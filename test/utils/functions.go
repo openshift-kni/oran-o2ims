@@ -15,14 +15,17 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"time"
 
 	. "github.com/onsi/gomega"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -113,25 +116,25 @@ func GetExternalCrdFiles(destDir string) error {
 		commitSha := GetGitCommitFromPseudoVersion(policyModPseudoVersionNew)
 
 		// Get the full sha of the commit by calling the github API.
+		// Retry with exponential backoff.
 		url := fmt.Sprintf(GithubCommitsAPI, externalCrd["owner"], externalCrd["repoName"], commitSha)
-		resp, err := http.Get(url) //nolint
+		fullCommitSha, err := RetryWithExponentialBackoff(func() (string, error) {
+			resp, err := http.Get(url) //nolint
+			if err != nil {
+				return "", fmt.Errorf("error getting URL: %w", err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				return "", fmt.Errorf("unexpected status, got: %d", resp.StatusCode)
+			}
+			var commit map[string]interface{}
+			if err := json.NewDecoder(resp.Body).Decode(&commit); err != nil {
+				return "", fmt.Errorf("failed to decode")
+			}
+			Expect(commit).To(HaveKey("sha"))
+			return commit["sha"].(string), nil
+		})
 		Expect(err).NotTo(HaveOccurred())
-		defer resp.Body.Close()
-		// Check that the status is ok.
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("unexpected status")
-		}
-
-		// Decode the response.
-		var commit map[string]interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&commit); err != nil {
-			return fmt.Errorf("failed to decode")
-		}
-		Expect(err).NotTo(HaveOccurred())
-		Expect(commit).To(HaveKey("sha"))
-		// Extract the commit sha.
-		fullCommitSha := commit["sha"].(string)
-
 		// Get the CRD file.
 		crdFilePath := fmt.Sprintf(
 			GithubUserContentLink,
@@ -142,6 +145,28 @@ func GetExternalCrdFiles(destDir string) error {
 	}
 
 	return nil
+}
+
+// RetryWithExponentialBackoff retries a function with exponential backoff
+func RetryWithExponentialBackoff(fn func() (string, error)) (string, error) {
+	maxRetries := 3
+	baseDelay := 100 * time.Millisecond
+
+	for i := 0; i < maxRetries; i++ {
+		result, err := fn()
+		if err == nil {
+			return result, nil
+		}
+
+		if i == maxRetries-1 {
+			return "", err
+		}
+
+		delay := baseDelay * time.Duration(1<<uint(i))
+		time.Sleep(delay)
+	}
+
+	return "", fmt.Errorf("max retries exceeded")
 }
 
 func DownloadFile(rawUrl, filename, dirpath string) error {
@@ -192,10 +217,16 @@ func CreateNodeResources(ctx context.Context, c client.Client, npName string) {
 
 func CreateResources(ctx context.Context, c client.Client, nodes []*pluginsv1alpha1.AllocatedNode, secrets []*corev1.Secret) {
 	for _, node := range nodes {
-		Expect(c.Create(ctx, node)).To(Succeed())
+		err := c.Create(ctx, node)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			Expect(err).ToNot(HaveOccurred())
+		}
 	}
 	for _, secret := range secrets {
-		Expect(c.Create(ctx, secret)).To(Succeed())
+		err := c.Create(ctx, secret)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			Expect(err).ToNot(HaveOccurred())
+		}
 	}
 }
 
@@ -227,7 +258,7 @@ func CreateNode(name, bmcAddress, bmcSecret, groupName, namespace, narName strin
 		Spec: pluginsv1alpha1.AllocatedNodeSpec{
 			NodeAllocationRequest: narName,
 			GroupName:             groupName,
-			HardwarePluginRef:     ctlrutils.UnitTestHwPluginRef,
+			HardwarePluginRef:     constants.DefaultNamespace,
 			HwMgrNodeId:           name,
 		},
 		Status: pluginsv1alpha1.AllocatedNodeStatus{
@@ -251,4 +282,105 @@ func CreateSecrets(names []string, namespace string) []*corev1.Secret {
 		})
 	}
 	return secrets
+}
+
+// Helper function to create BareMetalHost
+func CreateBareMetalHost(bmhData struct {
+	Name             string
+	MacAddress       string
+	BmcAddress       string
+	Hostname         string
+	RamMB            int32
+	HwProfile        string
+	Colour           string
+	StorageSizeBytes metal3v1alpha1.Capacity
+	IsPreferred      bool
+}) *metal3v1alpha1.BareMetalHost {
+	return &metal3v1alpha1.BareMetalHost{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      bmhData.Name,
+			Namespace: constants.DefaultNamespace,
+			Labels: map[string]string{
+				"resourceselector.clcm.openshift.io/server-colour": bmhData.Colour,
+				"resources.clcm.openshift.io/resourcePoolId":       TestPoolID,
+				"resourceselector.clcm.openshift.io/server-type":   TestServerType,
+			},
+		},
+		Spec: metal3v1alpha1.BareMetalHostSpec{
+			Online: true,
+			BMC: metal3v1alpha1.BMCDetails{
+				Address:         bmhData.BmcAddress,
+				CredentialsName: fmt.Sprintf("%s-bmc-secret", bmhData.Name),
+			},
+			BootMACAddress: bmhData.MacAddress,
+		},
+	}
+}
+
+// Helper function to create HardwareData CR
+func CreateHardwareData(bmhName string, bmhData struct {
+	Name             string
+	MacAddress       string
+	BmcAddress       string
+	Hostname         string
+	RamMB            int32
+	HwProfile        string
+	Colour           string
+	StorageSizeBytes metal3v1alpha1.Capacity
+	IsPreferred      bool
+}) *metal3v1alpha1.HardwareData {
+	return &metal3v1alpha1.HardwareData{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      bmhData.Name,
+			Namespace: constants.DefaultNamespace,
+		},
+		Spec: metal3v1alpha1.HardwareDataSpec{
+			HardwareDetails: &metal3v1alpha1.HardwareDetails{
+				Hostname: bmhData.Hostname,
+				CPU: metal3v1alpha1.CPU{
+					Arch: "x86_64",
+				},
+				RAMMebibytes: int(bmhData.RamMB),
+				NIC: []metal3v1alpha1.NIC{
+					{
+						Name: "eno1",
+						MAC:  bmhData.MacAddress,
+					},
+					{
+						Name: "eth0",
+						MAC:  fmt.Sprintf("%s:01", bmhData.MacAddress[:14]),
+					},
+					{
+						Name: "eth1",
+						MAC:  fmt.Sprintf("%s:02", bmhData.MacAddress[:14]),
+					},
+				},
+				Storage: []metal3v1alpha1.Storage{
+					{
+						Name:         "sda",
+						SizeBytes:    bmhData.StorageSizeBytes,
+						Rotational:   false,
+						Type:         "SSD",
+						Model:        "Samsung SSD 980 PRO 1TB",
+						SerialNumber: fmt.Sprintf("SN-%s", bmhData.Name),
+					},
+				},
+			},
+		},
+	}
+}
+
+// Helper function to create BMC secret
+func CreateBMCSecret(name string) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-bmc-secret", name),
+			Namespace: constants.DefaultNamespace,
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			"username": []byte("admin"),
+			"password": []byte("password123"),
+		},
+	}
 }

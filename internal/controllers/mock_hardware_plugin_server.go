@@ -70,6 +70,7 @@ import (
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
 
@@ -84,6 +85,7 @@ type MockHardwarePluginServer struct {
 	nodeAllocationRequests map[string]*hwmgrpluginapi.NodeAllocationRequestResponse
 	allocatedNodes         map[string][]hwmgrpluginapi.AllocatedNode
 	k8sClient              client.Client
+	queryK8S               bool
 }
 
 // NewMockHardwarePluginServer creates and starts a new mock hardware plugin server
@@ -91,6 +93,7 @@ func NewMockHardwarePluginServer() *MockHardwarePluginServer {
 	mock := &MockHardwarePluginServer{
 		nodeAllocationRequests: make(map[string]*hwmgrpluginapi.NodeAllocationRequestResponse),
 		allocatedNodes:         make(map[string][]hwmgrpluginapi.AllocatedNode),
+		queryK8S:               false, // Default to false for backward compatibility
 	}
 
 	return mock
@@ -102,6 +105,27 @@ func NewMockHardwarePluginServerWithClient(k8sClient client.Client) *MockHardwar
 		nodeAllocationRequests: make(map[string]*hwmgrpluginapi.NodeAllocationRequestResponse),
 		allocatedNodes:         make(map[string][]hwmgrpluginapi.AllocatedNode),
 		k8sClient:              k8sClient,
+		queryK8S:               false, // Default to false for backward compatibility
+	}
+
+	// Setup default mock data
+	mock.setupDefaultData()
+
+	// Create HTTP server with routes
+	mux := http.NewServeMux()
+	mock.setupRoutes(mux)
+	mock.server = httptest.NewServer(mux)
+
+	return mock
+}
+
+// NewMockHardwarePluginServerWithK8SQuery creates and starts a new mock hardware plugin server with Kubernetes client and queryK8S enabled
+func NewMockHardwarePluginServerWithK8SQuery(k8sClient client.Client, queryK8S bool) *MockHardwarePluginServer {
+	mock := &MockHardwarePluginServer{
+		nodeAllocationRequests: make(map[string]*hwmgrpluginapi.NodeAllocationRequestResponse),
+		allocatedNodes:         make(map[string][]hwmgrpluginapi.AllocatedNode),
+		k8sClient:              k8sClient,
+		queryK8S:               queryK8S,
 	}
 
 	// Setup default mock data
@@ -269,13 +293,27 @@ func (m *MockHardwarePluginServer) handleNodeAllocationRequests(w http.ResponseW
 	switch r.Method {
 	case http.MethodGet:
 		// Return list of all NodeAllocationRequests
-		var requests []hwmgrpluginapi.NodeAllocationRequestResponse
-		for _, req := range m.nodeAllocationRequests {
-			requests = append(requests, *req)
-		}
-		if err := json.NewEncoder(w).Encode(requests); err != nil {
-			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-			return
+		if m.queryK8S && m.k8sClient != nil {
+			// Query Kubernetes for actual NodeAllocationRequests
+			requests, err := m.getKubernetesNodeAllocationRequests(r.Context())
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Failed to query K8s NodeAllocationRequests: %v", err), http.StatusInternalServerError)
+				return
+			}
+			if err := json.NewEncoder(w).Encode(requests); err != nil {
+				http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+				return
+			}
+		} else {
+			// Return mock data for backward compatibility
+			var requests []hwmgrpluginapi.NodeAllocationRequestResponse
+			for _, req := range m.nodeAllocationRequests {
+				requests = append(requests, *req)
+			}
+			if err := json.NewEncoder(w).Encode(requests); err != nil {
+				http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+				return
+			}
 		}
 
 	case http.MethodPost:
@@ -301,8 +339,8 @@ func (m *MockHardwarePluginServer) handleNodeAllocationRequests(w http.ResponseW
 		}
 		m.nodeAllocationRequests[requestID] = response
 
-		// Create Kubernetes NodeAllocationRequest resource if k8sClient is available
-		if m.k8sClient != nil {
+		// Create Kubernetes NodeAllocationRequest resource if k8sClient is available and queryK8S is enabled
+		if m.k8sClient != nil && m.queryK8S {
 			if err := m.createKubernetesNodeAllocationRequest(r.Context(), &request, requestID); err != nil {
 				// Log the error for debugging but continue
 				fmt.Printf("DEBUG: Failed to create K8s NodeAllocationRequest %s: %v\n", requestID, err)
@@ -312,128 +350,12 @@ func (m *MockHardwarePluginServer) handleNodeAllocationRequests(w http.ResponseW
 			}
 		}
 
-		// Automatically create default allocated nodes for this request
-		if _, exists := m.allocatedNodes[requestID]; !exists {
-			m.allocatedNodes[requestID] = []hwmgrpluginapi.AllocatedNode{
-				{
-					Id:                  "test-node-1",
-					GroupName:           "controller",
-					HwProfile:           "profile-spr-single-processor-64G",
-					ConfigTransactionId: 1,
-					Bmc: hwmgrpluginapi.BMC{
-						Address:         "redfish+http://192.168.111.20/redfish/v1/Systems/1",
-						CredentialsName: "test-node-1-bmc-secret",
-					},
-					Interfaces: []hwmgrpluginapi.Interface{
-						{
-							Name:       "eth0",
-							MacAddress: "00:11:22:33:44:55",
-							Label:      "base-interface",
-						},
-						{
-							Name:       "eth1",
-							MacAddress: "66:77:88:99:CC:BB",
-							Label:      "data-interface",
-						},
-						{
-							Name:       "eno1",
-							MacAddress: "AA:BB:CC:DD:EE:FF",
-							Label:      "bootable-interface",
-						},
-					},
-					Status: hwmgrpluginapi.AllocatedNodeStatus{
-						Conditions: &[]hwmgrpluginapi.Condition{
-							{
-								Type:               "Ready",
-								Status:             "True",
-								Reason:             "Provisioned",
-								Message:            "Node is ready",
-								LastTransitionTime: time.Now(),
-							},
-						},
-					},
-				},
-				{
-					Id:                  "master-node-2",
-					GroupName:           "controller",
-					HwProfile:           "profile-spr-single-processor-64G",
-					ConfigTransactionId: 1,
-					Bmc: hwmgrpluginapi.BMC{
-						Address:         "redfish+http://192.168.111.21/redfish/v1/Systems/1",
-						CredentialsName: "master-node-2-bmc-secret",
-					},
-					Interfaces: []hwmgrpluginapi.Interface{
-						{
-							Name:       "eth0",
-							MacAddress: "00:11:22:33:44:56",
-							Label:      "base-interface",
-						},
-						{
-							Name:       "eth1",
-							MacAddress: "66:77:88:99:CC:BC",
-							Label:      "data-interface",
-						},
-						{
-							Name:       "eno1",
-							MacAddress: "AA:BB:CC:DD:EE:F0",
-							Label:      "bootable-interface",
-						},
-					},
-					Status: hwmgrpluginapi.AllocatedNodeStatus{
-						Conditions: &[]hwmgrpluginapi.Condition{
-							{
-								Type:               "Ready",
-								Status:             "True",
-								Reason:             "Provisioned",
-								Message:            "Node is ready",
-								LastTransitionTime: time.Now(),
-							},
-						},
-					},
-				},
-			}
-		}
-
-		// Return the ID - client expects 202 Accepted with string response
-		w.WriteHeader(http.StatusAccepted)
-		if err := json.NewEncoder(w).Encode(requestID); err != nil {
-			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-			return
-		}
-
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
-// handleNodeAllocationRequestByID handles requests for specific NodeAllocationRequests
-func (m *MockHardwarePluginServer) handleNodeAllocationRequestByID(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	// Extract ID from path
-	path := strings.TrimPrefix(r.URL.Path, "/hardware-manager/provisioning/v1/node-allocation-requests/")
-	parts := strings.Split(path, "/")
-	requestID := parts[0]
-
-	switch r.Method {
-	case http.MethodGet:
-		if strings.HasSuffix(path, "/allocated-nodes") {
-			// First check if the NodeAllocationRequest exists
-			if _, exists := m.nodeAllocationRequests[requestID]; !exists {
-				http.Error(w, "Not found", http.StatusNotFound)
-				return
-			}
-
-			// Return allocated nodes for this request
-			if nodes, exists := m.allocatedNodes[requestID]; exists {
-				if err := json.NewEncoder(w).Encode(nodes); err != nil {
-					http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-					return
-				}
-			} else {
-				// If no specific allocated nodes exist for this request ID,
-				// return default allocated nodes to prevent test failures
-				defaultNodes := []hwmgrpluginapi.AllocatedNode{
+		// Don't automatically create default allocated nodes when queryK8S is enabled
+		// The real allocated nodes will be created by the hardware plugin and queried from K8s
+		if !m.queryK8S {
+			// Only create default allocated nodes for backward compatibility when not using K8s
+			if _, exists := m.allocatedNodes[requestID]; !exists {
+				m.allocatedNodes[requestID] = []hwmgrpluginapi.AllocatedNode{
 					{
 						Id:                  "test-node-1",
 						GroupName:           "controller",
@@ -472,27 +394,175 @@ func (m *MockHardwarePluginServer) handleNodeAllocationRequestByID(w http.Respon
 							},
 						},
 					},
+					{
+						Id:                  "master-node-2",
+						GroupName:           "controller",
+						HwProfile:           "profile-spr-single-processor-64G",
+						ConfigTransactionId: 1,
+						Bmc: hwmgrpluginapi.BMC{
+							Address:         "redfish+http://192.168.111.21/redfish/v1/Systems/1",
+							CredentialsName: "master-node-2-bmc-secret",
+						},
+						Interfaces: []hwmgrpluginapi.Interface{
+							{
+								Name:       "eth0",
+								MacAddress: "00:11:22:33:44:56",
+								Label:      "base-interface",
+							},
+							{
+								Name:       "eth1",
+								MacAddress: "66:77:88:99:CC:BC",
+								Label:      "data-interface",
+							},
+							{
+								Name:       "eno1",
+								MacAddress: "AA:BB:CC:DD:EE:F0",
+								Label:      "bootable-interface",
+							},
+						},
+						Status: hwmgrpluginapi.AllocatedNodeStatus{
+							Conditions: &[]hwmgrpluginapi.Condition{
+								{
+									Type:               "Ready",
+									Status:             "True",
+									Reason:             "Provisioned",
+									Message:            "Node is ready",
+									LastTransitionTime: time.Now(),
+								},
+							},
+						},
+					},
 				}
-				if err := json.NewEncoder(w).Encode(defaultNodes); err != nil {
+			}
+		}
+
+		// Return the ID - client expects 202 Accepted with string response
+		w.WriteHeader(http.StatusAccepted)
+		if err := json.NewEncoder(w).Encode(requestID); err != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+			return
+		}
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleNodeAllocationRequestByID handles requests for specific NodeAllocationRequests
+func (m *MockHardwarePluginServer) handleNodeAllocationRequestByID(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Extract ID from path
+	path := strings.TrimPrefix(r.URL.Path, "/hardware-manager/provisioning/v1/node-allocation-requests/")
+	parts := strings.Split(path, "/")
+	requestID := parts[0]
+
+	switch r.Method {
+	case http.MethodGet:
+		if strings.HasSuffix(path, "/allocated-nodes") {
+			// First check if the NodeAllocationRequest exists
+			if _, exists := m.nodeAllocationRequests[requestID]; !exists {
+				http.Error(w, "Not found", http.StatusNotFound)
+				return
+			}
+
+			// Return allocated nodes for this request
+			if m.queryK8S && m.k8sClient != nil {
+				// Query Kubernetes for actual AllocatedNodes
+				nodes, err := m.getKubernetesAllocatedNodes(r.Context(), requestID)
+				if err != nil {
+					http.Error(w, fmt.Sprintf("Failed to query K8s AllocatedNodes: %v", err), http.StatusInternalServerError)
+					return
+				}
+				if err := json.NewEncoder(w).Encode(nodes); err != nil {
 					http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 					return
+				}
+			} else {
+				// Return mock data for backward compatibility
+				if nodes, exists := m.allocatedNodes[requestID]; exists {
+					if err := json.NewEncoder(w).Encode(nodes); err != nil {
+						http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+						return
+					}
+				} else {
+					// If no specific allocated nodes exist for this request ID,
+					// return default allocated nodes to prevent test failures
+					defaultNodes := []hwmgrpluginapi.AllocatedNode{
+						{
+							Id:                  "test-node-1",
+							GroupName:           "controller",
+							HwProfile:           "profile-spr-single-processor-64G",
+							ConfigTransactionId: 1,
+							Bmc: hwmgrpluginapi.BMC{
+								Address:         "redfish+http://192.168.111.20/redfish/v1/Systems/1",
+								CredentialsName: "test-node-1-bmc-secret",
+							},
+							Interfaces: []hwmgrpluginapi.Interface{
+								{
+									Name:       "eth0",
+									MacAddress: "00:11:22:33:44:55",
+									Label:      "base-interface",
+								},
+								{
+									Name:       "eth1",
+									MacAddress: "66:77:88:99:CC:BB",
+									Label:      "data-interface",
+								},
+								{
+									Name:       "eno1",
+									MacAddress: "AA:BB:CC:DD:EE:FF",
+									Label:      "bootable-interface",
+								},
+							},
+							Status: hwmgrpluginapi.AllocatedNodeStatus{
+								Conditions: &[]hwmgrpluginapi.Condition{
+									{
+										Type:               "Ready",
+										Status:             "True",
+										Reason:             "Provisioned",
+										Message:            "Node is ready",
+										LastTransitionTime: time.Now(),
+									},
+								},
+							},
+						},
+					}
+					if err := json.NewEncoder(w).Encode(defaultNodes); err != nil {
+						http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+						return
+					}
 				}
 			}
 			return
 		}
 
 		// Return specific NodeAllocationRequest
-		if response, exists := m.nodeAllocationRequests[requestID]; exists {
-			// Check if we should update the status to simulate hardware provisioning completion
-			// This simulates the behavior of real hardware plugins that update status when AllocatedNodes are created
-			m.updateNodeAllocationRequestStatus(requestID, response)
-
+		if m.queryK8S && m.k8sClient != nil {
+			// Query Kubernetes for actual NodeAllocationRequest
+			response, err := m.getKubernetesNodeAllocationRequest(r.Context(), requestID)
+			if err != nil {
+				http.Error(w, "Not found", http.StatusNotFound)
+				return
+			}
 			if err := json.NewEncoder(w).Encode(response); err != nil {
 				http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 				return
 			}
 		} else {
-			http.Error(w, "Not found", http.StatusNotFound)
+			// Return mock data for backward compatibility
+			if response, exists := m.nodeAllocationRequests[requestID]; exists {
+				// Check if we should update the status to simulate hardware provisioning completion
+				// This simulates the behavior of real hardware plugins that update status when AllocatedNodes are created
+				m.updateNodeAllocationRequestStatus(requestID, response)
+
+				if err := json.NewEncoder(w).Encode(response); err != nil {
+					http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+					return
+				}
+			} else {
+				http.Error(w, "Not found", http.StatusNotFound)
+			}
 		}
 
 	case http.MethodPut:
@@ -539,14 +609,27 @@ func (m *MockHardwarePluginServer) handleAllocatedNodes(w http.ResponseWriter, r
 	w.Header().Set("Content-Type", "application/json")
 
 	if r.Method == http.MethodGet {
-		// Return all allocated nodes
-		var allNodes []hwmgrpluginapi.AllocatedNode
-		for _, nodes := range m.allocatedNodes {
-			allNodes = append(allNodes, nodes...)
-		}
-		if err := json.NewEncoder(w).Encode(allNodes); err != nil {
-			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-			return
+		if m.queryK8S && m.k8sClient != nil {
+			// Query Kubernetes for all AllocatedNodes
+			allNodes, err := m.getAllKubernetesAllocatedNodes(r.Context())
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Failed to query K8s AllocatedNodes: %v", err), http.StatusInternalServerError)
+				return
+			}
+			if err := json.NewEncoder(w).Encode(allNodes); err != nil {
+				http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+				return
+			}
+		} else {
+			// Return mock data for backward compatibility
+			var allNodes []hwmgrpluginapi.AllocatedNode
+			for _, nodes := range m.allocatedNodes {
+				allNodes = append(allNodes, nodes...)
+			}
+			if err := json.NewEncoder(w).Encode(allNodes); err != nil {
+				http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+				return
+			}
 		}
 	} else {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -618,6 +701,9 @@ func (m *MockHardwarePluginServer) createKubernetesNodeAllocationRequest(ctx con
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      requestID,
 			Namespace: constants.DefaultNamespace,
+			Labels: map[string]string{
+				hwmgrutils.HardwarePluginLabel: hwmgrutils.Metal3HardwarePluginID,
+			},
 		},
 		Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 			ClusterId:          request.ClusterId,
@@ -631,9 +717,11 @@ func (m *MockHardwarePluginServer) createKubernetesNodeAllocationRequest(ctx con
 			k8sNodeGroup := pluginsv1alpha1.NodeGroup{
 				Size: group.NodeGroupData.Size,
 				NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
-					Name:      group.NodeGroupData.Name,
-					Role:      group.NodeGroupData.Role,
-					HwProfile: group.NodeGroupData.HwProfile,
+					Name:             group.NodeGroupData.Name,
+					Role:             group.NodeGroupData.Role,
+					HwProfile:        group.NodeGroupData.HwProfile,
+					ResourcePoolId:   group.NodeGroupData.ResourceGroupId,
+					ResourceSelector: group.NodeGroupData.ResourceSelector,
 				},
 			}
 			k8sNodeAllocationRequest.Spec.NodeGroup = append(k8sNodeAllocationRequest.Spec.NodeGroup, k8sNodeGroup)
@@ -645,4 +733,162 @@ func (m *MockHardwarePluginServer) createKubernetesNodeAllocationRequest(ctx con
 		return fmt.Errorf("failed to create NodeAllocationRequest: %w", err)
 	}
 	return nil
+}
+
+// getKubernetesNodeAllocationRequests retrieves all NodeAllocationRequests from Kubernetes
+func (m *MockHardwarePluginServer) getKubernetesNodeAllocationRequests(ctx context.Context) ([]hwmgrpluginapi.NodeAllocationRequestResponse, error) {
+	narList := &pluginsv1alpha1.NodeAllocationRequestList{}
+	err := m.k8sClient.List(ctx, narList, client.InNamespace(constants.DefaultNamespace))
+	if err != nil {
+		return nil, fmt.Errorf("failed to list NodeAllocationRequests: %w", err)
+	}
+
+	var responses []hwmgrpluginapi.NodeAllocationRequestResponse
+	for _, nar := range narList.Items {
+		response := m.convertK8sNARToPluginAPI(&nar)
+		responses = append(responses, response)
+	}
+	return responses, nil
+}
+
+// getKubernetesNodeAllocationRequest retrieves a specific NodeAllocationRequest from Kubernetes
+func (m *MockHardwarePluginServer) getKubernetesNodeAllocationRequest(ctx context.Context, requestID string) (*hwmgrpluginapi.NodeAllocationRequestResponse, error) {
+	nar := &pluginsv1alpha1.NodeAllocationRequest{}
+	err := m.k8sClient.Get(ctx, client.ObjectKey{Name: requestID, Namespace: constants.DefaultNamespace}, nar)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get NodeAllocationRequest: %w", err)
+	}
+
+	response := m.convertK8sNARToPluginAPI(nar)
+	return &response, nil
+}
+
+// getKubernetesAllocatedNodes retrieves AllocatedNodes for a specific NodeAllocationRequest from Kubernetes
+func (m *MockHardwarePluginServer) getKubernetesAllocatedNodes(ctx context.Context, requestID string) ([]hwmgrpluginapi.AllocatedNode, error) {
+	allocatedNodeList := &pluginsv1alpha1.AllocatedNodeList{}
+	err := m.k8sClient.List(ctx, allocatedNodeList, client.InNamespace(constants.DefaultNamespace))
+	if err != nil {
+		return nil, fmt.Errorf("failed to list AllocatedNodes: %w", err)
+	}
+
+	var nodes []hwmgrpluginapi.AllocatedNode
+	for _, allocatedNode := range allocatedNodeList.Items {
+		if allocatedNode.Spec.NodeAllocationRequest == requestID {
+			node := m.convertK8sAllocatedNodeToPluginAPI(&allocatedNode)
+			nodes = append(nodes, node)
+		}
+	}
+	return nodes, nil
+}
+
+// getAllKubernetesAllocatedNodes retrieves all AllocatedNodes from Kubernetes
+func (m *MockHardwarePluginServer) getAllKubernetesAllocatedNodes(ctx context.Context) ([]hwmgrpluginapi.AllocatedNode, error) {
+	allocatedNodeList := &pluginsv1alpha1.AllocatedNodeList{}
+	err := m.k8sClient.List(ctx, allocatedNodeList, client.InNamespace(constants.DefaultNamespace))
+	if err != nil {
+		return nil, fmt.Errorf("failed to list AllocatedNodes: %w", err)
+	}
+
+	var nodes []hwmgrpluginapi.AllocatedNode
+	for _, allocatedNode := range allocatedNodeList.Items {
+		node := m.convertK8sAllocatedNodeToPluginAPI(&allocatedNode)
+		nodes = append(nodes, node)
+	}
+	return nodes, nil
+}
+
+// convertK8sNARToPluginAPI converts Kubernetes NodeAllocationRequest to plugin API format
+func (m *MockHardwarePluginServer) convertK8sNARToPluginAPI(k8sNAR *pluginsv1alpha1.NodeAllocationRequest) hwmgrpluginapi.NodeAllocationRequestResponse {
+	// Convert NodeGroups
+	var nodeGroups []hwmgrpluginapi.NodeGroup
+	for _, group := range k8sNAR.Spec.NodeGroup {
+		nodeGroup := hwmgrpluginapi.NodeGroup{
+			NodeGroupData: hwmgrpluginapi.NodeGroupData{
+				Name:             group.NodeGroupData.Name,
+				Role:             group.NodeGroupData.Role,
+				HwProfile:        group.NodeGroupData.HwProfile,
+				ResourceGroupId:  group.NodeGroupData.ResourcePoolId,
+				ResourceSelector: group.NodeGroupData.ResourceSelector,
+				Size:             group.Size,
+			},
+		}
+		nodeGroups = append(nodeGroups, nodeGroup)
+	}
+
+	// Convert conditions
+	var conditions []hwmgrpluginapi.Condition
+	for _, condition := range k8sNAR.Status.Conditions {
+		hwCondition := hwmgrpluginapi.Condition{
+			Type:               condition.Type,
+			Status:             string(condition.Status),
+			Reason:             condition.Reason,
+			Message:            condition.Message,
+			LastTransitionTime: condition.LastTransitionTime.Time,
+		}
+		conditions = append(conditions, hwCondition)
+	}
+
+	return hwmgrpluginapi.NodeAllocationRequestResponse{
+		NodeAllocationRequest: &hwmgrpluginapi.NodeAllocationRequest{
+			ClusterId:           k8sNAR.Spec.ClusterId,
+			Site:                k8sNAR.Spec.Site,
+			BootInterfaceLabel:  k8sNAR.Spec.BootInterfaceLabel,
+			ConfigTransactionId: k8sNAR.Spec.ConfigTransactionId,
+			NodeGroup:           nodeGroups,
+		},
+		Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
+			Conditions:                  &conditions,
+			ObservedConfigTransactionId: &k8sNAR.Status.ObservedConfigTransactionId,
+		},
+	}
+}
+
+// convertK8sAllocatedNodeToPluginAPI converts Kubernetes AllocatedNode to plugin API format
+func (m *MockHardwarePluginServer) convertK8sAllocatedNodeToPluginAPI(k8sNode *pluginsv1alpha1.AllocatedNode) hwmgrpluginapi.AllocatedNode {
+	// Convert BMC
+	var bmc hwmgrpluginapi.BMC
+	if k8sNode.Status.BMC != nil {
+		bmc = hwmgrpluginapi.BMC{
+			Address:         k8sNode.Status.BMC.Address,
+			CredentialsName: k8sNode.Status.BMC.CredentialsName,
+		}
+	}
+
+	// Convert interfaces
+	var interfaces []hwmgrpluginapi.Interface
+	for _, iface := range k8sNode.Status.Interfaces {
+		if iface != nil {
+			hwInterface := hwmgrpluginapi.Interface{
+				Name:       iface.Name,
+				Label:      iface.Label,
+				MacAddress: iface.MACAddress,
+			}
+			interfaces = append(interfaces, hwInterface)
+		}
+	}
+
+	// Convert conditions
+	var conditions []hwmgrpluginapi.Condition
+	for _, condition := range k8sNode.Status.Conditions {
+		hwCondition := hwmgrpluginapi.Condition{
+			Type:               condition.Type,
+			Status:             string(condition.Status),
+			Reason:             condition.Reason,
+			Message:            condition.Message,
+			LastTransitionTime: condition.LastTransitionTime.Time,
+		}
+		conditions = append(conditions, hwCondition)
+	}
+
+	return hwmgrpluginapi.AllocatedNode{
+		Id:                  k8sNode.Spec.HwMgrNodeId,
+		GroupName:           k8sNode.Spec.GroupName,
+		HwProfile:           k8sNode.Spec.HwProfile,
+		ConfigTransactionId: 0, // Not directly available in K8s spec
+		Bmc:                 bmc,
+		Interfaces:          interfaces,
+		Status: hwmgrpluginapi.AllocatedNodeStatus{
+			Conditions: &conditions,
+		},
+	}
 }
