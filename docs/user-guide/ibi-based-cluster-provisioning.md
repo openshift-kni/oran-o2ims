@@ -37,7 +37,7 @@ Some of the key benefits of using IBI provisioning are:
 * Reduced network bandwidth requirements for remote deployments
 * Simplified deployment process for edge environments
 
-For additional details, see the [Red Hat OpenShift Image-Based Installation documentation](https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/edge_computing/image-based-installation-for-single-node-openshift).
+For additional details, see the [Red Hat OpenShift Image-Based Installation documentation](https://docs.redhat.com/en/documentation/openshift_container_platform/4.20/html/edge_computing/image-based-installation-for-single-node-openshift).
 
 ## IBI Workflow Overview
 
