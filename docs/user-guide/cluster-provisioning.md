@@ -498,7 +498,7 @@ curl -sk -X POST \
 curl -sk -X PUT \
 -H 'Content-Type: application/json' \
 -H "Authorization: Bearer $MY_TOKEN" \
-"${BASE_URL}/provisioningRequests" -d \
+"${BASE_URL}/provisioningRequests/123e4567-e89b-12d3-a456-426614174000" -d \
 '{
   "provisioningRequestId": "123e4567-e89b-12d3-a456-426614174000",
   "name": "sno1-request",
