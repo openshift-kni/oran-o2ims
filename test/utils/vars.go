@@ -9,7 +9,11 @@ package teste2eutils
 import (
 	"fmt"
 
+	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -333,8 +337,15 @@ const (
 )
 
 const (
-	MasterNodeName = "node1"
-	BmcSecretName  = "bmc-secret"
+	MasterNodeName      = "node1"
+	BmcSecretName       = "bmc-secret"
+	BmhPoolName         = "test-pool"
+	TestHwTemplateBlue  = "hwtemplate-blue"
+	TestHwTemplateGreen = "hwtemplate-green"
+	TestHwProfileName   = "profile-spr-dual-processor-128g"
+	TestHwPluginRef     = "hwmgr"
+	TestPoolID          = "test-pool-001"
+	TestServerType      = "test-server-type"
 )
 
 var (
@@ -369,6 +380,13 @@ var (
 			"crdFileName": "siteconfig.open-cluster-management.io_clusterinstances.yaml",
 		},
 		{
+			"repoName":    "multicluster-observability-operator",
+			"modulePath":  "github.com/stolostron/multicluster-observability-operator",
+			"crdPath":     "multicluster-observability-operator/operators/multiclusterobservability/manifests/endpoint-observability",
+			"owner":       "stolostron",
+			"crdFileName": "observability.open-cluster-management.io_observabilityaddon_crd.yaml",
+		},
+		{
 			"repoName":    "cluster-group-upgrades-operator",
 			"modName":     "github.com/openshift-kni",
 			"crdPath":     "config/crd/bases",
@@ -381,6 +399,112 @@ var (
 			"crdPath":     "config/crds",
 			"owner":       "openshift",
 			"crdFileName": "hive.openshift.io_clusterimagesets.yaml",
+		},
+		{
+			"repoName":    "baremetal-operator",
+			"modulePath":  "github.com/metal3-io/baremetal-operator/apis",
+			"crdPath":     "config/base/crds/bases",
+			"owner":       "metal3-io",
+			"crdFileName": "metal3.io_baremetalhosts.yaml",
+		},
+		{
+			"repoName":    "baremetal-operator",
+			"modulePath":  "github.com/metal3-io/baremetal-operator/apis",
+			"crdPath":     "config/base/crds/bases",
+			"owner":       "metal3-io",
+			"crdFileName": "metal3.io_hardwaredata.yaml",
+		},
+		{
+			"repoName":    "baremetal-operator",
+			"modulePath":  "github.com/metal3-io/baremetal-operator/apis",
+			"crdPath":     "config/base/crds/bases",
+			"owner":       "metal3-io",
+			"crdFileName": "metal3.io_hostfirmwarecomponents.yaml",
+		},
+		{
+			"repoName":    "baremetal-operator",
+			"modulePath":  "github.com/metal3-io/baremetal-operator/apis",
+			"crdPath":     "config/base/crds/bases",
+			"owner":       "metal3-io",
+			"crdFileName": "metal3.io_hostfirmwaresettings.yaml",
+		},
+		{
+			"repoName":    "baremetal-operator",
+			"modulePath":  "github.com/metal3-io/baremetal-operator/apis",
+			"crdPath":     "config/base/crds/bases",
+			"owner":       "metal3-io",
+			"crdFileName": "metal3.io_preprovisioningimages.yaml",
+		},
+	}
+
+	HardwareProfile = &hwmgmtv1alpha1.HardwareProfile{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      TestHwProfileName,
+			Namespace: constants.DefaultNamespace,
+		},
+		Spec: hwmgmtv1alpha1.HardwareProfileSpec{
+			// Basic hardware profile spec - minimal firmware config to satisfy CRD validation
+			BiosFirmware: hwmgmtv1alpha1.Firmware{
+				Version: "test-bios-v1.0",
+				URL:     "https://example.com/bios-firmware.bin",
+			},
+		},
+	}
+
+	TestBMHs = []struct {
+		Name             string
+		MacAddress       string
+		BmcAddress       string
+		Hostname         string
+		RamMB            int32
+		HwProfile        string
+		Colour           string
+		StorageSizeBytes metal3v1alpha1.Capacity
+		IsPreferred      bool // Only one host will match the strict criteria
+	}{
+		{
+			Name:             "bmh-1",
+			MacAddress:       "aa:bb:cc:dd:ee:01",
+			BmcAddress:       "redfish://192.168.1.101/redfish/v1/Systems/1",
+			Hostname:         "server-node-1.example.com",
+			RamMB:            65536, // 64GB - meets minimum but not preferred
+			HwProfile:        TestHwProfileName,
+			Colour:           "red",
+			StorageSizeBytes: 500000000000,
+			IsPreferred:      false,
+		},
+		{
+			Name:             "bmh-2",
+			MacAddress:       "aa:bb:cc:dd:ee:02",
+			BmcAddress:       "redfish://192.168.1.102/redfish/v1/Systems/1",
+			Hostname:         "server-node-2.example.com",
+			RamMB:            131072, // 128GB - this one will be selected
+			HwProfile:        TestHwProfileName,
+			Colour:           "blue",
+			StorageSizeBytes: 600000000000,
+			IsPreferred:      true,
+		},
+		{
+			Name:             "bmh-3",
+			MacAddress:       "aa:bb:cc:dd:ee:03",
+			BmcAddress:       "redfish://192.168.1.103/redfish/v1/Systems/1",
+			Hostname:         "server-node-3.example.com",
+			RamMB:            32768, // 32GB - below minimum requirements
+			HwProfile:        TestHwProfileName,
+			StorageSizeBytes: 6000000000000,
+			Colour:           "green",
+			IsPreferred:      false,
+		},
+		{
+			Name:             "bmh-4",
+			MacAddress:       "aa:bb:cc:dd:ee:04",
+			BmcAddress:       "redfish://192.168.1.104/redfish/v1/Systems/1",
+			Hostname:         "server-node-4.example.com",
+			RamMB:            131072, // 128GB - identical to bmh-2
+			HwProfile:        TestHwProfileName,
+			Colour:           "blue",
+			StorageSizeBytes: 600000000000,
+			IsPreferred:      true,
 		},
 	}
 )
