@@ -52,7 +52,7 @@ client present a certificate.
 
 To configure the primary controller to enable mTLS the following attributes must be set in the `clientTLS` section of
 the `spec`. For more information, please refer to the
-[Ingress Operator in OpenShift Container Platform documentation](https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/networking_operators/configuring-ingress#configuring-ingress-controller-tls).
+[Ingress Operator in OpenShift Container Platform documentation](https://docs.redhat.com/en/documentation/openshift_container_platform/4.20/html/networking_operators/configuring-ingress#configuring-ingress-controller-tls).
 
 ```yaml
 apiVersion: operator.openshift.io/v1

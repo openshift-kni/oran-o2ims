@@ -213,7 +213,7 @@ configuration requirements.
 
    > :warning: Do this only if the cluster proxy isn't currently pointing to some other custom CA bundle. If it is
    > pointing to an existing bundle, then the new private certificates need to be appended to the existing set. Refer to
-   > the [OpenShift Configuring a custom PKI documentation](https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/configuring_network_settings/configuring-a-custom-pki)
+   > the [OpenShift Configuring a custom PKI documentation](https://docs.redhat.com/en/documentation/openshift_container_platform/4.20/html/configuring_network_settings/configuring-a-custom-pki)
    > for more details.
 
    ```console
