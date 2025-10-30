@@ -431,6 +431,12 @@ components:
         Information about a provisioning request.
       type: object
       properties:
+        provisioningRequestReference:
+          type: string
+          format: uuid
+          description: |
+            Unique reference of the provisioning request assigned by O-Cloud.
+          example: "822eca7c-54cd-4cbe-a01f-8b4ccb4bb3cf"
         provisioningRequestData:
           $ref: "#/components/schemas/ProvisioningRequestData"
         provisionedResourceSets:

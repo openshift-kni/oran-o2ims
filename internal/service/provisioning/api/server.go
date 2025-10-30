@@ -274,9 +274,17 @@ func (r *ProvisioningServer) DeleteProvisioningRequest(ctx context.Context, requ
 func convertProvisioningRequestCRToApi(id uuid.UUID, provisioningRequest provisioningv1alpha1.ProvisioningRequest) (api.ProvisioningRequestInfo, error) {
 	provisioningRequestInfo := api.ProvisioningRequestInfo{}
 
+	// Map the ProvisioningRequest CR metadata UID to the provisioningRequestReference in the API model
+	provisioningRequestReferenceId, err := uuid.Parse(string(provisioningRequest.UID))
+	if err != nil {
+		return api.ProvisioningRequestInfo{}, fmt.Errorf("could not convert ProvisioningRequest UID (%s) to uuid: %w",
+			string(provisioningRequest.UID), err)
+	}
+	provisioningRequestInfo.ProvisioningRequestReference = &provisioningRequestReferenceId
+
 	// Unmarshal the TemplateParameters bytes into a map
 	var templateParameters = make(map[string]interface{})
-	err := json.Unmarshal(provisioningRequest.Spec.TemplateParameters.Raw, &templateParameters)
+	err = json.Unmarshal(provisioningRequest.Spec.TemplateParameters.Raw, &templateParameters)
 	if err != nil {
 		return provisioningRequestInfo, fmt.Errorf("failed to unmarshal TemplateParameters into a map: %w", err)
 	}
