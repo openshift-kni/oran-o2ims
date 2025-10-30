@@ -9,6 +9,7 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/google/uuid"
@@ -137,6 +138,22 @@ func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Contex
 	if oldPr == nil {
 		// ProvisioningRequest is being created, no immutable fields to check
 		return nil
+	}
+
+	// Check if hardware provisioning has timed out or failed
+	// If so, reject any spec updates - user must delete and recreate the PR
+	hwProvisionedCond := meta.FindStatusCondition(
+		newPr.Status.Conditions, string(PRconditionTypes.HardwareProvisioned))
+	if hwProvisionedCond != nil &&
+		hwProvisionedCond.Status == "False" &&
+		(hwProvisionedCond.Reason == string(CRconditionReasons.TimedOut) ||
+			hwProvisionedCond.Reason == string(CRconditionReasons.Failed)) {
+		// Compare specs to see if there's an actual spec change
+		if !reflect.DeepEqual(oldPr.Spec, newPr.Spec) {
+			return fmt.Errorf("hardware provisioning has timed out or failed. " +
+				"Spec changes are not allowed. " +
+				"Please delete and recreate the ProvisioningRequest to retry")
+		}
 	}
 
 	crProvisionedCond := meta.FindStatusCondition(

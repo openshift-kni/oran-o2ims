@@ -113,6 +113,18 @@ func (r *NodeAllocationRequestReconciler) updateConditionAndSendCallback(
 		return err //nolint:wrapcheck
 	}
 
+	// Propagate timeout state to AllocatedNodes
+	if conditionReason == hwmgmtv1alpha1.TimedOut {
+		if err := propagateTimeoutToAllocatedNodes(
+			ctx, r.Client, r.NoncachedClient, r.Logger,
+			nodeAllocationRequest, conditionType, message,
+		); err != nil {
+			r.Logger.WarnContext(ctx, "Failed to propagate timeout to AllocatedNodes",
+				slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
+				slog.String("error", err.Error()))
+		}
+	}
+
 	// Send callback notification asynchronously (non-blocking)
 	callbackStatus := mapConditionToCallbackStatus(conditionType, conditionReason)
 	errorMsg := ""
@@ -542,6 +554,73 @@ func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 	ctx context.Context, nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
 	result := hwmgrutils.DoNotRequeue()
 
+	// Check for hardware timeout at the top level
+	if timeoutExceeded, conditionType, err := r.checkHardwareTimeout(nodeAllocationRequest); err != nil {
+		r.Logger.ErrorContext(ctx, "Failed to check hardware timeout",
+			slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
+			slog.String("error", err.Error()))
+		return hwmgrutils.RequeueWithMediumInterval(), fmt.Errorf("failed to check hardware timeout: %w", err)
+	} else if timeoutExceeded {
+		var timeoutMessage string
+		var startTimeStr string
+		switch conditionType {
+		case hwmgmtv1alpha1.Provisioned:
+			timeoutMessage = "Hardware provisioning timed out"
+			if nodeAllocationRequest.Status.ProvisioningStartTime != nil {
+				startTimeStr = nodeAllocationRequest.Status.ProvisioningStartTime.Format(time.RFC3339)
+			}
+		case hwmgmtv1alpha1.Configured:
+			timeoutMessage = "Hardware configuration timed out"
+			if nodeAllocationRequest.Status.ConfiguringStartTime != nil {
+				startTimeStr = nodeAllocationRequest.Status.ConfiguringStartTime.Format(time.RFC3339)
+			}
+		default:
+			timeoutMessage = "Hardware operation timed out"
+		}
+
+		r.Logger.ErrorContext(ctx, "Timeout detected: "+timeoutMessage,
+			slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
+			slog.String("conditionType", string(conditionType)),
+			slog.String("timeoutDuration", nodeAllocationRequest.Spec.HardwareProvisioningTimeout),
+			slog.String("startTime", startTimeStr))
+
+		if updateErr := r.updateConditionAndSendCallback(
+			ctx, nodeAllocationRequest,
+			conditionType, hwmgmtv1alpha1.TimedOut,
+			metav1.ConditionFalse, timeoutMessage,
+		); updateErr != nil {
+			r.Logger.ErrorContext(ctx, "Failed to update status for timeout",
+				slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
+				slog.String("error", updateErr.Error()))
+			return hwmgrutils.RequeueWithMediumInterval(),
+				fmt.Errorf("failed to update status for NodeAllocationRequest timeout %s: %w",
+					nodeAllocationRequest.Name, updateErr)
+		}
+
+		if conditionType == hwmgmtv1alpha1.Configured {
+			if err := clearConfigAnnotationForAllocatedNodes(ctx, r.Client, r.NoncachedClient, r.Logger, nodeAllocationRequest); err != nil {
+				r.Logger.ErrorContext(ctx, "Failed to clear config in progress annotations after configuration timeout",
+					slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
+					slog.String("error", err.Error()))
+				return hwmgrutils.RequeueWithMediumInterval(),
+					fmt.Errorf("failed to clear config in progress annotations after configuration timeout %s: %w",
+						nodeAllocationRequest.Name, err)
+			}
+
+			// Also clear BMH update annotations for configuration timeouts
+			if err := clearBMHUpdateAnnotationsForNAR(ctx, r.Client, r.Logger, nodeAllocationRequest); err != nil {
+				r.Logger.ErrorContext(ctx, "Failed to clear BMH update annotations after configuration timeout",
+					slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
+					slog.String("error", err.Error()))
+				return hwmgrutils.RequeueWithMediumInterval(),
+					fmt.Errorf("failed to clear BMH update annotations after configuration timeout %s: %w",
+						nodeAllocationRequest.Name, err)
+			}
+		}
+
+		return hwmgrutils.DoNotRequeue(), nil
+	}
+
 	if !controllerutil.ContainsFinalizer(nodeAllocationRequest, hwmgrutils.NodeAllocationRequestFinalizer) {
 		r.Logger.InfoContext(ctx, "Adding finalizer to NodeAllocationRequest")
 		if err := hwmgrutils.NodeAllocationRequestAddFinalizer(ctx, r.Client, nodeAllocationRequest); err != nil {
@@ -604,6 +683,15 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 	configuredCondition := meta.FindStatusCondition(
 		nodeAllocationRequest.Status.Conditions,
 		string(hwmgmtv1alpha1.Configured))
+
+	if configuredCondition != nil {
+		if configuredCondition.Reason == string(hwmgmtv1alpha1.TimedOut) ||
+			configuredCondition.Reason == string(hwmgmtv1alpha1.Failed) {
+			r.Logger.InfoContext(ctx, "NodeAllocationRequest configuration is in terminal state, but config change detected - allowing retry",
+				slog.String("reason", configuredCondition.Reason))
+		}
+	}
+
 	// Set a default status that will be updated during the configuration process
 	if configuredCondition == nil || configuredCondition.Status == metav1.ConditionTrue {
 		if result, err := setAwaitConfigCondition(ctx, r.Client, nodeAllocationRequest); err != nil {
@@ -717,6 +805,92 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestProcessing(
 				nodeAllocationRequest.Name, err)
 	}
 	return hwmgrutils.RequeueWithShortInterval(), nil
+}
+
+// checkHardwareTimeout returns (timedOut, whichCondition, err)
+// It times out Day 0 (Provisioned) using ProvisioningStartTime and
+// Day 2 (Configured) using ConfiguringStartTime.
+func (r *NodeAllocationRequestReconciler) checkHardwareTimeout(
+	nar *pluginsv1alpha1.NodeAllocationRequest,
+) (bool, hwmgmtv1alpha1.ConditionType, error) {
+
+	// 1) Resolve timeout
+	timeoutStr := nar.Spec.HardwareProvisioningTimeout
+	if timeoutStr == "" {
+		timeoutStr = ctlrutils.DefaultHardwareProvisioningTimeout.String()
+	}
+	timeout, err := time.ParseDuration(timeoutStr)
+	if err != nil {
+		return false, hwmgmtv1alpha1.ConditionType(""),
+			fmt.Errorf("invalid hardware provisioning timeout %q: %w", timeoutStr, err)
+	}
+	if timeout <= 0 {
+		return false, hwmgmtv1alpha1.ConditionType(""),
+			fmt.Errorf("hardware provisioning timeout must be > 0 (got %q)", timeoutStr)
+	}
+
+	// 2) Read conditions once
+	prov := meta.FindStatusCondition(nar.Status.Conditions, string(hwmgmtv1alpha1.Provisioned))
+	cfg := meta.FindStatusCondition(nar.Status.Conditions, string(hwmgmtv1alpha1.Configured))
+
+	// Consider "in progress" as anything not True; Reason may be empty or "InProgress".
+	inProgress := func(c *metav1.Condition) bool {
+		return c != nil && c.Status != metav1.ConditionTrue
+	}
+
+	now := time.Now()
+
+	// 3) Phase precedence:
+	// If provisioning is in-progress, that's the active phase (ignore config).
+	if inProgress(prov) {
+		if nar.Status.ProvisioningStartTime == nil || nar.Status.ProvisioningStartTime.Time.IsZero() {
+			// Inconsistent state: provisioning says in-progress but no start time.
+			r.Logger.WarnContext(context.Background(), "Provisioning in progress but no start time set",
+				slog.String("nar", nar.Name),
+				slog.String("provisionedStatus", string(prov.Status)),
+				slog.String("provisionedReason", prov.Reason))
+			return false, hwmgmtv1alpha1.ConditionType(""), nil
+		}
+		deadline := nar.Status.ProvisioningStartTime.Time.Add(timeout)
+		r.Logger.InfoContext(context.Background(), "Checking provisioning timeout",
+			slog.String("nar", nar.Name),
+			slog.Time("now", now),
+			slog.Time("startTime", nar.Status.ProvisioningStartTime.Time),
+			slog.Time("deadline", deadline),
+			slog.Duration("timeout", timeout),
+			slog.Bool("exceeded", !now.Before(deadline)))
+		if !now.Before(deadline) { // inclusive: >=
+			return true, hwmgmtv1alpha1.Provisioned, nil
+		}
+		return false, hwmgmtv1alpha1.ConditionType(""), nil
+	}
+
+	// If provisioning is complete (or not in-progress) and configuring is in-progress, use ConfiguringStartTime.
+	if inProgress(cfg) {
+		if nar.Status.ConfiguringStartTime == nil || nar.Status.ConfiguringStartTime.Time.IsZero() {
+			// Inconsistent state: configuring says in-progress but no start time.
+			r.Logger.WarnContext(context.Background(), "Configuration in progress but no start time set",
+				slog.String("nar", nar.Name),
+				slog.String("configuredStatus", string(cfg.Status)),
+				slog.String("configuredReason", cfg.Reason))
+			return false, hwmgmtv1alpha1.ConditionType(""), nil
+		}
+		deadline := nar.Status.ConfiguringStartTime.Time.Add(timeout)
+		r.Logger.InfoContext(context.Background(), "Checking configuration timeout",
+			slog.String("nar", nar.Name),
+			slog.Time("now", now),
+			slog.Time("startTime", nar.Status.ConfiguringStartTime.Time),
+			slog.Time("deadline", deadline),
+			slog.Duration("timeout", timeout),
+			slog.Bool("exceeded", !now.Before(deadline)))
+		if !now.Before(deadline) { // inclusive: >=
+			return true, hwmgmtv1alpha1.Configured, nil
+		}
+		return false, hwmgmtv1alpha1.ConditionType(""), nil
+	}
+
+	// Neither phase is in progress → no timeout.
+	return false, hwmgmtv1alpha1.ConditionType(""), nil
 }
 
 // handleNodeAllocationRequestDeletion processes the NodeAllocationRequest CR deletion

@@ -305,10 +305,6 @@ func (m *MockHardwarePluginServer) handleNodeAllocationRequests(w http.ResponseW
 		if m.k8sClient != nil {
 			if err := m.createKubernetesNodeAllocationRequest(r.Context(), &request, requestID); err != nil {
 				// Log the error for debugging but continue
-				fmt.Printf("DEBUG: Failed to create K8s NodeAllocationRequest %s: %v\n", requestID, err)
-			} else {
-				// Success case - log for debugging
-				fmt.Printf("DEBUG: Successfully created K8s NodeAllocationRequest %s in namespace %s\n", requestID, ctlrutils.UnitTestHwmgrNamespace)
 			}
 		}
 
