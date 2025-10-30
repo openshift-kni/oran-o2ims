@@ -553,6 +553,11 @@ yamllint: yamllint-download ## Lint YAML files in the repository
 		| xargs -0 --no-run-if-empty $(YAMLLINT) -c .yamllint.yaml
 	@echo "YAML linting completed successfully."
 
+.PHONY: test-kustomize
+test-kustomize: ## Validate that all kustomization.yaml files can build successfully
+	@echo "Validating kustomization files..."
+	$(PROJECT_DIR)/hack/test-kustomize.sh
+
 .PHONY: yq
 .PHONY: $(YQ)
 yq: sync-git-submodules $(YQ) ## Download yq locally if necessary. If wrong version is installed, it will be removed before downloading.
