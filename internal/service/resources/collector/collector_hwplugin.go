@@ -199,15 +199,14 @@ func (d *HwPluginDataSource) convertResourcePool(pool *inventoryclient.ResourceP
 	}
 }
 
-// MakeResourceID calculates a UUID value to be used as the ResourceID.  The cloudID and hwPluginRef are added to the node
-// id value to ensure we get a globally unique value.
-func MakeResourceID(cloudID uuid.UUID, hwPluginRef, hwMgrNodeID string) uuid.UUID {
-	return ctlrutils.MakeUUIDFromNames(ResourceUUIDNamespace, cloudID, hwPluginRef, hwMgrNodeID)
-}
-
 func (d *HwPluginDataSource) convertResource(resource *inventoryclient.ResourceInfo) *models.Resource {
-	// The resourceID computed here must
-	resourceID := MakeResourceID(d.cloudID, d.hwplugin.Name, resource.ResourceId)
+	// Parse the resource ID directly (now it's the BMH UID from the hardware plugin)
+	resourceID, err := uuid.Parse(resource.ResourceId)
+	if err != nil {
+		slog.Warn("Failed to parse resource ID as UUID, using nil UUID", "resourceId", resource.ResourceId, "error", err)
+		resourceID = uuid.Nil
+	}
+
 	name := fmt.Sprintf("%s/%s", resource.Vendor, resource.Model)
 	resourceTypeID := ctlrutils.MakeUUIDFromNames(ResourceTypeUUIDNamespace, d.cloudID, d.hwplugin.Name, name)
 
@@ -233,7 +232,7 @@ func (d *HwPluginDataSource) convertResource(resource *inventoryclient.ResourceI
 		Tags:         resource.Tags,
 		DataSourceID: d.dataSourceID,
 		GenerationID: d.generationID,
-		ExternalID:   fmt.Sprintf("%s/%s", d.hwplugin.Name, resource.Name),
+		ExternalID:   fmt.Sprintf("%s/%s", d.hwplugin.Name, resource.ResourceId),
 	}
 
 	if resource.PowerState != nil {
