@@ -70,7 +70,7 @@ import (
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
-	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
 
 const (
@@ -308,7 +308,7 @@ func (m *MockHardwarePluginServer) handleNodeAllocationRequests(w http.ResponseW
 				fmt.Printf("DEBUG: Failed to create K8s NodeAllocationRequest %s: %v\n", requestID, err)
 			} else {
 				// Success case - log for debugging
-				fmt.Printf("DEBUG: Successfully created K8s NodeAllocationRequest %s in namespace %s\n", requestID, ctlrutils.UnitTestHwmgrNamespace)
+				fmt.Printf("DEBUG: Successfully created K8s NodeAllocationRequest %s in namespace %s\n", requestID, constants.DefaultNamespace)
 			}
 		}
 
@@ -598,7 +598,7 @@ func (m *MockHardwarePluginServer) checkForAllocatedNodes(requestID string) bool
 
 	// Check if any AllocatedNode resources exist for this NodeAllocationRequest
 	allocatedNodeList := &pluginsv1alpha1.AllocatedNodeList{}
-	err := m.k8sClient.List(context.Background(), allocatedNodeList, client.InNamespace(ctlrutils.UnitTestHwmgrNamespace))
+	err := m.k8sClient.List(context.Background(), allocatedNodeList, client.InNamespace(constants.DefaultNamespace))
 	if err != nil {
 		return false
 	}
@@ -617,7 +617,7 @@ func (m *MockHardwarePluginServer) createKubernetesNodeAllocationRequest(ctx con
 	k8sNodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      requestID,
-			Namespace: ctlrutils.UnitTestHwmgrNamespace,
+			Namespace: constants.DefaultNamespace,
 		},
 		Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 			ClusterId:          request.ClusterId,

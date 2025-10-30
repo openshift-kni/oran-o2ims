@@ -79,9 +79,6 @@ spec:
           value: controller:latest
         - name: POSTGRES_IMAGE
           value: registry.redhat.io/rhel9/postgresql-16:9.5-1731610873
-        - name: HWMGR_PLUGIN_NAMESPACE
-          # A placeholder for the replacement kustomization that will inject the value from the config map
-          value: plugin-namespace-placeholder
         - name: OCLOUD_MANAGER_NAMESPACE
           valueFrom:
             fieldRef:

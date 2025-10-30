@@ -1516,7 +1516,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (c
 	// Build the deployment's metadata.
 	deploymentMeta := metav1.ObjectMeta{
 		Name:      serverName,
-		Namespace: ctlrutils.InventoryNamespace,
+		Namespace: t.object.Namespace,
 		Labels: map[string]string{
 			"oran/o2ims": t.object.Name,
 			"app":        serverName,
@@ -1602,12 +1602,16 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (c
 			},
 		},
 		{
-			Name:  constants.InternalServicePortName,
-			Value: fmt.Sprintf("%d", constants.DefaultServicePort),
+			Name: constants.DefaultNamespaceEnvName,
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "metadata.namespace",
+				},
+			},
 		},
 		{
-			Name:  ctlrutils.HwMgrPluginNameSpace,
-			Value: ctlrutils.GetHwMgrPluginNS(),
+			Name:  constants.InternalServicePortName,
+			Value: fmt.Sprintf("%d", constants.DefaultServicePort),
 		},
 	}...)
 
@@ -1891,7 +1895,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 
 func (t *reconcilerTask) updateInventoryStatusConditions(ctx context.Context, deploymentName string) {
 	deployment := &appsv1.Deployment{}
-	err := t.client.Get(ctx, types.NamespacedName{Name: deploymentName, Namespace: ctlrutils.InventoryNamespace}, deployment)
+	err := t.client.Get(ctx, types.NamespacedName{Name: deploymentName, Namespace: t.object.Namespace}, deployment)
 
 	if err != nil {
 		reason := string(ctlrutils.InventoryConditionReasons.ErrorGettingDeploymentInformation)
