@@ -185,7 +185,7 @@ func getResourceInfoProcessors(hwdata *metal3v1alpha1.HardwareData) []inventory.
 }
 
 func getResourceInfoResourceId(bmh *metal3v1alpha1.BareMetalHost) string {
-	return fmt.Sprintf("%s/%s", bmh.Namespace, bmh.Name)
+	return string(bmh.UID)
 }
 
 func getResourceInfoResourcePoolId(bmh *metal3v1alpha1.BareMetalHost) string {

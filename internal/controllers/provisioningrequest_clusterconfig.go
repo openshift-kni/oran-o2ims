@@ -466,7 +466,7 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 					return err
 				}
 
-				err = t.setLabelValue(ctx, &agent, ctlrutils.HardwareManagerNodeIdLabel, bmh.Name)
+				err = t.setLabelValue(ctx, &agent, ctlrutils.HardwareManagerNodeIdLabel, string(bmh.UID))
 				if err != nil {
 					return err
 				}
