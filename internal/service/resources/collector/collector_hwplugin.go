@@ -155,7 +155,13 @@ func (d *HwPluginDataSource) GetResources(ctx context.Context, _ []models.Resour
 
 	resources := make([]models.Resource, 0)
 	for _, resource := range *result.JSON200 {
-		resources = append(resources, *d.convertResource(&resource))
+		converted, err := d.convertResource(&resource)
+		if err != nil {
+			// Log error but continue processing other resources
+			slog.Error("Skipping resource due to conversion error", "error", err, "resourceId", resource.ResourceId)
+			continue
+		}
+		resources = append(resources, *converted)
 	}
 
 	return resources, nil
@@ -199,12 +205,11 @@ func (d *HwPluginDataSource) convertResourcePool(pool *inventoryclient.ResourceP
 	}
 }
 
-func (d *HwPluginDataSource) convertResource(resource *inventoryclient.ResourceInfo) *models.Resource {
+func (d *HwPluginDataSource) convertResource(resource *inventoryclient.ResourceInfo) (*models.Resource, error) {
 	// Parse the resource ID directly (now it's the BMH UID from the hardware plugin)
 	resourceID, err := uuid.Parse(resource.ResourceId)
 	if err != nil {
-		slog.Warn("Failed to parse resource ID as UUID, using nil UUID", "resourceId", resource.ResourceId, "error", err)
-		resourceID = uuid.Nil
+		return nil, fmt.Errorf("failed to parse resource ID as UUID: %w", err)
 	}
 
 	name := fmt.Sprintf("%s/%s", resource.Vendor, resource.Model)
@@ -243,5 +248,5 @@ func (d *HwPluginDataSource) convertResource(resource *inventoryclient.ResourceI
 		result.Extensions[labelsExtension] = *resource.Labels
 	}
 
-	return result
+	return result, nil
 }
