@@ -201,6 +201,11 @@ func UpdateNodeAllocationRequestStatusCondition(
 			conditionStatus,
 			message)
 
+		// Update the observed config transaction id if the condition is Configured
+		if conditionType == hwmgmtv1alpha1.Configured {
+			newNodeAllocationRequest.Status.ObservedConfigTransactionId = nodeAllocationRequest.Spec.ConfigTransactionId
+		}
+
 		// Copy both start time fields from the local object to persist them
 		newNodeAllocationRequest.Status.ProvisioningStartTime = nodeAllocationRequest.Status.ProvisioningStartTime
 		newNodeAllocationRequest.Status.ConfiguringStartTime = nodeAllocationRequest.Status.ConfiguringStartTime

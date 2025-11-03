@@ -684,6 +684,13 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 		nodeAllocationRequest.Status.Conditions,
 		string(hwmgmtv1alpha1.Configured))
 
+	if configuredCondition != nil {
+		if configuredCondition.Reason == string(hwmgmtv1alpha1.TimedOut) ||
+			configuredCondition.Reason == string(hwmgmtv1alpha1.Failed) {
+			r.Logger.InfoContext(ctx, "NodeAllocationRequest configuration is in terminal state, but config change detected - allowing retry",
+				slog.String("reason", configuredCondition.Reason))
+		}
+	}
 	// Set a default status that will be updated during the configuration process
 	if configuredCondition == nil || configuredCondition.Status == metav1.ConditionTrue {
 		if result, err := setAwaitConfigCondition(ctx, r.Client, nodeAllocationRequest); err != nil {
@@ -859,6 +866,19 @@ func (r *NodeAllocationRequestReconciler) checkHardwareTimeout(
 
 	// If provisioning is complete (or not in-progress) and configuring is in-progress, use ConfiguringStartTime.
 	if inProgress(cfg) {
+		// For Day 2 retry: if there's a spec change (ConfigTransactionId mismatch),
+		// skip timeout checking as this is a new configuration attempt
+		// Note: ObservedConfigTransactionId is 0 when not set, so we check for 0 or mismatch
+		if nar.Spec.ConfigTransactionId != 0 &&
+			(nar.Status.ObservedConfigTransactionId == 0 ||
+				nar.Status.ObservedConfigTransactionId != nar.Spec.ConfigTransactionId) {
+			r.Logger.InfoContext(context.Background(), "Configuration spec change detected, skipping timeout check for retry",
+				slog.String("nar", nar.Name),
+				slog.Int64("specConfigTransactionId", nar.Spec.ConfigTransactionId),
+				slog.Int64("observedConfigTransactionId", nar.Status.ObservedConfigTransactionId))
+			return false, hwmgmtv1alpha1.ConditionType(""), nil
+		}
+
 		if nar.Status.ConfiguringStartTime == nil || nar.Status.ConfiguringStartTime.Time.IsZero() {
 			// Inconsistent state: configuring says in-progress but no start time.
 			r.Logger.WarnContext(context.Background(), "Configuration in progress but no start time set",

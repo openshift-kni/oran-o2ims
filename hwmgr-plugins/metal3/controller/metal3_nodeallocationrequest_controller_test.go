@@ -286,4 +286,92 @@ var _ = Describe("Metal3 NodeAllocationRequest Controller Timeout Handling", fun
 			})
 		})
 	})
+
+	Describe("Day 2 retry scenarios", func() {
+		var nar *pluginsv1alpha1.NodeAllocationRequest
+
+		BeforeEach(func() {
+			nar = &pluginsv1alpha1.NodeAllocationRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-nar-day2",
+					Namespace: "default",
+				},
+				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+					HardwareProvisioningTimeout: "5m",
+					ConfigTransactionId:         2, // Indicates spec change
+				},
+				Status: pluginsv1alpha1.NodeAllocationRequestStatus{
+					Conditions: []metav1.Condition{},
+				},
+			}
+		})
+
+		Context("when configuration failed and spec changed", func() {
+			BeforeEach(func() {
+				// Set provisioning as completed
+				hwmgrutils.SetStatusCondition(&nar.Status.Conditions,
+					string(hwmgmtv1alpha1.Provisioned),
+					string(hwmgmtv1alpha1.Completed),
+					metav1.ConditionTrue,
+					"Hardware provisioning completed")
+
+				// Set configuration as failed
+				hwmgrutils.SetStatusCondition(&nar.Status.Conditions,
+					string(hwmgmtv1alpha1.Configured),
+					string(hwmgmtv1alpha1.Failed),
+					metav1.ConditionFalse,
+					"Hardware configuration failed")
+
+				// Set configuration start time to old (exceeded timeout) - this should be ignored when spec changes
+				startTime := metav1.Time{Time: time.Now().Add(-10 * time.Minute)}
+				nar.Status.ConfiguringStartTime = &startTime
+
+				// Set ObservedConfigTransactionId to 1, but Spec.ConfigTransactionId is 2 (mismatch = spec change)
+				nar.Status.ObservedConfigTransactionId = 1
+			})
+
+			It("should allow retry when spec changes", func() {
+				// The Metal3 controller should detect the spec change and skip timeout checking
+				// This allows retry even when the previous configuration failed/timed out
+				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(nar)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(timeoutExceeded).To(BeFalse())
+				Expect(conditionType).To(Equal(hwmgmtv1alpha1.ConditionType("")))
+			})
+		})
+
+		Context("when configuration timed out and spec changed", func() {
+			BeforeEach(func() {
+				// Set provisioning as completed
+				hwmgrutils.SetStatusCondition(&nar.Status.Conditions,
+					string(hwmgmtv1alpha1.Provisioned),
+					string(hwmgmtv1alpha1.Completed),
+					metav1.ConditionTrue,
+					"Hardware provisioning completed")
+
+				// Set configuration as timed out
+				hwmgrutils.SetStatusCondition(&nar.Status.Conditions,
+					string(hwmgmtv1alpha1.Configured),
+					string(hwmgmtv1alpha1.TimedOut),
+					metav1.ConditionFalse,
+					"Hardware configuration timed out")
+
+				// Set configuration start time to old (exceeded timeout) - this should be ignored when spec changes
+				startTime := metav1.Time{Time: time.Now().Add(-10 * time.Minute)}
+				nar.Status.ConfiguringStartTime = &startTime
+
+				// Set ObservedConfigTransactionId to 1, but Spec.ConfigTransactionId is 2 (mismatch = spec change)
+				nar.Status.ObservedConfigTransactionId = 1
+			})
+
+			It("should allow retry when spec changes", func() {
+				// Similar to failed case, should allow retry with spec change
+				// Timeout check should be skipped when spec changes
+				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(nar)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(timeoutExceeded).To(BeFalse())
+				Expect(conditionType).To(Equal(hwmgmtv1alpha1.ConditionType("")))
+			})
+		})
+	})
 })

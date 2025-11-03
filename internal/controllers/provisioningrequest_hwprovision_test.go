@@ -1010,6 +1010,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		nar, err := task.buildNodeAllocationRequest(clusterInstance, hwTemplate)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
+		Expect(nar.ConfigTransactionId).To(Equal(int64(1))) // Should match PR generation
 		Expect(nar.HardwareProvisioningTimeout).ToNot(BeNil())
 		Expect(*nar.HardwareProvisioningTimeout).To(Equal("60m"))
 	})
@@ -2498,6 +2499,149 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			Expect(timedOutOrFailed).To(BeFalse())
 			// Verify the NAR context is preserved with "configuring" (verb form)
 			Expect(message).To(Equal("Hardware configuring is in progress: " + narContextMessage))
+		})
+	})
+
+	Context("shouldUpdateHardwareStatus day 2 retry logic", func() {
+		var task *provisioningRequestReconcilerTask
+		var cr *provisioningv1alpha1.ProvisioningRequest
+
+		BeforeEach(func() {
+			cr = &provisioningv1alpha1.ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-pr",
+					Namespace:  "default",
+					Generation: 2,
+				},
+				Status: provisioningv1alpha1.ProvisioningRequestStatus{
+					ObservedGeneration: 1, // Different from generation, indicating spec change
+					ProvisioningStatus: provisioningv1alpha1.ProvisioningStatus{
+						ProvisioningPhase: provisioningv1alpha1.StatePending,
+					},
+				},
+			}
+			Expect(c.Create(ctx, cr)).To(Succeed())
+
+			task = &provisioningRequestReconcilerTask{
+				logger: reconciler.Logger,
+				client: reconciler.Client,
+				object: cr,
+			}
+		})
+
+		Context("when Configured condition is in terminal state and PR is pending", func() {
+			BeforeEach(func() {
+				// Set up terminal state (TimedOut) for HardwareConfigured condition
+				utils.SetStatusCondition(&cr.Status.Conditions,
+					provisioningv1alpha1.PRconditionTypes.HardwareConfigured,
+					provisioningv1alpha1.CRconditionReasons.TimedOut,
+					metav1.ConditionFalse,
+					"Hardware configuration timed out")
+				Expect(c.Status().Update(ctx, cr)).To(Succeed())
+			})
+
+			It("should NOT allow status update for terminal Configured condition", func() {
+				// This should return false because:
+				// 1. isTerminalState = true (TimedOut reason)
+				// 2. condition = hwmgmtv1alpha1.Configured
+				// 3. With new implementation, terminal states always return false
+				result := task.shouldUpdateHardwareStatus(hwmgmtv1alpha1.Configured)
+				Expect(result).To(BeFalse())
+			})
+
+			It("should NOT allow status update for Provisioned condition", func() {
+				// Set up terminal state (TimedOut) for HardwareProvisioned condition
+				utils.SetStatusCondition(&cr.Status.Conditions,
+					provisioningv1alpha1.PRconditionTypes.HardwareProvisioned,
+					provisioningv1alpha1.CRconditionReasons.TimedOut,
+					metav1.ConditionFalse,
+					"Hardware provisioning timed out")
+				Expect(c.Status().Update(ctx, cr)).To(Succeed())
+
+				// This should return false because:
+				// 1. isTerminalState = true (TimedOut reason)
+				// 2. condition = hwmgmtv1alpha1.Provisioned (not Configured)
+				// 3. Day 2 retry exception only applies to Configured condition
+				result := task.shouldUpdateHardwareStatus(hwmgmtv1alpha1.Provisioned)
+				Expect(result).To(BeFalse())
+			})
+
+			It("should NOT allow status update when PR is not pending", func() {
+				// Change PR phase to progressing
+				cr.Status.ProvisioningStatus.ProvisioningPhase = provisioningv1alpha1.StateProgressing
+				Expect(c.Status().Update(ctx, cr)).To(Succeed())
+
+				// This should return false because ProvisioningPhase is not StatePending
+				result := task.shouldUpdateHardwareStatus(hwmgmtv1alpha1.Configured)
+				Expect(result).To(BeFalse())
+			})
+		})
+
+		Context("when Configured condition is in terminal state (Failed) and PR is pending", func() {
+			BeforeEach(func() {
+				// Set up terminal state (Failed) for HardwareConfigured condition
+				utils.SetStatusCondition(&cr.Status.Conditions,
+					provisioningv1alpha1.PRconditionTypes.HardwareConfigured,
+					provisioningv1alpha1.CRconditionReasons.Failed,
+					metav1.ConditionFalse,
+					"Hardware configuration failed")
+				Expect(c.Status().Update(ctx, cr)).To(Succeed())
+			})
+
+			It("should NOT allow status update for terminal Configured condition", func() {
+				result := task.shouldUpdateHardwareStatus(hwmgmtv1alpha1.Configured)
+				Expect(result).To(BeFalse())
+			})
+		})
+
+		Context("when Configured condition is NOT in terminal state", func() {
+			BeforeEach(func() {
+				// Set up non-terminal state (InProgress) for HardwareConfigured condition
+				utils.SetStatusCondition(&cr.Status.Conditions,
+					provisioningv1alpha1.PRconditionTypes.HardwareConfigured,
+					provisioningv1alpha1.CRconditionReasons.InProgress,
+					metav1.ConditionFalse,
+					"Hardware configuration in progress")
+				Expect(c.Status().Update(ctx, cr)).To(Succeed())
+			})
+
+			It("should allow status update regardless of PR phase", func() {
+				// Should return true because condition is not in terminal state
+				result := task.shouldUpdateHardwareStatus(hwmgmtv1alpha1.Configured)
+				Expect(result).To(BeTrue())
+			})
+		})
+
+		Context("when no condition exists yet", func() {
+			It("should allow status update", func() {
+				// Should return true because no condition exists yet
+				result := task.shouldUpdateHardwareStatus(hwmgmtv1alpha1.Configured)
+				Expect(result).To(BeTrue())
+			})
+		})
+
+		Context("when callback-triggered reconciliation", func() {
+			BeforeEach(func() {
+				// Set up callback annotations
+				cr.Annotations = map[string]string{
+					utils.CallbackReceivedAnnotation: "test-callback",
+				}
+				Expect(c.Update(ctx, cr)).To(Succeed())
+
+				// Set up terminal state
+				utils.SetStatusCondition(&cr.Status.Conditions,
+					provisioningv1alpha1.PRconditionTypes.HardwareConfigured,
+					provisioningv1alpha1.CRconditionReasons.TimedOut,
+					metav1.ConditionFalse,
+					"Hardware configuration timed out")
+				Expect(c.Status().Update(ctx, cr)).To(Succeed())
+			})
+
+			It("should always allow status update", func() {
+				// Should return true because it's callback-triggered, regardless of terminal state
+				result := task.shouldUpdateHardwareStatus(hwmgmtv1alpha1.Configured)
+				Expect(result).To(BeTrue())
+			})
 		})
 	})
 
