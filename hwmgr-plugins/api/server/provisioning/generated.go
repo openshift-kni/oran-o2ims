@@ -165,6 +165,10 @@ type NodeAllocationRequest struct {
 	// ConfigTransactionId ConfigTransactionId is the identifier of the configuration transaction.
 	ConfigTransactionId int64 `json:"configTransactionId"`
 
+	// HardwareProvisioningTimeout HardwareProvisioningTimeout defines the timeout duration string for the hardware provisioning.
+	// If not specified, the default timeout value will be applied.
+	HardwareProvisioningTimeout *string `json:"hardwareProvisioningTimeout,omitempty"`
+
 	// NodeGroup List of node groups which this resource is based on.
 	NodeGroup []NodeGroup `json:"nodeGroup"`
 

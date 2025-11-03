@@ -582,6 +582,11 @@ components:
           description: |
             Callback configuration for receiving notifications when the NodeAllocationRequest operation is completed or fails.
             The callback will be made as a POST request with CallbackPayload in the request body.
+        hardwareProvisioningTimeout:
+          type: string
+          description: |
+            HardwareProvisioningTimeout defines the timeout duration string for the hardware provisioning.
+            If not specified, the default timeout value will be applied.
       required:
         - nodeGroup
         - site
