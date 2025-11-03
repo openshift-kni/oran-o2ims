@@ -296,6 +296,7 @@ YQ ?= $(LOCALBIN)/yq
 
 ## Download go tools
 .PHONY: kubectl
+.PHONY: $(KUBECTL)
 kubectl: $(KUBECTL) ## Use envtest to download kubectl
 $(KUBECTL): $(LOCALBIN) envtest
 	if [ ! -f $(KUBECTL) ] || ! $(KUBECTL) version 2>/dev/null | grep -q "Client Version: v$(ENVTEST_K8S_VERSION)$$"; then \
@@ -304,6 +305,7 @@ $(KUBECTL): $(LOCALBIN) envtest
 	fi
 
 .PHONY: kustomize
+.PHONY: $(KUSTOMIZE)
 kustomize: sync-git-submodules $(KUSTOMIZE) ## Download kustomize locally if necessary. If wrong version is installed, it will be removed before downloading.
 $(KUSTOMIZE): $(LOCALBIN)
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-go-tool \
@@ -312,6 +314,7 @@ $(KUSTOMIZE): $(LOCALBIN)
 		DOWNLOAD_INSTALL_DIR=$(LOCALBIN)
 
 .PHONY: controller-gen
+.PHONY: $(CONTROLLER_GEN)
 controller-gen: sync-git-submodules $(CONTROLLER_GEN) ## Download controller-gen locally if necessary. If wrong version is installed, it will be removed before downloading.
 $(CONTROLLER_GEN): $(LOCALBIN)
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-go-tool \
@@ -320,6 +323,7 @@ $(CONTROLLER_GEN): $(LOCALBIN)
 		DOWNLOAD_INSTALL_DIR=$(LOCALBIN)
 
 .PHONY: envtest
+.PHONY: $(ENVTEST)
 envtest: sync-git-submodules $(ENVTEST) ## Download envtest-setup locally if necessary. If wrong version is installed, it will be removed before downloading.
 $(ENVTEST): $(LOCALBIN)
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-go-tool \
@@ -328,6 +332,7 @@ $(ENVTEST): $(LOCALBIN)
 		DOWNLOAD_INSTALL_DIR=$(LOCALBIN)
 
 .PHONY: mock-gen
+.PHONY: $(MOCK_GEN)
 mock-gen: sync-git-submodules $(MOCK_GEN) ## Download mockgen locally if necessary. If wrong version is installed, it will be removed before downloading.
 $(MOCK_GEN): $(LOCALBIN)
 	$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-go-tool \
@@ -449,6 +454,7 @@ $(GOLANGCI_LINT): $(LOCALBIN)
 	@echo "Golangci-lint downloaded successfully."
 
 .PHONY: golangci-lint
+.PHONY: $(GOLANGCI_LINT)
 golangci-lint: golangci-lint-download ## Run golangci-lint against code.
 	@echo "Running golangci-lint on repository go files..."
 	$(GOLANGCI_LINT) --version
@@ -466,6 +472,7 @@ $(BASHATE): $(LOCALBIN)
 	@echo "Bashate downloaded successfully."
 
 .PHONY: bashate
+.PHONY: $(BASHATE)
 bashate: bashate-download ## Run bashate against bash files in the repository.
 	@echo "Running bashate on repository bash files..."
 	find $(PROJECT_DIR) -name '*.sh' \
@@ -479,6 +486,8 @@ bashate: bashate-download ## Run bashate against bash files in the repository.
 		| xargs -0 --no-run-if-empty $(BASHATE) -v -e 'E*' -i E006
 	@echo "Bashate linting completed successfully."
 
+.PHONY: operator-sdk
+.PHONY: $(OPERATOR_SDK)
 operator-sdk: sync-git-submodules $(OPERATOR_SDK) ## Download operator-sdk locally if necessary. If wrong version is installed, it will be removed before downloading.
 $(OPERATOR_SDK): $(LOCALBIN)
 	@$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-operator-sdk \
@@ -487,6 +496,7 @@ $(OPERATOR_SDK): $(LOCALBIN)
 	@echo "Operator sdk downloaded successfully."
 
 .PHONY: opm
+.PHONY: $(OPM)
 opm: sync-git-submodules $(OPM) ## Download opm locally if necessary. If wrong version is installed, it will be removed before downloading.
 $(OPM): $(LOCALBIN)
 	@$(MAKE) -C $(PROJECT_DIR)/telco5g-konflux/scripts/download download-opm \
@@ -507,6 +517,7 @@ $(SHELLCHECK): $(LOCALBIN)
 	$(SHELLCHECK) -V
 
 .PHONY: shellcheck
+.PHONY: $(SHELLCHECK)
 shellcheck: shellcheck-download ## Run shellcheck against bash scripts in the repository.
 	@echo "Running shellcheck on repository bash files..."
 	find $(PROJECT_DIR) -name '*.sh' \
@@ -532,6 +543,7 @@ $(YAMLLINT): $(LOCALBIN)
 	@echo "Yamllint downloaded successfully."
 
 .PHONY: yamllint
+.PHONY: $(YAMLLINT)
 yamllint: yamllint-download ## Lint YAML files in the repository
 	@echo "Running yamllint on repository YAML files..."
 	find $(PROJECT_DIR) -name "*.yaml" -o -name "*.yml" \
@@ -546,6 +558,7 @@ yamllint: yamllint-download ## Lint YAML files in the repository
 	@echo "YAML linting completed successfully."
 
 .PHONY: yq
+.PHONY: $(YQ)
 yq: sync-git-submodules $(YQ) ## Download yq locally if necessary. If wrong version is installed, it will be removed before downloading.
 $(YQ): $(LOCALBIN)
 	@echo "Downloading yq..."
