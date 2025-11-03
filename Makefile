@@ -291,6 +291,7 @@ KUSTOMIZE ?= $(LOCALBIN)/kustomize
 MOCK_GEN ?= $(LOCALBIN)/mockgen
 OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
 OPM ?= $(LOCALBIN)/opm
+SHELLCHECK ?= $(LOCALBIN)/shellcheck
 YAMLLINT ?= $(LOCALBIN)/yamllint
 YQ ?= $(LOCALBIN)/yq
 
