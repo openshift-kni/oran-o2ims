@@ -2104,10 +2104,12 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			testutils.CreateResources(ctx, c, []*pluginsv1alpha1.AllocatedNode{node}, secrets)
 
 			// Create the corresponding BareMetalHost that the function will look for
+			bmhUID := "f47ac10b-58cc-4372-a567-0e02b2c3d479" // Fixed UUID for testing
 			bmh := &metal3v1alpha1.BareMetalHost{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      masterNodeName2,
 					Namespace: utils.UnitTestHwmgrNamespace,
+					UID:       types.UID(bmhUID),
 				},
 				Spec: metal3v1alpha1.BareMetalHostSpec{
 					BMC: metal3v1alpha1.BMCDetails{
@@ -2145,7 +2147,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 						utils.ClusterTemplateArtifactsLabel:                      "57b39bda-ac56-4143-9b10-d1a71517d04f",
 						"agent-install.openshift.io/clusterdeployment-namespace": mclName,
 						"clcm.openshift.io/hardwarePluginRef":                    utils.UnitTestHwPluginRef,
-						"clcm.openshift.io/hwMgrNodeId":                          masterNodeName2,
+						"clcm.openshift.io/hwMgrNodeId":                          bmhUID,
 					}))
 				}
 				if agent.Name == AgentName {

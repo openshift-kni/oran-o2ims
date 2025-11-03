@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
@@ -569,10 +570,12 @@ var _ = Describe("Inventory", func() {
 	})
 
 	Describe("getResourceInfoResourceId", func() {
-		It("should return formatted resource ID", func() {
+		It("should return BMH UID as resource ID", func() {
 			bmh := createBasicBMH("test-bmh", "test-ns")
+			testUID := types.UID("f47ac10b-58cc-4372-a567-0e02b2c3d479")
+			bmh.UID = testUID
 			result := getResourceInfoResourceId(bmh)
-			Expect(result).To(Equal("test-ns/test-bmh"))
+			Expect(result).To(Equal(string(testUID)))
 		})
 	})
 
@@ -857,7 +860,9 @@ var _ = Describe("Inventory", func() {
 
 	Describe("getResourceInfo", func() {
 		It("should aggregate all resource information correctly", func() {
+			testUID := types.UID("f47ac10b-58cc-4372-a567-0e02b2c3d479")
 			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.UID = testUID
 			bmh.Labels = map[string]string{
 				LabelResourcePoolID:                  "pool123",
 				LabelPrefixResourceSelector + "zone": "zone1",
@@ -886,7 +891,7 @@ var _ = Describe("Inventory", func() {
 			Expect(result.PartNumber).To(Equal("PN123456"))
 			Expect(*result.PowerState).To(Equal(inventory.ON))
 			Expect(result.Processors).To(HaveLen(1))
-			Expect(result.ResourceId).To(Equal("test-ns/test-bmh"))
+			Expect(result.ResourceId).To(Equal(string(testUID)))
 			Expect(result.ResourcePoolId).To(Equal("pool123"))
 			Expect(result.SerialNumber).To(Equal("ABC123456"))
 			Expect(*result.Tags).To(ContainElement("zone: zone1"))
@@ -975,7 +980,9 @@ var _ = Describe("Inventory", func() {
 
 		It("should return resources from BMHs included in inventory", func() {
 			// Create BMH with required labels and valid state
+			testUID := types.UID("f47ac10b-58cc-4372-a567-0e02b2c3d479")
 			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.UID = testUID
 			bmh.Labels = map[string]string{
 				LabelResourcePoolID: "pool123",
 				LabelSiteID:         "site123",
@@ -1004,7 +1011,7 @@ var _ = Describe("Inventory", func() {
 
 			resource := response[0]
 			Expect(resource.Name).To(Equal("test-bmh"))
-			Expect(resource.ResourceId).To(Equal("test-ns/test-bmh"))
+			Expect(resource.ResourceId).To(Equal(string(testUID)))
 			Expect(resource.ResourcePoolId).To(Equal("pool123"))
 			Expect(resource.HwProfile).To(Equal("profile123"))
 		})
