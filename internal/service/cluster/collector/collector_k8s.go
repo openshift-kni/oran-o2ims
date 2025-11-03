@@ -31,7 +31,6 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
-	"github.com/openshift-kni/oran-o2ims/internal/service/resources/collector"
 )
 
 // Interface compile enforcement
@@ -183,16 +182,12 @@ func (d *K8SDataSource) MakeNodeClusterType(resource *models.NodeCluster) (*mode
 // getInventoryResourceID calculates the Inventory Resource ID value based on the labels on the Agent.  If the labels
 // are not yet present, then we simply return a zero UUID value.
 func (d *K8SDataSource) getInventoryResourceID(agent *v1beta1.Agent) uuid.UUID {
-	var hwMgrID, hwMgrNodeID string
-	var found bool
-	if hwMgrID, found = agent.Labels[ctlrutils.HardwarePluginRefLabel]; !found {
-		return uuid.Nil
+	if hwMgrNodeID, found := agent.Labels[ctlrutils.HardwareManagerNodeIdLabel]; found {
+		if resourceID, err := uuid.Parse(hwMgrNodeID); err == nil {
+			return resourceID
+		}
 	}
-	if hwMgrNodeID, found = agent.Labels[ctlrutils.HardwareManagerNodeIdLabel]; !found {
-		return uuid.Nil
-	}
-
-	return collector.MakeResourceID(d.cloudID, hwMgrID, hwMgrNodeID)
+	return uuid.Nil
 }
 
 // convertAgentToClusterResource converts an Agent CR to a ClusterResource object
