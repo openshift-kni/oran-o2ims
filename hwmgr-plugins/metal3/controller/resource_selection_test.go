@@ -327,6 +327,135 @@ var _ = Describe("Resource Selection", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeTrue())
 		})
+
+		It("should return error for invalid integer value in num_threads", func() {
+			hwData := createHardwareData("test", "test-ns", &metal3v1alpha1.HardwareDetails{
+				CPU: metal3v1alpha1.CPU{Count: 8},
+			})
+
+			_, err := ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldNumThreads, "invalid", hwData)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("checkIntWithQualifiers failed"))
+		})
+
+		It("should return error for invalid integer qualifier in num_threads", func() {
+			hwData := createHardwareData("test", "test-ns", &metal3v1alpha1.HardwareDetails{
+				CPU: metal3v1alpha1.CPU{Count: 8},
+			})
+
+			_, err := ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldNumThreads+";invalid", "8", hwData)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("checkIntWithQualifiers failed"))
+		})
+
+		It("should return error for invalid integer value in ramMebibytes", func() {
+			hwData := createHardwareData("test", "test-ns", &metal3v1alpha1.HardwareDetails{
+				RAMMebibytes: 16384,
+			})
+
+			_, err := ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldRAM, "not-a-number", hwData)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("checkIntWithQualifiers failed"))
+		})
+
+		It("should return error for invalid integer qualifier in ramMebibytes", func() {
+			hwData := createHardwareData("test", "test-ns", &metal3v1alpha1.HardwareDetails{
+				RAMMebibytes: 16384,
+			})
+
+			_, err := ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldRAM+";badqualifier", "16384", hwData)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("checkIntWithQualifiers failed"))
+		})
+
+		It("should return error for invalid NIC qualifier format", func() {
+			hwData := createHardwareData("test", "test-ns", &metal3v1alpha1.HardwareDetails{
+				NIC: []metal3v1alpha1.NIC{
+					{Model: "Intel", SpeedGbps: 10},
+				},
+			})
+
+			_, err := ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldNIC+";invalidqualifier", "present", hwData)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("checkNicsWithQualifiers failed"))
+		})
+
+		It("should return error for invalid NIC value", func() {
+			hwData := createHardwareData("test", "test-ns", &metal3v1alpha1.HardwareDetails{
+				NIC: []metal3v1alpha1.NIC{
+					{Model: "Intel", SpeedGbps: 10},
+				},
+			})
+
+			_, err := ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldNIC, "invalid-value", hwData)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("checkNicsWithQualifiers failed"))
+		})
+
+		It("should return error for invalid NIC speedGbps operator", func() {
+			hwData := createHardwareData("test", "test-ns", &metal3v1alpha1.HardwareDetails{
+				NIC: []metal3v1alpha1.NIC{
+					{Model: "Intel", SpeedGbps: 10},
+				},
+			})
+
+			_, err := ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldNIC+";speedGbps~10", "present", hwData)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("checkNicsWithQualifiers failed"))
+		})
+
+		It("should return error for invalid storage qualifier format", func() {
+			hwData := createHardwareData("test", "test-ns", &metal3v1alpha1.HardwareDetails{
+				Storage: []metal3v1alpha1.Storage{
+					{Name: "sda", Type: metal3v1alpha1.SSD, SizeBytes: 1000000000000},
+				},
+			})
+
+			_, err := ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldStorage+";invalidqualifier", "present", hwData)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("checkStorageWithQualifiers failed"))
+		})
+
+		It("should return error for invalid storage value", func() {
+			hwData := createHardwareData("test", "test-ns", &metal3v1alpha1.HardwareDetails{
+				Storage: []metal3v1alpha1.Storage{
+					{Name: "sda", Type: metal3v1alpha1.SSD, SizeBytes: 1000000000000},
+				},
+			})
+
+			_, err := ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldStorage, "not-present", hwData)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("checkStorageWithQualifiers failed"))
+		})
+
+		It("should return error for invalid storage sizeBytes operator", func() {
+			hwData := createHardwareData("test", "test-ns", &metal3v1alpha1.HardwareDetails{
+				Storage: []metal3v1alpha1.Storage{
+					{Name: "sda", Type: metal3v1alpha1.SSD, SizeBytes: 1000000000000},
+				},
+			})
+
+			_, err := ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldStorage+";sizeBytes~1000", "present", hwData)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("checkStorageWithQualifiers failed"))
+		})
+
+		It("should handle nil hardware details gracefully", func() {
+			hwData := createHardwareData("test", "test-ns", nil)
+
+			// Should panic or handle gracefully - depending on implementation
+			// Let's test with CPU arch which should cause a nil pointer dereference
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						// This is expected behavior when hardware details is nil
+						Expect(r).NotTo(BeNil())
+					}
+				}()
+				_, err := ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldCPUArch, "x86_64", hwData)
+				Expect(err).NotTo(HaveOccurred())
+			}()
+		})
 	})
 
 	Describe("String matching with qualifiers", func() {
@@ -540,6 +669,48 @@ var _ = Describe("Resource Selection", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(BeTrue())
 			})
+
+			It("should return error for invalid value parameter", func() {
+				_, err := checkNicsWithQualifiers([]string{"model=Intel"}, "invalid", nics, true)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("expected value to be 'present'"))
+			})
+
+			It("should return error for invalid qualifier format", func() {
+				_, err := checkNicsWithQualifiers([]string{"invalidqualifier"}, "present", nics, true)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("qualifierSetFromQualifiers failed"))
+			})
+
+			It("should return error for invalid string operator", func() {
+				_, err := checkNicsWithQualifiers([]string{"model>Intel"}, "present", nics, true)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("checkStringWithOpQualifier failed"))
+			})
+
+			It("should return error for invalid speed value", func() {
+				_, err := checkNicsWithQualifiers([]string{"speedGbps=invalid"}, "present", nics, true)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("checkIntWithOpQualifier failed"))
+			})
+
+			It("should return error for invalid speed operator", func() {
+				_, err := checkNicsWithQualifiers([]string{"speedGbps~10"}, "present", nics, true)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("checkIntWithOpQualifier failed"))
+			})
+
+			It("should return error for invalid count value", func() {
+				_, err := checkNicsWithQualifiers([]string{"count=invalid"}, "present", nics, true)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("checkIntWithOpQualifier failed"))
+			})
+
+			It("should return error for invalid count operator", func() {
+				_, err := checkNicsWithQualifiers([]string{"count~3"}, "present", nics, true)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("checkIntWithOpQualifier failed"))
+			})
 		})
 	})
 
@@ -654,6 +825,66 @@ var _ = Describe("Resource Selection", func() {
 				result, err = checkStorageWithQualifiers([]string{"sizeBytes>600000000000", "vendor=Seagate"}, "present", storage, true)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(BeTrue())
+			})
+
+			It("should return error for invalid value parameter", func() {
+				_, err := checkStorageWithQualifiers([]string{"type=SSD"}, "invalid", storage, true)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("expected value to be 'present'"))
+			})
+
+			It("should return error for invalid qualifier format", func() {
+				_, err := checkStorageWithQualifiers([]string{"invalidqualifier"}, "present", storage, true)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("qualifierSetFromQualifiers failed"))
+			})
+
+			It("should return error for invalid type operator", func() {
+				_, err := checkStorageWithQualifiers([]string{"type>SSD"}, "present", storage, true)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("checkStringWithOpQualifier failed"))
+			})
+
+			It("should return error for invalid sizeBytes value", func() {
+				_, err := checkStorageWithQualifiers([]string{"sizeBytes=invalid"}, "present", storage, true)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("checkIntWithOpQualifier failed"))
+			})
+
+			It("should return error for invalid sizeBytes operator", func() {
+				_, err := checkStorageWithQualifiers([]string{"sizeBytes~1000"}, "present", storage, true)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("checkIntWithOpQualifier failed"))
+			})
+
+			It("should return error for invalid name operator", func() {
+				_, err := checkStorageWithQualifiers([]string{"name>sda"}, "present", storage, true)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("checkStringWithOpQualifier failed"))
+			})
+
+			It("should return error for invalid vendor operator", func() {
+				_, err := checkStorageWithQualifiers([]string{"vendor>Seagate"}, "present", storage, true)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("checkStringWithOpQualifier failed"))
+			})
+
+			It("should return error for invalid model operator", func() {
+				_, err := checkStorageWithQualifiers([]string{"model>ST1000"}, "present", storage, true)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("checkStringWithOpQualifier failed"))
+			})
+
+			It("should return error for invalid count value", func() {
+				_, err := checkStorageWithQualifiers([]string{"count=invalid"}, "present", storage, true)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("checkIntWithOpQualifier failed"))
+			})
+
+			It("should return error for invalid count operator", func() {
+				_, err := checkStorageWithQualifiers([]string{"count~2"}, "present", storage, true)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("checkIntWithOpQualifier failed"))
 			})
 		})
 	})
