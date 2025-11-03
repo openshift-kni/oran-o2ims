@@ -9,6 +9,7 @@
 
 PINNED_GO="1.24.0"
 
+# shellcheck disable=SC2329
 function cleanup {
     # shellcheck disable=SC2317
     if [ -n "${rootdir}" ]; then
