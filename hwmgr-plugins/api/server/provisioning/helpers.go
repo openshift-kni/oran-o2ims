@@ -20,15 +20,13 @@ import (
 
 	"github.com/openshift-kni/oran-o2ims/api/common"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
-func GetLoopbackHWPluginNamespace() string {
-	return ctlrutils.GetHwMgrPluginNS()
-}
-
 func GetMetal3HWPluginNamespace() string {
-	return ctlrutils.GetHwMgrPluginNS()
+	// HardwarePlugins are co-located with the operator in OCLOUD_MANAGER_NAMESPACE
+	return ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
 }
 
 func GenerateResourceIdentifier(baseName string) (string, error) {

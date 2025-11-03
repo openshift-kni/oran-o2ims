@@ -350,12 +350,12 @@ defaultHugepagesSize: "1G"`,
 
 		// Create the provisioned NodeAllocationRequest
 		hwPluginNs := &corev1.Namespace{}
-		hwPluginNs.SetName(utils.UnitTestHwmgrNamespace)
+		hwPluginNs.SetName(constants.DefaultNamespace)
 		Expect(c.Create(ctx, hwPluginNs)).To(Succeed())
 		nodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "cluster-1",
-				Namespace: utils.UnitTestHwmgrNamespace,
+				Namespace: constants.DefaultNamespace,
 				Annotations: map[string]string{
 					pluginsv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
 				},
@@ -1782,7 +1782,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 		}
 
 		hwPluginNs := &corev1.Namespace{}
-		hwPluginNs.SetName(utils.UnitTestHwmgrNamespace)
+		hwPluginNs.SetName(constants.DefaultNamespace)
 
 		crs := []client.Object{
 			// Cluster Template Namespace.
@@ -1793,7 +1793,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			},
 			&corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: utils.UnitTestHwmgrNamespace,
+					Name: constants.DefaultNamespace,
 				},
 			},
 			// ManagedCluster Namespace.
@@ -1850,7 +1850,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 		nodeAllocationRequest = &pluginsv1alpha1.NodeAllocationRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      mclName,
-				Namespace: utils.UnitTestHwmgrNamespace,
+				Namespace: constants.DefaultNamespace,
 				Annotations: map[string]string{
 					pluginsv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
 				},
@@ -1901,7 +1901,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 		// Get hwpluginClient for the test
 		hwpluginKey := types.NamespacedName{
 			Name:      utils.UnitTestHwPluginRef,
-			Namespace: utils.UnitTestHwmgrNamespace,
+			Namespace: constants.DefaultNamespace,
 		}
 		hwplugin := &hwmgmtv1alpha1.HardwarePlugin{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1990,7 +1990,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 	Context("When the HW template is provided and the expected HW CRs exist", func() {
 		BeforeEach(func() {
 			hwPluginNs := &corev1.Namespace{}
-			hwPluginNs.SetName(utils.UnitTestHwmgrNamespace)
+			hwPluginNs.SetName(constants.DefaultNamespace)
 
 			// Create the NodeAllocationRequest.
 			Expect(c.Create(ctx, nodeAllocationRequest)).To(Succeed())
@@ -2098,9 +2098,9 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			bmcSecretName2 := "bmc-secret-2"
 			node := testutils.CreateNode(
 				masterNodeName2, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1",
-				"bmc-secret", "controller", utils.UnitTestHwmgrNamespace, mclName, nil)
+				"bmc-secret", "controller", constants.DefaultNamespace, mclName, nil)
 			node.Status.Hostname = agent2Hostname
-			secrets := testutils.CreateSecrets([]string{bmcSecretName2}, utils.UnitTestHwmgrNamespace)
+			secrets := testutils.CreateSecrets([]string{bmcSecretName2}, constants.DefaultNamespace)
 			testutils.CreateResources(ctx, c, []*pluginsv1alpha1.AllocatedNode{node}, secrets)
 
 			// Create the corresponding BareMetalHost that the function will look for
@@ -2108,7 +2108,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			bmh := &metal3v1alpha1.BareMetalHost{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      masterNodeName2,
-					Namespace: utils.UnitTestHwmgrNamespace,
+					Namespace: constants.DefaultNamespace,
 					UID:       types.UID(bmhUID),
 				},
 				Spec: metal3v1alpha1.BareMetalHostSpec{
@@ -2188,9 +2188,9 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			bmcSecretName2 := "bmc-secret-2"
 			node := testutils.CreateNode(
 				masterNodeName2, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1",
-				"bmc-secret", "controller", utils.UnitTestHwmgrNamespace, mclName, nil)
+				"bmc-secret", "controller", constants.DefaultNamespace, mclName, nil)
 			node.Status.Hostname = "some-other-cluster.lab.example.com"
-			secrets := testutils.CreateSecrets([]string{bmcSecretName2}, utils.UnitTestHwmgrNamespace)
+			secrets := testutils.CreateSecrets([]string{bmcSecretName2}, constants.DefaultNamespace)
 			testutils.CreateResources(ctx, c, []*pluginsv1alpha1.AllocatedNode{node}, secrets)
 
 			// Run the function.
