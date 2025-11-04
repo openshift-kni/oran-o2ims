@@ -1,0 +1,38 @@
+name: Kustomize Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  kustomize-validation:
+    name: Validate Kustomization Files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Install Kustomize
+        run: |
+          # Use the Makefile to install kustomize with the version specified in KUSTOMIZE_VERSION
+          make kustomize
+
+          # Add the bin directory to PATH for subsequent steps
+          echo "$(pwd)/bin" >> $GITHUB_PATH
+
+          # Verify installation
+          $(pwd)/bin/kustomize version
+
+      - name: Validate Kustomization Files
+        run: make test-kustomize
