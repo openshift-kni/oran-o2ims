@@ -19,6 +19,7 @@ Test Suites:
 1. policyManagement - Tests for handling ACM (Advanced Cluster Management) policies during cluster configuration:
    • Does not handle the policy configuration without the cluster provisioning having started
    • Moves from Missing to OutOfDate when expected child policies are all Inform and not yet Compliant
+   • Does not set NonCompliantAt timestamp when the cluster is NotReady even if expected policies are missing
    • Sets InProgress and requeues when an expected enforce child policy is missing, then times out
    • Moves from preparing InProgress to applying InProgress when expected child policies appear NonCompliant, then times out
    • Moves from InProgress to Completed when all bound (expected and present) policies are Compliant
@@ -561,6 +562,59 @@ defaultHugepagesSize: "1G"`,
 				{
 					Compliant:         "NonCompliant",
 					PolicyName:        "v2-inform-2",
+					PolicyNamespace:   fmt.Sprintf("ztp-%s", ctNamespace),
+					RemediationAction: "inform",
+				},
+			},
+		))
+	})
+
+	It("Does not set NonCompliantAt timestamp when the cluster is NotReady even if expected policies are missing", func() {
+		annot := map[string]string{
+			utils.CTPolicyTemplatesAnnotation: GetClusterTemplateRefName(tName, tVersion) + "," + GetClusterTemplateRefName(tName, "v1.0.1"),
+		}
+		// One expected Enforce, one expected Inform
+		createRootPolicy("v2-inform", annot, "inform")
+		createRootPolicy("v2-enforce", annot, "enforce")
+		// Create expected child for Inform; Enforce child remains missing
+		createChildPolicy(fmt.Sprintf("ztp-%s.v2-inform", ctNamespace), annot, "inform", "NonCompliant")
+
+		currentTime := metav1.Now()
+		CRTask.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = &currentTime
+		Expect(c.Status().Update(ctx, CRTask.object)).To(Succeed())
+
+		// Update the managed cluster to be not available.
+		managedCluster1 := &clusterv1.ManagedCluster{}
+		managedClusterExists, err := utils.DoesK8SResourceExist(
+			ctx, c, "cluster-1", "", managedCluster1)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(managedClusterExists).To(BeTrue())
+		utils.SetStatusCondition(&managedCluster1.Status.Conditions,
+			provisioningv1alpha1.ConditionType(clusterv1.ManagedClusterConditionAvailable),
+			"ManagedClusterAvailable",
+			metav1.ConditionFalse,
+			"Managed cluster is not available",
+		)
+		err = c.Status().Update(ctx, managedCluster1)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Missing expected enforce policy, but cluster is not ready, so set ClusterNotReady.
+		requeue, err := CRTask.handleClusterPolicyConfiguration(context.Background())
+		Expect(requeue).To(BeTrue())
+		Expect(err).ToNot(HaveOccurred())
+		cond := meta.FindStatusCondition(CRTask.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied))
+		Expect(cond).ToNot(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.ClusterNotReady)))
+		Expect(cond.Message).To(Equal("The Cluster is not yet ready"))
+		// NonCompliantAt should be zero because the cluster is not ready.
+		Expect(CRTask.object.Status.Extensions.ClusterDetails.NonCompliantAt).To(BeZero())
+		Expect(CRTask.object.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StateProgressing))
+		Expect(CRTask.object.Status.Extensions.Policies).To(ConsistOf(
+			[]provisioningv1alpha1.PolicyDetails{
+				{
+					Compliant:         "NonCompliant",
+					PolicyName:        "v2-inform",
 					PolicyNamespace:   fmt.Sprintf("ztp-%s", ctNamespace),
 					RemediationAction: "inform",
 				},
