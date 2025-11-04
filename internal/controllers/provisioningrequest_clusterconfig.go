@@ -69,10 +69,10 @@ func (t *provisioningRequestReconcilerTask) handleClusterPolicyConfiguration(ctx
 		return false, fmt.Errorf("failed to list child Policies: %w", err)
 	}
 
-	allPoliciesCompliant := true
-	allPoliciesInInform := true
+	allChildPoliciesCompliant := true
+	allChildPoliciesInInform := true
 	currentChildPolicyNames := map[string]bool{}
-	var targetPolicies []provisioningv1alpha1.PolicyDetails
+	var targetChildPolicies []provisioningv1alpha1.PolicyDetails
 	// Go through all the policies and get those that are matched with the managed cluster created
 	// by the current provisioning request.
 	for _, childPolicy := range childPolicies.Items {
@@ -81,34 +81,34 @@ func (t *provisioningRequestReconcilerTask) handleClusterPolicyConfiguration(ctx
 			continue
 		}
 
-		targetPolicy := &provisioningv1alpha1.PolicyDetails{
+		targetChildPolicy := &provisioningv1alpha1.PolicyDetails{
 			Compliant:         string(childPolicy.Status.ComplianceState),
 			PolicyName:        rootPolicyName,
 			PolicyNamespace:   rootPolicyNamespace,
 			RemediationAction: string(childPolicy.Spec.RemediationAction),
 		}
-		targetPolicies = append(targetPolicies, *targetPolicy)
+		targetChildPolicies = append(targetChildPolicies, *targetChildPolicy)
 
 		if childPolicy.Status.ComplianceState != policiesv1.Compliant {
-			allPoliciesCompliant = false
+			allChildPoliciesCompliant = false
 		}
 		if !strings.EqualFold(string(childPolicy.Spec.RemediationAction), string(policiesv1.Inform)) {
-			allPoliciesInInform = false
+			allChildPoliciesInInform = false
 		}
 
 		currentChildPolicyNames[childPolicy.Name] = true
 	}
 
-	missingChildPolicies, allExpectedPoliciesInInform := t.summarizeExpectedChildPolicies(
+	missingChildPolicies, allExpectedChildPoliciesInInform := t.summarizeExpectedChildPolicies(
 		ctx, expectedChildPolicies, currentChildPolicyNames)
 
 	policyConfigTimedOut, err := t.updateConfigurationAppliedStatus(
-		ctx, targetPolicies, allPoliciesCompliant, allPoliciesInInform,
-		missingChildPolicies, allExpectedPoliciesInInform)
+		ctx, targetChildPolicies, allChildPoliciesCompliant, allChildPoliciesInInform,
+		missingChildPolicies, allExpectedChildPoliciesInInform)
 	if err != nil {
 		return false, err
 	}
-	err = t.updateZTPStatus(ctx, allPoliciesCompliant)
+	err = t.updateZTPStatus(ctx, allChildPoliciesCompliant)
 	if err != nil {
 		return false, err
 	}
@@ -117,7 +117,7 @@ func (t *provisioningRequestReconcilerTask) handleClusterPolicyConfiguration(ctx
 	//  - present enforce policies not yet compliant and not timed out, or
 	//  - expected enforce policies not yet created and not timed out.
 	// Do not requeue for inform-only states (either present or expected).
-	requeue = ((!allPoliciesCompliant && !allPoliciesInInform) || (missingChildPolicies && !allExpectedPoliciesInInform)) && !policyConfigTimedOut
+	requeue = ((!allChildPoliciesCompliant && !allChildPoliciesInInform) || (missingChildPolicies && !allExpectedChildPoliciesInInform)) && !policyConfigTimedOut
 	return requeue, nil
 }
 
@@ -125,7 +125,7 @@ func (t *provisioningRequestReconcilerTask) handleClusterPolicyConfiguration(ctx
 // and if all expected policies are inform.
 func (t *provisioningRequestReconcilerTask) summarizeExpectedChildPolicies(
 	ctx context.Context, expectedChildPolicies map[string]string, currentChildPolicies map[string]bool) (bool, bool) {
-	allExpectedPoliciesInInform := true
+	allExpectedChildPoliciesInInform := true
 	missingChildPolicyNames := []string{}
 
 	for expectedName, expectedRemediationAction := range expectedChildPolicies {
@@ -133,32 +133,49 @@ func (t *provisioningRequestReconcilerTask) summarizeExpectedChildPolicies(
 			missingChildPolicyNames = append(missingChildPolicyNames, expectedName)
 		}
 		if !strings.EqualFold(expectedRemediationAction, string(policiesv1.Inform)) {
-			allExpectedPoliciesInInform = false
+			allExpectedChildPoliciesInInform = false
 		}
 	}
 	if len(missingChildPolicyNames) > 0 {
 		t.logger.InfoContext(ctx, fmt.Sprintf("Cluster (%s) is missing the expected policies: %s",
 			t.object.Status.Extensions.ClusterDetails.Name, strings.Join(missingChildPolicyNames, ", ")))
-		return true, allExpectedPoliciesInInform
+		return true, allExpectedChildPoliciesInInform
 	}
-	return false, allExpectedPoliciesInInform
+	return false, allExpectedChildPoliciesInInform
 }
 
 // updateConfigurationAppliedStatus updates the ProvisioningRequest ConfigurationApplied condition
-// based on the state of the policies matched with the managed cluster.
+// based on:
+//   - the set of present child policies (their compliance and remediation)
+//   - the set of expected child policies derived from root policies
+//   - whether the managed cluster is ready for policy configuration
+//
+// It sets one of the following reasons (with representative messages):
+//   - Missing: No present policies or expected missing policies are all Inform.
+//   - Completed: No expected missing policies and all present policies are Compliant.
+//   - ClusterNotReady: Cluster not ready to apply policy configuration.
+//   - OutOfDate: No expected missing policies and present policies are all Inform and NonCompliant.
+//   - InProgress: Expected policies missing or present policies not yet compliant.
+//   - TimedOut: Expected policies didn't appear in time, or present policies didn't become compliant in time.
+//
+// Additional effects:
+//   - Maintains status.extensions.clusterDetails.nonCompliantAt to drive timeout checks.
+//   - May update provisioning state to InProgress or Failed depending on context.
+//
+// Returns whether a timeout was detected and any error encountered while updating status.
 func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 	ctx context.Context,
-	targetPolicies []provisioningv1alpha1.PolicyDetails,
-	allPoliciesCompliant bool,
-	allPoliciesInInform bool,
+	targetChildPolicies []provisioningv1alpha1.PolicyDetails,
+	allChildPoliciesCompliant bool,
+	allChildPoliciesInInform bool,
 	missingChildPolicies bool,
-	allExpectedPoliciesInInform bool,
+	allExpectedChildPoliciesInInform bool,
 ) (policyConfigTimedOut bool, err error) {
 	err = nil
 	policyConfigTimedOut = false
 
 	defer func() {
-		t.object.Status.Extensions.Policies = targetPolicies
+		t.object.Status.Extensions.Policies = targetChildPolicies
 		// Update the current policy status.
 		if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
 			err = fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", t.object.Name, updateErr)
@@ -167,66 +184,15 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 		}
 	}()
 
-	// Handle the expected policies path first: if any expected child policies are missing,
-	// gate completion until they appear. Distinguish between:
-	//  - all expected are Inform: Missing (no timeout)
-	//  - otherwise: InProgress or TimedOut
-	if missingChildPolicies {
-		if allExpectedPoliciesInInform {
-			t.object.Status.Extensions.ClusterDetails.NonCompliantAt = nil
-			ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
-				provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
-				provisioningv1alpha1.CRconditionReasons.Missing,
-				metav1.ConditionTrue,
-				"Not all expected configuration is present",
-			)
-			return
-		}
-
-		// Check if expected policies generation has timed out.
-		policyConfigTimedOut = t.hasPolicyConfigurationTimedOut(ctx)
-		if policyConfigTimedOut {
-			ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
-				provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
-				provisioningv1alpha1.CRconditionReasons.TimedOut,
-				metav1.ConditionFalse,
-				"Timed out waiting for expected configuration to be present",
-			)
-			if !ctlrutils.IsClusterUpgradeInitiated(t.object) ||
-				ctlrutils.IsClusterUpgradeCompleted(t.object) {
-				ctlrutils.SetProvisioningStateFailed(t.object,
-					"Cluster configuration timed out")
-			}
-		} else {
-			ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
-				provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
-				provisioningv1alpha1.CRconditionReasons.InProgress,
-				metav1.ConditionFalse,
-				"Expected configuration is not yet prepared",
-			)
-			if !ctlrutils.IsClusterUpgradeInitiated(t.object) ||
-				ctlrutils.IsClusterUpgradeCompleted(t.object) {
-				ctlrutils.SetProvisioningStateInProgress(t.object,
-					"Cluster configuration is being prepared")
-			}
-		}
-		return
-	}
-
-	// No missing expected policies. Keep the existing behavior.
-	if len(targetPolicies) == 0 {
+	if !missingChildPolicies && len(targetChildPolicies) == 0 {
 		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = nil
-		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
-			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
+		t.setConfigurationAppliedStatus(
 			provisioningv1alpha1.CRconditionReasons.Missing,
-			metav1.ConditionTrue,
-			"No configuration present",
-		)
+			"No configuration present")
 		return
 	}
 
-	// Update the ConfigurationApplied condition.
-	if allPoliciesCompliant {
+	if !missingChildPolicies && allChildPoliciesCompliant {
 		t.logger.InfoContext(
 			ctx,
 			fmt.Sprintf(
@@ -235,12 +201,9 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 			),
 		)
 		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = nil
-		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
-			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
+		t.setConfigurationAppliedStatus(
 			provisioningv1alpha1.CRconditionReasons.Completed,
-			metav1.ConditionTrue,
-			"The configuration is up to date",
-		)
+			"The configuration is up to date")
 		return
 	}
 
@@ -251,79 +214,141 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 		return policyConfigTimedOut, fmt.Errorf(
 			"error determining if the cluster is ready for policy configuration: %w", err)
 	}
-
 	if !clusterIsReadyForPolicyConfig {
-		t.logger.InfoContext(
-			ctx,
-			fmt.Sprintf(
-				"Cluster (%s) is not ready for policy configuration",
-				t.object.Status.Extensions.ClusterDetails.Name,
-			),
-		)
-		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
-			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
-			provisioningv1alpha1.CRconditionReasons.ClusterNotReady,
-			metav1.ConditionFalse,
-			"The Cluster is not yet ready",
-		)
-		if ctlrutils.IsClusterProvisionCompleted(t.object) &&
-			(!ctlrutils.IsClusterUpgradeInitiated(t.object) ||
-				ctlrutils.IsClusterUpgradeCompleted(t.object)) &&
-			!allPoliciesInInform {
-			ctlrutils.SetProvisioningStateInProgress(t.object,
-				"Waiting for cluster to be ready for policy configuration")
-		}
+		t.updateClusterNotReadyStatus(allChildPoliciesInInform)
 		return
 	}
 
-	var message string
-	if allPoliciesInInform {
+	if missingChildPolicies {
+		// If any expected child policies are missing, gate completion until they appear.
+		if allExpectedChildPoliciesInInform {
+			t.object.Status.Extensions.ClusterDetails.NonCompliantAt = nil
+			t.setConfigurationAppliedStatus(
+				provisioningv1alpha1.CRconditionReasons.Missing,
+				"Not all expected configuration is present")
+			return
+		}
+
+		// Check if expected policies generation has timed out.
+		policyConfigTimedOut = t.hasPolicyConfigurationTimedOut(ctx)
+		t.updatePolicyConfigPreparationStatus(policyConfigTimedOut)
+		return
+	}
+
+	if allChildPoliciesInInform {
 		// No timeout is computed if all policies are in inform, just out of date.
 		t.object.Status.Extensions.ClusterDetails.NonCompliantAt = nil
-		message = "The configuration is out of date"
-		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
-			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
+		t.setConfigurationAppliedStatus(
 			provisioningv1alpha1.CRconditionReasons.OutOfDate,
-			metav1.ConditionFalse,
-			message,
-		)
-	} else {
-		policyConfigTimedOut = t.hasPolicyConfigurationTimedOut(ctx)
+			"The configuration is out of date")
+		return
+	}
 
-		message = "The configuration is still being applied"
-		reason := provisioningv1alpha1.CRconditionReasons.InProgress
+	// Check if the policy configuration has timed out.
+	policyConfigTimedOut = t.hasPolicyConfigurationTimedOut(ctx)
+	t.updatePolicyConfigApplyingStatus(policyConfigTimedOut)
+	return
+}
+
+func (t *provisioningRequestReconcilerTask) setConfigurationAppliedStatus(
+	reason provisioningv1alpha1.ConditionReason, message string) {
+	var status metav1.ConditionStatus = metav1.ConditionFalse
+	if reason == provisioningv1alpha1.CRconditionReasons.Completed ||
+		reason == provisioningv1alpha1.CRconditionReasons.Missing {
+		status = metav1.ConditionTrue
+	}
+	ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
+		provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
+		reason,
+		status,
+		message,
+	)
+}
+
+func (t *provisioningRequestReconcilerTask) updatePolicyConfigPreparationStatus(policyConfigTimedOut bool) {
+	var message string
+	var reason provisioningv1alpha1.ConditionReason
+
+	if policyConfigTimedOut {
+		message = "Timed out waiting for expected configuration to be present"
+		reason = provisioningv1alpha1.CRconditionReasons.TimedOut
+
+		if !ctlrutils.IsClusterUpgradeInitiated(t.object) ||
+			ctlrutils.IsClusterUpgradeCompleted(t.object) {
+			ctlrutils.SetProvisioningStateFailed(t.object,
+				"Cluster configuration timed out")
+		}
+	} else {
+		message = "Expected configuration is not yet prepared"
+		reason = provisioningv1alpha1.CRconditionReasons.InProgress
+
 		if !ctlrutils.IsClusterUpgradeInitiated(t.object) ||
 			ctlrutils.IsClusterUpgradeCompleted(t.object) {
 			ctlrutils.SetProvisioningStateInProgress(t.object,
-				"Cluster configuration is being applied")
+				"Cluster configuration is being prepared")
 		}
-		if policyConfigTimedOut {
-			message += ", but it timed out"
-			reason = provisioningv1alpha1.CRconditionReasons.TimedOut
-
-			if !ctlrutils.IsClusterUpgradeInitiated(t.object) ||
-				ctlrutils.IsClusterUpgradeCompleted(t.object) {
-				ctlrutils.SetProvisioningStateFailed(t.object,
-					"Cluster configuration timed out")
-			}
-		}
-		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
-			provisioningv1alpha1.PRconditionTypes.ConfigurationApplied,
-			reason,
-			metav1.ConditionFalse,
-			message,
-		)
 	}
-	t.logger.InfoContext(
-		ctx,
+	t.setConfigurationAppliedStatus(reason, message)
+
+	t.logger.Info(
 		fmt.Sprintf(
 			"Cluster (%s) configuration status: %s",
 			t.object.Status.Extensions.ClusterDetails.Name,
 			message,
 		),
 	)
+}
 
-	return
+func (t *provisioningRequestReconcilerTask) updatePolicyConfigApplyingStatus(policyConfigTimedOut bool) {
+	var message string
+	var reason provisioningv1alpha1.ConditionReason
+
+	if policyConfigTimedOut {
+		message = "The configuration is still being applied, but it timed out"
+		reason = provisioningv1alpha1.CRconditionReasons.TimedOut
+
+		if !ctlrutils.IsClusterUpgradeInitiated(t.object) ||
+			ctlrutils.IsClusterUpgradeCompleted(t.object) {
+			ctlrutils.SetProvisioningStateFailed(t.object,
+				"Cluster configuration timed out")
+		}
+	} else {
+		message = "The configuration is still being applied"
+		reason = provisioningv1alpha1.CRconditionReasons.InProgress
+
+		if !ctlrutils.IsClusterUpgradeInitiated(t.object) ||
+			ctlrutils.IsClusterUpgradeCompleted(t.object) {
+			ctlrutils.SetProvisioningStateInProgress(t.object,
+				"Cluster configuration is being applied")
+		}
+	}
+	t.setConfigurationAppliedStatus(reason, message)
+
+	t.logger.Info(
+		fmt.Sprintf(
+			"Cluster (%s) configuration status: %s",
+			t.object.Status.Extensions.ClusterDetails.Name,
+			message,
+		),
+	)
+}
+
+func (t *provisioningRequestReconcilerTask) updateClusterNotReadyStatus(allChildPoliciesInInform bool) {
+	t.setConfigurationAppliedStatus(
+		provisioningv1alpha1.CRconditionReasons.ClusterNotReady,
+		"The Cluster is not yet ready")
+	if ctlrutils.IsClusterProvisionCompleted(t.object) &&
+		(!ctlrutils.IsClusterUpgradeInitiated(t.object) ||
+			ctlrutils.IsClusterUpgradeCompleted(t.object)) &&
+		!allChildPoliciesInInform {
+		ctlrutils.SetProvisioningStateInProgress(t.object,
+			"Waiting for cluster to be ready for policy configuration")
+	}
+
+	t.logger.Info(fmt.Sprintf(
+		"Cluster (%s) is not ready for policy configuration",
+		t.object.Status.Extensions.ClusterDetails.Name,
+	))
 }
 
 // updateZTPStatus updates status.ClusterDetails.ZtpStatus.
