@@ -25,6 +25,7 @@ filters:
     reviewers:
       - rauhersu
       - fontivan
+      - by2waysprojects
   ^bundle/manifests/oran-o2ims.clusterserviceversion.yaml:
     approvers:
       - rauhersu
@@ -32,6 +33,7 @@ filters:
     reviewers:
       - rauhersu
       - fontivan
+      - by2waysprojects
   "renovate.json":
     approvers:
       - konflux-approvers
