@@ -40,8 +40,8 @@ require (
 	github.com/xeipuuv/gojsonschema v1.2.0
 	go.uber.org/mock v0.6.0
 	golang.org/x/mod v0.29.0
-	golang.org/x/oauth2 v0.32.0
-	golang.org/x/sync v0.17.0
+	golang.org/x/oauth2 v0.33.0
+	golang.org/x/sync v0.18.0
 	golang.org/x/term v0.36.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.34.1
