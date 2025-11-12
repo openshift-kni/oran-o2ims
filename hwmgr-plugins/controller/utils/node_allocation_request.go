@@ -147,47 +147,6 @@ func UpdateNodeAllocationRequestStatusCondition(
 		conditionStatus,
 		message)
 
-	now := metav1.NewTime(time.Now())
-	switch conditionType {
-	case hwmgmtv1alpha1.Provisioned:
-		if conditionStatus == metav1.ConditionFalse &&
-			conditionReason != hwmgmtv1alpha1.TimedOut &&
-			conditionReason != hwmgmtv1alpha1.Failed {
-
-			// Only set start time if this is a transition to InProgress state
-			if conditionReason == hwmgmtv1alpha1.InProgress &&
-				nodeAllocationRequest.Status.ProvisioningStartTime == nil {
-				// Set start time to track provisioning timeout
-				// Only set once when first transitioning to InProgress
-				nodeAllocationRequest.Status.ProvisioningStartTime = &now
-			}
-		} else if conditionStatus == metav1.ConditionTrue ||
-			conditionReason == hwmgmtv1alpha1.Completed ||
-			conditionReason == hwmgmtv1alpha1.Failed ||
-			conditionReason == hwmgmtv1alpha1.TimedOut {
-			// Clear start time when provisioning completes, fails, or times out
-			nodeAllocationRequest.Status.ProvisioningStartTime = nil
-		}
-
-	case hwmgmtv1alpha1.Configured:
-		if conditionStatus == metav1.ConditionFalse &&
-			conditionReason != hwmgmtv1alpha1.TimedOut &&
-			conditionReason != hwmgmtv1alpha1.Failed {
-
-			// Set start time when configuration starts
-			if conditionReason == hwmgmtv1alpha1.ConfigUpdate &&
-				nodeAllocationRequest.Status.ConfiguringStartTime == nil {
-				nodeAllocationRequest.Status.ConfiguringStartTime = &now
-			}
-		} else if conditionStatus == metav1.ConditionTrue ||
-			conditionReason == hwmgmtv1alpha1.ConfigApplied ||
-			conditionReason == hwmgmtv1alpha1.Failed ||
-			conditionReason == hwmgmtv1alpha1.TimedOut {
-			// Clear start time when configuration completes, fails, or times out
-			nodeAllocationRequest.Status.ConfiguringStartTime = nil
-		}
-	}
-
 	// nolint: wrapcheck
 	err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
 		newNodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{}
@@ -206,9 +165,59 @@ func UpdateNodeAllocationRequestStatusCondition(
 			newNodeAllocationRequest.Status.ObservedConfigTransactionId = nodeAllocationRequest.Spec.ConfigTransactionId
 		}
 
-		// Copy both start time fields from the local object to persist them
-		newNodeAllocationRequest.Status.ProvisioningStartTime = nodeAllocationRequest.Status.ProvisioningStartTime
-		newNodeAllocationRequest.Status.ConfiguringStartTime = nodeAllocationRequest.Status.ConfiguringStartTime
+		// Apply start time logic to the fresh object to avoid race conditions.
+		// This ensures we work with the latest state from the API server.
+		now := metav1.NewTime(time.Now())
+		switch conditionType {
+		case hwmgmtv1alpha1.Provisioned:
+			if conditionStatus == metav1.ConditionFalse &&
+				conditionReason != hwmgmtv1alpha1.TimedOut &&
+				conditionReason != hwmgmtv1alpha1.Failed {
+
+				// Set start time when provisioning operation starts
+				if conditionReason == hwmgmtv1alpha1.InProgress &&
+					newNodeAllocationRequest.Status.HardwareOperationStartTime == nil {
+					// Set start time to track hardware operation timeout
+					// Only set once when first transitioning to InProgress
+					newNodeAllocationRequest.Status.HardwareOperationStartTime = &now
+				}
+			} else if conditionStatus == metav1.ConditionTrue ||
+				conditionReason == hwmgmtv1alpha1.Completed ||
+				conditionReason == hwmgmtv1alpha1.Failed ||
+				conditionReason == hwmgmtv1alpha1.TimedOut {
+				// Clear start time when provisioning operation completes, fails, or times out
+				newNodeAllocationRequest.Status.HardwareOperationStartTime = nil
+			}
+
+		case hwmgmtv1alpha1.Configured:
+			if conditionStatus == metav1.ConditionFalse &&
+				conditionReason != hwmgmtv1alpha1.TimedOut &&
+				conditionReason != hwmgmtv1alpha1.Failed {
+
+				// Set/reset start time when configuration operation starts
+				// Only set when nil (first time) or when transitioning from terminal state
+				if conditionReason == hwmgmtv1alpha1.ConfigUpdate {
+					// Check if we're transitioning FROM a terminal state
+					existingCondition := meta.FindStatusCondition(newNodeAllocationRequest.Status.Conditions, string(hwmgmtv1alpha1.Configured))
+					isRetryAfterTerminal := existingCondition != nil &&
+						(existingCondition.Reason == string(hwmgmtv1alpha1.TimedOut) ||
+							existingCondition.Reason == string(hwmgmtv1alpha1.Failed))
+
+					// Set start time only if:
+					// 1. Start time is nil (first time entering config state), OR
+					// 2. Retrying after a terminal state (timeout/failure)
+					if newNodeAllocationRequest.Status.HardwareOperationStartTime == nil || isRetryAfterTerminal {
+						newNodeAllocationRequest.Status.HardwareOperationStartTime = &now
+					}
+				}
+			} else if conditionStatus == metav1.ConditionTrue ||
+				conditionReason == hwmgmtv1alpha1.ConfigApplied ||
+				conditionReason == hwmgmtv1alpha1.Failed ||
+				conditionReason == hwmgmtv1alpha1.TimedOut {
+				// Clear start time when configuration operation completes, fails, or times out
+				newNodeAllocationRequest.Status.HardwareOperationStartTime = nil
+			}
+		}
 
 		if err := c.Status().Update(ctx, newNodeAllocationRequest); err != nil {
 			return err

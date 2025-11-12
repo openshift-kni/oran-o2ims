@@ -15,7 +15,7 @@ Key Test Areas:
 2. HardwareProvisioningTimeout field handling
 3. Day 2 retry scenarios with spec changes
 4. Callback integration for timeout notifications
-5. Integration with ProvisioningStartTime and ConfiguringStartTime
+5. Integration with HardwareOperationStartTime
 */
 
 package controller
@@ -119,9 +119,9 @@ var _ = Describe("Metal3 NodeAllocationRequest Controller Timeout Handling", fun
 
 		Context("when provisioning is in progress and times out", func() {
 			BeforeEach(func() {
-				// Set provisioning start time to 10 minutes ago (exceeds 5m timeout)
+				// Set operation start time to 10 minutes ago (exceeds 5m timeout)
 				startTime := metav1.Time{Time: time.Now().Add(-10 * time.Minute)}
-				nar.Status.ProvisioningStartTime = &startTime
+				nar.Status.HardwareOperationStartTime = &startTime
 
 				// Add provisioning condition in progress
 				hwmgrutils.SetStatusCondition(&nar.Status.Conditions,
@@ -141,9 +141,9 @@ var _ = Describe("Metal3 NodeAllocationRequest Controller Timeout Handling", fun
 
 		Context("when provisioning is in progress but not timed out", func() {
 			BeforeEach(func() {
-				// Set provisioning start time to 2 minutes ago (within 5m timeout)
+				// Set operation start time to 2 minutes ago (within 5m timeout)
 				startTime := metav1.Time{Time: time.Now().Add(-2 * time.Minute)}
-				nar.Status.ProvisioningStartTime = &startTime
+				nar.Status.HardwareOperationStartTime = &startTime
 
 				// Add provisioning condition in progress
 				hwmgrutils.SetStatusCondition(&nar.Status.Conditions,
@@ -170,9 +170,9 @@ var _ = Describe("Metal3 NodeAllocationRequest Controller Timeout Handling", fun
 					metav1.ConditionTrue,
 					"Hardware provisioning completed")
 
-				// Set configuration start time to 10 minutes ago (exceeds 5m timeout)
+				// Set operation start time to 10 minutes ago (exceeds 5m timeout)
 				startTime := metav1.Time{Time: time.Now().Add(-10 * time.Minute)}
-				nar.Status.ConfiguringStartTime = &startTime
+				nar.Status.HardwareOperationStartTime = &startTime
 
 				// Add configuration condition in progress
 				hwmgrutils.SetStatusCondition(&nar.Status.Conditions,
@@ -199,9 +199,9 @@ var _ = Describe("Metal3 NodeAllocationRequest Controller Timeout Handling", fun
 					metav1.ConditionTrue,
 					"Hardware provisioning completed")
 
-				// Set configuration start time to 2 minutes ago (within 5m timeout)
+				// Set operation start time to 2 minutes ago (within 5m timeout)
 				startTime := metav1.Time{Time: time.Now().Add(-2 * time.Minute)}
-				nar.Status.ConfiguringStartTime = &startTime
+				nar.Status.HardwareOperationStartTime = &startTime
 
 				// Add configuration condition in progress
 				hwmgrutils.SetStatusCondition(&nar.Status.Conditions,
@@ -243,7 +243,7 @@ var _ = Describe("Metal3 NodeAllocationRequest Controller Timeout Handling", fun
 			})
 		})
 
-		Context("when provisioning is in progress but ProvisioningStartTime is missing", func() {
+		Context("when provisioning is in progress but HardwareOperationStartTime is missing", func() {
 			BeforeEach(func() {
 				// Add provisioning condition in progress but no start time
 				hwmgrutils.SetStatusCondition(&nar.Status.Conditions,
@@ -261,7 +261,7 @@ var _ = Describe("Metal3 NodeAllocationRequest Controller Timeout Handling", fun
 			})
 		})
 
-		Context("when configuration is in progress but ConfiguringStartTime is missing", func() {
+		Context("when configuration is in progress but HardwareOperationStartTime is missing", func() {
 			BeforeEach(func() {
 				// Set provisioning as completed
 				hwmgrutils.SetStatusCondition(&nar.Status.Conditions,
@@ -322,9 +322,9 @@ var _ = Describe("Metal3 NodeAllocationRequest Controller Timeout Handling", fun
 					metav1.ConditionFalse,
 					"Hardware configuration failed")
 
-				// Set configuration start time to old (exceeded timeout) - this should be ignored when spec changes
+				// Set operation start time to old (exceeded timeout) - this should be ignored when spec changes
 				startTime := metav1.Time{Time: time.Now().Add(-10 * time.Minute)}
-				nar.Status.ConfiguringStartTime = &startTime
+				nar.Status.HardwareOperationStartTime = &startTime
 
 				// Set ObservedConfigTransactionId to 1, but Spec.ConfigTransactionId is 2 (mismatch = spec change)
 				nar.Status.ObservedConfigTransactionId = 1
@@ -356,9 +356,9 @@ var _ = Describe("Metal3 NodeAllocationRequest Controller Timeout Handling", fun
 					metav1.ConditionFalse,
 					"Hardware configuration timed out")
 
-				// Set configuration start time to old (exceeded timeout) - this should be ignored when spec changes
+				// Set operation start time to old (exceeded timeout) - this should be ignored when spec changes
 				startTime := metav1.Time{Time: time.Now().Add(-10 * time.Minute)}
-				nar.Status.ConfiguringStartTime = &startTime
+				nar.Status.HardwareOperationStartTime = &startTime
 
 				// Set ObservedConfigTransactionId to 1, but Spec.ConfigTransactionId is 2 (mismatch = spec change)
 				nar.Status.ObservedConfigTransactionId = 1

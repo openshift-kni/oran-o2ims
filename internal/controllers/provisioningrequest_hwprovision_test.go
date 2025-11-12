@@ -372,7 +372,7 @@ func createMockNodeAllocationRequestResponseWithTransactionId(conditionStatus, c
 		},
 		Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
 			Conditions:                  &conditions,
-			ObservedConfigTransactionId: &statusTransactionId,
+			ObservedConfigTransactionId: statusTransactionId,
 			Properties: &hwmgrpluginapi.Properties{
 				NodeNames: &nodeNames,
 			},
@@ -1306,7 +1306,7 @@ var _ = Describe("waitForHardwareData", func() {
 						LastTransitionTime: time.Now(),
 					},
 				},
-				ObservedConfigTransactionId: &cr.Generation,
+				ObservedConfigTransactionId: cr.Generation,
 			},
 		}
 
@@ -2649,6 +2649,33 @@ var _ = Describe("processExistingHardwareCondition", func() {
 		It("propagates detailed error through the full flow", func() {
 			detailedError := "Creation request failed: not enough free resources matching nodegroup=controller criteria: freenodes=0, required=1"
 
+			// Get or create the ProvisioningRequest from client
+			// Use local variable to avoid shadowing issues
+			pr := &provisioningv1alpha1.ProvisioningRequest{}
+			key := client.ObjectKey{Name: "test-pr-update-after-failure", Namespace: "test-ns"}
+			if err := c.Get(ctx, key, pr); err != nil {
+				// Object doesn't exist, create a basic one
+				pr = &provisioningv1alpha1.ProvisioningRequest{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      key.Name,
+						Namespace: key.Namespace,
+					},
+				}
+				Expect(c.Create(ctx, pr)).To(Succeed())
+				// Refresh to get the created object
+				Expect(c.Get(ctx, key, pr)).To(Succeed())
+			}
+
+			// Set up NodeAllocationRequestRef if not already set (required for updateHardwareStatus)
+			if pr.Status.Extensions.NodeAllocationRequestRef == nil {
+				pr.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
+					NodeAllocationRequestID: "test-nar-id",
+				}
+				Expect(c.Status().Update(ctx, pr)).To(Succeed())
+				// Refresh to get the updated status
+				Expect(c.Get(ctx, key, pr)).To(Succeed())
+			}
+
 			// Simulate callback-triggered reconciliation
 			if pr.Annotations == nil {
 				pr.Annotations = make(map[string]string)
@@ -2684,6 +2711,194 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			// Verify provisioning status details also contain the error
 			Expect(updatedCR.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring("Hardware provisioning failed"))
 			Expect(updatedCR.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring(detailedError))
+		})
+	})
+
+	Context("waitingForConfigStart code path", func() {
+		BeforeEach(func() {
+			// Create or get the ProvisioningRequest for this test
+			// Use local variable to avoid shadowing issues
+			pr := &provisioningv1alpha1.ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-pr-update-after-failure",
+					Namespace:  "test-ns",
+					Generation: 5,
+				},
+				Status: provisioningv1alpha1.ProvisioningRequestStatus{
+					Extensions: provisioningv1alpha1.Extensions{
+						NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
+							NodeAllocationRequestID: "test-nar-id",
+						},
+					},
+				},
+			}
+			// Try to get it first, if it doesn't exist, create it
+			existing := &provisioningv1alpha1.ProvisioningRequest{}
+			if err := c.Get(ctx, client.ObjectKeyFromObject(pr), existing); err != nil {
+				// Object doesn't exist, create it
+				Expect(c.Create(ctx, pr)).To(Succeed())
+			} else {
+				// Object exists, update it with our test configuration
+				existing.Status.Extensions.NodeAllocationRequestRef = pr.Status.Extensions.NodeAllocationRequestRef
+				existing.Generation = 5
+				Expect(c.Status().Update(ctx, existing)).To(Succeed())
+				pr = existing
+			}
+			// Refresh from client to get the latest version
+			Expect(c.Get(ctx, client.ObjectKeyFromObject(pr), pr)).To(Succeed())
+			task.object = pr
+		})
+
+		It("should return ConditionDoesNotExistsErr when waiting for config start", func() {
+			// Create NAR response without Configured condition and ObservedConfigTransactionId not matching
+			// This simulates waiting for a new configuration transaction to start
+			observedID := int64(3) // Different from PR Generation (5)
+			mockResponse := &hwmgrpluginapi.NodeAllocationRequestResponse{
+				Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
+					ObservedConfigTransactionId: observedID,
+					Conditions:                  &[]hwmgrpluginapi.Condition{}, // No Configured condition
+				},
+			}
+
+			configured, timedOutOrFailed, err := task.updateHardwareStatus(ctx, mockResponse, hwmgmtv1alpha1.Configured)
+
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(&utils.ConditionDoesNotExistsErr{}))
+			Expect(configured).To(BeFalse())
+			Expect(timedOutOrFailed).To(BeFalse())
+		})
+
+		It("should return ConditionDoesNotExistsErr when ObservedConfigTransactionId is zero", func() {
+			// Create NAR response without Configured condition and zero ObservedConfigTransactionId
+			// Zero indicates the transaction has not been observed yet
+			mockResponse := &hwmgrpluginapi.NodeAllocationRequestResponse{
+				Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
+					ObservedConfigTransactionId: 0,
+					Conditions:                  &[]hwmgrpluginapi.Condition{}, // No Configured condition
+				},
+			}
+
+			configured, timedOutOrFailed, err := task.updateHardwareStatus(ctx, mockResponse, hwmgmtv1alpha1.Configured)
+
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(&utils.ConditionDoesNotExistsErr{}))
+			Expect(configured).To(BeFalse())
+			Expect(timedOutOrFailed).To(BeFalse())
+		})
+
+		It("should proceed normally when ObservedConfigTransactionId matches Generation", func() {
+			// Create NAR response with matching ObservedConfigTransactionId
+			observedID := int64(5) // Matches PR Generation
+			configuredCondition := hwmgrpluginapi.Condition{
+				Type:    "Configured",
+				Status:  "True",
+				Reason:  "Completed",
+				Message: "Hardware configured successfully",
+			}
+			mockResponse := &hwmgrpluginapi.NodeAllocationRequestResponse{
+				Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
+					ObservedConfigTransactionId: observedID,
+					Conditions:                  &[]hwmgrpluginapi.Condition{configuredCondition},
+				},
+			}
+
+			configured, timedOutOrFailed, err := task.updateHardwareStatus(ctx, mockResponse, hwmgmtv1alpha1.Configured)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(configured).To(BeTrue())
+			Expect(timedOutOrFailed).To(BeFalse())
+		})
+	})
+
+	Context("race condition: ConfigTransactionId changes mid-reconciliation", func() {
+		BeforeEach(func() {
+			// Create or get the ProvisioningRequest for this test
+			// Use local variable to avoid shadowing issues
+			pr := &provisioningv1alpha1.ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-pr-update-after-failure",
+					Namespace:  "test-ns",
+					Generation: 5,
+				},
+				Status: provisioningv1alpha1.ProvisioningRequestStatus{
+					Extensions: provisioningv1alpha1.Extensions{
+						NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
+							NodeAllocationRequestID: "test-nar-id",
+						},
+					},
+				},
+			}
+			// Try to get it first, if it doesn't exist, create it
+			existing := &provisioningv1alpha1.ProvisioningRequest{}
+			if err := c.Get(ctx, client.ObjectKeyFromObject(pr), existing); err != nil {
+				// Object doesn't exist, create it
+				Expect(c.Create(ctx, pr)).To(Succeed())
+			} else {
+				// Object exists, update it with our test configuration
+				existing.Status.Extensions.NodeAllocationRequestRef = pr.Status.Extensions.NodeAllocationRequestRef
+				existing.Generation = 5
+				Expect(c.Status().Update(ctx, existing)).To(Succeed())
+				pr = existing
+			}
+			// Refresh from client to get the latest version
+			Expect(c.Get(ctx, client.ObjectKeyFromObject(pr), pr)).To(Succeed())
+			task.object = pr
+		})
+
+		It("should handle ConfigTransactionId change during reconciliation", func() {
+			// Simulate a race condition: PR Generation changes during reconciliation
+			// Step 1: Start reconciliation with Generation=5
+			observedID := int64(5) // Matches initial Generation
+			mockResponse1 := &hwmgrpluginapi.NodeAllocationRequestResponse{
+				Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
+					ObservedConfigTransactionId: observedID,
+					Conditions:                  &[]hwmgrpluginapi.Condition{}, // No Configured condition yet
+				},
+			}
+
+			// Step 2: PR spec changes, Generation increments to 6
+			task.object.Generation = 6
+			Expect(c.Update(ctx, task.object)).To(Succeed())
+			// Refresh from client to get updated generation
+			Expect(c.Get(ctx, client.ObjectKeyFromObject(task.object), task.object)).To(Succeed())
+
+			// Step 3: Continue reconciliation - ObservedConfigTransactionId (5) no longer matches Generation (6)
+			// This should trigger waitingForConfigStart
+			configured, timedOutOrFailed, err := task.updateHardwareStatus(ctx, mockResponse1, hwmgmtv1alpha1.Configured)
+
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(&utils.ConditionDoesNotExistsErr{}))
+			Expect(configured).To(BeFalse())
+			Expect(timedOutOrFailed).To(BeFalse())
+		})
+
+		It("should process new ConfigTransactionId when plugin catches up", func() {
+			// Step 1: PR Generation changes from 5 to 6
+			task.object.Generation = 6
+			Expect(c.Update(ctx, task.object)).To(Succeed())
+			// Refresh from client to get updated generation
+			Expect(c.Get(ctx, client.ObjectKeyFromObject(task.object), task.object)).To(Succeed())
+
+			// Step 2: Plugin eventually processes the new transaction (Generation 6)
+			observedID := int64(6) // Matches new Generation
+			configuredCondition := hwmgrpluginapi.Condition{
+				Type:    "Configured",
+				Status:  "True",
+				Reason:  "Completed",
+				Message: "Hardware configured successfully",
+			}
+			mockResponse := &hwmgrpluginapi.NodeAllocationRequestResponse{
+				Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
+					ObservedConfigTransactionId: observedID,
+					Conditions:                  &[]hwmgrpluginapi.Condition{configuredCondition},
+				},
+			}
+
+			configured, timedOutOrFailed, err := task.updateHardwareStatus(ctx, mockResponse, hwmgmtv1alpha1.Configured)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(configured).To(BeTrue())
+			Expect(timedOutOrFailed).To(BeFalse())
 		})
 	})
 })

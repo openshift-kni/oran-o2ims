@@ -113,18 +113,6 @@ func (r *NodeAllocationRequestReconciler) updateConditionAndSendCallback(
 		return err //nolint:wrapcheck
 	}
 
-	// Propagate timeout state to AllocatedNodes
-	if conditionReason == hwmgmtv1alpha1.TimedOut {
-		if err := propagateTimeoutToAllocatedNodes(
-			ctx, r.Client, r.NoncachedClient, r.Logger,
-			nodeAllocationRequest, conditionType, message,
-		); err != nil {
-			r.Logger.WarnContext(ctx, "Failed to propagate timeout to AllocatedNodes",
-				slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
-				slog.String("error", err.Error()))
-		}
-	}
-
 	// Send callback notification asynchronously (non-blocking)
 	callbackStatus := mapConditionToCallbackStatus(conditionType, conditionReason)
 	errorMsg := ""
@@ -566,13 +554,13 @@ func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 		switch conditionType {
 		case hwmgmtv1alpha1.Provisioned:
 			timeoutMessage = "Hardware provisioning timed out"
-			if nodeAllocationRequest.Status.ProvisioningStartTime != nil {
-				startTimeStr = nodeAllocationRequest.Status.ProvisioningStartTime.Format(time.RFC3339)
+			if nodeAllocationRequest.Status.HardwareOperationStartTime != nil {
+				startTimeStr = nodeAllocationRequest.Status.HardwareOperationStartTime.Format(time.RFC3339)
 			}
 		case hwmgmtv1alpha1.Configured:
 			timeoutMessage = "Hardware configuration timed out"
-			if nodeAllocationRequest.Status.ConfiguringStartTime != nil {
-				startTimeStr = nodeAllocationRequest.Status.ConfiguringStartTime.Format(time.RFC3339)
+			if nodeAllocationRequest.Status.HardwareOperationStartTime != nil {
+				startTimeStr = nodeAllocationRequest.Status.HardwareOperationStartTime.Format(time.RFC3339)
 			}
 		default:
 			timeoutMessage = "Hardware operation timed out"
@@ -595,6 +583,15 @@ func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 			return hwmgrutils.RequeueWithMediumInterval(),
 				fmt.Errorf("failed to update status for NodeAllocationRequest timeout %s: %w",
 					nodeAllocationRequest.Name, updateErr)
+		}
+
+		// Update ObservedGeneration to mark this generation as processed
+		// This prevents FSM from treating this as a spec change on next reconciliation
+		if updateErr := hwmgrutils.UpdateNodeAllocationRequestPluginStatus(ctx, r.Client, nodeAllocationRequest); updateErr != nil {
+			r.Logger.ErrorContext(ctx, "Failed to update ObservedGeneration after timeout",
+				slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
+				slog.String("error", updateErr.Error()))
+			// Don't return error, timeout condition is already set
 		}
 
 		if conditionType == hwmgmtv1alpha1.Configured {
@@ -684,15 +681,19 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 		nodeAllocationRequest.Status.Conditions,
 		string(hwmgmtv1alpha1.Configured))
 
-	if configuredCondition != nil {
+	// Set AwaitConfig condition when handling spec changes for retry scenarios
+	// Only update when the condition exists and is in a state that allows retry:
+	// - Status is True (completed configuration, now needs reconfiguration)
+	// - Reason is TimedOut or Failed (terminal states that can be retried on spec change)
+	// Do NOT set during initial provisioning when configuredCondition doesn't exist yet
+	if configuredCondition != nil && (configuredCondition.Status == metav1.ConditionTrue ||
+		configuredCondition.Reason == string(hwmgmtv1alpha1.TimedOut) ||
+		configuredCondition.Reason == string(hwmgmtv1alpha1.Failed)) {
 		if configuredCondition.Reason == string(hwmgmtv1alpha1.TimedOut) ||
 			configuredCondition.Reason == string(hwmgmtv1alpha1.Failed) {
 			r.Logger.InfoContext(ctx, "NodeAllocationRequest configuration is in terminal state, but config change detected - allowing retry",
 				slog.String("reason", configuredCondition.Reason))
 		}
-	}
-	// Set a default status that will be updated during the configuration process
-	if configuredCondition == nil || configuredCondition.Status == metav1.ConditionTrue {
 		if result, err := setAwaitConfigCondition(ctx, r.Client, nodeAllocationRequest); err != nil {
 			return result, err
 		}
@@ -701,6 +702,15 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 	result, nodelist, err := handleNodeAllocationRequestConfiguring(ctx, r.Client, r.NoncachedClient, r.Logger, r.PluginNamespace, nodeAllocationRequest)
 
 	if nodelist != nil {
+		// Check if NAR already has a timeout condition - if so, skip aggregation
+		// to preserve the timeout status. Timeout is detected at NAR level, not node level.
+		configuredCondition := meta.FindStatusCondition(nodeAllocationRequest.Status.Conditions, string(hwmgmtv1alpha1.Configured))
+		if configuredCondition != nil && configuredCondition.Reason == string(hwmgmtv1alpha1.TimedOut) {
+			r.Logger.InfoContext(ctx, "Skipping status aggregation - NAR already has timeout condition",
+				slog.String("nodeAllocationRequest", nodeAllocationRequest.Name))
+			return result, err
+		}
+
 		status, reason, message := deriveNodeAllocationRequestStatusFromNodes(ctx, r.NoncachedClient, r.Logger, nodelist)
 
 		if updateErr := r.updateConditionAndSendCallback(ctx, nodeAllocationRequest,
@@ -807,8 +817,8 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestProcessing(
 }
 
 // checkHardwareTimeout returns (timedOut, whichCondition, err)
-// It times out Day 0 (Provisioned) using ProvisioningStartTime and
-// Day 2 (Configured) using ConfiguringStartTime.
+// It times out Day 0 (Provisioned) and Day 2 (Configured) operations using HardwareOperationStartTime.
+// The active operation is determined from the conditions.
 func (r *NodeAllocationRequestReconciler) checkHardwareTimeout(
 	nar *pluginsv1alpha1.NodeAllocationRequest,
 ) (bool, hwmgmtv1alpha1.ConditionType, error) {
@@ -842,7 +852,7 @@ func (r *NodeAllocationRequestReconciler) checkHardwareTimeout(
 	// 3) Phase precedence:
 	// If provisioning is in-progress, that's the active phase (ignore config).
 	if inProgress(prov) {
-		if nar.Status.ProvisioningStartTime == nil || nar.Status.ProvisioningStartTime.Time.IsZero() {
+		if nar.Status.HardwareOperationStartTime == nil || nar.Status.HardwareOperationStartTime.Time.IsZero() {
 			// Inconsistent state: provisioning says in-progress but no start time.
 			r.Logger.WarnContext(context.Background(), "Provisioning in progress but no start time set",
 				slog.String("nar", nar.Name),
@@ -850,13 +860,15 @@ func (r *NodeAllocationRequestReconciler) checkHardwareTimeout(
 				slog.String("provisionedReason", prov.Reason))
 			return false, hwmgmtv1alpha1.ConditionType(""), nil
 		}
-		deadline := nar.Status.ProvisioningStartTime.Time.Add(timeout)
+		deadline := nar.Status.HardwareOperationStartTime.Time.Add(timeout)
+		elapsed := now.Sub(nar.Status.HardwareOperationStartTime.Time)
 		r.Logger.InfoContext(context.Background(), "Checking provisioning timeout",
 			slog.String("nar", nar.Name),
 			slog.Time("now", now),
-			slog.Time("startTime", nar.Status.ProvisioningStartTime.Time),
+			slog.Time("startTime", nar.Status.HardwareOperationStartTime.Time),
 			slog.Time("deadline", deadline),
 			slog.Duration("timeout", timeout),
+			slog.Duration("elapsed", elapsed),
 			slog.Bool("exceeded", !now.Before(deadline)))
 		if !now.Before(deadline) { // inclusive: >=
 			return true, hwmgmtv1alpha1.Provisioned, nil
@@ -864,7 +876,7 @@ func (r *NodeAllocationRequestReconciler) checkHardwareTimeout(
 		return false, hwmgmtv1alpha1.ConditionType(""), nil
 	}
 
-	// If provisioning is complete (or not in-progress) and configuring is in-progress, use ConfiguringStartTime.
+	// If provisioning is complete (or not in-progress) and configuring is in-progress, use HardwareOperationStartTime.
 	if inProgress(cfg) {
 		// For Day 2 retry: if there's a spec change (ConfigTransactionId mismatch),
 		// skip timeout checking as this is a new configuration attempt
@@ -879,7 +891,7 @@ func (r *NodeAllocationRequestReconciler) checkHardwareTimeout(
 			return false, hwmgmtv1alpha1.ConditionType(""), nil
 		}
 
-		if nar.Status.ConfiguringStartTime == nil || nar.Status.ConfiguringStartTime.Time.IsZero() {
+		if nar.Status.HardwareOperationStartTime == nil || nar.Status.HardwareOperationStartTime.Time.IsZero() {
 			// Inconsistent state: configuring says in-progress but no start time.
 			r.Logger.WarnContext(context.Background(), "Configuration in progress but no start time set",
 				slog.String("nar", nar.Name),
@@ -887,13 +899,15 @@ func (r *NodeAllocationRequestReconciler) checkHardwareTimeout(
 				slog.String("configuredReason", cfg.Reason))
 			return false, hwmgmtv1alpha1.ConditionType(""), nil
 		}
-		deadline := nar.Status.ConfiguringStartTime.Time.Add(timeout)
+		deadline := nar.Status.HardwareOperationStartTime.Time.Add(timeout)
+		elapsed := now.Sub(nar.Status.HardwareOperationStartTime.Time)
 		r.Logger.InfoContext(context.Background(), "Checking configuration timeout",
 			slog.String("nar", nar.Name),
 			slog.Time("now", now),
-			slog.Time("startTime", nar.Status.ConfiguringStartTime.Time),
+			slog.Time("startTime", nar.Status.HardwareOperationStartTime.Time),
 			slog.Time("deadline", deadline),
 			slog.Duration("timeout", timeout),
+			slog.Duration("elapsed", elapsed),
 			slog.Bool("exceeded", !now.Before(deadline)))
 		if !now.Before(deadline) { // inclusive: >=
 			return true, hwmgmtv1alpha1.Configured, nil

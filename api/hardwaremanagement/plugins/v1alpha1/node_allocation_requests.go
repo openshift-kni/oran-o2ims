@@ -134,15 +134,10 @@ type NodeAllocationRequestStatus struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=status
 	SelectedGroups map[string]string `json:"selectedGroups,omitempty"`
 
-	// ProvisioningStartTime tracks when hardware provisioning actually started.
-	// This timestamp is used for timeout calculations for Day 0 provisioning.
+	// HardwareOperationStartTime tracks when the current hardware operation (provisioning or configuration) actually started.
+	// This timestamp is used for timeout calculations. The active operation is determined from the conditions.
 	//+operator-sdk:csv:customresourcedefinitions:type=status
-	ProvisioningStartTime *metav1.Time `json:"provisioningStartTime,omitempty"`
-
-	// ConfiguringStartTime tracks when hardware configuration actually started.
-	// This timestamp is used for timeout calculations for Day 2 configuration changes.
-	//+operator-sdk:csv:customresourcedefinitions:type=status
-	ConfiguringStartTime *metav1.Time `json:"configuringStartTime,omitempty"`
+	HardwareOperationStartTime *metav1.Time `json:"hardwareOperationStartTime,omitempty"`
 }
 
 // NodeAllocationRequest is the schema for an allocation request of nodes

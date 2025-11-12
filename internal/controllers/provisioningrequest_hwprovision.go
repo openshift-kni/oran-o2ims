@@ -551,9 +551,7 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 	// Check if we're waiting for a new configuration to start (only when condition doesn't exist)
 	waitingForConfigStart := condition == hwmgmtv1alpha1.Configured &&
 		hwCondition == nil &&
-		(nodeAllocationRequest.Status.ObservedConfigTransactionId == nil ||
-			*nodeAllocationRequest.Status.ObservedConfigTransactionId == 0 ||
-			*nodeAllocationRequest.Status.ObservedConfigTransactionId != t.object.Generation)
+		!isConfigTransactionObserved(nodeAllocationRequest.Status.ObservedConfigTransactionId, t.object.Generation)
 
 	if hwCondition == nil {
 		// Condition does not exist in plugin response
@@ -604,6 +602,18 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 	t.logger.InfoContext(ctx, fmt.Sprintf("NodeAllocationRequest (%s) %s status: %s",
 		nodeAllocationRequestID, ctlrutils.GetStatusMessage(condition), message))
 
+	// Update ObservedConfigTransactionId on ProvisioningRequest to track which transaction
+	// the plugin has observed. This helps with debugging by providing visibility into the
+	// transaction synchronization between the ProvisioningRequest and the hardware plugin.
+	if nodeAllocationRequest.Status.ObservedConfigTransactionId != 0 {
+		if t.object.Status.Extensions.NodeAllocationRequestRef == nil {
+			t.object.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
+				NodeAllocationRequestID: nodeAllocationRequestID,
+			}
+		}
+		t.object.Status.Extensions.NodeAllocationRequestRef.ObservedConfigTransactionId = nodeAllocationRequest.Status.ObservedConfigTransactionId
+	}
+
 	// Update the CR status for the ProvisioningRequest.
 	if err = ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 		err = fmt.Errorf("failed to update Hardware %s status: %w", ctlrutils.GetStatusMessage(condition), err)
@@ -649,10 +659,27 @@ func (t *provisioningRequestReconcilerTask) shouldUpdateHardwareStatus(
 	condition hwmgmtv1alpha1.ConditionType,
 ) bool {
 	// Callbacks always allowed to update.
-	if t.isCallbackTriggeredReconciliation() {
+	if shouldAllowCallbackUpdate(t) {
 		return true
 	}
 
+	// During polling, check if updates are allowed based on current condition state.
+	return shouldAllowPollingUpdate(t, condition)
+}
+
+// shouldAllowCallbackUpdate returns true if the reconciliation is callback-triggered.
+// Callbacks are always allowed to update hardware status.
+func shouldAllowCallbackUpdate(t *provisioningRequestReconcilerTask) bool {
+	return t.isCallbackTriggeredReconciliation()
+}
+
+// shouldAllowPollingUpdate determines if hardware status updates are allowed during polling
+// (non-callback reconciliations). Updates are allowed if:
+// - The condition type is supported (Provisioned/Configured)
+// - No prior condition exists (first write)
+// - Prior condition is not terminal (TimedOut/Failed)
+// - Prior condition status is not True (allows updates for False/Unknown)
+func shouldAllowPollingUpdate(t *provisioningRequestReconcilerTask, condition hwmgmtv1alpha1.ConditionType) bool {
 	// Map HW condition → PR condition type stored in Status.Conditions.
 	prTypeByHW := map[hwmgmtv1alpha1.ConditionType]string{
 		hwmgmtv1alpha1.Provisioned: string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
@@ -671,7 +698,8 @@ func (t *provisioningRequestReconcilerTask) shouldUpdateHardwareStatus(
 		return true
 	}
 
-	if isTerminalReason(hwCond.Reason) {
+	// Do not update if condition is in terminal state.
+	if isTerminalState(hwCond) {
 		return false
 	}
 
@@ -679,9 +707,27 @@ func (t *provisioningRequestReconcilerTask) shouldUpdateHardwareStatus(
 	return hwCond.Status != metav1.ConditionTrue
 }
 
+// isTerminalState returns true if the condition is in a terminal state (TimedOut or Failed).
+// Terminal states should not be overwritten by polling updates.
+func isTerminalState(condition *metav1.Condition) bool {
+	return isTerminalReason(condition.Reason)
+}
+
 func isTerminalReason(reason string) bool {
 	return reason == string(provisioningv1alpha1.CRconditionReasons.TimedOut) ||
 		reason == string(provisioningv1alpha1.CRconditionReasons.Failed)
+}
+
+// isConfigTransactionObserved checks if the observed config transaction ID matches the expected generation.
+// Returns true if the transaction has been observed (not zero and matches generation).
+// A value of 0 indicates the transaction has not been observed yet.
+func isConfigTransactionObserved(observedID, expectedGeneration int64) bool {
+	// Treat zero as unobserved
+	if observedID == 0 {
+		return false
+	}
+	// Check if the observed ID matches the expected generation
+	return observedID == expectedGeneration
 }
 
 // checkExistingNodeAllocationRequest checks for an existing NodeAllocationRequest and verifies changes if necessary
@@ -763,6 +809,10 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(clusterIn
 	nodeAllocationRequest.ClusterId = clusterId.(string)
 	nodeAllocationRequest.NodeGroup = nodeGroups
 	nodeAllocationRequest.BootInterfaceLabel = hwTemplate.Spec.BootInterfaceLabel
+	// Use Generation as ConfigTransactionId: Generation tracks spec changes in Kubernetes,
+	// which is exactly what ConfigTransactionId represents - a unique identifier for each
+	// configuration change. When the ProvisioningRequest spec changes, Generation increments,
+	// providing a monotonic identifier for tracking configuration transactions.
 	nodeAllocationRequest.ConfigTransactionId = t.object.Generation
 
 	// Set HardwareProvisioningTimeout - use template value or default

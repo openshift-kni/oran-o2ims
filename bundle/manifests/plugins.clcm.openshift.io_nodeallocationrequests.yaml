@@ -285,10 +285,10 @@ spec:
                   - type
                   type: object
                 type: array
-              configuringStartTime:
+              hardwareOperationStartTime:
                 description: |-
-                  ConfiguringStartTime tracks when hardware configuration actually started.
-                  This timestamp is used for timeout calculations for Day 2 configuration changes.
+                  HardwareOperationStartTime tracks when the current hardware operation (provisioning or configuration) actually started.
+                  This timestamp is used for timeout calculations. The active operation is determined from the conditions.
                 format: date-time
                 type: string
               hwMgrPlugin:
@@ -310,12 +310,6 @@ spec:
                       type: string
                     type: array
                 type: object
-              provisioningStartTime:
-                description: |-
-                  ProvisioningStartTime tracks when hardware provisioning actually started.
-                  This timestamp is used for timeout calculations for Day 0 provisioning.
-                format: date-time
-                type: string
               selectedGroups:
                 additionalProperties:
                   type: string

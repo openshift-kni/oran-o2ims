@@ -333,12 +333,8 @@ func (in *NodeAllocationRequestStatus) DeepCopyInto(out *NodeAllocationRequestSt
 			(*out)[key] = val
 		}
 	}
-	if in.ProvisioningStartTime != nil {
-		in, out := &in.ProvisioningStartTime, &out.ProvisioningStartTime
-		*out = (*in).DeepCopy()
-	}
-	if in.ConfiguringStartTime != nil {
-		in, out := &in.ConfiguringStartTime, &out.ConfiguringStartTime
+	if in.HardwareOperationStartTime != nil {
+		in, out := &in.HardwareOperationStartTime, &out.HardwareOperationStartTime
 		*out = (*in).DeepCopy()
 	}
 }

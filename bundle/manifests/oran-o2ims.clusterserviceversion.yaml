@@ -1251,10 +1251,10 @@ spec:
         displayName: Conditions
         path: conditions
       - description: |-
-          ConfiguringStartTime tracks when hardware configuration actually started.
-          This timestamp is used for timeout calculations for Day 2 configuration changes.
-        displayName: Configuring Start Time
-        path: configuringStartTime
+          HardwareOperationStartTime tracks when the current hardware operation (provisioning or configuration) actually started.
+          This timestamp is used for timeout calculations. The active operation is determined from the conditions.
+        displayName: Hardware Operation Start Time
+        path: hardwareOperationStartTime
       - displayName: Hw Mgr Plugin
         path: hwMgrPlugin
       - displayName: Observed Config Transaction Id
@@ -1262,11 +1262,6 @@ spec:
       - description: Properties represent the node properties in the pool
         displayName: Properties
         path: properties
-      - description: |-
-          ProvisioningStartTime tracks when hardware provisioning actually started.
-          This timestamp is used for timeout calculations for Day 0 provisioning.
-        displayName: Provisioning Start Time
-        path: provisioningStartTime
       - displayName: Selected Groups
         path: selectedGroups
       version: v1alpha1

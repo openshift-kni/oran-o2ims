@@ -754,7 +754,9 @@ components:
           format: int64
           description: |
             ObservedConfigTransactionId is the identifier of the observed configuration transaction.
-      required: []
+            A value of 0 indicates the transaction has not been observed yet.
+      required:
+        - observedConfigTransactionId
 
     AllocatedNodeStatus:
       description: |
@@ -771,6 +773,9 @@ components:
           format: int64
           description: |
             ObservedConfigTransactionId is the identifier of the observed configuration transaction.
+            A value of 0 indicates the transaction has not been observed yet.
+      required:
+        - observedConfigTransactionId
 
     Properties:
       type: object
