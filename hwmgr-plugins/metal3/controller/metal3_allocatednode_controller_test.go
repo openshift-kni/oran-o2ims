@@ -630,28 +630,28 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 		})
 
 		Context("when BMH does not exist", func() {
-			It("should return error", func() {
-				// Delete the BMH
+			It("should proceed with deletion gracefully", func() {
+				// Delete the BMH to simulate it being manually deleted
 				Expect(fakeClient.Delete(ctx, bmh)).To(Succeed())
 
 				completed, err := reconciler.handleAllocatedNodeDeletion(ctx, allocatedNode)
 
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to get BMH for node"))
+				// Should complete successfully without error when BMH is not found
+				Expect(err).NotTo(HaveOccurred())
 				Expect(completed).To(BeTrue()) // Returns true to indicate we should proceed with finalizer removal
 			})
 		})
 
 		Context("when node has invalid BMH reference", func() {
-			It("should return error", func() {
-				// Set invalid BMH reference
+			It("should proceed with deletion gracefully", func() {
+				// Set invalid BMH reference to a non-existent BMH
 				allocatedNode.Spec.HwMgrNodeId = nonexistentBMHID
-				allocatedNode.Spec.HwMgrNodeNs = "nonexistent-namespace"
+				allocatedNode.Spec.HwMgrNodeNs = nonexistentBMHNamespace
 
 				completed, err := reconciler.handleAllocatedNodeDeletion(ctx, allocatedNode)
 
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to get BMH for node"))
+				// Should complete successfully without error when BMH is not found
+				Expect(err).NotTo(HaveOccurred())
 				Expect(completed).To(BeTrue())
 			})
 		})
