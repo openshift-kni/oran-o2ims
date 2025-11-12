@@ -246,12 +246,9 @@ func Serve(config *api.ResourceServerConfig) error {
 	}()
 
 	// Start PostgreSQL listener for resource type changes
-	listenerErrors := make(chan error, 1)
 	go func() {
 		slog.Info("Starting PostgreSQL listener for resource type changes")
-		if err := listener.ListenForResourcePgChannels(ctx, pool, repository); err != nil {
-			listenerErrors <- err
-		}
+		listener.ListenForResourcePgChannels(ctx, pool, repository)
 		slog.Info("PostgreSQL listener stopped")
 	}()
 
@@ -283,8 +280,6 @@ func Serve(config *api.ResourceServerConfig) error {
 		return fmt.Errorf("error starting collector: %w", err)
 	case err := <-notifierErrors:
 		return fmt.Errorf("error starting notifier: %w", err)
-	case err := <-listenerErrors:
-		return fmt.Errorf("error starting listener: %w", err)
 	case <-ctx.Done():
 		slog.Info("Process shutting down")
 	}

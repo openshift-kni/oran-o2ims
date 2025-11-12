@@ -28,13 +28,13 @@ type ResourceTypeChangeNotification struct {
 }
 
 // ListenForResourcePgChannels registers the channels with their handlers and starts listening
-func ListenForResourcePgChannels(ctx context.Context, pool *pgxpool.Pool, repository *repo.ResourcesRepository) error {
+func ListenForResourcePgChannels(ctx context.Context, pool *pgxpool.Pool, repository *repo.ResourcesRepository) {
 	slog.Info("Starting PostgreSQL listener for resource server")
 
 	// Sync existing ResourceTypes on startup to handle any that were created before listener started
 	// This prevents race condition where collector creates ResourceTypes before listener is ready
 	if err := syncExistingResourceTypes(ctx, repository); err != nil {
-		return fmt.Errorf("failed to sync existing resource types on startup: %w", err)
+		slog.Error("Failed to sync existing resource types on startup", "error", err)
 	}
 
 	// Initialize the generic listener manager
@@ -63,7 +63,6 @@ func ListenForResourcePgChannels(ctx context.Context, pool *pgxpool.Pool, reposi
 	<-ctx.Done()
 	slog.Info("PostgreSQL listener for resource server shutting down")
 	lm.Wait()
-	return nil
 }
 
 // processResourceTypeChangeNotification handles resource_type_changed notifications
@@ -105,7 +104,7 @@ func processResourceTypeChangeNotification(ctx context.Context, repository *repo
 }
 
 // syncExistingResourceTypes syncs alarm dictionaries for all existing resource types
-// Called on startup and periodically (every 15min) to handle
+// Called on startup and periodically (every 15min) to handle missed notifications or failures
 func syncExistingResourceTypes(ctx context.Context, repository *repo.ResourcesRepository) error {
 	slog.Debug("Syncing alarm dictionaries for existing resource types")
 
