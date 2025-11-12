@@ -74,7 +74,8 @@ import (
 )
 
 const (
-	nonexistentBMHID = "nonexistent-bmh"
+	nonexistentBMHID        = "nonexistent-bmh"
+	nonexistentBMHNamespace = "nonexistent-namespace"
 )
 
 var _ = Describe("BareMetalHost Manager", func() {
