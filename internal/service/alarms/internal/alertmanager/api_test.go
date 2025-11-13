@@ -113,9 +113,8 @@ var _ = Describe("Alertmanager API Client", func() {
 			Build()
 
 		infra = &infrastructure.Infrastructure{
-			Clients: []infrastructure.Client{
-				&infrastructure.ClusterServer{},
-			},
+			ClusterServer:  &infrastructure.ClusterServer{},
+			ResourceServer: &infrastructure.ResourceServer{},
 		}
 
 		amClient = alertmanager.NewAlertmanagerClient(fakeClient, mockRepo, infra)

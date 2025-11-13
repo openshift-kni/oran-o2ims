@@ -1,0 +1,42 @@
+overlay: 1.0.0
+info:
+  title: Internal Endpoints Overlay
+  version: 1.0.0
+actions:
+  - target: "$.paths"
+    update:
+      /o2ims-infrastructureInventory/v1/internal/resources/{resourceId}:
+        get:
+          operationId: getInternalResourceById
+          summary: Get a resource by ID
+          description: Internal endpoint to get a resource directly by ID without needing to know the resource pool
+          tags:
+            - resources
+          security: []
+          parameters:
+            - name: resourceId
+              in: path
+              required: true
+              description: Resource identifier
+              schema:
+                type: string
+                format: uuid
+          responses:
+            '200':
+              description: Successfully obtained the resource
+              content:
+                application/json:
+                  schema:
+                    $ref: "#/components/schemas/Resource"
+            '404':
+              description: Resource not found
+              content:
+                application/problem+json:
+                  schema:
+                    $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+            '500':
+              description: Internal server error
+              content:
+                application/problem+json:
+                  schema:
+                    $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
