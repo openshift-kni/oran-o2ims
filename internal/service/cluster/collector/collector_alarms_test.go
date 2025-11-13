@@ -21,6 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	svccommon "github.com/openshift-kni/oran-o2ims/internal/service/common"
 )
 
 const (
@@ -225,6 +226,198 @@ var _ = Describe("Alarms Collector", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(rules).To(HaveLen(2))
+		})
+	})
+
+	Describe("getRules", func() {
+		var (
+			r      *AlarmsDataSource
+			ctx    context.Context
+			scheme *runtime.Scheme
+		)
+
+		BeforeEach(func() {
+			scheme = runtime.NewScheme()
+			_ = monitoringv1.AddToScheme(scheme)
+
+			ctx = context.Background()
+		})
+
+		It("excludes hardware monitoring groups from results", func() {
+			withWatch := fake.NewClientBuilder().WithScheme(scheme).Build()
+			r = &AlarmsDataSource{
+				hubClient: withWatch,
+			}
+
+			// Create PrometheusRules with both hardware and non-hardware groups
+			rules := []*monitoringv1.PrometheusRule{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "mixed-rules",
+						Namespace: "monitoring",
+					},
+					Spec: monitoringv1.PrometheusRuleSpec{
+						Groups: []monitoringv1.RuleGroup{
+							{
+								Name: "hardware-alerts",
+								Labels: map[string]string{
+									svccommon.HardwareAlertTypeLabel:      svccommon.HardwareAlertTypeValue,
+									svccommon.HardwareAlertComponentLabel: svccommon.HardwareAlertComponentValue,
+								},
+								Rules: []monitoringv1.Rule{
+									{
+										Alert: "HardwareTemperatureHigh",
+										Annotations: map[string]string{
+											"summary":     "Hardware temperature is high",
+											"description": "Sensor temperature above threshold",
+										},
+										Expr: intstr.IntOrString{
+											Type:   intstr.String,
+											StrVal: "hardware_temp > 80",
+										},
+										Labels: map[string]string{
+											"severity": "warning",
+										},
+									},
+								},
+							},
+							{
+								Name: "cluster-alerts",
+								Rules: []monitoringv1.Rule{
+									{
+										Alert: "ClusterMemoryHigh",
+										Annotations: map[string]string{
+											"summary":     "Cluster memory usage is high",
+											"description": "Memory usage above 85%",
+										},
+										Expr: intstr.IntOrString{
+											Type:   intstr.String,
+											StrVal: "cluster_memory > 85",
+										},
+										Labels: map[string]string{
+											"severity": "critical",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			for _, rule := range rules {
+				err := r.hubClient.Create(ctx, rule)
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			// Call getRules and verify only non-hardware alerts are returned
+			result, err := r.getRules(ctx, r.hubClient)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(HaveLen(1))
+			Expect(result[0].Alert).To(Equal("ClusterMemoryHigh"))
+		})
+
+		It("includes all rules when no hardware groups are present", func() {
+			withWatch := fake.NewClientBuilder().WithScheme(scheme).Build()
+			r = &AlarmsDataSource{
+				hubClient: withWatch,
+			}
+
+			rules := []*monitoringv1.PrometheusRule{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "cluster-rules",
+						Namespace: "monitoring",
+					},
+					Spec: monitoringv1.PrometheusRuleSpec{
+						Groups: []monitoringv1.RuleGroup{
+							{
+								Name: "cluster-alerts-1",
+								Rules: []monitoringv1.Rule{
+									{
+										Alert: "Alert1",
+										Expr:  intstr.FromString("up == 1"),
+									},
+								},
+							},
+							{
+								Name: "cluster-alerts-2",
+								Rules: []monitoringv1.Rule{
+									{
+										Alert: "Alert2",
+										Expr:  intstr.FromString("up == 0"),
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			for _, rule := range rules {
+				err := r.hubClient.Create(ctx, rule)
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			result, err := r.getRules(ctx, r.hubClient)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(HaveLen(2))
+		})
+
+		It("excludes only groups with both type and component hardware labels", func() {
+			withWatch := fake.NewClientBuilder().WithScheme(scheme).Build()
+			r = &AlarmsDataSource{
+				hubClient: withWatch,
+			}
+
+			rules := []*monitoringv1.PrometheusRule{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "partial-hardware-labels",
+						Namespace: "monitoring",
+					},
+					Spec: monitoringv1.PrometheusRuleSpec{
+						Groups: []monitoringv1.RuleGroup{
+							{
+								Name: "only-type-label",
+								Labels: map[string]string{
+									svccommon.HardwareAlertTypeLabel: svccommon.HardwareAlertTypeValue,
+									// Missing component label
+								},
+								Rules: []monitoringv1.Rule{
+									{
+										Alert: "PartialHardwareAlert",
+										Expr:  intstr.FromString("up == 1"),
+									},
+								},
+							},
+							{
+								Name: "only-component-label",
+								Labels: map[string]string{
+									svccommon.HardwareAlertComponentLabel: svccommon.HardwareAlertComponentValue,
+									// Missing type label
+								},
+								Rules: []monitoringv1.Rule{
+									{
+										Alert: "AnotherPartialAlert",
+										Expr:  intstr.FromString("up == 0"),
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			for _, rule := range rules {
+				err := r.hubClient.Create(ctx, rule)
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			// Both alerts should be included since neither group has BOTH labels
+			result, err := r.getRules(ctx, r.hubClient)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(HaveLen(2))
 		})
 	})
 })
