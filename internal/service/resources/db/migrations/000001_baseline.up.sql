@@ -120,7 +120,7 @@ CREATE TABLE subscription
 -- Table: alarm_dictionary
 CREATE TABLE alarm_dictionary
 (
-    alarm_dictionary_id             UUID          PRIMARY KEY,
+    alarm_dictionary_id             UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
     alarm_dictionary_version        VARCHAR(50)   NOT NULL,
     alarm_dictionary_schema_version VARCHAR(50)   NOT NULL,
     entity_type                     VARCHAR(255)  NOT NULL,
@@ -129,7 +129,9 @@ CREATE TABLE alarm_dictionary
     pk_notification_field           TEXT[]        DEFAULT ARRAY ['alarmDefinitionID']::TEXT[],
 
     resource_type_id                UUID          NOT NULL UNIQUE,
-    created_at                      TIMESTAMPTZ   DEFAULT CURRENT_TIMESTAMP
+    created_at                      TIMESTAMPTZ   DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (resource_type_id) REFERENCES resource_type (resource_type_id) ON DELETE CASCADE
 );
 
 -- Table: alarm_definition
@@ -158,3 +160,27 @@ CREATE TABLE alarm_definition
     FOREIGN KEY (alarm_dictionary_id) REFERENCES alarm_dictionary (alarm_dictionary_id) ON DELETE CASCADE,
     CONSTRAINT unique_alarm UNIQUE(alarm_dictionary_id, alarm_name, severity)
 );
+
+-- Trigger function: Notify when resource_type changes
+CREATE OR REPLACE FUNCTION notify_resource_type_change()
+RETURNS TRIGGER AS $$
+BEGIN
+    PERFORM pg_notify('resource_type_changed',
+        json_build_object(
+            'resource_type_id', COALESCE(NEW.resource_type_id, OLD.resource_type_id),
+            'change_type', CASE
+                WHEN TG_OP = 'INSERT' THEN 'created'
+                WHEN TG_OP = 'DELETE' THEN 'deleted'
+                ELSE 'updated'
+            END
+        )::text
+    );
+    RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger on resource_type table for INSERT/UPDATE/DELETE
+CREATE TRIGGER resource_type_change_trigger
+AFTER INSERT OR UPDATE OR DELETE ON resource_type
+FOR EACH ROW
+EXECUTE FUNCTION notify_resource_type_change();

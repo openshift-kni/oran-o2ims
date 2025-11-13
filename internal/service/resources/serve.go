@@ -32,6 +32,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/collector"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/repo"
+	"github.com/openshift-kni/oran-o2ims/internal/service/resources/listener"
 )
 
 // Resource server config values
@@ -242,6 +243,13 @@ func Serve(config *api.ResourceServerConfig) error {
 		if err := resourceCollector.Run(ctx); err != nil {
 			collectorErrors <- err
 		}
+	}()
+
+	// Start PostgreSQL listener for resource type changes
+	go func() {
+		slog.Info("Starting PostgreSQL listener for resource type changes")
+		listener.ListenForResourcePgChannels(ctx, pool, repository)
+		slog.Info("PostgreSQL listener stopped")
 	}()
 
 	// Start server

@@ -28,6 +28,7 @@ import (
 
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/models"
+	svccommon "github.com/openshift-kni/oran-o2ims/internal/service/common"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
@@ -265,10 +266,15 @@ func (d *AlarmsDataSource) getRules(ctx context.Context, cl crclient.Client) ([]
 	var rules []monitoringv1.Rule
 	for _, promRule := range promRules.Items {
 		for _, group := range promRule.Spec.Groups {
-			for _, rule := range group.Rules {
-				// Only alerting rules are of interest (not recording rules)
-				if rule.Alert != "" {
-					rules = append(rules, rule)
+			// Exclude hardware monitoring groups (handled by resource server)
+			isHardwareGroup := group.Labels[svccommon.HardwareAlertTypeLabel] == svccommon.HardwareAlertTypeValue &&
+				group.Labels[svccommon.HardwareAlertComponentLabel] == svccommon.HardwareAlertComponentValue
+			if !isHardwareGroup {
+				// Collect all alerting rules from non-hardware groups
+				for _, rule := range group.Rules {
+					if rule.Alert != "" {
+						rules = append(rules, rule)
+					}
 				}
 			}
 		}
@@ -497,6 +503,7 @@ func (d *AlarmsDataSource) collectThanosRules(ctx context.Context) ([]monitoring
 				continue
 			}
 
+			// Hardware monitoring rules are not expected in Thanos ConfigMaps
 			for _, group := range spec.Groups {
 				for _, rule := range group.Rules {
 					if rule.Alert != "" {
