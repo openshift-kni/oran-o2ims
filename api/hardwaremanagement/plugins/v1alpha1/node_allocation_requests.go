@@ -89,6 +89,12 @@ type NodeAllocationRequestSpec struct {
 	// +optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Callback Configuration"
 	Callback *Callback `json:"callback,omitempty"`
+
+	// HardwareProvisioningTimeout defines the timeout duration string for the hardware provisioning.
+	// If not specified, the default timeout value will be applied.
+	// +optional
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Provisioning Timeout",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	HardwareProvisioningTimeout string `json:"hardwareProvisioningTimeout,omitempty"`
 }
 
 type NodeGroup struct {
@@ -127,6 +133,11 @@ type NodeAllocationRequestStatus struct {
 
 	//+operator-sdk:csv:customresourcedefinitions:type=status
 	SelectedGroups map[string]string `json:"selectedGroups,omitempty"`
+
+	// HardwareOperationStartTime tracks when the current hardware operation (provisioning or configuration) actually started.
+	// This timestamp is used for timeout calculations. The active operation is determined from the conditions.
+	//+operator-sdk:csv:customresourcedefinitions:type=status
+	HardwareOperationStartTime *metav1.Time `json:"hardwareOperationStartTime,omitempty"`
 }
 
 // NodeAllocationRequest is the schema for an allocation request of nodes
