@@ -19,7 +19,7 @@ import (
 )
 
 // ConvertAmToAlarmEventRecordModels get alarmEventRecords based on the alertmanager notification and AlarmDefinition
-func ConvertAmToAlarmEventRecordModels(ctx context.Context, alerts *[]api.Alert, infrastructureClient infrastructure.Client) []models.AlarmEventRecord {
+func ConvertAmToAlarmEventRecordModels(ctx context.Context, alerts *[]api.Alert, clusterServer, resourceServer infrastructure.Client) []models.AlarmEventRecord {
 	records := make([]models.AlarmEventRecord, 0, len(*alerts))
 	for _, alert := range *alerts {
 		record := models.AlarmEventRecord{}
@@ -69,8 +69,21 @@ func ConvertAmToAlarmEventRecordModels(ctx context.Context, alerts *[]api.Alert,
 		// Update Extensions with things we didn't really process
 		record.Extensions = getExtensions(alert)
 
-		// for caas alerts object is the cluster ID
-		record.ObjectID = getClusterID(labels)
+		// Determine alert type (CaaS vs hardware) and select appropriate infrastructure client
+		// Hardware alerts have both type=hardware AND component=ironic labels
+		isHardware := isHardwareAlert(labels)
+		var infrastructureClient infrastructure.Client
+		if isHardware {
+			// For hardware alerts, object is the resource ID from instance_uuid
+			record.ObjectID = getResourceID(labels)
+			record.AlarmSource = models.AlarmSourceHardware
+			infrastructureClient = resourceServer
+		} else {
+			// For CaaS alerts, object is the cluster ID from managed_cluster
+			record.ObjectID = getClusterID(labels)
+			record.AlarmSource = models.AlarmSourceCaaS
+			infrastructureClient = clusterServer
+		}
 
 		// derive ObjectTypeID from ObjectID
 		if record.ObjectID != nil {
@@ -112,6 +125,30 @@ func getClusterID(labels map[string]string) *uuid.UUID {
 	id, err := uuid.Parse(val)
 	if err != nil {
 		slog.Warn("Could convert managed_cluster string to uuid", "labels", labels, "err", err.Error())
+		return nil
+	}
+
+	return &id
+}
+
+// isHardwareAlert checks if an alert is a hardware alert by checking for type=hardware AND component=ironic labels
+func isHardwareAlert(labels map[string]string) bool {
+	alertType, hasType := labels["type"]
+	component, hasComponent := labels["component"]
+	return hasType && alertType == "hardware" && hasComponent && component == "ironic"
+}
+
+// getResourceID extracts resource ID from instance_uuid label for hardware alerts
+func getResourceID(labels map[string]string) *uuid.UUID {
+	val, ok := labels["instance_uuid"]
+	if !ok {
+		slog.Warn("Could not find instance_uuid for hardware alert", "labels", labels)
+		return nil
+	}
+
+	id, err := uuid.Parse(val)
+	if err != nil {
+		slog.Warn("Could not convert instance_uuid string to uuid", "labels", labels, "err", err.Error())
 		return nil
 	}
 

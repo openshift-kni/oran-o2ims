@@ -13,6 +13,13 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 )
 
+const (
+	// AlarmSourceCaaS represents alarms from Container-as-a-Service (cluster alerts)
+	AlarmSourceCaaS = "caas"
+	// AlarmSourceHardware represents alarms from hardware resources
+	AlarmSourceHardware = "hardware"
+)
+
 // AlarmEventRecord represents a record in the alarm_event_record table.
 type AlarmEventRecord struct {
 	AlarmEventRecordID    uuid.UUID                             `db:"alarm_event_record_id" json:"alarm_event_record_id"`

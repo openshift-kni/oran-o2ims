@@ -272,6 +272,7 @@ var _ = Describe("AlarmsRepository", func() {
 						PerceivedSeverity: api.WARNING,
 						ObjectID:          &id,
 						Fingerprint:       "9a9e2d82a78cf2b9",
+						AlarmSource:       models.AlarmSourceCaaS,
 					},
 				}
 				// Expect transaction begin
@@ -284,7 +285,7 @@ var _ = Describe("AlarmsRepository", func() {
 						records[0].PerceivedSeverity, records[0].Extensions,
 						records[0].ObjectID, records[0].ObjectTypeID,
 						records[0].AlarmStatus, records[0].Fingerprint,
-						records[0].AlarmDefinitionID, records[0].ProbableCauseID, int64(0), "alertmanager",
+						records[0].AlarmDefinitionID, records[0].ProbableCauseID, int64(0), records[0].AlarmSource,
 					).
 					WillReturnResult(pgxmock.NewResult("INSERT", 1))
 
@@ -312,12 +313,14 @@ var _ = Describe("AlarmsRepository", func() {
 						PerceivedSeverity: api.WARNING,
 						ObjectID:          &id1,
 						Fingerprint:       "9a9e2d82a78cf2b7",
+						AlarmSource:       models.AlarmSourceCaaS,
 					},
 					{
 						AlarmRaisedTime:   now,
 						PerceivedSeverity: api.CRITICAL,
 						ObjectID:          &id2,
 						Fingerprint:       "9a9e2d82a78cf2b9",
+						AlarmSource:       models.AlarmSourceCaaS,
 					},
 				}
 
@@ -331,14 +334,13 @@ var _ = Describe("AlarmsRepository", func() {
 						records[0].PerceivedSeverity, records[0].Extensions,
 						records[0].ObjectID, records[0].ObjectTypeID,
 						records[0].AlarmStatus, records[0].Fingerprint,
-						records[0].AlarmDefinitionID, records[0].ProbableCauseID, int64(0),
+						records[0].AlarmDefinitionID, records[0].ProbableCauseID, int64(0), records[0].AlarmSource,
 						records[1].AlarmRaisedTime, records[1].AlarmClearedTime,
 						records[1].AlarmAcknowledgedTime, records[1].AlarmAcknowledged,
 						records[1].PerceivedSeverity, records[1].Extensions,
 						records[1].ObjectID, records[1].ObjectTypeID,
 						records[1].AlarmStatus, records[1].Fingerprint,
-						records[1].AlarmDefinitionID, records[1].ProbableCauseID, int64(0),
-						"alertmanager",
+						records[1].AlarmDefinitionID, records[1].ProbableCauseID, int64(0), records[1].AlarmSource,
 					).
 					WillReturnResult(pgxmock.NewResult("INSERT", 2))
 
@@ -427,7 +429,7 @@ var _ = Describe("AlarmsRepository", func() {
 				mock.ExpectBegin()
 
 				mock.ExpectQuery(fmt.Sprintf("UPDATE %s SET", models.AlarmEventRecord{}.TableName())).
-					WithArgs(api.Resolved, api.CLEARED, clearTime, int64(2), "alertmanager", api.Resolved).
+					WithArgs(api.Resolved, api.CLEARED, clearTime, int64(2), models.AlarmSourceCaaS, models.AlarmSourceHardware, api.Resolved).
 					WillReturnRows(pgxmock.NewRows([]string{"alarm_event_record_id"}).AddRow(uuid.New()))
 
 				// Expect transaction commit

@@ -99,7 +99,7 @@ func (c *AMClient) SyncAlerts(ctx context.Context) error {
 	// Covert to Webhook payload to allow us to maintain a single point of entry in the DB
 	webhookPayload := ConvertAPIAlertsToWebhook(&apiPayload)
 	if len(webhookPayload) != 0 {
-		if err := HandleAlerts(ctx, c.infrastructure.Clients, c.alarmsRepository, &webhookPayload, API); err != nil {
+		if err := HandleAlerts(ctx, c.infrastructure.ClusterServer, c.infrastructure.ResourceServer, c.alarmsRepository, &webhookPayload, API); err != nil {
 			return fmt.Errorf("failed to handle alerts during full sync: %w", err)
 		}
 	}

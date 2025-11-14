@@ -1,13 +1,11 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/HEAD/configuration-schema.json
 package: generated
-output: ../generated/inventory.generated.go
+output: client.gen.go
 
 generate:
-  std-http-server: true
-  client: false
+  client: true
   models: true
   embedded-spec: true
-  strict-server: true
 
 output-options:
   skip-fmt: false
@@ -15,7 +13,7 @@ output-options:
   nullable-type: true
   name-normalizer: ToCamelCaseWithDigits
   overlay:
-    path: ../openapi-overlay.yaml
+    path: ../../../../../../../internal/service/resources/api/openapi-overlay.yaml
 
 import-mapping:
   ../../common/api/openapi.yaml: "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"

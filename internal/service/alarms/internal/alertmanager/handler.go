@@ -26,7 +26,7 @@ const (
 
 // HandleAlerts can be called when a payload from Webhook or API `/alerts` is received
 // Webhook is our primary and API as our backup and sync mechanism
-func HandleAlerts(ctx context.Context, clients []infrastructure.Client, repository repo.AlarmRepositoryInterface, alerts *[]api.Alert, source SourceType) error {
+func HandleAlerts(ctx context.Context, clusterServer, resourceServer infrastructure.Client, repository repo.AlarmRepositoryInterface, alerts *[]api.Alert, source SourceType) error {
 	// Handle nil alerts
 	if alerts == nil {
 		return nil
@@ -37,23 +37,8 @@ func HandleAlerts(ctx context.Context, clients []infrastructure.Client, reposito
 		return nil
 	}
 
-	// Get cached cluster server data
-	var (
-		clusterServer infrastructure.Client
-		found         bool
-	)
-	for i := range clients {
-		if clients[i].Name() == infrastructure.Name {
-			clusterServer = clients[i]
-			found = true
-		}
-	}
-	if !found {
-		return fmt.Errorf("no cluster server found with name %q", infrastructure.Name)
-	}
-
 	// Combine possible definitions with events
-	aerModels := ConvertAmToAlarmEventRecordModels(ctx, alerts, clusterServer)
+	aerModels := ConvertAmToAlarmEventRecordModels(ctx, alerts, clusterServer, resourceServer)
 
 	// Insert and update AlarmEventRecord and optionally resolve stale
 	if err := repository.WithTransaction(ctx, func(tx pgx.Tx) error {

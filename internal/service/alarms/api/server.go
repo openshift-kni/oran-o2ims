@@ -493,7 +493,7 @@ func (a *AlarmsServer) UpdateAlarmServiceConfiguration(ctx context.Context, requ
 func (a *AlarmsServer) AmNotification(ctx context.Context, request api.AmNotificationRequestObject) (api.AmNotificationResponseObject, error) {
 	// TODO: AM auto retries if it receives 5xx error code. That means any error, even if permanent (e.g postgres syntax), will be processed the same way. Once we have a better retry mechanism for pg, update all 5xx to 4xx as needed.
 
-	if err := alertmanager.HandleAlerts(ctx, a.Infrastructure.Clients, a.AlarmsRepository, &request.Body.Alerts, alertmanager.Webhook); err != nil {
+	if err := alertmanager.HandleAlerts(ctx, a.Infrastructure.ClusterServer, a.Infrastructure.ResourceServer, a.AlarmsRepository, &request.Body.Alerts, alertmanager.Webhook); err != nil {
 		msg := "failed to handle alerts"
 		slog.Error(msg, "error", err)
 		return nil, fmt.Errorf("%s: %w", msg, err)

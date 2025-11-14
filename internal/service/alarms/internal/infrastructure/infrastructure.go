@@ -36,7 +36,8 @@ type Client interface {
 
 // Infrastructure represents the infrastructure clients
 type Infrastructure struct {
-	Clients []Client
+	ClusterServer  Client
+	ResourceServer Client
 }
 
 type AlarmDictionary = generated.AlarmDictionary
@@ -49,10 +50,11 @@ type AlarmDefinitionUniqueIdentifier struct {
 
 // Init sets up the infrastructure clients and fetches all the data
 func Init(ctx context.Context) (*Infrastructure, error) {
-	// Currently only the cluster server is supported
-	clients := []Client{&ClusterServer{}}
+	// Initialize both cluster server (for CaaS alerts) and resource server (for hardware alerts)
+	clusterServer := &ClusterServer{}
+	resourceServer := &ResourceServer{}
 
-	for _, server := range clients {
+	for _, server := range []Client{clusterServer, resourceServer} {
 		if err := server.Setup(); err != nil {
 			return nil, fmt.Errorf("failed to setup %s: %w", server.Name(), err)
 		}
@@ -60,5 +62,8 @@ func Init(ctx context.Context) (*Infrastructure, error) {
 		server.Sync(ctx)
 	}
 
-	return &Infrastructure{Clients: clients}, nil
+	return &Infrastructure{
+		ClusterServer:  clusterServer,
+		ResourceServer: resourceServer,
+	}, nil
 }

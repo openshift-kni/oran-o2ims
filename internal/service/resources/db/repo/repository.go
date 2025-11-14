@@ -92,6 +92,11 @@ func (r *ResourcesRepository) GetResource(ctx context.Context, id uuid.UUID) (*m
 	return svcutils.Find[models.Resource](ctx, r.Db, id)
 }
 
+// GetResources retrieves all Resource tuples or returns an empty array if no tuples are found
+func (r *ResourcesRepository) GetResources(ctx context.Context) ([]models.Resource, error) {
+	return svcutils.FindAll[models.Resource](ctx, r.Db)
+}
+
 // CreateResource creates a new Resource tuple
 func (r *ResourcesRepository) CreateResource(ctx context.Context, resource *models.Resource) (*models.Resource, error) {
 	return svcutils.Create[models.Resource](ctx, r.Db, *resource)

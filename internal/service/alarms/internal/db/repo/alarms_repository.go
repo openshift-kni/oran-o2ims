@@ -141,7 +141,7 @@ func (ar *AlarmsRepository) UpsertAlarmEventCaaSRecord(ctx context.Context, tx p
 		"AlarmAcknowledged", "PerceivedSeverity", "Extensions",
 		"ObjectID", "ObjectTypeID", "AlarmStatus",
 		"Fingerprint", "AlarmDefinitionID", "ProbableCauseID",
-		"GenerationID",
+		"GenerationID", "AlarmSource",
 	})
 
 	// Set values
@@ -152,7 +152,7 @@ func (ar *AlarmsRepository) UpsertAlarmEventCaaSRecord(ctx context.Context, tx p
 			record.AlarmAcknowledged, record.PerceivedSeverity, record.Extensions,
 			record.ObjectID, record.ObjectTypeID, record.AlarmStatus,
 			record.Fingerprint, record.AlarmDefinitionID, record.ProbableCauseID,
-			generationID,
+			generationID, record.AlarmSource,
 		)))
 	}
 	query.Apply(values...)
@@ -169,7 +169,7 @@ func (ar *AlarmsRepository) UpsertAlarmEventCaaSRecord(ctx context.Context, tx p
 		im.SetExcluded(dbTags["AlarmDefinitionID"]),
 		im.SetExcluded(dbTags["ProbableCauseID"]),
 		im.SetExcluded(dbTags["GenerationID"]),
-		im.Where(psql.Quote(m.TableName(), dbTags["AlarmSource"]).EQ(psql.Arg("alertmanager"))),
+		im.SetExcluded(dbTags["AlarmSource"]),
 	))
 
 	sql, params, err := query.Build(ctx)
@@ -209,12 +209,12 @@ func (ar *AlarmsRepository) ResolveStaleAlarmEventCaaSRecord(ctx context.Context
 
 	query := psql.Update(
 		um.Table(tableName),
-		um.SetCol(alarmStatus).ToArg(api.Resolved),                       // Set to resolved
-		um.SetCol(perceivedSeverity).ToArg(api.CLEARED),                  // Set corresponding perceivedSeverity
-		um.Set(psql.Raw(updateClearedTimeCase, TimeNow())),               // Set a resolved time if not there already
-		um.Where(psql.Quote(generationIDCol).LT(psql.Arg(generationID))), // An alert is stale if its GenID is less than current
-		um.Where(psql.Quote(alarmSource).EQ(psql.Arg("alertmanager"))),   // This is only applicable for alertmanager rows
-		um.Where(psql.Quote(alarmStatus).NE(psql.Arg(api.Resolved))),     // If already resolved no need to process that row
+		um.SetCol(alarmStatus).ToArg(api.Resolved),                                                         // Set to resolved
+		um.SetCol(perceivedSeverity).ToArg(api.CLEARED),                                                    // Set corresponding perceivedSeverity
+		um.Set(psql.Raw(updateClearedTimeCase, TimeNow())),                                                 // Set a resolved time if not there already
+		um.Where(psql.Quote(generationIDCol).LT(psql.Arg(generationID))),                                   // An alert is stale if its GenID is less than current
+		um.Where(psql.Quote(alarmSource).In(psql.Arg(models.AlarmSourceCaaS, models.AlarmSourceHardware))), // Support both CaaS and hardware alerts
+		um.Where(psql.Quote(alarmStatus).NE(psql.Arg(api.Resolved))),                                       // If already resolved no need to process that row
 		um.Returning(psql.Quote(alarmEventRecordID)),
 	)
 
