@@ -76,6 +76,7 @@ import (
 const (
 	nonexistentBMHID        = "nonexistent-bmh"
 	nonexistentBMHNamespace = "nonexistent-namespace"
+	testBootMAC             = "00:11:22:33:44:55"
 )
 
 var _ = Describe("BareMetalHost Manager", func() {
@@ -111,7 +112,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 					NIC: []metal3v1alpha1.NIC{
 						{
 							Name: "eth0",
-							MAC:  "00:11:22:33:44:55",
+							MAC:  testBootMAC,
 						},
 						{
 							Name: "eth1",
@@ -250,11 +251,201 @@ var _ = Describe("BareMetalHost Manager", func() {
 		})
 	})
 
+	Describe("setBootMACAddressFromLabel", func() {
+		var (
+			fakeClient client.Client
+		)
+
+		It("should set bootMACAddress when found by NIC name", func() {
+			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
+			bmh := createBMH("test-bmh", "test-ns", map[string]string{
+				"interfacelabel.clcm.openshift.io/boot": "eth0",
+			}, nil, metal3v1alpha1.StateAvailable)
+			// bootMACAddress is not set
+			bmh.Spec.BootMACAddress = ""
+
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
+
+			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, nodeRequest, bmh)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify bootMACAddress was set
+			var updatedBMH metal3v1alpha1.BareMetalHost
+			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+			err = fakeClient.Get(ctx, name, &updatedBMH)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedBMH.Spec.BootMACAddress).To(Equal(testBootMAC))
+		})
+
+		It("should set bootMACAddress when found by hyphenated MAC", func() {
+			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
+			bmh := createBMH("test-bmh", "test-ns", map[string]string{
+				"interfacelabel.clcm.openshift.io/boot": "00-11-22-33-44-56",
+			}, nil, metal3v1alpha1.StateAvailable)
+			bmh.Spec.BootMACAddress = ""
+
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
+
+			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, nodeRequest, bmh)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify bootMACAddress was set to eth1's MAC
+			var updatedBMH metal3v1alpha1.BareMetalHost
+			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+			err = fakeClient.Get(ctx, name, &updatedBMH)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedBMH.Spec.BootMACAddress).To(Equal("00:11:22:33:44:56"))
+		})
+
+		It("should set bootMACAddress with case-insensitive hyphenated MAC matching", func() {
+			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
+			// Label has uppercase MAC, but NIC.MAC in hardware details is lowercase with colons
+			bmh := createBMH("test-bmh", "test-ns", map[string]string{
+				"interfacelabel.clcm.openshift.io/boot": "00-11-22-33-44-AA",
+			}, nil, metal3v1alpha1.StateAvailable)
+			bmh.Spec.BootMACAddress = ""
+
+			// Add a NIC with lowercase MAC to test case-insensitive matching
+			bmh.Status.HardwareDetails.NIC = append(bmh.Status.HardwareDetails.NIC, metal3v1alpha1.NIC{
+				Name: "eth2",
+				MAC:  "00:11:22:33:44:aa", // lowercase version of label's MAC
+			})
+
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
+
+			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, nodeRequest, bmh)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify bootMACAddress was set using case-insensitive matching
+			var updatedBMH metal3v1alpha1.BareMetalHost
+			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+			err = fakeClient.Get(ctx, name, &updatedBMH)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedBMH.Spec.BootMACAddress).To(Equal("00:11:22:33:44:aa"))
+		})
+
+		It("should succeed when bootMACAddress is set but boot interface label is not present", func() {
+			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
+			// BMH has bootMACAddress but no boot interface label
+			bmh := createBMH("test-bmh", "test-ns", map[string]string{
+				"interfacelabel.clcm.openshift.io/mgmt": "eth1",
+			}, nil, metal3v1alpha1.StateAvailable)
+			bmh.Spec.BootMACAddress = testBootMAC
+
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
+
+			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, nodeRequest, bmh)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify bootMACAddress was not changed
+			var updatedBMH metal3v1alpha1.BareMetalHost
+			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+			err = fakeClient.Get(ctx, name, &updatedBMH)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedBMH.Spec.BootMACAddress).To(Equal(testBootMAC))
+		})
+
+		It("should validate bootMACAddress matches boot interface label when both are set", func() {
+			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
+			bmh := createBMH("test-bmh", "test-ns", map[string]string{
+				"interfacelabel.clcm.openshift.io/boot": "eth0",
+			}, nil, metal3v1alpha1.StateAvailable)
+			bmh.Spec.BootMACAddress = testBootMAC
+
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
+
+			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, nodeRequest, bmh)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify bootMACAddress was not changed
+			var updatedBMH metal3v1alpha1.BareMetalHost
+			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+			err = fakeClient.Get(ctx, name, &updatedBMH)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedBMH.Spec.BootMACAddress).To(Equal(testBootMAC))
+		})
+
+		It("should return error when bootMACAddress doesn't match boot interface label", func() {
+			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
+			bmh := createBMH("test-bmh", "test-ns", map[string]string{
+				"interfacelabel.clcm.openshift.io/boot": "eth0",
+			}, nil, metal3v1alpha1.StateAvailable)
+			// Set bootMACAddress to eth1's MAC, but label points to eth0
+			bmh.Spec.BootMACAddress = "00:11:22:33:44:56"
+
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
+
+			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, nodeRequest, bmh)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("bootMACAddress"))
+			Expect(err.Error()).To(ContainSubstring("does not match"))
+			Expect(err.Error()).To(ContainSubstring("00:11:22:33:44:56"))
+			Expect(err.Error()).To(ContainSubstring(testBootMAC))
+		})
+
+		It("should return error when hardware details are nil", func() {
+			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
+			bmh := createBMH("test-bmh", "test-ns", map[string]string{
+				"interfacelabel.clcm.openshift.io/boot": "eth0",
+			}, nil, metal3v1alpha1.StateAvailable)
+			bmh.Spec.BootMACAddress = ""
+			bmh.Status.HardwareDetails = nil
+
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
+
+			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, nodeRequest, bmh)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("bareMetalHost.status.hardwareDetails should not be nil"))
+		})
+
+		It("should return error when boot interface label is empty", func() {
+			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
+			nodeRequest.Spec.BootInterfaceLabel = ""
+			bmh := createBMH("test-bmh", "test-ns", nil, nil, metal3v1alpha1.StateAvailable)
+			bmh.Spec.BootMACAddress = ""
+
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
+
+			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, nodeRequest, bmh)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("bootInterfaceLabel is empty"))
+		})
+
+		It("should return error when boot label not found on BMH", func() {
+			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
+			bmh := createBMH("test-bmh", "test-ns", map[string]string{
+				"interfacelabel.clcm.openshift.io/mgmt": "eth0",
+			}, nil, metal3v1alpha1.StateAvailable)
+			bmh.Spec.BootMACAddress = ""
+
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
+
+			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, nodeRequest, bmh)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("boot interface label"))
+			Expect(err.Error()).To(ContainSubstring("not found"))
+		})
+
+		It("should return error when no NIC matches label value", func() {
+			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
+			bmh := createBMH("test-bmh", "test-ns", map[string]string{
+				"interfacelabel.clcm.openshift.io/boot": "eth99",
+			}, nil, metal3v1alpha1.StateAvailable)
+			bmh.Spec.BootMACAddress = ""
+
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
+
+			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, nodeRequest, bmh)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("no NIC found matching"))
+		})
+	})
+
 	Describe("buildInterfacesFromBMH", func() {
 		It("should build interfaces correctly with boot interface", func() {
 			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
 			bmh := createBMH("test-bmh", "test-ns", nil, nil, metal3v1alpha1.StateAvailable)
-			bmh.Spec.BootMACAddress = "00:11:22:33:44:55"
+			bmh.Spec.BootMACAddress = testBootMAC
 
 			interfaces, err := buildInterfacesFromBMH(nodeRequest, bmh)
 			Expect(err).NotTo(HaveOccurred())
@@ -263,7 +454,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 			// Find boot interface
 			var bootInterface *pluginsv1alpha1.Interface
 			for _, iface := range interfaces {
-				if iface.MACAddress == "00:11:22:33:44:55" {
+				if iface.MACAddress == testBootMAC {
 					bootInterface = iface
 					break
 				}
@@ -1499,7 +1690,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 				Interfaces: []*pluginsv1alpha1.Interface{
 					{
 						Name:       "eth0",
-						MACAddress: "00:11:22:33:44:55",
+						MACAddress: testBootMAC,
 						Label:      "mgmt",
 					},
 				},
