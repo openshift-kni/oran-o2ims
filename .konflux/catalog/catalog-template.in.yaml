@@ -8,21 +8,33 @@ entries:
     schema: olm.package
     # Channel entries for 'stable' channel
   - entries:
+      # v4.20.0
       - name: o-cloud-manager.v4.20.0
         skipRange: '>=4.9.0 <4.20.0'
+      # v4.20.1
       - name: o-cloud-manager.v4.20.1
         replaces: o-cloud-manager.v4.20.0
         skipRange: '>=4.9.0 <4.20.1'
+      # v4.20.2
+      - name: o-cloud-manager.v4.20.2
+        replaces: o-cloud-manager.v4.20.1
+        skipRange: '>=4.9.0 <4.20.2'
     name: stable
     package: o-cloud-manager
     schema: olm.channel
     # Channel entries for '4.20' channel
   - entries:
+      # v4.20.0
       - name: o-cloud-manager.v4.20.0
         skipRange: '>=4.9.0 <4.20.0'
+      # v4.20.1
       - name: o-cloud-manager.v4.20.1
         replaces: o-cloud-manager.v4.20.0
         skipRange: '>=4.9.0 <4.20.1'
+      # v4.20.2
+      - name: o-cloud-manager.v4.20.2
+        replaces: o-cloud-manager.v4.20.1
+        skipRange: '>=4.9.0 <4.20.2'
     name: "4.20"
     package: o-cloud-manager
     schema: olm.channel
@@ -30,6 +42,9 @@ entries:
   - image: registry.redhat.io/openshift4/o-cloud-manager-operator-bundle@sha256:2147b542ddcc54717fd9c7e7d944a357280c6416f7d860400365667ad9de744d
     schema: olm.bundle
   # v4.20.1 bundle
+  - image: registry.redhat.io/openshift4/o-cloud-manager-operator-bundle@sha256:d403352abf14d6553da6665e47342927500608f2646cb17eac80414f44320ae0
+    schema: olm.bundle
+  # v4.20.2 bundle
   # The url for this last entry is updated by telco5g-konflux/scripts/catalog/update-catalog-template.sh automatically
   - image: placeholder.will.be.updated.by.telco5g-konflux.scripts.catalog.update-catalog-template.sh
     schema: olm.bundle
