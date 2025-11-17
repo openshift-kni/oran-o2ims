@@ -702,12 +702,27 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 	result, nodelist, err := handleNodeAllocationRequestConfiguring(ctx, r.Client, r.NoncachedClient, r.Logger, r.PluginNamespace, nodeAllocationRequest)
 
 	if nodelist != nil {
-		// Check if NAR already has a timeout condition - if so, skip aggregation
-		// to preserve the timeout status. Timeout is detected at NAR level, not node level.
+		// Check if NAR already has a terminal condition (Failed or TimedOut) - if so, skip aggregation
+		// to preserve the terminal status. These terminal states are detected at NAR level, not node level.
 		configuredCondition := meta.FindStatusCondition(nodeAllocationRequest.Status.Conditions, string(hwmgmtv1alpha1.Configured))
-		if configuredCondition != nil && configuredCondition.Reason == string(hwmgmtv1alpha1.TimedOut) {
-			r.Logger.InfoContext(ctx, "Skipping status aggregation - NAR already has timeout condition",
-				slog.String("nodeAllocationRequest", nodeAllocationRequest.Name))
+		if configuredCondition != nil &&
+			(configuredCondition.Reason == string(hwmgmtv1alpha1.Failed) ||
+				configuredCondition.Reason == string(hwmgmtv1alpha1.TimedOut)) {
+			r.Logger.InfoContext(ctx, "Skipping status aggregation - NAR already has terminal condition",
+				slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
+				slog.String("reason", configuredCondition.Reason))
+
+			// Update observedGeneration to acknowledge the spec change was processed
+			// This prevents the FSM from re-triggering spec change handling
+			if updateErr := hwmgrutils.UpdateNodeAllocationRequestPluginStatus(ctx, r.Client, nodeAllocationRequest); updateErr != nil {
+				r.Logger.ErrorContext(ctx, "Failed to update hwMgrPlugin observedGeneration Status",
+					slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
+					slog.String("error", updateErr.Error()))
+				// Return error to trigger requeue
+				return hwmgrutils.RequeueWithShortInterval(),
+					fmt.Errorf("failed to update hwMgrPlugin observedGeneration Status: %w", updateErr)
+			}
+
 			return result, err
 		}
 
@@ -724,9 +739,18 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 				err = updateErr
 			}
 		}
-		if status == metav1.ConditionTrue && reason == string(hwmgmtv1alpha1.ConfigApplied) {
-			if err := hwmgrutils.UpdateNodeAllocationRequestPluginStatus(ctx, r.Client, nodeAllocationRequest); err != nil {
-				return hwmgrutils.RequeueWithShortInterval(), fmt.Errorf("failed to update hwMgrPlugin observedGeneration Status: %w", err)
+
+		// Update observedGeneration when configuration reaches a terminal state (success, failure, or timeout).
+		if status == metav1.ConditionTrue ||
+			reason == string(hwmgmtv1alpha1.Failed) ||
+			reason == string(hwmgmtv1alpha1.TimedOut) {
+			if updateErr := hwmgrutils.UpdateNodeAllocationRequestPluginStatus(ctx, r.Client, nodeAllocationRequest); updateErr != nil {
+				r.Logger.ErrorContext(ctx, "Failed to update hwMgrPlugin observedGeneration Status",
+					slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
+					slog.String("error", updateErr.Error()))
+				// Return error to trigger requeue
+				return hwmgrutils.RequeueWithShortInterval(),
+					fmt.Errorf("failed to update hwMgrPlugin observedGeneration Status: %w", updateErr)
 			}
 		}
 	}
