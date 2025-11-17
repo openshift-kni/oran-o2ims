@@ -151,6 +151,13 @@ func (r *AllocatedNodeReconciler) handleAllocatedNodeDeletion(ctx context.Contex
 	r.Logger.InfoContext(ctx, "handleAllocatedNodeDeletion", slog.String("node", allocatednode.Name))
 	bmh, err := getBMHForNode(ctx, r.NoncachedClient, allocatednode)
 	if err != nil {
+		// If BMH is not found (e.g., manually deleted), allow the AllocatedNode deletion to proceed
+		if errors.IsNotFound(err) {
+			r.Logger.InfoContext(ctx, "BMH not found, assuming manually deleted — proceeding with AllocatedNode deletion",
+				slog.String("node", allocatednode.Name),
+				slog.String("bmh", allocatednode.Spec.HwMgrNodeId))
+			return true, nil
+		}
 		return true, fmt.Errorf("failed to get BMH for node %s: %w", allocatednode.Name, err)
 	}
 
