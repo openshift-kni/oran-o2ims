@@ -16,6 +16,7 @@ import (
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common"
 )
 
 // ConvertAmToAlarmEventRecordModels get alarmEventRecords based on the alertmanager notification and AlarmDefinition
@@ -133,9 +134,9 @@ func getClusterID(labels map[string]string) *uuid.UUID {
 
 // isHardwareAlert checks if an alert is a hardware alert by checking for type=hardware AND component=ironic labels
 func isHardwareAlert(labels map[string]string) bool {
-	alertType, hasType := labels["type"]
-	component, hasComponent := labels["component"]
-	return hasType && alertType == "hardware" && hasComponent && component == "ironic"
+	alertType, hasType := labels[common.HardwareAlertTypeLabel]
+	component, hasComponent := labels[common.HardwareAlertComponentLabel]
+	return hasType && alertType == common.HardwareAlertTypeValue && hasComponent && component == common.HardwareAlertComponentValue
 }
 
 // getResourceID extracts resource ID from instance_uuid label for hardware alerts

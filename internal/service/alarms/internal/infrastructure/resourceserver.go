@@ -126,9 +126,11 @@ func (r *ResourceServer) FetchAll(ctx context.Context) error {
 		slog.Info("Mapping resource type ID to alarm definitions", "resourceTypeID", resourceType.ResourceTypeId, "alarmDictionaryID", resp.JSON200.AlarmDictionaryId, "definitionCount", len(alarmDefinitions))
 	}
 
-	// Atomically update the map while holding lock
+	// Atomically update the maps while holding lock
 	r.Lock()
 	r.resourceTypeIDToAlarmDefinitions = newResourceTypeIDToAlarmDefinitions
+	// Clear the resource ID cache to prevent memory leak from deleted/stale resources
+	r.resourceIDToResourceTypeID = make(map[uuid.UUID]uuid.UUID)
 	r.Unlock()
 
 	slog.Info("Successfully synced ResourceServer objects")
@@ -139,9 +141,9 @@ func (r *ResourceServer) FetchAll(ctx context.Context) error {
 // It uses the cache if available, otherwise fetches from resource server
 func (r *ResourceServer) GetObjectTypeID(ctx context.Context, resourceID uuid.UUID) (uuid.UUID, error) {
 	r.Lock()
-	resourceTypeID, ok := r.resourceIDToResourceTypeID[resourceID]
-	r.Unlock()
+	defer r.Unlock()
 
+	resourceTypeID, ok := r.resourceIDToResourceTypeID[resourceID]
 	if ok {
 		return resourceTypeID, nil
 	}
@@ -154,9 +156,8 @@ func (r *ResourceServer) GetObjectTypeID(ctx context.Context, resourceID uuid.UU
 	}
 
 	// Cache the mapping
-	r.Lock()
 	r.resourceIDToResourceTypeID[resourceID] = resource.ResourceTypeId
-	r.Unlock()
+	slog.Info("Mapping resource ID to resource type ID", "resourceID", resourceID, "resourceTypeID", resource.ResourceTypeId)
 
 	return resource.ResourceTypeId, nil
 }
@@ -165,9 +166,9 @@ func (r *ResourceServer) GetObjectTypeID(ctx context.Context, resourceID uuid.UU
 // It uses the cache if available, otherwise it fetches the data from the server
 func (r *ResourceServer) GetAlarmDefinitionID(ctx context.Context, resourceTypeID uuid.UUID, name, severity string) (uuid.UUID, error) {
 	r.Lock()
-	alarmDefinitions, ok := r.resourceTypeIDToAlarmDefinitions[resourceTypeID]
-	r.Unlock()
+	defer r.Unlock()
 
+	alarmDefinitions, ok := r.resourceTypeIDToAlarmDefinitions[resourceTypeID]
 	if !ok {
 		slog.Info("Resource type ID not found in cache, fetching from resource server", "resourceTypeID", resourceTypeID)
 
@@ -189,10 +190,7 @@ func (r *ResourceServer) GetAlarmDefinitionID(ctx context.Context, resourceTypeI
 		alarmDefinitions = buildAlarmDefinitionsFromDictionary(*resp.JSON200)
 
 		// Cache the alarm definitions
-		r.Lock()
 		r.resourceTypeIDToAlarmDefinitions[resourceTypeID] = alarmDefinitions
-		r.Unlock()
-
 		slog.Info("Mapping resource type ID to alarm definitions", "resourceTypeID", resourceTypeID, "alarmDictionaryID", resp.JSON200.AlarmDictionaryId, "definitionCount", len(alarmDefinitions))
 	}
 
@@ -258,7 +256,10 @@ func (r *ResourceServer) Sync(ctx context.Context) {
 
 // getResourceTypes fetches all resource types from the resource server
 func (r *ResourceServer) getResourceTypes(ctx context.Context) ([]generated.ResourceType, error) {
-	resp, err := r.client.GetResourceTypesWithResponse(ctx, &generated.GetResourceTypesParams{})
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, clients.ListRequestTimeout)
+	defer cancel()
+
+	resp, err := r.client.GetResourceTypesWithResponse(ctxWithTimeout, &generated.GetResourceTypesParams{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resource types: %w", err)
 	}
@@ -271,12 +272,16 @@ func (r *ResourceServer) getResourceTypes(ctx context.Context) ([]generated.Reso
 		return nil, fmt.Errorf("empty response from resource server")
 	}
 
+	slog.Info("Got resource types", "count", len(*resp.JSON200))
 	return *resp.JSON200, nil
 }
 
 // getResource fetches a resource by ID from the resource server
 func (r *ResourceServer) getResource(ctx context.Context, resourceID uuid.UUID) (*generated.Resource, error) {
-	resp, err := r.client.GetInternalResourceByIdWithResponse(ctx, resourceID)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, clients.SingleRequestTimeout)
+	defer cancel()
+
+	resp, err := r.client.GetInternalResourceByIdWithResponse(ctxWithTimeout, resourceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resource: %w", err)
 	}
@@ -289,6 +294,7 @@ func (r *ResourceServer) getResource(ctx context.Context, resourceID uuid.UUID) 
 		return nil, fmt.Errorf("empty response from resource server")
 	}
 
+	slog.Info("Got resource", "resourceID", resourceID)
 	return resp.JSON200, nil
 }
 
