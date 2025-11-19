@@ -13,21 +13,21 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
-	// ACMObsAMRouteName route to collect ACM's AM API host
-	ACMObsAMRouteName = "alertmanager"
-	// ACMObsAMAuthSecretName secret to collect ACM's AM API BEARER and ca.Crt
-	ACMObsAMAuthSecretName = "observability-alertmanager-accessor-token" // nolint: gosec
+	// ACMObsAMServiceName is the alertmanager service name in ACM observability
+	ACMObsAMServiceName = "alertmanager"
+	// ACMObsAMServicePort is the HTTPS port for alertmanager service
+	ACMObsAMServicePort = 9095
 )
 
 // APIAlert represents the alert structure returned by the Alertmanager API.
@@ -110,16 +110,21 @@ func (c *AMClient) SyncAlerts(ctx context.Context) error {
 
 // getAlerts retrieves all alerts from Alertmanager API
 func (c *AMClient) getAlerts(ctx context.Context) ([]APIAlert, error) {
-	// Get the alertmanager route
-	alertmanagerHost, err := c.GetAlertmanagerRoute(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get alertmanager route: %w", err)
-	}
-
-	// Initialize a new client each time to pick up the latest secrets
-	httpClient, token, err := c.createAlertmanagerClient(ctx)
+	// Initialize a new client each time to pick up the latest token
+	httpClient, token, err := c.createAlertmanagerClient()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create alertmanager client: %w", err)
+	}
+
+	// Build service URL for alertmanager
+	// Format: alertmanager.open-cluster-management-observability.svc:9095
+	// Allow override for testing
+	alertmanagerHost := os.Getenv("ALARMS_SERVER_AM_HOST")
+	if alertmanagerHost == "" {
+		alertmanagerHost = fmt.Sprintf("%s.%s.svc:%d",
+			ACMObsAMServiceName,
+			ctlrutils.OpenClusterManagementObservabilityNamespace,
+			ACMObsAMServicePort)
 	}
 
 	// Create request
@@ -138,7 +143,7 @@ func (c *AMClient) getAlerts(ctx context.Context) ([]APIAlert, error) {
 	q.Set("silenced", "true")
 
 	u.RawQuery = q.Encode()
-	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %w", err)
 	}
@@ -179,78 +184,32 @@ func (c *AMClient) getAlerts(ctx context.Context) ([]APIAlert, error) {
 	return alerts, nil
 }
 
-// GetAlertmanagerRoute gets the hostname for the alertmanager route using unstructured type
-func (c *AMClient) GetAlertmanagerRoute(ctx context.Context) (string, error) {
-	// Define the route GVK (Group, Version, Kind)
-	routeGVK := schema.GroupVersionKind{
-		Group:   "route.openshift.io",
-		Version: "v1",
-		Kind:    "Route",
+// createAlertmanagerClient creates a new HTTP client with the service account token and service CA certificate.
+// The token comes from the pod's service account and CA cert from the service CA file.
+func (c *AMClient) createAlertmanagerClient() (*http.Client, string, error) {
+	// Determine token file path (allow override for testing/local development)
+	tokenPath := constants.DefaultBackendTokenFile
+	if envPath := os.Getenv("ALARMS_SERVER_TOKEN_FILE"); envPath != "" {
+		tokenPath = envPath
 	}
 
-	// Create an unstructured object
-	route := &unstructured.Unstructured{}
-	route.SetGroupVersionKind(routeGVK)
-
-	// Get the route
-	if err := c.k8sClient.Get(ctx, client.ObjectKey{
-		Namespace: ACMObsAMNamespace,
-		Name:      ACMObsAMRouteName,
-	}, route); err != nil {
-		return "", fmt.Errorf("error getting '%s' route: %w", ACMObsAMRouteName, err)
-	}
-
-	// Try to get host from spec
-	specHost, found, err := unstructured.NestedString(route.Object, "spec", "host")
+	// Read token from service account token file
+	token, err := os.ReadFile(tokenPath)
 	if err != nil {
-		return "", fmt.Errorf("error accessing spec.host: %w", err)
-	}
-	if found && specHost != "" {
-		return specHost, nil
+		return nil, "", fmt.Errorf("error reading service account token: %w", err)
 	}
 
-	// Fallback to status if spec host is empty
-	statusIngress, found, err := unstructured.NestedSlice(route.Object, "status", "ingress")
+	// Determine service CA file path (allow override for testing/local development)
+	caPath := constants.DefaultServiceCAFile
+	if envPath := os.Getenv("ALARMS_SERVER_CA_FILE"); envPath != "" {
+		caPath = envPath
+	}
+
+	// Read service CA certificate
+	// This is automatically mounted by Kubernetes for service-to-service TLS
+	caCrt, err := os.ReadFile(caPath)
 	if err != nil {
-		return "", fmt.Errorf("error accessing status.ingress: %w", err)
-	}
-
-	if found && len(statusIngress) > 0 {
-		ingressMap, ok := statusIngress[0].(map[string]interface{})
-		if !ok {
-			return "", fmt.Errorf("invalid ingress format")
-		}
-
-		host, found := ingressMap["host"]
-		if found && host != "" {
-			return host.(string), nil
-		}
-	}
-
-	return "", fmt.Errorf("no host found in alertmanager route")
-}
-
-// createAlertmanagerClient creates a new HTTP client with the latest token
-// TODO: we can be more robust by reading our `/var/run/secrets/kubernetes.io/serviceaccount/token` for token instead of relying on ACMObsAMAuthSecretName data.
-func (c *AMClient) createAlertmanagerClient(ctx context.Context) (*http.Client, string, error) {
-	var secret corev1.Secret
-	if err := c.k8sClient.Get(ctx, client.ObjectKey{
-		Namespace: ACMObsAMNamespace,
-		Name:      ACMObsAMAuthSecretName,
-	}, &secret); err != nil {
-		return nil, "", fmt.Errorf("error getting token secret from '%s': %w", ACMObsAMAuthSecretName, err)
-	}
-
-	// Extract token
-	token, ok := secret.Data["token"]
-	if !ok {
-		return nil, "", fmt.Errorf("token not found in secret")
-	}
-
-	// Extract CA certificate
-	caCrt, ok := secret.Data["ca.crt"]
-	if !ok {
-		return nil, "", fmt.Errorf("ca.crt not found in secret")
+		return nil, "", fmt.Errorf("error reading service CA certificate: %w", err)
 	}
 
 	// Create certificate pool with the CA cert
