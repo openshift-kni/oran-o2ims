@@ -10,21 +10,18 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure"
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -46,10 +43,9 @@ var _ = Describe("Alertmanager API Client", func() {
 		mockRepo      *generated.MockAlarmRepositoryInterface
 		infra         *infrastructure.Infrastructure
 		amClient      *alertmanager.AMClient
-		fakeRoute     *unstructured.Unstructured
-		fakeSecret    *corev1.Secret
 		mockAMServer  *httptest.Server
 		testAPIAlerts []alertmanager.APIAlert
+		tempTokenFile string
 	)
 
 	BeforeEach(func() {
@@ -70,46 +66,43 @@ var _ = Describe("Alertmanager API Client", func() {
 			Expect(err).To(BeNil())
 		}))
 
-		// Set up fake k8s client with the route and secret
-		scheme := runtime.NewScheme()
-		Expect(corev1.AddToScheme(scheme)).To(Succeed())
+		// Create temporary token file for testing
+		tempDir := GinkgoT().TempDir()
+		tempTokenFile = tempDir + "/token"
+		err := os.WriteFile(tempTokenFile, []byte("fake-token"), 0o600)
+		Expect(err).NotTo(HaveOccurred())
 
-		// Create a fake Route resource
-		fakeRoute = &unstructured.Unstructured{}
-		fakeRoute.SetGroupVersionKind(schema.GroupVersionKind(metav1.GroupVersionKind{
-			Group:   "route.openshift.io",
-			Version: "v1",
-			Kind:    "Route",
-		}))
-		fakeRoute.SetNamespace(alertmanager.ACMObsAMNamespace)
-		fakeRoute.SetName(alertmanager.ACMObsAMRouteName)
-		// Extract server hostname from test server URL without the scheme
-		serverHost := mockAMServer.URL[8:] // Skip "https://"
-		Expect(unstructured.SetNestedField(fakeRoute.Object, serverHost, "spec", "host")).To(Succeed())
-
-		// Extract server certificate for use in our fake secret
-		// This gets the actual certificate from our test server
+		// Extract server certificate for use in our fake CA file
 		certPEM := pem.EncodeToMemory(&pem.Block{
 			Type:  "CERTIFICATE",
 			Bytes: mockAMServer.Certificate().Raw,
 		})
 
-		// Create a fake Secret
-		fakeSecret = &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: alertmanager.ACMObsAMNamespace,
-				Name:      alertmanager.ACMObsAMAuthSecretName,
-			},
-			Data: map[string][]byte{
-				"token":  []byte("fake-token"),
-				"ca.crt": certPEM,
-			},
-		}
+		// Create temporary CA file with the test server's certificate
+		tempCAFile := tempDir + "/ca.crt"
+		err = os.WriteFile(tempCAFile, certPEM, 0o600)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Extract server hostname from test server URL without the scheme
+		serverHost := mockAMServer.URL[8:] // Skip "https://"
+
+		// Set environment variables to point to our temp files and test server
+		os.Setenv("ALARMS_SERVER_TOKEN_FILE", tempTokenFile)
+		os.Setenv("ALARMS_SERVER_CA_FILE", tempCAFile)
+		os.Setenv("ALARMS_SERVER_AM_HOST", serverHost)
+
+		DeferCleanup(func() {
+			os.Unsetenv("ALARMS_SERVER_TOKEN_FILE")
+			os.Unsetenv("ALARMS_SERVER_CA_FILE")
+			os.Unsetenv("ALARMS_SERVER_AM_HOST")
+		})
+
+		// Set up minimal fake k8s client (only needed for infrastructure)
+		scheme := runtime.NewScheme()
+		Expect(corev1.AddToScheme(scheme)).To(Succeed())
 
 		fakeClient = fake.NewClientBuilder().
 			WithScheme(scheme).
-			WithObjects(fakeSecret).
-			WithRuntimeObjects(fakeRoute).
 			Build()
 
 		infra = &infrastructure.Infrastructure{
@@ -201,32 +194,6 @@ var _ = Describe("Alertmanager API Client", func() {
 			// Assert
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to handle alerts"))
-		})
-	})
-
-	Describe("GetAlertmanagerRoute", func() {
-		It("should retrieve the route from Kubernetes API", func() {
-			// This is using the fake client with our route already set up
-			host, err := amClient.GetAlertmanagerRoute(ctx)
-
-			// Assert
-			Expect(err).NotTo(HaveOccurred())
-			Expect(host).NotTo(BeEmpty())
-			Expect(host).To(ContainSubstring(constants.Localhost))
-		})
-
-		It("should return error when route not found", func() {
-			// Create a client without the route
-			emptyClient := fake.NewClientBuilder().
-				WithScheme(runtime.NewScheme()).
-				Build()
-
-			clientWithoutRoute := alertmanager.NewAlertmanagerClient(emptyClient, mockRepo, infra)
-
-			_, err := clientWithoutRoute.GetAlertmanagerRoute(ctx)
-
-			// Assert
-			Expect(err).To(HaveOccurred())
 		})
 	})
 
