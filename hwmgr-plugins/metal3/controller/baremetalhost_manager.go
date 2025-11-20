@@ -234,6 +234,150 @@ func buildInterfacesFromBMH(
 	return interfaces, nil
 }
 
+// setBootMACAddressFromLabel populates the bootMACAddress in the BMH spec
+// from interface labels when bootMACAddress is not already set. When bootMACAddress
+// is already set, it optionally validates that the boot interface label points to the
+// same MAC if the label exists. The label is optional when bootMACAddress is already set.
+// This allows pre-provisioned hardware to identify the boot interface via labels.
+func setBootMACAddressFromLabel(
+	ctx context.Context,
+	c client.Client,
+	logger *slog.Logger,
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
+	bmh *metal3v1alpha1.BareMetalHost) error {
+
+	// Verify hardware details are available
+	if bmh.Status.HardwareDetails == nil {
+		return fmt.Errorf("bareMetalHost.status.hardwareDetails should not be nil")
+	}
+
+	// Get the boot interface label name
+	bootInterfaceLabel := nodeAllocationRequest.Spec.BootInterfaceLabel
+	if bootInterfaceLabel == "" {
+		return fmt.Errorf("nodeAllocationRequest.spec.bootInterfaceLabel is empty")
+	}
+
+	// If bootMACAddress is already set, the label is optional
+	// Optionally validate it matches the label if the label exists
+	if bmh.Spec.BootMACAddress != "" {
+		// Construct the full label key
+		bootLabelKey := LabelPrefixInterfaces + bootInterfaceLabel
+
+		// Check if the boot interface label exists on the BMH
+		bootLabelValue, found := bmh.Labels[bootLabelKey]
+		if !found {
+			// Label not found, but bootMACAddress is already set - this is fine
+			logger.InfoContext(ctx, "bootMACAddress already set, boot interface label not present (optional)",
+				slog.String("bmh", bmh.Name),
+				slog.String("mac", bmh.Spec.BootMACAddress))
+			return nil
+		}
+
+		// Label exists - validate it matches the bootMACAddress
+		// The label value could be either a NIC name or a hyphenated MAC address
+		var targetMAC string
+		for _, nic := range bmh.Status.HardwareDetails.NIC {
+			hyphenatedMac := strings.ReplaceAll(nic.MAC, ":", "-")
+
+			if bootLabelValue == nic.Name || strings.EqualFold(hyphenatedMac, bootLabelValue) {
+				targetMAC = nic.MAC
+				break
+			}
+		}
+
+		if targetMAC == "" {
+			return fmt.Errorf("no NIC found matching boot interface label value '%s' on BMH '%s'",
+				bootLabelValue, bmh.Name)
+		}
+
+		if !strings.EqualFold(bmh.Spec.BootMACAddress, targetMAC) {
+			return fmt.Errorf("bootMACAddress '%s' does not match boot interface label '%s' which points to MAC '%s' on BMH '%s'",
+				bmh.Spec.BootMACAddress, bootLabelKey, targetMAC, bmh.Name)
+		}
+
+		logger.InfoContext(ctx, "Validated bootMACAddress matches boot interface label",
+			slog.String("bmh", bmh.Name),
+			slog.String("label", bootLabelKey),
+			slog.String("mac", targetMAC))
+		return nil
+	}
+
+	// bootMACAddress is NOT set - label is REQUIRED to determine the boot MAC
+	// Construct the full label key
+	bootLabelKey := LabelPrefixInterfaces + bootInterfaceLabel
+
+	// Look for the boot interface label on the BMH
+	bootLabelValue, found := bmh.Labels[bootLabelKey]
+	if !found {
+		return fmt.Errorf("boot interface label '%s' not found on BMH '%s'", bootLabelKey, bmh.Name)
+	}
+
+	// The label value could be either a NIC name or a hyphenated MAC address
+	// Find the NIC that matches this value
+	var targetMAC string
+	for _, nic := range bmh.Status.HardwareDetails.NIC {
+		hyphenatedMac := strings.ReplaceAll(nic.MAC, ":", "-")
+
+		if bootLabelValue == nic.Name || strings.EqualFold(hyphenatedMac, bootLabelValue) {
+			targetMAC = nic.MAC
+			break
+		}
+	}
+
+	if targetMAC == "" {
+		return fmt.Errorf("no NIC found matching boot interface label value '%s' on BMH '%s'",
+			bootLabelValue, bmh.Name)
+	}
+
+	// Update the BMH spec with retry logic to handle concurrent modifications
+	name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+	// nolint: wrapcheck
+	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+		// Fetch the latest version of the BMH
+		var latestBMH metal3v1alpha1.BareMetalHost
+		if err := c.Get(ctx, name, &latestBMH); err != nil {
+			logger.ErrorContext(ctx, "Failed to fetch BMH for bootMACAddress update",
+				slog.Any("bmh", name),
+				slog.String("error", err.Error()))
+			return err
+		}
+
+		// Check if bootMACAddress was set by another process
+		if latestBMH.Spec.BootMACAddress != "" {
+			// Validate it matches what we expect
+			if !strings.EqualFold(latestBMH.Spec.BootMACAddress, targetMAC) {
+				return fmt.Errorf("bootMACAddress '%s' does not match boot interface label '%s' which points to MAC '%s' on BMH '%s'",
+					latestBMH.Spec.BootMACAddress, bootLabelKey, targetMAC, latestBMH.Name)
+			}
+			logger.InfoContext(ctx, "bootMACAddress already set and validated",
+				slog.String("bmh", latestBMH.Name),
+				slog.String("mac", targetMAC))
+			return nil
+		}
+
+		// Create a patch base
+		patch := client.MergeFrom(latestBMH.DeepCopy())
+
+		// Set the bootMACAddress
+		latestBMH.Spec.BootMACAddress = targetMAC
+
+		// Apply the patch
+		if err := c.Patch(ctx, &latestBMH, patch); err != nil {
+			logger.ErrorContext(ctx, "Failed to patch BMH bootMACAddress",
+				slog.String("bmh", name.Name),
+				slog.String("error", err.Error()))
+			return fmt.Errorf("failed to patch BMH bootMACAddress %s: %w", name.Name, err)
+		}
+
+		logger.InfoContext(ctx, "Successfully set bootMACAddress from interface label",
+			slog.String("bmh", latestBMH.Name),
+			slog.String("label", bootLabelKey),
+			slog.String("labelValue", bootLabelValue),
+			slog.String("mac", targetMAC))
+		return nil
+	})
+}
+
 func countNodesInGroup(ctx context.Context,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
