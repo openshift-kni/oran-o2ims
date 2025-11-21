@@ -73,7 +73,6 @@ import (
 //+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/alarmDictionaries/*",verbs=get
 //+kubebuilder:rbac:urls="/hardware-manager/inventory/*",verbs=get;list
 //+kubebuilder:rbac:groups="batch",resources=cronjobs,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=events,verbs=create;patch;update
 //+kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwareplugins,verbs=get;list;watch;create;update;patch;delete
@@ -1270,6 +1269,22 @@ func (t *reconcilerTask) createAlarmServerClusterRole(ctx context.Context) error
 				},
 			},
 			{
+				// Required for ACM Observability API authentication.
+				// The oauth-proxy in front of alertmanager validates that the service account
+				// token has at least "get namespaces" permission before granting API access.
+				// This is an ACM authentication requirement - our code doesn't actually call
+				// Get on namespace resources.
+				APIGroups: []string{
+					"",
+				},
+				Resources: []string{
+					"namespaces",
+				},
+				Verbs: []string{
+					"get",
+				},
+			},
+			{
 				APIGroups: []string{
 					"",
 				},
@@ -1327,22 +1342,6 @@ func (t *reconcilerTask) createAlarmServerClusterRole(ctx context.Context) error
 					"delete",
 					"update",
 					"patch",
-				},
-			},
-			{
-				APIGroups: []string{
-					"route.openshift.io",
-				},
-				Resources: []string{
-					"routes",
-				},
-				Verbs: []string{
-					"get",
-					"list",
-					"watch",
-				},
-				ResourceNames: []string{
-					"alertmanager",
 				},
 			},
 			{
