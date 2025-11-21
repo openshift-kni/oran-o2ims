@@ -711,6 +711,13 @@ func allocateBMHToNodeAllocationRequest(
 		return ctrl.Result{}, fmt.Errorf("failed to add host management annotation to BMH (%s): %w", bmh.Name, err)
 	}
 
+	// Set bootMACAddress from interface labels if not already set
+	// This enables the pre-provisioned hardware workflow where boot interface
+	// is identified via labels instead of requiring bootMACAddress in the spec
+	if err := setBootMACAddressFromLabel(ctx, c, logger, nodeAllocationRequest, bmh); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to set bootMACAddress from interface label for BMH (%s): %w", bmh.Name, err)
+	}
+
 	// Update node status
 	bmhInterface, err := buildInterfacesFromBMH(nodeAllocationRequest, bmh)
 	if err != nil {
