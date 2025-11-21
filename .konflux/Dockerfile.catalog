@@ -6,40 +6,9 @@
 # For >= 4.15, use registry.redhat.io/openshift4/ose-operator-registry-rhel9:v4.y
 #
 # TODO: once available, migrate to: registry.redhat.io/openshift4/ose-operator-registry-rhel9:v4.y
-ARG OPM_IMAGE=registry.redhat.io/openshift4/ose-operator-registry-rhel9:v4.20
-
-# build the catalog
-FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_golang_1.24@sha256:8412323224878c4e27cd6f7dc6ce99c50f878f37df323285bff29a53f8ec37cd AS builder
-
-# create dir structure to generate the catalog
-RUN mkdir -p /app/hack /app/.konflux/catalog
-
-COPY hack/ /app/hack/
-COPY .konflux/catalog/ /app/.konflux/catalog/
-COPY telco5g-konflux /app/telco5g-konflux
-COPY Makefile /app/Makefile
-
-# generate the catalog
-
-# debug
-RUN echo "root dir" && ls -lra $HOME
-
-WORKDIR /app
-RUN --mount=type=secret,id=telco-5g-redhat-pull-secret/.dockerconfigjson \
-    mkdir -p $HOME/.docker/ && \
-    cp /run/secrets/telco-5g-redhat-pull-secret/.dockerconfigjson $HOME/.docker/config.json
-
-# debug
-RUN echo "run secrets" && ls -lra /run/secrets/ && echo "docker dir" && ls -lra $HOME/.docker/ && cat $HOME/.docker/config.json
-
-ENV REGISTRY_AUTH_FILE=$HOME/.docker/config.json
-# The fbc build is not hermetic, so make will download yq and opm
-# Konflux will externally sync the submodules so we can skip it here
-RUN SKIP_SUBMODULE_SYNC=yes make konflux-generate-catalog-production && \
-    rm -f $HOME/.docker/config.json
 
 # run the catalog
-FROM ${OPM_IMAGE}
+FROM registry.redhat.io/openshift4/ose-operator-registry-rhel9:v4.20
 
 ENTRYPOINT ["/bin/opm"]
 CMD ["serve", "/configs", "--cache-dir=/tmp/cache"]
@@ -47,7 +16,10 @@ CMD ["serve", "/configs", "--cache-dir=/tmp/cache"]
 # ensure this correponds to olm.package name
 ENV PACKAGE_NAME=o-cloud-manager
 
-COPY --from=builder /app/.konflux/catalog/$PACKAGE_NAME/ /configs/$PACKAGE_NAME
+# This assumes that the catalog template is already built and exists in the .konflux/catalog/$PACKAGE_NAME directory
+# This should be done automatically by the fbc pipeline using the `run-opm-pre-action` task
+COPY .konflux/catalog/$PACKAGE_NAME/ /configs/$PACKAGE_NAME
+
 # RUN ["/bin/opm", "validate", "/configs/o-cloud-manager"]
 RUN ["/bin/opm", "serve", "/configs", "--cache-dir=/tmp/cache", "--cache-only"]
 
