@@ -410,18 +410,19 @@ func (a *AlarmsServer) PatchAlarmServiceConfiguration(ctx context.Context, reque
 	serviceConfigRecord := records[0]
 
 	// Patch the Alarm Service Configuration
-	if request.Body.RetentionPeriod != 0 {
+	if request.Body.RetentionPeriod != nil {
 		// Check if the retention period is valid
-		if serviceConfigRecord.RetentionPeriod < minRetentionPeriod {
+		if *request.Body.RetentionPeriod < minRetentionPeriod {
 			return api.PatchAlarmServiceConfiguration400ApplicationProblemPlusJSONResponse(common.ProblemDetails{
 				Detail: fmt.Sprintf("retentionPeriod must be greater than or equal to %d", minRetentionPeriod),
 				Status: http.StatusBadRequest,
 			}), nil
 		}
 
-		serviceConfigRecord.RetentionPeriod = request.Body.RetentionPeriod
+		serviceConfigRecord.RetentionPeriod = *request.Body.RetentionPeriod
 	}
 
+	// Update extensions if provided in the request
 	if request.Body.Extensions != nil {
 		serviceConfigRecord.Extensions = *request.Body.Extensions
 	}
@@ -465,11 +466,9 @@ func (a *AlarmsServer) UpdateAlarmServiceConfiguration(ctx context.Context, requ
 	}
 
 	// Update the Alarm Service Configuration
+	// Extensions is now a required field (not a pointer), always update it
 	serviceConfigRecord.RetentionPeriod = request.Body.RetentionPeriod
-	serviceConfigRecord.Extensions = nil
-	if request.Body.Extensions != nil {
-		serviceConfigRecord.Extensions = *request.Body.Extensions
-	}
+	serviceConfigRecord.Extensions = request.Body.Extensions
 
 	// TODO make it event-driven with PG listen/notify
 	// Update the Alarm Service Configuration

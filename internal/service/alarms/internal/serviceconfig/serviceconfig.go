@@ -134,11 +134,6 @@ func getCleanUpPgSQL(ctx context.Context, sc *models.ServiceConfiguration) (stri
 		return "", fmt.Errorf("invalid retention period: %d", sc.RetentionPeriod)
 	}
 
-	// Currently not supported
-	if len(sc.Extensions) != 0 {
-		slog.Warn("Service configuration extension is currently ignored")
-	}
-
 	aer := models.AlarmEventRecord{}
 	dbTag := svcutils.GetAllDBTagsFromStruct(aer)
 	query := psql.Delete(

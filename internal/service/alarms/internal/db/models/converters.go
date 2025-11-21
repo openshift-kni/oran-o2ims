@@ -90,7 +90,7 @@ func ConvertServiceConfigurationToAPI(config ServiceConfiguration) api.AlarmServ
 	}
 
 	if config.Extensions != nil {
-		apiModel.Extensions = &config.Extensions
+		apiModel.Extensions = config.Extensions
 	}
 
 	return apiModel
