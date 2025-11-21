@@ -16,8 +16,8 @@ CMD ["serve", "/configs", "--cache-dir=/tmp/cache"]
 # ensure this correponds to olm.package name
 ENV PACKAGE_NAME=o-cloud-manager
 
-# This assumes that the catalog template is already built and exists in the .konflux/catalog/$PACKAGE_NAME directory
-# This should be done automatically by the fbc pipeline using the `run-opm-pre-action` task
+# This assumes that the catalog is already built and exists in the .konflux/catalog/$PACKAGE_NAME directory
+# This should be done automatically by the fbc pipeline using the `run-opm-command` task
 COPY .konflux/catalog/$PACKAGE_NAME/ /configs/$PACKAGE_NAME
 
 # RUN ["/bin/opm", "validate", "/configs/o-cloud-manager"]
