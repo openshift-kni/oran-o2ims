@@ -781,7 +781,7 @@ components:
           type: integer
           description: |
             Number of days for alarm history to be retained.
-            This value has cannot be set lower than 1 (day).
+            This value cannot be set lower than 1 (day).
           example: 30
         extensions:
           type: object
@@ -800,7 +800,7 @@ components:
           type: integer
           description: |
             Number of days for alarm history to be retained.
-            This value has cannot be set lower than 1 (day).
+            This value cannot be set lower than 1 (day).
           example: 30
         extensions:
           type: object
