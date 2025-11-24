@@ -598,3 +598,30 @@ func (r *ResourceServer) GetResourceType(ctx context.Context, request api.GetRes
 	object := models.ResourceTypeToModel(record)
 	return api.GetResourceType200JSONResponse(object), nil
 }
+
+// GetInternalResourceById receives the API request to this endpoint, executes the request, and responds appropriately
+// This internal endpoint returns a resource by ID without needing to know the resource pool
+func (r *ResourceServer) GetInternalResourceById(ctx context.Context, request api.GetInternalResourceByIdRequestObject) (api.GetInternalResourceByIdResponseObject, error) {
+	record, err := r.Repo.GetResource(ctx, request.ResourceId)
+	if errors.Is(err, svcutils.ErrNotFound) {
+		return api.GetInternalResourceById404ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"resourceId": request.ResourceId.String(),
+			},
+			Detail: "requested resource not found",
+			Status: http.StatusNotFound,
+		}, nil
+	}
+	if err != nil {
+		return api.GetInternalResourceById500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"resourceId": request.ResourceId.String(),
+			},
+			Detail: err.Error(),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	object := models.ResourceToModel(record, nil)
+	return api.GetInternalResourceById200JSONResponse(object), nil
+}

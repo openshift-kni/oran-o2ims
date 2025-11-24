@@ -75,7 +75,7 @@ var _ = Describe("Alertmanager Functions", func() {
 				},
 			}
 
-			records := alertmanager.ConvertAmToAlarmEventRecordModels(ctx, &alerts, mockInfraClient)
+			records := alertmanager.ConvertAmToAlarmEventRecordModels(ctx, &alerts, mockInfraClient, mockInfraClient)
 
 			// Assert
 			Expect(records).To(HaveLen(1))
@@ -131,7 +131,7 @@ var _ = Describe("Alertmanager Functions", func() {
 				GetAlarmDefinitionID(gomock.Any(), objectTypeIDUUID, "TestAlert", "critical").
 				Return(alarmDefUUID, nil)
 
-			records := alertmanager.ConvertAmToAlarmEventRecordModels(ctx, &alerts, mockInfraClient)
+			records := alertmanager.ConvertAmToAlarmEventRecordModels(ctx, &alerts, mockInfraClient, mockInfraClient)
 
 			// Assert
 			Expect(records).To(HaveLen(1))
@@ -188,9 +188,9 @@ var _ = Describe("Alertmanager Functions", func() {
 				},
 			}
 
-			Expect(alertmanager.ConvertAmToAlarmEventRecordModels(ctx, &alerts1, mockInfraClient)).To(BeEmpty())
-			Expect(alertmanager.ConvertAmToAlarmEventRecordModels(ctx, &alerts2, mockInfraClient)).To(BeEmpty())
-			Expect(alertmanager.ConvertAmToAlarmEventRecordModels(ctx, &alerts3, mockInfraClient)).To(BeEmpty())
+			Expect(alertmanager.ConvertAmToAlarmEventRecordModels(ctx, &alerts1, mockInfraClient, mockInfraClient)).To(BeEmpty())
+			Expect(alertmanager.ConvertAmToAlarmEventRecordModels(ctx, &alerts2, mockInfraClient, mockInfraClient)).To(BeEmpty())
+			Expect(alertmanager.ConvertAmToAlarmEventRecordModels(ctx, &alerts3, mockInfraClient, mockInfraClient)).To(BeEmpty())
 		})
 
 		It("should handle infrastructure client errors gracefully", func() {
@@ -220,7 +220,7 @@ var _ = Describe("Alertmanager Functions", func() {
 				},
 			}
 
-			records := alertmanager.ConvertAmToAlarmEventRecordModels(ctx, &alerts, mockInfraClient)
+			records := alertmanager.ConvertAmToAlarmEventRecordModels(ctx, &alerts, mockInfraClient, mockInfraClient)
 
 			// Assert - should still create record but without ObjectTypeID
 			Expect(records).To(HaveLen(1))
@@ -265,7 +265,7 @@ var _ = Describe("Alertmanager Functions", func() {
 					},
 				}
 
-				records := alertmanager.ConvertAmToAlarmEventRecordModels(ctx, &alerts, mockInfraClient)
+				records := alertmanager.ConvertAmToAlarmEventRecordModels(ctx, &alerts, mockInfraClient, mockInfraClient)
 
 				// Assert
 				Expect(records).To(HaveLen(1))

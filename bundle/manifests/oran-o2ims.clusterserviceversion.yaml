@@ -1327,6 +1327,7 @@ spec:
           - /o2ims-infrastructureCluster/v1/alarmDictionaries
           - /o2ims-infrastructureCluster/v1/nodeClusterTypes
           - /o2ims-infrastructureCluster/v1/nodeClusters
+          - /o2ims-infrastructureInventory/v1/resourceTypes
           verbs:
           - get
           - list
@@ -1348,6 +1349,8 @@ spec:
           - /o2ims-infrastructureCluster/v1/alarmDictionaries/*
           - /o2ims-infrastructureCluster/v1/nodeClusterTypes/*
           - /o2ims-infrastructureCluster/v1/nodeClusters/*
+          - /o2ims-infrastructureInventory/v1/internal/resources/*
+          - /o2ims-infrastructureInventory/v1/resourceTypes/*
           verbs:
           - get
         - apiGroups:
