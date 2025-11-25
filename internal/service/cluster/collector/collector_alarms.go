@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 
 	"github.com/go-logr/logr"
@@ -319,10 +320,23 @@ func (d *AlarmsDataSource) buildAlarmDictionaryIDToAlarmDefinitions(nodeClusterT
 	return alarmDictionaryIDToAlarmDefinitions
 }
 
-// getFilteredRules check to see if rule can potentially be skipped
+// getFilteredRules deduplicates rules by (alertname, severity) key.
+//
+// This deduplication is intentional and correct because:
+//  1. Alertmanager computes alert fingerprints from labels only (alertname + other labels)
+//  2. Multiple PrometheusRules with the same alertname and severity but different expressions
+//     (e.g., different thresholds or conditions) produce alerts with identical label sets
+//  3. Identical labels = identical fingerprint = same alert in Alertmanager
+//  4. Therefore, we only need one AlarmDefinition per (alertname, severity) combination
+//
+// Example: KubePersistentVolumeFillingUp has two variants in Thanos rules:
+//   - Variant 1: fires when volume < 3% free (immediate warning)
+//   - Variant 2: fires when volume < 15% AND predicted to fill up (predictive)
+//
+// Both have identical labels (severity=info), so Alertmanager treats them as the same
+// alert type. We correctly keep only one AlarmDefinition.
 func (d *AlarmsDataSource) getFilteredRules(monitoringRules []monitoringv1.Rule) []monitoringv1.Rule {
-	// Upsert will complain if there are rules with the same Alert and Severity
-	// We need to filter them out. First occurrence wins.
+	// Deduplicate by (alertname, severity). First occurrence wins.
 	type uniqueAlarm struct {
 		Alert    string
 		Severity string
@@ -524,7 +538,76 @@ func (d *AlarmsDataSource) collectThanosRules(ctx context.Context) ([]monitoring
 	}
 
 	slog.Debug("Collected thanos rules", "rules count", len(rules))
-	return rules, nil
+
+	// Expand rules with templated severity into multiple static rules
+	expandedRules := d.expandTemplatedSeverity(rules)
+
+	return expandedRules, nil
+}
+
+// expandTemplatedSeverity detects rules with Go template syntax in the severity label
+// (e.g., "{{ $labels.severity }}") and expands them into multiple rules with static
+// severity values. This is necessary because:
+//  1. Some Thanos rules (like ViolatedPolicyReport) use templated severity that is
+//     resolved at alert time based on the source data (e.g., PolicyReport severity)
+//  2. We need static AlarmDefinitions for each possible severity to properly match
+//     incoming alerts when looking up the alarm definition
+func (d *AlarmsDataSource) expandTemplatedSeverity(rules []monitoringv1.Rule) []monitoringv1.Rule {
+	var expandedRules []monitoringv1.Rule
+
+	// Severity values from stolostron/insights-metrics PolicyReport collector.
+	// See: https://github.com/stolostron/insights-metrics/blob/main/pkg/collectors/policyreport.go
+	severities := []string{"critical", "important", "moderate", "low", "unknown"}
+
+	for _, rule := range rules {
+		severity, hasSeverity := rule.Labels["severity"]
+
+		// Check if severity contains template syntax
+		if !hasSeverity || !IsTemplated(severity) {
+			// Not templated, keep as-is
+			expandedRules = append(expandedRules, rule)
+			continue
+		}
+
+		slog.Info("Expanding templated severity rule", "alert", rule.Alert, "severity", severity)
+
+		// Create one rule for each static severity value
+		for _, staticSeverity := range severities {
+			// Copy labels map and replace severity
+			labels := make(map[string]string, len(rule.Labels))
+			for k, v := range rule.Labels {
+				labels[k] = v
+			}
+			labels["severity"] = staticSeverity
+
+			// Copy annotations map
+			annotations := make(map[string]string, len(rule.Annotations))
+			for k, v := range rule.Annotations {
+				annotations[k] = v
+			}
+
+			// Create expanded rule with static severity
+			expandedRule := monitoringv1.Rule{
+				Alert:         rule.Alert,
+				Expr:          rule.Expr,
+				For:           rule.For,
+				KeepFiringFor: rule.KeepFiringFor,
+				Labels:        labels,
+				Annotations:   annotations,
+			}
+
+			expandedRules = append(expandedRules, expandedRule)
+			slog.Debug("Created expanded rule", "alert", expandedRule.Alert, "severity", staticSeverity)
+		}
+	}
+
+	slog.Info("Severity expansion complete", "original count", len(rules), "expanded count", len(expandedRules))
+	return expandedRules
+}
+
+// IsTemplated checks if a string contains template delimiters
+func IsTemplated(s string) bool {
+	return strings.Contains(s, "{{") && strings.Contains(s, "}}")
 }
 
 // makeThanosAlarmDefinitions creates alarm definitions from thanos rules

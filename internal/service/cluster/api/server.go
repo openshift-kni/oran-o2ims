@@ -508,6 +508,15 @@ func (r *ClusterServer) GetAlarmDictionaries(ctx context.Context, request api.Ge
 		return nil, fmt.Errorf("failed to get alarm dictionaries: %w", err)
 	}
 
+	// Get Thanos alarm definitions (stored globally with NULL alarm_dictionary_id)
+	thanosDefinitions, err := r.Repo.GetThanosAlarmDefinitions(ctx)
+	if err != nil {
+		return api.GetAlarmDictionaries500ApplicationProblemPlusJSONResponse{
+			Detail: fmt.Sprintf("failed to get thanos alarm definitions: %s", err.Error()),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
 	objects := make([]generated.AlarmDictionary, len(records))
 	for i, record := range records {
 		definitions, err := r.Repo.GetAlarmDefinitionsByAlarmDictionaryID(ctx, record.AlarmDictionaryID)
@@ -521,6 +530,8 @@ func (r *ClusterServer) GetAlarmDictionaries(ctx context.Context, request api.Ge
 			}, nil
 		}
 
+		// Append Thanos alarm definitions to each dictionary
+		definitions = append(definitions, thanosDefinitions...)
 		objects[i] = models.AlarmDictionaryToModel(&record, definitions)
 	}
 
@@ -560,6 +571,20 @@ func (r *ClusterServer) GetAlarmDictionary(ctx context.Context, request api.GetA
 		}, nil
 	}
 
+	// Get Thanos alarm definitions (stored globally with NULL alarm_dictionary_id)
+	thanosDefinitions, err := r.Repo.GetThanosAlarmDefinitions(ctx)
+	if err != nil {
+		return api.GetAlarmDictionary500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"alarmDictionaryId": request.AlarmDictionaryId.String(),
+			},
+			Detail: fmt.Sprintf("failed to get thanos alarm definitions: %s", err.Error()),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	// Append Thanos alarm definitions to the dictionary
+	definitions = append(definitions, thanosDefinitions...)
 	object := models.AlarmDictionaryToModel(record, definitions)
 
 	return api.GetAlarmDictionary200JSONResponse(object), nil
