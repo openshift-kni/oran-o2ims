@@ -12,7 +12,7 @@ type Chain[T bob.Expression, B builder[T]] struct {
 }
 
 // WriteSQL satisfies the bob.Expression interface
-func (x Chain[T, B]) WriteSQL(ctx context.Context, w io.Writer, d bob.Dialect, start int) ([]any, error) {
+func (x Chain[T, B]) WriteSQL(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 	return bob.Express(ctx, w, d, start, x.Base)
 }
 
@@ -111,6 +111,11 @@ func (x Chain[T, B]) NotBetween(a, b bob.Expression) T {
 // Subtract
 func (x Chain[T, B]) Minus(target bob.Expression) T {
 	return X[T, B](leftRight{operator: "-", left: x.Base, right: target})
+}
+
+// Addition
+func (x Chain[T, B]) Plus(target bob.Expression) T {
+	return X[T, B](leftRight{operator: "+", left: x.Base, right: target})
 }
 
 // Like operator
