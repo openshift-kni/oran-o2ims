@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.42.0] - 2025-11-25
+
+### Fixed
+
+- Fixed a bug where the generated loaders for many-to-many relationships were skipping related rows. (thanks @TylerJGabb)
+
+### Added
+
+- Include `shell.nix` for developers using [Nix](https://nixos.org/) to create development environments. (thanks @EliRibble)
+- Additional README content on how developers can use linting and unit testing to contribute. (thanks @EliRibble)
+- Added `Plus` expression chain method (thanks @atzedus).
+
+### Changed
+
+- Export `orm.NullTypeConverter`. (thanks @Serjlee)
+- Uses `io.StringWriter` instead of `io.Writer` for efficiency since we are always writing strings.
+
 ## [v0.41.1] - 2025-09-02
 
 ### Fixed
