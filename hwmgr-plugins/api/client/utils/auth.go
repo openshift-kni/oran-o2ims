@@ -9,7 +9,7 @@ package utils
 import (
 	"context"
 	"fmt"
-	"strings"
+	"net/url"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -112,17 +112,17 @@ func SetupOAuthConfig(ctx context.Context, c client.Client, authClientConfig *co
 		return fmt.Errorf("failed to get '%s' from OAuth secret: %w", ctlrutils.OAuthClientSecretField, err)
 	}
 
+	tokenURL, err := url.JoinPath(oauthConf.URL, oauthConf.TokenEndpoint)
+	if err != nil {
+		return fmt.Errorf("failed to construct token URL: %w", err)
+	}
+
 	config.OAuthConfig = &ctlrutils.OAuthConfig{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
-		TokenURL:     BuildTokenURL(oauthConf.URL, oauthConf.TokenEndpoint),
+		TokenURL:     tokenURL,
 		Scopes:       oauthConf.Scopes,
 	}
 
 	return nil
-}
-
-// BuildTokenURL constructs the token URL from base URL and token endpoint
-func BuildTokenURL(baseURL, tokenEndpoint string) string {
-	return strings.TrimSuffix(baseURL, "/") + "/" + strings.TrimPrefix(tokenEndpoint, "/")
 }

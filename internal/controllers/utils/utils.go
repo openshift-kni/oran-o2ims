@@ -969,9 +969,13 @@ func NewNarCallbackConfig(port int) *NarCallbackConfig {
 }
 
 // BuildCallbackURL constructs the callback URL for a given provisioning request name
-func (c *NarCallbackConfig) BuildCallbackURL(prName string) string {
-	return fmt.Sprintf("https://%s.%s.%s:%d%s/%s",
-		c.ServiceName, c.ServiceNamespace, constants.ClusterLocalDomain, c.Port, constants.NarCallbackServicePath, prName)
+func (c *NarCallbackConfig) BuildCallbackURL(prName string) (string, error) {
+	host := fmt.Sprintf("%s.%s.%s:%d", c.ServiceName, c.ServiceNamespace, constants.ClusterLocalDomain, c.Port)
+	path, err := url.JoinPath(constants.NarCallbackServicePath, prName)
+	if err != nil {
+		return "", err // nolint: wrapcheck
+	}
+	return fmt.Sprintf("https://%s%s", host, path), nil
 }
 
 // ExtractPortFromAddress extracts the port number from an address string like ":8090" or "0.0.0.0:8090"

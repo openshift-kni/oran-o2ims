@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 
 	"github.com/kelseyhightower/envconfig"
@@ -214,8 +215,13 @@ func (c *CommonServerConfig) CreateOAuthConfig(ctx context.Context) (*ctlrutils.
 		go dynamicClientCert.Run(ctx, 1)
 	}
 
+	tokenURL, err := url.JoinPath(c.OAuth.IssuerURL, c.OAuth.TokenEndpoint)
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct token URL: %w", err)
+	}
+
 	config.OAuthConfig = &ctlrutils.OAuthConfig{
-		TokenURL:     fmt.Sprintf("%s/%s", c.OAuth.IssuerURL, c.OAuth.TokenEndpoint),
+		TokenURL:     tokenURL,
 		ClientID:     c.OAuth.ClientID,
 		ClientSecret: c.OAuth.ClientSecret,
 		Scopes:       c.OAuth.Scopes,
