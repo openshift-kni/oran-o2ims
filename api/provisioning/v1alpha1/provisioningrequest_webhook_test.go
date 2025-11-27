@@ -60,16 +60,21 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 	})
 
 	Describe("ValidateUpdate", func() {
+		const (
+			testClusterTemplateB = "clustertemplate-b"
+			testVersionB         = "v1.0.2"
+		)
+
 		BeforeEach(func() {
 			// Create a new ClusterTemplate
 			newCt := &ClusterTemplate{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "clustertemplate-b.v1.0.2",
+					Name:      testClusterTemplateB + "." + testVersionB,
 					Namespace: "default",
 				},
 				Spec: ClusterTemplateSpec{
-					Name:       "clustertemplate-b",
-					Version:    "v1.0.2",
+					Name:       testClusterTemplateB,
+					Version:    testVersionB,
 					TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
 					Templates: Templates{
 						ClusterInstanceDefaults: "clusterinstance-defaults-v1",
@@ -92,8 +97,8 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 
 		Context("when spec.templateName or spec.templateVersion is changed", func() {
 			BeforeEach(func() {
-				newPr.Spec.TemplateName = "clustertemplate-b"
-				newPr.Spec.TemplateVersion = "v1.0.2"
+				newPr.Spec.TemplateName = testClusterTemplateB
+				newPr.Spec.TemplateVersion = testVersionB
 			})
 
 			It("should allow the change when the ProvisioningRequest is fulfilled", func() {
@@ -678,6 +683,134 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
 					Expect(err).NotTo(HaveOccurred())
 				})
+			})
+		})
+
+		Context("When HardwareProvisioned condition is TimedOut or Failed", func() {
+			BeforeEach(func() {
+				// Create ClusterTemplate for validation
+				ct := &ClusterTemplate{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "clustertemplate-a.v1.0.1",
+						Namespace: "default",
+					},
+					Spec: ClusterTemplateSpec{
+						Name:       "clustertemplate-a",
+						Version:    "v1.0.1",
+						TemplateID: "test-template-id",
+						Templates: Templates{
+							ClusterInstanceDefaults: "defaults-v1",
+							PolicyTemplateDefaults:  "policy-defaults-v1",
+						},
+						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testTemplate)},
+					},
+					Status: ClusterTemplateStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(CTconditionTypes.Validated),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				}
+				Expect(fakeClient.Create(ctx, ct)).To(Succeed())
+
+				// Create ClusterTemplate-b that will be used by tests
+				newCt := &ClusterTemplate{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      testClusterTemplateB + "." + testVersionB,
+						Namespace: "default",
+					},
+					Spec: ClusterTemplateSpec{
+						Name:       testClusterTemplateB,
+						Version:    testVersionB,
+						TemplateID: "test-template-id-b",
+						Templates: Templates{
+							ClusterInstanceDefaults: "defaults-v1",
+							PolicyTemplateDefaults:  "policy-defaults-v1",
+						},
+						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testTemplate)},
+					},
+					Status: ClusterTemplateStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(CTconditionTypes.Validated),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				}
+				// Create only if it doesn't exist (to avoid conflicts between tests)
+				existing := &ClusterTemplate{}
+				if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(newCt), existing); err != nil {
+					Expect(fakeClient.Create(ctx, newCt)).To(Succeed())
+				}
+
+				// Set HardwareProvisioned condition to TimedOut
+				newPr.Status.Conditions = []metav1.Condition{
+					{
+						Type:   string(PRconditionTypes.HardwareProvisioned),
+						Status: metav1.ConditionFalse,
+						Reason: string(CRconditionReasons.TimedOut),
+					},
+				}
+			})
+
+			It("should reject spec changes when hardware provisioning has timed out", func() {
+				// clustertemplate-b is already created in BeforeEach
+				// Try to change TemplateName (a hardware provisioning-related field)
+				newPr.Spec.TemplateName = testClusterTemplateB
+				newPr.Spec.TemplateVersion = testVersionB
+
+				_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("hardware provisioning has timed out or failed"))
+				Expect(err.Error()).To(ContainSubstring("Spec changes are not allowed"))
+				Expect(err.Error()).To(ContainSubstring("delete and recreate"))
+			})
+
+			It("should reject TemplateParameters changes when hardware provisioning has timed out", func() {
+				// Try to change TemplateParameters
+				newPr.Spec.TemplateParameters.Raw = []byte(`{
+					"oCloudSiteId": "local-123",
+					"nodeClusterName": "exampleCluster",
+					"clusterInstanceParameters": {"additionalNTPSources": ["2.2.2.2"]},
+					"policyTemplateParameters": {"sriov-network-vlan-1": "200"}
+				}`)
+
+				_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("hardware provisioning has timed out or failed"))
+				Expect(err.Error()).To(ContainSubstring("Spec changes are not allowed"))
+			})
+
+			It("should allow non-spec changes when hardware provisioning has timed out", func() {
+				// Only change metadata (like labels/annotations) - should be allowed
+				newPr.Labels = map[string]string{"new-label": "new-value"}
+				newPr.Annotations = map[string]string{"new-annotation": "new-value"}
+
+				_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should reject spec changes when hardware provisioning has failed", func() {
+				// Set HardwareProvisioned condition to Failed
+				newPr.Status.Conditions = []metav1.Condition{
+					{
+						Type:   string(PRconditionTypes.HardwareProvisioned),
+						Status: metav1.ConditionFalse,
+						Reason: string(CRconditionReasons.Failed),
+					},
+				}
+
+				// clustertemplate-b is already created in BeforeEach
+				// Try to change TemplateName and TemplateVersion
+				newPr.Spec.TemplateName = testClusterTemplateB
+				newPr.Spec.TemplateVersion = testVersionB
+
+				_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("hardware provisioning has timed out or failed"))
 			})
 		})
 	})
