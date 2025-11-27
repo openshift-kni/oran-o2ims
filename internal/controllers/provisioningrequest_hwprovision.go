@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -24,7 +25,6 @@ import (
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"k8s.io/apimachinery/pkg/api/meta"
 )
 
 // createOrUpdateNodeAllocationRequest creates a new NodeAllocationRequest resource if it doesn't exist or updates it if the spec has changed.
@@ -748,7 +748,10 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(clusterIn
 		return nil, fmt.Errorf("failed to get %s from templateParameters: %w", ctlrutils.TemplateParamNodeClusterName, err)
 	}
 
-	callbackURL := t.callbackConfig.BuildCallbackURL(t.object.Name)
+	callbackURL, err := t.callbackConfig.BuildCallbackURL(t.object.Name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build callback url: %w", err)
+	}
 
 	nodeAllocationRequest := &hwmgrpluginapi.NodeAllocationRequest{}
 	nodeAllocationRequest.Site = siteID.(string)
