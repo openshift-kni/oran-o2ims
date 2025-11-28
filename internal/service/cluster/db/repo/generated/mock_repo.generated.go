@@ -466,6 +466,21 @@ func (mr *MockRepositoryInterfaceMockRecorder) GetSubscriptions(arg0 any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubscriptions", reflect.TypeOf((*MockRepositoryInterface)(nil).GetSubscriptions), arg0)
 }
 
+// GetThanosAlarmDefinitions mocks base method.
+func (m *MockRepositoryInterface) GetThanosAlarmDefinitions(arg0 context.Context) ([]models.AlarmDefinition, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetThanosAlarmDefinitions", arg0)
+	ret0, _ := ret[0].([]models.AlarmDefinition)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetThanosAlarmDefinitions indicates an expected call of GetThanosAlarmDefinitions.
+func (mr *MockRepositoryInterfaceMockRecorder) GetThanosAlarmDefinitions(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetThanosAlarmDefinitions", reflect.TypeOf((*MockRepositoryInterface)(nil).GetThanosAlarmDefinitions), arg0)
+}
+
 // SetNodeClusterID mocks base method.
 func (m *MockRepositoryInterface) SetNodeClusterID(arg0 context.Context, arg1 string, arg2 uuid.UUID) (int, error) {
 	m.ctrl.T.Helper()

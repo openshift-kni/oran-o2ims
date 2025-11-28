@@ -117,15 +117,20 @@ func ConvertAmToAlarmEventRecordModels(ctx context.Context, alerts *[]api.Alert,
 }
 
 func getClusterID(labels map[string]string) *uuid.UUID {
+	// First try managed_cluster (standard managed cluster alerts)
 	val, ok := labels["managed_cluster"]
 	if !ok {
-		slog.Warn("Could not find managed_cluster", "labels", labels)
-		return nil
+		// Fall back to clusterID (Thanos/ACM alerts like ViolatedPolicyReport)
+		val, ok = labels["clusterID"]
+		if !ok {
+			slog.Warn("Could not find managed_cluster or clusterID", "labels", labels)
+			return nil
+		}
 	}
 
 	id, err := uuid.Parse(val)
 	if err != nil {
-		slog.Warn("Could convert managed_cluster string to uuid", "labels", labels, "err", err.Error())
+		slog.Warn("Could not convert cluster ID string to uuid", "labels", labels, "err", err.Error())
 		return nil
 	}
 
@@ -185,13 +190,14 @@ func severityToPerceivedSeverity(input string) api.PerceivedSeverity {
 		return api.CLEARED
 	case "critical":
 		return api.CRITICAL
-	case "major":
+	case "major", "important": // "important" is used by ACM/PolicyReport (ViolatedPolicyReport)
 		return api.MAJOR
 	case "minor", "low":
 		return api.MINOR
-	case "warning", "info":
+	case "warning", "info", "moderate": // "moderate" is used by ACM/PolicyReport (ViolatedPolicyReport)
 		return api.WARNING
 	default:
+		slog.Debug("Unknown severity mapped to INDETERMINATE", "severity", input)
 		return api.INDETERMINATE
 	}
 }

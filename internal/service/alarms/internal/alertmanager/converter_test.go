@@ -229,6 +229,59 @@ var _ = Describe("Alertmanager Functions", func() {
 			Expect(record.AlarmDefinitionID).To(BeNil()) // Can't get definition without object type
 		})
 
+		It("should use clusterID label as fallback for Thanos/ACM alerts", func() {
+			// Setup - Thanos/ACM alerts like ViolatedPolicyReport use clusterID instead of managed_cluster
+			now := time.Now().UTC()
+			clusterUUID := uuid.New()
+			fingerprint := commonFP
+			objectTypeIDUUID := uuid.New()
+			alarmDefUUID := uuid.New()
+
+			// Setup mock expectations
+			mockInfraClient.EXPECT().
+				GetObjectTypeID(gomock.Any(), clusterUUID).
+				Return(objectTypeIDUUID, nil)
+
+			mockInfraClient.EXPECT().
+				GetAlarmDefinitionID(gomock.Any(), objectTypeIDUUID, "ViolatedPolicyReport", "important").
+				Return(alarmDefUUID, nil)
+
+			// Create alert with clusterID label (Thanos/ACM style) instead of managed_cluster
+			firing := api.Firing
+			labels := map[string]string{
+				"alertname": "ViolatedPolicyReport",
+				"severity":  "important",
+				"clusterID": clusterUUID.String(), // Thanos uses clusterID, not managed_cluster
+				"cluster":   "test-cluster",
+				"policy":    "test-policy",
+			}
+			annotations := map[string]string{
+				"summary":     "There is a policy report violation",
+				"description": "The policy has a violation",
+			}
+			alerts := []api.Alert{
+				{
+					Status:      &firing,
+					StartsAt:    &now,
+					Fingerprint: &fingerprint,
+					Labels:      &labels,
+					Annotations: &annotations,
+				},
+			}
+
+			records := alertmanager.ConvertAmToAlarmEventRecordModels(ctx, &alerts, mockInfraClient, mockInfraClient)
+
+			// Assert
+			Expect(records).To(HaveLen(1))
+			record := records[0]
+
+			Expect(record.ObjectID).NotTo(BeNil())
+			Expect(*record.ObjectID).To(Equal(clusterUUID))
+			Expect(record.AlarmDefinitionID).NotTo(BeNil())
+			Expect(*record.AlarmDefinitionID).To(Equal(alarmDefUUID))
+			Expect(record.PerceivedSeverity).To(Equal(api.MAJOR)) // important maps to MAJOR
+		})
+
 		DescribeTable("severity mapping",
 			func(inputSeverity string, expectedSeverity api.PerceivedSeverity) {
 				// Setup
@@ -273,10 +326,12 @@ var _ = Describe("Alertmanager Functions", func() {
 			},
 			Entry("critical severity", "critical", api.CRITICAL),
 			Entry("major severity", "major", api.MAJOR),
+			Entry("important severity (ACM/PolicyReport)", "important", api.MAJOR),
 			Entry("minor severity", "minor", api.MINOR),
 			Entry("low severity", "low", api.MINOR),
 			Entry("warning severity", "warning", api.WARNING),
 			Entry("info severity", "info", api.WARNING),
+			Entry("moderate severity (ACM/PolicyReport)", "moderate", api.WARNING),
 			Entry("unknown severity", "unknown", api.INDETERMINATE),
 		)
 	})

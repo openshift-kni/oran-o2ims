@@ -420,4 +420,156 @@ var _ = Describe("Alarms Collector", func() {
 			Expect(result).To(HaveLen(2))
 		})
 	})
+
+	Describe("isTemplated", func() {
+		DescribeTable("correctly identifies templated strings",
+			func(input string, expected bool) {
+				Expect(IsTemplated(input)).To(Equal(expected))
+			},
+			Entry("templated severity from ViolatedPolicyReport", "{{ $labels.severity }}", true),
+			Entry("templated with spaces", "{{$labels.severity}}", true),
+			Entry("simple static value", "critical", false),
+			Entry("empty string", "", false),
+			Entry("partial template open only", "{{something", false),
+			Entry("partial template close only", "something}}", false),
+			Entry("multiple templates", "{{ $labels.foo }} and {{ $labels.bar }}", true),
+		)
+	})
+
+	Describe("expandTemplatedSeverity", func() {
+		var r *AlarmsDataSource
+
+		BeforeEach(func() {
+			r = &AlarmsDataSource{}
+		})
+
+		It("expands rules with templated severity into 5 static rules", func() {
+			// ViolatedPolicyReport rule with templated severity
+			rules := []monitoringv1.Rule{
+				{
+					Alert: "ViolatedPolicyReport",
+					Expr:  intstr.FromString("sum(policyreport_info) > 0"),
+					For: func() *monitoringv1.Duration {
+						d := monitoringv1.Duration("1m")
+						return &d
+					}(),
+					Labels: map[string]string{
+						"severity": "{{ $labels.severity }}",
+					},
+					Annotations: map[string]string{
+						"summary":     "Policy violation detected",
+						"description": "The policy has a violation",
+					},
+				},
+			}
+
+			result := r.expandTemplatedSeverity(rules)
+
+			// Should expand into 5 rules (critical, important, moderate, low, unknown)
+			Expect(result).To(HaveLen(5))
+
+			// Verify each expanded rule has a static severity
+			severities := make(map[string]bool)
+			for _, rule := range result {
+				Expect(rule.Alert).To(Equal("ViolatedPolicyReport"))
+				severity := rule.Labels["severity"]
+				Expect(severity).NotTo(ContainSubstring("{{"))
+				severities[severity] = true
+			}
+
+			// Verify all expected severities are present
+			Expect(severities).To(HaveKey("critical"))
+			Expect(severities).To(HaveKey("important"))
+			Expect(severities).To(HaveKey("moderate"))
+			Expect(severities).To(HaveKey("low"))
+			Expect(severities).To(HaveKey("unknown"))
+		})
+
+		It("preserves non-templated rules unchanged", func() {
+			rules := []monitoringv1.Rule{
+				{
+					Alert: "KubePersistentVolumeFillingUp",
+					Expr:  intstr.FromString("kubelet_volume_stats < 0.03"),
+					Labels: map[string]string{
+						"severity": "info",
+					},
+				},
+			}
+
+			result := r.expandTemplatedSeverity(rules)
+
+			Expect(result).To(HaveLen(1))
+			Expect(result[0].Alert).To(Equal("KubePersistentVolumeFillingUp"))
+			Expect(result[0].Labels["severity"]).To(Equal("info"))
+		})
+
+		It("handles mixed templated and non-templated rules", func() {
+			rules := []monitoringv1.Rule{
+				{
+					Alert: "ViolatedPolicyReport",
+					Expr:  intstr.FromString("sum(policyreport_info) > 0"),
+					Labels: map[string]string{
+						"severity": "{{ $labels.severity }}",
+					},
+				},
+				{
+					Alert: "KubePersistentVolumeFillingUp",
+					Expr:  intstr.FromString("kubelet_volume_stats < 0.03"),
+					Labels: map[string]string{
+						"severity": "info",
+					},
+				},
+			}
+
+			result := r.expandTemplatedSeverity(rules)
+
+			// 5 from ViolatedPolicyReport + 1 from KubePersistentVolumeFillingUp
+			Expect(result).To(HaveLen(6))
+		})
+
+		It("handles rules without severity label", func() {
+			rules := []monitoringv1.Rule{
+				{
+					Alert: "SomeAlert",
+					Expr:  intstr.FromString("up == 0"),
+					Labels: map[string]string{
+						"team": "platform",
+					},
+				},
+			}
+
+			result := r.expandTemplatedSeverity(rules)
+
+			Expect(result).To(HaveLen(1))
+			Expect(result[0].Alert).To(Equal("SomeAlert"))
+		})
+
+		It("preserves other labels and annotations during expansion", func() {
+			rules := []monitoringv1.Rule{
+				{
+					Alert: "ViolatedPolicyReport",
+					Expr:  intstr.FromString("sum(policyreport_info) > 0"),
+					Labels: map[string]string{
+						"severity": "{{ $labels.severity }}",
+						"team":     "security",
+					},
+					Annotations: map[string]string{
+						"summary":     "Policy violation",
+						"runbook_url": "https://example.com/runbook",
+					},
+				},
+			}
+
+			result := r.expandTemplatedSeverity(rules)
+
+			Expect(result).To(HaveLen(5))
+			for _, rule := range result {
+				// Other labels preserved
+				Expect(rule.Labels["team"]).To(Equal("security"))
+				// Annotations preserved
+				Expect(rule.Annotations["summary"]).To(Equal("Policy violation"))
+				Expect(rule.Annotations["runbook_url"]).To(Equal("https://example.com/runbook"))
+			}
+		})
+	})
 })
