@@ -20,6 +20,7 @@ filters:
       - konflux-reviewers
   ^Dockerfile:
     approvers:
+      - by2waysprojects
       - rauhersu
       - fontivan
     reviewers:
@@ -28,6 +29,7 @@ filters:
       - by2waysprojects
   ^bundle/manifests/oran-o2ims.clusterserviceversion.yaml:
     approvers:
+      - by2waysprojects
       - rauhersu
       - fontivan
     reviewers:
