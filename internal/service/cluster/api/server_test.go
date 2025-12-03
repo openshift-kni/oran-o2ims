@@ -174,6 +174,10 @@ var _ = Describe("Cluster Server", func() {
 					GetAlarmDictionaries(ctx).
 					Return([]models.AlarmDictionary{}, nil)
 
+				mockRepo.EXPECT().
+					GetThanosAlarmDefinitions(ctx).
+					Return([]models.AlarmDefinition{}, nil)
+
 				resp, err := server.GetAlarmDictionaries(ctx, apigenerated.GetAlarmDictionariesRequestObject{})
 
 				Expect(err).To(BeNil())
@@ -191,6 +195,10 @@ var _ = Describe("Cluster Server", func() {
 							AlarmDictionaryID: testUUID,
 						},
 					}, nil)
+
+				mockRepo.EXPECT().
+					GetThanosAlarmDefinitions(ctx).
+					Return([]models.AlarmDefinition{}, nil)
 
 				mockRepo.EXPECT().
 					GetAlarmDefinitionsByAlarmDictionaryID(ctx, testUUID).
@@ -217,6 +225,10 @@ var _ = Describe("Cluster Server", func() {
 					}, nil)
 
 				mockRepo.EXPECT().
+					GetThanosAlarmDefinitions(ctx).
+					Return([]models.AlarmDefinition{}, nil)
+
+				mockRepo.EXPECT().
 					GetAlarmDefinitionsByAlarmDictionaryID(ctx, testUUID).
 					Return([]models.AlarmDefinition{
 						{
@@ -232,6 +244,24 @@ var _ = Describe("Cluster Server", func() {
 				Expect(resp.(apigenerated.GetAlarmDictionaries200JSONResponse)[0].AlarmDictionaryId).To(Equal(testUUID))
 				Expect(resp.(apigenerated.GetAlarmDictionaries200JSONResponse)[0].AlarmDefinition).To(HaveLen(1))
 				Expect(resp.(apigenerated.GetAlarmDictionaries200JSONResponse)[0].AlarmDefinition[0].AlarmDefinitionId).To(Equal(alarmDefinitionUUID))
+			})
+		})
+
+		When("GetThanosAlarmDefinitions returns error", func() {
+			It("returns 500 internal server error", func() {
+				mockRepo.EXPECT().
+					GetAlarmDictionaries(ctx).
+					Return([]models.AlarmDictionary{}, nil)
+
+				mockRepo.EXPECT().
+					GetThanosAlarmDefinitions(ctx).
+					Return(nil, fmt.Errorf("thanos db error"))
+
+				resp, err := server.GetAlarmDictionaries(ctx, apigenerated.GetAlarmDictionariesRequestObject{})
+
+				Expect(err).To(BeNil())
+				Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetAlarmDictionaries500ApplicationProblemPlusJSONResponse{}))
+				Expect(resp.(apigenerated.GetAlarmDictionaries500ApplicationProblemPlusJSONResponse).Detail).To(ContainSubstring("thanos"))
 			})
 		})
 	})
@@ -302,6 +332,10 @@ var _ = Describe("Cluster Server", func() {
 					GetAlarmDefinitionsByAlarmDictionaryID(ctx, testUUID).
 					Return([]models.AlarmDefinition{}, nil)
 
+				mockRepo.EXPECT().
+					GetThanosAlarmDefinitions(ctx).
+					Return([]models.AlarmDefinition{}, nil)
+
 				resp, err := server.GetAlarmDictionary(ctx, apigenerated.GetAlarmDictionaryRequestObject{
 					AlarmDictionaryId: testUUID,
 				})
@@ -331,6 +365,10 @@ var _ = Describe("Cluster Server", func() {
 						},
 					}, nil)
 
+				mockRepo.EXPECT().
+					GetThanosAlarmDefinitions(ctx).
+					Return([]models.AlarmDefinition{}, nil)
+
 				resp, err := server.GetAlarmDictionary(ctx, apigenerated.GetAlarmDictionaryRequestObject{
 					AlarmDictionaryId: testUUID,
 				})
@@ -339,6 +377,65 @@ var _ = Describe("Cluster Server", func() {
 				Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetAlarmDictionary200JSONResponse{}))
 				Expect(resp.(apigenerated.GetAlarmDictionary200JSONResponse).AlarmDictionaryId).To(Equal(testUUID))
 				Expect(resp.(apigenerated.GetAlarmDictionary200JSONResponse).AlarmDefinition).To(HaveLen(1))
+			})
+		})
+
+		When("alarm dictionary found and Thanos definitions exist", func() {
+			It("appends Thanos definitions to the dictionary", func() {
+				dictDefUUID := uuid.New()
+				thanosDefUUID := uuid.New()
+
+				mockRepo.EXPECT().
+					GetAlarmDictionary(ctx, testUUID).
+					Return(&models.AlarmDictionary{
+						AlarmDictionaryID: testUUID,
+					}, nil)
+
+				mockRepo.EXPECT().
+					GetAlarmDefinitionsByAlarmDictionaryID(ctx, testUUID).
+					Return([]models.AlarmDefinition{
+						{AlarmDefinitionID: dictDefUUID},
+					}, nil)
+
+				mockRepo.EXPECT().
+					GetThanosAlarmDefinitions(ctx).
+					Return([]models.AlarmDefinition{
+						{AlarmDefinitionID: thanosDefUUID, AlarmName: "ViolatedPolicyReport"},
+					}, nil)
+
+				resp, err := server.GetAlarmDictionary(ctx, apigenerated.GetAlarmDictionaryRequestObject{
+					AlarmDictionaryId: testUUID,
+				})
+
+				Expect(err).To(BeNil())
+				Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetAlarmDictionary200JSONResponse{}))
+				Expect(resp.(apigenerated.GetAlarmDictionary200JSONResponse).AlarmDefinition).To(HaveLen(2))
+			})
+		})
+
+		When("GetThanosAlarmDefinitions returns error", func() {
+			It("returns 500 internal server error", func() {
+				mockRepo.EXPECT().
+					GetAlarmDictionary(ctx, testUUID).
+					Return(&models.AlarmDictionary{
+						AlarmDictionaryID: testUUID,
+					}, nil)
+
+				mockRepo.EXPECT().
+					GetAlarmDefinitionsByAlarmDictionaryID(ctx, testUUID).
+					Return([]models.AlarmDefinition{}, nil)
+
+				mockRepo.EXPECT().
+					GetThanosAlarmDefinitions(ctx).
+					Return(nil, fmt.Errorf("thanos db error"))
+
+				resp, err := server.GetAlarmDictionary(ctx, apigenerated.GetAlarmDictionaryRequestObject{
+					AlarmDictionaryId: testUUID,
+				})
+
+				Expect(err).To(BeNil())
+				Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetAlarmDictionary500ApplicationProblemPlusJSONResponse{}))
+				Expect(resp.(apigenerated.GetAlarmDictionary500ApplicationProblemPlusJSONResponse).Detail).To(ContainSubstring("thanos"))
 			})
 		})
 	})
