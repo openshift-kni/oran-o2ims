@@ -5584,58 +5584,6 @@ plan:
 			})
 		})
 
-		Context("when hardware provisioning timeout is exceeded", func() {
-			BeforeEach(func() {
-				// Set up NodeAllocationRequestRef with exceeded timeout
-				testObject.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
-					HardwareProvisioningCheckStart: &metav1.Time{Time: currentTime.Add(-45 * time.Minute)}, // Exceeds 30min timeout
-				}
-				// Set HardwareProvisioned condition to False with InProgress reason
-				testObject.Status.Conditions = append(testObject.Status.Conditions, metav1.Condition{
-					Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
-					Status: metav1.ConditionFalse,
-					Reason: string(provisioningv1alpha1.CRconditionReasons.InProgress),
-				})
-			})
-
-			It("should set provisioning state to failed for hardware timeout", func() {
-				result := testTask.checkHardwareProvisioningTimeout(ctx, currentTime)
-
-				Expect(result.RequeueAfter).To(Equal(requeueWithMediumInterval().RequeueAfter))
-				Expect(testObject.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StateFailed))
-				Expect(testObject.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring("Hardware provisioning timed out"))
-			})
-		})
-
-		Context("when hardware provisioning timeout is exceeded but callback annotation exists", func() {
-			BeforeEach(func() {
-				// Set up NodeAllocationRequestRef with exceeded timeout
-				testObject.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
-					HardwareProvisioningCheckStart: &metav1.Time{Time: currentTime.Add(-45 * time.Minute)}, // Exceeds 30min timeout
-				}
-				// Set HardwareProvisioned condition to False with InProgress reason
-				testObject.Status.Conditions = append(testObject.Status.Conditions, metav1.Condition{
-					Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
-					Status: metav1.ConditionFalse,
-					Reason: string(provisioningv1alpha1.CRconditionReasons.InProgress),
-				})
-				// Add callback annotation to simulate callback-triggered reconciliation
-				if testObject.Annotations == nil {
-					testObject.Annotations = make(map[string]string)
-				}
-				testObject.Annotations[utils.CallbackReceivedAnnotation] = "123456789"
-			})
-
-			It("should trigger timeout even when callback annotation exists", func() {
-				result := testTask.checkHardwareProvisioningTimeout(ctx, currentTime)
-
-				// Should timeout because we now always check timeouts regardless of callbacks
-				Expect(result.RequeueAfter).To(Equal(requeueWithMediumInterval().RequeueAfter))
-				Expect(testObject.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StateFailed))
-				Expect(testObject.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring("Hardware provisioning timed out"))
-			})
-		})
-
 		Context("when hardware provisioning timeout is exceeded but condition is already Failed", func() {
 			BeforeEach(func() {
 				// Set up NodeAllocationRequestRef with exceeded timeout
@@ -5651,7 +5599,7 @@ plan:
 			})
 
 			It("should not trigger timeout since condition is already Failed", func() {
-				result := testTask.checkHardwareProvisioningTimeout(ctx, currentTime)
+				result := testTask.checkHardwareProvisioningTimeout()
 
 				Expect(result.RequeueAfter).To(Equal(time.Duration(0)))
 				Expect(testObject.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StatePending))
@@ -5673,7 +5621,7 @@ plan:
 			})
 
 			It("should not trigger timeout since condition is completed", func() {
-				result := testTask.checkHardwareProvisioningTimeout(ctx, currentTime)
+				result := testTask.checkHardwareProvisioningTimeout()
 
 				Expect(result.RequeueAfter).To(Equal(time.Duration(0)))
 				Expect(testObject.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StatePending))
