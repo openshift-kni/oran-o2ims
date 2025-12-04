@@ -32,7 +32,7 @@ require (
 	github.com/pashagolub/pgxmock/v4 v4.9.0
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.87.0
 	github.com/r3labs/diff/v3 v3.0.2
-	github.com/spf13/cobra v1.10.1
+	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	github.com/stephenafamo/bob v0.42.0
 	github.com/stolostron/multicluster-observability-operator v0.0.0-20250915133613-22760d2cb96b
