@@ -8,13 +8,14 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -62,13 +63,22 @@ func getConfigAnnotation(object client.Object) string {
 
 func removeConfigAnnotation(object client.Object) {
 	annotations := object.GetAnnotations()
-	delete(annotations, ConfigAnnotation)
+	if annotations != nil {
+		delete(annotations, ConfigAnnotation)
+		object.SetAnnotations(annotations)
+	}
 }
 
 // clearConfigAnnotationWithPatch removes the config-in-progress annotation from an AllocatedNode and patches it
 func clearConfigAnnotationWithPatch(ctx context.Context, c client.Client, node *pluginsv1alpha1.AllocatedNode) error {
+	// Create a patch to remove the annotation
+	patch := client.MergeFrom(node.DeepCopy())
+
+	// Remove the annotation from the local copy
 	removeConfigAnnotation(node)
-	if err := ctlrutils.CreateK8sCR(ctx, c, node, nil, ctlrutils.PATCH); err != nil {
+
+	// Apply the patch
+	if err := c.Patch(ctx, node, patch); err != nil {
 		return fmt.Errorf("failed to clear config annotation from AllocatedNode %s: %w", node.Name, err)
 	}
 	return nil
@@ -100,7 +110,7 @@ func applyPostConfigUpdates(ctx context.Context,
 	}
 
 	// nolint:wrapcheck
-	err := retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+	err := retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
 		updatedNode := &pluginsv1alpha1.AllocatedNode{}
 
 		if err := noncachedClient.Get(ctx, types.NamespacedName{Name: node.Name, Namespace: node.Namespace}, updatedNode); err != nil {
@@ -154,6 +164,15 @@ func findNextNodeToUpdate(nodelist *pluginsv1alpha1.AllocatedNodeList, groupname
 
 // deriveNodeAllocationRequestStatusFromNodes evaluates all child AllocatedNodes and returns an appropriate
 // NodeAllocationRequest Configured condition status and reason.
+//
+// Message Propagation Architecture:
+// - Status flows UP: AllocatedNode conditions → aggregated → NodeAllocationRequest condition
+// - Timeout detection happens at NAR level only (see checkHardwareTimeout), not per-node
+// - To prevent circular message nesting, timeout messages are passed through without modification
+// - Note: This defensive approach works but suggests the architecture could be improved:
+//   - TODO: Consider using structured error types instead of string messages for better traceability
+//   - Currently, timeout status is detected at NAR level and aggregation is skipped when NAR has timeout
+//     (see handleNodeAllocationRequestSpecChanged), which prevents conflicting status updates
 func deriveNodeAllocationRequestStatusFromNodes(
 	ctx context.Context,
 	noncachedClient client.Reader,
@@ -177,9 +196,20 @@ func deriveNodeAllocationRequestStatusFromNodes(
 				fmt.Sprintf("Node %s missing Configured condition", node.Name)
 		}
 
-		// If not successfully applied, return this node’s current condition
+		// If not successfully applied, return this node's current condition
 		if cond.Reason != string(hwmgmtv1alpha1.ConfigApplied) {
-			return cond.Status, cond.Reason, fmt.Sprintf("AllocatedNode %s: %s", node.Name, cond.Message)
+			// For TimedOut, use the message directly to avoid cascading message nesting.
+			// This prevents scenarios like: "AllocatedNode X: Hardware configuration timed out"
+			// when the original message was already "Hardware configuration timed out".
+			// Note: NAR-level timeouts are detected separately (checkHardwareTimeout) and
+			// skip aggregation (see handleNodeAllocationRequestSpecChanged) to preserve timeout status.
+			var message string
+			if cond.Reason == string(hwmgmtv1alpha1.TimedOut) {
+				message = cond.Message
+			} else {
+				message = fmt.Sprintf("AllocatedNode %s: %s", node.Name, cond.Message)
+			}
+			return cond.Status, cond.Reason, message
 		}
 	}
 
@@ -223,7 +253,7 @@ func createNode(ctx context.Context,
 		return nil
 	}
 
-	if !errors.IsNotFound(err) {
+	if !k8serrors.IsNotFound(err) {
 		return fmt.Errorf("failed to check if AllocatedNode exists: %w", err)
 	}
 
@@ -270,7 +300,7 @@ func updateNodeStatus(ctx context.Context,
 	info bmhNodeInfo, nodename, hwprofile string, updating bool) error {
 	logger.InfoContext(ctx, "Updating AllocatedNode", slog.String("nodename", nodename))
 	// nolint:wrapcheck
-	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+	return retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
 		node := &pluginsv1alpha1.AllocatedNode{}
 
 		if err := noncachedClient.Get(ctx, types.NamespacedName{Name: nodename, Namespace: pluginNamespace}, node); err != nil {
@@ -766,7 +796,7 @@ func waitForPreprovisioningImageNetworkDataCleared(ctx context.Context, c client
 	// Get the corresponding PreprovisioningImage (same name/namespace as BMH)
 	image := &metal3v1alpha1.PreprovisioningImage{}
 	if err := c.Get(ctx, bmhName, image); err != nil {
-		if errors.IsNotFound(err) {
+		if k8serrors.IsNotFound(err) {
 			// If PreprovisioningImage doesn't exist, consider network data as cleared
 			logger.InfoContext(ctx, "PreprovisioningImage not found, considering network data cleared",
 				slog.String("bmh", bmhName.String()))
@@ -979,7 +1009,7 @@ func validateFirmwareVersions(
 	// 3) Get HostFirmwareComponents
 	hfc, err := getHostFirmwareComponents(ctx, noncachedClient, bmh.Name, bmh.Namespace)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if k8serrors.IsNotFound(err) {
 			// Profile expects versions but HFC absent -> not valid yet
 			logger.InfoContext(ctx, "HostFirmwareComponents not found while versions are specified; not valid yet",
 				slog.String("bmh", bmh.Name))
@@ -1062,7 +1092,7 @@ func validateAppliedBiosSettings(
 	// 3) Get HostFirmwareSettings
 	hfs, err := getHostFirmwareSettings(ctx, noncachedClient, bmh.Name, bmh.Namespace)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if k8serrors.IsNotFound(err) {
 			// Profile expects BIOS settings but HFS absent -> not valid yet
 			logger.InfoContext(ctx, "HostFirmwareSettings not found while BIOS settings are specified; not valid yet",
 				slog.String("bmh", bmh.Name))
@@ -1104,7 +1134,7 @@ func validateAppliedBiosSettings(
 		// Get HostFirmwareComponents to check NIC firmware versions
 		hfc, err := getHostFirmwareComponents(ctx, noncachedClient, bmh.Name, bmh.Namespace)
 		if err != nil {
-			if errors.IsNotFound(err) {
+			if k8serrors.IsNotFound(err) {
 				// Profile expects NIC firmware but HFC absent -> not valid yet
 				logger.InfoContext(ctx, "HostFirmwareComponents not found while NIC firmware is specified; not valid yet",
 					slog.String("bmh", bmh.Name))
@@ -1197,4 +1227,91 @@ func validateNodeConfiguration(
 
 	logger.InfoContext(ctx, "Firmware versions and BIOS settings validated successfully", slog.String("BMH", bmh.Name))
 	return true, nil
+}
+
+// clearBMHUpdateAnnotationsForNAR removes BIOS and firmware update annotations from all BMHs
+// associated with the provided NodeAllocationRequest. This is intended for cleanup on configuration timeout
+// so that subsequent retries can proceed cleanly.
+func clearBMHUpdateAnnotationsForNAR(
+	ctx context.Context,
+	c client.Client,
+	logger *slog.Logger,
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
+) error {
+	logger.InfoContext(ctx, "Clearing BMH update annotations for NodeAllocationRequest",
+		slog.String("nodeAllocationRequest", nodeAllocationRequest.Name))
+
+	nodeList, err := hwmgrutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
+	if err != nil {
+		return fmt.Errorf("failed to get AllocatedNodes for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
+	}
+
+	var errs []error
+	for _, node := range nodeList.Items {
+		// Get BMH for this node
+		bmh, err := getBMHForNode(ctx, c, &node)
+		if err != nil {
+			logger.ErrorContext(ctx, "Failed to get BMH for annotation clear",
+				slog.String("allocatedNode", node.Name), slog.String("error", err.Error()))
+			errs = append(errs, fmt.Errorf("failed to get BMH for AllocatedNode %s: %w", node.Name, err))
+			continue
+		}
+
+		// Clear update annotations from BMH
+		if err := clearBMHUpdateAnnotations(ctx, c, logger, bmh); err != nil {
+			logger.ErrorContext(ctx, "Failed to clear BMH update annotations",
+				slog.String("bmh", bmh.Name), slog.String("error", err.Error()))
+			errs = append(errs, fmt.Errorf("failed to clear BMH update annotations for BMH %s: %w", bmh.Name, err))
+		} else {
+			logger.InfoContext(ctx, "Cleared BMH update annotations",
+				slog.String("bmh", bmh.Name))
+		}
+	}
+
+	if len(errs) > 0 {
+		// Use errors.Join to preserve all errors for better debugging
+		return fmt.Errorf("failed to clear BMH update annotations for NodeAllocationRequest %s (%d error(s)): %w",
+			nodeAllocationRequest.Name, len(errs), errors.Join(errs...))
+	}
+
+	return nil
+}
+
+// clearConfigAnnotationForAllocatedNodes removes the config-in-progress annotation from all AllocatedNodes
+// associated with the provided NodeAllocationRequest. This is intended for cleanup on configuration timeout/failure
+// so that subsequent retries can proceed cleanly.
+func clearConfigAnnotationForAllocatedNodes(
+	ctx context.Context,
+	c client.Client,
+	noncachedClient client.Reader,
+	logger *slog.Logger,
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
+) error {
+	logger.InfoContext(ctx, "Clearing config-in-progress annotations for AllocatedNodes",
+		slog.String("nodeAllocationRequest", nodeAllocationRequest.Name))
+
+	nodeList, err := hwmgrutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
+	if err != nil {
+		return fmt.Errorf("failed to get AllocatedNodes for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
+	}
+
+	for _, node := range nodeList.Items {
+		// Fetch latest to avoid conflicts
+		updatedNode := &pluginsv1alpha1.AllocatedNode{}
+		if err := noncachedClient.Get(ctx, types.NamespacedName{Name: node.Name, Namespace: node.Namespace}, updatedNode); err != nil {
+			logger.ErrorContext(ctx, "Failed to fetch AllocatedNode for annotation clear",
+				slog.String("allocatedNode", node.Name), slog.String("error", err.Error()))
+			continue
+		}
+		if err := clearConfigAnnotationWithPatch(ctx, c, updatedNode); err != nil {
+			logger.ErrorContext(ctx, "Failed to clear config-in-progress annotation",
+				slog.String("allocatedNode", updatedNode.Name), slog.String("error", err.Error()))
+			// continue to other nodes
+		} else {
+			logger.InfoContext(ctx, "Cleared config-in-progress annotation",
+				slog.String("allocatedNode", updatedNode.Name))
+		}
+	}
+
+	return nil
 }
