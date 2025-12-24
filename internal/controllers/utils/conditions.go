@@ -196,6 +196,20 @@ func IsClusterZtpDone(cr *provisioningv1alpha1.ProvisioningRequest) bool {
 	return false
 }
 
+// IsHardwareProvisionTimedOutOrFailed checks if the hardware provision condition status is timedout or failed
+func IsHardwareProvisionTimedOutOrFailed(cr *provisioningv1alpha1.ProvisioningRequest) bool {
+	condition := meta.FindStatusCondition(cr.Status.Conditions,
+		string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned))
+	if condition != nil {
+		if condition.Status == metav1.ConditionFalse &&
+			(condition.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed) ||
+				condition.Reason == string(provisioningv1alpha1.CRconditionReasons.TimedOut)) {
+			return true
+		}
+	}
+	return false
+}
+
 // HasFatalProvisioningFailure checks if the ProvisioningRequest
 // has a fatal provisioning failure that cannot be recovered
 // on its own.
