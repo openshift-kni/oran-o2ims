@@ -15,8 +15,9 @@ import (
 
 // Metal3Controllers holds references to the metal3 controllers for lifecycle management
 type Metal3Controllers struct {
-	NodeAllocationReconciler *NodeAllocationRequestReconciler
-	AllocatedNodeReconciler  *AllocatedNodeReconciler
+	NodeAllocationReconciler         *NodeAllocationRequestReconciler
+	AllocatedNodeReconciler          *AllocatedNodeReconciler
+	HostFirmwareComponentsReconciler *HostFirmwareComponentsReconciler
 }
 
 func SetupMetal3Controllers(mgr ctrl.Manager, namespace string, baseLogger *slog.Logger) (*Metal3Controllers, error) {
@@ -46,8 +47,22 @@ func SetupMetal3Controllers(mgr ctrl.Manager, namespace string, baseLogger *slog
 		return nil, fmt.Errorf("failed to setup AllocatedNode controller: %w", err)
 	}
 
+	hfcReconciler := &HostFirmwareComponentsReconciler{
+		Client:          mgr.GetClient(),
+		NoncachedClient: mgr.GetAPIReader(),
+		Scheme:          mgr.GetScheme(),
+		Logger:          baseLogger.With("controller", "metal3_hostfirmwarecomponents_controller"),
+		PluginNamespace: namespace,
+		Manager:         mgr,
+	}
+
+	if err := hfcReconciler.SetupWithManager(mgr); err != nil {
+		return nil, fmt.Errorf("failed to setup HostFirmwareComponents controller: %w", err)
+	}
+
 	return &Metal3Controllers{
-		NodeAllocationReconciler: nodeAllocationReconciler,
-		AllocatedNodeReconciler:  allocatedReconciler,
+		NodeAllocationReconciler:         nodeAllocationReconciler,
+		AllocatedNodeReconciler:          allocatedReconciler,
+		HostFirmwareComponentsReconciler: hfcReconciler,
 	}, nil
 }

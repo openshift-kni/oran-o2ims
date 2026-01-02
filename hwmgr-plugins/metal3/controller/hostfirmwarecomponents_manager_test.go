@@ -1121,4 +1121,170 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			Expect(updateMap["bmc"]).To(Equal("https://example.com/new-bmc.bin"))
 		})
 	})
+
+	Describe("validateHFCHasRequiredComponents", func() {
+		It("should return nil when all components are present and spec is empty", func() {
+			status := &metal3v1alpha1.HostFirmwareComponentsStatus{
+				Components: []metal3v1alpha1.FirmwareComponentStatus{
+					{Component: "bios", CurrentVersion: "1.0"},
+					{Component: "bmc", CurrentVersion: "2.0"},
+					{Component: "nic:0", CurrentVersion: "3.0"},
+				},
+			}
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{}
+
+			err := validateHFCHasRequiredComponents(status, spec)
+			Expect(err).To(BeNil())
+		})
+
+		It("should return error when BIOS firmware required but not available", func() {
+			status := &metal3v1alpha1.HostFirmwareComponentsStatus{
+				Components: []metal3v1alpha1.FirmwareComponentStatus{
+					{Component: "bmc", CurrentVersion: "2.0"},
+					{Component: "nic:0", CurrentVersion: "3.0"},
+				},
+			}
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{
+				BiosFirmware: hwmgmtv1alpha1.Firmware{
+					Version: "1.1",
+					URL:     "https://example.com/bios.bin",
+				},
+			}
+
+			err := validateHFCHasRequiredComponents(status, spec)
+			Expect(err).NotTo(BeNil())
+			Expect(err.Error()).To(ContainSubstring("BIOS firmware update requested but BIOS component not found"))
+		})
+
+		It("should return error when BMC firmware required but not available", func() {
+			status := &metal3v1alpha1.HostFirmwareComponentsStatus{
+				Components: []metal3v1alpha1.FirmwareComponentStatus{
+					{Component: "bios", CurrentVersion: "1.0"},
+					{Component: "nic:0", CurrentVersion: "3.0"},
+				},
+			}
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{
+				BmcFirmware: hwmgmtv1alpha1.Firmware{
+					Version: "2.1",
+					URL:     "https://example.com/bmc.bin",
+				},
+			}
+
+			err := validateHFCHasRequiredComponents(status, spec)
+			Expect(err).NotTo(BeNil())
+			Expect(err.Error()).To(ContainSubstring("BMC firmware update requested but BMC component not found"))
+		})
+
+		It("should return error when NIC firmware required but no NICs available", func() {
+			status := &metal3v1alpha1.HostFirmwareComponentsStatus{
+				Components: []metal3v1alpha1.FirmwareComponentStatus{
+					{Component: "bios", CurrentVersion: "1.0"},
+					{Component: "bmc", CurrentVersion: "2.0"},
+				},
+			}
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{
+				NicFirmware: []hwmgmtv1alpha1.Nic{
+					{Version: "3.1", URL: "https://example.com/nic.bin"},
+				},
+			}
+
+			err := validateHFCHasRequiredComponents(status, spec)
+			Expect(err).NotTo(BeNil())
+			Expect(err.Error()).To(ContainSubstring("NIC firmware update requested but no NIC components found"))
+		})
+
+		It("should return error when more NICs required than available", func() {
+			status := &metal3v1alpha1.HostFirmwareComponentsStatus{
+				Components: []metal3v1alpha1.FirmwareComponentStatus{
+					{Component: "bios", CurrentVersion: "1.0"},
+					{Component: "bmc", CurrentVersion: "2.0"},
+					{Component: "nic:0", CurrentVersion: "3.0"},
+				},
+			}
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{
+				NicFirmware: []hwmgmtv1alpha1.Nic{
+					{Version: "3.1", URL: "https://example.com/nic1.bin"},
+					{Version: "3.2", URL: "https://example.com/nic2.bin"},
+					{Version: "3.3", URL: "https://example.com/nic3.bin"},
+				},
+			}
+
+			err := validateHFCHasRequiredComponents(status, spec)
+			Expect(err).NotTo(BeNil())
+			Expect(err.Error()).To(ContainSubstring("NIC firmware update requested for 3 NICs but only 1 NIC components found"))
+		})
+
+		It("should return nil when all required components are available", func() {
+			status := &metal3v1alpha1.HostFirmwareComponentsStatus{
+				Components: []metal3v1alpha1.FirmwareComponentStatus{
+					{Component: "bios", CurrentVersion: "1.0"},
+					{Component: "bmc", CurrentVersion: "2.0"},
+					{Component: "nic:0", CurrentVersion: "3.0"},
+					{Component: "nic:1", CurrentVersion: "3.0"},
+				},
+			}
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{
+				BiosFirmware: hwmgmtv1alpha1.Firmware{
+					Version: "1.1",
+					URL:     "https://example.com/bios.bin",
+				},
+				BmcFirmware: hwmgmtv1alpha1.Firmware{
+					Version: "2.1",
+					URL:     "https://example.com/bmc.bin",
+				},
+				NicFirmware: []hwmgmtv1alpha1.Nic{
+					{Version: "3.1", URL: "https://example.com/nic1.bin"},
+					{Version: "3.2", URL: "https://example.com/nic2.bin"},
+				},
+			}
+
+			err := validateHFCHasRequiredComponents(status, spec)
+			Expect(err).To(BeNil())
+		})
+
+		It("should skip empty NIC firmware specs when counting required NICs", func() {
+			status := &metal3v1alpha1.HostFirmwareComponentsStatus{
+				Components: []metal3v1alpha1.FirmwareComponentStatus{
+					{Component: "bios", CurrentVersion: "1.0"},
+					{Component: "bmc", CurrentVersion: "2.0"},
+					{Component: "nic:0", CurrentVersion: "3.0"},
+				},
+			}
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{
+				NicFirmware: []hwmgmtv1alpha1.Nic{
+					{Version: "3.1", URL: "https://example.com/nic.bin"},
+					{Version: "", URL: ""},         // Empty - should be skipped
+					{Version: "3.2", URL: ""},      // Only version - should be skipped
+					{Version: "", URL: "https://"}, // Only URL - should be skipped
+				},
+			}
+
+			err := validateHFCHasRequiredComponents(status, spec)
+			Expect(err).To(BeNil())
+		})
+
+		It("should return error when multiple components are missing", func() {
+			status := &metal3v1alpha1.HostFirmwareComponentsStatus{
+				Components: []metal3v1alpha1.FirmwareComponentStatus{},
+			}
+			spec := hwmgmtv1alpha1.HardwareProfileSpec{
+				BiosFirmware: hwmgmtv1alpha1.Firmware{
+					Version: "1.1",
+					URL:     "https://example.com/bios.bin",
+				},
+				BmcFirmware: hwmgmtv1alpha1.Firmware{
+					Version: "2.1",
+					URL:     "https://example.com/bmc.bin",
+				},
+				NicFirmware: []hwmgmtv1alpha1.Nic{
+					{Version: "3.1", URL: "https://example.com/nic.bin"},
+				},
+			}
+
+			err := validateHFCHasRequiredComponents(status, spec)
+			Expect(err).NotTo(BeNil())
+			// Should fail on first missing component (BIOS)
+			Expect(err.Error()).To(ContainSubstring("BIOS firmware update requested but BIOS component not found"))
+		})
+	})
 })

@@ -35,3 +35,56 @@ disabled which would otherwise cause debugging with a debugger to be more diffic
 
 5. Use your IDE's debug capabilities to attach to `localhost:40000` to start your debug session. This will vary based
    on which IDE is being used.
+
+## Troubleshooting ProvisioningRequest failures due to unavailable resources
+
+When a ProvisioningRequest fails with an error indicating no resources are available, it may be because some BareMetalHosts
+have validation issues that prevent them from being used for provisioning. These issues are tracked using the
+`validation.clcm.openshift.io/unavailable` label on BareMetalHost resources.
+
+### Checking for hosts with validation issues
+
+To list all BareMetalHosts across all namespaces that have validation issues:
+
+```console
+oc get baremetalhosts -A -l validation.clcm.openshift.io/unavailable
+```
+
+This will show hosts that cannot be used for provisioning due to missing or incomplete firmware component data.
+
+### Understanding validation label values
+
+The `validation.clcm.openshift.io/unavailable` label can have the following values:
+
+- `hfc-missing-firmware-data` - Multiple firmware components are missing (2 or more of BIOS, BMC, NIC)
+- `hfc-missing-bios-data` - BIOS firmware component data is missing
+- `hfc-missing-bmc-data` - BMC firmware component data is missing
+- `hfc-missing-nic-data` - NIC firmware component data is missing
+
+To check the specific validation issue for a host:
+
+```console
+oc get baremetalhost <hostname> -n <namespace> -o jsonpath='{.metadata.labels.validation\.clcm\.openshift\.io/unavailable}{"\n"}'
+```
+
+### Resolution
+
+These validation labels are automatically managed by the HostFirmwareComponents controller. The controller:
+
+- Monitors HostFirmwareComponents status for each BareMetalHost
+- Only applies validation labels to HPE and Dell systems that are O-Cloud managed
+- Automatically removes the label when the firmware component data becomes available
+
+To resolve the issue:
+
+1. Check the corresponding HostFirmwareComponents resource status to see which firmware components are missing
+2. Wait for the Metal3 baremetal-operator to populate the firmware component data through inspection
+3. The validation label will be automatically removed once all required firmware components are present
+
+**Note:** Certain nodes may be unable to return complete firmware data to Metal3 Ironic queries when the node is powered off.
+This can result in incomplete data in the HostFirmwareComponents CR. If the firmware component data remains incomplete after
+inspection, the user should:
+
+1. Delete the BareMetalHost resource
+2. Manually power on the physical node
+3. Recreate the BareMetalHost resource to trigger reinspection with the node powered on

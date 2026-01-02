@@ -30,6 +30,15 @@ const (
 
 	LabelPrefixInterfaces = "interfacelabel.clcm.openshift.io/"
 
+	// ValidationUnavailableLabelKey is the label key used to mark BMHs with missing firmware data
+	ValidationUnavailableLabelKey = "validation.clcm.openshift.io/unavailable"
+
+	// Label values for different missing firmware scenarios
+	LabelValueMissingFirmwareData = "hfc-missing-firmware-data"
+	LabelValueMissingNICData      = "hfc-missing-nic-data"
+	LabelValueMissingBMCData      = "hfc-missing-bmc-data"
+	LabelValueMissingBIOSData     = "hfc-missing-bios-data"
+
 	AnnotationPrefixResourceInfo        = "resourceinfo.clcm.openshift.io/"
 	AnnotationResourceInfoDescription   = AnnotationPrefixResourceInfo + "description"
 	AnnotationResourceInfoPartNumber    = AnnotationPrefixResourceInfo + "partNumber"
@@ -261,8 +270,33 @@ func getResourceInfoVendor(hwdata *metal3v1alpha1.HardwareData) string {
 	return emptyString
 }
 
+// IsOCloudManaged checks if a BareMetalHost is managed by O-Cloud Manager based on required labels.
+// A BMH is considered O-Cloud managed if it has:
+// 1. Required labels: resourcePoolId and siteId
+// 2. OR at least one resource selector label (resourceselector.clcm.openshift.io/*)
+func IsOCloudManaged(bmh *metal3v1alpha1.BareMetalHost) bool {
+	if bmh.Labels == nil {
+		return false
+	}
+
+	// Check for required labels
+	hasRequiredLabels := bmh.Labels[LabelResourcePoolID] != "" && bmh.Labels[LabelSiteID] != ""
+
+	// Check for any resource selector labels
+	hasResourceSelectorLabels := false
+	for label := range bmh.Labels {
+		if REPatternResourceSelectorLabel.MatchString(label) {
+			hasResourceSelectorLabels = true
+			break
+		}
+	}
+
+	// BMH is O-Cloud managed if it has required labels OR resource selector labels
+	return hasRequiredLabels || hasResourceSelectorLabels
+}
+
 func includeInInventory(bmh *metal3v1alpha1.BareMetalHost) bool {
-	if bmh.Labels == nil || bmh.Labels[LabelResourcePoolID] == "" || bmh.Labels[LabelSiteID] == "" {
+	if !IsOCloudManaged(bmh) {
 		// Ignore BMH CRs without the required labels
 		return false
 	}

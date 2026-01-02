@@ -787,6 +787,76 @@ var _ = Describe("Inventory", func() {
 		})
 	})
 
+	Describe("IsOCloudManaged", func() {
+		It("should return false when labels are nil", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			result := IsOCloudManaged(bmh)
+			Expect(result).To(BeFalse())
+		})
+
+		It("should return false when required labels are missing", func() {
+			bmh := createBMHWithLabels("test-bmh", "test-ns", map[string]string{
+				"other-label": "value",
+			})
+			result := IsOCloudManaged(bmh)
+			Expect(result).To(BeFalse())
+		})
+
+		It("should return false when only resourcePoolId label is present", func() {
+			bmh := createBMHWithLabels("test-bmh", "test-ns", map[string]string{
+				LabelResourcePoolID: "pool123",
+			})
+			result := IsOCloudManaged(bmh)
+			Expect(result).To(BeFalse())
+		})
+
+		It("should return false when only siteId label is present", func() {
+			bmh := createBMHWithLabels("test-bmh", "test-ns", map[string]string{
+				LabelSiteID: "site123",
+			})
+			result := IsOCloudManaged(bmh)
+			Expect(result).To(BeFalse())
+		})
+
+		It("should return true when both required labels are present", func() {
+			bmh := createBMHWithLabels("test-bmh", "test-ns", map[string]string{
+				LabelResourcePoolID: "pool123",
+				LabelSiteID:         "site123",
+			})
+			result := IsOCloudManaged(bmh)
+			Expect(result).To(BeTrue())
+		})
+
+		It("should return true when resource selector label is present", func() {
+			bmh := createBMHWithLabels("test-bmh", "test-ns", map[string]string{
+				LabelPrefixResourceSelector + "zone": "east",
+			})
+			result := IsOCloudManaged(bmh)
+			Expect(result).To(BeTrue())
+		})
+
+		It("should return true when multiple resource selector labels are present", func() {
+			bmh := createBMHWithLabels("test-bmh", "test-ns", map[string]string{
+				LabelPrefixResourceSelector + "zone":  "east",
+				LabelPrefixResourceSelector + "rack":  "rack1",
+				LabelPrefixResourceSelector + "floor": "2",
+			})
+			result := IsOCloudManaged(bmh)
+			Expect(result).To(BeTrue())
+		})
+
+		It("should return true when both required labels and resource selector labels are present", func() {
+			bmh := createBMHWithLabels("test-bmh", "test-ns", map[string]string{
+				LabelResourcePoolID:                   "pool123",
+				LabelSiteID:                           "site123",
+				LabelPrefixResourceSelector + "zone":  "east",
+				LabelPrefixResourceSelector + "floor": "2",
+			})
+			result := IsOCloudManaged(bmh)
+			Expect(result).To(BeTrue())
+		})
+	})
+
 	Describe("includeInInventory", func() {
 		It("should return false when labels are nil", func() {
 			bmh := createBasicBMH("test-bmh", "test-ns")
