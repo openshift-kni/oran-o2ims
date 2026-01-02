@@ -582,6 +582,11 @@ components:
           description: |
             Callback configuration for receiving notifications when the NodeAllocationRequest operation is completed or fails.
             The callback will be made as a POST request with CallbackPayload in the request body.
+        hardwareProvisioningTimeout:
+          type: string
+          description: |
+            HardwareProvisioningTimeout defines the timeout duration string for the hardware provisioning.
+            If not specified, the default timeout value will be applied.
       required:
         - nodeGroup
         - site
@@ -749,7 +754,9 @@ components:
           format: int64
           description: |
             ObservedConfigTransactionId is the identifier of the observed configuration transaction.
-      required: []
+            A value of 0 indicates the transaction has not been observed yet.
+      required:
+        - observedConfigTransactionId
 
     AllocatedNodeStatus:
       description: |
@@ -766,6 +773,9 @@ components:
           format: int64
           description: |
             ObservedConfigTransactionId is the identifier of the observed configuration transaction.
+            A value of 0 indicates the transaction has not been observed yet.
+      required:
+        - observedConfigTransactionId
 
     Properties:
       type: object

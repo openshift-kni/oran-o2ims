@@ -171,7 +171,7 @@ func (m *MockHardwarePluginServer) setupDefaultData() {
 					LastTransitionTime: time.Now(),
 				},
 			},
-			ObservedConfigTransactionId: &[]int64{0}[0], // Pointer to int64(0) to match test object Generation
+			ObservedConfigTransactionId: 0, // 0 indicates transaction not observed yet
 		},
 		NodeAllocationRequest: &hwmgrpluginapi.NodeAllocationRequest{
 			ClusterId:           testClusterID,
@@ -838,7 +838,7 @@ func (m *MockHardwarePluginServer) convertK8sNARToPluginAPI(k8sNAR *pluginsv1alp
 		},
 		Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
 			Conditions:                  &conditions,
-			ObservedConfigTransactionId: &k8sNAR.Status.ObservedConfigTransactionId,
+			ObservedConfigTransactionId: k8sNAR.Status.ObservedConfigTransactionId,
 		},
 	}
 }

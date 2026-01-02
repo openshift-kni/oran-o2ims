@@ -116,6 +116,18 @@ func updateBMHMetaWithRetry(
 			}
 		}
 
+		if operation == OpAdd {
+			// For transient error timestamp, skip if annotation already exists to preserve original timestamp
+			if key == BmhErrorTimestampAnnotation {
+				if existingValue, exists := targetMap[key]; exists {
+					logger.InfoContext(ctx, fmt.Sprintf("%s already present with value %s, skipping add operation", metaType, existingValue),
+						slog.Any("bmh", name),
+						slog.String(metaType, key))
+					return nil
+				}
+			}
+		}
+
 		// Create a patch base
 		patch := client.MergeFrom(latestBMH.DeepCopy())
 
@@ -488,6 +500,11 @@ func processHwProfile(ctx context.Context,
 	logger *slog.Logger,
 	pluginNamespace string,
 	bmh *metal3v1alpha1.BareMetalHost, profileName string, postInstall bool) (bool, error) {
+
+	// Clear any existing update annotations to ensure clean state
+	if err := clearBMHUpdateAnnotations(ctx, c, logger, bmh); err != nil {
+		return false, fmt.Errorf("failed to clear existing update annotations from BMH %s: %w", bmh.Name, err)
+	}
 
 	var err error
 	name := types.NamespacedName{
@@ -1144,9 +1161,14 @@ func markBMHTransitenError(ctx context.Context, c client.Client, logger *slog.Lo
 		bmh.Annotations = make(map[string]string)
 	}
 	if _, exists := bmh.Annotations[BmhErrorTimestampAnnotation]; exists {
+		logger.InfoContext(ctx, "BMH already has transient error timestamp annotation, skipping",
+			slog.String("BMH", bmh.Name),
+			slog.String("timestamp", bmh.Annotations[BmhErrorTimestampAnnotation]))
 		return nil // Already marked
 	}
 	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+	logger.InfoContext(ctx, "Adding transient error timestamp annotation to BMH",
+		slog.String("BMH", bmh.Name))
 	return updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation,
 		BmhErrorTimestampAnnotation,
 		time.Now().Format(time.RFC3339), OpAdd)
@@ -1176,7 +1198,9 @@ func isTransientBMHError(bmh *metal3v1alpha1.BareMetalHost) (bool, error) {
 	}
 
 	// Return true if still within retry window
-	return time.Since(ts) < ErrorRetryWindow, nil
+	elapsed := time.Since(ts)
+	withinWindow := elapsed < ErrorRetryWindow
+	return withinWindow, nil
 }
 
 func tolerateAndAnnotateTransientBMHError(
@@ -1193,15 +1217,51 @@ func tolerateAndAnnotateTransientBMHError(
 	}
 
 	if tolerate {
+		tsStr, hasAnnotation := bmh.Annotations[BmhErrorTimestampAnnotation]
 		if err := markBMHTransitenError(ctx, c, logger, bmh); err != nil {
 			message := "failed to annotate transient BMH error"
 			logger.WarnContext(ctx, message, slog.String("BMH", bmh.Name), slog.String("error", err.Error()))
 			return false, fmt.Errorf("%s: %w", message, err)
 		}
 		logger.InfoContext(ctx, "BMH in transient error — tolerating and skipping failure",
-			slog.String("BMH", bmh.Name))
+			slog.String("BMH", bmh.Name),
+			slog.Bool("hasTimestamp", hasAnnotation),
+			slog.String("timestamp", tsStr))
 		return true, nil
 	}
 
 	return false, nil
+}
+
+// clearBMHUpdateAnnotations removes BIOS and firmware update annotations from a BareMetalHost
+func clearBMHUpdateAnnotations(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
+	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+	var errs []error
+
+	// Remove BIOS update annotation if it exists
+	if _, exists := bmh.Annotations[BiosUpdateNeededAnnotation]; exists {
+		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation, BiosUpdateNeededAnnotation, "", OpRemove); err != nil {
+			logger.WarnContext(ctx, "Failed to remove BIOS update annotation",
+				slog.String("bmh", bmh.Name),
+				slog.String("error", err.Error()))
+			errs = append(errs, fmt.Errorf("bios annotation removal failed: %w", err))
+		}
+	}
+
+	// Remove firmware update annotation if it exists
+	if _, exists := bmh.Annotations[FirmwareUpdateNeededAnnotation]; exists {
+		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation, FirmwareUpdateNeededAnnotation, "", OpRemove); err != nil {
+			logger.WarnContext(ctx, "Failed to remove firmware update annotation",
+				slog.String("bmh", bmh.Name),
+				slog.String("error", err.Error()))
+			errs = append(errs, fmt.Errorf("firmware annotation removal failed: %w", err))
+		}
+	}
+
+	// Return combined errors if any occurred
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to remove some BMH update annotations from BMH %s: %v", bmh.Name, errs)
+	}
+
+	return nil
 }

@@ -95,7 +95,7 @@ func NodeAllocationRequestCRToResponseObject(nodeAllocationRequest *pluginsv1alp
 	nodeAllocationRequestStatus.Properties = &Properties{
 		NodeNames: &nodeAllocationRequest.Status.Properties.NodeNames,
 	}
-	nodeAllocationRequestStatus.ObservedConfigTransactionId = &nodeAllocationRequest.Status.ObservedConfigTransactionId
+	nodeAllocationRequestStatus.ObservedConfigTransactionId = nodeAllocationRequest.Status.ObservedConfigTransactionId
 
 	return NodeAllocationRequestResponse{
 		NodeAllocationRequest: &nodeAllocationRequestObject,

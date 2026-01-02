@@ -372,7 +372,7 @@ func createMockNodeAllocationRequestResponseWithTransactionId(conditionStatus, c
 		},
 		Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
 			Conditions:                  &conditions,
-			ObservedConfigTransactionId: &statusTransactionId,
+			ObservedConfigTransactionId: statusTransactionId,
 			Properties: &hwmgrpluginapi.Properties{
 				NodeNames: &nodeNames,
 			},
@@ -417,8 +417,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 			Status: provisioningv1alpha1.ProvisioningRequestStatus{
 				Extensions: provisioningv1alpha1.Extensions{
 					NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
-						NodeAllocationRequestID:        crName,
-						HardwareProvisioningCheckStart: &metav1.Time{Time: time.Now()},
+						NodeAllocationRequestID: crName,
 					},
 				},
 			},
@@ -553,10 +552,8 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 
 	It("continues checking hardware configured status for ongoing operations", func() {
 		// Set up initial state with configuration started but not completed
-		currentTime := metav1.Now()
 		cr.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
-			NodeAllocationRequestID:       "test-nar-id",
-			HardwareConfiguringCheckStart: &currentTime,
+			NodeAllocationRequestID: "test-nar-id",
 		}
 
 		// Set initial configured condition to false (in progress)
@@ -608,10 +605,8 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 
 	It("does not pick up stale failed status after spec update", func() {
 		// Set up initial state with configuration started and a stale failed condition
-		currentTime := metav1.Now()
 		cr.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
-			NodeAllocationRequestID:       "test-nar-id",
-			HardwareConfiguringCheckStart: &currentTime,
+			NodeAllocationRequestID: "test-nar-id",
 		}
 
 		// Set initial configured condition to failed (simulating old failed state)
@@ -620,7 +615,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 			Status:             metav1.ConditionFalse,
 			Reason:             string(provisioningv1alpha1.CRconditionReasons.Failed),
 			Message:            "Hardware configuration failed",
-			LastTransitionTime: currentTime,
+			LastTransitionTime: metav1.Now(),
 		}
 		cr.Status.Conditions = append(cr.Status.Conditions, failedCondition)
 
@@ -781,7 +776,6 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 		// Verify NodeAllocationRequestRef is set
 		Expect(cr.Status.Extensions.NodeAllocationRequestRef).ToNot(BeNil())
 		Expect(cr.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID).To(Equal("cluster-1"))
-		Expect(cr.Status.Extensions.NodeAllocationRequestRef.HardwareProvisioningCheckStart).ToNot(BeNil())
 	})
 
 	It("updates existing NodeAllocationRequest when spec changes", func() {
@@ -811,13 +805,10 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 	})
 
 	It("updates configuring timer when NAR spec changes", func() {
-		// Set up existing NodeAllocationRequest with active timers
+		// Set up existing NodeAllocationRequest
 		existingID := crName
-		oldTime := metav1.NewTime(time.Now().Add(-10 * time.Minute)) // 10 minutes ago
 		task.object.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
-			NodeAllocationRequestID:        existingID,
-			HardwareProvisioningCheckStart: &oldTime,
-			HardwareConfiguringCheckStart:  &oldTime,
+			NodeAllocationRequestID: existingID,
 		}
 
 		// Update the CR to persist the old timers
@@ -871,12 +862,9 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 		var updatedCR provisioningv1alpha1.ProvisioningRequest
 		Expect(c.Get(ctx, client.ObjectKeyFromObject(cr), &updatedCR)).To(Succeed())
 
-		// Verify provisioning timer remains unchanged (not reset)
-		// Use time comparison without monotonic clock since Kubernetes serialization strips it
-		Expect(updatedCR.Status.Extensions.NodeAllocationRequestRef.HardwareProvisioningCheckStart.Time.Truncate(time.Second)).To(Equal(oldTime.Time.Truncate(time.Second)))
-		// HardwareConfiguringCheckStart should be updated to current time (not old time)
-		Expect(updatedCR.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart.IsZero()).To(BeFalse())
-		Expect(updatedCR.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart.After(oldTime.Time)).To(BeTrue())
+		// Verify NodeAllocationRequestRef is updated
+		Expect(updatedCR.Status.Extensions.NodeAllocationRequestRef).ToNot(BeNil())
+		Expect(updatedCR.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID).To(Equal("cluster-1"))
 	})
 })
 
@@ -893,7 +881,8 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		// Define the provisioning request.
 		cr = &provisioningv1alpha1.ProvisioningRequest{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: crName,
+				Name:       crName,
+				Generation: 1, // Set explicit generation for testing
 			},
 			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 				TemplateParameters: runtime.RawExtension{
@@ -978,6 +967,97 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		Expect(workerGroup).ToNot(BeNil())
 		Expect(workerGroup.NodeGroupData.Size).To(Equal(1)) // 1 worker node
 		Expect(workerGroup.NodeGroupData.Role).To(Equal("worker"))
+	})
+
+	It("should set ConfigTransactionId to ProvisioningRequest generation", func() {
+		clusterInstance := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "siteconfig.openshift.io/v1alpha1",
+				"kind":       "ClusterInstance",
+				"metadata": map[string]interface{}{
+					"name":      "exampleCluster",
+					"namespace": "default",
+				},
+				"spec": map[string]interface{}{
+					"nodes": []interface{}{
+						map[string]interface{}{
+							"role": "master",
+						},
+					},
+				},
+			},
+		}
+
+		hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-hw-template",
+				Namespace: "default",
+			},
+			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
+				HardwarePluginRef:           "test-plugin",
+				BootInterfaceLabel:          "bootable-interface",
+				HardwareProvisioningTimeout: "60m",
+				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+					{
+						Name:      "controller",
+						Role:      "master",
+						HwProfile: "test-profile",
+					},
+				},
+			},
+		}
+
+		nar, err := task.buildNodeAllocationRequest(clusterInstance, hwTemplate)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(nar).ToNot(BeNil())
+		Expect(nar.ConfigTransactionId).To(Equal(int64(1))) // Should match PR generation
+		Expect(nar.HardwareProvisioningTimeout).ToNot(BeNil())
+		Expect(*nar.HardwareProvisioningTimeout).To(Equal("60m"))
+	})
+
+	It("should use default timeout when template timeout is empty", func() {
+		clusterInstance := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "siteconfig.openshift.io/v1alpha1",
+				"kind":       "ClusterInstance",
+				"metadata": map[string]interface{}{
+					"name":      "exampleCluster",
+					"namespace": "default",
+				},
+				"spec": map[string]interface{}{
+					"nodes": []interface{}{
+						map[string]interface{}{
+							"role": "master",
+						},
+					},
+				},
+			},
+		}
+
+		hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-hw-template",
+				Namespace: "default",
+			},
+			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
+				HardwarePluginRef:           "test-plugin",
+				BootInterfaceLabel:          "bootable-interface",
+				HardwareProvisioningTimeout: "", // Empty timeout
+				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+					{
+						Name:      "controller",
+						Role:      "master",
+						HwProfile: "test-profile",
+					},
+				},
+			},
+		}
+
+		nar, err := task.buildNodeAllocationRequest(clusterInstance, hwTemplate)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(nar).ToNot(BeNil())
+		Expect(nar.HardwareProvisioningTimeout).ToNot(BeNil())
+		Expect(*nar.HardwareProvisioningTimeout).To(Equal("1h30m0s")) // Default timeout
 	})
 
 	It("returns error when spec.nodes not found", func() {
@@ -1115,8 +1195,7 @@ var _ = Describe("waitForHardwareData", func() {
 			Status: provisioningv1alpha1.ProvisioningRequestStatus{
 				Extensions: provisioningv1alpha1.Extensions{
 					NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
-						NodeAllocationRequestID:        crName,
-						HardwareProvisioningCheckStart: &metav1.Time{Time: time.Now()},
+						NodeAllocationRequestID: crName,
 					},
 				},
 			},
@@ -1227,7 +1306,7 @@ var _ = Describe("waitForHardwareData", func() {
 						LastTransitionTime: time.Now(),
 					},
 				},
-				ObservedConfigTransactionId: &cr.Generation,
+				ObservedConfigTransactionId: cr.Generation,
 			},
 		}
 
@@ -1994,9 +2073,7 @@ var _ = Describe("ProvisioningRequest Status Update After Hardware Failure", fun
 				},
 				Extensions: provisioningv1alpha1.Extensions{
 					NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
-						NodeAllocationRequestID:        testNARID,
-						HardwareProvisioningCheckStart: &metav1.Time{Time: time.Now().Add(-10 * time.Minute)},
-						HardwareConfiguringCheckStart:  nil,
+						NodeAllocationRequestID: testNARID,
 					},
 				},
 				Conditions: []metav1.Condition{
@@ -2087,10 +2164,6 @@ var _ = Describe("ProvisioningRequest Status Update After Hardware Failure", fun
 			// Simulate updating the ProvisioningRequest spec
 			cr.Generation = 2 // Simulating spec update
 
-			// Set a recent HardwareProvisioningCheckStart time to avoid timeout
-			recentTime := metav1.NewTime(time.Now().Add(-1 * time.Minute))
-			cr.Status.Extensions.NodeAllocationRequestRef.HardwareProvisioningCheckStart = &recentTime
-
 			Expect(c.Update(ctx, cr)).To(Succeed())
 
 			// Get the latest CR from client to ensure we have fresh data
@@ -2132,10 +2205,6 @@ var _ = Describe("ProvisioningRequest Status Update After Hardware Failure", fun
 		It("should allow normal transition from pending to progressing when hardware is in progress", func() {
 			// Simulate updating the ProvisioningRequest spec
 			cr.Generation = 2 // Simulating spec update
-
-			// Set a recent HardwareProvisioningCheckStart time to avoid timeout
-			recentTime := metav1.NewTime(time.Now().Add(-1 * time.Minute))
-			cr.Status.Extensions.NodeAllocationRequestRef.HardwareProvisioningCheckStart = &recentTime
 
 			Expect(c.Update(ctx, cr)).To(Succeed())
 
@@ -2229,8 +2298,7 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			Status: provisioningv1alpha1.ProvisioningRequestStatus{
 				Extensions: provisioningv1alpha1.Extensions{
 					NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
-						NodeAllocationRequestID:        clusterName,
-						HardwareProvisioningCheckStart: &metav1.Time{Time: time.Now()},
+						NodeAllocationRequestID: clusterName,
 					},
 				},
 			},
@@ -2282,10 +2350,6 @@ var _ = Describe("processExistingHardwareCondition", func() {
 				Message: detailedError,
 			}
 
-			// Set the configuring start time
-			currentTime := metav1.Now()
-			task.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart = &currentTime
-
 			status, reason, message, timedOutOrFailed := task.processExistingHardwareCondition(hwCondition, hwmgmtv1alpha1.Configured)
 
 			Expect(status).To(Equal(metav1.ConditionFalse))
@@ -2298,15 +2362,14 @@ var _ = Describe("processExistingHardwareCondition", func() {
 
 	Context("when HardwareProvisioned times out", func() {
 		It("preserves timeout message", func() {
-			// Simulate timeout scenario
-			oldTime := metav1.NewTime(time.Now().Add(-2 * time.Hour)) // 2 hours ago, well past timeout
-			task.object.Status.Extensions.NodeAllocationRequestRef.HardwareProvisioningCheckStart = &oldTime
-
+			// With the new timeout handling approach, timeouts are detected at the NodeAllocationRequest level
+			// and propagated via callbacks. The ProvisioningRequest controller no longer detects timeouts directly.
+			// Instead, it receives timeout status via callbacks from the hardware plugin.
 			hwCondition := &hwmgrpluginapi.Condition{
 				Type:    string(hwmgmtv1alpha1.Provisioned),
 				Status:  string(metav1.ConditionFalse),
-				Reason:  string(hwmgmtv1alpha1.InProgress), // Still in progress, but will timeout
-				Message: "Waiting for BMH to provision",
+				Reason:  string(hwmgmtv1alpha1.TimedOut), // Hardware plugin reports timeout via callback
+				Message: "Hardware provisioning timed out",
 			}
 
 			status, reason, message, timedOutOrFailed := task.processExistingHardwareCondition(hwCondition, hwmgmtv1alpha1.Provisioned)
@@ -2314,29 +2377,69 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			Expect(status).To(Equal(metav1.ConditionFalse))
 			Expect(reason).To(Equal(string(hwmgmtv1alpha1.TimedOut)))
 			Expect(timedOutOrFailed).To(BeTrue())
-			Expect(message).To(Equal("Hardware provisioning timed out"))
+			Expect(message).To(Equal("Hardware provisioning failed: Hardware provisioning timed out"))
 		})
 	})
 
 	Context("when HardwareConfigured times out", func() {
 		It("preserves timeout message", func() {
-			// Simulate timeout scenario
-			oldTime := metav1.NewTime(time.Now().Add(-2 * time.Hour)) // 2 hours ago, well past timeout
-			task.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart = &oldTime
-
+			// With the new timeout handling approach, timeouts are detected at the NodeAllocationRequest level
+			// and propagated via callbacks. The ProvisioningRequest controller no longer detects timeouts directly.
+			// Instead, it receives timeout status via callbacks from the hardware plugin.
 			hwCondition := &hwmgrpluginapi.Condition{
 				Type:    string(hwmgmtv1alpha1.Configured),
 				Status:  string(metav1.ConditionFalse),
-				Reason:  string(hwmgmtv1alpha1.InProgress), // Still in progress, but will timeout
-				Message: "Applying BIOS configuration",
+				Reason:  string(hwmgmtv1alpha1.TimedOut), // Hardware plugin reports timeout via callback
+				Message: "Hardware configuration timed out",
 			}
-
 			status, reason, message, timedOutOrFailed := task.processExistingHardwareCondition(hwCondition, hwmgmtv1alpha1.Configured)
 
 			Expect(status).To(Equal(metav1.ConditionFalse))
 			Expect(reason).To(Equal(string(hwmgmtv1alpha1.TimedOut)))
 			Expect(timedOutOrFailed).To(BeTrue())
-			Expect(message).To(Equal("Hardware configuration timed out"))
+			Expect(message).To(Equal("Hardware configuring failed: Hardware configuration timed out"))
+		})
+	})
+
+	Context("when HardwareProvisioned completes successfully", func() {
+		It("updates provisioningStatus with success message", func() {
+			hwCondition := &hwmgrpluginapi.Condition{
+				Type:    string(hwmgmtv1alpha1.Provisioned),
+				Status:  string(metav1.ConditionTrue),
+				Reason:  string(hwmgmtv1alpha1.Completed),
+				Message: "Created",
+			}
+
+			status, reason, message, timedOutOrFailed := task.processExistingHardwareCondition(hwCondition, hwmgmtv1alpha1.Provisioned)
+
+			Expect(status).To(Equal(metav1.ConditionTrue))
+			Expect(reason).To(Equal(string(hwmgmtv1alpha1.Completed)))
+			Expect(timedOutOrFailed).To(BeFalse())
+			Expect(message).To(Equal("Hardware provisioning completed: Created"))
+			// Verify provisioningStatus is updated to progressing
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StateProgressing))
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring("Hardware provisioning completed"))
+		})
+	})
+
+	Context("when HardwareConfigured completes successfully", func() {
+		It("updates provisioningStatus with success message", func() {
+			hwCondition := &hwmgrpluginapi.Condition{
+				Type:    string(hwmgmtv1alpha1.Configured),
+				Status:  string(metav1.ConditionTrue),
+				Reason:  string(hwmgmtv1alpha1.Completed),
+				Message: "Configuration applied",
+			}
+
+			status, reason, message, timedOutOrFailed := task.processExistingHardwareCondition(hwCondition, hwmgmtv1alpha1.Configured)
+
+			Expect(status).To(Equal(metav1.ConditionTrue))
+			Expect(reason).To(Equal(string(hwmgmtv1alpha1.Completed)))
+			Expect(timedOutOrFailed).To(BeFalse())
+			Expect(message).To(Equal("Hardware configuring completed: Configuration applied"))
+			// Verify provisioningStatus is updated to progressing
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StateProgressing))
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring("Hardware configuring completed"))
 		})
 	})
 
@@ -2389,10 +2492,6 @@ var _ = Describe("processExistingHardwareCondition", func() {
 				Message: narContextMessage,
 			}
 
-			// Set the configuring start time
-			currentTime := metav1.Now()
-			task.object.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart = &currentTime
-
 			status, reason, message, timedOutOrFailed := task.processExistingHardwareCondition(hwCondition, hwmgmtv1alpha1.Configured)
 
 			Expect(status).To(Equal(metav1.ConditionFalse))
@@ -2403,9 +2502,179 @@ var _ = Describe("processExistingHardwareCondition", func() {
 		})
 	})
 
+	Context("shouldUpdateHardwareStatus day 2 retry logic", func() {
+		var task *provisioningRequestReconcilerTask
+		var cr *provisioningv1alpha1.ProvisioningRequest
+
+		BeforeEach(func() {
+			cr = &provisioningv1alpha1.ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-pr",
+					Namespace:  "default",
+					Generation: 2,
+				},
+				Status: provisioningv1alpha1.ProvisioningRequestStatus{
+					ObservedGeneration: 1, // Different from generation, indicating spec change
+					ProvisioningStatus: provisioningv1alpha1.ProvisioningStatus{
+						ProvisioningPhase: provisioningv1alpha1.StatePending,
+					},
+				},
+			}
+			Expect(c.Create(ctx, cr)).To(Succeed())
+
+			task = &provisioningRequestReconcilerTask{
+				logger: reconciler.Logger,
+				client: reconciler.Client,
+				object: cr,
+			}
+		})
+
+		Context("when Configured condition is in terminal state and PR is pending", func() {
+			BeforeEach(func() {
+				// Set up terminal state (TimedOut) for HardwareConfigured condition
+				utils.SetStatusCondition(&cr.Status.Conditions,
+					provisioningv1alpha1.PRconditionTypes.HardwareConfigured,
+					provisioningv1alpha1.CRconditionReasons.TimedOut,
+					metav1.ConditionFalse,
+					"Hardware configuration timed out")
+				Expect(c.Status().Update(ctx, cr)).To(Succeed())
+			})
+
+			It("should NOT allow status update for terminal Configured condition", func() {
+				// This should return false because:
+				// 1. isTerminalState = true (TimedOut reason)
+				// 2. condition = hwmgmtv1alpha1.Configured
+				// 3. With new implementation, terminal states always return false
+				result := task.shouldUpdateHardwareStatus(hwmgmtv1alpha1.Configured)
+				Expect(result).To(BeFalse())
+			})
+
+			It("should NOT allow status update for Provisioned condition", func() {
+				// Set up terminal state (TimedOut) for HardwareProvisioned condition
+				utils.SetStatusCondition(&cr.Status.Conditions,
+					provisioningv1alpha1.PRconditionTypes.HardwareProvisioned,
+					provisioningv1alpha1.CRconditionReasons.TimedOut,
+					metav1.ConditionFalse,
+					"Hardware provisioning timed out")
+				Expect(c.Status().Update(ctx, cr)).To(Succeed())
+
+				// This should return false because:
+				// 1. isTerminalState = true (TimedOut reason)
+				// 2. condition = hwmgmtv1alpha1.Provisioned (not Configured)
+				// 3. Day 2 retry exception only applies to Configured condition
+				result := task.shouldUpdateHardwareStatus(hwmgmtv1alpha1.Provisioned)
+				Expect(result).To(BeFalse())
+			})
+
+			It("should NOT allow status update when PR is not pending", func() {
+				// Change PR phase to progressing
+				cr.Status.ProvisioningStatus.ProvisioningPhase = provisioningv1alpha1.StateProgressing
+				Expect(c.Status().Update(ctx, cr)).To(Succeed())
+
+				// This should return false because ProvisioningPhase is not StatePending
+				result := task.shouldUpdateHardwareStatus(hwmgmtv1alpha1.Configured)
+				Expect(result).To(BeFalse())
+			})
+		})
+
+		Context("when Configured condition is in terminal state (Failed) and PR is pending", func() {
+			BeforeEach(func() {
+				// Set up terminal state (Failed) for HardwareConfigured condition
+				utils.SetStatusCondition(&cr.Status.Conditions,
+					provisioningv1alpha1.PRconditionTypes.HardwareConfigured,
+					provisioningv1alpha1.CRconditionReasons.Failed,
+					metav1.ConditionFalse,
+					"Hardware configuration failed")
+				Expect(c.Status().Update(ctx, cr)).To(Succeed())
+			})
+
+			It("should NOT allow status update for terminal Configured condition", func() {
+				result := task.shouldUpdateHardwareStatus(hwmgmtv1alpha1.Configured)
+				Expect(result).To(BeFalse())
+			})
+		})
+
+		Context("when Configured condition is NOT in terminal state", func() {
+			BeforeEach(func() {
+				// Set up non-terminal state (InProgress) for HardwareConfigured condition
+				utils.SetStatusCondition(&cr.Status.Conditions,
+					provisioningv1alpha1.PRconditionTypes.HardwareConfigured,
+					provisioningv1alpha1.CRconditionReasons.InProgress,
+					metav1.ConditionFalse,
+					"Hardware configuration in progress")
+				Expect(c.Status().Update(ctx, cr)).To(Succeed())
+			})
+
+			It("should allow status update regardless of PR phase", func() {
+				// Should return true because condition is not in terminal state
+				result := task.shouldUpdateHardwareStatus(hwmgmtv1alpha1.Configured)
+				Expect(result).To(BeTrue())
+			})
+		})
+
+		Context("when no condition exists yet", func() {
+			It("should allow status update", func() {
+				// Should return true because no condition exists yet
+				result := task.shouldUpdateHardwareStatus(hwmgmtv1alpha1.Configured)
+				Expect(result).To(BeTrue())
+			})
+		})
+
+		Context("when callback-triggered reconciliation", func() {
+			BeforeEach(func() {
+				// Set up callback annotations
+				cr.Annotations = map[string]string{
+					utils.CallbackReceivedAnnotation: "test-callback",
+				}
+				Expect(c.Update(ctx, cr)).To(Succeed())
+
+				// Set up terminal state
+				utils.SetStatusCondition(&cr.Status.Conditions,
+					provisioningv1alpha1.PRconditionTypes.HardwareConfigured,
+					provisioningv1alpha1.CRconditionReasons.TimedOut,
+					metav1.ConditionFalse,
+					"Hardware configuration timed out")
+				Expect(c.Status().Update(ctx, cr)).To(Succeed())
+			})
+
+			It("should always allow status update", func() {
+				// Should return true because it's callback-triggered, regardless of terminal state
+				result := task.shouldUpdateHardwareStatus(hwmgmtv1alpha1.Configured)
+				Expect(result).To(BeTrue())
+			})
+		})
+	})
+
 	Context("integration test: updateHardwareStatus with callback for failed condition", func() {
 		It("propagates detailed error through the full flow", func() {
 			detailedError := "Creation request failed: not enough free resources matching nodegroup=controller criteria: freenodes=0, required=1"
+
+			// Get or create the ProvisioningRequest from client
+			// Use local variable to avoid shadowing issues
+			pr := &provisioningv1alpha1.ProvisioningRequest{}
+			key := client.ObjectKey{Name: "test-pr-update-after-failure", Namespace: "test-ns"}
+			if err := c.Get(ctx, key, pr); err != nil {
+				// Object doesn't exist, create a basic one
+				pr = &provisioningv1alpha1.ProvisioningRequest{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      key.Name,
+						Namespace: key.Namespace,
+					},
+				}
+				Expect(c.Create(ctx, pr)).To(Succeed())
+				// Refresh to get the created object
+				Expect(c.Get(ctx, key, pr)).To(Succeed())
+			}
+
+			// Set up NodeAllocationRequestRef if not already set (required for updateHardwareStatus)
+			if pr.Status.Extensions.NodeAllocationRequestRef == nil {
+				pr.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
+					NodeAllocationRequestID: "test-nar-id",
+				}
+				Expect(c.Status().Update(ctx, pr)).To(Succeed())
+				// Refresh to get the updated status
+				Expect(c.Get(ctx, key, pr)).To(Succeed())
+			}
 
 			// Simulate callback-triggered reconciliation
 			if pr.Annotations == nil {
@@ -2442,6 +2711,194 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			// Verify provisioning status details also contain the error
 			Expect(updatedCR.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring("Hardware provisioning failed"))
 			Expect(updatedCR.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring(detailedError))
+		})
+	})
+
+	Context("waitingForConfigStart code path", func() {
+		BeforeEach(func() {
+			// Create or get the ProvisioningRequest for this test
+			// Use local variable to avoid shadowing issues
+			pr := &provisioningv1alpha1.ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-pr-update-after-failure",
+					Namespace:  "test-ns",
+					Generation: 5,
+				},
+				Status: provisioningv1alpha1.ProvisioningRequestStatus{
+					Extensions: provisioningv1alpha1.Extensions{
+						NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
+							NodeAllocationRequestID: "test-nar-id",
+						},
+					},
+				},
+			}
+			// Try to get it first, if it doesn't exist, create it
+			existing := &provisioningv1alpha1.ProvisioningRequest{}
+			if err := c.Get(ctx, client.ObjectKeyFromObject(pr), existing); err != nil {
+				// Object doesn't exist, create it
+				Expect(c.Create(ctx, pr)).To(Succeed())
+			} else {
+				// Object exists, update it with our test configuration
+				existing.Status.Extensions.NodeAllocationRequestRef = pr.Status.Extensions.NodeAllocationRequestRef
+				existing.Generation = 5
+				Expect(c.Status().Update(ctx, existing)).To(Succeed())
+				pr = existing
+			}
+			// Refresh from client to get the latest version
+			Expect(c.Get(ctx, client.ObjectKeyFromObject(pr), pr)).To(Succeed())
+			task.object = pr
+		})
+
+		It("should return ConditionDoesNotExistsErr when waiting for config start", func() {
+			// Create NAR response without Configured condition and ObservedConfigTransactionId not matching
+			// This simulates waiting for a new configuration transaction to start
+			observedID := int64(3) // Different from PR Generation (5)
+			mockResponse := &hwmgrpluginapi.NodeAllocationRequestResponse{
+				Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
+					ObservedConfigTransactionId: observedID,
+					Conditions:                  &[]hwmgrpluginapi.Condition{}, // No Configured condition
+				},
+			}
+
+			configured, timedOutOrFailed, err := task.updateHardwareStatus(ctx, mockResponse, hwmgmtv1alpha1.Configured)
+
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(&utils.ConditionDoesNotExistsErr{}))
+			Expect(configured).To(BeFalse())
+			Expect(timedOutOrFailed).To(BeFalse())
+		})
+
+		It("should return ConditionDoesNotExistsErr when ObservedConfigTransactionId is zero", func() {
+			// Create NAR response without Configured condition and zero ObservedConfigTransactionId
+			// Zero indicates the transaction has not been observed yet
+			mockResponse := &hwmgrpluginapi.NodeAllocationRequestResponse{
+				Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
+					ObservedConfigTransactionId: 0,
+					Conditions:                  &[]hwmgrpluginapi.Condition{}, // No Configured condition
+				},
+			}
+
+			configured, timedOutOrFailed, err := task.updateHardwareStatus(ctx, mockResponse, hwmgmtv1alpha1.Configured)
+
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(&utils.ConditionDoesNotExistsErr{}))
+			Expect(configured).To(BeFalse())
+			Expect(timedOutOrFailed).To(BeFalse())
+		})
+
+		It("should proceed normally when ObservedConfigTransactionId matches Generation", func() {
+			// Create NAR response with matching ObservedConfigTransactionId
+			observedID := int64(5) // Matches PR Generation
+			configuredCondition := hwmgrpluginapi.Condition{
+				Type:    "Configured",
+				Status:  "True",
+				Reason:  "Completed",
+				Message: "Hardware configured successfully",
+			}
+			mockResponse := &hwmgrpluginapi.NodeAllocationRequestResponse{
+				Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
+					ObservedConfigTransactionId: observedID,
+					Conditions:                  &[]hwmgrpluginapi.Condition{configuredCondition},
+				},
+			}
+
+			configured, timedOutOrFailed, err := task.updateHardwareStatus(ctx, mockResponse, hwmgmtv1alpha1.Configured)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(configured).To(BeTrue())
+			Expect(timedOutOrFailed).To(BeFalse())
+		})
+	})
+
+	Context("race condition: ConfigTransactionId changes mid-reconciliation", func() {
+		BeforeEach(func() {
+			// Create or get the ProvisioningRequest for this test
+			// Use local variable to avoid shadowing issues
+			pr := &provisioningv1alpha1.ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-pr-update-after-failure",
+					Namespace:  "test-ns",
+					Generation: 5,
+				},
+				Status: provisioningv1alpha1.ProvisioningRequestStatus{
+					Extensions: provisioningv1alpha1.Extensions{
+						NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
+							NodeAllocationRequestID: "test-nar-id",
+						},
+					},
+				},
+			}
+			// Try to get it first, if it doesn't exist, create it
+			existing := &provisioningv1alpha1.ProvisioningRequest{}
+			if err := c.Get(ctx, client.ObjectKeyFromObject(pr), existing); err != nil {
+				// Object doesn't exist, create it
+				Expect(c.Create(ctx, pr)).To(Succeed())
+			} else {
+				// Object exists, update it with our test configuration
+				existing.Status.Extensions.NodeAllocationRequestRef = pr.Status.Extensions.NodeAllocationRequestRef
+				existing.Generation = 5
+				Expect(c.Status().Update(ctx, existing)).To(Succeed())
+				pr = existing
+			}
+			// Refresh from client to get the latest version
+			Expect(c.Get(ctx, client.ObjectKeyFromObject(pr), pr)).To(Succeed())
+			task.object = pr
+		})
+
+		It("should handle ConfigTransactionId change during reconciliation", func() {
+			// Simulate a race condition: PR Generation changes during reconciliation
+			// Step 1: Start reconciliation with Generation=5
+			observedID := int64(5) // Matches initial Generation
+			mockResponse1 := &hwmgrpluginapi.NodeAllocationRequestResponse{
+				Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
+					ObservedConfigTransactionId: observedID,
+					Conditions:                  &[]hwmgrpluginapi.Condition{}, // No Configured condition yet
+				},
+			}
+
+			// Step 2: PR spec changes, Generation increments to 6
+			task.object.Generation = 6
+			Expect(c.Update(ctx, task.object)).To(Succeed())
+			// Refresh from client to get updated generation
+			Expect(c.Get(ctx, client.ObjectKeyFromObject(task.object), task.object)).To(Succeed())
+
+			// Step 3: Continue reconciliation - ObservedConfigTransactionId (5) no longer matches Generation (6)
+			// This should trigger waitingForConfigStart
+			configured, timedOutOrFailed, err := task.updateHardwareStatus(ctx, mockResponse1, hwmgmtv1alpha1.Configured)
+
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(&utils.ConditionDoesNotExistsErr{}))
+			Expect(configured).To(BeFalse())
+			Expect(timedOutOrFailed).To(BeFalse())
+		})
+
+		It("should process new ConfigTransactionId when plugin catches up", func() {
+			// Step 1: PR Generation changes from 5 to 6
+			task.object.Generation = 6
+			Expect(c.Update(ctx, task.object)).To(Succeed())
+			// Refresh from client to get updated generation
+			Expect(c.Get(ctx, client.ObjectKeyFromObject(task.object), task.object)).To(Succeed())
+
+			// Step 2: Plugin eventually processes the new transaction (Generation 6)
+			observedID := int64(6) // Matches new Generation
+			configuredCondition := hwmgrpluginapi.Condition{
+				Type:    "Configured",
+				Status:  "True",
+				Reason:  "Completed",
+				Message: "Hardware configured successfully",
+			}
+			mockResponse := &hwmgrpluginapi.NodeAllocationRequestResponse{
+				Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
+					ObservedConfigTransactionId: observedID,
+					Conditions:                  &[]hwmgrpluginapi.Condition{configuredCondition},
+				},
+			}
+
+			configured, timedOutOrFailed, err := task.updateHardwareStatus(ctx, mockResponse, hwmgmtv1alpha1.Configured)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(configured).To(BeTrue())
+			Expect(timedOutOrFailed).To(BeFalse())
 		})
 	})
 })

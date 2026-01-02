@@ -337,16 +337,22 @@ Default timeouts:
 
 - Hardware provisioning: 90m
 - Cluster installation: 90m
-- Cluster configuration 30m
+- Cluster configuration: 30m
 
-These timeouts can be configured in their respective ConfigMaps or resource spec fields. The timeout value should be a duration string. For example:
+#### Hardware Provisioning Timeout
 
-For hardware provisioning, set in the `spec.templates.hwTemplate` hardware template resource:
+The timeout is configured in the `HardwareTemplate` resource.
+
+Configure hardware provisioning timeout in the `spec.templates.hwTemplate` hardware template resource:
 
 ``` yaml
 spec:
   hardwareProvisioningTimeout: "100m"
 ```
+
+If not specified, the default timeout value (90m) will be applied.
+
+#### Cluster Installation Timeout
 
 For cluster installation, set in the `spec.templates.clusterInstanceDefaults` ConfigMap:
 
@@ -354,6 +360,8 @@ For cluster installation, set in the `spec.templates.clusterInstanceDefaults` Co
 data:
   clusterInstallationTimeout: "100m"
 ```
+
+#### Cluster Configuration Timeout
 
 For cluster configuration, set in the `spec.templates.policyTemplateDefaults` ConfigMap:
 

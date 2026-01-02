@@ -47,8 +47,10 @@ func DetermineAction(ctx context.Context, logger *slog.Logger, nodeAllocationReq
 			return NodeAllocationRequestFSMNoop
 		}
 
-		if provisionedCondition.Reason == string(hwmgmtv1alpha1.Failed) {
-			logger.InfoContext(ctx, "NodeAllocationRequest request in Failed state")
+		if provisionedCondition.Reason == string(hwmgmtv1alpha1.Failed) ||
+			provisionedCondition.Reason == string(hwmgmtv1alpha1.TimedOut) {
+			logger.InfoContext(ctx, "NodeAllocationRequest request in terminal state",
+				slog.String("reason", provisionedCondition.Reason))
 			return NodeAllocationRequestFSMNoop
 		}
 
