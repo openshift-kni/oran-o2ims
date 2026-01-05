@@ -28,6 +28,7 @@ import (
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	controller "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/metal3/controller"
 )
 
 // CRD type constants
@@ -49,6 +50,8 @@ const (
 	StringUnknown        = "<unknown>"
 	StringTrue           = "true"
 	StringFalse          = "false"
+	StringYes            = "yes"
+	StringNo             = "no"
 	StringValid          = "Valid"
 	StringChangeDetected = "ChangeDetected"
 	SidebarCharUnicode   = "│"
@@ -360,9 +363,10 @@ func (f *TableFormatter) printTableHeader(crdType string, widths FieldWidths) {
 			sidebarChar, widths.Name, "NAME", widths.Field1, "NODE-ALLOC-REQUEST",
 			widths.Field2, "HWMGR-NODE-ID", widths.Field3, "PROVISIONING", widths.Field4, "DAY2-UPDATE")
 	case CRDTypeBareMetalHosts:
-		fmt.Printf("%s %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s\n",
+		fmt.Printf("%s %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s\n",
 			sidebarChar, widths.Namespace, "NS", widths.Name, "BMH", widths.Field1, "STATUS", widths.Field2, "STATE",
-			widths.Field3, "ONLINE", widths.Field4, "POWEREDON", widths.Field5, "NETDATA", widths.Field6, "ERROR")
+			widths.Field3, "ONLINE", widths.Field4, "POWEREDON", widths.Field5, "NETDATA", widths.Field6, "ERROR",
+			widths.Field7, "OCLOUD", widths.Field8, "CLCMVALIDATION")
 	case CRDTypeHostFirmwareComponents:
 		fmt.Printf("%s %-*s   %-*s   %-*s   %-*s   %-*s\n",
 			sidebarChar, widths.Name, "HOSTFIRMWARECOMPONENTS", widths.Field1, "GEN", widths.Field2, "OBSERVED",
@@ -546,9 +550,26 @@ func (f *TableFormatter) formatBareMetalHost(age string, obj runtime.Object, wid
 	}
 	errorType = truncateToWidth(errorType, widths.Field6)
 
-	fmt.Printf("%s %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s\n",
+	// OCLOUD field - check if BMH is O-Cloud managed
+	ocloud := StringNo
+	if controller.IsOCloudManaged(bmh) {
+		ocloud = StringYes
+	}
+	ocloud = truncateToWidth(ocloud, widths.Field7)
+
+	// CLCMVALIDATION field - get the validation label value if present
+	clcmvalidation := ""
+	if bmh.Labels != nil {
+		if labelValue, exists := bmh.Labels[controller.ValidationUnavailableLabelKey]; exists {
+			clcmvalidation = labelValue
+		}
+	}
+	clcmvalidation = truncateToWidth(clcmvalidation, widths.Field8)
+
+	fmt.Printf("%s %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s   %-*s\n",
 		sidebarChar, widths.Namespace, namespace, widths.Name, name, widths.Field1, status, widths.Field2, state,
-		widths.Field3, online, widths.Field4, poweredOn, widths.Field5, netData, widths.Field6, errorType)
+		widths.Field3, online, widths.Field4, poweredOn, widths.Field5, netData, widths.Field6, errorType,
+		widths.Field7, ocloud, widths.Field8, clcmvalidation)
 
 	return nil
 }
@@ -1148,6 +1169,8 @@ func (f *TableFormatter) initializeHeaderWidths(crdType string) FieldWidths {
 		widths.Field4 = safeMax(widths.Field4, len("POWEREDON"))
 		widths.Field5 = safeMax(widths.Field5, len("NETDATA"))
 		widths.Field6 = safeMax(widths.Field6, len("ERROR"))
+		widths.Field7 = safeMax(widths.Field7, len("OCLOUD"))
+		widths.Field8 = safeMax(widths.Field8, len("CLCMVALIDATION"))
 	case CRDTypeHostFirmwareComponents:
 		widths.Name = safeMax(widths.Name, len("HOSTFIRMWARECOMPONENTS"))
 		widths.Field1 = safeMax(widths.Field1, len("GEN"))
@@ -1302,6 +1325,22 @@ func (f *TableFormatter) calculateBareMetalHostWidths(events []WatchEvent, width
 			errorType = StringNone
 		}
 		widths.Field6 = safeMax(widths.Field6, len(errorType))
+
+		// OCLOUD field - "yes" or "no"
+		ocloud := StringNo
+		if controller.IsOCloudManaged(bmh) {
+			ocloud = StringYes
+		}
+		widths.Field7 = safeMax(widths.Field7, len(ocloud))
+
+		// CLCMVALIDATION field - get the validation label value if present
+		clcmvalidation := ""
+		if bmh.Labels != nil {
+			if labelValue, exists := bmh.Labels[controller.ValidationUnavailableLabelKey]; exists {
+				clcmvalidation = labelValue
+			}
+		}
+		widths.Field8 = safeMax(widths.Field8, len(clcmvalidation))
 	}
 	return widths
 }

@@ -161,6 +161,10 @@ func ResourceSelectionPrimaryFilter(ctx context.Context,
 	opts := []client.ListOption{}
 
 	// Fetch only unallocated BMHs
+	// TODO: Add validation label check once metal3-ironic fix for inspection of powered-off nodes that only
+	// return NIC firmware data when powered-on is available. This will exclude BMHs with
+	// validation.clcm.openshift.io/unavailable label (missing firmware component data).
+	// Without this check, we rely on firmware update validation to catch missing firmware data issues.
 	selector := metav1.LabelSelector{
 		MatchExpressions: []metav1.LabelSelectorRequirement{
 			{
@@ -168,6 +172,11 @@ func ResourceSelectionPrimaryFilter(ctx context.Context,
 				Operator: metav1.LabelSelectorOpNotIn,
 				Values:   []string{ValueTrue}, // Exclude allocated=true
 			},
+			// TODO: Uncomment when metal3-ironic fix is available:
+			// {
+			// 	Key:      ValidationUnavailableLabelKey,
+			// 	Operator: metav1.LabelSelectorOpDoesNotExist, // Exclude BMHs with validation issues
+			// },
 		},
 	}
 	labelSelector, err := metav1.LabelSelectorAsSelector(&selector)
