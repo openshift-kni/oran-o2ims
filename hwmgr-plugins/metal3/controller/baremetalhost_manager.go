@@ -885,6 +885,13 @@ func handleBMHCompletion(ctx context.Context,
 		return true, nil // Continue polling
 	}
 
+	// Clear firmware spec fields after validation succeeds
+	if err := clearFirmwareSpecFields(ctx, c, logger, bmh); err != nil {
+		logger.ErrorContext(ctx, "Failed to clear firmware spec fields",
+			slog.String("BMH", bmh.Name), slog.String("error", err.Error()))
+		// Don't fail the entire operation if cleanup fails - log and continue
+	}
+
 	// Apply post-config updates and finalize the process
 	if requeue, err := applyPostConfigUpdates(ctx, c, noncachedClient, logger, types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}, node); err != nil {
 		return true, fmt.Errorf("failed to apply post config update on node %s: %w", node.Name, err)
