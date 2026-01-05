@@ -17,6 +17,7 @@ updates:
     golang:
      patterns: ["golang.org/*"]
      update-types: ["major", "minor", "patch"]
-   #ignore:
-   #  - dependency-name: "*"
-   #    update-types: ["version-update:semver-patch"]
+   ignore:
+    # k8s.io moved to go 1.25 in v0.35, so ignore major/minor updates until this repo is 1.25-based
+    - dependency-name: "k8s.io/*"
+      update-types: ["version-update:semver-major", "version-update:semver-minor"]
