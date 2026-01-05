@@ -1,6 +1,6 @@
 module github.com/openshift-kni/oran-o2ims
 
-go 1.24.0
+go 1.25.0
 
 // Needed for importing the siteconfig operator, taken from the siteconfig operator repo.
 replace (
@@ -46,7 +46,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.34.2
 	k8s.io/apiextensions-apiserver v0.34.2
-	k8s.io/apimachinery v0.34.2
+	k8s.io/apimachinery v0.35.0
 	k8s.io/apiserver v0.34.2
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/klog/v2 v2.130.1
@@ -180,7 +180,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gorm.io/gorm v1.30.1 // indirect
 	k8s.io/component-base v0.34.2 // indirect
-	k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b // indirect
+	k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.33.0 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
