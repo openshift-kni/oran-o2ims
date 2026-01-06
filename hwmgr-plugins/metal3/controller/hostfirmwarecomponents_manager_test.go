@@ -91,6 +91,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -1285,6 +1286,171 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			Expect(err).NotTo(BeNil())
 			// Should fail on first missing component (BIOS)
 			Expect(err.Error()).To(ContainSubstring("BIOS firmware update requested but BIOS component not found"))
+		})
+	})
+
+	Describe("clearFirmwareSpecFields", func() {
+		var fakeClient client.Client
+
+		BeforeEach(func() {
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
+		})
+
+		// nolint:unparam
+		createHFS := func(name, namespace string, settings metal3v1alpha1.DesiredSettingsMap) *metal3v1alpha1.HostFirmwareSettings {
+			return &metal3v1alpha1.HostFirmwareSettings{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      name,
+					Namespace: namespace,
+				},
+				Spec: metal3v1alpha1.HostFirmwareSettingsSpec{
+					Settings: settings,
+				},
+			}
+		}
+
+		It("should clear HFC spec.updates when it exists and has updates", func() {
+			bmh := createBMH("test-bmh", "test-namespace")
+			hfc := createHFC("test-bmh", "test-namespace", []metal3v1alpha1.FirmwareUpdate{
+				{Component: "bios", URL: "https://example.com/bios.bin"},
+				{Component: "bmc", URL: "https://example.com/bmc.bin"},
+			})
+			Expect(fakeClient.Create(ctx, hfc)).To(Succeed())
+
+			err := clearFirmwareSpecFields(ctx, fakeClient, logger, bmh)
+			Expect(err).To(BeNil())
+
+			// Verify HFC spec.updates is cleared
+			updatedHFC := &metal3v1alpha1.HostFirmwareComponents{}
+			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-namespace"}, updatedHFC)
+			Expect(err).To(BeNil())
+			Expect(updatedHFC.Spec.Updates).To(BeEmpty())
+		})
+
+		It("should clear HFS spec.settings when it exists and has settings", func() {
+			bmh := createBMH("test-bmh", "test-namespace")
+			settings := metal3v1alpha1.DesiredSettingsMap{
+				"ProcTurboMode": intstr.FromString("Enabled"),
+				"BootMode":      intstr.FromString("UEFI"),
+			}
+			hfs := createHFS("test-bmh", "test-namespace", settings)
+			Expect(fakeClient.Create(ctx, hfs)).To(Succeed())
+
+			err := clearFirmwareSpecFields(ctx, fakeClient, logger, bmh)
+			Expect(err).To(BeNil())
+
+			// Verify HFS spec.settings is cleared
+			updatedHFS := &metal3v1alpha1.HostFirmwareSettings{}
+			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-namespace"}, updatedHFS)
+			Expect(err).To(BeNil())
+			Expect(updatedHFS.Spec.Settings).To(BeEmpty())
+		})
+
+		It("should clear both HFC and HFS when both exist with data", func() {
+			bmh := createBMH("test-bmh", "test-namespace")
+			hfc := createHFC("test-bmh", "test-namespace", []metal3v1alpha1.FirmwareUpdate{
+				{Component: "bios", URL: "https://example.com/bios.bin"},
+			})
+			settings := metal3v1alpha1.DesiredSettingsMap{
+				"ProcTurboMode": intstr.FromString("Enabled"),
+			}
+			hfs := createHFS("test-bmh", "test-namespace", settings)
+			Expect(fakeClient.Create(ctx, hfc)).To(Succeed())
+			Expect(fakeClient.Create(ctx, hfs)).To(Succeed())
+
+			err := clearFirmwareSpecFields(ctx, fakeClient, logger, bmh)
+			Expect(err).To(BeNil())
+
+			// Verify both are cleared
+			updatedHFC := &metal3v1alpha1.HostFirmwareComponents{}
+			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-namespace"}, updatedHFC)
+			Expect(err).To(BeNil())
+			Expect(updatedHFC.Spec.Updates).To(BeEmpty())
+
+			updatedHFS := &metal3v1alpha1.HostFirmwareSettings{}
+			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-namespace"}, updatedHFS)
+			Expect(err).To(BeNil())
+			Expect(updatedHFS.Spec.Settings).To(BeEmpty())
+		})
+
+		It("should not error when HFC does not exist", func() {
+			bmh := createBMH("test-bmh", "test-namespace")
+
+			err := clearFirmwareSpecFields(ctx, fakeClient, logger, bmh)
+			Expect(err).To(BeNil())
+		})
+
+		It("should not error when HFS does not exist", func() {
+			bmh := createBMH("test-bmh", "test-namespace")
+
+			err := clearFirmwareSpecFields(ctx, fakeClient, logger, bmh)
+			Expect(err).To(BeNil())
+		})
+
+		It("should not error when HFC spec.updates is already empty", func() {
+			bmh := createBMH("test-bmh", "test-namespace")
+			hfc := createHFC("test-bmh", "test-namespace", []metal3v1alpha1.FirmwareUpdate{})
+			Expect(fakeClient.Create(ctx, hfc)).To(Succeed())
+
+			err := clearFirmwareSpecFields(ctx, fakeClient, logger, bmh)
+			Expect(err).To(BeNil())
+
+			// Verify HFC spec.updates remains empty
+			updatedHFC := &metal3v1alpha1.HostFirmwareComponents{}
+			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-namespace"}, updatedHFC)
+			Expect(err).To(BeNil())
+			Expect(updatedHFC.Spec.Updates).To(BeEmpty())
+		})
+
+		It("should not error when HFS spec.settings is already empty", func() {
+			bmh := createBMH("test-bmh", "test-namespace")
+			settings := metal3v1alpha1.DesiredSettingsMap{}
+			hfs := createHFS("test-bmh", "test-namespace", settings)
+			Expect(fakeClient.Create(ctx, hfs)).To(Succeed())
+
+			err := clearFirmwareSpecFields(ctx, fakeClient, logger, bmh)
+			Expect(err).To(BeNil())
+
+			// Verify HFS spec.settings remains empty
+			updatedHFS := &metal3v1alpha1.HostFirmwareSettings{}
+			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-namespace"}, updatedHFS)
+			Expect(err).To(BeNil())
+			Expect(updatedHFS.Spec.Settings).To(BeEmpty())
+		})
+
+		It("should handle case where only HFC exists and has updates", func() {
+			bmh := createBMH("test-bmh", "test-namespace")
+			hfc := createHFC("test-bmh", "test-namespace", []metal3v1alpha1.FirmwareUpdate{
+				{Component: "bios", URL: "https://example.com/bios.bin"},
+			})
+			Expect(fakeClient.Create(ctx, hfc)).To(Succeed())
+
+			err := clearFirmwareSpecFields(ctx, fakeClient, logger, bmh)
+			Expect(err).To(BeNil())
+
+			// Verify HFC spec.updates is cleared
+			updatedHFC := &metal3v1alpha1.HostFirmwareComponents{}
+			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-namespace"}, updatedHFC)
+			Expect(err).To(BeNil())
+			Expect(updatedHFC.Spec.Updates).To(BeEmpty())
+		})
+
+		It("should handle case where only HFS exists and has settings", func() {
+			bmh := createBMH("test-bmh", "test-namespace")
+			settings := metal3v1alpha1.DesiredSettingsMap{
+				"ProcTurboMode": intstr.FromString("Enabled"),
+			}
+			hfs := createHFS("test-bmh", "test-namespace", settings)
+			Expect(fakeClient.Create(ctx, hfs)).To(Succeed())
+
+			err := clearFirmwareSpecFields(ctx, fakeClient, logger, bmh)
+			Expect(err).To(BeNil())
+
+			// Verify HFS spec.settings is cleared
+			updatedHFS := &metal3v1alpha1.HostFirmwareSettings{}
+			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-namespace"}, updatedHFS)
+			Expect(err).To(BeNil())
+			Expect(updatedHFS.Spec.Settings).To(BeEmpty())
 		})
 	})
 })
