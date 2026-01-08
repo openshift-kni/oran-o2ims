@@ -144,7 +144,7 @@ $ make IMAGE_TAG_BASE=quay.io/${MY_REPO}/oran-o2ims catalog-deploy
 hack/generate-catalog-deploy.sh \
         --package oran-o2ims \
         --namespace oran-o2ims \
-        --catalog-image quay.io/${MY_REPO}/oran-o2ims-catalog:v4.21.0 \
+        --catalog-image quay.io/${MY_REPO}/oran-o2ims-catalog:v4.22.0 \
         --channel alpha \
         --install-mode OwnNamespace \
         | oc create -f -
@@ -157,10 +157,10 @@ subscription.operators.coreos.com/oran-o2ims created
 To undeploy and clean up the installed resources, use the `catalog-undeploy` target:
 
 ```console
-$ make IMAGE_TAG_BASE=quay.io/${MY_REPO}/oran-o2ims VERSION=4.21.0 catalog-undeploy
+$ make IMAGE_TAG_BASE=quay.io/${MY_REPO}/oran-o2ims VERSION=4.22.0 catalog-undeploy
 hack/catalog-undeploy.sh --package oran-o2ims --namespace oran-o2ims --crd-search "o2ims.*oran"
 subscription.operators.coreos.com "oran-o2ims" deleted
-clusterserviceversion.operators.coreos.com "oran-o2ims.v4.21.0" deleted
+clusterserviceversion.operators.coreos.com "oran-o2ims.v4.22.0" deleted
 customresourcedefinition.apiextensions.k8s.io "clustertemplates.clcm.openshift.io" deleted
 customresourcedefinition.apiextensions.k8s.io "hardwaretemplates.clcm.openshift.io" deleted
 customresourcedefinition.apiextensions.k8s.io "inventories.ocloud.openshift.io" deleted
