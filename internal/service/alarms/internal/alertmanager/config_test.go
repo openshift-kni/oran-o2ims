@@ -14,10 +14,12 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 var _ = Describe("Alertmanager", func() {
@@ -225,6 +227,89 @@ route:
 				}
 			}
 			Expect(foundExtra).To(BeTrue())
+		})
+
+		It("handles concurrent updates with retry logic", func() {
+			// Track update attempts
+			updateAttempts := 0
+
+			// Create a client with an interceptor that simulates a conflict on first update
+			conflictClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithInterceptorFuncs(interceptor.Funcs{
+					Update: func(ctx context.Context, client client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+						updateAttempts++
+						// Simulate conflict on first attempt only
+						if updateAttempts == 1 {
+							// Return a conflict error by setting the object to have a different ResourceVersion
+							return &errors.StatusError{
+								ErrStatus: metav1.Status{
+									Status: metav1.StatusFailure,
+									Reason: metav1.StatusReasonConflict,
+									Code:   409,
+								},
+							}
+						}
+						// Second attempt succeeds
+						return client.Update(ctx, obj, opts...)
+					},
+				}).
+				Build()
+
+			// Create the initial secret with the conflict client
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      alertmanager.ACMObsAMSecretName,
+					Namespace: alertmanager.ACMObsAMNamespace,
+				},
+				Data: map[string][]byte{
+					alertmanager.ACMObsAMSecretKey: []byte(
+						`
+global:
+  resolve_timeout: 5m
+receivers:
+  - name: "null"
+route:
+  receiver: "null"
+`),
+				},
+			}
+			err := conflictClient.Create(ctx, secret)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Override GetHubClient to return our conflict-simulating client
+			alertmanager.GetHubClient = func() (client.WithWatch, error) {
+				return conflictClient, nil
+			}
+
+			// Run Setup - should succeed despite the initial conflict
+			err = alertmanager.Setup(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify that update was attempted more than once (retry occurred)
+			Expect(updateAttempts).To(BeNumerically(">", 1), "Setup should have retried after conflict")
+
+			// Verify the final configuration is correct
+			finalSecret := &corev1.Secret{}
+			err = conflictClient.Get(ctx, client.ObjectKey{Namespace: alertmanager.ACMObsAMNamespace, Name: alertmanager.ACMObsAMSecretName}, finalSecret)
+			Expect(err).NotTo(HaveOccurred())
+
+			var config map[string]interface{}
+			Expect(yaml.Unmarshal(finalSecret.Data[alertmanager.ACMObsAMSecretKey], &config)).NotTo(HaveOccurred())
+
+			// Verify oran receiver was added
+			receivers, ok := config["receivers"].([]interface{})
+			Expect(ok).To(BeTrue())
+
+			foundOranReceiver := false
+			for _, r := range receivers {
+				rMap, ok := r.(map[string]interface{})
+				if ok && rMap["name"] == alertmanager.OranReceiverName {
+					foundOranReceiver = true
+					break
+				}
+			}
+			Expect(foundOranReceiver).To(BeTrue(), "oran receiver should be present after retry")
 		})
 	})
 
