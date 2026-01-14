@@ -84,16 +84,17 @@ func clearConfigAnnotationWithPatch(ctx context.Context, c client.Client, node *
 	return nil
 }
 
-// findNodeInProgress scans the nodelist to find the first node in InProgress
-func findNodeInProgress(nodelist *pluginsv1alpha1.AllocatedNodeList) *pluginsv1alpha1.AllocatedNode {
+// findNodesInProgress scans the nodelist to find all nodes in InProgress state or no condition
+func findNodesInProgress(nodelist *pluginsv1alpha1.AllocatedNodeList) []*pluginsv1alpha1.AllocatedNode {
+	var nodes []*pluginsv1alpha1.AllocatedNode
 	for _, node := range nodelist.Items {
 		condition := meta.FindStatusCondition(node.Status.Conditions, (string(hwmgmtv1alpha1.Provisioned)))
 		if condition == nil || (condition.Status == metav1.ConditionFalse && condition.Reason == string(hwmgmtv1alpha1.InProgress)) {
-			return &node
+			nodes = append(nodes, &node)
 		}
 	}
 
-	return nil
+	return nodes
 }
 
 func applyPostConfigUpdates(ctx context.Context,
