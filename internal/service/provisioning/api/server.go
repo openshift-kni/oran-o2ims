@@ -21,6 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
@@ -187,28 +188,32 @@ func (r *ProvisioningServer) UpdateProvisioningRequest(ctx context.Context, requ
 		}), nil
 	}
 
-	// Get the existing ProvisioningRequest
-	existingProvisioningRequest := &provisioningv1alpha1.ProvisioningRequest{}
-	err := r.HubClient.Get(ctx, types.NamespacedName{Name: request.ProvisioningRequestId.String()}, existingProvisioningRequest)
-	if err != nil {
-		if k8serrors.IsNotFound(err) {
-			return api.UpdateProvisioningRequest404ApplicationProblemPlusJSONResponse(common.ProblemDetails{
-				AdditionalAttributes: &map[string]string{
-					"provisioningRequestId": request.ProvisioningRequestId.String(),
-				},
-				Detail: "requested ProvisioningRequest not found",
-				Status: http.StatusNotFound,
-			}), nil
+	// Use retry logic to handle concurrent update conflicts
+	var provisioningRequest *provisioningv1alpha1.ProvisioningRequest
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		// Get the latest ProvisioningRequest
+		existingProvisioningRequest := &provisioningv1alpha1.ProvisioningRequest{}
+		if err := r.HubClient.Get(ctx, types.NamespacedName{Name: request.ProvisioningRequestId.String()}, existingProvisioningRequest); err != nil {
+			return fmt.Errorf("failed to get ProvisioningRequest (%s): %w", request.ProvisioningRequestId.String(), err)
 		}
-		return nil, fmt.Errorf("failed to get ProvisioningRequest (%s): %w", request.ProvisioningRequestId.String(), err)
-	}
 
-	provisioningRequest, err := convertProvisioningRequestApiToCR(*request.Body)
-	if err != nil {
-		return nil, err
-	}
-	provisioningRequest.SetResourceVersion(existingProvisioningRequest.ResourceVersion)
-	err = r.HubClient.Update(ctx, provisioningRequest)
+		// Convert API request to CR
+		var convErr error
+		provisioningRequest, convErr = convertProvisioningRequestApiToCR(*request.Body)
+		if convErr != nil {
+			return convErr
+		}
+
+		// Set the ResourceVersion from the latest fetched object
+		provisioningRequest.SetResourceVersion(existingProvisioningRequest.ResourceVersion)
+
+		// Attempt the update
+		if err := r.HubClient.Update(ctx, provisioningRequest); err != nil {
+			return fmt.Errorf("failed to update ProvisioningRequest (%s): %w", request.ProvisioningRequestId.String(), err)
+		}
+		return nil
+	})
+
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			return api.UpdateProvisioningRequest404ApplicationProblemPlusJSONResponse(common.ProblemDetails{
