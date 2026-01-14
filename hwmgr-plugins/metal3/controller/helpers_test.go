@@ -30,7 +30,7 @@ Test Cases Covered in this File:
      * Handles nodes without config annotation gracefully
 
 2. Node Finding Functions
-   - findNodeInProgress: Tests finding nodes that are currently in progress state
+   - findNodesInProgress: Tests finding all nodes that are currently in progress state or have no condition
      * Returns nil when no nodes are in progress
      * Returns first node with InProgress status
      * Handles nodes without provisioned condition
@@ -102,6 +102,20 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 )
+
+// Helper functions
+// nolint:unparam
+func createNodeWithCondition(name, namespace, conditionType, reason string, status metav1.ConditionStatus) *pluginsv1alpha1.AllocatedNode {
+	node := createAllocatedNode(name, namespace, "bmh-"+name, namespace)
+	node.Status.Conditions = []metav1.Condition{
+		{
+			Type:   conditionType,
+			Status: status,
+			Reason: reason,
+		},
+	}
+	return node
+}
 
 var _ = Describe("Helpers", func() {
 	var (
@@ -265,72 +279,37 @@ var _ = Describe("Helpers", func() {
 			}
 		})
 
-		Describe("findNodeInProgress", func() {
-			It("should return nil when no nodes are in progress", func() {
-				// Add node with completed status
-				completedNode := pluginsv1alpha1.AllocatedNode{
-					ObjectMeta: metav1.ObjectMeta{Name: "completed-node"},
-					Status: pluginsv1alpha1.AllocatedNodeStatus{
-						Conditions: []metav1.Condition{
-							{
-								Type:   string(hwmgmtv1alpha1.Provisioned),
-								Status: metav1.ConditionTrue,
-								Reason: string(hwmgmtv1alpha1.Completed),
-							},
-						},
+		Describe("findNodesInProgress", func() {
+			It("should return empty slice when no nodes are in progress", func() {
+				nodeList := &pluginsv1alpha1.AllocatedNodeList{
+					Items: []pluginsv1alpha1.AllocatedNode{
+						*createNodeWithCondition("node1", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
+						*createNodeWithCondition("node2", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Failed), metav1.ConditionFalse),
 					},
 				}
-				nodeList.Items = append(nodeList.Items, completedNode)
 
-				result := findNodeInProgress(nodeList)
-				Expect(result).To(BeNil())
+				result := findNodesInProgress(nodeList)
+				Expect(result).To(BeEmpty())
 			})
 
-			It("should return first node with InProgress status", func() {
-				// Add node with in-progress status
-				inProgressNode := pluginsv1alpha1.AllocatedNode{
-					ObjectMeta: metav1.ObjectMeta{Name: "in-progress-node"},
-					Status: pluginsv1alpha1.AllocatedNodeStatus{
-						Conditions: []metav1.Condition{
-							{
-								Type:   string(hwmgmtv1alpha1.Provisioned),
-								Status: metav1.ConditionFalse,
-								Reason: string(hwmgmtv1alpha1.InProgress),
-							},
-						},
+			It("should return all nodes with InProgress status or no condition", func() {
+				nodeList := &pluginsv1alpha1.AllocatedNodeList{
+					Items: []pluginsv1alpha1.AllocatedNode{
+						*createNodeWithCondition("node1", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
+						*createNodeWithCondition("node2", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
+						*createAllocatedNode("node3", "test-ns", "bmh-node3", "test-ns"),
 					},
 				}
-				// Add another completed node
-				completedNode := pluginsv1alpha1.AllocatedNode{
-					ObjectMeta: metav1.ObjectMeta{Name: "completed-node"},
-					Status: pluginsv1alpha1.AllocatedNodeStatus{
-						Conditions: []metav1.Condition{
-							{
-								Type:   string(hwmgmtv1alpha1.Provisioned),
-								Status: metav1.ConditionTrue,
-								Reason: string(hwmgmtv1alpha1.Completed),
-							},
-						},
-					},
-				}
-				nodeList.Items = append(nodeList.Items, inProgressNode, completedNode)
 
-				result := findNodeInProgress(nodeList)
-				Expect(result).NotTo(BeNil())
-				Expect(result.Name).To(Equal("in-progress-node"))
+				result := findNodesInProgress(nodeList)
+				Expect(result).To(HaveLen(2))
+				Expect(result[0].Name).To(Equal("node2"))
+				Expect(result[1].Name).To(Equal("node3"))
 			})
 
-			It("should return node when no provisioned condition exists", func() {
-				// Add node without provisioned condition (considered in progress)
-				nodeWithoutCondition := pluginsv1alpha1.AllocatedNode{
-					ObjectMeta: metav1.ObjectMeta{Name: "no-condition-node"},
-					Status:     pluginsv1alpha1.AllocatedNodeStatus{},
-				}
-				nodeList.Items = append(nodeList.Items, nodeWithoutCondition)
-
-				result := findNodeInProgress(nodeList)
-				Expect(result).NotTo(BeNil())
-				Expect(result.Name).To(Equal("no-condition-node"))
+			It("should handle empty node list", func() {
+				result := findNodesInProgress(nodeList)
+				Expect(result).To(BeEmpty())
 			})
 		})
 

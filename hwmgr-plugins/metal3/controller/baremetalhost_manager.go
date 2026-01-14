@@ -8,12 +8,14 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
@@ -76,7 +78,7 @@ func updateBMHMetaWithRetry(
 	key, value, operation string,
 ) error {
 	// nolint: wrapcheck
-	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+	return retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
 		// Fetch the latest version of the BMH
 		var latestBMH metal3v1alpha1.BareMetalHost
 		if err := c.Get(ctx, name, &latestBMH); err != nil {
@@ -344,7 +346,7 @@ func setBootMACAddressFromLabel(
 	// Update the BMH spec with retry logic to handle concurrent modifications
 	name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	// nolint: wrapcheck
-	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+	return retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
 		// Fetch the latest version of the BMH
 		var latestBMH metal3v1alpha1.BareMetalHost
 		if err := c.Get(ctx, name, &latestBMH); err != nil {
@@ -425,7 +427,7 @@ func clearBMHNetworkData(
 	name types.NamespacedName,
 ) (ctrl.Result, error) {
 	// Try to clear Spec.PreprovisioningNetworkDataName with conflict retry.
-	if err := retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+	if err := retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
 		bmh := &metal3v1alpha1.BareMetalHost{}
 		if err := c.Get(ctx, name, bmh); err != nil {
 			return fmt.Errorf("fetch BMH %s/%s: %w", name.Namespace, name.Name, err)
@@ -730,7 +732,7 @@ func processBMHUpdateCase(ctx context.Context,
 			condType = hwmgmtv1alpha1.Configured
 		}
 		if err := hwmgrutils.SetNodeFailedStatus(ctx, c, logger, node, string(condType), message); err != nil {
-			if errors.IsConflict(err) {
+			if k8serrors.IsConflict(err) {
 				logger.WarnContext(ctx, "conflict setting node status; will retry", slog.String("node", node.Name), slog.String("error", err.Error()))
 				return hwmgrutils.RequeueWithShortInterval(), nil
 			}
@@ -822,6 +824,9 @@ func processBMHUpdateCase(ctx context.Context,
 	return ctrl.Result{}, nil
 }
 
+// handleBMHCompletion handles the completion check for all AllocatedNodes that are allocated
+// to the NodeAllocationRequest. It sets the Provisioned condition to Completed when complete
+// and returns true if any node is still in progress.
 func handleBMHCompletion(ctx context.Context,
 	c client.Client,
 	noncachedClient client.Reader,
@@ -829,16 +834,68 @@ func handleBMHCompletion(ctx context.Context,
 	pluginNamespace string,
 	nodelist *pluginsv1alpha1.AllocatedNodeList) (bool, error) {
 
-	logger.InfoContext(ctx, "Checking for node with config in progress")
-	node := findNodeInProgress(nodelist)
-	if node == nil {
-		return false, nil // No node is in config progress
+	logger.InfoContext(ctx, "Checking for nodes with config in progress")
+
+	// Find all nodes that are in InProgress state or have no condition
+	nodes := findNodesInProgress(nodelist)
+	if len(nodes) == 0 {
+		return false, nil // no node is in config progress
 	}
+
+	logger.InfoContext(ctx, "Handling nodes for completion", slog.Int("count", len(nodes)))
+	var (
+		wg          sync.WaitGroup
+		mu          sync.Mutex
+		anyUpdating bool
+		errs        []error
+	)
+
+	// Process each node in parallel for better performance with large clusters (e.g. 3 masters + 50+ workers).
+	for _, node := range nodes {
+		wg.Add(1)
+		go func(node *pluginsv1alpha1.AllocatedNode) {
+			defer wg.Done()
+
+			updating, err := handleSingleNodeCompletion(ctx, c, noncachedClient, logger, pluginNamespace, node)
+
+			mu.Lock()
+			defer mu.Unlock()
+
+			if updating {
+				anyUpdating = true
+			}
+			if err != nil {
+				logger.ErrorContext(ctx, "failed to handle single node completion",
+					slog.String("node", node.Name),
+					slog.String("error", err.Error()))
+				errs = append(errs, fmt.Errorf("node %s, error: %w", node.Name, err))
+			}
+		}(node)
+	}
+
+	wg.Wait()
+
+	if len(errs) > 0 {
+		aggErr := fmt.Errorf("failed to handle BMH completion: %w", errors.Join(errs...))
+		return anyUpdating, aggErr
+	}
+
+	return anyUpdating, nil
+}
+
+// handleSingleNodeCompletion handles the completion check for a single AllocatedNode.
+// Returns true if the node is still updating, false if the node is complete.
+func handleSingleNodeCompletion(ctx context.Context,
+	c client.Client,
+	noncachedClient client.Reader,
+	logger *slog.Logger,
+	pluginNamespace string,
+	node *pluginsv1alpha1.AllocatedNode) (bool, error) {
 
 	// Get BMH associated with the node
 	bmh, err := getBMHForNode(ctx, noncachedClient, node)
 	if err != nil {
-		return false, fmt.Errorf("failed to get BMH for node %s: %w", node.Name, err)
+		return true, fmt.Errorf("failed to get BMH for node %s: %w", node.Name, err)
 	}
 
 	// Check if BMH has transitioned to "Available"
@@ -945,7 +1002,7 @@ func getBMHForNode(ctx context.Context, c client.Reader, node *pluginsv1alpha1.A
 
 func removeInfraEnvLabelFromPreprovisioningImage(ctx context.Context, c client.Client, logger *slog.Logger, name types.NamespacedName) error {
 	// nolint: wrapcheck
-	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+	return retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
 		image := &metal3v1alpha1.PreprovisioningImage{}
 		if err := c.Get(ctx, name, image); err != nil {
 			logger.ErrorContext(ctx, "Failed to get PreprovisioningImage",
@@ -992,7 +1049,7 @@ func removeInfraEnvLabel(ctx context.Context, c client.Client, logger *slog.Logg
 func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
 	name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	// nolint: wrapcheck
-	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+	return retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
 		// Fetch the latest version of the BMH
 		var current metal3v1alpha1.BareMetalHost
 		if err := c.Get(ctx, name, &current); err != nil {
@@ -1097,7 +1154,7 @@ func clearBMHAnnotation(ctx context.Context, c client.Client, logger *slog.Logge
 	name := types.NamespacedName{Namespace: bmh.Namespace, Name: bmh.Name}
 
 	// nolint: wrapcheck
-	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+	return retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
 		// Fetch the latest version of the BMH
 		var latestBMH metal3v1alpha1.BareMetalHost
 		if err := c.Get(ctx, name, &latestBMH); err != nil {
@@ -1151,7 +1208,7 @@ func clearBMHAnnotation(ctx context.Context, c client.Client, logger *slog.Logge
 func patchOnlineFalse(ctx context.Context, c client.Client, bmh *metal3v1alpha1.BareMetalHost) error {
 	name := types.NamespacedName{Namespace: bmh.Namespace, Name: bmh.Name}
 	// nolint: wrapcheck
-	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+	return retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
 		var fresh metal3v1alpha1.BareMetalHost
 		if err := c.Get(ctx, name, &fresh); err != nil {
 			return err

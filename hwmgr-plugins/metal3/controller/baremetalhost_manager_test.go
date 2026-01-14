@@ -79,6 +79,85 @@ const (
 	testBootMAC             = "00:11:22:33:44:55"
 )
 
+// Helper functions
+// nolint:unparam
+func createBMH(name, namespace string, labels, annotations map[string]string, state metal3v1alpha1.ProvisioningState) *metal3v1alpha1.BareMetalHost {
+	bmh := &metal3v1alpha1.BareMetalHost{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Namespace:   namespace,
+			Labels:      labels,
+			Annotations: annotations,
+		},
+		Status: metal3v1alpha1.BareMetalHostStatus{
+			Provisioning: metal3v1alpha1.ProvisionStatus{
+				State: state,
+			},
+			HardwareDetails: &metal3v1alpha1.HardwareDetails{
+				NIC: []metal3v1alpha1.NIC{
+					{
+						Name: "eth0",
+						MAC:  testBootMAC,
+					},
+					{
+						Name: "eth1",
+						MAC:  "00:11:22:33:44:56",
+					},
+				},
+			},
+		},
+	}
+	return bmh
+}
+
+// nolint:unparam
+func createNodeAllocationRequest(name, namespace string) *pluginsv1alpha1.NodeAllocationRequest {
+	return &pluginsv1alpha1.NodeAllocationRequest{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+			BootInterfaceLabel: "boot",
+		},
+	}
+}
+
+func createAllocatedNode(name, namespace, hwMgrNodeId, hwMgrNodeNs string) *pluginsv1alpha1.AllocatedNode {
+	return &pluginsv1alpha1.AllocatedNode{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: pluginsv1alpha1.AllocatedNodeSpec{
+			HwMgrNodeId: hwMgrNodeId,
+			HwMgrNodeNs: hwMgrNodeNs,
+		},
+		Status: pluginsv1alpha1.AllocatedNodeStatus{
+			Conditions: []metav1.Condition{},
+		},
+	}
+}
+
+// nolint:unparam
+func createAllocatedNodeWithGroup(name, namespace, hwMgrNodeId, hwMgrNodeNs, groupName, hwProfile string) *pluginsv1alpha1.AllocatedNode {
+	return &pluginsv1alpha1.AllocatedNode{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: pluginsv1alpha1.AllocatedNodeSpec{
+			HwMgrNodeId: hwMgrNodeId,
+			HwMgrNodeNs: hwMgrNodeNs,
+			GroupName:   groupName,
+			HwProfile:   hwProfile,
+		},
+		Status: pluginsv1alpha1.AllocatedNodeStatus{
+			Conditions: []metav1.Condition{},
+		},
+	}
+}
+
 var _ = Describe("BareMetalHost Manager", func() {
 	var (
 		ctx    context.Context
@@ -94,94 +173,6 @@ var _ = Describe("BareMetalHost Manager", func() {
 		Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
 		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 	})
-
-	// Helper functions
-	createBMH := func(name, namespace string, labels map[string]string, annotations map[string]string, state metal3v1alpha1.ProvisioningState) *metal3v1alpha1.BareMetalHost {
-		bmh := &metal3v1alpha1.BareMetalHost{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:        name,
-				Namespace:   namespace,
-				Labels:      labels,
-				Annotations: annotations,
-			},
-			Status: metal3v1alpha1.BareMetalHostStatus{
-				Provisioning: metal3v1alpha1.ProvisionStatus{
-					State: state,
-				},
-				HardwareDetails: &metal3v1alpha1.HardwareDetails{
-					NIC: []metal3v1alpha1.NIC{
-						{
-							Name: "eth0",
-							MAC:  testBootMAC,
-						},
-						{
-							Name: "eth1",
-							MAC:  "00:11:22:33:44:56",
-						},
-					},
-				},
-			},
-		}
-		return bmh
-	}
-
-	createNodeAllocationRequest := func(name, namespace string) *pluginsv1alpha1.NodeAllocationRequest {
-		return &pluginsv1alpha1.NodeAllocationRequest{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: namespace,
-			},
-			Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-				BootInterfaceLabel: "boot",
-			},
-		}
-	}
-
-	createAllocatedNode := func(name, namespace, hwMgrNodeId, hwMgrNodeNs string) *pluginsv1alpha1.AllocatedNode {
-		return &pluginsv1alpha1.AllocatedNode{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: namespace,
-			},
-			Spec: pluginsv1alpha1.AllocatedNodeSpec{
-				HwMgrNodeId: hwMgrNodeId,
-				HwMgrNodeNs: hwMgrNodeNs,
-			},
-			Status: pluginsv1alpha1.AllocatedNodeStatus{
-				Conditions: []metav1.Condition{},
-			},
-		}
-	}
-
-	createAllocatedNodeWithGroup := func(name, namespace, hwMgrNodeId, hwMgrNodeNs, groupName, hwProfile string) *pluginsv1alpha1.AllocatedNode {
-		return &pluginsv1alpha1.AllocatedNode{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: namespace,
-			},
-			Spec: pluginsv1alpha1.AllocatedNodeSpec{
-				HwMgrNodeId: hwMgrNodeId,
-				HwMgrNodeNs: hwMgrNodeNs,
-				GroupName:   groupName,
-				HwProfile:   hwProfile,
-			},
-			Status: pluginsv1alpha1.AllocatedNodeStatus{
-				Conditions: []metav1.Condition{},
-			},
-		}
-	}
-
-	createNodeWithCondition := func(name, namespace string, conditionType, reason string, status metav1.ConditionStatus) *pluginsv1alpha1.AllocatedNode {
-		node := createAllocatedNode(name, namespace, "bmh-"+name, namespace)
-		node.Status.Conditions = []metav1.Condition{
-			{
-				Type:   conditionType,
-				Status: status,
-				Reason: reason,
-			},
-		}
-		return node
-	}
 
 	Describe("isBMHAllocated", func() {
 		It("should return true when BMH has allocated label set to true", func() {
@@ -1174,40 +1165,9 @@ var _ = Describe("BareMetalHost Manager", func() {
 		})
 	})
 
+	// TODO: the following functions from helpers.go are already tested in helpers_test.go.
+	// Merge these tests into helpers_test.go.
 	Describe("node finder functions", func() {
-		Describe("findNodeInProgress", func() {
-			It("should return nil when no nodes are in progress", func() {
-				nodelist := &pluginsv1alpha1.AllocatedNodeList{
-					Items: []pluginsv1alpha1.AllocatedNode{
-						*createNodeWithCondition("node1", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
-						*createNodeWithCondition("node2", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Failed), metav1.ConditionFalse),
-					},
-				}
-
-				result := findNodeInProgress(nodelist)
-				Expect(result).To(BeNil())
-			})
-
-			It("should return node with InProgress provisioned condition", func() {
-				nodelist := &pluginsv1alpha1.AllocatedNodeList{
-					Items: []pluginsv1alpha1.AllocatedNode{
-						*createNodeWithCondition("node1", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
-						*createNodeWithCondition("node2", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
-					},
-				}
-
-				result := findNodeInProgress(nodelist)
-				Expect(result).NotTo(BeNil())
-				Expect(result.Name).To(Equal("node2"))
-			})
-
-			It("should handle empty node list", func() {
-				nodelist := &pluginsv1alpha1.AllocatedNodeList{Items: []pluginsv1alpha1.AllocatedNode{}}
-				result := findNodeInProgress(nodelist)
-				Expect(result).To(BeNil())
-			})
-		})
-
 		Describe("findNextNodeToUpdate", func() {
 			It("should return nil when no nodes need updating", func() {
 				// Create nodes with configured condition to indicate they are successfully configured
@@ -1699,6 +1659,80 @@ var _ = Describe("BareMetalHost Manager", func() {
 			Expect(nodeInfo.BMC.Address).To(Equal("192.168.1.100"))
 			Expect(len(nodeInfo.Interfaces)).To(Equal(1))
 			Expect(nodeInfo.Interfaces[0].Name).To(Equal("eth0"))
+		})
+	})
+
+	Describe("handleBMHCompletion", func() {
+		var (
+			fakeClient client.Client
+			pluginNs   = "test-plugin-ns"
+		)
+
+		BeforeEach(func() {
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
+		})
+
+		It("should return false when no nodes are updating", func() {
+			// All nodes have Provisioned=True
+			nodelist := &pluginsv1alpha1.AllocatedNodeList{
+				Items: []pluginsv1alpha1.AllocatedNode{
+					*createNodeWithCondition("node1", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
+					*createNodeWithCondition("node2", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
+					*createNodeWithCondition("node3", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
+				},
+			}
+
+			updating, err := handleBMHCompletion(ctx, fakeClient, fakeClient, logger, pluginNs, nodelist)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updating).To(BeFalse())
+		})
+
+		It("should aggregate errors from multiple node failures", func() {
+			// Mix of nodes: some completed, some in progress, some with no condition
+			nodelist := &pluginsv1alpha1.AllocatedNodeList{
+				Items: []pluginsv1alpha1.AllocatedNode{
+					*createNodeWithCondition("node1", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
+					*createNodeWithCondition("fail-node2", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
+					*createAllocatedNode("fail-node3", pluginNs, "bmh-node3", pluginNs), // no condition
+					*createNodeWithCondition("fail-node4", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
+				},
+			}
+
+			// The function will return error because BMHs don't exist, but it should
+			// process all 3 nodes that need completion (node2, node3, node4)
+			updating, err := handleBMHCompletion(ctx, fakeClient, fakeClient, logger, pluginNs, nodelist)
+
+			// Expect errors because BMHs don't exist for the nodes
+			Expect(err).To(HaveOccurred())
+			// The error should be aggregated from multiple node failures
+			Expect(err.Error()).To(ContainSubstring("failed to handle BMH completion"))
+			Expect(err.Error()).To(ContainSubstring("node fail-node2"))
+			Expect(err.Error()).To(ContainSubstring("node fail-node3"))
+			Expect(err.Error()).To(ContainSubstring("node fail-node4"))
+			// Should return true because unexpected errors happened during processing, so we need to retry
+			Expect(updating).To(BeTrue())
+		})
+
+		It("should return anyUpdating=true when nodes are still in progress", func() {
+			// Create nodes with corresponding BMHs that are NOT in Available state
+			bmh1 := createBMH("bmh-progress-node1", pluginNs, nil, nil, metal3v1alpha1.StatePreparing)
+			bmh2 := createBMH("bmh-progress-node2", pluginNs, nil, nil, metal3v1alpha1.StatePreparing)
+
+			err := fakeClient.Create(ctx, bmh1)
+			Expect(err).ToNot(HaveOccurred())
+			err = fakeClient.Create(ctx, bmh2)
+			Expect(err).ToNot(HaveOccurred())
+
+			nodelist := &pluginsv1alpha1.AllocatedNodeList{
+				Items: []pluginsv1alpha1.AllocatedNode{
+					*createNodeWithCondition("progress-node1", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
+					*createNodeWithCondition("progress-node2", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
+				},
+			}
+
+			updating, err := handleBMHCompletion(ctx, fakeClient, fakeClient, logger, pluginNs, nodelist)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updating).To(BeTrue()) // BMHs are not Available yet
 		})
 	})
 })
