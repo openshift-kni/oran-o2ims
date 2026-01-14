@@ -14,6 +14,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
@@ -37,36 +38,43 @@ func Setup(ctx context.Context) error {
 		return fmt.Errorf("error creating client for hub: %w", err)
 	}
 
-	// ACM recreates the secret when it is deleted, so we can safely assume it exists
-	var secret corev1.Secret
-	if err = hubClient.Get(ctx, client.ObjectKey{Namespace: ACMObsAMNamespace, Name: ACMObsAMSecretName}, &secret); err != nil {
-		return fmt.Errorf("failed to get secret %s/%s: %w", ACMObsAMNamespace, ACMObsAMSecretName, err)
-	}
+	// Use retry logic to handle concurrent update conflicts
+	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		// ACM recreates the secret when it is deleted, so we can safely assume it exists
+		// Get the latest version of the secret
+		var secret corev1.Secret
+		if err := hubClient.Get(ctx, client.ObjectKey{Namespace: ACMObsAMNamespace, Name: ACMObsAMSecretName}, &secret); err != nil {
+			return fmt.Errorf("failed to get secret %s/%s: %w", ACMObsAMNamespace, ACMObsAMSecretName, err)
+		}
 
-	// If there's no existing config, return error
-	existingYAML, exists := secret.Data[ACMObsAMSecretKey]
-	if !exists {
-		return fmt.Errorf("secret %s/%s does not contain key %s", ACMObsAMNamespace, ACMObsAMSecretName, ACMObsAMSecretKey)
-	}
+		// If there's no existing config, return error
+		existingYAML, exists := secret.Data[ACMObsAMSecretKey]
+		if !exists {
+			return fmt.Errorf("secret %s/%s does not contain key %s", ACMObsAMNamespace, ACMObsAMSecretName, ACMObsAMSecretKey)
+		}
 
-	// Merge the existing configuration with oran-specific settings
-	updateCfg, err := MergeWithExisting(existingYAML)
+		// Merge the existing configuration with oran-specific settings
+		updateCfg, err := MergeWithExisting(existingYAML)
+		if err != nil {
+			return fmt.Errorf("failed to update existing alertmanager config with oran config: %w", err)
+		}
+
+		// Marshal the updated configuration back to YAML with custom indentation.
+		var buf bytes.Buffer
+		encoder := yaml.NewEncoder(&buf)
+		encoder.SetIndent(2)
+		if err := encoder.Encode(updateCfg); err != nil {
+			return fmt.Errorf("failed to encode updated alertmanager config: %w", err)
+		}
+
+		// Set it back to the secret for ACM
+		secret.Data[ACMObsAMSecretKey] = buf.Bytes()
+
+		// Attempt the update
+		return hubClient.Update(ctx, &secret)
+	})
+
 	if err != nil {
-		return fmt.Errorf("failed to update existing alertmanager config with oran config: %w", err)
-	}
-
-	// Marshal the updated configuration back to YAML with custom indentation.
-	var buf bytes.Buffer
-	encoder := yaml.NewEncoder(&buf)
-	encoder.SetIndent(2)
-	if err := encoder.Encode(updateCfg); err != nil {
-		return fmt.Errorf("failed to encode updated alertmanager config: %w", err)
-	}
-
-	// Set it back to the secret for ACM
-	secret.Data[ACMObsAMSecretKey] = buf.Bytes()
-
-	if err = hubClient.Update(ctx, &secret); err != nil {
 		return fmt.Errorf("failed to update secret %s/%s: %w", ACMObsAMNamespace, ACMObsAMSecretName, err)
 	}
 
