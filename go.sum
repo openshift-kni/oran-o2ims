@@ -287,8 +287,8 @@ github.com/mailru/easyjson v0.9.0 h1:PrnmzHw7262yW8sTBwxi1PdJA3Iw/EKBa8psRf7d9a4
 github.com/mailru/easyjson v0.9.0/go.mod h1:1+xMtQp2MRNVL/V1bOzuP3aP8VNwRW55fQUto+XFtTU=
 github.com/maruel/natural v1.1.1 h1:Hja7XhhmvEFhcByqDoHz9QZbkWey+COd9xWfCfn1ioo=
 github.com/maruel/natural v1.1.1/go.mod h1:v+Rfd79xlw1AgVBjbO0BEQmptqb5HvL/k9GRHB7ZKEg=
-github.com/metal3-io/baremetal-operator/apis v0.12.0 h1:tLe+VocO7nwGLiIK7vcnFE5f3jcM4AhJ5mCLDVrEAtU=
-github.com/metal3-io/baremetal-operator/apis v0.12.0/go.mod h1:7MJs5wimmBRFZ9drrrt51blP7LaBewTZ9rzzc4nyi8E=
+github.com/metal3-io/baremetal-operator/apis v0.12.1 h1:QT9HGLJeNIsT5fTkfjKzlG8Ul3oQkCrzKrnBismDyb4=
+github.com/metal3-io/baremetal-operator/apis v0.12.1/go.mod h1:7MJs5wimmBRFZ9drrrt51blP7LaBewTZ9rzzc4nyi8E=
 github.com/mfridman/tparse v0.18.0 h1:wh6dzOKaIwkUGyKgOntDW4liXSo37qg5AXbIhkMV3vE=
 github.com/mfridman/tparse v0.18.0/go.mod h1:gEvqZTuCgEhPbYk/2lS3Kcxg1GmTxxU7kTC8DvP0i/A=
 github.com/mitchellh/mapstructure v1.1.2/go.mod h1:FVVH3fgwuzCH5S8UJGiWEs2h04kUh9fWfEaFds41c1Y=
