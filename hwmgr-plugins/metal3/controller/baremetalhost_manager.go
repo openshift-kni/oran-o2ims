@@ -497,6 +497,11 @@ func processHwProfileWithHandledError(
 	return updateRequired, nil
 }
 
+// processHwProfile processes a HardwareProfile and determines if BIOS/firmware updates are required.
+// It annotates the BMH with BiosUpdateNeeded and/or FirmwareUpdateNeeded to signal pending updates.
+// For postInstall, it creates or updates a HostUpdatePolicy to control the update timing.
+//
+// Returns (true, nil) if any update is required, (false, nil) if no updates needed.
 func processHwProfile(ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
@@ -607,42 +612,64 @@ func handleTransitionNodes(ctx context.Context,
 	nodelist *pluginsv1alpha1.AllocatedNodeList, postInstall bool) (ctrl.Result, error) {
 
 	for _, node := range nodelist.Items {
-		bmh, err := getBMHForNode(ctx, noncachedClient, &node)
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to get BMH for node %s: %w", node.Name, err)
+		res, err := handleTransitionNode(ctx, c, noncachedClient, logger, pluginNamespace, &node, postInstall)
+		if err != nil || res.Requeue || res.RequeueAfter > 0 {
+			return res, err
 		}
+	}
 
-		if bmh.Annotations == nil {
-			bmh.Annotations = make(map[string]string)
-		}
+	return ctrl.Result{}, nil
+}
 
-		if postInstall {
-			if err := evaluateCRForReboot(ctx, c, logger, bmh); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-		updateCases := []struct {
-			AnnotationKey string
-			Reason        string
-			LogLabel      string
-		}{
-			{BiosUpdateNeededAnnotation, UpdateReasonBIOSSettings, "BIOS settings"},
-			{FirmwareUpdateNeededAnnotation, UpdateReasonFirmware, "firmware"},
-		}
+// handleTransitionNode processes Day1/Day2 transition logic for a given AllocatedNode.
+// It is responsible for:
+// - adding reboot annotation (postInstall only) once the corresponding CRs report valid changes
+// - waiting for BMH to enter expected transitional state (Preparing/Servicing)
+// - removing update-needed annotations and setting node config-in-progress annotation
+func handleTransitionNode(ctx context.Context,
+	c client.Client,
+	noncachedClient client.Reader,
+	logger *slog.Logger,
+	pluginNamespace string,
+	node *pluginsv1alpha1.AllocatedNode,
+	postInstall bool,
+) (ctrl.Result, error) {
+	bmh, err := getBMHForNode(ctx, noncachedClient, node)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get BMH for node %s: %w", node.Name, err)
+	}
 
-		// Process each update case for the current BMH.
-		for _, uc := range updateCases {
-			if _, exists := bmh.Annotations[uc.AnnotationKey]; !exists {
-				continue
-			}
-			res, err := processBMHUpdateCase(ctx, c, logger, pluginNamespace, &node, bmh, uc, postInstall)
-			if err != nil || res.Requeue || res.RequeueAfter > 0 {
-				// Propagate either requeue or error
-				return res, err
-			}
-			// Only handle one update case per reconciliation cycle
-			return ctrl.Result{}, nil
+	if bmh.Annotations == nil {
+		bmh.Annotations = make(map[string]string)
+	}
+
+	if postInstall {
+		if err := evaluateCRForReboot(ctx, c, logger, bmh); err != nil {
+			return ctrl.Result{}, err
 		}
+	}
+
+	updateCases := []struct {
+		AnnotationKey string
+		Reason        string
+		LogLabel      string
+	}{
+		{BiosUpdateNeededAnnotation, UpdateReasonBIOSSettings, "BIOS settings"},
+		{FirmwareUpdateNeededAnnotation, UpdateReasonFirmware, "firmware"},
+	}
+
+	// Process each update case for the current BMH.
+	for _, uc := range updateCases {
+		if _, exists := bmh.Annotations[uc.AnnotationKey]; !exists {
+			continue
+		}
+		res, err := processBMHUpdateCase(ctx, c, logger, pluginNamespace, node, bmh, uc, postInstall)
+		if err != nil || res.Requeue || res.RequeueAfter > 0 {
+			// Propagate either requeue or error
+			return res, err
+		}
+		// Only handle one update case per reconciliation cycle
+		return ctrl.Result{}, nil
 	}
 
 	return ctrl.Result{}, nil
@@ -656,6 +683,9 @@ func addRebootAnnotation(ctx context.Context, c client.Client, logger *slog.Logg
 	return nil
 }
 
+// evaluateCRForReboot evaluates the BareMetalHost for pending BIOS and/or
+// firmware updates and adds the reboot annotation to the BMH to trigger node
+// reboot when required.
 func evaluateCRForReboot(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
 	// Check if both annotations are present
 	hasBiosAnnotation := bmh.Annotations[BiosUpdateNeededAnnotation] != ""
@@ -707,7 +737,15 @@ func evaluateCRForReboot(ctx context.Context, c client.Client, logger *slog.Logg
 	return nil
 }
 
-// processBMHUpdateCase handles the update for a given BMH and update case.
+// processBMHUpdateCase handles the update transition for a given BMH and update case.
+//
+// This function orchestrates the transition from "update-needed" to "config-in-progress" state:
+//  1. Handles BMH error states (transient errors are tolerated with timeout, permanent errors fail the node)
+//  2. Waits for BMH to enter the expected transition state:
+//     - Day1: waits for Preparing state
+//     - Day2(postInstall): waits for Servicing state
+//  3. When the BMH is in the expected state, removes the update-needed annotations from BMH and
+//     adds the config-in-progress annotation to the AllocatedNode to mark the update as in progress.
 func processBMHUpdateCase(ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
