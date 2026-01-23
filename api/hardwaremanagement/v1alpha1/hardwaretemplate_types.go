@@ -10,6 +10,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// Node role constants
+// The kubebuilder validation enum values for NodeGroupData.Role must match these values.
+const (
+	NodeRoleMaster = "master"
+	NodeRoleWorker = "worker"
+)
+
 // NodeGroupData provides the necessary information for populating a node allocation request
 type NodeGroupData struct {
 	// +kubebuilder:validation:MinLength=1
