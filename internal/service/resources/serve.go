@@ -149,7 +149,7 @@ func Serve(config *api.ResourceServerConfig) error {
 		Repo:   repository,
 		Info: generated.OCloudInfo{
 			Description:   "OpenShift O-Cloud Manager",
-			GlobalcloudId: globalCloudID,
+			GlobalCloudId: globalCloudID,
 			Name:          "OpenShift O-Cloud Manager",
 			OCloudId:      cloudID,
 			ServiceUri:    config.ExternalAddress,

@@ -683,3 +683,43 @@ func (r *ResourceServer) GetInternalResourceById(ctx context.Context, request ap
 	object := models.ResourceToModel(record, nil)
 	return api.GetInternalResourceById200JSONResponse(object), nil
 }
+
+// GetLocations receives the API request to this endpoint, executes the request, and responds appropriately
+// TODO: Implement when Location data model and repository are available
+func (r *ResourceServer) GetLocations(ctx context.Context, request api.GetLocationsRequestObject) (api.GetLocationsResponseObject, error) {
+	// Return empty list until Location support is fully implemented
+	objects := make([]api.LocationInfo, 0)
+	return api.GetLocations200JSONResponse(objects), nil
+}
+
+// GetLocation receives the API request to this endpoint, executes the request, and responds appropriately
+// TODO: Implement when Location data model and repository are available
+func (r *ResourceServer) GetLocation(ctx context.Context, request api.GetLocationRequestObject) (api.GetLocationResponseObject, error) {
+	return api.GetLocation404ApplicationProblemPlusJSONResponse{
+		AdditionalAttributes: &map[string]string{
+			"globalLocationId": request.GlobalLocationId,
+		},
+		Detail: "requested location not found",
+		Status: http.StatusNotFound,
+	}, nil
+}
+
+// GetOCloudSites receives the API request to this endpoint, executes the request, and responds appropriately
+// TODO: Implement when OCloudSite data model and repository are available
+func (r *ResourceServer) GetOCloudSites(ctx context.Context, request api.GetOCloudSitesRequestObject) (api.GetOCloudSitesResponseObject, error) {
+	// Return empty list until OCloudSite support is fully implemented
+	objects := make([]api.OCloudSiteInfo, 0)
+	return api.GetOCloudSites200JSONResponse(objects), nil
+}
+
+// GetOCloudSite receives the API request to this endpoint, executes the request, and responds appropriately
+// TODO: Implement when OCloudSite data model and repository are available
+func (r *ResourceServer) GetOCloudSite(ctx context.Context, request api.GetOCloudSiteRequestObject) (api.GetOCloudSiteResponseObject, error) {
+	return api.GetOCloudSite404ApplicationProblemPlusJSONResponse{
+		AdditionalAttributes: &map[string]string{
+			"oCloudSiteId": request.OCloudSiteId.String(),
+		},
+		Detail: "requested O-Cloud site not found",
+		Status: http.StatusNotFound,
+	}, nil
+}

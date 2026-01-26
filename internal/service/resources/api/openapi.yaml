@@ -1388,13 +1388,13 @@ components:
           format: uuid
           description: Identifier of the O-Cloud instance. Internally generated within an O-Cloud instance.
           example: "262c8f17-52b5-4614-9e56-812ae21fa8a7"
-        globalcloudId:
+        globalCloudId:
           type: string
           format: uuid
           description: | 
             Identifier of the O-Cloud instance assigned by the SMO. This identifier is globally unique across O-Cloud 
-            instances known to the SMO. This value was provided by the SMO at cloud genesis and is stored in the O-Cloud
-            IMS Inventory.
+            instances known to the SMO. This value was provided by the SMO with the callback URI at the beginning of 
+            O-Cloud genesis and used in registration at the end of genesis.
           example: "8c1c151d-2899-4c96-b76f-4fe92064b57b"
         name:
           type: string
@@ -1406,16 +1406,21 @@ components:
           example: "My cloud"
         serviceUri:
           type: string
-          description: The URI root to all services provided by the O2ims interface. Inventory is one of these services.
+          description: |
+            The fully qualified URI root to all services provided by the O2ims interface, Inventory only being one of 
+            them. Since the O2ims provides multiple services this entry is for the {apiRoot} only.
           example: "http://localhost:8000"
         extensions:
           type: object
+          description: |
+            These are unspecified (not standardized) properties (keys) which are tailored by the vendor to extend the 
+            information provided about the O-Cloud.
           example:
             hub: "hub0"
             country: "ES"
       required:
       - oCloudId
-      - globalcloudId
+      - globalCloudId
       - name
       - description
       - serviceUri
@@ -1449,13 +1454,27 @@ components:
           type: string
           description: Version or generation of the resource as defined by its provider.
           example: "v2024.11"
+        alarmDictionary:
+          deprecated: true
+          description: |
+            Dictionary of alarms for this resource type. DEPRECATED: This attribute is deprecated and may be removed 
+            in future releases. Use alarmDictionaryId instead.
+          allOf:
+            - $ref: "../../common/api/openapi.yaml#/components/schemas/AlarmDictionary"
+        alarmDictionaryId:
+          type: string
+          format: uuid
+          description: |
+            Identifier of the Alarm Dictionary for this resource type. The IMS shall ensure that the identifier points 
+            to the same dictionary available under the URI path of the resource type.
+          example: "b2f8c7a1-3d4e-5f6a-7b8c-9d0e1f2a3b4c"
         resourceKind:
           type: string
           enum:
           - UNDEFINED
           - PHYSICAL
           - LOGICAL
-          description: Value describing “physicality” of the resource type.
+          description: Value describing "physicality" of the resource type.
           example: "PHYSICAL"
         resourceClass:
           type: string
@@ -1469,8 +1488,6 @@ components:
         extensions:
           type: object
           description: List of metadata key-value pairs used to associate meaningful metadata to the related resource type.
-        alarmDictionary:
-          $ref: "../../common/api/openapi.yaml#/components/schemas/AlarmDictionary"
       required:
       - resourceTypeId
       - name
@@ -1480,7 +1497,6 @@ components:
       - version
       - resourceKind
       - resourceClass
-      - extensions
 
     ResourcePool:
       description: |
@@ -1492,25 +1508,39 @@ components:
           format: uuid
           description: Identifier for the Resource Pool in the O-Cloud instance. This identifier is allocated by the O-Cloud.
           example: "d3b27e14-4589-4d93-ae76-ddca559193ea"
-        name:
-          type: string
-          description: Human readable name of the resource pool.
-          example: "my-cluster"
-        description:
-          type: string
-          description: Human readable description of the resource pool.
         oCloudId:
           type: string
           format: uuid
-          description: Identifier for the containing O-Cloud.
+          deprecated: true
+          description: |
+            Identifier for the containing O-Cloud. DEPRECATED: This attribute is deprecated and may be removed in 
+            future releases.
           example: "262c8f17-52b5-4614-9e56-812ae21fa8a7"
         globalLocationId:
           type: string
           format: uuid
-          description: This identifier is copied from the O-Cloud Id assigned by the SMO during the O-Cloud deployment
+          deprecated: true
+          description: |
+            This identifier is copied from the O-Cloud Id assigned by the SMO during the O-Cloud deployment. 
+            DEPRECATED: This attribute is deprecated and may be removed in future releases.
+        name:
+          type: string
+          description: Human readable name of the resource pool.
+          example: "my-cluster"
+        oCloudSiteId:
+          type: string
+          format: uuid
+          description: Identifier of the O-Cloud site the resource pool is a part of.
+          example: "7fd364a0-6d82-4e0c-a418-5c1a2f8b9c3e"
+        description:
+          type: string
+          description: Human readable description of the resource pool.
         location:
           type: string
-          description: Information about the geographical location of the resource pool as detected by the O-Cloud.
+          deprecated: true
+          description: |
+            Information about the geographical location of the resource pool as detected by the O-Cloud. 
+            DEPRECATED: This attribute is deprecated and may be removed in future releases.
           example: "EU"
         extensions:
           type: object
@@ -1520,6 +1550,7 @@ components:
       - oCloudId
       - globalLocationId
       - name
+      - oCloudSiteId
       - description
 
     Resource:

@@ -67,7 +67,6 @@ func ResourceTypeToModel(record *ResourceType, alarmDictionary *common.AlarmDict
 	object := generated.ResourceType{
 		AlarmDictionary: alarmDictionary,
 		Description:     record.Description,
-		Extensions:      record.Extensions,
 		Model:           record.Model,
 		Name:            record.Name,
 		ResourceClass:   generated.ResourceTypeResourceClass(record.ResourceClass),
@@ -75,6 +74,11 @@ func ResourceTypeToModel(record *ResourceType, alarmDictionary *common.AlarmDict
 		ResourceTypeId:  record.ResourceTypeID,
 		Vendor:          record.Vendor,
 		Version:         record.Version,
+	}
+
+	// Handle optional Extensions field
+	if record.Extensions != nil {
+		object.Extensions = &record.Extensions
 	}
 
 	return object
