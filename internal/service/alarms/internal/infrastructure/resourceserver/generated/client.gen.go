@@ -33,6 +33,11 @@ const (
 	N2 InventoryChangeNotificationNotificationEventType = 2
 )
 
+// Defines values for LocationInfoCoordinateType.
+const (
+	Point LocationInfoCoordinateType = "Point"
+)
+
 // Defines values for ResourceTypeResourceClass.
 const (
 	ResourceTypeResourceClassCOMPUTE    ResourceTypeResourceClass = "COMPUTE"
@@ -111,16 +116,65 @@ type InventoryChangeNotification struct {
 // InventoryChangeNotificationNotificationEventType One of the following values: 0 - create, 1 - modify, 2 - delete
 type InventoryChangeNotificationNotificationEventType int
 
+// LocationInfo Information about a location where O-Cloud Sites can be available.
+//
+// NOTE: Per O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00 3.2.6.2.16, at least one of 'coordinate',
+// 'civicAddress', or 'address' shall be provided when creating location data.
+type LocationInfo struct {
+	// Address Human readable format of address of the location.
+	Address *string `json:"address,omitempty"`
+
+	// CivicAddress Civic address of the location. Includes zero or more elements comprising the civic address.
+	CivicAddress *[]struct {
+		// CaType Describes the content type of caValue. The value of caType shall comply with IETF RFC 4776.
+		CaType int `json:"caType"`
+
+		// CaValue Content of civic address element corresponding to the caType.
+		CaValue string `json:"caValue"`
+	} `json:"civicAddress,omitempty"`
+
+	// Coordinate The coordinates (including latitude and longitude) of the location. The content of this attribute
+	// follows the provisions for the "Point" geometry object as defined in IETF RFC 7946.
+	Coordinate *struct {
+		// Coordinates Longitude and latitude coordinates [longitude, latitude]
+		Coordinates *[]float32 `json:"coordinates,omitempty"`
+
+		// Type GeoJSON geometry type
+		Type *LocationInfoCoordinateType `json:"type,omitempty"`
+	} `json:"coordinate,omitempty"`
+
+	// Description Human readable description of the location.
+	Description string `json:"description"`
+
+	// Extensions List of metadata key-value pairs used to associate meaningful metadata to the related location.
+	Extensions *map[string]interface{} `json:"extensions,omitempty"`
+
+	// GlobalLocationId Identifier of the location as defined by the SMO.
+	GlobalLocationId string `json:"globalLocationId"`
+
+	// Name Human readable name of the location as defined by the SMO.
+	Name string `json:"name"`
+
+	// OCloudSiteIds List of O-Cloud Site identifiers referencing the O-Cloud Sites available at the location.
+	OCloudSiteIds *[]openapi_types.UUID `json:"oCloudSiteIds,omitempty"`
+}
+
+// LocationInfoCoordinateType GeoJSON geometry type
+type LocationInfoCoordinateType string
+
 // OCloudInfo defines model for OCloudInfo.
 type OCloudInfo struct {
 	// Description Human readable description of the O-Cloud as provided by the SMO at cloud genesis.
-	Description string                  `json:"description"`
-	Extensions  *map[string]interface{} `json:"extensions,omitempty"`
+	Description string `json:"description"`
 
-	// GlobalcloudId Identifier of the O-Cloud instance assigned by the SMO. This identifier is globally unique across O-Cloud
-	// instances known to the SMO. This value was provided by the SMO at cloud genesis and is stored in the O-Cloud
-	// IMS Inventory.
-	GlobalcloudId openapi_types.UUID `json:"globalcloudId"`
+	// Extensions These are unspecified (not standardized) properties (keys) which are tailored by the vendor to extend the
+	// information provided about the O-Cloud.
+	Extensions *map[string]interface{} `json:"extensions,omitempty"`
+
+	// GlobalCloudId Identifier of the O-Cloud instance assigned by the SMO. This identifier is globally unique across O-Cloud
+	// instances known to the SMO. This value was provided by the SMO with the callback URI at the beginning of
+	// O-Cloud genesis and used in registration at the end of genesis.
+	GlobalCloudId openapi_types.UUID `json:"globalCloudId"`
 
 	// Name Human readable name of the O-Cloud as identified by the SMO at cloud genesis.
 	Name string `json:"name"`
@@ -128,8 +182,30 @@ type OCloudInfo struct {
 	// OCloudId Identifier of the O-Cloud instance. Internally generated within an O-Cloud instance.
 	OCloudId openapi_types.UUID `json:"oCloudId"`
 
-	// ServiceUri The URI root to all services provided by the O2ims interface. Inventory is one of these services.
+	// ServiceUri The fully qualified URI root to all services provided by the O2ims interface, Inventory only being one of
+	// them. Since the O2ims provides multiple services this entry is for the {apiRoot} only.
 	ServiceUri string `json:"serviceUri"`
+}
+
+// OCloudSiteInfo Information about an O-Cloud site instance.
+type OCloudSiteInfo struct {
+	// Description Human readable description of the O-Cloud site as provided by the cloud provider.
+	Description string `json:"description"`
+
+	// Extensions List of metadata key-value pairs used to associate meaningful metadata to the related O-Cloud site.
+	Extensions *map[string]interface{} `json:"extensions,omitempty"`
+
+	// GlobalLocationId Identifier of location where the O-Cloud site is deployed at.
+	GlobalLocationId string `json:"globalLocationId"`
+
+	// Name Human readable name of the O-Cloud site as identified by the cloud provider.
+	Name string `json:"name"`
+
+	// OCloudSiteId Identifier of the O-Cloud site. Locally unique within the scope of an O-Cloud instance.
+	OCloudSiteId openapi_types.UUID `json:"oCloudSiteId"`
+
+	// ResourcePools List of resource pools that are part of the O-Cloud site.
+	ResourcePools []openapi_types.UUID `json:"resourcePools"`
 }
 
 // Resource Information about a resource.
@@ -169,17 +245,26 @@ type ResourcePool struct {
 	// Extensions List of metadata key-value pairs used to associate meaningful metadata to the related resource pool.
 	Extensions *map[string]interface{} `json:"extensions,omitempty"`
 
-	// GlobalLocationId This identifier is copied from the O-Cloud Id assigned by the SMO during the O-Cloud deployment
+	// GlobalLocationId This identifier is copied from the O-Cloud Id assigned by the SMO during the O-Cloud deployment.
+	// DEPRECATED: This attribute is deprecated and may be removed in future releases.
+	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 	GlobalLocationId openapi_types.UUID `json:"globalLocationId"`
 
 	// Location Information about the geographical location of the resource pool as detected by the O-Cloud.
+	// DEPRECATED: This attribute is deprecated and may be removed in future releases.
+	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 	Location *string `json:"location,omitempty"`
 
 	// Name Human readable name of the resource pool.
 	Name string `json:"name"`
 
-	// OCloudId Identifier for the containing O-Cloud.
+	// OCloudId Identifier for the containing O-Cloud. DEPRECATED: This attribute is deprecated and may be removed in
+	// future releases.
+	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 	OCloudId openapi_types.UUID `json:"oCloudId"`
+
+	// OCloudSiteId Identifier of the O-Cloud site the resource pool is a part of.
+	OCloudSiteId openapi_types.UUID `json:"oCloudSiteId"`
 
 	// ResourcePoolId Identifier for the Resource Pool in the O-Cloud instance. This identifier is allocated by the O-Cloud.
 	ResourcePoolId openapi_types.UUID `json:"resourcePoolId"`
@@ -187,14 +272,20 @@ type ResourcePool struct {
 
 // ResourceType Information about a resource type.
 type ResourceType struct {
-	// AlarmDictionary Information about an alarm dictionary.
+	// AlarmDictionary Dictionary of alarms for this resource type. DEPRECATED: This attribute is deprecated and may be removed
+	// in future releases. Use alarmDictionaryId instead.
+	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 	AlarmDictionary *externalRef0.AlarmDictionary `json:"alarmDictionary,omitempty"`
+
+	// AlarmDictionaryId Identifier of the Alarm Dictionary for this resource type. The IMS shall ensure that the identifier points
+	// to the same dictionary available under the URI path of the resource type.
+	AlarmDictionaryId *openapi_types.UUID `json:"alarmDictionaryId,omitempty"`
 
 	// Description Human readable description of the resource type.
 	Description string `json:"description"`
 
 	// Extensions List of metadata key-value pairs used to associate meaningful metadata to the related resource type.
-	Extensions map[string]interface{} `json:"extensions"`
+	Extensions *map[string]interface{} `json:"extensions,omitempty"`
 
 	// Model Information about the model of the resource as defined by its provider.
 	Model string `json:"model"`
@@ -205,7 +296,7 @@ type ResourceType struct {
 	// ResourceClass Functional role of the resource type within the cloud.
 	ResourceClass ResourceTypeResourceClass `json:"resourceClass"`
 
-	// ResourceKind Value describing “physicality” of the resource type.
+	// ResourceKind Value describing "physicality" of the resource type.
 	ResourceKind ResourceTypeResourceKind `json:"resourceKind"`
 
 	// ResourceTypeId Identifier for the Resource Type. This identifier is allocated by the O-Cloud.
@@ -221,7 +312,7 @@ type ResourceType struct {
 // ResourceTypeResourceClass Functional role of the resource type within the cloud.
 type ResourceTypeResourceClass string
 
-// ResourceTypeResourceKind Value describing “physicality” of the resource type.
+// ResourceTypeResourceKind Value describing "physicality" of the resource type.
 type ResourceTypeResourceKind string
 
 // Subscription Information about an inventory subscription.
@@ -243,6 +334,12 @@ type Subscription struct {
 
 // DeploymentManagerId defines model for deploymentManagerId.
 type DeploymentManagerId = openapi_types.UUID
+
+// GlobalLocationId defines model for globalLocationId.
+type GlobalLocationId = string
+
+// OCloudSiteId defines model for oCloudSiteId.
+type OCloudSiteId = openapi_types.UUID
 
 // ResourceId defines model for resourceId.
 type ResourceId = openapi_types.UUID
@@ -387,6 +484,190 @@ type GetAlarmDictionariesParams struct {
 
 // GetDeploymentManagersParams defines parameters for GetDeploymentManagers.
 type GetDeploymentManagersParams struct {
+	// AllFields This URI query parameter requests that all complex attributes are included in the response.
+	//
+	// ```
+	// all_fields
+	// ```
+	AllFields *externalRef0.AllFields `form:"all_fields,omitempty" json:"all_fields,omitempty"`
+
+	// ExcludeFields Comma separated list of field references to exclude from the result.
+	//
+	// Each field reference is a field name, or a sequence of field names separated by slashes. For
+	// example, to exclude the `country` subfield of the `extensions` field:
+	//
+	// ```
+	// exclude_fields=extensions/country
+	// ```
+	//
+	// When this parameter isn't used no field will be excluded.
+	//
+	// Fields in this list will be excluded even if they are explicitly included using the
+	// `fields` parameter.
+	ExcludeFields *externalRef0.ExcludeFields `form:"exclude_fields,omitempty" json:"exclude_fields,omitempty"`
+
+	// Fields Comma separated list of field references to include in the result.
+	//
+	// Each field reference is a field name, or a sequence of field names separated by slashes. For
+	// example, to get the `name` field and the `country` subfield of the `extensions` field:
+	//
+	// ```
+	// fields=name,extensions/country
+	// ```
+	//
+	// When this parameter isn't used all the fields will be returned.
+	Fields *externalRef0.Fields `form:"fields,omitempty" json:"fields,omitempty"`
+
+	// Filter Search criteria.
+	//
+	// Contains one or more search criteria, separated by semicolons. Each search criteria is a
+	// tuple containing an operator, a field reference and one or more values. The operator can
+	// be any of the following strings:
+	//
+	// | Operator | Meaning                                                     |
+	// |----------|-------------------------------------------------------------|
+	// | `cont`   | Matches if the field contains the value                     |
+	// | `eq`     | Matches if the field is equal to the value                  |
+	// | `gt`     | Matches if the field is greater than the value              |
+	// | `gte`    | Matches if the field is greater than or equal to the value  |
+	// | `in`     | Matches if the field is one of the values                   |
+	// | `lt`     | Matches if the field is less than the value                 |
+	// | `lte`    | Matches if the field is less than or equal to the the value |
+	// | `ncont`  | Matches if the field does not contain the value             |
+	// | `neq`    | Matches if the field is not equal to the value              |
+	// | `nin`    | Matches if the field is not one of the values               |
+	//
+	// The field reference is the name of one of the fields of the object, or a sequence of
+	// name of fields separated by slashes. For example, to use the `country` sub-field inside
+	// the `extensions` field:
+	//
+	// ```
+	// filter=(eq,extensions/country,EQ)
+	// ```
+	//
+	// The values are the arguments of the operator. For example, the `eq` operator compares
+	// checks if the value of the field is equal to the value.
+	//
+	// The `in` and `nin` operators support multiple values. For example, to check if the `country`
+	// sub-field inside the `extensions` field is either `ES` or `US:
+	//
+	// ```
+	// filter=(in,extensions/country,ES,US)
+	// ```
+	//
+	// When values contain commas, slashes or spaces they need to be surrounded by single quotes.
+	// For example, to check if the `name` field is the string `my cluster`:
+	//
+	// ```
+	// filter=(eq,name,'my cluster')
+	// ```
+	//
+	// When multiple criteria separated by semicolons are used, all of them must match for the
+	// complete condition to match. For example, the following will check if the `name` is
+	// `my cluster` *and* the `country` extension is `ES`:
+	//
+	// ```
+	// filter=(eq,name,'my cluster');(eq,extensions/country,ES)
+	// ```
+	//
+	// When this parameter isn't used all the results will be returned.
+	Filter *externalRef0.Filter `form:"filter,omitempty" json:"filter,omitempty"`
+}
+
+// GetLocationsParams defines parameters for GetLocations.
+type GetLocationsParams struct {
+	// AllFields This URI query parameter requests that all complex attributes are included in the response.
+	//
+	// ```
+	// all_fields
+	// ```
+	AllFields *externalRef0.AllFields `form:"all_fields,omitempty" json:"all_fields,omitempty"`
+
+	// ExcludeFields Comma separated list of field references to exclude from the result.
+	//
+	// Each field reference is a field name, or a sequence of field names separated by slashes. For
+	// example, to exclude the `country` subfield of the `extensions` field:
+	//
+	// ```
+	// exclude_fields=extensions/country
+	// ```
+	//
+	// When this parameter isn't used no field will be excluded.
+	//
+	// Fields in this list will be excluded even if they are explicitly included using the
+	// `fields` parameter.
+	ExcludeFields *externalRef0.ExcludeFields `form:"exclude_fields,omitempty" json:"exclude_fields,omitempty"`
+
+	// Fields Comma separated list of field references to include in the result.
+	//
+	// Each field reference is a field name, or a sequence of field names separated by slashes. For
+	// example, to get the `name` field and the `country` subfield of the `extensions` field:
+	//
+	// ```
+	// fields=name,extensions/country
+	// ```
+	//
+	// When this parameter isn't used all the fields will be returned.
+	Fields *externalRef0.Fields `form:"fields,omitempty" json:"fields,omitempty"`
+
+	// Filter Search criteria.
+	//
+	// Contains one or more search criteria, separated by semicolons. Each search criteria is a
+	// tuple containing an operator, a field reference and one or more values. The operator can
+	// be any of the following strings:
+	//
+	// | Operator | Meaning                                                     |
+	// |----------|-------------------------------------------------------------|
+	// | `cont`   | Matches if the field contains the value                     |
+	// | `eq`     | Matches if the field is equal to the value                  |
+	// | `gt`     | Matches if the field is greater than the value              |
+	// | `gte`    | Matches if the field is greater than or equal to the value  |
+	// | `in`     | Matches if the field is one of the values                   |
+	// | `lt`     | Matches if the field is less than the value                 |
+	// | `lte`    | Matches if the field is less than or equal to the the value |
+	// | `ncont`  | Matches if the field does not contain the value             |
+	// | `neq`    | Matches if the field is not equal to the value              |
+	// | `nin`    | Matches if the field is not one of the values               |
+	//
+	// The field reference is the name of one of the fields of the object, or a sequence of
+	// name of fields separated by slashes. For example, to use the `country` sub-field inside
+	// the `extensions` field:
+	//
+	// ```
+	// filter=(eq,extensions/country,EQ)
+	// ```
+	//
+	// The values are the arguments of the operator. For example, the `eq` operator compares
+	// checks if the value of the field is equal to the value.
+	//
+	// The `in` and `nin` operators support multiple values. For example, to check if the `country`
+	// sub-field inside the `extensions` field is either `ES` or `US:
+	//
+	// ```
+	// filter=(in,extensions/country,ES,US)
+	// ```
+	//
+	// When values contain commas, slashes or spaces they need to be surrounded by single quotes.
+	// For example, to check if the `name` field is the string `my cluster`:
+	//
+	// ```
+	// filter=(eq,name,'my cluster')
+	// ```
+	//
+	// When multiple criteria separated by semicolons are used, all of them must match for the
+	// complete condition to match. For example, the following will check if the `name` is
+	// `my cluster` *and* the `country` extension is `ES`:
+	//
+	// ```
+	// filter=(eq,name,'my cluster');(eq,extensions/country,ES)
+	// ```
+	//
+	// When this parameter isn't used all the results will be returned.
+	Filter *externalRef0.Filter `form:"filter,omitempty" json:"filter,omitempty"`
+}
+
+// GetOCloudSitesParams defines parameters for GetOCloudSites.
+type GetOCloudSitesParams struct {
 	// AllFields This URI query parameter requests that all complex attributes are included in the response.
 	//
 	// ```
@@ -945,6 +1226,18 @@ type ClientInterface interface {
 	// GetInternalResourceById request
 	GetInternalResourceById(ctx context.Context, resourceId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetLocations request
+	GetLocations(ctx context.Context, params *GetLocationsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetLocation request
+	GetLocation(ctx context.Context, globalLocationId GlobalLocationId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOCloudSites request
+	GetOCloudSites(ctx context.Context, params *GetOCloudSitesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOCloudSite request
+	GetOCloudSite(ctx context.Context, oCloudSiteId OCloudSiteId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetResourcePools request
 	GetResourcePools(ctx context.Context, params *GetResourcePoolsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -1067,6 +1360,54 @@ func (c *Client) GetDeploymentManager(ctx context.Context, deploymentManagerId D
 
 func (c *Client) GetInternalResourceById(ctx context.Context, resourceId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetInternalResourceByIdRequest(c.Server, resourceId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetLocations(ctx context.Context, params *GetLocationsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetLocationsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetLocation(ctx context.Context, globalLocationId GlobalLocationId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetLocationRequest(c.Server, globalLocationId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetOCloudSites(ctx context.Context, params *GetOCloudSitesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOCloudSitesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetOCloudSite(ctx context.Context, oCloudSiteId OCloudSiteId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOCloudSiteRequest(c.Server, oCloudSiteId)
 	if err != nil {
 		return nil, err
 	}
@@ -1635,6 +1976,268 @@ func NewGetInternalResourceByIdRequest(server string, resourceId openapi_types.U
 	}
 
 	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v1/internal/resources/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetLocationsRequest generates requests for GetLocations
+func NewGetLocationsRequest(server string, params *GetLocationsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v1/locations")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.AllFields != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "all_fields", runtime.ParamLocationQuery, *params.AllFields); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.ExcludeFields != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "exclude_fields", runtime.ParamLocationQuery, *params.ExcludeFields); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Fields != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "fields", runtime.ParamLocationQuery, *params.Fields); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Filter != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "filter", runtime.ParamLocationQuery, *params.Filter); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetLocationRequest generates requests for GetLocation
+func NewGetLocationRequest(server string, globalLocationId GlobalLocationId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "globalLocationId", runtime.ParamLocationPath, globalLocationId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v1/locations/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetOCloudSitesRequest generates requests for GetOCloudSites
+func NewGetOCloudSitesRequest(server string, params *GetOCloudSitesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v1/oCloudSites")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.AllFields != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "all_fields", runtime.ParamLocationQuery, *params.AllFields); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.ExcludeFields != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "exclude_fields", runtime.ParamLocationQuery, *params.ExcludeFields); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Fields != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "fields", runtime.ParamLocationQuery, *params.Fields); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Filter != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "filter", runtime.ParamLocationQuery, *params.Filter); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetOCloudSiteRequest generates requests for GetOCloudSite
+func NewGetOCloudSiteRequest(server string, oCloudSiteId OCloudSiteId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "oCloudSiteId", runtime.ParamLocationPath, oCloudSiteId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v1/oCloudSites/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2365,6 +2968,18 @@ type ClientWithResponsesInterface interface {
 	// GetInternalResourceByIdWithResponse request
 	GetInternalResourceByIdWithResponse(ctx context.Context, resourceId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetInternalResourceByIdResponse, error)
 
+	// GetLocationsWithResponse request
+	GetLocationsWithResponse(ctx context.Context, params *GetLocationsParams, reqEditors ...RequestEditorFn) (*GetLocationsResponse, error)
+
+	// GetLocationWithResponse request
+	GetLocationWithResponse(ctx context.Context, globalLocationId GlobalLocationId, reqEditors ...RequestEditorFn) (*GetLocationResponse, error)
+
+	// GetOCloudSitesWithResponse request
+	GetOCloudSitesWithResponse(ctx context.Context, params *GetOCloudSitesParams, reqEditors ...RequestEditorFn) (*GetOCloudSitesResponse, error)
+
+	// GetOCloudSiteWithResponse request
+	GetOCloudSiteWithResponse(ctx context.Context, oCloudSiteId OCloudSiteId, reqEditors ...RequestEditorFn) (*GetOCloudSiteResponse, error)
+
 	// GetResourcePoolsWithResponse request
 	GetResourcePoolsWithResponse(ctx context.Context, params *GetResourcePoolsParams, reqEditors ...RequestEditorFn) (*GetResourcePoolsResponse, error)
 
@@ -2603,6 +3218,112 @@ func (r GetInternalResourceByIdResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r GetInternalResourceByIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetLocationsResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON200                   *[]LocationInfo
+	ApplicationProblemJSON400 *externalRef0.ProblemDetails
+	ApplicationProblemJSON401 *externalRef0.ProblemDetails
+	ApplicationProblemJSON403 *externalRef0.ProblemDetails
+	ApplicationProblemJSON500 *externalRef0.ProblemDetails
+}
+
+// Status returns HTTPResponse.Status
+func (r GetLocationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetLocationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetLocationResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON200                   *LocationInfo
+	ApplicationProblemJSON400 *externalRef0.ProblemDetails
+	ApplicationProblemJSON401 *externalRef0.ProblemDetails
+	ApplicationProblemJSON403 *externalRef0.ProblemDetails
+	ApplicationProblemJSON404 *externalRef0.ProblemDetails
+	ApplicationProblemJSON500 *externalRef0.ProblemDetails
+}
+
+// Status returns HTTPResponse.Status
+func (r GetLocationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetLocationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetOCloudSitesResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON200                   *[]OCloudSiteInfo
+	ApplicationProblemJSON400 *externalRef0.ProblemDetails
+	ApplicationProblemJSON401 *externalRef0.ProblemDetails
+	ApplicationProblemJSON403 *externalRef0.ProblemDetails
+	ApplicationProblemJSON500 *externalRef0.ProblemDetails
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOCloudSitesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOCloudSitesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetOCloudSiteResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON200                   *OCloudSiteInfo
+	ApplicationProblemJSON400 *externalRef0.ProblemDetails
+	ApplicationProblemJSON401 *externalRef0.ProblemDetails
+	ApplicationProblemJSON403 *externalRef0.ProblemDetails
+	ApplicationProblemJSON404 *externalRef0.ProblemDetails
+	ApplicationProblemJSON500 *externalRef0.ProblemDetails
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOCloudSiteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOCloudSiteResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -2970,6 +3691,42 @@ func (c *ClientWithResponses) GetInternalResourceByIdWithResponse(ctx context.Co
 		return nil, err
 	}
 	return ParseGetInternalResourceByIdResponse(rsp)
+}
+
+// GetLocationsWithResponse request returning *GetLocationsResponse
+func (c *ClientWithResponses) GetLocationsWithResponse(ctx context.Context, params *GetLocationsParams, reqEditors ...RequestEditorFn) (*GetLocationsResponse, error) {
+	rsp, err := c.GetLocations(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetLocationsResponse(rsp)
+}
+
+// GetLocationWithResponse request returning *GetLocationResponse
+func (c *ClientWithResponses) GetLocationWithResponse(ctx context.Context, globalLocationId GlobalLocationId, reqEditors ...RequestEditorFn) (*GetLocationResponse, error) {
+	rsp, err := c.GetLocation(ctx, globalLocationId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetLocationResponse(rsp)
+}
+
+// GetOCloudSitesWithResponse request returning *GetOCloudSitesResponse
+func (c *ClientWithResponses) GetOCloudSitesWithResponse(ctx context.Context, params *GetOCloudSitesParams, reqEditors ...RequestEditorFn) (*GetOCloudSitesResponse, error) {
+	rsp, err := c.GetOCloudSites(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOCloudSitesResponse(rsp)
+}
+
+// GetOCloudSiteWithResponse request returning *GetOCloudSiteResponse
+func (c *ClientWithResponses) GetOCloudSiteWithResponse(ctx context.Context, oCloudSiteId OCloudSiteId, reqEditors ...RequestEditorFn) (*GetOCloudSiteResponse, error) {
+	rsp, err := c.GetOCloudSite(ctx, oCloudSiteId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOCloudSiteResponse(rsp)
 }
 
 // GetResourcePoolsWithResponse request returning *GetResourcePoolsResponse
@@ -3491,6 +4248,236 @@ func ParseGetInternalResourceByIdResponse(rsp *http.Response) (*GetInternalResou
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetLocationsResponse parses an HTTP response from a GetLocationsWithResponse call
+func ParseGetLocationsResponse(rsp *http.Response) (*GetLocationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetLocationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []LocationInfo
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetLocationResponse parses an HTTP response from a GetLocationWithResponse call
+func ParseGetLocationResponse(rsp *http.Response) (*GetLocationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetLocationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest LocationInfo
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOCloudSitesResponse parses an HTTP response from a GetOCloudSitesWithResponse call
+func ParseGetOCloudSitesResponse(rsp *http.Response) (*GetOCloudSitesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOCloudSitesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []OCloudSiteInfo
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOCloudSiteResponse parses an HTTP response from a GetOCloudSiteWithResponse call
+func ParseGetOCloudSiteResponse(rsp *http.Response) (*GetOCloudSiteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOCloudSiteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OCloudSiteInfo
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest externalRef0.ProblemDetails
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest externalRef0.ProblemDetails
@@ -4143,120 +5130,143 @@ func ParseGetSubscriptionResponse(rsp *http.Response) (*GetSubscriptionResponse,
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"kRENK7gAAA==",
+	"H4sIAAAAAAAC/+x9eXPbOLbvV0Hxvaok80RZm2XZU1Ov3LbTrddJ7Oel505FqTZEghYmJKAAoB112t/9",
+	"FhaSIAlq8dbJXOWPbksigXMODn5nwQHwzQtoMqcEEcG9g2/eHDKYIIGY+hTQJKHkdzjHv9M5IvL/MIYs",
+	"OcaBwJRAthiH8rkQ8YDhufzOO/CuCP6SIoBDRASOMGKARgASoF4FYf5ue0K8loe+wmQeI+/A64/CYDrs",
+	"T/1pN+r4g7AX+KPRNPJ3h4PBcLjXQVGn67U8LPuYQzHzWh6BiXyzTlTLY+hLihkKvQPBUtTyeDBDCZTU",
+	"RpQlUHgHXppi+aRYzGUjXDBMbrz7+5ab7/gtRnHI6/xezjAHV+dj8CVFbAFyEQJJAuKCAzGDAsA4BlLY",
+	"MfoKoBAMT1OBOIAMAUyCOA1RCDABYoYAQ3xOCUftCZmQ6+vrCYFx/Huk+jdfZIJQfdqSyJ7zbJZDFME0",
+	"ljxHMOZIPp/GMZxKuWvxrCUE9FXR2SSII5okEHAkJSBQCGLMhRx7RRBgKEIMkQBxICgwTYGI0STjOY2F",
+	"4vgEBrPqSwBzAM2XktcWoAzIzr6k6ue8G/kjt4iYLgCPIZ8h3gZvKZsQo3AtmwpJwHVAUyLY4hrwdKrb",
+	"opH+BX0ViHBMCb/WvRzkA2NaMEL/R/HkjmnOPDch/5whObqYWxqCOXklQMpRCAg1DNzhOAZTlNEWKpFo",
+	"kWv9wFxLtvogQLeIAKxoXii9Ql/nMQ6wiBeFiqUckxv5yIRca6KvC4KqU1JJus5Tg/KVZVFSwLXUK3oC",
+	"vTJ8WjPp5bXqBgmtN/ItozEAkvARambUq2E81tUxCUGyJ91arkAMiZQRpWmPGP2Hj3osEKuP+gWCLJiB",
+	"gGGBGIZqDI8oERATDihBcqgSyhDg5QdblWFCCQ5oTAlvA6UClceVCkyISOcxAoFuX84QSACdIwYFZa1c",
+	"RwrFkcNpE3EL41Qqw+UM5e+BAJIJmcqHF9kgRzSO6Z3sQEuFqzH+E5xm7/wJ3iOoKHjIvz8n5E8//2f9",
+	"+YB/si2prkRcy5bBeyiCGeIGYYxEgmxE5FdKCI10gWv05Vp/creFOUBfUhjLObSkOd3WjVjV1g1DUE4A",
+	"MYOkqb2sLXS9QVuUOenUbWGyii6lNlHxJm+UV7ySxxhxvpRBq61VPBZtVRks2tZtEaMUDW2FFHFAqMiU",
+	"o4E205ZRima6ZEur9MK0ZYS/vK1V8v9TzsjL/K2SsZAvSbyTDVjtGEA1n+j03ygQdVsyIdmr5vlGewJs",
+	"c5Jyh4PiG5YIxyGakNX2Q4LsP16jLw5Ab538/ze5CbksxCJdCNkwZDdpIiOEnEEDVlVaFRFfri0ApMkc",
+	"MsQnJJih4HM+HnoE6crJ384oUtNKYq4e46wDDng6n1MmQJLGAksIz4C4KkVFQNZ/LsoJqcqywRQr+rCY",
+	"IQauTy6u5dheX13UBYyJU8AXrauLN2UzbYSczRFpGSFvZWogO+BzqLwa6c4RhELJxhQBnjJGUxIatcHk",
+	"JkbgS0oF4u0JWc637ZEYddZ2CFwnCxDEKReIXTv1RnkDr4qnXlX4yUcgt6wNdljplfRHWsoh0VqQgCTl",
+	"AiRy3oKIMu2h6nhJKMMcYukYSJbUQw7dK2yr8mxcnGMZP1mcgr9BEv6tMr3yAZQikqO9pjz+3jS9qkO/",
+	"2kPTfutqFy0npKDjTaN/pvys5f5ZiOYxXcjJ/h4SeIPY+gE+KN4FiX65Su1wt9fr7g4H/mja2fUH3SH0",
+	"p1HQ94PebmcaDAeoC6E7wnfR9bgY/yamUxi/owGUXLnYHJf4k6MSm6cB5CBEESZateVPF+9Pq9xmT/sI",
+	"cuE3pC5qZCzjqs4FPYppGl5ggdbj4NRXLwCOBWoD2W0cL0CqB/QOi5mx1jygc2TyNtk7mHABSYCqfO5F",
+	"YX84gB1/GI56/gB1Ah8OuiN/N+jCXjSa7gd95Ga+RP3jhpMhTlMWoA30NXvl6fJQFhFPw80ZpfEDOAJz",
+	"SuOnZ8tQ8zSsXS7mDxksIFussdaFw/3dvV2/H+13/AGa7vrTUQT9UTRCvX60vx9EneWsGWoexxpPpzkn",
+	"G7Bmv1blDMJRP+xMoQ93EfIHUTfyp2g08KN+fzDtdbvDYRC5OasQ8xjO7rOHVW7muArFDtwhukkFlVOa",
+	"iiXWYc6kMycw0hlnOIdTHOPsMwy12YfxWem5ComtlQRIULMbzxzHAsELvoBhTDmcWEg/XeWbaizIPyeE",
+	"I3aLpaM2hdKE0zzzpDSLS5su4V37b+6etCgMUzp8kExJggMsFk8uCXgLsUr/tizqJLcMSW5QCLKuJd+Z",
+	"AThvZGlC1uZpLQ/DMlzGF3QJDajMuzWdsE2ZGVZDfPshjsiKiVGRdZWJX9IEEsAQDKWkgfVjZo3rc6JE",
+	"5fvcp3P1XTia9a7fmQxpggQMoYDgM1r4OuiaQ8y4djYFBZBzGmAoEEh01ilK4+Ito68MxUqia4+xhqAn",
+	"kkeNce01rKk2VkbPqQm9YS8YRd09f7c33fUHw+7A30e7Q3/U7UHU60ZwBPfW0QQDAlcMuxaIEIhS6WjJ",
+	"AFfSF6r1Iin/ulDVn2oWai5Oe2HCQQYybXCBSaCjVP3LnNFbHCIOJiQPwbKnWzrUQDIMkbMjk8o3OMfn",
+	"lIp7QElcW4ibCTHnBzs7yaJt9O9gOBj0nWxnKJp5sEuUseLqHpt1sTvEkNRDfEMKiDzViCNdw9f8Dbib",
+	"4WCmeXHAtCGCaz6wQIkbGc0XkDG4ML5IZhI/NkQYSpPL89xSwNKwO4XRKls0C9I/OebNmNwiIihbHM0g",
+	"uUEfqFRm3dRaRpYAnLUAAtUEIHYbNWtLCU8TxC5WOC55TihTthxdsxay9Rbb61CjsXLi2ASeSOIv1RNV",
+	"Ek6tZFse5usUygHoAB8EKkPbAl3gg4SGOFq0QA/4IEQxEkhrOEkT7+Bjp9Vt9QrxYyKQRJoKLS45HGaR",
+	"kmVzBAUMzaXdJEJrqN2KWpMT60lC68E5itwDcHX+Lpsd+snM/umsZqbLWcLDKVf5cA+8Pj55d3J58qYN",
+	"xmYVcU6xpJ5OCHXJWRuDxRwVYS8mIIhhyhHot3vtYb68VWRLVcM6n6NyyAsdUGra+YTI2RJj3dScYcpO",
+	"1S8XQlojSMIdysCccmF9XTI3heAqTzWs0GO+vow64PXR+cnh5ckbQBnogtfvT4/Hb//1RnuEpRR+WUoT",
+	"slpMSwWzTBrZ0xOipMw0XGICcs1psMfVBp9AQpZMKLN0apmEJmRNRVotofKIP1JAFUtQQYEmiHIBeG7c",
+	"SETXC4vylNLdTNrBzNWWho+DABIwtbx1lQ7/cHp5cgDOEAOn/vnhh/Y/fx62Ly/ap73x+wt//OHy5Pzt",
+	"4dGJf97p7Pq33W6709GSbffa3WELQAFiBHm+DPIqoJSFmECBXrXAhLwK8C0ODsOQIc5fqUWMV9B8AnwG",
+	"dT4ytwN3M0Q09sopkHMjB9oV35mWVjqHWlAqPtZvVFNwZS+u2+sPwCUKZoTG9GYBDm8RSZELK2zuHJUG",
+	"8tfGLsFYFxdw8AdiNF/6RTHSqyMBTeYMZ/UVILAbK9H7UQa62s51pUvwm7RjsvtD775V/Na3fzslAjJM",
+	"Sw8M7QcuKaNElB/o9ewnfoILcCEYQqL8UKmZXqfj3X+y3KhqgO62z8fq01QvVyivW9lDM3NN83p5PF/8",
+	"0W0ZpVKp/oXKQYLxyeVbcP72CAz29oZtz2Wqc4LrxSK6a9l+aTTNMIGAMl1fFaqBoiY1IElpN2SsCmww",
+	"7Bf9u1Cg7Ge2vGKGuS178TsHr3UBi5pMUGCRhrrWIKbkRn16U1fLS0vi6kcZB2cVZmBCNADrkVETV0WN",
+	"eTAw8c6k+Z944AbRBMlQwSAtLMF0Pip7+4NhJWb4ZjHJvYOP/t5eu9MfDlr9UXu0v9stxKT60kap7Ipa",
+	"r9ciiIx5LYpMLrbcPuYCauUPfHJEAyRNplqDEvh1rH/stbwEk+JDdfyEU+N/RvT/XZx+KIQmtGYYL9Mw",
+	"+smlUY6kyKPyCG5QPEch+AUKYBslUI5kvoOkgk17TS7PsEjjXqLpOkOTddIY2ZL+pl27Rqc526HXSJYM",
+	"iu04WOEJzx3yzCqVPYzctZB+QaMqfVx3jQd2p72gHw58tBsN/b3RfseH0yD0USQt9O5QfuPZxmVlULQ0",
+	"ZncsnjkCdhdE6/xC5qaVoeiRkzETMOS1aPni/amUc6B+v0EEcVx2DHTKj6bhpnPzcoY40gvrhM9RoJNM",
+	"r2VgyAUkIWQh/gOFb0DBKnj9GS3y3Iqq9YA4pqwg9xaRkDJdJyuQCfAmBFtubM5hkVvO0mx1A6GrBw+8",
+	"kwuv5c3SqXcg/9vx7htn/jqZvorYs1XKIqVkzUBXxlj3VKyCwoBRzvP2JL+6RQ4+E3pHMgAr2tMYeNcw",
+	"4Mqj0T5GHE9h8Fnl/sx0m6IbTFR2kkZgQrJOjW4oc6dQFUudu8FcMAMw+nU5KDTKVamSxxsF3aC72w39",
+	"3mh/3x8E+0N/ujeM/EGE9nud4WC6uzddK0WzKQ5aUyCX9QaTIFn4jZOAPkIlpAMvECNqtGXPujjFLHu7",
+	"Vrq/m1Qxo1Qo0xrHeXK3pm2nPZxwIJ1kFsEAtUCeT1RpXjBFStF03KdqxpJyOhnb6eRaMvnBueSDnR1p",
+	"VuIZ5eJg1Ol0VrrZVoa1DAQNGVlLpM1or2zouoE5KZVKVGofnsVeqH4cGKInivmWuZ2IMoPfn5NXKjt5",
+	"CkevkjapyRFzs5gkTZN4VqevOn51xNt8BFc5gi9W6vOQQp+VAGjXkyxRwVI1S7aJikk9ZMLJZNllDfvT",
+	"3h7qDvzB7mjfH4T7fR+ivaEfhgHc3d3v7vcRfEJftFLLtJ5rWpWFC7yyVff18onloqYnBaq86aqxJjR0",
+	"5tqyxJjbzOXDm+CbmQBTpFJAVJVQRIAnMI7VHrqs5oAyQFX9bf5i4Zjp+kMcqVBHZJF4PrL/m6HIO/D+",
+	"106x2XHHVLTs5OJ1JG5eHihtGTeA5CHnSKyCACatNoYx0PmO6hC2AI6stDIYi1LyX3kLuPwKmEEOpggR",
+	"6REXEBemqnoYCw6yCpU8p5b5gFIr55QJHWdK8rPlQukL5kuWVddhOoyGe8Fezx/td3f9wd5g6k/7w31/",
+	"2N0fIdiN9qbDyKV2N4ymc8eI/YoWd5SF0jIQqtLV+km7umyKYkpuOBC0vcFS8vLyQ0dVQqZ0G5ewbISt",
+	"mhirTG4/GO2ivYHfQ/sjf4D6oT+KUOCjXTga7If7w71guEkfTSV8SxgGlyYjrHxJN6LsDvv9vbCD/NEU",
+	"IX+wF/Z9GAVTvx8Me90gimBvupafLeDNci1QGWvlEjMQxDJejBZZmqQGMg+vLKhUhdZqKSsViOVZXrUX",
+	"OaYa/nJ1L6HVMjsie97MlljlpM9iUHT734en2kTTKld1zpCas1l1pWt5tTTLAzqX+Jnvf848mXHoylxk",
+	"OGs/WVSstMGEHJ+cnZ8cHV6eHB9oUClWALQzbAhUOYUELvSugoTe6uxClIqUKTEgyJFJJaycYpkrvY4M",
+	"3JWIN4jeMDif4QDGhVfvUhCdVBUocCDjM/FfYNLJ1ZPECjXtqiQ9Gov9ymmPFYJeqwoOPFJgE7JCZE+V",
+	"LnlM3OPQIrXj24QQzx/ebGoezxSJpCF99eB617ViodZa1ft1u5abslrWxhX+VOKkVYn6c8s8bmi1ip0C",
+	"lRqE8mkh+qv4NFLr8stCBcfm9cNKW/efWivnZ/G4iltkC1k2zfKJNPmPmqUT4gA2cMURqB2YopQMQZW1",
+	"v295a5zyUp94ShbA4q6JJxn9jd9fmIV/RHiqUjgmp23ptypL42BCjJHmEkqLA2Ss1auUhEhPpavzMZhD",
+	"MatBrmvjyLQXjYI92PX74QD5u9EQ+nvTUeDvhx3UjXqwPx0EL1AHXqbxO3OEKjQVUzOhIVrLk5TNqodr",
+	"/JbXSWUQ6c6S/ZffdaaNH2OCM74sE4xCnCbLIP1IRgn17t6mROtkDBiN3V3ZKbcgR2hTK3D14fjk7fjD",
+	"ybHX8o5O359dXZ54Le/DyeU/T89/HX/42Wt5F5en54c/n0iQLCgunm0k+VdMHLNXFa/YIdDEm88WXHph",
+	"WCwmXrO0HBSf/fKvi/HR4Tuv5b07/Vn9VaLS+v3JY8nHGEUY7AZ7g47fH+x1/AEcRj4MRvs+7O3tdbr7",
+	"+9Fw1Ftn8utl0jrpZ0aVM1meO6PdC5ogcETZnOqlvRYYk6Dt7odxJ8D8pn+QYaxZ1XJhy7pz7bbX6Q3a",
+	"3e7a9j+PXJ0JTiOdDC4KNioqWp1kLmfArlPfuCC+vs2uWtmml2c33L+RV8DPGQ1QKE2ZXlEPINHfcelx",
+	"nlGeJ60nJF+YU+Wkdp1/014MntC2+bYd0ER+3rnt7lAFJb/nXP5Op3rriLP2cc1yf3cAobmkkS5p50AV",
+	"vIcpytfDbfmuM2+aDv45ys4PkJ2bzrRIQ6pK3a2zEHRiEYVS97O98rrdYvLbAw8mpFSebxYOlU/CUESZ",
+	"SY2aRrLi+nxNTswQUYuwhi7IChoaqtP55tIuifLFd7lJs3lK4kXz0XDlikgzbVwT1uUxn41/awIylzt/",
+	"m4GbcTLPxq7Ja2GjVRXc7rTda82bEcrXLOU2fpihha8gGc6x3b5dHJxzY1go1eNuGqEU8nbkrVOGzxiK",
+	"8Ney5HZoDyfcxyRikAuWBjKGyEFr57b7cKmqyELaIbwBipujI/PX2u6g7jDfI9t0ROFL+MruPRiKQL2v",
+	"qymWDSUqmQrqvHJab+NS0RENglRtarCSgVoyMeTCPPp3AMMQhS2z8Sls6d1QOD87xDhwh8fHynnT+zbk",
+	"X2o/x/jk2FGzmkWE+QC4gOwsqxyBjm1SZi5ocnUhCoOYo7DYxSR/P2M4kZHdr2gBcBb2VQPL9XKThuIl",
+	"DoNFcEzJDWJFbHabj3uZ8uIcGhlvQ1cwJ02lOfMpg4AJqbxdMI2JQOoon8yeQYXp1ulz6kRBSZD0ZkIE",
+	"ZZt3Uh1mcD5HxIT+UNpjrk+ZUpVhUYQCwVslclr62Dq1ioqTOVSpVMgQzLGKL7hASYMlU0y8g1xoNV6l",
+	"wrV8QOanYmJv6KxpcLis+w/OeC8fST6jTOh4LzOm6jV3i0GMoPy7YUJm2ivdD6SEpmnFHKg3pfBSQSVY",
+	"6eIKykACSSr/rky2q8vT94eX4yM5zQ4/XOkIqUZPcarAOCvick20HMSK/cJ50Regt4hlNZ06taRKOxkk",
+	"PMFCDnieljkhAouFDqMm5Pzk4vJ8fHQ5Pv1woM5WKq1KvL8AF6U6MA2a6izSBJuTANQepMou3EwE6jcn",
+	"11WbNP9sO8QKyVcMDs5P9qSsfDooz5KpeuRKvl/p6MK5AZ7PaAFen/36JkefCWnOa+VS/zvAbdQuUVJq",
+	"3TSRwycYH2+2WVmbO8pReI6koToMGjZb5zPhJsWhqoOV1GYvS18VYgagft050Sr+XR347ZlYB4W6pXNA",
+	"cRM7lSnZNCPcOvJpEw+klP5d3wMpDq9uSCuXPJsH+2yVphzqsEaGVqVZV2ZpTTq2FF6Ui8SKurD2JpY3",
+	"7+FCMfrbyuxFQxZZvy7hpWY0rFRwQNWo8WW2o2j0ocS0CxvGs/L4LKnCU0WcyWJXwhabUrWpc0JyD1NX",
+	"IEsLrgv3g+rLnEbiTqJ4iGJ8i9giL6CYMxqmgWhgGil8b9hP758ffgD6Ce1sImkeSm6lWXHIN30atZgj",
+	"lvFur860dYoXknBCSt8bbtw0/oUmD4Ct0fvOjV5TavU3rX5mfliDqmFClVRgXscSqI4c4O1MsWkah1Kz",
+	"88UlPcAwl2BNlVW/+Rrc2vazfDdBAxqtQM7ShLYTqxvYyFogt67VPGN0GqPkGAmIY8e+4OJ4qsP8boNH",
+	"HFt1SBZW6WLRiHVzQquyPbXAT5P/ZiaQwslcF0017zMMFVuuAz9maQKJn68koa/zGBKTO8zgWs0ZzLP4",
+	"3Bwcb3bbSqmV03JHlBAUZJWSIRRwCjkCAicoBDQVLpjMq9AcJKr9IfmxG8oC4QIolGpnlDZTCCZkLNQC",
+	"8kLN5ChlOky0nCEcgRDlPdW8AXUGTj39KaBIG0qAf7m8PAP6ARDQEBUgs1SU9d3gAovYKRsVD7aqo8jT",
+	"JIFsUWnarE6PRQYM6ghrnX9RZVoWUYI2k9hSt0KgudCud8qko8uzXQsx/iM7TSDShhdzFd8TKzhXp3BP",
+	"POV9HkxjSD5PvFZ1Y7e2yzDm1D6RocEXcO9hrioPDAK1pVrti8/3e/f3R0Pwsf/JqVs14ak9QgFNGbxR",
+	"CXPjEKl1eROcTEhlQEIapPkMzSP3rOnXqH3T1hdX/HL5/t0bfehESRVBca5ughRs5Jl7dTJPa0KwsOw3",
+	"5DxN8qxLRdJNazCZCloybAc0WTkJKhbBzIgcdT65DiThKEgZFtoEaMikMBWzXsPZLYdnY5BKNTs9TMUM",
+	"9KxthzFWxx4wpAYOxhxEMb1TSzQxvdNrX+qZo+IR+aXaGKL+YjRGBzolDMNEHTapPBtwKD+BcxpLg2Q9",
+	"JQcWsfyxc/XR8ZxZG5laz17kX+nnpe7Sz4hcsdgais9oEcQUfi6tiTEE44TvUAaJHCtBAxrvSAOGQz/Q",
+	"oLuj2iplq7VU1SmX6KveHnhMA97kMutdcrmlBRclo9Pttjvg9WkgqGSg1+kN3ngtLy3RXjJTvE19Bkmb",
+	"spudkN6RmMLw/+LwH3uDfY37rv1qcrD10XBSYuNSlr7Y9Ke0OMYBIlxNfXMw6OEcBjMEempppEzZ3d1d",
+	"G6qfFT3mXb7zbnx08uHixO+1O+2ZSGILcr3lNEi9tNZ8D7yeXtBoecax8A68vlmmmUMxU2Jfsfog3ZFb",
+	"a+XkBom6iM7VgdnZaSTmFPHMS5byy1dpcvfAWjE0q4JKgjoPa3Le3s9IHMZxvnCjVq3VXU2KlF6nY85V",
+	"E4gIvcozj81Q7/yb65CzOHn1wWs5XCts5caUNAgQ53qpmk6lJ66XLOsSyLg39V6DpXQb3Ps/j6a/4kQ6",
+	"WPgJhtm1WZqu7vdB1xWRMEEZ/gOFmrD+90HYW8qmOAyRGsbd72UYs33W2TmWiDHK2iXDphY6M5P2sW5i",
+	"XPbk0/2nlmecNz0XS1M52xNx8NHLVuq8T7LP1cuZ68CINte8cXe5Gy2KgyZapdv1GmpNi0d2lt5Cd996",
+	"yPvlC9we1oa550kOxbNhn3U8x0Y4t8YQbdFui3Y/LNoVCq33iD8M7XbKaSaTkVmJf5nvUMm942zrh8NR",
+	"qnbzHwaBD3xZlb09Gj8ft7hkbVmobV/cAHCX68QWa7dY+xJY+xxQW9doC3DrAPpQ5N35VlsguN/UG228",
+	"W3kFIi+eBo+r6xvP6hmuA2gP9BgbxLgFsf8UEBt0Bt8HVZfFmgwKs0X4O6gz1hFNSdj+H+rgOubgk8Du",
+	"pinDzK9JMKGsOV+Yr1cl8N+UNdaq13D4vWz2u04iboFv6739yEBSn7iPiJdrd8NsBiL1a42aIubjekfb",
+	"kPmFQ+b6/XZPEiE3KMEWZLcg+8OCrEOnLZR1oOaD8Xbnm+N+rs0D5cZbKFcj8cZA7LpQ7FlDYwdwPWLt",
+	"xC2pLVxtg+FtMPyXweuToCs2DOzkZ6vufCvOKGwG1ZxxRMLswjhwg0pnLoWYoUDECzBdgPGxKkKjqd6x",
+	"b6oKPxN6Vz+WywXBWX9ZBfZPuni6gsJV4M+Obcw3tDzrVd3PiefFybSbwDizzrP9buZ4Piz5nP7xFhXq",
+	"uSrr2Fip7dbkzGfWunMytq9PXTuwzN9a9/Y41zSzLyvdhpovGmqW7v55kigz14its7aNLX9o5ye2YCmD",
+	"1eK7TWF151v1RMoHBI/53VjLgXRjHK0dlvmsbkUZdB4RIdri2ELNNi7cxoUvtUiaT73HYGNxEO9mTqd9",
+	"vnLTOsap1fbWq3xhr7JyldCT+JW1Qd8C/ta3/OHLqLkBqAxDbUjcHEV3vtlnmz+kiq90m9UqZN0YWEsn",
+	"r7/A9o0CgZ5gC0cmki3ubB3NraP5ctV49vx7HFLWbv1b2+MsXwTYAIznpea3TucLO52l26WexOWsj/oW",
+	"+7c+5w+LpWV1dqwVmRtAHwCmxfKtvornAalNx1VvSxF2Y4CtXBb0IgunGose4XzWpLJFoK33ufU+XyzN",
+	"WS0ReUbILIphNgXP4oZidQjdJkjKHw2jra1n+1Ke7dN6tVuHdmtOtubkr3DAXTj9mNKtde3KekWWqz30",
+	"ja3MCxgZq5ryOyyJbPDqtwi8ReAtAv81Dv3zQPDlYo4emFqWnt2q1LJufpta/osccHXu+dOmlvNR39qB",
+	"bWr5Rz2pqKzNDhzVuPUQLC18Vn3J62P81uJuvKUA+2Bv1VxD+yL+p4aip8gsZ1LZAtDWEd06oi/viAoN",
+	"Oc8ImZUz3xZrQWjtfquIsgeA6WPPe3tJbH3Gk91cEt2C7hZ0t6D71x7t5kK1pzjuzb5yfbN8QH6RfunW",
+	"+KbEwEWpnydIDDxFYP/Y5MKPkxiwxf80iYHaoG8txDYv8GMgbtO9Sg4k5hXYyvC2/P2n+5Y3p9wBnEcM",
+	"qUu+IdkEL/VbpTmrT95AXPxEw8WTOZJlWCjfviVYiu5r2NR9xr6XQFCgJKIRaIs8W+T50ZCnGWX0XF8b",
+	"aDZ36na+2R9NYjJEMRKOWw6P1fccwBJBLozST1YwajOvrkxXoye0BBY0G3VYyFFhO/u2keF/ElroWVfS",
+	"9aVeyWYLEKvmfCWOe64J//LuxbJsmBNXtt7GFu+2ePd9xGXLvKUNKNK9KIY0mBUXvh7sqOOR4hnl4mDU",
+	"6XQUdJlO62c/FteAq7uSmw81NwcsOs6nvG+tbnZpQGmaLguk3uqFvr4VZMe8twAmQZyqEyjzaxwgCUvX",
+	"qRkySh3l58SvQ7mrlKhy2KReVdqoMWvLa6Uxvflhk8bc7azXRtOlb6axeqp2nUYfcn6h6bA47madjkoN",
+	"l9qxNzLff7r/7wAAAP//kR9UihDjAAA=",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

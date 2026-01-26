@@ -140,7 +140,7 @@ func Serve(config *api.ResourceServerConfig) error {
 	}
 
 	// Create the collector
-	resourceCollector := collector.NewCollector(repository, resourceNotifier, hwMgrDataSourceLoader, []collector.DataSource{k8s})
+	resourceCollector := collector.NewCollector(pool, repository, resourceNotifier, hwMgrDataSourceLoader, []collector.DataSource{k8s})
 
 	// Init server
 	// Create the handler
@@ -149,7 +149,7 @@ func Serve(config *api.ResourceServerConfig) error {
 		Repo:   repository,
 		Info: generated.OCloudInfo{
 			Description:   "OpenShift O-Cloud Manager",
-			GlobalcloudId: globalCloudID,
+			GlobalCloudId: globalCloudID,
 			Name:          "OpenShift O-Cloud Manager",
 			OCloudId:      cloudID,
 			ServiceUri:    config.ExternalAddress,

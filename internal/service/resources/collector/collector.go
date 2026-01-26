@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
@@ -67,6 +68,7 @@ type DataSourceLoader interface {
 
 // Collector defines the attributes required by the collector implementation.
 type Collector struct {
+	pool                *pgxpool.Pool // Direct pool injection for transaction operations
 	notificationHandler NotificationHandler
 	repository          *repo.ResourcesRepository
 	dataSources         []DataSource
@@ -75,8 +77,9 @@ type Collector struct {
 }
 
 // NewCollector creates a new collector instance
-func NewCollector(repo *repo.ResourcesRepository, notificationHandler NotificationHandler, loader DataSourceLoader, dataSources []DataSource) *Collector {
+func NewCollector(pool *pgxpool.Pool, repo *repo.ResourcesRepository, notificationHandler NotificationHandler, loader DataSourceLoader, dataSources []DataSource) *Collector {
 	return &Collector{
+		pool:                pool,
 		repository:          repo,
 		notificationHandler: notificationHandler,
 		dataSources:         dataSources,
@@ -251,7 +254,7 @@ func (c *Collector) purgeStaleResources(ctx context.Context, dataSource DataSour
 
 	count := 0
 	for _, resource := range resources {
-		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, resource, resource.ResourceID,
+		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, resource, resource.ResourceID,
 			&resource.ResourcePoolID, func(object interface{}) any {
 				r, _ := object.(models.Resource)
 				return models.ResourceToModel(&r, nil)
@@ -280,7 +283,7 @@ func (c *Collector) purgeStaleResourcePools(ctx context.Context, dataSource Data
 
 	count := 0
 	for _, pool := range pools {
-		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, pool, pool.ResourcePoolID,
+		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, pool, pool.ResourcePoolID,
 			nil, func(object interface{}) any {
 				r, _ := object.(models.ResourcePool)
 				return models.ResourcePoolToModel(&r, commonapi.NewDefaultFieldOptions())
@@ -309,7 +312,7 @@ func (c *Collector) purgeStaleResourceTypes(ctx context.Context, dataSource Data
 
 	count := 0
 	for _, pool := range pools {
-		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, pool, pool.ResourcePoolID,
+		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, pool, pool.ResourcePoolID,
 			nil, func(object interface{}) any {
 				r, _ := object.(models.ResourcePool)
 				return models.ResourcePoolToModel(&r, commonapi.NewDefaultFieldOptions())
@@ -433,7 +436,7 @@ func (c *Collector) collectResources(ctx context.Context, dataSource ResourceDat
 		alarmDict := alarmDictMap[resourceType.ResourceTypeID.String()]
 
 		dataChangeEvent, err := svcutils.PersistObjectWithChangeEvent(
-			ctx, c.repository.Db, *resourceType, resourceType.ResourceTypeID, nil, func(object interface{}) any {
+			ctx, c.pool, *resourceType, resourceType.ResourceTypeID, nil, func(object interface{}) any {
 				record, _ := object.(models.ResourceType)
 				return models.ResourceTypeToModel(&record, alarmDict)
 			})
@@ -449,7 +452,7 @@ func (c *Collector) collectResources(ctx context.Context, dataSource ResourceDat
 	// Loop over the set of resources and insert (or update) as needed
 	for _, resource := range resources {
 		dataChangeEvent, err := svcutils.PersistObjectWithChangeEvent(
-			ctx, c.repository.Db, resource, resource.ResourceID, &resource.ResourcePoolID, func(object interface{}) any {
+			ctx, c.pool, resource, resource.ResourceID, &resource.ResourcePoolID, func(object interface{}) any {
 				record, _ := object.(models.Resource)
 				return models.ResourceToModel(&record, nil)
 			})
@@ -500,7 +503,7 @@ func (c *Collector) collectResourcePools(ctx context.Context, dataSource Resourc
 	// Loop over the set of resource pools and insert (or update) as needed
 	for _, pool := range pools {
 		dataChangeEvent, err := svcutils.PersistObjectWithChangeEvent(
-			ctx, c.repository.Db, pool, pool.ResourcePoolID, nil, func(object interface{}) any {
+			ctx, c.pool, pool, pool.ResourcePoolID, nil, func(object interface{}) any {
 				record, _ := object.(models.ResourcePool)
 				return models.ResourcePoolToModel(&record, commonapi.NewDefaultFieldOptions())
 			})
@@ -527,7 +530,7 @@ func (c *Collector) handleDeploymentManagerSyncCompletion(ctx context.Context, i
 
 	count := 0
 	for _, record := range records {
-		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, record, record.DeploymentManagerID, nil, func(object interface{}) any {
+		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, record, record.DeploymentManagerID, nil, func(object interface{}) any {
 			r, _ := object.(models.DeploymentManager)
 			return models.DeploymentManagerToModel(&r, commonapi.NewDefaultFieldOptions())
 		})
@@ -589,7 +592,7 @@ func (c *Collector) handleAsyncDeploymentManagerEvent(ctx context.Context, deplo
 	var err error
 	if deleted {
 		dataChangeEvent, err = svcutils.DeleteObjectWithChangeEvent(
-			ctx, c.repository.Db, deploymentManager, deploymentManager.DeploymentManagerID, nil, func(object interface{}) any {
+			ctx, c.pool, deploymentManager, deploymentManager.DeploymentManagerID, nil, func(object interface{}) any {
 				record, _ := object.(models.DeploymentManager)
 				return models.DeploymentManagerToModel(&record, commonapi.NewDefaultFieldOptions())
 			})
@@ -599,7 +602,7 @@ func (c *Collector) handleAsyncDeploymentManagerEvent(ctx context.Context, deplo
 		}
 	} else {
 		dataChangeEvent, err = svcutils.PersistObjectWithChangeEvent(
-			ctx, c.repository.Db, deploymentManager, deploymentManager.DeploymentManagerID, nil, func(object interface{}) any {
+			ctx, c.pool, deploymentManager, deploymentManager.DeploymentManagerID, nil, func(object interface{}) any {
 				record, _ := object.(models.DeploymentManager)
 				return models.DeploymentManagerToModel(&record, commonapi.NewDefaultFieldOptions())
 			})

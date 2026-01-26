@@ -683,3 +683,137 @@ func (r *ResourceServer) GetInternalResourceById(ctx context.Context, request ap
 	object := models.ResourceToModel(record, nil)
 	return api.GetInternalResourceById200JSONResponse(object), nil
 }
+
+// GetLocations receives the API request to this endpoint, executes the request, and responds appropriately
+func (r *ResourceServer) GetLocations(ctx context.Context, request api.GetLocationsRequestObject) (api.GetLocationsResponseObject, error) {
+	records, err := r.Repo.GetLocations(ctx)
+	if err != nil {
+		return api.GetLocations500ApplicationProblemPlusJSONResponse{
+			Detail: fmt.Sprintf("failed to get locations: %s", err.Error()),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	objects := make([]api.LocationInfo, len(records))
+	for i, record := range records {
+		// Fetch O-Cloud Site IDs for this location
+		siteIDs, err := r.Repo.GetOCloudSiteIDsForLocation(ctx, record.GlobalLocationID)
+		if err != nil {
+			return api.GetLocations500ApplicationProblemPlusJSONResponse{
+				AdditionalAttributes: &map[string]string{
+					"globalLocationId": record.GlobalLocationID,
+				},
+				Detail: fmt.Sprintf("failed to get O-Cloud sites for location: %s", err.Error()),
+				Status: http.StatusInternalServerError,
+			}, nil
+		}
+		objects[i] = models.LocationToModel(&record, siteIDs)
+	}
+
+	return api.GetLocations200JSONResponse(objects), nil
+}
+
+// GetLocation receives the API request to this endpoint, executes the request, and responds appropriately
+func (r *ResourceServer) GetLocation(ctx context.Context, request api.GetLocationRequestObject) (api.GetLocationResponseObject, error) {
+	record, err := r.Repo.GetLocation(ctx, request.GlobalLocationId)
+	if errors.Is(err, svcutils.ErrNotFound) {
+		return api.GetLocation404ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"globalLocationId": request.GlobalLocationId,
+			},
+			Detail: "requested location not found",
+			Status: http.StatusNotFound,
+		}, nil
+	}
+	if err != nil {
+		return api.GetLocation500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"globalLocationId": request.GlobalLocationId,
+			},
+			Detail: err.Error(),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	// Fetch O-Cloud Site IDs for this location
+	siteIDs, err := r.Repo.GetOCloudSiteIDsForLocation(ctx, record.GlobalLocationID)
+	if err != nil {
+		return api.GetLocation500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"globalLocationId": request.GlobalLocationId,
+			},
+			Detail: fmt.Sprintf("failed to get O-Cloud sites for location: %s", err.Error()),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	object := models.LocationToModel(record, siteIDs)
+	return api.GetLocation200JSONResponse(object), nil
+}
+
+// GetOCloudSites receives the API request to this endpoint, executes the request, and responds appropriately
+func (r *ResourceServer) GetOCloudSites(ctx context.Context, request api.GetOCloudSitesRequestObject) (api.GetOCloudSitesResponseObject, error) {
+	records, err := r.Repo.GetOCloudSites(ctx)
+	if err != nil {
+		return api.GetOCloudSites500ApplicationProblemPlusJSONResponse{
+			Detail: fmt.Sprintf("failed to get O-Cloud sites: %s", err.Error()),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	objects := make([]api.OCloudSiteInfo, len(records))
+	for i, record := range records {
+		// Fetch Resource Pool IDs for this site
+		poolIDs, err := r.Repo.GetResourcePoolIDsForSite(ctx, record.OCloudSiteID)
+		if err != nil {
+			return api.GetOCloudSites500ApplicationProblemPlusJSONResponse{
+				AdditionalAttributes: &map[string]string{
+					"oCloudSiteId": record.OCloudSiteID.String(),
+				},
+				Detail: fmt.Sprintf("failed to get resource pools for site: %s", err.Error()),
+				Status: http.StatusInternalServerError,
+			}, nil
+		}
+		objects[i] = models.OCloudSiteToModel(&record, poolIDs)
+	}
+
+	return api.GetOCloudSites200JSONResponse(objects), nil
+}
+
+// GetOCloudSite receives the API request to this endpoint, executes the request, and responds appropriately
+func (r *ResourceServer) GetOCloudSite(ctx context.Context, request api.GetOCloudSiteRequestObject) (api.GetOCloudSiteResponseObject, error) {
+	record, err := r.Repo.GetOCloudSite(ctx, request.OCloudSiteId)
+	if errors.Is(err, svcutils.ErrNotFound) {
+		return api.GetOCloudSite404ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"oCloudSiteId": request.OCloudSiteId.String(),
+			},
+			Detail: "requested O-Cloud site not found",
+			Status: http.StatusNotFound,
+		}, nil
+	}
+	if err != nil {
+		return api.GetOCloudSite500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"oCloudSiteId": request.OCloudSiteId.String(),
+			},
+			Detail: err.Error(),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	// Fetch Resource Pool IDs for this site
+	poolIDs, err := r.Repo.GetResourcePoolIDsForSite(ctx, record.OCloudSiteID)
+	if err != nil {
+		return api.GetOCloudSite500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"oCloudSiteId": request.OCloudSiteId.String(),
+			},
+			Detail: fmt.Sprintf("failed to get resource pools for site: %s", err.Error()),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	object := models.OCloudSiteToModel(record, poolIDs)
+	return api.GetOCloudSite200JSONResponse(object), nil
+}

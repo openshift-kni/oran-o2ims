@@ -12,20 +12,20 @@ import (
 	"log/slog"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stephenafamo/bob/dialect/psql/sm"
 	"github.com/stephenafamo/bob/dialect/psql/um"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stephenafamo/bob/dialect/psql"
 
 	commonmodels "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
-// CommonRepository defines the database repository for the resource server tables
+// CommonRepository defines the database repository for the resource server tables.
 type CommonRepository struct {
-	Db *pgxpool.Pool
+	Db svcutils.DBQuery
 }
 
 // GetSubscriptions retrieves all Subscription tuples or returns an empty array if no tuples are found

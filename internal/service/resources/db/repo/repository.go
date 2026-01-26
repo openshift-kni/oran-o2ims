@@ -215,3 +215,59 @@ func (r *ResourcesRepository) UpsertAlarmDictionary(ctx context.Context, db svcu
 
 	return &results[0], nil
 }
+
+// GetLocations retrieves all Location tuples or returns an empty array if no tuples are found
+func (r *ResourcesRepository) GetLocations(ctx context.Context) ([]models.Location, error) {
+	return svcutils.FindAll[models.Location](ctx, r.Db)
+}
+
+// GetLocation retrieves a specific Location tuple by globalLocationId or returns ErrNotFound if not found
+func (r *ResourcesRepository) GetLocation(ctx context.Context, globalLocationID string) (*models.Location, error) {
+	e := psql.Quote("global_location_id").EQ(psql.Arg(globalLocationID))
+	results, err := svcutils.Search[models.Location](ctx, r.Db, e)
+	if err != nil {
+		return nil, err
+	}
+	if len(results) == 0 {
+		return nil, svcutils.ErrNotFound
+	}
+	return &results[0], nil
+}
+
+// GetOCloudSiteIDsForLocation retrieves the list of OCloudSite IDs for a given Location
+func (r *ResourcesRepository) GetOCloudSiteIDsForLocation(ctx context.Context, globalLocationID string) ([]uuid.UUID, error) {
+	e := psql.Quote("global_location_id").EQ(psql.Arg(globalLocationID))
+	sites, err := svcutils.Search[models.OCloudSite](ctx, r.Db, e)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]uuid.UUID, len(sites))
+	for i, site := range sites {
+		ids[i] = site.OCloudSiteID
+	}
+	return ids, nil
+}
+
+// GetOCloudSites retrieves all OCloudSite tuples or returns an empty array if no tuples are found
+func (r *ResourcesRepository) GetOCloudSites(ctx context.Context) ([]models.OCloudSite, error) {
+	return svcutils.FindAll[models.OCloudSite](ctx, r.Db)
+}
+
+// GetOCloudSite retrieves a specific OCloudSite tuple or returns ErrNotFound if not found
+func (r *ResourcesRepository) GetOCloudSite(ctx context.Context, id uuid.UUID) (*models.OCloudSite, error) {
+	return svcutils.Find[models.OCloudSite](ctx, r.Db, id)
+}
+
+// GetResourcePoolIDsForSite retrieves the list of ResourcePool IDs for a given OCloudSite
+func (r *ResourcesRepository) GetResourcePoolIDsForSite(ctx context.Context, oCloudSiteID uuid.UUID) ([]uuid.UUID, error) {
+	e := psql.Quote("o_cloud_site_id").EQ(psql.Arg(oCloudSiteID))
+	pools, err := svcutils.Search[models.ResourcePool](ctx, r.Db, e)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]uuid.UUID, len(pools))
+	for i, pool := range pools {
+		ids[i] = pool.ResourcePoolID
+	}
+	return ids, nil
+}

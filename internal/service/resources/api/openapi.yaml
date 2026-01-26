@@ -16,7 +16,7 @@ openapi: "3.0.0"
 
 info:
   title: O2IMS Infrastructure Inventory API
-  version: 1.0.0
+  version: 2.0.0
   description: |
     API for O2IMS Infrastructure Inventory
   license:
@@ -24,7 +24,7 @@ info:
     url: https://www.apache.org/licenses/LICENSE-2.0.html
 
 externalDocs:
-  description: O-RAN O2ims Interface Specification 7.0 (October 2024)
+  description: O-RAN O2ims Interface Specification 11.0 (October 2024)
   url: https://specifications.o-ran.org/download?id=749
 
 servers:
@@ -52,6 +52,12 @@ tags:
 - name: alarmDictionaries
   description: |
     Information about alarm dictionaries.
+- name: locations
+  description: |
+    Information about locations where O-Cloud Sites can be available.
+- name: oCloudSites
+  description: |
+    Information about O-Cloud Sites.
 
 security:
 - oauth2:
@@ -982,6 +988,216 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
+  /o2ims-infrastructureInventory/v1/locations:
+    get:
+      operationId: getLocations
+      summary: Get locations
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
+      description: |
+        Returns the list of locations where O-Cloud Sites can be available.
+      parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
+      tags:
+      - locations
+      responses:
+        '200':
+          description: |
+            Successfully obtained the list of locations.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LocationInfo"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+  /o2ims-infrastructureInventory/v1/locations/{globalLocationId}:
+    get:
+      operationId: getLocation
+      summary: Get a location
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
+      description: |
+        Returns the details of a location.
+      parameters:
+      - $ref: "#/components/parameters/globalLocationId"
+      tags:
+      - locations
+      responses:
+        '200':
+          description: |
+            Successfully obtained the details of the location.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationInfo"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+  /o2ims-infrastructureInventory/v1/oCloudSites:
+    get:
+      operationId: getOCloudSites
+      summary: Get O-Cloud sites
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
+      description: |
+        Returns the list of O-Cloud sites.
+      parameters:
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
+      - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
+      tags:
+      - oCloudSites
+      responses:
+        '200':
+          description: |
+            Successfully obtained the list of O-Cloud sites.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OCloudSiteInfo"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+  /o2ims-infrastructureInventory/v1/oCloudSites/{oCloudSiteId}:
+    get:
+      operationId: getOCloudSite
+      summary: Get an O-Cloud site
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-reader
+      description: |
+        Returns the details of an O-Cloud site.
+      parameters:
+      - $ref: "#/components/parameters/oCloudSiteId"
+      tags:
+      - oCloudSites
+      responses:
+        '200':
+          description: |
+            Successfully obtained the details of the O-Cloud site.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OCloudSiteInfo"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
 components:
   securitySchemes:
     oauth2:
@@ -1050,6 +1266,27 @@ components:
         type: string
         format: uuid
       example: 31a69575-3f90-4eb5-b8fa-8f8e23f99cf0
+
+    globalLocationId:
+      name: globalLocationId
+      description: |
+        Identifier of the location as defined by the SMO.
+      in: path
+      required: true
+      schema:
+        type: string
+      example: location-east-1
+
+    oCloudSiteId:
+      name: oCloudSiteId
+      description: |
+        Identifier of the O-Cloud site. Locally unique within the scope of an O-Cloud instance.
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      example: 7fd364a0-6d82-4e0c-a418-5c1a2f8b9c3e
 
   schemas:
     DeploymentManager:
@@ -1151,13 +1388,13 @@ components:
           format: uuid
           description: Identifier of the O-Cloud instance. Internally generated within an O-Cloud instance.
           example: "262c8f17-52b5-4614-9e56-812ae21fa8a7"
-        globalcloudId:
+        globalCloudId:
           type: string
           format: uuid
           description: | 
             Identifier of the O-Cloud instance assigned by the SMO. This identifier is globally unique across O-Cloud 
-            instances known to the SMO. This value was provided by the SMO at cloud genesis and is stored in the O-Cloud
-            IMS Inventory.
+            instances known to the SMO. This value was provided by the SMO with the callback URI at the beginning of 
+            O-Cloud genesis and used in registration at the end of genesis.
           example: "8c1c151d-2899-4c96-b76f-4fe92064b57b"
         name:
           type: string
@@ -1169,16 +1406,21 @@ components:
           example: "My cloud"
         serviceUri:
           type: string
-          description: The URI root to all services provided by the O2ims interface. Inventory is one of these services.
+          description: |
+            The fully qualified URI root to all services provided by the O2ims interface, Inventory only being one of 
+            them. Since the O2ims provides multiple services this entry is for the {apiRoot} only.
           example: "http://localhost:8000"
         extensions:
           type: object
+          description: |
+            These are unspecified (not standardized) properties (keys) which are tailored by the vendor to extend the 
+            information provided about the O-Cloud.
           example:
             hub: "hub0"
             country: "ES"
       required:
       - oCloudId
-      - globalcloudId
+      - globalCloudId
       - name
       - description
       - serviceUri
@@ -1212,13 +1454,27 @@ components:
           type: string
           description: Version or generation of the resource as defined by its provider.
           example: "v2024.11"
+        alarmDictionary:
+          deprecated: true
+          description: |
+            Dictionary of alarms for this resource type. DEPRECATED: This attribute is deprecated and may be removed 
+            in future releases. Use alarmDictionaryId instead.
+          allOf:
+            - $ref: "../../common/api/openapi.yaml#/components/schemas/AlarmDictionary"
+        alarmDictionaryId:
+          type: string
+          format: uuid
+          description: |
+            Identifier of the Alarm Dictionary for this resource type. The IMS shall ensure that the identifier points 
+            to the same dictionary available under the URI path of the resource type.
+          example: "b2f8c7a1-3d4e-5f6a-7b8c-9d0e1f2a3b4c"
         resourceKind:
           type: string
           enum:
           - UNDEFINED
           - PHYSICAL
           - LOGICAL
-          description: Value describing “physicality” of the resource type.
+          description: Value describing "physicality" of the resource type.
           example: "PHYSICAL"
         resourceClass:
           type: string
@@ -1232,8 +1488,6 @@ components:
         extensions:
           type: object
           description: List of metadata key-value pairs used to associate meaningful metadata to the related resource type.
-        alarmDictionary:
-          $ref: "../../common/api/openapi.yaml#/components/schemas/AlarmDictionary"
       required:
       - resourceTypeId
       - name
@@ -1243,7 +1497,6 @@ components:
       - version
       - resourceKind
       - resourceClass
-      - extensions
 
     ResourcePool:
       description: |
@@ -1255,25 +1508,39 @@ components:
           format: uuid
           description: Identifier for the Resource Pool in the O-Cloud instance. This identifier is allocated by the O-Cloud.
           example: "d3b27e14-4589-4d93-ae76-ddca559193ea"
-        name:
-          type: string
-          description: Human readable name of the resource pool.
-          example: "my-cluster"
-        description:
-          type: string
-          description: Human readable description of the resource pool.
         oCloudId:
           type: string
           format: uuid
-          description: Identifier for the containing O-Cloud.
+          deprecated: true
+          description: |
+            Identifier for the containing O-Cloud. DEPRECATED: This attribute is deprecated and may be removed in 
+            future releases.
           example: "262c8f17-52b5-4614-9e56-812ae21fa8a7"
         globalLocationId:
           type: string
           format: uuid
-          description: This identifier is copied from the O-Cloud Id assigned by the SMO during the O-Cloud deployment
+          deprecated: true
+          description: |
+            This identifier is copied from the O-Cloud Id assigned by the SMO during the O-Cloud deployment. 
+            DEPRECATED: This attribute is deprecated and may be removed in future releases.
+        name:
+          type: string
+          description: Human readable name of the resource pool.
+          example: "my-cluster"
+        oCloudSiteId:
+          type: string
+          format: uuid
+          description: Identifier of the O-Cloud site the resource pool is a part of.
+          example: "7fd364a0-6d82-4e0c-a418-5c1a2f8b9c3e"
+        description:
+          type: string
+          description: Human readable description of the resource pool.
         location:
           type: string
-          description: Information about the geographical location of the resource pool as detected by the O-Cloud.
+          deprecated: true
+          description: |
+            Information about the geographical location of the resource pool as detected by the O-Cloud. 
+            DEPRECATED: This attribute is deprecated and may be removed in future releases.
           example: "EU"
         extensions:
           type: object
@@ -1283,6 +1550,7 @@ components:
       - oCloudId
       - globalLocationId
       - name
+      - oCloudSiteId
       - description
 
     Resource:
@@ -1382,3 +1650,137 @@ components:
       required:
       - notificationId
       - notificationEventType
+
+    LocationInfo:
+      description: |
+        Information about a location where O-Cloud Sites can be available.
+
+        NOTE: Per O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00 3.2.6.2.16, at least one of 'coordinate', 
+        'civicAddress', or 'address' shall be provided when creating location data.
+      type: object
+      properties:
+        globalLocationId:
+          type: string
+          description: Identifier of the location as defined by the SMO.
+          example: "location-1"
+        name:
+          type: string
+          description: Human readable name of the location as defined by the SMO.
+          example: "Red Hat LocationInfo"
+        description:
+          type: string
+          description: Human readable description of the location.
+          example: "Red Hat LocationInfo description"
+        oCloudSiteIds:
+          type: array
+          description: List of O-Cloud Site identifiers referencing the O-Cloud Sites available at the location.
+          items:
+            type: string
+            format: uuid
+          example:
+            - "7fd364a0-6d82-4e0c-a418-5c1a2f8b9c3e"
+            - "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        coordinate: # see NOTE above
+          type: object
+          description: |
+            The coordinates (including latitude and longitude) of the location. The content of this attribute 
+            follows the provisions for the "Point" geometry object as defined in IETF RFC 7946.
+          properties:
+            type:
+              type: string
+              enum: ["Point"]
+              description: GeoJSON geometry type
+            coordinates:
+              type: array
+              description: Longitude and latitude coordinates [longitude, latitude]
+              items:
+                type: number
+              minItems: 2
+              maxItems: 2
+          example:
+            type: "Point"
+            coordinates: [-77.0364, 38.8951]
+        civicAddress: # see NOTE above
+          type: array
+          description: |
+            Civic address of the location. Includes zero or more elements comprising the civic address.
+            The caType values follow IETF RFC 4776 civic address format:
+              - caType 1: Country (ISO 3166-1 alpha-2 code)
+              - caType 3: State, province, or autonomous community
+              - caType 6: City or municipality
+              - caType 22: Street name
+              - caType 26: Street number or building number
+          items:
+            type: object
+            properties:
+              caType:
+                type: integer
+                description: Describes the content type of caValue. The value of caType shall comply with IETF RFC 4776.
+              caValue:
+                type: string
+                description: Content of civic address element corresponding to the caType.
+            required:
+              - caType
+              - caValue
+          example:
+            - caType: 1
+              caValue: "CA"
+            - caType: 3
+              caValue: "Ontario"
+            - caType: 6
+              caValue: "Toronto"
+            - caType: 22
+              caValue: "Bay Street"
+            - caType: 26
+              caValue: "200"
+        address: # see NOTE above
+          type: string
+          description: Human readable format of address of the location.
+          example: "1234 Technology Avenue"
+        extensions:
+          type: object
+          description: List of metadata key-value pairs used to associate meaningful metadata to the related location.
+      required:
+        - globalLocationId
+        - name
+        - description
+
+    OCloudSiteInfo:
+      description: |
+        Information about an O-Cloud site instance.
+      type: object
+      properties:
+        oCloudSiteId:
+          type: string
+          format: uuid
+          description: Identifier of the O-Cloud site. Locally unique within the scope of an O-Cloud instance.
+          example: "7fd364a0-6d82-4e0c-a418-5c1a2f8b9c3e"
+        globalLocationId:
+          type: string
+          description: Identifier of location where the O-Cloud site is deployed at.
+          example: "location-1"
+        name:
+          type: string
+          description: Human readable name of the O-Cloud site as identified by the cloud provider.
+          example: "Red Hat OCloudSiteInfo"
+        description:
+          type: string
+          description: Human readable description of the O-Cloud site as provided by the cloud provider.
+          example: "Red Hat OCloudSiteInfo description"
+        resourcePools:
+          type: array
+          description: List of resource pools that are part of the O-Cloud site.
+          items:
+            type: string
+            format: uuid
+          example:
+            - "d3b27e14-4589-4d93-ae76-ddca559193ea"
+        extensions:
+          type: object
+          description: List of metadata key-value pairs used to associate meaningful metadata to the related O-Cloud site.
+      required:
+        - oCloudSiteId
+        - globalLocationId
+        - name
+        - description
+        - resourcePools
