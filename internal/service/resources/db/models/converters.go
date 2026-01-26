@@ -20,16 +20,6 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
 )
 
-// managementInterfaceID defines the unique identifier for the IMS O2 interface
-const managementInterfaceID = "O2IMS"
-
-// dummyDefinitionID is a temporary value used to render a placeholder alarm definition.  To be replaced when we support
-// retrieving alarm dictionaries from the hardware manager
-const dummyDefinitionID = "46a600ca-bb4d-470d-b8ca-0f95989518e4"
-
-// dummyVersion is a temporary value to used to render a placeholder alarm dictionary/definition.
-const dummyVersion = "0.0.0"
-
 // DeploymentManagerToModel converts a DB tuple to an API Model
 func DeploymentManagerToModel(record *DeploymentManager, options *commonapi.FieldOptions) generated.DeploymentManager {
 	object := generated.DeploymentManager{
@@ -71,42 +61,20 @@ func DeploymentManagerToModel(record *DeploymentManager, options *commonapi.Fiel
 	return object
 }
 
-// ResourceTypeToModel converts a DB tuple to an API Model
-func ResourceTypeToModel(record *ResourceType) generated.ResourceType {
-	alarmAdditionalFields := map[string]interface{}{}
+// ResourceTypeToModel converts a DB tuple to an API Model.
+// If alarmDictionary is provided, it will be included in the response; otherwise the field will be nil.
+func ResourceTypeToModel(record *ResourceType, alarmDictionary *common.AlarmDictionary) generated.ResourceType {
 	object := generated.ResourceType{
-		// TODO: fill-in a proper alarm dictionary when we can get it from the hardware manager
-		AlarmDictionary: &common.AlarmDictionary{
-			AlarmDefinition: []common.AlarmDefinition{
-				{
-					AlarmAdditionalFields: &alarmAdditionalFields,
-					AlarmChangeType:       common.ADDED,
-					AlarmDefinitionId:     uuid.MustParse(dummyDefinitionID),
-					AlarmDescription:      "Sample alarm definition",
-					AlarmLastChange:       dummyVersion,
-					AlarmName:             "Sample alarm name",
-					ClearingType:          common.MANUAL,
-					ManagementInterfaceId: []common.AlarmDefinitionManagementInterfaceId{managementInterfaceID},
-					PkNotificationField:   []string{"alarmDefinitionID"},
-					ProposedRepairActions: "Please consult the documentation",
-				},
-			},
-			AlarmDictionarySchemaVersion: dummyVersion,
-			AlarmDictionaryVersion:       dummyVersion,
-			EntityType:                   fmt.Sprintf("%s/%s", record.Model, record.Version),
-			ManagementInterfaceId:        []common.AlarmDictionaryManagementInterfaceId{"O2IMS"},
-			PkNotificationField:          []string{"alarmDictionaryID"},
-			Vendor:                       record.Vendor,
-		},
-		Description:    record.Description,
-		Extensions:     record.Extensions,
-		Model:          record.Model,
-		Name:           record.Name,
-		ResourceClass:  generated.ResourceTypeResourceClass(record.ResourceClass),
-		ResourceKind:   generated.ResourceTypeResourceKind(record.ResourceKind),
-		ResourceTypeId: record.ResourceTypeID,
-		Vendor:         record.Vendor,
-		Version:        record.Version,
+		AlarmDictionary: alarmDictionary,
+		Description:     record.Description,
+		Extensions:      record.Extensions,
+		Model:           record.Model,
+		Name:            record.Name,
+		ResourceClass:   generated.ResourceTypeResourceClass(record.ResourceClass),
+		ResourceKind:    generated.ResourceTypeResourceKind(record.ResourceKind),
+		ResourceTypeId:  record.ResourceTypeID,
+		Vendor:          record.Vendor,
+		Version:         record.Version,
 	}
 
 	return object
