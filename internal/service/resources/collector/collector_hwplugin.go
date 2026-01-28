@@ -48,8 +48,6 @@ const (
 const (
 	vendorExtension           = "vendor"
 	modelExtension            = "model"
-	partNumberExtension       = "partNumber"
-	serialNumberExtension     = "serialNumber"
 	memoryExtension           = "memory"
 	processorsExtension       = "processors"
 	adminStateExtension       = "adminState"
@@ -58,6 +56,9 @@ const (
 	powerStateExtension       = "powerState"
 	hwProfileExtension        = "hwProfile"
 	labelsExtension           = "labels"
+	allocatedExtension        = "allocated"
+	nicsExtension             = "nics"
+	storageExtension          = "storage"
 )
 
 // NewHwPluginDataSource creates a new instance of an ACM data source collector whose purpose is to collect data from the
@@ -224,8 +225,6 @@ func (d *HwPluginDataSource) convertResource(resource *inventoryclient.ResourceI
 		Extensions: map[string]interface{}{
 			modelExtension:            resource.Model,
 			vendorExtension:           resource.Vendor,
-			partNumberExtension:       resource.PartNumber,
-			serialNumberExtension:     resource.SerialNumber,
 			memoryExtension:           fmt.Sprintf("%d MiB", resource.Memory),
 			processorsExtension:       resource.Processors,
 			adminStateExtension:       string(resource.AdminState),
@@ -246,6 +245,18 @@ func (d *HwPluginDataSource) convertResource(resource *inventoryclient.ResourceI
 
 	if resource.Labels != nil {
 		result.Extensions[labelsExtension] = *resource.Labels
+	}
+
+	if resource.Allocated != nil {
+		result.Extensions[allocatedExtension] = *resource.Allocated
+	}
+
+	if resource.Nics != nil {
+		result.Extensions[nicsExtension] = *resource.Nics
+	}
+
+	if resource.Storage != nil {
+		result.Extensions[storageExtension] = *resource.Storage
 	}
 
 	return result, nil
