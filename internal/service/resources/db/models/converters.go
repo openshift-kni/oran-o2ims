@@ -65,9 +65,8 @@ func DeploymentManagerToModel(record *DeploymentManager, options *commonapi.Fiel
 // If alarmDictionary is provided, it will be included in the response; otherwise the field will be nil.
 func ResourceTypeToModel(record *ResourceType, alarmDictionary *common.AlarmDictionary) generated.ResourceType {
 	object := generated.ResourceType{
-		AlarmDictionary: alarmDictionary,
+		AlarmDictionary: alarmDictionary, // Deprecated by O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00
 		Description:     record.Description,
-		Extensions:      record.Extensions,
 		Model:           record.Model,
 		Name:            record.Name,
 		ResourceClass:   generated.ResourceTypeResourceClass(record.ResourceClass),
@@ -75,6 +74,17 @@ func ResourceTypeToModel(record *ResourceType, alarmDictionary *common.AlarmDict
 		ResourceTypeId:  record.ResourceTypeID,
 		Vendor:          record.Vendor,
 		Version:         record.Version,
+	}
+
+	// Handle optional Extensions field
+	if record.Extensions != nil {
+		object.Extensions = &record.Extensions
+	}
+
+	// Populate alarmDictionaryId from the alarm dictionary if present
+	// O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00
+	if alarmDictionary != nil {
+		object.AlarmDictionaryId = &alarmDictionary.AlarmDictionaryId
 	}
 
 	return object
@@ -111,11 +121,15 @@ func SubscriptionFromModel(object *generated.Subscription) *models2.Subscription
 func ResourcePoolToModel(record *ResourcePool, options *commonapi.FieldOptions) generated.ResourcePool {
 	object := generated.ResourcePool{
 		Description:      record.Description,
-		GlobalLocationId: record.GlobalLocationID,
-		Location:         record.Location,
+		GlobalLocationId: record.GlobalLocationID, // Deprecated by O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00
+		Location:         record.Location,         // Deprecated by O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00
 		Name:             record.Name,
-		OCloudId:         record.OCloudID,
+		OCloudId:         record.OCloudID, // Deprecated by O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00
 		ResourcePoolId:   record.ResourcePoolID,
+	}
+
+	if record.OCloudSiteID != nil {
+		object.OCloudSiteId = *record.OCloudSiteID
 	}
 
 	if options.IsIncluded(commonapi.ExtensionsAttribute) {
@@ -233,6 +247,90 @@ func SubscriptionToInfo(record *models2.Subscription) *notifier.SubscriptionInfo
 		Filter:                 record.Filter,
 		EventCursor:            record.EventCursor,
 	}
+}
+
+// LocationToModel converts a Location DB record to an API model
+func LocationToModel(record *Location, oCloudSiteIDs []uuid.UUID) generated.LocationInfo {
+	object := generated.LocationInfo{
+		GlobalLocationId: record.GlobalLocationID,
+		Name:             record.Name,
+		Description:      record.Description,
+		Address:          record.Address,
+	}
+
+	// Handle optional Extensions field
+	if record.Extensions != nil {
+		object.Extensions = &record.Extensions
+	}
+
+	// Handle Coordinate (GeoJSON Point)
+	if record.Coordinate != nil {
+		coordType := generated.Point
+		coord := struct {
+			Coordinates *[]float32                            `json:"coordinates,omitempty"`
+			Type        *generated.LocationInfoCoordinateType `json:"type,omitempty"`
+		}{
+			Type: &coordType,
+		}
+		// Extract coordinates from the map if present
+		if coords, ok := record.Coordinate["coordinates"].([]interface{}); ok {
+			floatCoords := make([]float32, len(coords))
+			for i, c := range coords {
+				if f, ok := c.(float64); ok {
+					floatCoords[i] = float32(f)
+				}
+			}
+			coord.Coordinates = &floatCoords
+		}
+		object.Coordinate = &coord
+	}
+
+	// Handle CivicAddress (array of {caType, caValue})
+	if record.CivicAddress != nil && len(record.CivicAddress) > 0 {
+		civicAddr := make([]struct {
+			CaType  int    `json:"caType"`
+			CaValue string `json:"caValue"`
+		}, len(record.CivicAddress))
+		for i, ca := range record.CivicAddress {
+			if caType, ok := ca["caType"].(float64); ok {
+				civicAddr[i].CaType = int(caType)
+			}
+			if caValue, ok := ca["caValue"].(string); ok {
+				civicAddr[i].CaValue = caValue
+			}
+		}
+		object.CivicAddress = &civicAddr
+	}
+
+	// Handle OCloudSiteIds
+	if oCloudSiteIDs != nil && len(oCloudSiteIDs) > 0 {
+		object.OCloudSiteIds = &oCloudSiteIDs
+	}
+
+	return object
+}
+
+// OCloudSiteToModel converts an OCloudSite DB record to an API model
+func OCloudSiteToModel(record *OCloudSite, resourcePoolIDs []uuid.UUID) generated.OCloudSiteInfo {
+	object := generated.OCloudSiteInfo{
+		OCloudSiteId:     record.OCloudSiteID,
+		GlobalLocationId: record.GlobalLocationID,
+		Name:             record.Name,
+		Description:      record.Description,
+		ResourcePools:    resourcePoolIDs,
+	}
+
+	// Handle optional Extensions field
+	if record.Extensions != nil {
+		object.Extensions = &record.Extensions
+	}
+
+	// Ensure ResourcePools is not nil (API requires it)
+	if object.ResourcePools == nil {
+		object.ResourcePools = []uuid.UUID{}
+	}
+
+	return object
 }
 
 // AlarmDictionaryToModel converts an AlarmDictionary DB record to an API model
