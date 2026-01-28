@@ -31,11 +31,11 @@ CREATE TABLE IF NOT EXISTS resource_type
 CREATE TABLE IF NOT EXISTS resource_pool
 (
     resource_pool_id   UUID PRIMARY KEY,
-    global_location_id UUID NOT NULL,
+    global_location_id UUID NOT NULL,                                   -- Deprecated by O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00
     name               VARCHAR(255) NOT NULL,
     description        TEXT        NOT NULL,
-    o_cloud_id         UUID         NOT NULL,
-    location           VARCHAR(64) NULL,
+    o_cloud_id         UUID         NOT NULL,                           -- Deprecated by O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00
+    location           VARCHAR(64) NULL,                                -- Deprecated by O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00
     extensions         json         NULL,
     data_source_id     UUID        NOT NULL,
     generation_id      INTEGER      NOT NULL DEFAULT 0,
