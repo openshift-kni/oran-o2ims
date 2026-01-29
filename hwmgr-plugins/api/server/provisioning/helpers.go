@@ -74,7 +74,6 @@ func NodeAllocationRequestCRToResponseObject(nodeAllocationRequest *pluginsv1alp
 	nodeAllocationRequestObject := NodeAllocationRequest{
 		NodeGroup:           nodeGroups,
 		Site:                nodeAllocationRequest.Spec.Site,
-		BootInterfaceLabel:  nodeAllocationRequest.Spec.BootInterfaceLabel,
 		ClusterId:           nodeAllocationRequest.Spec.ClusterId,
 		ConfigTransactionId: nodeAllocationRequest.Spec.ConfigTransactionId,
 	}

@@ -239,8 +239,7 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 				Namespace: utils.InventoryNamespace,
 			},
 			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				HardwarePluginRef:  testMetal3HardwarePluginRef,
-				BootInterfaceLabel: "bootable-interface",
+				HardwarePluginRef: testMetal3HardwarePluginRef,
 				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 					{
 						Name:           "controller",
@@ -348,7 +347,6 @@ func createMockNodeAllocationRequestResponseWithTransactionId(conditionStatus, c
 
 	return &hwmgrpluginapi.NodeAllocationRequestResponse{
 		NodeAllocationRequest: &hwmgrpluginapi.NodeAllocationRequest{
-			BootInterfaceLabel:  "test-interface",
 			ClusterId:           "test-cluster",
 			ConfigTransactionId: specTransactionId,
 			NodeGroup: []hwmgrpluginapi.NodeGroup{
@@ -924,7 +922,6 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 
 		hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{
 			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				BootInterfaceLabel: "bootable-interface",
 				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 					{
 						Name:           "controller",
@@ -947,7 +944,6 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		Expect(nar).ToNot(BeNil())
 		Expect(nar.Site).To(Equal("local-123"))
 		Expect(nar.ClusterId).To(Equal("exampleCluster"))
-		Expect(nar.BootInterfaceLabel).To(Equal("bootable-interface"))
 		Expect(nar.NodeGroup).To(HaveLen(2))
 
 		// Check master nodes
@@ -995,7 +991,6 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
 				HardwarePluginRef:           "test-plugin",
-				BootInterfaceLabel:          "bootable-interface",
 				HardwareProvisioningTimeout: "60m",
 				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 					{
@@ -1041,7 +1036,6 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
 				HardwarePluginRef:           "test-plugin",
-				BootInterfaceLabel:          "bootable-interface",
 				HardwareProvisioningTimeout: "", // Empty timeout
 				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 					{
@@ -1230,8 +1224,7 @@ var _ = Describe("waitForHardwareData", func() {
 				Namespace: utils.InventoryNamespace,
 			},
 			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				HardwarePluginRef:  testMetal3HardwarePluginRef,
-				BootInterfaceLabel: "bootable-interface",
+				HardwarePluginRef: testMetal3HardwarePluginRef,
 				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 					{
 						Name:           "controller",
@@ -1441,8 +1434,7 @@ var _ = Describe("checkExistingNodeAllocationRequest", func() {
 	It("returns response when NodeAllocationRequest exists and matches", func() {
 		hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{
 			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				HardwarePluginRef:  testMetal3HardwarePluginRef,
-				BootInterfaceLabel: "bootable-interface",
+				HardwarePluginRef: testMetal3HardwarePluginRef,
 				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 					{
 						Name:      "controller",
@@ -1499,7 +1491,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 							"interfaces": []interface{}{
 								map[string]interface{}{
 									"name":       "eno1",
-									"label":      "bootable-interface",
+									"label":      constants.BootInterfaceLabel,
 									"macAddress": "",
 								},
 								map[string]interface{}{
@@ -1517,7 +1509,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 							"interfaces": []interface{}{
 								map[string]interface{}{
 									"name":       "eno1",
-									"label":      "bootable-interface",
+									"label":      constants.BootInterfaceLabel,
 									"macAddress": "",
 								},
 							},
@@ -1570,8 +1562,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 				Namespace: utils.InventoryNamespace,
 			},
 			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				HardwarePluginRef:  testMetal3HardwarePluginRef,
-				BootInterfaceLabel: "bootable-interface",
+				HardwarePluginRef: testMetal3HardwarePluginRef,
 				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 					{
 						Name:           "controller",
@@ -1602,7 +1593,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 						{
 							Name:       "eno1",
 							MACAddress: "aa:bb:cc:dd:ee:01",
-							Label:      "bootable-interface",
+							Label:      constants.BootInterfaceLabel,
 						},
 						{
 							Name:       "eno2",
@@ -1623,7 +1614,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 						{
 							Name:       "eno1",
 							MACAddress: "aa:bb:cc:dd:ee:11",
-							Label:      "bootable-interface",
+							Label:      constants.BootInterfaceLabel,
 						},
 					},
 				},
@@ -1675,7 +1666,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 								"interfaces": []any{
 									map[string]any{
 										"name":       "eno1",
-										"label":      "bootable-interface",
+										"label":      constants.BootInterfaceLabel,
 										"macAddress": "",
 									},
 									map[string]any{
@@ -1693,7 +1684,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 								"interfaces": []any{
 									map[string]any{
 										"name":       "eno1",
-										"label":      "bootable-interface",
+										"label":      constants.BootInterfaceLabel,
 										"macAddress": "",
 									},
 								},
@@ -1791,44 +1782,6 @@ var _ = Describe("applyNodeConfiguration", func() {
 		Expect(err.Error()).To(ContainSubstring("failed to get boot MAC for node"))
 	})
 
-	It("returns error when cluster template not found", func() {
-		// Create a provisioning request with non-existent cluster template
-		invalidCr := &provisioningv1alpha1.ProvisioningRequest{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "invalid-cluster",
-			},
-			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
-				TemplateName:    "non-existent",
-				TemplateVersion: "v1.0.0",
-				TemplateParameters: runtime.RawExtension{
-					Raw: []byte(testutils.TestFullTemplateParameters),
-				},
-			},
-		}
-
-		task.object = invalidCr
-
-		err := task.applyNodeConfiguration(ctx, hwNodes, nar, ci)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("failed to get the ClusterTemplate"))
-	})
-
-	It("returns error when hardware template not found", func() {
-		// Update cluster template to reference non-existent hardware template
-		ct := &provisioningv1alpha1.ClusterTemplate{}
-		Expect(c.Get(ctx, client.ObjectKey{
-			Name:      GetClusterTemplateRefName(tName, tVersion),
-			Namespace: ctNamespace,
-		}, ct)).To(Succeed())
-
-		ct.Spec.Templates.HwTemplate = "non-existent-hw-template"
-		Expect(c.Update(ctx, ct)).To(Succeed())
-
-		err := task.applyNodeConfiguration(ctx, hwNodes, nar, ci)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("failed to get the HardwareTemplate"))
-	})
-
 	It("handles nodes without HwMgrNodeId and HwMgrNodeNs", func() {
 		// Remove HwMgrNodeId and HwMgrNodeNs from hardware nodes
 		// Also provide both interfaces to match the cluster instance structure
@@ -1844,7 +1797,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 						{
 							Name:       "eno1",
 							MACAddress: "aa:bb:cc:dd:ee:01",
-							Label:      "bootable-interface",
+							Label:      constants.BootInterfaceLabel,
 						},
 						{
 							Name:       "eno2",
@@ -1865,7 +1818,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 						{
 							Name:       "eno1",
 							MACAddress: "aa:bb:cc:dd:ee:11",
-							Label:      "bootable-interface",
+							Label:      constants.BootInterfaceLabel,
 						},
 					},
 				},
@@ -1901,7 +1854,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 							"interfaces": []interface{}{
 								map[string]interface{}{
 									"name":       "eno1",
-									"label":      "bootable-interface",
+									"label":      constants.BootInterfaceLabel,
 									"macAddress": "",
 								},
 							},
@@ -1914,7 +1867,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 							"interfaces": []interface{}{
 								map[string]interface{}{
 									"name":       "eno1",
-									"label":      "bootable-interface",
+									"label":      constants.BootInterfaceLabel,
 									"macAddress": "",
 								},
 							},
@@ -1935,7 +1888,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 				{
 					Name:       "eno1",
 					MACAddress: "aa:bb:cc:dd:ee:03",
-					Label:      "bootable-interface",
+					Label:      constants.BootInterfaceLabel,
 				},
 			},
 		})
@@ -2003,8 +1956,7 @@ var _ = Describe("ProvisioningRequest Status Update After Hardware Failure", fun
 				Namespace: "test-ns",
 			},
 			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				HardwarePluginRef:  "test-plugin",
-				BootInterfaceLabel: "bootable-device",
+				HardwarePluginRef: "test-plugin",
 				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 					{
 						Name:      "master",

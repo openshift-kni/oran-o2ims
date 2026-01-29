@@ -52,8 +52,9 @@ spec:
             description: HardwareTemplateSpec defines the desired state of HardwareTemplate
             properties:
               bootInterfaceLabel:
-                description: BootInterfaceLabel is the label of the boot interface.
-                minLength: 1
+                description: |-
+                  BootInterfaceLabel is the label of the boot interface.
+                  Deprecated: This field is deprecated and will be ignored. The boot interface label is now fixed as "boot-interface".
                 type: string
               hardwarePluginRef:
                 description: HardwarePluginRef is the name of the HardwarePlugin.
@@ -96,7 +97,6 @@ spec:
                 minItems: 1
                 type: array
             required:
-            - bootInterfaceLabel
             - hardwarePluginRef
             - nodeGroupData
             type: object

@@ -12,5 +12,4 @@ spec:
       resourceSelector:
         "server-type": "R740"
         "resourceselector.clcm.openshift.io/server-colour": "blue"
-  bootInterfaceLabel: bootable-interface
   hardwareProvisioningTimeout: "60m"

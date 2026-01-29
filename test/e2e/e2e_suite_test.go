@@ -263,7 +263,6 @@ var _ = BeforeSuite(func() {
 			},
 			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
 				HardwarePluginRef:           testutils.TestHwPluginRef,
-				BootInterfaceLabel:          "bootable-interface",
 				HardwareProvisioningTimeout: "10m",
 				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 					{
@@ -290,7 +289,6 @@ var _ = BeforeSuite(func() {
 			},
 			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
 				HardwarePluginRef:           testutils.TestHwPluginRef,
-				BootInterfaceLabel:          "bootable-interface",
 				HardwareProvisioningTimeout: "10m",
 				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 					{
@@ -354,9 +352,9 @@ var _ = BeforeSuite(func() {
 		if bmh.Labels == nil {
 			bmh.Labels = make(map[string]string)
 		}
-		bmh.Labels["interfacelabel.clcm.openshift.io/bootable-interface"] = "eno1"
-		bmh.Labels["interfacelabel.clcm.openshift.io/base-interface"] = "eth0"
-		bmh.Labels["interfacelabel.clcm.openshift.io/data-interface"] = "eth1"
+		bmh.Labels[constants.BootInterfaceLabelFullKey] = "eno1"
+		bmh.Labels[constants.LabelPrefixInterfaces+"base-interface"] = "eth0"
+		bmh.Labels[constants.LabelPrefixInterfaces+"data-interface"] = "eth1"
 		Expect(K8SClient.Update(context.Background(), bmh)).To(Succeed())
 
 		// Set the status with hardware details and Available state
@@ -497,7 +495,7 @@ nodes:
   nodeNetwork:
     interfaces:
     - name: eno1
-      label: bootable-interface
+      label: boot-interface
     - name: eth0
       label: base-interface
     - name: eth1
@@ -532,7 +530,7 @@ nodes:
   nodeNetwork:
     interfaces:
     - name: eno1
-      label: bootable-interface
+      label: boot-interface
     - name: eth0
       label: base-interface
     - name: eth1
@@ -1045,11 +1043,10 @@ var _ = Describe("BareMetalHost with empty bootMACAddress", Ordered, func() {
 	const interval = time.Second * 3
 
 	var (
-		testCtx            = context.Background()
-		bmhName            = "bmh-empty-bootmac"
-		bootInterfaceLabel = "bootable-interface"
-		bootInterfaceName  = "ens3f0"
-		bootInterfaceMAC   = "aa:bb:cc:dd:ee:ff"
+		testCtx           = context.Background()
+		bmhName           = "bmh-empty-bootmac"
+		bootInterfaceName = "ens3f0"
+		bootInterfaceMAC  = "aa:bb:cc:dd:ee:ff"
 	)
 
 	It("Creates BMH without bootMACAddress with interface labels", func() {
@@ -1060,7 +1057,7 @@ var _ = Describe("BareMetalHost with empty bootMACAddress", Ordered, func() {
 				Namespace: constants.DefaultNamespace,
 				Labels: map[string]string{
 					// Add interface label that maps to the boot interface
-					fmt.Sprintf("interfacelabel.clcm.openshift.io/%s", bootInterfaceLabel): bootInterfaceName,
+					constants.BootInterfaceLabelFullKey: bootInterfaceName,
 					// Add same resource selector labels as existing BMHs for allocation
 					"resourceselector.clcm.openshift.io/server-colour": "green",
 					"resources.clcm.openshift.io/resourcePoolId":       testutils.TestPoolID,
@@ -1182,9 +1179,8 @@ var _ = Describe("BareMetalHost with empty bootMACAddress", Ordered, func() {
 		Expect(bmh.Status.HardwareDetails).ToNot(BeNil())
 
 		// Verify interface label is present
-		expectedLabelKey := fmt.Sprintf("interfacelabel.clcm.openshift.io/%s", bootInterfaceLabel)
-		Expect(bmh.Labels).To(HaveKey(expectedLabelKey))
-		Expect(bmh.Labels[expectedLabelKey]).To(Equal(bootInterfaceName))
+		Expect(bmh.Labels).To(HaveKey(constants.BootInterfaceLabelFullKey))
+		Expect(bmh.Labels[constants.BootInterfaceLabelFullKey]).To(Equal(bootInterfaceName))
 
 		// Verify the boot interface exists in hardware details
 		foundBootInterface := false
@@ -1222,7 +1218,7 @@ var _ = Describe("BareMetalHost with empty bootMACAddress", Ordered, func() {
 	})
 })
 
-// Test BMH with bootMACAddress set but no bootable-interface label (Scenario 1)
+// Test BMH with bootMACAddress set but no boot-interface label (Scenario 1)
 var _ = Describe("BareMetalHost with bootMACAddress set but no interface label", Ordered, func() {
 	const timeout = time.Second * 90
 	const interval = time.Second * 3
@@ -1234,17 +1230,17 @@ var _ = Describe("BareMetalHost with bootMACAddress set but no interface label",
 		bootInterfaceMAC  = "bb:cc:dd:ee:ff:00"
 	)
 
-	It("Creates BMH with bootMACAddress but without bootable-interface label", func() {
-		// Create a BMH with bootMACAddress set, but WITHOUT the bootable-interface label
+	It("Creates BMH with bootMACAddress but without boot-interface label", func() {
+		// Create a BMH with bootMACAddress set, but WITHOUT the boot-interface label
 		// This tests the scenario where the hardware was pre-provisioned with a known boot MAC
 		bmh := &metal3v1alpha1.BareMetalHost{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      bmhName,
 				Namespace: constants.DefaultNamespace,
 				Labels: map[string]string{
-					// NO bootable-interface label - this is the key difference from scenario 2
+					// NO boot-interface label - this is the key difference from scenario 2
 					// Add other interface labels for non-boot interfaces
-					"interfacelabel.clcm.openshift.io/mgmt": "eth0",
+					constants.LabelPrefixInterfaces + "mgmt": "eth0",
 					// Add same resource selector labels as existing BMHs for allocation
 					"resourceselector.clcm.openshift.io/server-colour": "green",
 					"resources.clcm.openshift.io/resourcePoolId":       testutils.TestPoolID,
@@ -1284,10 +1280,9 @@ var _ = Describe("BareMetalHost with bootMACAddress set but no interface label",
 			"bootMACAddress should be set when BMH is created")
 		Expect(createdBMH.Spec.PreprovisioningNetworkDataName).To(Equal("test-network-data"))
 
-		// Verify bootable-interface label is NOT present
-		bootLabelKey := "interfacelabel.clcm.openshift.io/bootable-interface"
-		Expect(createdBMH.Labels).ToNot(HaveKey(bootLabelKey),
-			"bootable-interface label should not be present")
+		// Verify boot-interface label is NOT present
+		Expect(createdBMH.Labels).ToNot(HaveKey(constants.BootInterfaceLabelFullKey),
+			"boot-interface label should not be present")
 	})
 
 	It("Simulates hardware inspection populating NIC details", func() {
@@ -1350,9 +1345,9 @@ var _ = Describe("BareMetalHost with bootMACAddress set but no interface label",
 			"bootMACAddress should remain unchanged")
 	})
 
-	It("Verifies BMH is ready for allocation without requiring bootable-interface label", func() {
+	It("Verifies BMH is ready for allocation without requiring boot-interface label", func() {
 		// The bmh-bootmac-no-label should be available for allocation
-		// Even without the bootable-interface label, allocation should succeed
+		// Even without the boot-interface label, allocation should succeed
 		// because bootMACAddress is already set
 
 		bmh := &metal3v1alpha1.BareMetalHost{}
@@ -1368,10 +1363,9 @@ var _ = Describe("BareMetalHost with bootMACAddress set but no interface label",
 		Expect(bmh.Status.Provisioning.State).To(Equal(metal3v1alpha1.StateAvailable))
 		Expect(bmh.Status.HardwareDetails).ToNot(BeNil())
 
-		// Verify bootable-interface label is NOT present (key test for scenario 1)
-		bootLabelKey := "interfacelabel.clcm.openshift.io/bootable-interface"
-		Expect(bmh.Labels).ToNot(HaveKey(bootLabelKey),
-			"bootable-interface label should not be required when bootMACAddress is set")
+		// Verify boot-interface label is NOT present (key test for scenario 1)
+		Expect(bmh.Labels).ToNot(HaveKey(constants.BootInterfaceLabelFullKey),
+			"boot-interface label should not be required when bootMACAddress is set")
 
 		// Verify the boot interface exists in hardware details and matches bootMACAddress
 		foundBootInterface := false

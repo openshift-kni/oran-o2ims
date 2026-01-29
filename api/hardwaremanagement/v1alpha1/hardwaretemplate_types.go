@@ -41,9 +41,11 @@ type HardwareTemplateSpec struct {
 	HardwarePluginRef string `json:"hardwarePluginRef"`
 
 	// BootInterfaceLabel is the label of the boot interface.
-	// +kubebuilder:validation:MinLength=1
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Boot Interface Label",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	BootInterfaceLabel string `json:"bootInterfaceLabel"`
+	// Deprecated: This field is deprecated and will be ignored. The boot interface label is now fixed as "boot-interface".
+	// +optional
+	// +kubebuilder:validation:Optional
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Boot Interface Label (Deprecated)",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	BootInterfaceLabel string `json:"bootInterfaceLabel,omitempty"`
 
 	// HardwareProvisioningTimeout defines the timeout duration string for the hardware provisioning.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Provisioning Timeout",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
