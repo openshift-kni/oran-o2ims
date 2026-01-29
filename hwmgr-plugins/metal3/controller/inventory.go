@@ -19,6 +19,7 @@ import (
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/inventory"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
 
 const (
@@ -27,8 +28,6 @@ const (
 	LabelSiteID          = LabelPrefixResources + "siteId"
 
 	LabelPrefixResourceSelector = "resourceselector.clcm.openshift.io/"
-
-	LabelPrefixInterfaces = "interfacelabel.clcm.openshift.io/"
 
 	// ValidationUnavailableLabelKey is the label key used to mark BMHs with missing firmware data
 	ValidationUnavailableLabelKey = "validation.clcm.openshift.io/unavailable"
@@ -47,7 +46,7 @@ const (
 )
 
 // The following regex pattern is used to find interface labels
-var REPatternInterfaceLabel = regexp.MustCompile(`^` + LabelPrefixInterfaces + `(.*)`)
+var REPatternInterfaceLabel = regexp.MustCompile(`^` + constants.LabelPrefixInterfaces + `(.*)`)
 
 // The following regex pattern is used to check resourceselector label pattern
 var REPatternResourceSelectorLabel = regexp.MustCompile(`^` + LabelPrefixResourceSelector)

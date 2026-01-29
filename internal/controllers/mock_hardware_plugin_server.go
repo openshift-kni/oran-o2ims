@@ -176,7 +176,6 @@ func (m *MockHardwarePluginServer) setupDefaultData() {
 		NodeAllocationRequest: &hwmgrpluginapi.NodeAllocationRequest{
 			ClusterId:           testClusterID,
 			Site:                "test-site",
-			BootInterfaceLabel:  "bootable-interface",
 			ConfigTransactionId: 0,
 			NodeGroup: []hwmgrpluginapi.NodeGroup{
 				{
@@ -228,7 +227,7 @@ func (m *MockHardwarePluginServer) setupDefaultData() {
 				{
 					Name:       "eno1",
 					MacAddress: "AA:BB:CC:DD:EE:FF",
-					Label:      "bootable-interface",
+					Label:      constants.BootInterfaceLabel,
 				},
 			},
 			Status: hwmgrpluginapi.AllocatedNodeStatus{
@@ -379,7 +378,7 @@ func (m *MockHardwarePluginServer) handleNodeAllocationRequests(w http.ResponseW
 							{
 								Name:       "eno1",
 								MacAddress: "AA:BB:CC:DD:EE:FF",
-								Label:      "bootable-interface",
+								Label:      constants.BootInterfaceLabel,
 							},
 						},
 						Status: hwmgrpluginapi.AllocatedNodeStatus{
@@ -417,7 +416,7 @@ func (m *MockHardwarePluginServer) handleNodeAllocationRequests(w http.ResponseW
 							{
 								Name:       "eno1",
 								MacAddress: "AA:BB:CC:DD:EE:F0",
-								Label:      "bootable-interface",
+								Label:      constants.BootInterfaceLabel,
 							},
 						},
 						Status: hwmgrpluginapi.AllocatedNodeStatus{
@@ -512,7 +511,7 @@ func (m *MockHardwarePluginServer) handleNodeAllocationRequestByID(w http.Respon
 								{
 									Name:       "eno1",
 									MacAddress: "AA:BB:CC:DD:EE:FF",
-									Label:      "bootable-interface",
+									Label:      constants.BootInterfaceLabel,
 								},
 							},
 							Status: hwmgrpluginapi.AllocatedNodeStatus{
@@ -706,8 +705,7 @@ func (m *MockHardwarePluginServer) createKubernetesNodeAllocationRequest(ctx con
 			},
 		},
 		Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-			ClusterId:          request.ClusterId,
-			BootInterfaceLabel: request.BootInterfaceLabel,
+			ClusterId: request.ClusterId,
 		},
 	}
 
@@ -832,7 +830,6 @@ func (m *MockHardwarePluginServer) convertK8sNARToPluginAPI(k8sNAR *pluginsv1alp
 		NodeAllocationRequest: &hwmgrpluginapi.NodeAllocationRequest{
 			ClusterId:           k8sNAR.Spec.ClusterId,
 			Site:                k8sNAR.Spec.Site,
-			BootInterfaceLabel:  k8sNAR.Spec.BootInterfaceLabel,
 			ConfigTransactionId: k8sNAR.Spec.ConfigTransactionId,
 			NodeGroup:           nodeGroups,
 		},

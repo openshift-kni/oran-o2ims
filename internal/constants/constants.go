@@ -174,3 +174,14 @@ const (
 	NarCallbackBaseURL                  = NarCallbackAPIPath + APIVersionV1
 	NarCallbackServicePath              = NarCallbackBaseURL + NarCallbackProvisioningRequestsPath
 )
+
+// Label prefixes
+const (
+	LabelPrefixInterfaces = "interfacelabel.clcm.openshift.io/"
+)
+
+// Boot interface configuration
+const (
+	BootInterfaceLabel        = "boot-interface"
+	BootInterfaceLabelFullKey = LabelPrefixInterfaces + BootInterfaceLabel
+)

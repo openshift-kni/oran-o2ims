@@ -187,8 +187,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 				Namespace: ctlrutils.InventoryNamespace,
 			},
 			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				HardwarePluginRef:  "hwMgr",
-				BootInterfaceLabel: "label",
+				HardwarePluginRef: "hwMgr",
 				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 					{
 						Name:           "master",
@@ -586,8 +585,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 				Namespace: ctlrutils.InventoryNamespace,
 			},
 			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				HardwarePluginRef:  "hwMgr",
-				BootInterfaceLabel: "label",
+				HardwarePluginRef: "hwMgr",
 				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 					{
 						Name:           "master",

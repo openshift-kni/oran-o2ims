@@ -28,7 +28,7 @@ status:
   - label: ""
     macAddress: c3:f7:f5:b2:4d:1a
     name: ens3f1np1
-  - label: bootable-interface
+  - label: boot-interface
     macAddress: c3:f7:f5:b2:4d:1b
     name: eno1np0
   - label: ""
