@@ -448,15 +448,18 @@ func isNodeAllocationRequestFullyAllocated(ctx context.Context,
 }
 
 // handleNodeInProgressUpdate progresses a node that is in in progress of being configured.
-// If its associated BMH status indicates that the update has completed, it updates the node
-// status, clears the config-in-progress annotation, applies the post-change updates, and returns
-// a no-requeue result to allow initiating the next node in the same reconciliation cycle.
+// If its associated BMH status indicates that the update has completed, it validates the
+// configuration, waits for the K8s node to be Ready on the spoke cluster before marking
+// the node status as complete and clearing the config-in-progress annotation. It returns
+// a no-requeue result to allow initiating the next node in the same reconciliation cycle
+// if complete.
 func handleNodeInProgressUpdate(ctx context.Context,
 	c client.Client,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	pluginNamespace string,
 	node *pluginsv1alpha1.AllocatedNode,
+	nar *pluginsv1alpha1.NodeAllocationRequest,
 ) (ctrl.Result, error) {
 	bmh, err := getBMHForNode(ctx, noncachedClient, node)
 	if err != nil {
@@ -489,6 +492,19 @@ func handleNodeInProgressUpdate(ctx context.Context,
 				return ctrl.Result{}, err
 			}
 		}
+
+		// Check if the K8s node is Ready on the spoke cluster before marking update as complete.
+		// This ensures the node has successfully rejoined the cluster after the hardware update.
+		ready, err := CheckNodeReady(ctx, c, logger, nar, node)
+		if err != nil {
+			logger.ErrorContext(ctx, "Failed to check node readiness on spoke cluster",
+				slog.String("allocatedNode", node.Name), slog.String("error", err.Error()))
+			return hwmgrutils.RequeueWithMediumInterval(), nil // Retry later
+		}
+		if !ready {
+			return hwmgrutils.RequeueWithMediumInterval(), nil
+		}
+		logger.InfoContext(ctx, "Node is ready on spoke cluster", slog.String("allocatedNode", node.Name))
 
 		// Update the node's status to reflect the new hardware profile.
 		node.Status.HwProfile = node.Spec.HwProfile
@@ -613,12 +629,10 @@ func initiateNodeUpdate(ctx context.Context,
 // in a NodeAllocationRequest.
 //
 // Update behavior:
-//   - Updates are applied serially: each node must complete (BMH returns to OK status) before
-//     the next node is initiated
+//   - Updates are applied serially: each node must complete (BMH returns to OK status and k8s node is ready)
+//     before the next node is initiated
 //   - Master nodes are updated before worker nodes
 //   - If a node update fails, processing stops and remaining nodes are not updated
-//
-// TODO: Wait for node to be ready before initiating the next node update.
 //
 // This function also returns the nodeList for the caller (deriveNodeAllocationRequestStatusFromNodes)
 // to determine the NodeAllocationRequest status. Note that status conditions in the returned nodeList
@@ -650,7 +664,7 @@ func handleNodeAllocationRequestConfiguring(
 	node := findNodeConfigInProgress(nodelist)
 	if node != nil {
 		logger.InfoContext(ctx, "Node found with configuring in progress, handling node for completion", slog.String("node", node.Name))
-		res, err := handleNodeInProgressUpdate(ctx, c, noncachedClient, logger, pluginNamespace, node)
+		res, err := handleNodeInProgressUpdate(ctx, c, noncachedClient, logger, pluginNamespace, node, nodeAllocationRequest)
 		if err != nil || res.Requeue || res.RequeueAfter > 0 {
 			return res, nodelist, err
 		}
