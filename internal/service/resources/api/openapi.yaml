@@ -1457,8 +1457,11 @@ components:
         alarmDictionary:
           deprecated: true
           description: |
-            Dictionary of alarms for this resource type. DEPRECATED: This attribute is deprecated and may be removed 
-            in future releases. Use alarmDictionaryId instead.
+            Dictionary of alarms for this resource type.
+
+            DEPRECATED (since v2.0.0): full embedded object replaced with ID reference for efficiency.
+
+            See migration guide: docs/deprecations/alarm-dictionary.md
           allOf:
             - $ref: "../../common/api/openapi.yaml#/components/schemas/AlarmDictionary"
         alarmDictionaryId:
@@ -1513,16 +1516,22 @@ components:
           format: uuid
           deprecated: true
           description: |
-            Identifier for the containing O-Cloud. DEPRECATED: This attribute is deprecated and may be removed in 
-            future releases.
+            Identifier for the containing O-Cloud.
+
+            DEPRECATED (since v2.0.0): redundant, O-Cloud context is implicit in the API path.
+
+            See migration guide: docs/deprecations/resource-pool-fields.md
           example: "262c8f17-52b5-4614-9e56-812ae21fa8a7"
         globalLocationId:
           type: string
           format: uuid
           deprecated: true
           description: |
-            This identifier is copied from the O-Cloud Id assigned by the SMO during the O-Cloud deployment. 
-            DEPRECATED: This attribute is deprecated and may be removed in future releases.
+            This identifier is copied from the O-Cloud Id assigned by the SMO during the O-Cloud deployment.
+
+            DEPRECATED (since v2.0.0): replaced by structured LocationInfo model.
+
+            See migration guide: docs/deprecations/resource-pool-fields.md
         name:
           type: string
           description: Human readable name of the resource pool.
@@ -1539,8 +1548,12 @@ components:
           type: string
           deprecated: true
           description: |
-            Information about the geographical location of the resource pool as detected by the O-Cloud. 
-            DEPRECATED: This attribute is deprecated and may be removed in future releases.
+            Information about the geographical location of the resource pool as detected by the O-Cloud.
+
+            DEPRECATED (since v2.0.0): simple string replaced with rich LocationInfo structure 
+            supporting coordinates, civic addresses and human-readable addresses.
+
+            See migration guide: docs/deprecations/resource-pool-fields.md
           example: "EU"
         extensions:
           type: object

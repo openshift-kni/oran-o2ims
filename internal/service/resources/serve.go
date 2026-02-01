@@ -26,6 +26,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/auth"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/deprecation"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	repo2 "github.com/openshift-kni/oran-o2ims/internal/service/common/repo"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/api"
@@ -43,6 +44,9 @@ const (
 
 	username = "resources"
 	database = "resources"
+
+	// docsBaseURL is the base URL for project documentation (used for deprecation Link headers).
+	docsBaseURL = "https://github.com/openshift-kni/oran-o2ims/blob/main"
 )
 
 // Serve start alarms server
@@ -193,6 +197,7 @@ func Serve(config *api.ResourceServerConfig) error {
 		Middlewares: []generated.MiddlewareFunc{ // Add middlewares here
 			middleware.OpenAPIValidation(swagger),
 			middleware.ResponseFilter(filterAdapter),
+			deprecation.HeadersMiddleware(docsBaseURL),
 			authz,
 			authn,
 			middleware.LogDuration(),
