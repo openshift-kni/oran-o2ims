@@ -753,6 +753,33 @@ func processBMHUpdateCase(ctx context.Context,
 
 		message := fmt.Sprintf("BMH in error state: %s", bmh.Status.ErrorType)
 		logger.WarnContext(ctx, message, slog.String("BMH", bmh.Name))
+
+		// Clear config-in-progress annotation before setting node to failed
+		if err := clearConfigAnnotationWithPatch(ctx, c, node); err != nil {
+			logger.ErrorContext(ctx, "Failed to clear config annotation",
+				slog.String("node", node.Name),
+				slog.String("error", err.Error()))
+			return ctrl.Result{}, err
+		}
+
+		// Clear BMH update annotations to ensure clean state for retry
+		if err := clearBMHUpdateAnnotations(ctx, c, logger, bmh); err != nil {
+			logger.WarnContext(ctx, "Failed to clear BMH update annotations after error",
+				slog.String("BMH", bmh.Name),
+				slog.String("error", err.Error()))
+			return hwmgrutils.RequeueWithShortInterval(), nil
+		}
+
+		// Clear BMH error annotation to allow future retry attempts
+		if err := clearTransientBMHErrorAnnotation(ctx, c, logger, bmh); err != nil {
+			logger.WarnContext(ctx, "failed to clear BMH error annotation for future retries",
+				slog.String("BMH", bmh.Name),
+				slog.String("error", err.Error()))
+			return hwmgrutils.RequeueWithShortInterval(), nil
+		}
+
+		// Set node to failed status after cleanup completes
+		// This ensures NAR can be retried after user intervention
 		condType := hwmgmtv1alpha1.Provisioned
 		if postInstall {
 			condType = hwmgmtv1alpha1.Configured
@@ -766,21 +793,6 @@ func processBMHUpdateCase(ctx context.Context,
 			return ctrl.Result{}, fmt.Errorf("failed to set node failed status for %s: %w", node.Name, err)
 		}
 
-		// Clear config-in-progress annotation when node fails
-		if err := clearConfigAnnotationWithPatch(ctx, c, node); err != nil {
-			logger.ErrorContext(ctx, "Failed to clear config annotation",
-				slog.String("node", node.Name),
-				slog.String("error", err.Error()))
-			return ctrl.Result{}, err
-		}
-
-		// Clear BMH error annotation to allow future retry attempts
-		if err := clearTransientBMHErrorAnnotation(ctx, c, logger, bmh); err != nil {
-			logger.WarnContext(ctx, "failed to clear BMH error annotation for future retries",
-				slog.String("BMH", bmh.Name),
-				slog.String("error", err.Error()))
-			return hwmgrutils.RequeueWithShortInterval(), nil
-		}
 		return hwmgrutils.RequeueWithMediumInterval(), nil
 	}
 
