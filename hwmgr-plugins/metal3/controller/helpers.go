@@ -539,6 +539,14 @@ func handleNodeInProgressUpdate(ctx context.Context,
 			return ctrl.Result{}, err
 		}
 
+		// Clear BMH update annotations to ensure clean state for retry
+		if err := clearBMHUpdateAnnotations(ctx, c, logger, bmh); err != nil {
+			logger.WarnContext(ctx, "Failed to clear BMH update annotations after error",
+				slog.String("BMH", bmh.Name),
+				slog.String("error", err.Error()))
+			return ctrl.Result{}, fmt.Errorf("failed to clear BMH update annotations %s:%w", bmh.Name, err)
+		}
+
 		if err := hwmgrutils.SetNodeConditionStatus(ctx, c, noncachedClient,
 			node.Name, node.Namespace,
 			string(hwmgmtv1alpha1.Configured), metav1.ConditionFalse,
