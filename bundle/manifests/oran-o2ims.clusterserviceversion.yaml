@@ -284,7 +284,6 @@ metadata:
             "namespace": "oran-o2ims"
           },
           "spec": {
-            "bootInterfaceLabel": "bootable-interface",
             "hardwarePluginRef": "metal3-hwplugin",
             "hardwareProvisioningTimeout": "60m",
             "nodeGroupData": [
@@ -565,7 +564,7 @@ metadata:
                 "name": "ens3f1np1"
               },
               {
-                "label": "bootable-interface",
+                "label": "boot-interface",
                 "macAddress": "c3:f7:f5:b2:4d:1b",
                 "name": "eno1np0"
               },
@@ -625,7 +624,6 @@ metadata:
             "namespace": "oran-o2ims"
           },
           "spec": {
-            "bootInterfaceLabel": "bootable-interface",
             "clusterId": "cluster1",
             "configTransactionId": 1,
             "hardwarePluginRef": "metal3-hwplugin",
@@ -925,8 +923,10 @@ spec:
         name: ""
         version: v1
       specDescriptors:
-      - description: BootInterfaceLabel is the label of the boot interface.
-        displayName: Boot Interface Label
+      - description: |-
+          BootInterfaceLabel is the label of the boot interface.
+          Deprecated: This field is deprecated and will be ignored. The boot interface label is now fixed as "boot-interface".
+        displayName: Boot Interface Label (Deprecated)
         path: bootInterfaceLabel
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
@@ -1151,8 +1151,10 @@ spec:
         name: ""
         version: v1
       specDescriptors:
-      - description: BootInterfaceLabel is the label of the boot interface.
-        displayName: Boot Interface Label
+      - description: |-
+          BootInterfaceLabel is the label of the boot interface.
+          Deprecated: This field is deprecated and will be ignored. The boot interface label is now fixed as "boot-interface".
+        displayName: Boot Interface Label (Deprecated)
         path: bootInterfaceLabel
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text

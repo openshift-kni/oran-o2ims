@@ -575,8 +575,10 @@ components:
             ConfigTransactionId is the identifier of the configuration transaction.
         bootInterfaceLabel:
           type: string
+          deprecated: true
           description: |
             BootInterfaceLabel is the label of the boot interface.
+            Deprecated: This field is deprecated and will be ignored. The boot interface label is now fixed as "boot-interface".
         callback:
           $ref: '#/components/schemas/Callback'
           description: |
@@ -592,7 +594,6 @@ components:
         - site
         - clusterId
         - configTransactionId
-        - bootInterfaceLabel
 
     NodeGroup:
       description: |

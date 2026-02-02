@@ -26,6 +26,7 @@ import (
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 )
@@ -206,7 +207,6 @@ func GroupBMHsByResourcePool(
 }
 
 func buildInterfacesFromBMH(
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
 	bmh *metal3v1alpha1.BareMetalHost) ([]*pluginsv1alpha1.Interface, error) {
 	var interfaces []*pluginsv1alpha1.Interface
 
@@ -218,7 +218,7 @@ func buildInterfacesFromBMH(
 		label := ""
 
 		if strings.EqualFold(nic.MAC, bmh.Spec.BootMACAddress) {
-			label = nodeAllocationRequest.Spec.BootInterfaceLabel
+			label = constants.BootInterfaceLabel
 		} else {
 			// Interface labels with MACs use - instead of :
 			hyphenatedMac := strings.ReplaceAll(nic.MAC, ":", "-")
@@ -257,7 +257,6 @@ func setBootMACAddressFromLabel(
 	ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
 	bmh *metal3v1alpha1.BareMetalHost) error {
 
 	// Verify hardware details are available
@@ -265,20 +264,12 @@ func setBootMACAddressFromLabel(
 		return fmt.Errorf("bareMetalHost.status.hardwareDetails should not be nil")
 	}
 
-	// Get the boot interface label name
-	bootInterfaceLabel := nodeAllocationRequest.Spec.BootInterfaceLabel
-	if bootInterfaceLabel == "" {
-		return fmt.Errorf("nodeAllocationRequest.spec.bootInterfaceLabel is empty")
-	}
-
 	// If bootMACAddress is already set, the label is optional
 	// Optionally validate it matches the label if the label exists
 	if bmh.Spec.BootMACAddress != "" {
-		// Construct the full label key
-		bootLabelKey := LabelPrefixInterfaces + bootInterfaceLabel
 
 		// Check if the boot interface label exists on the BMH
-		bootLabelValue, found := bmh.Labels[bootLabelKey]
+		bootLabelValue, found := bmh.Labels[constants.BootInterfaceLabelFullKey]
 		if !found {
 			// Label not found, but bootMACAddress is already set - this is fine
 			logger.InfoContext(ctx, "bootMACAddress already set, boot interface label not present (optional)",
@@ -306,24 +297,21 @@ func setBootMACAddressFromLabel(
 
 		if !strings.EqualFold(bmh.Spec.BootMACAddress, targetMAC) {
 			return fmt.Errorf("bootMACAddress '%s' does not match boot interface label '%s' which points to MAC '%s' on BMH '%s'",
-				bmh.Spec.BootMACAddress, bootLabelKey, targetMAC, bmh.Name)
+				bmh.Spec.BootMACAddress, constants.BootInterfaceLabelFullKey, targetMAC, bmh.Name)
 		}
 
 		logger.InfoContext(ctx, "Validated bootMACAddress matches boot interface label",
 			slog.String("bmh", bmh.Name),
-			slog.String("label", bootLabelKey),
+			slog.String("label", constants.BootInterfaceLabelFullKey),
 			slog.String("mac", targetMAC))
 		return nil
 	}
 
 	// bootMACAddress is NOT set - label is REQUIRED to determine the boot MAC
-	// Construct the full label key
-	bootLabelKey := LabelPrefixInterfaces + bootInterfaceLabel
-
 	// Look for the boot interface label on the BMH
-	bootLabelValue, found := bmh.Labels[bootLabelKey]
+	bootLabelValue, found := bmh.Labels[constants.BootInterfaceLabelFullKey]
 	if !found {
-		return fmt.Errorf("boot interface label '%s' not found on BMH '%s'", bootLabelKey, bmh.Name)
+		return fmt.Errorf("boot interface label '%s' not found on BMH '%s'", constants.BootInterfaceLabelFullKey, bmh.Name)
 	}
 
 	// The label value could be either a NIC name or a hyphenated MAC address
@@ -361,7 +349,7 @@ func setBootMACAddressFromLabel(
 			// Validate it matches what we expect
 			if !strings.EqualFold(latestBMH.Spec.BootMACAddress, targetMAC) {
 				return fmt.Errorf("bootMACAddress '%s' does not match boot interface label '%s' which points to MAC '%s' on BMH '%s'",
-					latestBMH.Spec.BootMACAddress, bootLabelKey, targetMAC, latestBMH.Name)
+					latestBMH.Spec.BootMACAddress, constants.BootInterfaceLabelFullKey, targetMAC, latestBMH.Name)
 			}
 			logger.InfoContext(ctx, "bootMACAddress already set and validated",
 				slog.String("bmh", latestBMH.Name),
@@ -385,7 +373,7 @@ func setBootMACAddressFromLabel(
 
 		logger.InfoContext(ctx, "Successfully set bootMACAddress from interface label",
 			slog.String("bmh", latestBMH.Name),
-			slog.String("label", bootLabelKey),
+			slog.String("label", constants.BootInterfaceLabelFullKey),
 			slog.String("labelValue", bootLabelValue),
 			slog.String("mac", targetMAC))
 		return nil

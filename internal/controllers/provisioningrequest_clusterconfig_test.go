@@ -212,7 +212,7 @@ nodes:
   nodeNetwork:
     interfaces:
     - name: eno1
-      label: bootable-interface
+      label: boot-interface
     - name: eth0
       label: base-interface
     - name: eth1
@@ -250,7 +250,6 @@ defaultHugepagesSize: "1G"`,
 				},
 				Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
 					HardwarePluginRef:           utils.UnitTestHwPluginRef,
-					BootInterfaceLabel:          "bootable-interface",
 					HardwareProvisioningTimeout: "1m",
 					NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 						{
@@ -357,9 +356,6 @@ defaultHugepagesSize: "1G"`,
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "cluster-1",
 				Namespace: constants.DefaultNamespace,
-				Annotations: map[string]string{
-					pluginsv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
-				},
 			},
 			Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 				HardwarePluginRef: utils.UnitTestHwPluginRef,
@@ -1905,9 +1901,6 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      mclName,
 				Namespace: constants.DefaultNamespace,
-				Annotations: map[string]string{
-					pluginsv1alpha1.BootInterfaceLabelAnnotation: "bootable-interface",
-				},
 			},
 			Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 				HardwarePluginRef: utils.UnitTestHwPluginRef,

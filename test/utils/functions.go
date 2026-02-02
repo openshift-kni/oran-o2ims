@@ -49,7 +49,7 @@ func RemoveRequiredFieldFromClusterInstanceCm(
       nodeNetwork:
         interfaces:
         - name: eno1
-          label: bootable-interface
+          label: boot-interface
         - name: eth0
           label: base-interface
         - name: eth1
@@ -235,7 +235,7 @@ func CreateNode(name, bmcAddress, bmcSecret, groupName, namespace, narName strin
 		interfaces = []*pluginsv1alpha1.Interface{
 			{
 				Name:       "eno1",
-				Label:      "bootable-interface",
+				Label:      constants.BootInterfaceLabel,
 				MACAddress: "00:00:00:01:20:30",
 			},
 			{

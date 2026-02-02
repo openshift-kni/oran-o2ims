@@ -91,7 +91,7 @@ nodes:
   nodeNetwork:
     interfaces:
     - name: eno1
-      label: bootable-interface
+      label: boot-interface
     - name: eth0
       label: base-interface
     - name: eth1

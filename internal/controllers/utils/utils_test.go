@@ -1012,7 +1012,7 @@ properties:
 						"interfaces": []interface{}{
 							map[string]interface{}{
 								"name":       "eth0",
-								"label":      "bootable-interface",
+								"label":      constants.BootInterfaceLabel,
 								"macAddress": "aa:aa:aa:aa:aa:aa",
 							},
 							map[string]interface{}{
@@ -1051,7 +1051,7 @@ properties:
 					"nodeNetwork": map[string]interface{}{
 						"interfaces": []interface{}{
 							map[string]interface{}{
-								"label": "bootable-interface",
+								"label": constants.BootInterfaceLabel,
 							},
 							map[string]interface{}{
 								"label": "data-interface",
@@ -1122,7 +1122,7 @@ properties:
 						"interfaces": []interface{}{
 							map[string]interface{}{
 								"name":       "eth0",
-								"label":      "bootable-interface",
+								"label":      constants.BootInterfaceLabel,
 								"macAddress": "aa:aa:aa:aa:aa:aa",
 							},
 							map[string]interface{}{
@@ -1176,7 +1176,7 @@ properties:
 					"nodeNetwork": map[string]interface{}{
 						"interfaces": []interface{}{
 							map[string]interface{}{
-								"label": "bootable-interface",
+								"label": constants.BootInterfaceLabel,
 							},
 							map[string]interface{}{
 								"label": "data-interface",

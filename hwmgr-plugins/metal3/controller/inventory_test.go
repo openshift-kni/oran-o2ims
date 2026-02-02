@@ -25,6 +25,7 @@ import (
 
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/inventory"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
 
 /*
@@ -1118,7 +1119,7 @@ var _ = Describe("Inventory", func() {
 	Describe("Regex patterns", func() {
 		Describe("REPatternInterfaceLabel", func() {
 			It("should match interface labels correctly", func() {
-				matches := REPatternInterfaceLabel.FindStringSubmatch(LabelPrefixInterfaces + "eth0")
+				matches := REPatternInterfaceLabel.FindStringSubmatch(constants.LabelPrefixInterfaces + "eth0")
 				Expect(matches).To(HaveLen(2))
 				Expect(matches[1]).To(Equal("eth0"))
 			})
@@ -1152,7 +1153,7 @@ var _ = Describe("Inventory", func() {
 			Expect(LabelResourcePoolID).To(Equal("resources.clcm.openshift.io/resourcePoolId"))
 			Expect(LabelSiteID).To(Equal("resources.clcm.openshift.io/siteId"))
 			Expect(LabelPrefixResourceSelector).To(Equal("resourceselector.clcm.openshift.io/"))
-			Expect(LabelPrefixInterfaces).To(Equal("interfacelabel.clcm.openshift.io/"))
+			Expect(constants.LabelPrefixInterfaces).To(Equal("interfacelabel.clcm.openshift.io/"))
 		})
 
 		It("should have correct annotation prefixes", func() {
