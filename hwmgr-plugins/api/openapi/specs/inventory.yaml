@@ -557,11 +557,6 @@ components:
         Information about a processor
       type: object
       properties:
-        manufacturer:
-          type: string
-          description:
-            The manufacturer of the processor
-          example: "Intel"
         model:
           type: string
           description:
@@ -571,12 +566,91 @@ components:
           type: string
           description:
             The processor architecture
-          example: "x86-64"
-        cores:
+          example: "x86_64"
+        cpus:
           type: integer
           description:
-            The total number of physical cores
-          example: 32
+            The total number of physical CPUs
+          example: 64
+        frequency:
+          type: integer
+          description:
+            The processor frequency in MHz
+          example: 3600
+
+    NicInfo:
+      description:
+        Information about a network interface card
+      type: object
+      properties:
+        mac:
+          type: string
+          description:
+            The device MAC address
+          example: "40:a6:b7:b1:6d:7a"
+        model:
+          type: string
+          description:
+            The vendor and product IDs of the NIC
+          example: "0x8086 0x1593"
+        speedGbps:
+          type: integer
+          description:
+            The speed of the device in Gigabits per second
+          example: 25
+        label:
+          type: string
+          description:
+            The interface label assigned to this NIC via BMH labels
+          example: "data-interface"
+        bootInterface:
+          type: boolean
+          description:
+            Indicates if this is the boot interface (MAC matches BMH bootMACAddress)
+          example: true
+
+    StorageInfo:
+      description:
+        Information about a storage device
+      type: object
+      properties:
+        alternateNames:
+          type: array
+          items:
+            type: string
+          description:
+            A list of alternate Linux device names
+          example: ["/dev/nvme1n1", "/dev/disk/by-path/pci-0000:44:00.0-nvme-1"]
+        model:
+          type: string
+          description:
+            Hardware model
+          example: "Dell NVMe PE8010 RI M.2 960GB"
+        serialNumber:
+          type: string
+          description:
+            The serial number of the device
+          example: "NDC5N4765I0405N4P"
+        sizeBytes:
+          type: integer
+          format: int64
+          description:
+            The size of the disk in bytes
+          example: 960197124096
+        type:
+          type: string
+          enum:
+            - HDD
+            - SSD
+            - NVME
+          description:
+            Device type
+          example: "NVME"
+        wwn:
+          type: string
+          description:
+            The WWN of the device
+          example: "eui.ace42e00357f8b6f"
 
     ResourceInfo:
       description:
@@ -606,14 +680,6 @@ components:
           description:
             Identifier or serial number of the resource, if available.
           example: "assetid-a"
-        serialNumber:
-          type: string
-          description:
-            The vendor serial number of the resource
-        partNumber:
-          type: string
-          description:
-            The vendor part number of the resource
         model:
           type: string
           description:
@@ -650,6 +716,36 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ProcessorInfo"
+        nics:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/NicInfo"
+          description:
+            Network interface cards indexed by interface name
+          example:
+            "ens2f2":
+              mac: "40:a6:b7:b1:6d:7a"
+              model: "0x8086 0x1593"
+              speedGbps: 25
+        storage:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/StorageInfo"
+          description:
+            Storage devices indexed by device path
+          example:
+            "/dev/disk/by-path/pci-0000:44:00.0-nvme-1":
+              alternateNames: ["/dev/nvme1n1"]
+              model: "Dell NVMe PE8010 RI M.2 960GB"
+              serialNumber: "NDC5N4765I0405N4P"
+              sizeBytes: 960197124096
+              type: "NVME"
+              wwn: "eui.ace42e00357f8b6f"
+        allocated:
+          type: boolean
+          description:
+            Indicates whether the resource has been allocated for use in a cluster
+          example: true
         powerState:
           type: string
           enum:
@@ -686,8 +782,6 @@ components:
         - name
         - vendor
         - model
-        - serialNumber
-        - partNumber
         - memory
         - processors
         - adminState
