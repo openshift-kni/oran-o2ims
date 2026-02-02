@@ -91,6 +91,7 @@ import (
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -100,6 +101,7 @@ import (
 
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 )
 
@@ -1322,16 +1324,22 @@ var _ = Describe("Helpers", func() {
 
 		Context("handleNodeInProgressUpdate", func() {
 			var (
-				testBMH    *metal3v1alpha1.BareMetalHost
-				testNode   *pluginsv1alpha1.AllocatedNode
-				testClient client.Client
-				ctx        context.Context
-				logger     *slog.Logger
+				testBMH            *metal3v1alpha1.BareMetalHost
+				testNode           *pluginsv1alpha1.AllocatedNode
+				testNAR            *pluginsv1alpha1.NodeAllocationRequest
+				testClient         client.Client
+				spokeClient        client.Client
+				ctx                context.Context
+				logger             *slog.Logger
+				originalClientFunc func(context.Context, client.Client, string) (client.Client, error)
 			)
 
 			BeforeEach(func() {
 				ctx = context.Background()
 				logger = slog.New(slog.NewTextHandler(GinkgoWriter, &slog.HandlerOptions{}))
+
+				// Save original function and restore in AfterEach
+				originalClientFunc = newClientForClusterFunc
 
 				// Create a test AllocatedNode with config-in-progress annotation
 				testNode = &pluginsv1alpha1.AllocatedNode{
@@ -1346,6 +1354,34 @@ var _ = Describe("Helpers", func() {
 						HwMgrNodeId: "test-bmh",
 						HwMgrNodeNs: "test-namespace",
 						HwProfile:   "test-hw-profile",
+					},
+				}
+
+				// Create a test NAR with callback URL pointing to test PR
+				testNAR = &pluginsv1alpha1.NodeAllocationRequest{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-nar",
+						Namespace: "test-namespace",
+					},
+					Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+						ClusterId: "test-cluster",
+						Callback: &pluginsv1alpha1.Callback{
+							CallbackURL: "http://localhost/nar-callback/v1/provisioning-requests/test-pr",
+						},
+					},
+				}
+
+				// Create a test ProvisioningRequest with AllocatedNodeHostMap
+				testPR := &provisioningv1alpha1.ProvisioningRequest{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-pr",
+					},
+					Status: provisioningv1alpha1.ProvisioningRequestStatus{
+						Extensions: provisioningv1alpha1.Extensions{
+							AllocatedNodeHostMap: map[string]string{
+								"test-node": "test-node.example.com",
+							},
+						},
 					},
 				}
 				// Create HardwareProfile with empty BIOS/firmware settings to pass validation checks
@@ -1374,22 +1410,29 @@ var _ = Describe("Helpers", func() {
 					},
 				}
 
-				// Create fake client with the test objects
+				// Create fake hub client with the test objects
 				scheme := runtime.NewScheme()
 				Expect(metal3v1alpha1.AddToScheme(scheme)).To(Succeed())
 				Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
 				Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
+				Expect(provisioningv1alpha1.AddToScheme(scheme)).To(Succeed())
+				Expect(corev1.AddToScheme(scheme)).To(Succeed())
 
 				testClient = fake.NewClientBuilder().
 					WithScheme(scheme).
-					WithObjects(testBMH, testNode, testHwProfile).
+					WithObjects(testBMH, testNode, testHwProfile, testPR).
 					WithStatusSubresource(&pluginsv1alpha1.AllocatedNode{}).
 					Build()
 			})
 
+			AfterEach(func() {
+				// Restore the original function
+				newClientForClusterFunc = originalClientFunc
+			})
+
 			It("should clean up config annotation when BMH is in error state", func() {
 				// Call handleNodeInProgressUpdate
-				result, err := handleNodeInProgressUpdate(ctx, testClient, testClient, logger, "test-plugin-namespace", testNode)
+				result, err := handleNodeInProgressUpdate(ctx, testClient, testClient, logger, "test-plugin-namespace", testNode, testNAR)
 
 				// Verify the function handled the error case
 				Expect(err).To(HaveOccurred())
@@ -1417,7 +1460,7 @@ var _ = Describe("Helpers", func() {
 				Expect(testClient.Update(ctx, testBMH)).To(Succeed())
 
 				// Call handleNodeInProgressUpdate
-				result, err := handleNodeInProgressUpdate(ctx, testClient, testClient, logger, "test-plugin-namespace", testNode)
+				result, err := handleNodeInProgressUpdate(ctx, testClient, testClient, logger, "test-plugin-namespace", testNode, testNAR)
 
 				// Verify the function continues waiting
 				Expect(err).ToNot(HaveOccurred())
@@ -1434,7 +1477,7 @@ var _ = Describe("Helpers", func() {
 				Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 			})
 
-			It("should clear config annotation and return no requeue when BMH is in OK state", func() {
+			It("should clear config annotation and return no requeue when BMH is in OK state and node is ready", func() {
 				// Update BMH to be in OK state
 				testBMH.Status.OperationalStatus = metal3v1alpha1.OperationalStatusOK
 				testBMH.Status.ErrorMessage = ""
@@ -1442,8 +1485,34 @@ var _ = Describe("Helpers", func() {
 				// Update the client with the modified BMH
 				Expect(testClient.Update(ctx, testBMH)).To(Succeed())
 
-				// Call handleNodeInProgressUpdate with the fresh node
-				result, err := handleNodeInProgressUpdate(ctx, testClient, testClient, logger, "test-plugin-namespace", testNode)
+				// Create a ready K8s node for the spoke cluster
+				readyK8sNode := &corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-node.example.com",
+					},
+					Status: corev1.NodeStatus{
+						Conditions: []corev1.NodeCondition{
+							{Type: corev1.NodeReady, Status: corev1.ConditionTrue},
+							{Type: corev1.NodeNetworkUnavailable, Status: corev1.ConditionFalse},
+						},
+					},
+				}
+
+				// Create fake spoke client with the ready K8s node
+				spokeScheme := runtime.NewScheme()
+				Expect(corev1.AddToScheme(spokeScheme)).To(Succeed())
+				spokeClient = fake.NewClientBuilder().
+					WithScheme(spokeScheme).
+					WithObjects(readyK8sNode).
+					Build()
+
+				// Mock the spoke client creation function
+				newClientForClusterFunc = func(_ context.Context, _ client.Client, _ string) (client.Client, error) {
+					return spokeClient, nil
+				}
+
+				// Call handleNodeInProgressUpdate
+				result, err := handleNodeInProgressUpdate(ctx, testClient, testClient, logger, "test-plugin-namespace", testNode, testNAR)
 
 				// Verify the function clears the config annotation and returns no requeue
 				Expect(err).ToNot(HaveOccurred())
@@ -1458,6 +1527,56 @@ var _ = Describe("Helpers", func() {
 
 				// Verify node status was updated to ConfigApplied
 				Expect(updatedNode.Status.HwProfile).To(Equal("test-hw-profile"))
+			})
+
+			It("should wait and requeue when BMH is in OK state but node is not ready", func() {
+				// Update BMH to be in OK state
+				testBMH.Status.OperationalStatus = metal3v1alpha1.OperationalStatusOK
+				testBMH.Status.ErrorMessage = ""
+				testBMH.Status.ErrorType = ""
+				Expect(testClient.Update(ctx, testBMH)).To(Succeed())
+
+				// Create a not-ready K8s node for the spoke cluster
+				notReadyK8sNode := &corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-node.example.com",
+					},
+					Status: corev1.NodeStatus{
+						Conditions: []corev1.NodeCondition{
+							{Type: corev1.NodeReady, Status: corev1.ConditionFalse},
+							{Type: corev1.NodeNetworkUnavailable, Status: corev1.ConditionTrue},
+						},
+					},
+				}
+
+				// Create spoke client with not-ready node
+				spokeScheme := runtime.NewScheme()
+				Expect(corev1.AddToScheme(spokeScheme)).To(Succeed())
+				notReadySpokeClient := fake.NewClientBuilder().
+					WithScheme(spokeScheme).
+					WithObjects(notReadyK8sNode).
+					Build()
+
+				// Override the mock to return the not-ready spoke client
+				newClientForClusterFunc = func(_ context.Context, _ client.Client, _ string) (client.Client, error) {
+					return notReadySpokeClient, nil
+				}
+
+				// Call handleNodeInProgressUpdate
+				result, err := handleNodeInProgressUpdate(ctx, testClient, testClient, logger, "test-plugin-namespace", testNode, testNAR)
+
+				// Verify no error but should requeue
+				Expect(err).ToNot(HaveOccurred())
+				Expect(result).To(Equal(hwmgrutils.RequeueWithMediumInterval()))
+
+				// Verify that the config annotation was NOT removed (still waiting)
+				updatedNode := &pluginsv1alpha1.AllocatedNode{}
+				nodeKey := types.NamespacedName{Name: testNode.Name, Namespace: testNode.Namespace}
+				Expect(testClient.Get(ctx, nodeKey, updatedNode)).To(Succeed())
+				Expect(updatedNode.Annotations).To(HaveKey(ConfigAnnotation))
+
+				// Verify node status was NOT updated to the new profile
+				Expect(updatedNode.Status.HwProfile).ToNot(Equal(testNode.Spec.HwProfile))
 			})
 
 			Context("Integration test scenarios", func() {

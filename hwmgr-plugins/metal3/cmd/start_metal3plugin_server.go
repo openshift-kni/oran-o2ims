@@ -28,6 +28,7 @@ import (
 	bmhv1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	hwpluginserver "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/provisioning"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	metal3ctrl "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/metal3/controller"
@@ -47,6 +48,7 @@ func init() {
 	utilruntime.Must(hwmgmtv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(pluginsv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(bmhv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(provisioningv1alpha1.AddToScheme(scheme))
 }
 
 // Create creates and returns the `start` command.
