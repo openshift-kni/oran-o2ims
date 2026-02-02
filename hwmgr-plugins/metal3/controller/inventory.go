@@ -38,11 +38,10 @@ const (
 	LabelValueMissingBMCData      = "hfc-missing-bmc-data"
 	LabelValueMissingBIOSData     = "hfc-missing-bios-data"
 
-	AnnotationPrefixResourceInfo        = "resourceinfo.clcm.openshift.io/"
-	AnnotationResourceInfoDescription   = AnnotationPrefixResourceInfo + "description"
-	AnnotationResourceInfoPartNumber    = AnnotationPrefixResourceInfo + "partNumber"
-	AnnotationResourceInfoGlobalAssetId = AnnotationPrefixResourceInfo + "globalAssetId"
-	AnnotationsResourceInfoGroups       = AnnotationPrefixResourceInfo + "groups"
+	AnnotationPrefixResourceInfo      = "resourceinfo.clcm.openshift.io/"
+	AnnotationResourceInfoDescription = AnnotationPrefixResourceInfo + "description"
+	AnnotationResourceInfoPartNumber  = AnnotationPrefixResourceInfo + "partNumber"
+	AnnotationsResourceInfoGroups     = AnnotationPrefixResourceInfo + "groups"
 )
 
 // The following regex pattern is used to find interface labels
@@ -71,10 +70,9 @@ func getResourceInfoDescription(bmh *metal3v1alpha1.BareMetalHost) string {
 	return emptyString
 }
 
-func getResourceInfoGlobalAssetId(bmh *metal3v1alpha1.BareMetalHost) *string {
-	if bmh.Annotations != nil {
-		annotation := bmh.Annotations[AnnotationResourceInfoGlobalAssetId]
-		return &annotation
+func getResourceInfoGlobalAssetId(hwdata *metal3v1alpha1.HardwareData) *string {
+	if hwdata.Spec.HardwareDetails != nil {
+		return &hwdata.Spec.HardwareDetails.SystemVendor.SerialNumber
 	}
 
 	return &emptyString
@@ -135,14 +133,6 @@ func getResourceInfoOperationalState(bmh *metal3v1alpha1.BareMetalHost) inventor
 	return inventory.ResourceInfoOperationalStateDISABLED
 }
 
-func getResourceInfoPartNumber(bmh *metal3v1alpha1.BareMetalHost) string {
-	if bmh.Annotations != nil {
-		return bmh.Annotations[AnnotationResourceInfoPartNumber]
-	}
-
-	return emptyString
-}
-
 func getResourceInfoPowerState(bmh *metal3v1alpha1.BareMetalHost) *inventory.ResourceInfoPowerState {
 	state := inventory.OFF
 	if bmh.Status.PoweredOn {
@@ -159,7 +149,7 @@ func getProcessorInfoArchitecture(hwdata *metal3v1alpha1.HardwareData) *string {
 	return &emptyString
 }
 
-func getProcessorInfoCores(hwdata *metal3v1alpha1.HardwareData) *int {
+func getProcessorInfoCpus(hwdata *metal3v1alpha1.HardwareData) *int {
 	if hwdata.Spec.HardwareDetails != nil {
 		return &hwdata.Spec.HardwareDetails.CPU.Count
 	}
@@ -167,8 +157,13 @@ func getProcessorInfoCores(hwdata *metal3v1alpha1.HardwareData) *int {
 	return nil
 }
 
-func getProcessorInfoManufacturer() *string {
-	return &emptyString
+func getProcessorInfoFrequency(hwdata *metal3v1alpha1.HardwareData) *int {
+	if hwdata.Spec.HardwareDetails != nil {
+		freq := int(hwdata.Spec.HardwareDetails.CPU.ClockMegahertz)
+		return &freq
+	}
+
+	return nil
 }
 
 func getProcessorInfoModel(hwdata *metal3v1alpha1.HardwareData) *string {
@@ -184,8 +179,8 @@ func getResourceInfoProcessors(hwdata *metal3v1alpha1.HardwareData) []inventory.
 	if hwdata.Spec.HardwareDetails != nil {
 		processors = append(processors, inventory.ProcessorInfo{
 			Architecture: getProcessorInfoArchitecture(hwdata),
-			Cores:        getProcessorInfoCores(hwdata),
-			Manufacturer: getProcessorInfoManufacturer(),
+			Cpus:         getProcessorInfoCpus(hwdata),
+			Frequency:    getProcessorInfoFrequency(hwdata),
 			Model:        getProcessorInfoModel(hwdata),
 		})
 	}
@@ -207,11 +202,74 @@ func getResourceInfoResourceProfileId(node *pluginsv1alpha1.AllocatedNode) strin
 	return emptyString
 }
 
-func getResourceInfoSerialNumber(hwdata *metal3v1alpha1.HardwareData) string {
-	if hwdata.Spec.HardwareDetails != nil {
-		return hwdata.Spec.HardwareDetails.SystemVendor.SerialNumber
+func getResourceInfoNics(bmh *metal3v1alpha1.BareMetalHost, hwdata *metal3v1alpha1.HardwareData) map[string]inventory.NicInfo {
+	if hwdata.Spec.HardwareDetails == nil || len(hwdata.Spec.HardwareDetails.NIC) == 0 {
+		return nil
 	}
-	return emptyString
+
+	// Build a reverse map of interface name -> label suffix
+	interfaceLabels := make(map[string]string)
+	if bmh.Labels != nil {
+		for fullLabel, interfaceName := range bmh.Labels {
+			match := REPatternInterfaceLabel.FindStringSubmatch(fullLabel)
+			if len(match) == 2 {
+				// match[0] is the full label, match[1] is the suffix after the prefix
+				labelSuffix := match[1]
+				interfaceLabels[interfaceName] = labelSuffix
+			}
+		}
+	}
+
+	nics := make(map[string]inventory.NicInfo)
+	for _, nic := range hwdata.Spec.HardwareDetails.NIC {
+		nicInfo := inventory.NicInfo{
+			Mac:       &nic.MAC,
+			Model:     &nic.Model,
+			SpeedGbps: &nic.SpeedGbps,
+		}
+		// Add label if this NIC has an interface label
+		if labelSuffix, exists := interfaceLabels[nic.Name]; exists {
+			nicInfo.Label = &labelSuffix
+		}
+		// Mark as boot interface if MAC matches BMH bootMACAddress
+		if bmh.Spec.BootMACAddress != "" && nic.MAC == bmh.Spec.BootMACAddress {
+			bootInterface := true
+			nicInfo.BootInterface = &bootInterface
+		}
+		nics[nic.Name] = nicInfo
+	}
+	return nics
+}
+
+func getResourceInfoStorage(hwdata *metal3v1alpha1.HardwareData) map[string]inventory.StorageInfo {
+	if hwdata.Spec.HardwareDetails == nil || len(hwdata.Spec.HardwareDetails.Storage) == 0 {
+		return nil
+	}
+
+	storage := make(map[string]inventory.StorageInfo)
+	for _, disk := range hwdata.Spec.HardwareDetails.Storage {
+		storageType := inventory.StorageInfoType(disk.Type)
+		storage[disk.Name] = inventory.StorageInfo{
+			AlternateNames: &disk.AlternateNames,
+			Model:          &disk.Model,
+			SerialNumber:   &disk.SerialNumber,
+			SizeBytes:      (*int64)(&disk.SizeBytes),
+			Type:           &storageType,
+			Wwn:            &disk.WWN,
+		}
+	}
+	return storage
+}
+
+func getResourceInfoAllocated(bmh *metal3v1alpha1.BareMetalHost) *bool {
+	if bmh.Labels != nil {
+		if allocated, exists := bmh.Labels[BmhAllocatedLabel]; exists && allocated == ValueTrue {
+			result := true
+			return &result
+		}
+	}
+	result := false
+	return &result
 }
 
 func getResourceInfoTags(bmh *metal3v1alpha1.BareMetalHost) *[]string {
@@ -312,10 +370,14 @@ func includeInInventory(bmh *metal3v1alpha1.BareMetalHost) bool {
 }
 
 func getResourceInfo(bmh *metal3v1alpha1.BareMetalHost, node *pluginsv1alpha1.AllocatedNode, hwdata *metal3v1alpha1.HardwareData) inventory.ResourceInfo {
-	return inventory.ResourceInfo{
+	nics := getResourceInfoNics(bmh, hwdata)
+	storage := getResourceInfoStorage(hwdata)
+
+	result := inventory.ResourceInfo{
 		AdminState:       getResourceInfoAdminState(bmh),
+		Allocated:        getResourceInfoAllocated(bmh),
 		Description:      getResourceInfoDescription(bmh),
-		GlobalAssetId:    getResourceInfoGlobalAssetId(bmh),
+		GlobalAssetId:    getResourceInfoGlobalAssetId(hwdata),
 		Groups:           getResourceInfoGroups(bmh),
 		HwProfile:        getResourceInfoResourceProfileId(node),
 		Labels:           getResourceInfoLabels(bmh),
@@ -323,16 +385,24 @@ func getResourceInfo(bmh *metal3v1alpha1.BareMetalHost, node *pluginsv1alpha1.Al
 		Model:            getResourceInfoModel(hwdata),
 		Name:             getResourceInfoName(bmh),
 		OperationalState: getResourceInfoOperationalState(bmh),
-		PartNumber:       getResourceInfoPartNumber(bmh),
 		PowerState:       getResourceInfoPowerState(bmh),
 		Processors:       getResourceInfoProcessors(hwdata),
 		ResourceId:       getResourceInfoResourceId(bmh),
 		ResourcePoolId:   getResourceInfoResourcePoolId(bmh),
-		SerialNumber:     getResourceInfoSerialNumber(hwdata),
 		Tags:             getResourceInfoTags(bmh),
 		UsageState:       getResourceInfoUsageState(bmh),
 		Vendor:           getResourceInfoVendor(hwdata),
 	}
+
+	if nics != nil {
+		result.Nics = &nics
+	}
+
+	if storage != nil {
+		result.Storage = &storage
+	}
+
+	return result
 }
 
 func GetResourcePools(ctx context.Context, c client.Client) (inventory.GetResourcePoolsResponseObject, error) {
