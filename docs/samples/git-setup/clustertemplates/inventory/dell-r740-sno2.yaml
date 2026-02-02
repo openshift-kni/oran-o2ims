@@ -47,7 +47,6 @@ metadata:
     bmac.agent-install.openshift.io/allow-provisioned-host-management: ""
     resourceinfo.clcm.openshift.io/description: "R740 server with Green label"
     resourceinfo.clcm.openshift.io/partNumber: "00002"
-    resourceinfo.clcm.openshift.io/globalAssetId: "asset0002"
     resourceinfo.clcm.openshift.io/groups: "groupA"
   name: dell-r740-sno2
   namespace: dell-r740-pool
