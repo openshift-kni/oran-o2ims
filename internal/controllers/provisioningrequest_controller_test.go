@@ -3063,7 +3063,6 @@ nodes:
 					NodeAllocationRequest: &hwmgrpluginapi.NodeAllocationRequest{
 						ClusterId:           testClusterName,
 						Site:                "test-site",
-						BootInterfaceLabel:  "eth0",
 						ConfigTransactionId: 12345,
 					},
 					Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
@@ -3089,7 +3088,6 @@ nodes:
 				// Verify response structure
 				Expect(response.NodeAllocationRequest.ClusterId).To(Equal(testClusterName))
 				Expect(response.NodeAllocationRequest.Site).To(Equal("test-site"))
-				Expect(response.NodeAllocationRequest.BootInterfaceLabel).To(Equal("eth0"))
 				Expect(response.NodeAllocationRequest.ConfigTransactionId).To(Equal(int64(12345)))
 				Expect(response.Status).ToNot(BeNil())
 				Expect(response.Status.Conditions).ToNot(BeNil())
@@ -5903,7 +5901,6 @@ plan:
 				Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
 					HardwareProvisioningTimeout: "30m",
 					HardwarePluginRef:           "test-hw-plugin",
-					BootInterfaceLabel:          "test-label",
 					NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 						{
 							Name:           "master",

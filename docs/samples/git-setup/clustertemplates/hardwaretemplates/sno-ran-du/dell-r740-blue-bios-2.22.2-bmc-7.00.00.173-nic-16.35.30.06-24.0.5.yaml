@@ -9,7 +9,6 @@ spec:
   # (e.g., "90m" for 90 minutes)
   # hardwareProvisioningTimeout: "90m"
   hardwarePluginRef: metal3-hwplugin
-  bootInterfaceLabel: bootable-interface
   nodeGroupData:
     - name: controller
       role: master

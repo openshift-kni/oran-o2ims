@@ -803,12 +803,12 @@ func allocateBMHToNodeAllocationRequest(
 	// Set bootMACAddress from interface labels if not already set
 	// This enables the pre-provisioned hardware workflow where boot interface
 	// is identified via labels instead of requiring bootMACAddress in the spec
-	if err := setBootMACAddressFromLabel(ctx, c, logger, nodeAllocationRequest, bmh); err != nil {
+	if err := setBootMACAddressFromLabel(ctx, c, logger, bmh); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to set bootMACAddress from interface label for BMH (%s): %w", bmh.Name, err)
 	}
 
 	// Update node status
-	bmhInterface, err := buildInterfacesFromBMH(nodeAllocationRequest, bmh)
+	bmhInterface, err := buildInterfacesFromBMH(bmh)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to build interfaces from BareMetalHost '%s': %w", bmh.Name, err)
 	}

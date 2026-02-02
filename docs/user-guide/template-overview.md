@@ -76,7 +76,6 @@ At runtime, the Metal3 hardware plugin finds BareMetalHosts whose labels satisfy
 
 **[TODO] Add documentation for the hardware data selector**
 
-The template also carries a `bootInterfaceLabel` that identifies which NIC is used for booting. This label is later matched against the interface list to resolve the boot MAC address. For more details, refer to [ClusterInstance defaults ConfigMap](#clusterinstance-defaults-configmap).
 The template includes a `hardwarePluginRef`, which points to `metal3-hwplugin` (automatically created by the operator), and a reference to the HardwareProfile that should be applied to the matched hosts. The ClusterTemplate references the HardwareTemplate at `spec.templates.hwTemplate`.
 
 Example files are under [hardwaretemplates](../samples/git-setup/clustertemplates/hardwaretemplates/).
@@ -86,7 +85,7 @@ For details about server onboarding, refer to [Server Onboarding](./server-onboa
 
 Cluster installation defaults that are common across clusters are provided in a ConfigMap and referenced by the ClusterTemplate. These defaults can include node configuration, networking, and other baseline settings. All fields must comply with the SiteConfig `ClusterInstance` schema.
 
-Each node’s boot interface in the `interfaces` list must include a label that matches the `spec.bootInterfaceLabel` in the associated HardwareTemplate.  This allows the O-Cloud manager to resolve the boot NIC’s MAC address from the NIC-to-MAC mappings retrieved from the Metal3 hardware plugin.
+Each node’s boot interface in the `interfaces` list must include a `boot-interface` label.  This allows the O-Cloud manager to resolve the boot NIC’s MAC address from the NIC-to-MAC mappings retrieved from the Metal3 hardware plugin.
 
 For example,
 
@@ -96,7 +95,7 @@ nodes:
     nodeNetwork:
       interfaces:
         - name: eno1
-          label: bootable-interface
+          label: boot-interface
         - name: eno2
 ```
 
