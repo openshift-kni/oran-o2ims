@@ -476,13 +476,6 @@ func handleNodeInProgressUpdate(ctx context.Context,
 			return hwmgrutils.RequeueWithMediumInterval(), nil
 		}
 
-		// Clear firmware spec fields after validation succeeds
-		if err := clearFirmwareSpecFields(ctx, c, logger, bmh); err != nil {
-			logger.ErrorContext(ctx, "Failed to clear firmware spec fields",
-				slog.String("BMH", bmh.Name), slog.String("error", err.Error()))
-			// Don't fail the entire operation if cleanup fails - log and continue
-		}
-
 		if _, hasAnnotation := bmh.Annotations[BmhErrorTimestampAnnotation]; hasAnnotation {
 			if err := clearTransientBMHErrorAnnotation(ctx, c, logger, bmh); err != nil {
 				logger.WarnContext(ctx, "failed to clean up transient error annotation", slog.String("BMH", bmh.Name), slog.String("error", err.Error()))
