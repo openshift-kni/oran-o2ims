@@ -21,6 +21,22 @@
 
 ## Request Examples
 
+> **Interactive API Documentation**
+>
+> You can explore the API interactively using Swagger UI. From the project root, run:
+>
+> ```bash
+> make swagger-ui-start
+> ```
+>
+> Then open <http://localhost:9090> in your browser. This provides an interactive interface
+> to browse endpoints, view schemas, and try out requests. To stop the Swagger UI container:
+>
+> ```bash
+> make swagger-ui-stop
+> ```
+>
+
 ### Query the Metadata endpoints
 
 > :warning: Confirm that an authorization token has already been acquired. See
