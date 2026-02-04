@@ -674,6 +674,9 @@ func handleTransitionNode(ctx context.Context,
 	}
 
 	// Process each update case for the current BMH.
+	// Since BMO can process both BIOS and firmware updates in a single cycle,
+	// we process all annotations that exist so they can all be removed when
+	// the BMH enters the transitional state.
 	for _, uc := range updateCases {
 		if _, exists := bmh.Annotations[uc.AnnotationKey]; !exists {
 			continue
@@ -683,8 +686,7 @@ func handleTransitionNode(ctx context.Context,
 			// Propagate either requeue or error
 			return res, err
 		}
-		// Only handle one update case per reconciliation cycle
-		return ctrl.Result{}, nil
+		// Continue to process remaining annotations in the same cycle
 	}
 
 	return ctrl.Result{}, nil
