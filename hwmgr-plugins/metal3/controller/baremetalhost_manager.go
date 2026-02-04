@@ -496,6 +496,11 @@ func processHwProfile(ctx context.Context,
 	pluginNamespace string,
 	bmh *metal3v1alpha1.BareMetalHost, profileName string, postInstall bool) (bool, error) {
 
+	logger.DebugContext(ctx, "Processing hardware profile for BMH",
+		slog.String("bmh", bmh.Name),
+		slog.String("hwProfile", profileName),
+		slog.Bool("postInstall", postInstall))
+
 	// Clear any existing update annotations to ensure clean state
 	if err := clearBMHUpdateAnnotations(ctx, c, logger, bmh); err != nil {
 		return false, fmt.Errorf("failed to clear existing update annotations from BMH %s: %w", bmh.Name, err)
@@ -515,20 +520,32 @@ func processHwProfile(ctx context.Context,
 	// Check if BIOS update is required
 	biosUpdateRequired := false
 	if hwProfile.Spec.Bios.Attributes != nil {
+		logger.DebugContext(ctx, "Checking if BIOS update is required",
+			slog.String("bmh", bmh.Name))
 		biosUpdateRequired, err = IsBiosUpdateRequired(ctx, c, logger, bmh, hwProfile.Spec.Bios)
 		if err != nil {
 			return false, err
 		}
+		logger.DebugContext(ctx, "BIOS update check complete",
+			slog.String("bmh", bmh.Name),
+			slog.Bool("biosUpdateRequired", biosUpdateRequired))
 	}
 
 	// Check if firmware update is required
+	logger.DebugContext(ctx, "Checking if firmware update is required",
+		slog.String("bmh", bmh.Name))
 	firmwareUpdateRequired, err := IsFirmwareUpdateRequired(ctx, c, logger, bmh, hwProfile.Spec)
 	if err != nil {
 		return false, err
 	}
+	logger.DebugContext(ctx, "Firmware update check complete",
+		slog.String("bmh", bmh.Name),
+		slog.Bool("firmwareUpdateRequired", firmwareUpdateRequired))
 
 	// If nothing is required, return early
 	if !biosUpdateRequired && !firmwareUpdateRequired {
+		logger.DebugContext(ctx, "No BIOS or firmware updates required",
+			slog.String("bmh", bmh.Name))
 		return false, nil
 	}
 
@@ -541,16 +558,26 @@ func processHwProfile(ctx context.Context,
 	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	// If bios update is required, annotate BMH
 	if biosUpdateRequired {
+		logger.DebugContext(ctx, "BIOS update required, setting update-needed annotation",
+			slog.String("bmh", bmh.Name),
+			slog.String("annotation", BiosUpdateNeededAnnotation))
 		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation, BiosUpdateNeededAnnotation, ValueTrue, OpAdd); err != nil {
 			return true, fmt.Errorf("failed to annotate BMH %s/%s: %w", bmh.Namespace, bmh.Name, err)
 		}
+		logger.DebugContext(ctx, "BIOS update-needed annotation set successfully",
+			slog.String("bmh", bmh.Name))
 	}
 
 	// if firmware update is required, annotate BMH
 	if firmwareUpdateRequired {
+		logger.DebugContext(ctx, "Firmware update required, setting update-needed annotation",
+			slog.String("bmh", bmh.Name),
+			slog.String("annotation", FirmwareUpdateNeededAnnotation))
 		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation, FirmwareUpdateNeededAnnotation, ValueTrue, OpAdd); err != nil {
 			return true, fmt.Errorf("failed to annotate BMH %s/%s: %w", bmh.Namespace, bmh.Name, err)
 		}
+		logger.DebugContext(ctx, "Firmware update-needed annotation set successfully",
+			slog.String("bmh", bmh.Name))
 	}
 
 	return true, nil
@@ -647,6 +674,9 @@ func handleTransitionNode(ctx context.Context,
 	}
 
 	// Process each update case for the current BMH.
+	// Since BMO can process both BIOS and firmware updates in a single cycle,
+	// we process all annotations that exist so they can all be removed when
+	// the BMH enters the transitional state.
 	for _, uc := range updateCases {
 		if _, exists := bmh.Annotations[uc.AnnotationKey]; !exists {
 			continue
@@ -656,8 +686,7 @@ func handleTransitionNode(ctx context.Context,
 			// Propagate either requeue or error
 			return res, err
 		}
-		// Only handle one update case per reconciliation cycle
-		return ctrl.Result{}, nil
+		// Continue to process remaining annotations in the same cycle
 	}
 
 	return ctrl.Result{}, nil
@@ -665,9 +694,14 @@ func handleTransitionNode(ctx context.Context,
 
 func addRebootAnnotation(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
 	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+	logger.DebugContext(ctx, "Adding reboot annotation to BMH",
+		slog.String("bmh", bmh.Name),
+		slog.String("annotation", BmhRebootAnnotation))
 	if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, "annotation", BmhRebootAnnotation, "", OpAdd); err != nil {
 		return fmt.Errorf("failed to add %s to BMH %+v: %w", BmhRebootAnnotation, bmhName, err)
 	}
+	logger.InfoContext(ctx, "Added reboot annotation to trigger firmware/BIOS update",
+		slog.String("BMH", bmh.Name))
 	return nil
 }
 
@@ -679,11 +713,25 @@ func evaluateCRForReboot(ctx context.Context, c client.Client, logger *slog.Logg
 	hasBiosAnnotation := bmh.Annotations[BiosUpdateNeededAnnotation] != ""
 	hasFirmwareAnnotation := bmh.Annotations[FirmwareUpdateNeededAnnotation] != ""
 
+	logger.DebugContext(ctx, "Evaluating BMH for reboot",
+		slog.String("bmh", bmh.Name),
+		slog.Bool("hasBiosAnnotation", hasBiosAnnotation),
+		slog.Bool("hasFirmwareAnnotation", hasFirmwareAnnotation))
+
+	if !hasBiosAnnotation && !hasFirmwareAnnotation {
+		logger.DebugContext(ctx, "No update-needed annotations present, skipping reboot evaluation",
+			slog.String("bmh", bmh.Name))
+		return nil
+	}
+
 	var biosChange, firmwareChange bool
 	var err error
 
 	// If both annotations are present, require both checks to pass
 	if hasBiosAnnotation && hasFirmwareAnnotation {
+		logger.DebugContext(ctx, "Both BIOS and firmware annotations present, checking both",
+			slog.String("bmh", bmh.Name))
+
 		biosChange, err = isFirmwareSettingsChangeDetectedAndValid(ctx, c, bmh)
 		if err != nil {
 			return fmt.Errorf("failed to evaluate FirmwareSettings status: %w", err)
@@ -694,32 +742,65 @@ func evaluateCRForReboot(ctx context.Context, c client.Client, logger *slog.Logg
 			return fmt.Errorf("failed to evaluate HostFirmwareComponents status: %w", err)
 		}
 
+		logger.DebugContext(ctx, "Both annotations check results",
+			slog.String("bmh", bmh.Name),
+			slog.Bool("biosChange", biosChange),
+			slog.Bool("firmwareChange", firmwareChange))
+
 		if biosChange && firmwareChange {
+			logger.DebugContext(ctx, "Both BIOS and firmware changes detected, adding reboot annotation",
+				slog.String("bmh", bmh.Name))
 			return addRebootAnnotation(ctx, c, logger, bmh)
 		}
+		logger.DebugContext(ctx, "Not all changes detected yet, skipping reboot",
+			slog.String("bmh", bmh.Name))
 		return nil
 	}
 
 	// If only BIOS annotation is present
 	if hasBiosAnnotation {
+		logger.DebugContext(ctx, "Only BIOS annotation present, checking BIOS change",
+			slog.String("bmh", bmh.Name))
+
 		biosChange, err = isFirmwareSettingsChangeDetectedAndValid(ctx, c, bmh)
 		if err != nil {
 			return fmt.Errorf("failed to evaluate FirmwareSettings status: %w", err)
 		}
+
+		logger.DebugContext(ctx, "BIOS-only check result",
+			slog.String("bmh", bmh.Name),
+			slog.Bool("biosChange", biosChange))
+
 		if biosChange {
+			logger.DebugContext(ctx, "BIOS change detected, adding reboot annotation",
+				slog.String("bmh", bmh.Name))
 			return addRebootAnnotation(ctx, c, logger, bmh)
 		}
+		logger.DebugContext(ctx, "BIOS change not detected yet, skipping reboot",
+			slog.String("bmh", bmh.Name))
 	}
 
 	// If only firmware annotation is present
 	if hasFirmwareAnnotation {
+		logger.DebugContext(ctx, "Only firmware annotation present, checking firmware change",
+			slog.String("bmh", bmh.Name))
+
 		firmwareChange, err = isHostFirmwareComponentsChangeDetectedAndValid(ctx, c, bmh)
 		if err != nil {
 			return fmt.Errorf("failed to evaluate HostFirmwareComponents status: %w", err)
 		}
+
+		logger.DebugContext(ctx, "Firmware-only check result",
+			slog.String("bmh", bmh.Name),
+			slog.Bool("firmwareChange", firmwareChange))
+
 		if firmwareChange {
+			logger.DebugContext(ctx, "Firmware change detected, adding reboot annotation",
+				slog.String("bmh", bmh.Name))
 			return addRebootAnnotation(ctx, c, logger, bmh)
 		}
+		logger.DebugContext(ctx, "Firmware change not detected yet, skipping reboot",
+			slog.String("bmh", bmh.Name))
 	}
 
 	return nil
@@ -753,6 +834,33 @@ func processBMHUpdateCase(ctx context.Context,
 
 		message := fmt.Sprintf("BMH in error state: %s", bmh.Status.ErrorType)
 		logger.WarnContext(ctx, message, slog.String("BMH", bmh.Name))
+
+		// Clear config-in-progress annotation before setting node to failed
+		if err := clearConfigAnnotationWithPatch(ctx, c, node); err != nil {
+			logger.ErrorContext(ctx, "Failed to clear config annotation",
+				slog.String("node", node.Name),
+				slog.String("error", err.Error()))
+			return ctrl.Result{}, err
+		}
+
+		// Clear BMH update annotations to ensure clean state for retry
+		if err := clearBMHUpdateAnnotations(ctx, c, logger, bmh); err != nil {
+			logger.WarnContext(ctx, "Failed to clear BMH update annotations after error",
+				slog.String("BMH", bmh.Name),
+				slog.String("error", err.Error()))
+			return hwmgrutils.RequeueWithShortInterval(), nil
+		}
+
+		// Clear BMH error annotation to allow future retry attempts
+		if err := clearTransientBMHErrorAnnotation(ctx, c, logger, bmh); err != nil {
+			logger.WarnContext(ctx, "failed to clear BMH error annotation for future retries",
+				slog.String("BMH", bmh.Name),
+				slog.String("error", err.Error()))
+			return hwmgrutils.RequeueWithShortInterval(), nil
+		}
+
+		// Set node to failed status after cleanup completes
+		// This ensures NAR can be retried after user intervention
 		condType := hwmgmtv1alpha1.Provisioned
 		if postInstall {
 			condType = hwmgmtv1alpha1.Configured
@@ -766,21 +874,6 @@ func processBMHUpdateCase(ctx context.Context,
 			return ctrl.Result{}, fmt.Errorf("failed to set node failed status for %s: %w", node.Name, err)
 		}
 
-		// Clear config-in-progress annotation when node fails
-		if err := clearConfigAnnotationWithPatch(ctx, c, node); err != nil {
-			logger.ErrorContext(ctx, "Failed to clear config annotation",
-				slog.String("node", node.Name),
-				slog.String("error", err.Error()))
-			return ctrl.Result{}, err
-		}
-
-		// Clear BMH error annotation to allow future retry attempts
-		if err := clearTransientBMHErrorAnnotation(ctx, c, logger, bmh); err != nil {
-			logger.WarnContext(ctx, "failed to clear BMH error annotation for future retries",
-				slog.String("BMH", bmh.Name),
-				slog.String("error", err.Error()))
-			return hwmgrutils.RequeueWithShortInterval(), nil
-		}
 		return hwmgrutils.RequeueWithMediumInterval(), nil
 	}
 
@@ -1321,24 +1414,46 @@ func clearBMHUpdateAnnotations(ctx context.Context, c client.Client, logger *slo
 	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	var errs []error
 
+	hasBios := false
+	hasFirmware := false
+
 	// Remove BIOS update annotation if it exists
 	if _, exists := bmh.Annotations[BiosUpdateNeededAnnotation]; exists {
+		hasBios = true
+		logger.DebugContext(ctx, "Clearing BIOS update-needed annotation",
+			slog.String("bmh", bmh.Name),
+			slog.String("annotation", BiosUpdateNeededAnnotation))
 		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation, BiosUpdateNeededAnnotation, "", OpRemove); err != nil {
 			logger.WarnContext(ctx, "Failed to remove BIOS update annotation",
 				slog.String("bmh", bmh.Name),
 				slog.String("error", err.Error()))
 			errs = append(errs, fmt.Errorf("bios annotation removal failed: %w", err))
+		} else {
+			logger.DebugContext(ctx, "BIOS update-needed annotation cleared successfully",
+				slog.String("bmh", bmh.Name))
 		}
 	}
 
 	// Remove firmware update annotation if it exists
 	if _, exists := bmh.Annotations[FirmwareUpdateNeededAnnotation]; exists {
+		hasFirmware = true
+		logger.DebugContext(ctx, "Clearing firmware update-needed annotation",
+			slog.String("bmh", bmh.Name),
+			slog.String("annotation", FirmwareUpdateNeededAnnotation))
 		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation, FirmwareUpdateNeededAnnotation, "", OpRemove); err != nil {
 			logger.WarnContext(ctx, "Failed to remove firmware update annotation",
 				slog.String("bmh", bmh.Name),
 				slog.String("error", err.Error()))
 			errs = append(errs, fmt.Errorf("firmware annotation removal failed: %w", err))
+		} else {
+			logger.DebugContext(ctx, "Firmware update-needed annotation cleared successfully",
+				slog.String("bmh", bmh.Name))
 		}
+	}
+
+	if !hasBios && !hasFirmware {
+		logger.DebugContext(ctx, "No update-needed annotations to clear",
+			slog.String("bmh", bmh.Name))
 	}
 
 	// Return combined errors if any occurred
