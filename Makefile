@@ -787,3 +787,17 @@ konflux-compare-catalog: sync-git-submodules ## Compare generated catalog with u
 .PHONY: konflux-all
 konflux-catalog-all: konflux-validate-catalog-template-bundle konflux-generate-catalog-production  konflux-compare-catalog ## Run all konflux catalog logic
 	@echo "All Konflux targets completed successfully."
+
+##@ API Documentation
+
+SWAGGER_UI_PORT ?= 9090
+
+.PHONY: swagger-ui-start
+swagger-ui-start: ## Start Swagger UI to browse all OpenAPI documentation interactively
+	@ENGINE=$(ENGINE) SWAGGER_UI_PORT=$(SWAGGER_UI_PORT) ./hack/swagger-ui.sh start
+
+.PHONY: swagger-ui-stop
+swagger-ui-stop: ## Stop the Swagger UI container
+	@ENGINE=$(ENGINE) ./hack/swagger-ui.sh stop
+
+

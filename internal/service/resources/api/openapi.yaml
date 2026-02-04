@@ -24,8 +24,8 @@ info:
     url: https://www.apache.org/licenses/LICENSE-2.0.html
 
 externalDocs:
-  description: O-RAN O2ims Interface Specification 11.0 (October 2024)
-  url: https://specifications.o-ran.org/download?id=749
+  description: O-RAN O2ims Interface Specification 11.0 (2025.11.28)
+  url: https://specifications.o-ran.org/specifications
 
 servers:
 - url: http://localhost:8000
