@@ -42,7 +42,7 @@ type ResourceServerConfig struct {
 type ResourceServer struct {
 	Config                   *ResourceServerConfig
 	Info                     api.OCloudInfo
-	Repo                     *repo.ResourcesRepository
+	Repo                     repo.ResourcesRepositoryInterface
 	SubscriptionEventHandler notifier.SubscriptionEventHandler
 }
 
