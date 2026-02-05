@@ -85,6 +85,12 @@ func convertToFirmwareUpdates(spec hwmgmtv1alpha1.HardwareProfileSpec) []metal3v
 func isHostFirmwareComponentsChangeDetectedAndValid(ctx context.Context,
 	c client.Client,
 	bmh *metal3v1alpha1.BareMetalHost) (bool, error) {
+	// Extract logger from context
+	logger := slog.Default()
+	if ctxLogger, ok := ctx.Value(any("logger")).(*slog.Logger); ok && ctxLogger != nil {
+		logger = ctxLogger
+	}
+
 	hfc, err := getHostFirmwareComponents(ctx, c, bmh.Name, bmh.Namespace)
 
 	if err != nil {
@@ -100,6 +106,17 @@ func isHostFirmwareComponentsChangeDetectedAndValid(ctx context.Context,
 	changeDetected := changeDetectedCond.Status == metav1.ConditionTrue
 	valid := meta.IsStatusConditionTrue(hfc.Status.Conditions, string(metal3v1alpha1.HostFirmwareComponentsValid))
 	observed := changeDetectedCond.ObservedGeneration == hfc.Generation
+
+	logger.DebugContext(ctx, "Evaluating HostFirmwareComponents change",
+		slog.String("bmh", bmh.Name),
+		slog.String("hfc", hfc.Name),
+		slog.Int64("hfcGeneration", hfc.Generation),
+		slog.String("changeDetectedStatus", string(changeDetectedCond.Status)),
+		slog.Int64("changeDetectedObservedGen", changeDetectedCond.ObservedGeneration),
+		slog.Bool("changeDetected", changeDetected),
+		slog.Bool("valid", valid),
+		slog.Bool("observed", observed),
+		slog.Bool("result", changeDetected && valid && observed))
 
 	return changeDetected && valid && observed, nil
 }
