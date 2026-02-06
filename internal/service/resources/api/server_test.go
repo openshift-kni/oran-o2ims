@@ -1266,6 +1266,7 @@ var _ = Describe("ResourceServer", func() {
 			It("returns 200 response with list", func() {
 				loc1 := testLocationID
 				loc2 := "LOC-002"
+				siteID := uuid.New()
 				mockRepo.EXPECT().
 					GetLocations(ctx).
 					Return([]models.Location{
@@ -1273,11 +1274,11 @@ var _ = Describe("ResourceServer", func() {
 						{GlobalLocationID: loc2, Name: "Location 2"},
 					}, nil)
 				mockRepo.EXPECT().
-					GetOCloudSiteIDsForLocation(ctx, loc1).
-					Return([]uuid.UUID{uuid.New()}, nil)
-				mockRepo.EXPECT().
-					GetOCloudSiteIDsForLocation(ctx, loc2).
-					Return([]uuid.UUID{}, nil)
+					GetAllOCloudSiteIDsByLocation(ctx).
+					Return(map[string][]uuid.UUID{
+						loc1: {siteID},
+						// loc2 has no sites
+					}, nil)
 
 				resp, err := server.GetLocations(ctx, apiGenerated.GetLocationsRequestObject{})
 
@@ -1296,6 +1297,9 @@ var _ = Describe("ResourceServer", func() {
 				mockRepo.EXPECT().
 					GetLocations(ctx).
 					Return([]models.Location{}, nil)
+				mockRepo.EXPECT().
+					GetAllOCloudSiteIDsByLocation(ctx).
+					Return(map[string][]uuid.UUID{}, nil)
 
 				resp, err := server.GetLocations(ctx, apiGenerated.GetLocationsRequestObject{})
 
@@ -1306,7 +1310,7 @@ var _ = Describe("ResourceServer", func() {
 			})
 		})
 
-		When("repository returns error", func() {
+		When("repository returns error on GetLocations", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
 					GetLocations(ctx).
@@ -1321,23 +1325,15 @@ var _ = Describe("ResourceServer", func() {
 			})
 		})
 
-		When("GetOCloudSiteIDsForLocation fails during iteration", func() {
-			It("returns 500 response with the failing location ID", func() {
-				loc1 := testLocationID
-				loc2 := "LOC-002"
+		When("GetAllOCloudSiteIDsByLocation fails", func() {
+			It("returns 500 response", func() {
 				mockRepo.EXPECT().
 					GetLocations(ctx).
 					Return([]models.Location{
-						{GlobalLocationID: loc1, Name: "Location 1"},
-						{GlobalLocationID: loc2, Name: "Location 2"},
+						{GlobalLocationID: testLocationID, Name: "Location 1"},
 					}, nil)
-				// First location succeeds
 				mockRepo.EXPECT().
-					GetOCloudSiteIDsForLocation(ctx, loc1).
-					Return([]uuid.UUID{uuid.New()}, nil)
-				// Second location fails (e.g., DB connection dropped mid-iteration)
-				mockRepo.EXPECT().
-					GetOCloudSiteIDsForLocation(ctx, loc2).
+					GetAllOCloudSiteIDsByLocation(ctx).
 					Return(nil, fmt.Errorf("connection timeout"))
 
 				resp, err := server.GetLocations(ctx, apiGenerated.GetLocationsRequestObject{})
@@ -1347,7 +1343,6 @@ var _ = Describe("ResourceServer", func() {
 				problemResp := resp.(apiGenerated.GetLocations500ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusInternalServerError))
 				Expect(problemResp.Detail).To(ContainSubstring("connection timeout"))
-				Expect((*problemResp.AdditionalAttributes)["globalLocationId"]).To(Equal(loc2))
 			})
 		})
 	})
@@ -1435,6 +1430,7 @@ var _ = Describe("ResourceServer", func() {
 			It("returns 200 response with list", func() {
 				siteID1 := uuid.New()
 				siteID2 := uuid.New()
+				poolID := uuid.New()
 				mockRepo.EXPECT().
 					GetOCloudSites(ctx).
 					Return([]models.OCloudSite{
@@ -1442,11 +1438,11 @@ var _ = Describe("ResourceServer", func() {
 						{OCloudSiteID: siteID2, Name: "site-2"},
 					}, nil)
 				mockRepo.EXPECT().
-					GetResourcePoolIDsForSite(ctx, siteID1).
-					Return([]uuid.UUID{uuid.New()}, nil)
-				mockRepo.EXPECT().
-					GetResourcePoolIDsForSite(ctx, siteID2).
-					Return([]uuid.UUID{}, nil)
+					GetAllResourcePoolIDsBySite(ctx).
+					Return(map[uuid.UUID][]uuid.UUID{
+						siteID1: {poolID},
+						// siteID2 has no pools
+					}, nil)
 
 				resp, err := server.GetOCloudSites(ctx, apiGenerated.GetOCloudSitesRequestObject{})
 
@@ -1465,6 +1461,9 @@ var _ = Describe("ResourceServer", func() {
 				mockRepo.EXPECT().
 					GetOCloudSites(ctx).
 					Return([]models.OCloudSite{}, nil)
+				mockRepo.EXPECT().
+					GetAllResourcePoolIDsBySite(ctx).
+					Return(map[uuid.UUID][]uuid.UUID{}, nil)
 
 				resp, err := server.GetOCloudSites(ctx, apiGenerated.GetOCloudSitesRequestObject{})
 
@@ -1475,7 +1474,7 @@ var _ = Describe("ResourceServer", func() {
 			})
 		})
 
-		When("repository returns error", func() {
+		When("repository returns error on GetOCloudSites", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
 					GetOCloudSites(ctx).
@@ -1490,23 +1489,16 @@ var _ = Describe("ResourceServer", func() {
 			})
 		})
 
-		When("GetResourcePoolIDsForSite fails during iteration", func() {
-			It("returns 500 response with the failing site ID", func() {
-				siteID1 := uuid.New()
-				siteID2 := uuid.New()
+		When("GetAllResourcePoolIDsBySite fails", func() {
+			It("returns 500 response", func() {
+				siteID := uuid.New()
 				mockRepo.EXPECT().
 					GetOCloudSites(ctx).
 					Return([]models.OCloudSite{
-						{OCloudSiteID: siteID1, Name: "site-1"},
-						{OCloudSiteID: siteID2, Name: "site-2"},
+						{OCloudSiteID: siteID, Name: "site-1"},
 					}, nil)
-				// First site succeeds
 				mockRepo.EXPECT().
-					GetResourcePoolIDsForSite(ctx, siteID1).
-					Return([]uuid.UUID{uuid.New()}, nil)
-				// Second site fails (e.g., query timeout on large table)
-				mockRepo.EXPECT().
-					GetResourcePoolIDsForSite(ctx, siteID2).
+					GetAllResourcePoolIDsBySite(ctx).
 					Return(nil, fmt.Errorf("query timeout"))
 
 				resp, err := server.GetOCloudSites(ctx, apiGenerated.GetOCloudSitesRequestObject{})
@@ -1516,7 +1508,6 @@ var _ = Describe("ResourceServer", func() {
 				problemResp := resp.(apiGenerated.GetOCloudSites500ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusInternalServerError))
 				Expect(problemResp.Detail).To(ContainSubstring("query timeout"))
-				Expect((*problemResp.AdditionalAttributes)["oCloudSiteId"]).To(Equal(siteID2.String()))
 			})
 		})
 	})

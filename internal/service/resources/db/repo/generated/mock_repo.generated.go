@@ -161,6 +161,36 @@ func (mr *MockResourcesRepositoryInterfaceMockRecorder) GetAlarmDictionary(ctx, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAlarmDictionary", reflect.TypeOf((*MockResourcesRepositoryInterface)(nil).GetAlarmDictionary), ctx, id)
 }
 
+// GetAllOCloudSiteIDsByLocation mocks base method.
+func (m *MockResourcesRepositoryInterface) GetAllOCloudSiteIDsByLocation(ctx context.Context) (map[string][]uuid.UUID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAllOCloudSiteIDsByLocation", ctx)
+	ret0, _ := ret[0].(map[string][]uuid.UUID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAllOCloudSiteIDsByLocation indicates an expected call of GetAllOCloudSiteIDsByLocation.
+func (mr *MockResourcesRepositoryInterfaceMockRecorder) GetAllOCloudSiteIDsByLocation(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllOCloudSiteIDsByLocation", reflect.TypeOf((*MockResourcesRepositoryInterface)(nil).GetAllOCloudSiteIDsByLocation), ctx)
+}
+
+// GetAllResourcePoolIDsBySite mocks base method.
+func (m *MockResourcesRepositoryInterface) GetAllResourcePoolIDsBySite(ctx context.Context) (map[uuid.UUID][]uuid.UUID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAllResourcePoolIDsBySite", ctx)
+	ret0, _ := ret[0].(map[uuid.UUID][]uuid.UUID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAllResourcePoolIDsBySite indicates an expected call of GetAllResourcePoolIDsBySite.
+func (mr *MockResourcesRepositoryInterfaceMockRecorder) GetAllResourcePoolIDsBySite(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllResourcePoolIDsBySite", reflect.TypeOf((*MockResourcesRepositoryInterface)(nil).GetAllResourcePoolIDsBySite), ctx)
+}
+
 // GetDataChangeEvents mocks base method.
 func (m *MockResourcesRepositoryInterface) GetDataChangeEvents(arg0 context.Context) ([]models.DataChangeEvent, error) {
 	m.ctrl.T.Helper()
