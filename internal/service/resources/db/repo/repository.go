@@ -271,3 +271,35 @@ func (r *ResourcesRepository) GetResourcePoolIDsForSite(ctx context.Context, oCl
 	}
 	return ids, nil
 }
+
+// GetAllOCloudSiteIDsByLocation returns a map of globalLocationID -> []oCloudSiteID.
+// This is optimized for batch lookups to avoid N+1 queries when listing locations.
+func (r *ResourcesRepository) GetAllOCloudSiteIDsByLocation(ctx context.Context) (map[string][]uuid.UUID, error) {
+	sites, err := svcutils.FindAll[models.OCloudSite](ctx, r.Db)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string][]uuid.UUID)
+	for _, site := range sites {
+		result[site.GlobalLocationID] = append(result[site.GlobalLocationID], site.OCloudSiteID)
+	}
+	return result, nil
+}
+
+// GetAllResourcePoolIDsBySite returns a map of oCloudSiteID -> []resourcePoolID.
+// This is optimized for batch lookups to avoid N+1 queries when listing sites.
+func (r *ResourcesRepository) GetAllResourcePoolIDsBySite(ctx context.Context) (map[uuid.UUID][]uuid.UUID, error) {
+	pools, err := svcutils.FindAll[models.ResourcePool](ctx, r.Db)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[uuid.UUID][]uuid.UUID)
+	for _, pool := range pools {
+		if pool.OCloudSiteID != nil && *pool.OCloudSiteID != uuid.Nil {
+			result[*pool.OCloudSiteID] = append(result[*pool.OCloudSiteID], pool.ResourcePoolID)
+		}
+	}
+	return result, nil
+}

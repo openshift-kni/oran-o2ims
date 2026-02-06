@@ -48,11 +48,13 @@ type ResourcesRepositoryInterface interface {
 	GetLocations(ctx context.Context) ([]models.Location, error)
 	GetLocation(ctx context.Context, globalLocationID string) (*models.Location, error)
 	GetOCloudSiteIDsForLocation(ctx context.Context, globalLocationID string) ([]uuid.UUID, error)
+	GetAllOCloudSiteIDsByLocation(ctx context.Context) (map[string][]uuid.UUID, error)
 
 	// OCloudSite methods
 	GetOCloudSites(ctx context.Context) ([]models.OCloudSite, error)
 	GetOCloudSite(ctx context.Context, id uuid.UUID) (*models.OCloudSite, error)
 	GetResourcePoolIDsForSite(ctx context.Context, oCloudSiteID uuid.UUID) ([]uuid.UUID, error)
+	GetAllResourcePoolIDsBySite(ctx context.Context) (map[uuid.UUID][]uuid.UUID, error)
 }
 
 // Compile-time check that ResourcesRepository implements ResourcesRepositoryInterface

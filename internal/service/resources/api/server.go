@@ -694,19 +694,17 @@ func (r *ResourceServer) GetLocations(ctx context.Context, request api.GetLocati
 		}, nil
 	}
 
+	siteIDsByLocation, err := r.Repo.GetAllOCloudSiteIDsByLocation(ctx)
+	if err != nil {
+		return api.GetLocations500ApplicationProblemPlusJSONResponse{
+			Detail: fmt.Sprintf("failed to get O-Cloud sites: %s", err.Error()),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
 	objects := make([]api.LocationInfo, len(records))
 	for i, record := range records {
-		// Fetch O-Cloud Site IDs for this location
-		siteIDs, err := r.Repo.GetOCloudSiteIDsForLocation(ctx, record.GlobalLocationID)
-		if err != nil {
-			return api.GetLocations500ApplicationProblemPlusJSONResponse{
-				AdditionalAttributes: &map[string]string{
-					"globalLocationId": record.GlobalLocationID,
-				},
-				Detail: fmt.Sprintf("failed to get O-Cloud sites for location: %s", err.Error()),
-				Status: http.StatusInternalServerError,
-			}, nil
-		}
+		siteIDs := siteIDsByLocation[record.GlobalLocationID] // nil if no sites, which is fine
 		objects[i] = models.LocationToModel(&record, siteIDs)
 	}
 
@@ -761,19 +759,17 @@ func (r *ResourceServer) GetOCloudSites(ctx context.Context, request api.GetOClo
 		}, nil
 	}
 
+	poolIDsBySite, err := r.Repo.GetAllResourcePoolIDsBySite(ctx)
+	if err != nil {
+		return api.GetOCloudSites500ApplicationProblemPlusJSONResponse{
+			Detail: fmt.Sprintf("failed to get resource pools: %s", err.Error()),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
 	objects := make([]api.OCloudSiteInfo, len(records))
 	for i, record := range records {
-		// Fetch Resource Pool IDs for this site
-		poolIDs, err := r.Repo.GetResourcePoolIDsForSite(ctx, record.OCloudSiteID)
-		if err != nil {
-			return api.GetOCloudSites500ApplicationProblemPlusJSONResponse{
-				AdditionalAttributes: &map[string]string{
-					"oCloudSiteId": record.OCloudSiteID.String(),
-				},
-				Detail: fmt.Sprintf("failed to get resource pools for site: %s", err.Error()),
-				Status: http.StatusInternalServerError,
-			}, nil
-		}
+		poolIDs := poolIDsBySite[record.OCloudSiteID] // nil if no pools, which is fine
 		objects[i] = models.OCloudSiteToModel(&record, poolIDs)
 	}
 
