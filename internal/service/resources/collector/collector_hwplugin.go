@@ -43,6 +43,7 @@ const (
 	ResourcePoolUUIDNamespace = "daee6434-767a-485d-816b-bc04c21f1acf"
 	ResourceUUIDNamespace     = "8ef67482-1215-470d-9a43-eb02af4a7c05"
 	ResourceTypeUUIDNamespace = "255c4b4c-84a8-4c95-95ba-217e1688a03d"
+	OCloudSiteUUIDNamespace   = "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d"
 )
 
 const (
