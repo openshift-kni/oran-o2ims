@@ -1,6 +1,6 @@
 # Overlay stage: overlay bundle manifests
 #
-FROM quay.io/konflux-ci/yq@sha256:d007048d29fc22f9a81524173eeb9131b5b78253a4ab18f6331400c88d78ea47 AS overlay
+FROM quay.io/konflux-ci/yq@sha256:d4feadf33854f9d9aef4e7deed45ba61d4c69d3fc2a685e82ad8ba12fc8bbae1 AS overlay
 
 WORKDIR /tmp
 
@@ -33,10 +33,10 @@ LABEL operators.operatorframework.io.bundle.manifests.v1=manifests/
 LABEL operators.operatorframework.io.bundle.metadata.v1=metadata/
 LABEL operators.operatorframework.io.bundle.package.v1=o-cloud-manager
 LABEL operators.operatorframework.io.bundle.channels.v1=stable,4.22
-LABEL operators.operatorframework.io.bundle.channels.default.v1=stable
-LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.28.0-ocp
+LABEL operators.operatorframework.io.bundle.channel.default.v1=stable
+LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.41.1
 LABEL operators.operatorframework.io.metrics.mediatype.v1=metrics+v1
-LABEL operators.operatorframework.io.metrics.project_layout=go.kubebuilder.io/v3
+LABEL operators.operatorframework.io.metrics.project_layout=go.kubebuilder.io/v4
 # Labels for testing
 LABEL operators.operatorframework.io.test.mediatype.v1=scorecard+v1
 LABEL operators.operatorframework.io.test.config.v1=tests/scorecard/

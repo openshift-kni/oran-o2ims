@@ -566,9 +566,38 @@ func (r *ResourceServer) GetResourceTypes(ctx context.Context, request api.GetRe
 		return nil, fmt.Errorf("failed to get resource types: %w", err)
 	}
 
+	// Fetch all alarm dictionaries and build a map by resource type ID
+	alarmDictionaries, err := r.Repo.GetAlarmDictionaries(ctx)
+	if err != nil {
+		return api.GetResourceTypes500ApplicationProblemPlusJSONResponse{
+			Detail: fmt.Sprintf("failed to get alarm dictionaries: %s", err.Error()),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	alarmDictionaryMap := make(map[string]*models.AlarmDictionary)
+	for i := range alarmDictionaries {
+		alarmDictionaryMap[alarmDictionaries[i].ResourceTypeID.String()] = &alarmDictionaries[i]
+	}
+
 	objects := make([]api.ResourceType, len(records))
 	for i, record := range records {
-		objects[i] = models.ResourceTypeToModel(&record)
+		var alarmDictionary *generated.AlarmDictionary
+		if dict, ok := alarmDictionaryMap[record.ResourceTypeID.String()]; ok {
+			definitions, err := r.Repo.GetAlarmDefinitionsByAlarmDictionaryID(ctx, dict.AlarmDictionaryID)
+			if err != nil {
+				return api.GetResourceTypes500ApplicationProblemPlusJSONResponse{
+					AdditionalAttributes: &map[string]string{
+						"resourceTypeId": record.ResourceTypeID.String(),
+					},
+					Detail: fmt.Sprintf("failed to get alarm definitions: %s", err.Error()),
+					Status: http.StatusInternalServerError,
+				}, nil
+			}
+			converted := models.AlarmDictionaryToModel(dict, definitions)
+			alarmDictionary = &converted
+		}
+		objects[i] = models.ResourceTypeToModel(&record, alarmDictionary)
 	}
 
 	return api.GetResourceTypes200JSONResponse(objects), nil
@@ -595,7 +624,36 @@ func (r *ResourceServer) GetResourceType(ctx context.Context, request api.GetRes
 		}, nil
 	}
 
-	object := models.ResourceTypeToModel(record)
+	// Fetch alarm dictionary for this resource type
+	var alarmDictionary *generated.AlarmDictionary
+	dictionaries, err := r.Repo.GetResourceTypeAlarmDictionary(ctx, request.ResourceTypeId)
+	if err != nil {
+		return api.GetResourceType500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"resourceTypeId": request.ResourceTypeId.String(),
+			},
+			Detail: fmt.Sprintf("failed to get alarm dictionary: %s", err.Error()),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	if len(dictionaries) > 0 {
+		dict := &dictionaries[0]
+		definitions, err := r.Repo.GetAlarmDefinitionsByAlarmDictionaryID(ctx, dict.AlarmDictionaryID)
+		if err != nil {
+			return api.GetResourceType500ApplicationProblemPlusJSONResponse{
+				AdditionalAttributes: &map[string]string{
+					"resourceTypeId": request.ResourceTypeId.String(),
+				},
+				Detail: fmt.Sprintf("failed to get alarm definitions: %s", err.Error()),
+				Status: http.StatusInternalServerError,
+			}, nil
+		}
+		converted := models.AlarmDictionaryToModel(dict, definitions)
+		alarmDictionary = &converted
+	}
+
+	object := models.ResourceTypeToModel(record, alarmDictionary)
 	return api.GetResourceType200JSONResponse(object), nil
 }
 

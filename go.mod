@@ -18,11 +18,11 @@ require (
 	github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/kelseyhightower/envconfig v1.4.0
-	github.com/metal3-io/baremetal-operator/apis v0.12.0
+	github.com/metal3-io/baremetal-operator/apis v0.12.1
 	github.com/oapi-codegen/nethttp-middleware v1.1.2
 	github.com/oapi-codegen/oapi-codegen/v2 v2.5.1
 	github.com/oapi-codegen/runtime v1.1.2
-	github.com/onsi/ginkgo/v2 v2.27.4
+	github.com/onsi/ginkgo/v2 v2.27.5
 	github.com/onsi/gomega v1.39.0
 	github.com/openshift-kni/cluster-group-upgrades-operator v0.0.0-20250725152424-e89f9c91fea5
 	github.com/openshift/api v0.0.0-20250725072657-92b1455121e1
@@ -30,7 +30,7 @@ require (
 	github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87
 	github.com/openshift/hive/apis v0.0.0-20250725035156-a29a23859060
 	github.com/pashagolub/pgxmock/v4 v4.9.0
-	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.88.0
+	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.88.1
 	github.com/r3labs/diff/v3 v3.0.2
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
@@ -162,11 +162,11 @@ require (
 	go.opentelemetry.io/proto/otlp v1.9.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.46.0 // indirect
+	golang.org/x/crypto v0.47.0 // indirect
 	golang.org/x/exp v0.0.0-20250718183923-645b1fa84792 // indirect
 	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
-	golang.org/x/text v0.32.0 // indirect
+	golang.org/x/text v0.33.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	golang.org/x/tools v0.40.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
@@ -194,8 +194,6 @@ require (
 replace github.com/imdario/mergo => github.com/imdario/mergo v0.3.16
 
 replace k8s.io/client-go => k8s.io/client-go v0.34.0
-
-replace golang.org/x/crypto => github.com/openshift/golang-crypto v0.33.1-0.20250310193910-9003f682e581
 
 // controller-runtime removed deprecated Validator interfaces in 0.20, but assisted-service is still using v0.16.3 and has references that break
 // https://github.com/kubernetes-sigs/controller-runtime/pull/2877

@@ -376,18 +376,8 @@ func (t *provisioningRequestReconcilerTask) applyNodeConfiguration(
 		// Boot MAC
 		bootMAC := ""
 		if !t.isHardwareProvisionSkipped() {
-			clusterTemplate, err := t.object.GetClusterTemplateRef(ctx, t.client)
-			if err != nil {
-				return fmt.Errorf("failed to get the ClusterTemplate for ProvisioningRequest %s: %w ", t.object.Name, err)
-			}
 
-			hwTemplateName := clusterTemplate.Spec.Templates.HwTemplate
-			hwTemplate, err := ctlrutils.GetHardwareTemplate(ctx, t.client, hwTemplateName)
-			if err != nil {
-				return fmt.Errorf("failed to get the HardwareTemplate %s resource: %w ", hwTemplateName, err)
-			}
-			bootInterfaceLabel := hwTemplate.Spec.BootInterfaceLabel
-			bootMAC, err = ctlrutils.GetBootMacAddress(nodeInfos[0].Interfaces, bootInterfaceLabel)
+			bootMAC, err = ctlrutils.GetBootMacAddress(nodeInfos[0].Interfaces, constants.BootInterfaceLabel)
 			if err != nil {
 				return fmt.Errorf("failed to get boot MAC for node '%s': %w", hostName, err)
 			}
@@ -811,7 +801,6 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(clusterIn
 	nodeAllocationRequest.Site = siteID.(string)
 	nodeAllocationRequest.ClusterId = clusterId.(string)
 	nodeAllocationRequest.NodeGroup = nodeGroups
-	nodeAllocationRequest.BootInterfaceLabel = hwTemplate.Spec.BootInterfaceLabel
 	// Use Generation as ConfigTransactionId: Generation tracks spec changes in Kubernetes,
 	// which is exactly what ConfigTransactionId represents - a unique identifier for each
 	// configuration change. When the ProvisioningRequest spec changes, Generation increments,

@@ -71,6 +71,7 @@ import (
 
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
 
 const (
@@ -78,6 +79,83 @@ const (
 	nonexistentBMHNamespace = "nonexistent-namespace"
 	testBootMAC             = "00:11:22:33:44:55"
 )
+
+// Helper functions
+// nolint:unparam
+func createBMH(name, namespace string, labels, annotations map[string]string, state metal3v1alpha1.ProvisioningState) *metal3v1alpha1.BareMetalHost {
+	bmh := &metal3v1alpha1.BareMetalHost{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Namespace:   namespace,
+			Labels:      labels,
+			Annotations: annotations,
+		},
+		Status: metal3v1alpha1.BareMetalHostStatus{
+			Provisioning: metal3v1alpha1.ProvisionStatus{
+				State: state,
+			},
+			HardwareDetails: &metal3v1alpha1.HardwareDetails{
+				NIC: []metal3v1alpha1.NIC{
+					{
+						Name: "eth0",
+						MAC:  testBootMAC,
+					},
+					{
+						Name: "eth1",
+						MAC:  "00:11:22:33:44:56",
+					},
+				},
+			},
+		},
+	}
+	return bmh
+}
+
+// nolint:unparam
+func createNodeAllocationRequest(name, namespace string) *pluginsv1alpha1.NodeAllocationRequest {
+	return &pluginsv1alpha1.NodeAllocationRequest{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: pluginsv1alpha1.NodeAllocationRequestSpec{},
+	}
+}
+
+func createAllocatedNode(name, namespace, hwMgrNodeId, hwMgrNodeNs string) *pluginsv1alpha1.AllocatedNode {
+	return &pluginsv1alpha1.AllocatedNode{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: pluginsv1alpha1.AllocatedNodeSpec{
+			HwMgrNodeId: hwMgrNodeId,
+			HwMgrNodeNs: hwMgrNodeNs,
+		},
+		Status: pluginsv1alpha1.AllocatedNodeStatus{
+			Conditions: []metav1.Condition{},
+		},
+	}
+}
+
+// nolint:unparam
+func createAllocatedNodeWithGroup(name, namespace, hwMgrNodeId, hwMgrNodeNs, groupName, hwProfile string) *pluginsv1alpha1.AllocatedNode {
+	return &pluginsv1alpha1.AllocatedNode{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: pluginsv1alpha1.AllocatedNodeSpec{
+			HwMgrNodeId: hwMgrNodeId,
+			HwMgrNodeNs: hwMgrNodeNs,
+			GroupName:   groupName,
+			HwProfile:   hwProfile,
+		},
+		Status: pluginsv1alpha1.AllocatedNodeStatus{
+			Conditions: []metav1.Condition{},
+		},
+	}
+}
 
 var _ = Describe("BareMetalHost Manager", func() {
 	var (
@@ -94,94 +172,6 @@ var _ = Describe("BareMetalHost Manager", func() {
 		Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
 		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 	})
-
-	// Helper functions
-	createBMH := func(name, namespace string, labels map[string]string, annotations map[string]string, state metal3v1alpha1.ProvisioningState) *metal3v1alpha1.BareMetalHost {
-		bmh := &metal3v1alpha1.BareMetalHost{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:        name,
-				Namespace:   namespace,
-				Labels:      labels,
-				Annotations: annotations,
-			},
-			Status: metal3v1alpha1.BareMetalHostStatus{
-				Provisioning: metal3v1alpha1.ProvisionStatus{
-					State: state,
-				},
-				HardwareDetails: &metal3v1alpha1.HardwareDetails{
-					NIC: []metal3v1alpha1.NIC{
-						{
-							Name: "eth0",
-							MAC:  testBootMAC,
-						},
-						{
-							Name: "eth1",
-							MAC:  "00:11:22:33:44:56",
-						},
-					},
-				},
-			},
-		}
-		return bmh
-	}
-
-	createNodeAllocationRequest := func(name, namespace string) *pluginsv1alpha1.NodeAllocationRequest {
-		return &pluginsv1alpha1.NodeAllocationRequest{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: namespace,
-			},
-			Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-				BootInterfaceLabel: "boot",
-			},
-		}
-	}
-
-	createAllocatedNode := func(name, namespace, hwMgrNodeId, hwMgrNodeNs string) *pluginsv1alpha1.AllocatedNode {
-		return &pluginsv1alpha1.AllocatedNode{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: namespace,
-			},
-			Spec: pluginsv1alpha1.AllocatedNodeSpec{
-				HwMgrNodeId: hwMgrNodeId,
-				HwMgrNodeNs: hwMgrNodeNs,
-			},
-			Status: pluginsv1alpha1.AllocatedNodeStatus{
-				Conditions: []metav1.Condition{},
-			},
-		}
-	}
-
-	createAllocatedNodeWithGroup := func(name, namespace, hwMgrNodeId, hwMgrNodeNs, groupName, hwProfile string) *pluginsv1alpha1.AllocatedNode {
-		return &pluginsv1alpha1.AllocatedNode{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: namespace,
-			},
-			Spec: pluginsv1alpha1.AllocatedNodeSpec{
-				HwMgrNodeId: hwMgrNodeId,
-				HwMgrNodeNs: hwMgrNodeNs,
-				GroupName:   groupName,
-				HwProfile:   hwProfile,
-			},
-			Status: pluginsv1alpha1.AllocatedNodeStatus{
-				Conditions: []metav1.Condition{},
-			},
-		}
-	}
-
-	createNodeWithCondition := func(name, namespace string, conditionType, reason string, status metav1.ConditionStatus) *pluginsv1alpha1.AllocatedNode {
-		node := createAllocatedNode(name, namespace, "bmh-"+name, namespace)
-		node.Status.Conditions = []metav1.Condition{
-			{
-				Type:   conditionType,
-				Status: status,
-				Reason: reason,
-			},
-		}
-		return node
-	}
 
 	Describe("isBMHAllocated", func() {
 		It("should return true when BMH has allocated label set to true", func() {
@@ -257,16 +247,15 @@ var _ = Describe("BareMetalHost Manager", func() {
 		)
 
 		It("should set bootMACAddress when found by NIC name", func() {
-			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
 			bmh := createBMH("test-bmh", "test-ns", map[string]string{
-				"interfacelabel.clcm.openshift.io/boot": "eth0",
+				constants.BootInterfaceLabelFullKey: "eth0",
 			}, nil, metal3v1alpha1.StateAvailable)
 			// bootMACAddress is not set
 			bmh.Spec.BootMACAddress = ""
 
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
-			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, nodeRequest, bmh)
+			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, bmh)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify bootMACAddress was set
@@ -278,15 +267,14 @@ var _ = Describe("BareMetalHost Manager", func() {
 		})
 
 		It("should set bootMACAddress when found by hyphenated MAC", func() {
-			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
 			bmh := createBMH("test-bmh", "test-ns", map[string]string{
-				"interfacelabel.clcm.openshift.io/boot": "00-11-22-33-44-56",
+				constants.BootInterfaceLabelFullKey: "00-11-22-33-44-56",
 			}, nil, metal3v1alpha1.StateAvailable)
 			bmh.Spec.BootMACAddress = ""
 
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
-			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, nodeRequest, bmh)
+			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, bmh)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify bootMACAddress was set to eth1's MAC
@@ -298,10 +286,9 @@ var _ = Describe("BareMetalHost Manager", func() {
 		})
 
 		It("should set bootMACAddress with case-insensitive hyphenated MAC matching", func() {
-			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
 			// Label has uppercase MAC, but NIC.MAC in hardware details is lowercase with colons
 			bmh := createBMH("test-bmh", "test-ns", map[string]string{
-				"interfacelabel.clcm.openshift.io/boot": "00-11-22-33-44-AA",
+				constants.BootInterfaceLabelFullKey: "00-11-22-33-44-AA",
 			}, nil, metal3v1alpha1.StateAvailable)
 			bmh.Spec.BootMACAddress = ""
 
@@ -313,7 +300,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
-			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, nodeRequest, bmh)
+			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, bmh)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify bootMACAddress was set using case-insensitive matching
@@ -325,16 +312,15 @@ var _ = Describe("BareMetalHost Manager", func() {
 		})
 
 		It("should succeed when bootMACAddress is set but boot interface label is not present", func() {
-			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
 			// BMH has bootMACAddress but no boot interface label
 			bmh := createBMH("test-bmh", "test-ns", map[string]string{
-				"interfacelabel.clcm.openshift.io/mgmt": "eth1",
+				constants.LabelPrefixInterfaces + "mgmt": "eth1",
 			}, nil, metal3v1alpha1.StateAvailable)
 			bmh.Spec.BootMACAddress = testBootMAC
 
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
-			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, nodeRequest, bmh)
+			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, bmh)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify bootMACAddress was not changed
@@ -346,15 +332,14 @@ var _ = Describe("BareMetalHost Manager", func() {
 		})
 
 		It("should validate bootMACAddress matches boot interface label when both are set", func() {
-			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
 			bmh := createBMH("test-bmh", "test-ns", map[string]string{
-				"interfacelabel.clcm.openshift.io/boot": "eth0",
+				constants.BootInterfaceLabelFullKey: "eth0",
 			}, nil, metal3v1alpha1.StateAvailable)
 			bmh.Spec.BootMACAddress = testBootMAC
 
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
-			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, nodeRequest, bmh)
+			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, bmh)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify bootMACAddress was not changed
@@ -366,16 +351,15 @@ var _ = Describe("BareMetalHost Manager", func() {
 		})
 
 		It("should return error when bootMACAddress doesn't match boot interface label", func() {
-			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
 			bmh := createBMH("test-bmh", "test-ns", map[string]string{
-				"interfacelabel.clcm.openshift.io/boot": "eth0",
+				constants.BootInterfaceLabelFullKey: "eth0",
 			}, nil, metal3v1alpha1.StateAvailable)
 			// Set bootMACAddress to eth1's MAC, but label points to eth0
 			bmh.Spec.BootMACAddress = "00:11:22:33:44:56"
 
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
-			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, nodeRequest, bmh)
+			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, bmh)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("bootMACAddress"))
 			Expect(err.Error()).To(ContainSubstring("does not match"))
@@ -384,58 +368,42 @@ var _ = Describe("BareMetalHost Manager", func() {
 		})
 
 		It("should return error when hardware details are nil", func() {
-			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
 			bmh := createBMH("test-bmh", "test-ns", map[string]string{
-				"interfacelabel.clcm.openshift.io/boot": "eth0",
+				constants.BootInterfaceLabelFullKey: "eth0",
 			}, nil, metal3v1alpha1.StateAvailable)
 			bmh.Spec.BootMACAddress = ""
 			bmh.Status.HardwareDetails = nil
 
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
-			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, nodeRequest, bmh)
+			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, bmh)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("bareMetalHost.status.hardwareDetails should not be nil"))
 		})
 
-		It("should return error when boot interface label is empty", func() {
-			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
-			nodeRequest.Spec.BootInterfaceLabel = ""
-			bmh := createBMH("test-bmh", "test-ns", nil, nil, metal3v1alpha1.StateAvailable)
-			bmh.Spec.BootMACAddress = ""
-
-			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
-
-			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, nodeRequest, bmh)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("bootInterfaceLabel is empty"))
-		})
-
 		It("should return error when boot label not found on BMH", func() {
-			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
 			bmh := createBMH("test-bmh", "test-ns", map[string]string{
-				"interfacelabel.clcm.openshift.io/mgmt": "eth0",
+				constants.LabelPrefixInterfaces + "mgmt": "eth0",
 			}, nil, metal3v1alpha1.StateAvailable)
 			bmh.Spec.BootMACAddress = ""
 
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
-			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, nodeRequest, bmh)
+			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, bmh)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("boot interface label"))
 			Expect(err.Error()).To(ContainSubstring("not found"))
 		})
 
 		It("should return error when no NIC matches label value", func() {
-			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
 			bmh := createBMH("test-bmh", "test-ns", map[string]string{
-				"interfacelabel.clcm.openshift.io/boot": "eth99",
+				constants.BootInterfaceLabelFullKey: "eth99",
 			}, nil, metal3v1alpha1.StateAvailable)
 			bmh.Spec.BootMACAddress = ""
 
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
-			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, nodeRequest, bmh)
+			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, bmh)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("no NIC found matching"))
 		})
@@ -443,11 +411,10 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 	Describe("buildInterfacesFromBMH", func() {
 		It("should build interfaces correctly with boot interface", func() {
-			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
 			bmh := createBMH("test-bmh", "test-ns", nil, nil, metal3v1alpha1.StateAvailable)
 			bmh.Spec.BootMACAddress = testBootMAC
 
-			interfaces, err := buildInterfacesFromBMH(nodeRequest, bmh)
+			interfaces, err := buildInterfacesFromBMH(bmh)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(interfaces)).To(Equal(2))
 
@@ -460,17 +427,16 @@ var _ = Describe("BareMetalHost Manager", func() {
 				}
 			}
 			Expect(bootInterface).NotTo(BeNil())
-			Expect(bootInterface.Label).To(Equal("boot"))
+			Expect(bootInterface.Label).To(Equal(constants.BootInterfaceLabel))
 			Expect(bootInterface.Name).To(Equal("eth0"))
 		})
 
 		It("should handle interface labels with MAC addresses", func() {
-			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
 			bmh := createBMH("test-bmh", "test-ns", map[string]string{
-				"interfacelabel.clcm.openshift.io/mgmt": "00-11-22-33-44-56",
+				constants.LabelPrefixInterfaces + "mgmt": "00-11-22-33-44-56",
 			}, nil, metal3v1alpha1.StateAvailable)
 
-			interfaces, err := buildInterfacesFromBMH(nodeRequest, bmh)
+			interfaces, err := buildInterfacesFromBMH(bmh)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(interfaces)).To(Equal(2))
 
@@ -487,11 +453,10 @@ var _ = Describe("BareMetalHost Manager", func() {
 		})
 
 		It("should return error when hardware details are nil", func() {
-			nodeRequest := createNodeAllocationRequest("test-request", "test-ns")
 			bmh := createBMH("test-bmh", "test-ns", nil, nil, metal3v1alpha1.StateAvailable)
 			bmh.Status.HardwareDetails = nil
 
-			_, err := buildInterfacesFromBMH(nodeRequest, bmh)
+			_, err := buildInterfacesFromBMH(bmh)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("bareMetalHost.status.hardwareDetails should not be nil"))
 		})
@@ -1174,40 +1139,9 @@ var _ = Describe("BareMetalHost Manager", func() {
 		})
 	})
 
+	// TODO: the following functions from helpers.go are already tested in helpers_test.go.
+	// Merge these tests into helpers_test.go.
 	Describe("node finder functions", func() {
-		Describe("findNodeInProgress", func() {
-			It("should return nil when no nodes are in progress", func() {
-				nodelist := &pluginsv1alpha1.AllocatedNodeList{
-					Items: []pluginsv1alpha1.AllocatedNode{
-						*createNodeWithCondition("node1", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
-						*createNodeWithCondition("node2", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Failed), metav1.ConditionFalse),
-					},
-				}
-
-				result := findNodeInProgress(nodelist)
-				Expect(result).To(BeNil())
-			})
-
-			It("should return node with InProgress provisioned condition", func() {
-				nodelist := &pluginsv1alpha1.AllocatedNodeList{
-					Items: []pluginsv1alpha1.AllocatedNode{
-						*createNodeWithCondition("node1", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
-						*createNodeWithCondition("node2", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
-					},
-				}
-
-				result := findNodeInProgress(nodelist)
-				Expect(result).NotTo(BeNil())
-				Expect(result.Name).To(Equal("node2"))
-			})
-
-			It("should handle empty node list", func() {
-				nodelist := &pluginsv1alpha1.AllocatedNodeList{Items: []pluginsv1alpha1.AllocatedNode{}}
-				result := findNodeInProgress(nodelist)
-				Expect(result).To(BeNil())
-			})
-		})
-
 		Describe("findNextNodeToUpdate", func() {
 			It("should return nil when no nodes need updating", func() {
 				// Create nodes with configured condition to indicate they are successfully configured
@@ -1699,6 +1633,80 @@ var _ = Describe("BareMetalHost Manager", func() {
 			Expect(nodeInfo.BMC.Address).To(Equal("192.168.1.100"))
 			Expect(len(nodeInfo.Interfaces)).To(Equal(1))
 			Expect(nodeInfo.Interfaces[0].Name).To(Equal("eth0"))
+		})
+	})
+
+	Describe("handleBMHCompletion", func() {
+		var (
+			fakeClient client.Client
+			pluginNs   = "test-plugin-ns"
+		)
+
+		BeforeEach(func() {
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
+		})
+
+		It("should return false when no nodes are updating", func() {
+			// All nodes have Provisioned=True
+			nodelist := &pluginsv1alpha1.AllocatedNodeList{
+				Items: []pluginsv1alpha1.AllocatedNode{
+					*createNodeWithCondition("node1", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
+					*createNodeWithCondition("node2", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
+					*createNodeWithCondition("node3", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
+				},
+			}
+
+			updating, err := handleBMHCompletion(ctx, fakeClient, fakeClient, logger, pluginNs, nodelist)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updating).To(BeFalse())
+		})
+
+		It("should aggregate errors from multiple node failures", func() {
+			// Mix of nodes: some completed, some in progress, some with no condition
+			nodelist := &pluginsv1alpha1.AllocatedNodeList{
+				Items: []pluginsv1alpha1.AllocatedNode{
+					*createNodeWithCondition("node1", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
+					*createNodeWithCondition("fail-node2", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
+					*createAllocatedNode("fail-node3", pluginNs, "bmh-node3", pluginNs), // no condition
+					*createNodeWithCondition("fail-node4", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
+				},
+			}
+
+			// The function will return error because BMHs don't exist, but it should
+			// process all 3 nodes that need completion (node2, node3, node4)
+			updating, err := handleBMHCompletion(ctx, fakeClient, fakeClient, logger, pluginNs, nodelist)
+
+			// Expect errors because BMHs don't exist for the nodes
+			Expect(err).To(HaveOccurred())
+			// The error should be aggregated from multiple node failures
+			Expect(err.Error()).To(ContainSubstring("failed to handle BMH completion"))
+			Expect(err.Error()).To(ContainSubstring("node fail-node2"))
+			Expect(err.Error()).To(ContainSubstring("node fail-node3"))
+			Expect(err.Error()).To(ContainSubstring("node fail-node4"))
+			// Should return true because unexpected errors happened during processing, so we need to retry
+			Expect(updating).To(BeTrue())
+		})
+
+		It("should return anyUpdating=true when nodes are still in progress", func() {
+			// Create nodes with corresponding BMHs that are NOT in Available state
+			bmh1 := createBMH("bmh-progress-node1", pluginNs, nil, nil, metal3v1alpha1.StatePreparing)
+			bmh2 := createBMH("bmh-progress-node2", pluginNs, nil, nil, metal3v1alpha1.StatePreparing)
+
+			err := fakeClient.Create(ctx, bmh1)
+			Expect(err).ToNot(HaveOccurred())
+			err = fakeClient.Create(ctx, bmh2)
+			Expect(err).ToNot(HaveOccurred())
+
+			nodelist := &pluginsv1alpha1.AllocatedNodeList{
+				Items: []pluginsv1alpha1.AllocatedNode{
+					*createNodeWithCondition("progress-node1", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
+					*createNodeWithCondition("progress-node2", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
+				},
+			}
+
+			updating, err := handleBMHCompletion(ctx, fakeClient, fakeClient, logger, pluginNs, nodelist)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updating).To(BeTrue()) // BMHs are not Available yet
 		})
 	})
 })

@@ -551,7 +551,7 @@ yamllint: yamllint-download ## Lint YAML files in the repository
 		-not -path '$(PROJECT_DIR)/testbin/*' \
 		-not -path '$(PROJECT_DIR)/telco5g-konflux/*' \
 		-print0 \
-		| xargs -0 --no-run-if-empty $(YAMLLINT) -c .yamllint.yaml
+		| xargs -0 --no-run-if-empty $(YAMLLINT) --strict -c .yamllint.yaml
 	@echo "YAML linting completed successfully."
 
 .PHONY: test-kustomize

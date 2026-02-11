@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
+	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 	models2 "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
@@ -406,6 +407,14 @@ func (c *Collector) collectResources(ctx context.Context, dataSource ResourceDat
 		return nil, fmt.Errorf("failed to get resources: %w", err)
 	}
 
+	// Fetch all alarm dictionaries and build a map for use in notifications
+	alarmDictMap, err := c.buildAlarmDictionaryMap(ctx)
+	if err != nil {
+		slog.Warn("failed to fetch alarm dictionaries for notifications", "error", err)
+		// Continue without alarm dictionaries - notifications will have nil alarmDictionary
+		alarmDictMap = make(map[string]*common.AlarmDictionary)
+	}
+
 	// Loop over the set of resources and create the associated resource types.
 	seen := make(map[uuid.UUID]bool)
 	for _, resource := range resources {
@@ -420,10 +429,13 @@ func (c *Collector) collectResources(ctx context.Context, dataSource ResourceDat
 		}
 		seen[resourceType.ResourceTypeID] = true
 
+		// Capture alarm dictionary for this resource type (may be nil if not found)
+		alarmDict := alarmDictMap[resourceType.ResourceTypeID.String()]
+
 		dataChangeEvent, err := svcutils.PersistObjectWithChangeEvent(
 			ctx, c.repository.Db, *resourceType, resourceType.ResourceTypeID, nil, func(object interface{}) any {
 				record, _ := object.(models.ResourceType)
-				return models.ResourceTypeToModel(&record)
+				return models.ResourceTypeToModel(&record, alarmDict)
 			})
 		if err != nil {
 			return nil, fmt.Errorf("failed to persist resource type': %w", err)
@@ -451,6 +463,28 @@ func (c *Collector) collectResources(ctx context.Context, dataSource ResourceDat
 	}
 
 	return resources, nil
+}
+
+// buildAlarmDictionaryMap fetches all alarm dictionaries and their definitions,
+// and returns a map keyed by resource type ID for efficient lookup.
+func (c *Collector) buildAlarmDictionaryMap(ctx context.Context) (map[string]*common.AlarmDictionary, error) {
+	alarmDictionaries, err := c.repository.GetAlarmDictionaries(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get alarm dictionaries: %w", err)
+	}
+
+	result := make(map[string]*common.AlarmDictionary)
+	for _, dict := range alarmDictionaries {
+		definitions, err := c.repository.GetAlarmDefinitionsByAlarmDictionaryID(ctx, dict.AlarmDictionaryID)
+		if err != nil {
+			slog.Warn("failed to get alarm definitions", "alarmDictionaryId", dict.AlarmDictionaryID, "error", err)
+			continue
+		}
+		converted := models.AlarmDictionaryToModel(&dict, definitions)
+		result[dict.ResourceTypeID.String()] = &converted
+	}
+
+	return result, nil
 }
 
 // collectResourcePools collects ResourcePool objects from the data source, persists them to the database,

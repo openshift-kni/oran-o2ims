@@ -22,6 +22,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 )
 
@@ -443,7 +444,7 @@ var _ = Describe("RemoveLabelFromInterfaces", func() {
 						"interfaces": []interface{}{
 							map[string]interface{}{
 								"name":       "eth0",
-								"label":      "boot-interface",
+								"label":      constants.BootInterfaceLabel,
 								"macAddress": "some-mac",
 							},
 						},

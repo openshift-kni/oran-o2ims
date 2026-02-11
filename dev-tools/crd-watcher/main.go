@@ -179,6 +179,14 @@ func runCommand() error {
 		return fmt.Errorf("failed to set log level: %w", err)
 	}
 
+	// In watch mode, suppress klog stderr output to prevent TUI corruption
+	// Only FATAL logs will go to stderr, preventing transient errors from persisting on screen
+	if config.Watch {
+		if err := flag.Set("stderrthreshold", "FATAL"); err != nil {
+			return fmt.Errorf("failed to set stderr threshold: %w", err)
+		}
+	}
+
 	// If no CRDs specified, watch all available ones
 	if len(config.CRDTypes) == 0 {
 		config.CRDTypes = getAvailableCRDNames()

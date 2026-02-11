@@ -4,7 +4,6 @@ metadata:
   name: metal3-b12f3e77848a4002bf40
   namespace: oran-o2ims
 spec:
-  bootInterfaceLabel: bootable-interface
   clusterId: cluster1
   configTransactionId: 1
   hardwarePluginRef: metal3-hwplugin

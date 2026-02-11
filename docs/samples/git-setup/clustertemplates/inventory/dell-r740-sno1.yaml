@@ -16,13 +16,6 @@ stringData:
         dhcp: true
       ipv6:
         enabled: false
-    - name: eth1
-      type: ethernet
-      state: up
-      ipv4:
-        enabled: false
-      ipv6:
-        enabled: false
     dns-resolver:
       config:
         server:
@@ -48,12 +41,12 @@ metadata:
     resourceselector.clcm.openshift.io/server-type: R740
     resourceselector.clcm.openshift.io/server-id: dell-r740-sno1
     resourceselector.clcm.openshift.io/subnet: "192.0.2.0"
-    interfacelabel.clcm.openshift.io/data-interface: eth1
+    interfacelabel.clcm.openshift.io/boot-interface: eno1
+    interfacelabel.clcm.openshift.io/data-interface: eno2
   annotations:
     bmac.agent-install.openshift.io/allow-provisioned-host-management: ""
     resourceinfo.clcm.openshift.io/description: "R740 server with Blue label"
     resourceinfo.clcm.openshift.io/partNumber: "00001"
-    resourceinfo.clcm.openshift.io/globalAssetId: "asset0001"
     resourceinfo.clcm.openshift.io/groups: "groupA, groupB"
   name: dell-r740-sno1
   namespace: dell-r740-pool

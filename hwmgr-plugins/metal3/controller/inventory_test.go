@@ -25,6 +25,7 @@ import (
 
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/inventory"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
 
 /*
@@ -199,9 +200,10 @@ var _ = Describe("Inventory", func() {
 						SerialNumber: "ABC123456",
 					},
 					CPU: metal3v1alpha1.CPU{
-						Arch:  "x86_64",
-						Model: "Intel Xeon Gold 6138",
-						Count: 40,
+						Arch:           "x86_64",
+						Model:          "Intel Xeon Gold 6138",
+						Count:          40,
+						ClockMegahertz: 2600.0,
 					},
 				},
 			},
@@ -249,18 +251,24 @@ var _ = Describe("Inventory", func() {
 	})
 
 	Describe("getResourceInfoGlobalAssetId", func() {
-		It("should return global asset ID from annotations when present", func() {
-			bmh := createBMHWithAnnotations("test-bmh", "test-ns", map[string]string{
-				AnnotationResourceInfoGlobalAssetId: "GA123456",
-			})
-			result := getResourceInfoGlobalAssetId(bmh)
+		It("should return serial number from hardware details when present", func() {
+			hwdata := createHardwareData("test-hwdata", "test-ns")
+			result := getResourceInfoGlobalAssetId(hwdata)
 			Expect(result).ToNot(BeNil())
-			Expect(*result).To(Equal("GA123456"))
+			Expect(*result).To(Equal("ABC123456"))
 		})
 
-		It("should return pointer to empty string when annotations are nil", func() {
-			bmh := createBasicBMH("test-bmh", "test-ns")
-			result := getResourceInfoGlobalAssetId(bmh)
+		It("should return pointer to empty string when hardware details are nil", func() {
+			hwdata := &metal3v1alpha1.HardwareData{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-hwdata",
+					Namespace: "test-ns",
+				},
+				Spec: metal3v1alpha1.HardwareDataSpec{
+					HardwareDetails: nil,
+				},
+			}
+			result := getResourceInfoGlobalAssetId(hwdata)
 			Expect(result).ToNot(BeNil())
 			Expect(*result).To(Equal(""))
 		})
@@ -428,22 +436,6 @@ var _ = Describe("Inventory", func() {
 		})
 	})
 
-	Describe("getResourceInfoPartNumber", func() {
-		It("should return part number from annotations when present", func() {
-			bmh := createBMHWithAnnotations("test-bmh", "test-ns", map[string]string{
-				AnnotationResourceInfoPartNumber: "PN123456",
-			})
-			result := getResourceInfoPartNumber(bmh)
-			Expect(result).To(Equal("PN123456"))
-		})
-
-		It("should return empty string when annotations are nil", func() {
-			bmh := createBasicBMH("test-bmh", "test-ns")
-			result := getResourceInfoPartNumber(bmh)
-			Expect(result).To(Equal(""))
-		})
-	})
-
 	Describe("getResourceInfoPowerState", func() {
 		It("should return ON when BMH is powered on", func() {
 			bmh := createBasicBMH("test-bmh", "test-ns")
@@ -486,10 +478,10 @@ var _ = Describe("Inventory", func() {
 		})
 	})
 
-	Describe("getProcessorInfoCores", func() {
-		It("should return CPU core count from hardware details when present", func() {
+	Describe("getProcessorInfoCpus", func() {
+		It("should return CPU count from hardware details when present", func() {
 			hwdata := createHardwareData("test-hwdata", "test-ns")
-			result := getProcessorInfoCores(hwdata)
+			result := getProcessorInfoCpus(hwdata)
 			Expect(result).ToNot(BeNil())
 			Expect(*result).To(Equal(40))
 		})
@@ -504,16 +496,32 @@ var _ = Describe("Inventory", func() {
 					HardwareDetails: nil,
 				},
 			}
-			result := getProcessorInfoCores(hwdata)
+			result := getProcessorInfoCpus(hwdata)
 			Expect(result).To(BeNil())
 		})
 	})
 
-	Describe("getProcessorInfoManufacturer", func() {
-		It("should return pointer to empty string", func() {
-			result := getProcessorInfoManufacturer()
+	Describe("getProcessorInfoFrequency", func() {
+		It("should return CPU frequency from hardware details when present", func() {
+			hwdata := createHardwareData("test-hwdata", "test-ns")
+			hwdata.Spec.HardwareDetails.CPU.ClockMegahertz = 2600.0
+			result := getProcessorInfoFrequency(hwdata)
 			Expect(result).ToNot(BeNil())
-			Expect(*result).To(Equal(""))
+			Expect(*result).To(Equal(2600))
+		})
+
+		It("should return nil when hardware details are nil", func() {
+			hwdata := &metal3v1alpha1.HardwareData{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-hwdata",
+					Namespace: "test-ns",
+				},
+				Spec: metal3v1alpha1.HardwareDataSpec{
+					HardwareDetails: nil,
+				},
+			}
+			result := getProcessorInfoFrequency(hwdata)
+			Expect(result).To(BeNil())
 		})
 	})
 
@@ -549,8 +557,8 @@ var _ = Describe("Inventory", func() {
 
 			processor := result[0]
 			Expect(*processor.Architecture).To(Equal("x86_64"))
-			Expect(*processor.Cores).To(Equal(40))
-			Expect(*processor.Manufacturer).To(Equal(""))
+			Expect(*processor.Cpus).To(Equal(40))
+			Expect(*processor.Frequency).To(Equal(2600))
 			Expect(*processor.Model).To(Equal("Intel Xeon Gold 6138"))
 		})
 
@@ -602,14 +610,82 @@ var _ = Describe("Inventory", func() {
 		})
 	})
 
-	Describe("getResourceInfoSerialNumber", func() {
-		It("should return serial number from hardware details when present", func() {
+	Describe("getResourceInfoNics", func() {
+		It("should return NIC map from hardware details", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
 			hwdata := createHardwareData("test-hwdata", "test-ns")
-			result := getResourceInfoSerialNumber(hwdata)
-			Expect(result).To(Equal("ABC123456"))
+			hwdata.Spec.HardwareDetails.NIC = []metal3v1alpha1.NIC{
+				{
+					Name:      "eno1",
+					Model:     "0x8086 0x1593",
+					MAC:       "40:a6:b7:b1:6d:7a",
+					SpeedGbps: 25,
+				},
+				{
+					Name:      "eno2",
+					Model:     "0x8086 0x1593",
+					MAC:       "40:a6:b7:b1:6d:7b",
+					SpeedGbps: 25,
+				},
+			}
+
+			result := getResourceInfoNics(bmh, hwdata)
+			Expect(result).ToNot(BeNil())
+			Expect(result).To(HaveLen(2))
+			Expect(result["eno1"].Mac).ToNot(BeNil())
+			Expect(*result["eno1"].Mac).To(Equal("40:a6:b7:b1:6d:7a"))
+			Expect(result["eno1"].Label).To(BeNil())
+			Expect(result["eno1"].BootInterface).To(BeNil())
 		})
 
-		It("should return empty string when hardware details are nil", func() {
+		It("should populate label field from BMH interface labels", func() {
+			bmh := createBMHWithLabels("test-bmh", "test-ns", map[string]string{
+				constants.LabelPrefixInterfaces + "data-interface": "eno1",
+			})
+			hwdata := createHardwareData("test-hwdata", "test-ns")
+			hwdata.Spec.HardwareDetails.NIC = []metal3v1alpha1.NIC{
+				{
+					Name:      "eno1",
+					Model:     "0x8086 0x1593",
+					MAC:       "40:a6:b7:b1:6d:7a",
+					SpeedGbps: 25,
+				},
+			}
+
+			result := getResourceInfoNics(bmh, hwdata)
+			Expect(result).ToNot(BeNil())
+			Expect(result["eno1"].Label).ToNot(BeNil())
+			Expect(*result["eno1"].Label).To(Equal("data-interface"))
+		})
+
+		It("should set bootInterface when MAC matches BMH bootMACAddress", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Spec.BootMACAddress = "40:a6:b7:b1:6d:7a"
+			hwdata := createHardwareData("test-hwdata", "test-ns")
+			hwdata.Spec.HardwareDetails.NIC = []metal3v1alpha1.NIC{
+				{
+					Name:      "eno1",
+					Model:     "0x8086 0x1593",
+					MAC:       "40:a6:b7:b1:6d:7a",
+					SpeedGbps: 25,
+				},
+				{
+					Name:      "eno2",
+					Model:     "0x8086 0x1593",
+					MAC:       "40:a6:b7:b1:6d:7b",
+					SpeedGbps: 25,
+				},
+			}
+
+			result := getResourceInfoNics(bmh, hwdata)
+			Expect(result).ToNot(BeNil())
+			Expect(result["eno1"].BootInterface).ToNot(BeNil())
+			Expect(*result["eno1"].BootInterface).To(BeTrue())
+			Expect(result["eno2"].BootInterface).To(BeNil())
+		})
+
+		It("should return nil when hardware details are nil", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
 			hwdata := &metal3v1alpha1.HardwareData{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-hwdata",
@@ -619,8 +695,88 @@ var _ = Describe("Inventory", func() {
 					HardwareDetails: nil,
 				},
 			}
-			result := getResourceInfoSerialNumber(hwdata)
-			Expect(result).To(Equal(""))
+
+			result := getResourceInfoNics(bmh, hwdata)
+			Expect(result).To(BeNil())
+		})
+	})
+
+	Describe("getResourceInfoStorage", func() {
+		It("should return storage map from hardware details", func() {
+			hwdata := createHardwareData("test-hwdata", "test-ns")
+			hwdata.Spec.HardwareDetails.Storage = []metal3v1alpha1.Storage{
+				{
+					Name:           "/dev/sda",
+					Model:          "Samsung SSD 970",
+					SerialNumber:   "S466NX0M123456",
+					SizeBytes:      1000204886016,
+					Type:           "SSD",
+					WWN:            "eui.ace42e00357f8b6f",
+					AlternateNames: []string{"/dev/disk/by-path/pci-0000:00:1f.2-ata-1"},
+				},
+			}
+
+			result := getResourceInfoStorage(hwdata)
+			Expect(result).ToNot(BeNil())
+			Expect(result).To(HaveLen(1))
+			Expect(result["/dev/sda"].Model).ToNot(BeNil())
+			Expect(*result["/dev/sda"].Model).To(Equal("Samsung SSD 970"))
+			Expect(result["/dev/sda"].SerialNumber).ToNot(BeNil())
+			Expect(*result["/dev/sda"].SerialNumber).To(Equal("S466NX0M123456"))
+		})
+
+		It("should return nil when hardware details are nil", func() {
+			hwdata := &metal3v1alpha1.HardwareData{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-hwdata",
+					Namespace: "test-ns",
+				},
+				Spec: metal3v1alpha1.HardwareDataSpec{
+					HardwareDetails: nil,
+				},
+			}
+
+			result := getResourceInfoStorage(hwdata)
+			Expect(result).To(BeNil())
+		})
+	})
+
+	Describe("getResourceInfoAllocated", func() {
+		It("should return true when BMH has allocated label set to true", func() {
+			bmh := createBMHWithLabels("test-bmh", "test-ns", map[string]string{
+				BmhAllocatedLabel: "true",
+			})
+
+			result := getResourceInfoAllocated(bmh)
+			Expect(result).ToNot(BeNil())
+			Expect(*result).To(BeTrue())
+		})
+
+		It("should return false when BMH has allocated label set to false", func() {
+			bmh := createBMHWithLabels("test-bmh", "test-ns", map[string]string{
+				BmhAllocatedLabel: "false",
+			})
+
+			result := getResourceInfoAllocated(bmh)
+			Expect(result).ToNot(BeNil())
+			Expect(*result).To(BeFalse())
+		})
+
+		It("should return false when allocated label is missing", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+
+			result := getResourceInfoAllocated(bmh)
+			Expect(result).ToNot(BeNil())
+			Expect(*result).To(BeFalse())
+		})
+
+		It("should return false when labels are nil", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Labels = nil
+
+			result := getResourceInfoAllocated(bmh)
+			Expect(result).ToNot(BeNil())
+			Expect(*result).To(BeFalse())
 		})
 	})
 
@@ -958,15 +1114,16 @@ var _ = Describe("Inventory", func() {
 			Expect(result.Model).To(Equal("PowerEdge R640"))
 			Expect(result.Name).To(Equal("test-bmh"))
 			Expect(result.OperationalState).To(Equal(inventory.ResourceInfoOperationalStateENABLED))
-			Expect(result.PartNumber).To(Equal("PN123456"))
 			Expect(*result.PowerState).To(Equal(inventory.ON))
 			Expect(result.Processors).To(HaveLen(1))
 			Expect(result.ResourceId).To(Equal(string(testUID)))
 			Expect(result.ResourcePoolId).To(Equal("pool123"))
-			Expect(result.SerialNumber).To(Equal("ABC123456"))
 			Expect(*result.Tags).To(ContainElement("zone: zone1"))
 			Expect(result.UsageState).To(Equal(inventory.ACTIVE))
 			Expect(result.Vendor).To(Equal("Dell Inc."))
+			Expect(*result.GlobalAssetId).To(Equal("ABC123456"))
+			Expect(result.Allocated).ToNot(BeNil())
+			Expect(*result.Allocated).To(BeFalse())
 		})
 	})
 
@@ -1118,7 +1275,7 @@ var _ = Describe("Inventory", func() {
 	Describe("Regex patterns", func() {
 		Describe("REPatternInterfaceLabel", func() {
 			It("should match interface labels correctly", func() {
-				matches := REPatternInterfaceLabel.FindStringSubmatch(LabelPrefixInterfaces + "eth0")
+				matches := REPatternInterfaceLabel.FindStringSubmatch(constants.LabelPrefixInterfaces + "eth0")
 				Expect(matches).To(HaveLen(2))
 				Expect(matches[1]).To(Equal("eth0"))
 			})
@@ -1152,14 +1309,13 @@ var _ = Describe("Inventory", func() {
 			Expect(LabelResourcePoolID).To(Equal("resources.clcm.openshift.io/resourcePoolId"))
 			Expect(LabelSiteID).To(Equal("resources.clcm.openshift.io/siteId"))
 			Expect(LabelPrefixResourceSelector).To(Equal("resourceselector.clcm.openshift.io/"))
-			Expect(LabelPrefixInterfaces).To(Equal("interfacelabel.clcm.openshift.io/"))
+			Expect(constants.LabelPrefixInterfaces).To(Equal("interfacelabel.clcm.openshift.io/"))
 		})
 
 		It("should have correct annotation prefixes", func() {
 			Expect(AnnotationPrefixResourceInfo).To(Equal("resourceinfo.clcm.openshift.io/"))
 			Expect(AnnotationResourceInfoDescription).To(Equal("resourceinfo.clcm.openshift.io/description"))
 			Expect(AnnotationResourceInfoPartNumber).To(Equal("resourceinfo.clcm.openshift.io/partNumber"))
-			Expect(AnnotationResourceInfoGlobalAssetId).To(Equal("resourceinfo.clcm.openshift.io/globalAssetId"))
 			Expect(AnnotationsResourceInfoGroups).To(Equal("resourceinfo.clcm.openshift.io/groups"))
 		})
 	})

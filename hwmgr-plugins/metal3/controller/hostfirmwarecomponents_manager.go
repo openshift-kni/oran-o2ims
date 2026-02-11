@@ -85,6 +85,12 @@ func convertToFirmwareUpdates(spec hwmgmtv1alpha1.HardwareProfileSpec) []metal3v
 func isHostFirmwareComponentsChangeDetectedAndValid(ctx context.Context,
 	c client.Client,
 	bmh *metal3v1alpha1.BareMetalHost) (bool, error) {
+	// Extract logger from context
+	logger := slog.Default()
+	if ctxLogger, ok := ctx.Value(any("logger")).(*slog.Logger); ok && ctxLogger != nil {
+		logger = ctxLogger
+	}
+
 	hfc, err := getHostFirmwareComponents(ctx, c, bmh.Name, bmh.Namespace)
 
 	if err != nil {
@@ -100,6 +106,17 @@ func isHostFirmwareComponentsChangeDetectedAndValid(ctx context.Context,
 	changeDetected := changeDetectedCond.Status == metav1.ConditionTrue
 	valid := meta.IsStatusConditionTrue(hfc.Status.Conditions, string(metal3v1alpha1.HostFirmwareComponentsValid))
 	observed := changeDetectedCond.ObservedGeneration == hfc.Generation
+
+	logger.DebugContext(ctx, "Evaluating HostFirmwareComponents change",
+		slog.String("bmh", bmh.Name),
+		slog.String("hfc", hfc.Name),
+		slog.Int64("hfcGeneration", hfc.Generation),
+		slog.String("changeDetectedStatus", string(changeDetectedCond.Status)),
+		slog.Int64("changeDetectedObservedGen", changeDetectedCond.ObservedGeneration),
+		slog.Bool("changeDetected", changeDetected),
+		slog.Bool("valid", valid),
+		slog.Bool("observed", observed),
+		slog.Bool("result", changeDetected && valid && observed))
 
 	return changeDetected && valid && observed, nil
 }
@@ -345,79 +362,4 @@ func getHostFirmwareComponents(ctx context.Context,
 	}
 
 	return hfc, nil
-}
-
-// clearFirmwareSpecFields resets HostFirmwareComponents spec.updates and HostFirmwareSettings spec.settings
-// after firmware updates have been verified as complete. This cleanup prevents stale update specifications
-// from being misleading or problematic in future operations.
-func clearFirmwareSpecFields(ctx context.Context,
-	c client.Client,
-	logger *slog.Logger,
-	bmh *metal3v1alpha1.BareMetalHost) error {
-
-	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
-
-	// Clear HostFirmwareComponents spec.updates if it exists
-	hfc, err := getHostFirmwareComponents(ctx, c, bmh.Name, bmh.Namespace)
-	switch {
-	case errors.IsNotFound(err):
-		// HFC doesn't exist - nothing to clear
-		logger.DebugContext(ctx, "HostFirmwareComponents not found, skipping spec.updates cleanup",
-			slog.String("bmh", bmh.Name))
-	case err != nil:
-		return fmt.Errorf("failed to get HostFirmwareComponents for cleanup: %w", err)
-	case len(hfc.Spec.Updates) == 0:
-		logger.DebugContext(ctx, "HostFirmwareComponents spec.updates already empty",
-			slog.String("bmh", bmh.Name))
-	default:
-		// Clear the updates field
-		if err := retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
-			currentHFC, err := getHostFirmwareComponents(ctx, c, bmh.Name, bmh.Namespace)
-			if err != nil {
-				return fmt.Errorf("failed to fetch HostFirmwareComponents for update: %w", err)
-			}
-			currentHFC.Spec.Updates = []metal3v1alpha1.FirmwareUpdate{}
-			if err := c.Update(ctx, currentHFC); err != nil {
-				return fmt.Errorf("failed to clear HostFirmwareComponents spec.updates: %w", err)
-			}
-			logger.InfoContext(ctx, "Cleared HostFirmwareComponents spec.updates",
-				slog.String("bmh", bmh.Name))
-			return nil
-		}); err != nil {
-			return fmt.Errorf("failed to clear HostFirmwareComponents spec.updates for %s: %w", bmhName, err)
-		}
-	}
-
-	// Clear HostFirmwareSettings spec.settings if it exists
-	hfs, err := getHostFirmwareSettings(ctx, c, bmh.Name, bmh.Namespace)
-	switch {
-	case errors.IsNotFound(err):
-		// HFS doesn't exist - nothing to clear
-		logger.DebugContext(ctx, "HostFirmwareSettings not found, skipping spec.settings cleanup",
-			slog.String("bmh", bmh.Name))
-	case err != nil:
-		return fmt.Errorf("failed to get HostFirmwareSettings for cleanup: %w", err)
-	case len(hfs.Spec.Settings) == 0:
-		logger.DebugContext(ctx, "HostFirmwareSettings spec.settings already empty",
-			slog.String("bmh", bmh.Name))
-	default:
-		// Clear the settings field
-		if err := retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
-			currentHFS, err := getHostFirmwareSettings(ctx, c, bmh.Name, bmh.Namespace)
-			if err != nil {
-				return fmt.Errorf("failed to fetch HostFirmwareSettings for update: %w", err)
-			}
-			currentHFS.Spec.Settings = metal3v1alpha1.DesiredSettingsMap{}
-			if err := c.Update(ctx, currentHFS); err != nil {
-				return fmt.Errorf("failed to clear HostFirmwareSettings spec.settings: %w", err)
-			}
-			logger.InfoContext(ctx, "Cleared HostFirmwareSettings spec.settings",
-				slog.String("bmh", bmh.Name))
-			return nil
-		}); err != nil {
-			return fmt.Errorf("failed to clear HostFirmwareSettings spec.settings for %s: %w", bmhName, err)
-		}
-	}
-
-	return nil
 }

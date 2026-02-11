@@ -8,12 +8,14 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
@@ -24,6 +26,7 @@ import (
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 )
@@ -76,7 +79,7 @@ func updateBMHMetaWithRetry(
 	key, value, operation string,
 ) error {
 	// nolint: wrapcheck
-	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+	return retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
 		// Fetch the latest version of the BMH
 		var latestBMH metal3v1alpha1.BareMetalHost
 		if err := c.Get(ctx, name, &latestBMH); err != nil {
@@ -204,7 +207,6 @@ func GroupBMHsByResourcePool(
 }
 
 func buildInterfacesFromBMH(
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
 	bmh *metal3v1alpha1.BareMetalHost) ([]*pluginsv1alpha1.Interface, error) {
 	var interfaces []*pluginsv1alpha1.Interface
 
@@ -216,7 +218,7 @@ func buildInterfacesFromBMH(
 		label := ""
 
 		if strings.EqualFold(nic.MAC, bmh.Spec.BootMACAddress) {
-			label = nodeAllocationRequest.Spec.BootInterfaceLabel
+			label = constants.BootInterfaceLabel
 		} else {
 			// Interface labels with MACs use - instead of :
 			hyphenatedMac := strings.ReplaceAll(nic.MAC, ":", "-")
@@ -255,7 +257,6 @@ func setBootMACAddressFromLabel(
 	ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
 	bmh *metal3v1alpha1.BareMetalHost) error {
 
 	// Verify hardware details are available
@@ -263,20 +264,12 @@ func setBootMACAddressFromLabel(
 		return fmt.Errorf("bareMetalHost.status.hardwareDetails should not be nil")
 	}
 
-	// Get the boot interface label name
-	bootInterfaceLabel := nodeAllocationRequest.Spec.BootInterfaceLabel
-	if bootInterfaceLabel == "" {
-		return fmt.Errorf("nodeAllocationRequest.spec.bootInterfaceLabel is empty")
-	}
-
 	// If bootMACAddress is already set, the label is optional
 	// Optionally validate it matches the label if the label exists
 	if bmh.Spec.BootMACAddress != "" {
-		// Construct the full label key
-		bootLabelKey := LabelPrefixInterfaces + bootInterfaceLabel
 
 		// Check if the boot interface label exists on the BMH
-		bootLabelValue, found := bmh.Labels[bootLabelKey]
+		bootLabelValue, found := bmh.Labels[constants.BootInterfaceLabelFullKey]
 		if !found {
 			// Label not found, but bootMACAddress is already set - this is fine
 			logger.InfoContext(ctx, "bootMACAddress already set, boot interface label not present (optional)",
@@ -304,24 +297,21 @@ func setBootMACAddressFromLabel(
 
 		if !strings.EqualFold(bmh.Spec.BootMACAddress, targetMAC) {
 			return fmt.Errorf("bootMACAddress '%s' does not match boot interface label '%s' which points to MAC '%s' on BMH '%s'",
-				bmh.Spec.BootMACAddress, bootLabelKey, targetMAC, bmh.Name)
+				bmh.Spec.BootMACAddress, constants.BootInterfaceLabelFullKey, targetMAC, bmh.Name)
 		}
 
 		logger.InfoContext(ctx, "Validated bootMACAddress matches boot interface label",
 			slog.String("bmh", bmh.Name),
-			slog.String("label", bootLabelKey),
+			slog.String("label", constants.BootInterfaceLabelFullKey),
 			slog.String("mac", targetMAC))
 		return nil
 	}
 
 	// bootMACAddress is NOT set - label is REQUIRED to determine the boot MAC
-	// Construct the full label key
-	bootLabelKey := LabelPrefixInterfaces + bootInterfaceLabel
-
 	// Look for the boot interface label on the BMH
-	bootLabelValue, found := bmh.Labels[bootLabelKey]
+	bootLabelValue, found := bmh.Labels[constants.BootInterfaceLabelFullKey]
 	if !found {
-		return fmt.Errorf("boot interface label '%s' not found on BMH '%s'", bootLabelKey, bmh.Name)
+		return fmt.Errorf("boot interface label '%s' not found on BMH '%s'", constants.BootInterfaceLabelFullKey, bmh.Name)
 	}
 
 	// The label value could be either a NIC name or a hyphenated MAC address
@@ -344,7 +334,7 @@ func setBootMACAddressFromLabel(
 	// Update the BMH spec with retry logic to handle concurrent modifications
 	name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	// nolint: wrapcheck
-	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+	return retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
 		// Fetch the latest version of the BMH
 		var latestBMH metal3v1alpha1.BareMetalHost
 		if err := c.Get(ctx, name, &latestBMH); err != nil {
@@ -359,7 +349,7 @@ func setBootMACAddressFromLabel(
 			// Validate it matches what we expect
 			if !strings.EqualFold(latestBMH.Spec.BootMACAddress, targetMAC) {
 				return fmt.Errorf("bootMACAddress '%s' does not match boot interface label '%s' which points to MAC '%s' on BMH '%s'",
-					latestBMH.Spec.BootMACAddress, bootLabelKey, targetMAC, latestBMH.Name)
+					latestBMH.Spec.BootMACAddress, constants.BootInterfaceLabelFullKey, targetMAC, latestBMH.Name)
 			}
 			logger.InfoContext(ctx, "bootMACAddress already set and validated",
 				slog.String("bmh", latestBMH.Name),
@@ -383,7 +373,7 @@ func setBootMACAddressFromLabel(
 
 		logger.InfoContext(ctx, "Successfully set bootMACAddress from interface label",
 			slog.String("bmh", latestBMH.Name),
-			slog.String("label", bootLabelKey),
+			slog.String("label", constants.BootInterfaceLabelFullKey),
 			slog.String("labelValue", bootLabelValue),
 			slog.String("mac", targetMAC))
 		return nil
@@ -425,7 +415,7 @@ func clearBMHNetworkData(
 	name types.NamespacedName,
 ) (ctrl.Result, error) {
 	// Try to clear Spec.PreprovisioningNetworkDataName with conflict retry.
-	if err := retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+	if err := retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
 		bmh := &metal3v1alpha1.BareMetalHost{}
 		if err := c.Get(ctx, name, bmh); err != nil {
 			return fmt.Errorf("fetch BMH %s/%s: %w", name.Namespace, name.Name, err)
@@ -495,11 +485,21 @@ func processHwProfileWithHandledError(
 	return updateRequired, nil
 }
 
+// processHwProfile processes a HardwareProfile and determines if BIOS/firmware updates are required.
+// It annotates the BMH with BiosUpdateNeeded and/or FirmwareUpdateNeeded to signal pending updates.
+// For postInstall, it creates or updates a HostUpdatePolicy to control the update timing.
+//
+// Returns (true, nil) if any update is required, (false, nil) if no updates needed.
 func processHwProfile(ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
 	pluginNamespace string,
 	bmh *metal3v1alpha1.BareMetalHost, profileName string, postInstall bool) (bool, error) {
+
+	logger.DebugContext(ctx, "Processing hardware profile for BMH",
+		slog.String("bmh", bmh.Name),
+		slog.String("hwProfile", profileName),
+		slog.Bool("postInstall", postInstall))
 
 	// Clear any existing update annotations to ensure clean state
 	if err := clearBMHUpdateAnnotations(ctx, c, logger, bmh); err != nil {
@@ -520,20 +520,32 @@ func processHwProfile(ctx context.Context,
 	// Check if BIOS update is required
 	biosUpdateRequired := false
 	if hwProfile.Spec.Bios.Attributes != nil {
+		logger.DebugContext(ctx, "Checking if BIOS update is required",
+			slog.String("bmh", bmh.Name))
 		biosUpdateRequired, err = IsBiosUpdateRequired(ctx, c, logger, bmh, hwProfile.Spec.Bios)
 		if err != nil {
 			return false, err
 		}
+		logger.DebugContext(ctx, "BIOS update check complete",
+			slog.String("bmh", bmh.Name),
+			slog.Bool("biosUpdateRequired", biosUpdateRequired))
 	}
 
 	// Check if firmware update is required
+	logger.DebugContext(ctx, "Checking if firmware update is required",
+		slog.String("bmh", bmh.Name))
 	firmwareUpdateRequired, err := IsFirmwareUpdateRequired(ctx, c, logger, bmh, hwProfile.Spec)
 	if err != nil {
 		return false, err
 	}
+	logger.DebugContext(ctx, "Firmware update check complete",
+		slog.String("bmh", bmh.Name),
+		slog.Bool("firmwareUpdateRequired", firmwareUpdateRequired))
 
 	// If nothing is required, return early
 	if !biosUpdateRequired && !firmwareUpdateRequired {
+		logger.DebugContext(ctx, "No BIOS or firmware updates required",
+			slog.String("bmh", bmh.Name))
 		return false, nil
 	}
 
@@ -546,16 +558,26 @@ func processHwProfile(ctx context.Context,
 	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	// If bios update is required, annotate BMH
 	if biosUpdateRequired {
+		logger.DebugContext(ctx, "BIOS update required, setting update-needed annotation",
+			slog.String("bmh", bmh.Name),
+			slog.String("annotation", BiosUpdateNeededAnnotation))
 		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation, BiosUpdateNeededAnnotation, ValueTrue, OpAdd); err != nil {
 			return true, fmt.Errorf("failed to annotate BMH %s/%s: %w", bmh.Namespace, bmh.Name, err)
 		}
+		logger.DebugContext(ctx, "BIOS update-needed annotation set successfully",
+			slog.String("bmh", bmh.Name))
 	}
 
 	// if firmware update is required, annotate BMH
 	if firmwareUpdateRequired {
+		logger.DebugContext(ctx, "Firmware update required, setting update-needed annotation",
+			slog.String("bmh", bmh.Name),
+			slog.String("annotation", FirmwareUpdateNeededAnnotation))
 		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation, FirmwareUpdateNeededAnnotation, ValueTrue, OpAdd); err != nil {
 			return true, fmt.Errorf("failed to annotate BMH %s/%s: %w", bmh.Namespace, bmh.Name, err)
 		}
+		logger.DebugContext(ctx, "Firmware update-needed annotation set successfully",
+			slog.String("bmh", bmh.Name))
 	}
 
 	return true, nil
@@ -605,42 +627,66 @@ func handleTransitionNodes(ctx context.Context,
 	nodelist *pluginsv1alpha1.AllocatedNodeList, postInstall bool) (ctrl.Result, error) {
 
 	for _, node := range nodelist.Items {
-		bmh, err := getBMHForNode(ctx, noncachedClient, &node)
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to get BMH for node %s: %w", node.Name, err)
+		res, err := handleTransitionNode(ctx, c, noncachedClient, logger, pluginNamespace, &node, postInstall)
+		if err != nil || res.Requeue || res.RequeueAfter > 0 {
+			return res, err
 		}
+	}
 
-		if bmh.Annotations == nil {
-			bmh.Annotations = make(map[string]string)
-		}
+	return ctrl.Result{}, nil
+}
 
-		if postInstall {
-			if err := evaluateCRForReboot(ctx, c, logger, bmh); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-		updateCases := []struct {
-			AnnotationKey string
-			Reason        string
-			LogLabel      string
-		}{
-			{BiosUpdateNeededAnnotation, UpdateReasonBIOSSettings, "BIOS settings"},
-			{FirmwareUpdateNeededAnnotation, UpdateReasonFirmware, "firmware"},
-		}
+// handleTransitionNode processes Day1/Day2 transition logic for a given AllocatedNode.
+// It is responsible for:
+// - adding reboot annotation (postInstall only) once the corresponding CRs report valid changes
+// - waiting for BMH to enter expected transitional state (Preparing/Servicing)
+// - removing update-needed annotations and setting node config-in-progress annotation
+func handleTransitionNode(ctx context.Context,
+	c client.Client,
+	noncachedClient client.Reader,
+	logger *slog.Logger,
+	pluginNamespace string,
+	node *pluginsv1alpha1.AllocatedNode,
+	postInstall bool,
+) (ctrl.Result, error) {
+	bmh, err := getBMHForNode(ctx, noncachedClient, node)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get BMH for node %s: %w", node.Name, err)
+	}
 
-		// Process each update case for the current BMH.
-		for _, uc := range updateCases {
-			if _, exists := bmh.Annotations[uc.AnnotationKey]; !exists {
-				continue
-			}
-			res, err := processBMHUpdateCase(ctx, c, logger, pluginNamespace, &node, bmh, uc, postInstall)
-			if err != nil || res.Requeue || res.RequeueAfter > 0 {
-				// Propagate either requeue or error
-				return res, err
-			}
-			// Only handle one update case per reconciliation cycle
-			return ctrl.Result{}, nil
+	if bmh.Annotations == nil {
+		bmh.Annotations = make(map[string]string)
+	}
+
+	if postInstall {
+		if err := evaluateCRForReboot(ctx, c, logger, bmh); err != nil {
+			return ctrl.Result{}, err
 		}
+	}
+
+	updateCases := []struct {
+		AnnotationKey string
+		Reason        string
+		LogLabel      string
+	}{
+		{BiosUpdateNeededAnnotation, UpdateReasonBIOSSettings, "BIOS settings"},
+		{FirmwareUpdateNeededAnnotation, UpdateReasonFirmware, "firmware"},
+	}
+
+	// Process each update case for the current BMH.
+	// Since BMO can process both BIOS and firmware updates in a single cycle,
+	// we process all annotations that exist so they can all be removed when
+	// the BMH enters the transitional state.
+	for _, uc := range updateCases {
+		if _, exists := bmh.Annotations[uc.AnnotationKey]; !exists {
+			continue
+		}
+		res, err := processBMHUpdateCase(ctx, c, logger, pluginNamespace, node, bmh, uc, postInstall)
+		if err != nil || res.Requeue || res.RequeueAfter > 0 {
+			// Propagate either requeue or error
+			return res, err
+		}
+		// Continue to process remaining annotations in the same cycle
 	}
 
 	return ctrl.Result{}, nil
@@ -648,22 +694,44 @@ func handleTransitionNodes(ctx context.Context,
 
 func addRebootAnnotation(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
 	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+	logger.DebugContext(ctx, "Adding reboot annotation to BMH",
+		slog.String("bmh", bmh.Name),
+		slog.String("annotation", BmhRebootAnnotation))
 	if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, "annotation", BmhRebootAnnotation, "", OpAdd); err != nil {
 		return fmt.Errorf("failed to add %s to BMH %+v: %w", BmhRebootAnnotation, bmhName, err)
 	}
+	logger.InfoContext(ctx, "Added reboot annotation to trigger firmware/BIOS update",
+		slog.String("BMH", bmh.Name))
 	return nil
 }
 
+// evaluateCRForReboot evaluates the BareMetalHost for pending BIOS and/or
+// firmware updates and adds the reboot annotation to the BMH to trigger node
+// reboot when required.
 func evaluateCRForReboot(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
 	// Check if both annotations are present
 	hasBiosAnnotation := bmh.Annotations[BiosUpdateNeededAnnotation] != ""
 	hasFirmwareAnnotation := bmh.Annotations[FirmwareUpdateNeededAnnotation] != ""
+
+	logger.DebugContext(ctx, "Evaluating BMH for reboot",
+		slog.String("bmh", bmh.Name),
+		slog.Bool("hasBiosAnnotation", hasBiosAnnotation),
+		slog.Bool("hasFirmwareAnnotation", hasFirmwareAnnotation))
+
+	if !hasBiosAnnotation && !hasFirmwareAnnotation {
+		logger.DebugContext(ctx, "No update-needed annotations present, skipping reboot evaluation",
+			slog.String("bmh", bmh.Name))
+		return nil
+	}
 
 	var biosChange, firmwareChange bool
 	var err error
 
 	// If both annotations are present, require both checks to pass
 	if hasBiosAnnotation && hasFirmwareAnnotation {
+		logger.DebugContext(ctx, "Both BIOS and firmware annotations present, checking both",
+			slog.String("bmh", bmh.Name))
+
 		biosChange, err = isFirmwareSettingsChangeDetectedAndValid(ctx, c, bmh)
 		if err != nil {
 			return fmt.Errorf("failed to evaluate FirmwareSettings status: %w", err)
@@ -674,38 +742,79 @@ func evaluateCRForReboot(ctx context.Context, c client.Client, logger *slog.Logg
 			return fmt.Errorf("failed to evaluate HostFirmwareComponents status: %w", err)
 		}
 
+		logger.DebugContext(ctx, "Both annotations check results",
+			slog.String("bmh", bmh.Name),
+			slog.Bool("biosChange", biosChange),
+			slog.Bool("firmwareChange", firmwareChange))
+
 		if biosChange && firmwareChange {
+			logger.DebugContext(ctx, "Both BIOS and firmware changes detected, adding reboot annotation",
+				slog.String("bmh", bmh.Name))
 			return addRebootAnnotation(ctx, c, logger, bmh)
 		}
+		logger.DebugContext(ctx, "Not all changes detected yet, skipping reboot",
+			slog.String("bmh", bmh.Name))
 		return nil
 	}
 
 	// If only BIOS annotation is present
 	if hasBiosAnnotation {
+		logger.DebugContext(ctx, "Only BIOS annotation present, checking BIOS change",
+			slog.String("bmh", bmh.Name))
+
 		biosChange, err = isFirmwareSettingsChangeDetectedAndValid(ctx, c, bmh)
 		if err != nil {
 			return fmt.Errorf("failed to evaluate FirmwareSettings status: %w", err)
 		}
+
+		logger.DebugContext(ctx, "BIOS-only check result",
+			slog.String("bmh", bmh.Name),
+			slog.Bool("biosChange", biosChange))
+
 		if biosChange {
+			logger.DebugContext(ctx, "BIOS change detected, adding reboot annotation",
+				slog.String("bmh", bmh.Name))
 			return addRebootAnnotation(ctx, c, logger, bmh)
 		}
+		logger.DebugContext(ctx, "BIOS change not detected yet, skipping reboot",
+			slog.String("bmh", bmh.Name))
 	}
 
 	// If only firmware annotation is present
 	if hasFirmwareAnnotation {
+		logger.DebugContext(ctx, "Only firmware annotation present, checking firmware change",
+			slog.String("bmh", bmh.Name))
+
 		firmwareChange, err = isHostFirmwareComponentsChangeDetectedAndValid(ctx, c, bmh)
 		if err != nil {
 			return fmt.Errorf("failed to evaluate HostFirmwareComponents status: %w", err)
 		}
+
+		logger.DebugContext(ctx, "Firmware-only check result",
+			slog.String("bmh", bmh.Name),
+			slog.Bool("firmwareChange", firmwareChange))
+
 		if firmwareChange {
+			logger.DebugContext(ctx, "Firmware change detected, adding reboot annotation",
+				slog.String("bmh", bmh.Name))
 			return addRebootAnnotation(ctx, c, logger, bmh)
 		}
+		logger.DebugContext(ctx, "Firmware change not detected yet, skipping reboot",
+			slog.String("bmh", bmh.Name))
 	}
 
 	return nil
 }
 
-// processBMHUpdateCase handles the update for a given BMH and update case.
+// processBMHUpdateCase handles the update transition for a given BMH and update case.
+//
+// This function orchestrates the transition from "update-needed" to "config-in-progress" state:
+//  1. Handles BMH error states (transient errors are tolerated with timeout, permanent errors fail the node)
+//  2. Waits for BMH to enter the expected transition state:
+//     - Day1: waits for Preparing state
+//     - Day2(postInstall): waits for Servicing state
+//  3. When the BMH is in the expected state, removes the update-needed annotations from BMH and
+//     adds the config-in-progress annotation to the AllocatedNode to mark the update as in progress.
 func processBMHUpdateCase(ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
@@ -725,25 +834,21 @@ func processBMHUpdateCase(ctx context.Context,
 
 		message := fmt.Sprintf("BMH in error state: %s", bmh.Status.ErrorType)
 		logger.WarnContext(ctx, message, slog.String("BMH", bmh.Name))
-		condType := hwmgmtv1alpha1.Provisioned
-		if postInstall {
-			condType = hwmgmtv1alpha1.Configured
-		}
-		if err := hwmgrutils.SetNodeFailedStatus(ctx, c, logger, node, string(condType), message); err != nil {
-			if errors.IsConflict(err) {
-				logger.WarnContext(ctx, "conflict setting node status; will retry", slog.String("node", node.Name), slog.String("error", err.Error()))
-				return hwmgrutils.RequeueWithShortInterval(), nil
-			}
-			// everything else here is unexpected
-			return ctrl.Result{}, fmt.Errorf("failed to set node failed status for %s: %w", node.Name, err)
-		}
 
-		// Clear config-in-progress annotation when node fails
+		// Clear config-in-progress annotation before setting node to failed
 		if err := clearConfigAnnotationWithPatch(ctx, c, node); err != nil {
 			logger.ErrorContext(ctx, "Failed to clear config annotation",
 				slog.String("node", node.Name),
 				slog.String("error", err.Error()))
 			return ctrl.Result{}, err
+		}
+
+		// Clear BMH update annotations to ensure clean state for retry
+		if err := clearBMHUpdateAnnotations(ctx, c, logger, bmh); err != nil {
+			logger.WarnContext(ctx, "Failed to clear BMH update annotations after error",
+				slog.String("BMH", bmh.Name),
+				slog.String("error", err.Error()))
+			return hwmgrutils.RequeueWithShortInterval(), nil
 		}
 
 		// Clear BMH error annotation to allow future retry attempts
@@ -753,6 +858,22 @@ func processBMHUpdateCase(ctx context.Context,
 				slog.String("error", err.Error()))
 			return hwmgrutils.RequeueWithShortInterval(), nil
 		}
+
+		// Set node to failed status after cleanup completes
+		// This ensures NAR can be retried after user intervention
+		condType := hwmgmtv1alpha1.Provisioned
+		if postInstall {
+			condType = hwmgmtv1alpha1.Configured
+		}
+		if err := hwmgrutils.SetNodeFailedStatus(ctx, c, logger, node, string(condType), message); err != nil {
+			if k8serrors.IsConflict(err) {
+				logger.WarnContext(ctx, "conflict setting node status; will retry", slog.String("node", node.Name), slog.String("error", err.Error()))
+				return hwmgrutils.RequeueWithShortInterval(), nil
+			}
+			// everything else here is unexpected
+			return ctrl.Result{}, fmt.Errorf("failed to set node failed status for %s: %w", node.Name, err)
+		}
+
 		return hwmgrutils.RequeueWithMediumInterval(), nil
 	}
 
@@ -822,6 +943,9 @@ func processBMHUpdateCase(ctx context.Context,
 	return ctrl.Result{}, nil
 }
 
+// handleBMHCompletion handles the completion check for all AllocatedNodes that are allocated
+// to the NodeAllocationRequest. It sets the Provisioned condition to Completed when complete
+// and returns true if any node is still in progress.
 func handleBMHCompletion(ctx context.Context,
 	c client.Client,
 	noncachedClient client.Reader,
@@ -829,16 +953,68 @@ func handleBMHCompletion(ctx context.Context,
 	pluginNamespace string,
 	nodelist *pluginsv1alpha1.AllocatedNodeList) (bool, error) {
 
-	logger.InfoContext(ctx, "Checking for node with config in progress")
-	node := findNodeInProgress(nodelist)
-	if node == nil {
-		return false, nil // No node is in config progress
+	logger.InfoContext(ctx, "Checking for nodes with config in progress")
+
+	// Find all nodes that are in InProgress state or have no condition
+	nodes := findNodesInProgress(nodelist)
+	if len(nodes) == 0 {
+		return false, nil // no node is in config progress
 	}
+
+	logger.InfoContext(ctx, "Handling nodes for completion", slog.Int("count", len(nodes)))
+	var (
+		wg          sync.WaitGroup
+		mu          sync.Mutex
+		anyUpdating bool
+		errs        []error
+	)
+
+	// Process each node in parallel for better performance with large clusters (e.g. 3 masters + 50+ workers).
+	for _, node := range nodes {
+		wg.Add(1)
+		go func(node *pluginsv1alpha1.AllocatedNode) {
+			defer wg.Done()
+
+			updating, err := handleSingleNodeCompletion(ctx, c, noncachedClient, logger, pluginNamespace, node)
+
+			mu.Lock()
+			defer mu.Unlock()
+
+			if updating {
+				anyUpdating = true
+			}
+			if err != nil {
+				logger.ErrorContext(ctx, "failed to handle single node completion",
+					slog.String("node", node.Name),
+					slog.String("error", err.Error()))
+				errs = append(errs, fmt.Errorf("node %s, error: %w", node.Name, err))
+			}
+		}(node)
+	}
+
+	wg.Wait()
+
+	if len(errs) > 0 {
+		aggErr := fmt.Errorf("failed to handle BMH completion: %w", errors.Join(errs...))
+		return anyUpdating, aggErr
+	}
+
+	return anyUpdating, nil
+}
+
+// handleSingleNodeCompletion handles the completion check for a single AllocatedNode.
+// Returns true if the node is still updating, false if the node is complete.
+func handleSingleNodeCompletion(ctx context.Context,
+	c client.Client,
+	noncachedClient client.Reader,
+	logger *slog.Logger,
+	pluginNamespace string,
+	node *pluginsv1alpha1.AllocatedNode) (bool, error) {
 
 	// Get BMH associated with the node
 	bmh, err := getBMHForNode(ctx, noncachedClient, node)
 	if err != nil {
-		return false, fmt.Errorf("failed to get BMH for node %s: %w", node.Name, err)
+		return true, fmt.Errorf("failed to get BMH for node %s: %w", node.Name, err)
 	}
 
 	// Check if BMH has transitioned to "Available"
@@ -883,13 +1059,6 @@ func handleBMHCompletion(ctx context.Context,
 	}
 	if !configValid {
 		return true, nil // Continue polling
-	}
-
-	// Clear firmware spec fields after validation succeeds
-	if err := clearFirmwareSpecFields(ctx, c, logger, bmh); err != nil {
-		logger.ErrorContext(ctx, "Failed to clear firmware spec fields",
-			slog.String("BMH", bmh.Name), slog.String("error", err.Error()))
-		// Don't fail the entire operation if cleanup fails - log and continue
 	}
 
 	// Apply post-config updates and finalize the process
@@ -945,7 +1114,7 @@ func getBMHForNode(ctx context.Context, c client.Reader, node *pluginsv1alpha1.A
 
 func removeInfraEnvLabelFromPreprovisioningImage(ctx context.Context, c client.Client, logger *slog.Logger, name types.NamespacedName) error {
 	// nolint: wrapcheck
-	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+	return retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
 		image := &metal3v1alpha1.PreprovisioningImage{}
 		if err := c.Get(ctx, name, image); err != nil {
 			logger.ErrorContext(ctx, "Failed to get PreprovisioningImage",
@@ -992,7 +1161,7 @@ func removeInfraEnvLabel(ctx context.Context, c client.Client, logger *slog.Logg
 func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
 	name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	// nolint: wrapcheck
-	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+	return retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
 		// Fetch the latest version of the BMH
 		var current metal3v1alpha1.BareMetalHost
 		if err := c.Get(ctx, name, &current); err != nil {
@@ -1097,7 +1266,7 @@ func clearBMHAnnotation(ctx context.Context, c client.Client, logger *slog.Logge
 	name := types.NamespacedName{Namespace: bmh.Namespace, Name: bmh.Name}
 
 	// nolint: wrapcheck
-	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+	return retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
 		// Fetch the latest version of the BMH
 		var latestBMH metal3v1alpha1.BareMetalHost
 		if err := c.Get(ctx, name, &latestBMH); err != nil {
@@ -1151,7 +1320,7 @@ func clearBMHAnnotation(ctx context.Context, c client.Client, logger *slog.Logge
 func patchOnlineFalse(ctx context.Context, c client.Client, bmh *metal3v1alpha1.BareMetalHost) error {
 	name := types.NamespacedName{Namespace: bmh.Namespace, Name: bmh.Name}
 	// nolint: wrapcheck
-	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+	return retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
 		var fresh metal3v1alpha1.BareMetalHost
 		if err := c.Get(ctx, name, &fresh); err != nil {
 			return err
@@ -1245,24 +1414,46 @@ func clearBMHUpdateAnnotations(ctx context.Context, c client.Client, logger *slo
 	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	var errs []error
 
+	hasBios := false
+	hasFirmware := false
+
 	// Remove BIOS update annotation if it exists
 	if _, exists := bmh.Annotations[BiosUpdateNeededAnnotation]; exists {
+		hasBios = true
+		logger.DebugContext(ctx, "Clearing BIOS update-needed annotation",
+			slog.String("bmh", bmh.Name),
+			slog.String("annotation", BiosUpdateNeededAnnotation))
 		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation, BiosUpdateNeededAnnotation, "", OpRemove); err != nil {
 			logger.WarnContext(ctx, "Failed to remove BIOS update annotation",
 				slog.String("bmh", bmh.Name),
 				slog.String("error", err.Error()))
 			errs = append(errs, fmt.Errorf("bios annotation removal failed: %w", err))
+		} else {
+			logger.DebugContext(ctx, "BIOS update-needed annotation cleared successfully",
+				slog.String("bmh", bmh.Name))
 		}
 	}
 
 	// Remove firmware update annotation if it exists
 	if _, exists := bmh.Annotations[FirmwareUpdateNeededAnnotation]; exists {
+		hasFirmware = true
+		logger.DebugContext(ctx, "Clearing firmware update-needed annotation",
+			slog.String("bmh", bmh.Name),
+			slog.String("annotation", FirmwareUpdateNeededAnnotation))
 		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation, FirmwareUpdateNeededAnnotation, "", OpRemove); err != nil {
 			logger.WarnContext(ctx, "Failed to remove firmware update annotation",
 				slog.String("bmh", bmh.Name),
 				slog.String("error", err.Error()))
 			errs = append(errs, fmt.Errorf("firmware annotation removal failed: %w", err))
+		} else {
+			logger.DebugContext(ctx, "Firmware update-needed annotation cleared successfully",
+				slog.String("bmh", bmh.Name))
 		}
+	}
+
+	if !hasBios && !hasFirmware {
+		logger.DebugContext(ctx, "No update-needed annotations to clear",
+			slog.String("bmh", bmh.Name))
 	}
 
 	// Return combined errors if any occurred

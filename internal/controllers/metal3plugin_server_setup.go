@@ -131,6 +131,20 @@ func (t *reconcilerTask) createMetal3PluginServerClusterRole(ctx context.Context
 					"update",
 				},
 			},
+			// ProvisioningRequest read access for node hostname mapping during Day2 updates
+			{
+				APIGroups: []string{
+					"clcm.openshift.io",
+				},
+				Resources: []string{
+					"provisioningrequests",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+				},
+			},
 			{
 				APIGroups: []string{
 					"plugins.clcm.openshift.io",

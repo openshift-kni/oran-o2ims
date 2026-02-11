@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -84,16 +85,17 @@ func clearConfigAnnotationWithPatch(ctx context.Context, c client.Client, node *
 	return nil
 }
 
-// findNodeInProgress scans the nodelist to find the first node in InProgress
-func findNodeInProgress(nodelist *pluginsv1alpha1.AllocatedNodeList) *pluginsv1alpha1.AllocatedNode {
+// findNodesInProgress scans the nodelist to find all nodes in InProgress state or no condition
+func findNodesInProgress(nodelist *pluginsv1alpha1.AllocatedNodeList) []*pluginsv1alpha1.AllocatedNode {
+	var nodes []*pluginsv1alpha1.AllocatedNode
 	for _, node := range nodelist.Items {
 		condition := meta.FindStatusCondition(node.Status.Conditions, (string(hwmgmtv1alpha1.Provisioned)))
 		if condition == nil || (condition.Status == metav1.ConditionFalse && condition.Reason == string(hwmgmtv1alpha1.InProgress)) {
-			return &node
+			nodes = append(nodes, &node)
 		}
 	}
 
-	return nil
+	return nodes
 }
 
 func applyPostConfigUpdates(ctx context.Context,
@@ -227,6 +229,37 @@ func findNodeConfigInProgress(nodelist *pluginsv1alpha1.AllocatedNodeList) *plug
 	}
 
 	return nil
+}
+
+// findNodeConfigRequested finds the first AllocatedNode that has a configuration update requested.
+func findNodeConfigRequested(nodelist *pluginsv1alpha1.AllocatedNodeList) *pluginsv1alpha1.AllocatedNode {
+	for _, node := range nodelist.Items {
+		condition := meta.FindStatusCondition(node.Status.Conditions, string(hwmgmtv1alpha1.Configured))
+		if (condition == nil && node.Spec.HwProfile != node.Status.HwProfile) ||
+			(condition != nil && condition.Status == metav1.ConditionFalse &&
+				condition.Reason == string(hwmgmtv1alpha1.ConfigUpdate)) {
+			return &node
+		}
+	}
+	return nil
+}
+
+// getGroupsSortedByRole returns NodeGroups sorted master-first, preserving spec order within same role.
+func getGroupsSortedByRole(nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) []pluginsv1alpha1.NodeGroup {
+	var groupPriority = func(role string) int {
+		switch strings.ToLower(role) {
+		case hwmgmtv1alpha1.NodeRoleMaster:
+			return 0
+		default:
+			return 1
+		}
+	}
+
+	groups := append([]pluginsv1alpha1.NodeGroup(nil), nodeAllocationRequest.Spec.NodeGroup...)
+	sort.SliceStable(groups, func(i, j int) bool {
+		return groupPriority(groups[i].NodeGroupData.Role) < groupPriority(groups[j].NodeGroupData.Role)
+	})
+	return groups
 }
 
 // createNode creates an AllocatedNode CR with specified attributes
@@ -414,26 +447,23 @@ func isNodeAllocationRequestFullyAllocated(ctx context.Context,
 	return true
 }
 
-// handleInProgressUpdate checks for any node marked as having a configuration update in progress.
-// If a AllocatedNode is found and its associated BMH status indicates that the update has completed,
-// it updates the node status, clears the annotation, applies the post-change annotation, and
-// requeues immediately.
-func handleInProgressUpdate(ctx context.Context,
+// handleNodeInProgressUpdate progresses a node that is in in progress of being configured.
+// If its associated BMH status indicates that the update has completed, it validates the
+// configuration, waits for the K8s node to be Ready on the spoke cluster before marking
+// the node status as complete and clearing the config-in-progress annotation. It returns
+// a no-requeue result to allow initiating the next node in the same reconciliation cycle
+// if complete.
+func handleNodeInProgressUpdate(ctx context.Context,
 	c client.Client,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	pluginNamespace string,
-	nodelist *pluginsv1alpha1.AllocatedNodeList,
-) (ctrl.Result, bool, error) {
-	node := findNodeConfigInProgress(nodelist)
-	if node == nil {
-		logger.InfoContext(ctx, "No AllocatedNode found that is in progress")
-		return ctrl.Result{}, false, nil
-	}
-	logger.InfoContext(ctx, "Node found that is in progress", slog.String("node", node.Name))
+	node *pluginsv1alpha1.AllocatedNode,
+	nar *pluginsv1alpha1.NodeAllocationRequest,
+) (ctrl.Result, error) {
 	bmh, err := getBMHForNode(ctx, noncachedClient, node)
 	if err != nil {
-		return ctrl.Result{}, true, fmt.Errorf("failed to get BMH for AllocatedNode %s: %w", node.Name, err)
+		return ctrl.Result{}, fmt.Errorf("failed to get BMH for AllocatedNode %s: %w", node.Name, err)
 	}
 
 	// Check if the update is complete by examining the BMH operational status.
@@ -443,25 +473,31 @@ func handleInProgressUpdate(ctx context.Context,
 		// Validate node configuration (firmware versions and BIOS settings)
 		configValid, err := validateNodeConfiguration(ctx, c, noncachedClient, logger, bmh, pluginNamespace, node.Spec.HwProfile)
 		if err != nil {
-			return hwmgrutils.RequeueWithMediumInterval(), true, err
+			return hwmgrutils.RequeueWithMediumInterval(), err
 		}
 		if !configValid {
-			return hwmgrutils.RequeueWithMediumInterval(), true, nil
-		}
-
-		// Clear firmware spec fields after validation succeeds
-		if err := clearFirmwareSpecFields(ctx, c, logger, bmh); err != nil {
-			logger.ErrorContext(ctx, "Failed to clear firmware spec fields",
-				slog.String("BMH", bmh.Name), slog.String("error", err.Error()))
-			// Don't fail the entire operation if cleanup fails - log and continue
+			return hwmgrutils.RequeueWithMediumInterval(), nil
 		}
 
 		if _, hasAnnotation := bmh.Annotations[BmhErrorTimestampAnnotation]; hasAnnotation {
 			if err := clearTransientBMHErrorAnnotation(ctx, c, logger, bmh); err != nil {
 				logger.WarnContext(ctx, "failed to clean up transient error annotation", slog.String("BMH", bmh.Name), slog.String("error", err.Error()))
-				return ctrl.Result{}, true, err
+				return ctrl.Result{}, err
 			}
 		}
+
+		// Check if the K8s node is Ready on the spoke cluster before marking update as complete.
+		// This ensures the node has successfully rejoined the cluster after the hardware update.
+		ready, err := CheckNodeReady(ctx, c, logger, nar, node)
+		if err != nil {
+			logger.ErrorContext(ctx, "Failed to check node readiness on spoke cluster",
+				slog.String("allocatedNode", node.Name), slog.String("error", err.Error()))
+			return hwmgrutils.RequeueWithMediumInterval(), nil // Retry later
+		}
+		if !ready {
+			return hwmgrutils.RequeueWithMediumInterval(), nil
+		}
+		logger.InfoContext(ctx, "Node is ready on spoke cluster", slog.String("allocatedNode", node.Name))
 
 		// Update the node's status to reflect the new hardware profile.
 		node.Status.HwProfile = node.Spec.HwProfile
@@ -475,30 +511,40 @@ func handleInProgressUpdate(ctx context.Context,
 			logger.ErrorContext(ctx, "Failed to update AllocatedNode status",
 				slog.String("node", node.Name),
 				slog.String("error", err.Error()))
-			return ctrl.Result{}, true, fmt.Errorf("failed to update status for AllocatedNode %s: %w", node.Name, err)
+			return ctrl.Result{}, fmt.Errorf("failed to update status for AllocatedNode %s: %w", node.Name, err)
 		}
 
 		if err := clearConfigAnnotationWithPatch(ctx, c, node); err != nil {
 			logger.ErrorContext(ctx, "Failed to clear config annotation",
 				slog.String("node", node.Name),
 				slog.String("error", err.Error()))
-			return ctrl.Result{}, true, err
+			return ctrl.Result{}, err
 		}
 
-		return hwmgrutils.RequeueImmediately(), true, nil
+		// Node completed successfully - return with no requeue to allow initiating the next node
+		// in the same reconciliation cycle if available.
+		return ctrl.Result{}, nil
 	}
 
 	if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusError {
 		tolerate, err := tolerateAndAnnotateTransientBMHError(ctx, c, logger, bmh)
 		if err != nil || tolerate {
-			return hwmgrutils.RequeueWithMediumInterval(), true, err
+			return hwmgrutils.RequeueWithMediumInterval(), err
 		}
 
 		logger.InfoContext(ctx, "BMH update failed", slog.String("BMH", bmh.Name))
 
 		// Clean up the config-in-progress annotation
 		if err := clearConfigAnnotationWithPatch(ctx, c, node); err != nil {
-			return ctrl.Result{}, true, err
+			return ctrl.Result{}, err
+		}
+
+		// Clear BMH update annotations to ensure clean state for retry
+		if err := clearBMHUpdateAnnotations(ctx, c, logger, bmh); err != nil {
+			logger.WarnContext(ctx, "Failed to clear BMH update annotations after error",
+				slog.String("BMH", bmh.Name),
+				slog.String("error", err.Error()))
+			return ctrl.Result{}, fmt.Errorf("failed to clear BMH update annotations %s:%w", bmh.Name, err)
 		}
 
 		if err := hwmgrutils.SetNodeConditionStatus(ctx, c, noncachedClient,
@@ -506,7 +552,7 @@ func handleInProgressUpdate(ctx context.Context,
 			string(hwmgmtv1alpha1.Configured), metav1.ConditionFalse,
 			string(hwmgmtv1alpha1.Failed), BmhServicingErr); err != nil {
 			logger.ErrorContext(ctx, "failed to update AllocatedNode status", slog.String("node", node.Name), slog.String("error", err.Error()))
-			return ctrl.Result{}, true, fmt.Errorf("failed to update AllocatedNode status %s:%w", node.Name, err)
+			return ctrl.Result{}, fmt.Errorf("failed to update AllocatedNode status %s:%w", node.Name, err)
 		}
 
 		// Clear BMH error annotation to allow future retry attempts
@@ -514,16 +560,16 @@ func handleInProgressUpdate(ctx context.Context,
 			logger.WarnContext(ctx, "failed to clear BMH error annotation for future retries",
 				slog.String("BMH", bmh.Name),
 				slog.String("error", err.Error()))
-			return ctrl.Result{}, true, fmt.Errorf("failed to clear BMH error annotation %s:%w", bmh.Name, err)
+			return ctrl.Result{}, fmt.Errorf("failed to clear BMH error annotation %s:%w", bmh.Name, err)
 		}
 
 		// Successfully handled BMH error state: updated node status and cleared annotations
 		logger.InfoContext(ctx, "Successfully handled BMH error state", slog.String("BMH", bmh.Name))
-		return ctrl.Result{}, false, fmt.Errorf("bmh %s/%s is in error state, node status updated to Failed", bmh.Namespace, bmh.Name)
+		return ctrl.Result{}, fmt.Errorf("bmh %s/%s is in error state, node status updated to Failed", bmh.Namespace, bmh.Name)
 	}
 
 	logger.InfoContext(ctx, "BMH config in progress", slog.String("bmh", bmh.Name))
-	return hwmgrutils.RequeueWithMediumInterval(), true, nil
+	return hwmgrutils.RequeueWithMediumInterval(), nil
 }
 
 // initiateNodeUpdate starts the update process for the given AllocatedNode by processing the new hardware profile,
@@ -580,6 +626,21 @@ func initiateNodeUpdate(ctx context.Context,
 	return ctrl.Result{}, nil
 }
 
+// handleNodeAllocationRequestConfiguring orchestrates Day2 hardware profile updates for all nodes
+// in a NodeAllocationRequest.
+//
+// Update behavior:
+//   - Updates are applied serially: each node must complete (BMH returns to OK status and k8s node is ready)
+//     before the next node is initiated
+//   - Master nodes are updated before worker nodes
+//   - If a node update fails, processing stops and remaining nodes are not updated
+//
+// This function also returns the nodeList for the caller (deriveNodeAllocationRequestStatusFromNodes)
+// to determine the NodeAllocationRequest status. Note that status conditions in the returned nodeList
+// may be stale since nodes are updated during processing, but the caller will refetch latest version
+// of each node.
+// TODO: Consider returning only a bool indicating if nodes exist for cleaner code,
+// since the caller needs to refetch nodes anyway.
 func handleNodeAllocationRequestConfiguring(
 	ctx context.Context,
 	c client.Client,
@@ -595,19 +656,35 @@ func handleNodeAllocationRequestConfiguring(
 	if err != nil {
 		return ctrl.Result{}, nil, fmt.Errorf("failed to get child nodes for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
 	}
+	// Deterministic ordering of listed nodes by name across reconciles
+	sort.Slice(nodelist.Items, func(i, j int) bool {
+		return nodelist.Items[i].Name < nodelist.Items[j].Name
+	})
 
-	// STEP 1: Process any node that is already in the update-in-progress state.
-	logger.InfoContext(ctx, "Checking for nodes in progress", slog.Int("totalNodes", len(nodelist.Items)))
-
-	res, handled, err := handleInProgressUpdate(ctx, c, noncachedClient, logger, pluginNamespace, nodelist)
-	if err != nil || handled {
-		return res, nodelist, err
+	// STEP 1: If any node is already in the config-in-progress state, process it for completion.
+	node := findNodeConfigInProgress(nodelist)
+	if node != nil {
+		logger.InfoContext(ctx, "Node found with configuring in progress, handling node for completion", slog.String("node", node.Name))
+		res, err := handleNodeInProgressUpdate(ctx, c, noncachedClient, logger, pluginNamespace, node, nodeAllocationRequest)
+		if err != nil || res.Requeue || res.RequeueAfter > 0 {
+			return res, nodelist, err
+		}
 	}
 
-	// No nodes are currently in progress, check if all nodes have been updated
+	// STEP 2: If any node already has config update requested but isn't in progress yet,
+	// drive node reboot and handle node transition from updated-needed to config-in-progress.
+	node = findNodeConfigRequested(nodelist)
+	if node != nil {
+		logger.InfoContext(ctx, "Node found with config requested, handling node for transition", slog.String("node", node.Name))
+		res, err := handleTransitionNode(ctx, c, noncachedClient, logger, pluginNamespace, node, true)
+		if err != nil || res.Requeue || res.RequeueAfter > 0 {
+			return res, nodelist, err
+		}
+	}
 
-	// STEP 2: Look for the next node that requires an update.
-	for _, nodegroup := range nodeAllocationRequest.Spec.NodeGroup {
+	// STEP 3: If there are no active nodes (config in progress or requested), look for the next node to update,
+	// respecting group role priority (master first, then worker). Only one node update is requested/initiated at a time.
+	for _, nodegroup := range getGroupsSortedByRole(nodeAllocationRequest) {
 		newHwProfile := nodegroup.NodeGroupData.HwProfile
 		node := findNextNodeToUpdate(nodelist, nodegroup.NodeGroupData.Name, newHwProfile)
 		if node == nil {
@@ -618,16 +695,6 @@ func handleNodeAllocationRequestConfiguring(
 		// Initiate the update process for the selected node.
 		res, err := initiateNodeUpdate(ctx, c, noncachedClient, logger, pluginNamespace, node, newHwProfile)
 		return res, nodelist, err
-	}
-
-	// STEP 3: Handle nodes in transition (from update-needed to update in-progress).
-	res, err = handleTransitionNodes(ctx, c, noncachedClient, logger, pluginNamespace, nodelist, true)
-	if err != nil {
-		return res, nodelist, err
-	}
-	if res.Requeue || res.RequeueAfter > 0 {
-		// handleTransitionNodes found work to do, requeue to let next reconcile handle in-progress nodes
-		return res, nodelist, nil
 	}
 
 	// No nodes in progress, no nodes needing updates, and no transitions happening
@@ -751,12 +818,12 @@ func allocateBMHToNodeAllocationRequest(
 	// Set bootMACAddress from interface labels if not already set
 	// This enables the pre-provisioned hardware workflow where boot interface
 	// is identified via labels instead of requiring bootMACAddress in the spec
-	if err := setBootMACAddressFromLabel(ctx, c, logger, nodeAllocationRequest, bmh); err != nil {
+	if err := setBootMACAddressFromLabel(ctx, c, logger, bmh); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to set bootMACAddress from interface label for BMH (%s): %w", bmh.Name, err)
 	}
 
 	// Update node status
-	bmhInterface, err := buildInterfacesFromBMH(nodeAllocationRequest, bmh)
+	bmhInterface, err := buildInterfacesFromBMH(bmh)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to build interfaces from BareMetalHost '%s': %w", bmh.Name, err)
 	}
