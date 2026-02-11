@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
@@ -74,10 +75,11 @@ type Collector struct {
 	dataSources         []DataSource
 	AsyncChangeEvents   chan *async.AsyncChangeEvent
 	loader              DataSourceLoader
+	hubClient           client.Client // For reading Location/OCloudSite CRs from Kubernetes
 }
 
 // NewCollector creates a new collector instance
-func NewCollector(pool *pgxpool.Pool, repo *repo.ResourcesRepository, notificationHandler NotificationHandler, loader DataSourceLoader, dataSources []DataSource) *Collector {
+func NewCollector(pool *pgxpool.Pool, repo *repo.ResourcesRepository, notificationHandler NotificationHandler, loader DataSourceLoader, dataSources []DataSource, hubClient client.Client) *Collector {
 	return &Collector{
 		pool:                pool,
 		repository:          repo,
@@ -85,6 +87,7 @@ func NewCollector(pool *pgxpool.Pool, repo *repo.ResourcesRepository, notificati
 		dataSources:         dataSources,
 		loader:              loader,
 		AsyncChangeEvents:   make(chan *async.AsyncChangeEvent, asyncEventBufferSize),
+		hubClient:           hubClient,
 	}
 }
 
