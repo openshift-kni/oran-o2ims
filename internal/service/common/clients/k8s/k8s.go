@@ -30,6 +30,7 @@ import (
 
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
@@ -71,6 +72,7 @@ func GetSchemeForHub() *runtime.Scheme {
 	utilruntime.Must(batchv1.AddToScheme(scheme))
 	utilruntime.Must(hwmgmtv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(pluginsv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(inventoryv1alpha1.AddToScheme(scheme))
 
 	return scheme
 }

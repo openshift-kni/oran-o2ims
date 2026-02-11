@@ -25,6 +25,7 @@ import (
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/auth"
+	k8sclient "github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/deprecation"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
@@ -143,8 +144,14 @@ func Serve(config *api.ResourceServerConfig) error {
 		return fmt.Errorf("failed to create hardware manager data source: %w", err)
 	}
 
+	// Create hub client for reading Location/OCloudSite CRs
+	hubClient, err := k8sclient.NewClientForHub()
+	if err != nil {
+		return fmt.Errorf("failed to create hub client: %w", err)
+	}
+
 	// Create the collector
-	resourceCollector := collector.NewCollector(pool, repository, resourceNotifier, hwMgrDataSourceLoader, []collector.DataSource{k8s})
+	resourceCollector := collector.NewCollector(pool, repository, resourceNotifier, hwMgrDataSourceLoader, []collector.DataSource{k8s}, hubClient)
 
 	// Init server
 	// Create the handler
