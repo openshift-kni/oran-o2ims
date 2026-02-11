@@ -11,7 +11,7 @@ metadata:
     pipelinesascode.tekton.dev/on-cel-expression: |
       event == "pull_request" &&
       target_branch == "main" &&
-      !event_title.startsWith("[BRANCH-CUT]") &&
+      !event_title.contains("[BRANCH-CUT]") &&
       (
         '.konflux/Dockerfile.bundle'.pathChanged() ||
         '.konflux/overlay/***'.pathChanged() ||

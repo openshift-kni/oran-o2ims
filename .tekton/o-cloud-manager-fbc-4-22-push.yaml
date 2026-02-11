@@ -10,7 +10,7 @@ metadata:
     pipelinesascode.tekton.dev/on-cel-expression: |
       event == "push" &&
       target_branch == "main" &&
-      !event_title.startsWith("[BRANCH-CUT]") &&
+      !event_title.contains("[BRANCH-CUT]") &&
       (
         '.konflux/catalog/***'.pathChanged() ||
         '.konflux/Dockerfile.catalog'.pathChanged() ||
