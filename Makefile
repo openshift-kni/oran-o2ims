@@ -611,6 +611,13 @@ ifeq ($(shell uname -s),Linux)
 endif
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -i --bin-dir $(LOCALBIN) -p path)" go test ./test/e2e/ -v ginkgo.v
 
+.PHONY: test-locations-envtest
+test-locations-envtest: envtest
+ifeq ($(shell uname -s),Linux)
+	@chmod -R u+w $(LOCALBIN)
+endif
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -i --bin-dir $(LOCALBIN) -p path)" go test ./internal/service/resources/collector/... -run "TestCollectorLocationsEnvtest" -v -count=1
+
 .PHONY: test-crd-watcher
 test-crd-watcher:
 	@echo "Run crd-watcher unit tests"
@@ -634,7 +641,7 @@ deps-update: mock-gen golangci-lint-download
 # TODO: add back `test-e2e` to ci-job
 # NOTE: `bundle-check` should be the last job in the list for `ci-job`
 .PHONY: ci-job
-ci-job: deps-update go-generate generate fmt vet lint test test-e2e test-crd-watcher bundle-check
+ci-job: deps-update go-generate generate fmt vet lint test test-e2e test-locations-envtest test-crd-watcher bundle-check
 
 .PHONY: clean
 clean:
