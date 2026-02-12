@@ -4,7 +4,7 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
-package collector_test
+package collector
 
 import (
 	"context"
@@ -20,7 +20,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/service/resources/collector"
 )
 
 const testNamespace = "test-locations"
@@ -75,16 +74,17 @@ var _ = AfterSuite(func() {
 	}
 })
 
-var _ = Describe("Location/OCloudSite List Functions", func() {
-	var c *collector.Collector
+var _ = Describe("Location/OCloudSite List Functions", Label("envtest"), func() {
+	var c *Collector
 
 	BeforeEach(func() {
-		c = collector.NewCollectorForTest(k8sClient)
+		// Create a Collector with only hubClient set for testing list functions
+		c = &Collector{hubClient: k8sClient}
 	})
 
-	Describe("ListLocations", func() {
+	Describe("listLocations", func() {
 		It("returns empty list when no Locations exist", func() {
-			locations, err := c.ListLocations(ctx)
+			locations, err := c.listLocations(ctx)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(locations).To(BeEmpty())
 		})
@@ -105,16 +105,28 @@ var _ = Describe("Location/OCloudSite List Functions", func() {
 			Expect(k8sClient.Create(ctx, loc)).To(Succeed())
 			DeferCleanup(func() { _ = k8sClient.Delete(ctx, loc) })
 
-			locations, err := c.ListLocations(ctx)
+			locations, err := c.listLocations(ctx)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(locations).To(HaveLen(1))
-			Expect(locations[0].Spec.GlobalLocationID).To(Equal("LOC-001"))
+
+			// Verify all fields from the listed Location
+			listed := locations[0]
+			Expect(listed.Name).To(Equal("test-loc-list"))
+			Expect(listed.Namespace).To(Equal(testNamespace))
+			Expect(listed.Spec.GlobalLocationID).To(Equal("LOC-001"))
+			Expect(listed.Spec.Name).To(Equal("Test Location"))
+			Expect(listed.Spec.Description).To(Equal("Test location description"))
+			Expect(listed.Spec.Address).ToNot(BeNil())
+			Expect(*listed.Spec.Address).To(Equal("123 Test Street"))
+			Expect(listed.Spec.Coordinate).To(BeNil())
+			Expect(listed.Spec.CivicAddress).To(BeEmpty())
+			Expect(listed.Spec.Extensions).To(BeEmpty())
 		})
 	})
 
-	Describe("ListOCloudSites", func() {
+	Describe("listOCloudSites", func() {
 		It("returns empty list when no OCloudSites exist", func() {
-			sites, err := c.ListOCloudSites(ctx)
+			sites, err := c.listOCloudSites(ctx)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(sites).To(BeEmpty())
 		})
@@ -135,15 +147,24 @@ var _ = Describe("Location/OCloudSite List Functions", func() {
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
 			DeferCleanup(func() { _ = k8sClient.Delete(ctx, site) })
 
-			sites, err := c.ListOCloudSites(ctx)
+			sites, err := c.listOCloudSites(ctx)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(sites).To(HaveLen(1))
-			Expect(sites[0].Spec.SiteID).To(Equal("site-001"))
+
+			// Verify all fields from the listed OCloudSite
+			listed := sites[0]
+			Expect(listed.Name).To(Equal("test-site-list"))
+			Expect(listed.Namespace).To(Equal(testNamespace))
+			Expect(listed.Spec.SiteID).To(Equal("site-001"))
+			Expect(listed.Spec.GlobalLocationID).To(Equal("LOC-001"))
+			Expect(listed.Spec.Name).To(Equal("Test Site"))
+			Expect(listed.Spec.Description).To(Equal("Test site description"))
+			Expect(listed.Spec.Extensions).To(BeEmpty())
 		})
 	})
 })
 
-var _ = Describe("Location CEL Validation", func() {
+var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 	It("rejects Location without any address field", func() {
 		loc := &inventoryv1alpha1.Location{
 			ObjectMeta: metav1.ObjectMeta{
@@ -179,6 +200,20 @@ var _ = Describe("Location CEL Validation", func() {
 		}
 		Expect(k8sClient.Create(ctx, loc)).To(Succeed())
 		DeferCleanup(func() { _ = k8sClient.Delete(ctx, loc) })
+
+		// verify all fields
+		fetched := &inventoryv1alpha1.Location{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), fetched)).To(Succeed())
+		Expect(fetched.Spec.GlobalLocationID).To(Equal("LOC-COORD"))
+		Expect(fetched.Spec.Name).To(Equal("Valid Location with Coordinate"))
+		Expect(fetched.Spec.Description).To(Equal("Has coordinate"))
+		Expect(fetched.Spec.Coordinate).ToNot(BeNil())
+		Expect(fetched.Spec.Coordinate.Latitude).To(Equal("40.7128"))
+		Expect(fetched.Spec.Coordinate.Longitude).To(Equal("-74.0060"))
+		Expect(fetched.Spec.Coordinate.Altitude).To(BeNil())
+		Expect(fetched.Spec.CivicAddress).To(BeEmpty())
+		Expect(fetched.Spec.Address).To(BeNil())
+		Expect(fetched.Spec.Extensions).To(BeEmpty())
 	})
 
 	It("accepts Location with civicAddress field", func() {
@@ -198,6 +233,19 @@ var _ = Describe("Location CEL Validation", func() {
 		}
 		Expect(k8sClient.Create(ctx, loc)).To(Succeed())
 		DeferCleanup(func() { _ = k8sClient.Delete(ctx, loc) })
+
+		// verify all fields
+		fetched := &inventoryv1alpha1.Location{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), fetched)).To(Succeed())
+		Expect(fetched.Spec.GlobalLocationID).To(Equal("LOC-CIVIC"))
+		Expect(fetched.Spec.Name).To(Equal("Valid Location with Civic Address"))
+		Expect(fetched.Spec.Description).To(Equal("Has civic address"))
+		Expect(fetched.Spec.Coordinate).To(BeNil())
+		Expect(fetched.Spec.CivicAddress).To(HaveLen(1))
+		Expect(fetched.Spec.CivicAddress[0].CaType).To(Equal(0))
+		Expect(fetched.Spec.CivicAddress[0].CaValue).To(Equal("US"))
+		Expect(fetched.Spec.Address).To(BeNil())
+		Expect(fetched.Spec.Extensions).To(BeEmpty())
 	})
 
 	It("accepts Location with address field", func() {
@@ -215,6 +263,18 @@ var _ = Describe("Location CEL Validation", func() {
 		}
 		Expect(k8sClient.Create(ctx, loc)).To(Succeed())
 		DeferCleanup(func() { _ = k8sClient.Delete(ctx, loc) })
+
+		// verify all fields
+		fetched := &inventoryv1alpha1.Location{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), fetched)).To(Succeed())
+		Expect(fetched.Spec.GlobalLocationID).To(Equal("LOC-ADDR"))
+		Expect(fetched.Spec.Name).To(Equal("Valid Location with Address"))
+		Expect(fetched.Spec.Description).To(Equal("Has address string"))
+		Expect(fetched.Spec.Coordinate).To(BeNil())
+		Expect(fetched.Spec.CivicAddress).To(BeEmpty())
+		Expect(fetched.Spec.Address).ToNot(BeNil())
+		Expect(*fetched.Spec.Address).To(Equal("123 Main St, City, Country"))
+		Expect(fetched.Spec.Extensions).To(BeEmpty())
 	})
 
 	It("validates latitude range - rejects invalid latitude", func() {
@@ -298,6 +358,20 @@ var _ = Describe("Location CEL Validation", func() {
 		}
 		Expect(k8sClient.Create(ctx, loc)).To(Succeed())
 		DeferCleanup(func() { _ = k8sClient.Delete(ctx, loc) })
+
+		// verify all fields
+		fetched := &inventoryv1alpha1.Location{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), fetched)).To(Succeed())
+		Expect(fetched.Spec.GlobalLocationID).To(Equal("LOC-BOUNDARY"))
+		Expect(fetched.Spec.Name).To(Equal("Valid Boundary Coordinates"))
+		Expect(fetched.Spec.Description).To(Equal("At boundary values"))
+		Expect(fetched.Spec.Coordinate).ToNot(BeNil())
+		Expect(fetched.Spec.Coordinate.Latitude).To(Equal("90.0"))
+		Expect(fetched.Spec.Coordinate.Longitude).To(Equal("-180.0"))
+		Expect(fetched.Spec.Coordinate.Altitude).To(BeNil())
+		Expect(fetched.Spec.CivicAddress).To(BeEmpty())
+		Expect(fetched.Spec.Address).To(BeNil())
+		Expect(fetched.Spec.Extensions).To(BeEmpty())
 	})
 
 	It("accepts Location with optional altitude", func() {
@@ -320,10 +394,25 @@ var _ = Describe("Location CEL Validation", func() {
 		}
 		Expect(k8sClient.Create(ctx, loc)).To(Succeed())
 		DeferCleanup(func() { _ = k8sClient.Delete(ctx, loc) })
+
+		// verify all fields
+		fetched := &inventoryv1alpha1.Location{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), fetched)).To(Succeed())
+		Expect(fetched.Spec.GlobalLocationID).To(Equal("LOC-ALT"))
+		Expect(fetched.Spec.Name).To(Equal("Valid Location with Altitude"))
+		Expect(fetched.Spec.Description).To(Equal("Has altitude"))
+		Expect(fetched.Spec.Coordinate).ToNot(BeNil())
+		Expect(fetched.Spec.Coordinate.Latitude).To(Equal("40.7128"))
+		Expect(fetched.Spec.Coordinate.Longitude).To(Equal("-74.0060"))
+		Expect(fetched.Spec.Coordinate.Altitude).ToNot(BeNil())
+		Expect(*fetched.Spec.Coordinate.Altitude).To(Equal("100.5"))
+		Expect(fetched.Spec.CivicAddress).To(BeEmpty())
+		Expect(fetched.Spec.Address).To(BeNil())
+		Expect(fetched.Spec.Extensions).To(BeEmpty())
 	})
 })
 
-var _ = Describe("OCloudSite Validation", func() {
+var _ = Describe("OCloudSite Validation", Label("envtest"), func() {
 	It("rejects OCloudSite with empty siteId", func() {
 		site := &inventoryv1alpha1.OCloudSite{
 			ObjectMeta: metav1.ObjectMeta{
@@ -357,6 +446,15 @@ var _ = Describe("OCloudSite Validation", func() {
 		}
 		Expect(k8sClient.Create(ctx, site)).To(Succeed())
 		DeferCleanup(func() { _ = k8sClient.Delete(ctx, site) })
+
+		// verify all fields
+		fetched := &inventoryv1alpha1.OCloudSite{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetched)).To(Succeed())
+		Expect(fetched.Spec.SiteID).To(Equal("site-valid"))
+		Expect(fetched.Spec.GlobalLocationID).To(Equal("LOC-001"))
+		Expect(fetched.Spec.Name).To(Equal("Valid Site"))
+		Expect(fetched.Spec.Description).To(Equal("A valid site"))
+		Expect(fetched.Spec.Extensions).To(BeEmpty())
 	})
 })
 
