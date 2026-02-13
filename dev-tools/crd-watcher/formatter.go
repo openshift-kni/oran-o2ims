@@ -233,11 +233,17 @@ func (f *TableFormatter) compareEvents(crdType string, a, b WatchEvent) bool {
 		// Sort by name
 		accessor1, _ := meta.Accessor(a.Object)
 		accessor2, _ := meta.Accessor(b.Object)
+		if accessor1 == nil || accessor2 == nil {
+			return false // Maintain consistent ordering when accessors are nil
+		}
 		return accessor1.GetName() < accessor2.GetName()
 	case CRDTypeBareMetalHosts, CRDTypeHostFirmwareComponents, CRDTypeHostFirmwareSettings:
 		// Sort by name
 		accessor1, _ := meta.Accessor(a.Object)
 		accessor2, _ := meta.Accessor(b.Object)
+		if accessor1 == nil || accessor2 == nil {
+			return false // Maintain consistent ordering when accessors are nil
+		}
 		return accessor1.GetName() < accessor2.GetName()
 	case CRDTypeInventoryResources:
 		// Sort by resource ID
@@ -263,6 +269,9 @@ func (f *TableFormatter) compareEvents(crdType string, a, b WatchEvent) bool {
 		// Default to sorting by name
 		accessor1, _ := meta.Accessor(a.Object)
 		accessor2, _ := meta.Accessor(b.Object)
+		if accessor1 == nil || accessor2 == nil {
+			return false // Maintain consistent ordering when accessors are nil
+		}
 		return accessor1.GetName() < accessor2.GetName()
 	}
 }
@@ -276,7 +285,10 @@ func (f *TableFormatter) getProvisioningRequestDisplayName(obj runtime.Object) s
 	}
 	// Fallback to object name if displayName is empty
 	accessor, _ := meta.Accessor(obj)
-	return accessor.GetName()
+	if accessor != nil {
+		return accessor.GetName()
+	}
+	return ""
 }
 
 func (f *TableFormatter) getNodeAllocationRequestClusterId(obj runtime.Object) string {
