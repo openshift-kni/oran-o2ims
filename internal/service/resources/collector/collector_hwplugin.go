@@ -193,6 +193,14 @@ func (d *HwPluginDataSource) GetResourcePools(ctx context.Context) ([]models.Res
 }
 
 func (d *HwPluginDataSource) convertResourcePool(pool *inventoryclient.ResourcePoolInfo) *models.ResourcePool {
+	// Generate OCloudSiteID from siteId using deterministic UUID
+	// This matches the UUID generated when collecting OCloudSite CRs
+	var oCloudSiteID *uuid.UUID
+	if pool.SiteId != nil && *pool.SiteId != "" {
+		siteUUID := ctlrutils.MakeUUIDFromNames(OCloudSiteUUIDNamespace, d.cloudID, *pool.SiteId)
+		oCloudSiteID = &siteUUID
+	}
+
 	return &models.ResourcePool{
 		ResourcePoolID:   ctlrutils.MakeUUIDFromNames(ResourcePoolUUIDNamespace, d.cloudID, d.hwplugin.Name, pool.ResourcePoolId),
 		GlobalLocationID: d.globalCloudID, // TODO: spec wording is unclear about what this value should be.
@@ -200,6 +208,7 @@ func (d *HwPluginDataSource) convertResourcePool(pool *inventoryclient.ResourceP
 		Description:      pool.Description,
 		OCloudID:         d.cloudID,
 		Location:         pool.SiteId,
+		OCloudSiteID:     oCloudSiteID,
 		Extensions:       nil,
 		DataSourceID:     d.dataSourceID,
 		GenerationID:     d.generationID,

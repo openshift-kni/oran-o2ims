@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
@@ -77,10 +79,11 @@ type Collector struct {
 	AsyncChangeEvents   chan *async.AsyncChangeEvent
 	loader              DataSourceLoader
 	hubClient           client.Client // For reading Location/OCloudSite CRs from Kubernetes
+	cloudID             uuid.UUID     // O-Cloud ID for deterministic UUID generation
 }
 
 // NewCollector creates a new collector instance
-func NewCollector(pool *pgxpool.Pool, repo *repo.ResourcesRepository, notificationHandler NotificationHandler, loader DataSourceLoader, dataSources []DataSource, hubClient client.Client) *Collector {
+func NewCollector(pool *pgxpool.Pool, repo *repo.ResourcesRepository, notificationHandler NotificationHandler, loader DataSourceLoader, dataSources []DataSource, hubClient client.Client, cloudID uuid.UUID) *Collector {
 	return &Collector{
 		pool:                pool,
 		repository:          repo,
@@ -89,6 +92,7 @@ func NewCollector(pool *pgxpool.Pool, repo *repo.ResourcesRepository, notificati
 		loader:              loader,
 		AsyncChangeEvents:   make(chan *async.AsyncChangeEvent, asyncEventBufferSize),
 		hubClient:           hubClient,
+		cloudID:             cloudID,
 	}
 }
 
@@ -230,6 +234,12 @@ func (c *Collector) execute(ctx context.Context) {
 
 	if err := c.loadDynamicDataSources(ctx); err != nil {
 		slog.Warn("failed to load dynamic data sources", "error", err)
+		// this will get retried later
+	}
+
+	// Collect global Location and OCloudSite CRs from Kubernetes
+	if err := c.collectLocationsAndSites(ctx); err != nil {
+		slog.Warn("failed to collect locations and sites", "error", err)
 		// this will get retried later
 	}
 
@@ -621,6 +631,182 @@ func (c *Collector) handleAsyncDeploymentManagerEvent(ctx context.Context, deplo
 	}
 
 	return nil
+}
+
+// LocationSiteDataSourceName is the name of the data source used for Location/OCloudSite collection
+const LocationSiteDataSourceName = "location-site-collector"
+
+// collectLocationsAndSites reads Location and OCloudSite CRs from Kubernetes
+// and persists them to the database via repository methods.
+func (c *Collector) collectLocationsAndSites(ctx context.Context) error {
+	if c.hubClient == nil {
+		slog.Debug("hubClient is nil, skipping location/site collection")
+		return nil
+	}
+
+	// Get or create a data source for location/site collection
+	dataSource, err := c.getOrCreateLocationSiteDataSource(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get location/site data source: %w", err)
+	}
+
+	// Increment generation for this collection cycle
+	generationID := dataSource.GenerationID + 1
+
+	// Read Locations from Kubernetes
+	locations, err := c.listLocations(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list locations: %w", err)
+	}
+
+	for _, loc := range locations {
+		dbLocation, err := c.convertLocationCRToModel(&loc, *dataSource.DataSourceID, generationID)
+		if err != nil {
+			return fmt.Errorf("failed to convert location CR: %w", err)
+		}
+		if _, err := c.repository.CreateOrUpdateLocation(ctx, dbLocation); err != nil {
+			return fmt.Errorf("failed to persist location %q: %w", loc.Spec.GlobalLocationID, err)
+		}
+	}
+
+	// Read OCloudSites from Kubernetes
+	sites, err := c.listOCloudSites(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list ocloud sites: %w", err)
+	}
+
+	for _, site := range sites {
+		dbSite := c.convertOCloudSiteCRToModel(&site, *dataSource.DataSourceID, generationID)
+		if _, err := c.repository.CreateOrUpdateOCloudSite(ctx, dbSite); err != nil {
+			return fmt.Errorf("failed to persist ocloud site %q: %w", site.Spec.SiteID, err)
+		}
+	}
+
+	// Update data source generation
+	dataSource.GenerationID = generationID
+	if _, err := c.repository.UpdateDataSource(ctx, dataSource); err != nil {
+		return fmt.Errorf("failed to update location/site data source generation: %w", err)
+	}
+
+	slog.Debug("collected locations and sites", "locations", len(locations), "sites", len(sites))
+	return nil
+}
+
+// getOrCreateLocationSiteDataSource retrieves or creates the data source used for location/site collection
+func (c *Collector) getOrCreateLocationSiteDataSource(ctx context.Context) (*models2.DataSource, error) {
+	record, err := c.repository.GetDataSourceByName(ctx, LocationSiteDataSourceName)
+	if errors.Is(err, svcutils.ErrNotFound) {
+		// Create new data source
+		return c.repository.CreateDataSource(ctx, &models2.DataSource{
+			Name:         LocationSiteDataSourceName,
+			GenerationID: 0,
+		})
+	}
+	if err != nil {
+		return nil, err
+	}
+	return record, nil
+}
+
+// convertLocationCRToModel converts a Location CR to a database model
+func (c *Collector) convertLocationCRToModel(loc *inventoryv1alpha1.Location, dataSourceID uuid.UUID, generationID int) (models.Location, error) {
+	coordinate, err := convertCoordinateToGeoJSON(loc.Spec.Coordinate)
+	if err != nil {
+		return models.Location{}, fmt.Errorf("failed to convert coordinate for location %q: %w", loc.Spec.GlobalLocationID, err)
+	}
+
+	var extensions map[string]interface{}
+	if loc.Spec.Extensions != nil {
+		extensions = make(map[string]interface{})
+		for k, v := range loc.Spec.Extensions {
+			extensions[k] = v
+		}
+	}
+
+	return models.Location{
+		GlobalLocationID: loc.Spec.GlobalLocationID,
+		Name:             loc.Spec.Name,
+		Description:      loc.Spec.Description,
+		Coordinate:       coordinate,
+		CivicAddress:     convertCivicAddress(loc.Spec.CivicAddress),
+		Address:          loc.Spec.Address,
+		Extensions:       extensions,
+		DataSourceID:     dataSourceID,
+		GenerationID:     generationID,
+	}, nil
+}
+
+// convertCoordinateToGeoJSON converts CRD coordinate to GeoJSON Point format
+// GeoJSON uses [longitude, latitude, altitude] order per RFC 7946
+func convertCoordinateToGeoJSON(coord *inventoryv1alpha1.GeoLocation) (map[string]interface{}, error) {
+	if coord == nil {
+		return nil, nil
+	}
+
+	lat, err := strconv.ParseFloat(coord.Latitude, 64)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse latitude %q: %w", coord.Latitude, err)
+	}
+
+	lon, err := strconv.ParseFloat(coord.Longitude, 64)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse longitude %q: %w", coord.Longitude, err)
+	}
+
+	coordinates := []float64{lon, lat} // GeoJSON: [longitude, latitude]
+
+	if coord.Altitude != nil {
+		alt, err := strconv.ParseFloat(*coord.Altitude, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse altitude %q: %w", *coord.Altitude, err)
+		}
+		coordinates = append(coordinates, alt)
+	}
+
+	return map[string]interface{}{
+		"type":        "Point",
+		"coordinates": coordinates,
+	}, nil
+}
+
+// convertCivicAddress converts CRD civic address elements to database format
+func convertCivicAddress(civic []inventoryv1alpha1.CivicAddressElement) []map[string]interface{} {
+	if len(civic) == 0 {
+		return nil
+	}
+
+	result := make([]map[string]interface{}, len(civic))
+	for i, elem := range civic {
+		result[i] = map[string]interface{}{
+			"caType":  elem.CaType,
+			"caValue": elem.CaValue,
+		}
+	}
+	return result
+}
+
+// convertOCloudSiteCRToModel converts an OCloudSite CR to a database model
+func (c *Collector) convertOCloudSiteCRToModel(site *inventoryv1alpha1.OCloudSite, dataSourceID uuid.UUID, generationID int) models.OCloudSite {
+	// Generate deterministic UUID from siteId using the same algorithm as HwPluginDataSource
+	oCloudSiteID := ctlrutils.MakeUUIDFromNames(OCloudSiteUUIDNamespace, c.cloudID, site.Spec.SiteID)
+
+	var extensions map[string]interface{}
+	if site.Spec.Extensions != nil {
+		extensions = make(map[string]interface{})
+		for k, v := range site.Spec.Extensions {
+			extensions[k] = v
+		}
+	}
+
+	return models.OCloudSite{
+		OCloudSiteID:     oCloudSiteID,
+		GlobalLocationID: site.Spec.GlobalLocationID,
+		Name:             site.Spec.Name,
+		Description:      site.Spec.Description,
+		Extensions:       extensions,
+		DataSourceID:     dataSourceID,
+		GenerationID:     generationID,
+	}
 }
 
 // listLocations retrieves all Location CRs from the Kubernetes API.
