@@ -741,13 +741,17 @@ func (c *Collector) getOrCreateDataSource(ctx context.Context, name string) (*mo
 	record, err := c.repository.GetDataSourceByName(ctx, name)
 	if errors.Is(err, svcutils.ErrNotFound) {
 		// Create new data source
-		return c.repository.CreateDataSource(ctx, &models2.DataSource{
+		ds, err := c.repository.CreateDataSource(ctx, &models2.DataSource{
 			Name:         name,
 			GenerationID: 0,
 		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create data source %q: %w", name, err)
+		}
+		return ds, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get data source %q: %w", name, err)
 	}
 	return record, nil
 }
@@ -833,7 +837,8 @@ func (c *Collector) convertLocationCRToModel(loc *inventoryv1alpha1.Location, da
 // GeoJSON uses [longitude, latitude, altitude] order per RFC 7946
 func convertCoordinateToGeoJSON(coord *inventoryv1alpha1.GeoLocation) (map[string]interface{}, error) {
 	if coord == nil {
-		return nil, nil
+		// nil coordinate is valid (optional field), not an error condition
+		return nil, nil //nolint:nilnil
 	}
 
 	lat, err := strconv.ParseFloat(coord.Latitude, 64)
