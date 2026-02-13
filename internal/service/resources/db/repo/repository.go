@@ -8,6 +8,7 @@ package repo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -302,4 +303,40 @@ func (r *ResourcesRepository) GetAllResourcePoolIDsBySite(ctx context.Context) (
 		}
 	}
 	return result, nil
+}
+
+// CreateOrUpdateLocation creates a new Location or updates an existing one.
+// Uses string primary key (global_location_id) for lookup.
+func (r *ResourcesRepository) CreateOrUpdateLocation(ctx context.Context, location models.Location) (*models.Location, error) {
+	// Search
+	e := psql.Quote("global_location_id").EQ(psql.Arg(location.GlobalLocationID))
+	existing, err := svcutils.Search[models.Location](ctx, r.Db, e)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search for location: %w", err)
+	}
+
+	if len(existing) == 0 {
+		// Create new location
+		return svcutils.Create[models.Location](ctx, r.Db, location)
+	}
+
+	// Update existing location
+	return svcutils.Update[models.Location](ctx, r.Db, location.GlobalLocationID, location)
+}
+
+// CreateOrUpdateOCloudSite creates a new OCloudSite or updates an existing one.
+// Uses UUID primary key (o_cloud_site_id) for lookup.
+func (r *ResourcesRepository) CreateOrUpdateOCloudSite(ctx context.Context, site models.OCloudSite) (*models.OCloudSite, error) {
+	// Search
+	_, err := svcutils.Find[models.OCloudSite](ctx, r.Db, site.OCloudSiteID)
+	if errors.Is(err, svcutils.ErrNotFound) {
+		// Create new site
+		return svcutils.Create[models.OCloudSite](ctx, r.Db, site)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to find site: %w", err)
+	}
+
+	// Update existing site
+	return svcutils.Update[models.OCloudSite](ctx, r.Db, site.OCloudSiteID, site)
 }
