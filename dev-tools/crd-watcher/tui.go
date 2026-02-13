@@ -88,6 +88,11 @@ type TUIFormatter struct {
 	lastScreenContent string // Cache of last screen content for differential updates
 	forceFullRedraw   bool   // Force full redraw flag for first draw or terminal resize
 	useUnicode        bool   // Whether to use Unicode characters (default true)
+
+	// Error state management
+	errorMutex   sync.RWMutex
+	currentError map[string]string // Map of CRD type to error message
+	errorTime    map[string]time.Time
 }
 
 func NewTUIFormatter(refreshIntervalSeconds int, watchedCRDTypes []string, verifyFunc func(WatchEvent) bool, useUnicode bool) *TUIFormatter {
@@ -126,6 +131,10 @@ func NewTUIFormatter(refreshIntervalSeconds int, watchedCRDTypes []string, verif
 		lastScreenContent: "",
 		forceFullRedraw:   true, // Force full redraw on first display
 		useUnicode:        useUnicode,
+
+		// Error state initialization
+		currentError: make(map[string]string),
+		errorTime:    make(map[string]time.Time),
 	}
 
 	// Start the refresh timer for screen redraws during inactivity
@@ -194,6 +203,45 @@ func (t *TUIFormatter) FormatEvent(event WatchEvent) error {
 		return t.immediateUpdate()
 	}
 	return t.scheduleUpdate()
+}
+
+// SetError sets an error message for a specific CRD type and triggers a screen update
+func (t *TUIFormatter) SetError(crdType string, err error) {
+	t.errorMutex.Lock()
+	t.currentError[crdType] = err.Error()
+	t.errorTime[crdType] = time.Now()
+	t.errorMutex.Unlock()
+
+	// Force a full screen redraw to show the error
+	t.mutex.Lock()
+	t.forceFullRedraw = true
+	t.mutex.Unlock()
+
+	// Trigger immediate update to show error
+	_ = t.immediateUpdate()
+}
+
+// ClearError clears the error state for a specific CRD type and triggers a screen update
+func (t *TUIFormatter) ClearError(crdType string) {
+	t.errorMutex.Lock()
+	delete(t.currentError, crdType)
+	delete(t.errorTime, crdType)
+	t.errorMutex.Unlock()
+
+	// Force a full screen redraw to clear the error
+	t.mutex.Lock()
+	t.forceFullRedraw = true
+	t.mutex.Unlock()
+
+	// Trigger immediate update to show normal view
+	_ = t.immediateUpdate()
+}
+
+// hasErrors returns true if there are any active errors
+func (t *TUIFormatter) hasErrors() bool {
+	t.errorMutex.RLock()
+	defer t.errorMutex.RUnlock()
+	return len(t.currentError) > 0
 }
 
 // immediateUpdate performs an immediate screen update without debouncing
@@ -445,6 +493,11 @@ func (t *TUIFormatter) redrawScreen() error {
 		return t.fallbackFormat()
 	}
 
+	// Check if we have errors and display error screen instead
+	if t.hasErrors() {
+		return t.drawErrorScreen()
+	}
+
 	// Ensure stale resources are cleaned up during refresh
 	// Only removes resources confirmed deleted from source database/API
 	if time.Since(t.lastCleanup) > 15*time.Second {
@@ -525,6 +578,86 @@ func (t *TUIFormatter) redrawScreen() error {
 
 	t.lastScreenContent = newContent
 	fmt.Print(ansiShowCursor)
+
+	return nil
+}
+
+// drawErrorScreen displays a clean error screen with all active errors
+func (t *TUIFormatter) drawErrorScreen() error {
+	var screenContent strings.Builder
+
+	currentTime := time.Now().UTC().Format("2006-01-02 15:04:05 UTC")
+
+	// Build error screen header
+	var headerTop, headerBottom string
+	if t.useUnicode {
+		headerTop = fmt.Sprintf("╔═══ O-Cloud Manager Provisioning Watcher ═══ %s\n", currentTime)
+		headerBottom = "╚═══════════════════════════════════════════════════════════\n"
+	} else {
+		headerTop = fmt.Sprintf("+--- O-Cloud Manager Provisioning Watcher --- %s\n", currentTime)
+		headerBottom = "+-----------------------------------------------------------\n"
+	}
+
+	screenContent.WriteString(ansiBold + ansiRed + headerTop + ansiReset)
+	screenContent.WriteString(headerBottom)
+	screenContent.WriteString("\n")
+
+	// Get errors sorted by CRD type
+	t.errorMutex.RLock()
+	errorList := make([]struct {
+		crdType string
+		message string
+		time    time.Time
+	}, 0, len(t.currentError))
+
+	for crdType, errMsg := range t.currentError {
+		errorList = append(errorList, struct {
+			crdType string
+			message string
+			time    time.Time
+		}{
+			crdType: crdType,
+			message: errMsg,
+			time:    t.errorTime[crdType],
+		})
+	}
+	t.errorMutex.RUnlock()
+
+	// Sort by time (oldest first)
+	sort.Slice(errorList, func(i, j int) bool {
+		return errorList[i].time.Before(errorList[j].time)
+	})
+
+	// Display errors
+	screenContent.WriteString(ansiBold + "Connection Errors:\n" + ansiReset)
+	screenContent.WriteString("\n")
+
+	for _, err := range errorList {
+		age := time.Since(err.time).Round(time.Second)
+		screenContent.WriteString(fmt.Sprintf("  %s %s%s%s\n",
+			t.getSidebarChar(),
+			ansiBold, err.crdType, ansiReset))
+		screenContent.WriteString(fmt.Sprintf("  %s   Error: %s\n",
+			t.getSidebarChar(), err.message))
+		screenContent.WriteString(fmt.Sprintf("  %s   Duration: %s\n",
+			t.getSidebarChar(), age))
+		screenContent.WriteString("\n")
+	}
+
+	screenContent.WriteString("\n")
+	screenContent.WriteString("Attempting to reconnect...\n")
+	screenContent.WriteString("\n")
+	screenContent.WriteString(fmt.Sprintf("Press Ctrl+C to exit │ Uptime: %s\n",
+		time.Since(t.startTime).Round(time.Second)))
+
+	newContent := screenContent.String()
+
+	// Always do a full screen clear and redraw for error screen
+	fmt.Print(ansiClearScreen + ansiHome + ansiHideCursor)
+	fmt.Print(newContent)
+	fmt.Print(ansiShowCursor)
+
+	t.lastScreenContent = newContent
 
 	return nil
 }
@@ -636,11 +769,17 @@ func (t *TUIFormatter) compareEvents(crdType string, a, b WatchEvent) bool {
 		// Sort by name
 		accessor1, _ := meta.Accessor(a.Object)
 		accessor2, _ := meta.Accessor(b.Object)
+		if accessor1 == nil || accessor2 == nil {
+			return false // Maintain consistent ordering when accessors are nil
+		}
 		return accessor1.GetName() < accessor2.GetName()
 	case CRDTypeBareMetalHosts, CRDTypeHostFirmwareComponents, CRDTypeHostFirmwareSettings:
 		// Sort by name
 		accessor1, _ := meta.Accessor(a.Object)
 		accessor2, _ := meta.Accessor(b.Object)
+		if accessor1 == nil || accessor2 == nil {
+			return false // Maintain consistent ordering when accessors are nil
+		}
 		return accessor1.GetName() < accessor2.GetName()
 	case CRDTypeInventoryResources:
 		// Sort by resource ID
@@ -682,7 +821,10 @@ func (t *TUIFormatter) getProvisioningRequestDisplayName(obj runtime.Object) str
 	}
 	// Fallback to object name if displayName is empty
 	accessor, _ := meta.Accessor(obj)
-	return accessor.GetName()
+	if accessor != nil {
+		return accessor.GetName()
+	}
+	return ""
 }
 
 func (t *TUIFormatter) getNodeAllocationRequestClusterId(obj runtime.Object) string {
