@@ -238,9 +238,14 @@ func (c *Collector) execute(ctx context.Context) {
 		// this will get retried later
 	}
 
-	// Collect global Location and OCloudSite CRs from Kubernetes
-	if err := c.collectLocationsAndSites(ctx); err != nil {
-		slog.Warn("failed to collect locations and sites", "error", err)
+	// Collect global Location CRs from K8s
+	if err := c.collectLocations(ctx); err != nil {
+		slog.Warn("failed to collect locations", "error", err)
+	}
+
+	// Collect global OCloudSite CRs from K8s
+	if err := c.collectOCloudSites(ctx); err != nil {
+		slog.Warn("failed to collect ocloud sites", "error", err)
 		// this will get retried later
 	}
 
@@ -634,27 +639,29 @@ func (c *Collector) handleAsyncDeploymentManagerEvent(ctx context.Context, deplo
 	return nil
 }
 
-// LocationSiteDataSourceName is the name of the data source used for Location/OCloudSite collection
-const LocationSiteDataSourceName = "location-site-collector"
+// Data source names for Location and OCloudSite collection
+const (
+	LocationDataSourceName   = "location-collector"
+	OCloudSiteDataSourceName = "ocloudsite-collector"
+)
 
-// collectLocationsAndSites reads Location and OCloudSite CRs from Kubernetes
-// and persists them to the database via repository methods.
-func (c *Collector) collectLocationsAndSites(ctx context.Context) error {
+// collectLocations reads Location CRs from K8s and persists them to the database.
+func (c *Collector) collectLocations(ctx context.Context) error {
 	if c.hubClient == nil {
-		slog.Debug("hubClient is nil, skipping location/site collection")
+		slog.Debug("hubClient is nil, skipping location collection")
 		return nil
 	}
 
-	// Get or create a data source for location/site collection
-	dataSource, err := c.getOrCreateLocationSiteDataSource(ctx)
+	// Get or create a data source for location collection
+	dataSource, err := c.getOrCreateDataSource(ctx, LocationDataSourceName)
 	if err != nil {
-		return fmt.Errorf("failed to get location/site data source: %w", err)
+		return fmt.Errorf("failed to get location data source: %w", err)
 	}
 
 	// Increment generation for this collection cycle
 	generationID := dataSource.GenerationID + 1
 
-	// Read Locations from Kubernetes
+	// Read Locations from K8s
 	locations, err := c.listLocations(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list locations: %w", err)
@@ -663,14 +670,45 @@ func (c *Collector) collectLocationsAndSites(ctx context.Context) error {
 	for _, loc := range locations {
 		dbLocation, err := c.convertLocationCRToModel(&loc, *dataSource.DataSourceID, generationID)
 		if err != nil {
-			return fmt.Errorf("failed to convert location CR: %w", err)
+			return fmt.Errorf("failed to convert location CR %q: %w", loc.Name, err)
 		}
 		if _, err := c.repository.CreateOrUpdateLocation(ctx, dbLocation); err != nil {
 			return fmt.Errorf("failed to persist location %q: %w", loc.Spec.GlobalLocationID, err)
 		}
 	}
 
-	// Read OCloudSites from Kubernetes
+	// Update data source generation
+	dataSource.GenerationID = generationID
+	if _, err := c.repository.UpdateDataSource(ctx, dataSource); err != nil {
+		return fmt.Errorf("failed to update location data source generation: %w", err)
+	}
+
+	// Purge stale records (Location CRs that were deleted from K8s)
+	if _, err := c.purgeStaleLocations(ctx, *dataSource.DataSourceID, generationID); err != nil {
+		return fmt.Errorf("failed to purge stale locations: %w", err)
+	}
+
+	slog.Debug("collected locations", "count", len(locations))
+	return nil
+}
+
+// collectOCloudSites reads OCloudSite CRs from K8s and persists them to the database.
+func (c *Collector) collectOCloudSites(ctx context.Context) error {
+	if c.hubClient == nil {
+		slog.Debug("hubClient is nil, skipping ocloud site collection")
+		return nil
+	}
+
+	// Get or create a data source for ocloud site collection
+	dataSource, err := c.getOrCreateDataSource(ctx, OCloudSiteDataSourceName)
+	if err != nil {
+		return fmt.Errorf("failed to get ocloud site data source: %w", err)
+	}
+
+	// Increment generation for this collection cycle
+	generationID := dataSource.GenerationID + 1
+
+	// Read OCloudSites from K8s
 	sites, err := c.listOCloudSites(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list ocloud sites: %w", err)
@@ -686,28 +724,25 @@ func (c *Collector) collectLocationsAndSites(ctx context.Context) error {
 	// Update data source generation
 	dataSource.GenerationID = generationID
 	if _, err := c.repository.UpdateDataSource(ctx, dataSource); err != nil {
-		return fmt.Errorf("failed to update location/site data source generation: %w", err)
+		return fmt.Errorf("failed to update ocloud site data source generation: %w", err)
 	}
 
-	// Purge stale records (CRs that were deleted from Kubernetes)
-	if _, err := c.purgeStaleLocations(ctx, *dataSource.DataSourceID, generationID); err != nil {
-		return fmt.Errorf("failed to purge stale locations: %w", err)
-	}
+	// Purge stale records (OCloudSite CRs that were deleted from Kubernetes)
 	if _, err := c.purgeStaleOCloudSites(ctx, *dataSource.DataSourceID, generationID); err != nil {
 		return fmt.Errorf("failed to purge stale ocloud sites: %w", err)
 	}
 
-	slog.Debug("collected locations and sites", "locations", len(locations), "sites", len(sites))
+	slog.Debug("collected ocloud sites", "count", len(sites))
 	return nil
 }
 
-// getOrCreateLocationSiteDataSource retrieves or creates the data source used for location/site collection
-func (c *Collector) getOrCreateLocationSiteDataSource(ctx context.Context) (*models2.DataSource, error) {
-	record, err := c.repository.GetDataSourceByName(ctx, LocationSiteDataSourceName)
+// getOrCreateDataSource retrieves or creates a data source with the given name
+func (c *Collector) getOrCreateDataSource(ctx context.Context, name string) (*models2.DataSource, error) {
+	record, err := c.repository.GetDataSourceByName(ctx, name)
 	if errors.Is(err, svcutils.ErrNotFound) {
 		// Create new data source
 		return c.repository.CreateDataSource(ctx, &models2.DataSource{
-			Name:         LocationSiteDataSourceName,
+			Name:         name,
 			GenerationID: 0,
 		})
 	}
@@ -743,7 +778,7 @@ func (c *Collector) purgeStaleLocations(ctx context.Context, dataSourceID uuid.U
 }
 
 // purgeStaleOCloudSites removes OCloudSite records that were not updated in the current collection cycle.
-// This handles the case where an OCloudSite CR was deleted from Kubernetes.
+// This handles the case where an OCloudSite CR was deleted from K8s.
 func (c *Collector) purgeStaleOCloudSites(ctx context.Context, dataSourceID uuid.UUID, generationID int) (int, error) {
 	sites, err := c.repository.FindStaleOCloudSites(ctx, dataSourceID, generationID)
 	if err != nil {
