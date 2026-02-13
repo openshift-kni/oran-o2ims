@@ -71,6 +71,36 @@ func (mr *MockResourcesRepositoryInterfaceMockRecorder) CreateDataSource(arg0, a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDataSource", reflect.TypeOf((*MockResourcesRepositoryInterface)(nil).CreateDataSource), arg0, arg1)
 }
 
+// CreateOrUpdateLocation mocks base method.
+func (m *MockResourcesRepositoryInterface) CreateOrUpdateLocation(ctx context.Context, location models0.Location) (*models0.Location, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateOrUpdateLocation", ctx, location)
+	ret0, _ := ret[0].(*models0.Location)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateOrUpdateLocation indicates an expected call of CreateOrUpdateLocation.
+func (mr *MockResourcesRepositoryInterfaceMockRecorder) CreateOrUpdateLocation(ctx, location any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdateLocation", reflect.TypeOf((*MockResourcesRepositoryInterface)(nil).CreateOrUpdateLocation), ctx, location)
+}
+
+// CreateOrUpdateOCloudSite mocks base method.
+func (m *MockResourcesRepositoryInterface) CreateOrUpdateOCloudSite(ctx context.Context, site models0.OCloudSite) (*models0.OCloudSite, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateOrUpdateOCloudSite", ctx, site)
+	ret0, _ := ret[0].(*models0.OCloudSite)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateOrUpdateOCloudSite indicates an expected call of CreateOrUpdateOCloudSite.
+func (mr *MockResourcesRepositoryInterfaceMockRecorder) CreateOrUpdateOCloudSite(ctx, site any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdateOCloudSite", reflect.TypeOf((*MockResourcesRepositoryInterface)(nil).CreateOrUpdateOCloudSite), ctx, site)
+}
+
 // CreateSubscription mocks base method.
 func (m *MockResourcesRepositoryInterface) CreateSubscription(arg0 context.Context, arg1 *models.Subscription) (*models.Subscription, error) {
 	m.ctrl.T.Helper()
@@ -114,6 +144,36 @@ func (m *MockResourcesRepositoryInterface) DeleteSubscription(arg0 context.Conte
 func (mr *MockResourcesRepositoryInterfaceMockRecorder) DeleteSubscription(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSubscription", reflect.TypeOf((*MockResourcesRepositoryInterface)(nil).DeleteSubscription), arg0, arg1)
+}
+
+// FindStaleLocations mocks base method.
+func (m *MockResourcesRepositoryInterface) FindStaleLocations(ctx context.Context, dataSourceID uuid.UUID, generationID int) ([]models0.Location, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindStaleLocations", ctx, dataSourceID, generationID)
+	ret0, _ := ret[0].([]models0.Location)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindStaleLocations indicates an expected call of FindStaleLocations.
+func (mr *MockResourcesRepositoryInterfaceMockRecorder) FindStaleLocations(ctx, dataSourceID, generationID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindStaleLocations", reflect.TypeOf((*MockResourcesRepositoryInterface)(nil).FindStaleLocations), ctx, dataSourceID, generationID)
+}
+
+// FindStaleOCloudSites mocks base method.
+func (m *MockResourcesRepositoryInterface) FindStaleOCloudSites(ctx context.Context, dataSourceID uuid.UUID, generationID int) ([]models0.OCloudSite, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindStaleOCloudSites", ctx, dataSourceID, generationID)
+	ret0, _ := ret[0].([]models0.OCloudSite)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindStaleOCloudSites indicates an expected call of FindStaleOCloudSites.
+func (mr *MockResourcesRepositoryInterfaceMockRecorder) FindStaleOCloudSites(ctx, dataSourceID, generationID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindStaleOCloudSites", reflect.TypeOf((*MockResourcesRepositoryInterface)(nil).FindStaleOCloudSites), ctx, dataSourceID, generationID)
 }
 
 // GetAlarmDefinitionsByAlarmDictionaryID mocks base method.
