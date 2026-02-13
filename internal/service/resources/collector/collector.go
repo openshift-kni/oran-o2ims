@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stephenafamo/bob/dialect/psql"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
@@ -688,6 +689,14 @@ func (c *Collector) collectLocationsAndSites(ctx context.Context) error {
 		return fmt.Errorf("failed to update location/site data source generation: %w", err)
 	}
 
+	// Purge stale records (CRs that were deleted from Kubernetes)
+	if _, err := c.purgeStaleLocations(ctx, *dataSource.DataSourceID, generationID); err != nil {
+		return fmt.Errorf("failed to purge stale locations: %w", err)
+	}
+	if _, err := c.purgeStaleOCloudSites(ctx, *dataSource.DataSourceID, generationID); err != nil {
+		return fmt.Errorf("failed to purge stale ocloud sites: %w", err)
+	}
+
 	slog.Debug("collected locations and sites", "locations", len(locations), "sites", len(sites))
 	return nil
 }
@@ -706,6 +715,55 @@ func (c *Collector) getOrCreateLocationSiteDataSource(ctx context.Context) (*mod
 		return nil, err
 	}
 	return record, nil
+}
+
+// purgeStaleLocations removes Location records that were not updated in the current collection cycle.
+// This handles the case where a Location CR was deleted from Kubernetes.
+func (c *Collector) purgeStaleLocations(ctx context.Context, dataSourceID uuid.UUID, generationID int) (int, error) {
+	locations, err := c.repository.FindStaleLocations(ctx, dataSourceID, generationID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to find stale locations: %w", err)
+	}
+
+	count := 0
+	for _, location := range locations {
+		// Delete using string primary key
+		whereExpr := psql.Quote("global_location_id").EQ(psql.Arg(location.GlobalLocationID))
+		if _, err := svcutils.Delete[models.Location](ctx, c.pool, whereExpr); err != nil {
+			return count, fmt.Errorf("failed to delete stale location %q: %w", location.GlobalLocationID, err)
+		}
+		count++
+	}
+
+	if count > 0 {
+		slog.Info("Purged stale locations", "count", count)
+	}
+
+	return count, nil
+}
+
+// purgeStaleOCloudSites removes OCloudSite records that were not updated in the current collection cycle.
+// This handles the case where an OCloudSite CR was deleted from Kubernetes.
+func (c *Collector) purgeStaleOCloudSites(ctx context.Context, dataSourceID uuid.UUID, generationID int) (int, error) {
+	sites, err := c.repository.FindStaleOCloudSites(ctx, dataSourceID, generationID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to find stale ocloud sites: %w", err)
+	}
+
+	count := 0
+	for _, site := range sites {
+		whereExpr := psql.Quote("o_cloud_site_id").EQ(psql.Arg(site.OCloudSiteID))
+		if _, err := svcutils.Delete[models.OCloudSite](ctx, c.pool, whereExpr); err != nil {
+			return count, fmt.Errorf("failed to delete stale ocloud site %q: %w", site.OCloudSiteID, err)
+		}
+		count++
+	}
+
+	if count > 0 {
+		slog.Info("Purged stale ocloud sites", "count", count)
+	}
+
+	return count, nil
 }
 
 // convertLocationCRToModel converts a Location CR to a database model
