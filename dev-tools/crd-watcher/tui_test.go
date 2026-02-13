@@ -36,6 +36,8 @@ var _ = Describe("TUIFormatter", func() {
 			maxEvents:       100,
 			isTerminal:      false,
 			useUnicode:      true, // Use Unicode characters for tests
+			currentError:    make(map[string]string),
+			errorTime:       make(map[string]time.Time),
 		}
 
 		// Create sample inventory resource with all state fields
