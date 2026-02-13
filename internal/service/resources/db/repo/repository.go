@@ -121,6 +121,18 @@ func (r *ResourcesRepository) FindStaleResourceTypes(ctx context.Context, dataSo
 	return svcutils.Search[models.ResourceType](ctx, r.Db, e)
 }
 
+// FindStaleLocations returns any Location objects that have a generation less than the specific generation
+func (r *ResourcesRepository) FindStaleLocations(ctx context.Context, dataSourceID uuid.UUID, generationID int) ([]models.Location, error) {
+	e := psql.Quote("data_source_id").EQ(psql.Arg(dataSourceID)).And(psql.Quote("generation_id").LT(psql.Arg(generationID)))
+	return svcutils.Search[models.Location](ctx, r.Db, e)
+}
+
+// FindStaleOCloudSites returns any OCloudSite objects that have a generation less than the specific generation
+func (r *ResourcesRepository) FindStaleOCloudSites(ctx context.Context, dataSourceID uuid.UUID, generationID int) ([]models.OCloudSite, error) {
+	e := psql.Quote("data_source_id").EQ(psql.Arg(dataSourceID)).And(psql.Quote("generation_id").LT(psql.Arg(generationID)))
+	return svcutils.Search[models.OCloudSite](ctx, r.Db, e)
+}
+
 // GetAlarmDictionaries returns the list of AlarmDictionary records or an empty list if none exist; otherwise an error
 func (r *ResourcesRepository) GetAlarmDictionaries(ctx context.Context) ([]models.AlarmDictionary, error) {
 	return svcutils.FindAll[models.AlarmDictionary](ctx, r.Db)
