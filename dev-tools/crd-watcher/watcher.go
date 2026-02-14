@@ -426,7 +426,11 @@ func (w *CRDWatcher) listCRDResources(ctx context.Context, crdType string) ([]Wa
 
 		// Filter firmware CRDs based on matching BareMetalHost names
 		if crdType == CRDTypeHostFirmwareComponents || crdType == CRDTypeHostFirmwareSettings {
-			accessor, _ := meta.Accessor(typedObj)
+			accessor, err := meta.Accessor(typedObj)
+			if err != nil {
+				klog.V(2).Infof("Skipping %s - failed to get accessor: %v", crdType, err)
+				continue
+			}
 			resourceName := accessor.GetName()
 
 			w.bmhMutex.RLock()
@@ -993,6 +997,7 @@ func (w *CRDWatcher) watchCRDWithRetry(ctx context.Context, crdType string) erro
 	)
 
 	retryDelay := initialDelay
+	hadError := false
 
 	for {
 		select {
@@ -1003,9 +1008,21 @@ func (w *CRDWatcher) watchCRDWithRetry(ctx context.Context, crdType string) erro
 
 		err := w.watchCRD(ctx, crdType)
 		if err == nil {
-			// watchCRD returned normally (context cancelled), exit retry loop
+			// watchCRD returned normally (context cancelled), clear any error state
+			if hadError {
+				// Clear error from TUI if supported
+				if tuiFormatter, ok := w.formatter.(*TUIFormatter); ok {
+					tuiFormatter.ClearError(crdType)
+				}
+			}
 			return nil
 		}
+
+		// Set error in TUI if supported
+		if tuiFormatter, ok := w.formatter.(*TUIFormatter); ok {
+			tuiFormatter.SetError(crdType, err)
+		}
+		hadError = true
 
 		// Log the error and prepare to retry
 		klog.V(1).Infof("Watcher for %s failed, retrying in %v: %v", crdType, retryDelay, err)
@@ -1052,6 +1069,11 @@ func (w *CRDWatcher) watchCRD(ctx context.Context, crdType string) error {
 	defer watcher.Stop()
 
 	klog.V(1).Infof("Successfully started watching %s", crdType)
+
+	// Clear any error state in TUI since watch is now running
+	if tuiFormatter, ok := w.formatter.(*TUIFormatter); ok {
+		tuiFormatter.ClearError(crdType)
+	}
 
 	for {
 		select {
@@ -1106,7 +1128,10 @@ func (w *CRDWatcher) handleWatchEvent(ctx context.Context, event watch.Event, cr
 	// Filter firmware CRDs based on matching BareMetalHost names
 	// For deletion events, always allow them through since the corresponding BMH might already be deleted
 	if crdType == CRDTypeHostFirmwareComponents || crdType == CRDTypeHostFirmwareSettings {
-		accessor, _ := meta.Accessor(typedObj)
+		accessor, err := meta.Accessor(typedObj)
+		if err != nil {
+			return fmt.Errorf("failed to get accessor for %s: %w", crdType, err)
+		}
 		resourceName := accessor.GetName()
 
 		// Always process deletion events regardless of BMH existence
