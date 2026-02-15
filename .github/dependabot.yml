@@ -24,3 +24,6 @@ updates:
     # open-cluster-management.io/api moved to go 1.25 in v1.2.0, so ignore major/minor updates until this repo is 1.25-based
     - dependency-name: "open-cluster-management.io/api"
       update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    # open-cluster-management.io/governance-policy-propagator moved to go 1.25 in v0.18.0, so ignore major/minor updates until this repo is 1.25-based
+    - dependency-name: "open-cluster-management.io/governance-policy-propagator"
+      update-types: ["version-update:semver-major", "version-update:semver-minor"]
