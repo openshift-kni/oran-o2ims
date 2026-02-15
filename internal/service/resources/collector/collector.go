@@ -11,10 +11,16 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stephenafamo/bob/dialect/psql"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
@@ -67,21 +73,27 @@ type DataSourceLoader interface {
 
 // Collector defines the attributes required by the collector implementation.
 type Collector struct {
+	pool                *pgxpool.Pool // Direct pool injection for transaction operations
 	notificationHandler NotificationHandler
 	repository          *repo.ResourcesRepository
 	dataSources         []DataSource
 	AsyncChangeEvents   chan *async.AsyncChangeEvent
 	loader              DataSourceLoader
+	hubClient           client.Client // For reading Location/OCloudSite CRs from Kubernetes
+	cloudID             uuid.UUID     // O-Cloud ID for deterministic UUID generation
 }
 
 // NewCollector creates a new collector instance
-func NewCollector(repo *repo.ResourcesRepository, notificationHandler NotificationHandler, loader DataSourceLoader, dataSources []DataSource) *Collector {
+func NewCollector(pool *pgxpool.Pool, repo *repo.ResourcesRepository, notificationHandler NotificationHandler, loader DataSourceLoader, dataSources []DataSource, hubClient client.Client, cloudID uuid.UUID) *Collector {
 	return &Collector{
+		pool:                pool,
 		repository:          repo,
 		notificationHandler: notificationHandler,
 		dataSources:         dataSources,
 		loader:              loader,
 		AsyncChangeEvents:   make(chan *async.AsyncChangeEvent, asyncEventBufferSize),
+		hubClient:           hubClient,
+		cloudID:             cloudID,
 	}
 }
 
@@ -226,6 +238,17 @@ func (c *Collector) execute(ctx context.Context) {
 		// this will get retried later
 	}
 
+	// Collect global Location CRs from K8s
+	if err := c.collectLocations(ctx); err != nil {
+		slog.Warn("failed to collect locations", "error", err)
+	}
+
+	// Collect global OCloudSite CRs from K8s
+	if err := c.collectOCloudSites(ctx); err != nil {
+		slog.Warn("failed to collect ocloud sites", "error", err)
+		// this will get retried later
+	}
+
 	for _, d := range c.dataSources {
 		rd, ok := d.(ResourceDataSource)
 		if !ok {
@@ -251,7 +274,7 @@ func (c *Collector) purgeStaleResources(ctx context.Context, dataSource DataSour
 
 	count := 0
 	for _, resource := range resources {
-		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, resource, resource.ResourceID,
+		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, resource, resource.ResourceID,
 			&resource.ResourcePoolID, func(object interface{}) any {
 				r, _ := object.(models.Resource)
 				return models.ResourceToModel(&r, nil)
@@ -280,7 +303,7 @@ func (c *Collector) purgeStaleResourcePools(ctx context.Context, dataSource Data
 
 	count := 0
 	for _, pool := range pools {
-		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, pool, pool.ResourcePoolID,
+		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, pool, pool.ResourcePoolID,
 			nil, func(object interface{}) any {
 				r, _ := object.(models.ResourcePool)
 				return models.ResourcePoolToModel(&r, commonapi.NewDefaultFieldOptions())
@@ -309,7 +332,7 @@ func (c *Collector) purgeStaleResourceTypes(ctx context.Context, dataSource Data
 
 	count := 0
 	for _, pool := range pools {
-		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, pool, pool.ResourcePoolID,
+		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, pool, pool.ResourcePoolID,
 			nil, func(object interface{}) any {
 				r, _ := object.(models.ResourcePool)
 				return models.ResourcePoolToModel(&r, commonapi.NewDefaultFieldOptions())
@@ -433,7 +456,7 @@ func (c *Collector) collectResources(ctx context.Context, dataSource ResourceDat
 		alarmDict := alarmDictMap[resourceType.ResourceTypeID.String()]
 
 		dataChangeEvent, err := svcutils.PersistObjectWithChangeEvent(
-			ctx, c.repository.Db, *resourceType, resourceType.ResourceTypeID, nil, func(object interface{}) any {
+			ctx, c.pool, *resourceType, resourceType.ResourceTypeID, nil, func(object interface{}) any {
 				record, _ := object.(models.ResourceType)
 				return models.ResourceTypeToModel(&record, alarmDict)
 			})
@@ -449,7 +472,7 @@ func (c *Collector) collectResources(ctx context.Context, dataSource ResourceDat
 	// Loop over the set of resources and insert (or update) as needed
 	for _, resource := range resources {
 		dataChangeEvent, err := svcutils.PersistObjectWithChangeEvent(
-			ctx, c.repository.Db, resource, resource.ResourceID, &resource.ResourcePoolID, func(object interface{}) any {
+			ctx, c.pool, resource, resource.ResourceID, &resource.ResourcePoolID, func(object interface{}) any {
 				record, _ := object.(models.Resource)
 				return models.ResourceToModel(&record, nil)
 			})
@@ -500,7 +523,7 @@ func (c *Collector) collectResourcePools(ctx context.Context, dataSource Resourc
 	// Loop over the set of resource pools and insert (or update) as needed
 	for _, pool := range pools {
 		dataChangeEvent, err := svcutils.PersistObjectWithChangeEvent(
-			ctx, c.repository.Db, pool, pool.ResourcePoolID, nil, func(object interface{}) any {
+			ctx, c.pool, pool, pool.ResourcePoolID, nil, func(object interface{}) any {
 				record, _ := object.(models.ResourcePool)
 				return models.ResourcePoolToModel(&record, commonapi.NewDefaultFieldOptions())
 			})
@@ -527,7 +550,7 @@ func (c *Collector) handleDeploymentManagerSyncCompletion(ctx context.Context, i
 
 	count := 0
 	for _, record := range records {
-		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, record, record.DeploymentManagerID, nil, func(object interface{}) any {
+		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, record, record.DeploymentManagerID, nil, func(object interface{}) any {
 			r, _ := object.(models.DeploymentManager)
 			return models.DeploymentManagerToModel(&r, commonapi.NewDefaultFieldOptions())
 		})
@@ -589,7 +612,7 @@ func (c *Collector) handleAsyncDeploymentManagerEvent(ctx context.Context, deplo
 	var err error
 	if deleted {
 		dataChangeEvent, err = svcutils.DeleteObjectWithChangeEvent(
-			ctx, c.repository.Db, deploymentManager, deploymentManager.DeploymentManagerID, nil, func(object interface{}) any {
+			ctx, c.pool, deploymentManager, deploymentManager.DeploymentManagerID, nil, func(object interface{}) any {
 				record, _ := object.(models.DeploymentManager)
 				return models.DeploymentManagerToModel(&record, commonapi.NewDefaultFieldOptions())
 			})
@@ -599,7 +622,7 @@ func (c *Collector) handleAsyncDeploymentManagerEvent(ctx context.Context, deplo
 		}
 	} else {
 		dataChangeEvent, err = svcutils.PersistObjectWithChangeEvent(
-			ctx, c.repository.Db, deploymentManager, deploymentManager.DeploymentManagerID, nil, func(object interface{}) any {
+			ctx, c.pool, deploymentManager, deploymentManager.DeploymentManagerID, nil, func(object interface{}) any {
 				record, _ := object.(models.DeploymentManager)
 				return models.DeploymentManagerToModel(&record, commonapi.NewDefaultFieldOptions())
 			})
@@ -614,4 +637,302 @@ func (c *Collector) handleAsyncDeploymentManagerEvent(ctx context.Context, deplo
 	}
 
 	return nil
+}
+
+// Data source names for Location and OCloudSite collection
+const (
+	LocationDataSourceName   = "location-collector"
+	OCloudSiteDataSourceName = "ocloudsite-collector"
+)
+
+// collectLocations reads Location CRs from K8s and persists them to the database.
+func (c *Collector) collectLocations(ctx context.Context) error {
+	if c.hubClient == nil {
+		slog.Debug("hubClient is nil, skipping location collection")
+		return nil
+	}
+
+	// Get or create a data source for location collection
+	dataSource, err := c.getOrCreateDataSource(ctx, LocationDataSourceName)
+	if err != nil {
+		return fmt.Errorf("failed to get location data source: %w", err)
+	}
+
+	// Increment generation for this collection cycle
+	generationID := dataSource.GenerationID + 1
+
+	// Read Locations from K8s
+	locations, err := c.listLocations(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list locations: %w", err)
+	}
+
+	for _, loc := range locations {
+		dbLocation, err := c.convertLocationCRToModel(&loc, *dataSource.DataSourceID, generationID)
+		if err != nil {
+			return fmt.Errorf("failed to convert location CR %q: %w", loc.Name, err)
+		}
+		if _, err := c.repository.CreateOrUpdateLocation(ctx, dbLocation); err != nil {
+			return fmt.Errorf("failed to persist location %q: %w", loc.Spec.GlobalLocationID, err)
+		}
+	}
+
+	// Update data source generation
+	dataSource.GenerationID = generationID
+	if _, err := c.repository.UpdateDataSource(ctx, dataSource); err != nil {
+		return fmt.Errorf("failed to update location data source generation: %w", err)
+	}
+
+	// Purge stale records (Location CRs that were deleted from K8s)
+	if _, err := c.purgeStaleLocations(ctx, *dataSource.DataSourceID, generationID); err != nil {
+		return fmt.Errorf("failed to purge stale locations: %w", err)
+	}
+
+	slog.Debug("collected locations", "count", len(locations))
+	return nil
+}
+
+// collectOCloudSites reads OCloudSite CRs from K8s and persists them to the database.
+func (c *Collector) collectOCloudSites(ctx context.Context) error {
+	if c.hubClient == nil {
+		slog.Debug("hubClient is nil, skipping ocloud site collection")
+		return nil
+	}
+
+	// Get or create a data source for ocloud site collection
+	dataSource, err := c.getOrCreateDataSource(ctx, OCloudSiteDataSourceName)
+	if err != nil {
+		return fmt.Errorf("failed to get ocloud site data source: %w", err)
+	}
+
+	// Increment generation for this collection cycle
+	generationID := dataSource.GenerationID + 1
+
+	// Read OCloudSites from K8s
+	sites, err := c.listOCloudSites(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list ocloud sites: %w", err)
+	}
+
+	for _, site := range sites {
+		dbSite := c.convertOCloudSiteCRToModel(&site, *dataSource.DataSourceID, generationID)
+		if _, err := c.repository.CreateOrUpdateOCloudSite(ctx, dbSite); err != nil {
+			return fmt.Errorf("failed to persist ocloud site %q: %w", site.Spec.SiteID, err)
+		}
+	}
+
+	// Update data source generation
+	dataSource.GenerationID = generationID
+	if _, err := c.repository.UpdateDataSource(ctx, dataSource); err != nil {
+		return fmt.Errorf("failed to update ocloud site data source generation: %w", err)
+	}
+
+	// Purge stale records (OCloudSite CRs that were deleted from Kubernetes)
+	if _, err := c.purgeStaleOCloudSites(ctx, *dataSource.DataSourceID, generationID); err != nil {
+		return fmt.Errorf("failed to purge stale ocloud sites: %w", err)
+	}
+
+	slog.Debug("collected ocloud sites", "count", len(sites))
+	return nil
+}
+
+// getOrCreateDataSource retrieves or creates a data source with the given name
+func (c *Collector) getOrCreateDataSource(ctx context.Context, name string) (*models2.DataSource, error) {
+	record, err := c.repository.GetDataSourceByName(ctx, name)
+	if errors.Is(err, svcutils.ErrNotFound) {
+		// Create new data source
+		ds, err := c.repository.CreateDataSource(ctx, &models2.DataSource{
+			Name:         name,
+			GenerationID: 0,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create data source %q: %w", name, err)
+		}
+		return ds, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get data source %q: %w", name, err)
+	}
+	return record, nil
+}
+
+// purgeStaleLocations removes Location records that were not updated in the current collection cycle.
+// This handles the case where a Location CR was deleted from Kubernetes.
+func (c *Collector) purgeStaleLocations(ctx context.Context, dataSourceID uuid.UUID, generationID int) (int, error) {
+	locations, err := c.repository.FindStaleLocations(ctx, dataSourceID, generationID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to find stale locations: %w", err)
+	}
+
+	count := 0
+	for _, location := range locations {
+		// Delete using string primary key
+		whereExpr := psql.Quote("global_location_id").EQ(psql.Arg(location.GlobalLocationID))
+		if _, err := svcutils.Delete[models.Location](ctx, c.pool, whereExpr); err != nil {
+			return count, fmt.Errorf("failed to delete stale location %q: %w", location.GlobalLocationID, err)
+		}
+		count++
+	}
+
+	if count > 0 {
+		slog.Info("Purged stale locations", "count", count)
+	}
+
+	return count, nil
+}
+
+// purgeStaleOCloudSites removes OCloudSite records that were not updated in the current collection cycle.
+// This handles the case where an OCloudSite CR was deleted from K8s.
+func (c *Collector) purgeStaleOCloudSites(ctx context.Context, dataSourceID uuid.UUID, generationID int) (int, error) {
+	sites, err := c.repository.FindStaleOCloudSites(ctx, dataSourceID, generationID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to find stale ocloud sites: %w", err)
+	}
+
+	count := 0
+	for _, site := range sites {
+		whereExpr := psql.Quote("o_cloud_site_id").EQ(psql.Arg(site.OCloudSiteID))
+		if _, err := svcutils.Delete[models.OCloudSite](ctx, c.pool, whereExpr); err != nil {
+			return count, fmt.Errorf("failed to delete stale ocloud site %q: %w", site.OCloudSiteID, err)
+		}
+		count++
+	}
+
+	if count > 0 {
+		slog.Info("Purged stale ocloud sites", "count", count)
+	}
+
+	return count, nil
+}
+
+// convertLocationCRToModel converts a Location CR to a database model
+func (c *Collector) convertLocationCRToModel(loc *inventoryv1alpha1.Location, dataSourceID uuid.UUID, generationID int) (models.Location, error) {
+	coordinate, err := convertCoordinateToGeoJSON(loc.Spec.Coordinate)
+	if err != nil {
+		return models.Location{}, fmt.Errorf("failed to convert coordinate for location %q: %w", loc.Spec.GlobalLocationID, err)
+	}
+
+	var extensions map[string]interface{}
+	if loc.Spec.Extensions != nil {
+		extensions = make(map[string]interface{})
+		for k, v := range loc.Spec.Extensions {
+			extensions[k] = v
+		}
+	}
+
+	return models.Location{
+		GlobalLocationID: loc.Spec.GlobalLocationID,
+		Name:             loc.Spec.Name,
+		Description:      loc.Spec.Description,
+		Coordinate:       coordinate,
+		CivicAddress:     convertCivicAddress(loc.Spec.CivicAddress),
+		Address:          loc.Spec.Address,
+		Extensions:       extensions,
+		DataSourceID:     dataSourceID,
+		GenerationID:     generationID,
+	}, nil
+}
+
+// convertCoordinateToGeoJSON converts CRD coordinate to GeoJSON Point format
+// GeoJSON uses [longitude, latitude, altitude] order per RFC 7946
+func convertCoordinateToGeoJSON(coord *inventoryv1alpha1.GeoLocation) (map[string]interface{}, error) {
+	if coord == nil {
+		// nil coordinate is valid (optional field), not an error condition
+		return nil, nil //nolint:nilnil
+	}
+
+	lat, err := strconv.ParseFloat(coord.Latitude, 64)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse latitude %q: %w", coord.Latitude, err)
+	}
+
+	lon, err := strconv.ParseFloat(coord.Longitude, 64)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse longitude %q: %w", coord.Longitude, err)
+	}
+
+	coordinates := []float64{lon, lat} // GeoJSON: [longitude, latitude]
+
+	if coord.Altitude != nil {
+		alt, err := strconv.ParseFloat(*coord.Altitude, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse altitude %q: %w", *coord.Altitude, err)
+		}
+		coordinates = append(coordinates, alt)
+	}
+
+	return map[string]interface{}{
+		"type":        "Point",
+		"coordinates": coordinates,
+	}, nil
+}
+
+// convertCivicAddress converts CRD civic address elements to database format
+func convertCivicAddress(civic []inventoryv1alpha1.CivicAddressElement) []map[string]interface{} {
+	if len(civic) == 0 {
+		return nil
+	}
+
+	result := make([]map[string]interface{}, len(civic))
+	for i, elem := range civic {
+		result[i] = map[string]interface{}{
+			"caType":  elem.CaType,
+			"caValue": elem.CaValue,
+		}
+	}
+	return result
+}
+
+// convertOCloudSiteCRToModel converts an OCloudSite CR to a database model
+func (c *Collector) convertOCloudSiteCRToModel(site *inventoryv1alpha1.OCloudSite, dataSourceID uuid.UUID, generationID int) models.OCloudSite {
+	// Generate deterministic UUID from siteId using the same algorithm as HwPluginDataSource
+	oCloudSiteID := ctlrutils.MakeUUIDFromNames(OCloudSiteUUIDNamespace, c.cloudID, site.Spec.SiteID)
+
+	var extensions map[string]interface{}
+	if site.Spec.Extensions != nil {
+		extensions = make(map[string]interface{})
+		for k, v := range site.Spec.Extensions {
+			extensions[k] = v
+		}
+	}
+
+	return models.OCloudSite{
+		OCloudSiteID:     oCloudSiteID,
+		GlobalLocationID: site.Spec.GlobalLocationID,
+		Name:             site.Spec.Name,
+		Description:      site.Spec.Description,
+		Extensions:       extensions,
+		DataSourceID:     dataSourceID,
+		GenerationID:     generationID,
+	}
+}
+
+// listLocations retrieves all Location CRs from the Kubernetes API.
+// This function only performs the K8s read operation and returns the raw CRD objects.
+func (c *Collector) listLocations(ctx context.Context) ([]inventoryv1alpha1.Location, error) {
+	if c.hubClient == nil {
+		return nil, fmt.Errorf("hubClient is not initialized")
+	}
+
+	var locationList inventoryv1alpha1.LocationList
+	if err := c.hubClient.List(ctx, &locationList, &client.ListOptions{}); err != nil {
+		return nil, fmt.Errorf("failed to list Location CRs: %w", err)
+	}
+
+	return locationList.Items, nil
+}
+
+// listOCloudSites retrieves all OCloudSite CRs from the Kubernetes API.
+// This function only performs the K8s read operation and returns the raw CRD objects.
+func (c *Collector) listOCloudSites(ctx context.Context) ([]inventoryv1alpha1.OCloudSite, error) {
+	if c.hubClient == nil {
+		return nil, fmt.Errorf("hubClient is not initialized")
+	}
+
+	var siteList inventoryv1alpha1.OCloudSiteList
+	if err := c.hubClient.List(ctx, &siteList, &client.ListOptions{}); err != nil {
+		return nil, fmt.Errorf("failed to list OCloudSite CRs: %w", err)
+	}
+
+	return siteList.Items, nil
 }

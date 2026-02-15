@@ -8,6 +8,7 @@ package repo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -120,6 +121,18 @@ func (r *ResourcesRepository) FindStaleResourceTypes(ctx context.Context, dataSo
 	return svcutils.Search[models.ResourceType](ctx, r.Db, e)
 }
 
+// FindStaleLocations returns any Location objects that have a generation less than the specific generation
+func (r *ResourcesRepository) FindStaleLocations(ctx context.Context, dataSourceID uuid.UUID, generationID int) ([]models.Location, error) {
+	e := psql.Quote("data_source_id").EQ(psql.Arg(dataSourceID)).And(psql.Quote("generation_id").LT(psql.Arg(generationID)))
+	return svcutils.Search[models.Location](ctx, r.Db, e)
+}
+
+// FindStaleOCloudSites returns any OCloudSite objects that have a generation less than the specific generation
+func (r *ResourcesRepository) FindStaleOCloudSites(ctx context.Context, dataSourceID uuid.UUID, generationID int) ([]models.OCloudSite, error) {
+	e := psql.Quote("data_source_id").EQ(psql.Arg(dataSourceID)).And(psql.Quote("generation_id").LT(psql.Arg(generationID)))
+	return svcutils.Search[models.OCloudSite](ctx, r.Db, e)
+}
+
 // GetAlarmDictionaries returns the list of AlarmDictionary records or an empty list if none exist; otherwise an error
 func (r *ResourcesRepository) GetAlarmDictionaries(ctx context.Context) ([]models.AlarmDictionary, error) {
 	return svcutils.FindAll[models.AlarmDictionary](ctx, r.Db)
@@ -214,4 +227,128 @@ func (r *ResourcesRepository) UpsertAlarmDictionary(ctx context.Context, db svcu
 	}
 
 	return &results[0], nil
+}
+
+// GetLocations retrieves all Location tuples or returns an empty array if no tuples are found
+func (r *ResourcesRepository) GetLocations(ctx context.Context) ([]models.Location, error) {
+	return svcutils.FindAll[models.Location](ctx, r.Db)
+}
+
+// GetLocation retrieves a specific Location tuple by globalLocationId or returns ErrNotFound if not found
+func (r *ResourcesRepository) GetLocation(ctx context.Context, globalLocationID string) (*models.Location, error) {
+	e := psql.Quote("global_location_id").EQ(psql.Arg(globalLocationID))
+	results, err := svcutils.Search[models.Location](ctx, r.Db, e)
+	if err != nil {
+		return nil, err
+	}
+	if len(results) == 0 {
+		return nil, svcutils.ErrNotFound
+	}
+	return &results[0], nil
+}
+
+// GetOCloudSiteIDsForLocation retrieves the list of OCloudSite IDs for a given Location
+func (r *ResourcesRepository) GetOCloudSiteIDsForLocation(ctx context.Context, globalLocationID string) ([]uuid.UUID, error) {
+	e := psql.Quote("global_location_id").EQ(psql.Arg(globalLocationID))
+	sites, err := svcutils.Search[models.OCloudSite](ctx, r.Db, e)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]uuid.UUID, len(sites))
+	for i, site := range sites {
+		ids[i] = site.OCloudSiteID
+	}
+	return ids, nil
+}
+
+// GetOCloudSites retrieves all OCloudSite tuples or returns an empty array if no tuples are found
+func (r *ResourcesRepository) GetOCloudSites(ctx context.Context) ([]models.OCloudSite, error) {
+	return svcutils.FindAll[models.OCloudSite](ctx, r.Db)
+}
+
+// GetOCloudSite retrieves a specific OCloudSite tuple or returns ErrNotFound if not found
+func (r *ResourcesRepository) GetOCloudSite(ctx context.Context, id uuid.UUID) (*models.OCloudSite, error) {
+	return svcutils.Find[models.OCloudSite](ctx, r.Db, id)
+}
+
+// GetResourcePoolIDsForSite retrieves the list of ResourcePool IDs for a given OCloudSite
+func (r *ResourcesRepository) GetResourcePoolIDsForSite(ctx context.Context, oCloudSiteID uuid.UUID) ([]uuid.UUID, error) {
+	e := psql.Quote("o_cloud_site_id").EQ(psql.Arg(oCloudSiteID))
+	pools, err := svcutils.Search[models.ResourcePool](ctx, r.Db, e)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]uuid.UUID, len(pools))
+	for i, pool := range pools {
+		ids[i] = pool.ResourcePoolID
+	}
+	return ids, nil
+}
+
+// GetAllOCloudSiteIDsByLocation returns a map of globalLocationID -> []oCloudSiteID.
+// This is optimized for batch lookups to avoid N+1 queries when listing locations.
+func (r *ResourcesRepository) GetAllOCloudSiteIDsByLocation(ctx context.Context) (map[string][]uuid.UUID, error) {
+	sites, err := svcutils.FindAll[models.OCloudSite](ctx, r.Db)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string][]uuid.UUID)
+	for _, site := range sites {
+		result[site.GlobalLocationID] = append(result[site.GlobalLocationID], site.OCloudSiteID)
+	}
+	return result, nil
+}
+
+// GetAllResourcePoolIDsBySite returns a map of oCloudSiteID -> []resourcePoolID.
+// This is optimized for batch lookups to avoid N+1 queries when listing sites.
+func (r *ResourcesRepository) GetAllResourcePoolIDsBySite(ctx context.Context) (map[uuid.UUID][]uuid.UUID, error) {
+	pools, err := svcutils.FindAll[models.ResourcePool](ctx, r.Db)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[uuid.UUID][]uuid.UUID)
+	for _, pool := range pools {
+		if pool.OCloudSiteID != nil && *pool.OCloudSiteID != uuid.Nil {
+			result[*pool.OCloudSiteID] = append(result[*pool.OCloudSiteID], pool.ResourcePoolID)
+		}
+	}
+	return result, nil
+}
+
+// CreateOrUpdateLocation creates a new Location or updates an existing one.
+// Uses string primary key (global_location_id) for lookup.
+func (r *ResourcesRepository) CreateOrUpdateLocation(ctx context.Context, location models.Location) (*models.Location, error) {
+	// Search
+	e := psql.Quote("global_location_id").EQ(psql.Arg(location.GlobalLocationID))
+	existing, err := svcutils.Search[models.Location](ctx, r.Db, e)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search for location: %w", err)
+	}
+
+	if len(existing) == 0 {
+		// Create new location
+		return svcutils.Create[models.Location](ctx, r.Db, location)
+	}
+
+	// Update existing location
+	return svcutils.Update[models.Location](ctx, r.Db, location.GlobalLocationID, location)
+}
+
+// CreateOrUpdateOCloudSite creates a new OCloudSite or updates an existing one.
+// Uses UUID primary key (o_cloud_site_id) for lookup.
+func (r *ResourcesRepository) CreateOrUpdateOCloudSite(ctx context.Context, site models.OCloudSite) (*models.OCloudSite, error) {
+	// Search
+	_, err := svcutils.Find[models.OCloudSite](ctx, r.Db, site.OCloudSiteID)
+	if errors.Is(err, svcutils.ErrNotFound) {
+		// Create new site
+		return svcutils.Create[models.OCloudSite](ctx, r.Db, site)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to find site: %w", err)
+	}
+
+	// Update existing site
+	return svcutils.Update[models.OCloudSite](ctx, r.Db, site.OCloudSiteID, site)
 }

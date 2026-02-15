@@ -43,6 +43,7 @@ const (
 	ResourcePoolUUIDNamespace = "daee6434-767a-485d-816b-bc04c21f1acf"
 	ResourceUUIDNamespace     = "8ef67482-1215-470d-9a43-eb02af4a7c05"
 	ResourceTypeUUIDNamespace = "255c4b4c-84a8-4c95-95ba-217e1688a03d"
+	OCloudSiteUUIDNamespace   = "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d"
 )
 
 const (
@@ -192,6 +193,14 @@ func (d *HwPluginDataSource) GetResourcePools(ctx context.Context) ([]models.Res
 }
 
 func (d *HwPluginDataSource) convertResourcePool(pool *inventoryclient.ResourcePoolInfo) *models.ResourcePool {
+	// Generate OCloudSiteID from siteId using deterministic UUID
+	// This matches the UUID generated when collecting OCloudSite CRs
+	var oCloudSiteID *uuid.UUID
+	if pool.SiteId != nil && *pool.SiteId != "" {
+		siteUUID := ctlrutils.MakeUUIDFromNames(OCloudSiteUUIDNamespace, d.cloudID, *pool.SiteId)
+		oCloudSiteID = &siteUUID
+	}
+
 	return &models.ResourcePool{
 		ResourcePoolID:   ctlrutils.MakeUUIDFromNames(ResourcePoolUUIDNamespace, d.cloudID, d.hwplugin.Name, pool.ResourcePoolId),
 		GlobalLocationID: d.globalCloudID, // TODO: spec wording is unclear about what this value should be.
@@ -199,6 +208,7 @@ func (d *HwPluginDataSource) convertResourcePool(pool *inventoryclient.ResourceP
 		Description:      pool.Description,
 		OCloudID:         d.cloudID,
 		Location:         pool.SiteId,
+		OCloudSiteID:     oCloudSiteID,
 		Extensions:       nil,
 		DataSourceID:     d.dataSourceID,
 		GenerationID:     d.generationID,

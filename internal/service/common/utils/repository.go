@@ -145,11 +145,11 @@ func Create[T db.Model](ctx context.Context, db DBQuery, record T, fields ...str
 }
 
 // Update attempts to update a record of the requested model type.
-// The `uuid` argument is the primary key of the record to update.
+// The `key` argument is the primary key of the record to update (supports uuid.UUID, string, or other types).
 // The `record` argument is the record to update in the database.
 // The `fields` argument is a list of columns to update. If no fields are specified only non-nil fields are updated.
 // The updated record is returned on success; otherwise an error is returned.
-func Update[T db.Model](ctx context.Context, db DBQuery, uuid uuid.UUID, record T, fields ...string) (*T, error) {
+func Update[T db.Model](ctx context.Context, db DBQuery, key any, record T, fields ...string) (*T, error) {
 	all := GetAllDBTagsFromStruct(record)
 	tags := all
 	if len(fields) > 0 {
@@ -160,7 +160,7 @@ func Update[T db.Model](ctx context.Context, db DBQuery, uuid uuid.UUID, record 
 	// multiple Set(..) operation without having to add them one at a time separately.
 	mods := []bob.Mod[*dialect.UpdateQuery]{
 		um.Table(record.TableName()),
-		um.Where(psql.Quote(record.PrimaryKey()).EQ(psql.Arg(uuid))),
+		um.Where(psql.Quote(record.PrimaryKey()).EQ(psql.Arg(key))),
 		um.Returning(all.Columns()...)}
 
 	// Add the individual column sets
