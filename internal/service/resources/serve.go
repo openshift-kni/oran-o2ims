@@ -163,7 +163,7 @@ func Serve(config *api.ResourceServerConfig) error {
 
 	// Create the collector with all data sources
 	resourceCollector := collector.NewCollector(pool, repository, resourceNotifier, hwMgrDataSourceLoader,
-		[]collector.DataSource{k8s, locationDS, oCloudSiteDS}, hubClient, cloudID)
+		[]collector.DataSource{k8s, locationDS, oCloudSiteDS})
 
 	// Init server
 	// Create the handler

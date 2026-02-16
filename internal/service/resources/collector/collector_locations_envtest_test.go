@@ -82,97 +82,6 @@ var _ = AfterSuite(func() {
 		Expect(testEnv.Stop()).To(Succeed())
 	}
 })
-
-var _ = Describe("Location/OCloudSite List Functions", Label("envtest"), func() {
-	var c *Collector
-
-	BeforeEach(func() {
-		// Create a Collector with only hubClient set for testing list functions
-		c = &Collector{hubClient: k8sClient}
-	})
-
-	Describe("listLocations", func() {
-		It("returns empty list when no Locations exist", func() {
-			locations, err := c.listLocations(ctx)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(locations).To(BeEmpty())
-		})
-
-		It("lists deployed Location CRs", func() {
-			loc := &inventoryv1alpha1.Location{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-loc-list",
-					Namespace: testNamespace,
-				},
-				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-001",
-					Name:             "Test Location",
-					Description:      "Test location description",
-					Address:          ptrTo("123 Test Street"),
-				},
-			}
-			Expect(k8sClient.Create(ctx, loc)).To(Succeed())
-			DeferCleanup(func() { _ = k8sClient.Delete(ctx, loc) })
-
-			locations, err := c.listLocations(ctx)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(locations).To(HaveLen(1))
-
-			// Verify all fields from the listed Location
-			listed := locations[0]
-			Expect(listed.Name).To(Equal("test-loc-list"))
-			Expect(listed.Namespace).To(Equal(testNamespace))
-			Expect(listed.Spec.GlobalLocationID).To(Equal("LOC-001"))
-			Expect(listed.Spec.Name).To(Equal("Test Location"))
-			Expect(listed.Spec.Description).To(Equal("Test location description"))
-			Expect(listed.Spec.Address).ToNot(BeNil())
-			Expect(*listed.Spec.Address).To(Equal("123 Test Street"))
-			Expect(listed.Spec.Coordinate).To(BeNil())
-			Expect(listed.Spec.CivicAddress).To(BeEmpty())
-			Expect(listed.Spec.Extensions).To(BeEmpty())
-		})
-	})
-
-	Describe("listOCloudSites", func() {
-		It("returns empty list when no OCloudSites exist", func() {
-			sites, err := c.listOCloudSites(ctx)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(sites).To(BeEmpty())
-		})
-
-		It("lists deployed OCloudSite CRs", func() {
-			site := &inventoryv1alpha1.OCloudSite{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-site-list",
-					Namespace: testNamespace,
-				},
-				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "site-001",
-					GlobalLocationID: "LOC-001",
-					Name:             "Test Site",
-					Description:      "Test site description",
-				},
-			}
-			Expect(k8sClient.Create(ctx, site)).To(Succeed())
-			DeferCleanup(func() { _ = k8sClient.Delete(ctx, site) })
-
-			sites, err := c.listOCloudSites(ctx)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(sites).To(HaveLen(1))
-
-			// Verify all fields from the listed OCloudSite
-			listed := sites[0]
-			Expect(listed.Name).To(Equal("test-site-list"))
-			Expect(listed.Namespace).To(Equal(testNamespace))
-			Expect(listed.Spec.SiteID).To(Equal("site-001"))
-			Expect(listed.Spec.GlobalLocationID).To(Equal("LOC-001"))
-			Expect(listed.Spec.Name).To(Equal("Test Site"))
-			Expect(listed.Spec.Description).To(Equal("Test site description"))
-			Expect(listed.Spec.Extensions).To(BeEmpty())
-		})
-	})
-})
-
 var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 	It("rejects Location without any address field", func() {
 		loc := &inventoryv1alpha1.Location{
@@ -469,12 +378,12 @@ var _ = Describe("OCloudSite Validation", Label("envtest"), func() {
 
 var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 	var (
-		ds            *LocationDataSource
-		eventChannel  chan *async.AsyncChangeEvent
-		watchCtx      context.Context
-		watchCancel   context.CancelFunc
-		testCloudID   uuid.UUID
-		testDSID      uuid.UUID
+		ds           *LocationDataSource
+		eventChannel chan *async.AsyncChangeEvent
+		watchCtx     context.Context
+		watchCancel  context.CancelFunc
+		testCloudID  uuid.UUID
+		testDSID     uuid.UUID
 	)
 
 	BeforeEach(func() {
@@ -713,7 +622,7 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 
 		coords, ok := locModel.Coordinate["coordinates"].([]float64)
 		Expect(ok).To(BeTrue())
-		Expect(coords).To(HaveLen(3)) // [longitude, latitude, altitude]
+		Expect(coords).To(HaveLen(3))                              // [longitude, latitude, altitude]
 		Expect(coords[0]).To(BeNumerically("~", -74.0060, 0.0001)) // longitude
 		Expect(coords[1]).To(BeNumerically("~", 40.7128, 0.0001))  // latitude
 		Expect(coords[2]).To(BeNumerically("~", 100.5, 0.0001))    // altitude
