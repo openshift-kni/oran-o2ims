@@ -22,6 +22,7 @@ import (
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
 )
 
@@ -183,8 +184,7 @@ func (d *LocationDataSource) handleLocationWatchEvent(ctx context.Context, locat
 		EventType:    eventType,
 		Object:       record}:
 		// return a generated trackingUUID for tracking purposes
-		trackingUUID := uuid.NewSHA1(uuid.NameSpaceDNS, []byte(record.GlobalLocationID))
-		return trackingUUID, nil
+		return svcutils.GetTrackingUUID(record.GlobalLocationID), nil
 	}
 }
 

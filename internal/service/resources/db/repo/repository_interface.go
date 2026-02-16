@@ -59,6 +59,7 @@ type ResourcesRepositoryInterface interface {
 	GetAllResourcePoolIDsBySite(ctx context.Context) (map[uuid.UUID][]uuid.UUID, error)
 	CreateOrUpdateOCloudSite(ctx context.Context, site models.OCloudSite) (*models.OCloudSite, error)
 	FindStaleOCloudSites(ctx context.Context, dataSourceID uuid.UUID, generationID int) ([]models.OCloudSite, error)
+	GetOCloudSitesNotIn(ctx context.Context, ids []any) ([]models.OCloudSite, error)
 }
 
 // Compile-time check that ResourcesRepository implements ResourcesRepositoryInterface

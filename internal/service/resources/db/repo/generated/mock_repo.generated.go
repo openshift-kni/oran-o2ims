@@ -386,6 +386,21 @@ func (mr *MockResourcesRepositoryInterfaceMockRecorder) GetOCloudSites(ctx any) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOCloudSites", reflect.TypeOf((*MockResourcesRepositoryInterface)(nil).GetOCloudSites), ctx)
 }
 
+// GetOCloudSitesNotIn mocks base method.
+func (m *MockResourcesRepositoryInterface) GetOCloudSitesNotIn(ctx context.Context, ids []any) ([]models0.OCloudSite, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOCloudSitesNotIn", ctx, ids)
+	ret0, _ := ret[0].([]models0.OCloudSite)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetOCloudSitesNotIn indicates an expected call of GetOCloudSitesNotIn.
+func (mr *MockResourcesRepositoryInterfaceMockRecorder) GetOCloudSitesNotIn(ctx, ids any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOCloudSitesNotIn", reflect.TypeOf((*MockResourcesRepositoryInterface)(nil).GetOCloudSitesNotIn), ctx, ids)
+}
+
 // GetResource mocks base method.
 func (m *MockResourcesRepositoryInterface) GetResource(ctx context.Context, id uuid.UUID) (*models0.Resource, error) {
 	m.ctrl.T.Helper()

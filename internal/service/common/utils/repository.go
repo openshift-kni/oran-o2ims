@@ -43,16 +43,16 @@ type DBQuery interface {
 }
 
 // Find retrieves a specific tuple from the database table specified.
-// The `uuid` argument is the primary key of the record to retrieve.
+// The `key` argument is the primary key of the record to retrieve (supports uuid.UUID, string, or other types).
 // If no record is found ErrNotFound is returned as an error.
-func Find[T db.Model](ctx context.Context, db DBQuery, uuid uuid.UUID) (*T, error) {
+func Find[T db.Model](ctx context.Context, db DBQuery, key any) (*T, error) {
 	var record T
 	tags := GetAllDBTagsFromStruct(record)
 
 	sql, args, err := psql.Select(
 		sm.Columns(tags.Columns()...),
 		sm.From(record.TableName()),
-		sm.Where(psql.Quote(record.PrimaryKey()).EQ(psql.Arg(uuid))),
+		sm.Where(psql.Quote(record.PrimaryKey()).EQ(psql.Arg(key))),
 	).Build(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build query: %w", err)

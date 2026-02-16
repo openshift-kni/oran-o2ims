@@ -133,6 +133,16 @@ func (r *ResourcesRepository) FindStaleOCloudSites(ctx context.Context, dataSour
 	return svcutils.Search[models.OCloudSite](ctx, r.Db, e)
 }
 
+// GetOCloudSitesNotIn returns the list of OCloudSite records not matching the list of keys provided, or
+// an empty list if none exist; otherwise an error
+func (r *ResourcesRepository) GetOCloudSitesNotIn(ctx context.Context, keys []any) ([]models.OCloudSite, error) {
+	var e bob.Expression
+	if len(keys) > 0 {
+		e = psql.Quote(models.OCloudSite{}.PrimaryKey()).NotIn(psql.Arg(keys...))
+	}
+	return svcutils.Search[models.OCloudSite](ctx, r.Db, e)
+}
+
 // GetAlarmDictionaries returns the list of AlarmDictionary records or an empty list if none exist; otherwise an error
 func (r *ResourcesRepository) GetAlarmDictionaries(ctx context.Context) ([]models.AlarmDictionary, error) {
 	return svcutils.FindAll[models.AlarmDictionary](ctx, r.Db)

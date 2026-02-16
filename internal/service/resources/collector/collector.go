@@ -586,6 +586,10 @@ func (c *Collector) handleSyncCompletion(ctx context.Context, objectType db.Mode
 	switch obj := objectType.(type) {
 	case models.DeploymentManager:
 		return c.handleDeploymentManagerSyncCompletion(ctx, ids)
+	case models.Location:
+		return c.handleLocationSyncCompletion(ctx, keys)
+	case models.OCloudSite:
+		return c.handleOCloudSiteSyncCompletion(ctx, ids)
 	default:
 		return fmt.Errorf("unsupported sync completion type for '%T'", obj)
 	}
@@ -601,6 +605,10 @@ func (c *Collector) handleAsyncEvent(ctx context.Context, event *async.AsyncChan
 	switch value := event.Object.(type) {
 	case models.DeploymentManager:
 		return c.handleAsyncDeploymentManagerEvent(ctx, value, event.EventType == async.Deleted)
+	case models.Location:
+		return c.handleAsyncLocationEvent(ctx, value, event.EventType == async.Deleted)
+	case models.OCloudSite:
+		return c.handleAsyncOCloudSiteEvent(ctx, value, event.EventType == async.Deleted)
 	default:
 		return fmt.Errorf("unknown object type '%T'", event.Object)
 	}
@@ -634,6 +642,150 @@ func (c *Collector) handleAsyncDeploymentManagerEvent(ctx context.Context, deplo
 
 	if dataChangeEvent != nil {
 		c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+	}
+
+	return nil
+}
+
+// handleAsyncLocationEvent handles an async event received for a Location object.
+func (c *Collector) handleAsyncLocationEvent(ctx context.Context, location models.Location, deleted bool) error {
+	var dataChangeEvent *models2.DataChangeEvent
+	var err error
+	converter := func(object interface{}) any {
+		record, _ := object.(models.Location)
+		return models.LocationToModel(&record, nil)
+	}
+
+	if deleted {
+		dataChangeEvent, err = svcutils.DeleteObjectWithChangeEvent(
+			ctx, c.pool, location, location.GlobalLocationID, nil, converter)
+		if err != nil {
+			return fmt.Errorf("failed to delete location '%s': %w", location.GlobalLocationID, err)
+		}
+	} else {
+		dataChangeEvent, err = svcutils.PersistObjectWithChangeEvent(
+			ctx, c.pool, location, location.GlobalLocationID, nil, converter)
+		if err != nil {
+			return fmt.Errorf("failed to persist location '%s': %w", location.GlobalLocationID, err)
+		}
+	}
+
+	if dataChangeEvent != nil {
+		c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+	}
+
+	return nil
+}
+
+// handleAsyncOCloudSiteEvent handles an async event received for an OCloudSite object.
+func (c *Collector) handleAsyncOCloudSiteEvent(ctx context.Context, site models.OCloudSite, deleted bool) error {
+	var dataChangeEvent *models2.DataChangeEvent
+	var err error
+
+	if deleted {
+		dataChangeEvent, err = svcutils.DeleteObjectWithChangeEvent(
+			ctx, c.pool, site, site.OCloudSiteID, nil, func(object interface{}) any {
+				record, _ := object.(models.OCloudSite)
+				return models.OCloudSiteToModel(&record, nil)
+			})
+
+		if err != nil {
+			return fmt.Errorf("failed to delete OCloudSite '%s': %w", site.OCloudSiteID, err)
+		}
+	} else {
+		dataChangeEvent, err = svcutils.PersistObjectWithChangeEvent(
+			ctx, c.pool, site, site.OCloudSiteID, nil, func(object interface{}) any {
+				record, _ := object.(models.OCloudSite)
+				return models.OCloudSiteToModel(&record, nil)
+			})
+
+		if err != nil {
+			return fmt.Errorf("failed to persist OCloudSite '%s': %w", site.OCloudSiteID, err)
+		}
+	}
+
+	if dataChangeEvent != nil {
+		c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+	}
+
+	return nil
+}
+
+// handleLocationSyncCompletion handles the sync completion for Location objects.
+func (c *Collector) handleLocationSyncCompletion(ctx context.Context, keys []uuid.UUID) error {
+	slog.Debug("Handling end of sync for Location instances", "count", len(keys))
+
+	// Create a set of tracking UUIDs for fast lookup
+	keySet := make(map[uuid.UUID]struct{}, len(keys))
+	for _, key := range keys {
+		keySet[key] = struct{}{}
+	}
+
+	// Get all locations and check if their tracking UUID is in the set
+	locations, err := c.repository.GetLocations(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get locations: %w", err)
+	}
+
+	converter := func(object interface{}) any {
+		record, _ := object.(models.Location)
+		return models.LocationToModel(&record, nil)
+	}
+
+	count := 0
+	for _, location := range locations {
+		trackingUUID := svcutils.GetTrackingUUID(location.GlobalLocationID)
+
+		if _, exists := keySet[trackingUUID]; !exists {
+			// This location is stale, delete it
+			dataChangeEvent, deleteErr := svcutils.DeleteObjectWithChangeEvent(
+				ctx, c.pool, location, location.GlobalLocationID, nil, converter)
+			if deleteErr != nil {
+				return fmt.Errorf("failed to delete stale location '%s': %w", location.GlobalLocationID, deleteErr)
+			}
+
+			if dataChangeEvent != nil {
+				c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+			}
+			count++
+		}
+	}
+
+	if count > 0 {
+		slog.Info("Deleted stale location records", "count", count)
+	}
+
+	return nil
+}
+
+// handleOCloudSiteSyncCompletion handles the sync completion for OCloudSite objects.
+func (c *Collector) handleOCloudSiteSyncCompletion(ctx context.Context, ids []any) error {
+	slog.Debug("Handling end of sync for OCloudSite instances", "count", len(ids))
+
+	records, err := c.repository.GetOCloudSitesNotIn(ctx, ids)
+	if err != nil {
+		return fmt.Errorf("failed to get stale OCloudSites: %w", err)
+	}
+
+	count := 0
+	for _, record := range records {
+		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, record, record.OCloudSiteID, nil, func(object interface{}) any {
+			r, _ := object.(models.OCloudSite)
+			return models.OCloudSiteToModel(&r, nil)
+		})
+
+		if err != nil {
+			return fmt.Errorf("failed to delete stale OCloudSite: %w", err)
+		}
+
+		if dataChangeEvent != nil {
+			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+			count++
+		}
+	}
+
+	if count > 0 {
+		slog.Info("Deleted stale OCloudSite records", "count", count)
 	}
 
 	return nil

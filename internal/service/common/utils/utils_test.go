@@ -39,6 +39,53 @@ func (m *mockDBModel) OnConflict() string {
 }
 
 var _ = Describe("Utils", func() {
+	Describe("GetTrackingUUID", func() {
+		It("returns UUID unchanged when key is UUID", func() {
+			id := uuid.New()
+			result := GetTrackingUUID(id)
+			Expect(result).To(Equal(id))
+		})
+
+		It("returns deterministic UUID for string key", func() {
+			key := "LOC-001"
+			result1 := GetTrackingUUID(key)
+			result2 := GetTrackingUUID(key)
+			Expect(result1).To(Equal(result2)) // deterministic
+			Expect(result1).NotTo(Equal(uuid.Nil))
+		})
+
+		It("returns different UUIDs for different string keys", func() {
+			result1 := GetTrackingUUID("LOC-001")
+			result2 := GetTrackingUUID("LOC-002")
+			Expect(result1).NotTo(Equal(result2))
+		})
+
+		It("returns UUID using SHA1 namespace for string keys", func() {
+			key := "test-location"
+			expected := uuid.NewSHA1(uuid.NameSpaceDNS, []byte(key))
+			result := GetTrackingUUID(key)
+			Expect(result).To(Equal(expected))
+		})
+
+		It("handles empty string key", func() {
+			result := GetTrackingUUID("")
+			Expect(result).NotTo(Equal(uuid.Nil))
+			// Empty string should still produce a deterministic UUID
+			Expect(result).To(Equal(GetTrackingUUID("")))
+		})
+
+		It("handles other types by converting to string", func() {
+			// Integer
+			result1 := GetTrackingUUID(42)
+			result2 := GetTrackingUUID(42)
+			Expect(result1).To(Equal(result2))
+			Expect(result1).NotTo(Equal(uuid.Nil))
+
+			// Different integers produce different UUIDs
+			Expect(GetTrackingUUID(42)).NotTo(Equal(GetTrackingUUID(43)))
+		})
+	})
+
 	Describe("DB tags", func() {
 		It("returns all tags of the alarm_event_record", func() {
 			ar := mockDBModel{}
