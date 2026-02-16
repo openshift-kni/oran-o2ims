@@ -150,8 +150,20 @@ func Serve(config *api.ResourceServerConfig) error {
 		return fmt.Errorf("failed to create hub client: %w", err)
 	}
 
-	// Create the collector
-	resourceCollector := collector.NewCollector(pool, repository, resourceNotifier, hwMgrDataSourceLoader, []collector.DataSource{k8s}, hubClient, cloudID)
+	// Create watch-based data sources for Location and OCloudSite CRs
+	locationDS, err := collector.NewLocationDataSource(cloudID, hubClient)
+	if err != nil {
+		return fmt.Errorf("failed to create location data source: %w", err)
+	}
+
+	oCloudSiteDS, err := collector.NewOCloudSiteDataSource(cloudID, hubClient)
+	if err != nil {
+		return fmt.Errorf("failed to create ocloud site data source: %w", err)
+	}
+
+	// Create the collector with all data sources
+	resourceCollector := collector.NewCollector(pool, repository, resourceNotifier, hwMgrDataSourceLoader,
+		[]collector.DataSource{k8s, locationDS, oCloudSiteDS}, hubClient, cloudID)
 
 	// Init server
 	// Create the handler
