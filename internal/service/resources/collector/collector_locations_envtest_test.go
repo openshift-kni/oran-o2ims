@@ -10,7 +10,9 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -20,15 +22,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
+	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
 )
 
 const testNamespace = "test-locations"
 
 var (
-	testEnv   *envtest.Environment
-	k8sClient client.Client
-	ctx       context.Context
-	cancel    context.CancelFunc
+	testEnv        *envtest.Environment
+	k8sClient      client.Client
+	k8sWatchClient client.WithWatch // For Watch-capable client
+	ctx            context.Context
+	cancel         context.CancelFunc
 )
 
 func TestCollectorLocationsEnvtest(t *testing.T) {
@@ -56,6 +61,10 @@ var _ = BeforeSuite(func() {
 	Expect(cfg).ToNot(BeNil())
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme})
+	Expect(err).ToNot(HaveOccurred())
+
+	// Create watch-capable client for LocationDataSource tests
+	k8sWatchClient, err = client.NewWithWatch(cfg, client.Options{Scheme: scheme})
 	Expect(err).ToNot(HaveOccurred())
 
 	// Create test namespace
@@ -457,6 +466,524 @@ var _ = Describe("OCloudSite Validation", Label("envtest"), func() {
 		Expect(fetched.Spec.Extensions).To(BeEmpty())
 	})
 })
+
+var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
+	var (
+		ds            *LocationDataSource
+		eventChannel  chan *async.AsyncChangeEvent
+		watchCtx      context.Context
+		watchCancel   context.CancelFunc
+		testCloudID   uuid.UUID
+		testDSID      uuid.UUID
+	)
+
+	BeforeEach(func() {
+		testCloudID = uuid.New()
+		testDSID = uuid.New()
+		eventChannel = make(chan *async.AsyncChangeEvent, 10)
+
+		var err error
+		ds, err = NewLocationDataSource(testCloudID, k8sWatchClient)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Initialize the data source
+		ds.Init(testDSID, 0, eventChannel)
+
+		// Create a separate context for the watch that we can cancel
+		watchCtx, watchCancel = context.WithCancel(ctx)
+	})
+
+	AfterEach(func() {
+		watchCancel()
+		close(eventChannel)
+	})
+
+	It("receives Created event when Location CR is created", func() {
+		// Start watching
+		err := ds.Watch(watchCtx)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Give the reflector time to start
+		time.Sleep(100 * time.Millisecond)
+
+		// Create a Location CR
+		loc := &inventoryv1alpha1.Location{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "watch-test-create",
+				Namespace: testNamespace,
+			},
+			Spec: inventoryv1alpha1.LocationSpec{
+				GlobalLocationID: "LOC-WATCH-CREATE",
+				Name:             "Watch Test Location",
+				Description:      "Testing watch create",
+				Address:          ptrTo("123 Watch Street"),
+			},
+		}
+		Expect(k8sClient.Create(ctx, loc)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, loc) })
+
+		// Wait for the event
+		var event *async.AsyncChangeEvent
+		Eventually(func() bool {
+			select {
+			case event = <-eventChannel:
+				// Skip SyncComplete events
+				if event.EventType == async.SyncComplete {
+					return false
+				}
+				return true
+			default:
+				return false
+			}
+		}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// Verify the event
+		Expect(event).ToNot(BeNil())
+		Expect(event.EventType).To(Equal(async.Updated))
+		Expect(event.DataSourceID).To(Equal(testDSID))
+
+		// Verify the object is a Location model
+		locModel, ok := event.Object.(models.Location)
+		Expect(ok).To(BeTrue())
+		Expect(locModel.GlobalLocationID).To(Equal("LOC-WATCH-CREATE"))
+		Expect(locModel.Name).To(Equal("Watch Test Location"))
+		Expect(locModel.Description).To(Equal("Testing watch create"))
+		Expect(locModel.Address).ToNot(BeNil())
+		Expect(*locModel.Address).To(Equal("123 Watch Street"))
+		Expect(locModel.DataSourceID).To(Equal(testDSID))
+	})
+
+	It("receives Updated event when Location CR is modified", func() {
+		// Create a Location CR first
+		loc := &inventoryv1alpha1.Location{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "watch-test-update",
+				Namespace: testNamespace,
+			},
+			Spec: inventoryv1alpha1.LocationSpec{
+				GlobalLocationID: "LOC-WATCH-UPDATE",
+				Name:             "Original Name",
+				Description:      "Original description",
+				Address:          ptrTo("Original Address"),
+			},
+		}
+		Expect(k8sClient.Create(ctx, loc)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, loc) })
+
+		// Start watching
+		err := ds.Watch(watchCtx)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Give the reflector time to start and process initial list
+		time.Sleep(200 * time.Millisecond)
+
+		// Drain initial events (create + possible sync)
+		drainEvents(eventChannel)
+
+		// Update the Location CR
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), loc)).To(Succeed())
+		loc.Spec.Name = "Updated Name"
+		loc.Spec.Description = "Updated description"
+		Expect(k8sClient.Update(ctx, loc)).To(Succeed())
+
+		// Wait for the update event
+		var event *async.AsyncChangeEvent
+		Eventually(func() bool {
+			select {
+			case event = <-eventChannel:
+				if event.EventType == async.SyncComplete {
+					return false
+				}
+				return true
+			default:
+				return false
+			}
+		}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// Verify the event
+		Expect(event).ToNot(BeNil())
+		Expect(event.EventType).To(Equal(async.Updated))
+
+		locModel, ok := event.Object.(models.Location)
+		Expect(ok).To(BeTrue())
+		Expect(locModel.GlobalLocationID).To(Equal("LOC-WATCH-UPDATE"))
+		Expect(locModel.Name).To(Equal("Updated Name"))
+		Expect(locModel.Description).To(Equal("Updated description"))
+	})
+
+	It("receives Deleted event when Location CR is deleted", func() {
+		// Create a Location CR first
+		loc := &inventoryv1alpha1.Location{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "watch-test-delete",
+				Namespace: testNamespace,
+			},
+			Spec: inventoryv1alpha1.LocationSpec{
+				GlobalLocationID: "LOC-WATCH-DELETE",
+				Name:             "To Be Deleted",
+				Description:      "Will be deleted",
+				Address:          ptrTo("Delete Street"),
+			},
+		}
+		Expect(k8sClient.Create(ctx, loc)).To(Succeed())
+
+		// Start watching
+		err := ds.Watch(watchCtx)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Give the reflector time to start and process initial list
+		time.Sleep(200 * time.Millisecond)
+
+		// Drain initial events
+		drainEvents(eventChannel)
+
+		// Delete the Location CR
+		Expect(k8sClient.Delete(ctx, loc)).To(Succeed())
+
+		// Wait for the delete event
+		var event *async.AsyncChangeEvent
+		Eventually(func() bool {
+			select {
+			case event = <-eventChannel:
+				if event.EventType == async.SyncComplete {
+					return false
+				}
+				return true
+			default:
+				return false
+			}
+		}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// Verify the event
+		Expect(event).ToNot(BeNil())
+		Expect(event.EventType).To(Equal(async.Deleted))
+
+		locModel, ok := event.Object.(models.Location)
+		Expect(ok).To(BeTrue())
+		Expect(locModel.GlobalLocationID).To(Equal("LOC-WATCH-DELETE"))
+	})
+
+	It("converts coordinate to GeoJSON format", func() {
+		// Start watching
+		err := ds.Watch(watchCtx)
+		Expect(err).ToNot(HaveOccurred())
+
+		time.Sleep(100 * time.Millisecond)
+
+		// Create a Location CR with coordinates
+		altitude := "100.5"
+		loc := &inventoryv1alpha1.Location{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "watch-test-coord",
+				Namespace: testNamespace,
+			},
+			Spec: inventoryv1alpha1.LocationSpec{
+				GlobalLocationID: "LOC-WATCH-COORD",
+				Name:             "Coordinate Test",
+				Description:      "Testing coordinate conversion",
+				Coordinate: &inventoryv1alpha1.GeoLocation{
+					Latitude:  "40.7128",
+					Longitude: "-74.0060",
+					Altitude:  &altitude,
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, loc)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, loc) })
+
+		// Wait for the event
+		var event *async.AsyncChangeEvent
+		Eventually(func() bool {
+			select {
+			case event = <-eventChannel:
+				if event.EventType == async.SyncComplete {
+					return false
+				}
+				return true
+			default:
+				return false
+			}
+		}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// Verify the coordinate was converted to GeoJSON
+		locModel, ok := event.Object.(models.Location)
+		Expect(ok).To(BeTrue())
+		Expect(locModel.Coordinate).ToNot(BeNil())
+		Expect(locModel.Coordinate["type"]).To(Equal("Point"))
+
+		coords, ok := locModel.Coordinate["coordinates"].([]float64)
+		Expect(ok).To(BeTrue())
+		Expect(coords).To(HaveLen(3)) // [longitude, latitude, altitude]
+		Expect(coords[0]).To(BeNumerically("~", -74.0060, 0.0001)) // longitude
+		Expect(coords[1]).To(BeNumerically("~", 40.7128, 0.0001))  // latitude
+		Expect(coords[2]).To(BeNumerically("~", 100.5, 0.0001))    // altitude
+	})
+})
+
+var _ = Describe("OCloudSiteDataSource Watch", Label("envtest"), func() {
+	var (
+		ds           *OCloudSiteDataSource
+		eventChannel chan *async.AsyncChangeEvent
+		watchCtx     context.Context
+		watchCancel  context.CancelFunc
+		testCloudID  uuid.UUID
+		testDSID     uuid.UUID
+	)
+
+	BeforeEach(func() {
+		testCloudID = uuid.New()
+		testDSID = uuid.New()
+		eventChannel = make(chan *async.AsyncChangeEvent, 10)
+
+		var err error
+		ds, err = NewOCloudSiteDataSource(testCloudID, k8sWatchClient)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Initialize the data source
+		ds.Init(testDSID, 0, eventChannel)
+
+		// Create a separate context for the watch that we can cancel
+		watchCtx, watchCancel = context.WithCancel(ctx)
+	})
+
+	AfterEach(func() {
+		watchCancel()
+		close(eventChannel)
+	})
+
+	It("receives Created event when OCloudSite CR is created", func() {
+		// Start watching
+		err := ds.Watch(watchCtx)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Give the reflector time to start
+		time.Sleep(100 * time.Millisecond)
+
+		// Create an OCloudSite CR
+		site := &inventoryv1alpha1.OCloudSite{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "watch-test-site-create",
+				Namespace: testNamespace,
+			},
+			Spec: inventoryv1alpha1.OCloudSiteSpec{
+				SiteID:           "site-watch-create",
+				GlobalLocationID: "LOC-001",
+				Name:             "Watch Test Site",
+				Description:      "Testing watch create for site",
+			},
+		}
+		Expect(k8sClient.Create(ctx, site)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, site) })
+
+		// Wait for the event
+		var event *async.AsyncChangeEvent
+		Eventually(func() bool {
+			select {
+			case event = <-eventChannel:
+				// Skip SyncComplete events
+				if event.EventType == async.SyncComplete {
+					return false
+				}
+				return true
+			default:
+				return false
+			}
+		}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// Verify the event
+		Expect(event).ToNot(BeNil())
+		Expect(event.EventType).To(Equal(async.Updated))
+		Expect(event.DataSourceID).To(Equal(testDSID))
+
+		// Verify the object is an OCloudSite model
+		siteModel, ok := event.Object.(models.OCloudSite)
+		Expect(ok).To(BeTrue())
+		Expect(siteModel.GlobalLocationID).To(Equal("LOC-001"))
+		Expect(siteModel.Name).To(Equal("Watch Test Site"))
+		Expect(siteModel.Description).To(Equal("Testing watch create for site"))
+		Expect(siteModel.DataSourceID).To(Equal(testDSID))
+		// OCloudSiteID should be a deterministically generated UUID
+		Expect(siteModel.OCloudSiteID).ToNot(Equal(uuid.Nil))
+	})
+
+	It("receives Updated event when OCloudSite CR is modified", func() {
+		// Create an OCloudSite CR first
+		site := &inventoryv1alpha1.OCloudSite{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "watch-test-site-update",
+				Namespace: testNamespace,
+			},
+			Spec: inventoryv1alpha1.OCloudSiteSpec{
+				SiteID:           "site-watch-update",
+				GlobalLocationID: "LOC-001",
+				Name:             "Original Site Name",
+				Description:      "Original site description",
+			},
+		}
+		Expect(k8sClient.Create(ctx, site)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, site) })
+
+		// Start watching
+		err := ds.Watch(watchCtx)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Give the reflector time to start and process initial list
+		time.Sleep(200 * time.Millisecond)
+
+		// Drain initial events (create + possible sync)
+		drainEvents(eventChannel)
+
+		// Update the OCloudSite CR
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(site), site)).To(Succeed())
+		site.Spec.Name = "Updated Site Name"
+		site.Spec.Description = "Updated site description"
+		Expect(k8sClient.Update(ctx, site)).To(Succeed())
+
+		// Wait for the update event
+		var event *async.AsyncChangeEvent
+		Eventually(func() bool {
+			select {
+			case event = <-eventChannel:
+				if event.EventType == async.SyncComplete {
+					return false
+				}
+				return true
+			default:
+				return false
+			}
+		}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// Verify the event
+		Expect(event).ToNot(BeNil())
+		Expect(event.EventType).To(Equal(async.Updated))
+
+		siteModel, ok := event.Object.(models.OCloudSite)
+		Expect(ok).To(BeTrue())
+		Expect(siteModel.Name).To(Equal("Updated Site Name"))
+		Expect(siteModel.Description).To(Equal("Updated site description"))
+	})
+
+	It("receives Deleted event when OCloudSite CR is deleted", func() {
+		// Create an OCloudSite CR first
+		site := &inventoryv1alpha1.OCloudSite{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "watch-test-site-delete",
+				Namespace: testNamespace,
+			},
+			Spec: inventoryv1alpha1.OCloudSiteSpec{
+				SiteID:           "site-watch-delete",
+				GlobalLocationID: "LOC-001",
+				Name:             "To Be Deleted Site",
+				Description:      "Will be deleted",
+			},
+		}
+		Expect(k8sClient.Create(ctx, site)).To(Succeed())
+
+		// Start watching
+		err := ds.Watch(watchCtx)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Give the reflector time to start and process initial list
+		time.Sleep(200 * time.Millisecond)
+
+		// Drain initial events
+		drainEvents(eventChannel)
+
+		// Delete the OCloudSite CR
+		Expect(k8sClient.Delete(ctx, site)).To(Succeed())
+
+		// Wait for the delete event
+		var event *async.AsyncChangeEvent
+		Eventually(func() bool {
+			select {
+			case event = <-eventChannel:
+				if event.EventType == async.SyncComplete {
+					return false
+				}
+				return true
+			default:
+				return false
+			}
+		}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// Verify the event
+		Expect(event).ToNot(BeNil())
+		Expect(event.EventType).To(Equal(async.Deleted))
+
+		siteModel, ok := event.Object.(models.OCloudSite)
+		Expect(ok).To(BeTrue())
+		Expect(siteModel.GlobalLocationID).To(Equal("LOC-001"))
+	})
+
+	It("generates deterministic UUID for OCloudSiteID", func() {
+		// Start watching
+		err := ds.Watch(watchCtx)
+		Expect(err).ToNot(HaveOccurred())
+
+		time.Sleep(100 * time.Millisecond)
+
+		// Create an OCloudSite CR
+		site := &inventoryv1alpha1.OCloudSite{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "watch-test-site-uuid",
+				Namespace: testNamespace,
+			},
+			Spec: inventoryv1alpha1.OCloudSiteSpec{
+				SiteID:           "site-uuid-test",
+				GlobalLocationID: "LOC-001",
+				Name:             "UUID Test Site",
+				Description:      "Testing UUID generation",
+			},
+		}
+		Expect(k8sClient.Create(ctx, site)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, site) })
+
+		// Wait for the event
+		var event *async.AsyncChangeEvent
+		Eventually(func() bool {
+			select {
+			case event = <-eventChannel:
+				if event.EventType == async.SyncComplete {
+					return false
+				}
+				return true
+			default:
+				return false
+			}
+		}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// Get the OCloudSiteID from the event
+		siteModel, ok := event.Object.(models.OCloudSite)
+		Expect(ok).To(BeTrue())
+		firstUUID := siteModel.OCloudSiteID
+
+		// The UUID should be deterministic - creating a new datasource with the same cloudID
+		// and processing the same siteId should produce the same UUID
+		ds2, err := NewOCloudSiteDataSource(testCloudID, k8sWatchClient)
+		Expect(err).ToNot(HaveOccurred())
+		ds2.Init(testDSID, 0, nil) // nil channel ok for this test
+
+		// Fetch the site and convert it manually
+		fetchedSite := &inventoryv1alpha1.OCloudSite{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetchedSite)).To(Succeed())
+		convertedModel := ds2.convertOCloudSiteToModel(fetchedSite)
+
+		// The UUIDs should match
+		Expect(convertedModel.OCloudSiteID).To(Equal(firstUUID))
+	})
+})
+
+// drainEvents removes all pending events from the channel
+func drainEvents(ch chan *async.AsyncChangeEvent) {
+	for {
+		select {
+		case <-ch:
+			// discard
+		default:
+			return
+		}
+	}
+}
 
 func ptrTo(s string) *string {
 	return &s
