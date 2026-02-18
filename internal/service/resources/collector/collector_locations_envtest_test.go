@@ -629,6 +629,126 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 	})
 })
 
+var _ = Describe("ResourcePool Validation", Label("envtest"), func() {
+	It("rejects ResourcePool with empty resourcePoolId", func() {
+		rp := &inventoryv1alpha1.ResourcePool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "invalid-rp-empty-poolid",
+				Namespace: testNamespace,
+			},
+			Spec: inventoryv1alpha1.ResourcePoolSpec{
+				ResourcePoolId: "", // Invalid: empty
+				OCloudSiteId:   "site-001",
+				Name:           "Invalid Pool",
+				Description:    "Empty resourcePoolId",
+			},
+		}
+		err := k8sClient.Create(ctx, rp)
+		Expect(err).To(HaveOccurred())
+		// MinLength validation
+	})
+
+	It("rejects ResourcePool with empty oCloudSiteId", func() {
+		rp := &inventoryv1alpha1.ResourcePool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "invalid-rp-empty-siteid",
+				Namespace: testNamespace,
+			},
+			Spec: inventoryv1alpha1.ResourcePoolSpec{
+				ResourcePoolId: "pool-001",
+				OCloudSiteId:   "", // Invalid: empty
+				Name:           "Invalid Pool",
+				Description:    "Empty oCloudSiteId",
+			},
+		}
+		err := k8sClient.Create(ctx, rp)
+		Expect(err).To(HaveOccurred())
+		// MinLength validation
+	})
+
+	It("rejects ResourcePool with empty name", func() {
+		rp := &inventoryv1alpha1.ResourcePool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "invalid-rp-empty-name",
+				Namespace: testNamespace,
+			},
+			Spec: inventoryv1alpha1.ResourcePoolSpec{
+				ResourcePoolId: "pool-001",
+				OCloudSiteId:   "site-001",
+				Name:           "", // Invalid: empty
+				Description:    "Empty name",
+			},
+		}
+		err := k8sClient.Create(ctx, rp)
+		Expect(err).To(HaveOccurred())
+		// MinLength validation
+	})
+
+	It("accepts valid ResourcePool with required fields", func() {
+		rp := &inventoryv1alpha1.ResourcePool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "valid-rp-basic",
+				Namespace: testNamespace,
+			},
+			Spec: inventoryv1alpha1.ResourcePoolSpec{
+				ResourcePoolId: "pool-valid-001",
+				OCloudSiteId:   "site-valid-001",
+				Name:           "Valid Resource Pool",
+				Description:    "A valid resource pool",
+			},
+		}
+		Expect(k8sClient.Create(ctx, rp)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, rp) })
+
+		// Verify all fields
+		fetched := &inventoryv1alpha1.ResourcePool{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rp), fetched)).To(Succeed())
+		Expect(fetched.Spec.ResourcePoolId).To(Equal("pool-valid-001"))
+		Expect(fetched.Spec.OCloudSiteId).To(Equal("site-valid-001"))
+		Expect(fetched.Spec.Name).To(Equal("Valid Resource Pool"))
+		Expect(fetched.Spec.Description).To(Equal("A valid resource pool"))
+		Expect(fetched.Spec.Location).To(BeNil())
+		Expect(fetched.Spec.Extensions).To(BeEmpty())
+	})
+
+	It("accepts valid ResourcePool with all optional fields", func() {
+		rp := &inventoryv1alpha1.ResourcePool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "valid-rp-full",
+				Namespace: testNamespace,
+			},
+			Spec: inventoryv1alpha1.ResourcePoolSpec{
+				ResourcePoolId: "pool-full-001",
+				OCloudSiteId:   "site-full-001",
+				Name:           "Full Resource Pool",
+				Description:    "A resource pool with all fields",
+				Location:       ptrTo("Building A, Floor 2"),
+				Extensions: map[string]string{
+					"vendor": "acme",
+					"tier":   "premium",
+					"rack":   "R42",
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, rp)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, rp) })
+
+		// Verify all fields
+		fetched := &inventoryv1alpha1.ResourcePool{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rp), fetched)).To(Succeed())
+		Expect(fetched.Spec.ResourcePoolId).To(Equal("pool-full-001"))
+		Expect(fetched.Spec.OCloudSiteId).To(Equal("site-full-001"))
+		Expect(fetched.Spec.Name).To(Equal("Full Resource Pool"))
+		Expect(fetched.Spec.Description).To(Equal("A resource pool with all fields"))
+		Expect(fetched.Spec.Location).ToNot(BeNil())
+		Expect(*fetched.Spec.Location).To(Equal("Building A, Floor 2"))
+		Expect(fetched.Spec.Extensions).To(HaveLen(3))
+		Expect(fetched.Spec.Extensions["vendor"]).To(Equal("acme"))
+		Expect(fetched.Spec.Extensions["tier"]).To(Equal("premium"))
+		Expect(fetched.Spec.Extensions["rack"]).To(Equal("R42"))
+	})
+})
+
 var _ = Describe("OCloudSiteDataSource Watch", Label("envtest"), func() {
 	var (
 		ds           *OCloudSiteDataSource
