@@ -572,6 +572,8 @@ func (c *Collector) handleSyncCompletion(ctx context.Context, objectType db.Mode
 		return c.handleLocationSyncCompletion(ctx, keys)
 	case models.OCloudSite:
 		return c.handleOCloudSiteSyncCompletion(ctx, ids)
+	case models.ResourcePool:
+		return c.handleResourcePoolSyncCompletion(ctx, ids)
 	default:
 		return fmt.Errorf("unsupported sync completion type for '%T'", obj)
 	}
@@ -591,6 +593,8 @@ func (c *Collector) handleAsyncEvent(ctx context.Context, event *async.AsyncChan
 		return c.handleAsyncLocationEvent(ctx, value, event.EventType == async.Deleted)
 	case models.OCloudSite:
 		return c.handleAsyncOCloudSiteEvent(ctx, value, event.EventType == async.Deleted)
+	case models.ResourcePool:
+		return c.handleAsyncResourcePoolEvent(ctx, value, event.EventType == async.Deleted)
 	default:
 		return fmt.Errorf("unknown object type '%T'", event.Object)
 	}
@@ -768,6 +772,69 @@ func (c *Collector) handleOCloudSiteSyncCompletion(ctx context.Context, ids []an
 
 	if count > 0 {
 		slog.Info("Deleted stale OCloudSite records", "count", count)
+	}
+
+	return nil
+}
+
+// handleAsyncResourcePoolEvent handles an async event received for a ResourcePool object.
+func (c *Collector) handleAsyncResourcePoolEvent(ctx context.Context, pool models.ResourcePool, deleted bool) error {
+	var dataChangeEvent *models2.DataChangeEvent
+	var err error
+	converter := func(object interface{}) any {
+		record, _ := object.(models.ResourcePool)
+		return models.ResourcePoolToModel(&record, nil)
+	}
+
+	if deleted {
+		dataChangeEvent, err = svcutils.DeleteObjectWithChangeEvent(
+			ctx, c.pool, pool, pool.ResourcePoolID, nil, converter)
+		if err != nil {
+			return fmt.Errorf("failed to delete ResourcePool '%s': %w", pool.ResourcePoolID, err)
+		}
+	} else {
+		dataChangeEvent, err = svcutils.PersistObjectWithChangeEvent(
+			ctx, c.pool, pool, pool.ResourcePoolID, nil, converter)
+		if err != nil {
+			return fmt.Errorf("failed to persist ResourcePool '%s': %w", pool.ResourcePoolID, err)
+		}
+	}
+
+	if dataChangeEvent != nil {
+		c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+	}
+
+	return nil
+}
+
+// handleResourcePoolSyncCompletion handles the sync completion for ResourcePool objects.
+func (c *Collector) handleResourcePoolSyncCompletion(ctx context.Context, ids []any) error {
+	slog.Debug("Handling end of sync for ResourcePool instances", "count", len(ids))
+
+	records, err := c.repository.GetResourcePoolsNotIn(ctx, ids)
+	if err != nil {
+		return fmt.Errorf("failed to get stale ResourcePools: %w", err)
+	}
+
+	count := 0
+	for _, record := range records {
+		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, record, record.ResourcePoolID, nil, func(object interface{}) any {
+			r, _ := object.(models.ResourcePool)
+			return models.ResourcePoolToModel(&r, nil)
+		})
+
+		if err != nil {
+			return fmt.Errorf("failed to delete stale ResourcePool: %w", err)
+		}
+
+		if dataChangeEvent != nil {
+			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+			count++
+		}
+	}
+
+	if count > 0 {
+		slog.Info("Deleted stale ResourcePool records", "count", count)
 	}
 
 	return nil
