@@ -33,6 +33,7 @@ type ResourcesRepositoryInterface interface {
 	GetResourcePools(ctx context.Context) ([]models.ResourcePool, error)
 	GetResourcePool(ctx context.Context, id uuid.UUID) (*models.ResourcePool, error)
 	ResourcePoolExists(ctx context.Context, id uuid.UUID) (bool, error)
+	GetResourcePoolsNotIn(ctx context.Context, ids []any) ([]models.ResourcePool, error)
 
 	// Resource methods
 	GetResourcePoolResources(ctx context.Context, id uuid.UUID) ([]models.Resource, error)

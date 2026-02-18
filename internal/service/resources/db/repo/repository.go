@@ -81,6 +81,16 @@ func (r *ResourcesRepository) UpdateResourcePool(ctx context.Context, resourcePo
 	return svcutils.Update[models.ResourcePool](ctx, r.Db, resourcePool.ResourcePoolID, *resourcePool)
 }
 
+// GetResourcePoolsNotIn returns the list of ResourcePool records not matching the list of keys provided, or
+// an empty list if none exist; otherwise an error
+func (r *ResourcesRepository) GetResourcePoolsNotIn(ctx context.Context, keys []any) ([]models.ResourcePool, error) {
+	var e bob.Expression
+	if len(keys) > 0 {
+		e = psql.Quote(models.ResourcePool{}.PrimaryKey()).NotIn(psql.Arg(keys...))
+	}
+	return svcutils.Search[models.ResourcePool](ctx, r.Db, e)
+}
+
 // GetResourcePoolResources retrieves all Resource tuples for a specific ResourcePool returns an empty array if not found
 func (r *ResourcesRepository) GetResourcePoolResources(ctx context.Context, id uuid.UUID) ([]models.Resource, error) {
 	e := psql.Quote("resource_pool_id").EQ(psql.Arg(id))

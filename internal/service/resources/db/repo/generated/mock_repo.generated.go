@@ -416,6 +416,21 @@ func (mr *MockResourcesRepositoryInterfaceMockRecorder) GetResourcePools(ctx any
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetResourcePools", reflect.TypeOf((*MockResourcesRepositoryInterface)(nil).GetResourcePools), ctx)
 }
 
+// GetResourcePoolsNotIn mocks base method.
+func (m *MockResourcesRepositoryInterface) GetResourcePoolsNotIn(ctx context.Context, ids []any) ([]models0.ResourcePool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetResourcePoolsNotIn", ctx, ids)
+	ret0, _ := ret[0].([]models0.ResourcePool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetResourcePoolsNotIn indicates an expected call of GetResourcePoolsNotIn.
+func (mr *MockResourcesRepositoryInterfaceMockRecorder) GetResourcePoolsNotIn(ctx, ids any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetResourcePoolsNotIn", reflect.TypeOf((*MockResourcesRepositoryInterface)(nil).GetResourcePoolsNotIn), ctx, ids)
+}
+
 // GetResourceType mocks base method.
 func (m *MockResourcesRepositoryInterface) GetResourceType(ctx context.Context, id uuid.UUID) (*models0.ResourceType, error) {
 	m.ctrl.T.Helper()
