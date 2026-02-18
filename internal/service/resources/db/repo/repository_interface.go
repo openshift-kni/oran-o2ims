@@ -49,16 +49,12 @@ type ResourcesRepositoryInterface interface {
 	GetLocation(ctx context.Context, globalLocationID string) (*models.Location, error)
 	GetOCloudSiteIDsForLocation(ctx context.Context, globalLocationID string) ([]uuid.UUID, error)
 	GetAllOCloudSiteIDsByLocation(ctx context.Context) (map[string][]uuid.UUID, error)
-	CreateOrUpdateLocation(ctx context.Context, location models.Location) (*models.Location, error)
-	FindStaleLocations(ctx context.Context, dataSourceID uuid.UUID, generationID int) ([]models.Location, error)
 
 	// OCloudSite methods
 	GetOCloudSites(ctx context.Context) ([]models.OCloudSite, error)
 	GetOCloudSite(ctx context.Context, id uuid.UUID) (*models.OCloudSite, error)
 	GetResourcePoolIDsForSite(ctx context.Context, oCloudSiteID uuid.UUID) ([]uuid.UUID, error)
 	GetAllResourcePoolIDsBySite(ctx context.Context) (map[uuid.UUID][]uuid.UUID, error)
-	CreateOrUpdateOCloudSite(ctx context.Context, site models.OCloudSite) (*models.OCloudSite, error)
-	FindStaleOCloudSites(ctx context.Context, dataSourceID uuid.UUID, generationID int) ([]models.OCloudSite, error)
 	GetOCloudSitesNotIn(ctx context.Context, ids []any) ([]models.OCloudSite, error)
 }
 
