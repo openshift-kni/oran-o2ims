@@ -37,24 +37,7 @@ type OCloudSiteSpec struct {
 	Extensions map[string]string `json:"extensions,omitempty"`
 }
 
-// OCloudSiteStatus defines the observed state of OCloudSite
-type OCloudSiteStatus struct {
-	// OCloudSiteID is the generated UUID for this site.
-	// This is computed deterministically from the siteId and cloudId.
-	// +optional
-	OCloudSiteID string `json:"oCloudSiteId,omitempty"`
-
-	// Conditions represent the latest available observations of the OCloudSite's state
-	// +patchMergeKey=type
-	// +patchStrategy=merge
-	// +listType=map
-	// +listMapKey=type
-	// +optional
-	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
-}
-
 // +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
 // +kubebuilder:resource:path=ocloudsites,shortName=ocs
 // +kubebuilder:printcolumn:name="SiteID",type="string",JSONPath=".spec.siteId"
 // +kubebuilder:printcolumn:name="LocationID",type="string",JSONPath=".spec.globalLocationId"
@@ -68,8 +51,7 @@ type OCloudSite struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   OCloudSiteSpec   `json:"spec,omitempty"`
-	Status OCloudSiteStatus `json:"status,omitempty"`
+	Spec OCloudSiteSpec `json:"spec,omitempty"`
 }
 
 // +kubebuilder:object:root=true

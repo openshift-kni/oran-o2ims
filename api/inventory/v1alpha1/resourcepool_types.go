@@ -43,29 +43,7 @@ type ResourcePoolSpec struct {
 	Extensions map[string]string `json:"extensions,omitempty"`
 }
 
-// ResourcePoolStatus defines the observed state of ResourcePool
-type ResourcePoolStatus struct {
-	// ResourcePoolID is the generated UUID for this resource pool.
-	// This is computed deterministically from the resourcePoolId and cloudId.
-	// +optional
-	ResourcePoolID string `json:"resourcePoolId,omitempty"`
-
-	// OCloudSiteID is the generated UUID for the referenced OCloudSite.
-	// This is computed deterministically from the oCloudSiteId and cloudId.
-	// +optional
-	OCloudSiteID string `json:"oCloudSiteId,omitempty"`
-
-	// Conditions represent the latest available observations of the ResourcePool's state
-	// +patchMergeKey=type
-	// +patchStrategy=merge
-	// +listType=map
-	// +listMapKey=type
-	// +optional
-	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
-}
-
 // +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
 // +kubebuilder:resource:path=resourcepools,shortName=rp
 // +kubebuilder:printcolumn:name="PoolID",type="string",JSONPath=".spec.resourcePoolId"
 // +kubebuilder:printcolumn:name="SiteID",type="string",JSONPath=".spec.oCloudSiteId"
@@ -79,8 +57,7 @@ type ResourcePool struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ResourcePoolSpec   `json:"spec,omitempty"`
-	Status ResourcePoolStatus `json:"status,omitempty"`
+	Spec ResourcePoolSpec `json:"spec,omitempty"`
 }
 
 // +kubebuilder:object:root=true
