@@ -277,19 +277,19 @@ func (c *Collector) purgeStaleResources(ctx context.Context, dataSource DataSour
 }
 
 func (c *Collector) purgeStaleResourceTypes(ctx context.Context, dataSource DataSource) (int, error) {
-	pools, err := c.repository.FindStaleResourcePools(ctx, dataSource.GetID(), dataSource.GetGenerationID())
+	resourceTypes, err := c.repository.FindStaleResourceTypes(ctx, dataSource.GetID(), dataSource.GetGenerationID())
 	if err != nil {
 		return 0, fmt.Errorf("failed to find stale resource types: %w", err)
 	}
 
 	count := 0
-	for _, pool := range pools {
-		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, pool, pool.ResourcePoolID,
+	for _, resourceType := range resourceTypes {
+		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, resourceType, resourceType.ResourceTypeID,
 			nil, func(object interface{}) any {
-				r, _ := object.(models.ResourcePool)
-				return models.ResourcePoolToModel(&r, commonapi.NewDefaultFieldOptions())
+				r, _ := object.(models.ResourceType)
+				return models.ResourceTypeToModel(&r, nil)
 			})
-		if err == nil {
+		if err != nil {
 			return count, fmt.Errorf("failed to delete stale resource type: %w", err)
 		}
 		if dataChangeEvent != nil {
