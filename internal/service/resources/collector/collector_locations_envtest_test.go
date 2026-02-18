@@ -1002,6 +1002,318 @@ var _ = Describe("OCloudSiteDataSource Watch", Label("envtest"), func() {
 	})
 })
 
+var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
+	var (
+		ds           *ResourcePoolDataSource
+		eventChannel chan *async.AsyncChangeEvent
+		watchCtx     context.Context
+		watchCancel  context.CancelFunc
+		testCloudID  uuid.UUID
+		testDSID     uuid.UUID
+	)
+
+	BeforeEach(func() {
+		testCloudID = uuid.New()
+		testDSID = uuid.New()
+		eventChannel = make(chan *async.AsyncChangeEvent, 10)
+
+		var err error
+		ds, err = NewResourcePoolDataSource(testCloudID, k8sWatchClient)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Initialize the data source
+		ds.Init(testDSID, 0, eventChannel)
+
+		// Create a separate context for the watch that we can cancel
+		watchCtx, watchCancel = context.WithCancel(ctx)
+	})
+
+	AfterEach(func() {
+		watchCancel()
+		close(eventChannel)
+	})
+
+	It("receives Created event when ResourcePool CR is created", func() {
+		// Start watching
+		err := ds.Watch(watchCtx)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Give the reflector time to start
+		time.Sleep(100 * time.Millisecond)
+
+		// Create a ResourcePool CR
+		rp := &inventoryv1alpha1.ResourcePool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "watch-test-rp-create",
+				Namespace: testNamespace,
+			},
+			Spec: inventoryv1alpha1.ResourcePoolSpec{
+				ResourcePoolId: "pool-watch-create",
+				OCloudSiteId:   "site-watch-create",
+				Name:           "Watch Test Pool",
+				Description:    "Testing watch create",
+			},
+		}
+		Expect(k8sClient.Create(ctx, rp)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, rp) })
+
+		// Wait for the event
+		var event *async.AsyncChangeEvent
+		Eventually(func() bool {
+			select {
+			case event = <-eventChannel:
+				// Skip SyncComplete events
+				if event.EventType == async.SyncComplete {
+					return false
+				}
+				return true
+			default:
+				return false
+			}
+		}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// Verify the event
+		Expect(event).ToNot(BeNil())
+		Expect(event.EventType).To(Equal(async.Updated))
+		Expect(event.DataSourceID).To(Equal(testDSID))
+
+		// Verify the object is a ResourcePool model
+		rpModel, ok := event.Object.(models.ResourcePool)
+		Expect(ok).To(BeTrue())
+		Expect(rpModel.Name).To(Equal("Watch Test Pool"))
+		Expect(rpModel.Description).To(Equal("Testing watch create"))
+		Expect(rpModel.DataSourceID).To(Equal(testDSID))
+		// ResourcePoolID should be a deterministically generated UUID
+		Expect(rpModel.ResourcePoolID).ToNot(Equal(uuid.Nil))
+		// OCloudSiteID should be set
+		Expect(rpModel.OCloudSiteID).ToNot(BeNil())
+		Expect(*rpModel.OCloudSiteID).ToNot(Equal(uuid.Nil))
+	})
+
+	It("receives Updated event when ResourcePool CR is modified", func() {
+		// Create a ResourcePool CR first
+		rp := &inventoryv1alpha1.ResourcePool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "watch-test-rp-update",
+				Namespace: testNamespace,
+			},
+			Spec: inventoryv1alpha1.ResourcePoolSpec{
+				ResourcePoolId: "pool-watch-update",
+				OCloudSiteId:   "site-watch-update",
+				Name:           "Original Pool Name",
+				Description:    "Original pool description",
+			},
+		}
+		Expect(k8sClient.Create(ctx, rp)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, rp) })
+
+		// Start watching
+		err := ds.Watch(watchCtx)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Give the reflector time to start and process initial list
+		time.Sleep(200 * time.Millisecond)
+
+		// Drain initial events (create + possible sync)
+		drainEvents(eventChannel)
+
+		// Update the ResourcePool CR
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rp), rp)).To(Succeed())
+		rp.Spec.Name = "Updated Pool Name"
+		rp.Spec.Description = "Updated pool description"
+		Expect(k8sClient.Update(ctx, rp)).To(Succeed())
+
+		// Wait for the update event
+		var event *async.AsyncChangeEvent
+		Eventually(func() bool {
+			select {
+			case event = <-eventChannel:
+				if event.EventType == async.SyncComplete {
+					return false
+				}
+				return true
+			default:
+				return false
+			}
+		}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// Verify the event
+		Expect(event).ToNot(BeNil())
+		Expect(event.EventType).To(Equal(async.Updated))
+
+		rpModel, ok := event.Object.(models.ResourcePool)
+		Expect(ok).To(BeTrue())
+		Expect(rpModel.Name).To(Equal("Updated Pool Name"))
+		Expect(rpModel.Description).To(Equal("Updated pool description"))
+	})
+
+	It("receives Deleted event when ResourcePool CR is deleted", func() {
+		// Create a ResourcePool CR first
+		rp := &inventoryv1alpha1.ResourcePool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "watch-test-rp-delete",
+				Namespace: testNamespace,
+			},
+			Spec: inventoryv1alpha1.ResourcePoolSpec{
+				ResourcePoolId: "pool-watch-delete",
+				OCloudSiteId:   "site-watch-delete",
+				Name:           "To Be Deleted Pool",
+				Description:    "Will be deleted",
+			},
+		}
+		Expect(k8sClient.Create(ctx, rp)).To(Succeed())
+
+		// Start watching
+		err := ds.Watch(watchCtx)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Give the reflector time to start and process initial list
+		time.Sleep(200 * time.Millisecond)
+
+		// Drain initial events
+		drainEvents(eventChannel)
+
+		// Delete the ResourcePool CR
+		Expect(k8sClient.Delete(ctx, rp)).To(Succeed())
+
+		// Wait for the delete event
+		var event *async.AsyncChangeEvent
+		Eventually(func() bool {
+			select {
+			case event = <-eventChannel:
+				if event.EventType == async.SyncComplete {
+					return false
+				}
+				return true
+			default:
+				return false
+			}
+		}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// Verify the event
+		Expect(event).ToNot(BeNil())
+		Expect(event.EventType).To(Equal(async.Deleted))
+
+		rpModel, ok := event.Object.(models.ResourcePool)
+		Expect(ok).To(BeTrue())
+		Expect(rpModel.Name).To(Equal("To Be Deleted Pool"))
+	})
+
+	It("generates deterministic UUID for ResourcePoolID", func() {
+		// Start watching
+		err := ds.Watch(watchCtx)
+		Expect(err).ToNot(HaveOccurred())
+
+		time.Sleep(100 * time.Millisecond)
+
+		// Create a ResourcePool CR
+		rp := &inventoryv1alpha1.ResourcePool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "watch-test-rp-uuid",
+				Namespace: testNamespace,
+			},
+			Spec: inventoryv1alpha1.ResourcePoolSpec{
+				ResourcePoolId: "pool-uuid-test",
+				OCloudSiteId:   "site-uuid-test",
+				Name:           "UUID Test Pool",
+				Description:    "Testing UUID generation",
+			},
+		}
+		Expect(k8sClient.Create(ctx, rp)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, rp) })
+
+		// Wait for the event
+		var event *async.AsyncChangeEvent
+		Eventually(func() bool {
+			select {
+			case event = <-eventChannel:
+				if event.EventType == async.SyncComplete {
+					return false
+				}
+				return true
+			default:
+				return false
+			}
+		}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// Get the ResourcePoolID from the event
+		rpModel, ok := event.Object.(models.ResourcePool)
+		Expect(ok).To(BeTrue())
+		firstResourcePoolUUID := rpModel.ResourcePoolID
+		firstOCloudSiteUUID := rpModel.OCloudSiteID
+
+		// The UUID should be deterministic - creating a new datasource with the same cloudID
+		// and processing the same resourcePoolId should produce the same UUID
+		ds2, err := NewResourcePoolDataSource(testCloudID, k8sWatchClient)
+		Expect(err).ToNot(HaveOccurred())
+		ds2.Init(testDSID, 0, nil) // nil channel ok for this test
+
+		// Fetch the pool and convert it manually
+		fetchedPool := &inventoryv1alpha1.ResourcePool{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rp), fetchedPool)).To(Succeed())
+		convertedModel := ds2.convertResourcePoolToModel(fetchedPool)
+
+		// The UUIDs should match
+		Expect(convertedModel.ResourcePoolID).To(Equal(firstResourcePoolUUID))
+		Expect(convertedModel.OCloudSiteID).ToNot(BeNil())
+		Expect(*convertedModel.OCloudSiteID).To(Equal(*firstOCloudSiteUUID))
+	})
+
+	It("includes optional fields when provided", func() {
+		// Start watching
+		err := ds.Watch(watchCtx)
+		Expect(err).ToNot(HaveOccurred())
+
+		time.Sleep(100 * time.Millisecond)
+
+		// Create a ResourcePool CR with all optional fields
+		rp := &inventoryv1alpha1.ResourcePool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "watch-test-rp-full",
+				Namespace: testNamespace,
+			},
+			Spec: inventoryv1alpha1.ResourcePoolSpec{
+				ResourcePoolId: "pool-full-test",
+				OCloudSiteId:   "site-full-test",
+				Name:           "Full Pool",
+				Description:    "Pool with all fields",
+				Location:       ptrTo("Building B, Rack 42"),
+				Extensions: map[string]string{
+					"vendor": "acme",
+					"tier":   "premium",
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, rp)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, rp) })
+
+		// Wait for the event
+		var event *async.AsyncChangeEvent
+		Eventually(func() bool {
+			select {
+			case event = <-eventChannel:
+				if event.EventType == async.SyncComplete {
+					return false
+				}
+				return true
+			default:
+				return false
+			}
+		}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// Verify all fields including optional ones
+		rpModel, ok := event.Object.(models.ResourcePool)
+		Expect(ok).To(BeTrue())
+		Expect(rpModel.Name).To(Equal("Full Pool"))
+		Expect(rpModel.Description).To(Equal("Pool with all fields"))
+		Expect(rpModel.Location).ToNot(BeNil())
+		Expect(*rpModel.Location).To(Equal("Building B, Rack 42"))
+		Expect(rpModel.Extensions).To(HaveLen(2))
+		Expect(rpModel.Extensions["vendor"]).To(Equal("acme"))
+		Expect(rpModel.Extensions["tier"]).To(Equal("premium"))
+	})
+})
+
 // drainEvents removes all pending events from the channel
 func drainEvents(ch chan *async.AsyncChangeEvent) {
 	for {
