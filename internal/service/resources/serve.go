@@ -144,7 +144,7 @@ func Serve(config *api.ResourceServerConfig) error {
 		return fmt.Errorf("failed to create hardware manager data source: %w", err)
 	}
 
-	// Create hub client for reading Location/OCloudSite CRs
+	// Create hub client for reading CRs
 	hubClient, err := k8sclient.NewClientForHub()
 	if err != nil {
 		return fmt.Errorf("failed to create hub client: %w", err)
@@ -161,9 +161,15 @@ func Serve(config *api.ResourceServerConfig) error {
 		return fmt.Errorf("failed to create ocloud site data source: %w", err)
 	}
 
+	// Create watch-based data source for ResourcePool CR
+	resourcePoolDS, err := collector.NewResourcePoolDataSource(cloudID, hubClient)
+	if err != nil {
+		return fmt.Errorf("failed to create resource pool data source: %w", err)
+	}
+
 	// Create the collector with all data sources
 	resourceCollector := collector.NewCollector(pool, repository, resourceNotifier, hwMgrDataSourceLoader,
-		[]collector.DataSource{k8s, locationDS, oCloudSiteDS})
+		[]collector.DataSource{k8s, locationDS, oCloudSiteDS, resourcePoolDS})
 
 	// Init server
 	// Create the handler
