@@ -405,33 +405,6 @@ func getResourceInfo(bmh *metal3v1alpha1.BareMetalHost, node *pluginsv1alpha1.Al
 	return result
 }
 
-func GetResourcePools(ctx context.Context, c client.Client) (inventory.GetResourcePoolsResponseObject, error) {
-
-	var resp []inventory.ResourcePoolInfo
-
-	var bmhList metal3v1alpha1.BareMetalHostList
-	var opts []client.ListOption
-
-	if err := c.List(ctx, &bmhList, opts...); err != nil {
-		return nil, fmt.Errorf("failed to list BareMetalHosts: %w", err)
-	}
-
-	for _, bmh := range bmhList.Items {
-		if includeInInventory(&bmh) {
-			siteID := bmh.Labels[LabelSiteID]
-			poolID := bmh.Labels[LabelResourcePoolID]
-			resp = append(resp, inventory.ResourcePoolInfo{
-				ResourcePoolId: poolID,
-				Description:    poolID,
-				Name:           poolID,
-				SiteId:         &siteID,
-			})
-		}
-	}
-
-	return inventory.GetResourcePools200JSONResponse(resp), nil
-}
-
 func GetResources(ctx context.Context,
 	logger *slog.Logger,
 	c client.Client) (inventory.GetResourcesResponseObject, error) {

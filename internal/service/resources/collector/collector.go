@@ -48,8 +48,7 @@ type DataSource interface {
 // ResourceDataSource defines an interface of a data source capable of getting handling Inventory resources.
 type ResourceDataSource interface {
 	DataSource
-	GetResourcePools(ctx context.Context) ([]models.ResourcePool, error)
-	GetResources(ctx context.Context, pools []models.ResourcePool) ([]models.Resource, error)
+	GetResources(ctx context.Context) ([]models.Resource, error)
 	MakeResourceType(resource *models.Resource) (*models.ResourceType, error)
 }
 
@@ -277,35 +276,6 @@ func (c *Collector) purgeStaleResources(ctx context.Context, dataSource DataSour
 	return count, nil
 }
 
-func (c *Collector) purgeStaleResourcePools(ctx context.Context, dataSource DataSource) (int, error) {
-	pools, err := c.repository.FindStaleResourcePools(ctx, dataSource.GetID(), dataSource.GetGenerationID())
-	if err != nil {
-		return 0, fmt.Errorf("failed to find stale resources: %w", err)
-	}
-
-	count := 0
-	for _, pool := range pools {
-		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, pool, pool.ResourcePoolID,
-			nil, func(object interface{}) any {
-				r, _ := object.(models.ResourcePool)
-				return models.ResourcePoolToModel(&r, commonapi.NewDefaultFieldOptions())
-			})
-		if err == nil {
-			return count, fmt.Errorf("failed to delete stale resource pool: %w", err)
-		}
-		if dataChangeEvent != nil {
-			count++
-			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
-		}
-	}
-
-	if count > 0 {
-		slog.Info("Purged stale resource pool", "count", count)
-	}
-
-	return count, nil
-}
-
 func (c *Collector) purgeStaleResourceTypes(ctx context.Context, dataSource DataSource) (int, error) {
 	pools, err := c.repository.FindStaleResourcePools(ctx, dataSource.GetID(), dataSource.GetGenerationID())
 	if err != nil {
@@ -349,12 +319,6 @@ func (c *Collector) purgeStaleData(ctx context.Context, dataSource DataSource) e
 	}
 	total += count
 
-	count, err = c.purgeStaleResourcePools(ctx, dataSource)
-	if err != nil {
-		return fmt.Errorf("failed to purge stale resource pools: %w", err)
-	}
-	total += count
-
 	count, err = c.purgeStaleResourceTypes(ctx, dataSource)
 	if err != nil {
 		return fmt.Errorf("failed to purge stale resource types: %w", err)
@@ -367,17 +331,12 @@ func (c *Collector) purgeStaleData(ctx context.Context, dataSource DataSource) e
 }
 
 // executeOneDataSource runs a single iteration of the main loop for a specific data source instance.
+// Note: ResourcePools are now collected via CRD-based ResourcePoolDataSource (watch-based).
 func (c *Collector) executeOneDataSource(ctx context.Context, dataSource ResourceDataSource) (err error) {
 	// TODO: Add code to retrieve alarm dictionaries
 
-	// Get the list of resource pools for this data source
-	pools, err := c.collectResourcePools(ctx, dataSource)
-	if err != nil {
-		return fmt.Errorf("failed to collect resource pools: %w", err)
-	}
-
 	// Get the list of resources for this data source
-	_, err = c.collectResources(ctx, dataSource, pools)
+	_, err = c.collectResources(ctx, dataSource)
 	if err != nil {
 		return fmt.Errorf("failed to collect resources: %w", err)
 	}
@@ -403,11 +362,10 @@ func (c *Collector) executeOneDataSource(ctx context.Context, dataSource Resourc
 
 // collectResources collects Resource objects from the data source, persists them to the database,
 // and signals any change events to the notification processor.
-func (c *Collector) collectResources(ctx context.Context, dataSource ResourceDataSource,
-	pools []models.ResourcePool) ([]models.Resource, error) {
+func (c *Collector) collectResources(ctx context.Context, dataSource ResourceDataSource) ([]models.Resource, error) {
 	slog.Debug("collecting resource and types", "source", dataSource.Name())
 
-	resources, err := dataSource.GetResources(ctx, pools)
+	resources, err := dataSource.GetResources(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resources: %w", err)
 	}
@@ -494,33 +452,6 @@ func (c *Collector) buildAlarmDictionaryMap(ctx context.Context) (map[string]*co
 
 // collectResourcePools collects ResourcePool objects from the data source, persists them to the database,
 // and signals any change events to the notification processor.
-func (c *Collector) collectResourcePools(ctx context.Context, dataSource ResourceDataSource) ([]models.ResourcePool, error) {
-	slog.Debug("collecting resource pools", "source", dataSource.Name())
-
-	pools, err := dataSource.GetResourcePools(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get resource pools: %w", err)
-	}
-
-	// Loop over the set of resource pools and insert (or update) as needed
-	for _, pool := range pools {
-		dataChangeEvent, err := svcutils.PersistObjectWithChangeEvent(
-			ctx, c.pool, pool, pool.ResourcePoolID, nil, func(object interface{}) any {
-				record, _ := object.(models.ResourcePool)
-				return models.ResourcePoolToModel(&record, commonapi.NewDefaultFieldOptions())
-			})
-		if err != nil {
-			return nil, fmt.Errorf("failed to persist resource pool: %w", err)
-		}
-
-		if dataChangeEvent != nil {
-			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
-		}
-	}
-
-	return pools, nil
-}
-
 // handleDeploymentManagerSyncCompletion handles the end of sync for DeploymentManager objects.  It deletes any
 // DeploymentManager objects not included in the set of keys received during the sync operation.
 func (c *Collector) handleDeploymentManagerSyncCompletion(ctx context.Context, ids []any) error {

@@ -139,9 +139,8 @@ func (d *HwPluginDataSource) MakeResourceType(resource *models.Resource) (*model
 	return &result, nil
 }
 
-// GetResources returns the list of resources available for this data source.  The resources to be
-// retrieved can be scoped to a set of pools (currently not used by this data source)
-func (d *HwPluginDataSource) GetResources(ctx context.Context, _ []models.ResourcePool) ([]models.Resource, error) {
+// GetResources returns the list of resources available for this data source.
+func (d *HwPluginDataSource) GetResources(ctx context.Context) ([]models.Resource, error) {
 	result, err := d.client.GetResourcesWithResponse(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resources: %w", err)
@@ -169,53 +168,6 @@ func (d *HwPluginDataSource) GetResources(ctx context.Context, _ []models.Resour
 	return resources, nil
 }
 
-// GetResourcePools returns the list of resource pools available for this data source.
-func (d *HwPluginDataSource) GetResourcePools(ctx context.Context) ([]models.ResourcePool, error) {
-	result, err := d.client.GetResourcePoolsWithResponse(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get resource pools: %w", err)
-	}
-
-	if result.StatusCode() != http.StatusOK {
-		return nil, fmt.Errorf("failed to get resource pools, status: %d", result.StatusCode())
-	}
-
-	if result.JSON200 == nil {
-		return nil, fmt.Errorf("failed to get resource pools, empty response")
-	}
-
-	pools := make([]models.ResourcePool, 0)
-	for _, pool := range *result.JSON200 {
-		pools = append(pools, *d.convertResourcePool(&pool))
-	}
-
-	return pools, nil
-}
-
-func (d *HwPluginDataSource) convertResourcePool(pool *inventoryclient.ResourcePoolInfo) *models.ResourcePool {
-	// Generate OCloudSiteID from siteId using deterministic UUID
-	// This matches the UUID generated when collecting OCloudSite CRs
-	var oCloudSiteID *uuid.UUID
-	if pool.SiteId != nil && *pool.SiteId != "" {
-		siteUUID := ctlrutils.MakeUUIDFromNames(OCloudSiteUUIDNamespace, d.cloudID, *pool.SiteId)
-		oCloudSiteID = &siteUUID
-	}
-
-	return &models.ResourcePool{
-		ResourcePoolID:   ctlrutils.MakeUUIDFromNames(ResourcePoolUUIDNamespace, d.cloudID, d.hwplugin.Name, pool.ResourcePoolId),
-		GlobalLocationID: d.globalCloudID, // TODO: spec wording is unclear about what this value should be.
-		Name:             pool.Name,
-		Description:      pool.Description,
-		OCloudID:         d.cloudID,
-		Location:         pool.SiteId,
-		OCloudSiteID:     oCloudSiteID,
-		Extensions:       nil,
-		DataSourceID:     d.dataSourceID,
-		GenerationID:     d.generationID,
-		ExternalID:       fmt.Sprintf("%s/%s", d.hwplugin.Name, pool.Name),
-	}
-}
-
 func (d *HwPluginDataSource) convertResource(resource *inventoryclient.ResourceInfo) (*models.Resource, error) {
 	// Parse the resource ID directly (now it's the BMH UID from the hardware plugin)
 	resourceID, err := uuid.Parse(resource.ResourceId)
@@ -231,7 +183,7 @@ func (d *HwPluginDataSource) convertResource(resource *inventoryclient.ResourceI
 		Description:    resource.Description,
 		ResourceTypeID: resourceTypeID,
 		GlobalAssetID:  resource.GlobalAssetId,
-		ResourcePoolID: ctlrutils.MakeUUIDFromNames(ResourcePoolUUIDNamespace, d.cloudID, d.hwplugin.Name, resource.ResourcePoolId),
+		ResourcePoolID: ctlrutils.MakeUUIDFromNames(ResourcePoolUUIDNamespace, d.cloudID, resource.ResourcePoolId),
 		Extensions: map[string]interface{}{
 			modelExtension:            resource.Model,
 			vendorExtension:           resource.Vendor,

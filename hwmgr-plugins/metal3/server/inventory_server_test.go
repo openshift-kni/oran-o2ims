@@ -13,7 +13,6 @@ Generated-By: Cursor/claude-4-sonnet
 //   - Constructor function validation and parameter handling
 //   - Interface compliance verification (StrictServerInterface)
 //   - Field initialization and embedded struct configuration
-//   - GetResourcePools method implementation and delegation
 //   - GetResources method implementation and delegation
 //   - Error handling scenarios
 //   - Integration with metal3ctrl functions
@@ -41,14 +40,7 @@ Generated-By: Cursor/claude-4-sonnet
 //   - should be assignable to StrictServerInterface without errors
 //   - should satisfy the interface at compile time
 //
-// 3. GetResourcePools Method Tests:
-//   - Successful Operation:
-//   - should call metal3ctrl.GetResourcePools with correct parameters
-//   - should use the correct context when calling GetResourcePools
-//   - Method Signature Validation:
-//   - should have the correct method signature matching interface requirements
-//
-// 4. GetResources Method Tests:
+// 3. GetResources Method Tests:
 //   - Successful Operation:
 //   - should call metal3ctrl.GetResources with correct parameters
 //   - should use the correct context and logger when calling GetResources
@@ -67,7 +59,6 @@ Generated-By: Cursor/claude-4-sonnet
 //   - should properly handle server cleanup
 //
 // 8. Method Delegation Tests:
-//   - should properly delegate GetResourcePools to metal3ctrl package
 //   - should properly delegate GetResources to metal3ctrl package
 package server
 
@@ -211,56 +202,6 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 				Expect(s).ToNot(BeNil())
 			}
 			checkInterfaceCompliance(server)
-		})
-	})
-
-	Describe("GetResourcePools", func() {
-		BeforeEach(func() {
-			var err error
-			server, err = NewMetal3PluginInventoryServer(mockClient, logger)
-			Expect(err).ToNot(HaveOccurred())
-
-			// Set up mock expectations for BareMetalHost List call
-			mockClient.EXPECT().
-				List(gomock.Any(), gomock.Any(), gomock.Any()).
-				Return(nil).
-				AnyTimes()
-		})
-
-		Context("successful operation", func() {
-			It("should call metal3ctrl.GetResourcePools with correct parameters", func() {
-				// Note: Since metal3ctrl.GetResourcePools performs actual business logic,
-				// we verify that the method exists and can be called without panic
-				request := inventory.GetResourcePoolsRequestObject{}
-
-				// The function should not panic when called
-				Expect(func() {
-					_, _ = server.GetResourcePools(ctx, request)
-				}).ToNot(Panic())
-			})
-
-			It("should use the correct context when calling GetResourcePools", func() {
-				testContext := context.WithValue(ctx, testKey, "value")
-				request := inventory.GetResourcePoolsRequestObject{}
-
-				// The function should handle the context properly without panic
-				Expect(func() {
-					_, _ = server.GetResourcePools(testContext, request)
-				}).ToNot(Panic())
-			})
-		})
-
-		Context("method signature validation", func() {
-			It("should have the correct method signature", func() {
-				// Verify the method signature matches the interface requirement
-				request := inventory.GetResourcePoolsRequestObject{}
-				result, err := server.GetResourcePools(ctx, request)
-
-				// The method should return something and not panic
-				// Type checking is ensured by compilation since the method implements the interface
-				_ = result
-				_ = err
-			})
 		})
 	})
 
@@ -426,17 +367,6 @@ var _ = Describe("Metal3PluginInventoryServer", func() {
 				List(gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(nil).
 				AnyTimes()
-		})
-
-		It("should properly delegate GetResourcePools to metal3ctrl package", func() {
-			// Verify that the method delegates to the controller package
-			// by checking that it uses the embedded client
-			request := inventory.GetResourcePoolsRequestObject{}
-
-			// Call the method and verify it doesn't panic
-			Expect(func() {
-				_, _ = server.GetResourcePools(ctx, request)
-			}).ToNot(Panic())
 		})
 
 		It("should properly delegate GetResources to metal3ctrl package", func() {
