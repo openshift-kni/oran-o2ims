@@ -1,0 +1,19 @@
+---
+# ResourcePool CR - groups related resources (servers) within an O-Cloud Site
+# Referenced by: BareMetalHost label resourcePoolId
+apiVersion: ocloud.openshift.io/v1alpha1
+kind: ResourcePool
+metadata:
+  name: pool-dell-r740
+  namespace: oran-o2ims
+spec:
+  # This value is used for BMH label matching and UUID generation
+  # Must match: BareMetalHost label resources.clcm.openshift.io/resourcePoolId
+  resourcePoolId: "dell-r740-pool"
+  # Must match an existing OCloudSite's siteId
+  oCloudSiteId: "local-west"
+  name: "Dell R740 Pool"
+  description: "Resource pool for Dell R740 servers"
+  extensions:
+    hardware-profile: "dell-r740"
+    purpose: "ran-du"

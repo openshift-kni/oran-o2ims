@@ -1,4 +1,7 @@
 resources:
 - common.yaml
+- location.yaml
+- ocloudsite.yaml
+- resourcepool.yaml
 - dell-r740-sno1.yaml
 - dell-r740-sno2.yaml
