@@ -707,7 +707,6 @@ var _ = Describe("ResourcePool Validation", Label("envtest"), func() {
 		Expect(fetched.Spec.OCloudSiteId).To(Equal("site-valid-001"))
 		Expect(fetched.Spec.Name).To(Equal("Valid Resource Pool"))
 		Expect(fetched.Spec.Description).To(Equal("A valid resource pool"))
-		Expect(fetched.Spec.Location).To(BeNil())
 		Expect(fetched.Spec.Extensions).To(BeEmpty())
 	})
 
@@ -722,7 +721,6 @@ var _ = Describe("ResourcePool Validation", Label("envtest"), func() {
 				OCloudSiteId:   "site-full-001",
 				Name:           "Full Resource Pool",
 				Description:    "A resource pool with all fields",
-				Location:       ptrTo("Building A, Floor 2"),
 				Extensions: map[string]string{
 					"vendor": "acme",
 					"tier":   "premium",
@@ -740,8 +738,6 @@ var _ = Describe("ResourcePool Validation", Label("envtest"), func() {
 		Expect(fetched.Spec.OCloudSiteId).To(Equal("site-full-001"))
 		Expect(fetched.Spec.Name).To(Equal("Full Resource Pool"))
 		Expect(fetched.Spec.Description).To(Equal("A resource pool with all fields"))
-		Expect(fetched.Spec.Location).ToNot(BeNil())
-		Expect(*fetched.Spec.Location).To(Equal("Building A, Floor 2"))
 		Expect(fetched.Spec.Extensions).To(HaveLen(3))
 		Expect(fetched.Spec.Extensions["vendor"]).To(Equal("acme"))
 		Expect(fetched.Spec.Extensions["tier"]).To(Equal("premium"))
@@ -1086,8 +1082,7 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 		// ResourcePoolID should be a deterministically generated UUID
 		Expect(rpModel.ResourcePoolID).ToNot(Equal(uuid.Nil))
 		// OCloudSiteID should be set
-		Expect(rpModel.OCloudSiteID).ToNot(BeNil())
-		Expect(*rpModel.OCloudSiteID).ToNot(Equal(uuid.Nil))
+		Expect(rpModel.OCloudSiteID).ToNot(Equal(uuid.Nil))
 	})
 
 	It("receives Updated event when ResourcePool CR is modified", func() {
@@ -1255,8 +1250,7 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 
 		// The UUIDs should match
 		Expect(convertedModel.ResourcePoolID).To(Equal(firstResourcePoolUUID))
-		Expect(convertedModel.OCloudSiteID).ToNot(BeNil())
-		Expect(*convertedModel.OCloudSiteID).To(Equal(*firstOCloudSiteUUID))
+		Expect(convertedModel.OCloudSiteID).To(Equal(firstOCloudSiteUUID))
 	})
 
 	It("includes optional fields when provided", func() {
@@ -1277,7 +1271,6 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 				OCloudSiteId:   "site-full-test",
 				Name:           "Full Pool",
 				Description:    "Pool with all fields",
-				Location:       ptrTo("Building B, Rack 42"),
 				Extensions: map[string]string{
 					"vendor": "acme",
 					"tier":   "premium",
@@ -1306,8 +1299,6 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 		Expect(ok).To(BeTrue())
 		Expect(rpModel.Name).To(Equal("Full Pool"))
 		Expect(rpModel.Description).To(Equal("Pool with all fields"))
-		Expect(rpModel.Location).ToNot(BeNil())
-		Expect(*rpModel.Location).To(Equal("Building B, Rack 42"))
 		Expect(rpModel.Extensions).To(HaveLen(2))
 		Expect(rpModel.Extensions["vendor"]).To(Equal("acme"))
 		Expect(rpModel.Extensions["tier"]).To(Equal("premium"))

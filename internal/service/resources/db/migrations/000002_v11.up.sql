@@ -1,7 +1,14 @@
 -- =============================================================================
--- V11 Locations and Sites Feature
+-- V11 Schema Migration
 -- O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00
--- Creates location and o_cloud_site tables, adds o_cloud_site_id to resource_pool
+--
+-- This migration:
+-- 1. Creates location and o_cloud_site tables (new v11 entities)
+-- 2. Adds o_cloud_site_id to resource_pool
+-- 3. Removes deprecated fields from resource_pool:
+--    - global_location_id
+--    - o_cloud_id
+--    - location
 -- =============================================================================
 
 -- Table: location
@@ -40,13 +47,19 @@ CREATE TABLE IF NOT EXISTS o_cloud_site
     FOREIGN KEY (global_location_id) REFERENCES location (global_location_id)
 );
 
--- Alter resource_pool to reference o_cloud_site
--- Column is NULLABLE for backward compatibility with existing data
-ALTER TABLE resource_pool ADD COLUMN IF NOT EXISTS o_cloud_site_id UUID NULL;
-ALTER TABLE resource_pool ADD CONSTRAINT fk_resource_pool_site 
+-- Add o_cloud_site_id column
+-- NOTE: Adding as NOT NULL requires existing rows to have a value.
+-- For fresh installs this is fine. For upgrades, data migration may be needed.
+ALTER TABLE resource_pool ADD COLUMN IF NOT EXISTS o_cloud_site_id UUID NOT NULL;
+ALTER TABLE resource_pool ADD CONSTRAINT fk_resource_pool_site
     FOREIGN KEY (o_cloud_site_id) REFERENCES o_cloud_site (o_cloud_site_id);
 
--- Indexes for foreign key columns
+-- Remove deprecated columns from resource_pool
+-- These fields are replaced by the new LocationInfo/OCloudSite model
+ALTER TABLE resource_pool DROP COLUMN IF EXISTS global_location_id;
+ALTER TABLE resource_pool DROP COLUMN IF EXISTS o_cloud_id;
+ALTER TABLE resource_pool DROP COLUMN IF EXISTS location;
+
 
 -- Index on o_cloud_site.global_location_id for location -> sites lookups
 CREATE INDEX IF NOT EXISTS idx_o_cloud_site_global_location_id

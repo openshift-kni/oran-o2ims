@@ -822,7 +822,7 @@ var _ = Describe("ResourceServer", func() {
 		})
 
 		When("resource type is found with alarm dictionary", func() {
-			It("returns 200 response with resource type and dictionary", func() {
+			It("returns 200 response with resource type and dictionary ID", func() {
 				dictID := uuid.New()
 				mockRepo.EXPECT().
 					GetResourceType(ctx, testUUID).
@@ -830,9 +830,6 @@ var _ = Describe("ResourceServer", func() {
 				mockRepo.EXPECT().
 					GetResourceTypeAlarmDictionary(ctx, testUUID).
 					Return([]models.AlarmDictionary{{AlarmDictionaryID: dictID, ResourceTypeID: testUUID}}, nil)
-				mockRepo.EXPECT().
-					GetAlarmDefinitionsByAlarmDictionaryID(ctx, dictID).
-					Return([]models.AlarmDefinition{}, nil)
 
 				resp, err := server.GetResourceType(ctx, apiGenerated.GetResourceTypeRequestObject{
 					ResourceTypeId: testUUID,
@@ -841,6 +838,8 @@ var _ = Describe("ResourceServer", func() {
 				// verify
 				Expect(err).NotTo(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetResourceType200JSONResponse{}))
+				resourceType := resp.(apiGenerated.GetResourceType200JSONResponse)
+				Expect(resourceType.AlarmDictionaryId).To(Equal(&dictID))
 			})
 		})
 
@@ -905,7 +904,7 @@ var _ = Describe("ResourceServer", func() {
 		})
 
 		When("resource types are found with alarm dictionaries", func() {
-			It("returns 200 response with list including dictionaries", func() {
+			It("returns 200 response with list including dictionary IDs", func() {
 				typeID := uuid.New()
 				dictID := uuid.New()
 				mockRepo.EXPECT().
@@ -918,9 +917,6 @@ var _ = Describe("ResourceServer", func() {
 					Return([]models.AlarmDictionary{
 						{AlarmDictionaryID: dictID, ResourceTypeID: typeID},
 					}, nil)
-				mockRepo.EXPECT().
-					GetAlarmDefinitionsByAlarmDictionaryID(ctx, dictID).
-					Return([]models.AlarmDefinition{}, nil)
 
 				resp, err := server.GetResourceTypes(ctx, apiGenerated.GetResourceTypesRequestObject{})
 
@@ -931,6 +927,7 @@ var _ = Describe("ResourceServer", func() {
 				Expect(resourceTypes).To(HaveLen(1))
 				Expect(resourceTypes[0].Name).To(Equal("type-1"))
 				Expect(resourceTypes[0].ResourceTypeId).To(Equal(typeID))
+				Expect(resourceTypes[0].AlarmDictionaryId).To(Equal(&dictID))
 			})
 		})
 

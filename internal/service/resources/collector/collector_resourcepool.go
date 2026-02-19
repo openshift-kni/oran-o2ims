@@ -201,17 +201,11 @@ func (d *ResourcePoolDataSource) convertResourcePoolToModel(pool *inventoryv1alp
 		}
 	}
 
-	var location *string
-	if pool.Spec.Location != nil {
-		location = pool.Spec.Location
-	}
-
 	return models.ResourcePool{
 		ResourcePoolID: resourcePoolID,
 		Name:           pool.Spec.Name,
 		Description:    pool.Spec.Description,
-		OCloudSiteID:   &oCloudSiteID,
-		Location:       location,
+		OCloudSiteID:   oCloudSiteID,
 		Extensions:     extensions,
 		DataSourceID:   d.dataSourceID,
 		GenerationID:   d.generationID,

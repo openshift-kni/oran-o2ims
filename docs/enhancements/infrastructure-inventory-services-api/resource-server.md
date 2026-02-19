@@ -98,6 +98,11 @@ The database schema will be managed as a set of data migration scripts. The [ini
 define the initial database schema and subsequent scripts -- not defined here -- will update the schema for minor and
 major upgrades.
 
+> **Note**: The schema in `resource-server.sql` represents the initial design from October 2024. As of February 2026
+> (O2IMS v11 compliance), the production schema has evolved to include new tables (`location`, `o_cloud_site`) and
+> removed deprecated columns from `resource_pool` (`global_location_id`, `o_cloud_id`, `location`). See the actual
+> migration files in `internal/service/resources/db/migrations/` for the current schema.
+
 ### Extension Fields
 
 As discussed above, the database schema parallels the public facing API data model. Since the API data model is in

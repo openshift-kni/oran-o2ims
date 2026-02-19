@@ -68,11 +68,6 @@ spec:
                   type: string
                 description: Extensions contains additional custom attributes
                 type: object
-              location:
-                description: |-
-                  Location is a human-readable description of the geographical location
-                  of the resource pool. This is deprecated in favor of oCloudSiteId.
-                type: string
               name:
                 description: Name is the human-readable name of the resource pool
                 minLength: 1

@@ -14,9 +14,7 @@ import (
 	"time"
 )
 
-const resourcesAPIBasePath = "/o2ims-infrastructureInventory/v1"
-
-var sunset2026Dec01 = time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
+const resourcesAPIBasePath = "/o2ims-infrastructureInventory/v1" //nolint:unused // Reserved for future deprecations
 
 // Field represents metadata about a deprecated API field
 type Field struct {
@@ -43,44 +41,21 @@ type Field struct {
 	MigrationGuide string
 }
 
-// registry holds all deprecated fields. Single source of truth
+// registry holds all deprecated fields. Single source of truth.
+// To add new deprecations, create a Field entry here and create a migration guide in /docs/deprecations/
 var registry = []Field{
-	{
-		EndpointPath:   resourcesAPIBasePath + "/resourceTypes",
-		Schema:         "ResourceType",
-		FieldName:      "alarmDictionary",
-		SunsetDate:     sunset2026Dec01,
-		Replacement:    "alarmDictionaryId",
-		Reason:         "Full embedded object replaced with ID reference for efficiency",
-		MigrationGuide: "/docs/deprecations/resource-type-fields.md",
-	},
-	{
-		EndpointPath:   resourcesAPIBasePath + "/resourcePools",
-		Schema:         "ResourcePool",
-		FieldName:      "oCloudId",
-		SunsetDate:     sunset2026Dec01,
-		Replacement:    "",
-		Reason:         "Redundant, O-Cloud context is implicit in API path",
-		MigrationGuide: "/docs/deprecations/resource-pool-fields.md",
-	},
-	{
-		EndpointPath:   resourcesAPIBasePath + "/resourcePools",
-		Schema:         "ResourcePool",
-		FieldName:      "globalLocationId",
-		SunsetDate:     sunset2026Dec01,
-		Replacement:    "oCloudSiteId with GET /locations endpoint",
-		Reason:         "Replaced by structured LocationInfo model",
-		MigrationGuide: "/docs/deprecations/resource-pool-fields.md",
-	},
-	{
-		EndpointPath:   resourcesAPIBasePath + "/resourcePools",
-		Schema:         "ResourcePool",
-		FieldName:      "location",
-		SunsetDate:     sunset2026Dec01,
-		Replacement:    "GET /locations/{globalLocationId} for coordinate/civicAddress/address",
-		Reason:         "Simple string replaced with rich LocationInfo structure per RFC 4776/7946",
-		MigrationGuide: "/docs/deprecations/resource-pool-fields.md",
-	},
+	/*
+		This is only an example:
+		{
+		 	EndpointPath:   resourcesAPIBasePath + "/resourceTypes",
+		 	Schema:         "ResourceType",
+		 	FieldName:      "alarmDictionary",
+		 	SunsetDate:     sunset2026Dec01,
+		 	Replacement:    "alarmDictionaryId",
+		 	Reason:         "Full embedded object replaced with ID reference for efficiency",
+		 	MigrationGuide: "/docs/deprecations/resource-type-fields.md",
+		}
+	*/
 }
 
 // endpointFieldsCache maps URL path prefixes to deprecated fields.

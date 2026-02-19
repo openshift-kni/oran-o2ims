@@ -62,18 +62,16 @@ func DeploymentManagerToModel(record *DeploymentManager, options *commonapi.Fiel
 }
 
 // ResourceTypeToModel converts a DB tuple to an API Model.
-// If alarmDictionary is provided, it will be included in the response; otherwise the field will be nil.
-func ResourceTypeToModel(record *ResourceType, alarmDictionary *common.AlarmDictionary) generated.ResourceType {
+func ResourceTypeToModel(record *ResourceType, alarmDictionaryID *uuid.UUID) generated.ResourceType {
 	object := generated.ResourceType{
-		AlarmDictionary: alarmDictionary, // Deprecated by O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00
-		Description:     record.Description,
-		Model:           record.Model,
-		Name:            record.Name,
-		ResourceClass:   generated.ResourceTypeResourceClass(record.ResourceClass),
-		ResourceKind:    generated.ResourceTypeResourceKind(record.ResourceKind),
-		ResourceTypeId:  record.ResourceTypeID,
-		Vendor:          record.Vendor,
-		Version:         record.Version,
+		Description:    record.Description,
+		Model:          record.Model,
+		Name:           record.Name,
+		ResourceClass:  generated.ResourceTypeResourceClass(record.ResourceClass),
+		ResourceKind:   generated.ResourceTypeResourceKind(record.ResourceKind),
+		ResourceTypeId: record.ResourceTypeID,
+		Vendor:         record.Vendor,
+		Version:        record.Version,
 	}
 
 	// Handle optional Extensions field
@@ -81,10 +79,9 @@ func ResourceTypeToModel(record *ResourceType, alarmDictionary *common.AlarmDict
 		object.Extensions = &record.Extensions
 	}
 
-	// Populate alarmDictionaryId from the alarm dictionary if present
-	// O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00
-	if alarmDictionary != nil {
-		object.AlarmDictionaryId = &alarmDictionary.AlarmDictionaryId
+	// Populate alarmDictionaryId if present
+	if alarmDictionaryID != nil {
+		object.AlarmDictionaryId = alarmDictionaryID
 	}
 
 	return object
@@ -120,16 +117,10 @@ func SubscriptionFromModel(object *generated.Subscription) *models2.Subscription
 // ResourcePoolToModel converts a DB tuple to an API model
 func ResourcePoolToModel(record *ResourcePool, options *commonapi.FieldOptions) generated.ResourcePool {
 	object := generated.ResourcePool{
-		Description:      record.Description,
-		GlobalLocationId: record.GlobalLocationID, // Deprecated by O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00
-		Location:         record.Location,         // Deprecated by O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00
-		Name:             record.Name,
-		OCloudId:         record.OCloudID, // Deprecated by O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00
-		ResourcePoolId:   record.ResourcePoolID,
-	}
-
-	if record.OCloudSiteID != nil {
-		object.OCloudSiteId = *record.OCloudSiteID
+		Description:    record.Description,
+		Name:           record.Name,
+		OCloudSiteId:   record.OCloudSiteID,
+		ResourcePoolId: record.ResourcePoolID,
 	}
 
 	if options.IsIncluded(commonapi.ExtensionsAttribute) {

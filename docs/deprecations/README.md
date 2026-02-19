@@ -2,9 +2,22 @@
 
 This directory contains migration guides for deprecated API fields and features.
 
+## Current Status
+
+As of February 2026 (O2IMS v11 compliance update), all previously deprecated fields have been **removed**:
+
+| Schema | Removed Field | Replacement |
+|--------|---------------|-------------|
+| ResourceType | `alarmDictionary` | `alarmDictionaryId` field + `/alarmDictionaries` endpoint |
+| ResourcePool | `oCloudId` | None (O-Cloud context is implicit in API path) |
+| ResourcePool | `globalLocationId` | `oCloudSiteId` + `/oCloudSites` and `/locations` endpoints |
+| ResourcePool | `location` | `/locations` endpoint with rich LocationInfo model |
+
+There are currently **no deprecated fields** in the API. When new deprecations are introduced, migration guides will be added to this directory.
+
 ## Deprecated fields
 
-Deprecations for each schema type are explained in their respective dedicated markdown files within this directory. Refer to those guides for details on deprecated fields, timelines, and migration steps.
+When fields are deprecated, each schema type will have a dedicated markdown file in this directory. Refer to those guides for details on deprecated fields, timelines, and migration steps.
 
 ## Deprecation Policy
 

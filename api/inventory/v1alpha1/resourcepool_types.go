@@ -33,11 +33,6 @@ type ResourcePoolSpec struct {
 	// Description provides additional details about the resource pool
 	Description string `json:"description"`
 
-	// Location is a human-readable description of the geographical location
-	// of the resource pool. This is deprecated in favor of oCloudSiteId.
-	// +optional
-	Location *string `json:"location,omitempty"`
-
 	// Extensions contains additional custom attributes
 	// +optional
 	Extensions map[string]string `json:"extensions,omitempty"`

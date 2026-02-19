@@ -1454,16 +1454,6 @@ components:
           type: string
           description: Version or generation of the resource as defined by its provider.
           example: "v2024.11"
-        alarmDictionary:
-          deprecated: true
-          description: |
-            Dictionary of alarms for this resource type.
-
-            DEPRECATED (since v2.0.0): full embedded object replaced with ID reference for efficiency.
-
-            See migration guide: docs/deprecations/alarm-dictionary.md
-          allOf:
-            - $ref: "../../common/api/openapi.yaml#/components/schemas/AlarmDictionary"
         alarmDictionaryId:
           type: string
           format: uuid
@@ -1511,27 +1501,6 @@ components:
           format: uuid
           description: Identifier for the Resource Pool in the O-Cloud instance. This identifier is allocated by the O-Cloud.
           example: "d3b27e14-4589-4d93-ae76-ddca559193ea"
-        oCloudId:
-          type: string
-          format: uuid
-          deprecated: true
-          description: |
-            Identifier for the containing O-Cloud.
-
-            DEPRECATED (since v2.0.0): redundant, O-Cloud context is implicit in the API path.
-
-            See migration guide: docs/deprecations/resource-pool-fields.md
-          example: "262c8f17-52b5-4614-9e56-812ae21fa8a7"
-        globalLocationId:
-          type: string
-          format: uuid
-          deprecated: true
-          description: |
-            This identifier is copied from the O-Cloud Id assigned by the SMO during the O-Cloud deployment.
-
-            DEPRECATED (since v2.0.0): replaced by structured LocationInfo model.
-
-            See migration guide: docs/deprecations/resource-pool-fields.md
         name:
           type: string
           description: Human readable name of the resource pool.
@@ -1544,24 +1513,11 @@ components:
         description:
           type: string
           description: Human readable description of the resource pool.
-        location:
-          type: string
-          deprecated: true
-          description: |
-            Information about the geographical location of the resource pool as detected by the O-Cloud.
-
-            DEPRECATED (since v2.0.0): simple string replaced with rich LocationInfo structure 
-            supporting coordinates, civic addresses and human-readable addresses.
-
-            See migration guide: docs/deprecations/resource-pool-fields.md
-          example: "EU"
         extensions:
           type: object
           description: List of metadata key-value pairs used to associate meaningful metadata to the related resource pool.
       required:
       - resourcePoolId
-      - oCloudId
-      - globalLocationId
       - name
       - oCloudSiteId
       - description

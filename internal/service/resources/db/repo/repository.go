@@ -317,8 +317,8 @@ func (r *ResourcesRepository) GetAllResourcePoolIDsBySite(ctx context.Context) (
 
 	result := make(map[uuid.UUID][]uuid.UUID)
 	for _, pool := range pools {
-		if pool.OCloudSiteID != nil && *pool.OCloudSiteID != uuid.Nil {
-			result[*pool.OCloudSiteID] = append(result[*pool.OCloudSiteID], pool.ResourcePoolID)
+		if pool.OCloudSiteID != uuid.Nil {
+			result[pool.OCloudSiteID] = append(result[pool.OCloudSiteID], pool.ResourcePoolID)
 		}
 	}
 	return result, nil

@@ -162,9 +162,6 @@ spec:
   name: "East Compute Pool"
   description: "Compute resources for production workloads"
   
-  # Optional: deprecated, use oCloudSiteId instead
-  location: "US-EAST"
-  
   extensions:
     hardware-profile: "high-performance"
     purpose: "ran-du"
@@ -178,7 +175,6 @@ spec:
 | `oCloudSiteId` | Yes | **Must match** an existing `OCloudSite.spec.siteId` |
 | `name` | Yes | Human-readable name |
 | `description` | Yes | Detailed description |
-| `location` | No | Deprecated. Simple location string. |
 | `extensions` | No | Custom key-value metadata |
 
 Apply the ResourcePool CR:

@@ -310,18 +310,16 @@ var _ = Describe("OCloudSite Repository", func() {
 			poolID1 := uuid.New()
 			poolID2 := uuid.New()
 			siteID := uuid.New()
-			globalLocID := uuid.New()
 
 			rows := pgxmock.NewRows([]string{
-				"resource_pool_id", "global_location_id", "name", "description", "o_cloud_id",
-				"location", "o_cloud_site_id", "extensions", "data_source_id", "generation_id",
-				"external_id", "created_at",
+				"resource_pool_id", "name", "description", "o_cloud_site_id",
+				"extensions", "data_source_id", "generation_id", "external_id", "created_at",
 			}).AddRow(
-				poolID1, globalLocID, "pool1", "desc1", uuid.New(),
-				nil, &siteID, nil, uuid.New(), 1, "ext-1", nil,
+				poolID1, "pool1", "desc1", siteID,
+				nil, uuid.New(), 1, "ext-1", nil,
 			).AddRow(
-				poolID2, globalLocID, "pool2", "desc2", uuid.New(),
-				nil, &siteID, nil, uuid.New(), 1, "ext-2", nil,
+				poolID2, "pool2", "desc2", siteID,
+				nil, uuid.New(), 1, "ext-2", nil,
 			)
 
 			// Expected
@@ -342,9 +340,8 @@ var _ = Describe("OCloudSite Repository", func() {
 		It("should return empty slice when no pools for site", func() {
 			siteID := uuid.New()
 			rows := pgxmock.NewRows([]string{
-				"resource_pool_id", "global_location_id", "name", "description", "o_cloud_id",
-				"location", "o_cloud_site_id", "extensions", "data_source_id", "generation_id",
-				"external_id", "created_at",
+				"resource_pool_id", "name", "description", "o_cloud_site_id",
+				"extensions", "data_source_id", "generation_id", "external_id", "created_at",
 			})
 
 			// Expected
@@ -391,18 +388,17 @@ var _ = Describe("ResourcePool Repository", func() {
 			poolID1 := uuid.New()
 			poolID2 := uuid.New()
 			siteID := uuid.New()
-			globalLocID := uuid.New()
+			siteID2 := uuid.New()
 
 			rows := pgxmock.NewRows([]string{
-				"resource_pool_id", "global_location_id", "name", "description", "o_cloud_id",
-				"location", "o_cloud_site_id", "extensions", "data_source_id", "generation_id",
-				"external_id", "created_at",
+				"resource_pool_id", "name", "description", "o_cloud_site_id",
+				"extensions", "data_source_id", "generation_id", "external_id", "created_at",
 			}).AddRow(
-				poolID1, globalLocID, "pool1", "First pool", uuid.New(),
-				nil, &siteID, nil, uuid.New(), 1, "ext-1", nil,
+				poolID1, "pool1", "First pool", siteID,
+				nil, uuid.New(), 1, "ext-1", nil,
 			).AddRow(
-				poolID2, globalLocID, "pool2", "Second pool", uuid.New(),
-				nil, nil, nil, uuid.New(), 1, "ext-2", nil,
+				poolID2, "pool2", "Second pool", siteID2,
+				nil, uuid.New(), 1, "ext-2", nil,
 			)
 
 			// Expected
@@ -416,8 +412,8 @@ var _ = Describe("ResourcePool Repository", func() {
 			Expect(results).To(HaveLen(2))
 			Expect(results[0].ResourcePoolID).To(Equal(poolID1))
 			Expect(results[0].Name).To(Equal("pool1"))
-			Expect(results[0].OCloudSiteID).ToNot(BeNil())
-			Expect(results[1].OCloudSiteID).To(BeNil())
+			Expect(results[0].OCloudSiteID).To(Equal(siteID))
+			Expect(results[1].OCloudSiteID).To(Equal(siteID2))
 			Expect(mock.ExpectationsWereMet()).To(Succeed())
 		})
 	})
@@ -426,15 +422,13 @@ var _ = Describe("ResourcePool Repository", func() {
 		It("should return resource pool by ID", func() {
 			poolID := uuid.New()
 			siteID := uuid.New()
-			globalLocID := uuid.New()
 
 			rows := pgxmock.NewRows([]string{
-				"resource_pool_id", "global_location_id", "name", "description", "o_cloud_id",
-				"location", "o_cloud_site_id", "extensions", "data_source_id", "generation_id",
-				"external_id", "created_at",
+				"resource_pool_id", "name", "description", "o_cloud_site_id",
+				"extensions", "data_source_id", "generation_id", "external_id", "created_at",
 			}).AddRow(
-				poolID, globalLocID, "pool1", "Test pool", uuid.New(),
-				nil, &siteID, nil, uuid.New(), 1, "ext-1", nil,
+				poolID, "pool1", "Test pool", siteID,
+				nil, uuid.New(), 1, "ext-1", nil,
 			)
 
 			// Expected
@@ -456,9 +450,8 @@ var _ = Describe("ResourcePool Repository", func() {
 		It("should return ErrNotFound when pool not found", func() {
 			poolID := uuid.New()
 			rows := pgxmock.NewRows([]string{
-				"resource_pool_id", "global_location_id", "name", "description", "o_cloud_id",
-				"location", "o_cloud_site_id", "extensions", "data_source_id", "generation_id",
-				"external_id", "created_at",
+				"resource_pool_id", "name", "description", "o_cloud_site_id",
+				"extensions", "data_source_id", "generation_id", "external_id", "created_at",
 			})
 
 			mock.ExpectQuery(`SELECT .* FROM resource_pool WHERE`).

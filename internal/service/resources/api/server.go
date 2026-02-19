@@ -14,6 +14,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
@@ -566,7 +568,7 @@ func (r *ResourceServer) GetResourceTypes(ctx context.Context, request api.GetRe
 		return nil, fmt.Errorf("failed to get resource types: %w", err)
 	}
 
-	// Fetch all alarm dictionaries and build a map by resource type ID
+	// Fetch all alarm dictionaries and build a map of resourceTypeId -> alarmDictionaryId
 	alarmDictionaries, err := r.Repo.GetAlarmDictionaries(ctx)
 	if err != nil {
 		return api.GetResourceTypes500ApplicationProblemPlusJSONResponse{
@@ -575,29 +577,15 @@ func (r *ResourceServer) GetResourceTypes(ctx context.Context, request api.GetRe
 		}, nil
 	}
 
-	alarmDictionaryMap := make(map[string]*models.AlarmDictionary)
+	alarmDictionaryIDMap := make(map[string]*uuid.UUID)
 	for i := range alarmDictionaries {
-		alarmDictionaryMap[alarmDictionaries[i].ResourceTypeID.String()] = &alarmDictionaries[i]
+		alarmDictionaryIDMap[alarmDictionaries[i].ResourceTypeID.String()] = &alarmDictionaries[i].AlarmDictionaryID
 	}
 
 	objects := make([]api.ResourceType, len(records))
 	for i, record := range records {
-		var alarmDictionary *generated.AlarmDictionary
-		if dict, ok := alarmDictionaryMap[record.ResourceTypeID.String()]; ok {
-			definitions, err := r.Repo.GetAlarmDefinitionsByAlarmDictionaryID(ctx, dict.AlarmDictionaryID)
-			if err != nil {
-				return api.GetResourceTypes500ApplicationProblemPlusJSONResponse{
-					AdditionalAttributes: &map[string]string{
-						"resourceTypeId": record.ResourceTypeID.String(),
-					},
-					Detail: fmt.Sprintf("failed to get alarm definitions: %s", err.Error()),
-					Status: http.StatusInternalServerError,
-				}, nil
-			}
-			converted := models.AlarmDictionaryToModel(dict, definitions)
-			alarmDictionary = &converted
-		}
-		objects[i] = models.ResourceTypeToModel(&record, alarmDictionary)
+		alarmDictionaryID := alarmDictionaryIDMap[record.ResourceTypeID.String()]
+		objects[i] = models.ResourceTypeToModel(&record, alarmDictionaryID)
 	}
 
 	return api.GetResourceTypes200JSONResponse(objects), nil
@@ -624,8 +612,8 @@ func (r *ResourceServer) GetResourceType(ctx context.Context, request api.GetRes
 		}, nil
 	}
 
-	// Fetch alarm dictionary for this resource type
-	var alarmDictionary *generated.AlarmDictionary
+	// Fetch alarm dictionary ID for this resource type
+	var alarmDictionaryID *uuid.UUID
 	dictionaries, err := r.Repo.GetResourceTypeAlarmDictionary(ctx, request.ResourceTypeId)
 	if err != nil {
 		return api.GetResourceType500ApplicationProblemPlusJSONResponse{
@@ -638,22 +626,10 @@ func (r *ResourceServer) GetResourceType(ctx context.Context, request api.GetRes
 	}
 
 	if len(dictionaries) > 0 {
-		dict := &dictionaries[0]
-		definitions, err := r.Repo.GetAlarmDefinitionsByAlarmDictionaryID(ctx, dict.AlarmDictionaryID)
-		if err != nil {
-			return api.GetResourceType500ApplicationProblemPlusJSONResponse{
-				AdditionalAttributes: &map[string]string{
-					"resourceTypeId": request.ResourceTypeId.String(),
-				},
-				Detail: fmt.Sprintf("failed to get alarm definitions: %s", err.Error()),
-				Status: http.StatusInternalServerError,
-			}, nil
-		}
-		converted := models.AlarmDictionaryToModel(dict, definitions)
-		alarmDictionary = &converted
+		alarmDictionaryID = &dictionaries[0].AlarmDictionaryID
 	}
 
-	object := models.ResourceTypeToModel(record, alarmDictionary)
+	object := models.ResourceTypeToModel(record, alarmDictionaryID)
 	return api.GetResourceType200JSONResponse(object), nil
 }
 
