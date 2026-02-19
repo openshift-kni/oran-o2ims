@@ -19,17 +19,15 @@ var _ db.Model = (*ResourcePool)(nil)
 
 // ResourcePool represents a record in the resource_pool table.
 type ResourcePool struct {
-	ResourcePoolID   uuid.UUID              `db:"resource_pool_id"` // Non-nil because we always set this from named values
-	GlobalLocationID uuid.UUID              `db:"global_location_id"`
-	Name             string                 `db:"name"`
-	Description      string                 `db:"description"`
-	OCloudID         uuid.UUID              `db:"o_cloud_id"`
-	Location         *string                `db:"location"`
-	Extensions       map[string]interface{} `db:"extensions"`
-	DataSourceID     uuid.UUID              `db:"data_source_id"`
-	GenerationID     int                    `db:"generation_id"`
-	ExternalID       string                 `db:"external_id"`
-	CreatedAt        *time.Time             `db:"created_at"`
+	ResourcePoolID uuid.UUID              `db:"resource_pool_id"`
+	Name           string                 `db:"name"`
+	Description    string                 `db:"description"`
+	OCloudSiteID   uuid.UUID              `db:"o_cloud_site_id"`
+	Extensions     map[string]interface{} `db:"extensions"`
+	DataSourceID   uuid.UUID              `db:"data_source_id"`
+	GenerationID   int                    `db:"generation_id"`
+	ExternalID     string                 `db:"external_id"`
+	CreatedAt      *time.Time             `db:"created_at"`
 }
 
 // TableName returns the table name associated to this model

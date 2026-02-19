@@ -1,0 +1,21 @@
+---
+# Location CR - defines a physical/logical place
+# Referenced by: OCloudSite.spec.globalLocationId
+apiVersion: ocloud.openshift.io/v1alpha1
+kind: Location
+metadata:
+  name: location-west
+  namespace: oran-o2ims
+spec:
+  # PRIMARY KEY - must be unique across all Locations
+  globalLocationId: "LOC-WEST-001"
+  name: "West Data Center"
+  description: "Primary west coast data center facility"
+  # At least ONE of: coordinate, civicAddress, or address is required
+  address: "456 Tech Park Drive, San Jose, CA 95134, USA"
+  coordinate:
+    latitude: "37.3382"
+    longitude: "-121.8863"
+  extensions:
+    region: "us-west"
+    tier: "primary"

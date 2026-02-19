@@ -14,6 +14,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
@@ -42,7 +44,7 @@ type ResourceServerConfig struct {
 type ResourceServer struct {
 	Config                   *ResourceServerConfig
 	Info                     api.OCloudInfo
-	Repo                     *repo.ResourcesRepository
+	Repo                     repo.ResourcesRepositoryInterface
 	SubscriptionEventHandler notifier.SubscriptionEventHandler
 }
 
@@ -566,7 +568,7 @@ func (r *ResourceServer) GetResourceTypes(ctx context.Context, request api.GetRe
 		return nil, fmt.Errorf("failed to get resource types: %w", err)
 	}
 
-	// Fetch all alarm dictionaries and build a map by resource type ID
+	// Fetch all alarm dictionaries and build a map of resourceTypeId -> alarmDictionaryId
 	alarmDictionaries, err := r.Repo.GetAlarmDictionaries(ctx)
 	if err != nil {
 		return api.GetResourceTypes500ApplicationProblemPlusJSONResponse{
@@ -575,29 +577,15 @@ func (r *ResourceServer) GetResourceTypes(ctx context.Context, request api.GetRe
 		}, nil
 	}
 
-	alarmDictionaryMap := make(map[string]*models.AlarmDictionary)
+	alarmDictionaryIDMap := make(map[string]*uuid.UUID)
 	for i := range alarmDictionaries {
-		alarmDictionaryMap[alarmDictionaries[i].ResourceTypeID.String()] = &alarmDictionaries[i]
+		alarmDictionaryIDMap[alarmDictionaries[i].ResourceTypeID.String()] = &alarmDictionaries[i].AlarmDictionaryID
 	}
 
 	objects := make([]api.ResourceType, len(records))
 	for i, record := range records {
-		var alarmDictionary *generated.AlarmDictionary
-		if dict, ok := alarmDictionaryMap[record.ResourceTypeID.String()]; ok {
-			definitions, err := r.Repo.GetAlarmDefinitionsByAlarmDictionaryID(ctx, dict.AlarmDictionaryID)
-			if err != nil {
-				return api.GetResourceTypes500ApplicationProblemPlusJSONResponse{
-					AdditionalAttributes: &map[string]string{
-						"resourceTypeId": record.ResourceTypeID.String(),
-					},
-					Detail: fmt.Sprintf("failed to get alarm definitions: %s", err.Error()),
-					Status: http.StatusInternalServerError,
-				}, nil
-			}
-			converted := models.AlarmDictionaryToModel(dict, definitions)
-			alarmDictionary = &converted
-		}
-		objects[i] = models.ResourceTypeToModel(&record, alarmDictionary)
+		alarmDictionaryID := alarmDictionaryIDMap[record.ResourceTypeID.String()]
+		objects[i] = models.ResourceTypeToModel(&record, alarmDictionaryID)
 	}
 
 	return api.GetResourceTypes200JSONResponse(objects), nil
@@ -624,8 +612,8 @@ func (r *ResourceServer) GetResourceType(ctx context.Context, request api.GetRes
 		}, nil
 	}
 
-	// Fetch alarm dictionary for this resource type
-	var alarmDictionary *generated.AlarmDictionary
+	// Fetch alarm dictionary ID for this resource type
+	var alarmDictionaryID *uuid.UUID
 	dictionaries, err := r.Repo.GetResourceTypeAlarmDictionary(ctx, request.ResourceTypeId)
 	if err != nil {
 		return api.GetResourceType500ApplicationProblemPlusJSONResponse{
@@ -638,22 +626,10 @@ func (r *ResourceServer) GetResourceType(ctx context.Context, request api.GetRes
 	}
 
 	if len(dictionaries) > 0 {
-		dict := &dictionaries[0]
-		definitions, err := r.Repo.GetAlarmDefinitionsByAlarmDictionaryID(ctx, dict.AlarmDictionaryID)
-		if err != nil {
-			return api.GetResourceType500ApplicationProblemPlusJSONResponse{
-				AdditionalAttributes: &map[string]string{
-					"resourceTypeId": request.ResourceTypeId.String(),
-				},
-				Detail: fmt.Sprintf("failed to get alarm definitions: %s", err.Error()),
-				Status: http.StatusInternalServerError,
-			}, nil
-		}
-		converted := models.AlarmDictionaryToModel(dict, definitions)
-		alarmDictionary = &converted
+		alarmDictionaryID = &dictionaries[0].AlarmDictionaryID
 	}
 
-	object := models.ResourceTypeToModel(record, alarmDictionary)
+	object := models.ResourceTypeToModel(record, alarmDictionaryID)
 	return api.GetResourceType200JSONResponse(object), nil
 }
 
@@ -682,4 +658,134 @@ func (r *ResourceServer) GetInternalResourceById(ctx context.Context, request ap
 
 	object := models.ResourceToModel(record, nil)
 	return api.GetInternalResourceById200JSONResponse(object), nil
+}
+
+// GetLocations receives the API request to this endpoint, executes the request, and responds appropriately
+func (r *ResourceServer) GetLocations(ctx context.Context, request api.GetLocationsRequestObject) (api.GetLocationsResponseObject, error) {
+	records, err := r.Repo.GetLocations(ctx)
+	if err != nil {
+		return api.GetLocations500ApplicationProblemPlusJSONResponse{
+			Detail: fmt.Sprintf("failed to get locations: %s", err.Error()),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	siteIDsByLocation, err := r.Repo.GetAllOCloudSiteIDsByLocation(ctx)
+	if err != nil {
+		return api.GetLocations500ApplicationProblemPlusJSONResponse{
+			Detail: fmt.Sprintf("failed to get O-Cloud sites: %s", err.Error()),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	objects := make([]api.LocationInfo, len(records))
+	for i, record := range records {
+		siteIDs := siteIDsByLocation[record.GlobalLocationID] // nil if no sites, which is fine
+		objects[i] = models.LocationToModel(&record, siteIDs)
+	}
+
+	return api.GetLocations200JSONResponse(objects), nil
+}
+
+// GetLocation receives the API request to this endpoint, executes the request, and responds appropriately
+func (r *ResourceServer) GetLocation(ctx context.Context, request api.GetLocationRequestObject) (api.GetLocationResponseObject, error) {
+	record, err := r.Repo.GetLocation(ctx, request.GlobalLocationId)
+	if errors.Is(err, svcutils.ErrNotFound) {
+		return api.GetLocation404ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"globalLocationId": request.GlobalLocationId,
+			},
+			Detail: "requested location not found",
+			Status: http.StatusNotFound,
+		}, nil
+	}
+	if err != nil {
+		return api.GetLocation500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"globalLocationId": request.GlobalLocationId,
+			},
+			Detail: err.Error(),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	// Fetch O-Cloud Site IDs for this location
+	siteIDs, err := r.Repo.GetOCloudSiteIDsForLocation(ctx, record.GlobalLocationID)
+	if err != nil {
+		return api.GetLocation500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"globalLocationId": request.GlobalLocationId,
+			},
+			Detail: fmt.Sprintf("failed to get O-Cloud sites for location: %s", err.Error()),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	object := models.LocationToModel(record, siteIDs)
+	return api.GetLocation200JSONResponse(object), nil
+}
+
+// GetOCloudSites receives the API request to this endpoint, executes the request, and responds appropriately
+func (r *ResourceServer) GetOCloudSites(ctx context.Context, request api.GetOCloudSitesRequestObject) (api.GetOCloudSitesResponseObject, error) {
+	records, err := r.Repo.GetOCloudSites(ctx)
+	if err != nil {
+		return api.GetOCloudSites500ApplicationProblemPlusJSONResponse{
+			Detail: fmt.Sprintf("failed to get O-Cloud sites: %s", err.Error()),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	poolIDsBySite, err := r.Repo.GetAllResourcePoolIDsBySite(ctx)
+	if err != nil {
+		return api.GetOCloudSites500ApplicationProblemPlusJSONResponse{
+			Detail: fmt.Sprintf("failed to get resource pools: %s", err.Error()),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	objects := make([]api.OCloudSiteInfo, len(records))
+	for i, record := range records {
+		poolIDs := poolIDsBySite[record.OCloudSiteID] // nil if no pools, which is fine
+		objects[i] = models.OCloudSiteToModel(&record, poolIDs)
+	}
+
+	return api.GetOCloudSites200JSONResponse(objects), nil
+}
+
+// GetOCloudSite receives the API request to this endpoint, executes the request, and responds appropriately
+func (r *ResourceServer) GetOCloudSite(ctx context.Context, request api.GetOCloudSiteRequestObject) (api.GetOCloudSiteResponseObject, error) {
+	record, err := r.Repo.GetOCloudSite(ctx, request.OCloudSiteId)
+	if errors.Is(err, svcutils.ErrNotFound) {
+		return api.GetOCloudSite404ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"oCloudSiteId": request.OCloudSiteId.String(),
+			},
+			Detail: "requested O-Cloud site not found",
+			Status: http.StatusNotFound,
+		}, nil
+	}
+	if err != nil {
+		return api.GetOCloudSite500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"oCloudSiteId": request.OCloudSiteId.String(),
+			},
+			Detail: err.Error(),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	// Fetch Resource Pool IDs for this site
+	poolIDs, err := r.Repo.GetResourcePoolIDsForSite(ctx, record.OCloudSiteID)
+	if err != nil {
+		return api.GetOCloudSite500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"oCloudSiteId": request.OCloudSiteId.String(),
+			},
+			Detail: fmt.Sprintf("failed to get resource pools for site: %s", err.Error()),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	object := models.OCloudSiteToModel(record, poolIDs)
+	return api.GetOCloudSite200JSONResponse(object), nil
 }

@@ -81,6 +81,16 @@ func (r *ResourcesRepository) UpdateResourcePool(ctx context.Context, resourcePo
 	return svcutils.Update[models.ResourcePool](ctx, r.Db, resourcePool.ResourcePoolID, *resourcePool)
 }
 
+// GetResourcePoolsNotIn returns the list of ResourcePool records not matching the list of keys provided, or
+// an empty list if none exist; otherwise an error
+func (r *ResourcesRepository) GetResourcePoolsNotIn(ctx context.Context, keys []any) ([]models.ResourcePool, error) {
+	var e bob.Expression
+	if len(keys) > 0 {
+		e = psql.Quote(models.ResourcePool{}.PrimaryKey()).NotIn(psql.Arg(keys...))
+	}
+	return svcutils.Search[models.ResourcePool](ctx, r.Db, e)
+}
+
 // GetResourcePoolResources retrieves all Resource tuples for a specific ResourcePool returns an empty array if not found
 func (r *ResourcesRepository) GetResourcePoolResources(ctx context.Context, id uuid.UUID) ([]models.Resource, error) {
 	e := psql.Quote("resource_pool_id").EQ(psql.Arg(id))
@@ -118,6 +128,16 @@ func (r *ResourcesRepository) FindStaleResourcePools(ctx context.Context, dataSo
 func (r *ResourcesRepository) FindStaleResourceTypes(ctx context.Context, dataSourceID uuid.UUID, generationID int) ([]models.ResourceType, error) {
 	e := psql.Quote("data_source_id").EQ(psql.Arg(dataSourceID)).And(psql.Quote("generation_id").LT(psql.Arg(generationID)))
 	return svcutils.Search[models.ResourceType](ctx, r.Db, e)
+}
+
+// GetOCloudSitesNotIn returns the list of OCloudSite records not matching the list of keys provided, or
+// an empty list if none exist; otherwise an error
+func (r *ResourcesRepository) GetOCloudSitesNotIn(ctx context.Context, keys []any) ([]models.OCloudSite, error) {
+	var e bob.Expression
+	if len(keys) > 0 {
+		e = psql.Quote(models.OCloudSite{}.PrimaryKey()).NotIn(psql.Arg(keys...))
+	}
+	return svcutils.Search[models.OCloudSite](ctx, r.Db, e)
 }
 
 // GetAlarmDictionaries returns the list of AlarmDictionary records or an empty list if none exist; otherwise an error
@@ -214,4 +234,92 @@ func (r *ResourcesRepository) UpsertAlarmDictionary(ctx context.Context, db svcu
 	}
 
 	return &results[0], nil
+}
+
+// GetLocations retrieves all Location tuples or returns an empty array if no tuples are found
+func (r *ResourcesRepository) GetLocations(ctx context.Context) ([]models.Location, error) {
+	return svcutils.FindAll[models.Location](ctx, r.Db)
+}
+
+// GetLocation retrieves a specific Location tuple by globalLocationId or returns ErrNotFound if not found
+func (r *ResourcesRepository) GetLocation(ctx context.Context, globalLocationID string) (*models.Location, error) {
+	e := psql.Quote("global_location_id").EQ(psql.Arg(globalLocationID))
+	results, err := svcutils.Search[models.Location](ctx, r.Db, e)
+	if err != nil {
+		return nil, err
+	}
+	if len(results) == 0 {
+		return nil, svcutils.ErrNotFound
+	}
+	return &results[0], nil
+}
+
+// GetOCloudSiteIDsForLocation retrieves the list of OCloudSite IDs for a given Location
+func (r *ResourcesRepository) GetOCloudSiteIDsForLocation(ctx context.Context, globalLocationID string) ([]uuid.UUID, error) {
+	e := psql.Quote("global_location_id").EQ(psql.Arg(globalLocationID))
+	sites, err := svcutils.Search[models.OCloudSite](ctx, r.Db, e)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]uuid.UUID, len(sites))
+	for i, site := range sites {
+		ids[i] = site.OCloudSiteID
+	}
+	return ids, nil
+}
+
+// GetOCloudSites retrieves all OCloudSite tuples or returns an empty array if no tuples are found
+func (r *ResourcesRepository) GetOCloudSites(ctx context.Context) ([]models.OCloudSite, error) {
+	return svcutils.FindAll[models.OCloudSite](ctx, r.Db)
+}
+
+// GetOCloudSite retrieves a specific OCloudSite tuple or returns ErrNotFound if not found
+func (r *ResourcesRepository) GetOCloudSite(ctx context.Context, id uuid.UUID) (*models.OCloudSite, error) {
+	return svcutils.Find[models.OCloudSite](ctx, r.Db, id)
+}
+
+// GetResourcePoolIDsForSite retrieves the list of ResourcePool IDs for a given OCloudSite
+func (r *ResourcesRepository) GetResourcePoolIDsForSite(ctx context.Context, oCloudSiteID uuid.UUID) ([]uuid.UUID, error) {
+	e := psql.Quote("o_cloud_site_id").EQ(psql.Arg(oCloudSiteID))
+	pools, err := svcutils.Search[models.ResourcePool](ctx, r.Db, e)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]uuid.UUID, len(pools))
+	for i, pool := range pools {
+		ids[i] = pool.ResourcePoolID
+	}
+	return ids, nil
+}
+
+// GetAllOCloudSiteIDsByLocation returns a map of globalLocationID -> []oCloudSiteID.
+// This is optimized for batch lookups to avoid N+1 queries when listing locations.
+func (r *ResourcesRepository) GetAllOCloudSiteIDsByLocation(ctx context.Context) (map[string][]uuid.UUID, error) {
+	sites, err := svcutils.FindAll[models.OCloudSite](ctx, r.Db)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string][]uuid.UUID)
+	for _, site := range sites {
+		result[site.GlobalLocationID] = append(result[site.GlobalLocationID], site.OCloudSiteID)
+	}
+	return result, nil
+}
+
+// GetAllResourcePoolIDsBySite returns a map of oCloudSiteID -> []resourcePoolID.
+// This is optimized for batch lookups to avoid N+1 queries when listing sites.
+func (r *ResourcesRepository) GetAllResourcePoolIDsBySite(ctx context.Context) (map[uuid.UUID][]uuid.UUID, error) {
+	pools, err := svcutils.FindAll[models.ResourcePool](ctx, r.Db)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[uuid.UUID][]uuid.UUID)
+	for _, pool := range pools {
+		if pool.OCloudSiteID != uuid.Nil {
+			result[pool.OCloudSiteID] = append(result[pool.OCloudSiteID], pool.ResourcePoolID)
+		}
+	}
+	return result, nil
 }

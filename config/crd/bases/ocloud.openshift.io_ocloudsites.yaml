@@ -1,0 +1,96 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: ocloudsites.ocloud.openshift.io
+spec:
+  group: ocloud.openshift.io
+  names:
+    kind: OCloudSite
+    listKind: OCloudSiteList
+    plural: ocloudsites
+    shortNames:
+    - ocs
+    singular: ocloudsite
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.siteId
+      name: SiteID
+      type: string
+    - jsonPath: .spec.globalLocationId
+      name: LocationID
+      type: string
+    - jsonPath: .spec.name
+      name: Name
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          OCloudSite is the Schema for the ocloudsites API.
+          Represents an O-Cloud site instance at a specific location.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              OCloudSiteSpec defines the desired state of OCloudSite.
+              Represents an O-Cloud site instance at a specific location.
+              Based on O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00 section 3.2.6.2.17
+            properties:
+              description:
+                description: Description provides additional details about the site
+                type: string
+              extensions:
+                additionalProperties:
+                  type: string
+                description: Extensions contains additional custom attributes
+                type: object
+              globalLocationId:
+                description: |-
+                  GlobalLocationID references the Location this site belongs to.
+                  Must match an existing Location's globalLocationId.
+                minLength: 1
+                type: string
+              name:
+                description: Name is the human-readable name of the site
+                minLength: 1
+                type: string
+              siteId:
+                description: |-
+                  SiteID is the string identifier that matches BareMetalHost siteId labels.
+                  This value is used to map BMH resources to this site and to generate
+                  the deterministic UUID for oCloudSiteId.
+                minLength: 1
+                type: string
+            required:
+            - description
+            - globalLocationId
+            - name
+            - siteId
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources: {}

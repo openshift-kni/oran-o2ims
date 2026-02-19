@@ -1,0 +1,150 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: locations.ocloud.openshift.io
+spec:
+  group: ocloud.openshift.io
+  names:
+    kind: Location
+    listKind: LocationList
+    plural: locations
+    shortNames:
+    - loc
+    singular: location
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.globalLocationId
+      name: GlobalLocationID
+      type: string
+    - jsonPath: .spec.name
+      name: Name
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          Location is the Schema for the locations API.
+          Represents a physical or logical location where O-Cloud Sites can be deployed.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              LocationSpec defines the desired state of Location.
+              Represents a physical or logical location where O-Cloud Sites can be deployed.
+              Based on O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00 section 3.2.6.2.16
+            properties:
+              address:
+                description: Address is a human-readable address string
+                type: string
+              civicAddress:
+                description: |-
+                  CivicAddress contains RFC 4776 civic address elements.
+                  Each element has a type (caType) and value (caValue).
+                items:
+                  description: |-
+                    CivicAddressElement represents a single civic address element per RFC 4776.
+                    The caType field identifies the type of element (e.g., country=0, state=1, city=3, etc.)
+                  properties:
+                    caType:
+                      description: |-
+                        CaType is the civic address type as defined in RFC 4776
+                        Common values: 0=country, 1=state/province, 3=city, 6=street, 19=building, 26=unit
+                      type: integer
+                    caValue:
+                      description: CaValue is the value for this civic address element
+                      minLength: 1
+                      type: string
+                  required:
+                  - caType
+                  - caValue
+                  type: object
+                type: array
+              coordinate:
+                description: Coordinate contains the geographic coordinates (latitude,
+                  longitude, altitude)
+                properties:
+                  altitude:
+                    description: |-
+                      Altitude is the altitude in meters above sea level.
+                      Must be a valid decimal number string.
+                    pattern: ^-?[0-9]+(\.[0-9]+)?$
+                    type: string
+                  latitude:
+                    description: |-
+                      Latitude is the latitude coordinate in decimal degrees.
+                      Valid range: -90.0 to 90.0. Must be a valid decimal number string.
+                    pattern: ^-?[0-9]+(\.[0-9]+)?$
+                    type: string
+                  longitude:
+                    description: |-
+                      Longitude is the longitude coordinate in decimal degrees.
+                      Valid range: -180.0 to 180.0. Must be a valid decimal number string.
+                    pattern: ^-?[0-9]+(\.[0-9]+)?$
+                    type: string
+                required:
+                - latitude
+                - longitude
+                type: object
+                x-kubernetes-validations:
+                - message: latitude must be between -90.0 and 90.0
+                  rule: double(self.latitude) >= -90.0 && double(self.latitude) <=
+                    90.0
+                - message: longitude must be between -180.0 and 180.0
+                  rule: double(self.longitude) >= -180.0 && double(self.longitude)
+                    <= 180.0
+                - message: altitude must be a valid number
+                  rule: '!has(self.altitude) || double(self.altitude) == double(self.altitude)'
+              description:
+                description: Description provides additional details about the location
+                type: string
+              extensions:
+                additionalProperties:
+                  type: string
+                description: Extensions contains additional custom attributes
+                type: object
+              globalLocationId:
+                description: |-
+                  GlobalLocationID is the SMO-defined identifier for this location.
+                  This value is used as the primary key and must be unique across all locations.
+                minLength: 1
+                type: string
+              name:
+                description: Name is the human-readable name of the location
+                minLength: 1
+                type: string
+            required:
+            - description
+            - globalLocationId
+            - name
+            type: object
+            x-kubernetes-validations:
+            - message: at least one of coordinate, civicAddress, or address must be
+                specified
+              rule: has(self.coordinate) || has(self.civicAddress) || has(self.address)
+        type: object
+    served: true
+    storage: true
+    subresources: {}

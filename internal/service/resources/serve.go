@@ -25,7 +25,9 @@ import (
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/auth"
+	k8sclient "github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/deprecation"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	repo2 "github.com/openshift-kni/oran-o2ims/internal/service/common/repo"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/api"
@@ -43,6 +45,9 @@ const (
 
 	username = "resources"
 	database = "resources"
+
+	// docsBaseURL is the base URL for project documentation (used for deprecation Link headers).
+	docsBaseURL = "https://github.com/openshift-kni/oran-o2ims/blob/main"
 )
 
 // Serve start alarms server
@@ -139,8 +144,32 @@ func Serve(config *api.ResourceServerConfig) error {
 		return fmt.Errorf("failed to create hardware manager data source: %w", err)
 	}
 
-	// Create the collector
-	resourceCollector := collector.NewCollector(repository, resourceNotifier, hwMgrDataSourceLoader, []collector.DataSource{k8s})
+	// Create hub client for reading CRs
+	hubClient, err := k8sclient.NewClientForHub()
+	if err != nil {
+		return fmt.Errorf("failed to create hub client: %w", err)
+	}
+
+	// Create watch-based data sources for Location and OCloudSite CRs
+	locationDS, err := collector.NewLocationDataSource(cloudID, hubClient)
+	if err != nil {
+		return fmt.Errorf("failed to create location data source: %w", err)
+	}
+
+	oCloudSiteDS, err := collector.NewOCloudSiteDataSource(cloudID, hubClient)
+	if err != nil {
+		return fmt.Errorf("failed to create ocloud site data source: %w", err)
+	}
+
+	// Create watch-based data source for ResourcePool CR
+	resourcePoolDS, err := collector.NewResourcePoolDataSource(cloudID, hubClient)
+	if err != nil {
+		return fmt.Errorf("failed to create resource pool data source: %w", err)
+	}
+
+	// Create the collector with all data sources
+	resourceCollector := collector.NewCollector(pool, repository, resourceNotifier, hwMgrDataSourceLoader,
+		[]collector.DataSource{k8s, locationDS, oCloudSiteDS, resourcePoolDS})
 
 	// Init server
 	// Create the handler
@@ -149,7 +178,7 @@ func Serve(config *api.ResourceServerConfig) error {
 		Repo:   repository,
 		Info: generated.OCloudInfo{
 			Description:   "OpenShift O-Cloud Manager",
-			GlobalcloudId: globalCloudID,
+			GlobalCloudId: globalCloudID,
 			Name:          "OpenShift O-Cloud Manager",
 			OCloudId:      cloudID,
 			ServiceUri:    config.ExternalAddress,
@@ -193,6 +222,7 @@ func Serve(config *api.ResourceServerConfig) error {
 		Middlewares: []generated.MiddlewareFunc{ // Add middlewares here
 			middleware.OpenAPIValidation(swagger),
 			middleware.ResponseFilter(filterAdapter),
+			deprecation.HeadersMiddleware(docsBaseURL),
 			authz,
 			authn,
 			middleware.LogDuration(),

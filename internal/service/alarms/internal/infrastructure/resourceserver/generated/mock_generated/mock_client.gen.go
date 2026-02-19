@@ -281,6 +281,46 @@ func (mr *MockClientInterfaceMockRecorder) GetInternalResourceById(ctx, resource
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInternalResourceById", reflect.TypeOf((*MockClientInterface)(nil).GetInternalResourceById), varargs...)
 }
 
+// GetLocation mocks base method.
+func (m *MockClientInterface) GetLocation(ctx context.Context, globalLocationId generated.GlobalLocationId, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, globalLocationId}
+	for _, a := range reqEditors {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetLocation", varargs...)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetLocation indicates an expected call of GetLocation.
+func (mr *MockClientInterfaceMockRecorder) GetLocation(ctx, globalLocationId any, reqEditors ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, globalLocationId}, reqEditors...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLocation", reflect.TypeOf((*MockClientInterface)(nil).GetLocation), varargs...)
+}
+
+// GetLocations mocks base method.
+func (m *MockClientInterface) GetLocations(ctx context.Context, params *generated.GetLocationsParams, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, params}
+	for _, a := range reqEditors {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetLocations", varargs...)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetLocations indicates an expected call of GetLocations.
+func (mr *MockClientInterfaceMockRecorder) GetLocations(ctx, params any, reqEditors ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, params}, reqEditors...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLocations", reflect.TypeOf((*MockClientInterface)(nil).GetLocations), varargs...)
+}
+
 // GetMinorVersions mocks base method.
 func (m *MockClientInterface) GetMinorVersions(ctx context.Context, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
@@ -299,6 +339,46 @@ func (mr *MockClientInterfaceMockRecorder) GetMinorVersions(ctx any, reqEditors 
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMinorVersions", reflect.TypeOf((*MockClientInterface)(nil).GetMinorVersions), varargs...)
+}
+
+// GetOCloudSite mocks base method.
+func (m *MockClientInterface) GetOCloudSite(ctx context.Context, oCloudSiteId generated.OCloudSiteId, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, oCloudSiteId}
+	for _, a := range reqEditors {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetOCloudSite", varargs...)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetOCloudSite indicates an expected call of GetOCloudSite.
+func (mr *MockClientInterfaceMockRecorder) GetOCloudSite(ctx, oCloudSiteId any, reqEditors ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, oCloudSiteId}, reqEditors...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOCloudSite", reflect.TypeOf((*MockClientInterface)(nil).GetOCloudSite), varargs...)
+}
+
+// GetOCloudSites mocks base method.
+func (m *MockClientInterface) GetOCloudSites(ctx context.Context, params *generated.GetOCloudSitesParams, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, params}
+	for _, a := range reqEditors {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetOCloudSites", varargs...)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetOCloudSites indicates an expected call of GetOCloudSites.
+func (mr *MockClientInterfaceMockRecorder) GetOCloudSites(ctx, params any, reqEditors ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, params}, reqEditors...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOCloudSites", reflect.TypeOf((*MockClientInterface)(nil).GetOCloudSites), varargs...)
 }
 
 // GetResource mocks base method.
@@ -704,6 +784,46 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetInternalResourceByIdW
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInternalResourceByIdWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).GetInternalResourceByIdWithResponse), varargs...)
 }
 
+// GetLocationWithResponse mocks base method.
+func (m *MockClientWithResponsesInterface) GetLocationWithResponse(ctx context.Context, globalLocationId generated.GlobalLocationId, reqEditors ...generated.RequestEditorFn) (*generated.GetLocationResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, globalLocationId}
+	for _, a := range reqEditors {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetLocationWithResponse", varargs...)
+	ret0, _ := ret[0].(*generated.GetLocationResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetLocationWithResponse indicates an expected call of GetLocationWithResponse.
+func (mr *MockClientWithResponsesInterfaceMockRecorder) GetLocationWithResponse(ctx, globalLocationId any, reqEditors ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, globalLocationId}, reqEditors...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLocationWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).GetLocationWithResponse), varargs...)
+}
+
+// GetLocationsWithResponse mocks base method.
+func (m *MockClientWithResponsesInterface) GetLocationsWithResponse(ctx context.Context, params *generated.GetLocationsParams, reqEditors ...generated.RequestEditorFn) (*generated.GetLocationsResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, params}
+	for _, a := range reqEditors {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetLocationsWithResponse", varargs...)
+	ret0, _ := ret[0].(*generated.GetLocationsResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetLocationsWithResponse indicates an expected call of GetLocationsWithResponse.
+func (mr *MockClientWithResponsesInterfaceMockRecorder) GetLocationsWithResponse(ctx, params any, reqEditors ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, params}, reqEditors...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLocationsWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).GetLocationsWithResponse), varargs...)
+}
+
 // GetMinorVersionsWithResponse mocks base method.
 func (m *MockClientWithResponsesInterface) GetMinorVersionsWithResponse(ctx context.Context, reqEditors ...generated.RequestEditorFn) (*generated.GetMinorVersionsResponse, error) {
 	m.ctrl.T.Helper()
@@ -722,6 +842,46 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetMinorVersionsWithResp
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMinorVersionsWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).GetMinorVersionsWithResponse), varargs...)
+}
+
+// GetOCloudSiteWithResponse mocks base method.
+func (m *MockClientWithResponsesInterface) GetOCloudSiteWithResponse(ctx context.Context, oCloudSiteId generated.OCloudSiteId, reqEditors ...generated.RequestEditorFn) (*generated.GetOCloudSiteResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, oCloudSiteId}
+	for _, a := range reqEditors {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetOCloudSiteWithResponse", varargs...)
+	ret0, _ := ret[0].(*generated.GetOCloudSiteResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetOCloudSiteWithResponse indicates an expected call of GetOCloudSiteWithResponse.
+func (mr *MockClientWithResponsesInterfaceMockRecorder) GetOCloudSiteWithResponse(ctx, oCloudSiteId any, reqEditors ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, oCloudSiteId}, reqEditors...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOCloudSiteWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).GetOCloudSiteWithResponse), varargs...)
+}
+
+// GetOCloudSitesWithResponse mocks base method.
+func (m *MockClientWithResponsesInterface) GetOCloudSitesWithResponse(ctx context.Context, params *generated.GetOCloudSitesParams, reqEditors ...generated.RequestEditorFn) (*generated.GetOCloudSitesResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, params}
+	for _, a := range reqEditors {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetOCloudSitesWithResponse", varargs...)
+	ret0, _ := ret[0].(*generated.GetOCloudSitesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetOCloudSitesWithResponse indicates an expected call of GetOCloudSitesWithResponse.
+func (mr *MockClientWithResponsesInterfaceMockRecorder) GetOCloudSitesWithResponse(ctx, params any, reqEditors ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, params}, reqEditors...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOCloudSitesWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).GetOCloudSitesWithResponse), varargs...)
 }
 
 // GetResourcePoolWithResponse mocks base method.

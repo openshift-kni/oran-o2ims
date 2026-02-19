@@ -1,5 +1,19 @@
 CREATE DATABASE resource_server;
 
+-- =============================================================================
+-- HISTORICAL NOTE: This schema represents the INITIAL design from October 2024.
+-- The actual production schema has evolved significantly since then:
+--
+-- Changes as of February 2026 (O2IMS v11 compliance):
+--   - resource_pool table: removed global_location_id, o_cloud_id, location columns
+--   - resource_pool table: added o_cloud_site_id (NOT NULL, FK to o_cloud_site)
+--   - Added new tables: location, o_cloud_site
+--
+-- For the current schema, see the migration files:
+--   internal/service/resources/db/migrations/000001_initial.up.sql
+--   internal/service/resources/db/migrations/000002_v11.up.sql
+-- =============================================================================
+
 -- Table: data_source
 CREATE TABLE IF NOT EXISTS data_source (
     id            SERIAL PRIMARY KEY,
