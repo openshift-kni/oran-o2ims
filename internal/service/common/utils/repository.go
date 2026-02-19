@@ -227,7 +227,7 @@ func Exists[T db.Model](ctx context.Context, db DBQuery, uuid uuid.UUID) (bool, 
 		return false, fmt.Errorf("failed to build query: %w", err)
 	}
 
-	slog.Error("executing query", "sql", sql, "args", args)
+	slog.Debug("executing query", "sql", sql, "args", args)
 
 	var result bool
 	err = db.QueryRow(ctx, sql, args...).Scan(&result)
