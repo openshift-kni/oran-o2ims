@@ -117,9 +117,6 @@ AGGREGATION FUNCTIONS:
   * Aggregates all resource information correctly from BMH and AllocatedNode
 
 API ENDPOINT FUNCTIONS:
-- GetResourcePools: Tests resource pool API endpoint
-  * Returns resource pools from BMHs included in inventory
-  * Handles empty BMH list
 - GetResources: Tests resources API endpoint
   * Returns resources from BMHs included in inventory
   * Handles BMH without corresponding AllocatedNode
@@ -1124,69 +1121,6 @@ var _ = Describe("Inventory", func() {
 			Expect(*result.GlobalAssetId).To(Equal("ABC123456"))
 			Expect(result.Allocated).ToNot(BeNil())
 			Expect(*result.Allocated).To(BeFalse())
-		})
-	})
-
-	Describe("GetResourcePools", func() {
-		var (
-			ctx    context.Context
-			scheme *runtime.Scheme
-		)
-
-		BeforeEach(func() {
-			ctx = context.Background()
-			scheme = runtime.NewScheme()
-			Expect(metal3v1alpha1.AddToScheme(scheme)).To(Succeed())
-		})
-
-		It("should return resource pools from BMHs included in inventory", func() {
-			// Create BMHs with required labels and valid states
-			bmh1 := createBMHWithLabels("bmh1", "ns1", map[string]string{
-				LabelResourcePoolID: "pool1",
-				LabelSiteID:         "site1",
-			})
-			bmh1.Status.Provisioning.State = metal3v1alpha1.StateAvailable
-
-			bmh2 := createBMHWithLabels("bmh2", "ns2", map[string]string{
-				LabelResourcePoolID: "pool2",
-				LabelSiteID:         "site2",
-			})
-			bmh2.Status.Provisioning.State = metal3v1alpha1.StateProvisioned
-
-			// Create BMH that should be excluded (missing labels)
-			bmh3 := createBasicBMH("bmh3", "ns3")
-
-			client := fake.NewClientBuilder().
-				WithScheme(scheme).
-				WithObjects(bmh1, bmh2, bmh3).
-				Build()
-
-			result, err := GetResourcePools(ctx, client)
-			Expect(err).ToNot(HaveOccurred())
-
-			response, ok := result.(inventory.GetResourcePools200JSONResponse)
-			Expect(ok).To(BeTrue())
-			Expect(response).To(HaveLen(2))
-
-			// Check if both pools are present
-			poolIds := make([]string, len(response))
-			for i, pool := range response {
-				poolIds[i] = pool.ResourcePoolId
-			}
-			Expect(poolIds).To(ContainElements("pool1", "pool2"))
-		})
-
-		It("should handle empty BMH list", func() {
-			client := fake.NewClientBuilder().
-				WithScheme(scheme).
-				Build()
-
-			result, err := GetResourcePools(ctx, client)
-			Expect(err).ToNot(HaveOccurred())
-
-			response, ok := result.(inventory.GetResourcePools200JSONResponse)
-			Expect(ok).To(BeTrue())
-			Expect(response).To(HaveLen(0))
 		})
 	})
 

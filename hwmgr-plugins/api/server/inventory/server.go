@@ -54,21 +54,6 @@ func (i *InventoryServer) GetMinorVersions(_ context.Context, _ GetMinorVersions
 	}), nil
 }
 
-func (i *InventoryServer) GetResourcePools(ctx context.Context, request GetResourcePoolsRequestObject) (GetResourcePoolsResponseObject, error) {
-	// TODO implement me
-	return GetResourcePools200JSONResponse{}, nil
-}
-
-func (i *InventoryServer) GetResourcePool(ctx context.Context, request GetResourcePoolRequestObject) (GetResourcePoolResponseObject, error) {
-	// TODO implement me
-	return GetResourcePool200JSONResponse{}, nil
-}
-
-func (i *InventoryServer) GetResourcePoolResources(ctx context.Context, request GetResourcePoolResourcesRequestObject) (GetResourcePoolResourcesResponseObject, error) {
-	// TODO implement me
-	return GetResourcePoolResources200JSONResponse{}, nil
-}
-
 func (i *InventoryServer) GetResources(ctx context.Context, request GetResourcesRequestObject) (GetResourcesResponseObject, error) {
 	// TODO implement me
 	return GetResources200JSONResponse{}, nil
