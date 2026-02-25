@@ -153,6 +153,7 @@ func Serve(config *api.ResourceServerConfig) error {
 			Name:          "OpenShift O-Cloud Manager",
 			OCloudId:      cloudID,
 			ServiceUri:    config.ExternalAddress,
+			Extensions:    map[string]interface{}{}, // Mandatory per O-RAN v11 spec
 		},
 		SubscriptionEventHandler: resourceNotifier,
 	}
