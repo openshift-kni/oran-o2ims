@@ -11,12 +11,14 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 
+	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
-	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 	models2 "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
@@ -45,8 +47,7 @@ type DataSource interface {
 // ResourceDataSource defines an interface of a data source capable of getting handling Inventory resources.
 type ResourceDataSource interface {
 	DataSource
-	GetResourcePools(ctx context.Context) ([]models.ResourcePool, error)
-	GetResources(ctx context.Context, pools []models.ResourcePool) ([]models.Resource, error)
+	GetResources(ctx context.Context) ([]models.Resource, error)
 	MakeResourceType(resource *models.Resource) (*models.ResourceType, error)
 }
 
@@ -67,6 +68,7 @@ type DataSourceLoader interface {
 
 // Collector defines the attributes required by the collector implementation.
 type Collector struct {
+	pool                *pgxpool.Pool // Direct pool injection for transaction operations
 	notificationHandler NotificationHandler
 	repository          *repo.ResourcesRepository
 	dataSources         []DataSource
@@ -75,8 +77,9 @@ type Collector struct {
 }
 
 // NewCollector creates a new collector instance
-func NewCollector(repo *repo.ResourcesRepository, notificationHandler NotificationHandler, loader DataSourceLoader, dataSources []DataSource) *Collector {
+func NewCollector(pool *pgxpool.Pool, repo *repo.ResourcesRepository, notificationHandler NotificationHandler, loader DataSourceLoader, dataSources []DataSource) *Collector {
 	return &Collector{
+		pool:                pool,
 		repository:          repo,
 		notificationHandler: notificationHandler,
 		dataSources:         dataSources,
@@ -251,7 +254,7 @@ func (c *Collector) purgeStaleResources(ctx context.Context, dataSource DataSour
 
 	count := 0
 	for _, resource := range resources {
-		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, resource, resource.ResourceID,
+		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, resource, resource.ResourceID,
 			&resource.ResourcePoolID, func(object interface{}) any {
 				r, _ := object.(models.Resource)
 				return models.ResourceToModel(&r, nil)
@@ -272,49 +275,20 @@ func (c *Collector) purgeStaleResources(ctx context.Context, dataSource DataSour
 	return count, nil
 }
 
-func (c *Collector) purgeStaleResourcePools(ctx context.Context, dataSource DataSource) (int, error) {
-	pools, err := c.repository.FindStaleResourcePools(ctx, dataSource.GetID(), dataSource.GetGenerationID())
-	if err != nil {
-		return 0, fmt.Errorf("failed to find stale resources: %w", err)
-	}
-
-	count := 0
-	for _, pool := range pools {
-		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, pool, pool.ResourcePoolID,
-			nil, func(object interface{}) any {
-				r, _ := object.(models.ResourcePool)
-				return models.ResourcePoolToModel(&r, commonapi.NewDefaultFieldOptions())
-			})
-		if err == nil {
-			return count, fmt.Errorf("failed to delete stale resource pool: %w", err)
-		}
-		if dataChangeEvent != nil {
-			count++
-			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
-		}
-	}
-
-	if count > 0 {
-		slog.Info("Purged stale resource pool", "count", count)
-	}
-
-	return count, nil
-}
-
 func (c *Collector) purgeStaleResourceTypes(ctx context.Context, dataSource DataSource) (int, error) {
-	pools, err := c.repository.FindStaleResourcePools(ctx, dataSource.GetID(), dataSource.GetGenerationID())
+	resourceTypes, err := c.repository.FindStaleResourceTypes(ctx, dataSource.GetID(), dataSource.GetGenerationID())
 	if err != nil {
 		return 0, fmt.Errorf("failed to find stale resource types: %w", err)
 	}
 
 	count := 0
-	for _, pool := range pools {
-		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, pool, pool.ResourcePoolID,
+	for _, resourceType := range resourceTypes {
+		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, resourceType, resourceType.ResourceTypeID,
 			nil, func(object interface{}) any {
-				r, _ := object.(models.ResourcePool)
-				return models.ResourcePoolToModel(&r, commonapi.NewDefaultFieldOptions())
+				r, _ := object.(models.ResourceType)
+				return models.ResourceTypeToModel(&r, nil)
 			})
-		if err == nil {
+		if err != nil {
 			return count, fmt.Errorf("failed to delete stale resource type: %w", err)
 		}
 		if dataChangeEvent != nil {
@@ -344,12 +318,6 @@ func (c *Collector) purgeStaleData(ctx context.Context, dataSource DataSource) e
 	}
 	total += count
 
-	count, err = c.purgeStaleResourcePools(ctx, dataSource)
-	if err != nil {
-		return fmt.Errorf("failed to purge stale resource pools: %w", err)
-	}
-	total += count
-
 	count, err = c.purgeStaleResourceTypes(ctx, dataSource)
 	if err != nil {
 		return fmt.Errorf("failed to purge stale resource types: %w", err)
@@ -362,17 +330,12 @@ func (c *Collector) purgeStaleData(ctx context.Context, dataSource DataSource) e
 }
 
 // executeOneDataSource runs a single iteration of the main loop for a specific data source instance.
+// Note: ResourcePools are now collected via CRD-based ResourcePoolDataSource (watch-based).
 func (c *Collector) executeOneDataSource(ctx context.Context, dataSource ResourceDataSource) (err error) {
 	// TODO: Add code to retrieve alarm dictionaries
 
-	// Get the list of resource pools for this data source
-	pools, err := c.collectResourcePools(ctx, dataSource)
-	if err != nil {
-		return fmt.Errorf("failed to collect resource pools: %w", err)
-	}
-
 	// Get the list of resources for this data source
-	_, err = c.collectResources(ctx, dataSource, pools)
+	_, err = c.collectResources(ctx, dataSource)
 	if err != nil {
 		return fmt.Errorf("failed to collect resources: %w", err)
 	}
@@ -398,21 +361,20 @@ func (c *Collector) executeOneDataSource(ctx context.Context, dataSource Resourc
 
 // collectResources collects Resource objects from the data source, persists them to the database,
 // and signals any change events to the notification processor.
-func (c *Collector) collectResources(ctx context.Context, dataSource ResourceDataSource,
-	pools []models.ResourcePool) ([]models.Resource, error) {
+func (c *Collector) collectResources(ctx context.Context, dataSource ResourceDataSource) ([]models.Resource, error) {
 	slog.Debug("collecting resource and types", "source", dataSource.Name())
 
-	resources, err := dataSource.GetResources(ctx, pools)
+	resources, err := dataSource.GetResources(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resources: %w", err)
 	}
 
-	// Fetch all alarm dictionaries and build a map for use in notifications
-	alarmDictMap, err := c.buildAlarmDictionaryMap(ctx)
+	// Fetch all alarm dictionaries and build a map of resource type ID -> alarm dictionary ID
+	alarmDictIDMap, err := c.buildAlarmDictionaryIDMap(ctx)
 	if err != nil {
 		slog.Warn("failed to fetch alarm dictionaries for notifications", "error", err)
-		// Continue without alarm dictionaries - notifications will have nil alarmDictionary
-		alarmDictMap = make(map[string]*common.AlarmDictionary)
+		// Continue without alarm dictionaries - notifications will have nil alarmDictionaryId
+		alarmDictIDMap = make(map[string]*uuid.UUID)
 	}
 
 	// Loop over the set of resources and create the associated resource types.
@@ -429,13 +391,13 @@ func (c *Collector) collectResources(ctx context.Context, dataSource ResourceDat
 		}
 		seen[resourceType.ResourceTypeID] = true
 
-		// Capture alarm dictionary for this resource type (may be nil if not found)
-		alarmDict := alarmDictMap[resourceType.ResourceTypeID.String()]
+		// Capture alarm dictionary ID for this resource type (may be nil if not found)
+		alarmDictID := alarmDictIDMap[resourceType.ResourceTypeID.String()]
 
 		dataChangeEvent, err := svcutils.PersistObjectWithChangeEvent(
-			ctx, c.repository.Db, *resourceType, resourceType.ResourceTypeID, nil, func(object interface{}) any {
+			ctx, c.pool, *resourceType, resourceType.ResourceTypeID, nil, func(object interface{}) any {
 				record, _ := object.(models.ResourceType)
-				return models.ResourceTypeToModel(&record, alarmDict)
+				return models.ResourceTypeToModel(&record, alarmDictID)
 			})
 		if err != nil {
 			return nil, fmt.Errorf("failed to persist resource type': %w", err)
@@ -449,7 +411,7 @@ func (c *Collector) collectResources(ctx context.Context, dataSource ResourceDat
 	// Loop over the set of resources and insert (or update) as needed
 	for _, resource := range resources {
 		dataChangeEvent, err := svcutils.PersistObjectWithChangeEvent(
-			ctx, c.repository.Db, resource, resource.ResourceID, &resource.ResourcePoolID, func(object interface{}) any {
+			ctx, c.pool, resource, resource.ResourceID, &resource.ResourcePoolID, func(object interface{}) any {
 				record, _ := object.(models.Resource)
 				return models.ResourceToModel(&record, nil)
 			})
@@ -465,23 +427,18 @@ func (c *Collector) collectResources(ctx context.Context, dataSource ResourceDat
 	return resources, nil
 }
 
-// buildAlarmDictionaryMap fetches all alarm dictionaries and their definitions,
-// and returns a map keyed by resource type ID for efficient lookup.
-func (c *Collector) buildAlarmDictionaryMap(ctx context.Context) (map[string]*common.AlarmDictionary, error) {
+// buildAlarmDictionaryIDMap fetches all alarm dictionaries and returns a map
+// of resource type ID -> alarm dictionary ID for efficient lookup.
+func (c *Collector) buildAlarmDictionaryIDMap(ctx context.Context) (map[string]*uuid.UUID, error) {
 	alarmDictionaries, err := c.repository.GetAlarmDictionaries(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get alarm dictionaries: %w", err)
 	}
 
-	result := make(map[string]*common.AlarmDictionary)
+	result := make(map[string]*uuid.UUID)
 	for _, dict := range alarmDictionaries {
-		definitions, err := c.repository.GetAlarmDefinitionsByAlarmDictionaryID(ctx, dict.AlarmDictionaryID)
-		if err != nil {
-			slog.Warn("failed to get alarm definitions", "alarmDictionaryId", dict.AlarmDictionaryID, "error", err)
-			continue
-		}
-		converted := models.AlarmDictionaryToModel(&dict, definitions)
-		result[dict.ResourceTypeID.String()] = &converted
+		dictID := dict.AlarmDictionaryID
+		result[dict.ResourceTypeID.String()] = &dictID
 	}
 
 	return result, nil
@@ -489,33 +446,6 @@ func (c *Collector) buildAlarmDictionaryMap(ctx context.Context) (map[string]*co
 
 // collectResourcePools collects ResourcePool objects from the data source, persists them to the database,
 // and signals any change events to the notification processor.
-func (c *Collector) collectResourcePools(ctx context.Context, dataSource ResourceDataSource) ([]models.ResourcePool, error) {
-	slog.Debug("collecting resource pools", "source", dataSource.Name())
-
-	pools, err := dataSource.GetResourcePools(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get resource pools: %w", err)
-	}
-
-	// Loop over the set of resource pools and insert (or update) as needed
-	for _, pool := range pools {
-		dataChangeEvent, err := svcutils.PersistObjectWithChangeEvent(
-			ctx, c.repository.Db, pool, pool.ResourcePoolID, nil, func(object interface{}) any {
-				record, _ := object.(models.ResourcePool)
-				return models.ResourcePoolToModel(&record, commonapi.NewDefaultFieldOptions())
-			})
-		if err != nil {
-			return nil, fmt.Errorf("failed to persist resource pool: %w", err)
-		}
-
-		if dataChangeEvent != nil {
-			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
-		}
-	}
-
-	return pools, nil
-}
-
 // handleDeploymentManagerSyncCompletion handles the end of sync for DeploymentManager objects.  It deletes any
 // DeploymentManager objects not included in the set of keys received during the sync operation.
 func (c *Collector) handleDeploymentManagerSyncCompletion(ctx context.Context, ids []any) error {
@@ -527,7 +457,7 @@ func (c *Collector) handleDeploymentManagerSyncCompletion(ctx context.Context, i
 
 	count := 0
 	for _, record := range records {
-		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.repository.Db, record, record.DeploymentManagerID, nil, func(object interface{}) any {
+		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, record, record.DeploymentManagerID, nil, func(object interface{}) any {
 			r, _ := object.(models.DeploymentManager)
 			return models.DeploymentManagerToModel(&r, commonapi.NewDefaultFieldOptions())
 		})
@@ -563,6 +493,12 @@ func (c *Collector) handleSyncCompletion(ctx context.Context, objectType db.Mode
 	switch obj := objectType.(type) {
 	case models.DeploymentManager:
 		return c.handleDeploymentManagerSyncCompletion(ctx, ids)
+	case models.Location:
+		return c.handleLocationSyncCompletion(ctx, keys)
+	case models.OCloudSite:
+		return c.handleOCloudSiteSyncCompletion(ctx, ids)
+	case models.ResourcePool:
+		return c.handleResourcePoolSyncCompletion(ctx, ids)
 	default:
 		return fmt.Errorf("unsupported sync completion type for '%T'", obj)
 	}
@@ -578,6 +514,12 @@ func (c *Collector) handleAsyncEvent(ctx context.Context, event *async.AsyncChan
 	switch value := event.Object.(type) {
 	case models.DeploymentManager:
 		return c.handleAsyncDeploymentManagerEvent(ctx, value, event.EventType == async.Deleted)
+	case models.Location:
+		return c.handleAsyncLocationEvent(ctx, value, event.EventType == async.Deleted)
+	case models.OCloudSite:
+		return c.handleAsyncOCloudSiteEvent(ctx, value, event.EventType == async.Deleted)
+	case models.ResourcePool:
+		return c.handleAsyncResourcePoolEvent(ctx, value, event.EventType == async.Deleted)
 	default:
 		return fmt.Errorf("unknown object type '%T'", event.Object)
 	}
@@ -589,7 +531,7 @@ func (c *Collector) handleAsyncDeploymentManagerEvent(ctx context.Context, deplo
 	var err error
 	if deleted {
 		dataChangeEvent, err = svcutils.DeleteObjectWithChangeEvent(
-			ctx, c.repository.Db, deploymentManager, deploymentManager.DeploymentManagerID, nil, func(object interface{}) any {
+			ctx, c.pool, deploymentManager, deploymentManager.DeploymentManagerID, nil, func(object interface{}) any {
 				record, _ := object.(models.DeploymentManager)
 				return models.DeploymentManagerToModel(&record, commonapi.NewDefaultFieldOptions())
 			})
@@ -599,7 +541,7 @@ func (c *Collector) handleAsyncDeploymentManagerEvent(ctx context.Context, deplo
 		}
 	} else {
 		dataChangeEvent, err = svcutils.PersistObjectWithChangeEvent(
-			ctx, c.repository.Db, deploymentManager, deploymentManager.DeploymentManagerID, nil, func(object interface{}) any {
+			ctx, c.pool, deploymentManager, deploymentManager.DeploymentManagerID, nil, func(object interface{}) any {
 				record, _ := object.(models.DeploymentManager)
 				return models.DeploymentManagerToModel(&record, commonapi.NewDefaultFieldOptions())
 			})
@@ -614,4 +556,261 @@ func (c *Collector) handleAsyncDeploymentManagerEvent(ctx context.Context, deplo
 	}
 
 	return nil
+}
+
+// handleAsyncLocationEvent handles an async event received for a Location object.
+func (c *Collector) handleAsyncLocationEvent(ctx context.Context, location models.Location, deleted bool) error {
+	var dataChangeEvent *models2.DataChangeEvent
+	var err error
+	converter := func(object interface{}) any {
+		record, _ := object.(models.Location)
+		return models.LocationToModel(&record, nil)
+	}
+
+	if deleted {
+		dataChangeEvent, err = svcutils.DeleteObjectWithChangeEvent(
+			ctx, c.pool, location, location.GlobalLocationID, nil, converter)
+		if err != nil {
+			return fmt.Errorf("failed to delete location '%s': %w", location.GlobalLocationID, err)
+		}
+	} else {
+		dataChangeEvent, err = svcutils.PersistObjectWithChangeEvent(
+			ctx, c.pool, location, location.GlobalLocationID, nil, converter)
+		if err != nil {
+			return fmt.Errorf("failed to persist location '%s': %w", location.GlobalLocationID, err)
+		}
+	}
+
+	if dataChangeEvent != nil {
+		c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+	}
+
+	return nil
+}
+
+// handleAsyncOCloudSiteEvent handles an async event received for an OCloudSite object.
+func (c *Collector) handleAsyncOCloudSiteEvent(ctx context.Context, site models.OCloudSite, deleted bool) error {
+	var dataChangeEvent *models2.DataChangeEvent
+	var err error
+
+	if deleted {
+		dataChangeEvent, err = svcutils.DeleteObjectWithChangeEvent(
+			ctx, c.pool, site, site.OCloudSiteID, nil, func(object interface{}) any {
+				record, _ := object.(models.OCloudSite)
+				return models.OCloudSiteToModel(&record, nil)
+			})
+
+		if err != nil {
+			return fmt.Errorf("failed to delete OCloudSite '%s': %w", site.OCloudSiteID, err)
+		}
+	} else {
+		dataChangeEvent, err = svcutils.PersistObjectWithChangeEvent(
+			ctx, c.pool, site, site.OCloudSiteID, nil, func(object interface{}) any {
+				record, _ := object.(models.OCloudSite)
+				return models.OCloudSiteToModel(&record, nil)
+			})
+
+		if err != nil {
+			return fmt.Errorf("failed to persist OCloudSite '%s': %w", site.OCloudSiteID, err)
+		}
+	}
+
+	if dataChangeEvent != nil {
+		c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+	}
+
+	return nil
+}
+
+// handleLocationSyncCompletion handles the sync completion for Location objects.
+func (c *Collector) handleLocationSyncCompletion(ctx context.Context, keys []uuid.UUID) error {
+	slog.Debug("Handling end of sync for Location instances", "count", len(keys))
+
+	// Create a set of tracking UUIDs for fast lookup
+	keySet := make(map[uuid.UUID]struct{}, len(keys))
+	for _, key := range keys {
+		keySet[key] = struct{}{}
+	}
+
+	// Get all locations and check if their tracking UUID is in the set
+	locations, err := c.repository.GetLocations(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get locations: %w", err)
+	}
+
+	converter := func(object interface{}) any {
+		record, _ := object.(models.Location)
+		return models.LocationToModel(&record, nil)
+	}
+
+	count := 0
+	for _, location := range locations {
+		trackingUUID := svcutils.GetTrackingUUID(location.GlobalLocationID)
+
+		if _, exists := keySet[trackingUUID]; !exists {
+			// This location is stale, delete it
+			dataChangeEvent, deleteErr := svcutils.DeleteObjectWithChangeEvent(
+				ctx, c.pool, location, location.GlobalLocationID, nil, converter)
+			if deleteErr != nil {
+				return fmt.Errorf("failed to delete stale location '%s': %w", location.GlobalLocationID, deleteErr)
+			}
+
+			if dataChangeEvent != nil {
+				c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+			}
+			count++
+		}
+	}
+
+	if count > 0 {
+		slog.Info("Deleted stale location records", "count", count)
+	}
+
+	return nil
+}
+
+// handleOCloudSiteSyncCompletion handles the sync completion for OCloudSite objects.
+func (c *Collector) handleOCloudSiteSyncCompletion(ctx context.Context, ids []any) error {
+	slog.Debug("Handling end of sync for OCloudSite instances", "count", len(ids))
+
+	records, err := c.repository.GetOCloudSitesNotIn(ctx, ids)
+	if err != nil {
+		return fmt.Errorf("failed to get stale OCloudSites: %w", err)
+	}
+
+	count := 0
+	for _, record := range records {
+		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, record, record.OCloudSiteID, nil, func(object interface{}) any {
+			r, _ := object.(models.OCloudSite)
+			return models.OCloudSiteToModel(&r, nil)
+		})
+
+		if err != nil {
+			return fmt.Errorf("failed to delete stale OCloudSite: %w", err)
+		}
+
+		if dataChangeEvent != nil {
+			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+			count++
+		}
+	}
+
+	if count > 0 {
+		slog.Info("Deleted stale OCloudSite records", "count", count)
+	}
+
+	return nil
+}
+
+// handleAsyncResourcePoolEvent handles an async event received for a ResourcePool object.
+func (c *Collector) handleAsyncResourcePoolEvent(ctx context.Context, pool models.ResourcePool, deleted bool) error {
+	var dataChangeEvent *models2.DataChangeEvent
+	var err error
+	converter := func(object interface{}) any {
+		record, _ := object.(models.ResourcePool)
+		return models.ResourcePoolToModel(&record, nil)
+	}
+
+	if deleted {
+		dataChangeEvent, err = svcutils.DeleteObjectWithChangeEvent(
+			ctx, c.pool, pool, pool.ResourcePoolID, nil, converter)
+		if err != nil {
+			return fmt.Errorf("failed to delete ResourcePool '%s': %w", pool.ResourcePoolID, err)
+		}
+	} else {
+		dataChangeEvent, err = svcutils.PersistObjectWithChangeEvent(
+			ctx, c.pool, pool, pool.ResourcePoolID, nil, converter)
+		if err != nil {
+			return fmt.Errorf("failed to persist ResourcePool '%s': %w", pool.ResourcePoolID, err)
+		}
+	}
+
+	if dataChangeEvent != nil {
+		c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+	}
+
+	return nil
+}
+
+// handleResourcePoolSyncCompletion handles the sync completion for ResourcePool objects.
+func (c *Collector) handleResourcePoolSyncCompletion(ctx context.Context, ids []any) error {
+	slog.Debug("Handling end of sync for ResourcePool instances", "count", len(ids))
+
+	records, err := c.repository.GetResourcePoolsNotIn(ctx, ids)
+	if err != nil {
+		return fmt.Errorf("failed to get stale ResourcePools: %w", err)
+	}
+
+	count := 0
+	for _, record := range records {
+		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, record, record.ResourcePoolID, nil, func(object interface{}) any {
+			r, _ := object.(models.ResourcePool)
+			return models.ResourcePoolToModel(&r, nil)
+		})
+
+		if err != nil {
+			return fmt.Errorf("failed to delete stale ResourcePool: %w", err)
+		}
+
+		if dataChangeEvent != nil {
+			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+			count++
+		}
+	}
+
+	if count > 0 {
+		slog.Info("Deleted stale ResourcePool records", "count", count)
+	}
+
+	return nil
+}
+
+// convertCoordinateToGeoJSON converts CRD coordinate to GeoJSON Point format
+// GeoJSON uses [longitude, latitude, altitude] order per RFC 7946
+func convertCoordinateToGeoJSON(coord *inventoryv1alpha1.GeoLocation) (map[string]interface{}, error) {
+	if coord == nil {
+		// nil coordinate is valid (optional field), not an error condition
+		return nil, nil //nolint:nilnil
+	}
+
+	lat, err := strconv.ParseFloat(coord.Latitude, 64)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse latitude %q: %w", coord.Latitude, err)
+	}
+
+	lon, err := strconv.ParseFloat(coord.Longitude, 64)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse longitude %q: %w", coord.Longitude, err)
+	}
+
+	coordinates := []float64{lon, lat} // GeoJSON: [longitude, latitude]
+
+	if coord.Altitude != nil {
+		alt, err := strconv.ParseFloat(*coord.Altitude, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse altitude %q: %w", *coord.Altitude, err)
+		}
+		coordinates = append(coordinates, alt)
+	}
+
+	return map[string]interface{}{
+		"type":        "Point",
+		"coordinates": coordinates,
+	}, nil
+}
+
+// convertCivicAddress converts CRD civic address elements to database format
+func convertCivicAddress(civic []inventoryv1alpha1.CivicAddressElement) []map[string]interface{} {
+	if len(civic) == 0 {
+		return nil
+	}
+
+	result := make([]map[string]interface{}, len(civic))
+	for i, elem := range civic {
+		result[i] = map[string]interface{}{
+			"caType":  elem.CaType,
+			"caValue": elem.CaValue,
+		}
+	}
+	return result
 }
