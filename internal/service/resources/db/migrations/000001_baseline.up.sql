@@ -27,22 +27,68 @@ CREATE TABLE IF NOT EXISTS resource_type
     FOREIGN KEY (data_source_id) REFERENCES data_source (data_source_id) -- Manual cascade required for events
 );
 
+-- Table: location
+-- O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00
+-- Represents a physical or logical location where O-Cloud Sites can be deployed
+CREATE TABLE IF NOT EXISTS location
+(
+    global_location_id VARCHAR(255) PRIMARY KEY,                      -- SMO-defined identifier (not UUID per spec)
+    name               VARCHAR(255) NOT NULL,
+    description        TEXT         NOT NULL,
+    coordinate         JSONB        NULL,                             -- GeoJSON Point: {"type": "Point", "coordinates": [lon, lat]}
+    civic_address      JSONB        NULL,                             -- Array of {caType, caValue} per RFC 4776
+    address            VARCHAR(512) NULL,                             -- Human-readable address
+    extensions         JSONB        NULL,
+    data_source_id     UUID         NOT NULL,
+    generation_id      INTEGER      NOT NULL DEFAULT 0,
+    created_at         TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (data_source_id) REFERENCES data_source (data_source_id),
+    -- Per O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00 3.2.6.2.16: at least one of coordinate, civic_address, or address is required
+    CONSTRAINT chk_location_address_required
+        CHECK (coordinate IS NOT NULL OR civic_address IS NOT NULL OR address IS NOT NULL)
+);
+
+-- Table: o_cloud_site
+-- O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00
+-- Represents an O-Cloud site instance at a location
+CREATE TABLE IF NOT EXISTS o_cloud_site
+(
+    o_cloud_site_id    UUID PRIMARY KEY,                              -- Locally unique within O-Cloud
+    global_location_id VARCHAR(255) NOT NULL,                         -- References location
+    name               VARCHAR(255) NOT NULL,
+    description        TEXT         NOT NULL,
+    extensions         JSONB        NULL,
+    data_source_id     UUID         NOT NULL,
+    generation_id      INTEGER      NOT NULL DEFAULT 0,
+    created_at         TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (data_source_id) REFERENCES data_source (data_source_id),
+    FOREIGN KEY (global_location_id) REFERENCES location (global_location_id)
+);
+
+-- Index on o_cloud_site.global_location_id for location -> sites lookups
+CREATE INDEX IF NOT EXISTS idx_o_cloud_site_global_location_id
+    ON o_cloud_site (global_location_id);
+
 -- Table: resource_pool
+-- O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00
 CREATE TABLE IF NOT EXISTS resource_pool
 (
     resource_pool_id   UUID PRIMARY KEY,
-    global_location_id UUID NOT NULL,
     name               VARCHAR(255) NOT NULL,
     description        TEXT        NOT NULL,
-    o_cloud_id         UUID         NOT NULL,
-    location           VARCHAR(64) NULL,
+    o_cloud_site_id    UUID         NOT NULL,                         -- References o_cloud_site (v11)
     extensions         json         NULL,
     data_source_id     UUID        NOT NULL,
     generation_id      INTEGER      NOT NULL DEFAULT 0,
     external_id VARCHAR(255) NOT NULL,                                  -- FQDN of resource in downstream data source (e.g., id=XXX)
     created_at         TIMESTAMPTZ           DEFAULT CURRENT_TIMESTAMP, -- TBD; tracks when first imported
-    FOREIGN KEY (data_source_id) REFERENCES data_source (data_source_id) -- Manual cascade required for events
+    FOREIGN KEY (data_source_id) REFERENCES data_source (data_source_id), -- Manual cascade required for events
+    FOREIGN KEY (o_cloud_site_id) REFERENCES o_cloud_site (o_cloud_site_id)
 );
+
+-- Index on resource_pool.o_cloud_site_id for site -> pools lookups
+CREATE INDEX IF NOT EXISTS idx_resource_pool_o_cloud_site_id
+    ON resource_pool (o_cloud_site_id);
 
 -- Table: resource
 CREATE TABLE IF NOT EXISTS resource

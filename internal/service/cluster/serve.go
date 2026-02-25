@@ -130,7 +130,7 @@ func Serve(config *api.ClusterServerConfig) error {
 	clusterNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider, clientFactory)
 
 	// Create the collector
-	clusterCollector := collector.NewCollector(repository, clusterNotifier, []collector.DataSource{k8s, alarms})
+	clusterCollector := collector.NewCollector(pool, repository, clusterNotifier, []collector.DataSource{k8s, alarms})
 
 	// Init server
 	// Create the handler
