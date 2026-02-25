@@ -70,12 +70,3 @@ func (i *InventoryClient) GetResourcesWithResponse(ctx context.Context, reqEdito
 	}
 	return ParseGetResourcesResponse(rsp)
 }
-
-// GetResourcePoolsWithResponse request returning *GetResourcePoolsResponse
-func (i *InventoryClient) GetResourcePoolsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetResourcePoolsResponse, error) {
-	rsp, err := i.client.GetResourcePools(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetResourcePoolsResponse(rsp)
-}
