@@ -973,6 +973,41 @@ var _ = Describe("BareMetalHost Manager", func() {
 			// Other labels should remain
 			Expect(updatedImage.Labels["other-label"]).To(Equal("other-value"))
 		})
+
+		It("should remove the AI deprovision finalizer from PreprovisioningImage", func() {
+			image.Finalizers = []string{
+				PreprovisioningImageDeprovisionFinalizer,
+				"other-finalizer",
+			}
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(image).Build()
+
+			name := types.NamespacedName{Name: image.Name, Namespace: image.Namespace}
+			err := removeInfraEnvLabelFromPreprovisioningImage(ctx, fakeClient, logger, name)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify finalizer was removed
+			var updatedImage metal3v1alpha1.PreprovisioningImage
+			err = fakeClient.Get(ctx, name, &updatedImage)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedImage.Finalizers).NotTo(ContainElement(PreprovisioningImageDeprovisionFinalizer))
+			// Other finalizers should remain
+			Expect(updatedImage.Finalizers).To(ContainElement("other-finalizer"))
+		})
+
+		It("should succeed when the AI deprovision finalizer is not present", func() {
+			image.Finalizers = []string{"other-finalizer"}
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(image).Build()
+
+			name := types.NamespacedName{Name: image.Name, Namespace: image.Namespace}
+			err := removeInfraEnvLabelFromPreprovisioningImage(ctx, fakeClient, logger, name)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify other finalizers are untouched
+			var updatedImage metal3v1alpha1.PreprovisioningImage
+			err = fakeClient.Get(ctx, name, &updatedImage)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedImage.Finalizers).To(ContainElement("other-finalizer"))
+		})
 	})
 
 	Describe("annotateNodeConfigInProgress", func() {
@@ -1127,6 +1162,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 			Expect(BmhAllocatedLabel).To(Equal("clcm.openshift.io/allocated"))
 			Expect(BmhHostMgmtAnnotation).To(Equal("bmac.agent-install.openshift.io/allow-provisioned-host-management"))
 			Expect(BmhInfraEnvLabel).To(Equal("infraenvs.agent-install.openshift.io"))
+			Expect(PreprovisioningImageDeprovisionFinalizer).To(Equal("preprovisioningimage.agent-install.openshift.io/ai-deprovision"))
 			Expect(SiteConfigOwnedByLabel).To(Equal("siteconfig.open-cluster-management.io/owned-by"))
 			Expect(UpdateReasonBIOSSettings).To(Equal("bios-settings-update"))
 			Expect(UpdateReasonFirmware).To(Equal("firmware-update"))
