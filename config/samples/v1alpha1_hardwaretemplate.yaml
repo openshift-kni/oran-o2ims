@@ -8,6 +8,9 @@ spec:
   nodeGroupData:
     - name: controller
       role: master
+      # hwProfile is optional and deprecated. Prefer specifying hwProfile via
+      # templateParameters.hwTemplateParameters.nodeGroupData.<name>.hwProfile
+      # in the ProvisioningRequest instead.
       hwProfile: rh-profile-r740-bios-settings
       resourceSelector:
         "server-type": "R740"
