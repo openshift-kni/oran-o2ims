@@ -8,7 +8,7 @@ spec:
   version: v4-Y-Z-3
   release: 4.Y.Z
   templates:
-    hwTemplate: dell-r740-blue-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06-24.0.5
+    hwTemplate: dell-r740-blue
     clusterInstanceDefaults: clusterinstance-defaults-v3
     policyTemplateDefaults: policytemplate-defaults-v1
   templateParameterSchema:
@@ -17,6 +17,25 @@ spec:
         type: string
       oCloudSiteId:
         type: string
+      hwTemplateParameters:
+        description: >
+          hwTemplateParameters allows overriding hardware template settings
+          per nodeGroup, such as the HardwareProfile to use.
+        properties:
+          nodeGroupData:
+            description: >
+              Per-nodeGroup overrides, keyed by nodeGroup name as defined in
+              the HardwareTemplate's nodeGroupData.
+            type: object
+            additionalProperties:
+              type: object
+              properties:
+                hwProfile:
+                  description: >
+                    Name of the HardwareProfile CR to use for this node group.
+                    Overrides the (deprecated) hwProfile in the HardwareTemplate.
+                  type: string
+        type: object
       policyTemplateParameters:
         description: policyTemplateSchema defines the available parameters for cluster configuration
         properties:

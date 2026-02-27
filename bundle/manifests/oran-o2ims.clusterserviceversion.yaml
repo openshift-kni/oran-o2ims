@@ -176,6 +176,25 @@ metadata:
                   ],
                   "type": "object"
                 },
+                "hwTemplateParameters": {
+                  "description": "hwTemplateParameters allows overriding hardware template settings per nodeGroup, such as the HardwareProfile to use.\n",
+                  "properties": {
+                    "nodeGroupData": {
+                      "additionalProperties": {
+                        "properties": {
+                          "hwProfile": {
+                            "description": "Name of the HardwareProfile CR to use for this node group. Overrides the (deprecated) hwProfile in the HardwareTemplate.\n",
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "description": "Per-nodeGroup overrides, keyed by nodeGroup name as defined in the HardwareTemplate's nodeGroupData.\n",
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                },
                 "nodeClusterName": {
                   "type": "string"
                 },
