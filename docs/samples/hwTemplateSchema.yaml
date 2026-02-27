@@ -1,0 +1,19 @@
+hwTemplateParameters:
+  description: >
+    hwTemplateParameters allows overriding hardware template settings
+    per nodeGroup, such as the HardwareProfile to use.
+  properties:
+    nodeGroupData:
+      description: >
+        Per-nodeGroup overrides, keyed by nodeGroup name as defined in
+        the HardwareTemplate's nodeGroupData.
+      type: object
+      additionalProperties:
+        type: object
+        properties:
+          hwProfile:
+            description: >
+              Name of the HardwareProfile CR to use for this node group.
+              Overrides the (deprecated) hwProfile in the HardwareTemplate.
+            type: string
+  type: object

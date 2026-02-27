@@ -528,37 +528,47 @@ metadata:
 
 ### Switching to a new hardware profile
 
-We assume a ManagedCluster has been installed through a `ProvisioningRequest` referencing the [sno-ran-du.v4-Y-Z-4](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml) `ClusterTemplate` CR.
+We assume a ManagedCluster has been installed through a `ProvisioningRequest` referencing the
+[sno-ran-du.v4-Y-Z-4](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml)
+`ClusterTemplate` CR, which uses the static
+[dell-r740-blue](../samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/dell-r740-blue.yaml)
+`HardwareTemplate`.
 
-In this example we are updating BIOS settings, BIOS firmware, and BMC firmware by updating the `hwProfile` under `spec.nodeGroupData.hwProfile`
-in the [dell-r740-blue-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06-24.0.5](../samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/dell-r740-blue-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06-24.0.5.yaml) hardware template resource.
+In this example we are updating BIOS settings, BIOS firmware, and BMC firmware by changing
+the `HardwareProfile` referenced via `templateParameters.hwTemplateParameters` in the
+`ProvisioningRequest`. The `HardwareTemplate` and `ClusterTemplate` remain unchanged —
+only the `ProvisioningRequest` and the `HardwareProfile` CR need to be updated.
 
 The following steps are required:
 
-1. Upversion the [sno-ran-du.v4-Y-Z-4](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml) ClusterTemplate:
-    * Create a new version of [dell-r740-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06-24.0.5](../samples/git-setup/clustertemplates/hardwareprofiles/dell-r740-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06-24.0.5.yaml) `HardwareProfile` - [dell-r740-bios-2.23.0-bmc-7.00.00.181](../samples/git-setup/clustertemplates/hardwareprofiles/dell-r740-bios-2.23.0-bmc-7.00.00.181.yaml)
+1. Create a new `HardwareProfile` CR (if one does not already exist for the target firmware versions):
+    * Create a new version of [dell-r740-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06-24.0.5](../samples/git-setup/clustertemplates/hardwareprofiles/dell-r740-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06-24.0.5.yaml) `HardwareProfile` — [dell-r740-bios-2.23.0-bmc-7.00.00.181](../samples/git-setup/clustertemplates/hardwareprofiles/dell-r740-bios-2.23.0-bmc-7.00.00.181.yaml)
         * Update the name from `dell-r740-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06-24.0.5` to `dell-r740-bios-2.23.0-bmc-7.00.00.181`.
         * Update the `spec.bios`, `spec.biosFirmware` and `spec.bmcFirmware` with desired settings/versions.
         * Remove the `spec.nicFirmware`.
-    * Create a new version of [dell-r740-blue-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06-24.0.5](../samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/dell-r740-blue-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06-24.0.5.yaml) `HardwareTemplate` - [dell-r740-blue-bios-2.23.0-bmc-7.00.00.181](../samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/dell-r740-blue-bios-2.23.0-bmc-7.00.00.181.yaml)
-        * The content is updated to point to new `hwProfile(s)`. For our example we are updating `spec.nodeGroupData.hwProfile` from `profile-dell-r740-v1` to `profile-dell-r740-v2`.
-    * Create a new version of the [sno-ran-du.v4-Y-Z-4](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml) `ClusterTemplate` - [sno-ran-du.v4-Y-Z-5](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-5.yaml).
-        * update the name from `sno-ran-du.v4-Y-Z-4` to `sno-ran-du.v4-Y-Z-5` (the namespace remains `sno-ran-du-v4-Y-Z`).
-        * update `spec.version` from `v4-Y-Z-4` to `v4-Y-Z-5`.
-        * update `spec.templates.hwTemplate` from `dell-r740-blue-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06-24.0.5` to `dell-r740-blue-bios-2.23.0-bmc-7.00.00.181`.
-2. Update the kustomization files to include the new resources. ArgoCD will automatically sync them to the hub cluster.
-    * The O-Cloud manager validates the new `ClusterTemplate`, but no other action is taken since the `ProvisioningRequest` has not been updated.
-3. The SMO selects the new `ClusterTemplate` version in the `ProvisioningRequest`.
-    * `spec.templateVersion` is updated from `v4-Y-Z-4` to `v4-Y-Z-5`, the one pointing to the new `hwProfile`.
-4. The O-Cloud manager detects the change:
-    * Updates the hardware profile in the `nodeAllocationRequests` CR for that cluster to the new profile.
+    * Update the kustomization files to include the new `HardwareProfile`. ArgoCD will automatically sync it to the hub cluster.
+    * No changes to `HardwareTemplate` or `ClusterTemplate` CRs are needed.
+2. Update the `ProvisioningRequest` to reference the new `HardwareProfile`:
+    * Set `spec.templateParameters.hwTemplateParameters.nodeGroupData.controller.hwProfile` to the new profile name (`dell-r740-bios-2.23.0-bmc-7.00.00.181`).
+
+    ```yaml
+    spec:
+      templateParameters:
+        hwTemplateParameters:
+          nodeGroupData:
+            controller:
+              hwProfile: dell-r740-bios-2.23.0-bmc-7.00.00.181
+    ```
+
+3. The O-Cloud manager detects the change:
+    * Updates the hardware profile in the `NodeAllocationRequest` CR for that cluster to the new profile.
 
     ```yaml
     spec:
       ...
         nodeGroup:
         - nodeGroupData:
-            hwProfile: dell-r740-blue-bios-2.23.0-bmc-7.00.00.181
+            hwProfile: dell-r740-bios-2.23.0-bmc-7.00.00.181
             name: controller
             resourceSelector:
               server-colour: blue
@@ -583,7 +593,7 @@ The following steps are required:
           provisioningState: progressing
     ```
 
-5. The O-Cloud Metal3 hardware plugin detects the updated `NodeAllocationRequest` CR:
+4. The O-Cloud Metal3 hardware plugin detects the updated `NodeAllocationRequest` CR:
     * It lists the `AllocatedNode` CRs that reference the `NodeAllocationRequest` and updates `spec.hwProfile` in each `AllocatedNode` CR to the new profile.
     * It computes BIOS/firmware changes from the new `HardwareProfile` and requests the updates by updating the Metal3 resources—`HostFirmwareSettings` and `HostFirmwareComponents`—with the changes.
     * The `NodeAllocationRequest` and `AllocatedNode` CRs status conditions are also updated to reflect the configuration change.
@@ -622,8 +632,8 @@ The following steps are required:
       type: Configured
     ```
 
-6. Metal3 baremetal operator applies the updates on the host.
-7. The O-Cloud metal3 hardware plugin waits for the result via `HostFirmwareSettings`/`HostFirmwareComponents` status and validates configuration.
+5. Metal3 baremetal operator applies the updates on the host.
+6. The O-Cloud metal3 hardware plugin waits for the result via `HostFirmwareSettings`/`HostFirmwareComponents` status and validates configuration.
     * Success scenario:
         * It updates the status of the `AllocatedNode` CR to reflect the result of the operation.
 
@@ -640,7 +650,7 @@ The following steps are required:
             reason: ConfigurationApplied
             status: "True"
             type: Configured
-          hwProfile: dell-r740-blue-bios-2.23.0-bmc-7.00.00.181
+          hwProfile: dell-r740-bios-2.23.0-bmc-7.00.00.181
         ```
 
         * The `currentVersion` values for bios and bmc in `HostFirmwareComponents` status should match the versions declared in the new HardwareProfile.
@@ -684,13 +694,13 @@ The following steps are required:
             reason: ConfigurationApplied
             status: "True"
             type: Configured
-         ```
+        ```
 
     * Failure scenario:
         * The operation is aborted.
         * The status of the `AllocatedNode` CR is updated with the failure reason.
         * The O-Cloud manager does not initiate a rollback of any nodes already updated. This is left to the user to remediate.
-8. The O-Cloud manager will update the `ProvisioningRequest` status to reflect the result of the operation, based on the status update of the `NodeAllocationRequest` CR:
+7. The O-Cloud manager will update the `ProvisioningRequest` status to reflect the result of the operation, based on the status update of the `NodeAllocationRequest` CR:
 
   ```yaml
       - lastTransitionTime: "2025-10-01T22:05:01Z"

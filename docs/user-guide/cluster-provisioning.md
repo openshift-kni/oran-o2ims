@@ -447,6 +447,13 @@ curl -sk -X POST \
   "templateParameters": {
     "nodeClusterName": "sno1",
     "oCloudSiteId": "local-west",
+    "hwTemplateParameters": {
+      "nodeGroupData": {
+        "controller": {
+          "hwProfile": "rh-profile-r740-bios-settings"
+        }
+      }
+    },
     "policyTemplateParameters": {
       "sriov-network-pfNames-1": "[\"ens1f2\"]",
       "sriov-network-pfNames-2": "[\"ens1f3\"]"
@@ -516,6 +523,13 @@ curl -sk -X PUT \
   "templateParameters": {
     "nodeClusterName": "sno1",
     "oCloudSiteId": "local-west",
+    "hwTemplateParameters": {
+      "nodeGroupData": {
+        "controller": {
+          "hwProfile": "rh-profile-r740-bios-settings"
+        }
+      }
+    },
     "policyTemplateParameters": {
       "sriov-network-pfNames-1": "[\"ens1f2\"]",
       "sriov-network-pfNames-2": "[\"ens1f3\"]"
