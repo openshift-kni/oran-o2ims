@@ -8,6 +8,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -735,13 +736,92 @@ func (t *provisioningRequestReconcilerTask) checkExistingNodeAllocationRequest(
 		return nil, fmt.Errorf("failed to get NodeAllocationRequest '%s': %w", nodeAllocationRequestId, err)
 	}
 	if exist {
-		_, err := compareHardwareTemplateWithNodeAllocationRequest(hwTemplate, nodeAllocationRequestResponse.NodeAllocationRequest)
+		// Build resolved profiles map for comparison
+		hwProfileOverrides, err := t.parseHwProfileOverrides()
+		if err != nil {
+			return nil, err
+		}
+		resolvedProfiles := make(map[string]string)
+		for _, group := range hwTemplate.Spec.NodeGroupData {
+			resolved, err := resolveHwProfile(group.Name, group.HwProfile, hwProfileOverrides)
+			if err != nil {
+				return nil, err
+			}
+			resolvedProfiles[group.Name] = resolved
+		}
+		_, err = compareHardwareTemplateWithNodeAllocationRequest(hwTemplate, nodeAllocationRequestResponse.NodeAllocationRequest, resolvedProfiles)
 		if err != nil {
 			return nil, ctlrutils.NewInputError("%w", err)
 		}
 	}
 
 	return nodeAllocationRequestResponse, nil
+}
+
+// parseHwProfileOverrides parses templateParameters.hwTemplateParameters.nodeGroupData
+// and returns a map of groupName -> hwProfile for any overrides specified.
+func (t *provisioningRequestReconcilerTask) parseHwProfileOverrides() (map[string]string, error) {
+	overrides := make(map[string]string)
+
+	if t.object.Spec.TemplateParameters.Raw == nil {
+		return overrides, nil
+	}
+
+	var params map[string]any
+	if err := json.Unmarshal(t.object.Spec.TemplateParameters.Raw, &params); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal templateParameters: %w", err)
+	}
+
+	hwTemplateParams, ok := params[provisioningv1alpha1.TemplateParamHwTemplate]
+	if !ok {
+		return overrides, nil
+	}
+	hwTemplateMap, ok := hwTemplateParams.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("templateParameters.%s must be an object", provisioningv1alpha1.TemplateParamHwTemplate)
+	}
+
+	nodeGroupData, ok := hwTemplateMap[provisioningv1alpha1.TemplateParamNodeGroupData]
+	if !ok {
+		return overrides, nil
+	}
+	nodeGroupMap, ok := nodeGroupData.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("templateParameters.%s.%s must be an object",
+			provisioningv1alpha1.TemplateParamHwTemplate, provisioningv1alpha1.TemplateParamNodeGroupData)
+	}
+
+	for groupName, groupData := range nodeGroupMap {
+		groupDataMap, ok := groupData.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("templateParameters.%s.%s.%s must be an object",
+				provisioningv1alpha1.TemplateParamHwTemplate, provisioningv1alpha1.TemplateParamNodeGroupData, groupName)
+		}
+		if hwProfile, ok := groupDataMap["hwProfile"]; ok {
+			if hwProfileStr, ok := hwProfile.(string); ok && hwProfileStr != "" {
+				overrides[groupName] = hwProfileStr
+			}
+		}
+	}
+
+	return overrides, nil
+}
+
+// resolveHwProfile returns the hwProfile for a given nodeGroup, checking
+// the overrides map first (from templateParameters), then falling back to
+// the HardwareTemplate's nodeGroupData value.
+func resolveHwProfile(groupName, templateHwProfile string, overrides map[string]string) (string, error) {
+	if profile, ok := overrides[groupName]; ok {
+		return profile, nil
+	}
+
+	if templateHwProfile != "" {
+		return templateHwProfile, nil
+	}
+
+	return "", fmt.Errorf("no hwProfile specified for nodeGroup %s: "+
+		"provide it via templateParameters.%s.%s.%s.hwProfile or in the HardwareTemplate nodeGroupData",
+		groupName, provisioningv1alpha1.TemplateParamHwTemplate, provisioningv1alpha1.TemplateParamNodeGroupData, groupName)
 }
 
 // buildNodeAllocationRequest builds the NodeAllocationRequest based on the templates and cluster instance
@@ -767,10 +847,19 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(clusterIn
 		roleCounts[role]++
 	}
 
+	hwProfileOverrides, err := t.parseHwProfileOverrides()
+	if err != nil {
+		return nil, err
+	}
+
 	nodeGroups := []hwmgrpluginapi.NodeGroup{}
 	for _, group := range hwTemplate.Spec.NodeGroupData {
+		hwProfile, err := resolveHwProfile(group.Name, group.HwProfile, hwProfileOverrides)
+		if err != nil {
+			return nil, err
+		}
 		ngd := hwmgrpluginapi.NodeGroupData{
-			HwProfile:        group.HwProfile,
+			HwProfile:        hwProfile,
 			Name:             group.Name,
 			ResourceGroupId:  group.ResourcePoolId,
 			ResourceSelector: group.ResourceSelector,

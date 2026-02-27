@@ -183,7 +183,10 @@ spec:
                         for populating a node allocation request
                       properties:
                         hwProfile:
-                          minLength: 1
+                          description: |-
+                            HwProfile is the name of the HardwareProfile to use for this node group.
+                            Deprecated: Use hwTemplateParameters.nodeGroupData.<name>.hwProfile in the
+                            ProvisioningRequest templateParameters instead.
                           type: string
                         name:
                           minLength: 1
@@ -202,7 +205,6 @@ spec:
                           - worker
                           type: string
                       required:
-                      - hwProfile
                       - name
                       - role
                       type: object

@@ -10,19 +10,29 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 
 	"github.com/r3labs/diff/v3"
 	"github.com/xeipuuv/gojsonschema"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 )
 
 const (
 	TemplateParamClusterInstance = "clusterInstanceParameters"
 	TemplateParamPolicyConfig    = "policyTemplateParameters"
+	TemplateParamHwTemplate      = "hwTemplateParameters"
+	TemplateParamNodeGroupData   = "nodeGroupData"
+
+	defaultNamespace        = "oran-o2ims"
+	defaultNamespaceEnvName = "OCLOUD_MANAGER_NAMESPACE"
 )
 
 var (
@@ -378,4 +388,126 @@ func matchesAnyPattern(path []string, patterns [][]string) bool {
 		}
 	}
 	return false
+}
+
+// getEnvOrDefault returns the value of the named environment variable or the
+// supplied default value if the environment variable is not set.
+func getEnvOrDefault(name, defaultValue string) string {
+	value := os.Getenv(name)
+	if value == "" {
+		return defaultValue
+	}
+	return value
+}
+
+// ValidateHwTemplateParameters validates the hwTemplateParameters in the ProvisioningRequest.
+// It checks that:
+// - Each nodeGroup referenced in hwTemplateParameters.nodeGroupData matches a nodeGroup in the HardwareTemplate
+// - Every nodeGroup has an hwProfile from either the templateParameters or the HardwareTemplate
+// - Each referenced HardwareProfile CR exists
+func (r *ProvisioningRequest) ValidateHwTemplateParameters(
+	ctx context.Context, c client.Client, clusterTemplate *ClusterTemplate) error {
+
+	hwTemplateName := clusterTemplate.Spec.Templates.HwTemplate
+	if hwTemplateName == "" {
+		// Hardware provisioning is skipped
+		return nil
+	}
+
+	// Fetch HardwareTemplate from operator namespace
+	hwTemplateNS := getEnvOrDefault(defaultNamespaceEnvName, defaultNamespace)
+	hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{}
+	if err := c.Get(ctx, types.NamespacedName{Name: hwTemplateName, Namespace: hwTemplateNS}, hwTemplate); err != nil {
+		if errors.IsNotFound(err) {
+			return fmt.Errorf("specified HardwareTemplate %q does not exist in namespace %s", hwTemplateName, hwTemplateNS)
+		}
+		return fmt.Errorf("failed to get HardwareTemplate %s: %w", hwTemplateName, err)
+	}
+
+	// Build a set of valid nodeGroup names from the HardwareTemplate
+	validNodeGroups := make(map[string]bool)
+	for _, ng := range hwTemplate.Spec.NodeGroupData {
+		validNodeGroups[ng.Name] = true
+	}
+
+	// Parse hwTemplateParameters from templateParameters if present
+	var overrideNodeGroupData map[string]map[string]any
+	if r.Spec.TemplateParameters.Raw != nil {
+		var params map[string]any
+		if err := json.Unmarshal(r.Spec.TemplateParameters.Raw, &params); err != nil {
+			return fmt.Errorf("failed to unmarshal templateParameters: %w", err)
+		}
+
+		if hwTemplateParams, ok := params[TemplateParamHwTemplate]; ok {
+			hwTemplateMap, ok := hwTemplateParams.(map[string]any)
+			if !ok {
+				return fmt.Errorf(
+					"templateParameters.%s must be an object", TemplateParamHwTemplate)
+			}
+
+			if nodeGroupData, ok := hwTemplateMap[TemplateParamNodeGroupData]; ok {
+				nodeGroupMap, ok := nodeGroupData.(map[string]any)
+				if !ok {
+					return fmt.Errorf(
+						"templateParameters.%s.%s must be an object",
+						TemplateParamHwTemplate, TemplateParamNodeGroupData)
+				}
+
+				overrideNodeGroupData = make(map[string]map[string]any)
+				for groupName, groupData := range nodeGroupMap {
+					// Validate that the nodeGroup exists in the HardwareTemplate
+					if !validNodeGroups[groupName] {
+						return fmt.Errorf(
+							"nodeGroup %q in templateParameters.%s.%s does not match any nodeGroup in HardwareTemplate %s",
+							groupName, TemplateParamHwTemplate, TemplateParamNodeGroupData, hwTemplateName)
+					}
+
+					groupDataMap, ok := groupData.(map[string]any)
+					if !ok {
+						return fmt.Errorf(
+							"templateParameters.%s.%s.%s must be an object",
+							TemplateParamHwTemplate, TemplateParamNodeGroupData, groupName)
+					}
+					overrideNodeGroupData[groupName] = groupDataMap
+				}
+			}
+		}
+	}
+
+	// Validate that every nodeGroup has an hwProfile from either source,
+	// and that every referenced HardwareProfile CR exists
+	hwProfileNS := getEnvOrDefault(defaultNamespaceEnvName, defaultNamespace)
+	for _, ng := range hwTemplate.Spec.NodeGroupData {
+		hwProfile := ng.HwProfile
+
+		// Check for override from templateParameters
+		if overrideNodeGroupData != nil {
+			if groupData, ok := overrideNodeGroupData[ng.Name]; ok {
+				if overrideHwProfile, ok := groupData["hwProfile"]; ok {
+					if hwProfileStr, ok := overrideHwProfile.(string); ok && hwProfileStr != "" {
+						hwProfile = hwProfileStr
+					}
+				}
+			}
+		}
+
+		if hwProfile == "" {
+			return fmt.Errorf(
+				"no hwProfile specified for nodeGroup %q: provide it via "+
+					"templateParameters.%s.%s.%s.hwProfile or in the HardwareTemplate nodeGroupData",
+				ng.Name, TemplateParamHwTemplate, TemplateParamNodeGroupData, ng.Name)
+		}
+
+		// Validate that the HardwareProfile CR exists
+		hwProfileObj := &hwmgmtv1alpha1.HardwareProfile{}
+		if err := c.Get(ctx, types.NamespacedName{Name: hwProfile, Namespace: hwProfileNS}, hwProfileObj); err != nil {
+			if errors.IsNotFound(err) {
+				return fmt.Errorf("specified HardwareProfile %q referenced by nodeGroup %q does not exist",
+					hwProfile, ng.Name)
+			}
+			return fmt.Errorf("failed to check HardwareProfile %s existence: %w", hwProfile, err)
+		}
+	}
+
+	return nil
 }

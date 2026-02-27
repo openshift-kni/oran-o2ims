@@ -55,8 +55,9 @@ func collectNodeDetails(ctx context.Context, c client.Client, nodes *[]hwmgrplug
 	return hwNodes, nil
 }
 
-// compareHardwareTemplateWithNodeAllocationRequest checks if there are any changes in the hardware template resource
-func compareHardwareTemplateWithNodeAllocationRequest(hardwareTemplate *hwmgmtv1alpha1.HardwareTemplate, nodeAllocationRequest *hwmgrpluginapi.NodeAllocationRequest) (bool, error) {
+// compareHardwareTemplateWithNodeAllocationRequest checks if there are any changes in the hardware template resource.
+// resolvedProfiles maps nodeGroup name to the resolved hwProfile (from templateParameters or HardwareTemplate).
+func compareHardwareTemplateWithNodeAllocationRequest(hardwareTemplate *hwmgmtv1alpha1.HardwareTemplate, nodeAllocationRequest *hwmgrpluginapi.NodeAllocationRequest, resolvedProfiles map[string]string) (bool, error) {
 
 	changesDetected := false
 
@@ -64,16 +65,23 @@ func compareHardwareTemplateWithNodeAllocationRequest(hardwareTemplate *hwmgmtv1
 	for _, specNodeGroup := range nodeAllocationRequest.NodeGroup {
 		var found bool
 		for _, ng := range hardwareTemplate.Spec.NodeGroupData {
-
-			if specNodeGroup.NodeGroupData.Name == ng.Name {
-				found = true
-
-				// Check for changes in HwProfile
-				if specNodeGroup.NodeGroupData.HwProfile != ng.HwProfile {
-					changesDetected = true
-				}
-				break
+			if specNodeGroup.NodeGroupData.Name != ng.Name {
+				continue
 			}
+
+			found = true
+
+			// Compare against resolved hwProfile if available, otherwise use template value
+			expectedHwProfile := ng.HwProfile
+			if resolved, ok := resolvedProfiles[ng.Name]; ok {
+				expectedHwProfile = resolved
+			}
+
+			// Check for changes in HwProfile
+			if specNodeGroup.NodeGroupData.HwProfile != expectedHwProfile {
+				changesDetected = true
+			}
+			break
 		}
 
 		// If no match was found for the current specNodeGroup, return an error
