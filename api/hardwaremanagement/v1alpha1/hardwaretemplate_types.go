@@ -24,8 +24,9 @@ type NodeGroupData struct {
 	// +kubebuilder:validation:Enum=master;worker
 	Role string `json:"role"`
 	// HwProfile is the name of the HardwareProfile to use for this node group.
-	// Deprecated: Use hwTemplateParameters.nodeGroupData.<name>.hwProfile in the
-	// ProvisioningRequest templateParameters instead.
+	// The HardwareProfile must be set here or in the ProvisioningRequest templateParameters
+	// as hwTemplateParameters.nodeGroupData.<name>.hwProfile, which overrides the value set
+	// in the template.
 	// +optional
 	HwProfile string `json:"hwProfile,omitempty"`
 	// ResourcePoolId is the identifier for the Resource Pool in the hardware manager instance.

@@ -8,8 +8,10 @@ spec:
   nodeGroupData:
     - name: controller
       role: master
-      # hwProfile is now specified via templateParameters.hwTemplateParameters
-      # in the ProvisioningRequest instead.
+      # hwProfile is optional. It can also be specified (or overridden) via
+      # templateParameters.hwTemplateParameters.nodeGroupData.<name>.hwProfile
+      # in the ProvisioningRequest.
+      hwProfile: rh-profile-r740-bios-settings
       resourceSelector:
         "resourceselector.clcm.openshift.io/server-type": "R740"
         "resourceselector.clcm.openshift.io/server-colour": "blue"
