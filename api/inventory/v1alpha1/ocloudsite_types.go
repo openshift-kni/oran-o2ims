@@ -18,18 +18,22 @@ type OCloudSiteSpec struct {
 	// This value is used to map BMH resources to this site and to generate
 	// the deterministic UUID for oCloudSiteId.
 	// +kubebuilder:validation:MinLength=1
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Site ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	SiteID string `json:"siteId"`
 
 	// GlobalLocationID references the Location this site belongs to.
 	// Must match an existing Location's globalLocationId.
 	// +kubebuilder:validation:MinLength=1
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Global Location ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	GlobalLocationID string `json:"globalLocationId"`
 
 	// Name is the human-readable name of the site
 	// +kubebuilder:validation:MinLength=1
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Name",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Name string `json:"name"`
 
 	// Description provides additional details about the site
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Description",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Description string `json:"description"`
 
 	// Extensions contains additional custom attributes
@@ -41,6 +45,7 @@ type OCloudSiteSpec struct {
 type OCloudSiteStatus struct {
 	// Conditions represent the latest available observations of the OCloudSite's state
 	// +optional
+	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Conditions"
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
@@ -55,7 +60,7 @@ type OCloudSiteStatus struct {
 
 // OCloudSite is the Schema for the ocloudsites API.
 // Represents an O-Cloud site instance at a specific location.
-// +operator-sdk:csv:customresourcedefinitions:displayName="O-Cloud Site"
+// +operator-sdk:csv:customresourcedefinitions:displayName="O-Cloud Site",resources={{OCloudSite,v1alpha1}}
 type OCloudSite struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

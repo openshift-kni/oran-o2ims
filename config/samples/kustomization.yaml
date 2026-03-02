@@ -2,6 +2,9 @@ resources:
 
 # Inventory:
 - v1alpha1_inventory.yaml
+- v1alpha1_location.yaml
+- v1alpha1_ocloudsite.yaml
+- v1alpha1_resourcepool.yaml
 
 # Hardware management:
 - v1alpha1_allocatednode.yaml
