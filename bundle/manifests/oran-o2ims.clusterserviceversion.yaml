@@ -555,6 +555,48 @@ metadata:
           }
         },
         {
+          "apiVersion": "ocloud.openshift.io/v1alpha1",
+          "kind": "Location",
+          "metadata": {
+            "name": "east-datacenter",
+            "namespace": "oran-o2ims"
+          },
+          "spec": {
+            "address": "123 Technology Way, Ashburn, VA 20147, USA",
+            "description": "Primary east coast data center facility",
+            "globalLocationId": "LOC-EAST-001",
+            "name": "East Data Center"
+          }
+        },
+        {
+          "apiVersion": "ocloud.openshift.io/v1alpha1",
+          "kind": "OCloudSite",
+          "metadata": {
+            "name": "site-east-1",
+            "namespace": "oran-o2ims"
+          },
+          "spec": {
+            "description": "Primary compute site at east data center",
+            "globalLocationId": "LOC-EAST-001",
+            "name": "East Site 1",
+            "siteId": "SITE-EAST-001"
+          }
+        },
+        {
+          "apiVersion": "ocloud.openshift.io/v1alpha1",
+          "kind": "ResourcePool",
+          "metadata": {
+            "name": "pool-east-compute",
+            "namespace": "oran-o2ims"
+          },
+          "spec": {
+            "description": "Compute resources for production workloads",
+            "name": "East Compute Pool",
+            "oCloudSiteId": "SITE-EAST-001",
+            "resourcePoolId": "pool-east-compute"
+          }
+        },
+        {
           "apiVersion": "plugins.clcm.openshift.io/v1alpha1",
           "kind": "AllocatedNode",
           "metadata": {
@@ -1160,6 +1202,45 @@ spec:
       - displayName: Deployed Server Configurations
         path: usedServerConfig
       version: v1alpha1
+    - description: |-
+        Location is the Schema for the locations API.
+        Represents a physical or logical location where O-Cloud Sites can be deployed.
+      displayName: Location
+      kind: Location
+      name: locations.ocloud.openshift.io
+      resources:
+      - kind: Location
+        name: ""
+        version: v1alpha1
+      specDescriptors:
+      - description: Address is a human-readable address string
+        displayName: Address
+        path: address
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: Description provides additional details about the location
+        displayName: Description
+        path: description
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          GlobalLocationID is the SMO-defined identifier for this location.
+          This value is used as the primary key and must be unique across all locations.
+        displayName: Global Location ID
+        path: globalLocationId
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: Name is the human-readable name of the location
+        displayName: Name
+        path: name
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      statusDescriptors:
+      - description: Conditions represent the latest available observations of the
+          Location's state
+        displayName: Conditions
+        path: conditions
+      version: v1alpha1
     - description: NodeAllocationRequest is the schema for an allocation request of
         nodes
       displayName: Node Allocation Request
@@ -1286,6 +1367,48 @@ spec:
       - displayName: Selected Groups
         path: selectedGroups
       version: v1alpha1
+    - description: |-
+        OCloudSite is the Schema for the ocloudsites API.
+        Represents an O-Cloud site instance at a specific location.
+      displayName: O-Cloud Site
+      kind: OCloudSite
+      name: ocloudsites.ocloud.openshift.io
+      resources:
+      - kind: OCloudSite
+        name: ""
+        version: v1alpha1
+      specDescriptors:
+      - description: Description provides additional details about the site
+        displayName: Description
+        path: description
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          GlobalLocationID references the Location this site belongs to.
+          Must match an existing Location's globalLocationId.
+        displayName: Global Location ID
+        path: globalLocationId
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: Name is the human-readable name of the site
+        displayName: Name
+        path: name
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          SiteID is the string identifier that matches BareMetalHost siteId labels.
+          This value is used to map BMH resources to this site and to generate
+          the deterministic UUID for oCloudSiteId.
+        displayName: Site ID
+        path: siteId
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      statusDescriptors:
+      - description: Conditions represent the latest available observations of the
+          OCloudSite's state
+        displayName: Conditions
+        path: conditions
+      version: v1alpha1
     - description: ProvisioningRequest is the Schema for the provisioningrequests
         API
       displayName: Provisioning Request
@@ -1339,6 +1462,49 @@ spec:
         - urn:alm:descriptor:com.tectonic.ui:text
       statusDescriptors:
       - displayName: Conditions
+        path: conditions
+      version: v1alpha1
+    - description: |-
+        ResourcePool is the Schema for the resourcepools API.
+        Represents a resource pool containing O-Cloud resources.
+      displayName: Resource Pool
+      kind: ResourcePool
+      name: resourcepools.ocloud.openshift.io
+      resources:
+      - kind: ResourcePool
+        name: ""
+        version: v1alpha1
+      specDescriptors:
+      - description: Description provides additional details about the resource pool
+        displayName: Description
+        path: description
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: Name is the human-readable name of the resource pool
+        displayName: Name
+        path: name
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          OCloudSiteId references the OCloudSite this pool belongs to.
+          Must match an existing OCloudSite's siteId.
+          This is used to generate the deterministic UUID for oCloudSiteId.
+        displayName: O-Cloud Site ID
+        path: oCloudSiteId
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          ResourcePoolId is the string identifier for this resource pool.
+          This value is used to generate the deterministic UUID for resourcePoolId.
+          It should match the resourcePoolId label on BareMetalHost resources.
+        displayName: Resource Pool ID
+        path: resourcePoolId
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      statusDescriptors:
+      - description: Conditions represent the latest available observations of the
+          ResourcePool's state
+        displayName: Conditions
         path: conditions
       version: v1alpha1
   description: |
@@ -1649,6 +1815,9 @@ spec:
           - ocloud.openshift.io
           resources:
           - inventories
+          - locations
+          - ocloudsites
+          - resourcepools
           verbs:
           - create
           - delete
@@ -1661,12 +1830,18 @@ spec:
           - ocloud.openshift.io
           resources:
           - inventories/finalizers
+          - locations/finalizers
+          - ocloudsites/finalizers
+          - resourcepools/finalizers
           verbs:
           - update
         - apiGroups:
           - ocloud.openshift.io
           resources:
           - inventories/status
+          - locations/status
+          - ocloudsites/status
+          - resourcepools/status
           verbs:
           - get
           - patch

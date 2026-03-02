@@ -54,13 +54,16 @@ type LocationSpec struct {
 	// GlobalLocationID is the SMO-defined identifier for this location.
 	// This value is used as the primary key and must be unique across all locations.
 	// +kubebuilder:validation:MinLength=1
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Global Location ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	GlobalLocationID string `json:"globalLocationId"`
 
 	// Name is the human-readable name of the location
 	// +kubebuilder:validation:MinLength=1
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Name",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Name string `json:"name"`
 
 	// Description provides additional details about the location
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Description",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Description string `json:"description"`
 
 	// Coordinate contains the geographic coordinates (latitude, longitude, altitude)
@@ -74,6 +77,7 @@ type LocationSpec struct {
 
 	// Address is a human-readable address string
 	// +optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Address",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Address *string `json:"address,omitempty"`
 
 	// Extensions contains additional custom attributes
@@ -85,6 +89,7 @@ type LocationSpec struct {
 type LocationStatus struct {
 	// Conditions represent the latest available observations of the Location's state
 	// +optional
+	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Conditions"
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
@@ -98,7 +103,7 @@ type LocationStatus struct {
 
 // Location is the Schema for the locations API.
 // Represents a physical or logical location where O-Cloud Sites can be deployed.
-// +operator-sdk:csv:customresourcedefinitions:displayName="Location"
+// +operator-sdk:csv:customresourcedefinitions:displayName="Location",resources={{Location,v1alpha1}}
 type Location struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
