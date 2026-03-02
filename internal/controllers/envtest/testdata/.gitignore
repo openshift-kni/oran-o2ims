@@ -1,0 +1,3 @@
+# Downloaded at test time from upstream metal3-io/baremetal-operator
+# See suite_test.go downloadBMHCRD()
+metal3.io_baremetalhosts.yaml

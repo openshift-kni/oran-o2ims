@@ -290,6 +290,48 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
+	// Start the Location controller.
+	if err = (&controllers.LocationReconciler{
+		Client: mgr.GetClient(),
+		Logger: logger.With("controller", "Location"),
+	}).SetupWithManager(mgr); err != nil {
+		logger.ErrorContext(
+			ctx,
+			"Unable to create controller",
+			slog.String("controller", "Location"),
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
+
+	// Start the OCloudSite controller.
+	if err = (&controllers.OCloudSiteReconciler{
+		Client: mgr.GetClient(),
+		Logger: logger.With("controller", "OCloudSite"),
+	}).SetupWithManager(mgr); err != nil {
+		logger.ErrorContext(
+			ctx,
+			"Unable to create controller",
+			slog.String("controller", "OCloudSite"),
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
+
+	// Start the ResourcePool controller.
+	if err = (&controllers.ResourcePoolReconciler{
+		Client: mgr.GetClient(),
+		Logger: logger.With("controller", "ResourcePool"),
+	}).SetupWithManager(mgr); err != nil {
+		logger.ErrorContext(
+			ctx,
+			"Unable to create controller",
+			slog.String("controller", "ResourcePool"),
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
+
 	narCallbackServer := narcallback.NewNodeAllocationRequestCallbackServer(
 		mgr.GetClient(),
 		logger.With("Callback", "NodeAllocationRequest"),

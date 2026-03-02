@@ -37,11 +37,20 @@ type OCloudSiteSpec struct {
 	Extensions map[string]string `json:"extensions,omitempty"`
 }
 
+// OCloudSiteStatus defines the observed state of OCloudSite
+type OCloudSiteStatus struct {
+	// Conditions represent the latest available observations of the OCloudSite's state
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
+
 // +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 // +kubebuilder:resource:path=ocloudsites,shortName=ocs
 // +kubebuilder:printcolumn:name="SiteID",type="string",JSONPath=".spec.siteId"
 // +kubebuilder:printcolumn:name="LocationID",type="string",JSONPath=".spec.globalLocationId"
 // +kubebuilder:printcolumn:name="Name",type="string",JSONPath=".spec.name"
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // OCloudSite is the Schema for the ocloudsites API.
@@ -51,7 +60,8 @@ type OCloudSite struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec OCloudSiteSpec `json:"spec,omitempty"`
+	Spec   OCloudSiteSpec   `json:"spec,omitempty"`
+	Status OCloudSiteStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
