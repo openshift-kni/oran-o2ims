@@ -81,10 +81,19 @@ type LocationSpec struct {
 	Extensions map[string]string `json:"extensions,omitempty"`
 }
 
+// LocationStatus defines the observed state of Location
+type LocationStatus struct {
+	// Conditions represent the latest available observations of the Location's state
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
+
 // +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 // +kubebuilder:resource:path=locations,shortName=loc
 // +kubebuilder:printcolumn:name="GlobalLocationID",type="string",JSONPath=".spec.globalLocationId"
 // +kubebuilder:printcolumn:name="Name",type="string",JSONPath=".spec.name"
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // Location is the Schema for the locations API.
@@ -94,7 +103,8 @@ type Location struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec LocationSpec `json:"spec,omitempty"`
+	Spec   LocationSpec   `json:"spec,omitempty"`
+	Status LocationStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
