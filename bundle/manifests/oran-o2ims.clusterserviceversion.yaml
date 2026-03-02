@@ -183,7 +183,7 @@ metadata:
                       "additionalProperties": {
                         "properties": {
                           "hwProfile": {
-                            "description": "Name of the HardwareProfile CR to use for this node group. Overrides the (deprecated) hwProfile in the HardwareTemplate.\n",
+                            "description": "Name of the HardwareProfile CR to use for this node group. Overrides the hwProfile in the HardwareTemplate when both are set.\n",
                             "type": "string"
                           }
                         },
