@@ -18,19 +18,23 @@ type ResourcePoolSpec struct {
 	// This value is used to generate the deterministic UUID for resourcePoolId.
 	// It should match the resourcePoolId label on BareMetalHost resources.
 	// +kubebuilder:validation:MinLength=1
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Resource Pool ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	ResourcePoolId string `json:"resourcePoolId"`
 
 	// OCloudSiteId references the OCloudSite this pool belongs to.
 	// Must match an existing OCloudSite's siteId.
 	// This is used to generate the deterministic UUID for oCloudSiteId.
 	// +kubebuilder:validation:MinLength=1
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="O-Cloud Site ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	OCloudSiteId string `json:"oCloudSiteId"`
 
 	// Name is the human-readable name of the resource pool
 	// +kubebuilder:validation:MinLength=1
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Name",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Name string `json:"name"`
 
 	// Description provides additional details about the resource pool
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Description",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Description string `json:"description"`
 
 	// Extensions contains additional custom attributes
@@ -42,6 +46,7 @@ type ResourcePoolSpec struct {
 type ResourcePoolStatus struct {
 	// Conditions represent the latest available observations of the ResourcePool's state
 	// +optional
+	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Conditions"
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
@@ -56,7 +61,7 @@ type ResourcePoolStatus struct {
 
 // ResourcePool is the Schema for the resourcepools API.
 // Represents a resource pool containing O-Cloud resources.
-// +operator-sdk:csv:customresourcedefinitions:displayName="Resource Pool"
+// +operator-sdk:csv:customresourcedefinitions:displayName="Resource Pool",resources={{ResourcePool,v1alpha1}}
 type ResourcePool struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

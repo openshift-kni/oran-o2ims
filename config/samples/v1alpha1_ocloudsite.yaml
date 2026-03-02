@@ -1,0 +1,10 @@
+apiVersion: ocloud.openshift.io/v1alpha1
+kind: OCloudSite
+metadata:
+  name: site-east-1
+  namespace: oran-o2ims
+spec:
+  siteId: "SITE-EAST-001"
+  globalLocationId: "LOC-EAST-001"
+  name: "East Site 1"
+  description: "Primary compute site at east data center"

@@ -1,0 +1,10 @@
+apiVersion: ocloud.openshift.io/v1alpha1
+kind: ResourcePool
+metadata:
+  name: pool-east-compute
+  namespace: oran-o2ims
+spec:
+  resourcePoolId: "pool-east-compute"
+  oCloudSiteId: "SITE-EAST-001"
+  name: "East Compute Pool"
+  description: "Compute resources for production workloads"
