@@ -38,11 +38,20 @@ type ResourcePoolSpec struct {
 	Extensions map[string]string `json:"extensions,omitempty"`
 }
 
+// ResourcePoolStatus defines the observed state of ResourcePool
+type ResourcePoolStatus struct {
+	// Conditions represent the latest available observations of the ResourcePool's state
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
+
 // +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 // +kubebuilder:resource:path=resourcepools,shortName=rp
 // +kubebuilder:printcolumn:name="PoolID",type="string",JSONPath=".spec.resourcePoolId"
 // +kubebuilder:printcolumn:name="SiteID",type="string",JSONPath=".spec.oCloudSiteId"
 // +kubebuilder:printcolumn:name="Name",type="string",JSONPath=".spec.name"
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // ResourcePool is the Schema for the resourcepools API.
@@ -52,7 +61,8 @@ type ResourcePool struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec ResourcePoolSpec `json:"spec,omitempty"`
+	Spec   ResourcePoolSpec   `json:"spec,omitempty"`
+	Status ResourcePoolStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
