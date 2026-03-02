@@ -17,6 +17,9 @@ updates:
     golang:
      patterns: ["golang.org/*"]
      update-types: ["major", "minor", "patch"]
+    oapi-codegen:
+     patterns: ["github.com/oapi-codegen/*"]
+     update-types: ["major", "minor", "patch"]
    ignore:
     # k8s.io moved to go 1.25 in v0.35, so ignore major/minor updates until this repo is 1.25-based
     - dependency-name: "k8s.io/*"
