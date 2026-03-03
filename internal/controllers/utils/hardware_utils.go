@@ -367,7 +367,7 @@ func GetHardwarePluginRefFromProvisioningRequest(ctx context.Context, c client.C
 		return "", fmt.Errorf("failed to get HardwareTemplate: %w", err)
 	}
 
-	return hwTemplate.Spec.HardwarePluginRef, nil
+	return hwTemplate.Spec.GetHardwarePluginRef(), nil
 }
 
 // GetHardwarePlugin retrieves the HardwarePlugin resource for a given name.

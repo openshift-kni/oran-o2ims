@@ -881,16 +881,18 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 		}
 	}
 
+	hwPluginRef := hwTemplate.Spec.GetHardwarePluginRef()
+
 	hwplugin := &hwmgmtv1alpha1.HardwarePlugin{}
 	hwpluginNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
-	if err := t.client.Get(ctx, types.NamespacedName{Namespace: hwpluginNS, Name: hwTemplate.Spec.HardwarePluginRef}, hwplugin); err != nil {
+	if err := t.client.Get(ctx, types.NamespacedName{Namespace: hwpluginNS, Name: hwPluginRef}, hwplugin); err != nil {
 		updateErr := ctlrutils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, provisioningv1alpha1.ConditionType(hwmgmtv1alpha1.Validation),
 			provisioningv1alpha1.ConditionReason(hwmgmtv1alpha1.Failed), metav1.ConditionFalse,
-			"Unable to find specified HardwarePlugin: "+hwTemplate.Spec.HardwarePluginRef)
+			"Unable to find specified HardwarePlugin: "+hwPluginRef)
 		if updateErr != nil {
 			return nil, fmt.Errorf("failed to update hwtemplate %s status: %w", hwTemplateName, updateErr)
 		}
-		return nil, fmt.Errorf("could not find specified HardwarePlugin: %s/%s, err=%w", hwpluginNS, hwTemplate.Spec.HardwarePluginRef, err)
+		return nil, fmt.Errorf("could not find specified HardwarePlugin: %s/%s, err=%w", hwpluginNS, hwPluginRef, err)
 	}
 
 	// The HardwareTemplate is validated by the CRD schema and no additional validation is needed
