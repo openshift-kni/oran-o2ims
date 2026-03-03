@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -34,7 +35,7 @@ type LocationDataSource struct {
 	dataSourceID      uuid.UUID
 	cloudID           uuid.UUID
 	hubClient         client.WithWatch
-	generationID      int
+	generationID      atomic.Int32
 	AsyncChangeEvents chan<- *async.AsyncChangeEvent
 }
 
@@ -45,9 +46,8 @@ func NewLocationDataSource(cloudID uuid.UUID, hubClient client.WithWatch) (*Loca
 	}
 
 	return &LocationDataSource{
-		generationID: 0,
-		cloudID:      cloudID,
-		hubClient:    hubClient,
+		cloudID:   cloudID,
+		hubClient: hubClient,
 	}, nil
 }
 
@@ -64,24 +64,23 @@ func (d *LocationDataSource) GetID() uuid.UUID {
 // Init initializes the data source with its configuration data
 func (d *LocationDataSource) Init(dataSourceID uuid.UUID, generationID int, asyncEventChannel chan<- *async.AsyncChangeEvent) {
 	d.dataSourceID = dataSourceID
-	d.generationID = generationID
+	d.generationID.Store(int32(generationID)) //nolint:gosec // generationID is a small counter, overflow impossible
 	d.AsyncChangeEvents = asyncEventChannel
 }
 
 // SetGenerationID sets the current generation id for this data source
 func (d *LocationDataSource) SetGenerationID(value int) {
-	d.generationID = value
+	d.generationID.Store(int32(value)) //nolint:gosec // generationID is a small counter, overflow impossible
 }
 
 // GetGenerationID retrieves the current generation id for this data source
 func (d *LocationDataSource) GetGenerationID() int {
-	return d.generationID
+	return int(d.generationID.Load())
 }
 
 // IncrGenerationID increments the current generation id for this data source
 func (d *LocationDataSource) IncrGenerationID() int {
-	d.generationID++
-	return d.generationID
+	return int(d.generationID.Add(1))
 }
 
 // Watch starts a watcher for Location CRs.
@@ -212,6 +211,6 @@ func (d *LocationDataSource) convertLocationToModel(loc *inventoryv1alpha1.Locat
 		Address:          loc.Spec.Address,
 		Extensions:       extensions,
 		DataSourceID:     d.dataSourceID,
-		GenerationID:     d.generationID,
+		GenerationID:     int(d.generationID.Load()),
 	}, nil
 }

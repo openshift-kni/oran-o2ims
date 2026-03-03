@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync/atomic"
 
 	"github.com/google/uuid"
 
@@ -29,7 +30,7 @@ var _ ResourceDataSource = (*HwPluginDataSource)(nil)
 // HwPluginDataSource defines an instance of a data source collector that interacts with the ACM search-api
 type HwPluginDataSource struct {
 	dataSourceID  uuid.UUID
-	generationID  int
+	generationID  atomic.Int32
 	hwplugin      *hwmgmtv1alpha1.HardwarePlugin
 	cloudID       uuid.UUID
 	globalCloudID uuid.UUID
@@ -72,7 +73,6 @@ func NewHwPluginDataSource(ctx context.Context, hubClient rtclient.Client, hwplu
 	}
 
 	return &HwPluginDataSource{
-		generationID:  0,
 		hwplugin:      hwplugin,
 		cloudID:       cloudID,
 		globalCloudID: globalCloudID,
@@ -94,24 +94,23 @@ func (d *HwPluginDataSource) GetID() uuid.UUID {
 // values if provided.
 func (d *HwPluginDataSource) Init(uuid uuid.UUID, generationID int, asyncEventChannel chan<- *async.AsyncChangeEvent) {
 	d.dataSourceID = uuid
-	d.generationID = generationID
+	d.generationID.Store(int32(generationID)) //nolint:gosec // generationID is a small counter, overflow impossible
 }
 
 // SetGenerationID sets the current generation id for this data source.  This value is expected to
 // be restored from persistent storage at initialization time.
 func (d *HwPluginDataSource) SetGenerationID(value int) {
-	d.generationID = value
+	d.generationID.Store(int32(value)) //nolint:gosec // generationID is a small counter, overflow impossible
 }
 
 // GetGenerationID retrieves the current generation id for this data source.
 func (d *HwPluginDataSource) GetGenerationID() int {
-	return d.generationID
+	return int(d.generationID.Load())
 }
 
 // IncrGenerationID increments the current generation id for this data source.
 func (d *HwPluginDataSource) IncrGenerationID() int {
-	d.generationID++
-	return d.generationID
+	return int(d.generationID.Add(1))
 }
 
 // MakeResourceType creates an instance of a ResourceType from a Resource object.
@@ -133,7 +132,7 @@ func (d *HwPluginDataSource) MakeResourceType(resource *models.Resource) (*model
 		ResourceClass:  models.ResourceClassCompute,
 		Extensions:     nil,
 		DataSourceID:   d.dataSourceID,
-		GenerationID:   d.generationID,
+		GenerationID:   int(d.generationID.Load()),
 	}
 
 	return &result, nil
@@ -197,7 +196,7 @@ func (d *HwPluginDataSource) convertResource(resource *inventoryclient.ResourceI
 		Groups:       resource.Groups,
 		Tags:         resource.Tags,
 		DataSourceID: d.dataSourceID,
-		GenerationID: d.generationID,
+		GenerationID: int(d.generationID.Load()),
 		ExternalID:   fmt.Sprintf("%s/%s", d.hwplugin.Name, resource.ResourceId),
 	}
 
