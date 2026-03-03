@@ -1,0 +1,19 @@
+---
+# OCloudSite CR - defines a logical site at a location
+# Referenced by: ResourcePool.spec.oCloudSiteId, BareMetalHost label siteId
+apiVersion: ocloud.openshift.io/v1alpha1
+kind: OCloudSite
+metadata:
+  name: site-local-west
+  namespace: oran-o2ims
+spec:
+  # This value is used for BMH label matching and UUID generation
+  # Must match: BareMetalHost label resources.clcm.openshift.io/siteId
+  siteId: "local-west"
+  # Must match an existing Location's globalLocationId
+  globalLocationId: "LOC-WEST-001"
+  name: "Local West Site"
+  description: "Production site at west data center"
+  extensions:
+    environment: "production"
+    managed-by: "team-infra"

@@ -8,6 +8,12 @@
     - [GET deploymentManagers List](#get-deploymentmanagers-list)
     - [GET field or fields from the deploymentManagers List](#get-field-or-fields-from-the-deploymentmanagers-list)
     - [GET deploymentManagers List using filter](#get-deploymentmanagers-list-using-filter)
+  - [Query Locations](#query-locations)
+    - [GET Location List](#get-location-list)
+    - [GET Specific Location](#get-specific-location)
+  - [Query O-Cloud Sites](#query-o-cloud-sites)
+    - [GET O-Cloud Site List](#get-o-cloud-site-list)
+    - [GET Specific O-Cloud Site](#get-specific-o-cloud-site)
   - [Query the Resource server](#query-the-resource-server)
     - [GET Resource Type List](#get-resource-type-list)
     - [GET Specific Resource Type](#get-specific-resource-type)
@@ -20,6 +26,22 @@
     - [DELETE an Infrastructure Inventory Subscription](#delete-an-infrastructure-inventory-subscription)
 
 ## Request Examples
+
+> **Interactive API Documentation**
+>
+> You can explore the API interactively using Swagger UI. From the project root, run:
+>
+> ```bash
+> make swagger-ui-start
+> ```
+>
+> Then open <http://localhost:9090> in your browser. This provides an interactive interface
+> to browse endpoints, view schemas, and try out requests. To stop the Swagger UI container:
+>
+> ```bash
+> make swagger-ui-stop
+> ```
+>
 
 ### Query the Metadata endpoints
 
@@ -92,6 +114,91 @@ To get a list of all the deploymentManagers whose name is **not** local-cluster 
 $ curl --insecure --silent --header "Authorization: Bearer ${MY_TOKEN}" 
 "https://${API_URI}/o2ims-infrastructureInventory/v1/deploymentManagers?filter=(neq,name,local-cluster)" | jq
  | jq
+```
+
+### Query Locations
+
+Locations represent geographic places where O-Cloud Sites can be deployed. The Location API provides structured location data including geographic coordinates (GeoJSON), civic addresses (RFC 4776), and human-readable addresses.
+
+> :information_source: Locations are defined via `Location` Custom Resources (CRs) in the hub cluster. See [Server Onboarding](./server-onboarding.md) for details on creating Location CRs.
+
+#### GET Location List
+
+To get a list of all locations:
+
+```console
+$ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" \
+"https://${API_URI}/o2ims-infrastructureInventory/v1/locations" | jq
+```
+
+Example response:
+
+```json
+[
+  {
+    "globalLocationId": "location-east-1",
+    "name": "East Data Center",
+    "description": "Primary east coast facility",
+    "coordinate": {
+      "type": "Point",
+      "coordinates": [-77.0364, 38.8951]
+    },
+    "civicAddress": [
+      {"caType": 1, "caValue": "US"},
+      {"caType": 3, "caValue": "Virginia"},
+      {"caType": 6, "caValue": "Ashburn"}
+    ],
+    "address": "123 Data Center Way, Ashburn, VA",
+    "oCloudSiteIds": ["7fd364a0-6d82-4e0c-a418-5c1a2f8b9c3e"]
+  }
+]
+```
+
+#### GET Specific Location
+
+To get information about a specific location by its `globalLocationId`:
+
+```console
+$ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" \
+"https://${API_URI}/o2ims-infrastructureInventory/v1/locations/{globalLocationId}" | jq
+```
+
+### Query O-Cloud Sites
+
+O-Cloud Sites represent logical groupings of infrastructure within a Location. Each site can contain multiple Resource Pools.
+
+> :information_source: O-Cloud Sites are defined via `OCloudSite` Custom Resources (CRs) in the hub cluster. See [Server Onboarding](./server-onboarding.md) for details on creating OCloudSite CRs.
+
+#### GET O-Cloud Site List
+
+To get a list of all O-Cloud sites:
+
+```console
+$ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" \
+"https://${API_URI}/o2ims-infrastructureInventory/v1/oCloudSites" | jq
+```
+
+Example response:
+
+```json
+[
+  {
+    "oCloudSiteId": "7fd364a0-6d82-4e0c-a418-5c1a2f8b9c3e",
+    "globalLocationId": "location-east-1",
+    "name": "East Site 1",
+    "description": "Primary site at east data center",
+    "resourcePools": ["d3b27e14-4589-4d93-ae76-ddca559193ea"]
+  }
+]
+```
+
+#### GET Specific O-Cloud Site
+
+To get information about a specific O-Cloud site by its `oCloudSiteId`:
+
+```console
+$ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" \
+"https://${API_URI}/o2ims-infrastructureInventory/v1/oCloudSites/{oCloudSiteId}" | jq
 ```
 
 ### Query the Resource server
