@@ -1,0 +1,16 @@
+---
+# ResourcePool CR - groups related resources (servers) within an O-Cloud Site
+# Referenced by BareMetalHost label resourcePoolName
+apiVersion: ocloud.openshift.io/v1alpha1
+kind: ResourcePool
+metadata:
+  # Must match: BareMetalHost label resources.clcm.openshift.io/resourcePoolName
+  name: dell-xr8620t-pool
+  namespace: oran-o2ims
+spec:
+  # Must match an existing OCloudSite's metadata.name
+  oCloudSiteName: "site-local-west"
+  description: "Resource pool for Dell xr8620t servers"
+  extensions:
+    hardware-profile: "dell-xr8620t"
+    purpose: "ran-du"

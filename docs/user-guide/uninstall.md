@@ -23,19 +23,19 @@ for a clean removal:
 
 ```bash
 # 1. Delete ResourcePools
-$ oc delete resourcepools --all -n oran-o2ims
+oc delete resourcepools --all -n oran-o2ims
 
 # 2. Delete OCloudSites
-$ oc delete ocloudsites --all -n oran-o2ims
+oc delete ocloudsites --all -n oran-o2ims
 
 # 3. Delete Locations
-$ oc delete locations --all -n oran-o2ims
+oc delete locations --all -n oran-o2ims
 
 # 4. Delete the Inventory CR
-$ oc delete inventory --all -n oran-o2ims
+oc delete inventory --all -n oran-o2ims
 
 # 5. Check for any remaining resources and delete if needed
-$ oc get all -n oran-o2ims
+oc get all -n oran-o2ims
 ```
 
 Then proceed with operator uninstallation via the OpenShift Console or CLI.
@@ -51,10 +51,10 @@ Then proceed with operator uninstallation via the OpenShift Console or CLI.
 
 ```bash
 # Delete the operator subscription
-$ oc delete subscription o-cloud-manager -n oran-o2ims
+oc delete subscription o-cloud-manager -n oran-o2ims
 
 # Delete the ClusterServiceVersion
-$ oc delete csv -n oran-o2ims -l operators.coreos.com/o-cloud-manager.oran-o2ims
+oc delete csv -n oran-o2ims -l operators.coreos.com/o-cloud-manager.oran-o2ims
 ```
 
 ## (Optional) Deleting CRDs
