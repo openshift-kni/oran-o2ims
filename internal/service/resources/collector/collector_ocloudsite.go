@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -34,7 +35,7 @@ type OCloudSiteDataSource struct {
 	dataSourceID      uuid.UUID
 	cloudID           uuid.UUID
 	hubClient         client.WithWatch
-	generationID      int
+	generationID      atomic.Int32
 	AsyncChangeEvents chan<- *async.AsyncChangeEvent
 }
 
@@ -45,9 +46,8 @@ func NewOCloudSiteDataSource(cloudID uuid.UUID, hubClient client.WithWatch) (*OC
 	}
 
 	return &OCloudSiteDataSource{
-		generationID: 0,
-		cloudID:      cloudID,
-		hubClient:    hubClient,
+		cloudID:   cloudID,
+		hubClient: hubClient,
 	}, nil
 }
 
@@ -64,24 +64,23 @@ func (d *OCloudSiteDataSource) GetID() uuid.UUID {
 // Init initializes the data source with its configuration data
 func (d *OCloudSiteDataSource) Init(dataSourceID uuid.UUID, generationID int, asyncEventChannel chan<- *async.AsyncChangeEvent) {
 	d.dataSourceID = dataSourceID
-	d.generationID = generationID
+	d.generationID.Store(int32(generationID)) //nolint:gosec // generationID is a small counter, overflow impossible
 	d.AsyncChangeEvents = asyncEventChannel
 }
 
 // SetGenerationID sets the current generation id for this data source
 func (d *OCloudSiteDataSource) SetGenerationID(value int) {
-	d.generationID = value
+	d.generationID.Store(int32(value)) //nolint:gosec // generationID is a small counter, overflow impossible
 }
 
 // GetGenerationID retrieves the current generation id for this data source
 func (d *OCloudSiteDataSource) GetGenerationID() int {
-	return d.generationID
+	return int(d.generationID.Load())
 }
 
 // IncrGenerationID increments the current generation id for this data source
 func (d *OCloudSiteDataSource) IncrGenerationID() int {
-	d.generationID++
-	return d.generationID
+	return int(d.generationID.Add(1))
 }
 
 // Watch starts a watcher for OCloudSite CRs.
@@ -205,6 +204,6 @@ func (d *OCloudSiteDataSource) convertOCloudSiteToModel(site *inventoryv1alpha1.
 		Description:      site.Spec.Description,
 		Extensions:       extensions,
 		DataSourceID:     d.dataSourceID,
-		GenerationID:     d.generationID,
+		GenerationID:     int(d.generationID.Load()),
 	}
 }
