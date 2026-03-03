@@ -57,8 +57,9 @@ spec:
                   Deprecated: This field is deprecated and will be ignored. The boot interface label is now fixed as "boot-interface".
                 type: string
               hardwarePluginRef:
-                description: HardwarePluginRef is the name of the HardwarePlugin.
-                minLength: 1
+                description: |-
+                  HardwarePluginRef is the name of the HardwarePlugin.
+                  When not specified, the internal metal3 hardware plugin is used.
                 type: string
               hardwareProvisioningTimeout:
                 description: HardwareProvisioningTimeout defines the timeout duration
@@ -100,7 +101,6 @@ spec:
                 minItems: 1
                 type: array
             required:
-            - hardwarePluginRef
             - nodeGroupData
             type: object
           status:

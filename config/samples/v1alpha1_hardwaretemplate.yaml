@@ -4,7 +4,6 @@ metadata:
   name: hwtemplate-sample
   namespace: oran-o2ims
 spec:
-  hardwarePluginRef: metal3-hwplugin
   nodeGroupData:
     - name: controller
       role: master
