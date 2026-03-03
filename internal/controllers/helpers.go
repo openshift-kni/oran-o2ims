@@ -55,13 +55,11 @@ func collectNodeDetails(ctx context.Context, c client.Client, nodes *[]hwmgrplug
 	return hwNodes, nil
 }
 
-// compareHardwareTemplateWithNodeAllocationRequest checks if there are any changes in the hardware template resource.
-// resolvedProfiles maps nodeGroup name to the resolved hwProfile (from templateParameters or HardwareTemplate).
-func compareHardwareTemplateWithNodeAllocationRequest(hardwareTemplate *hwmgmtv1alpha1.HardwareTemplate, nodeAllocationRequest *hwmgrpluginapi.NodeAllocationRequest, resolvedProfiles map[string]string) (bool, error) {
+// validateNodeGroupsMatchNAR verifies that every node group in the existing
+// NodeAllocationRequest has a corresponding entry in the HardwareTemplate.
+// This is a sanity check that the HardwareTemplate is still applicable to the NAR.
+func validateNodeGroupsMatchNAR(hardwareTemplate *hwmgmtv1alpha1.HardwareTemplate, nodeAllocationRequest *hwmgrpluginapi.NodeAllocationRequest) error {
 
-	changesDetected := false
-
-	// Check each group, allowing only hwProfile to be changed
 	for _, specNodeGroup := range nodeAllocationRequest.NodeGroup {
 		var found bool
 		for _, ng := range hardwareTemplate.Spec.NodeGroupData {
@@ -70,27 +68,16 @@ func compareHardwareTemplateWithNodeAllocationRequest(hardwareTemplate *hwmgmtv1
 			}
 
 			found = true
-
-			// Compare against resolved hwProfile if available, otherwise use template value
-			expectedHwProfile := ng.HwProfile
-			if resolved, ok := resolvedProfiles[ng.Name]; ok {
-				expectedHwProfile = resolved
-			}
-
-			// Check for changes in HwProfile
-			if specNodeGroup.NodeGroupData.HwProfile != expectedHwProfile {
-				changesDetected = true
-			}
 			break
 		}
 
 		// If no match was found for the current specNodeGroup, return an error
 		if !found {
-			return true, fmt.Errorf("node group %s found in NodeAllocationRequest but not in Hardware Template", specNodeGroup.NodeGroupData.Name)
+			return fmt.Errorf("node group %s found in NodeAllocationRequest but not in Hardware Template", specNodeGroup.NodeGroupData.Name)
 		}
 	}
 
-	return changesDetected, nil
+	return nil
 }
 
 // newNodeGroup populates NodeGroup

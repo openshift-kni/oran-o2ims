@@ -35,6 +35,56 @@ const (
 	defaultNamespaceEnvName = "OCLOUD_MANAGER_NAMESPACE"
 )
 
+// ParseHwProfileOverrides parses templateParameters.hwTemplateParameters.nodeGroupData
+// and returns a map of groupName -> hwProfile for any overrides specified.
+// Returns an empty map (not nil) when no overrides are present.
+func ParseHwProfileOverrides(templateParametersRaw []byte) (map[string]string, error) {
+	overrides := make(map[string]string)
+
+	if templateParametersRaw == nil {
+		return overrides, nil
+	}
+
+	var params map[string]any
+	if err := json.Unmarshal(templateParametersRaw, &params); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal templateParameters: %w", err)
+	}
+
+	hwTemplateParams, ok := params[TemplateParamHwTemplate]
+	if !ok {
+		return overrides, nil
+	}
+	hwTemplateMap, ok := hwTemplateParams.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("templateParameters.%s must be an object", TemplateParamHwTemplate)
+	}
+
+	nodeGroupData, ok := hwTemplateMap[TemplateParamNodeGroupData]
+	if !ok {
+		return overrides, nil
+	}
+	nodeGroupMap, ok := nodeGroupData.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("templateParameters.%s.%s must be an object",
+			TemplateParamHwTemplate, TemplateParamNodeGroupData)
+	}
+
+	for groupName, groupData := range nodeGroupMap {
+		groupDataMap, ok := groupData.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("templateParameters.%s.%s.%s must be an object",
+				TemplateParamHwTemplate, TemplateParamNodeGroupData, groupName)
+		}
+		if hwProfile, ok := groupDataMap["hwProfile"]; ok {
+			if hwProfileStr, ok := hwProfile.(string); ok && hwProfileStr != "" {
+				overrides[groupName] = hwProfileStr
+			}
+		}
+	}
+
+	return overrides, nil
+}
+
 var (
 	// allowedClusterInstanceFields contains path patterns for fields that are allowed to be updated.
 	// The wildcard "*" is used to match any index in a list.
@@ -400,6 +450,24 @@ func getEnvOrDefault(name, defaultValue string) string {
 	return value
 }
 
+// schemaDefinesHwTemplateParameters checks whether the ClusterTemplate's
+// templateParameterSchema defines the hwTemplateParameters property.
+func schemaDefinesHwTemplateParameters(clusterTemplate *ClusterTemplate) bool {
+	if clusterTemplate.Spec.TemplateParameterSchema.Raw == nil {
+		return false
+	}
+	var schema map[string]any
+	if err := json.Unmarshal(clusterTemplate.Spec.TemplateParameterSchema.Raw, &schema); err != nil {
+		return false
+	}
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		return false
+	}
+	_, defined := properties[TemplateParamHwTemplate]
+	return defined
+}
+
 // ValidateHwTemplateParameters validates the hwTemplateParameters in the ProvisioningRequest.
 // It checks that:
 // - Each nodeGroup referenced in hwTemplateParameters.nodeGroupData matches a nodeGroup in the HardwareTemplate
@@ -409,8 +477,20 @@ func (r *ProvisioningRequest) ValidateHwTemplateParameters(
 	ctx context.Context, c client.Client, clusterTemplate *ClusterTemplate) error {
 
 	hwTemplateName := clusterTemplate.Spec.Templates.HwTemplate
+
+	// Parse hwProfile overrides early so we can check for mismatches
+	hwProfileOverrides, err := ParseHwProfileOverrides(r.Spec.TemplateParameters.Raw)
+	if err != nil {
+		return err
+	}
+
 	if hwTemplateName == "" {
-		// Hardware provisioning is skipped
+		// Hardware provisioning is skipped; reject if the PR provides hwTemplateParameters
+		if len(hwProfileOverrides) > 0 {
+			return fmt.Errorf(
+				"templateParameters.%s is not allowed: ClusterTemplate %q does not reference a HardwareTemplate",
+				TemplateParamHwTemplate, clusterTemplate.Name)
+		}
 		return nil
 	}
 
@@ -424,53 +504,25 @@ func (r *ProvisioningRequest) ValidateHwTemplateParameters(
 		return fmt.Errorf("failed to get HardwareTemplate %s: %w", hwTemplateName, err)
 	}
 
+	// Reject hwTemplateParameters if the ClusterTemplate schema does not define them
+	if len(hwProfileOverrides) > 0 && !schemaDefinesHwTemplateParameters(clusterTemplate) {
+		return fmt.Errorf(
+			"templateParameters.%s is not defined in the ClusterTemplate %q schema",
+			TemplateParamHwTemplate, clusterTemplate.Name)
+	}
+
 	// Build a set of valid nodeGroup names from the HardwareTemplate
 	validNodeGroups := make(map[string]bool)
 	for _, ng := range hwTemplate.Spec.NodeGroupData {
 		validNodeGroups[ng.Name] = true
 	}
 
-	// Parse hwTemplateParameters from templateParameters if present
-	var overrideNodeGroupData map[string]map[string]any
-	if r.Spec.TemplateParameters.Raw != nil {
-		var params map[string]any
-		if err := json.Unmarshal(r.Spec.TemplateParameters.Raw, &params); err != nil {
-			return fmt.Errorf("failed to unmarshal templateParameters: %w", err)
-		}
-
-		if hwTemplateParams, ok := params[TemplateParamHwTemplate]; ok {
-			hwTemplateMap, ok := hwTemplateParams.(map[string]any)
-			if !ok {
-				return fmt.Errorf(
-					"templateParameters.%s must be an object", TemplateParamHwTemplate)
-			}
-
-			if nodeGroupData, ok := hwTemplateMap[TemplateParamNodeGroupData]; ok {
-				nodeGroupMap, ok := nodeGroupData.(map[string]any)
-				if !ok {
-					return fmt.Errorf(
-						"templateParameters.%s.%s must be an object",
-						TemplateParamHwTemplate, TemplateParamNodeGroupData)
-				}
-
-				overrideNodeGroupData = make(map[string]map[string]any)
-				for groupName, groupData := range nodeGroupMap {
-					// Validate that the nodeGroup exists in the HardwareTemplate
-					if !validNodeGroups[groupName] {
-						return fmt.Errorf(
-							"nodeGroup %q in templateParameters.%s.%s does not match any nodeGroup in HardwareTemplate %s",
-							groupName, TemplateParamHwTemplate, TemplateParamNodeGroupData, hwTemplateName)
-					}
-
-					groupDataMap, ok := groupData.(map[string]any)
-					if !ok {
-						return fmt.Errorf(
-							"templateParameters.%s.%s.%s must be an object",
-							TemplateParamHwTemplate, TemplateParamNodeGroupData, groupName)
-					}
-					overrideNodeGroupData[groupName] = groupDataMap
-				}
-			}
+	// Validate that each overridden nodeGroup exists in the HardwareTemplate
+	for groupName := range hwProfileOverrides {
+		if !validNodeGroups[groupName] {
+			return fmt.Errorf(
+				"nodeGroup %q in templateParameters.%s.%s does not match any nodeGroup in HardwareTemplate %s",
+				groupName, TemplateParamHwTemplate, TemplateParamNodeGroupData, hwTemplateName)
 		}
 	}
 
@@ -481,14 +533,8 @@ func (r *ProvisioningRequest) ValidateHwTemplateParameters(
 		hwProfile := ng.HwProfile
 
 		// Check for override from templateParameters
-		if overrideNodeGroupData != nil {
-			if groupData, ok := overrideNodeGroupData[ng.Name]; ok {
-				if overrideHwProfile, ok := groupData["hwProfile"]; ok {
-					if hwProfileStr, ok := overrideHwProfile.(string); ok && hwProfileStr != "" {
-						hwProfile = hwProfileStr
-					}
-				}
-			}
+		if override, ok := hwProfileOverrides[ng.Name]; ok {
+			hwProfile = override
 		}
 
 		if hwProfile == "" {

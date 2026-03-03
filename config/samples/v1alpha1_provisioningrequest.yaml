@@ -18,10 +18,10 @@ spec:
     oCloudSiteId: "local-west-12345"
     # hwTemplateParameters allows overriding the HardwareProfile per nodeGroup.
     # The nodeGroup names must match those defined in the HardwareTemplate.
-    # hwTemplateParameters:
-    #   nodeGroupData:
-    #     controller:
-    #       hwProfile: rh-profile-r740-bios-settings
+    hwTemplateParameters:
+      nodeGroupData:
+        controller:
+          hwProfile: hardwareprofile-sample
     policyTemplateParameters:
       sriov-network-vlan-1: "114"
       sriov-network-vlan-2: "111"
@@ -40,7 +40,7 @@ spec:
         AgentClusterInstall:
           extra-label-key: extra-label-value
         ManagedCluster:
-          cluster-version: "v4.16"
+          cluster-version: "v4.20"
           clustertemplate-a-policy: "v1"
       ingressVIPs:
         - 192.0.2.3
