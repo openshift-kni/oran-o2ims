@@ -2,3 +2,8 @@ resources:
 - common.yaml
 - dell-xr8620t-sno1.yaml
 - dell-xr8620t-sno2.yaml
+- oran-ns.yaml
+- location.yaml
+- ocloudsite.yaml
+- resourcepool.yaml
+

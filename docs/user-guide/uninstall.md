@@ -26,8 +26,8 @@ reference them.
 > checks if needed.
 
 ```bash
-$ oc scale deployment -l control-plane=controller-manager -n oran-o2ims --replicas=0
-$ oc wait --for=delete pod -l control-plane=controller-manager -n oran-o2ims --timeout=60s
+oc scale deployment -l control-plane=controller-manager -n oran-o2ims --replicas=0
+oc wait --for=delete pod -l control-plane=controller-manager -n oran-o2ims --timeout=60s
 ```
 
 **Important:** Before uninstalling the operator, delete these resources in the correct
@@ -35,19 +35,19 @@ order (children before parents):
 
 ```bash
 # 1. Delete ResourcePools
-$ oc delete resourcepools --all -n oran-o2ims
+oc delete resourcepools --all -n oran-o2ims
 
 # 2. Delete OCloudSites
-$ oc delete ocloudsites --all -n oran-o2ims
+oc delete ocloudsites --all -n oran-o2ims
 
 # 3. Delete Locations
-$ oc delete locations --all -n oran-o2ims
+oc delete locations --all -n oran-o2ims
 
 # 4. Delete the Inventory CR
-$ oc delete inventory --all -n oran-o2ims
+oc delete inventory --all -n oran-o2ims
 
 # 5. Check for any remaining resources and delete if needed
-$ oc get all -n oran-o2ims
+oc get all -n oran-o2ims
 ```
 
 Then proceed with operator uninstallation via the OpenShift Console or CLI.
@@ -63,10 +63,10 @@ Then proceed with operator uninstallation via the OpenShift Console or CLI.
 
 ```bash
 # Delete the operator subscription
-$ oc delete subscription o-cloud-manager -n oran-o2ims
+oc delete subscription o-cloud-manager -n oran-o2ims
 
 # Delete the ClusterServiceVersion
-$ oc delete csv -n oran-o2ims -l operators.coreos.com/o-cloud-manager.oran-o2ims
+oc delete csv -n oran-o2ims -l operators.coreos.com/o-cloud-manager.oran-o2ims
 ```
 
 ## (Optional) Deleting CRDs
@@ -102,13 +102,13 @@ Then remove finalizers from the stuck resources:
 
 ```bash
 # Remove finalizers from ResourcePools
-$ oc get resourcepools -n oran-o2ims -o name | xargs -r -I {} oc patch {} -n oran-o2ims --type=merge -p '{"metadata":{"finalizers":null}}'
+oc get resourcepools -n oran-o2ims -o name | xargs -r -I {} oc patch {} -n oran-o2ims --type=merge -p '{"metadata":{"finalizers":null}}'
 
 # Remove finalizers from OCloudSites
-$ oc get ocloudsites -n oran-o2ims -o name | xargs -r -I {} oc patch {} -n oran-o2ims --type=merge -p '{"metadata":{"finalizers":null}}'
+oc get ocloudsites -n oran-o2ims -o name | xargs -r -I {} oc patch {} -n oran-o2ims --type=merge -p '{"metadata":{"finalizers":null}}'
 
 # Remove finalizers from Locations
-$ oc get locations -n oran-o2ims -o name | xargs -r -I {} oc patch {} -n oran-o2ims --type=merge -p '{"metadata":{"finalizers":null}}'
+oc get locations -n oran-o2ims -o name | xargs -r -I {} oc patch {} -n oran-o2ims --type=merge -p '{"metadata":{"finalizers":null}}'
 ```
 
 After removing finalizers, the resources will be deleted automatically by the k8s garbage collector.

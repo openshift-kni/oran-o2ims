@@ -1,0 +1,15 @@
+---
+# OCloudSite CR - defines a logical site at a location
+# Referenced by ResourcePool.spec.oCloudSiteName
+apiVersion: ocloud.openshift.io/v1alpha1
+kind: OCloudSite
+metadata:
+  name: site-local-west
+  namespace: oran-o2ims
+spec:
+  # Must match an existing Location's metadata.name
+  globalLocationName: "location-west"
+  description: "Production site at west data center"
+  extensions:
+    environment: "production"
+    managed-by: "team-infra"
