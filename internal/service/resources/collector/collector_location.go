@@ -97,7 +97,7 @@ func (d *LocationDataSource) Watch(ctx context.Context) error {
 
 	// Create a Reflector to watch Location objects
 	lister := cache.ListWatch{
-		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+		ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
 			var locationList inventoryv1alpha1.LocationList
 			err := d.hubClient.List(ctx, &locationList, &client.ListOptions{Raw: &options})
 			if err != nil {
@@ -105,7 +105,7 @@ func (d *LocationDataSource) Watch(ctx context.Context) error {
 			}
 			return &locationList, nil
 		},
-		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+		WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
 			var locationList inventoryv1alpha1.LocationList
 			w, err := d.hubClient.Watch(ctx, &locationList, &client.ListOptions{Raw: &options})
 			if err != nil {

@@ -320,7 +320,7 @@ func (d *K8SDataSource) Watch(ctx context.Context) error {
 
 	// Create a Reflector to watch ManagedCluster objects
 	lister := cache.ListWatch{
-		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+		ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
 			var managedClusterList v1.ManagedClusterList
 			err := d.hubClient.List(ctx, &managedClusterList, &client.ListOptions{Raw: &options})
 			if err != nil {
@@ -328,7 +328,7 @@ func (d *K8SDataSource) Watch(ctx context.Context) error {
 			}
 			return &managedClusterList, nil
 		},
-		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+		WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
 			var managedClusterList v1.ManagedClusterList
 			w, err := d.hubClient.Watch(ctx, &managedClusterList, &client.ListOptions{Raw: &options})
 			if err != nil {
