@@ -9,7 +9,7 @@ metadata:
           "kind": "ClusterTemplate",
           "metadata": {
             "name": "clustertemplate-sample.v1.0.0",
-            "namespace": "clustertemplate-a-v4-16-3"
+            "namespace": "clustertemplate-a-v4-20-15"
           },
           "spec": {
             "characteristics": {
@@ -19,8 +19,8 @@ metadata:
             "metadata": {
               "apple": "23"
             },
-            "name": "clustertemplate-a",
-            "release": "4.16.3",
+            "name": "clustertemplate-sample",
+            "release": "4.20.15",
             "templateParameterSchema": {
               "properties": {
                 "clusterInstanceParameters": {
@@ -176,6 +176,25 @@ metadata:
                   ],
                   "type": "object"
                 },
+                "hwTemplateParameters": {
+                  "description": "hwTemplateParameters allows overriding hardware template settings per nodeGroup, such as the HardwareProfile to use.\n",
+                  "properties": {
+                    "nodeGroupData": {
+                      "additionalProperties": {
+                        "properties": {
+                          "hwProfile": {
+                            "description": "Name of the HardwareProfile CR to use for this node group. Overrides the hwProfile in the HardwareTemplate when both are set.\n",
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "description": "Per-nodeGroup overrides, keyed by nodeGroup name as defined in the HardwareTemplate's nodeGroupData.\n",
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                },
                 "nodeClusterName": {
                   "type": "string"
                 },
@@ -229,7 +248,7 @@ metadata:
             },
             "templates": {
               "clusterInstanceDefaults": "clustertemplate-sample.v1.0.0-clusterinstance-defaults",
-              "hwTemplate": "sample-hwtemplate-v1",
+              "hwTemplate": "hwtemplate-sample",
               "policyTemplateDefaults": "clustertemplate-sample.v1.0.0-policytemplate-defaults",
               "upgradeDefaults": "upgrade-defaults-v1"
             },
@@ -270,6 +289,14 @@ metadata:
                 "SysProfile": "Custom",
                 "WorkloadProfile": "TelcoOptimizedProfile"
               }
+            },
+            "biosFirmware": {
+              "url": "http://example.com:8888/firmware/xr8620t/BIOS_W23G7_WN64_2.7.5_01.EXE",
+              "version": "2.7.5"
+            },
+            "bmcFirmware": {
+              "url": "http://example.com:8888/firmware/xr8620t/iDRAC-with-Lifecycle-Controller_Firmware_K2KHC_WN64_7.20.70.50_A00.EXE",
+              "version": "7.20.70.50"
             }
           },
           "status": {
@@ -280,19 +307,18 @@ metadata:
           "apiVersion": "clcm.openshift.io/v1alpha1",
           "kind": "HardwareTemplate",
           "metadata": {
-            "name": "r740-blue-basic",
+            "name": "hwtemplate-sample",
             "namespace": "oran-o2ims"
           },
           "spec": {
             "hardwarePluginRef": "metal3-hwplugin",
-            "hardwareProvisioningTimeout": "60m",
+            "hardwareProvisioningTimeout": "90m",
             "nodeGroupData": [
               {
-                "hwProfile": "rh-profile-r740-bios-settings",
                 "name": "controller",
                 "resourceSelector": {
                   "resourceselector.clcm.openshift.io/server-colour": "blue",
-                  "server-type": "R740"
+                  "resourceselector.clcm.openshift.io/server-type": "xr8620t"
                 },
                 "role": "master"
               }
@@ -337,7 +363,7 @@ metadata:
                     "extra-label-key": "extra-label-value"
                   },
                   "ManagedCluster": {
-                    "cluster-version": "v4.16",
+                    "cluster-version": "v4.20",
                     "clustertemplate-a-policy": "v1"
                   }
                 },
@@ -463,6 +489,13 @@ metadata:
                 ],
                 "sshPublicKey": "ssh-rsa"
               },
+              "hwTemplateParameters": {
+                "nodeGroupData": {
+                  "controller": {
+                    "hwProfile": "hardwareprofile-sample"
+                  }
+                }
+              },
               "nodeClusterName": "site-sno-du-1",
               "oCloudSiteId": "local-west-12345",
               "policyTemplateParameters": {
@@ -526,92 +559,72 @@ metadata:
           "apiVersion": "plugins.clcm.openshift.io/v1alpha1",
           "kind": "AllocatedNode",
           "metadata": {
-            "name": "91c70863-8a83-422a-ab7a-a75f744d5210",
+            "name": "metal3-hwplugin-site-sno-du-1-xr8620t-pool-xr8620txserver1",
             "namespace": "oran-o2ims"
           },
           "spec": {
             "groupName": "controller",
             "hardwarePluginRef": "metal3-hwplugin",
-            "hwMgrNodeId": "r740xserver1",
-            "hwMgrNodeNs": "r740-pool",
-            "hwProfile": "rh-profile-r740-bios-settings",
+            "hwMgrNodeId": "xr8620txserver1",
+            "hwMgrNodeNs": "xr8620t-pool",
+            "hwProfile": "hardwareprofile-sample",
             "nodeAllocationRequest": "metal3-b12f3e77848a4002bf40"
           },
           "status": {
             "bmc": {
-              "address": "idrac-virtualmedia+https://127.0.0.1/redfish/v1/Systems/System.Embedded.1",
-              "credentialsName": "bmc-secret-r740xserver1"
+              "address": "idrac-virtualmedia+https://192.0.2.100/redfish/v1/Systems/System.Embedded.1",
+              "credentialsName": "bmc-secret-xr8620txserver1"
             },
             "conditions": [
               {
-                "lastTransitionTime": "2025-07-16T12:57:12Z",
+                "lastTransitionTime": "2026-03-03T15:04:57Z",
                 "message": "Provisioned",
                 "reason": "Completed",
                 "status": "True",
                 "type": "Provisioned"
               }
             ],
-            "hwProfile": "rh-profile-r740-bios-settings",
+            "hwProfile": "hardwareprofile-sample",
             "interfaces": [
               {
-                "label": "",
-                "macAddress": "c3:f7:f5:b2:4d:19",
-                "name": "ens1f0"
+                "label": "sriov-1",
+                "macAddress": "02:00:00:00:01:01",
+                "name": "ens2f0"
               },
               {
                 "label": "",
-                "macAddress": "c3:f7:f5:b2:4d:1a",
-                "name": "ens3f1np1"
-              },
-              {
-                "label": "boot-interface",
-                "macAddress": "c3:f7:f5:b2:4d:1b",
-                "name": "eno1np0"
-              },
-              {
-                "label": "",
-                "macAddress": "c3:f7:f5:b2:4d:1c",
-                "name": "ens5f3"
-              },
-              {
-                "label": "",
-                "macAddress": "c3:f7:f5:b2:4d:1d",
-                "name": "ens5f1"
+                "macAddress": "02:00:00:00:01:02",
+                "name": "ens3f3"
               },
               {
                 "label": "data-interface",
-                "macAddress": "c3:f7:f5:b2:4d:1e",
-                "name": "eno2np1"
+                "macAddress": "02:00:00:00:01:03",
+                "name": "ens3f1"
               },
               {
                 "label": "",
-                "macAddress": "c3:f7:f5:b2:4d:1f",
-                "name": "ens7f0np0"
+                "macAddress": "02:00:00:00:01:04",
+                "name": "ens2f3"
+              },
+              {
+                "label": "sriov-2",
+                "macAddress": "02:00:00:00:01:05",
+                "name": "ens2f1"
               },
               {
                 "label": "",
-                "macAddress": "c3:f7:f5:b2:4d:20",
-                "name": "ens7f1np1"
+                "macAddress": "02:00:00:00:01:06",
+                "name": "ens3f2"
+              },
+              {
+                "label": "boot-interface",
+                "macAddress": "02:00:00:00:01:07",
+                "name": "ens3f0"
               },
               {
                 "label": "",
-                "macAddress": "c3:f7:f5:b2:4d:21",
-                "name": "ens1f1"
-              },
-              {
-                "label": "",
-                "macAddress": "c3:f7:f5:b2:4d:22",
-                "name": "ens5f2"
-              },
-              {
-                "label": "",
-                "macAddress": "c3:f7:f5:b2:4d:23",
-                "name": "ens5f0"
-              },
-              {
-                "label": "",
-                "macAddress": "c3:f7:f5:b2:4d:24",
-                "name": "ens3f0np0"
+                "macAddress": "02:00:00:00:01:08",
+                "name": "ens2f2"
               }
             ]
           }
@@ -624,29 +637,33 @@ metadata:
             "namespace": "oran-o2ims"
           },
           "spec": {
-            "clusterId": "cluster1",
+            "callback": {
+              "callbackURL": "https://oran-o2ims-nar-callback-service.oran-o2ims.svc.cluster.local:8090/nar-callback/v1/provisioning-requests/123e4567-e89b-12d3-a456-426614174000"
+            },
+            "clusterId": "site-sno-du-1123e4567-e89b-12d3-a456-426614174000",
             "configTransactionId": 1,
             "hardwarePluginRef": "metal3-hwplugin",
+            "hardwareProvisioningTimeout": "90m",
             "nodeGroup": [
               {
                 "nodeGroupData": {
-                  "hwProfile": "rh-profile-r740-bios-settings",
+                  "hwProfile": "hardwareprofile-sample",
                   "name": "controller",
                   "resourceSelector": {
                     "resourceselector.clcm.openshift.io/server-colour": "blue",
-                    "server-type": "R740"
+                    "resourceselector.clcm.openshift.io/server-type": "xr8620t"
                   },
                   "role": "master"
                 },
                 "size": 1
               }
             ],
-            "site": "ottawa"
+            "site": "local-west-12345"
           },
           "status": {
             "conditions": [
               {
-                "lastTransitionTime": "2025-07-16T12:57:12Z",
+                "lastTransitionTime": "2026-03-03T15:04:57Z",
                 "message": "Created",
                 "reason": "Completed",
                 "status": "True",
@@ -659,7 +676,7 @@ metadata:
             "observedConfigTransactionId": 0,
             "properties": {
               "nodeNames": [
-                "91c70863-8a83-422a-ab7a-a75f744d5210"
+                "metal3-hwplugin-site-sno-du-1-xr8620t-pool-xr8620txserver1"
               ]
             }
           }

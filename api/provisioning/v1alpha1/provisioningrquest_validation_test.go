@@ -553,6 +553,15 @@ const testTemplate = `{
 			"type": "array"
 		  }
 		}
+	  },
+	  "hwTemplateParameters": {
+		"description": "hwTemplateParameters.",
+		"type": "object",
+		"properties": {
+		  "nodeGroupData": {
+			"type": "object"
+		  }
+		}
 	  }
 	},
 	"required": [

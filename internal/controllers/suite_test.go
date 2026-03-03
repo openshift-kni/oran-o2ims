@@ -327,6 +327,8 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(siteconfig.GroupVersion, &siteconfig.ClusterInstance{})
 	scheme.AddKnownTypes(siteconfig.GroupVersion, &siteconfig.ClusterInstanceList{})
 	scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion, &hwmgmtv1alpha1.HardwareTemplate{})
+	scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion, &hwmgmtv1alpha1.HardwareProfile{})
+	scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion, &hwmgmtv1alpha1.HardwareProfileList{})
 	scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion, &hwmgmtv1alpha1.HardwarePlugin{})
 	scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion, &hwmgmtv1alpha1.HardwarePluginList{})
 	scheme.AddKnownTypes(pluginsv1alpha1.GroupVersion, &pluginsv1alpha1.NodeAllocationRequest{})

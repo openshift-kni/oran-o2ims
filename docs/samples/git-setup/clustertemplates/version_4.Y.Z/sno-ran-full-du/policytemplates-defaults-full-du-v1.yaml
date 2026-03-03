@@ -10,7 +10,7 @@ data:
   clusterConfigurationTimeout: "40m"
   policytemplate-defaults: |
     cluster-log-fwd-filters-labels: '{"label1": "test1", "label2": "test2"}'
-    cluster-log-fwd-outputs-url: "tcp://10.46.55.190:9092/test"
+    cluster-log-fwd-outputs-url: "tcp://198.51.100.50:9092/test"
     cpu-isolated: 0-1,64-65
     cpu-reserved: 2-10
     hugepages-count: "32"
