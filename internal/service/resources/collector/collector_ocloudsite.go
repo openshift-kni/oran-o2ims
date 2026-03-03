@@ -97,7 +97,7 @@ func (d *OCloudSiteDataSource) Watch(ctx context.Context) error {
 
 	// Create a Reflector to watch OCloudSite objects
 	lister := cache.ListWatch{
-		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+		ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
 			var oCloudSiteList inventoryv1alpha1.OCloudSiteList
 			err := d.hubClient.List(ctx, &oCloudSiteList, &client.ListOptions{Raw: &options})
 			if err != nil {
@@ -105,7 +105,7 @@ func (d *OCloudSiteDataSource) Watch(ctx context.Context) error {
 			}
 			return &oCloudSiteList, nil
 		},
-		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+		WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
 			var oCloudSiteList inventoryv1alpha1.OCloudSiteList
 			w, err := d.hubClient.Watch(ctx, &oCloudSiteList, &client.ListOptions{Raw: &options})
 			if err != nil {
