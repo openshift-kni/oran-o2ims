@@ -71,6 +71,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -1068,6 +1069,152 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(nar).To(BeNil())
 		Expect(err.Error()).To(ContainSubstring("spec.nodes not found in cluster instance"))
+	})
+
+	It("uses hwProfile from templateParameters when provided", func() {
+		clusterInstance := &unstructured.Unstructured{}
+		clusterInstance.Object = map[string]interface{}{
+			"spec": map[string]interface{}{
+				"nodes": []interface{}{
+					map[string]interface{}{
+						"role": "master",
+					},
+					map[string]interface{}{
+						"role": "worker",
+					},
+				},
+			},
+		}
+
+		hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{
+			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
+				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+					{
+						Name:           "controller",
+						Role:           "master",
+						ResourcePoolId: "pool-1",
+						HwProfile:      "template-profile-1",
+					},
+					{
+						Name:           "worker",
+						Role:           "worker",
+						ResourcePoolId: "pool-2",
+						HwProfile:      "template-profile-2",
+					},
+				},
+			},
+		}
+
+		// Override hwProfile via templateParameters for the controller group
+		task.object.Spec.TemplateParameters = runtime.RawExtension{
+			Raw: []byte(fmt.Sprintf(`{
+				"%s": "exampleCluster",
+				"%s": "local-123",
+				"%s": %s,
+				"%s": %s,
+				"%s": {
+					"%s": {
+						"controller": {
+							"hwProfile": "override-profile-1"
+						}
+					}
+				}
+			}`, utils.TemplateParamNodeClusterName,
+				utils.TemplateParamOCloudSiteId,
+				utils.TemplateParamClusterInstance,
+				testutils.TestClusterInstanceInput,
+				utils.TemplateParamPolicyConfig,
+				testutils.TestPolicyTemplateInput,
+				provisioningv1alpha1.TemplateParamHwTemplate,
+				provisioningv1alpha1.TemplateParamNodeGroupData)),
+		}
+
+		nar, err := task.buildNodeAllocationRequest(clusterInstance, hwTemplate)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(nar).ToNot(BeNil())
+		Expect(nar.NodeGroup).To(HaveLen(2))
+
+		// Check that controller group uses the overridden profile
+		var controllerGroup, workerGroup *hwmgrpluginapi.NodeGroup
+		for i := range nar.NodeGroup {
+			if nar.NodeGroup[i].NodeGroupData.Name == "controller" {
+				controllerGroup = &nar.NodeGroup[i]
+			} else if nar.NodeGroup[i].NodeGroupData.Name == "worker" {
+				workerGroup = &nar.NodeGroup[i]
+			}
+		}
+
+		Expect(controllerGroup).ToNot(BeNil())
+		Expect(controllerGroup.NodeGroupData.HwProfile).To(Equal("override-profile-1"))
+
+		// Worker should still use the template profile
+		Expect(workerGroup).ToNot(BeNil())
+		Expect(workerGroup.NodeGroupData.HwProfile).To(Equal("template-profile-2"))
+	})
+
+	It("falls back to HardwareTemplate hwProfile when not in templateParameters", func() {
+		clusterInstance := &unstructured.Unstructured{}
+		clusterInstance.Object = map[string]interface{}{
+			"spec": map[string]interface{}{
+				"nodes": []interface{}{
+					map[string]interface{}{
+						"role": "master",
+					},
+				},
+			},
+		}
+
+		hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{
+			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
+				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+					{
+						Name:           "controller",
+						Role:           "master",
+						ResourcePoolId: "pool-1",
+						HwProfile:      "template-profile-1",
+					},
+				},
+			},
+		}
+
+		// No hwTemplateParameters override - should use HardwareTemplate value
+		nar, err := task.buildNodeAllocationRequest(clusterInstance, hwTemplate)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(nar).ToNot(BeNil())
+		Expect(nar.NodeGroup).To(HaveLen(1))
+		Expect(nar.NodeGroup[0].NodeGroupData.HwProfile).To(Equal("template-profile-1"))
+	})
+
+	It("returns error when neither source provides hwProfile", func() {
+		clusterInstance := &unstructured.Unstructured{}
+		clusterInstance.Object = map[string]interface{}{
+			"spec": map[string]interface{}{
+				"nodes": []interface{}{
+					map[string]interface{}{
+						"role": "master",
+					},
+				},
+			},
+		}
+
+		hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{
+			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
+				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+					{
+						Name:           "controller",
+						Role:           "master",
+						ResourcePoolId: "pool-1",
+						// No HwProfile set
+					},
+				},
+			},
+		}
+
+		// No hwTemplateParameters override either
+		nar, err := task.buildNodeAllocationRequest(clusterInstance, hwTemplate)
+		Expect(err).To(HaveOccurred())
+		Expect(nar).To(BeNil())
+		Expect(err.Error()).To(ContainSubstring("no hwProfile specified for nodeGroup controller"))
 	})
 })
 

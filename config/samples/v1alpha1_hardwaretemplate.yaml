@@ -1,15 +1,14 @@
 apiVersion: clcm.openshift.io/v1alpha1
 kind: HardwareTemplate
 metadata:
-  name: r740-blue-basic
+  name: hwtemplate-sample
   namespace: oran-o2ims
 spec:
   hardwarePluginRef: metal3-hwplugin
   nodeGroupData:
     - name: controller
       role: master
-      hwProfile: rh-profile-r740-bios-settings
       resourceSelector:
-        "server-type": "R740"
+        "resourceselector.clcm.openshift.io/server-type": "xr8620t"
         "resourceselector.clcm.openshift.io/server-colour": "blue"
-  hardwareProvisioningTimeout: "60m"
+  hardwareProvisioningTimeout: "90m"

@@ -76,7 +76,11 @@ At runtime, the Metal3 hardware plugin finds BareMetalHosts whose labels satisfy
 
 **[TODO] Add documentation for the hardware data selector**
 
-The template includes a `hardwarePluginRef`, which points to `metal3-hwplugin` (automatically created by the operator), and a reference to the HardwareProfile that should be applied to the matched hosts. The ClusterTemplate references the HardwareTemplate at `spec.templates.hwTemplate`.
+The template includes a `hardwarePluginRef`, which points to `metal3-hwplugin` (automatically created by the operator).
+The HardwareProfile to apply to matched hosts can be specified either in `nodeGroupData[].hwProfile` within the
+HardwareTemplate, or via `templateParameters.hwTemplateParameters.nodeGroupData.<name>.hwProfile` in the
+ProvisioningRequest. When both are set, the ProvisioningRequest value takes precedence. The ClusterTemplate
+references the HardwareTemplate at `spec.templates.hwTemplate`.
 
 Example files are under [hardwaretemplates](../samples/git-setup/clustertemplates/hardwaretemplates/).
 For details about server onboarding, refer to [Server Onboarding](./server-onboarding.md).
