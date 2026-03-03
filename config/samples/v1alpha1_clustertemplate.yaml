@@ -2,18 +2,18 @@ apiVersion: clcm.openshift.io/v1alpha1
 kind: ClusterTemplate
 metadata:
   name: clustertemplate-sample.v1.0.0
-  namespace: clustertemplate-a-v4-16-3
+  namespace: clustertemplate-a-v4-20-15
 spec:
-  name: clustertemplate-a 
-  description:   nice description
+  name: clustertemplate-sample
+  description: nice description
   version: v1.0.0
-  release: 4.16.3
+  release: 4.20.15
   characteristics:
     age: "31"
   metadata:
     apple: "23"
   templates:
-    hwTemplate: sample-hwtemplate-v1
+    hwTemplate: hwtemplate-sample
     clusterInstanceDefaults: clustertemplate-sample.v1.0.0-clusterinstance-defaults
     policyTemplateDefaults: clustertemplate-sample.v1.0.0-policytemplate-defaults
     upgradeDefaults: upgrade-defaults-v1

@@ -9,5 +9,11 @@ spec:
       SriovGlobalEnable: Enabled
       SysProfile: Custom
       WorkloadProfile: TelcoOptimizedProfile
+  biosFirmware:
+    version: 2.7.5
+    url: http://example.com:8888/firmware/xr8620t/BIOS_W23G7_WN64_2.7.5_01.EXE
+  bmcFirmware:
+    version: 7.20.70.50
+    url: http://example.com:8888/firmware/xr8620t/iDRAC-with-Lifecycle-Controller_Firmware_K2KHC_WN64_7.20.70.50_A00.EXE
 status:
   conditions: []
