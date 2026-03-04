@@ -10,7 +10,6 @@ entries:
   - entries:
       # v4.20.0
       - name: o-cloud-manager.v4.20.0
-        skipRange: '>=4.20.0 <4.21.0'
       # v4.20.1
       - name: o-cloud-manager.v4.20.1
         replaces: o-cloud-manager.v4.20.0
@@ -30,7 +29,6 @@ entries:
   - entries:
       # v4.20.0
       - name: o-cloud-manager.v4.20.0
-        skipRange: '>=4.20.0 <4.21.0'
       # v4.20.1
       - name: o-cloud-manager.v4.20.1
         replaces: o-cloud-manager.v4.20.0
