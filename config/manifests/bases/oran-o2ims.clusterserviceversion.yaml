@@ -266,7 +266,9 @@ spec:
         path: bootInterfaceLabel
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: HardwarePluginRef is the name of the HardwarePlugin.
+      - description: |-
+          HardwarePluginRef is the name of the HardwarePlugin.
+          When not specified, the internal metal3 hardware plugin is used.
         displayName: Hardware Plugin Reference
         path: hardwarePluginRef
         x-descriptors:
