@@ -10,19 +10,19 @@ entries:
   - entries:
       # v4.20.0
       - name: o-cloud-manager.v4.20.0
-        skipRange: '>=4.9.0 <4.20.0'
+        skipRange: '>=4.20.0 <4.21.0'
       # v4.20.1
       - name: o-cloud-manager.v4.20.1
         replaces: o-cloud-manager.v4.20.0
-        skipRange: '>=4.9.0 <4.20.1'
+        skipRange: '>=4.20.0 <4.20.1'
       # v4.20.2
       - name: o-cloud-manager.v4.20.2
         replaces: o-cloud-manager.v4.20.1
-        skipRange: '>=4.9.0 <4.20.2'
+        skipRange: '>=4.20.0 <4.20.2'
       # v4.20.3
       - name: o-cloud-manager.v4.20.3
         replaces: o-cloud-manager.v4.20.2
-        skipRange: '>=4.9.0 <4.20.3'
+        skipRange: '>=4.20.0 <4.20.3'
     name: stable
     package: o-cloud-manager
     schema: olm.channel
@@ -30,19 +30,19 @@ entries:
   - entries:
       # v4.20.0
       - name: o-cloud-manager.v4.20.0
-        skipRange: '>=4.9.0 <4.20.0'
+        skipRange: '>=4.20.0 <4.21.0'
       # v4.20.1
       - name: o-cloud-manager.v4.20.1
         replaces: o-cloud-manager.v4.20.0
-        skipRange: '>=4.9.0 <4.20.1'
+        skipRange: '>=4.20.0 <4.20.1'
       # v4.20.2
       - name: o-cloud-manager.v4.20.2
         replaces: o-cloud-manager.v4.20.1
-        skipRange: '>=4.9.0 <4.20.2'
+        skipRange: '>=4.20.0 <4.20.2'
       # v4.20.3
       - name: o-cloud-manager.v4.20.3
         replaces: o-cloud-manager.v4.20.2
-        skipRange: '>=4.9.0 <4.20.3'
+        skipRange: '>=4.20.0 <4.20.3'
     name: "4.20"
     package: o-cloud-manager
     schema: olm.channel
