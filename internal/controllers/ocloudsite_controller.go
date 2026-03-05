@@ -19,7 +19,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -92,8 +94,13 @@ func (r *OCloudSiteReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// Validate Location reference and set Ready condition if not being deleted
 	if site.DeletionTimestamp.IsZero() {
-		if err := r.validateAndSetConditions(ctx, site); err != nil {
+		locationExists, err := r.validateAndSetConditions(ctx, site)
+		if err != nil {
 			return requeueWithShortInterval(), err
+		}
+		// Requeue if location doesn't exist - it may be created later
+		if !locationExists {
+			return requeueWithMediumInterval(), nil
 		}
 	}
 
@@ -200,12 +207,13 @@ func (r *OCloudSiteReconciler) findDependentBMHs(ctx context.Context, siteID str
 	return bmhList.Items, nil
 }
 
-// validateAndSetConditions validates the Location reference and sets appropriate conditions
-func (r *OCloudSiteReconciler) validateAndSetConditions(ctx context.Context, site *inventoryv1alpha1.OCloudSite) error {
+// validateAndSetConditions validates the Location reference and sets appropriate conditions.
+// Returns (locationExists, error) so caller can decide whether to requeue.
+func (r *OCloudSiteReconciler) validateAndSetConditions(ctx context.Context, site *inventoryv1alpha1.OCloudSite) (bool, error) {
 	// Validate that the referenced Location exists
 	locationExists, err := r.validateLocationReference(ctx, site.Spec.GlobalLocationID)
 	if err != nil {
-		return fmt.Errorf("failed to validate Location reference: %w", err)
+		return false, fmt.Errorf("failed to validate Location reference: %w", err)
 	}
 
 	var condition metav1.Condition
@@ -232,11 +240,11 @@ func (r *OCloudSiteReconciler) validateAndSetConditions(ctx context.Context, sit
 	if existingCondition == nil || existingCondition.Status != condition.Status || existingCondition.Reason != condition.Reason {
 		meta.SetStatusCondition(&site.Status.Conditions, condition)
 		if err := r.Status().Update(ctx, site); err != nil {
-			return fmt.Errorf("failed to update status: %w", err)
+			return locationExists, fmt.Errorf("failed to update status: %w", err)
 		}
 	}
 
-	return nil
+	return locationExists, nil
 }
 
 // validateLocationReference checks if a Location with the given globalLocationId exists
@@ -278,8 +286,46 @@ func (r *OCloudSiteReconciler) setDeletionBlockedCondition(ctx context.Context, 
 func (r *OCloudSiteReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&inventoryv1alpha1.OCloudSite{}).
+		// Watch Location changes to re-reconcile OCloudSites that reference them
+		Watches(
+			&inventoryv1alpha1.Location{},
+			handler.EnqueueRequestsFromMapFunc(r.enqueueOCloudSitesForLocation),
+		).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to setup ocloudsite controller: %w", err)
 	}
 	return nil
+}
+
+// enqueueOCloudSitesForLocation maps Location changes to OCloudSites that reference them.
+func (r *OCloudSiteReconciler) enqueueOCloudSitesForLocation(ctx context.Context, obj client.Object) []reconcile.Request {
+	location, ok := obj.(*inventoryv1alpha1.Location)
+	if !ok {
+		return nil
+	}
+
+	// Find all OCloudSites that reference this Location's globalLocationId
+	var siteList inventoryv1alpha1.OCloudSiteList
+	if err := r.List(ctx, &siteList); err != nil {
+		r.Logger.ErrorContext(ctx, "Failed to list OCloudSites for Location watch",
+			slog.String("error", err.Error()))
+		return nil
+	}
+
+	var requests []reconcile.Request
+	for _, site := range siteList.Items {
+		if site.Spec.GlobalLocationID == location.Spec.GlobalLocationID {
+			requests = append(requests, reconcile.Request{
+				NamespacedName: client.ObjectKeyFromObject(&site),
+			})
+		}
+	}
+
+	if len(requests) > 0 {
+		r.Logger.InfoContext(ctx, "Location change triggering OCloudSite reconciliation",
+			slog.String("globalLocationId", location.Spec.GlobalLocationID),
+			slog.Int("oCloudSiteCount", len(requests)))
+	}
+
+	return requests
 }
