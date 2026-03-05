@@ -19,7 +19,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -91,8 +93,13 @@ func (r *ResourcePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	// Validate OCloudSite reference and set Ready condition if not being deleted
 	if pool.DeletionTimestamp.IsZero() {
-		if err := r.validateAndSetConditions(ctx, pool); err != nil {
+		siteExists, err := r.validateAndSetConditions(ctx, pool)
+		if err != nil {
 			return requeueWithShortInterval(), err
+		}
+		// Requeue if site doesn't exist - it may be created later
+		if !siteExists {
+			return requeueWithMediumInterval(), nil
 		}
 	}
 
@@ -174,12 +181,13 @@ func (r *ResourcePoolReconciler) findDependentBMHs(ctx context.Context, resource
 	return bmhList.Items, nil
 }
 
-// validateAndSetConditions validates the OCloudSite reference and sets appropriate conditions
-func (r *ResourcePoolReconciler) validateAndSetConditions(ctx context.Context, pool *inventoryv1alpha1.ResourcePool) error {
+// validateAndSetConditions validates the OCloudSite reference and sets appropriate conditions.
+// Returns (siteExists, error) so caller can decide whether to requeue.
+func (r *ResourcePoolReconciler) validateAndSetConditions(ctx context.Context, pool *inventoryv1alpha1.ResourcePool) (bool, error) {
 	// Validate that the referenced OCloudSite exists
 	siteExists, err := r.validateSiteReference(ctx, pool.Spec.OCloudSiteId)
 	if err != nil {
-		return fmt.Errorf("failed to validate OCloudSite reference: %w", err)
+		return false, fmt.Errorf("failed to validate OCloudSite reference: %w", err)
 	}
 
 	var condition metav1.Condition
@@ -206,11 +214,11 @@ func (r *ResourcePoolReconciler) validateAndSetConditions(ctx context.Context, p
 	if existingCondition == nil || existingCondition.Status != condition.Status || existingCondition.Reason != condition.Reason {
 		meta.SetStatusCondition(&pool.Status.Conditions, condition)
 		if err := r.Status().Update(ctx, pool); err != nil {
-			return fmt.Errorf("failed to update status: %w", err)
+			return siteExists, fmt.Errorf("failed to update status: %w", err)
 		}
 	}
 
-	return nil
+	return siteExists, nil
 }
 
 // validateSiteReference checks if an OCloudSite with the given siteId exists
@@ -251,8 +259,46 @@ func (r *ResourcePoolReconciler) setDeletionBlockedCondition(ctx context.Context
 func (r *ResourcePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&inventoryv1alpha1.ResourcePool{}).
+		// Watch OCloudSite changes to re-reconcile ResourcePools that reference them
+		Watches(
+			&inventoryv1alpha1.OCloudSite{},
+			handler.EnqueueRequestsFromMapFunc(r.enqueueResourcePoolsForOCloudSite),
+		).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to setup resourcepool controller: %w", err)
 	}
 	return nil
+}
+
+// enqueueResourcePoolsForOCloudSite maps OCloudSite changes to ResourcePools that reference them.
+func (r *ResourcePoolReconciler) enqueueResourcePoolsForOCloudSite(ctx context.Context, obj client.Object) []reconcile.Request {
+	site, ok := obj.(*inventoryv1alpha1.OCloudSite)
+	if !ok {
+		return nil
+	}
+
+	// Find all ResourcePools that reference this OCloudSite's siteId
+	var poolList inventoryv1alpha1.ResourcePoolList
+	if err := r.List(ctx, &poolList); err != nil {
+		r.Logger.ErrorContext(ctx, "Failed to list ResourcePools for OCloudSite watch",
+			slog.String("error", err.Error()))
+		return nil
+	}
+
+	var requests []reconcile.Request
+	for _, pool := range poolList.Items {
+		if pool.Spec.OCloudSiteId == site.Spec.SiteID {
+			requests = append(requests, reconcile.Request{
+				NamespacedName: client.ObjectKeyFromObject(&pool),
+			})
+		}
+	}
+
+	if len(requests) > 0 {
+		r.Logger.InfoContext(ctx, "OCloudSite change triggering ResourcePool reconciliation",
+			slog.String("siteId", site.Spec.SiteID),
+			slog.Int("resourcePoolCount", len(requests)))
+	}
+
+	return requests
 }
