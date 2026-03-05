@@ -169,6 +169,18 @@ func (d *LocationDataSource) HandleSyncComplete(ctx context.Context, objectType 
 func (d *LocationDataSource) handleLocationWatchEvent(ctx context.Context, location *inventoryv1alpha1.Location, eventType async.AsyncEventType) (uuid.UUID, error) {
 	slog.Debug("handleLocationWatchEvent received", "globalLocationId", location.Spec.GlobalLocationID, "type", eventType)
 
+	// DELETE events always proceed (finalizers guarantee deletion order)
+	// For CREATE/UPDATE, only emit if CR is Ready=True
+	if eventType != async.Deleted {
+		if !isResourceReady(location.Status.Conditions) {
+			slog.Debug("Location not ready, skipping",
+				"name", location.Name,
+				"globalLocationId", location.Spec.GlobalLocationID,
+				"reason", getReadyReason(location.Status.Conditions))
+			return uuid.Nil, nil
+		}
+	}
+
 	record, err := d.convertLocationToModel(location)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("failed to convert location CR to model: %w", err)

@@ -29,6 +29,12 @@ import (
 // ErrNotFound represents the error returned by any repository when not record matches the requested criteria
 var ErrNotFound = errors.New("record not found")
 
+// PrimaryKeyType defines the allowed types for primary keys in database operations.
+// This constraint enables type-safe generic functions that work with both UUID and string keys.
+type PrimaryKeyType interface {
+	uuid.UUID | string
+}
+
 // Following functions are meant to fulfill basic CRUD operations on the database. More complex queries or bulk operations
 // for Insert or Update should be built in the repository files of the specific service and called one of the Execute helper functions.
 
@@ -215,12 +221,12 @@ func UpdateAll[T db.Model](ctx context.Context, db DBQuery, whereExpr bob.Expres
 }
 
 // Exists checks whether a record exists in the database table specified.
-// The `uuid` argument is the primary key of the record to check.
-func Exists[T db.Model](ctx context.Context, db DBQuery, uuid uuid.UUID) (bool, error) {
+// The `key` argument is the primary key of the record to check (supports uuid.UUID or string).
+func Exists[T db.Model, K PrimaryKeyType](ctx context.Context, db DBQuery, key K) (bool, error) {
 	var record T
 
 	query := psql.RawQuery(fmt.Sprintf("SELECT EXISTS(SELECT 1 FROM %s WHERE %s=?)",
-		psql.Quote(record.TableName()), psql.Quote(record.PrimaryKey())), uuid)
+		psql.Quote(record.TableName()), psql.Quote(record.PrimaryKey())), key)
 
 	sql, args, err := query.Build(ctx)
 	if err != nil {

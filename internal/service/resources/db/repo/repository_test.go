@@ -191,6 +191,34 @@ var _ = Describe("Location Repository", func() {
 			Expect(mock.ExpectationsWereMet()).To(Succeed())
 		})
 	})
+
+	Describe("LocationExists", func() {
+		It("should return true when location exists", func() {
+			rows := pgxmock.NewRows([]string{"exists"}).AddRow(true)
+			mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM "location" WHERE`).
+				WithArgs("loc-1").
+				WillReturnRows(rows)
+
+			exists, err := repository.LocationExists(ctx, "loc-1")
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exists).To(BeTrue())
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+
+		It("should return false when location does not exist", func() {
+			rows := pgxmock.NewRows([]string{"exists"}).AddRow(false)
+			mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM "location" WHERE`).
+				WithArgs("non-existent").
+				WillReturnRows(rows)
+
+			exists, err := repository.LocationExists(ctx, "non-existent")
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exists).To(BeFalse())
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+	})
 })
 
 var _ = Describe("OCloudSite Repository", func() {
@@ -358,6 +386,36 @@ var _ = Describe("OCloudSite Repository", func() {
 			Expect(mock.ExpectationsWereMet()).To(Succeed())
 		})
 	})
+
+	Describe("OCloudSiteExists", func() {
+		It("should return true when site exists", func() {
+			siteID := uuid.New()
+			rows := pgxmock.NewRows([]string{"exists"}).AddRow(true)
+			mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM "o_cloud_site" WHERE`).
+				WithArgs(siteID).
+				WillReturnRows(rows)
+
+			exists, err := repository.OCloudSiteExists(ctx, siteID)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exists).To(BeTrue())
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+
+		It("should return false when site does not exist", func() {
+			siteID := uuid.New()
+			rows := pgxmock.NewRows([]string{"exists"}).AddRow(false)
+			mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM "o_cloud_site" WHERE`).
+				WithArgs(siteID).
+				WillReturnRows(rows)
+
+			exists, err := repository.OCloudSiteExists(ctx, siteID)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exists).To(BeFalse())
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+	})
 })
 
 var _ = Describe("ResourcePool Repository", func() {
@@ -464,6 +522,36 @@ var _ = Describe("ResourcePool Repository", func() {
 			// Verify
 			Expect(err).To(Equal(svcutils.ErrNotFound))
 			Expect(result).To(BeNil())
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+	})
+
+	Describe("ResourcePoolExists", func() {
+		It("should return true when resource pool exists", func() {
+			poolID := uuid.New()
+			rows := pgxmock.NewRows([]string{"exists"}).AddRow(true)
+			mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM "resource_pool" WHERE`).
+				WithArgs(poolID).
+				WillReturnRows(rows)
+
+			exists, err := repository.ResourcePoolExists(ctx, poolID)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exists).To(BeTrue())
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+
+		It("should return false when resource pool does not exist", func() {
+			poolID := uuid.New()
+			rows := pgxmock.NewRows([]string{"exists"}).AddRow(false)
+			mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM "resource_pool" WHERE`).
+				WithArgs(poolID).
+				WillReturnRows(rows)
+
+			exists, err := repository.ResourcePoolExists(ctx, poolID)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exists).To(BeFalse())
 			Expect(mock.ExpectationsWereMet()).To(Succeed())
 		})
 	})

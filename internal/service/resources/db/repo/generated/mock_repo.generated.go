@@ -506,6 +506,36 @@ func (mr *MockResourcesRepositoryInterfaceMockRecorder) GetSubscriptions(arg0 an
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubscriptions", reflect.TypeOf((*MockResourcesRepositoryInterface)(nil).GetSubscriptions), arg0)
 }
 
+// LocationExists mocks base method.
+func (m *MockResourcesRepositoryInterface) LocationExists(ctx context.Context, globalLocationID string) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LocationExists", ctx, globalLocationID)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LocationExists indicates an expected call of LocationExists.
+func (mr *MockResourcesRepositoryInterfaceMockRecorder) LocationExists(ctx, globalLocationID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LocationExists", reflect.TypeOf((*MockResourcesRepositoryInterface)(nil).LocationExists), ctx, globalLocationID)
+}
+
+// OCloudSiteExists mocks base method.
+func (m *MockResourcesRepositoryInterface) OCloudSiteExists(ctx context.Context, id uuid.UUID) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "OCloudSiteExists", ctx, id)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// OCloudSiteExists indicates an expected call of OCloudSiteExists.
+func (mr *MockResourcesRepositoryInterfaceMockRecorder) OCloudSiteExists(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OCloudSiteExists", reflect.TypeOf((*MockResourcesRepositoryInterface)(nil).OCloudSiteExists), ctx, id)
+}
+
 // ResourcePoolExists mocks base method.
 func (m *MockResourcesRepositoryInterface) ResourcePoolExists(ctx context.Context, id uuid.UUID) (bool, error) {
 	m.ctrl.T.Helper()

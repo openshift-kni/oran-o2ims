@@ -169,7 +169,19 @@ func (d *OCloudSiteDataSource) HandleSyncComplete(ctx context.Context, objectTyp
 func (d *OCloudSiteDataSource) handleOCloudSiteWatchEvent(ctx context.Context, site *inventoryv1alpha1.OCloudSite, eventType async.AsyncEventType) (uuid.UUID, error) {
 	slog.Debug("handleOCloudSiteWatchEvent received", "siteId", site.Spec.SiteID, "type", eventType)
 
-	record := d.convertOCloudSiteToModel(site)
+	// DELETE events always proceed (finalizers guarantee deletion order)
+	// For CREATE/UPDATE, only emit if CR is Ready=True
+	if eventType != async.Deleted {
+		if !isResourceReady(site.Status.Conditions) {
+			slog.Debug("OCloudSite not ready, skipping",
+				"name", site.Name,
+				"siteId", site.Spec.SiteID,
+				"reason", getReadyReason(site.Status.Conditions))
+			return uuid.Nil, nil
+		}
+	}
+
+	record := d.ConvertOCloudSiteToModel(site)
 
 	select {
 	case <-ctx.Done():
@@ -185,7 +197,8 @@ func (d *OCloudSiteDataSource) handleOCloudSiteWatchEvent(ctx context.Context, s
 }
 
 // convertOCloudSiteToModel converts an OCloudSite CR to a database model
-func (d *OCloudSiteDataSource) convertOCloudSiteToModel(site *inventoryv1alpha1.OCloudSite) models.OCloudSite {
+// ConvertOCloudSiteToModel converts an OCloudSite CR to a database model.
+func (d *OCloudSiteDataSource) ConvertOCloudSiteToModel(site *inventoryv1alpha1.OCloudSite) models.OCloudSite {
 	// Generate deterministic UUID from cloudID and siteId
 	oCloudSiteID := ctlrutils.MakeUUIDFromNames(OCloudSiteUUIDNamespace, d.cloudID, site.Spec.SiteID)
 
