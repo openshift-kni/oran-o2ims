@@ -35,15 +35,12 @@ const (
 	// ReasonReady indicates the CR is ready
 	ReasonReady = "Ready"
 
-	// ReasonInvalidReference indicates the CR references a non-existent parent
-	ReasonInvalidReference = "InvalidReference"
+	// ReasonParentNotFound indicates the referenced parent CR does not exist
+	ReasonParentNotFound = "ParentNotFound"
+
+	// ReasonParentNotReady indicates the parent CR exists but is not ready
+	ReasonParentNotReady = "ParentNotReady"
 
 	// ReasonDependentsExist indicates deletion is blocked due to existing dependents
 	ReasonDependentsExist = "DependentsExist"
-
-	// ReasonDeletionBlocked indicates deletion cannot proceed
-	ReasonDeletionBlocked = "DeletionBlocked"
-
-	// ReasonDeletionReady indicates deletion can proceed (no dependents)
-	ReasonDeletionReady = "DeletionReady"
 )

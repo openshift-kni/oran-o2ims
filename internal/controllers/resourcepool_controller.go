@@ -93,12 +93,12 @@ func (r *ResourcePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	// Validate OCloudSite reference and set Ready condition if not being deleted
 	if pool.DeletionTimestamp.IsZero() {
-		siteExists, err := r.validateAndSetConditions(ctx, pool)
+		parentValid, err := r.validateAndSetConditions(ctx, pool)
 		if err != nil {
 			return requeueWithShortInterval(), err
 		}
-		// Requeue if site doesn't exist - it may be created later
-		if !siteExists {
+		// Requeue if parent doesn't exist or is not ready - it may be created/ready later
+		if !parentValid {
 			return requeueWithMediumInterval(), nil
 		}
 	}
@@ -182,24 +182,33 @@ func (r *ResourcePoolReconciler) findDependentBMHs(ctx context.Context, resource
 }
 
 // validateAndSetConditions validates the OCloudSite reference and sets appropriate conditions.
-// Returns (siteExists, error) so caller can decide whether to requeue.
+// Returns (parentValid, error) where parentValid is true only when parent exists AND is ready.
 func (r *ResourcePoolReconciler) validateAndSetConditions(ctx context.Context, pool *inventoryv1alpha1.ResourcePool) (bool, error) {
-	// Validate that the referenced OCloudSite exists
-	siteExists, err := r.validateSiteReference(ctx, pool.Spec.OCloudSiteId)
+	// Validate that the referenced OCloudSite exists and is ready
+	result, err := r.validateSiteReference(ctx, pool.Spec.OCloudSiteId)
 	if err != nil {
 		return false, fmt.Errorf("failed to validate OCloudSite reference: %w", err)
 	}
 
 	var condition metav1.Condition
-	if !siteExists {
+	switch {
+	case !result.Exists:
 		condition = metav1.Condition{
 			Type:               inventoryv1alpha1.ConditionTypeReady,
 			Status:             metav1.ConditionFalse,
-			Reason:             inventoryv1alpha1.ReasonInvalidReference,
+			Reason:             inventoryv1alpha1.ReasonParentNotFound,
 			Message:            fmt.Sprintf("Referenced OCloudSite with siteId '%s' does not exist", pool.Spec.OCloudSiteId),
 			ObservedGeneration: pool.Generation,
 		}
-	} else {
+	case !result.Ready:
+		condition = metav1.Condition{
+			Type:               inventoryv1alpha1.ConditionTypeReady,
+			Status:             metav1.ConditionFalse,
+			Reason:             inventoryv1alpha1.ReasonParentNotReady,
+			Message:            fmt.Sprintf("Referenced OCloudSite with siteId '%s' is not ready", pool.Spec.OCloudSiteId),
+			ObservedGeneration: pool.Generation,
+		}
+	default:
 		condition = metav1.Condition{
 			Type:               inventoryv1alpha1.ConditionTypeReady,
 			Status:             metav1.ConditionTrue,
@@ -214,27 +223,31 @@ func (r *ResourcePoolReconciler) validateAndSetConditions(ctx context.Context, p
 	if existingCondition == nil || existingCondition.Status != condition.Status || existingCondition.Reason != condition.Reason {
 		meta.SetStatusCondition(&pool.Status.Conditions, condition)
 		if err := r.Status().Update(ctx, pool); err != nil {
-			return siteExists, fmt.Errorf("failed to update status: %w", err)
+			return result.Exists && result.Ready, fmt.Errorf("failed to update status: %w", err)
 		}
 	}
 
-	return siteExists, nil
+	// Return true only when parent exists AND is ready
+	return result.Exists && result.Ready, nil
 }
 
-// validateSiteReference checks if an OCloudSite with the given siteId exists
-func (r *ResourcePoolReconciler) validateSiteReference(ctx context.Context, siteID string) (bool, error) {
+// validateSiteReference checks if an OCloudSite with the given siteId exists and is ready
+func (r *ResourcePoolReconciler) validateSiteReference(ctx context.Context, siteID string) (parentValidationResult, error) {
 	var siteList inventoryv1alpha1.OCloudSiteList
 	if err := r.List(ctx, &siteList); err != nil {
-		return false, fmt.Errorf("failed to list OCloudSites: %w", err)
+		return parentValidationResult{}, fmt.Errorf("failed to list OCloudSites: %w", err)
 	}
 
 	for _, site := range siteList.Items {
 		if site.Spec.SiteID == siteID {
-			return true, nil
+			// Check if OCloudSite is Ready
+			readyCondition := meta.FindStatusCondition(site.Status.Conditions, inventoryv1alpha1.ConditionTypeReady)
+			isReady := readyCondition != nil && readyCondition.Status == metav1.ConditionTrue
+			return parentValidationResult{Exists: true, Ready: isReady}, nil
 		}
 	}
 
-	return false, nil
+	return parentValidationResult{Exists: false, Ready: false}, nil
 }
 
 // setDeletionBlockedCondition sets the Deleting condition indicating deletion is blocked

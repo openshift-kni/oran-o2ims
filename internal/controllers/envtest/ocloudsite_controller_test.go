@@ -55,116 +55,7 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 			}, timeout, interval).Should(BeTrue())
 		})
 
-		It("should set Ready=False when Location reference is invalid", func() {
-			site := &inventoryv1alpha1.OCloudSite{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-site-invalid-ref",
-					Namespace: testNamespace,
-				},
-				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "SITE-INVALID-REF-001",
-					GlobalLocationID: "LOC-DOES-NOT-EXIST",
-					Name:             "Test Site Invalid Ref",
-					Description:      "Testing invalid Location reference",
-				},
-			}
-			Expect(k8sClient.Create(ctx, site)).To(Succeed())
-			DeferCleanup(func() {
-				_ = k8sClient.Delete(ctx, site)
-			})
-
-			// Wait for the Ready=False condition with InvalidReference reason
-			Eventually(func() bool {
-				fetched := &inventoryv1alpha1.OCloudSite{}
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetched)
-				if err != nil {
-					return false
-				}
-				for _, cond := range fetched.Status.Conditions {
-					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
-						cond.Status == metav1.ConditionFalse &&
-						cond.Reason == inventoryv1alpha1.ReasonInvalidReference {
-						return true
-					}
-				}
-				return false
-			}, timeout, interval).Should(BeTrue())
-		})
-
-		It("should transition from Ready=False to Ready=True when Location is created after OCloudSite", func() {
-			// Create the OCloudSite FIRST, before Location exists
-			site := &inventoryv1alpha1.OCloudSite{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-site-late-location",
-					Namespace: testNamespace,
-				},
-				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "SITE-LATE-LOC-001",
-					GlobalLocationID: "LOC-LATE-002", // Location doesn't exist yet
-					Name:             "Site Created Before Location",
-					Description:      "Testing watch on Location creation",
-				},
-			}
-			Expect(k8sClient.Create(ctx, site)).To(Succeed())
-			DeferCleanup(func() {
-				_ = k8sClient.Delete(ctx, site)
-			})
-
-			// Wait for Ready=False (Location doesn't exist)
-			Eventually(func() bool {
-				fetched := &inventoryv1alpha1.OCloudSite{}
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetched)
-				if err != nil {
-					return false
-				}
-				for _, cond := range fetched.Status.Conditions {
-					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
-						cond.Status == metav1.ConditionFalse &&
-						cond.Reason == inventoryv1alpha1.ReasonInvalidReference {
-						return true
-					}
-				}
-				return false
-			}, timeout, interval).Should(BeTrue(), "OCloudSite should be Ready=False initially")
-
-			// Now create the Location AFTER OCloudSite
-			location := &inventoryv1alpha1.Location{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-location-late-for-site",
-					Namespace: testNamespace,
-				},
-				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-LATE-002", // Matches OCloudSite's reference
-					Name:             "Location Created Late",
-					Description:      "Testing watch triggers re-reconciliation",
-					Address:          ptrString("Late Address"),
-				},
-			}
-			Expect(k8sClient.Create(ctx, location)).To(Succeed())
-			DeferCleanup(func() {
-				_ = k8sClient.Delete(ctx, location)
-			})
-
-			// The watch should trigger re-reconciliation of OCloudSite
-			// It should now transition to Ready=True
-			Eventually(func() bool {
-				fetched := &inventoryv1alpha1.OCloudSite{}
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetched)
-				if err != nil {
-					return false
-				}
-				for _, cond := range fetched.Status.Conditions {
-					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
-						cond.Status == metav1.ConditionTrue &&
-						cond.Reason == inventoryv1alpha1.ReasonReady {
-						return true
-					}
-				}
-				return false
-			}, timeout, interval).Should(BeTrue(), "OCloudSite should transition to Ready=True after Location is created")
-		})
-
-		It("should set Ready=True when Location reference is valid", func() {
+		It("should set Ready=True when Location is valid and ready", func() {
 			// First create a valid Location
 			location := &inventoryv1alpha1.Location{
 				ObjectMeta: metav1.ObjectMeta{
@@ -213,12 +104,127 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 				}
 				for _, cond := range fetched.Status.Conditions {
 					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
-						cond.Status == metav1.ConditionTrue {
+						cond.Status == metav1.ConditionTrue &&
+						cond.Reason == inventoryv1alpha1.ReasonReady {
 						return true
 					}
 				}
 				return false
 			}, timeout, interval).Should(BeTrue())
+		})
+
+		It("should set Ready=False with ParentNotFound when Location does not exist", func() {
+			site := &inventoryv1alpha1.OCloudSite{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-site-invalid-ref",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.OCloudSiteSpec{
+					SiteID:           "SITE-INVALID-REF-001",
+					GlobalLocationID: "LOC-DOES-NOT-EXIST",
+					Name:             "Test Site Invalid Ref",
+					Description:      "Testing invalid Location reference",
+				},
+			}
+			Expect(k8sClient.Create(ctx, site)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, site)
+			})
+
+			// Wait for the Ready=False condition with ParentNotFound reason
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.OCloudSite{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetched)
+				if err != nil {
+					return false
+				}
+				for _, cond := range fetched.Status.Conditions {
+					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+						cond.Status == metav1.ConditionFalse &&
+						cond.Reason == inventoryv1alpha1.ReasonParentNotFound {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue())
+		})
+
+		// Note: We cannot test "ParentNotReady" for OCloudSite because Location
+		// has no parent and is always Ready=True.
+	})
+
+	Context("When parent Location is created later", func() {
+		It("should transition from ParentNotFound to Ready=True when Location is created and ready", func() {
+			// Create the OCloudSite FIRST, before Location exists
+			site := &inventoryv1alpha1.OCloudSite{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-site-late-location",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.OCloudSiteSpec{
+					SiteID:           "SITE-LATE-LOC-001",
+					GlobalLocationID: "LOC-LATE-002", // Location doesn't exist yet
+					Name:             "Site Created Before Location",
+					Description:      "Testing watch on Location creation",
+				},
+			}
+			Expect(k8sClient.Create(ctx, site)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, site)
+			})
+
+			// Wait for Ready=False (Location doesn't exist)
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.OCloudSite{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetched)
+				if err != nil {
+					return false
+				}
+				for _, cond := range fetched.Status.Conditions {
+					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+						cond.Status == metav1.ConditionFalse &&
+						cond.Reason == inventoryv1alpha1.ReasonParentNotFound {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue(), "OCloudSite should be Ready=False (ParentNotFound) initially")
+
+			// Now create the Location AFTER OCloudSite
+			location := &inventoryv1alpha1.Location{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-location-late-for-site",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.LocationSpec{
+					GlobalLocationID: "LOC-LATE-002", // Matches OCloudSite's reference
+					Name:             "Location Created Late",
+					Description:      "Testing watch triggers re-reconciliation",
+					Address:          ptrString("Late Address"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, location)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, location)
+			})
+
+			// The watch should trigger re-reconciliation of OCloudSite
+			// It should now transition to Ready=True
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.OCloudSite{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetched)
+				if err != nil {
+					return false
+				}
+				for _, cond := range fetched.Status.Conditions {
+					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+						cond.Status == metav1.ConditionTrue &&
+						cond.Reason == inventoryv1alpha1.ReasonReady {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue(), "OCloudSite should transition to Ready=True after Location is created")
 		})
 	})
 
