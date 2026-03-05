@@ -282,6 +282,11 @@ deploy: install manifests kustomize kubectl ## Deploy controller to the K8s clus
 
 .PHONY: undeploy
 undeploy: kustomize kubectl ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
+	# Remove finalizers from hierarchy CRs to prevent namespace deletion hang (children before parents)
+	# Note: '-' prefix allows undeploy to continue even if CRDs don't exist
+	-$(KUBECTL) get resourcepools -n $(OCLOUD_MANAGER_NAMESPACE) -o name | xargs -r -I {} $(KUBECTL) patch {} -n $(OCLOUD_MANAGER_NAMESPACE) --type=merge -p '{"metadata":{"finalizers":null}}'
+	-$(KUBECTL) get ocloudsites -n $(OCLOUD_MANAGER_NAMESPACE) -o name | xargs -r -I {} $(KUBECTL) patch {} -n $(OCLOUD_MANAGER_NAMESPACE) --type=merge -p '{"metadata":{"finalizers":null}}'
+	-$(KUBECTL) get locations -n $(OCLOUD_MANAGER_NAMESPACE) -o name | xargs -r -I {} $(KUBECTL) patch {} -n $(OCLOUD_MANAGER_NAMESPACE) --type=merge -p '{"metadata":{"finalizers":null}}'
 	$(KUSTOMIZE) build config/$(KUSTOMIZE_OVERLAY) | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
 
 ##@ Build Dependencies
