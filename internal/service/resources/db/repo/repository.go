@@ -254,6 +254,11 @@ func (r *ResourcesRepository) GetLocation(ctx context.Context, globalLocationID 
 	return &results[0], nil
 }
 
+// LocationExists determines whether a Location with the given globalLocationID exists
+func (r *ResourcesRepository) LocationExists(ctx context.Context, globalLocationID string) (bool, error) {
+	return svcutils.Exists[models.Location](ctx, r.Db, globalLocationID)
+}
+
 // GetOCloudSiteIDsForLocation retrieves the list of OCloudSite IDs for a given Location
 func (r *ResourcesRepository) GetOCloudSiteIDsForLocation(ctx context.Context, globalLocationID string) ([]uuid.UUID, error) {
 	e := psql.Quote("global_location_id").EQ(psql.Arg(globalLocationID))
@@ -276,6 +281,11 @@ func (r *ResourcesRepository) GetOCloudSites(ctx context.Context) ([]models.OClo
 // GetOCloudSite retrieves a specific OCloudSite tuple or returns ErrNotFound if not found
 func (r *ResourcesRepository) GetOCloudSite(ctx context.Context, id uuid.UUID) (*models.OCloudSite, error) {
 	return svcutils.Find[models.OCloudSite](ctx, r.Db, id)
+}
+
+// OCloudSiteExists determines whether an OCloudSite with the given ID exists
+func (r *ResourcesRepository) OCloudSiteExists(ctx context.Context, id uuid.UUID) (bool, error) {
+	return svcutils.Exists[models.OCloudSite](ctx, r.Db, id)
 }
 
 // GetResourcePoolIDsForSite retrieves the list of ResourcePool IDs for a given OCloudSite

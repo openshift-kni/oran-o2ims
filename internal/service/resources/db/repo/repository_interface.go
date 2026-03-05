@@ -48,12 +48,14 @@ type ResourcesRepositoryInterface interface {
 	// Location methods
 	GetLocations(ctx context.Context) ([]models.Location, error)
 	GetLocation(ctx context.Context, globalLocationID string) (*models.Location, error)
+	LocationExists(ctx context.Context, globalLocationID string) (bool, error)
 	GetOCloudSiteIDsForLocation(ctx context.Context, globalLocationID string) ([]uuid.UUID, error)
 	GetAllOCloudSiteIDsByLocation(ctx context.Context) (map[string][]uuid.UUID, error)
 
 	// OCloudSite methods
 	GetOCloudSites(ctx context.Context) ([]models.OCloudSite, error)
 	GetOCloudSite(ctx context.Context, id uuid.UUID) (*models.OCloudSite, error)
+	OCloudSiteExists(ctx context.Context, id uuid.UUID) (bool, error)
 	GetResourcePoolIDsForSite(ctx context.Context, oCloudSiteID uuid.UUID) ([]uuid.UUID, error)
 	GetAllResourcePoolIDsBySite(ctx context.Context) (map[uuid.UUID][]uuid.UUID, error)
 	GetOCloudSitesNotIn(ctx context.Context, ids []any) ([]models.OCloudSite, error)

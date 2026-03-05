@@ -169,7 +169,19 @@ func (d *ResourcePoolDataSource) HandleSyncComplete(ctx context.Context, objectT
 func (d *ResourcePoolDataSource) handleResourcePoolWatchEvent(ctx context.Context, pool *inventoryv1alpha1.ResourcePool, eventType async.AsyncEventType) (uuid.UUID, error) {
 	slog.Debug("handleResourcePoolWatchEvent received", "resourcePoolId", pool.Spec.ResourcePoolId, "type", eventType)
 
-	record := d.convertResourcePoolToModel(pool)
+	// DELETE events always proceed (finalizers guarantee deletion order)
+	// For CREATE/UPDATE, only emit if CR is Ready=True
+	if eventType != async.Deleted {
+		if !isResourceReady(pool.Status.Conditions) {
+			slog.Debug("ResourcePool not ready, skipping",
+				"name", pool.Name,
+				"resourcePoolId", pool.Spec.ResourcePoolId,
+				"reason", getReadyReason(pool.Status.Conditions))
+			return uuid.Nil, nil
+		}
+	}
+
+	record := d.ConvertResourcePoolToModel(pool)
 
 	select {
 	case <-ctx.Done():
@@ -185,7 +197,8 @@ func (d *ResourcePoolDataSource) handleResourcePoolWatchEvent(ctx context.Contex
 }
 
 // convertResourcePoolToModel converts a ResourcePool CR to a database model
-func (d *ResourcePoolDataSource) convertResourcePoolToModel(pool *inventoryv1alpha1.ResourcePool) models.ResourcePool {
+// ConvertResourcePoolToModel converts a ResourcePool CR to a database model.
+func (d *ResourcePoolDataSource) ConvertResourcePoolToModel(pool *inventoryv1alpha1.ResourcePool) models.ResourcePool {
 	// Generate deterministic UUID from cloudID and resourcePoolId
 	resourcePoolID := ctlrutils.MakeUUIDFromNames(ResourcePoolUUIDNamespace, d.cloudID, pool.Spec.ResourcePoolId)
 
