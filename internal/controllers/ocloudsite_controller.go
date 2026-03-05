@@ -94,12 +94,12 @@ func (r *OCloudSiteReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// Validate Location reference and set Ready condition if not being deleted
 	if site.DeletionTimestamp.IsZero() {
-		locationExists, err := r.validateAndSetConditions(ctx, site)
+		parentValid, err := r.validateAndSetConditions(ctx, site)
 		if err != nil {
 			return requeueWithShortInterval(), err
 		}
-		// Requeue if location doesn't exist - it may be created later
-		if !locationExists {
+		// Requeue if parent doesn't exist or is not ready, it may be created/ready later
+		if !parentValid {
 			return requeueWithMediumInterval(), nil
 		}
 	}
@@ -208,24 +208,33 @@ func (r *OCloudSiteReconciler) findDependentBMHs(ctx context.Context, siteID str
 }
 
 // validateAndSetConditions validates the Location reference and sets appropriate conditions.
-// Returns (locationExists, error) so caller can decide whether to requeue.
+// Returns (parentValid, error) where parentValid is true only when parent exists AND is ready.
 func (r *OCloudSiteReconciler) validateAndSetConditions(ctx context.Context, site *inventoryv1alpha1.OCloudSite) (bool, error) {
-	// Validate that the referenced Location exists
-	locationExists, err := r.validateLocationReference(ctx, site.Spec.GlobalLocationID)
+	// Validate that the referenced Location exists and is ready
+	result, err := r.validateLocationReference(ctx, site.Spec.GlobalLocationID)
 	if err != nil {
 		return false, fmt.Errorf("failed to validate Location reference: %w", err)
 	}
 
 	var condition metav1.Condition
-	if !locationExists {
+	switch {
+	case !result.Exists:
 		condition = metav1.Condition{
 			Type:               inventoryv1alpha1.ConditionTypeReady,
 			Status:             metav1.ConditionFalse,
-			Reason:             inventoryv1alpha1.ReasonInvalidReference,
+			Reason:             inventoryv1alpha1.ReasonParentNotFound,
 			Message:            fmt.Sprintf("Referenced Location with globalLocationId '%s' does not exist", site.Spec.GlobalLocationID),
 			ObservedGeneration: site.Generation,
 		}
-	} else {
+	case !result.Ready:
+		condition = metav1.Condition{
+			Type:               inventoryv1alpha1.ConditionTypeReady,
+			Status:             metav1.ConditionFalse,
+			Reason:             inventoryv1alpha1.ReasonParentNotReady,
+			Message:            fmt.Sprintf("Referenced Location with globalLocationId '%s' is not ready", site.Spec.GlobalLocationID),
+			ObservedGeneration: site.Generation,
+		}
+	default:
 		condition = metav1.Condition{
 			Type:               inventoryv1alpha1.ConditionTypeReady,
 			Status:             metav1.ConditionTrue,
@@ -240,27 +249,37 @@ func (r *OCloudSiteReconciler) validateAndSetConditions(ctx context.Context, sit
 	if existingCondition == nil || existingCondition.Status != condition.Status || existingCondition.Reason != condition.Reason {
 		meta.SetStatusCondition(&site.Status.Conditions, condition)
 		if err := r.Status().Update(ctx, site); err != nil {
-			return locationExists, fmt.Errorf("failed to update status: %w", err)
+			return result.Exists && result.Ready, fmt.Errorf("failed to update status: %w", err)
 		}
 	}
 
-	return locationExists, nil
+	// Return true only when parent exists AND is ready
+	return result.Exists && result.Ready, nil
 }
 
-// validateLocationReference checks if a Location with the given globalLocationId exists
-func (r *OCloudSiteReconciler) validateLocationReference(ctx context.Context, globalLocationID string) (bool, error) {
+// parentValidationResult holds the result of validating a parent CR reference
+type parentValidationResult struct {
+	Exists bool
+	Ready  bool
+}
+
+// validateLocationReference checks if a Location with the given globalLocationId exists and is ready
+func (r *OCloudSiteReconciler) validateLocationReference(ctx context.Context, globalLocationID string) (parentValidationResult, error) {
 	var locationList inventoryv1alpha1.LocationList
 	if err := r.List(ctx, &locationList); err != nil {
-		return false, fmt.Errorf("failed to list Locations: %w", err)
+		return parentValidationResult{}, fmt.Errorf("failed to list Locations: %w", err)
 	}
 
 	for _, location := range locationList.Items {
 		if location.Spec.GlobalLocationID == globalLocationID {
-			return true, nil
+			// Check if Location is Ready
+			readyCondition := meta.FindStatusCondition(location.Status.Conditions, inventoryv1alpha1.ConditionTypeReady)
+			isReady := readyCondition != nil && readyCondition.Status == metav1.ConditionTrue
+			return parentValidationResult{Exists: true, Ready: isReady}, nil
 		}
 	}
 
-	return false, nil
+	return parentValidationResult{Exists: false, Ready: false}, nil
 }
 
 // setDeletionBlockedCondition sets the Deleting condition indicating deletion is blocked

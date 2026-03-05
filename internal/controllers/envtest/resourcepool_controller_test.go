@@ -57,135 +57,7 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 			}, timeout, interval).Should(BeTrue())
 		})
 
-		It("should set Ready=False when OCloudSite reference is invalid", func() {
-			pool := &inventoryv1alpha1.ResourcePool{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-pool-invalid-ref",
-					Namespace: testNamespace,
-				},
-				Spec: inventoryv1alpha1.ResourcePoolSpec{
-					ResourcePoolId: "POOL-INVALID-REF-001",
-					OCloudSiteId:   "SITE-DOES-NOT-EXIST",
-					Name:           "Test Pool Invalid Ref",
-					Description:    "Testing invalid OCloudSite reference",
-				},
-			}
-			Expect(k8sClient.Create(ctx, pool)).To(Succeed())
-			DeferCleanup(func() {
-				_ = k8sClient.Delete(ctx, pool)
-			})
-
-			// Wait for the Ready=False condition with InvalidReference reason
-			Eventually(func() bool {
-				fetched := &inventoryv1alpha1.ResourcePool{}
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
-				if err != nil {
-					return false
-				}
-				for _, cond := range fetched.Status.Conditions {
-					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
-						cond.Status == metav1.ConditionFalse &&
-						cond.Reason == inventoryv1alpha1.ReasonInvalidReference {
-						return true
-					}
-				}
-				return false
-			}, timeout, interval).Should(BeTrue())
-		})
-
-		It("should transition from Ready=False to Ready=True when OCloudSite is created after ResourcePool", func() {
-			// Create the ResourcePool FIRST, before OCloudSite exists
-			pool := &inventoryv1alpha1.ResourcePool{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-pool-late-site",
-					Namespace: testNamespace,
-				},
-				Spec: inventoryv1alpha1.ResourcePoolSpec{
-					ResourcePoolId: "POOL-LATE-SITE-001",
-					OCloudSiteId:   "SITE-LATE-001", // Site doesn't exist yet
-					Name:           "Pool Created Before Site",
-					Description:    "Testing watch on OCloudSite creation",
-				},
-			}
-			Expect(k8sClient.Create(ctx, pool)).To(Succeed())
-			DeferCleanup(func() {
-				_ = k8sClient.Delete(ctx, pool)
-			})
-
-			// Wait for Ready=False (OCloudSite doesn't exist)
-			Eventually(func() bool {
-				fetched := &inventoryv1alpha1.ResourcePool{}
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
-				if err != nil {
-					return false
-				}
-				for _, cond := range fetched.Status.Conditions {
-					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
-						cond.Status == metav1.ConditionFalse &&
-						cond.Reason == inventoryv1alpha1.ReasonInvalidReference {
-						return true
-					}
-				}
-				return false
-			}, timeout, interval).Should(BeTrue(), "ResourcePool should be Ready=False initially")
-
-			// Now create the Location (required for OCloudSite)
-			location := &inventoryv1alpha1.Location{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-location-late",
-					Namespace: testNamespace,
-				},
-				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-LATE-001",
-					Name:             "Location Created Late",
-					Description:      "Testing late creation",
-					Address:          ptrString("Late Location Address"),
-				},
-			}
-			Expect(k8sClient.Create(ctx, location)).To(Succeed())
-			DeferCleanup(func() {
-				_ = k8sClient.Delete(ctx, location)
-			})
-			waitForLocationReady(location)
-
-			// Now create the OCloudSite AFTER ResourcePool
-			site := &inventoryv1alpha1.OCloudSite{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-site-late",
-					Namespace: testNamespace,
-				},
-				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "SITE-LATE-001", // Matches ResourcePool's reference
-					GlobalLocationID: "LOC-LATE-001",
-					Name:             "Site Created Late",
-					Description:      "Testing watch triggers re-reconciliation",
-				},
-			}
-			Expect(k8sClient.Create(ctx, site)).To(Succeed())
-			DeferCleanup(func() {
-				_ = k8sClient.Delete(ctx, site)
-			})
-
-			// The watch should trigger re-reconciliation of ResourcePool
-			// It should now transition to Ready=True
-			Eventually(func() bool {
-				fetched := &inventoryv1alpha1.ResourcePool{}
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
-				if err != nil {
-					return false
-				}
-				for _, cond := range fetched.Status.Conditions {
-					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
-						cond.Status == metav1.ConditionTrue &&
-						cond.Reason == inventoryv1alpha1.ReasonReady {
-						return true
-					}
-				}
-				return false
-			}, timeout, interval).Should(BeTrue(), "ResourcePool should transition to Ready=True after OCloudSite is created")
-		})
-
-		It("should set Ready=True when OCloudSite reference is valid", func() {
+		It("should set Ready=True when OCloudSite is valid and ready", func() {
 			// First create a valid Location
 			location := &inventoryv1alpha1.Location{
 				ObjectMeta: metav1.ObjectMeta{
@@ -255,12 +127,449 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				}
 				for _, cond := range fetched.Status.Conditions {
 					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
-						cond.Status == metav1.ConditionTrue {
+						cond.Status == metav1.ConditionTrue &&
+						cond.Reason == inventoryv1alpha1.ReasonReady {
 						return true
 					}
 				}
 				return false
 			}, timeout, interval).Should(BeTrue())
+		})
+
+		It("should set Ready=False with ParentNotFound when OCloudSite does not exist", func() {
+			pool := &inventoryv1alpha1.ResourcePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pool-invalid-ref",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.ResourcePoolSpec{
+					ResourcePoolId: "POOL-INVALID-REF-001",
+					OCloudSiteId:   "SITE-DOES-NOT-EXIST",
+					Name:           "Test Pool Invalid Ref",
+					Description:    "Testing invalid OCloudSite reference",
+				},
+			}
+			Expect(k8sClient.Create(ctx, pool)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, pool)
+			})
+
+			// Wait for the Ready=False condition with ParentNotFound reason
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.ResourcePool{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
+				if err != nil {
+					return false
+				}
+				for _, cond := range fetched.Status.Conditions {
+					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+						cond.Status == metav1.ConditionFalse &&
+						cond.Reason == inventoryv1alpha1.ReasonParentNotFound {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue())
+		})
+
+		It("should set Ready=False with ParentNotReady when OCloudSite exists but is not ready", func() {
+			// Create an OCloudSite that references a non-existent Location
+			// This makes OCloudSite exist but be Ready=False
+			site := &inventoryv1alpha1.OCloudSite{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-site-not-ready",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.OCloudSiteSpec{
+					SiteID:           "SITE-NOT-READY-001",
+					GlobalLocationID: "LOC-NONEXISTENT", // Location doesn't exist
+					Name:             "Site Not Ready",
+					Description:      "Site with invalid Location reference",
+				},
+			}
+			Expect(k8sClient.Create(ctx, site)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, site)
+			})
+
+			// Wait for OCloudSite to be Ready=False (ParentNotFound)
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.OCloudSite{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetched)
+				if err != nil {
+					return false
+				}
+				for _, cond := range fetched.Status.Conditions {
+					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+						cond.Status == metav1.ConditionFalse {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue(), "OCloudSite should be Ready=False")
+
+			// Create ResourcePool referencing the not-ready OCloudSite
+			pool := &inventoryv1alpha1.ResourcePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pool-parent-not-ready",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.ResourcePoolSpec{
+					ResourcePoolId: "POOL-PARENT-NOT-READY-001",
+					OCloudSiteId:   "SITE-NOT-READY-001", // References the not-ready site
+					Name:           "Pool with NotReady Parent",
+					Description:    "Testing ParentNotReady condition",
+				},
+			}
+			Expect(k8sClient.Create(ctx, pool)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, pool)
+			})
+
+			// Wait for the Ready=False condition with ParentNotReady reason
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.ResourcePool{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
+				if err != nil {
+					return false
+				}
+				for _, cond := range fetched.Status.Conditions {
+					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+						cond.Status == metav1.ConditionFalse &&
+						cond.Reason == inventoryv1alpha1.ReasonParentNotReady {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue(), "ResourcePool should have Ready=False with ParentNotReady reason")
+		})
+	})
+
+	Context("When parent OCloudSite is created or becomes ready later", func() {
+		It("should transition from ParentNotFound to Ready=True when OCloudSite is created and ready", func() {
+			// Create the ResourcePool FIRST, before OCloudSite exists
+			// Note: OCloudSite must be both created AND ready (which requires its parent Location to exist and be ready)
+			pool := &inventoryv1alpha1.ResourcePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pool-late-site",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.ResourcePoolSpec{
+					ResourcePoolId: "POOL-LATE-SITE-001",
+					OCloudSiteId:   "SITE-LATE-001", // Site doesn't exist yet
+					Name:           "Pool Created Before Site",
+					Description:    "Testing watch on OCloudSite creation",
+				},
+			}
+			Expect(k8sClient.Create(ctx, pool)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, pool)
+			})
+
+			// Wait for Ready=False (OCloudSite doesn't exist)
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.ResourcePool{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
+				if err != nil {
+					return false
+				}
+				for _, cond := range fetched.Status.Conditions {
+					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+						cond.Status == metav1.ConditionFalse &&
+						cond.Reason == inventoryv1alpha1.ReasonParentNotFound {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue(), "ResourcePool should be Ready=False (ParentNotFound) initially")
+
+			// Now create the Location (required for OCloudSite)
+			location := &inventoryv1alpha1.Location{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-location-late",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.LocationSpec{
+					GlobalLocationID: "LOC-LATE-001",
+					Name:             "Location Created Late",
+					Description:      "Testing late creation",
+					Address:          ptrString("Late Location Address"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, location)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, location)
+			})
+			waitForLocationReady(location)
+
+			// Now create the OCloudSite AFTER ResourcePool
+			site := &inventoryv1alpha1.OCloudSite{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-site-late",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.OCloudSiteSpec{
+					SiteID:           "SITE-LATE-001", // Matches ResourcePool's reference
+					GlobalLocationID: "LOC-LATE-001",
+					Name:             "Site Created Late",
+					Description:      "Testing watch triggers re-reconciliation",
+				},
+			}
+			Expect(k8sClient.Create(ctx, site)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, site)
+			})
+
+			// The watch should trigger re-reconciliation of ResourcePool
+			// It should now transition to Ready=True
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.ResourcePool{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
+				if err != nil {
+					return false
+				}
+				for _, cond := range fetched.Status.Conditions {
+					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+						cond.Status == metav1.ConditionTrue &&
+						cond.Reason == inventoryv1alpha1.ReasonReady {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue(), "ResourcePool should transition to Ready=True after OCloudSite is created")
+		})
+
+		It("should transition from ParentNotReady to Ready=True when OCloudSite becomes ready", func() {
+			// Create OCloudSite without its parent Location (will be NotReady)
+			site := &inventoryv1alpha1.OCloudSite{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-site-becomes-ready",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.OCloudSiteSpec{
+					SiteID:           "SITE-BECOMES-READY-001",
+					GlobalLocationID: "LOC-BECOMES-READY-001", // Location doesn't exist yet
+					Name:             "Site That Becomes Ready",
+					Description:      "Testing watch on parent status change",
+				},
+			}
+			Expect(k8sClient.Create(ctx, site)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, site)
+			})
+
+			// Wait for OCloudSite to be Ready=False
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.OCloudSite{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetched)
+				if err != nil {
+					return false
+				}
+				for _, cond := range fetched.Status.Conditions {
+					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+						cond.Status == metav1.ConditionFalse {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue(), "OCloudSite should be Ready=False initially")
+
+			// Create ResourcePool referencing the not-ready OCloudSite
+			pool := &inventoryv1alpha1.ResourcePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pool-waits-for-ready",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.ResourcePoolSpec{
+					ResourcePoolId: "POOL-WAITS-FOR-READY-001",
+					OCloudSiteId:   "SITE-BECOMES-READY-001",
+					Name:           "Pool Waiting for Parent Ready",
+					Description:    "Testing transition when parent becomes ready",
+				},
+			}
+			Expect(k8sClient.Create(ctx, pool)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, pool)
+			})
+
+			// Wait for ResourcePool to be Ready=False (ParentNotReady)
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.ResourcePool{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
+				if err != nil {
+					return false
+				}
+				for _, cond := range fetched.Status.Conditions {
+					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+						cond.Status == metav1.ConditionFalse &&
+						cond.Reason == inventoryv1alpha1.ReasonParentNotReady {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue(), "ResourcePool should be Ready=False (ParentNotReady)")
+
+			// Now create the Location, making OCloudSite become Ready=True
+			location := &inventoryv1alpha1.Location{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-location-makes-site-ready",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.LocationSpec{
+					GlobalLocationID: "LOC-BECOMES-READY-001", // Matches OCloudSite's reference
+					Name:             "Location Makes Site Ready",
+					Description:      "Creating this makes OCloudSite ready",
+					Address:          ptrString("Ready Address"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, location)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, location)
+			})
+
+			// ResourcePool should transition to Ready=True via watch cascade
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.ResourcePool{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
+				if err != nil {
+					return false
+				}
+				for _, cond := range fetched.Status.Conditions {
+					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+						cond.Status == metav1.ConditionTrue &&
+						cond.Reason == inventoryv1alpha1.ReasonReady {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue(), "ResourcePool should transition to Ready=True when OCloudSite becomes ready")
+		})
+
+		It("should cascade Ready status through entire hierarchy when Location is created last", func() {
+			// This test verifies the full cascade:
+			// 1. Create ResourcePool → Ready=False (ParentNotFound - OCloudSite doesn't exist)
+			// 2. Create OCloudSite → ResourcePool becomes Ready=False (ParentNotReady - OCloudSite not ready)
+			// 3. Create Location → OCloudSite becomes Ready=True → ResourcePool becomes Ready=True
+
+			// Step 1: Create ResourcePool first
+			pool := &inventoryv1alpha1.ResourcePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pool-cascade",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.ResourcePoolSpec{
+					ResourcePoolId: "POOL-CASCADE-001",
+					OCloudSiteId:   "SITE-CASCADE-001",
+					Name:           "Pool for Cascade Test",
+					Description:    "Testing full hierarchy cascade",
+				},
+			}
+			Expect(k8sClient.Create(ctx, pool)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, pool)
+			})
+
+			// Wait for Ready=False (ParentNotFound)
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.ResourcePool{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
+				if err != nil {
+					return false
+				}
+				for _, cond := range fetched.Status.Conditions {
+					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+						cond.Status == metav1.ConditionFalse &&
+						cond.Reason == inventoryv1alpha1.ReasonParentNotFound {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue(), "Step 1: ResourcePool should start with Ready=False (ParentNotFound)")
+
+			// Step 2: Create OCloudSite (without Location)
+			site := &inventoryv1alpha1.OCloudSite{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-site-cascade",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.OCloudSiteSpec{
+					SiteID:           "SITE-CASCADE-001",
+					GlobalLocationID: "LOC-CASCADE-001", // Location doesn't exist yet
+					Name:             "Site for Cascade Test",
+					Description:      "Testing full hierarchy cascade",
+				},
+			}
+			Expect(k8sClient.Create(ctx, site)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, site)
+			})
+
+			// ResourcePool should transition to ParentNotReady (OCloudSite exists but not ready)
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.ResourcePool{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
+				if err != nil {
+					return false
+				}
+				for _, cond := range fetched.Status.Conditions {
+					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+						cond.Status == metav1.ConditionFalse &&
+						cond.Reason == inventoryv1alpha1.ReasonParentNotReady {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue(), "Step 2: ResourcePool should transition to Ready=False (ParentNotReady)")
+
+			// Step 3: Create Location
+			location := &inventoryv1alpha1.Location{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-location-cascade",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.LocationSpec{
+					GlobalLocationID: "LOC-CASCADE-001",
+					Name:             "Location for Cascade Test",
+					Description:      "Testing full hierarchy cascade",
+					Address:          ptrString("Cascade Test Address"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, location)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, location)
+			})
+
+			// Both OCloudSite and ResourcePool should now be Ready=True
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.OCloudSite{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetched)
+				if err != nil {
+					return false
+				}
+				for _, cond := range fetched.Status.Conditions {
+					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+						cond.Status == metav1.ConditionTrue {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue(), "Step 3a: OCloudSite should become Ready=True")
+
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.ResourcePool{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
+				if err != nil {
+					return false
+				}
+				for _, cond := range fetched.Status.Conditions {
+					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+						cond.Status == metav1.ConditionTrue &&
+						cond.Reason == inventoryv1alpha1.ReasonReady {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue(), "Step 3b: ResourcePool should become Ready=True through cascade")
 		})
 	})
 
