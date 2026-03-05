@@ -57,8 +57,9 @@ spec:
                   Deprecated: This field is deprecated and will be ignored. The boot interface label is now fixed as "boot-interface".
                 type: string
               hardwarePluginRef:
-                description: HardwarePluginRef is the name of the HardwarePlugin.
-                minLength: 1
+                description: |-
+                  HardwarePluginRef is the name of the HardwarePlugin.
+                  When not specified, the internal metal3 hardware plugin is used.
                 type: string
               hardwareProvisioningTimeout:
                 description: HardwareProvisioningTimeout defines the timeout duration
@@ -71,7 +72,11 @@ spec:
                     populating a node allocation request
                   properties:
                     hwProfile:
-                      minLength: 1
+                      description: |-
+                        HwProfile is the name of the HardwareProfile to use for this node group.
+                        The HardwareProfile must be set here or in the ProvisioningRequest templateParameters
+                        as hwTemplateParameters.nodeGroupData.<name>.hwProfile, which overrides the value set
+                        in the template.
                       type: string
                     name:
                       minLength: 1
@@ -90,14 +95,12 @@ spec:
                       - worker
                       type: string
                   required:
-                  - hwProfile
                   - name
                   - role
                   type: object
                 minItems: 1
                 type: array
             required:
-            - hardwarePluginRef
             - nodeGroupData
             type: object
           status:

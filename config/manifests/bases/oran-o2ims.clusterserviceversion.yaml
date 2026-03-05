@@ -26,7 +26,7 @@ metadata:
     support: Red Hat
   labels:
     operatorframework.io/arch.amd64: supported
-  name: oran-o2ims.v4.16.0
+  name: oran-o2ims.v4.22.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -266,7 +266,9 @@ spec:
         path: bootInterfaceLabel
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: HardwarePluginRef is the name of the HardwarePlugin.
+      - description: |-
+          HardwarePluginRef is the name of the HardwarePlugin.
+          When not specified, the internal metal3 hardware plugin is used.
         displayName: Hardware Plugin Reference
         path: hardwarePluginRef
         x-descriptors:

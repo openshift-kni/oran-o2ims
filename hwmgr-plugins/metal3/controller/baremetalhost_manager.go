@@ -21,6 +21,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
@@ -37,25 +38,26 @@ type BMHAllocationStatus string
 const ErrorRetryWindow = 5 * time.Minute
 
 const (
-	BmhRebootAnnotation            = "reboot.metal3.io"
-	BmhNetworkDataPrefx            = "network-data"
-	BiosUpdateNeededAnnotation     = "clcm.openshift.io/bios-update-needed"
-	FirmwareUpdateNeededAnnotation = "clcm.openshift.io/firmware-update-needed"
-	BmhAllocatedLabel              = "clcm.openshift.io/allocated"
-	BmhDeallocationDoneAnnotation  = "clcm.openshift.io/deallocation-complete"
-	BmhErrorTimestampAnnotation    = "clcm.openshift.io/bmh-error-timestamp"
-	SkipCleanupAnnotation          = "clcm.openshift.io/skip-cleanup"
-	BmhHostMgmtAnnotation          = "bmac.agent-install.openshift.io/allow-provisioned-host-management"
-	BmhInfraEnvLabel               = "infraenvs.agent-install.openshift.io"
-	SiteConfigOwnedByLabel         = "siteconfig.open-cluster-management.io/owned-by"
-	UpdateReasonBIOSSettings       = "bios-settings-update"
-	UpdateReasonFirmware           = "firmware-update"
-	ValueTrue                      = "true"
-	MetaTypeLabel                  = "label"
-	MetaTypeAnnotation             = "annotation"
-	OpAdd                          = "add"
-	OpRemove                       = "remove"
-	BmhServicingErr                = "BMH Servicing Error"
+	BmhRebootAnnotation                      = "reboot.metal3.io"
+	BmhNetworkDataPrefx                      = "network-data"
+	BiosUpdateNeededAnnotation               = "clcm.openshift.io/bios-update-needed"
+	FirmwareUpdateNeededAnnotation           = "clcm.openshift.io/firmware-update-needed"
+	BmhAllocatedLabel                        = "clcm.openshift.io/allocated"
+	BmhDeallocationDoneAnnotation            = "clcm.openshift.io/deallocation-complete"
+	BmhErrorTimestampAnnotation              = "clcm.openshift.io/bmh-error-timestamp"
+	SkipCleanupAnnotation                    = "clcm.openshift.io/skip-cleanup"
+	BmhHostMgmtAnnotation                    = "bmac.agent-install.openshift.io/allow-provisioned-host-management"
+	BmhInfraEnvLabel                         = "infraenvs.agent-install.openshift.io"
+	PreprovisioningImageDeprovisionFinalizer = "preprovisioningimage.agent-install.openshift.io/ai-deprovision"
+	SiteConfigOwnedByLabel                   = "siteconfig.open-cluster-management.io/owned-by"
+	UpdateReasonBIOSSettings                 = "bios-settings-update"
+	UpdateReasonFirmware                     = "firmware-update"
+	ValueTrue                                = "true"
+	MetaTypeLabel                            = "label"
+	MetaTypeAnnotation                       = "annotation"
+	OpAdd                                    = "add"
+	OpRemove                                 = "remove"
+	BmhServicingErr                          = "BMH Servicing Error"
 )
 
 // Struct definitions for the nodelist configmap
@@ -1125,6 +1127,8 @@ func removeInfraEnvLabelFromPreprovisioningImage(ctx context.Context, c client.C
 
 		patched := image.DeepCopy()
 		delete(patched.Labels, BmhInfraEnvLabel)
+		// Remove the AI deprovision finalizer if present, as it blocks BMH deletion
+		controllerutil.RemoveFinalizer(patched, PreprovisioningImageDeprovisionFinalizer)
 
 		// Patch changes
 		patch := client.MergeFrom(image)
@@ -1135,7 +1139,7 @@ func removeInfraEnvLabelFromPreprovisioningImage(ctx context.Context, c client.C
 			return fmt.Errorf("failed to patch PreprovisioningImage %s: %w", name.String(), err)
 		}
 
-		logger.InfoContext(ctx, "Successfully removed InfraEnv label from PreprovisioningImage",
+		logger.InfoContext(ctx, "Successfully cleaned up PreprovisioningImage",
 			slog.String("bmh", name.String()))
 		return nil
 	})

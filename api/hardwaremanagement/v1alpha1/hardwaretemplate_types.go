@@ -17,14 +17,22 @@ const (
 	NodeRoleWorker = "worker"
 )
 
+// DefaultHardwarePluginRef is the default hardware plugin used when
+// HardwareTemplateSpec.HardwarePluginRef is not specified.
+const DefaultHardwarePluginRef = "metal3-hwplugin"
+
 // NodeGroupData provides the necessary information for populating a node allocation request
 type NodeGroupData struct {
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 	// +kubebuilder:validation:Enum=master;worker
 	Role string `json:"role"`
-	// +kubebuilder:validation:MinLength=1
-	HwProfile string `json:"hwProfile"`
+	// HwProfile is the name of the HardwareProfile to use for this node group.
+	// The HardwareProfile must be set here or in the ProvisioningRequest templateParameters
+	// as hwTemplateParameters.nodeGroupData.<name>.hwProfile, which overrides the value set
+	// in the template.
+	// +optional
+	HwProfile string `json:"hwProfile,omitempty"`
 	// ResourcePoolId is the identifier for the Resource Pool in the hardware manager instance.
 	// +optional
 	ResourcePoolId string `json:"resourcePoolId,omitempty"`
@@ -36,9 +44,10 @@ type NodeGroupData struct {
 type HardwareTemplateSpec struct {
 
 	// HardwarePluginRef is the name of the HardwarePlugin.
-	// +kubebuilder:validation:MinLength=1
+	// When not specified, the internal metal3 hardware plugin is used.
+	// +optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Plugin Reference",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	HardwarePluginRef string `json:"hardwarePluginRef"`
+	HardwarePluginRef string `json:"hardwarePluginRef,omitempty"`
 
 	// BootInterfaceLabel is the label of the boot interface.
 	// Deprecated: This field is deprecated and will be ignored. The boot interface label is now fixed as "boot-interface".
@@ -55,6 +64,15 @@ type HardwareTemplateSpec struct {
 	// +kubebuilder:validation:MinItems=1
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	NodeGroupData []NodeGroupData `json:"nodeGroupData"`
+}
+
+// GetHardwarePluginRef returns the HardwarePluginRef if set, or
+// DefaultHardwarePluginRef when the field is empty.
+func (s *HardwareTemplateSpec) GetHardwarePluginRef() string {
+	if s.HardwarePluginRef == "" {
+		return DefaultHardwarePluginRef
+	}
+	return s.HardwarePluginRef
 }
 
 // HardwareTemplateStatus defines the observed state of HardwareTemplate

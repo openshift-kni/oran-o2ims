@@ -1,60 +1,48 @@
 apiVersion: plugins.clcm.openshift.io/v1alpha1
 kind: AllocatedNode
 metadata:
-  name: 91c70863-8a83-422a-ab7a-a75f744d5210
+  name: metal3-hwplugin-site-sno-du-1-xr8620t-pool-xr8620txserver1
   namespace: oran-o2ims
 spec:
   groupName: controller
   hardwarePluginRef: metal3-hwplugin
-  hwMgrNodeId: r740xserver1
-  hwMgrNodeNs: r740-pool
-  hwProfile: rh-profile-r740-bios-settings
+  hwMgrNodeId: xr8620txserver1
+  hwMgrNodeNs: xr8620t-pool
+  hwProfile: hardwareprofile-sample
   nodeAllocationRequest: metal3-b12f3e77848a4002bf40
 status:
   bmc:
-    address: idrac-virtualmedia+https://127.0.0.1/redfish/v1/Systems/System.Embedded.1
-    credentialsName: bmc-secret-r740xserver1
+    address: idrac-virtualmedia+https://192.0.2.100/redfish/v1/Systems/System.Embedded.1
+    credentialsName: bmc-secret-xr8620txserver1
   conditions:
-  - lastTransitionTime: "2025-07-16T12:57:12Z"
+  - lastTransitionTime: "2026-03-03T15:04:57Z"
     message: Provisioned
     reason: Completed
     status: "True"
     type: Provisioned
-  hwProfile: rh-profile-r740-bios-settings
+  hwProfile: hardwareprofile-sample
   interfaces:
+  - label: sriov-1
+    macAddress: 02:00:00:00:01:01
+    name: ens2f0
   - label: ""
-    macAddress: c3:f7:f5:b2:4d:19
-    name: ens1f0
-  - label: ""
-    macAddress: c3:f7:f5:b2:4d:1a
-    name: ens3f1np1
-  - label: boot-interface
-    macAddress: c3:f7:f5:b2:4d:1b
-    name: eno1np0
-  - label: ""
-    macAddress: c3:f7:f5:b2:4d:1c
-    name: ens5f3
-  - label: ""
-    macAddress: c3:f7:f5:b2:4d:1d
-    name: ens5f1
+    macAddress: 02:00:00:00:01:02
+    name: ens3f3
   - label: data-interface
-    macAddress: c3:f7:f5:b2:4d:1e
-    name: eno2np1
+    macAddress: 02:00:00:00:01:03
+    name: ens3f1
   - label: ""
-    macAddress: c3:f7:f5:b2:4d:1f
-    name: ens7f0np0
+    macAddress: 02:00:00:00:01:04
+    name: ens2f3
+  - label: sriov-2
+    macAddress: 02:00:00:00:01:05
+    name: ens2f1
   - label: ""
-    macAddress: c3:f7:f5:b2:4d:20
-    name: ens7f1np1
+    macAddress: 02:00:00:00:01:06
+    name: ens3f2
+  - label: boot-interface
+    macAddress: 02:00:00:00:01:07
+    name: ens3f0
   - label: ""
-    macAddress: c3:f7:f5:b2:4d:21
-    name: ens1f1
-  - label: ""
-    macAddress: c3:f7:f5:b2:4d:22
-    name: ens5f2
-  - label: ""
-    macAddress: c3:f7:f5:b2:4d:23
-    name: ens5f0
-  - label: ""
-    macAddress: c3:f7:f5:b2:4d:24
-    name: ens3f0np0
+    macAddress: 02:00:00:00:01:08
+    name: ens2f2

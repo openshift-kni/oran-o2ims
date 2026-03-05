@@ -267,6 +267,19 @@ defaultHugepagesSize: "1G"`,
 					},
 				},
 			},
+			// HardwareProfile CRs referenced by the HardwareTemplate.
+			&hwmgmtv1alpha1.HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "profile-spr-single-processor-64G",
+					Namespace: utils.InventoryNamespace,
+				},
+			},
+			&hwmgmtv1alpha1.HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "profile-spr-dual-processor-128G",
+					Namespace: utils.InventoryNamespace,
+				},
+			},
 			// Pull secret.
 			&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{

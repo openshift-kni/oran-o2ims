@@ -735,13 +735,30 @@ func (t *provisioningRequestReconcilerTask) checkExistingNodeAllocationRequest(
 		return nil, fmt.Errorf("failed to get NodeAllocationRequest '%s': %w", nodeAllocationRequestId, err)
 	}
 	if exist {
-		_, err := compareHardwareTemplateWithNodeAllocationRequest(hwTemplate, nodeAllocationRequestResponse.NodeAllocationRequest)
+		err = validateNodeGroupsMatchNAR(hwTemplate, nodeAllocationRequestResponse.NodeAllocationRequest)
 		if err != nil {
 			return nil, ctlrutils.NewInputError("%w", err)
 		}
 	}
 
 	return nodeAllocationRequestResponse, nil
+}
+
+// resolveHwProfile returns the hwProfile for a given nodeGroup, checking
+// the overrides map first (from templateParameters), then falling back to
+// the HardwareTemplate's nodeGroupData value.
+func resolveHwProfile(groupName, templateHwProfile string, overrides map[string]string) (string, error) {
+	if profile, ok := overrides[groupName]; ok {
+		return profile, nil
+	}
+
+	if templateHwProfile != "" {
+		return templateHwProfile, nil
+	}
+
+	return "", fmt.Errorf("no hwProfile specified for nodeGroup %s: "+
+		"provide it via templateParameters.%s.%s.%s.hwProfile or in the HardwareTemplate nodeGroupData",
+		groupName, provisioningv1alpha1.TemplateParamHwTemplate, provisioningv1alpha1.TemplateParamNodeGroupData, groupName)
 }
 
 // buildNodeAllocationRequest builds the NodeAllocationRequest based on the templates and cluster instance
@@ -767,10 +784,19 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(clusterIn
 		roleCounts[role]++
 	}
 
+	hwProfileOverrides, err := provisioningv1alpha1.ParseHwProfileOverrides(t.object.Spec.TemplateParameters.Raw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse hwProfile overrides: %w", err)
+	}
+
 	nodeGroups := []hwmgrpluginapi.NodeGroup{}
 	for _, group := range hwTemplate.Spec.NodeGroupData {
+		hwProfile, err := resolveHwProfile(group.Name, group.HwProfile, hwProfileOverrides)
+		if err != nil {
+			return nil, err
+		}
 		ngd := hwmgrpluginapi.NodeGroupData{
-			HwProfile:        group.HwProfile,
+			HwProfile:        hwProfile,
 			Name:             group.Name,
 			ResourceGroupId:  group.ResourcePoolId,
 			ResourceSelector: group.ResourceSelector,
@@ -855,16 +881,18 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 		}
 	}
 
+	hwPluginRef := hwTemplate.Spec.GetHardwarePluginRef()
+
 	hwplugin := &hwmgmtv1alpha1.HardwarePlugin{}
 	hwpluginNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
-	if err := t.client.Get(ctx, types.NamespacedName{Namespace: hwpluginNS, Name: hwTemplate.Spec.HardwarePluginRef}, hwplugin); err != nil {
+	if err := t.client.Get(ctx, types.NamespacedName{Namespace: hwpluginNS, Name: hwPluginRef}, hwplugin); err != nil {
 		updateErr := ctlrutils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, provisioningv1alpha1.ConditionType(hwmgmtv1alpha1.Validation),
 			provisioningv1alpha1.ConditionReason(hwmgmtv1alpha1.Failed), metav1.ConditionFalse,
-			"Unable to find specified HardwarePlugin: "+hwTemplate.Spec.HardwarePluginRef)
+			"Unable to find specified HardwarePlugin: "+hwPluginRef)
 		if updateErr != nil {
 			return nil, fmt.Errorf("failed to update hwtemplate %s status: %w", hwTemplateName, updateErr)
 		}
-		return nil, fmt.Errorf("could not find specified HardwarePlugin: %s/%s, err=%w", hwpluginNS, hwTemplate.Spec.HardwarePluginRef, err)
+		return nil, fmt.Errorf("could not find specified HardwarePlugin: %s/%s, err=%w", hwpluginNS, hwPluginRef, err)
 	}
 
 	// The HardwareTemplate is validated by the CRD schema and no additional validation is needed
