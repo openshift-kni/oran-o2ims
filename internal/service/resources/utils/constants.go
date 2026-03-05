@@ -6,4 +6,4 @@ SPDX-License-Identifier: Apache-2.0
 
 package utils
 
-var CurrentInventoryVersion = "1.0.0"
+var CurrentInventoryVersion = "2.0.0"

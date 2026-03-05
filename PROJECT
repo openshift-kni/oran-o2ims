@@ -23,6 +23,33 @@ resources:
     namespaced: true
   controller: true
   domain: openshift.io
+  group: ocloud
+  kind: Location
+  path: github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: openshift.io
+  group: ocloud
+  kind: OCloudSite
+  path: github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: openshift.io
+  group: ocloud
+  kind: ResourcePool
+  path: github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: openshift.io
   group: clcm
   kind: ClusterTemplate
   path: github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1

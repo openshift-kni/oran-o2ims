@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync/atomic"
 
 	"github.com/google/uuid"
 
@@ -29,7 +30,7 @@ var _ ResourceDataSource = (*HwPluginDataSource)(nil)
 // HwPluginDataSource defines an instance of a data source collector that interacts with the ACM search-api
 type HwPluginDataSource struct {
 	dataSourceID  uuid.UUID
-	generationID  int
+	generationID  atomic.Int32
 	hwplugin      *hwmgmtv1alpha1.HardwarePlugin
 	cloudID       uuid.UUID
 	globalCloudID uuid.UUID
@@ -43,6 +44,7 @@ const (
 	ResourcePoolUUIDNamespace = "daee6434-767a-485d-816b-bc04c21f1acf"
 	ResourceUUIDNamespace     = "8ef67482-1215-470d-9a43-eb02af4a7c05"
 	ResourceTypeUUIDNamespace = "255c4b4c-84a8-4c95-95ba-217e1688a03d"
+	OCloudSiteUUIDNamespace   = "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d"
 )
 
 const (
@@ -71,7 +73,6 @@ func NewHwPluginDataSource(ctx context.Context, hubClient rtclient.Client, hwplu
 	}
 
 	return &HwPluginDataSource{
-		generationID:  0,
 		hwplugin:      hwplugin,
 		cloudID:       cloudID,
 		globalCloudID: globalCloudID,
@@ -93,24 +94,23 @@ func (d *HwPluginDataSource) GetID() uuid.UUID {
 // values if provided.
 func (d *HwPluginDataSource) Init(uuid uuid.UUID, generationID int, asyncEventChannel chan<- *async.AsyncChangeEvent) {
 	d.dataSourceID = uuid
-	d.generationID = generationID
+	d.generationID.Store(int32(generationID)) //nolint:gosec // generationID is a small counter, overflow impossible
 }
 
 // SetGenerationID sets the current generation id for this data source.  This value is expected to
 // be restored from persistent storage at initialization time.
 func (d *HwPluginDataSource) SetGenerationID(value int) {
-	d.generationID = value
+	d.generationID.Store(int32(value)) //nolint:gosec // generationID is a small counter, overflow impossible
 }
 
 // GetGenerationID retrieves the current generation id for this data source.
 func (d *HwPluginDataSource) GetGenerationID() int {
-	return d.generationID
+	return int(d.generationID.Load())
 }
 
 // IncrGenerationID increments the current generation id for this data source.
 func (d *HwPluginDataSource) IncrGenerationID() int {
-	d.generationID++
-	return d.generationID
+	return int(d.generationID.Add(1))
 }
 
 // MakeResourceType creates an instance of a ResourceType from a Resource object.
@@ -132,15 +132,14 @@ func (d *HwPluginDataSource) MakeResourceType(resource *models.Resource) (*model
 		ResourceClass:  models.ResourceClassCompute,
 		Extensions:     nil,
 		DataSourceID:   d.dataSourceID,
-		GenerationID:   d.generationID,
+		GenerationID:   int(d.generationID.Load()),
 	}
 
 	return &result, nil
 }
 
-// GetResources returns the list of resources available for this data source.  The resources to be
-// retrieved can be scoped to a set of pools (currently not used by this data source)
-func (d *HwPluginDataSource) GetResources(ctx context.Context, _ []models.ResourcePool) ([]models.Resource, error) {
+// GetResources returns the list of resources available for this data source.
+func (d *HwPluginDataSource) GetResources(ctx context.Context) ([]models.Resource, error) {
 	result, err := d.client.GetResourcesWithResponse(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resources: %w", err)
@@ -168,44 +167,6 @@ func (d *HwPluginDataSource) GetResources(ctx context.Context, _ []models.Resour
 	return resources, nil
 }
 
-// GetResourcePools returns the list of resource pools available for this data source.
-func (d *HwPluginDataSource) GetResourcePools(ctx context.Context) ([]models.ResourcePool, error) {
-	result, err := d.client.GetResourcePoolsWithResponse(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get resource pools: %w", err)
-	}
-
-	if result.StatusCode() != http.StatusOK {
-		return nil, fmt.Errorf("failed to get resource pools, status: %d", result.StatusCode())
-	}
-
-	if result.JSON200 == nil {
-		return nil, fmt.Errorf("failed to get resource pools, empty response")
-	}
-
-	pools := make([]models.ResourcePool, 0)
-	for _, pool := range *result.JSON200 {
-		pools = append(pools, *d.convertResourcePool(&pool))
-	}
-
-	return pools, nil
-}
-
-func (d *HwPluginDataSource) convertResourcePool(pool *inventoryclient.ResourcePoolInfo) *models.ResourcePool {
-	return &models.ResourcePool{
-		ResourcePoolID:   ctlrutils.MakeUUIDFromNames(ResourcePoolUUIDNamespace, d.cloudID, d.hwplugin.Name, pool.ResourcePoolId),
-		GlobalLocationID: d.globalCloudID, // TODO: spec wording is unclear about what this value should be.
-		Name:             pool.Name,
-		Description:      pool.Description,
-		OCloudID:         d.cloudID,
-		Location:         pool.SiteId,
-		Extensions:       nil,
-		DataSourceID:     d.dataSourceID,
-		GenerationID:     d.generationID,
-		ExternalID:       fmt.Sprintf("%s/%s", d.hwplugin.Name, pool.Name),
-	}
-}
-
 func (d *HwPluginDataSource) convertResource(resource *inventoryclient.ResourceInfo) (*models.Resource, error) {
 	// Parse the resource ID directly (now it's the BMH UID from the hardware plugin)
 	resourceID, err := uuid.Parse(resource.ResourceId)
@@ -221,7 +182,7 @@ func (d *HwPluginDataSource) convertResource(resource *inventoryclient.ResourceI
 		Description:    resource.Description,
 		ResourceTypeID: resourceTypeID,
 		GlobalAssetID:  resource.GlobalAssetId,
-		ResourcePoolID: ctlrutils.MakeUUIDFromNames(ResourcePoolUUIDNamespace, d.cloudID, d.hwplugin.Name, resource.ResourcePoolId),
+		ResourcePoolID: ctlrutils.MakeUUIDFromNames(ResourcePoolUUIDNamespace, d.cloudID, resource.ResourcePoolId),
 		Extensions: map[string]interface{}{
 			modelExtension:            resource.Model,
 			vendorExtension:           resource.Vendor,
@@ -235,7 +196,7 @@ func (d *HwPluginDataSource) convertResource(resource *inventoryclient.ResourceI
 		Groups:       resource.Groups,
 		Tags:         resource.Tags,
 		DataSourceID: d.dataSourceID,
-		GenerationID: d.generationID,
+		GenerationID: int(d.generationID.Load()),
 		ExternalID:   fmt.Sprintf("%s/%s", d.hwplugin.Name, resource.ResourceId),
 	}
 

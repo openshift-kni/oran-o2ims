@@ -1,0 +1,33 @@
+flowchart TB
+    subgraph Location["Location CR"]
+        L1["spec.globalLocationId: LOC-EAST-001"]
+        L2["spec.name: East Data Center"]
+        L3["spec.coordinate / civicAddress / address"]
+    end
+
+    subgraph OCloudSite["OCloudSite CR"]
+        S1["spec.siteId: SITE-EAST-001"]
+        S2["spec.globalLocationId: LOC-EAST-001"]
+        S3["spec.name: East Site 1"]
+    end
+
+    subgraph ResourcePool["ResourcePool CR"]
+        P1["spec.resourcePoolId: pool-east-compute"]
+        P2["spec.oCloudSiteId: SITE-EAST-001"]
+        P3["spec.name: East Compute Pool"]
+    end
+
+    subgraph BareMetalHost["BareMetalHost CR"]
+        B1["label: siteId = SITE-EAST-001"]
+        B2["label: resourcePoolId = pool-east-compute"]
+    end
+
+    S2 -->|"must match"| L1
+    P2 -->|"must match"| S1
+    B1 -->|"must match"| S1
+    B2 -->|"must match"| P1
+
+    style Location fill:#e1f5fe
+    style OCloudSite fill:#fff3e0
+    style ResourcePool fill:#f3e5f5
+    style BareMetalHost fill:#e8f5e9
