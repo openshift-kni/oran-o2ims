@@ -10,19 +10,18 @@ entries:
   - entries:
       # v4.21.0
       - name: o-cloud-manager.v4.21.0
-        skipRange: '>=4.9.0 <4.21.0'
       # v4.21.1
       - name: o-cloud-manager.v4.21.1
         replaces: o-cloud-manager.v4.21.0
-        skipRange: '>=4.9.0 <4.21.1'
+        skipRange: '>=4.21.0 <4.21.2'
       # v4.21.2
       - name: o-cloud-manager.v4.21.2
         replaces: o-cloud-manager.v4.21.1
-        skipRange: '>=4.9.0 <4.21.2'
+        skipRange: '>=4.21.0 <4.21.3'
       # v4.21.3
       - name: o-cloud-manager.v4.21.3
         replaces: o-cloud-manager.v4.21.2
-        skipRange: '>=4.9.0 <4.21.3'
+        skipRange: '>=4.21.3 <4.22.0'
     name: stable
     package: o-cloud-manager
     schema: olm.channel
@@ -30,22 +29,40 @@ entries:
   - entries:
       # v4.21.0
       - name: o-cloud-manager.v4.21.0
-        skipRange: '>=4.9.0 <4.21.0'
       # v4.21.1
       - name: o-cloud-manager.v4.21.1
         replaces: o-cloud-manager.v4.21.0
-        skipRange: '>=4.9.0 <4.21.1'
+        skipRange: '>=4.21.0 <4.21.2'
       # v4.21.2
       - name: o-cloud-manager.v4.21.2
         replaces: o-cloud-manager.v4.21.1
-        skipRange: '>=4.9.0 <4.21.2'
+        skipRange: '>=4.21.0 <4.21.3'
       # v4.21.3
       - name: o-cloud-manager.v4.21.3
         replaces: o-cloud-manager.v4.21.2
-        skipRange: '>=4.9.0 <4.21.3'
+        skipRange: '>=4.21.3 <4.22.0'
     name: "4.21"
     package: o-cloud-manager
     schema: olm.channel
+  # Deprecation notices for older bundles (no upgrade path to v4.21.3)
+  - entries:
+      - message: |
+          o-cloud-manager.v4.21.0 is deprecated. Uninstall and install o-cloud-manager.v4.21.3 for support.
+        reference:
+          name: o-cloud-manager.v4.21.0
+          schema: olm.bundle
+      - message: |
+          o-cloud-manager.v4.21.1 is deprecated. Uninstall and install o-cloud-manager.v4.21.3 for support.
+        reference:
+          name: o-cloud-manager.v4.21.1
+          schema: olm.bundle
+      - message: |
+          o-cloud-manager.v4.21.2 is deprecated. Uninstall and install o-cloud-manager.v4.21.3 for support.
+        reference:
+          name: o-cloud-manager.v4.21.2
+          schema: olm.bundle
+    package: o-cloud-manager
+    schema: olm.deprecations
   # v4.21.0
   - image: registry.redhat.io/openshift4/o-cloud-manager-operator-bundle@sha256:1a6e85788354257b0ea516d12583636489683eb7c24c06894010b0f6d718e35c
     schema: olm.bundle
