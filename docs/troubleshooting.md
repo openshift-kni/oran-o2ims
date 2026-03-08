@@ -1,4 +1,18 @@
-# troubleshooting
+# Troubleshooting
+
+## Collecting must-gather data
+
+When troubleshooting O-Cloud Manager issues, always collect must-gather data
+first. The custom must-gather image collects O-Cloud Manager CRs, Metal3
+resources, and pod logs that are not included in the standard OpenShift
+must-gather.
+
+```console
+oc adm must-gather --image=quay.io/openshift-kni/oran-o2ims-operator-must-gather:4.22.0
+```
+
+See the [must-gather guide](user-guide/must-gather.md) for details on what is
+collected and additional usage options.
 
 ## Using the development debug mode to attach the DLV debugger
 
