@@ -23,7 +23,7 @@ spec:
     - jsonPath: .spec.globalLocationId
       name: LocationID
       type: string
-    - jsonPath: .spec.name
+    - jsonPath: .metadata.name
       name: Name
       type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
@@ -76,10 +76,6 @@ spec:
                   Must match an existing Location's globalLocationId.
                 minLength: 1
                 type: string
-              name:
-                description: Name is the human-readable name of the site
-                minLength: 1
-                type: string
               siteId:
                 description: |-
                   SiteID is the string identifier that matches BareMetalHost siteId labels.
@@ -90,7 +86,6 @@ spec:
             required:
             - description
             - globalLocationId
-            - name
             - siteId
             type: object
           status:

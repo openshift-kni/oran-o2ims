@@ -28,11 +28,6 @@ type ResourcePoolSpec struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="O-Cloud Site ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	OCloudSiteId string `json:"oCloudSiteId"`
 
-	// Name is the human-readable name of the resource pool
-	// +kubebuilder:validation:MinLength=1
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Name",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	Name string `json:"name"`
-
 	// Description provides additional details about the resource pool
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Description",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Description string `json:"description"`
@@ -55,7 +50,7 @@ type ResourcePoolStatus struct {
 // +kubebuilder:resource:path=resourcepools,shortName=rp
 // +kubebuilder:printcolumn:name="PoolID",type="string",JSONPath=".spec.resourcePoolId"
 // +kubebuilder:printcolumn:name="SiteID",type="string",JSONPath=".spec.oCloudSiteId"
-// +kubebuilder:printcolumn:name="Name",type="string",JSONPath=".spec.name"
+// +kubebuilder:printcolumn:name="Name",type="string",JSONPath=".metadata.name"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 

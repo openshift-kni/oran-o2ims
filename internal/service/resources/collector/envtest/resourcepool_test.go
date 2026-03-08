@@ -69,7 +69,6 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 			Spec: inventoryv1alpha1.ResourcePoolSpec{
 				ResourcePoolId: "pool-watch-create",
 				OCloudSiteId:   "site-watch-create",
-				Name:           "Watch Test Pool",
 				Description:    "Testing watch create",
 			},
 		}
@@ -94,7 +93,7 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 		// Verify the object is a ResourcePool model
 		rpModel, ok := event.Object.(models.ResourcePool)
 		Expect(ok).To(BeTrue())
-		Expect(rpModel.Name).To(Equal("Watch Test Pool"))
+		Expect(rpModel.Name).To(Equal("watch-test-rp-create"))
 		Expect(rpModel.Description).To(Equal("Testing watch create"))
 		Expect(rpModel.DataSourceID).To(Equal(testDSID))
 		// ResourcePoolID should be a deterministically generated UUID
@@ -113,7 +112,6 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 			Spec: inventoryv1alpha1.ResourcePoolSpec{
 				ResourcePoolId: "pool-watch-update",
 				OCloudSiteId:   "site-watch-update",
-				Name:           "Original Pool Name",
 				Description:    "Original pool description",
 			},
 		}
@@ -137,9 +135,8 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 		// Drain initial events (create + possible sync)
 		drainEvents(eventChannel)
 
-		// Update the ResourcePool CR
+		// Update the ResourcePool CR (update description since Name is now in metadata)
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rp), rp)).To(Succeed())
-		rp.Spec.Name = "Updated Pool Name"
 		rp.Spec.Description = "Updated pool description"
 		Expect(k8sClient.Update(ctx, rp)).To(Succeed())
 
@@ -152,7 +149,7 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 
 		rpModel, ok := event.Object.(models.ResourcePool)
 		Expect(ok).To(BeTrue())
-		Expect(rpModel.Name).To(Equal("Updated Pool Name"))
+		Expect(rpModel.Name).To(Equal("watch-test-rp-update"))
 		Expect(rpModel.Description).To(Equal("Updated pool description"))
 	})
 
@@ -166,7 +163,6 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 			Spec: inventoryv1alpha1.ResourcePoolSpec{
 				ResourcePoolId: "pool-watch-delete",
 				OCloudSiteId:   "site-watch-delete",
-				Name:           "To Be Deleted Pool",
 				Description:    "Will be deleted",
 			},
 		}
@@ -201,7 +197,7 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 
 		rpModel, ok := event.Object.(models.ResourcePool)
 		Expect(ok).To(BeTrue())
-		Expect(rpModel.Name).To(Equal("To Be Deleted Pool"))
+		Expect(rpModel.Name).To(Equal("watch-test-rp-delete"))
 	})
 
 	It("generates deterministic UUID for ResourcePoolID", func() {
@@ -221,7 +217,6 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 			Spec: inventoryv1alpha1.ResourcePoolSpec{
 				ResourcePoolId: "pool-uuid-test",
 				OCloudSiteId:   "site-uuid-test",
-				Name:           "UUID Test Pool",
 				Description:    "Testing UUID generation",
 			},
 		}
@@ -277,7 +272,6 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 			Spec: inventoryv1alpha1.ResourcePoolSpec{
 				ResourcePoolId: "pool-full-test",
 				OCloudSiteId:   "site-full-test",
-				Name:           "Full Pool",
 				Description:    "Pool with all fields",
 				Extensions: map[string]string{
 					"vendor": "acme",
@@ -301,7 +295,7 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 		// Verify all fields including optional ones
 		rpModel, ok := event.Object.(models.ResourcePool)
 		Expect(ok).To(BeTrue())
-		Expect(rpModel.Name).To(Equal("Full Pool"))
+		Expect(rpModel.Name).To(Equal("watch-test-rp-full"))
 		Expect(rpModel.Description).To(Equal("Pool with all fields"))
 		Expect(rpModel.Extensions).To(HaveLen(2))
 		Expect(rpModel.Extensions["vendor"]).To(Equal("acme"))

@@ -215,7 +215,7 @@ func (d *ResourcePoolDataSource) ConvertResourcePoolToModel(pool *inventoryv1alp
 
 	return models.ResourcePool{
 		ResourcePoolID: resourcePoolID,
-		Name:           pool.Spec.Name,
+		Name:           pool.Name, // Use metadata.name
 		Description:    pool.Spec.Description,
 		OCloudSiteID:   oCloudSiteID,
 		Extensions:     extensions,

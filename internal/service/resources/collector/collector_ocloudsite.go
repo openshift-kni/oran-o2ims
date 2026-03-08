@@ -213,7 +213,7 @@ func (d *OCloudSiteDataSource) ConvertOCloudSiteToModel(site *inventoryv1alpha1.
 	return models.OCloudSite{
 		OCloudSiteID:     oCloudSiteID,
 		GlobalLocationID: site.Spec.GlobalLocationID,
-		Name:             site.Spec.Name,
+		Name:             site.Name, // Use metadata.name
 		Description:      site.Spec.Description,
 		Extensions:       extensions,
 		DataSourceID:     d.dataSourceID,

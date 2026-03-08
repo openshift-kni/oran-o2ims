@@ -68,7 +68,6 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
 					GlobalLocationID: "LOC-NO-READY",
-					Name:             "Location Without Ready Status",
 					Description:      "Should not emit event",
 					Address:          ptrTo("123 No Ready St"),
 				},
@@ -105,7 +104,6 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
 					GlobalLocationID: "LOC-NOT-READY",
-					Name:             "Location With Ready=False",
 					Description:      "Should not emit event",
 					Address:          ptrTo("456 Not Ready Ave"),
 				},
@@ -154,7 +152,6 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
 					GlobalLocationID: "LOC-TRANSITION",
-					Name:             "Location That Becomes Ready",
 					Description:      "Will transition to Ready=True",
 					Address:          ptrTo("789 Transition Blvd"),
 				},
@@ -211,7 +208,6 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
 					GlobalLocationID: "LOC-DELETE-NOTREADY",
-					Name:             "Location to delete",
 					Description:      "Delete with Ready=False",
 					Address:          ptrTo("999 Delete St"),
 				},
@@ -289,7 +285,6 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
 					SiteID:           "SITE-NO-READY",
 					GlobalLocationID: "LOC-001",
-					Name:             "Site Without Ready Status",
 					Description:      "Should not emit event",
 				},
 			}
@@ -323,7 +318,6 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
 					SiteID:           "SITE-TRANSITION",
 					GlobalLocationID: "LOC-001",
-					Name:             "Site That Becomes Ready",
 					Description:      "Will transition to Ready=True",
 				},
 			}
@@ -362,7 +356,7 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 
 			siteModel, ok := event.Object.(models.OCloudSite)
 			Expect(ok).To(BeTrue())
-			Expect(siteModel.Name).To(Equal("Site That Becomes Ready"))
+			Expect(siteModel.Name).To(Equal("site-transition-ready"))
 		})
 
 		It("should always emit Delete event regardless of Ready status", func() {
@@ -379,7 +373,6 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
 					SiteID:           "SITE-DELETE-NOTREADY",
 					GlobalLocationID: "LOC-001",
-					Name:             "Site to delete",
 					Description:      "Delete with Ready=False",
 				},
 			}
@@ -411,7 +404,7 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 
 			siteModel, ok := event.Object.(models.OCloudSite)
 			Expect(ok).To(BeTrue())
-			Expect(siteModel.Name).To(Equal("Site to delete"))
+			Expect(siteModel.Name).To(Equal("site-delete-not-ready"))
 		})
 	})
 
@@ -456,7 +449,6 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
 					ResourcePoolId: "POOL-NO-READY",
 					OCloudSiteId:   "SITE-001",
-					Name:           "Pool Without Ready Status",
 					Description:    "Should not emit event",
 				},
 			}
@@ -490,7 +482,6 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
 					ResourcePoolId: "POOL-TRANSITION",
 					OCloudSiteId:   "SITE-001",
-					Name:           "Pool That Becomes Ready",
 					Description:    "Will transition to Ready=True",
 				},
 			}
@@ -529,7 +520,7 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 
 			rpModel, ok := event.Object.(models.ResourcePool)
 			Expect(ok).To(BeTrue())
-			Expect(rpModel.Name).To(Equal("Pool That Becomes Ready"))
+			Expect(rpModel.Name).To(Equal("pool-transition-ready"))
 		})
 
 		It("should always emit Delete event regardless of Ready status", func() {
@@ -546,7 +537,6 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
 					ResourcePoolId: "POOL-DELETE-NOTREADY",
 					OCloudSiteId:   "SITE-001",
-					Name:           "Pool to delete",
 					Description:    "Delete with Ready=False",
 				},
 			}
@@ -578,7 +568,7 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 
 			rpModel, ok := event.Object.(models.ResourcePool)
 			Expect(ok).To(BeTrue())
-			Expect(rpModel.Name).To(Equal("Pool to delete"))
+			Expect(rpModel.Name).To(Equal("pool-delete-not-ready"))
 		})
 	})
 })

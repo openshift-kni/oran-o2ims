@@ -23,7 +23,7 @@ spec:
     - jsonPath: .spec.oCloudSiteId
       name: SiteID
       type: string
-    - jsonPath: .spec.name
+    - jsonPath: .metadata.name
       name: Name
       type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
@@ -71,10 +71,6 @@ spec:
                   type: string
                 description: Extensions contains additional custom attributes
                 type: object
-              name:
-                description: Name is the human-readable name of the resource pool
-                minLength: 1
-                type: string
               oCloudSiteId:
                 description: |-
                   OCloudSiteId references the OCloudSite this pool belongs to.
@@ -91,7 +87,6 @@ spec:
                 type: string
             required:
             - description
-            - name
             - oCloudSiteId
             - resourcePoolId
             type: object

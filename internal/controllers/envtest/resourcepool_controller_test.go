@@ -37,7 +37,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
 					ResourcePoolId: "POOL-FINALIZER-001",
 					OCloudSiteId:   "SITE-NONEXISTENT", // Site doesn't exist
-					Name:           "Test Pool for Finalizer",
 					Description:    "Testing finalizer addition",
 				},
 			}
@@ -66,7 +65,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
 					GlobalLocationID: "LOC-FOR-POOL-001",
-					Name:             "Location for Pool Test",
 					Description:      "Testing valid reference",
 					Address:          ptrString("Pool Test Address"),
 				},
@@ -88,7 +86,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
 					SiteID:           "SITE-FOR-POOL-001",
 					GlobalLocationID: "LOC-FOR-POOL-001", // References the location above
-					Name:             "Site for Pool Test",
 					Description:      "Testing valid reference",
 				},
 			}
@@ -109,7 +106,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
 					ResourcePoolId: "POOL-VALID-REF-001",
 					OCloudSiteId:   "SITE-FOR-POOL-001", // References the site above
-					Name:           "Test Pool Valid Ref",
 					Description:    "Testing valid OCloudSite reference",
 				},
 			}
@@ -145,7 +141,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
 					ResourcePoolId: "POOL-INVALID-REF-001",
 					OCloudSiteId:   "SITE-DOES-NOT-EXIST",
-					Name:           "Test Pool Invalid Ref",
 					Description:    "Testing invalid OCloudSite reference",
 				},
 			}
@@ -183,7 +178,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
 					SiteID:           "SITE-NOT-READY-001",
 					GlobalLocationID: "LOC-NONEXISTENT", // Location doesn't exist
-					Name:             "Site Not Ready",
 					Description:      "Site with invalid Location reference",
 				},
 			}
@@ -217,7 +211,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
 					ResourcePoolId: "POOL-PARENT-NOT-READY-001",
 					OCloudSiteId:   "SITE-NOT-READY-001", // References the not-ready site
-					Name:           "Pool with NotReady Parent",
 					Description:    "Testing ParentNotReady condition",
 				},
 			}
@@ -257,7 +250,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
 					ResourcePoolId: "POOL-LATE-SITE-001",
 					OCloudSiteId:   "SITE-LATE-001", // Site doesn't exist yet
-					Name:           "Pool Created Before Site",
 					Description:    "Testing watch on OCloudSite creation",
 				},
 			}
@@ -291,7 +283,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
 					GlobalLocationID: "LOC-LATE-001",
-					Name:             "Location Created Late",
 					Description:      "Testing late creation",
 					Address:          ptrString("Late Location Address"),
 				},
@@ -311,7 +302,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
 					SiteID:           "SITE-LATE-001", // Matches ResourcePool's reference
 					GlobalLocationID: "LOC-LATE-001",
-					Name:             "Site Created Late",
 					Description:      "Testing watch triggers re-reconciliation",
 				},
 			}
@@ -349,7 +339,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
 					SiteID:           "SITE-BECOMES-READY-001",
 					GlobalLocationID: "LOC-BECOMES-READY-001", // Location doesn't exist yet
-					Name:             "Site That Becomes Ready",
 					Description:      "Testing watch on parent status change",
 				},
 			}
@@ -383,7 +372,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
 					ResourcePoolId: "POOL-WAITS-FOR-READY-001",
 					OCloudSiteId:   "SITE-BECOMES-READY-001",
-					Name:           "Pool Waiting for Parent Ready",
 					Description:    "Testing transition when parent becomes ready",
 				},
 			}
@@ -417,7 +405,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
 					GlobalLocationID: "LOC-BECOMES-READY-001", // Matches OCloudSite's reference
-					Name:             "Location Makes Site Ready",
 					Description:      "Creating this makes OCloudSite ready",
 					Address:          ptrString("Ready Address"),
 				},
@@ -460,7 +447,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
 					ResourcePoolId: "POOL-CASCADE-001",
 					OCloudSiteId:   "SITE-CASCADE-001",
-					Name:           "Pool for Cascade Test",
 					Description:    "Testing full hierarchy cascade",
 				},
 			}
@@ -495,7 +481,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
 					SiteID:           "SITE-CASCADE-001",
 					GlobalLocationID: "LOC-CASCADE-001", // Location doesn't exist yet
-					Name:             "Site for Cascade Test",
 					Description:      "Testing full hierarchy cascade",
 				},
 			}
@@ -529,7 +514,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
 					GlobalLocationID: "LOC-CASCADE-001",
-					Name:             "Location for Cascade Test",
 					Description:      "Testing full hierarchy cascade",
 					Address:          ptrString("Cascade Test Address"),
 				},
@@ -583,7 +567,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
 					GlobalLocationID: "LOC-POOL-DELETE-001",
-					Name:             "Location for Pool Delete Test",
 					Description:      "Testing deletion",
 					Address:          ptrString("Pool Delete Test Address"),
 				},
@@ -604,7 +587,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
 					SiteID:           "SITE-POOL-DELETE-001",
 					GlobalLocationID: "LOC-POOL-DELETE-001", // References location above
-					Name:             "Site for Pool Delete Test",
 					Description:      "Testing deletion",
 				},
 			}
@@ -624,7 +606,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
 					ResourcePoolId: "POOL-DELETE-BLOCKED-001",
 					OCloudSiteId:   "SITE-POOL-DELETE-001", // References site above
-					Name:           "Pool with Dependents",
 					Description:    "Testing deletion blocking",
 				},
 			}
@@ -711,7 +692,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
 					GlobalLocationID: "LOC-POOL-MISMATCH-001",
-					Name:             "Location for Pool Mismatch Test",
 					Description:      "Testing deletion with mismatched BMH",
 					Address:          ptrString("Mismatch Test Address"),
 				},
@@ -732,7 +712,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
 					SiteID:           "SITE-POOL-MISMATCH-001",
 					GlobalLocationID: "LOC-POOL-MISMATCH-001",
-					Name:             "Site for Pool Mismatch Test",
 					Description:      "Testing deletion with mismatched BMH",
 				},
 			}
@@ -752,7 +731,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
 					ResourcePoolId: "POOL-MISMATCH-001",
 					OCloudSiteId:   "SITE-POOL-MISMATCH-001",
-					Name:           "Pool with Mismatched BMH",
 					Description:    "Testing deletion when BMH references different pool",
 				},
 			}
@@ -808,7 +786,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
 					GlobalLocationID: "LOC-POOL-DELETE-OK-001",
-					Name:             "Location for Pool Delete OK",
 					Description:      "Testing successful deletion",
 					Address:          ptrString("OK Address"),
 				},
@@ -829,7 +806,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
 					SiteID:           "SITE-POOL-DELETE-OK-001",
 					GlobalLocationID: "LOC-POOL-DELETE-OK-001",
-					Name:             "Site for Pool Delete OK",
 					Description:      "Testing successful deletion",
 				},
 			}
@@ -849,7 +825,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
 					ResourcePoolId: "POOL-DELETE-OK-001",
 					OCloudSiteId:   "SITE-POOL-DELETE-OK-001",
-					Name:           "Pool without Dependents",
 					Description:    "Testing successful deletion",
 				},
 			}

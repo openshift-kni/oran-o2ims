@@ -216,7 +216,7 @@ func (d *LocationDataSource) convertLocationToModel(loc *inventoryv1alpha1.Locat
 
 	return models.Location{
 		GlobalLocationID: loc.Spec.GlobalLocationID,
-		Name:             loc.Spec.Name,
+		Name:             loc.Name, // Use metadata.name
 		Description:      loc.Spec.Description,
 		Coordinate:       coordinate,
 		CivicAddress:     convertCivicAddress(loc.Spec.CivicAddress),

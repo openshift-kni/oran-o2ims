@@ -31,7 +31,6 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
 				GlobalLocationID: "LOC-INVALID",
-				Name:             "Invalid Location",
 				Description:      "Missing address fields",
 				// Missing: coordinate, civicAddress, AND address
 			},
@@ -48,7 +47,6 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
 				GlobalLocationID: "LOC-COORD",
-				Name:             "Valid Location with Coordinate",
 				Description:      "Has coordinate",
 				Coordinate: &inventoryv1alpha1.GeoLocation{
 					Latitude:  "40.7128",
@@ -63,7 +61,7 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 		fetched := &inventoryv1alpha1.Location{}
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), fetched)).To(Succeed())
 		Expect(fetched.Spec.GlobalLocationID).To(Equal("LOC-COORD"))
-		Expect(fetched.Spec.Name).To(Equal("Valid Location with Coordinate"))
+		Expect(fetched.Name).To(Equal("valid-loc-coord"))
 		Expect(fetched.Spec.Description).To(Equal("Has coordinate"))
 		Expect(fetched.Spec.Coordinate).ToNot(BeNil())
 		Expect(fetched.Spec.Coordinate.Latitude).To(Equal("40.7128"))
@@ -82,7 +80,6 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
 				GlobalLocationID: "LOC-CIVIC",
-				Name:             "Valid Location with Civic Address",
 				Description:      "Has civic address",
 				CivicAddress: []inventoryv1alpha1.CivicAddressElement{
 					{CaType: 0, CaValue: "US"},
@@ -96,7 +93,7 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 		fetched := &inventoryv1alpha1.Location{}
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), fetched)).To(Succeed())
 		Expect(fetched.Spec.GlobalLocationID).To(Equal("LOC-CIVIC"))
-		Expect(fetched.Spec.Name).To(Equal("Valid Location with Civic Address"))
+		Expect(fetched.Name).To(Equal("valid-loc-civic"))
 		Expect(fetched.Spec.Description).To(Equal("Has civic address"))
 		Expect(fetched.Spec.Coordinate).To(BeNil())
 		Expect(fetched.Spec.CivicAddress).To(HaveLen(1))
@@ -114,7 +111,6 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
 				GlobalLocationID: "LOC-ADDR",
-				Name:             "Valid Location with Address",
 				Description:      "Has address string",
 				Address:          ptrTo("123 Main St, City, Country"),
 			},
@@ -126,7 +122,7 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 		fetched := &inventoryv1alpha1.Location{}
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), fetched)).To(Succeed())
 		Expect(fetched.Spec.GlobalLocationID).To(Equal("LOC-ADDR"))
-		Expect(fetched.Spec.Name).To(Equal("Valid Location with Address"))
+		Expect(fetched.Name).To(Equal("valid-loc-addr"))
 		Expect(fetched.Spec.Description).To(Equal("Has address string"))
 		Expect(fetched.Spec.Coordinate).To(BeNil())
 		Expect(fetched.Spec.CivicAddress).To(BeEmpty())
@@ -143,7 +139,6 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
 				GlobalLocationID: "LOC-LAT-INVALID",
-				Name:             "Invalid Latitude",
 				Description:      "Latitude out of range",
 				Coordinate: &inventoryv1alpha1.GeoLocation{
 					Latitude:  "100.0", // Invalid: > 90
@@ -164,7 +159,6 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
 				GlobalLocationID: "LOC-LON-INVALID",
-				Name:             "Invalid Longitude",
 				Description:      "Longitude out of range",
 				Coordinate: &inventoryv1alpha1.GeoLocation{
 					Latitude:  "0.0",
@@ -185,7 +179,6 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
 				GlobalLocationID: "LOC-LAT-PATTERN",
-				Name:             "Invalid Latitude Pattern",
 				Description:      "Latitude is not a number",
 				Coordinate: &inventoryv1alpha1.GeoLocation{
 					Latitude:  "not-a-number",
@@ -206,7 +199,6 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
 				GlobalLocationID: "LOC-BOUNDARY",
-				Name:             "Valid Boundary Coordinates",
 				Description:      "At boundary values",
 				Coordinate: &inventoryv1alpha1.GeoLocation{
 					Latitude:  "90.0",   // Max valid latitude
@@ -221,7 +213,7 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 		fetched := &inventoryv1alpha1.Location{}
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), fetched)).To(Succeed())
 		Expect(fetched.Spec.GlobalLocationID).To(Equal("LOC-BOUNDARY"))
-		Expect(fetched.Spec.Name).To(Equal("Valid Boundary Coordinates"))
+		Expect(fetched.Name).To(Equal("valid-boundary-coords"))
 		Expect(fetched.Spec.Description).To(Equal("At boundary values"))
 		Expect(fetched.Spec.Coordinate).ToNot(BeNil())
 		Expect(fetched.Spec.Coordinate.Latitude).To(Equal("90.0"))
@@ -241,7 +233,6 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
 				GlobalLocationID: "LOC-ALT",
-				Name:             "Valid Location with Altitude",
 				Description:      "Has altitude",
 				Coordinate: &inventoryv1alpha1.GeoLocation{
 					Latitude:  "40.7128",
@@ -257,7 +248,7 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 		fetched := &inventoryv1alpha1.Location{}
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), fetched)).To(Succeed())
 		Expect(fetched.Spec.GlobalLocationID).To(Equal("LOC-ALT"))
-		Expect(fetched.Spec.Name).To(Equal("Valid Location with Altitude"))
+		Expect(fetched.Name).To(Equal("valid-with-altitude"))
 		Expect(fetched.Spec.Description).To(Equal("Has altitude"))
 		Expect(fetched.Spec.Coordinate).ToNot(BeNil())
 		Expect(fetched.Spec.Coordinate.Latitude).To(Equal("40.7128"))
@@ -280,7 +271,6 @@ var _ = Describe("OCloudSite Validation", Label("envtest"), func() {
 			Spec: inventoryv1alpha1.OCloudSiteSpec{
 				SiteID:           "", // Invalid: empty
 				GlobalLocationID: "LOC-001",
-				Name:             "Invalid Site",
 				Description:      "Empty siteId",
 			},
 		}
@@ -298,7 +288,6 @@ var _ = Describe("OCloudSite Validation", Label("envtest"), func() {
 			Spec: inventoryv1alpha1.OCloudSiteSpec{
 				SiteID:           "site-valid",
 				GlobalLocationID: "LOC-001",
-				Name:             "Valid Site",
 				Description:      "A valid site",
 			},
 		}
@@ -310,7 +299,7 @@ var _ = Describe("OCloudSite Validation", Label("envtest"), func() {
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetched)).To(Succeed())
 		Expect(fetched.Spec.SiteID).To(Equal("site-valid"))
 		Expect(fetched.Spec.GlobalLocationID).To(Equal("LOC-001"))
-		Expect(fetched.Spec.Name).To(Equal("Valid Site"))
+		Expect(fetched.Name).To(Equal("valid-site"))
 		Expect(fetched.Spec.Description).To(Equal("A valid site"))
 		Expect(fetched.Spec.Extensions).To(BeEmpty())
 	})
@@ -326,7 +315,6 @@ var _ = Describe("ResourcePool Validation", Label("envtest"), func() {
 			Spec: inventoryv1alpha1.ResourcePoolSpec{
 				ResourcePoolId: "", // Invalid: empty
 				OCloudSiteId:   "site-001",
-				Name:           "Invalid Pool",
 				Description:    "Empty resourcePoolId",
 			},
 		}
@@ -344,26 +332,7 @@ var _ = Describe("ResourcePool Validation", Label("envtest"), func() {
 			Spec: inventoryv1alpha1.ResourcePoolSpec{
 				ResourcePoolId: "pool-001",
 				OCloudSiteId:   "", // Invalid: empty
-				Name:           "Invalid Pool",
 				Description:    "Empty oCloudSiteId",
-			},
-		}
-		err := k8sClient.Create(ctx, rp)
-		Expect(err).To(HaveOccurred())
-		// MinLength validation
-	})
-
-	It("rejects ResourcePool with empty name", func() {
-		rp := &inventoryv1alpha1.ResourcePool{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "invalid-rp-empty-name",
-				Namespace: testNamespace,
-			},
-			Spec: inventoryv1alpha1.ResourcePoolSpec{
-				ResourcePoolId: "pool-001",
-				OCloudSiteId:   "site-001",
-				Name:           "", // Invalid: empty
-				Description:    "Empty name",
 			},
 		}
 		err := k8sClient.Create(ctx, rp)
@@ -380,7 +349,6 @@ var _ = Describe("ResourcePool Validation", Label("envtest"), func() {
 			Spec: inventoryv1alpha1.ResourcePoolSpec{
 				ResourcePoolId: "pool-valid-001",
 				OCloudSiteId:   "site-valid-001",
-				Name:           "Valid Resource Pool",
 				Description:    "A valid resource pool",
 			},
 		}
@@ -392,7 +360,7 @@ var _ = Describe("ResourcePool Validation", Label("envtest"), func() {
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rp), fetched)).To(Succeed())
 		Expect(fetched.Spec.ResourcePoolId).To(Equal("pool-valid-001"))
 		Expect(fetched.Spec.OCloudSiteId).To(Equal("site-valid-001"))
-		Expect(fetched.Spec.Name).To(Equal("Valid Resource Pool"))
+		Expect(fetched.Name).To(Equal("valid-rp-basic"))
 		Expect(fetched.Spec.Description).To(Equal("A valid resource pool"))
 		Expect(fetched.Spec.Extensions).To(BeEmpty())
 	})
@@ -406,7 +374,6 @@ var _ = Describe("ResourcePool Validation", Label("envtest"), func() {
 			Spec: inventoryv1alpha1.ResourcePoolSpec{
 				ResourcePoolId: "pool-full-001",
 				OCloudSiteId:   "site-full-001",
-				Name:           "Full Resource Pool",
 				Description:    "A resource pool with all fields",
 				Extensions: map[string]string{
 					"vendor": "acme",
@@ -423,7 +390,7 @@ var _ = Describe("ResourcePool Validation", Label("envtest"), func() {
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rp), fetched)).To(Succeed())
 		Expect(fetched.Spec.ResourcePoolId).To(Equal("pool-full-001"))
 		Expect(fetched.Spec.OCloudSiteId).To(Equal("site-full-001"))
-		Expect(fetched.Spec.Name).To(Equal("Full Resource Pool"))
+		Expect(fetched.Name).To(Equal("valid-rp-full"))
 		Expect(fetched.Spec.Description).To(Equal("A resource pool with all fields"))
 		Expect(fetched.Spec.Extensions).To(HaveLen(3))
 		Expect(fetched.Spec.Extensions["vendor"]).To(Equal("acme"))
@@ -479,7 +446,6 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
 				GlobalLocationID: "LOC-WATCH-CREATE",
-				Name:             "Watch Test Location",
 				Description:      "Testing watch create",
 				Address:          ptrTo("123 Watch Street"),
 			},
@@ -506,7 +472,7 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 		locModel, ok := event.Object.(models.Location)
 		Expect(ok).To(BeTrue())
 		Expect(locModel.GlobalLocationID).To(Equal("LOC-WATCH-CREATE"))
-		Expect(locModel.Name).To(Equal("Watch Test Location"))
+		Expect(locModel.Name).To(Equal("watch-test-create"))
 		Expect(locModel.Description).To(Equal("Testing watch create"))
 		Expect(locModel.Address).ToNot(BeNil())
 		Expect(*locModel.Address).To(Equal("123 Watch Street"))
@@ -522,7 +488,6 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
 				GlobalLocationID: "LOC-WATCH-UPDATE",
-				Name:             "Original Name",
 				Description:      "Original description",
 				Address:          ptrTo("Original Address"),
 			},
@@ -547,9 +512,8 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 		// Drain initial events (create + possible sync)
 		drainEvents(eventChannel)
 
-		// Update the Location CR
+		// Update the Location CR (update description since Name is now in metadata)
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), loc)).To(Succeed())
-		loc.Spec.Name = "Updated Name"
 		loc.Spec.Description = "Updated description"
 		Expect(k8sClient.Update(ctx, loc)).To(Succeed())
 
@@ -563,7 +527,7 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 		locModel, ok := event.Object.(models.Location)
 		Expect(ok).To(BeTrue())
 		Expect(locModel.GlobalLocationID).To(Equal("LOC-WATCH-UPDATE"))
-		Expect(locModel.Name).To(Equal("Updated Name"))
+		Expect(locModel.Name).To(Equal("watch-test-update"))
 		Expect(locModel.Description).To(Equal("Updated description"))
 	})
 
@@ -576,7 +540,6 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
 				GlobalLocationID: "LOC-WATCH-DELETE",
-				Name:             "To Be Deleted",
 				Description:      "Will be deleted",
 				Address:          ptrTo("Delete Street"),
 			},
@@ -632,7 +595,6 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
 				GlobalLocationID: "LOC-WATCH-COORD",
-				Name:             "Coordinate Test",
 				Description:      "Testing coordinate conversion",
 				Coordinate: &inventoryv1alpha1.GeoLocation{
 					Latitude:  "40.7128",
@@ -684,7 +646,6 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
 				GlobalLocationID: "LOC-WATCH-CIVIC",
-				Name:             "Civic Address Test",
 				Description:      "Testing civicAddress conversion",
 				CivicAddress: []inventoryv1alpha1.CivicAddressElement{
 					{CaType: 0, CaValue: "US"},        // Country (ISO 3166-1)
@@ -747,7 +708,6 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
 				GlobalLocationID: "LOC-WATCH-EXT",
-				Name:             "Extensions Test",
 				Description:      "Testing extensions propagation",
 				Address:          ptrTo("123 Extension St"),
 				Extensions: map[string]string{

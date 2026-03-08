@@ -27,11 +27,6 @@ type OCloudSiteSpec struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Global Location ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	GlobalLocationID string `json:"globalLocationId"`
 
-	// Name is the human-readable name of the site
-	// +kubebuilder:validation:MinLength=1
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Name",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	Name string `json:"name"`
-
 	// Description provides additional details about the site
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Description",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Description string `json:"description"`
@@ -54,7 +49,7 @@ type OCloudSiteStatus struct {
 // +kubebuilder:resource:path=ocloudsites,shortName=ocs
 // +kubebuilder:printcolumn:name="SiteID",type="string",JSONPath=".spec.siteId"
 // +kubebuilder:printcolumn:name="LocationID",type="string",JSONPath=".spec.globalLocationId"
-// +kubebuilder:printcolumn:name="Name",type="string",JSONPath=".spec.name"
+// +kubebuilder:printcolumn:name="Name",type="string",JSONPath=".metadata.name"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
