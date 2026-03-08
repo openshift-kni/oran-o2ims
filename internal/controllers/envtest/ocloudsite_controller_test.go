@@ -35,7 +35,6 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
 					SiteID:           "SITE-FINALIZER-001",
 					GlobalLocationID: "LOC-NONEXISTENT", // Location doesn't exist
-					Name:             "Test Site for Finalizer",
 					Description:      "Testing finalizer addition",
 				},
 			}
@@ -64,7 +63,6 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
 					GlobalLocationID: "LOC-FOR-SITE-001",
-					Name:             "Location for Site Test",
 					Description:      "Testing valid reference",
 					Address:          ptrString("Valid Address"),
 				},
@@ -86,7 +84,6 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
 					SiteID:           "SITE-VALID-REF-001",
 					GlobalLocationID: "LOC-FOR-SITE-001", // References the location above
-					Name:             "Test Site Valid Ref",
 					Description:      "Testing valid Location reference",
 				},
 			}
@@ -122,7 +119,6 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
 					SiteID:           "SITE-INVALID-REF-001",
 					GlobalLocationID: "LOC-DOES-NOT-EXIST",
-					Name:             "Test Site Invalid Ref",
 					Description:      "Testing invalid Location reference",
 				},
 			}
@@ -164,7 +160,6 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
 					SiteID:           "SITE-LATE-LOC-001",
 					GlobalLocationID: "LOC-LATE-002", // Location doesn't exist yet
-					Name:             "Site Created Before Location",
 					Description:      "Testing watch on Location creation",
 				},
 			}
@@ -198,7 +193,6 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
 					GlobalLocationID: "LOC-LATE-002", // Matches OCloudSite's reference
-					Name:             "Location Created Late",
 					Description:      "Testing watch triggers re-reconciliation",
 					Address:          ptrString("Late Address"),
 				},
@@ -238,7 +232,6 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
 					GlobalLocationID: "LOC-SITE-DELETE-001",
-					Name:             "Location for Site Delete Test",
 					Description:      "Testing deletion",
 					Address:          ptrString("Delete Test Address"),
 				},
@@ -260,7 +253,6 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
 					SiteID:           "SITE-DELETE-BLOCKED-001",
 					GlobalLocationID: "LOC-SITE-DELETE-001",
-					Name:             "Site with Dependents",
 					Description:      "Testing deletion blocking",
 				},
 			}
@@ -278,7 +270,6 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
 					ResourcePoolId: "POOL-DEP-001",
 					OCloudSiteId:   "SITE-DELETE-BLOCKED-001", // References the site above
-					Name:           "Dependent Pool",
 					Description:    "Pool that depends on site",
 				},
 			}
@@ -350,7 +341,6 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
 					GlobalLocationID: "LOC-SITE-DELETE-OK-001",
-					Name:             "Location for Site Delete OK",
 					Description:      "Testing successful deletion",
 					Address:          ptrString("OK Address"),
 				},
@@ -371,7 +361,6 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
 					SiteID:           "SITE-DELETE-OK-001",
 					GlobalLocationID: "LOC-SITE-DELETE-OK-001",
-					Name:             "Site without Dependents",
 					Description:      "Testing successful deletion",
 				},
 			}

@@ -69,7 +69,6 @@ var _ = Describe("OCloudSiteDataSource Watch", Label("envtest"), func() {
 			Spec: inventoryv1alpha1.OCloudSiteSpec{
 				SiteID:           "site-watch-create",
 				GlobalLocationID: "LOC-001",
-				Name:             "Watch Test Site",
 				Description:      "Testing watch create for site",
 			},
 		}
@@ -95,7 +94,7 @@ var _ = Describe("OCloudSiteDataSource Watch", Label("envtest"), func() {
 		siteModel, ok := event.Object.(models.OCloudSite)
 		Expect(ok).To(BeTrue())
 		Expect(siteModel.GlobalLocationID).To(Equal("LOC-001"))
-		Expect(siteModel.Name).To(Equal("Watch Test Site"))
+		Expect(siteModel.Name).To(Equal("watch-test-site-create"))
 		Expect(siteModel.Description).To(Equal("Testing watch create for site"))
 		Expect(siteModel.DataSourceID).To(Equal(testDSID))
 		// OCloudSiteID should be a deterministically generated UUID
@@ -112,7 +111,6 @@ var _ = Describe("OCloudSiteDataSource Watch", Label("envtest"), func() {
 			Spec: inventoryv1alpha1.OCloudSiteSpec{
 				SiteID:           "site-watch-update",
 				GlobalLocationID: "LOC-001",
-				Name:             "Original Site Name",
 				Description:      "Original site description",
 			},
 		}
@@ -136,9 +134,8 @@ var _ = Describe("OCloudSiteDataSource Watch", Label("envtest"), func() {
 		// Drain initial events (create + possible sync)
 		drainEvents(eventChannel)
 
-		// Update the OCloudSite CR
+		// Update the OCloudSite CR (update description since Name is now in metadata)
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(site), site)).To(Succeed())
-		site.Spec.Name = "Updated Site Name"
 		site.Spec.Description = "Updated site description"
 		Expect(k8sClient.Update(ctx, site)).To(Succeed())
 
@@ -151,7 +148,7 @@ var _ = Describe("OCloudSiteDataSource Watch", Label("envtest"), func() {
 
 		siteModel, ok := event.Object.(models.OCloudSite)
 		Expect(ok).To(BeTrue())
-		Expect(siteModel.Name).To(Equal("Updated Site Name"))
+		Expect(siteModel.Name).To(Equal("watch-test-site-update"))
 		Expect(siteModel.Description).To(Equal("Updated site description"))
 	})
 
@@ -165,7 +162,6 @@ var _ = Describe("OCloudSiteDataSource Watch", Label("envtest"), func() {
 			Spec: inventoryv1alpha1.OCloudSiteSpec{
 				SiteID:           "site-watch-delete",
 				GlobalLocationID: "LOC-001",
-				Name:             "To Be Deleted Site",
 				Description:      "Will be deleted",
 			},
 		}
@@ -220,7 +216,6 @@ var _ = Describe("OCloudSiteDataSource Watch", Label("envtest"), func() {
 			Spec: inventoryv1alpha1.OCloudSiteSpec{
 				SiteID:           "site-uuid-test",
 				GlobalLocationID: "LOC-001",
-				Name:             "UUID Test Site",
 				Description:      "Testing UUID generation",
 			},
 		}

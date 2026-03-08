@@ -20,7 +20,7 @@ spec:
     - jsonPath: .spec.globalLocationId
       name: GlobalLocationID
       type: string
-    - jsonPath: .spec.name
+    - jsonPath: .metadata.name
       name: Name
       type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
@@ -132,14 +132,9 @@ spec:
                   This value is used as the primary key and must be unique across all locations.
                 minLength: 1
                 type: string
-              name:
-                description: Name is the human-readable name of the location
-                minLength: 1
-                type: string
             required:
             - description
             - globalLocationId
-            - name
             type: object
             x-kubernetes-validations:
             - message: at least one of coordinate, civicAddress, or address must be

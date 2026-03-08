@@ -540,8 +540,7 @@ metadata:
           "spec": {
             "address": "123 Technology Way, Ashburn, VA 20147, USA",
             "description": "Primary east coast data center facility",
-            "globalLocationId": "LOC-EAST-001",
-            "name": "East Data Center"
+            "globalLocationId": "LOC-EAST-001"
           }
         },
         {
@@ -554,7 +553,6 @@ metadata:
           "spec": {
             "description": "Primary compute site at east data center",
             "globalLocationId": "LOC-EAST-001",
-            "name": "East Site 1",
             "siteId": "SITE-EAST-001"
           }
         },
@@ -567,7 +565,6 @@ metadata:
           },
           "spec": {
             "description": "Compute resources for production workloads",
-            "name": "East Compute Pool",
             "oCloudSiteId": "SITE-EAST-001",
             "resourcePoolId": "pool-east-compute"
           }
@@ -1206,11 +1203,6 @@ spec:
         path: globalLocationId
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: Name is the human-readable name of the location
-        displayName: Name
-        path: name
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
       statusDescriptors:
       - description: Conditions represent the latest available observations of the
           Location's state
@@ -1366,11 +1358,6 @@ spec:
         path: globalLocationId
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: Name is the human-readable name of the site
-        displayName: Name
-        path: name
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-
           SiteID is the string identifier that matches BareMetalHost siteId labels.
           This value is used to map BMH resources to this site and to generate
@@ -1454,11 +1441,6 @@ spec:
       - description: Description provides additional details about the resource pool
         displayName: Description
         path: description
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: Name is the human-readable name of the resource pool
-        displayName: Name
-        path: name
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-

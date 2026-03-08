@@ -34,7 +34,6 @@ var _ = Describe("Location Controller", Label("envtest"), func() {
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
 					GlobalLocationID: "LOC-FINALIZER-001",
-					Name:             "Test Location for Finalizer",
 					Description:      "Testing finalizer addition",
 					Address:          ptrString("123 Test Street"),
 				},
@@ -63,7 +62,6 @@ var _ = Describe("Location Controller", Label("envtest"), func() {
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
 					GlobalLocationID: "LOC-READY-001",
-					Name:             "Test Location Ready",
 					Description:      "Testing Ready condition",
 					Address:          ptrString("456 Ready Street"),
 				},
@@ -101,7 +99,6 @@ var _ = Describe("Location Controller", Label("envtest"), func() {
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
 					GlobalLocationID: "LOC-DELETE-BLOCKED",
-					Name:             "Location with Dependents",
 					Description:      "Testing deletion blocking",
 					Address:          ptrString("789 Block Street"),
 				},
@@ -120,7 +117,6 @@ var _ = Describe("Location Controller", Label("envtest"), func() {
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
 					SiteID:           "SITE-DEP-001",
 					GlobalLocationID: "LOC-DELETE-BLOCKED", // References the location above
-					Name:             "Dependent Site",
 					Description:      "Site that depends on location",
 				},
 			}
@@ -191,7 +187,6 @@ var _ = Describe("Location Controller", Label("envtest"), func() {
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
 					GlobalLocationID: "LOC-DELETE-OK",
-					Name:             "Location without Dependents",
 					Description:      "Testing successful deletion",
 					Address:          ptrString("111 Success Street"),
 				},

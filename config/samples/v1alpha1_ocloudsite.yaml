@@ -6,5 +6,4 @@ metadata:
 spec:
   siteId: "SITE-EAST-001"
   globalLocationId: "LOC-EAST-001"
-  name: "East Site 1"
   description: "Primary compute site at east data center"
