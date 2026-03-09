@@ -282,11 +282,18 @@ deploy: install manifests kustomize kubectl ## Deploy controller to the K8s clus
 
 .PHONY: undeploy
 undeploy: kustomize kubectl ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	# Remove finalizers from hierarchy CRs to prevent namespace deletion hang (children before parents)
+	# Scale down controller first to allow manual finalizer removal
+	# (controller keeps finalizers on parents while children exist, blocking deletion)
+	@if $(KUBECTL) get deployment -l control-plane=controller-manager -n $(OCLOUD_MANAGER_NAMESPACE) -o name 2>/dev/null | grep -q .; then \
+		$(KUBECTL) scale deployment -l control-plane=controller-manager -n $(OCLOUD_MANAGER_NAMESPACE) --replicas=0 && \
+		$(KUBECTL) wait --for=delete pod -l control-plane=controller-manager -n $(OCLOUD_MANAGER_NAMESPACE) --timeout=60s; \
+	fi
+	# Remove finalizers from hierarchy CRs to allow deletion without respecting dependency order
 	# Note: '-' prefix allows undeploy to continue even if CRDs don't exist
 	-$(KUBECTL) get resourcepools -n $(OCLOUD_MANAGER_NAMESPACE) -o name | xargs -r -I {} $(KUBECTL) patch {} -n $(OCLOUD_MANAGER_NAMESPACE) --type=merge -p '{"metadata":{"finalizers":null}}'
 	-$(KUBECTL) get ocloudsites -n $(OCLOUD_MANAGER_NAMESPACE) -o name | xargs -r -I {} $(KUBECTL) patch {} -n $(OCLOUD_MANAGER_NAMESPACE) --type=merge -p '{"metadata":{"finalizers":null}}'
 	-$(KUBECTL) get locations -n $(OCLOUD_MANAGER_NAMESPACE) -o name | xargs -r -I {} $(KUBECTL) patch {} -n $(OCLOUD_MANAGER_NAMESPACE) --type=merge -p '{"metadata":{"finalizers":null}}'
+	# Delete all resources
 	$(KUSTOMIZE) build config/$(KUSTOMIZE_OVERLAY) | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
 
 ##@ Build Dependencies
