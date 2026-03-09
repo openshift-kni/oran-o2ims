@@ -133,28 +133,38 @@ func (r *ResourcePoolReconciler) handleFinalizer(
 		r.Logger.InfoContext(ctx, "ResourcePool is being deleted, checking for dependents",
 			slog.String("resourcePoolId", pool.Spec.ResourcePoolId))
 
-		// Check for dependent BareMetalHosts
-		bmhDependents, err := r.findDependentBMHs(ctx, pool.Spec.ResourcePoolId)
-		if err != nil {
-			return requeueWithShortInterval(), true, fmt.Errorf("failed to check for dependent BareMetalHosts: %w", err)
-		}
+		// A ResourcePool that is not Ready (e.g., DuplicateID, ParentNotFound) can always be deleted
+		// because it was never serving any dependents - skip dependent check
+		readyCondition := meta.FindStatusCondition(pool.Status.Conditions, inventoryv1alpha1.ConditionTypeReady)
+		isReady := readyCondition != nil && readyCondition.Status == metav1.ConditionTrue
 
-		if len(bmhDependents) > 0 {
-			// Update status to indicate deletion is blocked
-			r.Logger.InfoContext(ctx, "ResourcePool deletion blocked by dependent BareMetalHosts",
-				slog.String("resourcePoolId", pool.Spec.ResourcePoolId),
-				slog.Int("bmhCount", len(bmhDependents)))
-
-			if err := r.setDeletionBlockedCondition(ctx, pool, len(bmhDependents)); err != nil {
-				r.Logger.WarnContext(ctx, "Failed to update status", slog.String("error", err.Error()))
+		if isReady {
+			// Only check for dependents if ResourcePool is Ready
+			bmhDependents, err := r.findDependentBMHs(ctx, pool.Spec.ResourcePoolId)
+			if err != nil {
+				return requeueWithShortInterval(), true, fmt.Errorf("failed to check for dependent BareMetalHosts: %w", err)
 			}
 
-			// Requeue to check again later
-			return requeueWithCustomInterval(10 * time.Second), true, nil
+			if len(bmhDependents) > 0 {
+				// Update status to indicate deletion is blocked
+				r.Logger.InfoContext(ctx, "ResourcePool deletion blocked by dependent BareMetalHosts",
+					slog.String("resourcePoolId", pool.Spec.ResourcePoolId),
+					slog.Int("bmhCount", len(bmhDependents)))
+
+				if err := r.setDeletionBlockedCondition(ctx, pool, len(bmhDependents)); err != nil {
+					r.Logger.WarnContext(ctx, "Failed to update status", slog.String("error", err.Error()))
+				}
+
+				// Requeue to check again later
+				return requeueWithCustomInterval(10 * time.Second), true, nil
+			}
+		} else {
+			r.Logger.InfoContext(ctx, "ResourcePool is not Ready, skipping dependent check",
+				slog.String("resourcePoolId", pool.Spec.ResourcePoolId))
 		}
 
-		// No dependents, safe to remove finalizer and allow k8s deletion
-		r.Logger.InfoContext(ctx, "No dependents found, removing finalizer from ResourcePool",
+		// No dependents (or not Ready), safe to remove finalizer and allow k8s deletion
+		r.Logger.InfoContext(ctx, "Removing finalizer from ResourcePool",
 			slog.String("resourcePoolId", pool.Spec.ResourcePoolId))
 
 		patch := client.MergeFrom(pool.DeepCopy())
@@ -181,16 +191,45 @@ func (r *ResourcePoolReconciler) findDependentBMHs(ctx context.Context, resource
 	return bmhList.Items, nil
 }
 
-// validateAndSetConditions validates the OCloudSite reference and sets appropriate conditions.
-// Returns (parentValid, error) where parentValid is true only when parent exists AND is ready.
+// validateAndSetConditions validates the OCloudSite reference, checks for duplicates, and sets appropriate conditions.
+// Returns (parentValid, error) where parentValid is true only when parent exists AND is ready AND no duplicates.
 func (r *ResourcePoolReconciler) validateAndSetConditions(ctx context.Context, pool *inventoryv1alpha1.ResourcePool) (bool, error) {
+	// Check for duplicate resourcePoolId first
+	duplicateName, err := r.findDuplicateResourcePool(ctx, pool)
+	if err != nil {
+		return false, fmt.Errorf("failed to check for duplicates: %w", err)
+	}
+
+	var condition metav1.Condition
+	if duplicateName != "" {
+		condition = metav1.Condition{
+			Type:               inventoryv1alpha1.ConditionTypeReady,
+			Status:             metav1.ConditionFalse,
+			Reason:             inventoryv1alpha1.ReasonDuplicateID,
+			Message:            fmt.Sprintf("resourcePoolId '%s' is already used by ResourcePool '%s'", pool.Spec.ResourcePoolId, duplicateName),
+			ObservedGeneration: pool.Generation,
+		}
+		r.Logger.WarnContext(ctx, "Duplicate resourcePoolId detected",
+			slog.String("resourcePoolId", pool.Spec.ResourcePoolId),
+			slog.String("conflictingResourcePool", duplicateName))
+
+		// Update status and return false (not valid)
+		existingCondition := meta.FindStatusCondition(pool.Status.Conditions, inventoryv1alpha1.ConditionTypeReady)
+		if existingCondition == nil || existingCondition.Status != condition.Status || existingCondition.Reason != condition.Reason {
+			meta.SetStatusCondition(&pool.Status.Conditions, condition)
+			if err := r.Status().Update(ctx, pool); err != nil {
+				return false, fmt.Errorf("failed to update status: %w", err)
+			}
+		}
+		return false, nil
+	}
+
 	// Validate that the referenced OCloudSite exists and is ready
 	result, err := r.validateSiteReference(ctx, pool.Spec.OCloudSiteId)
 	if err != nil {
 		return false, fmt.Errorf("failed to validate OCloudSite reference: %w", err)
 	}
 
-	var condition metav1.Condition
 	switch {
 	case !result.Exists:
 		condition = metav1.Condition{
@@ -229,6 +268,28 @@ func (r *ResourcePoolReconciler) validateAndSetConditions(ctx context.Context, p
 
 	// Return true only when parent exists AND is ready
 	return result.Exists && result.Ready, nil
+}
+
+// findDuplicateResourcePool checks if another ResourcePool CR already uses the same resourcePoolId.
+// Returns the name of the conflicting ResourcePool if found, or empty string if no duplicate exists.
+func (r *ResourcePoolReconciler) findDuplicateResourcePool(ctx context.Context, pool *inventoryv1alpha1.ResourcePool) (string, error) {
+	var poolList inventoryv1alpha1.ResourcePoolList
+	if err := r.List(ctx, &poolList); err != nil {
+		return "", fmt.Errorf("failed to list ResourcePools: %w", err)
+	}
+
+	for _, other := range poolList.Items {
+		// Skip self
+		if other.Name == pool.Name && other.Namespace == pool.Namespace {
+			continue
+		}
+		// Check for duplicate resourcePoolId
+		if other.Spec.ResourcePoolId == pool.Spec.ResourcePoolId {
+			return other.Name, nil
+		}
+	}
+
+	return "", nil
 }
 
 // validateSiteReference checks if an OCloudSite with the given siteId exists and is ready
