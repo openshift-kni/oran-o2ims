@@ -8,7 +8,7 @@ resources, and pod logs that are not included in the standard OpenShift
 must-gather.
 
 ```console
-oc adm must-gather --image=quay.io/openshift-kni/oran-o2ims-operator-must-gather:4.22.0
+oc adm must-gather --image=quay.io/openshift-kni/oran-o2ims-operator-must-gather:4.21.0
 ```
 
 See the [must-gather guide](user-guide/must-gather.md) for details on what is
