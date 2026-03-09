@@ -257,17 +257,11 @@ func (r *OCloudSiteReconciler) validateAndSetConditions(ctx context.Context, sit
 	return result.Exists && result.Ready, nil
 }
 
-// parentValidationResult holds the result of validating a parent CR reference
-type parentValidationResult struct {
-	Exists bool
-	Ready  bool
-}
-
 // validateLocationReference checks if a Location with the given globalLocationId exists and is ready
-func (r *OCloudSiteReconciler) validateLocationReference(ctx context.Context, globalLocationID string) (parentValidationResult, error) {
+func (r *OCloudSiteReconciler) validateLocationReference(ctx context.Context, globalLocationID string) (ctlrutils.ParentValidationResult, error) {
 	var locationList inventoryv1alpha1.LocationList
 	if err := r.List(ctx, &locationList); err != nil {
-		return parentValidationResult{}, fmt.Errorf("failed to list Locations: %w", err)
+		return ctlrutils.ParentValidationResult{}, fmt.Errorf("failed to list Locations: %w", err)
 	}
 
 	for _, location := range locationList.Items {
@@ -275,11 +269,11 @@ func (r *OCloudSiteReconciler) validateLocationReference(ctx context.Context, gl
 			// Check if Location is Ready
 			readyCondition := meta.FindStatusCondition(location.Status.Conditions, inventoryv1alpha1.ConditionTypeReady)
 			isReady := readyCondition != nil && readyCondition.Status == metav1.ConditionTrue
-			return parentValidationResult{Exists: true, Ready: isReady}, nil
+			return ctlrutils.ParentValidationResult{Exists: true, Ready: isReady}, nil
 		}
 	}
 
-	return parentValidationResult{Exists: false, Ready: false}, nil
+	return ctlrutils.ParentValidationResult{Exists: false, Ready: false}, nil
 }
 
 // setDeletionBlockedCondition sets the Deleting condition indicating deletion is blocked
