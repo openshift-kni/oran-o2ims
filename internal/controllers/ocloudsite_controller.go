@@ -134,36 +134,46 @@ func (r *OCloudSiteReconciler) handleFinalizer(
 		r.Logger.InfoContext(ctx, "OCloudSite is being deleted, checking for dependents",
 			slog.String("siteId", site.Spec.SiteID))
 
-		// Check for dependent ResourcePools
-		poolDependents, err := r.findDependentResourcePools(ctx, site.Spec.SiteID)
-		if err != nil {
-			return requeueWithShortInterval(), true, fmt.Errorf("failed to check for dependent ResourcePools: %w", err)
-		}
+		// An OCloudSite that is not Ready (e.g., DuplicateID, ParentNotFound) can always be deleted
+		// because it was never serving any dependents - skip dependent check
+		readyCondition := meta.FindStatusCondition(site.Status.Conditions, inventoryv1alpha1.ConditionTypeReady)
+		isReady := readyCondition != nil && readyCondition.Status == metav1.ConditionTrue
 
-		// Check for dependent BareMetalHosts
-		bmhDependents, err := r.findDependentBMHs(ctx, site.Spec.SiteID)
-		if err != nil {
-			return requeueWithShortInterval(), true, fmt.Errorf("failed to check for dependent BareMetalHosts: %w", err)
-		}
-
-		totalDependents := len(poolDependents) + len(bmhDependents)
-		if totalDependents > 0 {
-			// Update status to indicate deletion is blocked
-			r.Logger.InfoContext(ctx, "OCloudSite deletion blocked by dependents",
-				slog.String("siteId", site.Spec.SiteID),
-				slog.Int("resourcePoolCount", len(poolDependents)),
-				slog.Int("bmhCount", len(bmhDependents)))
-
-			if err := r.setDeletionBlockedCondition(ctx, site, len(poolDependents), len(bmhDependents)); err != nil {
-				r.Logger.WarnContext(ctx, "Failed to update status", slog.String("error", err.Error()))
+		if isReady {
+			// Only check for dependents if OCloudSite is Ready
+			poolDependents, err := r.findDependentResourcePools(ctx, site.Spec.SiteID)
+			if err != nil {
+				return requeueWithShortInterval(), true, fmt.Errorf("failed to check for dependent ResourcePools: %w", err)
 			}
 
-			// Requeue to check again later
-			return requeueWithCustomInterval(10 * time.Second), true, nil
+			// Check for dependent BareMetalHosts
+			bmhDependents, err := r.findDependentBMHs(ctx, site.Spec.SiteID)
+			if err != nil {
+				return requeueWithShortInterval(), true, fmt.Errorf("failed to check for dependent BareMetalHosts: %w", err)
+			}
+
+			totalDependents := len(poolDependents) + len(bmhDependents)
+			if totalDependents > 0 {
+				// Update status to indicate deletion is blocked
+				r.Logger.InfoContext(ctx, "OCloudSite deletion blocked by dependents",
+					slog.String("siteId", site.Spec.SiteID),
+					slog.Int("resourcePoolCount", len(poolDependents)),
+					slog.Int("bmhCount", len(bmhDependents)))
+
+				if err := r.setDeletionBlockedCondition(ctx, site, len(poolDependents), len(bmhDependents)); err != nil {
+					r.Logger.WarnContext(ctx, "Failed to update status", slog.String("error", err.Error()))
+				}
+
+				// Requeue to check again later
+				return requeueWithCustomInterval(10 * time.Second), true, nil
+			}
+		} else {
+			r.Logger.InfoContext(ctx, "OCloudSite is not Ready, skipping dependent check",
+				slog.String("siteId", site.Spec.SiteID))
 		}
 
-		// No dependents, safe to remove finalizer and allow k8s deletion
-		r.Logger.InfoContext(ctx, "No dependents found, removing finalizer from OCloudSite",
+		// No dependents (or not Ready), safe to remove finalizer and allow k8s deletion
+		r.Logger.InfoContext(ctx, "Removing finalizer from OCloudSite",
 			slog.String("siteId", site.Spec.SiteID))
 
 		patch := client.MergeFrom(site.DeepCopy())
@@ -207,16 +217,45 @@ func (r *OCloudSiteReconciler) findDependentBMHs(ctx context.Context, siteID str
 	return bmhList.Items, nil
 }
 
-// validateAndSetConditions validates the Location reference and sets appropriate conditions.
-// Returns (parentValid, error) where parentValid is true only when parent exists AND is ready.
+// validateAndSetConditions validates the Location reference, checks for duplicates, and sets appropriate conditions.
+// Returns (parentValid, error) where parentValid is true only when parent exists AND is ready AND no duplicates.
 func (r *OCloudSiteReconciler) validateAndSetConditions(ctx context.Context, site *inventoryv1alpha1.OCloudSite) (bool, error) {
+	// Check for duplicate siteId first
+	duplicateName, err := r.findDuplicateOCloudSite(ctx, site)
+	if err != nil {
+		return false, fmt.Errorf("failed to check for duplicates: %w", err)
+	}
+
+	var condition metav1.Condition
+	if duplicateName != "" {
+		condition = metav1.Condition{
+			Type:               inventoryv1alpha1.ConditionTypeReady,
+			Status:             metav1.ConditionFalse,
+			Reason:             inventoryv1alpha1.ReasonDuplicateID,
+			Message:            fmt.Sprintf("siteId '%s' is already used by OCloudSite '%s'", site.Spec.SiteID, duplicateName),
+			ObservedGeneration: site.Generation,
+		}
+		r.Logger.WarnContext(ctx, "Duplicate siteId detected",
+			slog.String("siteId", site.Spec.SiteID),
+			slog.String("conflictingOCloudSite", duplicateName))
+
+		// Update status and return false (not valid)
+		existingCondition := meta.FindStatusCondition(site.Status.Conditions, inventoryv1alpha1.ConditionTypeReady)
+		if existingCondition == nil || existingCondition.Status != condition.Status || existingCondition.Reason != condition.Reason {
+			meta.SetStatusCondition(&site.Status.Conditions, condition)
+			if err := r.Status().Update(ctx, site); err != nil {
+				return false, fmt.Errorf("failed to update status: %w", err)
+			}
+		}
+		return false, nil
+	}
+
 	// Validate that the referenced Location exists and is ready
 	result, err := r.validateLocationReference(ctx, site.Spec.GlobalLocationID)
 	if err != nil {
 		return false, fmt.Errorf("failed to validate Location reference: %w", err)
 	}
 
-	var condition metav1.Condition
 	switch {
 	case !result.Exists:
 		condition = metav1.Condition{
@@ -255,6 +294,28 @@ func (r *OCloudSiteReconciler) validateAndSetConditions(ctx context.Context, sit
 
 	// Return true only when parent exists AND is ready
 	return result.Exists && result.Ready, nil
+}
+
+// findDuplicateOCloudSite checks if another OCloudSite CR already uses the same siteId.
+// Returns the name of the conflicting OCloudSite if found, or empty string if no duplicate exists.
+func (r *OCloudSiteReconciler) findDuplicateOCloudSite(ctx context.Context, site *inventoryv1alpha1.OCloudSite) (string, error) {
+	var siteList inventoryv1alpha1.OCloudSiteList
+	if err := r.List(ctx, &siteList); err != nil {
+		return "", fmt.Errorf("failed to list OCloudSites: %w", err)
+	}
+
+	for _, other := range siteList.Items {
+		// Skip self
+		if other.Name == site.Name && other.Namespace == site.Namespace {
+			continue
+		}
+		// Check for duplicate siteId
+		if other.Spec.SiteID == site.Spec.SiteID {
+			return other.Name, nil
+		}
+	}
+
+	return "", nil
 }
 
 // validateLocationReference checks if a Location with the given globalLocationId exists and is ready
