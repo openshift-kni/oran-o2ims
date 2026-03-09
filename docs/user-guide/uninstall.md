@@ -19,6 +19,17 @@ to protect against accidental deletion of resources that are still in use. This 
 data integrity by preventing deletion of parent resources while child resources still
 reference them.
 
+**First, scale down the operator to allow manual finalizer removal:**
+
+> **Note:** The controller would keep finalizers on parent
+> resources while child resources still exist. Scaling down allows you to bypass dependency
+> checks if needed.
+
+```bash
+$ oc scale deployment -l control-plane=controller-manager -n oran-o2ims --replicas=0
+$ oc wait --for=delete pod -l control-plane=controller-manager -n oran-o2ims --timeout=60s
+```
+
 **Important:** Before uninstalling the operator, delete these resources in the correct
 order (children before parents):
 
@@ -79,7 +90,15 @@ stuck in a "Terminating" state due to unprocessed finalizers.
 
 ### Recovery Procedure
 
-Remove finalizers from the stuck resources, i.e.:
+**First, scale down the operator to allow manual finalizer removal:**
+
+```bash
+# Scale down the controller (if still running)
+oc scale deployment -l control-plane=controller-manager -n oran-o2ims --replicas=0
+oc wait --for=delete pod -l control-plane=controller-manager -n oran-o2ims --timeout=60s
+```
+
+Then remove finalizers from the stuck resources:
 
 ```bash
 # Remove finalizers from ResourcePools
