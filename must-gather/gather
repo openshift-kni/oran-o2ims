@@ -165,6 +165,7 @@ gather_resource "baremetalhosts.metal3.io" "metal3/baremetalhosts"
 gather_resource "hostfirmwaresettings.metal3.io" "metal3/hostfirmwaresettings"
 gather_resource "hostfirmwarecomponents.metal3.io" "metal3/hostfirmwarecomponents"
 gather_resource "preprovisioningimages.metal3.io" "metal3/preprovisioningimages"
+gather_resource "hardwaredata.metal3.io" "metal3/hardwaredata"
 
 # Secrets referenced by BMH preprovisioningNetworkDataName
 gather_bmh_preprovisioning_secrets
