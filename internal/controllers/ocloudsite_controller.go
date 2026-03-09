@@ -309,6 +309,10 @@ func (r *OCloudSiteReconciler) findDuplicateOCloudSite(ctx context.Context, site
 		if other.Name == site.Name && other.Namespace == site.Namespace {
 			continue
 		}
+		// Skip resources being deleted (they no longer "own" the ID)
+		if other.DeletionTimestamp != nil {
+			continue
+		}
 		// Check for duplicate siteId
 		if other.Spec.SiteID == site.Spec.SiteID {
 			return other.Name, nil
@@ -365,6 +369,13 @@ func (r *OCloudSiteReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&inventoryv1alpha1.Location{},
 			handler.EnqueueRequestsFromMapFunc(r.enqueueOCloudSitesForLocation),
 		).
+		// Watch OCloudSite changes to re-reconcile other OCloudSites with the same siteId.
+		// This allows a duplicate OCloudSite (Ready=False, DuplicateID) to transition to Ready=True
+		// when the conflicting OCloudSite is deleted.
+		Watches(
+			&inventoryv1alpha1.OCloudSite{},
+			handler.EnqueueRequestsFromMapFunc(r.enqueueOCloudSitesWithSameSiteId),
+		).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to setup ocloudsite controller: %w", err)
 	}
@@ -399,6 +410,48 @@ func (r *OCloudSiteReconciler) enqueueOCloudSitesForLocation(ctx context.Context
 		r.Logger.InfoContext(ctx, "Location change triggering OCloudSite reconciliation",
 			slog.String("globalLocationId", location.Spec.GlobalLocationID),
 			slog.Int("oCloudSiteCount", len(requests)))
+	}
+
+	return requests
+}
+
+// enqueueOCloudSitesWithSameSiteId maps OCloudSite changes to other OCloudSites
+// that have the same siteId. This enables duplicate resolution when a
+// conflicting OCloudSite is deleted or its ID changes.
+func (r *OCloudSiteReconciler) enqueueOCloudSitesWithSameSiteId(
+	ctx context.Context, obj client.Object) []reconcile.Request {
+
+	site, ok := obj.(*inventoryv1alpha1.OCloudSite)
+	if !ok {
+		return nil
+	}
+
+	// Find all other OCloudSites with the same siteId
+	var siteList inventoryv1alpha1.OCloudSiteList
+	if err := r.List(ctx, &siteList); err != nil {
+		r.Logger.ErrorContext(ctx, "Failed to list OCloudSites for duplicate watch",
+			slog.String("error", err.Error()))
+		return nil
+	}
+
+	var requests []reconcile.Request
+	for _, other := range siteList.Items {
+		// Skip self - we don't want to trigger reconciliation for the same resource
+		if other.Name == site.Name && other.Namespace == site.Namespace {
+			continue
+		}
+		// Only enqueue if they share the same siteId
+		if other.Spec.SiteID == site.Spec.SiteID {
+			requests = append(requests, reconcile.Request{
+				NamespacedName: client.ObjectKeyFromObject(&other),
+			})
+		}
+	}
+
+	if len(requests) > 0 {
+		r.Logger.InfoContext(ctx, "OCloudSite change triggering reconciliation of OCloudSites with same siteId",
+			slog.String("siteId", site.Spec.SiteID),
+			slog.Int("affectedCount", len(requests)))
 	}
 
 	return requests

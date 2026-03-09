@@ -283,6 +283,10 @@ func (r *ResourcePoolReconciler) findDuplicateResourcePool(ctx context.Context, 
 		if other.Name == pool.Name && other.Namespace == pool.Namespace {
 			continue
 		}
+		// Skip resources being deleted (they no longer "own" the ID)
+		if other.DeletionTimestamp != nil {
+			continue
+		}
 		// Check for duplicate resourcePoolId
 		if other.Spec.ResourcePoolId == pool.Spec.ResourcePoolId {
 			return other.Name, nil
@@ -338,6 +342,13 @@ func (r *ResourcePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&inventoryv1alpha1.OCloudSite{},
 			handler.EnqueueRequestsFromMapFunc(r.enqueueResourcePoolsForOCloudSite),
 		).
+		// Watch ResourcePool changes to re-reconcile other ResourcePools with the same resourcePoolId.
+		// This allows a duplicate ResourcePool (Ready=False, DuplicateID) to transition to Ready=True
+		// when the conflicting ResourcePool is deleted.
+		Watches(
+			&inventoryv1alpha1.ResourcePool{},
+			handler.EnqueueRequestsFromMapFunc(r.enqueueResourcePoolsWithSameResourcePoolId),
+		).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to setup resourcepool controller: %w", err)
 	}
@@ -372,6 +383,48 @@ func (r *ResourcePoolReconciler) enqueueResourcePoolsForOCloudSite(ctx context.C
 		r.Logger.InfoContext(ctx, "OCloudSite change triggering ResourcePool reconciliation",
 			slog.String("siteId", site.Spec.SiteID),
 			slog.Int("resourcePoolCount", len(requests)))
+	}
+
+	return requests
+}
+
+// enqueueResourcePoolsWithSameResourcePoolId maps ResourcePool changes to other ResourcePools
+// that have the same resourcePoolId. This enables duplicate resolution when a
+// conflicting ResourcePool is deleted or its ID changes.
+func (r *ResourcePoolReconciler) enqueueResourcePoolsWithSameResourcePoolId(
+	ctx context.Context, obj client.Object) []reconcile.Request {
+
+	pool, ok := obj.(*inventoryv1alpha1.ResourcePool)
+	if !ok {
+		return nil
+	}
+
+	// Find all other ResourcePools with the same resourcePoolId
+	var poolList inventoryv1alpha1.ResourcePoolList
+	if err := r.List(ctx, &poolList); err != nil {
+		r.Logger.ErrorContext(ctx, "Failed to list ResourcePools for duplicate watch",
+			slog.String("error", err.Error()))
+		return nil
+	}
+
+	var requests []reconcile.Request
+	for _, other := range poolList.Items {
+		// Skip self - we don't want to trigger reconciliation for the same resource
+		if other.Name == pool.Name && other.Namespace == pool.Namespace {
+			continue
+		}
+		// Only enqueue if they share the same resourcePoolId
+		if other.Spec.ResourcePoolId == pool.Spec.ResourcePoolId {
+			requests = append(requests, reconcile.Request{
+				NamespacedName: client.ObjectKeyFromObject(&other),
+			})
+		}
+	}
+
+	if len(requests) > 0 {
+		r.Logger.InfoContext(ctx, "ResourcePool change triggering reconciliation of ResourcePools with same resourcePoolId",
+			slog.String("resourcePoolId", pool.Spec.ResourcePoolId),
+			slog.Int("affectedCount", len(requests)))
 	}
 
 	return requests

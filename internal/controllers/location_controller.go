@@ -18,7 +18,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -238,6 +240,10 @@ func (r *LocationReconciler) findDuplicateLocation(ctx context.Context, location
 		if other.Name == location.Name && other.Namespace == location.Namespace {
 			continue
 		}
+		// Skip resources being deleted (they no longer "own" the ID)
+		if other.DeletionTimestamp != nil {
+			continue
+		}
 		// Check for duplicate globalLocationId
 		if other.Spec.GlobalLocationID == location.Spec.GlobalLocationID {
 			return other.Name, nil
@@ -269,8 +275,57 @@ func (r *LocationReconciler) setDeletionBlockedCondition(ctx context.Context, lo
 func (r *LocationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&inventoryv1alpha1.Location{}).
+		// Watch Location changes to re-reconcile other Locations with the same globalLocationId.
+		// This allows a duplicate Location (Ready=False, DuplicateID) to transition to Ready=True
+		// when the conflicting Location is deleted.
+		Watches(
+			&inventoryv1alpha1.Location{},
+			handler.EnqueueRequestsFromMapFunc(r.enqueueLocationsWithSameGlobalLocationId),
+		).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to setup location controller: %w", err)
 	}
 	return nil
+}
+
+// enqueueLocationsWithSameGlobalLocationId maps Location changes to other Locations
+// that have the same globalLocationId. This enables duplicate resolution when a
+// conflicting Location is deleted or its ID changes.
+func (r *LocationReconciler) enqueueLocationsWithSameGlobalLocationId(
+	ctx context.Context, obj client.Object) []reconcile.Request {
+
+	location, ok := obj.(*inventoryv1alpha1.Location)
+	if !ok {
+		return nil
+	}
+
+	// Find all other Locations with the same globalLocationId
+	var locationList inventoryv1alpha1.LocationList
+	if err := r.List(ctx, &locationList); err != nil {
+		r.Logger.ErrorContext(ctx, "Failed to list Locations for duplicate watch",
+			slog.String("error", err.Error()))
+		return nil
+	}
+
+	var requests []reconcile.Request
+	for _, other := range locationList.Items {
+		// Skip self - we don't want to trigger reconciliation for the same resource
+		if other.Name == location.Name && other.Namespace == location.Namespace {
+			continue
+		}
+		// Only enqueue if they share the same globalLocationId
+		if other.Spec.GlobalLocationID == location.Spec.GlobalLocationID {
+			requests = append(requests, reconcile.Request{
+				NamespacedName: client.ObjectKeyFromObject(&other),
+			})
+		}
+	}
+
+	if len(requests) > 0 {
+		r.Logger.InfoContext(ctx, "Location change triggering reconciliation of Locations with same globalLocationId",
+			slog.String("globalLocationId", location.Spec.GlobalLocationID),
+			slog.Int("affectedCount", len(requests)))
+	}
+
+	return requests
 }
