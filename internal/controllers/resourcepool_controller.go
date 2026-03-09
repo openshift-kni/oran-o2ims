@@ -232,10 +232,10 @@ func (r *ResourcePoolReconciler) validateAndSetConditions(ctx context.Context, p
 }
 
 // validateSiteReference checks if an OCloudSite with the given siteId exists and is ready
-func (r *ResourcePoolReconciler) validateSiteReference(ctx context.Context, siteID string) (parentValidationResult, error) {
+func (r *ResourcePoolReconciler) validateSiteReference(ctx context.Context, siteID string) (ctlrutils.ParentValidationResult, error) {
 	var siteList inventoryv1alpha1.OCloudSiteList
 	if err := r.List(ctx, &siteList); err != nil {
-		return parentValidationResult{}, fmt.Errorf("failed to list OCloudSites: %w", err)
+		return ctlrutils.ParentValidationResult{}, fmt.Errorf("failed to list OCloudSites: %w", err)
 	}
 
 	for _, site := range siteList.Items {
@@ -243,11 +243,11 @@ func (r *ResourcePoolReconciler) validateSiteReference(ctx context.Context, site
 			// Check if OCloudSite is Ready
 			readyCondition := meta.FindStatusCondition(site.Status.Conditions, inventoryv1alpha1.ConditionTypeReady)
 			isReady := readyCondition != nil && readyCondition.Status == metav1.ConditionTrue
-			return parentValidationResult{Exists: true, Ready: isReady}, nil
+			return ctlrutils.ParentValidationResult{Exists: true, Ready: isReady}, nil
 		}
 	}
 
-	return parentValidationResult{Exists: false, Ready: false}, nil
+	return ctlrutils.ParentValidationResult{Exists: false, Ready: false}, nil
 }
 
 // setDeletionBlockedCondition sets the Deleting condition indicating deletion is blocked
