@@ -18,6 +18,7 @@ The following data is collected:
   - HostFirmwareSettings
   - HostFirmwareComponents
   - PreprovisioningImages
+  - HardwareData
   - Secrets referenced by BMH `preprovisioningNetworkDataName` fields
 - Pod logs
   - All O-Cloud Manager pods (controller manager, resource-server,
@@ -41,8 +42,21 @@ To specify a custom output directory:
 oc adm must-gather --image=quay.io/openshift-kni/oran-o2ims-operator-must-gather:4.22.0 --dest-dir=must-gather/tmp
 ```
 
-To combine with the standard OpenShift must-gather:
+To include ACM resources and logs (e.g., ClusterInstance, SiteConfig), combine
+with the ACM must-gather image. Replace `<ACM-version>` with your installed ACM
+version (e.g., `v2.14`):
 
 ```shell
-oc adm must-gather --image=quay.io/openshift-kni/oran-o2ims-operator-must-gather:4.22.0 --image=quay.io/openshift/origin-must-gather
+oc adm must-gather \
+  --image=quay.io/openshift-kni/oran-o2ims-operator-must-gather:4.22.0 \
+  --image=registry.redhat.io/rhacm2/acm-must-gather-rhel9:v<ACM-version>
+```
+
+To also include the standard OpenShift must-gather:
+
+```shell
+oc adm must-gather \
+  --image=quay.io/openshift-kni/oran-o2ims-operator-must-gather:4.22.0 \
+  --image=registry.redhat.io/rhacm2/acm-must-gather-rhel9:v<ACM-version> \
+  --image=quay.io/openshift/origin-must-gather
 ```
