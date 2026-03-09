@@ -1,0 +1,5 @@
+FROM registry.redhat.io/openshift4/ose-cli-rhel9:latest
+
+COPY must-gather/gather /usr/bin/gather
+
+ENTRYPOINT ["/usr/bin/gather"]

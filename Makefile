@@ -106,6 +106,9 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 IMAGE_NAME ?= oran-o2ims-operator
 IMAGE_TAG_BASE ?= quay.io/openshift-kni/${IMAGE_NAME}
 
+# MUST_GATHER_IMG defines the image:tag used for the must-gather image.
+MUST_GATHER_IMG ?= $(IMAGE_TAG_BASE)-must-gather:$(VERSION)
+
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
 BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:$(VERSION)
@@ -228,6 +231,14 @@ docker-build: manifests generate fmt vet ## Build docker image with the manager.
 .PHONY: docker-push
 docker-push: docker-build ## Push docker image with the manager.
 	$(CONTAINER_TOOL) push ${IMG}
+
+.PHONY: must-gather-build
+must-gather-build: ## Build the must-gather image.
+	$(CONTAINER_TOOL) build -t $(MUST_GATHER_IMG) -f Dockerfile.must-gather .
+
+.PHONY: must-gather-push
+must-gather-push: must-gather-build ## Push the must-gather image.
+	$(CONTAINER_TOOL) push $(MUST_GATHER_IMG)
 
 # PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
 # architectures. (i.e. make docker-buildx IMG=myregistry/mypoperator:0.0.1). To use this option you need to:
