@@ -503,6 +503,126 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 
 			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(bmh), &bmhv1alpha1.BareMetalHost{})).To(Succeed())
 		})
+
+		It("should transition to Ready=True when the conflicting ResourcePool is deleted", func() {
+			// This test verifies that when the original ResourcePool is deleted,
+			// the duplicate ResourcePool automatically transitions to Ready=True
+			// via the watch mechanism.
+
+			// First create a valid parent hierarchy: Location -> OCloudSite
+			location := &inventoryv1alpha1.Location{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-location-for-pool-dup-resolve",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.LocationSpec{
+					GlobalLocationID: "LOC-POOL-DUP-RESOLVE-001",
+					Description:      "Location for duplicate ResourcePool resolution test",
+					Address:          ptrString("Test Address"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, location)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, location)
+			})
+			waitForLocationReady(location)
+
+			site := &inventoryv1alpha1.OCloudSite{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-site-for-pool-dup-resolve",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.OCloudSiteSpec{
+					SiteID:           "SITE-POOL-DUP-RESOLVE-001",
+					GlobalLocationID: "LOC-POOL-DUP-RESOLVE-001",
+					Description:      "Site for duplicate ResourcePool resolution test",
+				},
+			}
+			Expect(k8sClient.Create(ctx, site)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, site)
+			})
+			waitForOCloudSiteReady(site)
+
+			// Create the first ResourcePool (will be Ready=True)
+			pool1 := &inventoryv1alpha1.ResourcePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pool-dup-resolve-first",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.ResourcePoolSpec{
+					ResourcePoolId: "POOL-DUP-RESOLVE-001",
+					OCloudSiteId:   "SITE-POOL-DUP-RESOLVE-001",
+					Description:    "First pool to be deleted",
+				},
+			}
+			Expect(k8sClient.Create(ctx, pool1)).To(Succeed())
+
+			// Wait for first ResourcePool to be Ready=True
+			waitForResourcePoolReady(pool1)
+
+			// Create the second ResourcePool with the same resourcePoolId (will be Ready=False, DuplicateID)
+			pool2 := &inventoryv1alpha1.ResourcePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pool-dup-resolve-second",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.ResourcePoolSpec{
+					ResourcePoolId: "POOL-DUP-RESOLVE-001", // Same as first!
+					OCloudSiteId:   "SITE-POOL-DUP-RESOLVE-001",
+					Description:    "Second pool that will become valid",
+				},
+			}
+			Expect(k8sClient.Create(ctx, pool2)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, pool2)
+			})
+
+			// Wait for second ResourcePool to have Ready=False with DuplicateID
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.ResourcePool{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool2), fetched)
+				if err != nil {
+					return false
+				}
+				for _, cond := range fetched.Status.Conditions {
+					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+						cond.Status == metav1.ConditionFalse &&
+						cond.Reason == inventoryv1alpha1.ReasonDuplicateID {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue(), "Second ResourcePool should start with DuplicateID")
+
+			// Delete the first ResourcePool (the original)
+			Expect(k8sClient.Delete(ctx, pool1)).To(Succeed())
+
+			// Wait for first ResourcePool to be fully deleted
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.ResourcePool{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool1), fetched)
+				return k8serrors.IsNotFound(err)
+			}, timeout, interval).Should(BeTrue(), "First ResourcePool should be deleted")
+
+			// The watch should trigger re-reconciliation of the second ResourcePool.
+			// It should now transition to Ready=True since there's no more conflict.
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.ResourcePool{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool2), fetched)
+				if err != nil {
+					return false
+				}
+				for _, cond := range fetched.Status.Conditions {
+					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+						cond.Status == metav1.ConditionTrue &&
+						cond.Reason == inventoryv1alpha1.ReasonReady {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue(), "Second ResourcePool should transition to Ready=True after first is deleted")
+		})
 	})
 
 	Context("When parent OCloudSite is created or becomes ready later", func() {

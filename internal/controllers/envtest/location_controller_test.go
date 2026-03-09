@@ -369,6 +369,91 @@ var _ = Describe("Location Controller", Label("envtest"), func() {
 				),
 			), "OCloudSite should still be Ready")
 		})
+
+		It("should transition to Ready=True when the conflicting Location is deleted", func() {
+			// This test verifies that when the original Location is deleted,
+			// the duplicate Location automatically transitions to Ready=True
+			// via the watch mechanism.
+
+			// Create the first Location (will be Ready=True)
+			location1 := &inventoryv1alpha1.Location{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-location-dup-resolve-first",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.LocationSpec{
+					GlobalLocationID: "LOC-DUP-RESOLVE-001",
+					Description:      "First location to be deleted",
+					Address:          ptrString("First Address"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, location1)).To(Succeed())
+
+			// Wait for first Location to be Ready=True
+			waitForLocationReady(location1)
+
+			// Create the second Location with the same globalLocationId (will be Ready=False, DuplicateID)
+			location2 := &inventoryv1alpha1.Location{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-location-dup-resolve-second",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.LocationSpec{
+					GlobalLocationID: "LOC-DUP-RESOLVE-001", // Same as first!
+					Description:      "Second location that will become valid",
+					Address:          ptrString("Second Address"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, location2)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, location2)
+			})
+
+			// Wait for second Location to have Ready=False with DuplicateID
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.Location{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(location2), fetched)
+				if err != nil {
+					return false
+				}
+				for _, cond := range fetched.Status.Conditions {
+					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+						cond.Status == metav1.ConditionFalse &&
+						cond.Reason == inventoryv1alpha1.ReasonDuplicateID {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue(), "Second Location should start with DuplicateID")
+
+			// Delete the first Location (the original)
+			Expect(k8sClient.Delete(ctx, location1)).To(Succeed())
+
+			// Wait for first Location to be fully deleted
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.Location{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(location1), fetched)
+				return k8serrors.IsNotFound(err)
+			}, timeout, interval).Should(BeTrue(), "First Location should be deleted")
+
+			// The watch should trigger re-reconciliation of the second Location.
+			// It should now transition to Ready=True since there's no more conflict.
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.Location{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(location2), fetched)
+				if err != nil {
+					return false
+				}
+				for _, cond := range fetched.Status.Conditions {
+					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+						cond.Status == metav1.ConditionTrue &&
+						cond.Reason == inventoryv1alpha1.ReasonReady {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue(), "Second Location should transition to Ready=True after first is deleted")
+		})
 	})
 
 	Context("When deleting a Location without dependents", func() {

@@ -263,3 +263,21 @@ func waitForOCloudSiteReady(site *inventoryv1alpha1.OCloudSite) {
 		return false
 	}, defaultTimeout, defaultInterval).Should(BeTrue(), "OCloudSite should become Ready")
 }
+
+// waitForResourcePoolReady waits for a ResourcePool to have Ready=True condition.
+func waitForResourcePoolReady(pool *inventoryv1alpha1.ResourcePool) {
+	Eventually(func() bool {
+		fetched := &inventoryv1alpha1.ResourcePool{}
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
+		if err != nil {
+			return false
+		}
+		for _, cond := range fetched.Status.Conditions {
+			if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+				cond.Status == metav1.ConditionTrue {
+				return true
+			}
+		}
+		return false
+	}, defaultTimeout, defaultInterval).Should(BeTrue(), "ResourcePool should become Ready")
+}

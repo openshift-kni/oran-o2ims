@@ -374,6 +374,109 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 				),
 			), "ResourcePool should still be Ready")
 		})
+
+		It("should transition to Ready=True when the conflicting OCloudSite is deleted", func() {
+			// This test verifies that when the original OCloudSite is deleted,
+			// the duplicate OCloudSite automatically transitions to Ready=True
+			// via the watch mechanism.
+
+			// First create a valid parent Location
+			location := &inventoryv1alpha1.Location{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-location-for-dup-resolve",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.LocationSpec{
+					GlobalLocationID: "LOC-DUP-RESOLVE-SITE-001",
+					Description:      "Location for duplicate OCloudSite resolution test",
+					Address:          ptrString("Test Address"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, location)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, location)
+			})
+			waitForLocationReady(location)
+
+			// Create the first OCloudSite (will be Ready=True)
+			site1 := &inventoryv1alpha1.OCloudSite{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-site-dup-resolve-first",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.OCloudSiteSpec{
+					SiteID:           "SITE-DUP-RESOLVE-001",
+					GlobalLocationID: "LOC-DUP-RESOLVE-SITE-001",
+					Description:      "First site to be deleted",
+				},
+			}
+			Expect(k8sClient.Create(ctx, site1)).To(Succeed())
+
+			// Wait for first OCloudSite to be Ready=True
+			waitForOCloudSiteReady(site1)
+
+			// Create the second OCloudSite with the same siteId (will be Ready=False, DuplicateID)
+			site2 := &inventoryv1alpha1.OCloudSite{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-site-dup-resolve-second",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.OCloudSiteSpec{
+					SiteID:           "SITE-DUP-RESOLVE-001", // Same as first!
+					GlobalLocationID: "LOC-DUP-RESOLVE-SITE-001",
+					Description:      "Second site that will become valid",
+				},
+			}
+			Expect(k8sClient.Create(ctx, site2)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, site2)
+			})
+
+			// Wait for second OCloudSite to have Ready=False with DuplicateID
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.OCloudSite{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(site2), fetched)
+				if err != nil {
+					return false
+				}
+				for _, cond := range fetched.Status.Conditions {
+					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+						cond.Status == metav1.ConditionFalse &&
+						cond.Reason == inventoryv1alpha1.ReasonDuplicateID {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue(), "Second OCloudSite should start with DuplicateID")
+
+			// Delete the first OCloudSite (the original)
+			Expect(k8sClient.Delete(ctx, site1)).To(Succeed())
+
+			// Wait for first OCloudSite to be fully deleted
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.OCloudSite{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(site1), fetched)
+				return k8serrors.IsNotFound(err)
+			}, timeout, interval).Should(BeTrue(), "First OCloudSite should be deleted")
+
+			// The watch should trigger re-reconciliation of the second OCloudSite.
+			// It should now transition to Ready=True since there's no more conflict.
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.OCloudSite{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(site2), fetched)
+				if err != nil {
+					return false
+				}
+				for _, cond := range fetched.Status.Conditions {
+					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+						cond.Status == metav1.ConditionTrue &&
+						cond.Reason == inventoryv1alpha1.ReasonReady {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue(), "Second OCloudSite should transition to Ready=True after first is deleted")
+		})
 	})
 
 	Context("When parent Location is created later", func() {
