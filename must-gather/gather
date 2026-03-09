@@ -1,0 +1,179 @@
+#!/bin/bash
+
+# O-Cloud Manager must-gather collection script
+# Collects CRs from O-Cloud Manager API groups, related Metal3 resources,
+# and pod logs from the O-Cloud Manager and Metal3 namespaces.
+
+set -uo pipefail
+
+BASE_DIR="${BASE_DIR:-/must-gather}"
+METAL3_NS="openshift-machine-api"
+mkdir -p "${BASE_DIR}"
+
+log() {
+    echo "$(date '+%Y-%m-%dT%H:%M:%S') $*"
+}
+
+# gather_resource collects all instances of a resource type across all namespaces.
+# Args: $1=resource_type, $2=output_subdirectory
+gather_resource() {
+    local resource="$1"
+    local output_dir="${BASE_DIR}/$2"
+    mkdir -p "${output_dir}"
+
+    log "Collecting ${resource}..."
+
+    local items
+    items=$(oc get "${resource}" --all-namespaces -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name --no-headers 2>/dev/null) || true
+
+    if [ -z "${items}" ]; then
+        log "  No ${resource} found"
+        return
+    fi
+
+    local count=0
+    while IFS= read -r line; do
+        local ns name
+        ns=$(echo "${line}" | awk '{print $1}')
+        name=$(echo "${line}" | awk '{print $2}')
+
+        if [ "${ns}" == "<none>" ]; then
+            # Cluster-scoped resource
+            oc get "${resource}" "${name}" -o yaml > "${output_dir}/${name}.yaml" 2>/dev/null || true
+        else
+            mkdir -p "${output_dir}/${ns}"
+            oc get "${resource}" "${name}" -n "${ns}" -o yaml > "${output_dir}/${ns}/${name}.yaml" 2>/dev/null || true
+        fi
+        count=$((count + 1))
+    done <<< "${items}"
+
+    log "  Collected ${count} ${resource}"
+}
+
+# gather_bmh_preprovisioning_secrets collects Secrets referenced by BMH preprovisioningNetworkDataName fields.
+gather_bmh_preprovisioning_secrets() {
+    local output_dir="${BASE_DIR}/metal3/preprovisioning-secrets"
+    mkdir -p "${output_dir}"
+
+    log "Collecting Secrets referenced by BMH preprovisioningNetworkDataName..."
+
+    local bmhs
+    bmhs=$(oc get baremetalhosts.metal3.io --all-namespaces \
+        -o custom-columns=NAMESPACE:.metadata.namespace,NETDATA:.spec.preprovisioningNetworkDataName \
+        --no-headers 2>/dev/null) || true
+
+    if [ -z "${bmhs}" ]; then
+        log "  No BMHs found"
+        return
+    fi
+
+    local count=0
+    while IFS= read -r line; do
+        local ns secret_name
+        ns=$(echo "${line}" | awk '{print $1}')
+        secret_name=$(echo "${line}" | awk '{print $2}')
+
+        if [ -z "${secret_name}" ] || [ "${secret_name}" == "<none>" ]; then
+            continue
+        fi
+
+        mkdir -p "${output_dir}/${ns}"
+        oc get secret "${secret_name}" -n "${ns}" -o yaml > "${output_dir}/${ns}/${secret_name}.yaml" 2>/dev/null || true
+        count=$((count + 1))
+    done <<< "${bmhs}"
+
+    log "  Collected ${count} preprovisioning network data secrets"
+}
+
+# gather_pod_logs collects current and previous logs for all pods in a namespace.
+# Args: $1=namespace, $2=output_subdirectory [, $3=label_selector (optional)]
+gather_pod_logs() {
+    local ns="$1"
+    local output_dir="${BASE_DIR}/logs/$2"
+    local selector="${3:-}"
+    mkdir -p "${output_dir}"
+
+    local selector_args=()
+    if [ -n "${selector}" ]; then
+        selector_args=(-l "${selector}")
+        log "Collecting pod logs from ${ns} (selector: ${selector})..."
+    else
+        log "Collecting pod logs from ${ns}..."
+    fi
+
+    local pods
+    pods=$(oc get pods -n "${ns}" "${selector_args[@]}" -o custom-columns=NAME:.metadata.name --no-headers 2>/dev/null) || true
+
+    if [ -z "${pods}" ]; then
+        log "  No pods found"
+        return
+    fi
+
+    local count=0
+    while IFS= read -r pod; do
+        # Get list of containers in the pod
+        local containers
+        containers=$(oc get pod "${pod}" -n "${ns}" -o jsonpath='{range .spec.containers[*]}{.name}{"\n"}{end}' 2>/dev/null) || true
+        local init_containers
+        init_containers=$(oc get pod "${pod}" -n "${ns}" -o jsonpath='{range .spec.initContainers[*]}{.name}{"\n"}{end}' 2>/dev/null) || true
+
+        for container in ${containers} ${init_containers}; do
+            oc logs "${pod}" -n "${ns}" -c "${container}" > "${output_dir}/${pod}_${container}.log" 2>/dev/null || true
+            oc logs "${pod}" -n "${ns}" -c "${container}" --previous > "${output_dir}/${pod}_${container}_previous.log" 2>&1 || true
+            # Remove empty previous logs (no previous container)
+            if [ ! -s "${output_dir}/${pod}_${container}_previous.log" ] || \
+               grep -q "previous terminated container" "${output_dir}/${pod}_${container}_previous.log" 2>/dev/null; then
+                rm -f "${output_dir}/${pod}_${container}_previous.log"
+            fi
+        done
+        count=$((count + 1))
+    done <<< "${pods}"
+
+    log "  Collected logs from ${count} pods"
+}
+
+log "Starting O-Cloud Manager must-gather collection"
+log "Output directory: ${BASE_DIR}"
+
+# Discover the O-Cloud Manager operator namespace by finding the controller-manager deployment
+OCLOUD_NS=$(oc get deployments --all-namespaces -l app.kubernetes.io/part-of=oran-o2ims \
+    -o jsonpath='{.items[0].metadata.namespace}' 2>/dev/null) || true
+
+if [ -z "${OCLOUD_NS}" ]; then
+    log "WARNING: Could not discover O-Cloud Manager namespace, falling back to oran-o2ims"
+    OCLOUD_NS="oran-o2ims"
+else
+    log "Discovered O-Cloud Manager namespace: ${OCLOUD_NS}"
+fi
+
+# O-Cloud Manager CRDs - clcm.openshift.io
+gather_resource "clustertemplates.clcm.openshift.io" "clcm/clustertemplates"
+gather_resource "provisioningrequests.clcm.openshift.io" "clcm/provisioningrequests"
+gather_resource "hardwareplugins.clcm.openshift.io" "clcm/hardwareplugins"
+gather_resource "hardwareprofiles.clcm.openshift.io" "clcm/hardwareprofiles"
+gather_resource "hardwaretemplates.clcm.openshift.io" "clcm/hardwaretemplates"
+
+# O-Cloud Manager CRDs - ocloud.openshift.io
+gather_resource "inventories.ocloud.openshift.io" "ocloud/inventories"
+
+# O-Cloud Manager CRDs - plugins.clcm.openshift.io
+gather_resource "nodeallocationrequests.plugins.clcm.openshift.io" "plugins/nodeallocationrequests"
+gather_resource "allocatednodes.plugins.clcm.openshift.io" "plugins/allocatednodes"
+
+# Metal3 resources
+gather_resource "baremetalhosts.metal3.io" "metal3/baremetalhosts"
+gather_resource "hostfirmwaresettings.metal3.io" "metal3/hostfirmwaresettings"
+gather_resource "hostfirmwarecomponents.metal3.io" "metal3/hostfirmwarecomponents"
+gather_resource "preprovisioningimages.metal3.io" "metal3/preprovisioningimages"
+gather_resource "hardwaredata.metal3.io" "metal3/hardwaredata"
+
+# Secrets referenced by BMH preprovisioningNetworkDataName
+gather_bmh_preprovisioning_secrets
+
+# O-Cloud Manager pod logs (all pods in the oran-o2ims namespace)
+gather_pod_logs "${OCLOUD_NS}" "ocloud-manager"
+
+# Metal3 pod logs (metal3-baremetal-operator and metal3 pods in openshift-machine-api)
+gather_pod_logs "${METAL3_NS}" "metal3" "k8s-app=metal3"
+
+log "O-Cloud Manager must-gather collection complete"
