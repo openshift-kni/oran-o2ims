@@ -62,7 +62,7 @@ func registerIndex[T any, PT interface {
 func SetupHierarchyIndexers(ctx context.Context, mgr ctrl.Manager) error {
 	indexer := mgr.GetFieldIndexer()
 
-	// Location: index by globalLocationId (for duplicate detection)
+	// Location: index by globalLocationId (for OCloudSite parent lookup)
 	if err := registerIndex(ctx, indexer, GlobalLocationIDIndex,
 		func(l *inventoryv1alpha1.Location) string { return l.Spec.GlobalLocationID },
 	); err != nil {
@@ -76,7 +76,7 @@ func SetupHierarchyIndexers(ctx context.Context, mgr ctrl.Manager) error {
 		return fmt.Errorf("failed to setup OCloudSite globalLocationId index: %w", err)
 	}
 
-	// OCloudSite: index by siteId (for duplicate detection and ResourcePool parent lookup)
+	// OCloudSite: index by siteId (for ResourcePool parent lookup)
 	if err := registerIndex(ctx, indexer, OCloudSiteSiteIDIndex,
 		func(s *inventoryv1alpha1.OCloudSite) string { return s.Spec.SiteID },
 	); err != nil {
@@ -90,7 +90,7 @@ func SetupHierarchyIndexers(ctx context.Context, mgr ctrl.Manager) error {
 		return fmt.Errorf("failed to setup ResourcePool oCloudSiteId index: %w", err)
 	}
 
-	// ResourcePool: index by resourcePoolId (for duplicate detection)
+	// ResourcePool: index by resourcePoolId (for potential webhook optimization)
 	if err := registerIndex(ctx, indexer, ResourcePoolResourcePoolIDIndex,
 		func(p *inventoryv1alpha1.ResourcePool) string { return p.Spec.ResourcePoolId },
 	); err != nil {

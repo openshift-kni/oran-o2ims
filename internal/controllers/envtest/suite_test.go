@@ -286,3 +286,19 @@ func waitForResourcePoolReady(pool *inventoryv1alpha1.ResourcePool) {
 		return false
 	}, defaultTimeout, defaultInterval).Should(BeTrue(), "ResourcePool should become Ready")
 }
+
+// randString generates a random alphanumeric string of the given length.
+func randString(n int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letters[time.Now().UnixNano()%int64(len(letters))]
+		time.Sleep(time.Nanosecond) // Ensure different values
+	}
+	return string(b)
+}
+
+// ptrTo returns a pointer to the given value.
+func ptrTo[T any](v T) *T {
+	return &v
+}

@@ -180,7 +180,6 @@ func (r *OCloudSiteReconciler) findDependentResourcePools(ctx context.Context, s
 }
 
 // validateAndSetConditions validates the Location reference and sets appropriate conditions.
-// Note: Duplicate detection is handled by webhooks at admission time.
 // Returns (parentValid, error) where parentValid is true only when parent exists AND is ready.
 func (r *OCloudSiteReconciler) validateAndSetConditions(ctx context.Context, site *inventoryv1alpha1.OCloudSite) (bool, error) {
 	// Validate that the referenced Location exists and is ready

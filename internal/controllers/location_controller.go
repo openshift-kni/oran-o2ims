@@ -169,7 +169,6 @@ func (r *LocationReconciler) findDependentOCloudSites(ctx context.Context, globa
 }
 
 // validateAndSetConditions sets the Ready condition.
-// Note: Duplicate detection is handled by webhooks at admission time.
 func (r *LocationReconciler) validateAndSetConditions(ctx context.Context, location *inventoryv1alpha1.Location) error {
 	condition := metav1.Condition{
 		Type:               inventoryv1alpha1.ConditionTypeReady,
