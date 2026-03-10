@@ -25,3 +25,63 @@ webhooks:
     resources:
     - provisioningrequests
   sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-ocloud-openshift-io-v1alpha1-location
+  failurePolicy: Ignore
+  name: locations.ocloud.openshift.io
+  rules:
+  - apiGroups:
+    - ocloud.openshift.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - locations
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-ocloud-openshift-io-v1alpha1-ocloudsite
+  failurePolicy: Ignore
+  name: ocloudsites.ocloud.openshift.io
+  rules:
+  - apiGroups:
+    - ocloud.openshift.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - ocloudsites
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-ocloud-openshift-io-v1alpha1-resourcepool
+  failurePolicy: Ignore
+  name: resourcepools.ocloud.openshift.io
+  rules:
+  - apiGroups:
+    - ocloud.openshift.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - resourcepools
+  sideEffects: None

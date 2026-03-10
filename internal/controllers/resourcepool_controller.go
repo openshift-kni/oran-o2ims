@@ -182,7 +182,6 @@ func (r *ResourcePoolReconciler) findDependentBMHs(ctx context.Context, resource
 }
 
 // validateAndSetConditions validates the OCloudSite reference and sets appropriate conditions.
-// Note: Duplicate detection is handled by webhooks at admission time.
 // Returns (parentValid, error) where parentValid is true only when parent exists AND is ready.
 func (r *ResourcePoolReconciler) validateAndSetConditions(ctx context.Context, pool *inventoryv1alpha1.ResourcePool) (bool, error) {
 	// Validate that the referenced OCloudSite exists and is ready
