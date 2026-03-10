@@ -18,9 +18,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -120,37 +118,27 @@ func (r *LocationReconciler) handleFinalizer(
 		r.Logger.InfoContext(ctx, "Location is being deleted, checking for dependents",
 			slog.String("globalLocationId", location.Spec.GlobalLocationID))
 
-		// A Location that is not Ready (e.g., DuplicateID) can always be deleted
-		// because it was never serving any dependents - skip dependent check
-		readyCondition := meta.FindStatusCondition(location.Status.Conditions, inventoryv1alpha1.ConditionTypeReady)
-		isReady := readyCondition != nil && readyCondition.Status == metav1.ConditionTrue
-
-		if isReady {
-			// Only check for dependents if Location is Ready
-			dependents, err := r.findDependentOCloudSites(ctx, location.Spec.GlobalLocationID)
-			if err != nil {
-				return requeueWithShortInterval(), true, fmt.Errorf("failed to check for dependents: %w", err)
-			}
-
-			if len(dependents) > 0 {
-				// Update status to indicate deletion is blocked
-				r.Logger.InfoContext(ctx, "Location deletion blocked by dependent OCloudSites",
-					slog.String("globalLocationId", location.Spec.GlobalLocationID),
-					slog.Int("dependentCount", len(dependents)))
-
-				if err := r.setDeletionBlockedCondition(ctx, location, len(dependents)); err != nil {
-					r.Logger.WarnContext(ctx, "Failed to update status", slog.String("error", err.Error()))
-				}
-
-				// Requeue to check again later
-				return requeueWithCustomInterval(10 * time.Second), true, nil
-			}
-		} else {
-			r.Logger.InfoContext(ctx, "Location is not Ready, skipping dependent check",
-				slog.String("globalLocationId", location.Spec.GlobalLocationID))
+		// Check for dependent OCloudSites
+		dependents, err := r.findDependentOCloudSites(ctx, location.Spec.GlobalLocationID)
+		if err != nil {
+			return requeueWithShortInterval(), true, fmt.Errorf("failed to check for dependents: %w", err)
 		}
 
-		// No dependents (or not Ready), safe to remove finalizer and allow k8s deletion
+		if len(dependents) > 0 {
+			// Update status to indicate deletion is blocked
+			r.Logger.InfoContext(ctx, "Location deletion blocked by dependent OCloudSites",
+				slog.String("globalLocationId", location.Spec.GlobalLocationID),
+				slog.Int("dependentCount", len(dependents)))
+
+			if err := r.setDeletionBlockedCondition(ctx, location, len(dependents)); err != nil {
+				r.Logger.WarnContext(ctx, "Failed to update status", slog.String("error", err.Error()))
+			}
+
+			// Requeue to check again later
+			return requeueWithCustomInterval(10 * time.Second), true, nil
+		}
+
+		// No dependents, safe to remove finalizer and allow k8s deletion
 		r.Logger.InfoContext(ctx, "Removing finalizer from Location",
 			slog.String("globalLocationId", location.Spec.GlobalLocationID))
 
@@ -180,34 +168,15 @@ func (r *LocationReconciler) findDependentOCloudSites(ctx context.Context, globa
 	return siteList.Items, nil
 }
 
-// validateAndSetConditions validates uniqueness and sets appropriate conditions.
+// validateAndSetConditions sets the Ready condition.
+// Note: Duplicate detection is handled by webhooks at admission time.
 func (r *LocationReconciler) validateAndSetConditions(ctx context.Context, location *inventoryv1alpha1.Location) error {
-	// Check for duplicate globalLocationId
-	duplicateName, err := r.findDuplicateLocation(ctx, location)
-	if err != nil {
-		return fmt.Errorf("failed to check for duplicates: %w", err)
-	}
-
-	var condition metav1.Condition
-	if duplicateName != "" {
-		condition = metav1.Condition{
-			Type:               inventoryv1alpha1.ConditionTypeReady,
-			Status:             metav1.ConditionFalse,
-			Reason:             inventoryv1alpha1.ReasonDuplicateID,
-			Message:            fmt.Sprintf("globalLocationId '%s' is already used by Location '%s'", location.Spec.GlobalLocationID, duplicateName),
-			ObservedGeneration: location.Generation,
-		}
-		r.Logger.WarnContext(ctx, "Duplicate globalLocationId detected",
-			slog.String("globalLocationId", location.Spec.GlobalLocationID),
-			slog.String("conflictingLocation", duplicateName))
-	} else {
-		condition = metav1.Condition{
-			Type:               inventoryv1alpha1.ConditionTypeReady,
-			Status:             metav1.ConditionTrue,
-			Reason:             inventoryv1alpha1.ReasonReady,
-			Message:            "Location is ready",
-			ObservedGeneration: location.Generation,
-		}
+	condition := metav1.Condition{
+		Type:               inventoryv1alpha1.ConditionTypeReady,
+		Status:             metav1.ConditionTrue,
+		Reason:             inventoryv1alpha1.ReasonReady,
+		Message:            "Location is ready",
+		ObservedGeneration: location.Generation,
 	}
 
 	// Only update if the condition has changed
@@ -220,32 +189,6 @@ func (r *LocationReconciler) validateAndSetConditions(ctx context.Context, locat
 	}
 
 	return nil
-}
-
-// findDuplicateLocation checks if another Location CR already uses the same globalLocationId.
-// Returns the name of the conflicting Location if found, or empty string if no duplicate exists.
-func (r *LocationReconciler) findDuplicateLocation(ctx context.Context, location *inventoryv1alpha1.Location) (string, error) {
-	var locationList inventoryv1alpha1.LocationList
-	if err := r.List(ctx, &locationList, client.MatchingFields{
-		ctlrutils.GlobalLocationIDIndex: location.Spec.GlobalLocationID,
-	}); err != nil {
-		return "", fmt.Errorf("failed to list Locations: %w", err)
-	}
-
-	for _, other := range locationList.Items {
-		// Skip self
-		if other.Name == location.Name && other.Namespace == location.Namespace {
-			continue
-		}
-		// Skip resources being deleted (they no longer "own" the ID)
-		if other.DeletionTimestamp != nil {
-			continue
-		}
-		// Found a duplicate
-		return other.Name, nil
-	}
-
-	return "", nil
 }
 
 // setDeletionBlockedCondition sets the Deleting condition indicating deletion is blocked
@@ -270,56 +213,8 @@ func (r *LocationReconciler) setDeletionBlockedCondition(ctx context.Context, lo
 func (r *LocationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&inventoryv1alpha1.Location{}).
-		// Watch Location changes to re-reconcile other Locations with the same globalLocationId.
-		// This allows a duplicate Location (Ready=False, DuplicateID) to transition to Ready=True
-		// when the conflicting Location is deleted.
-		Watches(
-			&inventoryv1alpha1.Location{},
-			handler.EnqueueRequestsFromMapFunc(r.enqueueLocationsWithSameGlobalLocationId),
-		).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to setup location controller: %w", err)
 	}
 	return nil
-}
-
-// enqueueLocationsWithSameGlobalLocationId maps Location changes to other Locations
-// that have the same globalLocationId. This enables duplicate resolution when a
-// conflicting Location is deleted or its ID changes.
-func (r *LocationReconciler) enqueueLocationsWithSameGlobalLocationId(
-	ctx context.Context, obj client.Object) []reconcile.Request {
-
-	location, ok := obj.(*inventoryv1alpha1.Location)
-	if !ok {
-		return nil
-	}
-
-	// Find all other Locations with the same globalLocationId using indexed query
-	var locationList inventoryv1alpha1.LocationList
-	if err := r.List(ctx, &locationList, client.MatchingFields{
-		ctlrutils.GlobalLocationIDIndex: location.Spec.GlobalLocationID,
-	}); err != nil {
-		r.Logger.ErrorContext(ctx, "Failed to list Locations for duplicate watch",
-			slog.String("error", err.Error()))
-		return nil
-	}
-
-	var requests []reconcile.Request
-	for _, other := range locationList.Items {
-		// Skip self - we don't want to trigger reconciliation for the same resource
-		if other.Name == location.Name && other.Namespace == location.Namespace {
-			continue
-		}
-		requests = append(requests, reconcile.Request{
-			NamespacedName: client.ObjectKeyFromObject(&other),
-		})
-	}
-
-	if len(requests) > 0 {
-		r.Logger.InfoContext(ctx, "Location change triggering reconciliation of Locations with same globalLocationId",
-			slog.String("globalLocationId", location.Spec.GlobalLocationID),
-			slog.Int("affectedCount", len(requests)))
-	}
-
-	return requests
 }
