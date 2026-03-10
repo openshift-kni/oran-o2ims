@@ -274,7 +274,9 @@ func (r *ResourcePoolReconciler) validateAndSetConditions(ctx context.Context, p
 // Returns the name of the conflicting ResourcePool if found, or empty string if no duplicate exists.
 func (r *ResourcePoolReconciler) findDuplicateResourcePool(ctx context.Context, pool *inventoryv1alpha1.ResourcePool) (string, error) {
 	var poolList inventoryv1alpha1.ResourcePoolList
-	if err := r.List(ctx, &poolList); err != nil {
+	if err := r.List(ctx, &poolList, client.MatchingFields{
+		ctlrutils.ResourcePoolResourcePoolIDIndex: pool.Spec.ResourcePoolId,
+	}); err != nil {
 		return "", fmt.Errorf("failed to list ResourcePools: %w", err)
 	}
 
@@ -287,29 +289,34 @@ func (r *ResourcePoolReconciler) findDuplicateResourcePool(ctx context.Context, 
 		if other.DeletionTimestamp != nil {
 			continue
 		}
-		// Check for duplicate resourcePoolId
-		if other.Spec.ResourcePoolId == pool.Spec.ResourcePoolId {
-			return other.Name, nil
-		}
+		// Found a duplicate
+		return other.Name, nil
 	}
 
 	return "", nil
 }
 
-// validateSiteReference checks if an OCloudSite with the given siteId exists and is ready
+// validateSiteReference checks if an OCloudSite with the given siteId exists and is ready.
+// When duplicates exist, returns Ready=true if ANY matching OCloudSite is ready.
 func (r *ResourcePoolReconciler) validateSiteReference(ctx context.Context, siteID string) (ctlrutils.ParentValidationResult, error) {
 	var siteList inventoryv1alpha1.OCloudSiteList
-	if err := r.List(ctx, &siteList); err != nil {
+	if err := r.List(ctx, &siteList, client.MatchingFields{
+		ctlrutils.OCloudSiteSiteIDIndex: siteID,
+	}); err != nil {
 		return ctlrutils.ParentValidationResult{}, fmt.Errorf("failed to list OCloudSites: %w", err)
 	}
 
-	for _, site := range siteList.Items {
-		if site.Spec.SiteID == siteID {
-			// Check if OCloudSite is Ready
-			readyCondition := meta.FindStatusCondition(site.Status.Conditions, inventoryv1alpha1.ConditionTypeReady)
-			isReady := readyCondition != nil && readyCondition.Status == metav1.ConditionTrue
-			return ctlrutils.ParentValidationResult{Exists: true, Ready: isReady}, nil
+	// Check if any OCloudSite with this siteId is ready
+	// (handles duplicates: return Ready=true if any is ready)
+	if len(siteList.Items) > 0 {
+		for i := range siteList.Items {
+			readyCondition := meta.FindStatusCondition(siteList.Items[i].Status.Conditions, inventoryv1alpha1.ConditionTypeReady)
+			if readyCondition != nil && readyCondition.Status == metav1.ConditionTrue {
+				return ctlrutils.ParentValidationResult{Exists: true, Ready: true}, nil
+			}
 		}
+		// At least one exists but none are ready
+		return ctlrutils.ParentValidationResult{Exists: true, Ready: false}, nil
 	}
 
 	return ctlrutils.ParentValidationResult{Exists: false, Ready: false}, nil
@@ -362,9 +369,11 @@ func (r *ResourcePoolReconciler) enqueueResourcePoolsForOCloudSite(ctx context.C
 		return nil
 	}
 
-	// Find all ResourcePools that reference this OCloudSite's siteId
+	// Find all ResourcePools that reference this OCloudSite's siteId using indexed query
 	var poolList inventoryv1alpha1.ResourcePoolList
-	if err := r.List(ctx, &poolList); err != nil {
+	if err := r.List(ctx, &poolList, client.MatchingFields{
+		ctlrutils.ResourcePoolOCloudSiteIDIndex: site.Spec.SiteID,
+	}); err != nil {
 		r.Logger.ErrorContext(ctx, "Failed to list ResourcePools for OCloudSite watch",
 			slog.String("error", err.Error()))
 		return nil
@@ -372,11 +381,9 @@ func (r *ResourcePoolReconciler) enqueueResourcePoolsForOCloudSite(ctx context.C
 
 	var requests []reconcile.Request
 	for _, pool := range poolList.Items {
-		if pool.Spec.OCloudSiteId == site.Spec.SiteID {
-			requests = append(requests, reconcile.Request{
-				NamespacedName: client.ObjectKeyFromObject(&pool),
-			})
-		}
+		requests = append(requests, reconcile.Request{
+			NamespacedName: client.ObjectKeyFromObject(&pool),
+		})
 	}
 
 	if len(requests) > 0 {
@@ -399,9 +406,11 @@ func (r *ResourcePoolReconciler) enqueueResourcePoolsWithSameResourcePoolId(
 		return nil
 	}
 
-	// Find all other ResourcePools with the same resourcePoolId
+	// Find all other ResourcePools with the same resourcePoolId using indexed query
 	var poolList inventoryv1alpha1.ResourcePoolList
-	if err := r.List(ctx, &poolList); err != nil {
+	if err := r.List(ctx, &poolList, client.MatchingFields{
+		ctlrutils.ResourcePoolResourcePoolIDIndex: pool.Spec.ResourcePoolId,
+	}); err != nil {
 		r.Logger.ErrorContext(ctx, "Failed to list ResourcePools for duplicate watch",
 			slog.String("error", err.Error()))
 		return nil
@@ -413,12 +422,9 @@ func (r *ResourcePoolReconciler) enqueueResourcePoolsWithSameResourcePoolId(
 		if other.Name == pool.Name && other.Namespace == pool.Namespace {
 			continue
 		}
-		// Only enqueue if they share the same resourcePoolId
-		if other.Spec.ResourcePoolId == pool.Spec.ResourcePoolId {
-			requests = append(requests, reconcile.Request{
-				NamespacedName: client.ObjectKeyFromObject(&other),
-			})
-		}
+		requests = append(requests, reconcile.Request{
+			NamespacedName: client.ObjectKeyFromObject(&other),
+		})
 	}
 
 	if len(requests) > 0 {

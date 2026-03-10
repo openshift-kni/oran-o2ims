@@ -190,21 +190,16 @@ func (r *OCloudSiteReconciler) handleFinalizer(
 	return doNotRequeue(), false, nil
 }
 
-// findDependentResourcePools returns all ResourcePools that reference this OCloudSite
+// findDependentResourcePools returns all ResourcePools that reference this OCloudSite.
 func (r *OCloudSiteReconciler) findDependentResourcePools(ctx context.Context, siteID string) ([]inventoryv1alpha1.ResourcePool, error) {
 	var poolList inventoryv1alpha1.ResourcePoolList
-	if err := r.List(ctx, &poolList); err != nil {
+	if err := r.List(ctx, &poolList, client.MatchingFields{
+		ctlrutils.ResourcePoolOCloudSiteIDIndex: siteID,
+	}); err != nil {
 		return nil, fmt.Errorf("failed to list ResourcePools: %w", err)
 	}
 
-	var dependents []inventoryv1alpha1.ResourcePool
-	for _, pool := range poolList.Items {
-		if pool.Spec.OCloudSiteId == siteID {
-			dependents = append(dependents, pool)
-		}
-	}
-
-	return dependents, nil
+	return poolList.Items, nil
 }
 
 // findDependentBMHs returns all BareMetalHosts that have the siteId label matching this OCloudSite
@@ -300,7 +295,9 @@ func (r *OCloudSiteReconciler) validateAndSetConditions(ctx context.Context, sit
 // Returns the name of the conflicting OCloudSite if found, or empty string if no duplicate exists.
 func (r *OCloudSiteReconciler) findDuplicateOCloudSite(ctx context.Context, site *inventoryv1alpha1.OCloudSite) (string, error) {
 	var siteList inventoryv1alpha1.OCloudSiteList
-	if err := r.List(ctx, &siteList); err != nil {
+	if err := r.List(ctx, &siteList, client.MatchingFields{
+		ctlrutils.OCloudSiteSiteIDIndex: site.Spec.SiteID,
+	}); err != nil {
 		return "", fmt.Errorf("failed to list OCloudSites: %w", err)
 	}
 
@@ -313,29 +310,34 @@ func (r *OCloudSiteReconciler) findDuplicateOCloudSite(ctx context.Context, site
 		if other.DeletionTimestamp != nil {
 			continue
 		}
-		// Check for duplicate siteId
-		if other.Spec.SiteID == site.Spec.SiteID {
-			return other.Name, nil
-		}
+		// Found a duplicate
+		return other.Name, nil
 	}
 
 	return "", nil
 }
 
-// validateLocationReference checks if a Location with the given globalLocationId exists and is ready
+// validateLocationReference checks if a Location with the given globalLocationId exists and is ready.
+// When duplicates exist, returns Ready=true if ANY matching Location is ready.
 func (r *OCloudSiteReconciler) validateLocationReference(ctx context.Context, globalLocationID string) (ctlrutils.ParentValidationResult, error) {
 	var locationList inventoryv1alpha1.LocationList
-	if err := r.List(ctx, &locationList); err != nil {
+	if err := r.List(ctx, &locationList, client.MatchingFields{
+		ctlrutils.GlobalLocationIDIndex: globalLocationID,
+	}); err != nil {
 		return ctlrutils.ParentValidationResult{}, fmt.Errorf("failed to list Locations: %w", err)
 	}
 
-	for _, location := range locationList.Items {
-		if location.Spec.GlobalLocationID == globalLocationID {
-			// Check if Location is Ready
-			readyCondition := meta.FindStatusCondition(location.Status.Conditions, inventoryv1alpha1.ConditionTypeReady)
-			isReady := readyCondition != nil && readyCondition.Status == metav1.ConditionTrue
-			return ctlrutils.ParentValidationResult{Exists: true, Ready: isReady}, nil
+	// Check if any Location with this globalLocationId is ready
+	// (handles duplicates: return Ready=true if any is ready)
+	if len(locationList.Items) > 0 {
+		for i := range locationList.Items {
+			readyCondition := meta.FindStatusCondition(locationList.Items[i].Status.Conditions, inventoryv1alpha1.ConditionTypeReady)
+			if readyCondition != nil && readyCondition.Status == metav1.ConditionTrue {
+				return ctlrutils.ParentValidationResult{Exists: true, Ready: true}, nil
+			}
 		}
+		// At least one exists but none are ready
+		return ctlrutils.ParentValidationResult{Exists: true, Ready: false}, nil
 	}
 
 	return ctlrutils.ParentValidationResult{Exists: false, Ready: false}, nil
@@ -389,9 +391,11 @@ func (r *OCloudSiteReconciler) enqueueOCloudSitesForLocation(ctx context.Context
 		return nil
 	}
 
-	// Find all OCloudSites that reference this Location's globalLocationId
+	// Find all OCloudSites that reference this Location's globalLocationId using indexed query
 	var siteList inventoryv1alpha1.OCloudSiteList
-	if err := r.List(ctx, &siteList); err != nil {
+	if err := r.List(ctx, &siteList, client.MatchingFields{
+		ctlrutils.GlobalLocationIDIndex: location.Spec.GlobalLocationID,
+	}); err != nil {
 		r.Logger.ErrorContext(ctx, "Failed to list OCloudSites for Location watch",
 			slog.String("error", err.Error()))
 		return nil
@@ -399,11 +403,9 @@ func (r *OCloudSiteReconciler) enqueueOCloudSitesForLocation(ctx context.Context
 
 	var requests []reconcile.Request
 	for _, site := range siteList.Items {
-		if site.Spec.GlobalLocationID == location.Spec.GlobalLocationID {
-			requests = append(requests, reconcile.Request{
-				NamespacedName: client.ObjectKeyFromObject(&site),
-			})
-		}
+		requests = append(requests, reconcile.Request{
+			NamespacedName: client.ObjectKeyFromObject(&site),
+		})
 	}
 
 	if len(requests) > 0 {
@@ -426,9 +428,11 @@ func (r *OCloudSiteReconciler) enqueueOCloudSitesWithSameSiteId(
 		return nil
 	}
 
-	// Find all other OCloudSites with the same siteId
+	// Find all other OCloudSites with the same siteId using indexed query
 	var siteList inventoryv1alpha1.OCloudSiteList
-	if err := r.List(ctx, &siteList); err != nil {
+	if err := r.List(ctx, &siteList, client.MatchingFields{
+		ctlrutils.OCloudSiteSiteIDIndex: site.Spec.SiteID,
+	}); err != nil {
 		r.Logger.ErrorContext(ctx, "Failed to list OCloudSites for duplicate watch",
 			slog.String("error", err.Error()))
 		return nil
@@ -440,12 +444,9 @@ func (r *OCloudSiteReconciler) enqueueOCloudSitesWithSameSiteId(
 		if other.Name == site.Name && other.Namespace == site.Namespace {
 			continue
 		}
-		// Only enqueue if they share the same siteId
-		if other.Spec.SiteID == site.Spec.SiteID {
-			requests = append(requests, reconcile.Request{
-				NamespacedName: client.ObjectKeyFromObject(&other),
-			})
-		}
+		requests = append(requests, reconcile.Request{
+			NamespacedName: client.ObjectKeyFromObject(&other),
+		})
 	}
 
 	if len(requests) > 0 {

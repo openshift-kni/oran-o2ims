@@ -34,6 +34,7 @@ import (
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 const testNamespace = "test-controllers"
@@ -172,6 +173,10 @@ var _ = BeforeSuite(func() {
 			BindAddress: "0", // Disable metrics server for tests
 		},
 	})
+	Expect(err).ToNot(HaveOccurred())
+
+	// Register field indexes for hierarchy CRs (required for indexed queries)
+	err = ctlrutils.SetupHierarchyIndexers(ctx, mgr)
 	Expect(err).ToNot(HaveOccurred())
 
 	// Register the Location controller

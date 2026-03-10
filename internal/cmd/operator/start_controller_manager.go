@@ -276,6 +276,13 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
+	// Register field indexes for hierarchy CRs (Location, OCloudSite, ResourcePool) for
+	// efficient lookups
+	if err := ctlrutils.SetupHierarchyIndexers(ctx, mgr); err != nil {
+		logger.ErrorContext(ctx, "Unable to set up hierarchy indexers", slog.Any("error", err))
+		return exit.Error(1)
+	}
+
 	// Start the Cluster Template controller.
 	if err = (&controllers.ClusterTemplateReconciler{
 		Client: mgr.GetClient(),

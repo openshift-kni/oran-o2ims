@@ -168,21 +168,16 @@ func (r *LocationReconciler) handleFinalizer(
 	return doNotRequeue(), false, nil
 }
 
-// findDependentOCloudSites returns all OCloudSites that reference this Location
+// findDependentOCloudSites returns all OCloudSites that reference this Location.
 func (r *LocationReconciler) findDependentOCloudSites(ctx context.Context, globalLocationID string) ([]inventoryv1alpha1.OCloudSite, error) {
 	var siteList inventoryv1alpha1.OCloudSiteList
-	if err := r.List(ctx, &siteList); err != nil {
+	if err := r.List(ctx, &siteList, client.MatchingFields{
+		ctlrutils.GlobalLocationIDIndex: globalLocationID,
+	}); err != nil {
 		return nil, fmt.Errorf("failed to list OCloudSites: %w", err)
 	}
 
-	var dependents []inventoryv1alpha1.OCloudSite
-	for _, site := range siteList.Items {
-		if site.Spec.GlobalLocationID == globalLocationID {
-			dependents = append(dependents, site)
-		}
-	}
-
-	return dependents, nil
+	return siteList.Items, nil
 }
 
 // validateAndSetConditions validates uniqueness and sets appropriate conditions.
@@ -231,7 +226,9 @@ func (r *LocationReconciler) validateAndSetConditions(ctx context.Context, locat
 // Returns the name of the conflicting Location if found, or empty string if no duplicate exists.
 func (r *LocationReconciler) findDuplicateLocation(ctx context.Context, location *inventoryv1alpha1.Location) (string, error) {
 	var locationList inventoryv1alpha1.LocationList
-	if err := r.List(ctx, &locationList); err != nil {
+	if err := r.List(ctx, &locationList, client.MatchingFields{
+		ctlrutils.GlobalLocationIDIndex: location.Spec.GlobalLocationID,
+	}); err != nil {
 		return "", fmt.Errorf("failed to list Locations: %w", err)
 	}
 
@@ -244,10 +241,8 @@ func (r *LocationReconciler) findDuplicateLocation(ctx context.Context, location
 		if other.DeletionTimestamp != nil {
 			continue
 		}
-		// Check for duplicate globalLocationId
-		if other.Spec.GlobalLocationID == location.Spec.GlobalLocationID {
-			return other.Name, nil
-		}
+		// Found a duplicate
+		return other.Name, nil
 	}
 
 	return "", nil
@@ -299,9 +294,11 @@ func (r *LocationReconciler) enqueueLocationsWithSameGlobalLocationId(
 		return nil
 	}
 
-	// Find all other Locations with the same globalLocationId
+	// Find all other Locations with the same globalLocationId using indexed query
 	var locationList inventoryv1alpha1.LocationList
-	if err := r.List(ctx, &locationList); err != nil {
+	if err := r.List(ctx, &locationList, client.MatchingFields{
+		ctlrutils.GlobalLocationIDIndex: location.Spec.GlobalLocationID,
+	}); err != nil {
 		r.Logger.ErrorContext(ctx, "Failed to list Locations for duplicate watch",
 			slog.String("error", err.Error()))
 		return nil
@@ -313,12 +310,9 @@ func (r *LocationReconciler) enqueueLocationsWithSameGlobalLocationId(
 		if other.Name == location.Name && other.Namespace == location.Namespace {
 			continue
 		}
-		// Only enqueue if they share the same globalLocationId
-		if other.Spec.GlobalLocationID == location.Spec.GlobalLocationID {
-			requests = append(requests, reconcile.Request{
-				NamespacedName: client.ObjectKeyFromObject(&other),
-			})
-		}
+		requests = append(requests, reconcile.Request{
+			NamespacedName: client.ObjectKeyFromObject(&other),
+		})
 	}
 
 	if len(requests) > 0 {
