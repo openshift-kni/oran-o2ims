@@ -268,37 +268,3 @@ func waitForOCloudSiteReady(site *inventoryv1alpha1.OCloudSite) {
 		return false
 	}, defaultTimeout, defaultInterval).Should(BeTrue(), "OCloudSite should become Ready")
 }
-
-// waitForResourcePoolReady waits for a ResourcePool to have Ready=True condition.
-func waitForResourcePoolReady(pool *inventoryv1alpha1.ResourcePool) {
-	Eventually(func() bool {
-		fetched := &inventoryv1alpha1.ResourcePool{}
-		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
-		if err != nil {
-			return false
-		}
-		for _, cond := range fetched.Status.Conditions {
-			if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
-				cond.Status == metav1.ConditionTrue {
-				return true
-			}
-		}
-		return false
-	}, defaultTimeout, defaultInterval).Should(BeTrue(), "ResourcePool should become Ready")
-}
-
-// randString generates a random alphanumeric string of the given length.
-func randString(n int) string {
-	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = letters[time.Now().UnixNano()%int64(len(letters))]
-		time.Sleep(time.Nanosecond) // Ensure different values
-	}
-	return string(b)
-}
-
-// ptrTo returns a pointer to the given value.
-func ptrTo[T any](v T) *T {
-	return &v
-}

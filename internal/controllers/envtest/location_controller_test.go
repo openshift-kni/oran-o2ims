@@ -33,9 +33,8 @@ var _ = Describe("Location Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-FINALIZER-001",
-					Description:      "Testing finalizer addition",
-					Address:          ptrString("123 Test Street"),
+					Description: "Testing finalizer addition",
+					Address:     ptrString("123 Test Street"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, location)).To(Succeed())
@@ -61,9 +60,8 @@ var _ = Describe("Location Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-READY-001",
-					Description:      "Testing Ready condition",
-					Address:          ptrString("456 Ready Street"),
+					Description: "Testing Ready condition",
+					Address:     ptrString("456 Ready Street"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, location)).To(Succeed())
@@ -98,9 +96,8 @@ var _ = Describe("Location Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-DELETE-BLOCKED",
-					Description:      "Testing deletion blocking",
-					Address:          ptrString("789 Block Street"),
+					Description: "Testing deletion blocking",
+					Address:     ptrString("789 Block Street"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, location)).To(Succeed())
@@ -115,9 +112,8 @@ var _ = Describe("Location Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "SITE-DEP-001",
-					GlobalLocationID: "LOC-DELETE-BLOCKED", // References the location above
-					Description:      "Site that depends on location",
+					GlobalLocationName: "test-location-delete-blocked", // References the location by metadata.name
+					Description:        "Site that depends on location",
 				},
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
@@ -186,9 +182,8 @@ var _ = Describe("Location Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-DELETE-OK",
-					Description:      "Testing successful deletion",
-					Address:          ptrString("111 Success Street"),
+					Description: "Testing successful deletion",
+					Address:     ptrString("111 Success Street"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, location)).To(Succeed())

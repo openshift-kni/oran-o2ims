@@ -35,8 +35,7 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
-					ResourcePoolId: "POOL-FINALIZER-001",
-					OCloudSiteId:   "SITE-NONEXISTENT", // Site doesn't exist
+					OCloudSiteName: "site-nonexistent", // Site doesn't exist
 					Description:    "Testing finalizer addition",
 				},
 			}
@@ -64,9 +63,8 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-FOR-POOL-001",
-					Description:      "Testing valid reference",
-					Address:          ptrString("Pool Test Address"),
+					Description: "Testing valid reference",
+					Address:     ptrString("Pool Test Address"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, location)).To(Succeed())
@@ -84,9 +82,8 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "SITE-FOR-POOL-001",
-					GlobalLocationID: "LOC-FOR-POOL-001", // References the location above
-					Description:      "Testing valid reference",
+					GlobalLocationName: "test-location-for-pool", // References the location by metadata.name
+					Description:        "Testing valid reference",
 				},
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
@@ -104,8 +101,7 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
-					ResourcePoolId: "POOL-VALID-REF-001",
-					OCloudSiteId:   "SITE-FOR-POOL-001", // References the site above
+					OCloudSiteName: "test-site-for-pool", // References the site by metadata.name
 					Description:    "Testing valid OCloudSite reference",
 				},
 			}
@@ -139,8 +135,7 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
-					ResourcePoolId: "POOL-INVALID-REF-001",
-					OCloudSiteId:   "SITE-DOES-NOT-EXIST",
+					OCloudSiteName: "site-does-not-exist",
 					Description:    "Testing invalid OCloudSite reference",
 				},
 			}
@@ -176,9 +171,8 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "SITE-NOT-READY-001",
-					GlobalLocationID: "LOC-NONEXISTENT", // Location doesn't exist
-					Description:      "Site with invalid Location reference",
+					GlobalLocationName: "loc-nonexistent", // Location doesn't exist
+					Description:        "Site with invalid Location reference",
 				},
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
@@ -209,8 +203,7 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
-					ResourcePoolId: "POOL-PARENT-NOT-READY-001",
-					OCloudSiteId:   "SITE-NOT-READY-001", // References the not-ready site
+					OCloudSiteName: "test-site-not-ready", // References the not-ready site by metadata.name
 					Description:    "Testing ParentNotReady condition",
 				},
 			}
@@ -248,8 +241,7 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
-					ResourcePoolId: "POOL-LATE-SITE-001",
-					OCloudSiteId:   "SITE-LATE-001", // Site doesn't exist yet
+					OCloudSiteName: "test-site-late", // Site doesn't exist yet
 					Description:    "Testing watch on OCloudSite creation",
 				},
 			}
@@ -282,9 +274,8 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-LATE-001",
-					Description:      "Testing late creation",
-					Address:          ptrString("Late Location Address"),
+					Description: "Testing late creation",
+					Address:     ptrString("Late Location Address"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, location)).To(Succeed())
@@ -296,13 +287,12 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 			// Now create the OCloudSite AFTER ResourcePool
 			site := &inventoryv1alpha1.OCloudSite{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-site-late",
+					Name:      "test-site-late", // Matches ResourcePool's oCloudSiteName reference
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "SITE-LATE-001", // Matches ResourcePool's reference
-					GlobalLocationID: "LOC-LATE-001",
-					Description:      "Testing watch triggers re-reconciliation",
+					GlobalLocationName: "test-location-late",
+					Description:        "Testing watch triggers re-reconciliation",
 				},
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
@@ -337,9 +327,8 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "SITE-BECOMES-READY-001",
-					GlobalLocationID: "LOC-BECOMES-READY-001", // Location doesn't exist yet
-					Description:      "Testing watch on parent status change",
+					GlobalLocationName: "test-location-makes-site-ready", // Location doesn't exist yet
+					Description:        "Testing watch on parent status change",
 				},
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
@@ -370,8 +359,7 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
-					ResourcePoolId: "POOL-WAITS-FOR-READY-001",
-					OCloudSiteId:   "SITE-BECOMES-READY-001",
+					OCloudSiteName: "test-site-becomes-ready", // References site by metadata.name
 					Description:    "Testing transition when parent becomes ready",
 				},
 			}
@@ -400,13 +388,12 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 			// Now create the Location, making OCloudSite become Ready=True
 			location := &inventoryv1alpha1.Location{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-location-makes-site-ready",
+					Name:      "test-location-makes-site-ready", // Matches OCloudSite's globalLocationName reference
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-BECOMES-READY-001", // Matches OCloudSite's reference
-					Description:      "Creating this makes OCloudSite ready",
-					Address:          ptrString("Ready Address"),
+					Description: "Creating this makes OCloudSite ready",
+					Address:     ptrString("Ready Address"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, location)).To(Succeed())
@@ -434,8 +421,8 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 
 		It("should cascade Ready status through entire hierarchy when Location is created last", func() {
 			// This test verifies the full cascade:
-			// 1. Create ResourcePool → Ready=False (ParentNotFound - OCloudSite doesn't exist)
-			// 2. Create OCloudSite → ResourcePool becomes Ready=False (ParentNotReady - OCloudSite not ready)
+			// 1. Create ResourcePool → Ready=False (ParentNotFound, OCloudSite doesn't exist)
+			// 2. Create OCloudSite → ResourcePool becomes Ready=False (ParentNotReady, OCloudSite not ready)
 			// 3. Create Location → OCloudSite becomes Ready=True → ResourcePool becomes Ready=True
 
 			// Step 1: Create ResourcePool first
@@ -445,8 +432,7 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
-					ResourcePoolId: "POOL-CASCADE-001",
-					OCloudSiteId:   "SITE-CASCADE-001",
+					OCloudSiteName: "test-site-cascade", // Site doesn't exist yet
 					Description:    "Testing full hierarchy cascade",
 				},
 			}
@@ -475,13 +461,12 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 			// Step 2: Create OCloudSite (without Location)
 			site := &inventoryv1alpha1.OCloudSite{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-site-cascade",
+					Name:      "test-site-cascade", // Matches ResourcePool's oCloudSiteName
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "SITE-CASCADE-001",
-					GlobalLocationID: "LOC-CASCADE-001", // Location doesn't exist yet
-					Description:      "Testing full hierarchy cascade",
+					GlobalLocationName: "test-location-cascade", // Location doesn't exist yet
+					Description:        "Testing full hierarchy cascade",
 				},
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
@@ -509,13 +494,12 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 			// Step 3: Create Location
 			location := &inventoryv1alpha1.Location{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-location-cascade",
+					Name:      "test-location-cascade", // Matches OCloudSite's globalLocationName
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-CASCADE-001",
-					Description:      "Testing full hierarchy cascade",
-					Address:          ptrString("Cascade Test Address"),
+					Description: "Testing full hierarchy cascade",
+					Address:     ptrString("Cascade Test Address"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, location)).To(Succeed())
@@ -566,9 +550,8 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-POOL-DELETE-001",
-					Description:      "Testing deletion",
-					Address:          ptrString("Pool Delete Test Address"),
+					Description: "Testing deletion",
+					Address:     ptrString("Pool Delete Test Address"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, location)).To(Succeed())
@@ -585,9 +568,8 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "SITE-POOL-DELETE-001",
-					GlobalLocationID: "LOC-POOL-DELETE-001", // References location above
-					Description:      "Testing deletion",
+					GlobalLocationName: "test-location-for-pool-delete", // References location by metadata.name
+					Description:        "Testing deletion",
 				},
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
@@ -604,8 +586,7 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
-					ResourcePoolId: "POOL-DELETE-BLOCKED-001",
-					OCloudSiteId:   "SITE-POOL-DELETE-001", // References site above
+					OCloudSiteName: "test-site-for-pool-delete", // References site by metadata.name
 					Description:    "Testing deletion blocking",
 				},
 			}
@@ -621,13 +602,13 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				return controllerutil.ContainsFinalizer(fetched, inventoryv1alpha1.ResourcePoolFinalizer)
 			}, timeout, interval).Should(BeTrue())
 
-			// Create a dependent BareMetalHost with the resourcePoolId label
+			// Create a dependent BareMetalHost with the resourcePoolName label
 			bmh := &bmhv1alpha1.BareMetalHost{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-bmh-dependent",
 					Namespace: testNamespace,
 					Labels: map[string]string{
-						controllers.BMHLabelResourcePoolID: "POOL-DELETE-BLOCKED-001", // References pool above
+						controllers.BMHLabelResourcePoolName: "test-pool-delete-blocked", // References pool by metadata.name
 					},
 				},
 				Spec: bmhv1alpha1.BareMetalHostSpec{
@@ -691,9 +672,8 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-POOL-MISMATCH-001",
-					Description:      "Testing deletion with mismatched BMH",
-					Address:          ptrString("Mismatch Test Address"),
+					Description: "Testing deletion with mismatched BMH",
+					Address:     ptrString("Mismatch Test Address"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, location)).To(Succeed())
@@ -710,9 +690,8 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "SITE-POOL-MISMATCH-001",
-					GlobalLocationID: "LOC-POOL-MISMATCH-001",
-					Description:      "Testing deletion with mismatched BMH",
+					GlobalLocationName: "test-location-for-pool-mismatch",
+					Description:        "Testing deletion with mismatched BMH",
 				},
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
@@ -729,8 +708,7 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
-					ResourcePoolId: "POOL-MISMATCH-001",
-					OCloudSiteId:   "SITE-POOL-MISMATCH-001",
+					OCloudSiteName: "test-site-for-pool-mismatch",
 					Description:    "Testing deletion when BMH references different pool",
 				},
 			}
@@ -746,13 +724,13 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 				return controllerutil.ContainsFinalizer(fetched, inventoryv1alpha1.ResourcePoolFinalizer)
 			}, timeout, interval).Should(BeTrue())
 
-			// Create a BareMetalHost with a different resourcePoolId label (not matching our pool)
+			// Create a BareMetalHost with a different resourcePoolName label (not matching our pool)
 			bmh := &bmhv1alpha1.BareMetalHost{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-bmh-different-pool",
 					Namespace: testNamespace,
 					Labels: map[string]string{
-						controllers.BMHLabelResourcePoolID: "SOME-OTHER-POOL-ID", // Does NOT match pool above
+						controllers.BMHLabelResourcePoolName: "some-other-pool-name", // Does NOT match pool above
 					},
 				},
 				Spec: bmhv1alpha1.BareMetalHostSpec{
@@ -785,9 +763,8 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-POOL-DELETE-OK-001",
-					Description:      "Testing successful deletion",
-					Address:          ptrString("OK Address"),
+					Description: "Testing successful deletion",
+					Address:     ptrString("OK Address"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, location)).To(Succeed())
@@ -804,9 +781,8 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "SITE-POOL-DELETE-OK-001",
-					GlobalLocationID: "LOC-POOL-DELETE-OK-001",
-					Description:      "Testing successful deletion",
+					GlobalLocationName: "test-location-for-pool-delete-ok",
+					Description:        "Testing successful deletion",
 				},
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
@@ -823,8 +799,7 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
-					ResourcePoolId: "POOL-DELETE-OK-001",
-					OCloudSiteId:   "SITE-POOL-DELETE-OK-001",
+					OCloudSiteName: "test-site-for-pool-delete-ok",
 					Description:    "Testing successful deletion",
 				},
 			}

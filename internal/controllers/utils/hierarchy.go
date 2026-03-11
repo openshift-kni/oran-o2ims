@@ -16,17 +16,14 @@ import (
 )
 
 // Index field paths for hierarchy CRs.
-// These constants define the field paths used for indexed queries.
 const (
-	// Shared index for Location and OCloudSite (both use spec.globalLocationId)
-	GlobalLocationIDIndex = "spec.globalLocationId"
+	// OCloudSiteGlobalLocationNameIndex indexes OCloudSite by spec.globalLocationName.
+	// Used by Location controller to find dependent OCloudSites.
+	OCloudSiteGlobalLocationNameIndex = "spec.globalLocationName"
 
-	// OCloudSite
-	OCloudSiteSiteIDIndex = "spec.siteId"
-
-	// ResourcePool
-	ResourcePoolOCloudSiteIDIndex   = "spec.oCloudSiteId"
-	ResourcePoolResourcePoolIDIndex = "spec.resourcePoolId"
+	// ResourcePoolOCloudSiteNameIndex indexes ResourcePool by spec.oCloudSiteName.
+	// Used by OCloudSite controller to find dependent ResourcePools.
+	ResourcePoolOCloudSiteNameIndex = "spec.oCloudSiteName"
 )
 
 // ParentValidationResult holds the result of validating a parent CR reference.
@@ -49,52 +46,34 @@ func registerIndex[T any, PT interface {
 	getField func(PT) string,
 ) error {
 	var zero T
-	return indexer.IndexField(ctx, PT(&zero), indexName,
+	if err := indexer.IndexField(ctx, PT(&zero), indexName,
 		func(obj client.Object) []string {
 			if val := getField(obj.(PT)); val != "" {
 				return []string{val}
 			}
 			return nil
-		})
+		}); err != nil {
+		return fmt.Errorf("failed to register index %q: %w", indexName, err)
+	}
+	return nil
 }
 
-// SetupHierarchyIndexers registers field indexes for hierarchy CRs (Location, OCloudSite, ResourcePool).
+// SetupHierarchyIndexers registers field indexes for hierarchy CRs.
 func SetupHierarchyIndexers(ctx context.Context, mgr ctrl.Manager) error {
 	indexer := mgr.GetFieldIndexer()
 
-	// Location: index by globalLocationId (for OCloudSite parent lookup)
-	if err := registerIndex(ctx, indexer, GlobalLocationIDIndex,
-		func(l *inventoryv1alpha1.Location) string { return l.Spec.GlobalLocationID },
+	// OCloudSite: index by spec.globalLocationName (for Location to find dependent OCloudSites)
+	if err := registerIndex(ctx, indexer, OCloudSiteGlobalLocationNameIndex,
+		func(s *inventoryv1alpha1.OCloudSite) string { return s.Spec.GlobalLocationName },
 	); err != nil {
-		return fmt.Errorf("failed to setup Location index: %w", err)
+		return fmt.Errorf("failed to setup OCloudSite globalLocationName index: %w", err)
 	}
 
-	// OCloudSite: index by globalLocationId (for finding sites that reference a Location)
-	if err := registerIndex(ctx, indexer, GlobalLocationIDIndex,
-		func(s *inventoryv1alpha1.OCloudSite) string { return s.Spec.GlobalLocationID },
+	// ResourcePool: index by spec.oCloudSiteName (for OCloudSite to find dependent ResourcePools)
+	if err := registerIndex(ctx, indexer, ResourcePoolOCloudSiteNameIndex,
+		func(p *inventoryv1alpha1.ResourcePool) string { return p.Spec.OCloudSiteName },
 	); err != nil {
-		return fmt.Errorf("failed to setup OCloudSite globalLocationId index: %w", err)
-	}
-
-	// OCloudSite: index by siteId (for ResourcePool parent lookup)
-	if err := registerIndex(ctx, indexer, OCloudSiteSiteIDIndex,
-		func(s *inventoryv1alpha1.OCloudSite) string { return s.Spec.SiteID },
-	); err != nil {
-		return fmt.Errorf("failed to setup OCloudSite siteId index: %w", err)
-	}
-
-	// ResourcePool: index by oCloudSiteId (for finding pools that reference an OCloudSite)
-	if err := registerIndex(ctx, indexer, ResourcePoolOCloudSiteIDIndex,
-		func(p *inventoryv1alpha1.ResourcePool) string { return p.Spec.OCloudSiteId },
-	); err != nil {
-		return fmt.Errorf("failed to setup ResourcePool oCloudSiteId index: %w", err)
-	}
-
-	// ResourcePool: index by resourcePoolId (for potential webhook optimization)
-	if err := registerIndex(ctx, indexer, ResourcePoolResourcePoolIDIndex,
-		func(p *inventoryv1alpha1.ResourcePool) string { return p.Spec.ResourcePoolId },
-	); err != nil {
-		return fmt.Errorf("failed to setup ResourcePool resourcePoolId index: %w", err)
+		return fmt.Errorf("failed to setup ResourcePool oCloudSiteName index: %w", err)
 	}
 
 	return nil

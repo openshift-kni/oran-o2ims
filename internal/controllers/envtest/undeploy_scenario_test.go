@@ -50,9 +50,8 @@ var _ = Describe("Undeploy Scenario", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-UNDEPLOY-001",
-					Description:      "Location for undeploy test",
-					Address:          ptrString("Test Address"),
+					Description: "Location for undeploy test",
+					Address:     ptrString("Test Address"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, location)).To(Succeed())
@@ -84,9 +83,8 @@ var _ = Describe("Undeploy Scenario", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "SITE-UNDEPLOY-001",
-					GlobalLocationID: "LOC-UNDEPLOY-001",
-					Description:      "OCloudSite for undeploy test",
+					GlobalLocationName: "undeploy-test-location",
+					Description:        "OCloudSite for undeploy test",
 				},
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
@@ -118,8 +116,7 @@ var _ = Describe("Undeploy Scenario", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
-					ResourcePoolId: "POOL-UNDEPLOY-001",
-					OCloudSiteId:   "SITE-UNDEPLOY-001",
+					OCloudSiteName: "undeploy-test-site",
 					Description:    "ResourcePool for undeploy test",
 				},
 			}
@@ -151,8 +148,7 @@ var _ = Describe("Undeploy Scenario", Label("envtest"), func() {
 					Name:      "undeploy-test-bmh",
 					Namespace: testNamespace,
 					Labels: map[string]string{
-						"resources.clcm.openshift.io/siteId":         "SITE-UNDEPLOY-001",
-						"resources.clcm.openshift.io/resourcePoolId": "POOL-UNDEPLOY-001",
+						"resources.clcm.openshift.io/resourcePoolName": "undeploy-test-pool",
 					},
 				},
 				Spec: bmhv1alpha1.BareMetalHostSpec{
@@ -222,7 +218,7 @@ var _ = Describe("Undeploy Scenario", Label("envtest"), func() {
 				To(MatchError(ContainSubstring("not found")))
 		})
 
-		It("should demonstrate that deletion WITHOUT removing finalizers would hang on dependents", func() {
+		It("should demonstrate that deletion without removing finalizers would hang on dependents", func() {
 			// This test shows why the undeploy order matters
 
 			// Create hierarchy
@@ -232,9 +228,8 @@ var _ = Describe("Undeploy Scenario", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-HANG-001",
-					Description:      "Location for hang test",
-					Address:          ptrString("Test Address"),
+					Description: "Location for hang test",
+					Address:     ptrString("Test Address"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, location)).To(Succeed())
@@ -246,9 +241,8 @@ var _ = Describe("Undeploy Scenario", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "SITE-HANG-001",
-					GlobalLocationID: "LOC-HANG-001",
-					Description:      "OCloudSite for hang test",
+					GlobalLocationName: "undeploy-hang-test-location",
+					Description:        "OCloudSite for hang test",
 				},
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
