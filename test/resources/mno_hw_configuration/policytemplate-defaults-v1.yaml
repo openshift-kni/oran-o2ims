@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: policytemplate-defaults-v1
+  namespace: std-4-20-15
+data:
+  # clusterConfigurationTimeout is optional.
+  # The value should be a duration string
+  # (e.g., "40m" for 40 minutes)
+  # clusterConfigurationTimeout: "40m"
+  policytemplate-defaults: |
+    sriov-network-vlan-1: "140"
+    sriov-network-pfNames-1: '["ens4f1"]'
+    cpu-isolated: "0-1,64-65"
+    cpu-reserved: "2-10"
+    hugepages-default: "1G"
+    hugepages-size: "1G"
+    hugepages-count: "32"
+    install-plan-approval: "Automatic"

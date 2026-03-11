@@ -415,11 +415,12 @@ func processHwProfileWithHandledError(
 	logger *slog.Logger,
 	pluginNamespace string,
 	bmh *metal3v1alpha1.BareMetalHost,
-	nodeName, nodeNamepace, profileName string,
-	postInstall bool,
+	node *pluginsv1alpha1.AllocatedNode,
+	profileName string,
+	postInstall, validateOnly bool,
 ) (bool, error) {
 
-	updateRequired, err := processHwProfile(ctx, c, logger, pluginNamespace, bmh, profileName, postInstall)
+	updateRequired, err := processHwProfile(ctx, c, logger, pluginNamespace, bmh, profileName, postInstall, validateOnly)
 	contType := string(hwmgmtv1alpha1.Provisioned)
 	if postInstall {
 		contType = string(hwmgmtv1alpha1.Configured)
@@ -429,41 +430,40 @@ func processHwProfileWithHandledError(
 		if typederrors.IsInputError(err) {
 			reason = hwmgmtv1alpha1.InvalidInput
 		}
-		if err := hwmgrutils.SetNodeConditionStatus(ctx, c, noncachedClient, nodeName, nodeNamepace,
+		if err := hwmgrutils.SetNodeConditionStatus(ctx, c, noncachedClient, node,
 			contType, metav1.ConditionFalse, string(reason), err.Error()); err != nil {
-			logger.ErrorContext(ctx, "failed to update node status", slog.String("node", nodeName), slog.String("error", err.Error()))
+			logger.ErrorContext(ctx, "failed to update node status", slog.String("node", node.Name), slog.String("error", err.Error()))
 		}
 		return updateRequired, err
-	}
-	if !updateRequired && postInstall {
-		if err := hwmgrutils.SetNodeConditionStatus(ctx, c, noncachedClient, nodeName, nodeNamepace,
-			contType, metav1.ConditionTrue, string(hwmgmtv1alpha1.ConfigApplied),
-			string(hwmgmtv1alpha1.ConfigSuccess)); err != nil {
-			logger.ErrorContext(ctx, "failed to update node status", slog.String("node", nodeName), slog.String("error", err.Error()))
-		}
 	}
 	return updateRequired, nil
 }
 
 // processHwProfile processes a HardwareProfile and determines if BIOS/firmware updates are required.
-// It annotates the BMH with BiosUpdateNeeded and/or FirmwareUpdateNeeded to signal pending updates.
-// For postInstall, it creates or updates a HostUpdatePolicy to control the update timing.
+// When validateOnly is true, it only checks if updates are needed — HFS/HFC are not modified.
+// When validateOnly is false, it updates HFS/HFC, annotates the BMH with BiosUpdateNeeded and/or
+// FirmwareUpdateNeeded to signal pending updates if updates are needed. For postInstall, it also
+// creates or updates a HostUpdatePolicy to control the update timing.
 //
 // Returns (true, nil) if any update is required, (false, nil) if no updates needed.
 func processHwProfile(ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
 	pluginNamespace string,
-	bmh *metal3v1alpha1.BareMetalHost, profileName string, postInstall bool) (bool, error) {
+	bmh *metal3v1alpha1.BareMetalHost, profileName string,
+	postInstall, validateOnly bool) (bool, error) {
 
 	logger.DebugContext(ctx, "Processing hardware profile for BMH",
 		slog.String("bmh", bmh.Name),
 		slog.String("hwProfile", profileName),
-		slog.Bool("postInstall", postInstall))
+		slog.Bool("postInstall", postInstall),
+		slog.Bool("validateOnly", validateOnly))
 
 	// Clear any existing update annotations to ensure clean state
-	if err := clearBMHUpdateAnnotations(ctx, c, logger, bmh); err != nil {
-		return false, fmt.Errorf("failed to clear existing update annotations from BMH %s: %w", bmh.Name, err)
+	if !validateOnly {
+		if err := clearBMHUpdateAnnotations(ctx, c, logger, bmh); err != nil {
+			return false, fmt.Errorf("failed to clear existing update annotations from BMH %s: %w", bmh.Name, err)
+		}
 	}
 
 	var err error
@@ -482,7 +482,7 @@ func processHwProfile(ctx context.Context,
 	if hwProfile.Spec.Bios.Attributes != nil {
 		logger.DebugContext(ctx, "Checking if BIOS update is required",
 			slog.String("bmh", bmh.Name))
-		biosUpdateRequired, err = IsBiosUpdateRequired(ctx, c, logger, bmh, hwProfile.Spec.Bios)
+		biosUpdateRequired, err = IsBiosUpdateRequired(ctx, c, logger, bmh, hwProfile.Spec.Bios, validateOnly)
 		if err != nil {
 			return false, err
 		}
@@ -494,7 +494,7 @@ func processHwProfile(ctx context.Context,
 	// Check if firmware update is required
 	logger.DebugContext(ctx, "Checking if firmware update is required",
 		slog.String("bmh", bmh.Name))
-	firmwareUpdateRequired, err := IsFirmwareUpdateRequired(ctx, c, logger, bmh, hwProfile.Spec)
+	firmwareUpdateRequired, err := IsFirmwareUpdateRequired(ctx, c, logger, bmh, hwProfile.Spec, validateOnly)
 	if err != nil {
 		return false, err
 	}
@@ -507,6 +507,11 @@ func processHwProfile(ctx context.Context,
 		logger.DebugContext(ctx, "No BIOS or firmware updates required",
 			slog.String("bmh", bmh.Name))
 		return false, nil
+	}
+
+	if validateOnly {
+		// Return without updating any resources
+		return true, nil
 	}
 
 	if postInstall {
@@ -587,7 +592,7 @@ func handleTransitionNodes(ctx context.Context,
 	nodelist *pluginsv1alpha1.AllocatedNodeList, postInstall bool) (ctrl.Result, error) {
 
 	for _, node := range nodelist.Items {
-		res, err := handleTransitionNode(ctx, c, noncachedClient, logger, pluginNamespace, &node, postInstall)
+		res, err := handleTransitionNode(ctx, c, noncachedClient, logger, pluginNamespace, &node, postInstall, nil)
 		if err != nil || res.Requeue || res.RequeueAfter > 0 {
 			return res, err
 		}
@@ -608,6 +613,7 @@ func handleTransitionNode(ctx context.Context,
 	pluginNamespace string,
 	node *pluginsv1alpha1.AllocatedNode,
 	postInstall bool,
+	nodeOps NodeOps,
 ) (ctrl.Result, error) {
 	bmh, err := getBMHForNode(ctx, noncachedClient, node)
 	if err != nil {
@@ -641,7 +647,7 @@ func handleTransitionNode(ctx context.Context,
 		if _, exists := bmh.Annotations[uc.AnnotationKey]; !exists {
 			continue
 		}
-		res, err := processBMHUpdateCase(ctx, c, logger, pluginNamespace, node, bmh, uc, postInstall)
+		res, err := processBMHUpdateCase(ctx, c, noncachedClient, logger, pluginNamespace, node, bmh, uc, postInstall, nodeOps)
 		if err != nil || res.Requeue || res.RequeueAfter > 0 {
 			// Propagate either requeue or error
 			return res, err
@@ -777,6 +783,7 @@ func evaluateCRForReboot(ctx context.Context, c client.Client, logger *slog.Logg
 //     adds the config-in-progress annotation to the AllocatedNode to mark the update as in progress.
 func processBMHUpdateCase(ctx context.Context,
 	c client.Client,
+	noncachedClient client.Reader,
 	logger *slog.Logger,
 	namespace string,
 	node *pluginsv1alpha1.AllocatedNode, bmh *metal3v1alpha1.BareMetalHost,
@@ -784,7 +791,9 @@ func processBMHUpdateCase(ctx context.Context,
 		AnnotationKey string
 		Reason        string
 		LogLabel      string
-	}, postInstall bool) (ctrl.Result, error) {
+	}, postInstall bool,
+	nodeOps NodeOps,
+) (ctrl.Result, error) {
 
 	if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusError {
 		tolerate, err := tolerateAndAnnotateTransientBMHError(ctx, c, logger, bmh)
@@ -794,6 +803,15 @@ func processBMHUpdateCase(ctx context.Context,
 
 		message := fmt.Sprintf("BMH in error state: %s", bmh.Status.ErrorType)
 		logger.WarnContext(ctx, message, slog.String("BMH", bmh.Name))
+
+		// Uncordon the node on day2 failure so it returns to schedulable
+		if postInstall {
+			if err := nodeOps.UncordonNode(ctx, node.Status.Hostname); err != nil {
+				return ctrl.Result{}, fmt.Errorf(
+					"failed to uncordon node (%s) after BMH error: %w",
+					node.Status.Hostname, err)
+			}
+		}
 
 		// Clear config-in-progress annotation before setting node to failed
 		if err := clearConfigAnnotationWithPatch(ctx, c, node); err != nil {
@@ -848,6 +866,11 @@ func processBMHUpdateCase(ctx context.Context,
 	// Check whether the current state of the BMH meets the transition condition.
 	if postInstall {
 		if bmh.Status.OperationalStatus != metal3v1alpha1.OperationalStatusServicing {
+			// Update condition message to indicate waiting for BMH to enter Servicing
+			if err := hwmgrutils.SetNodeConfigUpdateRequested(ctx, c, noncachedClient, logger, node,
+				node.Spec.HwProfile, string(hwmgmtv1alpha1.NodeWaitingBMHServicing)); err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to update node condition for waiting servicing: %w", err)
+			}
 			logger.InfoContext(ctx,
 				"BMH not in 'Servicing' state yet, requeuing",
 				slog.String("BMH", bmh.Name),
@@ -987,7 +1010,7 @@ func handleSingleNodeCompletion(ctx context.Context,
 				return true, err
 			}
 			errMessage := fmt.Errorf("bmh %s/%s in an error state %s", bmh.Namespace, bmh.Name, bmh.Status.Provisioning.State)
-			if err := hwmgrutils.SetNodeConditionStatus(ctx, c, noncachedClient, node.Name, node.Namespace,
+			if err := hwmgrutils.SetNodeConditionStatus(ctx, c, noncachedClient, node,
 				string(hwmgmtv1alpha1.Provisioned), metav1.ConditionFalse,
 				string(hwmgmtv1alpha1.Failed), errMessage.Error()); err != nil {
 				logger.ErrorContext(ctx, "failed to set node condition status",

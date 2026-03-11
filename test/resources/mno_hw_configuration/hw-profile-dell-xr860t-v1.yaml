@@ -1,0 +1,12 @@
+apiVersion: clcm.openshift.io/v1alpha1
+kind: HardwareProfile
+metadata:
+  name: dell-xr8620t-bios-basic
+  namespace: oran-o2ims
+spec:
+  bios:
+    attributes:
+      SysProfile: Custom
+      WorkloadProfile: TelcoOptimizedProfile
+      SriovGlobalEnable: Enabled
+      AcPwrRcvryUserDelay: 120

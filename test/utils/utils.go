@@ -16,6 +16,7 @@ import (
 	"github.com/integralist/go-findroot/find"
 	. "github.com/onsi/ginkgo/v2" //nolint:golint,revive
 	"golang.org/x/mod/modfile"
+	k8syaml "sigs.k8s.io/yaml"
 )
 
 const (
@@ -204,4 +205,17 @@ func GetModuleFromGoMod(modPath string) (modNewPath string, modPseudoVersion str
 
 	return "", "",
 		fmt.Errorf("failed to find module:%s in go.mod:%s", modPath, goModFile)
+}
+
+// LoadYAML reads a YAML file and unmarshals it into a typed K8s resource.
+func LoadYAML[T any](path string) (*T, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read YAML file %s: %w", path, err)
+	}
+	obj := new(T)
+	if err := k8syaml.Unmarshal(data, obj); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal %s: %w", path, err)
+	}
+	return obj, nil
 }

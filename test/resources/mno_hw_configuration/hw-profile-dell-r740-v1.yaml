@@ -1,0 +1,10 @@
+apiVersion: clcm.openshift.io/v1alpha1 
+kind: HardwareProfile
+metadata:
+  name: dell-r740-bios-basic
+  namespace: oran-o2ims 
+spec:
+  bios:
+    attributes:
+      MemTest: "Disabled"
+      AcPwrRcvryUserDelay: 60

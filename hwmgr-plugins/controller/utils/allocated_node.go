@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
@@ -181,32 +182,29 @@ func GetChildNodes(
 	return nodelist, nil
 }
 
-// SetNodeConditionStatus sets a condition on the AllocatedNode status with the provided condition type
+// SetNodeConditionStatus sets a condition on the AllocatedNode status with the provided
+// condition type. It sets both the in-memory node and the API node status condition.
 func SetNodeConditionStatus(
 	ctx context.Context,
 	c client.Client,
 	noncachedClient client.Reader,
-	nodename, namespace string,
+	node *pluginsv1alpha1.AllocatedNode,
 	conditionType string,
 	conditionStatus metav1.ConditionStatus,
 	reason, message string,
 ) error {
+	// Sync the condition to the caller's in-memory node
+	SetStatusCondition(&node.Status.Conditions, conditionType, reason, conditionStatus, message)
+
 	// nolint: wrapcheck
 	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
-		node := &pluginsv1alpha1.AllocatedNode{}
-		if err := noncachedClient.Get(ctx, types.NamespacedName{Name: nodename, Namespace: namespace}, node); err != nil {
+		freshNode := &pluginsv1alpha1.AllocatedNode{}
+		if err := noncachedClient.Get(ctx, types.NamespacedName{Name: node.Name, Namespace: node.Namespace}, freshNode); err != nil {
 			return fmt.Errorf("failed to fetch Node: %w", err)
 		}
 
-		SetStatusCondition(
-			&node.Status.Conditions,
-			conditionType,
-			reason,
-			conditionStatus,
-			message,
-		)
-
-		return c.Status().Update(ctx, node)
+		SetStatusCondition(&freshNode.Status.Conditions, conditionType, reason, conditionStatus, message)
+		return c.Status().Update(ctx, freshNode)
 	})
 }
 
@@ -233,6 +231,116 @@ func SetNodeFailedStatus(
 		slog.String("node", node.Name),
 		slog.String("conditionType", conditionType),
 		slog.String("reason", string(hwmgmtv1alpha1.Failed)))
+	return nil
+}
+
+// SetNodeConfigApplied sets a node's Configured condition to ConfigApplied and
+// updates the node's status.hwProfile to the new hardware profile.
+func SetNodeConfigApplied(ctx context.Context,
+	c client.Client, noncachedClient client.Reader, logger *slog.Logger,
+	node *pluginsv1alpha1.AllocatedNode, newHwProfile string) error {
+	if err := SetNodeHwProfile(ctx, c, node, newHwProfile); err != nil {
+		return fmt.Errorf("failed to update node hwProfile on node %s: %w", node.Name, err)
+	}
+
+	// Sync in-memory node state
+	node.Status.HwProfile = newHwProfile
+	SetStatusCondition(&node.Status.Conditions,
+		string(hwmgmtv1alpha1.Configured),
+		string(hwmgmtv1alpha1.ConfigApplied),
+		metav1.ConditionTrue,
+		string(hwmgmtv1alpha1.ConfigSuccess))
+
+	// nolint: wrapcheck
+	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
+		freshNode := &pluginsv1alpha1.AllocatedNode{}
+		if err := noncachedClient.Get(ctx, types.NamespacedName{Name: node.Name, Namespace: node.Namespace}, freshNode); err != nil {
+			return fmt.Errorf("failed to fetch Node: %w", err)
+		}
+		// Update the node's status to reflect the new hardware profile.
+		freshNode.Status.HwProfile = newHwProfile
+		SetStatusCondition(&freshNode.Status.Conditions,
+			string(hwmgmtv1alpha1.Configured),
+			string(hwmgmtv1alpha1.ConfigApplied),
+			metav1.ConditionTrue,
+			string(hwmgmtv1alpha1.ConfigSuccess))
+		if err := c.Status().Update(ctx, freshNode); err != nil {
+			return fmt.Errorf("failed to update node config applied status: %w", err)
+		}
+		logger.InfoContext(ctx, "Set node config applied", slog.String("node", node.Name))
+		return nil
+	})
+}
+
+// SetNodeConfigUpdatePending sets a node's Configured condition to ConfigUpdatePending
+// and ensures the node's hardware profile is the new one.
+func SetNodeConfigUpdatePending(ctx context.Context,
+	c client.Client, noncachedClient client.Reader, logger *slog.Logger,
+	node *pluginsv1alpha1.AllocatedNode, newHwProfile, message string) error {
+
+	if err := SetNodeHwProfile(ctx, c, node, newHwProfile); err != nil {
+		return fmt.Errorf("failed to update node hwProfile on node %s: %w", node.Name, err)
+	}
+
+	cond := meta.FindStatusCondition(node.Status.Conditions, string(hwmgmtv1alpha1.Configured))
+	if cond != nil &&
+		cond.Reason == string(hwmgmtv1alpha1.ConfigUpdatePending) &&
+		cond.Status == metav1.ConditionFalse &&
+		cond.Message == message {
+		// Condition already matches, no need to update
+		return nil
+	}
+
+	if err := SetNodeConditionStatus(
+		ctx, c, noncachedClient, node,
+		string(hwmgmtv1alpha1.Configured), metav1.ConditionFalse,
+		string(hwmgmtv1alpha1.ConfigUpdatePending), message); err != nil {
+		return fmt.Errorf("failed to set node config update pending status: %w", err)
+	}
+	logger.InfoContext(ctx, "Set node config update pending", slog.String("node", node.Name))
+	return nil
+}
+
+// SetNodeConfigUpdateRequested sets a node's Configured condition to ConfigUpdateRequested
+// and ensures the node's hardware profile is the new one.
+// Skips the condition update if the condition already matches (avoids unnecessary API writes).
+func SetNodeConfigUpdateRequested(ctx context.Context,
+	c client.Client, noncachedClient client.Reader, logger *slog.Logger,
+	node *pluginsv1alpha1.AllocatedNode, newHwProfile, message string) error {
+	// Ensure the node's hardware profile is the new one
+	err := SetNodeHwProfile(ctx, c, node, newHwProfile)
+	if err != nil {
+		return fmt.Errorf("failed to update node hwProfile on node %s: %w", node.Name, err)
+	}
+
+	cond := meta.FindStatusCondition(node.Status.Conditions, string(hwmgmtv1alpha1.Configured))
+	if cond != nil &&
+		cond.Reason == string(hwmgmtv1alpha1.ConfigUpdate) &&
+		cond.Status == metav1.ConditionFalse &&
+		cond.Message == message {
+		// Condition already matches, no need to update
+		return nil
+	}
+
+	if err := SetNodeConditionStatus(
+		ctx, c, noncachedClient, node,
+		string(hwmgmtv1alpha1.Configured), metav1.ConditionFalse,
+		string(hwmgmtv1alpha1.ConfigUpdate), message); err != nil {
+		return fmt.Errorf("failed to update node config update requested status: %w", err)
+	}
+	logger.InfoContext(ctx, "Set node config update requested", slog.String("node", node.Name))
+	return nil
+}
+
+// SetNodeHwProfile sets the node's hardware profile to the new one if it's not already set.
+func SetNodeHwProfile(ctx context.Context, c client.Client, node *pluginsv1alpha1.AllocatedNode, newHwProfile string) error {
+	if newHwProfile != "" && node.Spec.HwProfile != newHwProfile {
+		patch := client.MergeFrom(node.DeepCopy())
+		node.Spec.HwProfile = newHwProfile
+		if err := c.Patch(ctx, node, patch); err != nil {
+			return fmt.Errorf("failed to patch AllocatedNode %s hw profile: %w", node.Name, err)
+		}
+	}
 	return nil
 }
 

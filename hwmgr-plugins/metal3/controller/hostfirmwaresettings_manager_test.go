@@ -89,6 +89,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -215,60 +216,6 @@ var _ = Describe("HostFirmwareSettings Manager", func() {
 
 			Expect(err).To(HaveOccurred())
 			Expect(result).To(BeNil())
-		})
-	})
-
-	Describe("getOrCreateHostFirmwareSettings", func() {
-		It("should return existing HostFirmwareSettings when found", func() {
-			existingHFS := &metal3v1alpha1.HostFirmwareSettings{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "existing-hfs",
-					Namespace: "test-namespace",
-				},
-				Spec: metal3v1alpha1.HostFirmwareSettingsSpec{
-					Settings: map[string]intstr.IntOrString{
-						"ProcTurboMode": intstr.FromString("Enabled"),
-					},
-				},
-			}
-			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existingHFS).Build()
-
-			hfs := &metal3v1alpha1.HostFirmwareSettings{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "existing-hfs",
-					Namespace: "test-namespace",
-				},
-			}
-
-			result, err := getOrCreateHostFirmwareSettings(ctx, fakeClient, logger, hfs)
-
-			Expect(err).ToNot(HaveOccurred())
-			Expect(result).ToNot(BeNil())
-			Expect(result.Name).To(Equal("existing-hfs"))
-			Expect(result.Namespace).To(Equal("test-namespace"))
-		})
-
-		It("should create new HostFirmwareSettings when not found", func() {
-			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-
-			hfs := &metal3v1alpha1.HostFirmwareSettings{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "new-hfs",
-					Namespace: "test-namespace",
-				},
-				Spec: metal3v1alpha1.HostFirmwareSettingsSpec{
-					Settings: map[string]intstr.IntOrString{
-						"BootMode": intstr.FromString("UEFI"),
-					},
-				},
-			}
-
-			result, err := getOrCreateHostFirmwareSettings(ctx, fakeClient, logger, hfs)
-
-			Expect(err).ToNot(HaveOccurred())
-			Expect(result).ToNot(BeNil())
-			Expect(result.Name).To(Equal("new-hfs"))
-			Expect(result.Namespace).To(Equal("test-namespace"))
 		})
 	})
 
@@ -615,91 +562,6 @@ var _ = Describe("HostFirmwareSettings Manager", func() {
 		})
 	})
 
-	Describe("checkAndUpdateFirmwareSettings", func() {
-		It("should return false when no changes detected", func() {
-			existingHFS := &metal3v1alpha1.HostFirmwareSettings{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-hfs",
-					Namespace: "test-namespace",
-				},
-				Spec: metal3v1alpha1.HostFirmwareSettingsSpec{
-					Settings: map[string]intstr.IntOrString{
-						"ProcTurboMode": intstr.FromString("Enabled"),
-					},
-				},
-				Status: metal3v1alpha1.HostFirmwareSettingsStatus{
-					Settings: map[string]string{
-						"ProcTurboMode": "Enabled",
-					},
-				},
-			}
-			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existingHFS).Build()
-
-			newHFS := &metal3v1alpha1.HostFirmwareSettings{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-hfs",
-					Namespace: "test-namespace",
-				},
-				Spec: metal3v1alpha1.HostFirmwareSettingsSpec{
-					Settings: map[string]intstr.IntOrString{
-						"ProcTurboMode": intstr.FromString("Enabled"),
-					},
-				},
-			}
-
-			updated, err := checkAndUpdateFirmwareSettings(ctx, fakeClient, logger, existingHFS, newHFS)
-
-			Expect(err).ToNot(HaveOccurred())
-			Expect(updated).To(BeFalse())
-		})
-
-		It("should return true and update when changes detected", func() {
-			existingHFS := &metal3v1alpha1.HostFirmwareSettings{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-hfs",
-					Namespace: "test-namespace",
-				},
-				Spec: metal3v1alpha1.HostFirmwareSettingsSpec{
-					Settings: map[string]intstr.IntOrString{
-						"ProcTurboMode": intstr.FromString("Enabled"),
-					},
-				},
-				Status: metal3v1alpha1.HostFirmwareSettingsStatus{
-					Settings: map[string]string{
-						"ProcTurboMode": "Enabled",
-					},
-				},
-			}
-			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existingHFS).Build()
-
-			newHFS := &metal3v1alpha1.HostFirmwareSettings{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-hfs",
-					Namespace: "test-namespace",
-				},
-				Spec: metal3v1alpha1.HostFirmwareSettingsSpec{
-					Settings: map[string]intstr.IntOrString{
-						"ProcTurboMode": intstr.FromString("Disabled"),
-					},
-				},
-			}
-
-			updated, err := checkAndUpdateFirmwareSettings(ctx, fakeClient, logger, existingHFS, newHFS)
-
-			Expect(err).ToNot(HaveOccurred())
-			Expect(updated).To(BeTrue())
-
-			// Verify the update was applied
-			result := &metal3v1alpha1.HostFirmwareSettings{}
-			err = fakeClient.Get(ctx, types.NamespacedName{
-				Name:      newHFS.Name,
-				Namespace: newHFS.Namespace,
-			}, result)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(result.Spec.Settings).To(Equal(newHFS.Spec.Settings))
-		})
-	})
-
 	Describe("IsBiosUpdateRequired", func() {
 		var firmwareSchema *metal3v1alpha1.FirmwareSchema
 		var bmh *metal3v1alpha1.BareMetalHost
@@ -727,7 +589,52 @@ var _ = Describe("HostFirmwareSettings Manager", func() {
 			}
 		})
 
-		It("should return error when update required - new HFS created without schema", func() {
+		It("should return error when update required - invalid BIOS settings", func() {
+			existingHFS := &metal3v1alpha1.HostFirmwareSettings{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-host",
+					Namespace: "test-namespace",
+				},
+				Spec: metal3v1alpha1.HostFirmwareSettingsSpec{
+					Settings: map[string]intstr.IntOrString{
+						"ProcTurboMode": intstr.FromString("Enabled"),
+					},
+				},
+				Status: metal3v1alpha1.HostFirmwareSettingsStatus{
+					FirmwareSchema: &metal3v1alpha1.SchemaReference{
+						Name:      "test-schema",
+						Namespace: "test-namespace",
+					},
+					Settings: map[string]string{
+						"ProcTurboMode": "Enabled",
+					},
+				},
+			}
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(firmwareSchema, existingHFS).Build()
+
+			biosSettings := hwmgmtv1alpha1.Bios{
+				Attributes: map[string]intstr.IntOrString{
+					"NewSetting": intstr.FromString("Value"),
+				},
+			}
+
+			// validateOnly=true: returns error for invalid BIOS settings
+			validateOnly := true
+			updateRequired, err := IsBiosUpdateRequired(ctx, fakeClient, logger, bmh, biosSettings, validateOnly)
+			Expect(err).To(HaveOccurred())
+
+			Expect(err.Error()).To(ContainSubstring("invalid BIOS settings: [setting NewSetting is not in the Status field]"))
+			Expect(updateRequired).To(BeFalse())
+
+			// validateOnly=false: returns error for invalid BIOS settings
+			validateOnly = false
+			updateRequired, err = IsBiosUpdateRequired(ctx, fakeClient, logger, bmh, biosSettings, validateOnly)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid BIOS settings: [setting NewSetting is not in the Status field]"))
+			Expect(updateRequired).To(BeFalse())
+		})
+
+		It("should return true and when HFS does not exist", func() {
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(firmwareSchema).Build()
 
 			biosSettings := hwmgmtv1alpha1.Bios{
@@ -736,11 +643,21 @@ var _ = Describe("HostFirmwareSettings Manager", func() {
 				},
 			}
 
-			updateRequired, err := IsBiosUpdateRequired(ctx, fakeClient, logger, bmh, biosSettings)
-
+			// validateOnly=true: reports update required but does not create HFS
+			updateRequired, err := IsBiosUpdateRequired(ctx, fakeClient, logger, bmh, biosSettings, true)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updateRequired).To(BeTrue())
+			hfs := &metal3v1alpha1.HostFirmwareSettings{}
+			err = fakeClient.Get(ctx, types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}, hfs)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to get FirmwareSchema from HFS"))
-			Expect(updateRequired).To(BeFalse())
+			Expect(errors.IsNotFound(err)).To(BeTrue())
+
+			// validateOnly=false: creates HFS
+			updateRequired, err = IsBiosUpdateRequired(ctx, fakeClient, logger, bmh, biosSettings, false)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updateRequired).To(BeTrue())
+			err = fakeClient.Get(ctx, types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}, hfs)
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should return true when update required - settings changed", func() {
@@ -772,10 +689,23 @@ var _ = Describe("HostFirmwareSettings Manager", func() {
 				},
 			}
 
-			updateRequired, err := IsBiosUpdateRequired(ctx, fakeClient, logger, bmh, biosSettings)
-
+			// validateOnly=true: reports update required but does not modify HFS
+			validateOnly := true
+			updateRequired, err := IsBiosUpdateRequired(ctx, fakeClient, logger, bmh, biosSettings, validateOnly)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(updateRequired).To(BeTrue())
+			unchangedHFS := &metal3v1alpha1.HostFirmwareSettings{}
+			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}, unchangedHFS)).To(Succeed())
+			Expect(unchangedHFS.Spec.Settings["ProcTurboMode"]).To(Equal(intstr.FromString("Enabled")))
+
+			// validateOnly=false: updates HFS
+			validateOnly = false
+			updateRequired, err = IsBiosUpdateRequired(ctx, fakeClient, logger, bmh, biosSettings, validateOnly)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updateRequired).To(BeTrue())
+			updatedHFS := &metal3v1alpha1.HostFirmwareSettings{}
+			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}, updatedHFS)).To(Succeed())
+			Expect(updatedHFS.Spec.Settings["ProcTurboMode"]).To(Equal(intstr.FromString("Disabled")))
 		})
 
 		It("should return false when no update required - settings same", func() {
@@ -806,9 +736,15 @@ var _ = Describe("HostFirmwareSettings Manager", func() {
 					"ProcTurboMode": intstr.FromString("Enabled"),
 				},
 			}
+			// validateOnly=true: reports no update required
+			validateOnly := true
+			updateRequired, err := IsBiosUpdateRequired(ctx, fakeClient, logger, bmh, biosSettings, validateOnly)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updateRequired).To(BeFalse())
 
-			updateRequired, err := IsBiosUpdateRequired(ctx, fakeClient, logger, bmh, biosSettings)
-
+			// validateOnly=false: reports no update required
+			validateOnly = false
+			updateRequired, err = IsBiosUpdateRequired(ctx, fakeClient, logger, bmh, biosSettings, validateOnly)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(updateRequired).To(BeFalse())
 		})

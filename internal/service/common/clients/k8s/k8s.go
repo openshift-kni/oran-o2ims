@@ -13,6 +13,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 
+	machineconfigv1 "github.com/openshift/api/machineconfiguration/v1"
 	agentv1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -21,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	clusterv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
@@ -75,7 +77,7 @@ func GetSchemeForHub() *runtime.Scheme {
 	return scheme
 }
 
-// NewClientForCluster creates a new client for a managed cluster
+// NewClientForCluster creates a controller-runtime client for a managed cluster
 func NewClientForCluster(ctx context.Context, hubClient client.Client, clusterName string) (client.Client, error) {
 	kubeConfig, err := GetClusterKubeConfigFromSecret(ctx, hubClient, clusterName)
 	if err != nil {
@@ -93,6 +95,26 @@ func NewClientForCluster(ctx context.Context, hubClient client.Client, clusterNa
 	}
 
 	return c, nil
+}
+
+// NewClientsetForCluster creates a client-go client for a managed cluster
+func NewClientsetForCluster(ctx context.Context, hubClient client.Client, clusterName string) (kubernetes.Interface, error) {
+	kubeConfig, err := GetClusterKubeConfigFromSecret(ctx, hubClient, clusterName)
+	if err != nil {
+		return nil, err
+	}
+
+	conf, err := clientcmd.RESTConfigFromKubeConfig(kubeConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get config: %w", err)
+	}
+
+	clientset, err := kubernetes.NewForConfig(conf)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create clientset: %w", err)
+	}
+
+	return clientset, nil
 }
 
 // GetClusterKubeConfigFromSecret retrieves the cluster kubeconfig from a secret
@@ -124,6 +146,7 @@ func GetSchemeForCluster() *runtime.Scheme {
 	scheme := runtime.NewScheme()
 	utilruntime.Must(corev1.AddToScheme(scheme))
 	utilruntime.Must(monitoringv1.AddToScheme(scheme))
+	utilruntime.Must(machineconfigv1.Install(scheme))
 
 	return scheme
 }

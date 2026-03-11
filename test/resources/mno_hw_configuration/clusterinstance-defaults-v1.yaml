@@ -1,0 +1,309 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clusterinstance-defaults-v1
+  namespace: std-4-20-15
+data:
+  clusterinstance-defaults: |
+    baseDomain: example.com
+    extraLabels:
+      ManagedCluster:
+        cluster-version: "v4-20-15"
+        std-policy: "v1"
+    clusterType: HighlyAvailable
+    clusterImageSetNameRef: "4.20.15"
+    pullSecretRef:
+      name: pull-secret
+    networkType: OVNKubernetes
+    sshPublicKey: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDTca4Qyu5AYBmZbSl74cNTKuNINJ7d+ceBRzKUrhHcQpMbl8UnAYhjh/ffTyVCsgwzm1RjTAm6/tPj9euEa+YX4U78Sx+ioLHmjDvACYsti4DekIR+opFwfIw+JTDXoyVv06lOPaTOa/vtgpe+gDEL364j47f3p9H/tGhsLmpjeG3DVAhbqSh3s0IHpd4OzF/r6g6mbPyHadvedkBZp/qeUX054Gc2QqJeg/s/eddPlQDJbmL8yRVkZu+SsFTOEOAtrdA3czeaEaA8s+aWP9PN3X539Ddw3qahyOSCXpCE2eJXPh8DJCBWVEcFFYgmIFVvCQ+o9cjEmIYg6drGGvRV
+    installConfigOverrides: '{"capabilities": {"baselineCapabilitySet": "None", "additionalEnabledCapabilities": ["NodeTuning", "OperatorLifecycleManager", "Ingress", "baremetal", "MachineAPI"]}}'
+    ignitionConfigOverride: '{"ignition": {"version": "3.2.0"}, "storage": {"files": [{"overwrite": true, "path": "/etc/containers/policy.json", "contents": {"source":"data:text/plain;base64,ewogICAgImRlZmF1bHQiOiBbCiAgICAgICAgewogICAgICAgICAgICAidHlwZSI6ICJpbnNlY3VyZUFjY2VwdEFueXRoaW5nIgogICAgICAgIH0KICAgIF0sCiAgICAidHJhbnNwb3J0cyI6CiAgICAgICAgewogICAgICAgICAgICAiZG9ja2VyLWRhZW1vbiI6CiAgICAgICAgICAgICAgICB7CiAgICAgICAgICAgICAgICAgICAgIiI6IFt7InR5cGUiOiJpbnNlY3VyZUFjY2VwdEFueXRoaW5nIn1dCiAgICAgICAgICAgICAgICB9CiAgICAgICAgfQp9Cgo="}}]}}'
+    clusterNetwork:
+      - cidr: 203.0.113.0/24
+        hostPrefix: 23
+    serviceNetwork:
+      - cidr: 233.252.0.0/24
+    additionalNTPSources:
+      - 1.pool.ntp.org
+    templateRefs:
+      - name: ai-cluster-templates-v1
+        namespace: open-cluster-management
+    cpuPartitioningMode: AllNodes
+    extraManifestsRefs:
+      - name: clustertemplate-sample.v1.0.0-extramanifests
+    nodes:
+      - role: master
+        bootMode: UEFI
+        rootDeviceHints:
+          deviceName: /dev/disk/by-path/pci-0000:01:00.0-scsi-0:2:0:0
+        nodeNetwork:
+          interfaces:
+            - name: eno1
+              label: boot-interface
+          config:
+            routes:
+              config:
+                - destination: 0.0.0.0/0
+                  next-hop-interface: eno1
+                  table-id: 254
+            interfaces:
+              - ipv6:
+                  enabled: false
+                ipv4:
+                  enabled: true
+                name: eno1
+                state: up
+                type: ethernet
+        templateRefs:
+          - name: ai-node-templates-v1
+            namespace: open-cluster-management
+      - role: master
+        bootMode: UEFI
+        rootDeviceHints:
+          deviceName: /dev/disk/by-path/pci-0000:01:00.0-scsi-0:2:0:0
+        nodeNetwork:
+          interfaces:
+            - name: eno1
+              label: boot-interface
+          config:
+            routes:
+              config:
+                - destination: 0.0.0.0/0
+                  next-hop-interface: eno1
+                  table-id: 254
+            interfaces:
+              - ipv6:
+                  enabled: false
+                ipv4:
+                  enabled: true
+                name: eno1
+                state: up
+                type: ethernet
+        templateRefs:
+          - name: ai-node-templates-v1
+            namespace: open-cluster-management
+      - role: master
+        bootMode: UEFI
+        rootDeviceHints:
+          deviceName: /dev/disk/by-path/pci-0000:01:00.0-scsi-0:2:0:0
+        nodeNetwork:
+          interfaces:
+            - name: eno1
+              label: boot-interface
+          config:
+            routes:
+              config:
+                - destination: 0.0.0.0/0
+                  next-hop-interface: eno1
+                  table-id: 254
+            interfaces:
+              - ipv6:
+                  enabled: false
+                ipv4:
+                  enabled: true
+                name: eno1
+                state: up
+                type: ethernet
+        templateRefs:
+          - name: ai-node-templates-v1
+            namespace: open-cluster-management
+      - role: worker
+        bootMode: UEFI
+        rootDeviceHints:
+          deviceName: /dev/disk/by-path/pci-0000:01:00.0-scsi-0:2:0:0
+        nodeNetwork:
+          interfaces:
+            - name: eno1
+              label: boot-interface
+          config:
+            routes:
+              config:
+                - destination: 0.0.0.0/0
+                  next-hop-interface: eno1
+                  table-id: 254
+            interfaces:
+              - ipv6:
+                  enabled: false
+                ipv4:
+                  enabled: true
+                name: eno1
+                state: up
+                type: ethernet
+        templateRefs:
+          - name: ai-node-templates-v1
+            namespace: open-cluster-management
+      - role: worker
+        bootMode: UEFI
+        rootDeviceHints:
+          deviceName: /dev/disk/by-path/pci-0000:01:00.0-scsi-0:2:0:0
+        nodeNetwork:
+          interfaces:
+            - name: eno1
+              label: boot-interface
+          config:
+            routes:
+              config:
+                - destination: 0.0.0.0/0
+                  next-hop-interface: eno1
+                  table-id: 254
+            interfaces:
+              - ipv6:
+                  enabled: false
+                ipv4:
+                  enabled: true
+                name: eno1
+                state: up
+                type: ethernet
+        templateRefs:
+          - name: ai-node-templates-v1
+            namespace: open-cluster-management
+      - role: worker
+        bootMode: UEFI
+        rootDeviceHints:
+          deviceName: /dev/disk/by-path/pci-0000:01:00.0-scsi-0:2:0:0
+        nodeNetwork:
+          interfaces:
+            - name: eno1
+              label: boot-interface
+          config:
+            routes:
+              config:
+                - destination: 0.0.0.0/0
+                  next-hop-interface: eno1
+                  table-id: 254
+            interfaces:
+              - ipv6:
+                  enabled: false
+                ipv4:
+                  enabled: true
+                name: eno1
+                state: up
+                type: ethernet
+        templateRefs:
+          - name: ai-node-templates-v1
+            namespace: open-cluster-management
+      - role: worker
+        bootMode: UEFI
+        rootDeviceHints:
+          deviceName: /dev/disk/by-path/pci-0000:01:00.0-scsi-0:2:0:0
+        nodeNetwork:
+          interfaces:
+            - name: eno1
+              label: boot-interface
+          config:
+            routes:
+              config:
+                - destination: 0.0.0.0/0
+                  next-hop-interface: eno1
+                  table-id: 254
+            interfaces:
+              - ipv6:
+                  enabled: false
+                ipv4:
+                  enabled: true
+                name: eno1
+                state: up
+                type: ethernet
+        templateRefs:
+          - name: ai-node-templates-v1
+            namespace: open-cluster-management
+      - role: worker
+        bootMode: UEFI
+        rootDeviceHints:
+          deviceName: /dev/disk/by-path/pci-0000:01:00.0-scsi-0:2:0:0
+        nodeNetwork:
+          interfaces:
+            - name: eno1
+              label: boot-interface
+          config:
+            routes:
+              config:
+                - destination: 0.0.0.0/0
+                  next-hop-interface: eno1
+                  table-id: 254
+            interfaces:
+              - ipv6:
+                  enabled: false
+                ipv4:
+                  enabled: true
+                name: eno1
+                state: up
+                type: ethernet
+        templateRefs:
+          - name: ai-node-templates-v1
+            namespace: open-cluster-management
+      - role: worker
+        bootMode: UEFI
+        rootDeviceHints:
+          deviceName: /dev/disk/by-path/pci-0000:01:00.0-scsi-0:2:0:0
+        nodeNetwork:
+          interfaces:
+            - name: eno1
+              label: boot-interface
+          config:
+            routes:
+              config:
+                - destination: 0.0.0.0/0
+                  next-hop-interface: eno1
+                  table-id: 254
+            interfaces:
+              - ipv6:
+                  enabled: false
+                ipv4:
+                  enabled: true
+                name: eno1
+                state: up
+                type: ethernet
+        templateRefs:
+          - name: ai-node-templates-v1
+            namespace: open-cluster-management
+      - role: worker
+        bootMode: UEFI
+        rootDeviceHints:
+          deviceName: /dev/disk/by-path/pci-0000:01:00.0-scsi-0:2:0:0
+        nodeNetwork:
+          interfaces:
+            - name: eno1
+              label: boot-interface
+          config:
+            routes:
+              config:
+                - destination: 0.0.0.0/0
+                  next-hop-interface: eno1
+                  table-id: 254
+            interfaces:
+              - ipv6:
+                  enabled: false
+                ipv4:
+                  enabled: true
+                name: eno1
+                state: up
+                type: ethernet
+        templateRefs:
+          - name: ai-node-templates-v1
+            namespace: open-cluster-management
+      - role: worker
+        bootMode: UEFI
+        rootDeviceHints:
+          deviceName: /dev/disk/by-path/pci-0000:01:00.0-scsi-0:2:0:0
+        nodeNetwork:
+          interfaces:
+            - name: eno1
+              label: boot-interface
+          config:
+            routes:
+              config:
+                - destination: 0.0.0.0/0
+                  next-hop-interface: eno1
+                  table-id: 254
+            interfaces:
+              - ipv6:
+                  enabled: false
+                ipv4:
+                  enabled: true
+                name: eno1
+                state: up
+                type: ethernet
+        templateRefs:
+          - name: ai-node-templates-v1
+            namespace: open-cluster-management

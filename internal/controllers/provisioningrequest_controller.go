@@ -283,9 +283,6 @@ func (t *provisioningRequestReconcilerTask) executeHardwareProvisioningPhase(ctx
 	if err != nil || (res == doNotRequeue() && !proceed) || res.RequeueAfter > 0 {
 		if err != nil {
 			ctlrutils.LogError(ctx, t.logger, "Hardware provisioning phase failed", err)
-		} else if res.RequeueAfter > 0 {
-			t.logger.InfoContext(ctx, "Hardware provisioning in progress, requeueing",
-				slog.Duration("requeueAfter", res.RequeueAfter))
 		}
 		return res, err
 	}
@@ -627,44 +624,24 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 		return requeueWithMediumInterval(), false, err
 	}
 	if timedOutOrFailed {
+		t.logger.InfoContext(ctx, "Hardware provisioning timed out or failed, monitoring for cleanup",
+			slog.String("nodeAllocationRequestID", nodeAllocationRequestID))
 		err = t.resetHardwareTimersAndPersist()
 		return requeueWithMediumInterval(), false, err
 	}
 	if !provisioned {
-
 		t.logger.InfoContext(ctx, "Waiting for NodeAllocationRequest to be provisioned",
 			slog.String("nodeAllocationRequestID", nodeAllocationRequestID))
 		return requeueWithMediumInterval(), false, nil
 	}
-
-	// Provisioning is done. Check if hardware provisioning completed successfully.
-	hwProvisionedCond := meta.FindStatusCondition(t.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned))
-	hardwareProvisioningCompleted := hwProvisionedCond != nil &&
-		hwProvisionedCond.Status == metav1.ConditionTrue &&
-		hwProvisionedCond.Reason == string(provisioningv1alpha1.CRconditionReasons.Completed)
-
-	if hardwareProvisioningCompleted {
-		// Hardware provisioning completed successfully → proceed to cluster installation
-		// Configuration is a Day 2 operation and will be handled separately
-		t.logger.InfoContext(ctx, "Hardware provisioning completed, proceeding to cluster installation",
-			slog.String("nodeAllocationRequestID", nodeAllocationRequestID))
-		return doNotRequeue(), true, nil
-	}
-
-	// If provisioning is not yet complete, evaluate configuration status.
-	switch {
-	case configured != nil && *configured:
-		// Config completed → proceed
-		return doNotRequeue(), true, nil
-	case configured != nil && !*configured:
-		// Config explicitly not done yet → wait
+	if configured != nil && !*configured {
 		t.logger.InfoContext(ctx, "Waiting for NodeAllocationRequest to be configured",
 			slog.String("nodeAllocationRequestID", nodeAllocationRequestID))
 		return requeueWithMediumInterval(), false, nil
-	default:
-		// configured == nil → no configuration needed or not yet reported; proceed
-		return doNotRequeue(), true, nil
 	}
+
+	// No hardware provisioning or configuration is in progress, proceed to next stage
+	return doNotRequeue(), true, nil
 }
 
 // checkClusterDeployConfigState checks the current deployment and configuration state of

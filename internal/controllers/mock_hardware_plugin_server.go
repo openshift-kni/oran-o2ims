@@ -574,6 +574,13 @@ func (m *MockHardwarePluginServer) handleNodeAllocationRequestByID(w http.Respon
 
 		if existing, exists := m.nodeAllocationRequests[requestID]; exists {
 			existing.NodeAllocationRequest = &request
+
+			if m.queryK8S && m.k8sClient != nil {
+				if err := m.updateKubernetesNodeAllocationRequest(r.Context(), &request, requestID); err != nil {
+					fmt.Printf("DEBUG: Failed to update K8s NodeAllocationRequest %s: %v\n", requestID, err)
+				}
+			}
+
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusAccepted)
 			if err := json.NewEncoder(w).Encode(requestID); err != nil {
@@ -724,6 +731,23 @@ func (m *MockHardwarePluginServer) createKubernetesNodeAllocationRequest(ctx con
 			}
 			k8sNodeAllocationRequest.Spec.NodeGroup = append(k8sNodeAllocationRequest.Spec.NodeGroup, k8sNodeGroup)
 		}
+	}
+
+	// Copy callback configuration
+	if request.Callback != nil {
+		k8sNodeAllocationRequest.Spec.Callback = &pluginsv1alpha1.Callback{
+			CallbackURL: request.Callback.CallbackURL,
+		}
+	}
+
+	// Copy hardware provisioning timeout
+	if request.HardwareProvisioningTimeout != nil {
+		k8sNodeAllocationRequest.Spec.HardwareProvisioningTimeout = *request.HardwareProvisioningTimeout
+	}
+
+	// Copy site info
+	if request.Site != "" {
+		k8sNodeAllocationRequest.Spec.Site = request.Site
 	}
 
 	// Create the Kubernetes resource
@@ -888,4 +912,38 @@ func (m *MockHardwarePluginServer) convertK8sAllocatedNodeToPluginAPI(k8sNode *p
 			Conditions: &conditions,
 		},
 	}
+}
+
+// updateKubernetesNodeAllocationRequest patches the K8s NodeAllocationRequest spec
+// to match the incoming plugin API request, mirroring the real server's behavior.
+func (m *MockHardwarePluginServer) updateKubernetesNodeAllocationRequest(
+	ctx context.Context, request *hwmgrpluginapi.NodeAllocationRequest, requestID string) error {
+
+	nar := &pluginsv1alpha1.NodeAllocationRequest{}
+	if err := m.k8sClient.Get(ctx, client.ObjectKey{
+		Name: requestID, Namespace: constants.DefaultNamespace,
+	}, nar); err != nil {
+		return fmt.Errorf("failed to get NodeAllocationRequest %s: %w", requestID, err)
+	}
+
+	patch := client.MergeFrom(nar.DeepCopy())
+
+	nar.Spec.NodeGroup = nil
+	for _, group := range request.NodeGroup {
+		nar.Spec.NodeGroup = append(nar.Spec.NodeGroup, pluginsv1alpha1.NodeGroup{
+			Size: group.NodeGroupData.Size,
+			NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
+				Name:             group.NodeGroupData.Name,
+				Role:             group.NodeGroupData.Role,
+				HwProfile:        group.NodeGroupData.HwProfile,
+				ResourcePoolId:   group.NodeGroupData.ResourceGroupId,
+				ResourceSelector: group.NodeGroupData.ResourceSelector,
+			},
+		})
+	}
+
+	if err := m.k8sClient.Patch(ctx, nar, patch); err != nil {
+		return fmt.Errorf("failed to patch NodeAllocationRequest %s: %w", requestID, err)
+	}
+	return nil
 }

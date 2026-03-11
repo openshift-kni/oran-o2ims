@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
@@ -119,7 +120,14 @@ func GetExternalCrdFiles(destDir string) error {
 		// Retry with exponential backoff.
 		url := fmt.Sprintf(GithubCommitsAPI, externalCrd["owner"], externalCrd["repoName"], commitSha)
 		fullCommitSha, err := RetryWithExponentialBackoff(func() (string, error) {
-			resp, err := http.Get(url) //nolint
+			req, err := http.NewRequest(http.MethodGet, url, nil) //nolint:noctx
+			if err != nil {
+				return "", fmt.Errorf("error creating request: %w", err)
+			}
+			if token := os.Getenv("GITHUB_TOKEN"); token != "" {
+				req.Header.Set("Authorization", "token "+token)
+			}
+			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
 				return "", fmt.Errorf("error getting URL: %w", err)
 			}
@@ -284,35 +292,38 @@ func CreateSecrets(names []string, namespace string) []*corev1.Secret {
 	return secrets
 }
 
+// BMHData holds data for creating BareMetalHost test resources.
+type BMHData struct {
+	Name           string
+	Namespace      string
+	MacAddress     string
+	BmcAddress     string
+	ServerType     string
+	Colour         string
+	SiteId         string
+	ResourcePoolId string
+}
+
 // Helper function to create BareMetalHost
-func CreateBareMetalHost(bmhData struct {
-	Name             string
-	MacAddress       string
-	BmcAddress       string
-	Hostname         string
-	RamMB            int32
-	HwProfile        string
-	Colour           string
-	StorageSizeBytes metal3v1alpha1.Capacity
-	IsPreferred      bool
-}) *metal3v1alpha1.BareMetalHost {
+func CreateBareMetalHost(d BMHData) *metal3v1alpha1.BareMetalHost {
 	return &metal3v1alpha1.BareMetalHost{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      bmhData.Name,
-			Namespace: constants.DefaultNamespace,
+			Name:      d.Name,
+			Namespace: d.Namespace,
 			Labels: map[string]string{
-				"resourceselector.clcm.openshift.io/server-colour": bmhData.Colour,
-				"resources.clcm.openshift.io/resourcePoolId":       TestPoolID,
-				"resourceselector.clcm.openshift.io/server-type":   TestServerType,
+				"resourceselector.clcm.openshift.io/server-type":   d.ServerType,
+				"resourceselector.clcm.openshift.io/server-colour": d.Colour,
+				"resources.clcm.openshift.io/resourcePoolId":       d.ResourcePoolId,
+				"resources.clcm.openshift.io/siteId":               d.SiteId,
 			},
 		},
 		Spec: metal3v1alpha1.BareMetalHostSpec{
 			Online: true,
 			BMC: metal3v1alpha1.BMCDetails{
-				Address:         bmhData.BmcAddress,
-				CredentialsName: fmt.Sprintf("%s-bmc-secret", bmhData.Name),
+				Address:         d.BmcAddress,
+				CredentialsName: fmt.Sprintf("%s-bmc-secret", d.Name),
 			},
-			BootMACAddress: bmhData.MacAddress,
+			BootMACAddress: d.MacAddress,
 		},
 	}
 }
@@ -381,6 +392,106 @@ func CreateBMCSecret(name string) *corev1.Secret {
 		Data: map[string][]byte{
 			"username": []byte("admin"),
 			"password": []byte("password123"),
+		},
+	}
+}
+
+// Create HostFirmwareSettings CR
+func CreateHostFirmwareSettings(bmhName, bmhNamespace string) *metal3v1alpha1.HostFirmwareSettings {
+	return &metal3v1alpha1.HostFirmwareSettings{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      bmhName,
+			Namespace: bmhNamespace,
+		},
+		Spec: metal3v1alpha1.HostFirmwareSettingsSpec{
+			Settings: map[string]intstr.IntOrString{},
+		},
+	}
+}
+
+// Update HostFirmwareSettings Status
+func UpdateHostFirmwareSettingsStatus(
+	schemaName, schemaNamespace string,
+	statusSettings map[string]string,
+	valid, changeDetected metav1.ConditionStatus, observedGeneration int64,
+) metal3v1alpha1.HostFirmwareSettingsStatus {
+	return metal3v1alpha1.HostFirmwareSettingsStatus{
+		FirmwareSchema: &metal3v1alpha1.SchemaReference{
+			Name:      schemaName,
+			Namespace: schemaNamespace,
+		},
+		Settings: statusSettings,
+		Conditions: []metav1.Condition{
+			{
+				Type:               string(metal3v1alpha1.FirmwareSettingsValid),
+				Status:             valid,
+				Reason:             "Success",
+				LastTransitionTime: metav1.Now(),
+				ObservedGeneration: observedGeneration,
+			},
+			{
+				Type:               string(metal3v1alpha1.FirmwareSettingsChangeDetected),
+				Status:             changeDetected,
+				LastTransitionTime: metav1.Now(),
+				Reason:             "Success",
+				ObservedGeneration: observedGeneration,
+			},
+		},
+	}
+}
+
+// Create HostFirmwareComponents CR
+func CreateHostFirmwareComponents(bmhName, bmhNamespace string) *metal3v1alpha1.HostFirmwareComponents {
+	return &metal3v1alpha1.HostFirmwareComponents{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      bmhName,
+			Namespace: bmhNamespace,
+		},
+		Spec: metal3v1alpha1.HostFirmwareComponentsSpec{
+			Updates: []metal3v1alpha1.FirmwareUpdate{},
+		},
+	}
+}
+
+// Update HostFirmwareComponents Status
+
+func UpdateHostFirmwareComponentsStatus(
+	bmhName, bmhNamespace string,
+	components []metal3v1alpha1.FirmwareComponentStatus,
+	valid, changeDetected metav1.ConditionStatus, observedGeneration int64,
+) metal3v1alpha1.HostFirmwareComponentsStatus {
+	return metal3v1alpha1.HostFirmwareComponentsStatus{
+		Components: components,
+		Conditions: []metav1.Condition{
+			{
+				Type:               string(metal3v1alpha1.HostFirmwareComponentsValid),
+				Status:             valid,
+				Reason:             "OK",
+				LastTransitionTime: metav1.Now(),
+				ObservedGeneration: observedGeneration,
+			},
+			{
+				Type:               string(metal3v1alpha1.HostFirmwareComponentsChangeDetected),
+				Status:             changeDetected,
+				Reason:             "OK",
+				LastTransitionTime: metav1.Now(),
+				ObservedGeneration: observedGeneration,
+			},
+		},
+	}
+}
+
+// Create FirmwareSchema CR
+func CreateFirmwareSchema(name, namespace, vendor, model string, schema map[string]metal3v1alpha1.SettingSchema) *metal3v1alpha1.FirmwareSchema {
+	return &metal3v1alpha1.FirmwareSchema{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: metal3v1alpha1.FirmwareSchemaSpec{
+			HardwareVendor: vendor,
+			HardwareModel:  model,
+			Schema:         schema,
 		},
 	}
 }

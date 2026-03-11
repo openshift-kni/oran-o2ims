@@ -613,9 +613,8 @@ The following steps are required:
         status: "True"
         type: Provisioned
       - lastTransitionTime: "2025-10-01T21:36:01Z"
-        message: 'AllocatedNode metal3-hwplugin-sno1-dell-xr8620t-pool-dell-xr8620t-sno1:
-          Update Requested'
-        reason: ConfigurationUpdateRequested
+        message: 'Configuration update in progress (AllocatedNode metal3-hwplugin-sno1-dell-xr8620t-pool-dell-xr8620t-sno1)'
+        reason: InProgress
         status: "False"
         type: Configured
     ```
@@ -630,7 +629,7 @@ The following steps are required:
       status: "True"
       type: Provisioned
     - lastTransitionTime: "2025-10-01T21:36:01Z"
-      message: Update Requested
+      message: Update requested
       reason: ConfigurationUpdateRequested
       status: "False"
       type: Configured

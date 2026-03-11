@@ -435,6 +435,20 @@ var (
 			"owner":       "metal3-io",
 			"crdFileName": "metal3.io_preprovisioningimages.yaml",
 		},
+		{
+			"repoName":    "baremetal-operator",
+			"modulePath":  "github.com/metal3-io/baremetal-operator/apis",
+			"crdPath":     "config/base/crds/bases",
+			"owner":       "metal3-io",
+			"crdFileName": "metal3.io_firmwareschemas.yaml",
+		},
+		{
+			"repoName":    "baremetal-operator",
+			"modulePath":  "github.com/metal3-io/baremetal-operator/apis",
+			"crdPath":     "config/base/crds/bases",
+			"owner":       "metal3-io",
+			"crdFileName": "metal3.io_hostupdatepolicies.yaml",
+		},
 	}
 
 	HardwareProfile = &hwmgmtv1alpha1.HardwareProfile{
@@ -449,6 +463,36 @@ var (
 				URL:     "https://example.com/bios-firmware.bin",
 			},
 		},
+	}
+
+	// MNO BMH definitions: N master (R740/green) + M worker (XR8620t/blue)
+	MnoBMHs = func(masterCount, workerCount int) []BMHData {
+		var bmhs []BMHData
+		for i := 1; i <= masterCount; i++ {
+			bmhs = append(bmhs, BMHData{
+				Name:           fmt.Sprintf("cnfdf%d", i),
+				Namespace:      "dell-r740-pool",
+				MacAddress:     fmt.Sprintf("aa:bb:cc:11:00:%02x", i),
+				BmcAddress:     fmt.Sprintf("redfish://192.168.1.%d/redfish/v1/Systems/1", 100+i),
+				ServerType:     "R740",
+				Colour:         "green",
+				SiteId:         "local-123",
+				ResourcePoolId: "dell-r740-pool",
+			})
+		}
+		for i := 1; i <= workerCount; i++ {
+			bmhs = append(bmhs, BMHData{
+				Name:           fmt.Sprintf("cnfdg%d", i),
+				Namespace:      "dell-xr8620t-pool",
+				MacAddress:     fmt.Sprintf("aa:bb:cc:22:00:%02x", i),
+				BmcAddress:     fmt.Sprintf("redfish://192.168.2.%d/redfish/v1/Systems/1", 100+i),
+				ServerType:     "XR8620t",
+				Colour:         "blue",
+				SiteId:         "local-123",
+				ResourcePoolId: "dell-xr8620t-pool",
+			})
+		}
+		return bmhs
 	}
 
 	TestBMHs = []struct {

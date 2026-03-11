@@ -938,46 +938,6 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 		})
 	})
 
-	Describe("getOrCreateHostFirmwareComponents", func() {
-		var fakeClient client.Client
-
-		BeforeEach(func() {
-			fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
-		})
-
-		It("should return existing HFC without creating new one", func() {
-			bmh := createBMH("test-bmh", "test-namespace")
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{}
-
-			// Create HFC first
-			existingHFC := createHFC("test-bmh", "test-namespace", []metal3v1alpha1.FirmwareUpdate{})
-			Expect(fakeClient.Create(ctx, existingHFC)).To(Succeed())
-
-			hfc, created, err := getOrCreateHostFirmwareComponents(ctx, fakeClient, logger, bmh, spec)
-			Expect(err).To(BeNil())
-			Expect(created).To(BeFalse())
-			Expect(hfc).NotTo(BeNil())
-			Expect(hfc.Name).To(Equal("test-bmh"))
-		})
-
-		It("should create new HFC when it does not exist", func() {
-			bmh := createBMH("test-bmh", "test-namespace")
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
-					Version: "1.0.0",
-					URL:     "https://example.com/bios.bin",
-				},
-			}
-
-			hfc, created, err := getOrCreateHostFirmwareComponents(ctx, fakeClient, logger, bmh, spec)
-			Expect(err).To(BeNil())
-			Expect(created).To(BeTrue())
-			Expect(hfc).NotTo(BeNil())
-			Expect(hfc.Name).To(Equal("test-bmh"))
-			Expect(hfc.Spec.Updates).To(HaveLen(1))
-		})
-	})
-
 	Describe("IsFirmwareUpdateRequired", func() {
 		var fakeClient client.Client
 
@@ -994,13 +954,22 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 				},
 			}
 
-			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec)
+			// validateOnly=true: returns error for invalid firmware spec
+			validateOnly := true
+			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("missing BIOS firmware URL"))
+			Expect(required).To(BeFalse())
+
+			// validateOnly=false: returns error for invalid firmware spec
+			validateOnly = false
+			required, err = IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing BIOS firmware URL"))
 			Expect(required).To(BeFalse())
 		})
 
-		It("should return true when HFC is created for the first time", func() {
+		It("should return true when HFC does not exist", func() {
 			bmh := createBMH("test-bmh", "test-namespace")
 			spec := hwmgmtv1alpha1.HardwareProfileSpec{
 				BiosFirmware: hwmgmtv1alpha1.Firmware{
@@ -1009,12 +978,21 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 				},
 			}
 
-			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec)
+			// validateOnly=true: reports update required but does not create HFC
+			validateOnly := true
+			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
 			Expect(err).To(BeNil())
 			Expect(required).To(BeTrue())
-
-			// Verify HFC was created
 			hfc := &metal3v1alpha1.HostFirmwareComponents{}
+			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-namespace"}, hfc)
+			Expect(err).To(HaveOccurred())
+			Expect(errors.IsNotFound(err)).To(BeTrue())
+
+			// validateOnly=false: creates HFC
+			validateOnly = false
+			required, err = IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
+			Expect(err).To(BeNil())
+			Expect(required).To(BeTrue())
 			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-namespace"}, hfc)
 			Expect(err).To(BeNil())
 		})
@@ -1038,7 +1016,15 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			hfc := createHFCWithStatus("test-bmh", "test-namespace", components, []metav1.Condition{}, 1)
 			Expect(fakeClient.Create(ctx, hfc)).To(Succeed())
 
-			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec)
+			// validateOnly=true: reports no update required
+			validateOnly := true
+			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
+			Expect(err).To(BeNil())
+			Expect(required).To(BeFalse())
+
+			// validateOnly=false: reports no update required
+			validateOnly = false
+			required, err = IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
 			Expect(err).To(BeNil())
 			Expect(required).To(BeFalse())
 		})
@@ -1062,14 +1048,22 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			hfc := createHFCWithStatus("test-bmh", "test-namespace", components, []metav1.Condition{}, 1)
 			Expect(fakeClient.Create(ctx, hfc)).To(Succeed())
 
-			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec)
+			// validateOnly=true: reports update required but does not modify HFC
+			validateOnly := true
+			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
 			Expect(err).To(BeNil())
 			Expect(required).To(BeTrue())
+			unchangedHFC := &metal3v1alpha1.HostFirmwareComponents{}
+			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-namespace"}, unchangedHFC)).To(Succeed())
+			Expect(unchangedHFC.Spec.Updates).To(BeEmpty())
 
-			// Verify HFC was updated with new firmware URL
-			updatedHFC := &metal3v1alpha1.HostFirmwareComponents{}
-			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-namespace"}, updatedHFC)
+			// validateOnly=false: updates HFC with new firmware URL
+			validateOnly = false
+			required, err = IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
 			Expect(err).To(BeNil())
+			Expect(required).To(BeTrue())
+			updatedHFC := &metal3v1alpha1.HostFirmwareComponents{}
+			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-namespace"}, updatedHFC)).To(Succeed())
 			Expect(updatedHFC.Spec.Updates).To(HaveLen(1))
 			Expect(updatedHFC.Spec.Updates[0].Component).To(Equal("bios"))
 			Expect(updatedHFC.Spec.Updates[0].URL).To(Equal("https://example.com/new-bios.bin"))
@@ -1102,7 +1096,18 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			hfc := createHFCWithStatus("test-bmh", "test-namespace", components, []metav1.Condition{}, 1)
 			Expect(fakeClient.Create(ctx, hfc)).To(Succeed())
 
-			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec)
+			// validateOnly=true: reports update required but does not modify HFC
+			validateOnly := true
+			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
+			Expect(err).To(BeNil())
+			Expect(required).To(BeTrue())
+			unchangedHFC := &metal3v1alpha1.HostFirmwareComponents{}
+			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-namespace"}, unchangedHFC)).To(Succeed())
+			Expect(unchangedHFC.Spec.Updates).To(BeEmpty())
+
+			// validateOnly=false: updates HFC with updates
+			validateOnly = false
+			required, err = IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
 			Expect(err).To(BeNil())
 			Expect(required).To(BeTrue())
 

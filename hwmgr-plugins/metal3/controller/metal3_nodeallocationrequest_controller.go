@@ -726,8 +726,14 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 			return result, err
 		}
 
-		status, reason, message := deriveNodeAllocationRequestStatusFromNodes(ctx, r.NoncachedClient, r.Logger, nodelist)
-
+		var status metav1.ConditionStatus
+		var reason, message string
+		if len(nodelist.Items) == 1 {
+			status, reason, message = deriveNARStatusFromSingleNode(ctx, r.NoncachedClient, r.Logger, &nodelist.Items[0])
+		} else {
+			status, reason, message = deriveNARStatusFromMultipleNodes(ctx, r.NoncachedClient, r.Logger, nodelist, nodeAllocationRequest)
+		}
+		// Update the NAR status with callback
 		if updateErr := r.updateConditionAndSendCallback(ctx, nodeAllocationRequest,
 			hwmgmtv1alpha1.Configured, hwmgmtv1alpha1.ConditionReason(reason), status, message); updateErr != nil {
 

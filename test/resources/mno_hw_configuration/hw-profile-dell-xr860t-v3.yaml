@@ -1,0 +1,18 @@
+apiVersion: clcm.openshift.io/v1alpha1
+kind: HardwareProfile
+metadata:
+  name: dell-xr8620t-bios-2.4.0-bmc-7.10.80.00
+  namespace: oran-o2ims
+spec:
+  bios:
+    attributes:
+      SysProfile: Custom
+      WorkloadProfile: TelcoOptimizedProfile
+      SriovGlobalEnable: Enabled
+      AcPwrRcvryUserDelay: 140
+  biosFirmware:
+    version: 2.4.0
+    url: https://example.com:8888/firmware/xr8620t/BIOS_JDR1R_WN64_2.4.0.EXE
+  bmcFirmware:
+    version: 7.10.80.00
+    url: https://example.com:8888/firmware/xr8620t/iDRAC-with-Lifecycle-Controller_Firmware_W4NV9_WN64_7.10.80.00_A00.EXE

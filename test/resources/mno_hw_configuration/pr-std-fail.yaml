@@ -1,0 +1,212 @@
+apiVersion: clcm.openshift.io/v1alpha1
+kind: ProvisioningRequest
+metadata:
+  name: 88744070-717a-4305-8461-796244098338
+spec:
+  name: "std-test"
+  templateName: std-dell-r740-green-xr8620t-blue
+  templateVersion: v4-20-15-v1
+  templateParameters:
+    nodeClusterName: std-test
+    oCloudSiteId: "local-123"
+    hwTemplateParameters:
+      nodeGroupData:
+        master:
+          hwProfile: dell-r740-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06
+        worker:
+          hwProfile: dell-xr8620t-bios-2.4.0-bmc-7.10.80.00
+    policyTemplateParameters: {}
+    clusterInstanceParameters:
+      clusterName: std-test
+      apiVIPs:
+        - 192.0.2.2
+      ingressVIPs:
+        - 192.0.2.4
+      nodes:
+      - hostName: master-1.std-test.example.com
+        nodeNetwork:
+          config:
+            dns-resolver:
+              config:
+                search:
+                  - example.com
+                server:
+                  - 8.8.8.8
+            routes:
+              config:
+                - next-hop-address: 192.0.2.254
+            interfaces:
+              - ipv4:
+                  address:
+                    - ip: 192.0.2.10
+                      prefix-length: 24
+      - hostName: master-2.std-test.example.com
+        nodeNetwork:
+          config:
+            dns-resolver:
+              config:
+                search:
+                  - example.com
+                server:
+                  - 8.8.8.8
+            routes:
+              config:
+                - next-hop-address: 192.0.2.254
+            interfaces:
+              - ipv4:
+                  address:
+                    - ip: 192.0.2.17
+                      prefix-length: 24
+      - hostName: master-3.std-test.example.com
+        nodeNetwork:
+          config:
+            dns-resolver:
+              config:
+                search:
+                  - example.com
+                server:
+                  - 8.8.8.8
+            routes:
+              config:
+                - next-hop-address: 192.0.2.254
+            interfaces:
+              - ipv4:
+                  address:
+                    - ip: 192.0.2.18
+                      prefix-length: 24
+      - hostName: worker-1.std-test.example.com
+        nodeNetwork:
+          config:
+            dns-resolver:
+              config:
+                search:
+                  - example.com
+                server:
+                  - 8.8.8.8
+            routes:
+              config:
+                - next-hop-address: 192.0.2.254
+            interfaces:
+              - ipv4:
+                  address:
+                    - ip: 192.0.2.123
+                      prefix-length: 24
+      - hostName: worker-2.std-test.example.com
+        nodeNetwork:
+          config:
+            dns-resolver:
+              config:
+                search:
+                  - example.com
+                server:
+                  - 8.8.8.8
+            routes:
+              config:
+                - next-hop-address: 192.0.2.254
+            interfaces:
+              - ipv4:
+                  address:
+                    - ip: 192.0.2.51
+                      prefix-length: 24
+      - hostName: worker-3.std-test.example.com
+        nodeNetwork:
+          config:
+            dns-resolver:
+              config:
+                search:
+                  - example.com
+                server:
+                  - 8.8.8.8
+            routes:
+              config:
+                - next-hop-address: 192.0.2.254
+            interfaces:
+              - ipv4:
+                  address:
+                    - ip: 192.0.2.54
+                      prefix-length: 24
+      - hostName: worker-4.std-test.example.com
+        nodeNetwork:
+          config:
+            dns-resolver:
+              config:
+                search:
+                  - example.com
+                server:
+                  - 8.8.8.8
+            routes:
+              config:
+                - next-hop-address: 192.0.2.254
+            interfaces:
+              - ipv4:
+                  address:
+                    - ip: 192.0.2.55
+                      prefix-length: 24
+      - hostName: worker-5.std-test.example.com
+        nodeNetwork:
+          config:
+            dns-resolver:
+              config:
+                search:
+                  - example.com
+                server:
+                  - 8.8.8.8
+            routes:
+              config:
+                - next-hop-address: 192.0.2.254
+            interfaces:
+              - ipv4:
+                  address:
+                    - ip: 192.0.2.56
+                      prefix-length: 24
+      - hostName: worker-6.std-test.example.com
+        nodeNetwork:
+          config:
+            dns-resolver:
+              config:
+                search:
+                  - example.com
+                server:
+                  - 8.8.8.8
+            routes:
+              config:
+                - next-hop-address: 192.0.2.254
+            interfaces:
+              - ipv4:
+                  address:
+                    - ip: 192.0.2.57
+                      prefix-length: 24
+      - hostName: worker-7.std-test.example.com
+        nodeNetwork:
+          config:
+            dns-resolver:
+              config:
+                search:
+                  - example.com
+                server:
+                  - 8.8.8.8
+            routes:
+              config:
+                - next-hop-address: 192.0.2.254
+            interfaces:
+              - ipv4:
+                  address:
+                    - ip: 192.0.2.58
+                      prefix-length: 24
+      - hostName: worker-8.std-test.example.com
+        nodeNetwork:
+          config:
+            dns-resolver:
+              config:
+                search:
+                  - example.com
+                server:
+                  - 8.8.8.8
+            routes:
+              config:
+                - next-hop-address: 192.0.2.254
+            interfaces:
+              - ipv4:
+                  address:
+                    - ip: 192.0.2.59
+                      prefix-length: 24

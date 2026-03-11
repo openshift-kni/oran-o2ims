@@ -270,6 +270,10 @@ func createHostFirmwareComponents(ctx context.Context,
 	}
 
 	if err := c.Create(ctx, &hfc); err != nil {
+		if errors.IsAlreadyExists(err) {
+			// Metal3 may have created the HFC concurrently; treat as success.
+			return hfc.DeepCopy(), nil
+		}
 		return nil, fmt.Errorf("failed to create HostFirmwareComponents: %w", err)
 	}
 
@@ -290,20 +294,38 @@ func updateHostFirmwareComponents(ctx context.Context,
 	})
 }
 
+// IsFirmwareUpdateRequired checks whether firmware updates (BIOS firmware, BMC, NIC) are needed
+// for the given BMH. It validates the firmware spec, fetches the existing HostFirmwareComponents (HFC),
+// validates that required components are present, and compares firmware versions.
+//
+// When validateOnly is true, it performs read-only validation and comparison without
+// creating or updating HFC — used to determine if drain is needed before applying.
+// When validateOnly is false, it creates the HFC if missing and updates it when version
+// changes are detected.
 func IsFirmwareUpdateRequired(ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
-	bmh *metal3v1alpha1.BareMetalHost, spec hwmgmtv1alpha1.HardwareProfileSpec) (bool, error) {
+	bmh *metal3v1alpha1.BareMetalHost, spec hwmgmtv1alpha1.HardwareProfileSpec, validateOnly bool) (bool, error) {
+	// Validate firmware spec (URLs, versions) before any resource access
 	if err := validateFirmwareUpdateSpec(spec); err != nil {
 		return false, err
 	}
 
-	existingHFC, created, err := getOrCreateHostFirmwareComponents(ctx, c, logger, bmh, spec)
+	existingHFC, err := getHostFirmwareComponents(ctx, c, bmh.Name, bmh.Namespace)
 	if err != nil {
-		return false, err
-	}
-	// If the resource was just created, we assume an update is needed
-	if created {
+		if !errors.IsNotFound(err) {
+			return false, err
+		}
+		// It's unlikely that the HFC doesn't exist as it should be automatically created
+		// by metal3, but we'll handle it anyway if something goes wrong.
+		if validateOnly {
+			// Return without creating HFC
+			return true, nil
+		}
+		if _, err := createHostFirmwareComponents(ctx, c, bmh, spec); err != nil {
+			return false, fmt.Errorf("failed to create HostFirmwareComponents: %w", err)
+		}
+		logger.InfoContext(ctx, "Successfully created HostFirmwareComponents", slog.String("HFC", bmh.Name))
 		return true, nil
 	}
 
@@ -312,11 +334,17 @@ func IsFirmwareUpdateRequired(ctx context.Context,
 		return false, err
 	}
 
+	// Compare desired firmware versions with current versions
 	updates, updateRequired := isVersionChangeDetected(ctx, logger, &existingHFC.Status, spec)
 
 	// No update needed if already up-to-date
 	if !updateRequired {
 		return false, nil
+	}
+
+	if validateOnly {
+		// Return without updating HFC
+		return true, nil
 	}
 
 	if err := updateHostFirmwareComponents(ctx, c, types.NamespacedName{
@@ -327,29 +355,6 @@ func IsFirmwareUpdateRequired(ctx context.Context,
 	}
 
 	return true, nil
-}
-
-// Retrieves existing HostFirmwareComponents or creates a new one if not found.
-func getOrCreateHostFirmwareComponents(ctx context.Context,
-	c client.Client,
-	logger *slog.Logger,
-	bmh *metal3v1alpha1.BareMetalHost,
-	spec hwmgmtv1alpha1.HardwareProfileSpec) (*metal3v1alpha1.HostFirmwareComponents, bool, error) {
-
-	hfc, err := getHostFirmwareComponents(ctx, c, bmh.Name, bmh.Namespace)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			newHFC, err := createHostFirmwareComponents(ctx, c, bmh, spec)
-			if err != nil {
-				return nil, false, fmt.Errorf("failed to create HostFirmwareComponents: %w", err)
-			}
-			logger.InfoContext(ctx, "Successfully created HostFirmwareComponents", slog.String("HFC", bmh.Name))
-			return newHFC, true, nil
-		}
-		return nil, false, err
-	}
-
-	return hfc, false, nil
 }
 
 func getHostFirmwareComponents(ctx context.Context,

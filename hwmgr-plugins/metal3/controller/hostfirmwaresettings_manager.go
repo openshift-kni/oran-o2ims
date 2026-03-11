@@ -40,6 +40,10 @@ func convertBiosSettingsToHostFirmware(bmh metal3v1alpha1.BareMetalHost, biosSet
 
 func createHostFirmwareSettings(ctx context.Context, c client.Client, logger *slog.Logger, hfs *metal3v1alpha1.HostFirmwareSettings) error {
 	if err := c.Create(ctx, hfs); err != nil {
+		if errors.IsAlreadyExists(err) {
+			// Metal3 may have created the HFS concurrently; treat as success.
+			return nil
+		}
 		logger.InfoContext(ctx, "Failed to create HostFirmwareSettings", slog.String("HFS", hfs.Name))
 		return fmt.Errorf("failed to create HostFirmwareSettings: %w", err)
 	}
@@ -59,17 +63,39 @@ func updateHostFirmwareSettings(ctx context.Context, c client.Client, name types
 	})
 }
 
+// IsBiosUpdateRequired checks whether BIOS settings need to be updated for the given BMH.
+// It fetches the existing HostFirmwareSettings (HFS), validates the desired BIOS settings
+// against the firmware schema, and compares them with the current state.
+//
+// When validateOnly is true, it performs read-only validation and comparison without
+// creating or updating HFS — used to determine if drain is needed before applying.
+// When validateOnly is false, it creates the HFS if missing and updates it when changes
+// are detected.
 func IsBiosUpdateRequired(ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
-	bmh *metal3v1alpha1.BareMetalHost, biosSettings hwmgmtv1alpha1.Bios) (bool, error) {
+	bmh *metal3v1alpha1.BareMetalHost, biosSettings hwmgmtv1alpha1.Bios, validateOnly bool) (bool, error) {
 	hfs := convertBiosSettingsToHostFirmware(*bmh, biosSettings)
 
-	existingHFS, err := getOrCreateHostFirmwareSettings(ctx, c, logger, &hfs)
+	existingHFS, err := getHostFirmwareSettings(ctx, c, hfs.Name, hfs.Namespace)
 	if err != nil {
-		return false, err
+		if !errors.IsNotFound(err) {
+			return false, err
+		}
+		// It's unlikely that the HFS doesn't exist as it should be automatically created
+		// by metal3, but we'll handle it anyway if something goes wrong.
+		if validateOnly {
+			// Return without creating HFS
+			return true, nil
+		}
+		if err := createHostFirmwareSettings(ctx, c, logger, &hfs); err != nil {
+			return false, fmt.Errorf("failed to create HostFirmwareSettings: %w", err)
+		}
+		logger.InfoContext(ctx, "Successfully created HostFirmwareSettings", slog.String("HFS", hfs.Name))
+		return true, nil
 	}
 
+	// Validate desired settings against the firmware schema
 	if err := validateBiosSettings(ctx, c, existingHFS, hfs.Spec.Settings); err != nil {
 		if !typederrors.IsInputError(err) {
 			return false, fmt.Errorf("hfs %s/%s: %w", existingHFS.Namespace, existingHFS.Name, err)
@@ -77,7 +103,25 @@ func IsBiosUpdateRequired(ctx context.Context,
 		return false, err
 	}
 
-	return checkAndUpdateFirmwareSettings(ctx, c, logger, existingHFS, &hfs)
+	// Compare desired settings with current status
+	if !isChangeDetected(ctx, logger, hfs.Spec.Settings, existingHFS.Status.Settings) {
+		logger.InfoContext(ctx, "No changes detected in HostFirmwareSettings", slog.String("HFS", hfs.Name))
+		return false, nil
+	}
+
+	if validateOnly {
+		// Return without updating HFS
+		return true, nil
+	}
+
+	logger.InfoContext(ctx, "Updating existing HostFirmwareSettings", slog.String("HFS", hfs.Name))
+	if err := updateHostFirmwareSettings(ctx, c, types.NamespacedName{Name: hfs.Name, Namespace: hfs.Namespace}, hfs); err != nil {
+		logger.InfoContext(ctx, "Failed to update HostFirmwareSettings", slog.String("HFS", hfs.Name))
+		return false, fmt.Errorf("failed to update HostFirmwareSettings: %w", err)
+	}
+
+	logger.InfoContext(ctx, "Successfully updated HostFirmwareSetting", slog.String("HFS", hfs.Name))
+	return true, nil
 }
 
 func isFirmwareSettingsChangeDetectedAndValid(ctx context.Context,
@@ -118,29 +162,6 @@ func isFirmwareSettingsChangeDetectedAndValid(ctx context.Context,
 	return changeDetected && valid && observed, nil
 }
 
-// Retrieves existing HostFirmwareSettings or creates a new one if not found.
-func getOrCreateHostFirmwareSettings(ctx context.Context,
-	c client.Client,
-	logger *slog.Logger,
-	hfs *metal3v1alpha1.HostFirmwareSettings) (*metal3v1alpha1.HostFirmwareSettings, error) {
-	existingHFS, err := getHostFirmwareSettings(ctx, c, hfs.Name, hfs.Namespace)
-
-	if err != nil {
-		if errors.IsNotFound(err) {
-			if err := createHostFirmwareSettings(ctx, c, logger, hfs); err != nil {
-				logger.InfoContext(ctx, "Failed to create HostFirmwareSettings", slog.String("HFS", hfs.Name))
-				return nil, fmt.Errorf("failed to create HostFirmwareSettings: %w", err)
-			}
-			logger.InfoContext(ctx, "Successfully created HostFirmwareSettings", slog.String("HFS", hfs.Name))
-			return hfs.DeepCopy(), nil
-		}
-		logger.InfoContext(ctx, "Failed to get HostFirmwareSettings", slog.String("HFS", hfs.Name))
-		return nil, err
-	}
-
-	return existingHFS, nil
-}
-
 func getHostFirmwareSettings(ctx context.Context, c client.Reader, name, namespace string) (*metal3v1alpha1.HostFirmwareSettings, error) {
 	hfs := &metal3v1alpha1.HostFirmwareSettings{}
 	err := c.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, hfs)
@@ -174,27 +195,6 @@ func validateBiosSettings(ctx context.Context,
 	}
 
 	return nil
-}
-
-// Checks if BIOS settings have changed and updates if necessary.
-func checkAndUpdateFirmwareSettings(ctx context.Context,
-	c client.Client,
-	logger *slog.Logger,
-	existingHFS, hfs *metal3v1alpha1.HostFirmwareSettings) (bool, error) {
-	if isChangeDetected(ctx, logger, hfs.Spec.Settings, existingHFS.Status.Settings) {
-		logger.InfoContext(ctx, "Updating existing HostFirmwareSettings", slog.String("HFS", hfs.Name))
-
-		if err := updateHostFirmwareSettings(ctx, c, types.NamespacedName{Name: hfs.Name, Namespace: hfs.Namespace}, *hfs); err != nil {
-			logger.InfoContext(ctx, "Failed to update HostFirmwareSettings", slog.String("HFS", hfs.Name))
-			return false, fmt.Errorf("failed to update HostFirmwareSettings: %w", err)
-		}
-
-		logger.InfoContext(ctx, "Successfully updated HostFirmwareSetting", slog.String("HFS", hfs.Name))
-		return true, nil
-	}
-
-	logger.InfoContext(ctx, "No changes detected in HostFirmwareSettings", slog.String("HFS", hfs.Name))
-	return false, nil
 }
 
 func validSettings(hfs *metal3v1alpha1.HostFirmwareSettings, schema *metal3v1alpha1.FirmwareSchema,
