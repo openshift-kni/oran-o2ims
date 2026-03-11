@@ -21,7 +21,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
-	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
@@ -167,7 +166,7 @@ func (d *ResourcePoolDataSource) HandleSyncComplete(ctx context.Context, objectT
 
 // handleResourcePoolWatchEvent handles an async event received for a ResourcePool CR
 func (d *ResourcePoolDataSource) handleResourcePoolWatchEvent(ctx context.Context, pool *inventoryv1alpha1.ResourcePool, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.Debug("handleResourcePoolWatchEvent received", "resourcePoolId", pool.Spec.ResourcePoolId, "type", eventType)
+	slog.Debug("handleResourcePoolWatchEvent received", "name", pool.Name, "type", eventType)
 
 	// DELETE events always proceed (finalizers guarantee deletion order)
 	// For CREATE/UPDATE, only emit if CR is Ready=True
@@ -175,13 +174,16 @@ func (d *ResourcePoolDataSource) handleResourcePoolWatchEvent(ctx context.Contex
 		if !isResourceReady(pool.Status.Conditions) {
 			slog.Debug("ResourcePool not ready, skipping",
 				"name", pool.Name,
-				"resourcePoolId", pool.Spec.ResourcePoolId,
 				"reason", getReadyReason(pool.Status.Conditions))
 			return uuid.Nil, nil
 		}
 	}
 
-	record := d.ConvertResourcePoolToModel(pool)
+	forDelete := eventType == async.Deleted
+	record, err := d.ConvertResourcePoolToModel(pool, forDelete)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to convert ResourcePool CR to model: %w", err)
+	}
 
 	select {
 	case <-ctx.Done():
@@ -191,19 +193,39 @@ func (d *ResourcePoolDataSource) handleResourcePoolWatchEvent(ctx context.Contex
 		DataSourceID: d.dataSourceID,
 		EventType:    eventType,
 		Object:       record}:
-		// return the generated ResourcePoolID (UUID) for tracking purposes
+		// return the ResourcePoolID (from metadata.uid) for tracking purposes
 		return record.ResourcePoolID, nil
 	}
 }
 
-// convertResourcePoolToModel converts a ResourcePool CR to a database model
 // ConvertResourcePoolToModel converts a ResourcePool CR to a database model.
-func (d *ResourcePoolDataSource) ConvertResourcePoolToModel(pool *inventoryv1alpha1.ResourcePool) models.ResourcePool {
-	// Generate deterministic UUID from cloudID and resourcePoolId
-	resourcePoolID := ctlrutils.MakeUUIDFromNames(ResourcePoolUUIDNamespace, d.cloudID, pool.Spec.ResourcePoolId)
+func (d *ResourcePoolDataSource) ConvertResourcePoolToModel(pool *inventoryv1alpha1.ResourcePool, forDelete bool) (models.ResourcePool, error) {
+	// Use metadata.uid as the resourcePoolId (UUID)
+	resourcePoolID, err := uuid.Parse(string(pool.UID))
+	if err != nil {
+		return models.ResourcePool{}, fmt.Errorf("failed to parse ResourcePool UID %q: %w", pool.UID, err)
+	}
 
-	// Generate deterministic UUID for OCloudSiteID from cloudID and oCloudSiteId
-	oCloudSiteID := ctlrutils.MakeUUIDFromNames(OCloudSiteUUIDNamespace, d.cloudID, pool.Spec.OCloudSiteId)
+	// For DELETE: oCloudSiteID is not needed (zero UUID is fine).
+	// For CREATE/UPDATE: resolvedOCloudSiteUID must be populated by controller if Ready=True.
+	var oCloudSiteID uuid.UUID
+	if !forDelete {
+		if pool.Status.ResolvedOCloudSiteUID == "" {
+			slog.Error("ResourcePool has Ready=True but no resolvedOCloudSiteUID, skipping",
+				slog.String("name", pool.Name),
+				slog.String("namespace", pool.Namespace))
+			return models.ResourcePool{}, fmt.Errorf("missing resolvedOCloudSiteUID for pool %s/%s", pool.Namespace, pool.Name)
+		}
+
+		oCloudSiteID, err = uuid.Parse(pool.Status.ResolvedOCloudSiteUID)
+		if err != nil {
+			slog.Error("Invalid UUID in resolvedOCloudSiteUID, skipping",
+				slog.String("name", pool.Name),
+				slog.String("value", pool.Status.ResolvedOCloudSiteUID),
+				slog.Any("error", err))
+			return models.ResourcePool{}, fmt.Errorf("invalid resolvedOCloudSiteUID for pool %s/%s: %w", pool.Namespace, pool.Name, err)
+		}
+	}
 
 	var extensions map[string]interface{}
 	if pool.Spec.Extensions != nil {
@@ -215,12 +237,12 @@ func (d *ResourcePoolDataSource) ConvertResourcePoolToModel(pool *inventoryv1alp
 
 	return models.ResourcePool{
 		ResourcePoolID: resourcePoolID,
-		Name:           pool.Name, // Use metadata.name
+		Name:           pool.Name,
 		Description:    pool.Spec.Description,
 		OCloudSiteID:   oCloudSiteID,
 		Extensions:     extensions,
 		DataSourceID:   d.dataSourceID,
 		GenerationID:   int(d.generationID.Load()),
 		ExternalID:     fmt.Sprintf("%s/%s", pool.Namespace, pool.Name),
-	}
+	}, nil
 }

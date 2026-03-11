@@ -37,7 +37,7 @@ var _ = Describe("OCloudSiteDataSource Watch", Label("envtest"), func() {
 		eventChannel = make(chan *async.AsyncChangeEvent, 10)
 
 		var err error
-		ds, err = collector.NewOCloudSiteDataSource(testCloudID, k8sWatchClient)
+		ds, err = collector.NewOCloudSiteDataSource(testCloudID, newWatchClient())
 		Expect(err).ToNot(HaveOccurred())
 
 		// Initialize the data source
@@ -49,7 +49,9 @@ var _ = Describe("OCloudSiteDataSource Watch", Label("envtest"), func() {
 
 	AfterEach(func() {
 		watchCancel()
-		close(eventChannel)
+		// Note: We intentionally don't close eventChannel here.
+		// Closing immediately after watchCancel() risks a panic if a
+		// goroutine is still sending. The channel will be GC'd anyway.
 	})
 
 	It("receives Created event when OCloudSite CR is created with Ready=True", func() {
@@ -67,13 +69,12 @@ var _ = Describe("OCloudSiteDataSource Watch", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.OCloudSiteSpec{
-				SiteID:           "site-watch-create",
-				GlobalLocationID: "LOC-001",
-				Description:      "Testing watch create for site",
+				GlobalLocationName: "test-location",
+				Description:        "Testing watch create for site",
 			},
 		}
 		Expect(k8sClient.Create(ctx, site)).To(Succeed())
-		DeferCleanup(func() { _ = k8sClient.Delete(ctx, site) })
+		DeferCleanup(func() { deleteAndWait(site) })
 
 		// Set Ready=True status (required for event to be emitted)
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(site), site)).To(Succeed())
@@ -93,11 +94,11 @@ var _ = Describe("OCloudSiteDataSource Watch", Label("envtest"), func() {
 		// Verify the object is an OCloudSite model
 		siteModel, ok := event.Object.(models.OCloudSite)
 		Expect(ok).To(BeTrue())
-		Expect(siteModel.GlobalLocationID).To(Equal("LOC-001"))
+		Expect(siteModel.GlobalLocationID).To(Equal("test-location"))
 		Expect(siteModel.Name).To(Equal("watch-test-site-create"))
 		Expect(siteModel.Description).To(Equal("Testing watch create for site"))
 		Expect(siteModel.DataSourceID).To(Equal(testDSID))
-		// OCloudSiteID should be a deterministically generated UUID
+		// OCloudSiteID should be from metadata.uid
 		Expect(siteModel.OCloudSiteID).ToNot(Equal(uuid.Nil))
 	})
 
@@ -109,13 +110,12 @@ var _ = Describe("OCloudSiteDataSource Watch", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.OCloudSiteSpec{
-				SiteID:           "site-watch-update",
-				GlobalLocationID: "LOC-001",
-				Description:      "Original site description",
+				GlobalLocationName: "test-location",
+				Description:        "Original site description",
 			},
 		}
 		Expect(k8sClient.Create(ctx, site)).To(Succeed())
-		DeferCleanup(func() { _ = k8sClient.Delete(ctx, site) })
+		DeferCleanup(func() { deleteAndWait(site) })
 
 		// Set Ready=True status (required for events to be emitted)
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(site), site)).To(Succeed())
@@ -160,9 +160,8 @@ var _ = Describe("OCloudSiteDataSource Watch", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.OCloudSiteSpec{
-				SiteID:           "site-watch-delete",
-				GlobalLocationID: "LOC-001",
-				Description:      "Will be deleted",
+				GlobalLocationName: "test-location",
+				Description:        "Will be deleted",
 			},
 		}
 		Expect(k8sClient.Create(ctx, site)).To(Succeed())
@@ -196,10 +195,10 @@ var _ = Describe("OCloudSiteDataSource Watch", Label("envtest"), func() {
 
 		siteModel, ok := event.Object.(models.OCloudSite)
 		Expect(ok).To(BeTrue())
-		Expect(siteModel.GlobalLocationID).To(Equal("LOC-001"))
+		Expect(siteModel.GlobalLocationID).To(Equal("test-location"))
 	})
 
-	It("generates deterministic UUID for OCloudSiteID", func() {
+	It("uses metadata.uid for OCloudSiteID", func() {
 		// Start watching
 		err := ds.Watch(watchCtx)
 		Expect(err).ToNot(HaveOccurred())
@@ -214,16 +213,18 @@ var _ = Describe("OCloudSiteDataSource Watch", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.OCloudSiteSpec{
-				SiteID:           "site-uuid-test",
-				GlobalLocationID: "LOC-001",
-				Description:      "Testing UUID generation",
+				GlobalLocationName: "test-location",
+				Description:        "Testing UUID from metadata.uid",
 			},
 		}
 		Expect(k8sClient.Create(ctx, site)).To(Succeed())
-		DeferCleanup(func() { _ = k8sClient.Delete(ctx, site) })
+		DeferCleanup(func() { deleteAndWait(site) })
+
+		// Get the created site to capture its metadata.uid
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(site), site)).To(Succeed())
+		expectedUID := uuid.MustParse(string(site.UID))
 
 		// Set Ready=True status (required for event to be emitted)
-		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(site), site)).To(Succeed())
 		site.Status.Conditions = []metav1.Condition{
 			{Type: inventoryv1alpha1.ConditionTypeReady, Status: metav1.ConditionTrue, Reason: inventoryv1alpha1.ReasonReady, LastTransitionTime: metav1.Now()},
 		}
@@ -235,20 +236,9 @@ var _ = Describe("OCloudSiteDataSource Watch", Label("envtest"), func() {
 		// Get the OCloudSiteID from the event
 		siteModel, ok := event.Object.(models.OCloudSite)
 		Expect(ok).To(BeTrue())
-		firstUUID := siteModel.OCloudSiteID
 
-		// The UUID should be deterministic - creating a new datasource with the same cloudID
-		// and processing the same siteId should produce the same UUID
-		ds2, err := collector.NewOCloudSiteDataSource(testCloudID, k8sWatchClient)
-		Expect(err).ToNot(HaveOccurred())
-		ds2.Init(testDSID, 0, nil) // nil channel ok for this test
+		// The OCloudSiteID should match the metadata.uid from Kubernetes
+		Expect(siteModel.OCloudSiteID).To(Equal(expectedUID))
 
-		// Fetch the site and convert it manually
-		fetchedSite := &inventoryv1alpha1.OCloudSite{}
-		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetchedSite)).To(Succeed())
-		convertedModel := ds2.ConvertOCloudSiteToModel(fetchedSite)
-
-		// The UUIDs should match
-		Expect(convertedModel.OCloudSiteID).To(Equal(firstUUID))
 	})
 })

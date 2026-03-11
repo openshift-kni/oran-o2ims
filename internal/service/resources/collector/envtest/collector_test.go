@@ -8,7 +8,6 @@ package envtest
 
 import (
 	"context"
-	"time"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -30,8 +29,7 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
-				GlobalLocationID: "LOC-INVALID",
-				Description:      "Missing address fields",
+				Description: "Missing address fields",
 				// Missing: coordinate, civicAddress, AND address
 			},
 		}
@@ -46,8 +44,7 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
-				GlobalLocationID: "LOC-COORD",
-				Description:      "Has coordinate",
+				Description: "Has coordinate",
 				Coordinate: &inventoryv1alpha1.GeoLocation{
 					Latitude:  "40.7128",
 					Longitude: "-74.0060",
@@ -55,12 +52,11 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, loc)).To(Succeed())
-		DeferCleanup(func() { _ = k8sClient.Delete(ctx, loc) })
+		DeferCleanup(func() { deleteAndWait(loc) })
 
 		// verify all fields
 		fetched := &inventoryv1alpha1.Location{}
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), fetched)).To(Succeed())
-		Expect(fetched.Spec.GlobalLocationID).To(Equal("LOC-COORD"))
 		Expect(fetched.Name).To(Equal("valid-loc-coord"))
 		Expect(fetched.Spec.Description).To(Equal("Has coordinate"))
 		Expect(fetched.Spec.Coordinate).ToNot(BeNil())
@@ -79,20 +75,18 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
-				GlobalLocationID: "LOC-CIVIC",
-				Description:      "Has civic address",
+				Description: "Has civic address",
 				CivicAddress: []inventoryv1alpha1.CivicAddressElement{
 					{CaType: 0, CaValue: "US"},
 				},
 			},
 		}
 		Expect(k8sClient.Create(ctx, loc)).To(Succeed())
-		DeferCleanup(func() { _ = k8sClient.Delete(ctx, loc) })
+		DeferCleanup(func() { deleteAndWait(loc) })
 
 		// verify all fields
 		fetched := &inventoryv1alpha1.Location{}
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), fetched)).To(Succeed())
-		Expect(fetched.Spec.GlobalLocationID).To(Equal("LOC-CIVIC"))
 		Expect(fetched.Name).To(Equal("valid-loc-civic"))
 		Expect(fetched.Spec.Description).To(Equal("Has civic address"))
 		Expect(fetched.Spec.Coordinate).To(BeNil())
@@ -110,18 +104,16 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
-				GlobalLocationID: "LOC-ADDR",
-				Description:      "Has address string",
-				Address:          ptrTo("123 Main St, City, Country"),
+				Description: "Has address string",
+				Address:     ptrTo("123 Main St, City, Country"),
 			},
 		}
 		Expect(k8sClient.Create(ctx, loc)).To(Succeed())
-		DeferCleanup(func() { _ = k8sClient.Delete(ctx, loc) })
+		DeferCleanup(func() { deleteAndWait(loc) })
 
 		// verify all fields
 		fetched := &inventoryv1alpha1.Location{}
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), fetched)).To(Succeed())
-		Expect(fetched.Spec.GlobalLocationID).To(Equal("LOC-ADDR"))
 		Expect(fetched.Name).To(Equal("valid-loc-addr"))
 		Expect(fetched.Spec.Description).To(Equal("Has address string"))
 		Expect(fetched.Spec.Coordinate).To(BeNil())
@@ -138,8 +130,7 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
-				GlobalLocationID: "LOC-LAT-INVALID",
-				Description:      "Latitude out of range",
+				Description: "Latitude out of range",
 				Coordinate: &inventoryv1alpha1.GeoLocation{
 					Latitude:  "100.0", // Invalid: > 90
 					Longitude: "0.0",
@@ -158,8 +149,7 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
-				GlobalLocationID: "LOC-LON-INVALID",
-				Description:      "Longitude out of range",
+				Description: "Longitude out of range",
 				Coordinate: &inventoryv1alpha1.GeoLocation{
 					Latitude:  "0.0",
 					Longitude: "200.0", // Invalid: > 180
@@ -178,8 +168,7 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
-				GlobalLocationID: "LOC-LAT-PATTERN",
-				Description:      "Latitude is not a number",
+				Description: "Latitude is not a number",
 				Coordinate: &inventoryv1alpha1.GeoLocation{
 					Latitude:  "not-a-number",
 					Longitude: "0.0",
@@ -198,8 +187,7 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
-				GlobalLocationID: "LOC-BOUNDARY",
-				Description:      "At boundary values",
+				Description: "At boundary values",
 				Coordinate: &inventoryv1alpha1.GeoLocation{
 					Latitude:  "90.0",   // Max valid latitude
 					Longitude: "-180.0", // Min valid longitude
@@ -207,12 +195,11 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, loc)).To(Succeed())
-		DeferCleanup(func() { _ = k8sClient.Delete(ctx, loc) })
+		DeferCleanup(func() { deleteAndWait(loc) })
 
 		// verify all fields
 		fetched := &inventoryv1alpha1.Location{}
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), fetched)).To(Succeed())
-		Expect(fetched.Spec.GlobalLocationID).To(Equal("LOC-BOUNDARY"))
 		Expect(fetched.Name).To(Equal("valid-boundary-coords"))
 		Expect(fetched.Spec.Description).To(Equal("At boundary values"))
 		Expect(fetched.Spec.Coordinate).ToNot(BeNil())
@@ -232,8 +219,7 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
-				GlobalLocationID: "LOC-ALT",
-				Description:      "Has altitude",
+				Description: "Has altitude",
 				Coordinate: &inventoryv1alpha1.GeoLocation{
 					Latitude:  "40.7128",
 					Longitude: "-74.0060",
@@ -242,12 +228,11 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, loc)).To(Succeed())
-		DeferCleanup(func() { _ = k8sClient.Delete(ctx, loc) })
+		DeferCleanup(func() { deleteAndWait(loc) })
 
 		// verify all fields
 		fetched := &inventoryv1alpha1.Location{}
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), fetched)).To(Succeed())
-		Expect(fetched.Spec.GlobalLocationID).To(Equal("LOC-ALT"))
 		Expect(fetched.Name).To(Equal("valid-with-altitude"))
 		Expect(fetched.Spec.Description).To(Equal("Has altitude"))
 		Expect(fetched.Spec.Coordinate).ToNot(BeNil())
@@ -262,16 +247,15 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 })
 
 var _ = Describe("OCloudSite Validation", Label("envtest"), func() {
-	It("rejects OCloudSite with empty siteId", func() {
+	It("rejects OCloudSite with empty globalLocationName", func() {
 		site := &inventoryv1alpha1.OCloudSite{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "invalid-site-empty-siteid",
+				Name:      "invalid-site-empty-locname",
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.OCloudSiteSpec{
-				SiteID:           "", // Invalid: empty
-				GlobalLocationID: "LOC-001",
-				Description:      "Empty siteId",
+				GlobalLocationName: "", // Invalid: empty
+				Description:        "Empty globalLocationName",
 			},
 		}
 		err := k8sClient.Create(ctx, site)
@@ -286,19 +270,17 @@ var _ = Describe("OCloudSite Validation", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.OCloudSiteSpec{
-				SiteID:           "site-valid",
-				GlobalLocationID: "LOC-001",
-				Description:      "A valid site",
+				GlobalLocationName: "test-location",
+				Description:        "A valid site",
 			},
 		}
 		Expect(k8sClient.Create(ctx, site)).To(Succeed())
-		DeferCleanup(func() { _ = k8sClient.Delete(ctx, site) })
+		DeferCleanup(func() { deleteAndWait(site) })
 
 		// verify all fields
 		fetched := &inventoryv1alpha1.OCloudSite{}
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetched)).To(Succeed())
-		Expect(fetched.Spec.SiteID).To(Equal("site-valid"))
-		Expect(fetched.Spec.GlobalLocationID).To(Equal("LOC-001"))
+		Expect(fetched.Spec.GlobalLocationName).To(Equal("test-location"))
 		Expect(fetched.Name).To(Equal("valid-site"))
 		Expect(fetched.Spec.Description).To(Equal("A valid site"))
 		Expect(fetched.Spec.Extensions).To(BeEmpty())
@@ -306,33 +288,15 @@ var _ = Describe("OCloudSite Validation", Label("envtest"), func() {
 })
 
 var _ = Describe("ResourcePool Validation", Label("envtest"), func() {
-	It("rejects ResourcePool with empty resourcePoolId", func() {
+	It("rejects ResourcePool with empty oCloudSiteName", func() {
 		rp := &inventoryv1alpha1.ResourcePool{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "invalid-rp-empty-poolid",
+				Name:      "invalid-rp-empty-sitename",
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.ResourcePoolSpec{
-				ResourcePoolId: "", // Invalid: empty
-				OCloudSiteId:   "site-001",
-				Description:    "Empty resourcePoolId",
-			},
-		}
-		err := k8sClient.Create(ctx, rp)
-		Expect(err).To(HaveOccurred())
-		// MinLength validation
-	})
-
-	It("rejects ResourcePool with empty oCloudSiteId", func() {
-		rp := &inventoryv1alpha1.ResourcePool{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "invalid-rp-empty-siteid",
-				Namespace: testNamespace,
-			},
-			Spec: inventoryv1alpha1.ResourcePoolSpec{
-				ResourcePoolId: "pool-001",
-				OCloudSiteId:   "", // Invalid: empty
-				Description:    "Empty oCloudSiteId",
+				OCloudSiteName: "", // Invalid: empty
+				Description:    "Empty oCloudSiteName",
 			},
 		}
 		err := k8sClient.Create(ctx, rp)
@@ -347,19 +311,17 @@ var _ = Describe("ResourcePool Validation", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.ResourcePoolSpec{
-				ResourcePoolId: "pool-valid-001",
-				OCloudSiteId:   "site-valid-001",
+				OCloudSiteName: "test-site",
 				Description:    "A valid resource pool",
 			},
 		}
 		Expect(k8sClient.Create(ctx, rp)).To(Succeed())
-		DeferCleanup(func() { _ = k8sClient.Delete(ctx, rp) })
+		DeferCleanup(func() { deleteAndWait(rp) })
 
 		// Verify all fields
 		fetched := &inventoryv1alpha1.ResourcePool{}
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rp), fetched)).To(Succeed())
-		Expect(fetched.Spec.ResourcePoolId).To(Equal("pool-valid-001"))
-		Expect(fetched.Spec.OCloudSiteId).To(Equal("site-valid-001"))
+		Expect(fetched.Spec.OCloudSiteName).To(Equal("test-site"))
 		Expect(fetched.Name).To(Equal("valid-rp-basic"))
 		Expect(fetched.Spec.Description).To(Equal("A valid resource pool"))
 		Expect(fetched.Spec.Extensions).To(BeEmpty())
@@ -372,8 +334,7 @@ var _ = Describe("ResourcePool Validation", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.ResourcePoolSpec{
-				ResourcePoolId: "pool-full-001",
-				OCloudSiteId:   "site-full-001",
+				OCloudSiteName: "test-site-full",
 				Description:    "A resource pool with all fields",
 				Extensions: map[string]string{
 					"vendor": "acme",
@@ -383,13 +344,12 @@ var _ = Describe("ResourcePool Validation", Label("envtest"), func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, rp)).To(Succeed())
-		DeferCleanup(func() { _ = k8sClient.Delete(ctx, rp) })
+		DeferCleanup(func() { deleteAndWait(rp) })
 
 		// Verify all fields
 		fetched := &inventoryv1alpha1.ResourcePool{}
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rp), fetched)).To(Succeed())
-		Expect(fetched.Spec.ResourcePoolId).To(Equal("pool-full-001"))
-		Expect(fetched.Spec.OCloudSiteId).To(Equal("site-full-001"))
+		Expect(fetched.Spec.OCloudSiteName).To(Equal("test-site-full"))
 		Expect(fetched.Name).To(Equal("valid-rp-full"))
 		Expect(fetched.Spec.Description).To(Equal("A resource pool with all fields"))
 		Expect(fetched.Spec.Extensions).To(HaveLen(3))
@@ -415,7 +375,7 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 		eventChannel = make(chan *async.AsyncChangeEvent, 10)
 
 		var err error
-		ds, err = collector.NewLocationDataSource(testCloudID, k8sWatchClient)
+		ds, err = collector.NewLocationDataSource(testCloudID, newWatchClient())
 		Expect(err).ToNot(HaveOccurred())
 
 		// Initialize the data source
@@ -427,7 +387,9 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 
 	AfterEach(func() {
 		watchCancel()
-		close(eventChannel)
+		// Note: We intentionally don't close eventChannel here.
+		// Closing immediately after watchCancel() risks a panic if a
+		// goroutine is still sending. The channel will be GC'd anyway.
 	})
 
 	It("receives Created event when Location CR is created with Ready=True", func() {
@@ -445,13 +407,12 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
-				GlobalLocationID: "LOC-WATCH-CREATE",
-				Description:      "Testing watch create",
-				Address:          ptrTo("123 Watch Street"),
+				Description: "Testing watch create",
+				Address:     ptrTo("123 Watch Street"),
 			},
 		}
 		Expect(k8sClient.Create(ctx, loc)).To(Succeed())
-		DeferCleanup(func() { _ = k8sClient.Delete(ctx, loc) })
+		DeferCleanup(func() { deleteAndWait(loc) })
 
 		// Set Ready=True status (required for event to be emitted)
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), loc)).To(Succeed())
@@ -460,7 +421,7 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 		}
 		Expect(k8sClient.Status().Update(ctx, loc)).To(Succeed())
 
-		// Wait for the event
+		// Wait for the event (use name filter to avoid stale events from previous tests)
 		event := waitForEvent(eventChannel)
 
 		// Verify the event
@@ -471,7 +432,7 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 		// Verify the object is a Location model
 		locModel, ok := event.Object.(models.Location)
 		Expect(ok).To(BeTrue())
-		Expect(locModel.GlobalLocationID).To(Equal("LOC-WATCH-CREATE"))
+		Expect(locModel.GlobalLocationID).To(Equal("watch-test-create")) // metadata.name is globalLocationId
 		Expect(locModel.Name).To(Equal("watch-test-create"))
 		Expect(locModel.Description).To(Equal("Testing watch create"))
 		Expect(locModel.Address).ToNot(BeNil())
@@ -487,13 +448,12 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
-				GlobalLocationID: "LOC-WATCH-UPDATE",
-				Description:      "Original description",
-				Address:          ptrTo("Original Address"),
+				Description: "Original description",
+				Address:     ptrTo("Original Address"),
 			},
 		}
 		Expect(k8sClient.Create(ctx, loc)).To(Succeed())
-		DeferCleanup(func() { _ = k8sClient.Delete(ctx, loc) })
+		DeferCleanup(func() { deleteAndWait(loc) })
 
 		// Set Ready=True status (required for events to be emitted)
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), loc)).To(Succeed())
@@ -517,7 +477,7 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 		loc.Spec.Description = "Updated description"
 		Expect(k8sClient.Update(ctx, loc)).To(Succeed())
 
-		// Wait for the update event
+		// Wait for the update event (use name filter to avoid stale events from previous tests)
 		event := waitForEvent(eventChannel)
 
 		// Verify the event
@@ -526,7 +486,7 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 
 		locModel, ok := event.Object.(models.Location)
 		Expect(ok).To(BeTrue())
-		Expect(locModel.GlobalLocationID).To(Equal("LOC-WATCH-UPDATE"))
+		Expect(locModel.GlobalLocationID).To(Equal("watch-test-update"))
 		Expect(locModel.Name).To(Equal("watch-test-update"))
 		Expect(locModel.Description).To(Equal("Updated description"))
 	})
@@ -539,9 +499,8 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
-				GlobalLocationID: "LOC-WATCH-DELETE",
-				Description:      "Will be deleted",
-				Address:          ptrTo("Delete Street"),
+				Description: "Will be deleted",
+				Address:     ptrTo("Delete Street"),
 			},
 		}
 		Expect(k8sClient.Create(ctx, loc)).To(Succeed())
@@ -566,7 +525,7 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 		// Delete the Location CR
 		Expect(k8sClient.Delete(ctx, loc)).To(Succeed())
 
-		// Wait for the delete event
+		// Wait for the delete event (use name filter to avoid stale events from previous tests)
 		event := waitForEvent(eventChannel)
 
 		// Verify the event
@@ -575,7 +534,7 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 
 		locModel, ok := event.Object.(models.Location)
 		Expect(ok).To(BeTrue())
-		Expect(locModel.GlobalLocationID).To(Equal("LOC-WATCH-DELETE"))
+		Expect(locModel.GlobalLocationID).To(Equal("watch-test-delete"))
 	})
 
 	It("converts coordinate to GeoJSON format", func() {
@@ -594,8 +553,7 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
-				GlobalLocationID: "LOC-WATCH-COORD",
-				Description:      "Testing coordinate conversion",
+				Description: "Testing coordinate conversion",
 				Coordinate: &inventoryv1alpha1.GeoLocation{
 					Latitude:  "40.7128",
 					Longitude: "-74.0060",
@@ -604,7 +562,7 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, loc)).To(Succeed())
-		DeferCleanup(func() { _ = k8sClient.Delete(ctx, loc) })
+		DeferCleanup(func() { deleteAndWait(loc) })
 
 		// Set Ready=True status (required for event to be emitted)
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), loc)).To(Succeed())
@@ -613,7 +571,7 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 		}
 		Expect(k8sClient.Status().Update(ctx, loc)).To(Succeed())
 
-		// Wait for the event
+		// Wait for the event (use name filter to avoid stale events from previous tests)
 		event := waitForEvent(eventChannel)
 
 		// Verify the coordinate was converted to GeoJSON
@@ -645,8 +603,7 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
-				GlobalLocationID: "LOC-WATCH-CIVIC",
-				Description:      "Testing civicAddress conversion",
+				Description: "Testing civicAddress conversion",
 				CivicAddress: []inventoryv1alpha1.CivicAddressElement{
 					{CaType: 0, CaValue: "US"},        // Country (ISO 3166-1)
 					{CaType: 1, CaValue: "Virginia"},  // State/Province
@@ -658,7 +615,7 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, loc)).To(Succeed())
-		DeferCleanup(func() { _ = k8sClient.Delete(ctx, loc) })
+		DeferCleanup(func() { deleteAndWait(loc) })
 
 		// Set Ready=True status (required for event to be emitted)
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), loc)).To(Succeed())
@@ -667,13 +624,13 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 		}
 		Expect(k8sClient.Status().Update(ctx, loc)).To(Succeed())
 
-		// Wait for the event
+		// Wait for the event (use name filter to avoid stale events from previous tests)
 		event := waitForEvent(eventChannel)
 
 		// Verify the civicAddress was converted to database format
 		locModel, ok := event.Object.(models.Location)
 		Expect(ok).To(BeTrue())
-		Expect(locModel.GlobalLocationID).To(Equal("LOC-WATCH-CIVIC"))
+		Expect(locModel.GlobalLocationID).To(Equal("watch-test-civic"))
 		Expect(locModel.CivicAddress).ToNot(BeNil())
 		Expect(locModel.CivicAddress).To(HaveLen(6))
 
@@ -707,9 +664,8 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.LocationSpec{
-				GlobalLocationID: "LOC-WATCH-EXT",
-				Description:      "Testing extensions propagation",
-				Address:          ptrTo("123 Extension St"),
+				Description: "Testing extensions propagation",
+				Address:     ptrTo("123 Extension St"),
 				Extensions: map[string]string{
 					"region":      "us-east",
 					"tier":        "primary",
@@ -719,7 +675,7 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, loc)).To(Succeed())
-		DeferCleanup(func() { _ = k8sClient.Delete(ctx, loc) })
+		DeferCleanup(func() { deleteAndWait(loc) })
 
 		// Set Ready=True status (required for event to be emitted)
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), loc)).To(Succeed())
@@ -728,13 +684,13 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 		}
 		Expect(k8sClient.Status().Update(ctx, loc)).To(Succeed())
 
-		// Wait for the event
+		// Wait for the event (use name filter to avoid stale events from previous tests)
 		event := waitForEvent(eventChannel)
 
 		// Verify extensions were propagated correctly
 		locModel, ok := event.Object.(models.Location)
 		Expect(ok).To(BeTrue())
-		Expect(locModel.GlobalLocationID).To(Equal("LOC-WATCH-EXT"))
+		Expect(locModel.GlobalLocationID).To(Equal("watch-test-ext"))
 		Expect(locModel.Extensions).ToNot(BeNil())
 		Expect(locModel.Extensions).To(HaveLen(4))
 		Expect(locModel.Extensions["region"]).To(Equal("us-east"))
@@ -743,49 +699,3 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 		Expect(locModel.Extensions["environment"]).To(Equal("production"))
 	})
 })
-
-// waitForWatchReady waits for the SyncComplete event which signals the watch reflector is ready.
-func waitForWatchReady(ch chan *async.AsyncChangeEvent) {
-	Eventually(func() bool {
-		select {
-		case event := <-ch:
-			return event.EventType == async.SyncComplete
-		default:
-			return false
-		}
-	}, 5*time.Second, 50*time.Millisecond).Should(BeTrue(), "watch should send SyncComplete when ready")
-}
-
-// waitForEvent waits for a non-SyncComplete event from the channel and returns it.
-func waitForEvent(ch chan *async.AsyncChangeEvent) *async.AsyncChangeEvent {
-	var event *async.AsyncChangeEvent
-	Eventually(func() bool {
-		select {
-		case event = <-ch:
-			// Skip SyncComplete events, we want actual change events
-			if event.EventType == async.SyncComplete {
-				return false
-			}
-			return true
-		default:
-			return false
-		}
-	}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "should receive a change event")
-	return event
-}
-
-// drainEvents removes all pending events from the channel
-func drainEvents(ch chan *async.AsyncChangeEvent) {
-	for {
-		select {
-		case <-ch:
-			// discard
-		default:
-			return
-		}
-	}
-}
-
-func ptrTo(s string) *string {
-	return &s
-}
