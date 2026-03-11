@@ -17,12 +17,6 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.globalLocationId
-      name: GlobalLocationID
-      type: string
-    - jsonPath: .metadata.name
-      name: Name
-      type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
       type: string
@@ -58,6 +52,9 @@ spec:
               LocationSpec defines the desired state of Location.
               Represents a physical or logical location where O-Cloud Sites can be deployed.
               Based on O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00 section 3.2.6.2.16
+
+              Note: The globalLocationId for API responses is derived from metadata.name.
+              Use metadata.name as the SMO-defined identifier when creating Location CRs.
             properties:
               address:
                 description: Address is a human-readable address string
@@ -126,15 +123,8 @@ spec:
                   type: string
                 description: Extensions contains additional custom attributes
                 type: object
-              globalLocationId:
-                description: |-
-                  GlobalLocationID is the SMO-defined identifier for this location.
-                  This value is used as the primary key and must be unique across all locations.
-                minLength: 1
-                type: string
             required:
             - description
-            - globalLocationId
             type: object
             x-kubernetes-validations:
             - message: at least one of coordinate, civicAddress, or address must be

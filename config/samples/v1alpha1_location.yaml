@@ -1,9 +1,9 @@
 apiVersion: ocloud.openshift.io/v1alpha1
 kind: Location
 metadata:
+  # metadata.name serves as the globalLocationId for API responses
   name: east-datacenter
   namespace: oran-o2ims
 spec:
-  globalLocationId: "LOC-EAST-001"
   description: "Primary east coast data center facility"
   address: "123 Technology Way, Ashburn, VA 20147, USA"

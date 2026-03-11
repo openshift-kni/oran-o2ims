@@ -563,8 +563,7 @@ metadata:
           },
           "spec": {
             "address": "123 Technology Way, Ashburn, VA 20147, USA",
-            "description": "Primary east coast data center facility",
-            "globalLocationId": "LOC-EAST-001"
+            "description": "Primary east coast data center facility"
           }
         },
         {
@@ -576,8 +575,7 @@ metadata:
           },
           "spec": {
             "description": "Primary compute site at east data center",
-            "globalLocationId": "LOC-EAST-001",
-            "siteId": "SITE-EAST-001"
+            "globalLocationName": "east-datacenter"
           }
         },
         {
@@ -589,8 +587,7 @@ metadata:
           },
           "spec": {
             "description": "Compute resources for production workloads",
-            "oCloudSiteId": "SITE-EAST-001",
-            "resourcePoolId": "pool-east-compute"
+            "oCloudSiteName": "site-east-1"
           }
         },
         {
@@ -1220,13 +1217,6 @@ spec:
         path: description
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: |-
-          GlobalLocationID is the SMO-defined identifier for this location.
-          This value is used as the primary key and must be unique across all locations.
-        displayName: Global Location ID
-        path: globalLocationId
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
       statusDescriptors:
       - description: Conditions represent the latest available observations of the
           Location's state
@@ -1376,18 +1366,10 @@ spec:
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-
-          GlobalLocationID references the Location this site belongs to.
-          Must match an existing Location's globalLocationId.
-        displayName: Global Location ID
-        path: globalLocationId
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: |-
-          SiteID is the string identifier that matches BareMetalHost siteId labels.
-          This value is used to map BMH resources to this site and to generate
-          the deterministic UUID for oCloudSiteId.
-        displayName: Site ID
-        path: siteId
+          GlobalLocationName references the parent Location CR by its metadata.name.
+          Must match an existing Location's metadata.name.
+        displayName: Global Location Name
+        path: globalLocationName
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       statusDescriptors:
@@ -1468,19 +1450,10 @@ spec:
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-
-          OCloudSiteId references the OCloudSite this pool belongs to.
-          Must match an existing OCloudSite's siteId.
-          This is used to generate the deterministic UUID for oCloudSiteId.
-        displayName: O-Cloud Site ID
-        path: oCloudSiteId
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: |-
-          ResourcePoolId is the string identifier for this resource pool.
-          This value is used to generate the deterministic UUID for resourcePoolId.
-          It should match the resourcePoolId label on BareMetalHost resources.
-        displayName: Resource Pool ID
-        path: resourcePoolId
+          OCloudSiteName references the parent OCloudSite CR by its metadata.name.
+          Must match an existing OCloudSite's metadata.name.
+        displayName: O-Cloud Site Name
+        path: oCloudSiteName
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       statusDescriptors:

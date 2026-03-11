@@ -13,20 +13,15 @@ import (
 // ResourcePoolSpec defines the desired state of ResourcePool.
 // Represents a resource pool containing O-Cloud resources.
 // Based on O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00 section 3.2.6.2.5
+//
+// Note: The resourcePoolId for API responses is derived from metadata.uid.
+// Use metadata.name as the identifier when referencing this ResourcePool from BMH labels.
 type ResourcePoolSpec struct {
-	// ResourcePoolId is the string identifier for this resource pool.
-	// This value is used to generate the deterministic UUID for resourcePoolId.
-	// It should match the resourcePoolId label on BareMetalHost resources.
+	// OCloudSiteName references the parent OCloudSite CR by its metadata.name.
+	// Must match an existing OCloudSite's metadata.name.
 	// +kubebuilder:validation:MinLength=1
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Resource Pool ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	ResourcePoolId string `json:"resourcePoolId"`
-
-	// OCloudSiteId references the OCloudSite this pool belongs to.
-	// Must match an existing OCloudSite's siteId.
-	// This is used to generate the deterministic UUID for oCloudSiteId.
-	// +kubebuilder:validation:MinLength=1
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="O-Cloud Site ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	OCloudSiteId string `json:"oCloudSiteId"`
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="O-Cloud Site Name",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	OCloudSiteName string `json:"oCloudSiteName"`
 
 	// Description provides additional details about the resource pool
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Description",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
@@ -43,14 +38,18 @@ type ResourcePoolStatus struct {
 	// +optional
 	// +operator-sdk:csv:customresourcedefinitions:type=status,displayName="Conditions"
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// ResolvedOCloudSiteUID contains the parent OCloudSite's metadata.uid.
+	// Populated by the controller when the parent is validated and Ready.
+	// Used by collectors to get the oCloudSiteId (UUID) for API responses.
+	// +optional
+	ResolvedOCloudSiteUID string `json:"resolvedOCloudSiteUID,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=resourcepools,shortName=rp
-// +kubebuilder:printcolumn:name="PoolID",type="string",JSONPath=".spec.resourcePoolId"
-// +kubebuilder:printcolumn:name="SiteID",type="string",JSONPath=".spec.oCloudSiteId"
-// +kubebuilder:printcolumn:name="Name",type="string",JSONPath=".metadata.name"
+// +kubebuilder:printcolumn:name="Site",type="string",JSONPath=".spec.oCloudSiteName",description="Parent OCloudSite name"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
