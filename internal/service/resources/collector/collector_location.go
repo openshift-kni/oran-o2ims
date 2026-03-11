@@ -167,7 +167,7 @@ func (d *LocationDataSource) HandleSyncComplete(ctx context.Context, objectType 
 
 // handleLocationWatchEvent handles an async event received for a Location CR
 func (d *LocationDataSource) handleLocationWatchEvent(ctx context.Context, location *inventoryv1alpha1.Location, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.Debug("handleLocationWatchEvent received", "globalLocationId", location.Spec.GlobalLocationID, "type", eventType)
+	slog.Debug("handleLocationWatchEvent received", "name", location.Name, "type", eventType)
 
 	// DELETE events always proceed (finalizers guarantee deletion order)
 	// For CREATE/UPDATE, only emit if CR is Ready=True
@@ -175,7 +175,6 @@ func (d *LocationDataSource) handleLocationWatchEvent(ctx context.Context, locat
 		if !isResourceReady(location.Status.Conditions) {
 			slog.Debug("Location not ready, skipping",
 				"name", location.Name,
-				"globalLocationId", location.Spec.GlobalLocationID,
 				"reason", getReadyReason(location.Status.Conditions))
 			return uuid.Nil, nil
 		}
@@ -203,7 +202,7 @@ func (d *LocationDataSource) handleLocationWatchEvent(ctx context.Context, locat
 func (d *LocationDataSource) convertLocationToModel(loc *inventoryv1alpha1.Location) (models.Location, error) {
 	coordinate, err := convertCoordinateToGeoJSON(loc.Spec.Coordinate)
 	if err != nil {
-		return models.Location{}, fmt.Errorf("failed to convert coordinate for location %q: %w", loc.Spec.GlobalLocationID, err)
+		return models.Location{}, fmt.Errorf("failed to convert coordinate for location %q: %w", loc.Name, err)
 	}
 
 	var extensions map[string]interface{}
@@ -215,8 +214,8 @@ func (d *LocationDataSource) convertLocationToModel(loc *inventoryv1alpha1.Locat
 	}
 
 	return models.Location{
-		GlobalLocationID: loc.Spec.GlobalLocationID,
-		Name:             loc.Name, // Use metadata.name
+		GlobalLocationID: loc.Name,
+		Name:             loc.Name,
 		Description:      loc.Spec.Description,
 		Coordinate:       coordinate,
 		CivicAddress:     convertCivicAddress(loc.Spec.CivicAddress),

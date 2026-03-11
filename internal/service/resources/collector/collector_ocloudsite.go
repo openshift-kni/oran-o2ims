@@ -21,7 +21,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
-	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
@@ -167,7 +166,7 @@ func (d *OCloudSiteDataSource) HandleSyncComplete(ctx context.Context, objectTyp
 
 // handleOCloudSiteWatchEvent handles an async event received for an OCloudSite CR
 func (d *OCloudSiteDataSource) handleOCloudSiteWatchEvent(ctx context.Context, site *inventoryv1alpha1.OCloudSite, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.Debug("handleOCloudSiteWatchEvent received", "siteId", site.Spec.SiteID, "type", eventType)
+	slog.Debug("handleOCloudSiteWatchEvent received", "name", site.Name, "type", eventType)
 
 	// DELETE events always proceed (finalizers guarantee deletion order)
 	// For CREATE/UPDATE, only emit if CR is Ready=True
@@ -175,13 +174,15 @@ func (d *OCloudSiteDataSource) handleOCloudSiteWatchEvent(ctx context.Context, s
 		if !isResourceReady(site.Status.Conditions) {
 			slog.Debug("OCloudSite not ready, skipping",
 				"name", site.Name,
-				"siteId", site.Spec.SiteID,
 				"reason", getReadyReason(site.Status.Conditions))
 			return uuid.Nil, nil
 		}
 	}
 
-	record := d.ConvertOCloudSiteToModel(site)
+	record, err := d.ConvertOCloudSiteToModel(site)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to convert OCloudSite CR to model: %w", err)
+	}
 
 	select {
 	case <-ctx.Done():
@@ -191,16 +192,18 @@ func (d *OCloudSiteDataSource) handleOCloudSiteWatchEvent(ctx context.Context, s
 		DataSourceID: d.dataSourceID,
 		EventType:    eventType,
 		Object:       record}:
-		// return the generated oCloudSiteID (UUID) for tracking purposes
 		return record.OCloudSiteID, nil
 	}
 }
 
-// convertOCloudSiteToModel converts an OCloudSite CR to a database model
 // ConvertOCloudSiteToModel converts an OCloudSite CR to a database model.
-func (d *OCloudSiteDataSource) ConvertOCloudSiteToModel(site *inventoryv1alpha1.OCloudSite) models.OCloudSite {
-	// Generate deterministic UUID from cloudID and siteId
-	oCloudSiteID := ctlrutils.MakeUUIDFromNames(OCloudSiteUUIDNamespace, d.cloudID, site.Spec.SiteID)
+// GlobalLocationID uses spec.globalLocationName (string, references parent Location's name).
+func (d *OCloudSiteDataSource) ConvertOCloudSiteToModel(site *inventoryv1alpha1.OCloudSite) (models.OCloudSite, error) {
+	// Use metadata.uid as the oCloudSiteId (UUID)
+	oCloudSiteID, err := uuid.Parse(string(site.UID))
+	if err != nil {
+		return models.OCloudSite{}, fmt.Errorf("failed to parse OCloudSite UID %q: %w", site.UID, err)
+	}
 
 	var extensions map[string]interface{}
 	if site.Spec.Extensions != nil {
@@ -212,11 +215,11 @@ func (d *OCloudSiteDataSource) ConvertOCloudSiteToModel(site *inventoryv1alpha1.
 
 	return models.OCloudSite{
 		OCloudSiteID:     oCloudSiteID,
-		GlobalLocationID: site.Spec.GlobalLocationID,
-		Name:             site.Name, // Use metadata.name
+		GlobalLocationID: site.Spec.GlobalLocationName, // Parent Location
+		Name:             site.Name,
 		Description:      site.Spec.Description,
 		Extensions:       extensions,
 		DataSourceID:     d.dataSourceID,
 		GenerationID:     int(d.generationID.Load()),
-	}
+	}, nil
 }

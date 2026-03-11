@@ -212,8 +212,7 @@ func (c *Collector) watchForChanges(ctx context.Context) error {
 		}
 
 		if err := d.(WatchableDataSource).Watch(ctx); err != nil {
-			slog.Error("failed to watch for changes", "source", d.Name(), "error", err)
-			return fmt.Errorf("failed to watch for changes: %w", err)
+			return fmt.Errorf("failed to watch for changes from %s: %w", d.Name(), err)
 		}
 	}
 	return nil

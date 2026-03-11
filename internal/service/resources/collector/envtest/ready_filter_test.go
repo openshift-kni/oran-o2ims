@@ -43,7 +43,7 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 			eventChannel = make(chan *async.AsyncChangeEvent, 10)
 
 			var err error
-			ds, err = collector.NewLocationDataSource(testCloudID, k8sWatchClient)
+			ds, err = collector.NewLocationDataSource(testCloudID, newWatchClient())
 			Expect(err).ToNot(HaveOccurred())
 
 			ds.Init(testDSID, 0, eventChannel)
@@ -52,7 +52,9 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 
 		AfterEach(func() {
 			watchCancel()
-			close(eventChannel)
+			// Note: We intentionally don't close eventChannel here.
+			// Closing immediately after watchCancel() risks a panic if a
+			// goroutine is still sending. The channel will be GC'd anyway.
 		})
 
 		It("should NOT emit event for Location without Ready status", func() {
@@ -67,13 +69,12 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-NO-READY",
-					Description:      "Should not emit event",
-					Address:          ptrTo("123 No Ready St"),
+					Description: "Should not emit event",
+					Address:     ptrTo("123 No Ready St"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, loc)).To(Succeed())
-			DeferCleanup(func() { _ = k8sClient.Delete(ctx, loc) })
+			DeferCleanup(func() { deleteAndWait(loc) })
 
 			// Verify NO event is emitted (wait a short time to be sure)
 			Consistently(func() bool {
@@ -103,13 +104,12 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-NOT-READY",
-					Description:      "Should not emit event",
-					Address:          ptrTo("456 Not Ready Ave"),
+					Description: "Should not emit event",
+					Address:     ptrTo("456 Not Ready Ave"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, loc)).To(Succeed())
-			DeferCleanup(func() { _ = k8sClient.Delete(ctx, loc) })
+			DeferCleanup(func() { deleteAndWait(loc) })
 
 			// Set Ready=False status
 			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), loc)).To(Succeed())
@@ -151,13 +151,12 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-TRANSITION",
-					Description:      "Will transition to Ready=True",
-					Address:          ptrTo("789 Transition Blvd"),
+					Description: "Will transition to Ready=True",
+					Address:     ptrTo("789 Transition Blvd"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, loc)).To(Succeed())
-			DeferCleanup(func() { _ = k8sClient.Delete(ctx, loc) })
+			DeferCleanup(func() { deleteAndWait(loc) })
 
 			// Wait to confirm no event is emitted initially
 			Consistently(func() bool {
@@ -192,7 +191,7 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 
 			locModel, ok := event.Object.(models.Location)
 			Expect(ok).To(BeTrue())
-			Expect(locModel.GlobalLocationID).To(Equal("LOC-TRANSITION"))
+			Expect(locModel.GlobalLocationID).To(Equal("loc-transition-ready"))
 		})
 
 		It("should always emit Delete event regardless of Ready status", func() {
@@ -207,9 +206,8 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-DELETE-NOTREADY",
-					Description:      "Delete with Ready=False",
-					Address:          ptrTo("999 Delete St"),
+					Description: "Delete with Ready=False",
+					Address:     ptrTo("999 Delete St"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, loc)).To(Succeed())
@@ -240,7 +238,7 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 
 			locModel, ok := event.Object.(models.Location)
 			Expect(ok).To(BeTrue())
-			Expect(locModel.GlobalLocationID).To(Equal("LOC-DELETE-NOTREADY"))
+			Expect(locModel.GlobalLocationID).To(Equal("loc-delete-not-ready"))
 		})
 	})
 
@@ -260,7 +258,7 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 			eventChannel = make(chan *async.AsyncChangeEvent, 10)
 
 			var err error
-			ds, err = collector.NewOCloudSiteDataSource(testCloudID, k8sWatchClient)
+			ds, err = collector.NewOCloudSiteDataSource(testCloudID, newWatchClient())
 			Expect(err).ToNot(HaveOccurred())
 
 			ds.Init(testDSID, 0, eventChannel)
@@ -269,7 +267,9 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 
 		AfterEach(func() {
 			watchCancel()
-			close(eventChannel)
+			// Note: We intentionally don't close eventChannel here.
+			// Closing immediately after watchCancel() risks a panic if a
+			// goroutine is still sending. The channel will be GC'd anyway.
 		})
 
 		It("should NOT emit event for OCloudSite without Ready status", func() {
@@ -283,13 +283,12 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "SITE-NO-READY",
-					GlobalLocationID: "LOC-001",
-					Description:      "Should not emit event",
+					GlobalLocationName: "test-location",
+					Description:        "Should not emit event",
 				},
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
-			DeferCleanup(func() { _ = k8sClient.Delete(ctx, site) })
+			DeferCleanup(func() { deleteAndWait(site) })
 
 			Consistently(func() bool {
 				select {
@@ -316,13 +315,12 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "SITE-TRANSITION",
-					GlobalLocationID: "LOC-001",
-					Description:      "Will transition to Ready=True",
+					GlobalLocationName: "test-location",
+					Description:        "Will transition to Ready=True",
 				},
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
-			DeferCleanup(func() { _ = k8sClient.Delete(ctx, site) })
+			DeferCleanup(func() { deleteAndWait(site) })
 
 			// Wait to confirm no event initially
 			Consistently(func() bool {
@@ -371,9 +369,8 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "SITE-DELETE-NOTREADY",
-					GlobalLocationID: "LOC-001",
-					Description:      "Delete with Ready=False",
+					GlobalLocationName: "test-location",
+					Description:        "Delete with Ready=False",
 				},
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
@@ -424,7 +421,7 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 			eventChannel = make(chan *async.AsyncChangeEvent, 10)
 
 			var err error
-			ds, err = collector.NewResourcePoolDataSource(testCloudID, k8sWatchClient)
+			ds, err = collector.NewResourcePoolDataSource(testCloudID, newWatchClient())
 			Expect(err).ToNot(HaveOccurred())
 
 			ds.Init(testDSID, 0, eventChannel)
@@ -433,7 +430,9 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 
 		AfterEach(func() {
 			watchCancel()
-			close(eventChannel)
+			// Note: We intentionally don't close eventChannel here.
+			// Closing immediately after watchCancel() risks a panic if a
+			// goroutine is still sending. The channel will be GC'd anyway.
 		})
 
 		It("should NOT emit event for ResourcePool without Ready status", func() {
@@ -447,13 +446,12 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
-					ResourcePoolId: "POOL-NO-READY",
-					OCloudSiteId:   "SITE-001",
+					OCloudSiteName: "test-site",
 					Description:    "Should not emit event",
 				},
 			}
 			Expect(k8sClient.Create(ctx, rp)).To(Succeed())
-			DeferCleanup(func() { _ = k8sClient.Delete(ctx, rp) })
+			DeferCleanup(func() { deleteAndWait(rp) })
 
 			Consistently(func() bool {
 				select {
@@ -474,19 +472,21 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 			Expect(err).ToNot(HaveOccurred())
 			waitForWatchReady(eventChannel)
 
+			// Create a fake site UID for the status
+			fakeSiteUID := uuid.New().String()
+
 			rp := &inventoryv1alpha1.ResourcePool{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "pool-transition-ready",
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
-					ResourcePoolId: "POOL-TRANSITION",
-					OCloudSiteId:   "SITE-001",
+					OCloudSiteName: "test-site",
 					Description:    "Will transition to Ready=True",
 				},
 			}
 			Expect(k8sClient.Create(ctx, rp)).To(Succeed())
-			DeferCleanup(func() { _ = k8sClient.Delete(ctx, rp) })
+			DeferCleanup(func() { deleteAndWait(rp) })
 
 			// Wait to confirm no event initially
 			Consistently(func() bool {
@@ -501,7 +501,7 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 				}
 			}, 300*time.Millisecond, 50*time.Millisecond).Should(BeTrue())
 
-			// Set Ready=True status
+			// Set Ready=True status with ResolvedOCloudSiteUID
 			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rp), rp)).To(Succeed())
 			rp.Status.Conditions = []metav1.Condition{
 				{
@@ -512,6 +512,7 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 					LastTransitionTime: metav1.Now(),
 				},
 			}
+			rp.Status.ResolvedOCloudSiteUID = fakeSiteUID
 			Expect(k8sClient.Status().Update(ctx, rp)).To(Succeed())
 
 			event := waitForEvent(eventChannel)
@@ -535,8 +536,7 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
-					ResourcePoolId: "POOL-DELETE-NOTREADY",
-					OCloudSiteId:   "SITE-001",
+					OCloudSiteName: "test-site",
 					Description:    "Delete with Ready=False",
 				},
 			}

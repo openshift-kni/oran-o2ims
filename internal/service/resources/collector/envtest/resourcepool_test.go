@@ -29,15 +29,18 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 		watchCancel  context.CancelFunc
 		testCloudID  uuid.UUID
 		testDSID     uuid.UUID
+		// A fake parent site UID for testing
+		fakeSiteUID string
 	)
 
 	BeforeEach(func() {
 		testCloudID = uuid.New()
 		testDSID = uuid.New()
+		fakeSiteUID = uuid.New().String()
 		eventChannel = make(chan *async.AsyncChangeEvent, 10)
 
 		var err error
-		ds, err = collector.NewResourcePoolDataSource(testCloudID, k8sWatchClient)
+		ds, err = collector.NewResourcePoolDataSource(testCloudID, newWatchClient())
 		Expect(err).ToNot(HaveOccurred())
 
 		// Initialize the data source
@@ -49,7 +52,9 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 
 	AfterEach(func() {
 		watchCancel()
-		close(eventChannel)
+		// Note: We intentionally don't close eventChannel here.
+		// Closing immediately after watchCancel() risks a panic if a
+		// goroutine is still sending. The channel will be GC'd anyway.
 	})
 
 	It("receives Created event when ResourcePool CR is created with Ready=True", func() {
@@ -67,19 +72,19 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.ResourcePoolSpec{
-				ResourcePoolId: "pool-watch-create",
-				OCloudSiteId:   "site-watch-create",
+				OCloudSiteName: "test-site",
 				Description:    "Testing watch create",
 			},
 		}
 		Expect(k8sClient.Create(ctx, rp)).To(Succeed())
-		DeferCleanup(func() { _ = k8sClient.Delete(ctx, rp) })
+		DeferCleanup(func() { deleteAndWait(rp) })
 
-		// Set Ready=True status (required for event to be emitted)
+		// Set Ready=True status with ResolvedOCloudSiteUID (simulating controller behavior)
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rp), rp)).To(Succeed())
 		rp.Status.Conditions = []metav1.Condition{
 			{Type: inventoryv1alpha1.ConditionTypeReady, Status: metav1.ConditionTrue, Reason: inventoryv1alpha1.ReasonReady, LastTransitionTime: metav1.Now()},
 		}
+		rp.Status.ResolvedOCloudSiteUID = fakeSiteUID
 		Expect(k8sClient.Status().Update(ctx, rp)).To(Succeed())
 
 		// Wait for the event
@@ -96,10 +101,10 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 		Expect(rpModel.Name).To(Equal("watch-test-rp-create"))
 		Expect(rpModel.Description).To(Equal("Testing watch create"))
 		Expect(rpModel.DataSourceID).To(Equal(testDSID))
-		// ResourcePoolID should be a deterministically generated UUID
+		// ResourcePoolID should be from metadata.uid
 		Expect(rpModel.ResourcePoolID).ToNot(Equal(uuid.Nil))
-		// OCloudSiteID should be set
-		Expect(rpModel.OCloudSiteID).ToNot(Equal(uuid.Nil))
+		// OCloudSiteID should be from status.resolvedOCloudSiteUID
+		Expect(rpModel.OCloudSiteID).To(Equal(uuid.MustParse(fakeSiteUID)))
 	})
 
 	It("receives Updated event when ResourcePool CR is modified", func() {
@@ -110,19 +115,19 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.ResourcePoolSpec{
-				ResourcePoolId: "pool-watch-update",
-				OCloudSiteId:   "site-watch-update",
+				OCloudSiteName: "test-site",
 				Description:    "Original pool description",
 			},
 		}
 		Expect(k8sClient.Create(ctx, rp)).To(Succeed())
-		DeferCleanup(func() { _ = k8sClient.Delete(ctx, rp) })
+		DeferCleanup(func() { deleteAndWait(rp) })
 
-		// Set Ready=True status (required for events to be emitted)
+		// Set Ready=True status with ResolvedOCloudSiteUID
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rp), rp)).To(Succeed())
 		rp.Status.Conditions = []metav1.Condition{
 			{Type: inventoryv1alpha1.ConditionTypeReady, Status: metav1.ConditionTrue, Reason: inventoryv1alpha1.ReasonReady, LastTransitionTime: metav1.Now()},
 		}
+		rp.Status.ResolvedOCloudSiteUID = fakeSiteUID
 		Expect(k8sClient.Status().Update(ctx, rp)).To(Succeed())
 
 		// Start watching
@@ -161,18 +166,18 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.ResourcePoolSpec{
-				ResourcePoolId: "pool-watch-delete",
-				OCloudSiteId:   "site-watch-delete",
+				OCloudSiteName: "test-site",
 				Description:    "Will be deleted",
 			},
 		}
 		Expect(k8sClient.Create(ctx, rp)).To(Succeed())
 
-		// Set Ready=True status
+		// Set Ready=True status with ResolvedOCloudSiteUID
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rp), rp)).To(Succeed())
 		rp.Status.Conditions = []metav1.Condition{
 			{Type: inventoryv1alpha1.ConditionTypeReady, Status: metav1.ConditionTrue, Reason: inventoryv1alpha1.ReasonReady, LastTransitionTime: metav1.Now()},
 		}
+		rp.Status.ResolvedOCloudSiteUID = fakeSiteUID
 		Expect(k8sClient.Status().Update(ctx, rp)).To(Succeed())
 
 		// Start watching
@@ -200,7 +205,7 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 		Expect(rpModel.Name).To(Equal("watch-test-rp-delete"))
 	})
 
-	It("generates deterministic UUID for ResourcePoolID", func() {
+	It("uses metadata.uid for ResourcePoolID", func() {
 		// Start watching
 		err := ds.Watch(watchCtx)
 		Expect(err).ToNot(HaveOccurred())
@@ -215,19 +220,22 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.ResourcePoolSpec{
-				ResourcePoolId: "pool-uuid-test",
-				OCloudSiteId:   "site-uuid-test",
-				Description:    "Testing UUID generation",
+				OCloudSiteName: "test-site",
+				Description:    "Testing UUID from metadata.uid",
 			},
 		}
 		Expect(k8sClient.Create(ctx, rp)).To(Succeed())
-		DeferCleanup(func() { _ = k8sClient.Delete(ctx, rp) })
+		DeferCleanup(func() { deleteAndWait(rp) })
 
-		// Set Ready=True status (required for event to be emitted)
+		// Get the created pool to capture its metadata.uid
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rp), rp)).To(Succeed())
+		expectedPoolUID := uuid.MustParse(string(rp.UID))
+
+		// Set Ready=True status with ResolvedOCloudSiteUID
 		rp.Status.Conditions = []metav1.Condition{
 			{Type: inventoryv1alpha1.ConditionTypeReady, Status: metav1.ConditionTrue, Reason: inventoryv1alpha1.ReasonReady, LastTransitionTime: metav1.Now()},
 		}
+		rp.Status.ResolvedOCloudSiteUID = fakeSiteUID
 		Expect(k8sClient.Status().Update(ctx, rp)).To(Succeed())
 
 		// Wait for the event
@@ -236,23 +244,12 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 		// Get the ResourcePoolID from the event
 		rpModel, ok := event.Object.(models.ResourcePool)
 		Expect(ok).To(BeTrue())
-		firstResourcePoolUUID := rpModel.ResourcePoolID
-		firstOCloudSiteUUID := rpModel.OCloudSiteID
 
-		// The UUID should be deterministic - creating a new datasource with the same cloudID
-		// and processing the same resourcePoolId should produce the same UUID
-		ds2, err := collector.NewResourcePoolDataSource(testCloudID, k8sWatchClient)
-		Expect(err).ToNot(HaveOccurred())
-		ds2.Init(testDSID, 0, nil) // nil channel ok for this test
+		// The ResourcePoolID should match the metadata.uid from Kubernetes
+		Expect(rpModel.ResourcePoolID).To(Equal(expectedPoolUID))
+		// The OCloudSiteID should match the status.resolvedOCloudSiteUID
+		Expect(rpModel.OCloudSiteID).To(Equal(uuid.MustParse(fakeSiteUID)))
 
-		// Fetch the pool and convert it manually
-		fetchedPool := &inventoryv1alpha1.ResourcePool{}
-		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rp), fetchedPool)).To(Succeed())
-		convertedModel := ds2.ConvertResourcePoolToModel(fetchedPool)
-
-		// The UUIDs should match
-		Expect(convertedModel.ResourcePoolID).To(Equal(firstResourcePoolUUID))
-		Expect(convertedModel.OCloudSiteID).To(Equal(firstOCloudSiteUUID))
 	})
 
 	It("includes optional fields when provided", func() {
@@ -270,8 +267,7 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 				Namespace: testNamespace,
 			},
 			Spec: inventoryv1alpha1.ResourcePoolSpec{
-				ResourcePoolId: "pool-full-test",
-				OCloudSiteId:   "site-full-test",
+				OCloudSiteName: "test-site",
 				Description:    "Pool with all fields",
 				Extensions: map[string]string{
 					"vendor": "acme",
@@ -280,13 +276,14 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, rp)).To(Succeed())
-		DeferCleanup(func() { _ = k8sClient.Delete(ctx, rp) })
+		DeferCleanup(func() { deleteAndWait(rp) })
 
-		// Set Ready=True status (required for event to be emitted)
+		// Set Ready=True status with ResolvedOCloudSiteUID
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rp), rp)).To(Succeed())
 		rp.Status.Conditions = []metav1.Condition{
 			{Type: inventoryv1alpha1.ConditionTypeReady, Status: metav1.ConditionTrue, Reason: inventoryv1alpha1.ReasonReady, LastTransitionTime: metav1.Now()},
 		}
+		rp.Status.ResolvedOCloudSiteUID = fakeSiteUID
 		Expect(k8sClient.Status().Update(ctx, rp)).To(Succeed())
 
 		// Wait for the event
