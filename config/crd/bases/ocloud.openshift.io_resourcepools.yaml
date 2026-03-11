@@ -17,14 +17,9 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.resourcePoolId
-      name: PoolID
-      type: string
-    - jsonPath: .spec.oCloudSiteId
-      name: SiteID
-      type: string
-    - jsonPath: .metadata.name
-      name: Name
+    - description: Parent OCloudSite name
+      jsonPath: .spec.oCloudSiteName
+      name: Site
       type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
@@ -61,6 +56,9 @@ spec:
               ResourcePoolSpec defines the desired state of ResourcePool.
               Represents a resource pool containing O-Cloud resources.
               Based on O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00 section 3.2.6.2.5
+
+              Note: The resourcePoolId for API responses is derived from metadata.uid.
+              Use metadata.name as the identifier when referencing this ResourcePool from BMH labels.
             properties:
               description:
                 description: Description provides additional details about the resource
@@ -71,24 +69,15 @@ spec:
                   type: string
                 description: Extensions contains additional custom attributes
                 type: object
-              oCloudSiteId:
+              oCloudSiteName:
                 description: |-
-                  OCloudSiteId references the OCloudSite this pool belongs to.
-                  Must match an existing OCloudSite's siteId.
-                  This is used to generate the deterministic UUID for oCloudSiteId.
-                minLength: 1
-                type: string
-              resourcePoolId:
-                description: |-
-                  ResourcePoolId is the string identifier for this resource pool.
-                  This value is used to generate the deterministic UUID for resourcePoolId.
-                  It should match the resourcePoolId label on BareMetalHost resources.
+                  OCloudSiteName references the parent OCloudSite CR by its metadata.name.
+                  Must match an existing OCloudSite's metadata.name.
                 minLength: 1
                 type: string
             required:
             - description
-            - oCloudSiteId
-            - resourcePoolId
+            - oCloudSiteName
             type: object
           status:
             description: ResourcePoolStatus defines the observed state of ResourcePool
@@ -151,6 +140,12 @@ spec:
                   - type
                   type: object
                 type: array
+              resolvedOCloudSiteUID:
+                description: |-
+                  ResolvedOCloudSiteUID contains the parent OCloudSite's metadata.uid.
+                  Populated by the controller when the parent is validated and Ready.
+                  Used by collectors to get the oCloudSiteId (UUID) for API responses.
+                type: string
             type: object
         type: object
     served: true

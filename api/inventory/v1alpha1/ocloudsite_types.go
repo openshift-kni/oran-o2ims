@@ -13,19 +13,15 @@ import (
 // OCloudSiteSpec defines the desired state of OCloudSite.
 // Represents an O-Cloud site instance at a specific location.
 // Based on O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00 section 3.2.6.2.17
+//
+// Note: The oCloudSiteId for API responses is derived from metadata.uid.
+// Use metadata.name as the identifier when referencing this OCloudSite from ResourcePool CRs.
 type OCloudSiteSpec struct {
-	// SiteID is the string identifier that matches BareMetalHost siteId labels.
-	// This value is used to map BMH resources to this site and to generate
-	// the deterministic UUID for oCloudSiteId.
+	// GlobalLocationName references the parent Location CR by its metadata.name.
+	// Must match an existing Location's metadata.name.
 	// +kubebuilder:validation:MinLength=1
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Site ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	SiteID string `json:"siteId"`
-
-	// GlobalLocationID references the Location this site belongs to.
-	// Must match an existing Location's globalLocationId.
-	// +kubebuilder:validation:MinLength=1
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Global Location ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	GlobalLocationID string `json:"globalLocationId"`
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Global Location Name",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	GlobalLocationName string `json:"globalLocationName"`
 
 	// Description provides additional details about the site
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Description",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
@@ -47,9 +43,7 @@ type OCloudSiteStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=ocloudsites,shortName=ocs
-// +kubebuilder:printcolumn:name="SiteID",type="string",JSONPath=".spec.siteId"
-// +kubebuilder:printcolumn:name="LocationID",type="string",JSONPath=".spec.globalLocationId"
-// +kubebuilder:printcolumn:name="Name",type="string",JSONPath=".metadata.name"
+// +kubebuilder:printcolumn:name="Location",type="string",JSONPath=".spec.globalLocationName",description="Parent Location name"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 

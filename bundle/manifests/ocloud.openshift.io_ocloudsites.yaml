@@ -17,14 +17,9 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.siteId
-      name: SiteID
-      type: string
-    - jsonPath: .spec.globalLocationId
-      name: LocationID
-      type: string
-    - jsonPath: .metadata.name
-      name: Name
+    - description: Parent Location name
+      jsonPath: .spec.globalLocationName
+      name: Location
       type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
@@ -61,6 +56,9 @@ spec:
               OCloudSiteSpec defines the desired state of OCloudSite.
               Represents an O-Cloud site instance at a specific location.
               Based on O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00 section 3.2.6.2.17
+
+              Note: The oCloudSiteId for API responses is derived from metadata.uid.
+              Use metadata.name as the identifier when referencing this OCloudSite from ResourcePool CRs.
             properties:
               description:
                 description: Description provides additional details about the site
@@ -70,23 +68,15 @@ spec:
                   type: string
                 description: Extensions contains additional custom attributes
                 type: object
-              globalLocationId:
+              globalLocationName:
                 description: |-
-                  GlobalLocationID references the Location this site belongs to.
-                  Must match an existing Location's globalLocationId.
-                minLength: 1
-                type: string
-              siteId:
-                description: |-
-                  SiteID is the string identifier that matches BareMetalHost siteId labels.
-                  This value is used to map BMH resources to this site and to generate
-                  the deterministic UUID for oCloudSiteId.
+                  GlobalLocationName references the parent Location CR by its metadata.name.
+                  Must match an existing Location's metadata.name.
                 minLength: 1
                 type: string
             required:
             - description
-            - globalLocationId
-            - siteId
+            - globalLocationName
             type: object
           status:
             description: OCloudSiteStatus defines the observed state of OCloudSite

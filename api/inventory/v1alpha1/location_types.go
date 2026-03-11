@@ -49,14 +49,11 @@ type CivicAddressElement struct {
 // Represents a physical or logical location where O-Cloud Sites can be deployed.
 // Based on O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00 section 3.2.6.2.16
 //
+// Note: The globalLocationId for API responses is derived from metadata.name.
+// Use metadata.name as the SMO-defined identifier when creating Location CRs.
+//
 // +kubebuilder:validation:XValidation:rule="has(self.coordinate) || has(self.civicAddress) || has(self.address)",message="at least one of coordinate, civicAddress, or address must be specified"
 type LocationSpec struct {
-	// GlobalLocationID is the SMO-defined identifier for this location.
-	// This value is used as the primary key and must be unique across all locations.
-	// +kubebuilder:validation:MinLength=1
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Global Location ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	GlobalLocationID string `json:"globalLocationId"`
-
 	// Description provides additional details about the location
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Description",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Description string `json:"description"`
@@ -91,8 +88,6 @@ type LocationStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=locations,shortName=loc
-// +kubebuilder:printcolumn:name="GlobalLocationID",type="string",JSONPath=".spec.globalLocationId"
-// +kubebuilder:printcolumn:name="Name",type="string",JSONPath=".metadata.name"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
