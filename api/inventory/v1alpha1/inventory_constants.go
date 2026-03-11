@@ -41,9 +41,6 @@ const (
 	// ReasonParentNotReady indicates the parent CR exists but is not ready
 	ReasonParentNotReady = "ParentNotReady"
 
-	// ReasonDuplicateID indicates another CR already uses the same ID
-	ReasonDuplicateID = "DuplicateID"
-
 	// ReasonDependentsExist indicates deletion is blocked due to existing dependents
 	ReasonDependentsExist = "DependentsExist"
 )

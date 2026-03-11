@@ -399,37 +399,6 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			)
 			return exit.Error(1)
 		}
-
-		// Inventory hierarchy webhooks (duplicate detection)
-		if err = (&inventoryv1alpha1.Location{}).SetupWebhookWithManager(mgr); err != nil {
-			logger.ErrorContext(
-				ctx,
-				"Unable to create webhook",
-				slog.String("webhook", "Location"),
-				slog.String("error", err.Error()),
-			)
-			return exit.Error(1)
-		}
-
-		if err = (&inventoryv1alpha1.OCloudSite{}).SetupWebhookWithManager(mgr); err != nil {
-			logger.ErrorContext(
-				ctx,
-				"Unable to create webhook",
-				slog.String("webhook", "OCloudSite"),
-				slog.String("error", err.Error()),
-			)
-			return exit.Error(1)
-		}
-
-		if err = (&inventoryv1alpha1.ResourcePool{}).SetupWebhookWithManager(mgr); err != nil {
-			logger.ErrorContext(
-				ctx,
-				"Unable to create webhook",
-				slog.String("webhook", "ResourcePool"),
-				slog.String("error", err.Error()),
-			)
-			return exit.Error(1)
-		}
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

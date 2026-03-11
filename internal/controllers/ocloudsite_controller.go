@@ -77,8 +77,8 @@ func (r *OCloudSiteReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// Add object-specific context
 	ctx = ctlrutils.AddObjectContext(ctx, site)
 	r.Logger.InfoContext(ctx, "Fetched OCloudSite successfully",
-		slog.String("siteId", site.Spec.SiteID),
-		slog.String("globalLocationId", site.Spec.GlobalLocationID))
+		slog.String("name", site.Name),
+		slog.String("globalLocationName", site.Spec.GlobalLocationName))
 
 	// Handle finalizer logic
 	if result, stop, err := r.handleFinalizer(ctx, site); stop || err != nil {
@@ -109,7 +109,7 @@ func (r *OCloudSiteReconciler) handleFinalizer(
 		// Object is not being deleted, add finalizer if not present
 		if !controllerutil.ContainsFinalizer(site, inventoryv1alpha1.OCloudSiteFinalizer) {
 			r.Logger.InfoContext(ctx, "Adding finalizer to OCloudSite",
-				slog.String("siteId", site.Spec.SiteID))
+				slog.String("name", site.Name))
 			controllerutil.AddFinalizer(site, inventoryv1alpha1.OCloudSiteFinalizer)
 			if err := r.Update(ctx, site); err != nil {
 				r.Logger.WarnContext(ctx, "Failed to add finalizer, will retry",
@@ -125,11 +125,11 @@ func (r *OCloudSiteReconciler) handleFinalizer(
 	// Object is being deleted
 	if controllerutil.ContainsFinalizer(site, inventoryv1alpha1.OCloudSiteFinalizer) {
 		r.Logger.InfoContext(ctx, "OCloudSite is being deleted, checking for dependents",
-			slog.String("siteId", site.Spec.SiteID))
+			slog.String("name", site.Name))
 
-		// Check for dependent ResourcePools
+		// Check for dependent ResourcePools (those that reference this OCloudSite by name)
 		// Note: ResourcePools handle their own BMH dependents transitively
-		dependents, err := r.findDependentResourcePools(ctx, site.Spec.SiteID)
+		dependents, err := r.findDependentResourcePools(ctx, site.Name)
 		if err != nil {
 			return requeueWithShortInterval(), true, fmt.Errorf("failed to check for dependent ResourcePools: %w", err)
 		}
@@ -138,7 +138,7 @@ func (r *OCloudSiteReconciler) handleFinalizer(
 		if len(dependents) > 0 {
 			// Update status to indicate deletion is blocked
 			r.Logger.InfoContext(ctx, "OCloudSite deletion blocked by dependent ResourcePools",
-				slog.String("siteId", site.Spec.SiteID),
+				slog.String("name", site.Name),
 				slog.Int("resourcePoolCount", len(dependents)))
 
 			if err := r.setDeletionBlockedCondition(ctx, site, len(dependents)); err != nil {
@@ -151,7 +151,7 @@ func (r *OCloudSiteReconciler) handleFinalizer(
 
 		// No dependents, safe to remove finalizer and allow k8s deletion
 		r.Logger.InfoContext(ctx, "Removing finalizer from OCloudSite",
-			slog.String("siteId", site.Spec.SiteID))
+			slog.String("name", site.Name))
 
 		patch := client.MergeFrom(site.DeepCopy())
 		if controllerutil.RemoveFinalizer(site, inventoryv1alpha1.OCloudSiteFinalizer) {
@@ -167,11 +167,11 @@ func (r *OCloudSiteReconciler) handleFinalizer(
 	return doNotRequeue(), false, nil
 }
 
-// findDependentResourcePools returns all ResourcePools that reference this OCloudSite.
-func (r *OCloudSiteReconciler) findDependentResourcePools(ctx context.Context, siteID string) ([]inventoryv1alpha1.ResourcePool, error) {
+// findDependentResourcePools returns all ResourcePools that reference this OCloudSite by name.
+func (r *OCloudSiteReconciler) findDependentResourcePools(ctx context.Context, siteName string) ([]inventoryv1alpha1.ResourcePool, error) {
 	var poolList inventoryv1alpha1.ResourcePoolList
 	if err := r.List(ctx, &poolList, client.MatchingFields{
-		ctlrutils.ResourcePoolOCloudSiteIDIndex: siteID,
+		ctlrutils.ResourcePoolOCloudSiteNameIndex: siteName,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to list ResourcePools: %w", err)
 	}
@@ -182,8 +182,8 @@ func (r *OCloudSiteReconciler) findDependentResourcePools(ctx context.Context, s
 // validateAndSetConditions validates the Location reference and sets appropriate conditions.
 // Returns (parentValid, error) where parentValid is true only when parent exists AND is ready.
 func (r *OCloudSiteReconciler) validateAndSetConditions(ctx context.Context, site *inventoryv1alpha1.OCloudSite) (bool, error) {
-	// Validate that the referenced Location exists and is ready
-	result, err := r.validateLocationReference(ctx, site.Spec.GlobalLocationID)
+	// Validate that the referenced Location exists and is ready (lookup by name)
+	result, err := r.validateLocationReference(ctx, site.Spec.GlobalLocationName, site.Namespace)
 	if err != nil {
 		return false, fmt.Errorf("failed to validate Location reference: %w", err)
 	}
@@ -195,7 +195,7 @@ func (r *OCloudSiteReconciler) validateAndSetConditions(ctx context.Context, sit
 			Type:               inventoryv1alpha1.ConditionTypeReady,
 			Status:             metav1.ConditionFalse,
 			Reason:             inventoryv1alpha1.ReasonParentNotFound,
-			Message:            fmt.Sprintf("Referenced Location with globalLocationId '%s' does not exist", site.Spec.GlobalLocationID),
+			Message:            fmt.Sprintf("Referenced Location '%s' does not exist", site.Spec.GlobalLocationName),
 			ObservedGeneration: site.Generation,
 		}
 	case !result.Ready:
@@ -203,7 +203,7 @@ func (r *OCloudSiteReconciler) validateAndSetConditions(ctx context.Context, sit
 			Type:               inventoryv1alpha1.ConditionTypeReady,
 			Status:             metav1.ConditionFalse,
 			Reason:             inventoryv1alpha1.ReasonParentNotReady,
-			Message:            fmt.Sprintf("Referenced Location with globalLocationId '%s' is not ready", site.Spec.GlobalLocationID),
+			Message:            fmt.Sprintf("Referenced Location '%s' is not ready", site.Spec.GlobalLocationName),
 			ObservedGeneration: site.Generation,
 		}
 	default:
@@ -229,30 +229,24 @@ func (r *OCloudSiteReconciler) validateAndSetConditions(ctx context.Context, sit
 	return result.Exists && result.Ready, nil
 }
 
-// validateLocationReference checks if a Location with the given globalLocationId exists and is ready.
-// When duplicates exist, returns Ready=true if ANY matching Location is ready.
-func (r *OCloudSiteReconciler) validateLocationReference(ctx context.Context, globalLocationID string) (ctlrutils.ParentValidationResult, error) {
-	var locationList inventoryv1alpha1.LocationList
-	if err := r.List(ctx, &locationList, client.MatchingFields{
-		ctlrutils.GlobalLocationIDIndex: globalLocationID,
-	}); err != nil {
-		return ctlrutils.ParentValidationResult{}, fmt.Errorf("failed to list Locations: %w", err)
-	}
-
-	// Check if any Location with this globalLocationId is ready
-	// (handles duplicates: return Ready=true if any is ready)
-	if len(locationList.Items) > 0 {
-		for i := range locationList.Items {
-			readyCondition := meta.FindStatusCondition(locationList.Items[i].Status.Conditions, inventoryv1alpha1.ConditionTypeReady)
-			if readyCondition != nil && readyCondition.Status == metav1.ConditionTrue {
-				return ctlrutils.ParentValidationResult{Exists: true, Ready: true}, nil
-			}
+// validateLocationReference checks if a Location with the given name exists and is ready.
+func (r *OCloudSiteReconciler) validateLocationReference(ctx context.Context, locationName, namespace string) (ctlrutils.ParentValidationResult, error) {
+	location := &inventoryv1alpha1.Location{}
+	if err := r.Get(ctx, client.ObjectKey{Name: locationName, Namespace: namespace}, location); err != nil {
+		if errors.IsNotFound(err) {
+			return ctlrutils.ParentValidationResult{Exists: false, Ready: false}, nil
 		}
-		// At least one exists but none are ready
-		return ctlrutils.ParentValidationResult{Exists: true, Ready: false}, nil
+		return ctlrutils.ParentValidationResult{}, fmt.Errorf("failed to get Location: %w", err)
 	}
 
-	return ctlrutils.ParentValidationResult{Exists: false, Ready: false}, nil
+	// Location exists, check if it's ready
+	readyCondition := meta.FindStatusCondition(location.Status.Conditions, inventoryv1alpha1.ConditionTypeReady)
+	if readyCondition != nil && readyCondition.Status == metav1.ConditionTrue {
+		return ctlrutils.ParentValidationResult{Exists: true, Ready: true}, nil
+	}
+
+	// Exists but not ready
+	return ctlrutils.ParentValidationResult{Exists: true, Ready: false}, nil
 }
 
 // setDeletionBlockedCondition sets the Deleting condition indicating deletion is blocked
@@ -295,10 +289,10 @@ func (r *OCloudSiteReconciler) enqueueOCloudSitesForLocation(ctx context.Context
 		return nil
 	}
 
-	// Find all OCloudSites that reference this Location's globalLocationId using indexed query
+	// Find all OCloudSites that reference this Location by name (spec.globalLocationName)
 	var siteList inventoryv1alpha1.OCloudSiteList
 	if err := r.List(ctx, &siteList, client.MatchingFields{
-		ctlrutils.GlobalLocationIDIndex: location.Spec.GlobalLocationID,
+		ctlrutils.OCloudSiteGlobalLocationNameIndex: location.Name,
 	}); err != nil {
 		r.Logger.ErrorContext(ctx, "Failed to list OCloudSites for Location watch",
 			slog.String("error", err.Error()))
@@ -314,7 +308,7 @@ func (r *OCloudSiteReconciler) enqueueOCloudSitesForLocation(ctx context.Context
 
 	if len(requests) > 0 {
 		r.Logger.InfoContext(ctx, "Location change triggering OCloudSite reconciliation",
-			slog.String("globalLocationId", location.Spec.GlobalLocationID),
+			slog.String("locationName", location.Name),
 			slog.Int("oCloudSiteCount", len(requests)))
 	}
 

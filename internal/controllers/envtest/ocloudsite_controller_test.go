@@ -33,9 +33,8 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "SITE-FINALIZER-001",
-					GlobalLocationID: "LOC-NONEXISTENT", // Location doesn't exist
-					Description:      "Testing finalizer addition",
+					GlobalLocationName: "loc-nonexistent", // Location doesn't exist
+					Description:        "Testing finalizer addition",
 				},
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
@@ -62,9 +61,8 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-FOR-SITE-001",
-					Description:      "Testing valid reference",
-					Address:          ptrString("Valid Address"),
+					Description: "Testing valid reference",
+					Address:     ptrString("Valid Address"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, location)).To(Succeed())
@@ -82,9 +80,8 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "SITE-VALID-REF-001",
-					GlobalLocationID: "LOC-FOR-SITE-001", // References the location above
-					Description:      "Testing valid Location reference",
+					GlobalLocationName: "test-location-for-site", // References the location by metadata.name
+					Description:        "Testing valid Location reference",
 				},
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
@@ -117,9 +114,8 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "SITE-INVALID-REF-001",
-					GlobalLocationID: "LOC-DOES-NOT-EXIST",
-					Description:      "Testing invalid Location reference",
+					GlobalLocationName: "loc-does-not-exist",
+					Description:        "Testing invalid Location reference",
 				},
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
@@ -158,9 +154,8 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "SITE-LATE-LOC-001",
-					GlobalLocationID: "LOC-LATE-002", // Location doesn't exist yet
-					Description:      "Testing watch on Location creation",
+					GlobalLocationName: "test-location-late-for-site", // Location doesn't exist yet
+					Description:        "Testing watch on Location creation",
 				},
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
@@ -188,13 +183,12 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 			// Now create the Location AFTER OCloudSite
 			location := &inventoryv1alpha1.Location{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-location-late-for-site",
+					Name:      "test-location-late-for-site", // Matches OCloudSite's globalLocationName reference
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-LATE-002", // Matches OCloudSite's reference
-					Description:      "Testing watch triggers re-reconciliation",
-					Address:          ptrString("Late Address"),
+					Description: "Testing watch triggers re-reconciliation",
+					Address:     ptrString("Late Address"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, location)).To(Succeed())
@@ -231,9 +225,8 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-SITE-DELETE-001",
-					Description:      "Testing deletion",
-					Address:          ptrString("Delete Test Address"),
+					Description: "Testing deletion",
+					Address:     ptrString("Delete Test Address"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, location)).To(Succeed())
@@ -251,9 +244,8 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "SITE-DELETE-BLOCKED-001",
-					GlobalLocationID: "LOC-SITE-DELETE-001",
-					Description:      "Testing deletion blocking",
+					GlobalLocationName: "test-location-for-site-delete",
+					Description:        "Testing deletion blocking",
 				},
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
@@ -268,8 +260,7 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
-					ResourcePoolId: "POOL-DEP-001",
-					OCloudSiteId:   "SITE-DELETE-BLOCKED-001", // References the site above
+					OCloudSiteName: "test-site-delete-blocked", // References the site by metadata.name
 					Description:    "Pool that depends on site",
 				},
 			}
@@ -340,9 +331,8 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					GlobalLocationID: "LOC-SITE-DELETE-OK-001",
-					Description:      "Testing successful deletion",
-					Address:          ptrString("OK Address"),
+					Description: "Testing successful deletion",
+					Address:     ptrString("OK Address"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, location)).To(Succeed())
@@ -359,9 +349,8 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					SiteID:           "SITE-DELETE-OK-001",
-					GlobalLocationID: "LOC-SITE-DELETE-OK-001",
-					Description:      "Testing successful deletion",
+					GlobalLocationName: "test-location-for-site-delete-ok",
+					Description:        "Testing successful deletion",
 				},
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())

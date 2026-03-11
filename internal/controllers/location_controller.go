@@ -74,7 +74,7 @@ func (r *LocationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 	// Add object-specific context
 	ctx = ctlrutils.AddObjectContext(ctx, location)
 	r.Logger.InfoContext(ctx, "Fetched Location successfully",
-		slog.String("globalLocationId", location.Spec.GlobalLocationID))
+		slog.String("name", location.Name))
 
 	// Handle finalizer logic
 	if result, stop, err := r.handleFinalizer(ctx, location); stop || err != nil {
@@ -100,7 +100,7 @@ func (r *LocationReconciler) handleFinalizer(
 		// Object is not being deleted, add finalizer if not present
 		if !controllerutil.ContainsFinalizer(location, inventoryv1alpha1.LocationFinalizer) {
 			r.Logger.InfoContext(ctx, "Adding finalizer to Location",
-				slog.String("globalLocationId", location.Spec.GlobalLocationID))
+				slog.String("name", location.Name))
 			controllerutil.AddFinalizer(location, inventoryv1alpha1.LocationFinalizer)
 			if err := r.Update(ctx, location); err != nil {
 				r.Logger.WarnContext(ctx, "Failed to add finalizer, will retry",
@@ -116,10 +116,10 @@ func (r *LocationReconciler) handleFinalizer(
 	// Object is being deleted
 	if controllerutil.ContainsFinalizer(location, inventoryv1alpha1.LocationFinalizer) {
 		r.Logger.InfoContext(ctx, "Location is being deleted, checking for dependents",
-			slog.String("globalLocationId", location.Spec.GlobalLocationID))
+			slog.String("name", location.Name))
 
-		// Check for dependent OCloudSites
-		dependents, err := r.findDependentOCloudSites(ctx, location.Spec.GlobalLocationID)
+		// Check for dependent OCloudSites (those that reference this Location by name)
+		dependents, err := r.findDependentOCloudSites(ctx, location.Name)
 		if err != nil {
 			return requeueWithShortInterval(), true, fmt.Errorf("failed to check for dependents: %w", err)
 		}
@@ -127,7 +127,7 @@ func (r *LocationReconciler) handleFinalizer(
 		if len(dependents) > 0 {
 			// Update status to indicate deletion is blocked
 			r.Logger.InfoContext(ctx, "Location deletion blocked by dependent OCloudSites",
-				slog.String("globalLocationId", location.Spec.GlobalLocationID),
+				slog.String("name", location.Name),
 				slog.Int("dependentCount", len(dependents)))
 
 			if err := r.setDeletionBlockedCondition(ctx, location, len(dependents)); err != nil {
@@ -140,7 +140,7 @@ func (r *LocationReconciler) handleFinalizer(
 
 		// No dependents, safe to remove finalizer and allow k8s deletion
 		r.Logger.InfoContext(ctx, "Removing finalizer from Location",
-			slog.String("globalLocationId", location.Spec.GlobalLocationID))
+			slog.String("name", location.Name))
 
 		patch := client.MergeFrom(location.DeepCopy())
 		if controllerutil.RemoveFinalizer(location, inventoryv1alpha1.LocationFinalizer) {
@@ -156,11 +156,11 @@ func (r *LocationReconciler) handleFinalizer(
 	return doNotRequeue(), false, nil
 }
 
-// findDependentOCloudSites returns all OCloudSites that reference this Location.
-func (r *LocationReconciler) findDependentOCloudSites(ctx context.Context, globalLocationID string) ([]inventoryv1alpha1.OCloudSite, error) {
+// findDependentOCloudSites returns all OCloudSites that reference this Location by name.
+func (r *LocationReconciler) findDependentOCloudSites(ctx context.Context, locationName string) ([]inventoryv1alpha1.OCloudSite, error) {
 	var siteList inventoryv1alpha1.OCloudSiteList
 	if err := r.List(ctx, &siteList, client.MatchingFields{
-		ctlrutils.GlobalLocationIDIndex: globalLocationID,
+		ctlrutils.OCloudSiteGlobalLocationNameIndex: locationName,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to list OCloudSites: %w", err)
 	}

@@ -29,7 +29,7 @@ import (
 
 // Label constants for BareMetalHost resources
 const (
-	BMHLabelResourcePoolID = "resources.clcm.openshift.io/resourcePoolId"
+	BMHLabelResourcePoolName = "resources.clcm.openshift.io/resourcePoolName"
 )
 
 // ResourcePoolReconciler reconciles a ResourcePool object
@@ -83,8 +83,8 @@ func (r *ResourcePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// Add object-specific context
 	ctx = ctlrutils.AddObjectContext(ctx, pool)
 	r.Logger.InfoContext(ctx, "Fetched ResourcePool successfully",
-		slog.String("resourcePoolId", pool.Spec.ResourcePoolId),
-		slog.String("oCloudSiteId", pool.Spec.OCloudSiteId))
+		slog.String("name", pool.Name),
+		slog.String("oCloudSiteName", pool.Spec.OCloudSiteName))
 
 	// Handle finalizer logic
 	if result, stop, err := r.handleFinalizer(ctx, pool); stop || err != nil {
@@ -115,7 +115,7 @@ func (r *ResourcePoolReconciler) handleFinalizer(
 		// Object is not being deleted, add finalizer if not present
 		if !controllerutil.ContainsFinalizer(pool, inventoryv1alpha1.ResourcePoolFinalizer) {
 			r.Logger.InfoContext(ctx, "Adding finalizer to ResourcePool",
-				slog.String("resourcePoolId", pool.Spec.ResourcePoolId))
+				slog.String("name", pool.Name))
 			controllerutil.AddFinalizer(pool, inventoryv1alpha1.ResourcePoolFinalizer)
 			if err := r.Update(ctx, pool); err != nil {
 				r.Logger.WarnContext(ctx, "Failed to add finalizer, will retry",
@@ -131,10 +131,10 @@ func (r *ResourcePoolReconciler) handleFinalizer(
 	// Object is being deleted
 	if controllerutil.ContainsFinalizer(pool, inventoryv1alpha1.ResourcePoolFinalizer) {
 		r.Logger.InfoContext(ctx, "ResourcePool is being deleted, checking for dependents",
-			slog.String("resourcePoolId", pool.Spec.ResourcePoolId))
+			slog.String("name", pool.Name))
 
-		// Check for dependent BareMetalHosts
-		bmhDependents, err := r.findDependentBMHs(ctx, pool.Spec.ResourcePoolId)
+		// Check for dependent BareMetalHosts (those that have resourcePoolName label matching this pool's name)
+		bmhDependents, err := r.findDependentBMHs(ctx, pool.Name)
 		if err != nil {
 			return requeueWithShortInterval(), true, fmt.Errorf("failed to check for dependent BareMetalHosts: %w", err)
 		}
@@ -142,7 +142,7 @@ func (r *ResourcePoolReconciler) handleFinalizer(
 		if len(bmhDependents) > 0 {
 			// Update status to indicate deletion is blocked
 			r.Logger.InfoContext(ctx, "ResourcePool deletion blocked by dependent BareMetalHosts",
-				slog.String("resourcePoolId", pool.Spec.ResourcePoolId),
+				slog.String("name", pool.Name),
 				slog.Int("bmhCount", len(bmhDependents)))
 
 			if err := r.setDeletionBlockedCondition(ctx, pool, len(bmhDependents)); err != nil {
@@ -155,7 +155,7 @@ func (r *ResourcePoolReconciler) handleFinalizer(
 
 		// No dependents, safe to remove finalizer and allow k8s deletion
 		r.Logger.InfoContext(ctx, "Removing finalizer from ResourcePool",
-			slog.String("resourcePoolId", pool.Spec.ResourcePoolId))
+			slog.String("name", pool.Name))
 
 		patch := client.MergeFrom(pool.DeepCopy())
 		if controllerutil.RemoveFinalizer(pool, inventoryv1alpha1.ResourcePoolFinalizer) {
@@ -171,10 +171,10 @@ func (r *ResourcePoolReconciler) handleFinalizer(
 	return doNotRequeue(), false, nil
 }
 
-// findDependentBMHs returns all BareMetalHosts that have the resourcePoolId label matching this ResourcePool
-func (r *ResourcePoolReconciler) findDependentBMHs(ctx context.Context, resourcePoolID string) ([]bmhv1alpha1.BareMetalHost, error) {
+// findDependentBMHs returns all BareMetalHosts that have the resourcePoolName label matching this ResourcePool
+func (r *ResourcePoolReconciler) findDependentBMHs(ctx context.Context, resourcePoolName string) ([]bmhv1alpha1.BareMetalHost, error) {
 	var bmhList bmhv1alpha1.BareMetalHostList
-	if err := r.List(ctx, &bmhList, client.MatchingLabels{BMHLabelResourcePoolID: resourcePoolID}); err != nil {
+	if err := r.List(ctx, &bmhList, client.MatchingLabels{BMHLabelResourcePoolName: resourcePoolName}); err != nil {
 		return nil, fmt.Errorf("failed to list BareMetalHosts: %w", err)
 	}
 
@@ -183,31 +183,36 @@ func (r *ResourcePoolReconciler) findDependentBMHs(ctx context.Context, resource
 
 // validateAndSetConditions validates the OCloudSite reference and sets appropriate conditions.
 // Returns (parentValid, error) where parentValid is true only when parent exists AND is ready.
+// When parent is ready, stores the parent's metadata.uid in status.resolvedOCloudSiteUID.
 func (r *ResourcePoolReconciler) validateAndSetConditions(ctx context.Context, pool *inventoryv1alpha1.ResourcePool) (bool, error) {
-	// Validate that the referenced OCloudSite exists and is ready
-	result, err := r.validateSiteReference(ctx, pool.Spec.OCloudSiteId)
+	// Validate that the referenced OCloudSite exists and is ready (lookup by name)
+	result, parentUID, err := r.validateSiteReference(ctx, pool.Spec.OCloudSiteName, pool.Namespace)
 	if err != nil {
 		return false, fmt.Errorf("failed to validate OCloudSite reference: %w", err)
 	}
 
 	var condition metav1.Condition
+	var resolvedUID string
+
 	switch {
 	case !result.Exists:
 		condition = metav1.Condition{
 			Type:               inventoryv1alpha1.ConditionTypeReady,
 			Status:             metav1.ConditionFalse,
 			Reason:             inventoryv1alpha1.ReasonParentNotFound,
-			Message:            fmt.Sprintf("Referenced OCloudSite with siteId '%s' does not exist", pool.Spec.OCloudSiteId),
+			Message:            fmt.Sprintf("Referenced OCloudSite '%s' does not exist", pool.Spec.OCloudSiteName),
 			ObservedGeneration: pool.Generation,
 		}
+		resolvedUID = "" // Clear stale UID
 	case !result.Ready:
 		condition = metav1.Condition{
 			Type:               inventoryv1alpha1.ConditionTypeReady,
 			Status:             metav1.ConditionFalse,
 			Reason:             inventoryv1alpha1.ReasonParentNotReady,
-			Message:            fmt.Sprintf("Referenced OCloudSite with siteId '%s' is not ready", pool.Spec.OCloudSiteId),
+			Message:            fmt.Sprintf("Referenced OCloudSite '%s' is not ready", pool.Spec.OCloudSiteName),
 			ObservedGeneration: pool.Generation,
 		}
+		resolvedUID = "" // Clear stale UID
 	default:
 		condition = metav1.Condition{
 			Type:               inventoryv1alpha1.ConditionTypeReady,
@@ -216,12 +221,17 @@ func (r *ResourcePoolReconciler) validateAndSetConditions(ctx context.Context, p
 			Message:            "ResourcePool is ready",
 			ObservedGeneration: pool.Generation,
 		}
+		resolvedUID = parentUID // Store parent's UID for collector use
 	}
 
-	// Only update if the condition has changed
+	// Check if status needs updating
 	existingCondition := meta.FindStatusCondition(pool.Status.Conditions, inventoryv1alpha1.ConditionTypeReady)
-	if existingCondition == nil || existingCondition.Status != condition.Status || existingCondition.Reason != condition.Reason {
+	conditionChanged := existingCondition == nil || existingCondition.Status != condition.Status || existingCondition.Reason != condition.Reason
+	uidChanged := pool.Status.ResolvedOCloudSiteUID != resolvedUID
+
+	if conditionChanged || uidChanged {
 		meta.SetStatusCondition(&pool.Status.Conditions, condition)
+		pool.Status.ResolvedOCloudSiteUID = resolvedUID
 		if err := r.Status().Update(ctx, pool); err != nil {
 			return result.Exists && result.Ready, fmt.Errorf("failed to update status: %w", err)
 		}
@@ -231,30 +241,26 @@ func (r *ResourcePoolReconciler) validateAndSetConditions(ctx context.Context, p
 	return result.Exists && result.Ready, nil
 }
 
-// validateSiteReference checks if an OCloudSite with the given siteId exists and is ready.
-// When duplicates exist, returns Ready=true if ANY matching OCloudSite is ready.
-func (r *ResourcePoolReconciler) validateSiteReference(ctx context.Context, siteID string) (ctlrutils.ParentValidationResult, error) {
-	var siteList inventoryv1alpha1.OCloudSiteList
-	if err := r.List(ctx, &siteList, client.MatchingFields{
-		ctlrutils.OCloudSiteSiteIDIndex: siteID,
-	}); err != nil {
-		return ctlrutils.ParentValidationResult{}, fmt.Errorf("failed to list OCloudSites: %w", err)
-	}
-
-	// Check if any OCloudSite with this siteId is ready
-	// (handles duplicates: return Ready=true if any is ready)
-	if len(siteList.Items) > 0 {
-		for i := range siteList.Items {
-			readyCondition := meta.FindStatusCondition(siteList.Items[i].Status.Conditions, inventoryv1alpha1.ConditionTypeReady)
-			if readyCondition != nil && readyCondition.Status == metav1.ConditionTrue {
-				return ctlrutils.ParentValidationResult{Exists: true, Ready: true}, nil
-			}
+// validateSiteReference checks if an OCloudSite with the given name exists and is ready.
+// Returns (result, parentUID, error) where parentUID is the OCloudSite's metadata.uid when ready.
+func (r *ResourcePoolReconciler) validateSiteReference(ctx context.Context, siteName, namespace string) (ctlrutils.ParentValidationResult, string, error) {
+	site := &inventoryv1alpha1.OCloudSite{}
+	if err := r.Get(ctx, client.ObjectKey{Name: siteName, Namespace: namespace}, site); err != nil {
+		if errors.IsNotFound(err) {
+			return ctlrutils.ParentValidationResult{Exists: false, Ready: false}, "", nil
 		}
-		// At least one exists but none are ready
-		return ctlrutils.ParentValidationResult{Exists: true, Ready: false}, nil
+		return ctlrutils.ParentValidationResult{}, "", fmt.Errorf("failed to get OCloudSite: %w", err)
 	}
 
-	return ctlrutils.ParentValidationResult{Exists: false, Ready: false}, nil
+	// OCloudSite exists, check if it's ready
+	readyCondition := meta.FindStatusCondition(site.Status.Conditions, inventoryv1alpha1.ConditionTypeReady)
+	if readyCondition != nil && readyCondition.Status == metav1.ConditionTrue {
+		// Return parent's metadata.uid for storage in status
+		return ctlrutils.ParentValidationResult{Exists: true, Ready: true}, string(site.UID), nil
+	}
+
+	// Exists but not ready
+	return ctlrutils.ParentValidationResult{Exists: true, Ready: false}, "", nil
 }
 
 // setDeletionBlockedCondition sets the Deleting condition indicating deletion is blocked
@@ -297,10 +303,10 @@ func (r *ResourcePoolReconciler) enqueueResourcePoolsForOCloudSite(ctx context.C
 		return nil
 	}
 
-	// Find all ResourcePools that reference this OCloudSite's siteId using indexed query
+	// Find all ResourcePools that reference this OCloudSite by name
 	var poolList inventoryv1alpha1.ResourcePoolList
 	if err := r.List(ctx, &poolList, client.MatchingFields{
-		ctlrutils.ResourcePoolOCloudSiteIDIndex: site.Spec.SiteID,
+		ctlrutils.ResourcePoolOCloudSiteNameIndex: site.Name,
 	}); err != nil {
 		r.Logger.ErrorContext(ctx, "Failed to list ResourcePools for OCloudSite watch",
 			slog.String("error", err.Error()))
@@ -316,7 +322,7 @@ func (r *ResourcePoolReconciler) enqueueResourcePoolsForOCloudSite(ctx context.C
 
 	if len(requests) > 0 {
 		r.Logger.InfoContext(ctx, "OCloudSite change triggering ResourcePool reconciliation",
-			slog.String("siteId", site.Spec.SiteID),
+			slog.String("siteName", site.Name),
 			slog.Int("resourcePoolCount", len(requests)))
 	}
 
