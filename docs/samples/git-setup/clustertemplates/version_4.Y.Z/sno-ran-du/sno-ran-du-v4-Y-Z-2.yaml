@@ -8,7 +8,7 @@ spec:
   version: v4-Y-Z-2
   release: 4.Y.Z
   templates:
-    hwTemplate: dell-r740-blue
+    hwTemplate: dell-xr8620t-blue
     clusterInstanceDefaults: clusterinstance-defaults-v2
     policyTemplateDefaults: policytemplate-defaults-v1
   templateParameterSchema:

@@ -1,4 +1,4 @@
 resources:
 - common.yaml
-- dell-r740-sno1.yaml
-- dell-r740-sno2.yaml
+- dell-xr8620t-sno1.yaml
+- dell-xr8620t-sno2.yaml
