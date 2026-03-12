@@ -697,6 +697,7 @@ metadata:
     features.operators.openshift.io/token-auth-gcp: "false"
     olm.skipRange: '>=4.16.0 <4.21'
     operators.openshift.io/infrastructure-features: '["disconnected"]'
+    operators.openshift.io/tech-preview: "true"
     operators.openshift.io/valid-subscription: '["OpenShift Container Platform", "OpenShift
       Platform Plus"]'
     operators.operatorframework.io/builder: operator-sdk-v1.41.1
