@@ -35,7 +35,8 @@ The onboarding process involves:
 3. Creating a preprovisioning network data Secret with nmstate configuration for host
    inspection.
 4. Creating a BareMetalHost CR with the required labels and annotations.
-5. Allowing Metal3 to inspect the host and populate hardware inventory data.
+5. Allowing Metal3 to inspect the host and populate hardware inventory data. This
+   process typically takes several minutes per host.
 
 Once onboarded, servers are available for selection by the Metal3 hardware plugin when
 processing [ProvisioningRequests](./cluster-provisioning.md). The plugin matches servers
@@ -48,9 +49,10 @@ Servers are grouped into resource pools using the `resources.clcm.openshift.io/r
 label on the BMH. BMHs that share the same `resourcePoolId` value belong to the same pool,
 regardless of which namespace they are in.
 
-The recommended convention is to organize BMHs by namespace to match the resource pool,
-but this is not required — BMHs in different namespaces can share the same resource pool
-identity, and BMHs in the same namespace could belong to different pools.
+The recommended convention is to use a namespace per resource pool, with the namespace
+name matching the `resourcePoolId` value. Servers within a resource pool should be
+homogeneous (same hardware type and configuration) so that any server in the pool can
+satisfy a provisioning request targeting that pool.
 
 Create a namespace for your servers:
 
@@ -89,7 +91,15 @@ The Secret must be named `network-data-<bmh-name>` (e.g., `network-data-dell-xr8
 for a BMH named `dell-xr8620t-sno1`). This naming convention is required by the Metal3
 hardware plugin, which uses it to restore the Secret reference during deprovisioning.
 
-The Secret is referenced by the BMH's `preprovisioningNetworkDataName` field:
+The Secret is referenced by the BMH's `preprovisioningNetworkDataName` field.
+
+> [!WARNING]
+> Interface names in the nmstate configuration must use the standard device name as
+> assigned by the RHEL CoreOS kernel (e.g., `ens3f0`, `eno1np0`), not an alternate name.
+> The device names may differ from those assigned by other Linux distributions. Using
+> alternate names can cause inspection failures, particularly with VLAN configurations.
+
+Basic example:
 
 ```yaml
 apiVersion: v1
@@ -104,6 +114,32 @@ stringData:
     - name: ens3f0
       type: ethernet
       state: up
+      ipv4:
+        enabled: true
+        dhcp: true
+      ipv6:
+        enabled: false
+    dns-resolver:
+      config:
+        server:
+        - 198.51.100.20
+```
+
+VLAN example:
+
+```yaml
+stringData:
+  nmstate: |
+    interfaces:
+    - name: eno1np0
+      type: ethernet
+      state: up
+    - name: eno1np0.310
+      type: vlan
+      state: up
+      vlan:
+        base-iface: eno1np0
+        id: 310
       ipv4:
         enabled: true
         dhcp: true
