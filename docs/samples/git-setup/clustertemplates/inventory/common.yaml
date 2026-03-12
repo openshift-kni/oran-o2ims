@@ -2,4 +2,4 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: dell-r740-pool
+  name: dell-xr8620t-pool
