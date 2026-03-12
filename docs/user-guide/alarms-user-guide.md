@@ -40,9 +40,10 @@ oc -n open-cluster-management-observability get secret alertmanager-config \
 
 All commands should return running pods/resources. If any fail, check the [ACM Observability Documentation](https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_management_for_kubernetes/2.14/html-single/observability/index).
 
-> **⚠️ Critical Dependency:** The alarms service is **completely dependent** on a healthy ACM Observability stack. The O2IMS alarms server only configures the alertmanager webhook - it cannot function without ACM's monitoring infrastructure already running and generating alerts.
+> [!WARNING]
+> The alarms service is **completely dependent** on a healthy ACM Observability stack. The O2IMS alarms server only configures the alertmanager webhook - it cannot function without ACM's monitoring infrastructure already running and generating alerts.
 >
-> **For Development/Testing:** If you need to set up ACM Observability from scratch, see the development configuration guide in [DEVELOPING.md](../../internal/service/alarms/DEVELOPING.md#setting-up-acm-observability-for-development).
+> For development/testing, if you need to set up ACM Observability from scratch, see the development configuration guide in [DEVELOPING.md](../../internal/service/alarms/DEVELOPING.md#setting-up-acm-observability-for-development).
 
 ## Authentication & Access
 
@@ -58,7 +59,8 @@ export API_URI=$(oc get route -n oran-o2ims -o jsonpath='{.items[?(@.spec.path==
 export BASE_URL="https://${API_URI}/o2ims-infrastructureMonitoring/v1"
 ```
 
-> **Note**: For OAuth2/OIDC-only configurations, service account tokens may not work. Check logs: `oc logs -n oran-o2ims deployment/alarms-server | grep -i oidc`
+> [!NOTE]
+> For OAuth2/OIDC-only configurations, service account tokens may not work. Check logs: `oc logs -n oran-o2ims deployment/alarms-server | grep -i oidc`
 
 **Production:** See [OAuth setup instructions in Prereqsuites](./prereqs.md#oauth-server-expectationsrequirements) for full OAuth2 configuration.
 

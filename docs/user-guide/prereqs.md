@@ -30,7 +30,7 @@ SPDX-License-Identifier: Apache-2.0
     oc patch multiclusterhubs.operator.open-cluster-management.io multiclusterhub -n <ACM_NAMESPACE> --type json --patch '[{"op": "add", "path":"/spec/overrides/components/-", "value": {"name":"siteconfig","enabled": true}}]'
     ```
 
-  - Observablity Operator
+  - Observability Operator
 
     Enable Observablity in ACM by following the official guide: [Red Hat ACM Observability - Enabling the Observability service](https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_management_for_kubernetes/2.14/html-single/observability/index#enabling-observability)
 - Red Hat OpenShift GitOps Operator

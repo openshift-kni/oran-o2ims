@@ -345,7 +345,7 @@ The timeout is configured in the `HardwareTemplate` resource.
 
 Configure hardware provisioning timeout in the `spec.templates.hwTemplate` hardware template resource:
 
-``` yaml
+```yaml
 spec:
   hardwareProvisioningTimeout: "100m"
 ```
@@ -356,7 +356,7 @@ If not specified, the default timeout value (90m) will be applied.
 
 For cluster installation, set in the `spec.templates.clusterInstanceDefaults` ConfigMap:
 
-``` yaml
+```yaml
 data:
   clusterInstallationTimeout: "100m"
 ```
@@ -365,7 +365,7 @@ data:
 
 For cluster configuration, set in the `spec.templates.policyTemplateDefaults` ConfigMap:
 
-``` yaml
+```yaml
 data:
   clusterConfigurationTimeout: "40m"
 ```
@@ -436,7 +436,7 @@ curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
 ```console
 curl -sk -X POST \
 -H 'Content-Type: application/json' \
--H "Authorization: Bearer $MY_TOKEN" \
+-H "Authorization: Bearer ${MY_TOKEN}" \
 "${BASE_URL}/provisioningRequests" -d \
 '{
   "provisioningRequestId": "123e4567-e89b-12d3-a456-426614174000",
@@ -512,7 +512,7 @@ curl -sk -X POST \
 ```console
 curl -sk -X PUT \
 -H 'Content-Type: application/json' \
--H "Authorization: Bearer $MY_TOKEN" \
+-H "Authorization: Bearer ${MY_TOKEN}" \
 "${BASE_URL}/provisioningRequests/123e4567-e89b-12d3-a456-426614174000" -d \
 '{
   "provisioningRequestId": "123e4567-e89b-12d3-a456-426614174000",
