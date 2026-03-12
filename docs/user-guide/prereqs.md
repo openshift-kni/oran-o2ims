@@ -15,7 +15,9 @@ SPDX-License-Identifier: Apache-2.0
 
 ### Platform
 
-- OpenShift Container Platform 4.20.0-rc3 or newer
+- OpenShift Container Platform
+  - 4.20: 4.20.15 or newer
+  - 4.21: 4.21.2 or newer
 
 ### Required operators and add‑ons on the hub
 
