@@ -531,7 +531,7 @@ metadata:
 We assume a ManagedCluster has been installed through a `ProvisioningRequest` referencing the
 [sno-ran-du.v4-Y-Z-4](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml)
 `ClusterTemplate` CR, which uses the static
-[dell-r740-blue](../samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/dell-r740-blue.yaml)
+[dell-xr8620t-blue](../samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/dell-xr8620t-blue.yaml)
 `HardwareTemplate`.
 
 In this example we are updating BIOS settings, BIOS firmware, and BMC firmware by changing
@@ -542,14 +542,14 @@ only the `ProvisioningRequest` and the `HardwareProfile` CR need to be updated.
 The following steps are required:
 
 1. Create a new `HardwareProfile` CR (if one does not already exist for the target firmware versions):
-    * Create a new version of [dell-r740-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06-24.0.5](../samples/git-setup/clustertemplates/hardwareprofiles/dell-r740-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06-24.0.5.yaml) `HardwareProfile` — [dell-r740-bios-2.23.0-bmc-7.00.00.181](../samples/git-setup/clustertemplates/hardwareprofiles/dell-r740-bios-2.23.0-bmc-7.00.00.181.yaml)
-        * Update the name from `dell-r740-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06-24.0.5` to `dell-r740-bios-2.23.0-bmc-7.00.00.181`.
+    * Create a new version of [dell-xr8620t-bios-2.3.5-bmc-7.10.70.10](../samples/git-setup/clustertemplates/hardwareprofiles/dell-xr8620t-bios-2.3.5-bmc-7.10.70.10.yaml) `HardwareProfile` — [dell-xr8620t-bios-2.6.3-bmc-7.20.30.50](../samples/git-setup/clustertemplates/hardwareprofiles/dell-xr8620t-bios-2.6.3-bmc-7.20.30.50.yaml)
+        * Update the name from `dell-xr8620t-bios-2.3.5-bmc-7.10.70.10` to `dell-xr8620t-bios-2.6.3-bmc-7.20.30.50`.
         * Update the `spec.bios`, `spec.biosFirmware` and `spec.bmcFirmware` with desired settings/versions.
-        * Remove the `spec.nicFirmware`.
+        * Add or update `spec.nicFirmware` if NIC firmware updates are also required.
     * Update the kustomization files to include the new `HardwareProfile`. ArgoCD will automatically sync it to the hub cluster.
     * No changes to `HardwareTemplate` or `ClusterTemplate` CRs are needed.
 2. Update the `ProvisioningRequest` to reference the new `HardwareProfile`:
-    * Set `spec.templateParameters.hwTemplateParameters.nodeGroupData.controller.hwProfile` to the new profile name (`dell-r740-bios-2.23.0-bmc-7.00.00.181`).
+    * Set `spec.templateParameters.hwTemplateParameters.nodeGroupData.controller.hwProfile` to the new profile name (`dell-xr8620t-bios-2.6.3-bmc-7.20.30.50`).
 
     ```yaml
     spec:
@@ -557,7 +557,7 @@ The following steps are required:
         hwTemplateParameters:
           nodeGroupData:
             controller:
-              hwProfile: dell-r740-bios-2.23.0-bmc-7.00.00.181
+              hwProfile: dell-xr8620t-bios-2.6.3-bmc-7.20.30.50
     ```
 
 3. The O-Cloud manager detects the change:
@@ -568,11 +568,11 @@ The following steps are required:
       ...
         nodeGroup:
         - nodeGroupData:
-            hwProfile: dell-r740-bios-2.23.0-bmc-7.00.00.181
+            hwProfile: dell-xr8620t-bios-2.6.3-bmc-7.20.30.50
             name: controller
             resourceSelector:
               server-colour: blue
-              server-type: Dell-R740
+              server-type: XR8620t
             role: master
       ...
     ```
@@ -609,7 +609,7 @@ The following steps are required:
         status: "True"
         type: Provisioned
       - lastTransitionTime: "2025-10-01T21:36:01Z"
-        message: 'AllocatedNode metal3-hwplugin-sno1-dell-r740-pool-dell-r740-sno1:
+        message: 'AllocatedNode metal3-hwplugin-sno1-dell-xr8620t-pool-dell-xr8620t-sno1:
           Update Requested'
         reason: ConfigurationUpdateRequested
         status: "False"
@@ -650,7 +650,7 @@ The following steps are required:
             reason: ConfigurationApplied
             status: "True"
             type: Configured
-          hwProfile: dell-r740-bios-2.23.0-bmc-7.00.00.181
+          hwProfile: dell-xr8620t-bios-2.6.3-bmc-7.20.30.50
         ```
 
         * The `currentVersion` values for bios and bmc in `HostFirmwareComponents` status should match the versions declared in the new HardwareProfile.
