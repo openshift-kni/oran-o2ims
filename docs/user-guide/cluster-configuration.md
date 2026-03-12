@@ -379,7 +379,7 @@ This usecase is identical to the [previous one](#updates-to-an-existing-acm-poli
 
 **Directory structure example:**
 
-``` console
+```console
 policytemplates
 |
 └──version_4.Y.Z

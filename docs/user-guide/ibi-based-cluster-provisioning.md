@@ -125,7 +125,8 @@ This ensures that a separate partition is created and the `/var/lib/containers` 
               name: var-lib-containers.mount 
 ```
 
-> **Note:** Remember to update the MachineConfig with the `device` information specific to your server before applying it.
+> [!NOTE]
+> Remember to update the MachineConfig with the `device` information specific to your server before applying it.
 
 **Step 2:** Annotate the BareMetalHost to prevent cleanup:
 
@@ -146,7 +147,8 @@ spec:
   seedImage: quay.io/<user-account>/seed-container-image:4.Y.Z
 ```
 
-> **Note:** Before applying the `SeedGenerator` CR, ensure that all ACM-related resources (including observability add-ons) are fully removed from the spoke cluster.
+> [!NOTE]
+> Before applying the `SeedGenerator` CR, ensure that all ACM-related resources (including observability add-ons) are fully removed from the spoke cluster.
 
 ### Phase 2: Live ISO Creation
 
@@ -158,7 +160,8 @@ INFO Consuming Image-based Installation ISO Config from target directory
 INFO Creating Image-based Installation ISO with embedded ignition
 ```
 
-> **Note:** The `ibi-iso-workdir` directory must contain an `ImageBasedInstallationConfig` resource. If you don't already have one, you can generate a default template as follows:
+> [!NOTE]
+> The `ibi-iso-workdir` directory must contain an `ImageBasedInstallationConfig` resource. If you don't already have one, you can generate a default template as follows:
 
 ```bash
 openshift-install image-based create image-config-template --dir ibi-iso-workdir
@@ -169,7 +172,8 @@ The live ISO contains:
 * The OpenShift seed image with preconfigured cluster state
 * Installation automation and configuration logic
 
-> **Note:** Network and hardware-specific configurations are applied later through the IBI templates provided by the SiteConfig Operator. These are not embedded in the live ISO.
+> [!NOTE]
+> Network and hardware-specific configurations are applied later through the IBI templates provided by the SiteConfig Operator. These are not embedded in the live ISO.
 
 ### Phase 3: Server Pre-Provisioning
 

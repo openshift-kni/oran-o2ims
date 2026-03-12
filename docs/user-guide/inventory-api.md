@@ -23,8 +23,9 @@
 
 ### Query the Metadata endpoints
 
-> :warning: Confirm that an authorization token has already been acquired. See
-> section [Testing API endpoints on a cluster](./environment-setup.md#testing-api-endpoints-on-a-cluster)
+> [!WARNING]
+> Confirm that an authorization token has already been acquired. See
+> section [Testing API endpoints on a cluster](./environment-setup.md#testing-api-endpoints-on-a-cluster).
 
 Notice the `API_URI` is the route HOST/PORT column of the oran-o2ims operator.
 
@@ -99,7 +100,8 @@ $ curl --insecure --silent --header "Authorization: Bearer ${MY_TOKEN}"
 The resource server exposes endpoints for retrieving resource types, resource pools and resources objects. The server relies on the Search Query API of ACM hub. Follow these [instructions](docs/dev/env_acm.md#search-query-api) to enable
 and configure the search API access. The resource server will translate those REST requests and send them to the ACM search server that implements a graphQL API.
 
-> :exclamation: To obtain the requested information we need to enable the searchCollector of all the managed clusters, concretely, in the KlusterletAddonConfig CR.
+> [!IMPORTANT]
+> To obtain the requested information we need to enable the searchCollector of all the managed clusters, concretely, in the KlusterletAddonConfig CR.
 
 #### GET Resource Type List
 
