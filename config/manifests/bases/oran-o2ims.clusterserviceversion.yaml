@@ -19,6 +19,7 @@ metadata:
     features.operators.openshift.io/token-auth-gcp: "false"
     olm.skipRange: '>=4.21.0 <4.23.0'
     operators.openshift.io/infrastructure-features: '["disconnected"]'
+    operators.openshift.io/tech-preview: "true"
     operators.openshift.io/valid-subscription: '["OpenShift Container Platform", "OpenShift
       Platform Plus"]'
     provider: Red Hat
