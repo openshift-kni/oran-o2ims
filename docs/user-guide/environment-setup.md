@@ -26,7 +26,8 @@ You can use the latest automatic build from the [openshift-kni namespace](https:
 
 If you want to build the image yourself and push it to your registry right after:
 
-> :warning: Replace the USERNAME and IMAGE_NAME values with the full name of your container image.
+> [!WARNING]
+> Replace the USERNAME and IMAGE_NAME values with the full name of your container image.
 
 ```console
 $ export USERNAME=your_user
@@ -108,7 +109,8 @@ NAME      AGE
 default   4m20s
 ```
 
-> :warning: Currently, the following components are enabled by default.
+> [!NOTE]
+> Currently, the following components are enabled by default.
 
 ```console
 $ oc get inventory -n oran-o2ims -oyaml
@@ -195,7 +197,8 @@ configure the SMO attributes so that the application can register with the SMO. 
 O-Cloud ID value, which is provided by the SMO. This registration is a one-time operation. Once it succeeds, it will
 not be repeated.
 
-> :exclamation: For development/debug purposes, if repeating the registration is necessary, the following annotation can
+> [!NOTE]
+> For development/debug purposes, if repeating the registration is necessary, the following annotation can
 > be applied to the Inventory CR.
 >
 >```bash
@@ -211,7 +214,8 @@ configuration requirements.
    certificates are signed by a non-public CA certificate. This is optional. If not required, then the 'caBundle'
    attribute can be omitted from the Inventory CR.
 
-   > :warning: Do this only if the cluster proxy isn't currently pointing to some other custom CA bundle. If it is
+   > [!WARNING]
+   > Do this only if the cluster proxy isn't currently pointing to some other custom CA bundle. If it is
    > pointing to an existing bundle, then the new private certificates need to be appended to the existing set. Refer to
    > the [OpenShift Configuring a custom PKI documentation](https://docs.redhat.com/en/documentation/openshift_container_platform/4.20/html/configuring_network_settings/configuring-a-custom-pki)
    > for more details.
@@ -262,7 +266,8 @@ configuration requirements.
       `spec.ingress.tls.secretName` attributes.
 
    **cert-manager method (recommended):**
-   > :exclamation: ensure that the `LAB_URL` environment variable is set to your DNS domain name as described above.
+   > [!IMPORTANT]
+   > Ensure that the `LAB_URL` environment variable is set to your DNS domain name as described above.
 
    ```console
    cat << EOF > oran-o2ims-tls-certificate.yaml
