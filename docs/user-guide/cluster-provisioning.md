@@ -56,6 +56,7 @@ The status of the provisioning process is tracked via the following `status.cond
 - ClusterResourcesCreated: The necessary cluster resources have been created.
 - HardwareTemplateRendered: The hardware template has been successfully rendered.
 - HardwareProvisioned: Hardware provisioning is complete.
+- HardwareConfigured: Firmware and BIOS configuration has been applied. See [Firmware Update Workflow](./firmware-update-workflow.md) for details.
 - HardwareNodeConfigApplied: Hardware node configuration is applied to the rendered ClusterInstance.
 - ClusterProvisioned: Cluster installation is complete.
 - ConfigurationApplied: Configuration has been successfully applied via ACM enforce policies.

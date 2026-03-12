@@ -528,6 +528,10 @@ metadata:
 
 ### Switching to a new hardware profile
 
+For a detailed explanation of how firmware updates are processed, including the CR
+relationship, status conditions, timeouts, and failure handling, see the
+[Firmware Update Workflow](./firmware-update-workflow.md) guide.
+
 We assume a ManagedCluster has been installed through a `ProvisioningRequest` referencing the
 [sno-ran-du.v4-Y-Z-4](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml)
 `ClusterTemplate` CR, which uses the static
@@ -632,8 +636,12 @@ The following steps are required:
       type: Configured
     ```
 
-5. Metal3 baremetal operator applies the updates on the host.
-6. The O-Cloud metal3 hardware plugin waits for the result via `HostFirmwareSettings`/`HostFirmwareComponents` status and validates configuration.
+5. The Metal3 hardware plugin waits for the Metal3 Bare Metal Operator (BMO) to detect and validate the changes on
+   the `HostFirmwareSettings` and `HostFirmwareComponents` CRs, then triggers a host reboot via the
+   `reboot.metal3.io` annotation on the BMH. BMO applies the firmware and BIOS updates during the reboot cycle.
+   For multi-node clusters, nodes are updated one at a time, with master nodes updated before worker nodes.
+   <!-- TODO: Update when parallel worker node updates are implemented for MNO clusters -->
+6. The hardware plugin validates the result by checking `HostFirmwareSettings`/`HostFirmwareComponents` status and confirming the Kubernetes node has rejoined the cluster and reached Ready state.
     * Success scenario:
         * It updates the status of the `AllocatedNode` CR to reflect the result of the operation.
 
@@ -659,14 +667,14 @@ The following steps are required:
         status:
           components:
           - component: bios
-            currentVersion: 2.23.0
-            initialVersion: 2.22.2
-            lastVersionFlashed: 2.23.0
+            currentVersion: 2.6.3
+            initialVersion: 2.3.5
+            lastVersionFlashed: 2.6.3
             updatedAt: "2025-10-01T22:01:50Z"
           - component: bmc
-            currentVersion: 7.00.00.181
-            initialVersion: 7.00.00.173
-            lastVersionFlashed: 7.00.00.181
+            currentVersion: 7.20.30.50
+            initialVersion: 7.10.70.10
+            lastVersionFlashed: 7.20.30.50
             updatedAt: "2025-10-01T22:01:50Z"
           ...
         ```
@@ -676,7 +684,7 @@ The following steps are required:
         ```yaml
         status:
           settings:
-            AcPwrRcvryUserDelay: "90"
+            AcPwrRcvryUserDelay: "120"
         ```
 
         * Once all nodes have been updated, it will update the status of the `NodeAllocationRequest` CR to reflect the result of the operation.
