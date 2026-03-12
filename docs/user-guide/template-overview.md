@@ -13,6 +13,9 @@ SPDX-License-Identifier: Apache-2.0
     - [Hardware resources](#hardware-resources)
       - [HardwareProfile](#hardwareprofile)
       - [HardwareTemplate](#hardwaretemplate)
+        - [Label selectors](#label-selectors)
+        - [Hardware data selectors](#hardware-data-selectors)
+        - [Complete example](#complete-example)
     - [ClusterInstance defaults ConfigMap](#clusterinstance-defaults-configmap)
     - [PolicyTemplate defaults ConfigMap](#policytemplate-defaults-configmap)
   - [Validation](#validation)
@@ -70,11 +73,147 @@ HardwareProfile describes the desired hardware state for a class of servers, suc
 
 #### HardwareTemplate
 
-HardwareTemplate defines the node groups that the cluster needs and how matching hosts are selected from the inventory. For each group you specify attributes such as the role and group name, and you provide a `resourceSelector` with label criteria.
-You can specify either fully-qualified labels such as `resourceselector.clcm.openshift.io/server-type=Dell-R740` or short keys like `server-type=Dell-R740`; the controller will automatically prepend the `resourceselector.clcm.openshift.io/` prefix when it is omitted.
-At runtime, the Metal3 hardware plugin finds BareMetalHosts whose labels satisfy the selector and allocates them to the request.
+HardwareTemplate defines the node groups that the cluster needs and how matching hosts
+are selected from the inventory. For each group, specify attributes such as the role
+and group name, and provide a `resourceSelector` with matching criteria. The Metal3
+hardware plugin uses a two-stage filtering process to find suitable BareMetalHosts:
 
-**[TODO] Add documentation for the hardware data selector**
+1. **Label-based filtering** — selects BMHs by Kubernetes label.
+2. **Hardware data filtering** — further filters BMHs based on their HardwareData CR (hardware inventory details such as CPU, memory, storage, and NICs).
+
+All criteria in the `resourceSelector` must match for a BMH to be selected (AND logic). Only BMHs in the `Available` provisioning state are evaluated.
+
+##### Label selectors
+
+You can specify either fully-qualified labels such as `resourceselector.clcm.openshift.io/server-type: Dell-R740` or short keys like `server-type: Dell-R740`; the controller will automatically prepend the `resourceselector.clcm.openshift.io/` prefix when it is omitted.
+
+##### Hardware data selectors
+
+Keys prefixed with `hardwaredata/` match against fields in the BMH's HardwareData CR. The general format is:
+
+```text
+hardwaredata/<field>[;qualifier1][;qualifier2]
+```
+
+The value is compared against the corresponding field from the HardwareData. For complex resource criteria (NICs and storage), the value must be set to `"present"`.
+
+**String fields** — `productname`, `manufacturer`, `cpu_arch`, `cpu_model`
+
+These fields support the following qualifiers:
+
+| Qualifier | Description |
+|---|---|
+| *(none)* | Exact match (case-sensitive) |
+| `icase` | Case-insensitive match |
+| `substring` | Substring match |
+| `substring;icase` | Case-insensitive substring match |
+
+Examples:
+
+```yaml
+resourceSelector:
+  "hardwaredata/productname": "ProLiant DL110 Gen11"              # exact
+  "hardwaredata/productname;substring;icase": "dl110"             # substring, case-insensitive
+  "hardwaredata/manufacturer;icase": "hpe"                        # case-insensitive
+  "hardwaredata/cpu_arch": "x86_64"                               # exact
+  "hardwaredata/cpu_model;substring": "Xeon(R)"                   # substring
+```
+
+**Integer fields** — `num_threads`, `ramMebibytes`
+
+These fields support comparison qualifiers:
+
+| Qualifier | Alternate | Description |
+|---|---|---|
+| *(none)* or `eq` | `==` | Equal |
+| `neq` | `!=` | Not equal |
+| `gt` | `>` | Greater than |
+| `gte` | `>=` | Greater than or equal |
+| `lt` | `<` | Less than |
+| `lte` | `<=` | Less than or equal |
+
+Examples:
+
+```yaml
+resourceSelector:
+  "hardwaredata/num_threads;>=": "64"                             # at least 64 threads
+  "hardwaredata/ramMebibytes;gt": "100000"                        # more than ~100 GiB RAM
+```
+
+**NIC criteria** — `nics`
+
+NIC selectors use a semicolon-delimited set of sub-criteria within the key. The value must be `"present"`. Available sub-criteria:
+
+| Sub-criterion | Operators | Description |
+|---|---|---|
+| `model` | `==`, `!=`, `~` (contains), `!~` | Match NIC model string |
+| `speedGbps` | `==`, `!=`, `>`, `>=`, `<`, `<=` | Match NIC speed in Gbps |
+| `count` | `==`, `!=`, `>`, `>=`, `<`, `<=` | Number of NICs matching the other sub-criteria |
+
+When `model` and/or `speedGbps` are specified, they filter the set of NICs first, and then `count` is evaluated against the matching subset.
+
+Examples:
+
+```yaml
+resourceSelector:
+  "hardwaredata/nics;count>4": "present"                          # more than 4 NICs total
+  "hardwaredata/nics;model~0x8086;count=8": "present"             # 8 Intel NICs
+  "hardwaredata/nics;model~0x8086;count=8;speedGbps>=25": "present"  # 8 Intel NICs at 25+ Gbps
+```
+
+**Storage criteria** — `storage`
+
+Storage selectors use a similar semicolon-delimited format. The value must be `"present"`. Available sub-criteria:
+
+| Sub-criterion | Operators | Description |
+|---|---|---|
+| `type` | `==`, `!=`, `~`, `!~` | Storage type: `NVME`, `SSD`, or `HDD` |
+| `model` | `==`, `!=`, `~`, `!~` | Storage device model |
+| `vendor` | `==`, `!=`, `~`, `!~` | Storage device vendor |
+| `name` | `==`, `!=`, `~`, `!~` | Device name or alternate name |
+| `sizeBytes` | `==`, `!=`, `>`, `>=`, `<`, `<=` | Storage device size in bytes |
+| `count` | `==`, `!=`, `>`, `>=`, `<`, `<=` | Number of devices matching the other sub-criteria |
+
+When filtering sub-criteria (type, model, vendor, name, sizeBytes) are specified, they filter the set of devices first, and then `count` is evaluated against the matching subset. The `icase` qualifier can be appended for case-insensitive type matching.
+
+Examples:
+
+```yaml
+resourceSelector:
+  "hardwaredata/storage;type==NVME;count>=2": "present"           # at least 2 NVMe disks
+  "hardwaredata/storage;type==NVME;count>=2;sizeBytes>100000": "present"  # 2+ NVMe > 100KB
+  "hardwaredata/storage;type==SSD;count=1": "present"             # exactly 1 SSD
+  "hardwaredata/storage;model~VR000480": "present"                # model contains "VR000480"
+  "hardwaredata/storage;type==nvme;count>=2;icase": "present"     # case-insensitive type
+```
+
+##### Complete example
+
+The following example combines label and hardware data selectors to match Dell XR8620t hosts with specific CPU, NIC, and storage requirements:
+
+```yaml
+apiVersion: clcm.openshift.io/v1alpha1
+kind: HardwareTemplate
+metadata:
+  name: dell-xr8620t-blue
+  namespace: oran-o2ims
+spec:
+  nodeGroupData:
+    - name: controller
+      role: master
+      hwProfile: rh-profile-xr8620t-bios-settings
+      resourceSelector:
+        # Label-based criteria
+        "server-type": "XR8620t"
+        "resourceselector.clcm.openshift.io/server-colour": "blue"
+        # Hardware data criteria
+        "hardwaredata/cpu_arch": "x86_64"
+        "hardwaredata/productname;substring;icase": "xr8620t"
+        "hardwaredata/num_threads;>=": "64"
+        "hardwaredata/storage;type==NVME;count>=2": "present"
+        "hardwaredata/nics;model~0x8086;count=8;speedGbps>=25": "present"
+  hardwareProvisioningTimeout: "90m"
+```
 
 The template includes a `hardwarePluginRef`, which defaults to `metal3-hwplugin` (automatically created by the operator) and can be omitted.
 The HardwareProfile to apply to matched hosts can be specified either in `nodeGroupData[].hwProfile` within the
