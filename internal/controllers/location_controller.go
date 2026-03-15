@@ -17,7 +17,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
@@ -76,96 +75,18 @@ func (r *LocationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 	r.Logger.InfoContext(ctx, "Fetched Location successfully",
 		slog.String("name", location.Name))
 
-	// Handle finalizer logic
-	if result, stop, err := r.handleFinalizer(ctx, location); stop || err != nil {
-		return result, err
+	// Skip validation if being deleted - let Kubernetes handle deletion directly
+	if !location.DeletionTimestamp.IsZero() {
+		r.Logger.InfoContext(ctx, "Location is being deleted, skipping validation")
+		return result, nil
 	}
 
-	// Validate and set Ready condition if not being deleted
-	if location.DeletionTimestamp.IsZero() {
-		if err := r.validateAndSetConditions(ctx, location); err != nil {
-			return requeueWithShortInterval(), err
-		}
+	// Validate and set Ready condition
+	if err := r.validateAndSetConditions(ctx, location); err != nil {
+		return requeueWithShortInterval(), err
 	}
 
 	return result, nil
-}
-
-// handleFinalizer manages the finalizer for Location CRs
-func (r *LocationReconciler) handleFinalizer(
-	ctx context.Context, location *inventoryv1alpha1.Location) (ctrl.Result, bool, error) {
-
-	// Check if the Location is marked to be deleted
-	if location.DeletionTimestamp.IsZero() {
-		// Object is not being deleted, add finalizer if not present
-		if !controllerutil.ContainsFinalizer(location, inventoryv1alpha1.LocationFinalizer) {
-			r.Logger.InfoContext(ctx, "Adding finalizer to Location",
-				slog.String("name", location.Name))
-			controllerutil.AddFinalizer(location, inventoryv1alpha1.LocationFinalizer)
-			if err := r.Update(ctx, location); err != nil {
-				r.Logger.WarnContext(ctx, "Failed to add finalizer, will retry",
-					slog.String("error", err.Error()))
-				return requeueWithShortInterval(), true, fmt.Errorf("failed to add finalizer: %w", err)
-			}
-			// Requeue since the finalizer has been added
-			return requeueImmediately(), false, nil
-		}
-		return doNotRequeue(), false, nil
-	}
-
-	// Object is being deleted
-	if controllerutil.ContainsFinalizer(location, inventoryv1alpha1.LocationFinalizer) {
-		r.Logger.InfoContext(ctx, "Location is being deleted, checking for dependents",
-			slog.String("name", location.Name))
-
-		// Check for dependent OCloudSites (those that reference this Location by name)
-		dependents, err := r.findDependentOCloudSites(ctx, location.Name)
-		if err != nil {
-			return requeueWithShortInterval(), true, fmt.Errorf("failed to check for dependents: %w", err)
-		}
-
-		if len(dependents) > 0 {
-			// Update status to indicate deletion is blocked
-			r.Logger.InfoContext(ctx, "Location deletion blocked by dependent OCloudSites",
-				slog.String("name", location.Name),
-				slog.Int("dependentCount", len(dependents)))
-
-			if err := r.setDeletionBlockedCondition(ctx, location, len(dependents)); err != nil {
-				r.Logger.WarnContext(ctx, "Failed to update status", slog.String("error", err.Error()))
-			}
-
-			// Requeue to check again later
-			return requeueWithCustomInterval(10 * time.Second), true, nil
-		}
-
-		// No dependents, safe to remove finalizer and allow k8s deletion
-		r.Logger.InfoContext(ctx, "Removing finalizer from Location",
-			slog.String("name", location.Name))
-
-		patch := client.MergeFrom(location.DeepCopy())
-		if controllerutil.RemoveFinalizer(location, inventoryv1alpha1.LocationFinalizer) {
-			if err := r.Patch(ctx, location, patch); err != nil {
-				r.Logger.WarnContext(ctx, "Failed to remove finalizer, will retry",
-					slog.String("error", err.Error()))
-				return requeueWithShortInterval(), true, fmt.Errorf("failed to remove finalizer: %w", err)
-			}
-		}
-		return doNotRequeue(), true, nil
-	}
-
-	return doNotRequeue(), false, nil
-}
-
-// findDependentOCloudSites returns all OCloudSites that reference this Location by name.
-func (r *LocationReconciler) findDependentOCloudSites(ctx context.Context, locationName string) ([]inventoryv1alpha1.OCloudSite, error) {
-	var siteList inventoryv1alpha1.OCloudSiteList
-	if err := r.List(ctx, &siteList, client.MatchingFields{
-		ctlrutils.OCloudSiteGlobalLocationNameIndex: locationName,
-	}); err != nil {
-		return nil, fmt.Errorf("failed to list OCloudSites: %w", err)
-	}
-
-	return siteList.Items, nil
 }
 
 // validateAndSetConditions sets the Ready condition.
@@ -185,24 +106,6 @@ func (r *LocationReconciler) validateAndSetConditions(ctx context.Context, locat
 		if err := r.Status().Update(ctx, location); err != nil {
 			return fmt.Errorf("failed to update status: %w", err)
 		}
-	}
-
-	return nil
-}
-
-// setDeletionBlockedCondition sets the Deleting condition indicating deletion is blocked
-func (r *LocationReconciler) setDeletionBlockedCondition(ctx context.Context, location *inventoryv1alpha1.Location, dependentCount int) error {
-	condition := metav1.Condition{
-		Type:               inventoryv1alpha1.ConditionTypeDeleting,
-		Status:             metav1.ConditionFalse,
-		Reason:             inventoryv1alpha1.ReasonDependentsExist,
-		Message:            fmt.Sprintf("Cannot delete: %d OCloudSite(s) reference this Location", dependentCount),
-		ObservedGeneration: location.Generation,
-	}
-
-	meta.SetStatusCondition(&location.Status.Conditions, condition)
-	if err := r.Status().Update(ctx, location); err != nil {
-		return fmt.Errorf("failed to update status: %w", err)
 	}
 
 	return nil

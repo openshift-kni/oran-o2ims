@@ -233,38 +233,36 @@ const (
 	defaultInterval = 250 * time.Millisecond
 )
 
-// waitForLocationReady waits for a Location to have Ready=True condition.
-func waitForLocationReady(location *inventoryv1alpha1.Location) {
+// waitForReady is a generic helper that waits for any hierarchy CR to have Ready=True condition.
+// T is the underlying struct type (e.g., Location), PT is the pointer type that implements client.Object.
+func waitForResourceReady[T any, PT interface {
+	client.Object
+	*T
+}](obj PT, getConditions func(PT) []metav1.Condition) {
 	Eventually(func() bool {
-		fetched := &inventoryv1alpha1.Location{}
-		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(location), fetched)
-		if err != nil {
+		fetched := PT(new(T))
+		if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), fetched); err != nil {
 			return false
 		}
-		for _, cond := range fetched.Status.Conditions {
+		for _, cond := range getConditions(fetched) {
 			if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
 				cond.Status == metav1.ConditionTrue {
 				return true
 			}
 		}
 		return false
-	}, defaultTimeout, defaultInterval).Should(BeTrue(), "Location should become Ready")
+	}, defaultTimeout, defaultInterval).Should(BeTrue(), "%T should become Ready", obj)
 }
 
-// waitForOCloudSiteReady waits for an OCloudSite to have Ready=True condition.
+// Convenience wrappers for readability at call sites
+func waitForLocationReady(location *inventoryv1alpha1.Location) {
+	waitForResourceReady(location, func(l *inventoryv1alpha1.Location) []metav1.Condition { return l.Status.Conditions })
+}
+
 func waitForOCloudSiteReady(site *inventoryv1alpha1.OCloudSite) {
-	Eventually(func() bool {
-		fetched := &inventoryv1alpha1.OCloudSite{}
-		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetched)
-		if err != nil {
-			return false
-		}
-		for _, cond := range fetched.Status.Conditions {
-			if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
-				cond.Status == metav1.ConditionTrue {
-				return true
-			}
-		}
-		return false
-	}, defaultTimeout, defaultInterval).Should(BeTrue(), "OCloudSite should become Ready")
+	waitForResourceReady(site, func(s *inventoryv1alpha1.OCloudSite) []metav1.Condition { return s.Status.Conditions })
+}
+
+func waitForResourcePoolReady(pool *inventoryv1alpha1.ResourcePool) {
+	waitForResourceReady(pool, func(p *inventoryv1alpha1.ResourcePool) []metav1.Condition { return p.Status.Conditions })
 }

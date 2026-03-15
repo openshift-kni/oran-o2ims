@@ -14,7 +14,6 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 )
@@ -26,33 +25,6 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 	)
 
 	Context("When creating an OCloudSite", func() {
-		It("should automatically add the finalizer", func() {
-			site := &inventoryv1alpha1.OCloudSite{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-site-finalizer",
-					Namespace: testNamespace,
-				},
-				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					GlobalLocationName: "loc-nonexistent", // Location doesn't exist
-					Description:        "Testing finalizer addition",
-				},
-			}
-			Expect(k8sClient.Create(ctx, site)).To(Succeed())
-			DeferCleanup(func() {
-				_ = k8sClient.Delete(ctx, site)
-			})
-
-			// Wait for the finalizer to be added
-			Eventually(func() bool {
-				fetched := &inventoryv1alpha1.OCloudSite{}
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetched)
-				if err != nil {
-					return false
-				}
-				return controllerutil.ContainsFinalizer(fetched, inventoryv1alpha1.OCloudSiteFinalizer)
-			}, timeout, interval).Should(BeTrue())
-		})
-
 		It("should set Ready=True when Location is valid and ready", func() {
 			// First create a valid Location
 			location := &inventoryv1alpha1.Location{
@@ -140,9 +112,6 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 				return false
 			}, timeout, interval).Should(BeTrue())
 		})
-
-		// Note: We cannot test "ParentNotReady" for OCloudSite because Location
-		// has no parent and is always Ready=True.
 	})
 
 	Context("When parent Location is created later", func() {
@@ -216,8 +185,8 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 		})
 	})
 
-	Context("When deleting an OCloudSite with dependent ResourcePools", func() {
-		It("should block deletion until dependents are removed", func() {
+	Context("When deleting an OCloudSite", func() {
+		It("should delete successfully even with dependent ResourcePools", func() {
 			// Create a Location first (for valid reference)
 			location := &inventoryv1alpha1.Location{
 				ObjectMeta: metav1.ObjectMeta{
@@ -240,12 +209,12 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 			// Create the OCloudSite
 			site := &inventoryv1alpha1.OCloudSite{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-site-delete-blocked",
+					Name:      "test-site-delete-with-deps",
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
 					GlobalLocationName: "test-location-for-site-delete",
-					Description:        "Testing deletion blocking",
+					Description:        "Testing deletion without blocking",
 				},
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
@@ -256,74 +225,51 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 			// Create a dependent ResourcePool
 			pool := &inventoryv1alpha1.ResourcePool{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-pool-dependent",
+					Name:      "test-pool-dependent-delete",
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
-					OCloudSiteName: "test-site-delete-blocked", // References the site by metadata.name
+					OCloudSiteName: "test-site-delete-with-deps", // References the site by metadata.name
 					Description:    "Pool that depends on site",
 				},
 			}
 			Expect(k8sClient.Create(ctx, pool)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, pool)
+			})
 
-			// Wait for pool finalizer to be added
-			Eventually(func() bool {
-				fetched := &inventoryv1alpha1.ResourcePool{}
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
-				if err != nil {
-					return false
-				}
-				return controllerutil.ContainsFinalizer(fetched, inventoryv1alpha1.ResourcePoolFinalizer)
-			}, timeout, interval).Should(BeTrue())
+			// Wait for ResourcePool to be Ready
+			waitForResourcePoolReady(pool)
 
-			// Try to delete the OCloudSite
+			// Delete the OCloudSite : it should succeed immediately (no blocking)
 			Expect(k8sClient.Delete(ctx, site)).To(Succeed())
 
-			// Verify the OCloudSite still exists (deletion blocked by finalizer)
-			Consistently(func() bool {
-				fetched := &inventoryv1alpha1.OCloudSite{}
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetched)
-				return err == nil && fetched.DeletionTimestamp != nil
-			}, 4*time.Second, interval).Should(BeTrue(), "OCloudSite should still exist with DeletionTimestamp set")
-
-			// Verify the Deleting condition is set
-			Eventually(func() bool {
-				fetched := &inventoryv1alpha1.OCloudSite{}
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetched)
-				if err != nil {
-					return false
-				}
-				for _, cond := range fetched.Status.Conditions {
-					if cond.Type == inventoryv1alpha1.ConditionTypeDeleting &&
-						cond.Status == metav1.ConditionFalse &&
-						cond.Reason == inventoryv1alpha1.ReasonDependentsExist {
-						return true
-					}
-				}
-				return false
-			}, timeout, interval).Should(BeTrue())
-
-			// Delete the dependent ResourcePool
-			Expect(k8sClient.Delete(ctx, pool)).To(Succeed())
-
-			// Wait for ResourcePool to be fully deleted
-			Eventually(func() bool {
-				fetched := &inventoryv1alpha1.ResourcePool{}
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
-				return k8serrors.IsNotFound(err)
-			}, timeout, interval).Should(BeTrue(), "ResourcePool should be deleted (NotFound)")
-
-			// Now the OCloudSite should be deleted
+			// OCloudSite should be deleted
 			Eventually(func() bool {
 				fetched := &inventoryv1alpha1.OCloudSite{}
 				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetched)
 				return k8serrors.IsNotFound(err)
 			}, timeout, interval).Should(BeTrue(), "OCloudSite should be deleted (NotFound)")
-		})
-	})
 
-	Context("When deleting an OCloudSite without dependents", func() {
-		It("should delete successfully", func() {
+			// ResourcePool should transition to Ready=False (parent not found)
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.ResourcePool{}
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
+				if err != nil {
+					return false
+				}
+				for _, cond := range fetched.Status.Conditions {
+					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+						cond.Status == metav1.ConditionFalse &&
+						cond.Reason == inventoryv1alpha1.ReasonParentNotFound {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue(), "ResourcePool should transition to Ready=False (ParentNotFound)")
+		})
+
+		It("should delete successfully without dependents", func() {
 			// Create a Location first
 			location := &inventoryv1alpha1.Location{
 				ObjectMeta: metav1.ObjectMeta{
@@ -355,20 +301,13 @@ var _ = Describe("OCloudSite Controller", Label("envtest"), func() {
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
 
-			// Wait for finalizer to be added
-			Eventually(func() bool {
-				fetched := &inventoryv1alpha1.OCloudSite{}
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetched)
-				if err != nil {
-					return false
-				}
-				return controllerutil.ContainsFinalizer(fetched, inventoryv1alpha1.OCloudSiteFinalizer)
-			}, timeout, interval).Should(BeTrue())
+			// Wait for Ready condition
+			waitForOCloudSiteReady(site)
 
 			// Delete the OCloudSite
 			Expect(k8sClient.Delete(ctx, site)).To(Succeed())
 
-			// OCloudSite should be deleted since there are no dependents
+			// OCloudSite should be deleted
 			Eventually(func() bool {
 				fetched := &inventoryv1alpha1.OCloudSite{}
 				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetched)

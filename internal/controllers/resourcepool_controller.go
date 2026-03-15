@@ -12,19 +12,16 @@ import (
 	"log/slog"
 	"time"
 
-	bmhv1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
@@ -82,99 +79,23 @@ func (r *ResourcePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		slog.String("name", pool.Name),
 		slog.String("oCloudSiteName", pool.Spec.OCloudSiteName))
 
-	// Handle finalizer logic
-	if result, stop, err := r.handleFinalizer(ctx, pool); stop || err != nil {
-		return result, err
+	// Skip validation if being deleted - let Kubernetes handle deletion directly
+	if !pool.DeletionTimestamp.IsZero() {
+		r.Logger.InfoContext(ctx, "ResourcePool is being deleted, skipping validation")
+		return result, nil
 	}
 
-	// Validate OCloudSite reference and set Ready condition if not being deleted
-	if pool.DeletionTimestamp.IsZero() {
-		parentValid, err := r.validateAndSetConditions(ctx, pool)
-		if err != nil {
-			return requeueWithShortInterval(), err
-		}
-		// Requeue if parent doesn't exist or is not ready - it may be created/ready later
-		if !parentValid {
-			return requeueWithMediumInterval(), nil
-		}
+	// Validate OCloudSite reference and set Ready condition
+	parentValid, err := r.validateAndSetConditions(ctx, pool)
+	if err != nil {
+		return requeueWithShortInterval(), err
+	}
+	// Requeue if parent doesn't exist or is not ready - it may be created/ready later
+	if !parentValid {
+		return requeueWithMediumInterval(), nil
 	}
 
 	return result, nil
-}
-
-// handleFinalizer manages the finalizer for ResourcePool CRs
-func (r *ResourcePoolReconciler) handleFinalizer(
-	ctx context.Context, pool *inventoryv1alpha1.ResourcePool) (ctrl.Result, bool, error) {
-
-	// Check if the ResourcePool is marked to be deleted
-	if pool.DeletionTimestamp.IsZero() {
-		// Object is not being deleted, add finalizer if not present
-		if !controllerutil.ContainsFinalizer(pool, inventoryv1alpha1.ResourcePoolFinalizer) {
-			r.Logger.InfoContext(ctx, "Adding finalizer to ResourcePool",
-				slog.String("name", pool.Name))
-			controllerutil.AddFinalizer(pool, inventoryv1alpha1.ResourcePoolFinalizer)
-			if err := r.Update(ctx, pool); err != nil {
-				r.Logger.WarnContext(ctx, "Failed to add finalizer, will retry",
-					slog.String("error", err.Error()))
-				return requeueWithShortInterval(), true, fmt.Errorf("failed to add finalizer: %w", err)
-			}
-			// Requeue since the finalizer has been added
-			return requeueImmediately(), false, nil
-		}
-		return doNotRequeue(), false, nil
-	}
-
-	// Object is being deleted
-	if controllerutil.ContainsFinalizer(pool, inventoryv1alpha1.ResourcePoolFinalizer) {
-		r.Logger.InfoContext(ctx, "ResourcePool is being deleted, checking for dependents",
-			slog.String("name", pool.Name))
-
-		// Check for dependent BareMetalHosts (those that have resourcePoolName label matching this pool's name)
-		bmhDependents, err := r.findDependentBMHs(ctx, pool.Name)
-		if err != nil {
-			return requeueWithShortInterval(), true, fmt.Errorf("failed to check for dependent BareMetalHosts: %w", err)
-		}
-
-		if len(bmhDependents) > 0 {
-			// Update status to indicate deletion is blocked
-			r.Logger.InfoContext(ctx, "ResourcePool deletion blocked by dependent BareMetalHosts",
-				slog.String("name", pool.Name),
-				slog.Int("bmhCount", len(bmhDependents)))
-
-			if err := r.setDeletionBlockedCondition(ctx, pool, len(bmhDependents)); err != nil {
-				r.Logger.WarnContext(ctx, "Failed to update status", slog.String("error", err.Error()))
-			}
-
-			// Requeue to check again later
-			return requeueWithCustomInterval(10 * time.Second), true, nil
-		}
-
-		// No dependents, safe to remove finalizer and allow k8s deletion
-		r.Logger.InfoContext(ctx, "Removing finalizer from ResourcePool",
-			slog.String("name", pool.Name))
-
-		patch := client.MergeFrom(pool.DeepCopy())
-		if controllerutil.RemoveFinalizer(pool, inventoryv1alpha1.ResourcePoolFinalizer) {
-			if err := r.Patch(ctx, pool, patch); err != nil {
-				r.Logger.WarnContext(ctx, "Failed to remove finalizer, will retry",
-					slog.String("error", err.Error()))
-				return requeueWithShortInterval(), true, fmt.Errorf("failed to remove finalizer: %w", err)
-			}
-		}
-		return doNotRequeue(), true, nil
-	}
-
-	return doNotRequeue(), false, nil
-}
-
-// findDependentBMHs returns all BareMetalHosts that have the resourcePoolName label matching this ResourcePool
-func (r *ResourcePoolReconciler) findDependentBMHs(ctx context.Context, resourcePoolName string) ([]bmhv1alpha1.BareMetalHost, error) {
-	var bmhList bmhv1alpha1.BareMetalHostList
-	if err := r.List(ctx, &bmhList, client.MatchingLabels{constants.LabelResourcePoolName: resourcePoolName}); err != nil {
-		return nil, fmt.Errorf("failed to list BareMetalHosts: %w", err)
-	}
-
-	return bmhList.Items, nil
 }
 
 // validateAndSetConditions validates the OCloudSite reference and sets appropriate conditions.
@@ -257,24 +178,6 @@ func (r *ResourcePoolReconciler) validateSiteReference(ctx context.Context, site
 
 	// Exists but not ready
 	return ctlrutils.ParentValidationResult{Exists: true, Ready: false}, "", nil
-}
-
-// setDeletionBlockedCondition sets the Deleting condition indicating deletion is blocked
-func (r *ResourcePoolReconciler) setDeletionBlockedCondition(ctx context.Context, pool *inventoryv1alpha1.ResourcePool, bmhCount int) error {
-	condition := metav1.Condition{
-		Type:               inventoryv1alpha1.ConditionTypeDeleting,
-		Status:             metav1.ConditionFalse,
-		Reason:             inventoryv1alpha1.ReasonDependentsExist,
-		Message:            fmt.Sprintf("Cannot delete: %d BareMetalHost(s) reference this ResourcePool", bmhCount),
-		ObservedGeneration: pool.Generation,
-	}
-
-	meta.SetStatusCondition(&pool.Status.Conditions, condition)
-	if err := r.Status().Update(ctx, pool); err != nil {
-		return fmt.Errorf("failed to update status: %w", err)
-	}
-
-	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

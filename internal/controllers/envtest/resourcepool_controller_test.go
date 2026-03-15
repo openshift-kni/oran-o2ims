@@ -9,16 +9,13 @@ package envtest
 import (
 	"time"
 
-	bmhv1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
 
 var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
@@ -28,33 +25,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 	)
 
 	Context("When creating a ResourcePool", func() {
-		It("should automatically add the finalizer", func() {
-			pool := &inventoryv1alpha1.ResourcePool{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-pool-finalizer",
-					Namespace: testNamespace,
-				},
-				Spec: inventoryv1alpha1.ResourcePoolSpec{
-					OCloudSiteName: "site-nonexistent", // Site doesn't exist
-					Description:    "Testing finalizer addition",
-				},
-			}
-			Expect(k8sClient.Create(ctx, pool)).To(Succeed())
-			DeferCleanup(func() {
-				_ = k8sClient.Delete(ctx, pool)
-			})
-
-			// Wait for the finalizer to be added
-			Eventually(func() bool {
-				fetched := &inventoryv1alpha1.ResourcePool{}
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
-				if err != nil {
-					return false
-				}
-				return controllerutil.ContainsFinalizer(fetched, inventoryv1alpha1.ResourcePoolFinalizer)
-			}, timeout, interval).Should(BeTrue())
-		})
-
 		It("should set Ready=True when OCloudSite is valid and ready", func() {
 			// First create a valid Location
 			location := &inventoryv1alpha1.Location{
@@ -234,7 +204,6 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 	Context("When parent OCloudSite is created or becomes ready later", func() {
 		It("should transition from ParentNotFound to Ready=True when OCloudSite is created and ready", func() {
 			// Create the ResourcePool FIRST, before OCloudSite exists
-			// Note: OCloudSite must be both created AND ready (which requires its parent Location to exist and be ready)
 			pool := &inventoryv1alpha1.ResourcePool{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-pool-late-site",
@@ -541,221 +510,8 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 		})
 	})
 
-	Context("When deleting a ResourcePool with dependent BareMetalHosts", func() {
-		It("should block deletion until dependents are removed", func() {
-			// Create the hierarchy: Location -> OCloudSite -> ResourcePool -> BareMetalHost
-			location := &inventoryv1alpha1.Location{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-location-for-pool-delete",
-					Namespace: testNamespace,
-				},
-				Spec: inventoryv1alpha1.LocationSpec{
-					Description: "Testing deletion",
-					Address:     ptrString("Pool Delete Test Address"),
-				},
-			}
-			Expect(k8sClient.Create(ctx, location)).To(Succeed())
-			DeferCleanup(func() {
-				_ = k8sClient.Delete(ctx, location)
-			})
-
-			// Wait for Location to be Ready before creating OCloudSite
-			waitForLocationReady(location)
-
-			site := &inventoryv1alpha1.OCloudSite{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-site-for-pool-delete",
-					Namespace: testNamespace,
-				},
-				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					GlobalLocationName: "test-location-for-pool-delete", // References location by metadata.name
-					Description:        "Testing deletion",
-				},
-			}
-			Expect(k8sClient.Create(ctx, site)).To(Succeed())
-			DeferCleanup(func() {
-				_ = k8sClient.Delete(ctx, site)
-			})
-
-			// Wait for OCloudSite to be Ready before creating ResourcePool
-			waitForOCloudSiteReady(site)
-
-			pool := &inventoryv1alpha1.ResourcePool{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-pool-delete-blocked",
-					Namespace: testNamespace,
-				},
-				Spec: inventoryv1alpha1.ResourcePoolSpec{
-					OCloudSiteName: "test-site-for-pool-delete", // References site by metadata.name
-					Description:    "Testing deletion blocking",
-				},
-			}
-			Expect(k8sClient.Create(ctx, pool)).To(Succeed())
-
-			// Wait for finalizer to be added
-			Eventually(func() bool {
-				fetched := &inventoryv1alpha1.ResourcePool{}
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
-				if err != nil {
-					return false
-				}
-				return controllerutil.ContainsFinalizer(fetched, inventoryv1alpha1.ResourcePoolFinalizer)
-			}, timeout, interval).Should(BeTrue())
-
-			// Create a dependent BareMetalHost with the resourcePoolName label
-			bmh := &bmhv1alpha1.BareMetalHost{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-bmh-dependent",
-					Namespace: testNamespace,
-					Labels: map[string]string{
-						constants.LabelResourcePoolName: "test-pool-delete-blocked", // References pool by metadata.name
-					},
-				},
-				Spec: bmhv1alpha1.BareMetalHostSpec{
-					Online: false,
-				},
-			}
-			Expect(k8sClient.Create(ctx, bmh)).To(Succeed())
-
-			// Try to delete the ResourcePool
-			Expect(k8sClient.Delete(ctx, pool)).To(Succeed())
-
-			// Verify the ResourcePool still exists (deletion blocked by finalizer)
-			Consistently(func() bool {
-				fetched := &inventoryv1alpha1.ResourcePool{}
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
-				return err == nil && fetched.DeletionTimestamp != nil
-			}, 4*time.Second, interval).Should(BeTrue(), "ResourcePool should still exist with DeletionTimestamp set")
-
-			// Verify the Deleting condition is set
-			Eventually(func() bool {
-				fetched := &inventoryv1alpha1.ResourcePool{}
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
-				if err != nil {
-					return false
-				}
-				for _, cond := range fetched.Status.Conditions {
-					if cond.Type == inventoryv1alpha1.ConditionTypeDeleting &&
-						cond.Status == metav1.ConditionFalse &&
-						cond.Reason == inventoryv1alpha1.ReasonDependentsExist {
-						return true
-					}
-				}
-				return false
-			}, timeout, interval).Should(BeTrue())
-
-			// Delete the dependent BareMetalHost
-			Expect(k8sClient.Delete(ctx, bmh)).To(Succeed())
-
-			// Wait for BareMetalHost to be fully deleted
-			Eventually(func() bool {
-				fetched := &bmhv1alpha1.BareMetalHost{}
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(bmh), fetched)
-				return k8serrors.IsNotFound(err)
-			}, timeout, interval).Should(BeTrue(), "BareMetalHost should be deleted (NotFound)")
-
-			// Now the ResourcePool should be deleted
-			Eventually(func() bool {
-				fetched := &inventoryv1alpha1.ResourcePool{}
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
-				return k8serrors.IsNotFound(err)
-			}, timeout, interval).Should(BeTrue(), "ResourcePool should be deleted (NotFound)")
-		})
-	})
-
-	Context("When deleting a ResourcePool with BMH referencing a different pool", func() {
-		It("should delete successfully since the BMH is not a dependent", func() {
-			// Create the hierarchy: Location -> OCloudSite -> ResourcePool
-			location := &inventoryv1alpha1.Location{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-location-for-pool-mismatch",
-					Namespace: testNamespace,
-				},
-				Spec: inventoryv1alpha1.LocationSpec{
-					Description: "Testing deletion with mismatched BMH",
-					Address:     ptrString("Mismatch Test Address"),
-				},
-			}
-			Expect(k8sClient.Create(ctx, location)).To(Succeed())
-			DeferCleanup(func() {
-				_ = k8sClient.Delete(ctx, location)
-			})
-
-			// Wait for Location to be Ready before creating OCloudSite
-			waitForLocationReady(location)
-
-			site := &inventoryv1alpha1.OCloudSite{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-site-for-pool-mismatch",
-					Namespace: testNamespace,
-				},
-				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					GlobalLocationName: "test-location-for-pool-mismatch",
-					Description:        "Testing deletion with mismatched BMH",
-				},
-			}
-			Expect(k8sClient.Create(ctx, site)).To(Succeed())
-			DeferCleanup(func() {
-				_ = k8sClient.Delete(ctx, site)
-			})
-
-			// Wait for OCloudSite to be Ready before creating ResourcePool
-			waitForOCloudSiteReady(site)
-
-			pool := &inventoryv1alpha1.ResourcePool{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-pool-mismatch",
-					Namespace: testNamespace,
-				},
-				Spec: inventoryv1alpha1.ResourcePoolSpec{
-					OCloudSiteName: "test-site-for-pool-mismatch",
-					Description:    "Testing deletion when BMH references different pool",
-				},
-			}
-			Expect(k8sClient.Create(ctx, pool)).To(Succeed())
-
-			// Wait for finalizer to be added
-			Eventually(func() bool {
-				fetched := &inventoryv1alpha1.ResourcePool{}
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
-				if err != nil {
-					return false
-				}
-				return controllerutil.ContainsFinalizer(fetched, inventoryv1alpha1.ResourcePoolFinalizer)
-			}, timeout, interval).Should(BeTrue())
-
-			// Create a BareMetalHost with a different resourcePoolName label (not matching our pool)
-			bmh := &bmhv1alpha1.BareMetalHost{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-bmh-different-pool",
-					Namespace: testNamespace,
-					Labels: map[string]string{
-						constants.LabelResourcePoolName: "some-other-pool-name", // Does NOT match pool above
-					},
-				},
-				Spec: bmhv1alpha1.BareMetalHostSpec{
-					Online: false,
-				},
-			}
-			Expect(k8sClient.Create(ctx, bmh)).To(Succeed())
-			DeferCleanup(func() {
-				_ = k8sClient.Delete(ctx, bmh)
-			})
-
-			// Delete the ResourcePool
-			Expect(k8sClient.Delete(ctx, pool)).To(Succeed())
-
-			// ResourcePool should be deleted since the BMH references a different pool
-			Eventually(func() bool {
-				fetched := &inventoryv1alpha1.ResourcePool{}
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
-				return k8serrors.IsNotFound(err)
-			}, timeout, interval).Should(BeTrue(), "ResourcePool should be deleted (NotFound): BMH references different pool")
-		})
-	})
-
-	Context("When deleting a ResourcePool without dependents", func() {
-		It("should delete successfully", func() {
+	Context("When deleting a ResourcePool", func() {
+		It("should delete successfully (no finalizer blocking)", func() {
 			// Create the hierarchy: Location -> OCloudSite -> ResourcePool
 			location := &inventoryv1alpha1.Location{
 				ObjectMeta: metav1.ObjectMeta{
@@ -805,20 +561,13 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 			}
 			Expect(k8sClient.Create(ctx, pool)).To(Succeed())
 
-			// Wait for finalizer to be added
-			Eventually(func() bool {
-				fetched := &inventoryv1alpha1.ResourcePool{}
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)
-				if err != nil {
-					return false
-				}
-				return controllerutil.ContainsFinalizer(fetched, inventoryv1alpha1.ResourcePoolFinalizer)
-			}, timeout, interval).Should(BeTrue())
+			// Wait for Ready condition
+			waitForResourcePoolReady(pool)
 
 			// Delete the ResourcePool
 			Expect(k8sClient.Delete(ctx, pool)).To(Succeed())
 
-			// ResourcePool should be deleted since there are no dependents
+			// ResourcePool should be deleted
 			Eventually(func() bool {
 				fetched := &inventoryv1alpha1.ResourcePool{}
 				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched)

@@ -15,7 +15,6 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
@@ -23,15 +22,12 @@ import (
 
 // This test validates the deletion behavior of the hierarchy controllers.
 //
-// Note: In a real `make undeploy`, the  controller is  stopped first, then
-// finalizers are removed. In envtest, controllers keep running, so we test
-// the controller's deletion behavior with dependents instead.
+// CRs can be deleted in any order. Child CRs will transition to Ready=False
+//  (ParentNotFound) when their parent is deleted, but deletion itself is not blocked.
 //
-// The undeploy sequence in Makefile is:
-//  1. Remove finalizers from ResourcePools (children first)
-//  2. Remove finalizers from OCloudSites (middle layer)
-//  3. Remove finalizers from Locations (parents)
-//  4. Delete all resources via kustomize
+// The undeploy sequence is now simpler:
+//  1. Delete all resources via kustomize (any order works)
+//  2. Children will transition to Ready=False when parents are deleted
 
 var _ = Describe("Undeploy Scenario", Label("envtest"), func() {
 	const (
@@ -40,7 +36,7 @@ var _ = Describe("Undeploy Scenario", Label("envtest"), func() {
 	)
 
 	Context("When deleting hierarchy in correct order (children first)", func() {
-		It("should allow clean deletion when dependents are removed first", func() {
+		It("should allow clean deletion in any order", func() {
 
 			// STEP 1: Create a complete hierarchy (Location -> OCloudSite -> ResourcePool -> BMH)
 
@@ -60,22 +56,8 @@ var _ = Describe("Undeploy Scenario", Label("envtest"), func() {
 				_ = k8sClient.Delete(ctx, location)
 			})
 
-			// Wait for Location to be Ready with finalizer
-			Eventually(func() bool {
-				fetched := &inventoryv1alpha1.Location{}
-				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(location), fetched); err != nil {
-					return false
-				}
-				hasFinalizer := controllerutil.ContainsFinalizer(fetched, inventoryv1alpha1.LocationFinalizer)
-				isReady := false
-				for _, cond := range fetched.Status.Conditions {
-					if cond.Type == inventoryv1alpha1.ConditionTypeReady && cond.Status == metav1.ConditionTrue {
-						isReady = true
-						break
-					}
-				}
-				return hasFinalizer && isReady
-			}, timeout, interval).Should(BeTrue(), "Location should have finalizer and be Ready")
+			// Wait for Location to be Ready
+			waitForLocationReady(location)
 
 			// Create OCloudSite
 			site := &inventoryv1alpha1.OCloudSite{
@@ -93,22 +75,8 @@ var _ = Describe("Undeploy Scenario", Label("envtest"), func() {
 				_ = k8sClient.Delete(ctx, site)
 			})
 
-			// Wait for OCloudSite to be Ready with finalizer
-			Eventually(func() bool {
-				fetched := &inventoryv1alpha1.OCloudSite{}
-				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetched); err != nil {
-					return false
-				}
-				hasFinalizer := controllerutil.ContainsFinalizer(fetched, inventoryv1alpha1.OCloudSiteFinalizer)
-				isReady := false
-				for _, cond := range fetched.Status.Conditions {
-					if cond.Type == inventoryv1alpha1.ConditionTypeReady && cond.Status == metav1.ConditionTrue {
-						isReady = true
-						break
-					}
-				}
-				return hasFinalizer && isReady
-			}, timeout, interval).Should(BeTrue(), "OCloudSite should have finalizer and be Ready")
+			// Wait for OCloudSite to be Ready
+			waitForOCloudSiteReady(site)
 
 			// Create ResourcePool
 			pool := &inventoryv1alpha1.ResourcePool{
@@ -126,22 +94,8 @@ var _ = Describe("Undeploy Scenario", Label("envtest"), func() {
 				_ = k8sClient.Delete(ctx, pool)
 			})
 
-			// Wait for ResourcePool to be Ready with finalizer
-			Eventually(func() bool {
-				fetched := &inventoryv1alpha1.ResourcePool{}
-				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), fetched); err != nil {
-					return false
-				}
-				hasFinalizer := controllerutil.ContainsFinalizer(fetched, inventoryv1alpha1.ResourcePoolFinalizer)
-				isReady := false
-				for _, cond := range fetched.Status.Conditions {
-					if cond.Type == inventoryv1alpha1.ConditionTypeReady && cond.Status == metav1.ConditionTrue {
-						isReady = true
-						break
-					}
-				}
-				return hasFinalizer && isReady
-			}, timeout, interval).Should(BeTrue(), "ResourcePool should have finalizer and be Ready")
+			// Wait for ResourcePool to be Ready
+			waitForResourcePoolReady(pool)
 
 			// Create BareMetalHost (associated via labels)
 			bmh := &bmhv1alpha1.BareMetalHost{
@@ -169,10 +123,9 @@ var _ = Describe("Undeploy Scenario", Label("envtest"), func() {
 				return k8sClient.Get(ctx, client.ObjectKeyFromObject(bmh), &bmhv1alpha1.BareMetalHost{})
 			}, timeout, interval).Should(Succeed(), "BareMetalHost should be created")
 
-			// STEP 2: Delete in correct order (children first)
-			// This simulates the natural cleanup order needed for undeploy
+			// STEP 2: Delete in children-first order (cleanest approach)
 
-			// 2a: Delete BareMetalHost first ---
+			// 2a: Delete BareMetalHost first
 			By("Deleting BareMetalHost first")
 			Expect(k8sClient.Delete(ctx, bmh)).To(Succeed())
 			Eventually(func() bool {
@@ -180,24 +133,24 @@ var _ = Describe("Undeploy Scenario", Label("envtest"), func() {
 				return k8serrors.IsNotFound(err)
 			}, timeout, interval).Should(BeTrue(), "BareMetalHost should be deleted")
 
-			// 2b: Delete ResourcePool (no BMH dependents now) ---
-			By("Deleting ResourcePool (no dependents)")
+			// 2b: Delete ResourcePool
+			By("Deleting ResourcePool")
 			Expect(k8sClient.Delete(ctx, pool)).To(Succeed())
 			Eventually(func() bool {
 				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(pool), &inventoryv1alpha1.ResourcePool{})
 				return k8serrors.IsNotFound(err)
 			}, timeout, interval).Should(BeTrue(), "ResourcePool should be deleted")
 
-			// 2c: Delete OCloudSite (no ResourcePool dependents now) ---
-			By("Deleting OCloudSite (no dependents)")
+			// 2c: Delete OCloudSite
+			By("Deleting OCloudSite")
 			Expect(k8sClient.Delete(ctx, site)).To(Succeed())
 			Eventually(func() bool {
 				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(site), &inventoryv1alpha1.OCloudSite{})
 				return k8serrors.IsNotFound(err)
 			}, timeout, interval).Should(BeTrue(), "OCloudSite should be deleted")
 
-			// 2d: Delete Location (no OCloudSite dependents now) ---
-			By("Deleting Location (no dependents)")
+			// 2d: Delete Location
+			By("Deleting Location")
 			Expect(k8sClient.Delete(ctx, location)).To(Succeed())
 			Eventually(func() bool {
 				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(location), &inventoryv1alpha1.Location{})
@@ -219,17 +172,18 @@ var _ = Describe("Undeploy Scenario", Label("envtest"), func() {
 				To(MatchError(ContainSubstring("not found")))
 		})
 
-		It("should demonstrate that deletion without removing finalizers would hang on dependents", func() {
-			// This test shows why the undeploy order matters
+		It("should allow deleting parent before children (children become not ready)", func() {
+			// This test shows that parents can be deleted first
+			// and children will gracefully transition to Ready=False
 
 			// Create hierarchy
 			location := &inventoryv1alpha1.Location{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "undeploy-hang-test-location",
+					Name:      "undeploy-parent-first-location",
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					Description: "Location for hang test",
+					Description: "Location for parent-first deletion test",
 					Address:     ptrString("Test Address"),
 				},
 			}
@@ -238,69 +192,53 @@ var _ = Describe("Undeploy Scenario", Label("envtest"), func() {
 
 			site := &inventoryv1alpha1.OCloudSite{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "undeploy-hang-test-site",
+					Name:      "undeploy-parent-first-site",
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
-					GlobalLocationName: "undeploy-hang-test-location",
-					Description:        "OCloudSite for hang test",
+					GlobalLocationName: "undeploy-parent-first-location",
+					Description:        "OCloudSite for parent-first deletion test",
 				},
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, site)
+			})
 			waitForOCloudSiteReady(site)
 
-			// Try to delete Location while OCloudSite still references it
-			// The controller should block this with a "deletion blocked" condition
-			By("Attempting to delete Location while dependent OCloudSite exists")
+			// Delete Location FIRST (parent before child)
+			By("Deleting Location while OCloudSite still references it")
 			Expect(k8sClient.Delete(ctx, location)).To(Succeed())
 
-			// Location should NOT be deleted immediately - it should have deletion blocked condition
-			Eventually(func() string {
-				fetched := &inventoryv1alpha1.Location{}
-				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(location), fetched); err != nil {
-					return "not found"
+			// Location should be deleted immediately (no blocking)
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(location), &inventoryv1alpha1.Location{})
+				return k8serrors.IsNotFound(err)
+			}, timeout, interval).Should(BeTrue(), "Location should be deleted immediately")
+
+			// OCloudSite should transition to Ready=False (ParentNotFound)
+			Eventually(func() bool {
+				fetched := &inventoryv1alpha1.OCloudSite{}
+				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetched); err != nil {
+					return false
 				}
-				// Check if deletion is blocked
 				for _, cond := range fetched.Status.Conditions {
-					if cond.Type == inventoryv1alpha1.ConditionTypeDeleting {
-						return cond.Reason
+					if cond.Type == inventoryv1alpha1.ConditionTypeReady &&
+						cond.Status == metav1.ConditionFalse &&
+						cond.Reason == inventoryv1alpha1.ReasonParentNotFound {
+						return true
 					}
 				}
-				return "no deleting condition"
-			}, timeout, interval).Should(Equal(inventoryv1alpha1.ReasonDependentsExist),
-				"Location should have Deleting condition with DependentsExist reason")
+				return false
+			}, timeout, interval).Should(BeTrue(), "OCloudSite should transition to Ready=False (ParentNotFound)")
 
-			// Location should still exist (finalizer prevents deletion)
-			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(location), &inventoryv1alpha1.Location{})).To(Succeed(),
-				"Location should still exist because of finalizer and dependents")
-
-			// Cleanup: Remove finalizers and delete (undeploy pattern)
-			By("Cleaning up using undeploy pattern")
-
-			// Delete site first (remove finalizer, then delete)
-			fetchedSite := &inventoryv1alpha1.OCloudSite{}
-			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(site), fetchedSite)).To(Succeed())
-			patch := client.MergeFrom(fetchedSite.DeepCopy())
-			fetchedSite.Finalizers = nil
-			Expect(k8sClient.Patch(ctx, fetchedSite, patch)).To(Succeed())
+			// Now delete OCloudSite
+			By("Deleting orphaned OCloudSite")
 			Expect(k8sClient.Delete(ctx, site)).To(Succeed())
 			Eventually(func() bool {
 				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(site), &inventoryv1alpha1.OCloudSite{})
 				return k8serrors.IsNotFound(err)
-			}, timeout, interval).Should(BeTrue())
-
-			// Now location can be deleted (remove finalizer first)
-			fetchedLocation := &inventoryv1alpha1.Location{}
-			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(location), fetchedLocation)).To(Succeed())
-			patch = client.MergeFrom(fetchedLocation.DeepCopy())
-			fetchedLocation.Finalizers = nil
-			Expect(k8sClient.Patch(ctx, fetchedLocation, patch)).To(Succeed())
-
-			// Location should now be deleted (delete was already requested)
-			Eventually(func() bool {
-				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(location), &inventoryv1alpha1.Location{})
-				return k8serrors.IsNotFound(err)
-			}, timeout, interval).Should(BeTrue(), "Location should be deleted after finalizer removal")
+			}, timeout, interval).Should(BeTrue(), "OCloudSite should be deleted")
 		})
 	})
 })

@@ -17,7 +17,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -80,103 +79,23 @@ func (r *OCloudSiteReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		slog.String("name", site.Name),
 		slog.String("globalLocationName", site.Spec.GlobalLocationName))
 
-	// Handle finalizer logic
-	if result, stop, err := r.handleFinalizer(ctx, site); stop || err != nil {
-		return result, err
+	// Skip validation if being deleted - let Kubernetes handle deletion directly
+	if !site.DeletionTimestamp.IsZero() {
+		r.Logger.InfoContext(ctx, "OCloudSite is being deleted, skipping validation")
+		return result, nil
 	}
 
-	// Validate Location reference and set Ready condition if not being deleted
-	if site.DeletionTimestamp.IsZero() {
-		parentValid, err := r.validateAndSetConditions(ctx, site)
-		if err != nil {
-			return requeueWithShortInterval(), err
-		}
-		// Requeue if parent doesn't exist or is not ready, it may be created/ready later
-		if !parentValid {
-			return requeueWithMediumInterval(), nil
-		}
+	// Validate Location reference and set Ready condition
+	parentValid, err := r.validateAndSetConditions(ctx, site)
+	if err != nil {
+		return requeueWithShortInterval(), err
+	}
+	// Requeue if parent doesn't exist or is not ready, it may be created/ready later
+	if !parentValid {
+		return requeueWithMediumInterval(), nil
 	}
 
 	return result, nil
-}
-
-// handleFinalizer manages the finalizer for OCloudSite CRs
-func (r *OCloudSiteReconciler) handleFinalizer(
-	ctx context.Context, site *inventoryv1alpha1.OCloudSite) (ctrl.Result, bool, error) {
-
-	// Check if the OCloudSite is marked to be deleted
-	if site.DeletionTimestamp.IsZero() {
-		// Object is not being deleted, add finalizer if not present
-		if !controllerutil.ContainsFinalizer(site, inventoryv1alpha1.OCloudSiteFinalizer) {
-			r.Logger.InfoContext(ctx, "Adding finalizer to OCloudSite",
-				slog.String("name", site.Name))
-			controllerutil.AddFinalizer(site, inventoryv1alpha1.OCloudSiteFinalizer)
-			if err := r.Update(ctx, site); err != nil {
-				r.Logger.WarnContext(ctx, "Failed to add finalizer, will retry",
-					slog.String("error", err.Error()))
-				return requeueWithShortInterval(), true, fmt.Errorf("failed to add finalizer: %w", err)
-			}
-			// Requeue since the finalizer has been added
-			return requeueImmediately(), false, nil
-		}
-		return doNotRequeue(), false, nil
-	}
-
-	// Object is being deleted
-	if controllerutil.ContainsFinalizer(site, inventoryv1alpha1.OCloudSiteFinalizer) {
-		r.Logger.InfoContext(ctx, "OCloudSite is being deleted, checking for dependents",
-			slog.String("name", site.Name))
-
-		// Check for dependent ResourcePools (those that reference this OCloudSite by name)
-		// Note: ResourcePools handle their own BMH dependents transitively
-		dependents, err := r.findDependentResourcePools(ctx, site.Name)
-		if err != nil {
-			return requeueWithShortInterval(), true, fmt.Errorf("failed to check for dependent ResourcePools: %w", err)
-		}
-
-		// dependents exist, block deletion
-		if len(dependents) > 0 {
-			// Update status to indicate deletion is blocked
-			r.Logger.InfoContext(ctx, "OCloudSite deletion blocked by dependent ResourcePools",
-				slog.String("name", site.Name),
-				slog.Int("resourcePoolCount", len(dependents)))
-
-			if err := r.setDeletionBlockedCondition(ctx, site, len(dependents)); err != nil {
-				r.Logger.WarnContext(ctx, "Failed to update status", slog.String("error", err.Error()))
-			}
-
-			// Requeue to check again later
-			return requeueWithCustomInterval(10 * time.Second), true, nil
-		}
-
-		// No dependents, safe to remove finalizer and allow k8s deletion
-		r.Logger.InfoContext(ctx, "Removing finalizer from OCloudSite",
-			slog.String("name", site.Name))
-
-		patch := client.MergeFrom(site.DeepCopy())
-		if controllerutil.RemoveFinalizer(site, inventoryv1alpha1.OCloudSiteFinalizer) {
-			if err := r.Patch(ctx, site, patch); err != nil {
-				r.Logger.WarnContext(ctx, "Failed to remove finalizer, will retry",
-					slog.String("error", err.Error()))
-				return requeueWithShortInterval(), true, fmt.Errorf("failed to remove finalizer: %w", err)
-			}
-		}
-		return doNotRequeue(), true, nil
-	}
-
-	return doNotRequeue(), false, nil
-}
-
-// findDependentResourcePools returns all ResourcePools that reference this OCloudSite by name.
-func (r *OCloudSiteReconciler) findDependentResourcePools(ctx context.Context, siteName string) ([]inventoryv1alpha1.ResourcePool, error) {
-	var poolList inventoryv1alpha1.ResourcePoolList
-	if err := r.List(ctx, &poolList, client.MatchingFields{
-		ctlrutils.ResourcePoolOCloudSiteNameIndex: siteName,
-	}); err != nil {
-		return nil, fmt.Errorf("failed to list ResourcePools: %w", err)
-	}
-
-	return poolList.Items, nil
 }
 
 // validateAndSetConditions validates the Location reference and sets appropriate conditions.
@@ -247,24 +166,6 @@ func (r *OCloudSiteReconciler) validateLocationReference(ctx context.Context, lo
 
 	// Exists but not ready
 	return ctlrutils.ParentValidationResult{Exists: true, Ready: false}, nil
-}
-
-// setDeletionBlockedCondition sets the Deleting condition indicating deletion is blocked
-func (r *OCloudSiteReconciler) setDeletionBlockedCondition(ctx context.Context, site *inventoryv1alpha1.OCloudSite, dependentCount int) error {
-	condition := metav1.Condition{
-		Type:               inventoryv1alpha1.ConditionTypeDeleting,
-		Status:             metav1.ConditionFalse,
-		Reason:             inventoryv1alpha1.ReasonDependentsExist,
-		Message:            fmt.Sprintf("Cannot delete: %d ResourcePool(s) reference this OCloudSite", dependentCount),
-		ObservedGeneration: site.Generation,
-	}
-
-	meta.SetStatusCondition(&site.Status.Conditions, condition)
-	if err := r.Status().Update(ctx, site); err != nil {
-		return fmt.Errorf("failed to update status: %w", err)
-	}
-
-	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
