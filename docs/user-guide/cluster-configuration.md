@@ -150,7 +150,7 @@ spec:
     oCloudSiteId: local-west-12345
     policyTemplateParameters:
       sriov-network-vlan-1: "111"
-      sriov-network-pfNames-1: '["ens4f1"]'
+      sriov-network-pfNames-1: '["ens2f0"]'
 ```
 
 **Note:** Only policy configuration values exposed in the `policyTemplateParameters` property within the `spec.templateParameterSchema` field of the associated `ClusterTemplate` can be updated through the `ProvisioningRequest`.
@@ -172,7 +172,7 @@ data:
   hugepages-size: 1G
   install-plan-approval: Automatic
   sriov-network-vlan-1: "111"
-  sriov-network-pfNames-1: '["ens4f1"]'
+  sriov-network-pfNames-1: '["ens2f0"]'
 kind: ConfigMap
 metadata:
   name: sno-ran-du-1-pg
@@ -514,8 +514,8 @@ data:
   hugepages-default: 1G
   hugepages-size: 1G
   install-plan-approval: Automatic
-  sriov-network-pfNames-1: '["ens4f1"]'
-  sriov-network-pfNames-2: '["ens4f2"]'
+  sriov-network-pfNames-1: '["ens2f0"]'
+  sriov-network-pfNames-2: '["ens2f1"]'
   sriov-network-vlan-1: "111"
   sriov-network-vlan-2: "222"
 kind: ConfigMap

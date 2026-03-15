@@ -22,8 +22,8 @@ data:
     sriov-fec-pciAddress: 0000:b4:00.1
     sriov-fec-pfDriver: pci-pf-stub
     sriov-fec-vfDriver: vfio-pci
-    sriov-network-pfNames-1: '["ens4f1"]'
-    sriov-network-pfNames-2: '["ens4f2"]'
+    sriov-network-pfNames-1: '["ens2f0"]'
+    sriov-network-pfNames-2: '["ens2f1"]'
     sriov-network-vlan-1: "114"
     sriov-network-vlan-2: "111"
     storage-lv-devicePaths-1: /dev/disk/by-path/pci-0000:62:00.0-scsi-0:2:8:0
