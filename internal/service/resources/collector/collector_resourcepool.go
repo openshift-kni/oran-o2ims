@@ -168,15 +168,13 @@ func (d *ResourcePoolDataSource) HandleSyncComplete(ctx context.Context, objectT
 func (d *ResourcePoolDataSource) handleResourcePoolWatchEvent(ctx context.Context, pool *inventoryv1alpha1.ResourcePool, eventType async.AsyncEventType) (uuid.UUID, error) {
 	slog.Debug("handleResourcePoolWatchEvent received", "name", pool.Name, "type", eventType)
 
-	// DELETE events always proceed (finalizers guarantee deletion order)
-	// For CREATE/UPDATE, only emit if CR is Ready=True
-	if eventType != async.Deleted {
-		if !isResourceReady(pool.Status.Conditions) {
-			slog.Debug("ResourcePool not ready, skipping",
-				"name", pool.Name,
-				"reason", getReadyReason(pool.Status.Conditions))
-			return uuid.Nil, nil
-		}
+	// If CR is not ready (e.g., validation failed, parent missing), treat as deletion
+	// from API perspective. This ensures stale data is removed when CRs become invalid.
+	if eventType != async.Deleted && !isResourceReady(pool.Status.Conditions) {
+		slog.Debug("ResourcePool not ready, treating as deletion",
+			"name", pool.Name,
+			"reason", getReadyReason(pool.Status.Conditions))
+		eventType = async.Deleted
 	}
 
 	forDelete := eventType == async.Deleted

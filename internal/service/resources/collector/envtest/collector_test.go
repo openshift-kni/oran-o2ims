@@ -392,7 +392,7 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 		// goroutine is still sending. The channel will be GC'd anyway.
 	})
 
-	It("receives Created event when Location CR is created with Ready=True", func() {
+	It("receives Updated event when Location CR is created with Ready=True", func() {
 		// Start watching
 		err := ds.Watch(watchCtx)
 		Expect(err).ToNot(HaveOccurred())
@@ -414,15 +414,21 @@ var _ = Describe("LocationDataSource Watch", Label("envtest"), func() {
 		Expect(k8sClient.Create(ctx, loc)).To(Succeed())
 		DeferCleanup(func() { deleteAndWait(loc) })
 
-		// Set Ready=True status (required for event to be emitted)
+		// First event: DELETE (CR created without Ready status)
+		event := waitForEvent(eventChannel)
+		Expect(event).ToNot(BeNil())
+		Expect(event.EventType).To(Equal(async.Deleted),
+			"Location created without Ready should emit DELETE")
+
+		// Set Ready=True status (required for Updated event to be emitted)
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), loc)).To(Succeed())
 		loc.Status.Conditions = []metav1.Condition{
 			{Type: inventoryv1alpha1.ConditionTypeReady, Status: metav1.ConditionTrue, Reason: inventoryv1alpha1.ReasonReady, LastTransitionTime: metav1.Now()},
 		}
 		Expect(k8sClient.Status().Update(ctx, loc)).To(Succeed())
 
-		// Wait for the event (use name filter to avoid stale events from previous tests)
-		event := waitForEvent(eventChannel)
+		// Second event: Updated (CR now Ready=True)
+		event = waitForEvent(eventChannel)
 
 		// Verify the event
 		Expect(event).ToNot(BeNil())

@@ -54,7 +54,7 @@ var _ = Describe("OCloudSiteDataSource Watch", Label("envtest"), func() {
 		// goroutine is still sending. The channel will be GC'd anyway.
 	})
 
-	It("receives Created event when OCloudSite CR is created with Ready=True", func() {
+	It("receives Updated event when OCloudSite CR is created with Ready=True", func() {
 		// Start watching
 		err := ds.Watch(watchCtx)
 		Expect(err).ToNot(HaveOccurred())
@@ -76,15 +76,21 @@ var _ = Describe("OCloudSiteDataSource Watch", Label("envtest"), func() {
 		Expect(k8sClient.Create(ctx, site)).To(Succeed())
 		DeferCleanup(func() { deleteAndWait(site) })
 
-		// Set Ready=True status (required for event to be emitted)
+		// First event: DELETE (CR created without Ready status)
+		event := waitForEvent(eventChannel)
+		Expect(event).ToNot(BeNil())
+		Expect(event.EventType).To(Equal(async.Deleted),
+			"OCloudSite created without Ready should emit DELETE")
+
+		// Set Ready=True status (required for Updated event to be emitted)
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(site), site)).To(Succeed())
 		site.Status.Conditions = []metav1.Condition{
 			{Type: inventoryv1alpha1.ConditionTypeReady, Status: metav1.ConditionTrue, Reason: inventoryv1alpha1.ReasonReady, LastTransitionTime: metav1.Now()},
 		}
 		Expect(k8sClient.Status().Update(ctx, site)).To(Succeed())
 
-		// Wait for the event
-		event := waitForEvent(eventChannel)
+		// Second event: Updated (CR now Ready=True)
+		event = waitForEvent(eventChannel)
 
 		// Verify the event
 		Expect(event).ToNot(BeNil())

@@ -168,15 +168,13 @@ func (d *OCloudSiteDataSource) HandleSyncComplete(ctx context.Context, objectTyp
 func (d *OCloudSiteDataSource) handleOCloudSiteWatchEvent(ctx context.Context, site *inventoryv1alpha1.OCloudSite, eventType async.AsyncEventType) (uuid.UUID, error) {
 	slog.Debug("handleOCloudSiteWatchEvent received", "name", site.Name, "type", eventType)
 
-	// DELETE events always proceed (finalizers guarantee deletion order)
-	// For CREATE/UPDATE, only emit if CR is Ready=True
-	if eventType != async.Deleted {
-		if !isResourceReady(site.Status.Conditions) {
-			slog.Debug("OCloudSite not ready, skipping",
-				"name", site.Name,
-				"reason", getReadyReason(site.Status.Conditions))
-			return uuid.Nil, nil
-		}
+	// If CR is not ready (e.g., validation failed, parent missing), treat as deletion
+	// from API perspective. This ensures stale data is removed when CRs become invalid.
+	if eventType != async.Deleted && !isResourceReady(site.Status.Conditions) {
+		slog.Debug("OCloudSite not ready, treating as deletion",
+			"name", site.Name,
+			"reason", getReadyReason(site.Status.Conditions))
+		eventType = async.Deleted
 	}
 
 	record, err := d.ConvertOCloudSiteToModel(site)

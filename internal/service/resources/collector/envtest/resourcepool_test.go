@@ -57,7 +57,7 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 		// goroutine is still sending. The channel will be GC'd anyway.
 	})
 
-	It("receives Created event when ResourcePool CR is created with Ready=True", func() {
+	It("receives Updated event when ResourcePool CR is created with Ready=True", func() {
 		// Start watching
 		err := ds.Watch(watchCtx)
 		Expect(err).ToNot(HaveOccurred())
@@ -79,6 +79,12 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 		Expect(k8sClient.Create(ctx, rp)).To(Succeed())
 		DeferCleanup(func() { deleteAndWait(rp) })
 
+		// First event: DELETE (CR created without Ready status)
+		event := waitForEvent(eventChannel)
+		Expect(event).ToNot(BeNil())
+		Expect(event.EventType).To(Equal(async.Deleted),
+			"ResourcePool created without Ready should emit DELETE")
+
 		// Set Ready=True status with ResolvedOCloudSiteUID (simulating controller behavior)
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rp), rp)).To(Succeed())
 		rp.Status.Conditions = []metav1.Condition{
@@ -87,8 +93,8 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 		rp.Status.ResolvedOCloudSiteUID = fakeSiteUID
 		Expect(k8sClient.Status().Update(ctx, rp)).To(Succeed())
 
-		// Wait for the event
-		event := waitForEvent(eventChannel)
+		// Second event: Updated (CR now Ready=True)
+		event = waitForEvent(eventChannel)
 
 		// Verify the event
 		Expect(event).ToNot(BeNil())
@@ -227,6 +233,11 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 		Expect(k8sClient.Create(ctx, rp)).To(Succeed())
 		DeferCleanup(func() { deleteAndWait(rp) })
 
+		// First event: DELETE (CR created without Ready status)
+		event := waitForEvent(eventChannel)
+		Expect(event).ToNot(BeNil())
+		Expect(event.EventType).To(Equal(async.Deleted))
+
 		// Get the created pool to capture its metadata.uid
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rp), rp)).To(Succeed())
 		expectedPoolUID := uuid.MustParse(string(rp.UID))
@@ -238,8 +249,8 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 		rp.Status.ResolvedOCloudSiteUID = fakeSiteUID
 		Expect(k8sClient.Status().Update(ctx, rp)).To(Succeed())
 
-		// Wait for the event
-		event := waitForEvent(eventChannel)
+		// Second event: Updated (CR now Ready=True)
+		event = waitForEvent(eventChannel)
 
 		// Get the ResourcePoolID from the event
 		rpModel, ok := event.Object.(models.ResourcePool)

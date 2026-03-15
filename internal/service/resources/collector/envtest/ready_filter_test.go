@@ -8,7 +8,6 @@ package envtest
 
 import (
 	"context"
-	"time"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -57,7 +56,7 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 			// goroutine is still sending. The channel will be GC'd anyway.
 		})
 
-		It("should NOT emit event for Location without Ready status", func() {
+		It("should emit DELETE event for Location without Ready status", func() {
 			err := ds.Watch(watchCtx)
 			Expect(err).ToNot(HaveOccurred())
 			waitForWatchReady(eventChannel)
@@ -69,30 +68,22 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					Description: "Should not emit event",
+					Description: "Should emit DELETE event (not ready = remove from API)",
 					Address:     ptrTo("123 No Ready St"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, loc)).To(Succeed())
 			DeferCleanup(func() { deleteAndWait(loc) })
 
-			// Verify NO event is emitted (wait a short time to be sure)
-			Consistently(func() bool {
-				select {
-				case event := <-eventChannel:
-					// SyncComplete events are OK, but no Updated/Created for this CR
-					if event.EventType == async.SyncComplete {
-						return true
-					}
-					return false // Got an unexpected event
-				default:
-					return true // No event, expected
-				}
-			}, 500*time.Millisecond, 50*time.Millisecond).Should(BeTrue(),
-				"should not emit event for Location without Ready=True status")
+			// CRs without Ready status are treated as deletions from API perspective
+			// This ensures stale data is removed when CRs are not valid
+			event := waitForEvent(eventChannel)
+			Expect(event).ToNot(BeNil())
+			Expect(event.EventType).To(Equal(async.Deleted),
+				"Location without Ready status should emit DELETE event")
 		})
 
-		It("should NOT emit event for Location with Ready=False", func() {
+		It("should emit DELETE event for Location with Ready=False", func() {
 			err := ds.Watch(watchCtx)
 			Expect(err).ToNot(HaveOccurred())
 			waitForWatchReady(eventChannel)
@@ -104,14 +95,19 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 					Namespace: testNamespace,
 				},
 				Spec: inventoryv1alpha1.LocationSpec{
-					Description: "Should not emit event",
+					Description: "Should emit DELETE event (Ready=False = remove from API)",
 					Address:     ptrTo("456 Not Ready Ave"),
 				},
 			}
 			Expect(k8sClient.Create(ctx, loc)).To(Succeed())
 			DeferCleanup(func() { deleteAndWait(loc) })
 
-			// Set Ready=False status
+			// First event: DELETE (CR created without Ready status)
+			event := waitForEvent(eventChannel)
+			Expect(event).ToNot(BeNil())
+			Expect(event.EventType).To(Equal(async.Deleted))
+
+			// Set Ready=False status explicitly
 			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), loc)).To(Succeed())
 			loc.Status.Conditions = []metav1.Condition{
 				{
@@ -124,22 +120,14 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 			}
 			Expect(k8sClient.Status().Update(ctx, loc)).To(Succeed())
 
-			// Verify NO event is emitted
-			Consistently(func() bool {
-				select {
-				case event := <-eventChannel:
-					if event.EventType == async.SyncComplete {
-						return true
-					}
-					return false
-				default:
-					return true
-				}
-			}, 500*time.Millisecond, 50*time.Millisecond).Should(BeTrue(),
-				"should not emit event for Location with Ready=False status")
+			// Second event: DELETE (Ready=False also triggers deletion from API)
+			event = waitForEvent(eventChannel)
+			Expect(event).ToNot(BeNil())
+			Expect(event.EventType).To(Equal(async.Deleted),
+				"Location with Ready=False should emit DELETE event")
 		})
 
-		It("should emit event when Location transitions to Ready=True", func() {
+		It("should emit UPDATE event when Location transitions to Ready=True", func() {
 			err := ds.Watch(watchCtx)
 			Expect(err).ToNot(HaveOccurred())
 			waitForWatchReady(eventChannel)
@@ -158,18 +146,11 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 			Expect(k8sClient.Create(ctx, loc)).To(Succeed())
 			DeferCleanup(func() { deleteAndWait(loc) })
 
-			// Wait to confirm no event is emitted initially
-			Consistently(func() bool {
-				select {
-				case event := <-eventChannel:
-					if event.EventType == async.SyncComplete {
-						return true
-					}
-					return false
-				default:
-					return true
-				}
-			}, 300*time.Millisecond, 50*time.Millisecond).Should(BeTrue())
+			// First event: DELETE (CR created without Ready status)
+			event := waitForEvent(eventChannel)
+			Expect(event).ToNot(BeNil())
+			Expect(event.EventType).To(Equal(async.Deleted),
+				"Location created without Ready should emit DELETE")
 
 			// Now set Ready=True status
 			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), loc)).To(Succeed())
@@ -184,10 +165,11 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 			}
 			Expect(k8sClient.Status().Update(ctx, loc)).To(Succeed())
 
-			// Now an event SHOULD be emitted
-			event := waitForEvent(eventChannel)
+			// Second event: UPDATE (now Ready=True, added to API)
+			event = waitForEvent(eventChannel)
 			Expect(event).ToNot(BeNil())
-			Expect(event.EventType).To(Equal(async.Updated))
+			Expect(event.EventType).To(Equal(async.Updated),
+				"Location transitioning to Ready=True should emit UPDATE")
 
 			locModel, ok := event.Object.(models.Location)
 			Expect(ok).To(BeTrue())
@@ -272,7 +254,7 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 			// goroutine is still sending. The channel will be GC'd anyway.
 		})
 
-		It("should NOT emit event for OCloudSite without Ready status", func() {
+		It("should emit DELETE event for OCloudSite without Ready status", func() {
 			err := ds.Watch(watchCtx)
 			Expect(err).ToNot(HaveOccurred())
 			waitForWatchReady(eventChannel)
@@ -284,27 +266,20 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 				},
 				Spec: inventoryv1alpha1.OCloudSiteSpec{
 					GlobalLocationName: "test-location",
-					Description:        "Should not emit event",
+					Description:        "Should emit DELETE event (not ready = remove from API)",
 				},
 			}
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
 			DeferCleanup(func() { deleteAndWait(site) })
 
-			Consistently(func() bool {
-				select {
-				case event := <-eventChannel:
-					if event.EventType == async.SyncComplete {
-						return true
-					}
-					return false
-				default:
-					return true
-				}
-			}, 500*time.Millisecond, 50*time.Millisecond).Should(BeTrue(),
-				"should not emit event for OCloudSite without Ready=True status")
+			// CRs without Ready status are treated as deletions from API perspective
+			event := waitForEvent(eventChannel)
+			Expect(event).ToNot(BeNil())
+			Expect(event.EventType).To(Equal(async.Deleted),
+				"OCloudSite without Ready status should emit DELETE event")
 		})
 
-		It("should emit event when OCloudSite transitions to Ready=True", func() {
+		It("should emit UPDATE event when OCloudSite transitions to Ready=True", func() {
 			err := ds.Watch(watchCtx)
 			Expect(err).ToNot(HaveOccurred())
 			waitForWatchReady(eventChannel)
@@ -322,18 +297,11 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 			Expect(k8sClient.Create(ctx, site)).To(Succeed())
 			DeferCleanup(func() { deleteAndWait(site) })
 
-			// Wait to confirm no event initially
-			Consistently(func() bool {
-				select {
-				case event := <-eventChannel:
-					if event.EventType == async.SyncComplete {
-						return true
-					}
-					return false
-				default:
-					return true
-				}
-			}, 300*time.Millisecond, 50*time.Millisecond).Should(BeTrue())
+			// First event: DELETE (CR created without Ready status)
+			event := waitForEvent(eventChannel)
+			Expect(event).ToNot(BeNil())
+			Expect(event.EventType).To(Equal(async.Deleted),
+				"OCloudSite created without Ready should emit DELETE")
 
 			// Set Ready=True status
 			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(site), site)).To(Succeed())
@@ -348,9 +316,11 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 			}
 			Expect(k8sClient.Status().Update(ctx, site)).To(Succeed())
 
-			event := waitForEvent(eventChannel)
+			// Second event: UPDATE (now Ready=True, added to API)
+			event = waitForEvent(eventChannel)
 			Expect(event).ToNot(BeNil())
-			Expect(event.EventType).To(Equal(async.Updated))
+			Expect(event.EventType).To(Equal(async.Updated),
+				"OCloudSite transitioning to Ready=True should emit UPDATE")
 
 			siteModel, ok := event.Object.(models.OCloudSite)
 			Expect(ok).To(BeTrue())
@@ -435,7 +405,7 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 			// goroutine is still sending. The channel will be GC'd anyway.
 		})
 
-		It("should NOT emit event for ResourcePool without Ready status", func() {
+		It("should emit DELETE event for ResourcePool without Ready status", func() {
 			err := ds.Watch(watchCtx)
 			Expect(err).ToNot(HaveOccurred())
 			waitForWatchReady(eventChannel)
@@ -447,27 +417,20 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 				},
 				Spec: inventoryv1alpha1.ResourcePoolSpec{
 					OCloudSiteName: "test-site",
-					Description:    "Should not emit event",
+					Description:    "Should emit DELETE event (not ready = remove from API)",
 				},
 			}
 			Expect(k8sClient.Create(ctx, rp)).To(Succeed())
 			DeferCleanup(func() { deleteAndWait(rp) })
 
-			Consistently(func() bool {
-				select {
-				case event := <-eventChannel:
-					if event.EventType == async.SyncComplete {
-						return true
-					}
-					return false
-				default:
-					return true
-				}
-			}, 500*time.Millisecond, 50*time.Millisecond).Should(BeTrue(),
-				"should not emit event for ResourcePool without Ready=True status")
+			// CRs without Ready status are treated as deletions from API perspective
+			event := waitForEvent(eventChannel)
+			Expect(event).ToNot(BeNil())
+			Expect(event.EventType).To(Equal(async.Deleted),
+				"ResourcePool without Ready status should emit DELETE event")
 		})
 
-		It("should emit event when ResourcePool transitions to Ready=True", func() {
+		It("should emit UPDATE event when ResourcePool transitions to Ready=True", func() {
 			err := ds.Watch(watchCtx)
 			Expect(err).ToNot(HaveOccurred())
 			waitForWatchReady(eventChannel)
@@ -488,18 +451,11 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 			Expect(k8sClient.Create(ctx, rp)).To(Succeed())
 			DeferCleanup(func() { deleteAndWait(rp) })
 
-			// Wait to confirm no event initially
-			Consistently(func() bool {
-				select {
-				case event := <-eventChannel:
-					if event.EventType == async.SyncComplete {
-						return true
-					}
-					return false
-				default:
-					return true
-				}
-			}, 300*time.Millisecond, 50*time.Millisecond).Should(BeTrue())
+			// First event: DELETE (CR created without Ready status)
+			event := waitForEvent(eventChannel)
+			Expect(event).ToNot(BeNil())
+			Expect(event.EventType).To(Equal(async.Deleted),
+				"ResourcePool created without Ready should emit DELETE")
 
 			// Set Ready=True status with ResolvedOCloudSiteUID
 			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rp), rp)).To(Succeed())
@@ -515,9 +471,11 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 			rp.Status.ResolvedOCloudSiteUID = fakeSiteUID
 			Expect(k8sClient.Status().Update(ctx, rp)).To(Succeed())
 
-			event := waitForEvent(eventChannel)
+			// Second event: UPDATE (now Ready=True, added to API)
+			event = waitForEvent(eventChannel)
 			Expect(event).ToNot(BeNil())
-			Expect(event.EventType).To(Equal(async.Updated))
+			Expect(event.EventType).To(Equal(async.Updated),
+				"ResourcePool transitioning to Ready=True should emit UPDATE")
 
 			rpModel, ok := event.Object.(models.ResourcePool)
 			Expect(ok).To(BeTrue())
