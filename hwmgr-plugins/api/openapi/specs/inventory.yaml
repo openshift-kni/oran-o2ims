@@ -517,7 +517,11 @@ components:
           example: "server-a"
         resourcePoolId:
           type: string
-          example: "pool-a"
+          description: |
+            The Kubernetes metadata.uid of the ResourcePool CR that this resource belongs to.
+            This value is obtained by looking up the ResourcePool CR by name (from the BMH's
+            resourcePoolName label) and extracting its UID.
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
         hwProfile:
           type: string
           example: "hwprofile-a"
