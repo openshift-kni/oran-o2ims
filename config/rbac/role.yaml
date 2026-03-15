@@ -298,6 +298,9 @@ rules:
   - ocloud.openshift.io
   resources:
   - inventories
+  - locations
+  - ocloudsites
+  - resourcepools
   verbs:
   - create
   - delete
@@ -310,12 +313,18 @@ rules:
   - ocloud.openshift.io
   resources:
   - inventories/finalizers
+  - locations/finalizers
+  - ocloudsites/finalizers
+  - resourcepools/finalizers
   verbs:
   - update
 - apiGroups:
   - ocloud.openshift.io
   resources:
   - inventories/status
+  - locations/status
+  - ocloudsites/status
+  - resourcepools/status
   verbs:
   - get
   - patch

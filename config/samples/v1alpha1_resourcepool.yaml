@@ -1,0 +1,11 @@
+apiVersion: ocloud.openshift.io/v1alpha1
+kind: ResourcePool
+metadata:
+  # metadata.name is used for CR-to-CR references
+  # metadata.uid becomes the resourcePoolId in API responses
+  name: pool-east-compute
+  namespace: oran-o2ims
+spec:
+  # References parent OCloudSite by its metadata.name
+  oCloudSiteName: "site-east-1"
+  description: "Compute resources for production workloads"

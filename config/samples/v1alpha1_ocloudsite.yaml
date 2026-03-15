@@ -1,0 +1,11 @@
+apiVersion: ocloud.openshift.io/v1alpha1
+kind: OCloudSite
+metadata:
+  # metadata.name is used for CR-to-CR references
+  # metadata.uid becomes the oCloudSiteId in API responses
+  name: site-east-1
+  namespace: oran-o2ims
+spec:
+  # References parent Location by its metadata.name
+  globalLocationName: "east-datacenter"
+  description: "Primary compute site at east data center"

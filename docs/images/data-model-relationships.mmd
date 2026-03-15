@@ -1,0 +1,27 @@
+flowchart BT
+    subgraph BareMetalHost["BareMetalHost CR"]
+        B1["<b>label: resourcePoolName</b> = pool-east-compute"]
+    end
+
+    subgraph ResourcePool["ResourcePool CR"]
+        P1["🔑 <b>metadata.name:</b> pool-east-compute<br/><i>(API: resourcePoolId = metadata.uid)</i>"]
+        P2["<b>spec.oCloudSiteName:</b> site-east-1"]
+    end
+
+    subgraph OCloudSite["OCloudSite CR"]
+        S1["🔑 <b>metadata.name:</b> site-east-1<br/><i>(API: oCloudSiteId = metadata.uid)</i>"]
+        S2["<b>spec.globalLocationName:</b> east-datacenter"]
+    end
+
+    subgraph Location["Location CR"]
+        L1["🔑 <b>metadata.name:</b> east-datacenter<br/><i>(API: globalLocationId = metadata.name)</i>"]
+    end
+
+    S2 -->|"must match"| L1
+    P2 -->|"must match"| S1
+    B1 -->|"must match"| P1
+
+    style Location fill:#e1f5fe
+    style OCloudSite fill:#fff3e0
+    style ResourcePool fill:#f3e5f5
+    style BareMetalHost fill:#e8f5e9

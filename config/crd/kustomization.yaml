@@ -2,6 +2,9 @@ resources:
 
 # Inventory:
 - bases/ocloud.openshift.io_inventories.yaml
+- bases/ocloud.openshift.io_locations.yaml
+- bases/ocloud.openshift.io_ocloudsites.yaml
+- bases/ocloud.openshift.io_resourcepools.yaml
 
 # Hardware management:
 - bases/clcm.openshift.io_hardwareplugins.yaml

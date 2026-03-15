@@ -1127,6 +1127,23 @@ func (t *reconcilerTask) createResourceServerClusterRole(ctx context.Context) er
 					"watch",
 				},
 			},
+			// We need to read Location, OCloudSite, and ResourcePool CRs
+			// for the inventory hierarchy collectors
+			{
+				APIGroups: []string{
+					"ocloud.openshift.io",
+				},
+				Resources: []string{
+					"locations",
+					"ocloudsites",
+					"resourcepools",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+				},
+			},
 			{
 				NonResourceURLs: []string{
 					"/hardware-manager/inventory/*",

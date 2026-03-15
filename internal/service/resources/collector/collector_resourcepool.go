@@ -1,0 +1,248 @@
+/*
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
+package collector
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"sync/atomic"
+	"time"
+
+	"github.com/google/uuid"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/tools/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
+	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
+)
+
+const resourcePoolReflectorName = "resourcepool-reflector"
+
+// ResourcePoolDataSource defines a data source that watches ResourcePool CRs from Kubernetes
+// and publishes changes via async events.
+type ResourcePoolDataSource struct {
+	dataSourceID      uuid.UUID
+	cloudID           uuid.UUID
+	hubClient         client.WithWatch
+	generationID      atomic.Int32
+	AsyncChangeEvents chan<- *async.AsyncChangeEvent
+}
+
+// NewResourcePoolDataSource creates a new instance of a ResourcePoolDataSource.
+func NewResourcePoolDataSource(cloudID uuid.UUID, hubClient client.WithWatch) (*ResourcePoolDataSource, error) {
+	if hubClient == nil {
+		return nil, fmt.Errorf("hubClient is required")
+	}
+
+	return &ResourcePoolDataSource{
+		cloudID:   cloudID,
+		hubClient: hubClient,
+	}, nil
+}
+
+// Name returns the name of this data source
+func (d *ResourcePoolDataSource) Name() string {
+	return "ResourcePool"
+}
+
+// GetID returns the data source ID for this data source
+func (d *ResourcePoolDataSource) GetID() uuid.UUID {
+	return d.dataSourceID
+}
+
+// Init initializes the data source with its configuration data
+func (d *ResourcePoolDataSource) Init(dataSourceID uuid.UUID, generationID int, asyncEventChannel chan<- *async.AsyncChangeEvent) {
+	d.dataSourceID = dataSourceID
+	d.generationID.Store(int32(generationID)) //nolint:gosec // generationID is a small counter, overflow impossible
+	d.AsyncChangeEvents = asyncEventChannel
+}
+
+// SetGenerationID sets the current generation id for this data source
+func (d *ResourcePoolDataSource) SetGenerationID(value int) {
+	d.generationID.Store(int32(value)) //nolint:gosec // generationID is a small counter, overflow impossible
+}
+
+// GetGenerationID retrieves the current generation id for this data source
+func (d *ResourcePoolDataSource) GetGenerationID() int {
+	return int(d.generationID.Load())
+}
+
+// IncrGenerationID increments the current generation id for this data source
+func (d *ResourcePoolDataSource) IncrGenerationID() int {
+	return int(d.generationID.Add(1))
+}
+
+// Watch starts a watcher for ResourcePool CRs.
+// The watch is dispatched to a go routine. If the context is canceled, the watcher is stopped.
+func (d *ResourcePoolDataSource) Watch(ctx context.Context) error {
+	// Create a channel to signal stop events to the Reflector
+	stopCh := make(chan struct{})
+	go func() {
+		<-ctx.Done()
+		slog.Info("context canceled; stopping resourcepool reflector")
+		close(stopCh)
+	}()
+
+	// Create a Reflector to watch ResourcePool objects
+	lister := cache.ListWatch{
+		ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
+			var resourcePoolList inventoryv1alpha1.ResourcePoolList
+			err := d.hubClient.List(ctx, &resourcePoolList, &client.ListOptions{Raw: &options})
+			if err != nil {
+				return nil, fmt.Errorf("error listing resourcepools: %w", err)
+			}
+			return &resourcePoolList, nil
+		},
+		WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
+			var resourcePoolList inventoryv1alpha1.ResourcePoolList
+			w, err := d.hubClient.Watch(ctx, &resourcePoolList, &client.ListOptions{Raw: &options})
+			if err != nil {
+				return nil, fmt.Errorf("error watching resourcepools: %w", err)
+			}
+			return w, nil
+		},
+		DisableChunking: false,
+	}
+
+	// Start the Reflector
+	store := async.NewReflectorStore(&inventoryv1alpha1.ResourcePool{})
+	reflector := cache.NewNamedReflector(resourcePoolReflectorName, &lister, &inventoryv1alpha1.ResourcePool{}, store, time.Duration(0))
+	slog.Info("starting resourcepool reflector")
+	go reflector.Run(stopCh)
+
+	// Start monitoring the store to process incoming events
+	slog.Info("starting to receive from resourcepool reflector store")
+	go store.Receive(ctx, d)
+
+	return nil
+}
+
+// HandleAsyncEvent handles an add/update/delete event received from the Reflector.
+func (d *ResourcePoolDataSource) HandleAsyncEvent(ctx context.Context, obj interface{}, eventType async.AsyncEventType) (uuid.UUID, error) {
+	slog.Debug("handleAsyncEvent received for resourcepool", "type", eventType, "object", fmt.Sprintf("%T", obj))
+
+	switch value := obj.(type) {
+	case *inventoryv1alpha1.ResourcePool:
+		return d.handleResourcePoolWatchEvent(ctx, value, eventType)
+	default:
+		slog.Warn("Unknown object type in ResourcePoolDataSource", "type", fmt.Sprintf("%T", obj))
+		return uuid.Nil, fmt.Errorf("unknown type: %T", obj)
+	}
+}
+
+// HandleSyncComplete handles the end of a sync operation by sending an event to the Collector.
+func (d *ResourcePoolDataSource) HandleSyncComplete(ctx context.Context, objectType runtime.Object, keys []uuid.UUID) error {
+	var object db.Model
+	switch objectType.(type) {
+	case *inventoryv1alpha1.ResourcePool:
+		object = models.ResourcePool{}
+	default:
+		slog.Warn("Unknown object type in HandleSyncComplete", "type", fmt.Sprintf("%T", objectType))
+		return nil
+	}
+
+	select {
+	case <-ctx.Done():
+		slog.Info("context cancelled while writing resourcepool sync complete event; aborting")
+		return fmt.Errorf("context cancelled; aborting")
+	case d.AsyncChangeEvents <- &async.AsyncChangeEvent{
+		DataSourceID: d.dataSourceID,
+		EventType:    async.SyncComplete,
+		Object:       object,
+		Keys:         keys}:
+		return nil
+	}
+}
+
+// handleResourcePoolWatchEvent handles an async event received for a ResourcePool CR
+func (d *ResourcePoolDataSource) handleResourcePoolWatchEvent(ctx context.Context, pool *inventoryv1alpha1.ResourcePool, eventType async.AsyncEventType) (uuid.UUID, error) {
+	slog.Debug("handleResourcePoolWatchEvent received", "name", pool.Name, "type", eventType)
+
+	// DELETE events always proceed (finalizers guarantee deletion order)
+	// For CREATE/UPDATE, only emit if CR is Ready=True
+	if eventType != async.Deleted {
+		if !isResourceReady(pool.Status.Conditions) {
+			slog.Debug("ResourcePool not ready, skipping",
+				"name", pool.Name,
+				"reason", getReadyReason(pool.Status.Conditions))
+			return uuid.Nil, nil
+		}
+	}
+
+	forDelete := eventType == async.Deleted
+	record, err := d.ConvertResourcePoolToModel(pool, forDelete)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to convert ResourcePool CR to model: %w", err)
+	}
+
+	select {
+	case <-ctx.Done():
+		slog.Info("context cancelled while writing to async event channel; aborting")
+		return uuid.Nil, fmt.Errorf("context cancelled; aborting")
+	case d.AsyncChangeEvents <- &async.AsyncChangeEvent{
+		DataSourceID: d.dataSourceID,
+		EventType:    eventType,
+		Object:       record}:
+		// return the ResourcePoolID (from metadata.uid) for tracking purposes
+		return record.ResourcePoolID, nil
+	}
+}
+
+// ConvertResourcePoolToModel converts a ResourcePool CR to a database model.
+func (d *ResourcePoolDataSource) ConvertResourcePoolToModel(pool *inventoryv1alpha1.ResourcePool, forDelete bool) (models.ResourcePool, error) {
+	// Use metadata.uid as the resourcePoolId (UUID)
+	resourcePoolID, err := uuid.Parse(string(pool.UID))
+	if err != nil {
+		return models.ResourcePool{}, fmt.Errorf("failed to parse ResourcePool UID %q: %w", pool.UID, err)
+	}
+
+	// For DELETE: oCloudSiteID is not needed (zero UUID is fine).
+	// For CREATE/UPDATE: resolvedOCloudSiteUID must be populated by controller if Ready=True.
+	var oCloudSiteID uuid.UUID
+	if !forDelete {
+		if pool.Status.ResolvedOCloudSiteUID == "" {
+			slog.Error("ResourcePool has Ready=True but no resolvedOCloudSiteUID, skipping",
+				slog.String("name", pool.Name),
+				slog.String("namespace", pool.Namespace))
+			return models.ResourcePool{}, fmt.Errorf("missing resolvedOCloudSiteUID for pool %s/%s", pool.Namespace, pool.Name)
+		}
+
+		oCloudSiteID, err = uuid.Parse(pool.Status.ResolvedOCloudSiteUID)
+		if err != nil {
+			slog.Error("Invalid UUID in resolvedOCloudSiteUID, skipping",
+				slog.String("name", pool.Name),
+				slog.String("value", pool.Status.ResolvedOCloudSiteUID),
+				slog.Any("error", err))
+			return models.ResourcePool{}, fmt.Errorf("invalid resolvedOCloudSiteUID for pool %s/%s: %w", pool.Namespace, pool.Name, err)
+		}
+	}
+
+	var extensions map[string]interface{}
+	if pool.Spec.Extensions != nil {
+		extensions = make(map[string]interface{})
+		for k, v := range pool.Spec.Extensions {
+			extensions[k] = v
+		}
+	}
+
+	return models.ResourcePool{
+		ResourcePoolID: resourcePoolID,
+		Name:           pool.Name,
+		Description:    pool.Spec.Description,
+		OCloudSiteID:   oCloudSiteID,
+		Extensions:     extensions,
+		DataSourceID:   d.dataSourceID,
+		GenerationID:   int(d.generationID.Load()),
+		ExternalID:     fmt.Sprintf("%s/%s", pool.Namespace, pool.Name),
+	}, nil
+}

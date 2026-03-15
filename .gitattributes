@@ -2,3 +2,6 @@ vendor/** linguist-generated=true
 bundle/** linguist-generated=true
 internal/generated/** linguist-generated=true
 PROJECT linguist-generated=true
+
+# Treat SVG files as binary to avoid noisy diffs for generated diagrams
+*.svg binary
