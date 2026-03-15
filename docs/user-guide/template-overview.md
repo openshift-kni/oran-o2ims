@@ -237,9 +237,9 @@ nodes:
   - role: master
     nodeNetwork:
       interfaces:
-        - name: eno1
+        - name: ens3f0
           label: boot-interface
-        - name: eno2
+        - name: ens3f1
 ```
 
 A complete example of ClusterInstance defaults can be found in [clusterinstance-defaults-v1.yaml](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v1.yaml).

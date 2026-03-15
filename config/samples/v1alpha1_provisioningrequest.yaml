@@ -85,28 +85,13 @@ spec:
                         prefix-length: 64
                     dhcp: false
                     enabled: true
-                  name: eno1
+                  name: ens3f0
                   type: ethernet
-                - ipv6:
-                    address:
-                      - ip: 2620:52:0:1302::100
-                    enabled: true
-                    link-aggregation:
-                      mode: balance-rr
-                      options:
-                        miimon: "140"
-                      slaves:
-                        - eth0
-                        - eth1
-                    prefix-length: 64
-                  name: bond99
-                  state: up
-                  type: bond
               routes:
                 config:
                   - destination: 0.0.0.0/0
                     next-hop-address: 192.0.2.254
-                    next-hop-interface: eno1
+                    next-hop-interface: ens3f0
                     table-id: 254
       serviceNetwork:
         - cidr: 233.252.0.0/24
