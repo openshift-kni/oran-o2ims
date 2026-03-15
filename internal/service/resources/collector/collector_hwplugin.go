@@ -37,11 +37,10 @@ type HwPluginDataSource struct {
 	client        *inventoryclient.InventoryClient
 }
 
-// Defines the UUID namespace values used to generated name based UUID values for inventory objects.
+// Defines the UUID namespace values used to generate name based UUID values for inventory objects.
 // These values are selected arbitrarily.
 // TODO: move to somewhere more generic
 const (
-	ResourcePoolUUIDNamespace = "daee6434-767a-485d-816b-bc04c21f1acf"
 	ResourceTypeUUIDNamespace = "255c4b4c-84a8-4c95-95ba-217e1688a03d"
 )
 
@@ -172,6 +171,12 @@ func (d *HwPluginDataSource) convertResource(resource *inventoryclient.ResourceI
 		return nil, fmt.Errorf("failed to parse resource ID as UUID: %w", err)
 	}
 
+	// ResourcePoolId is now the Kubernetes UID of the ResourcePool CR
+	resourcePoolID, err := uuid.Parse(resource.ResourcePoolId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse resource pool ID as UUID: %w", err)
+	}
+
 	name := fmt.Sprintf("%s/%s", resource.Vendor, resource.Model)
 	resourceTypeID := ctlrutils.MakeUUIDFromNames(ResourceTypeUUIDNamespace, d.cloudID, d.hwplugin.Name, name)
 
@@ -180,7 +185,7 @@ func (d *HwPluginDataSource) convertResource(resource *inventoryclient.ResourceI
 		Description:    resource.Description,
 		ResourceTypeID: resourceTypeID,
 		GlobalAssetID:  resource.GlobalAssetId,
-		ResourcePoolID: ctlrutils.MakeUUIDFromNames(ResourcePoolUUIDNamespace, d.cloudID, resource.ResourcePoolId),
+		ResourcePoolID: resourcePoolID,
 		Extensions: map[string]interface{}{
 			modelExtension:            resource.Model,
 			vendorExtension:           resource.Vendor,
