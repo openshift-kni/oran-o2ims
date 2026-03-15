@@ -275,7 +275,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		Eventually(func() int {
 			bmhListResult := &metal3v1alpha1.BareMetalHostList{}
 			Expect(K8SClient.List(testCtx, bmhListResult,
-				client.MatchingLabels{"resources.clcm.openshift.io/siteId": "local-123"})).To(Succeed())
+				client.HasLabels{constants.LabelResourcePoolName})).To(Succeed())
 			available := 0
 			for _, b := range bmhListResult.Items {
 				if b.Status.Provisioning.State == metal3v1alpha1.StateAvailable {

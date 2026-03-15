@@ -18,7 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
 
 var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
@@ -608,7 +608,7 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 					Name:      "test-bmh-dependent",
 					Namespace: testNamespace,
 					Labels: map[string]string{
-						controllers.BMHLabelResourcePoolName: "test-pool-delete-blocked", // References pool by metadata.name
+						constants.LabelResourcePoolName: "test-pool-delete-blocked", // References pool by metadata.name
 					},
 				},
 				Spec: bmhv1alpha1.BareMetalHostSpec{
@@ -730,7 +730,7 @@ var _ = Describe("ResourcePool Controller", Label("envtest"), func() {
 					Name:      "test-bmh-different-pool",
 					Namespace: testNamespace,
 					Labels: map[string]string{
-						controllers.BMHLabelResourcePoolName: "some-other-pool-name", // Does NOT match pool above
+						constants.LabelResourcePoolName: "some-other-pool-name", // Does NOT match pool above
 					},
 				},
 				Spec: bmhv1alpha1.BareMetalHostSpec{

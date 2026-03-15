@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
 
 // This test validates the deletion behavior of the hierarchy controllers.
@@ -148,7 +149,7 @@ var _ = Describe("Undeploy Scenario", Label("envtest"), func() {
 					Name:      "undeploy-test-bmh",
 					Namespace: testNamespace,
 					Labels: map[string]string{
-						"resources.clcm.openshift.io/resourcePoolName": "undeploy-test-pool",
+						constants.LabelResourcePoolName: "undeploy-test-pool",
 					},
 				},
 				Spec: bmhv1alpha1.BareMetalHostSpec{

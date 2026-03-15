@@ -24,12 +24,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-)
-
-// Label constants for BareMetalHost resources
-const (
-	BMHLabelResourcePoolName = "resources.clcm.openshift.io/resourcePoolName"
 )
 
 // ResourcePoolReconciler reconciles a ResourcePool object
@@ -174,7 +170,7 @@ func (r *ResourcePoolReconciler) handleFinalizer(
 // findDependentBMHs returns all BareMetalHosts that have the resourcePoolName label matching this ResourcePool
 func (r *ResourcePoolReconciler) findDependentBMHs(ctx context.Context, resourcePoolName string) ([]bmhv1alpha1.BareMetalHost, error) {
 	var bmhList bmhv1alpha1.BareMetalHostList
-	if err := r.List(ctx, &bmhList, client.MatchingLabels{BMHLabelResourcePoolName: resourcePoolName}); err != nil {
+	if err := r.List(ctx, &bmhList, client.MatchingLabels{constants.LabelResourcePoolName: resourcePoolName}); err != nil {
 		return nil, fmt.Errorf("failed to list BareMetalHosts: %w", err)
 	}
 

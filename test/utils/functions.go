@@ -312,7 +312,6 @@ type BMHData struct {
 	BmcAddress     string
 	ServerType     string
 	Colour         string
-	SiteId         string
 	ResourcePoolId string
 }
 
@@ -325,8 +324,7 @@ func CreateBareMetalHost(d BMHData) *metal3v1alpha1.BareMetalHost {
 			Labels: map[string]string{
 				"resourceselector.clcm.openshift.io/server-type":   d.ServerType,
 				"resourceselector.clcm.openshift.io/server-colour": d.Colour,
-				"resources.clcm.openshift.io/resourcePoolId":       d.ResourcePoolId,
-				"resources.clcm.openshift.io/siteId":               d.SiteId,
+				constants.LabelResourcePoolName:                    d.ResourcePoolId,
 			},
 		},
 		Spec: metal3v1alpha1.BareMetalHostSpec{

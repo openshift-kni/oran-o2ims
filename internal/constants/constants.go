@@ -178,6 +178,13 @@ const (
 // Label prefixes
 const (
 	LabelPrefixInterfaces = "interfacelabel.clcm.openshift.io/"
+	LabelPrefixResources  = "resources.clcm.openshift.io/"
+)
+
+// Resource labels for BareMetalHost management
+const (
+	// LabelResourcePoolName is the label key used to associate a BMH with a ResourcePool by name
+	LabelResourcePoolName = LabelPrefixResources + "resourcePoolName"
 )
 
 // Boot interface configuration
