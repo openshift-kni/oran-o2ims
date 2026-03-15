@@ -222,6 +222,76 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 			Expect(ok).To(BeTrue())
 			Expect(locModel.GlobalLocationID).To(Equal("loc-delete-not-ready"))
 		})
+
+		It("should emit DELETE when Location transitions from Ready=True to Ready=False", func() {
+			// A CR that was Ready and in the API becomes not Ready (e.g., parent deleted) and
+			// must be removed from the API.
+
+			err := ds.Watch(watchCtx)
+			Expect(err).ToNot(HaveOccurred())
+			waitForWatchReady(eventChannel)
+
+			// Create a Location CR
+			loc := &inventoryv1alpha1.Location{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "loc-ready-to-not-ready",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.LocationSpec{
+					Description: "Will transition Ready=True → Ready=False",
+					Address:     ptrTo("111 Transition St"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, loc)).To(Succeed())
+			DeferCleanup(func() { deleteAndWait(loc) })
+
+			// First event: DELETE (CR created without Ready status)
+			event := waitForEvent(eventChannel)
+			Expect(event).ToNot(BeNil())
+			Expect(event.EventType).To(Equal(async.Deleted))
+
+			// Set Ready=True status (simulates CR becoming valid)
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), loc)).To(Succeed())
+			loc.Status.Conditions = []metav1.Condition{
+				{
+					Type:               inventoryv1alpha1.ConditionTypeReady,
+					Status:             metav1.ConditionTrue,
+					Reason:             inventoryv1alpha1.ReasonReady,
+					Message:            "Resource is ready",
+					LastTransitionTime: metav1.Now(),
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, loc)).To(Succeed())
+
+			// Second event: UPDATE (Ready=True, added to API)
+			event = waitForEvent(eventChannel)
+			Expect(event).ToNot(BeNil())
+			Expect(event.EventType).To(Equal(async.Updated),
+				"Location becoming Ready=True should emit UPDATE")
+
+			// Now transition to Ready=False (simulates parent being deleted)
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(loc), loc)).To(Succeed())
+			loc.Status.Conditions = []metav1.Condition{
+				{
+					Type:               inventoryv1alpha1.ConditionTypeReady,
+					Status:             metav1.ConditionFalse,
+					Reason:             inventoryv1alpha1.ReasonParentNotFound,
+					Message:            "Parent location no longer exists",
+					LastTransitionTime: metav1.Now(),
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, loc)).To(Succeed())
+
+			// Third event: DELETE (Ready=False means remove from API)
+			event = waitForEvent(eventChannel)
+			Expect(event).ToNot(BeNil())
+			Expect(event.EventType).To(Equal(async.Deleted),
+				"Location transitioning to Ready=False should emit DELETE to remove from API")
+
+			locModel, ok := event.Object.(models.Location)
+			Expect(ok).To(BeTrue())
+			Expect(locModel.GlobalLocationID).To(Equal("loc-ready-to-not-ready"))
+		})
 	})
 
 	Describe("OCloudSite Ready Filter", func() {
@@ -372,6 +442,74 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 			siteModel, ok := event.Object.(models.OCloudSite)
 			Expect(ok).To(BeTrue())
 			Expect(siteModel.Name).To(Equal("site-delete-not-ready"))
+		})
+
+		It("should emit DELETE when OCloudSite transitions from Ready=True to Ready=False", func() {
+			// A CR that was Ready and in the API becomes not Ready (e.g., parent deleted) and
+			// must be removed from the API.
+			err := ds.Watch(watchCtx)
+			Expect(err).ToNot(HaveOccurred())
+			waitForWatchReady(eventChannel)
+
+			site := &inventoryv1alpha1.OCloudSite{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "site-ready-to-not-ready",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.OCloudSiteSpec{
+					GlobalLocationName: "test-location",
+					Description:        "Will transition Ready=True → Ready=False",
+				},
+			}
+			Expect(k8sClient.Create(ctx, site)).To(Succeed())
+			DeferCleanup(func() { deleteAndWait(site) })
+
+			// First event: DELETE (CR created without Ready status)
+			event := waitForEvent(eventChannel)
+			Expect(event).ToNot(BeNil())
+			Expect(event.EventType).To(Equal(async.Deleted))
+
+			// Set Ready=True status (simulates CR becoming valid)
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(site), site)).To(Succeed())
+			site.Status.Conditions = []metav1.Condition{
+				{
+					Type:               inventoryv1alpha1.ConditionTypeReady,
+					Status:             metav1.ConditionTrue,
+					Reason:             inventoryv1alpha1.ReasonReady,
+					Message:            "Resource is ready",
+					LastTransitionTime: metav1.Now(),
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, site)).To(Succeed())
+
+			// Second event: UPDATE (Ready=True, added to API)
+			event = waitForEvent(eventChannel)
+			Expect(event).ToNot(BeNil())
+			Expect(event.EventType).To(Equal(async.Updated),
+				"OCloudSite becoming Ready=True should emit UPDATE")
+
+			// Now transition to Ready=False (simulates parent being deleted)
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(site), site)).To(Succeed())
+			site.Status.Conditions = []metav1.Condition{
+				{
+					Type:               inventoryv1alpha1.ConditionTypeReady,
+					Status:             metav1.ConditionFalse,
+					Reason:             inventoryv1alpha1.ReasonParentNotFound,
+					Message:            "Parent location no longer exists",
+					LastTransitionTime: metav1.Now(),
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, site)).To(Succeed())
+
+			// Third event: DELETE (Ready=False means remove from API)
+			event = waitForEvent(eventChannel)
+			Expect(event).ToNot(BeNil())
+			Expect(event.EventType).To(Equal(async.Deleted),
+				"OCloudSite transitioning to Ready=False should emit DELETE to remove from API")
+
+			siteModel, ok := event.Object.(models.OCloudSite)
+			Expect(ok).To(BeTrue())
+			Expect(siteModel.Name).To(Equal("site-ready-to-not-ready"))
 		})
 	})
 
@@ -527,6 +665,80 @@ var _ = Describe("Ready Status Filtering", Label("envtest"), func() {
 			rpModel, ok := event.Object.(models.ResourcePool)
 			Expect(ok).To(BeTrue())
 			Expect(rpModel.Name).To(Equal("pool-delete-not-ready"))
+		})
+
+		It("should emit DELETE when ResourcePool transitions from Ready=True to Ready=False", func() {
+			// A CR that was Ready and in the API becomes not Ready (e.g., parent deleted) and must
+			// be removed from the API.
+
+			err := ds.Watch(watchCtx)
+			Expect(err).ToNot(HaveOccurred())
+			waitForWatchReady(eventChannel)
+
+			// Create a fake site UID for the status
+			fakeSiteUID := uuid.New().String()
+
+			rp := &inventoryv1alpha1.ResourcePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "pool-ready-to-not-ready",
+					Namespace: testNamespace,
+				},
+				Spec: inventoryv1alpha1.ResourcePoolSpec{
+					OCloudSiteName: "test-site",
+					Description:    "Will transition Ready=True → Ready=False",
+				},
+			}
+			Expect(k8sClient.Create(ctx, rp)).To(Succeed())
+			DeferCleanup(func() { deleteAndWait(rp) })
+
+			// First event: DELETE (CR created without Ready status)
+			event := waitForEvent(eventChannel)
+			Expect(event).ToNot(BeNil())
+			Expect(event.EventType).To(Equal(async.Deleted))
+
+			// Set Ready=True status with ResolvedOCloudSiteUID (simulates CR becoming valid)
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rp), rp)).To(Succeed())
+			rp.Status.Conditions = []metav1.Condition{
+				{
+					Type:               inventoryv1alpha1.ConditionTypeReady,
+					Status:             metav1.ConditionTrue,
+					Reason:             inventoryv1alpha1.ReasonReady,
+					Message:            "Resource is ready",
+					LastTransitionTime: metav1.Now(),
+				},
+			}
+			rp.Status.ResolvedOCloudSiteUID = fakeSiteUID
+			Expect(k8sClient.Status().Update(ctx, rp)).To(Succeed())
+
+			// Second event: UPDATE (Ready=True, added to API)
+			event = waitForEvent(eventChannel)
+			Expect(event).ToNot(BeNil())
+			Expect(event.EventType).To(Equal(async.Updated),
+				"ResourcePool becoming Ready=True should emit UPDATE")
+
+			// Now transition to Ready=False (simulates parent being deleted)
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rp), rp)).To(Succeed())
+			rp.Status.Conditions = []metav1.Condition{
+				{
+					Type:               inventoryv1alpha1.ConditionTypeReady,
+					Status:             metav1.ConditionFalse,
+					Reason:             inventoryv1alpha1.ReasonParentNotFound,
+					Message:            "Parent site no longer exists",
+					LastTransitionTime: metav1.Now(),
+				},
+			}
+			// Note: ResolvedOCloudSiteUID may still be set, but Ready=False takes precedence
+			Expect(k8sClient.Status().Update(ctx, rp)).To(Succeed())
+
+			// Third event: DELETE (Ready=False means remove from API)
+			event = waitForEvent(eventChannel)
+			Expect(event).ToNot(BeNil())
+			Expect(event.EventType).To(Equal(async.Deleted),
+				"ResourcePool transitioning to Ready=False should emit DELETE to remove from API")
+
+			rpModel, ok := event.Object.(models.ResourcePool)
+			Expect(ok).To(BeTrue())
+			Expect(rpModel.Name).To(Equal("pool-ready-to-not-ready"))
 		})
 	})
 })
