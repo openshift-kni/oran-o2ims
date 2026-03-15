@@ -74,6 +74,8 @@ type ReflectorStore struct {
 	mutex sync.Mutex
 	// ready is used to signal that a new operation has been received from the Reflector
 	ready chan struct{}
+	// closed indicates the store has been shut down and the ready channel is closed
+	closed bool
 	// hwm is the high watermark of the queue length
 	hwm int
 }
@@ -92,6 +94,12 @@ func NewReflectorStore(objectType runtime.Object) *ReflectorStore {
 func (c *ReflectorStore) enqueue(operation operation) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
+
+	// If the store is closed, don't try to enqueue - the Receive goroutine has exited
+	if c.closed {
+		return
+	}
+
 	c.queue = append(c.queue, operation)
 	if operation.eventType == SyncComplete {
 		c.hasSynced = true
@@ -151,7 +159,11 @@ func (c *ReflectorStore) Receive(ctx context.Context, handler AsyncEventHandler)
 		select {
 		case <-ctx.Done():
 			slog.Info("stopping store adapter; context canceled")
+			// Mark as closed before closing the channel to prevent enqueue from sending
+			c.mutex.Lock()
+			c.closed = true
 			close(c.ready)
+			c.mutex.Unlock()
 			return
 		case <-c.ready:
 			c.handleOperations(ctx, handler)
