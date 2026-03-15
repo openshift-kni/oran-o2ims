@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS o_cloud_site
     generation_id      INTEGER      NOT NULL DEFAULT 0,
     created_at         TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (data_source_id) REFERENCES data_source (data_source_id),
-    FOREIGN KEY (global_location_id) REFERENCES location (global_location_id)
+    FOREIGN KEY (global_location_id) REFERENCES location (global_location_id) ON DELETE CASCADE
 );
 
 -- Index on o_cloud_site.global_location_id for location -> sites lookups
@@ -83,7 +83,7 @@ CREATE TABLE IF NOT EXISTS resource_pool
     external_id VARCHAR(255) NOT NULL,                                  -- FQDN of resource in downstream data source (e.g., id=XXX)
     created_at         TIMESTAMPTZ           DEFAULT CURRENT_TIMESTAMP, -- TBD; tracks when first imported
     FOREIGN KEY (data_source_id) REFERENCES data_source (data_source_id), -- Manual cascade required for events
-    FOREIGN KEY (o_cloud_site_id) REFERENCES o_cloud_site (o_cloud_site_id)
+    FOREIGN KEY (o_cloud_site_id) REFERENCES o_cloud_site (o_cloud_site_id) ON DELETE CASCADE
 );
 
 -- Index on resource_pool.o_cloud_site_id for site -> pools lookups
@@ -105,7 +105,8 @@ CREATE TABLE IF NOT EXISTS resource
     generation_id    INTEGER      NOT NULL DEFAULT 0,
     external_id      VARCHAR(255),                                    -- FQDN of resource in downstream data source (e.g., id=XXX)
     created_at       TIMESTAMPTZ           DEFAULT CURRENT_TIMESTAMP, -- TBD; tracks when first imported
-    FOREIGN KEY (data_source_id) REFERENCES data_source (data_source_id) -- Manual cascade required for events
+    FOREIGN KEY (data_source_id) REFERENCES data_source (data_source_id), -- Manual cascade required for events
+    FOREIGN KEY (resource_pool_id) REFERENCES resource_pool (resource_pool_id) ON DELETE CASCADE
 );
 
 -- Table: resource_pool_member
