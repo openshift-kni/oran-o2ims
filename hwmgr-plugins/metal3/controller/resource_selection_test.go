@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
 
 var _ = Describe("Resource Selection", func() {
@@ -70,33 +71,18 @@ var _ = Describe("Resource Selection", func() {
 	}
 
 	Describe("ResourceSelectionPrimaryFilter", func() {
-		It("should create filters for site ID", func() {
-			nodeGroupData := hwmgmtv1alpha1.NodeGroupData{
-				ResourceSelector: map[string]string{},
-			}
-
-			opts, err := ResourceSelectionPrimaryFilter(ctx, nil, logger, "test-site", nodeGroupData)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(opts)).To(Equal(2)) // MatchingLabelsSelector + MatchingLabels
-
-			// Check that the site ID filter is present
-			matchingLabels, ok := opts[1].(client.MatchingLabels)
-			Expect(ok).To(BeTrue())
-			Expect(matchingLabels[LabelSiteID]).To(Equal("test-site"))
-		})
-
-		It("should create filters for resource pool ID", func() {
+		It("should create filters for resource pool name", func() {
 			nodeGroupData := hwmgmtv1alpha1.NodeGroupData{
 				ResourcePoolId:   "test-pool",
 				ResourceSelector: map[string]string{},
 			}
 
-			opts, err := ResourceSelectionPrimaryFilter(ctx, nil, logger, "", nodeGroupData)
+			opts, err := ResourceSelectionPrimaryFilter(ctx, nil, logger, nodeGroupData)
 			Expect(err).NotTo(HaveOccurred())
 
 			matchingLabels, ok := opts[1].(client.MatchingLabels)
 			Expect(ok).To(BeTrue())
-			Expect(matchingLabels[LabelResourcePoolID]).To(Equal("test-pool"))
+			Expect(matchingLabels[constants.LabelResourcePoolName]).To(Equal("test-pool"))
 		})
 
 		It("should create filters for resource selector labels", func() {
@@ -108,7 +94,7 @@ var _ = Describe("Resource Selection", func() {
 				},
 			}
 
-			opts, err := ResourceSelectionPrimaryFilter(ctx, nil, logger, "", nodeGroupData)
+			opts, err := ResourceSelectionPrimaryFilter(ctx, nil, logger, nodeGroupData)
 			Expect(err).NotTo(HaveOccurred())
 
 			matchingLabels, ok := opts[1].(client.MatchingLabels)
@@ -124,7 +110,7 @@ var _ = Describe("Resource Selection", func() {
 				ResourceSelector: map[string]string{},
 			}
 
-			opts, err := ResourceSelectionPrimaryFilter(ctx, nil, logger, "", nodeGroupData)
+			opts, err := ResourceSelectionPrimaryFilter(ctx, nil, logger, nodeGroupData)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check that the label selector excludes allocated BMHs

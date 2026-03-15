@@ -56,6 +56,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
 
 var _ = Describe("HostFirmwareComponents Controller", func() {
@@ -232,8 +234,7 @@ var _ = Describe("HostFirmwareComponents Controller", func() {
 
 		It("should skip reconciliation when system is not HPE or Dell", func() {
 			bmh := createBMHWithLabels("test-bmh", "test-ns", map[string]string{
-				LabelResourcePoolID: "pool123",
-				LabelSiteID:         "site123",
+				constants.LabelResourcePoolName: "pool123",
 			})
 			hfc := createHFC("test-bmh", "test-ns", []metal3v1alpha1.FirmwareComponentStatus{})
 			hwdata := createHardwareData("test-bmh", "test-ns", "Supermicro")
@@ -264,9 +265,8 @@ var _ = Describe("HostFirmwareComponents Controller", func() {
 
 		It("should remove label when system is not HPE/Dell but has label", func() {
 			bmh := createBMHWithLabels("test-bmh", "test-ns", map[string]string{
-				LabelResourcePoolID:           "pool123",
-				LabelSiteID:                   "site123",
-				ValidationUnavailableLabelKey: LabelValueMissingFirmwareData,
+				constants.LabelResourcePoolName: "pool123",
+				ValidationUnavailableLabelKey:   LabelValueMissingFirmwareData,
 			})
 			hfc := createHFC("test-bmh", "test-ns", []metal3v1alpha1.FirmwareComponentStatus{})
 			hwdata := createHardwareData("test-bmh", "test-ns", "Supermicro")
@@ -304,8 +304,7 @@ var _ = Describe("HostFirmwareComponents Controller", func() {
 
 		It("should add label when BIOS component is missing", func() {
 			bmh := createBMHWithLabels("test-bmh", "test-ns", map[string]string{
-				LabelResourcePoolID: "pool123",
-				LabelSiteID:         "site123",
+				constants.LabelResourcePoolName: "pool123",
 			})
 			hfc := createHFC("test-bmh", "test-ns", []metal3v1alpha1.FirmwareComponentStatus{
 				{Component: "bmc", CurrentVersion: "1.0"},
@@ -345,8 +344,7 @@ var _ = Describe("HostFirmwareComponents Controller", func() {
 
 		It("should add label when BMC component is missing", func() {
 			bmh := createBMHWithLabels("test-bmh", "test-ns", map[string]string{
-				LabelResourcePoolID: "pool123",
-				LabelSiteID:         "site123",
+				constants.LabelResourcePoolName: "pool123",
 			})
 			hfc := createHFC("test-bmh", "test-ns", []metal3v1alpha1.FirmwareComponentStatus{
 				{Component: "bios", CurrentVersion: "1.0"},
@@ -386,8 +384,7 @@ var _ = Describe("HostFirmwareComponents Controller", func() {
 
 		It("should add label when NIC component is missing", func() {
 			bmh := createBMHWithLabels("test-bmh", "test-ns", map[string]string{
-				LabelResourcePoolID: "pool123",
-				LabelSiteID:         "site123",
+				constants.LabelResourcePoolName: "pool123",
 			})
 			hfc := createHFC("test-bmh", "test-ns", []metal3v1alpha1.FirmwareComponentStatus{
 				{Component: "bios", CurrentVersion: "1.0"},
@@ -427,8 +424,7 @@ var _ = Describe("HostFirmwareComponents Controller", func() {
 
 		It("should add label when multiple components are missing", func() {
 			bmh := createBMHWithLabels("test-bmh", "test-ns", map[string]string{
-				LabelResourcePoolID: "pool123",
-				LabelSiteID:         "site123",
+				constants.LabelResourcePoolName: "pool123",
 			})
 			hfc := createHFC("test-bmh", "test-ns", []metal3v1alpha1.FirmwareComponentStatus{})
 			hwdata := createHardwareData("test-bmh", "test-ns", "Dell Inc.")
@@ -465,9 +461,8 @@ var _ = Describe("HostFirmwareComponents Controller", func() {
 
 		It("should remove label when all components are present", func() {
 			bmh := createBMHWithLabels("test-bmh", "test-ns", map[string]string{
-				LabelResourcePoolID:           "pool123",
-				LabelSiteID:                   "site123",
-				ValidationUnavailableLabelKey: LabelValueMissingNICData,
+				constants.LabelResourcePoolName: "pool123",
+				ValidationUnavailableLabelKey:   LabelValueMissingNICData,
 			})
 			hfc := createHFC("test-bmh", "test-ns", []metal3v1alpha1.FirmwareComponentStatus{
 				{Component: "bios", CurrentVersion: "1.0"},
@@ -509,9 +504,8 @@ var _ = Describe("HostFirmwareComponents Controller", func() {
 
 		It("should not modify label when already set correctly", func() {
 			bmh := createBMHWithLabels("test-bmh", "test-ns", map[string]string{
-				LabelResourcePoolID:           "pool123",
-				LabelSiteID:                   "site123",
-				ValidationUnavailableLabelKey: LabelValueMissingBIOSData,
+				constants.LabelResourcePoolName: "pool123",
+				ValidationUnavailableLabelKey:   LabelValueMissingBIOSData,
 			})
 			hfc := createHFC("test-bmh", "test-ns", []metal3v1alpha1.FirmwareComponentStatus{
 				{Component: "bmc", CurrentVersion: "2.0"},
