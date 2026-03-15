@@ -10,7 +10,7 @@ data:
   # clusterConfigurationTimeout: "40m"
   policytemplate-defaults: |
     sriov-network-vlan-1: "140"
-    sriov-network-pfNames-1: '["ens4f1"]'
+    sriov-network-pfNames-1: '["ens2f0"]'
     cpu-isolated: "0-1,64-65"
     cpu-reserved: "2-10"
     hugepages-default: "1G"

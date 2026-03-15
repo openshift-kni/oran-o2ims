@@ -43,37 +43,34 @@ data:
     nodes:
       - role: master
         bootMode: UEFI
+        ironicInspect: "disabled"
+        automatedCleaningMode: disabled
         rootDeviceHints:
-          deviceName: /dev/disk/by-path/pci-0000:01:00.0-scsi-0:2:0:0
+          deviceName: /dev/disk/by-path/pci-0000:01:00.0-nvme-1
         nodeNetwork:
           interfaces:
-            - name: eno1
+            - name: ens3f0
               label: boot-interface
-            - name: eth0
-              label: base-interface
-            - name: eth1
+            - name: ens3f1
               label: data-interface
+            - name: ens2f0
+              label: sriov-1
+            - name: ens2f1
+              label: sriov-2
           config:
             routes:
               config:
                 - destination: 0.0.0.0/0
-                  next-hop-interface: eno1
+                  next-hop-interface: ens3f0
                   table-id: 254
             interfaces:
               - ipv6:
                   enabled: false
                 ipv4:
                   enabled: true
-                name: eno1
+                name: ens3f0
                 state: up
                 type: ethernet
-              - ipv6:
-                  enabled: false
-                ipv4:
-                  enabled: false
-                name: bond99
-                state: up
-                type: bond
         templateRefs:
           - name: ibi-node-templates-v1
             namespace: open-cluster-management
