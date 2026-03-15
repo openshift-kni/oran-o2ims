@@ -40,22 +40,24 @@ data:
     nodes:
       - role: master
         bootMode: UEFISecureBoot
+        ironicInspect: "disabled"
+        automatedCleaningMode: disabled
         nodeNetwork:
           interfaces:
-            - name: eno1
+            - name: ens3f0
               label: boot-interface
           config:
             routes:
               config:
                 - destination: 0.0.0.0/0
-                  next-hop-interface: eno1
+                  next-hop-interface: ens3f0
                   table-id: 254
             interfaces:
               - ipv6:
                   enabled: false
                 ipv4:
                   enabled: true
-                name: eno1
+                name: ens3f0
                 state: up
                 type: ethernet
         templateRefs:
