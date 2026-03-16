@@ -97,7 +97,7 @@ $ curl --insecure --silent --header "Authorization: Bearer ${MY_TOKEN}"
 
 ### Query the Resource server
 
-The resource server exposes endpoints for retrieving resource types, resource pools and resources objects. The server relies on the Search Query API of ACM hub. Follow these [instructions](docs/dev/env_acm.md#search-query-api) to enable
+The resource server exposes endpoints for retrieving resource types, resource pools and resources objects. The server relies on the Search Query API of ACM hub. Follow these [instructions](../dev/env_acm.md#search-query-api) to enable
 and configure the search API access. The resource server will translate those REST requests and send them to the ACM search server that implements a graphQL API.
 
 > [!IMPORTANT]

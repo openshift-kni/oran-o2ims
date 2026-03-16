@@ -65,7 +65,7 @@ The template references hardware artifacts that the O‑Cloud Metal3 hardware pl
 
 > [!NOTE]
 > `spec.templates.hwTemplate` can be optional. In scenarios where the hwTemplate is not provided, hardware provisioning will not be performed, and hardware-related parameters for each node
-> (e.g, bmcAddress, bmcCredentialsDetails, bootMACAddress, nodeNetwork.interfaces[*].macAddress) should be specified in the ProvisioningRequest. See this [example](samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1-no-hwtemplate.yaml) of a ClusterTemplate without `hwTemplate`.
+> (e.g, bmcAddress, bmcCredentialsDetails, bootMACAddress, nodeNetwork.interfaces[*].macAddress) should be specified in the ProvisioningRequest. See this [example](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1-no-hwtemplate.yaml) of a ClusterTemplate without `hwTemplate`.
 
 #### HardwareProfile
 
@@ -222,7 +222,7 @@ ProvisioningRequest. When both are set, the ProvisioningRequest value takes prec
 references the HardwareTemplate at `spec.templates.hwTemplate`.
 
 Example files are under [hardwaretemplates](../samples/git-setup/clustertemplates/hardwaretemplates/).
-For details about server onboarding, refer to [Server Onboarding](./server-onboarding.md).
+For details about server onboarding, refer to [Server Onboarding](./server-onboarding-orig.md).
 
 ### ClusterInstance defaults ConfigMap
 

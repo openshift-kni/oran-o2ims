@@ -1,7 +1,7 @@
 apiVersion: clcm.openshift.io/v1alpha1
 kind: HardwareProfile
 metadata:
-  name: dell-xr8620t-bios-2.6.3-bmc-7.20.30.50-nic-24.0.5
+  name: dell-xr8620t-bios-2.6.3-bmc-7.20.30.50
   namespace: oran-o2ims
 spec:
   bios:
@@ -16,6 +16,3 @@ spec:
   bmcFirmware:
     version: 7.20.30.50
     url: https://example.com:8888/firmware/xr8620t/iDRAC-with-Lifecycle-Controller_Firmware_CJKPX_WN64_7.20.30.50_A00.EXE
-  nicFirmware:
-    - version: 24.0.5
-      url: https://example.com:8888/firmware/network/dell/intel/E810/Network_Firmware_DC20J_WN64_24.0.5_A00.EXE
