@@ -178,7 +178,7 @@ status:
       type: UpgradeCompleted
   provisioningStatus:
     provisioningDetails: Provisioning request has completed successfully
-    provisioningState: fulfilled
+    provisioningPhase: fulfilled
 ```
 
 ## Retry After Failure
