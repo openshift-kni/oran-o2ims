@@ -62,7 +62,7 @@ export BASE_URL="https://${API_URI}/o2ims-infrastructureMonitoring/v1"
 > [!NOTE]
 > For OAuth2/OIDC-only configurations, service account tokens may not work. Check logs: `oc logs -n oran-o2ims deployment/alarms-server | grep -i oidc`
 
-**Production:** See [OAuth setup instructions in Prereqsuites](./prereqs.md#oauth-server-expectationsrequirements) for full OAuth2 configuration.
+**Production:** See [OAuth setup instructions in Prerequisites](./prereqs.md#oauth-server-expectationsrequirements) for full OAuth2 configuration.
 
 ## API Operations
 
@@ -106,9 +106,22 @@ curl -s -k -H "Authorization: Bearer ${MY_TOKEN}" "${BASE_URL}/alarms" | jq
 - `alarmEventRecordId`: Unique identifier for this alarm instance
 - `alarmRaisedTime`: When the alarm was first triggered (ISO 8601)
 - `alarmAcknowledged`: Whether alarm has been acknowledged by operator
-- `perceivedSeverity`: Severity level (1=Critical, 2=Major, 3=Warning, 4=Minor)
+- `perceivedSeverity`: Severity level (0=Critical, 1=Major, 2=Minor, 3=Warning, 4=Indeterminate, 5=Cleared)
 - `resourceID`: ID of the affected resource (cluster, node, etc.)
 - `extensions`: Additional alert metadata from Prometheus/Alertmanager
+
+**Severity Mapping from Prometheus/Alertmanager:**
+
+The `perceivedSeverity` value is derived from the Prometheus alert's `severity` label:
+
+| Prometheus severity | O-RAN perceivedSeverity |
+|---|---|
+| `critical` | 0 (Critical) |
+| `major`, `important` | 1 (Major) |
+| `minor`, `low` | 2 (Minor) |
+| `warning`, `info`, `moderate` | 3 (Warning) |
+| *(missing label)* | 4 (Indeterminate) |
+| `cleared` | 5 (Cleared) |
 
 #### Get Specific Alarm
 
@@ -142,7 +155,10 @@ curl -s -k \
 
 ### Subscription Management
 
-**⚠️ Prerequisites:** Requires SMO configuration. Without SMO: _"provisioning of Alarm Subscriptions is blocked until the SMO attributes are configured"_. See [SMO registration guide in Environment Setup](./environment-setup.md#registering-the-o-cloud-manager-with-the-smo) for setup instructions.
+> [!WARNING]
+> Requires SMO configuration. Without SMO, alarm subscription creation will fail with:
+> *"provisioning of Alarm Subscriptions is blocked until the SMO attributes are configured"*.
+> See [SMO registration guide](./environment-setup.md#registering-the-o-cloud-manager-with-the-smo) for setup instructions.
 
 #### Create Subscription
 
@@ -160,7 +176,14 @@ curl -s -k \
   "${BASE_URL}/alarmSubscriptions" | jq
 ```
 
-**Filter Options:** `NEW`, `CHANGE`, `CLEAR`, `ACKNOWLEDGE`
+**Filter Options:**
+
+| Filter | Description |
+|---|---|
+| `NEW` | Notify when a new alarm is raised |
+| `CHANGE` | Notify when an existing alarm changes (e.g., severity change) |
+| `CLEAR` | Notify when an alarm is cleared |
+| `ACKNOWLEDGE` | Notify when an alarm is acknowledged |
 
 #### Manage Subscriptions
 
