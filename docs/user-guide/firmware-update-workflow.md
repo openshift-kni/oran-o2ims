@@ -354,7 +354,7 @@ When a timeout occurs:
 
 - The `HardwareProvisioned` or `HardwareConfigured` condition is set to
   `Status=False, Reason=TimedOut`.
-- The ProvisioningRequest `provisioningState` is set to `failed`.
+- The ProvisioningRequest `provisioningPhase` is set to `failed`.
 - Any in-progress BMH annotations are cleared.
 
 ### Firmware Application Failures

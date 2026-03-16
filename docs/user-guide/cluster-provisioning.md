@@ -456,8 +456,8 @@ curl -sk -X POST \
       }
     },
     "policyTemplateParameters": {
-      "sriov-network-pfNames-1": "[\"ens1f2\"]",
-      "sriov-network-pfNames-2": "[\"ens1f3\"]"
+      "sriov-network-pfNames-1": "[\"ens2f0\"]",
+      "sriov-network-pfNames-2": "[\"ens2f1\"]"
     },
     "clusterInstanceParameters": {
       "extraLabels": {
@@ -532,8 +532,8 @@ curl -sk -X PUT \
       }
     },
     "policyTemplateParameters": {
-      "sriov-network-pfNames-1": "[\"ens1f2\"]",
-      "sriov-network-pfNames-2": "[\"ens1f3\"]"
+      "sriov-network-pfNames-1": "[\"ens2f0\"]",
+      "sriov-network-pfNames-2": "[\"ens2f1\"]"
     },
     "clusterInstanceParameters": {
       "extraLabels": {

@@ -594,7 +594,7 @@ The following steps are required:
           provisionedResources:
             oCloudNodeClusterId: 95f4a2cf-04dc-42d5-9d1e-f6cbc693d8ea
           provisioningDetails: Hardware configuring is in progress
-          provisioningState: progressing
+          provisioningPhase: progressing
     ```
 
 4. The O-Cloud Metal3 hardware plugin detects the updated `NodeAllocationRequest` CR:
@@ -721,5 +721,5 @@ The following steps are required:
         provisionedResources:
           oCloudNodeClusterId: 95f4a2cf-04dc-42d5-9d1e-f6cbc693d8ea
         provisioningDetails: Provisioning request has completed successfully
-        provisioningState: fulfilled
+        provisioningPhase: fulfilled
   ```
