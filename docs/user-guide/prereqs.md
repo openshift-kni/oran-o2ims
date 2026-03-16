@@ -54,7 +54,7 @@ client present a certificate.
 
 To configure the primary controller to enable mTLS the following attributes must be set in the `clientTLS` section of
 the `spec`. For more information, please refer to the
-[Ingress Operator in OpenShift Container Platform documentation](https://docs.redhat.com/en/documentation/openshift_container_platform/4.20/html/networking_operators/configuring-ingress#configuring-ingress-controller-tls).
+[Ingress Operator in OpenShift Container Platform documentation](https://docs.redhat.com/en/documentation/openshift_container_platform/4.21/html/networking_operators/configuring-ingress#configuring-ingress-controller-tls).
 
 ```yaml
 apiVersion: operator.openshift.io/v1
@@ -90,7 +90,7 @@ regarding the OAuth settings and JWT contents.
    resource servers. For example purposes, this document assumes these to be "smo-client" and "o2ims-client".
 
 2. It is expected that the "smo-client" has been assigned "roles" which map to the Kubernetes RBAC roles
-   defined [here](../config/rbac/oran_o2ims_oauth_role_bindings.yaml) according to the level of access required by the SMO.
+   defined [here](../../config/rbac/oran_o2ims_oauth_role_bindings.yaml) according to the level of access required by the SMO.
    The "roles" attribute is expected to contain a list of roles assigned to the client.
    For example, one or more of "o2ims-reader", "o2ims-subscriber", "o2ims-maintainer", "o2ims-provisioner", or
    "o2ims-admin".

@@ -24,7 +24,6 @@ resources:
 # sno-ran-du.v4-Y-Z-4 ClusterTemplate:
 - sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml
 - sno-ran-du/clusterinstance-defaults-v4.yaml
-- sno-ran-du/policytemplates-defaults-v2.yaml
 # sno-ran-du.v4-Y-Z-1-no-hwtemplate ClusterTemplate:
 - sno-ran-du/sno-ran-du-v4-Y-Z-1-no-hwtemplate.yaml
 # Full DU profile:
