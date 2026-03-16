@@ -18,7 +18,7 @@ This document provides a walkthrough for provisioning single-node OpenShift (SNO
 * Red Hat OpenShift GitOps Operator
 * SiteConfig Operator enabled
 * Image-Based Install Operator enabled
-* ORAN O2IMS controllers installed and running
+* O-Cloud Manager operator installed and running
 
 ### Git Repository Setup
 
@@ -41,24 +41,17 @@ For additional details, see the [Red Hat OpenShift Image-Based Installation docu
 
 ## IBI Workflow Overview
 
-The Image-Based Installation workflow consists of four main phases. The first three are preparation steps, while the final phase is performed per cluster deployment.
+The IBI workflow is split into two stages that are typically performed by different
+teams in different environments:
 
-### Preparation Phases (Completed in Advance)
+**Factory preparation** — Done once per hardware/software configuration in a lab or
+factory environment. Produces a reusable live ISO, then uses it to pre-provision
+servers before they are shipped to deployment sites. The seed image and live ISO are
+reusable across multiple servers with the same hardware configuration.
 
-* Phase 1: Seed Image Preparation – Create a seed image from a reference bare metal cluster.
-* Phase 2: Live ISO Creation – Generate a bootable ISO that embeds the seed image.
-* Phase 3: Server Pre-Provisioning – Install the live ISO on target hardware via virtual media.
-
-### Deployment Phase (Executed Per Cluster)
-
-* Phase 4: Cluster Provisioning – Deploy clusters using a ProvisioningRequest CR referencing IBI templates.
-
-### Timing and Reusability Considerations
-
-* Phases 1–3 must be completed in advance to enable rapid cluster deployment when needed.
-* Phases 1 and 2 are reusable across multiple servers with the same hardware configuration and desired cluster setup. A single seed image and installation ISO can be used to pre-provision multiple servers.
-* Phase 3 is server-specific and must be performed individually for each target server, but can be run in parallel across multiple servers using the same ISO.
-* Phase 4 is cluster-specific and is executed when you are ready to deploy. It requires a ProvisioningRequest CR that references ClusterTemplates pointing to the default IBI templates in the SiteConfig Operator.
+**Site deployment** — Done per cluster at the deployment site. Since servers arrive
+pre-provisioned, cluster provisioning skips the OS installation and image pull steps,
+enabling rapid deployment via ProvisioningRequest CRs.
 
 ## Available Sample Resources
 
@@ -67,20 +60,23 @@ This repository includes sample resources for IBI-based provisioning:
 * [IBI Cluster Instance Defaults](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-ibi.yaml): References the IBI templates, `ibi-cluster-templates-v1` and `ibi-node-templates-v1`, from the SiteConfig Operator
 * [IBI ClusterTemplate](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-ibi-v4-Y-Z-1.yaml): Uses the IBI-specific cluster instance defaults
 
-## Implementation Guide
+## Factory Preparation
 
-### Phase 1: Seed Image Preparation
+These steps are performed once per hardware/software configuration to produce a
+reusable live installation ISO.
 
-A seed image is built from a reference OpenShift cluster that includes the desired configuration, applications, and customizations. The reference cluster should be running OpenShift 4.18 or later.
+### Step 1: Create a Seed Image
 
-#### Steps to Create the Seed Image
+A seed image is built from a reference OpenShift cluster that includes the desired
+configuration, applications, and customizations. The reference cluster should be running
+OpenShift 4.18 or later.
 
-**Step 1:** Provision the reference seed cluster using a ProvisioningRequest CR and the SiteConfig Operator's default assisted-installer templates.
+**1a.** Provision the reference seed cluster using a ProvisioningRequest CR and the SiteConfig Operator's default assisted-installer templates.
 Before provisioning, be sure to include the following MachineConfig in the extra manifests.
 This ensures that a separate partition is created and the `/var/lib/containers` partition is shared between the two ostree stateroots used during the pre-install process.
 
 ```yaml
-  98-var-lib-containers-partitioned.yaml: |        
+  98-var-lib-containers-partitioned.yaml: |
     apiVersion: machineconfiguration.openshift.io/v1
     kind: MachineConfig
     metadata:
@@ -122,21 +118,27 @@ This ensures that a separate partition is created and the `/var/lib/containers` 
                 [Install]
                 RequiredBy=local-fs.target
               enabled: true
-              name: var-lib-containers.mount 
+              name: var-lib-containers.mount
 ```
 
-> [!NOTE]
-> Remember to update the MachineConfig with the `device` information specific to your server before applying it.
+> [!WARNING]
+> The `device` path in the MachineConfig (e.g., `/dev/disk/by-path/pci-0000:43:00.0-nvme-1`)
+> is hardware-specific and must be updated to match the storage device on your server.
 
-**Step 2:** Annotate the BareMetalHost to prevent cleanup:
+**1b.** Annotate the BareMetalHost to prevent cleanup when the ProvisioningRequest
+is deleted in the next step. This annotation prevents the Metal3 hardware plugin from
+powering off the host and clearing its provisioning state, which is necessary because
+you need the running cluster to generate the seed image.
 
-```yaml
-clcm.openshift.io/skip-cleanup: ""
+```console
+oc annotate bmh <bmh-name> -n <bmh-namespace> clcm.openshift.io/skip-cleanup=""
 ```
 
-**Step 3:** Detach the spoke cluster by deleting the ProvisioningRequest CR. This automatically removes the corresponding ClusterInstance CR and related installation manifests.
+**1c.** Detach the spoke cluster by deleting the ProvisioningRequest CR. This
+automatically removes the corresponding ClusterInstance CR and related installation
+manifests, while the host remains powered on due to the `skip-cleanup` annotation.
 
-**Step 4:** Install the LifeCycleAgent (LCA) Operator on the spoke cluster and create a `SeedGenerator` CR:
+**1d.** Install the LifeCycleAgent (LCA) Operator on the spoke cluster and create a `SeedGenerator` CR:
 
 ```yaml
 apiVersion: lca.openshift.io/v1
@@ -150,7 +152,7 @@ spec:
 > [!NOTE]
 > Before applying the `SeedGenerator` CR, ensure that all ACM-related resources (including observability add-ons) are fully removed from the spoke cluster.
 
-### Phase 2: Live ISO Creation
+### Step 2: Create the Live ISO
 
 After generating the seed image, use the `openshift-install` program to create a live installation ISO that embeds the seed image and installation logic:
 
@@ -175,9 +177,11 @@ The live ISO contains:
 > [!NOTE]
 > Network and hardware-specific configurations are applied later through the IBI templates provided by the SiteConfig Operator. These are not embedded in the live ISO.
 
-### Phase 3: Server Pre-Provisioning
+### Step 3: Server Pre-Provisioning
 
-Before provisioning clusters with a ProvisioningRequest CR, pre-provision your bare metal servers using the live installation ISO and BMC virtual media:
+Pre-provision bare metal servers using the live installation ISO and BMC virtual media.
+This step is per-server but can be run in parallel across multiple servers using the
+same ISO.
 
 1. Mount the live ISO to the target server.
 2. Boot from virtual media. During installation, the ISO will:
@@ -187,15 +191,35 @@ Before provisioning clusters with a ProvisioningRequest CR, pre-provision your b
    * Apply the preconfigured OpenShift cluster state
    * Prepare the server for cluster provisioning
 
-### Phase 4: Cluster Provisioning
+Once pre-provisioned, servers can be shipped to deployment sites ready for rapid cluster
+provisioning.
+
+## Site Deployment
+
+With servers pre-provisioned in the factory, cluster provisioning at the site skips the
+OS installation and image pull steps, significantly reducing deployment time.
+
+### Cluster Provisioning
 
 #### ProvisioningRequest CR for IBI
 
-The IBI ProvisioningRequest CR follows the same structure as the [sample ProvisioningRequest](../../config/samples/v1alpha1_provisioningrequest.yaml) but references the IBI-specific ClusterTemplate.
+The IBI ProvisioningRequest CR follows the same structure as the
+[sample ProvisioningRequest](../../config/samples/v1alpha1_provisioningrequest.yaml)
+but references an IBI-specific ClusterTemplate. The key difference is in the
+ClusterInstance defaults ConfigMap, which references the SiteConfig Operator's IBI
+templates (`ibi-cluster-templates-v1` and `ibi-node-templates-v1`) instead of the
+standard assisted-installer templates (`ai-cluster-templates-v1` and
+`ai-node-templates-v1`). The IBI templates cause the SiteConfig Operator to create an
+`ImageClusterInstall` CR (instead of `AgentClusterInstall`), which drives the
+image-based installation flow for pre-provisioned servers. See the
+[IBI Cluster Instance Defaults](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-ibi.yaml)
+sample.
 
 #### IBI Provisioning Process
 
-The provisioning flow mirrors the standard ProvisioningRequest workflow, with adjustments for pre-provisioned hardware:
+The provisioning flow mirrors the standard
+[ProvisioningRequest workflow](./cluster-provisioning.md), with adjustments for
+pre-provisioned hardware:
 
 1. ProvisioningRequestValidated – Parameters validated against the ClusterTemplate schema
 2. ClusterInstanceRendered – Renders ClusterInstance with IBI-specific templates
