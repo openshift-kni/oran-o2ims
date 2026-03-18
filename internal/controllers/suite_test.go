@@ -202,6 +202,11 @@ func (c *SSACompatibleClient) handleServerSideApply(ctx context.Context, obj cli
 }
 
 func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
+	c, _ := getFakeClientAndMockServer(objs...)
+	return c
+}
+
+func getFakeClientAndMockServer(objs ...client.Object) (client.WithWatch, *MockHardwarePluginServer) {
 	// Create a basic auth secret for test authentication
 	basicAuthSecret := "test-auth-secret"
 	authSecret := &corev1.Secret{
@@ -238,13 +243,6 @@ func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 		WithStatusSubresource(&clusterv1.ManagedCluster{}).
 		WithIndex(&pluginsv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", func(obj client.Object) []string {
 			return []string{obj.(*pluginsv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
-		}).
-		WithIndex(&bmhv1alpha1.BareMetalHost{}, "status.hardware.hostname", func(obj client.Object) []string {
-			bmh := obj.(*bmhv1alpha1.BareMetalHost)
-			if bmh.Status.HardwareDetails != nil && bmh.Status.HardwareDetails.Hostname != "" {
-				return []string{bmh.Status.HardwareDetails.Hostname}
-			}
-			return nil
 		}).
 		Build()
 
@@ -284,7 +282,7 @@ func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 	}
 
 	// Wrap the fake client with SSA compatibility for testing
-	return &SSACompatibleClient{WithWatch: fakeClient}
+	return &SSACompatibleClient{WithWatch: fakeClient}, mockServer
 }
 
 // Logger used for tests:

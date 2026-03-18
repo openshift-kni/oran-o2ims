@@ -458,46 +458,50 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 		}
 
 		// Get the corresponding clcm.openshift.io and add the needed labels.
-		// Map by hostname.
+		// Match by the hostname recorded in AllocatedNodeHostMap, which is the
+		// hostname assigned during cluster installation (not the BMH inspected hostname).
 		foundNode := false
 
 		for _, node := range *nodes {
 
-			// Get the Hostname
 			hostName := t.object.Status.Extensions.AllocatedNodeHostMap[node.Id]
-			// Skip the Node if its hostname status is empty.
 			if hostName == "" {
 				continue
 			}
 
-			bmh, err := ctlrutils.GetBareMetalHostFromHostname(ctx, t.client, hostName)
-			if err != nil {
-				return fmt.Errorf("failed to retrieve BareMetalHost corresponding with hostname '%s': %w", hostName, err)
-			}
-			if bmh == nil {
+			if hostName != agent.Spec.Hostname {
 				continue
 			}
 
-			if bmh.Status.HardwareDetails.Hostname != hostName {
-				return fmt.Errorf("bareMetalHost Hostname '%s' is different from the ProvisioningRequest's Hostname: '%s'",
-					bmh.Status.HardwareDetails.Hostname, hostName)
+			// Look up the BMH via the allocated-node label rather than by
+			// BMH status hostname, because the inspected hostname on the BMH
+			// may differ from the hostname actually assigned to the node.
+			bmh, err := ctlrutils.GetBareMetalHostForAllocatedNode(ctx, t.client, node.Id)
+			if err != nil {
+				return fmt.Errorf("failed to get BareMetalHost: %w", err)
+			}
+			if bmh == nil {
+				t.logger.WarnContext(ctx,
+					"BareMetalHost not found for AllocatedNode",
+					"allocatedNodeId", node.Id,
+					"hostname", hostName,
+				)
+				continue
 			}
 
-			if hostName == agent.Spec.Hostname {
-				foundNode = true
+			foundNode = true
 
-				err = t.setLabelValue(ctx, &agent, ctlrutils.HardwarePluginRefLabel, t.hwpluginClient.GetHardwarePluginRef())
-				if err != nil {
-					return err
-				}
-
-				err = t.setLabelValue(ctx, &agent, ctlrutils.HardwareManagerNodeIdLabel, string(bmh.UID))
-				if err != nil {
-					return err
-				}
-
-				break
+			err = t.setLabelValue(ctx, &agent, ctlrutils.HardwarePluginRefLabel, t.hwpluginClient.GetHardwarePluginRef())
+			if err != nil {
+				return err
 			}
+
+			err = t.setLabelValue(ctx, &agent, ctlrutils.HardwareManagerNodeIdLabel, string(bmh.UID))
+			if err != nil {
+				return err
+			}
+
+			break
 		}
 		if !foundNode {
 			t.logger.WarnContext(

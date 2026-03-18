@@ -43,7 +43,11 @@ func collectNodeDetails(ctx context.Context, c client.Client, nodes *[]hwmgrplug
 			Interfaces:     interfaces,
 		}
 
-		if bmh := ctlrutils.GetBareMetalHostForAllocatedNode(ctx, c, node.Id); bmh != nil {
+		bmh, err := ctlrutils.GetBareMetalHostForAllocatedNode(ctx, c, node.Id)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get BareMetalHost: %w", err)
+		}
+		if bmh != nil {
 			tmpNode.HwMgrNodeId = bmh.Name
 			tmpNode.HwMgrNodeNs = bmh.Namespace
 		}

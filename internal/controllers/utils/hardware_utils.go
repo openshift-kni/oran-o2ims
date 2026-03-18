@@ -15,7 +15,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -61,40 +60,12 @@ func GetBootMacAddress(interfaces []*pluginsv1alpha1.Interface, bootIfaceLabel s
 	return "", fmt.Errorf("no boot interface found; missing interface with label %q", bootIfaceLabel)
 }
 
-// GetBareMetalHostFromHostname retrieves the BareMetalHost that matches the given hostname
-func GetBareMetalHostFromHostname(ctx context.Context, c client.Client, hostname string) (*metal3v1alpha1.BareMetalHost, error) {
-
-	bmhList := &metal3v1alpha1.BareMetalHostList{}
-	opts := []client.ListOption{
-		client.MatchingFields{"status.hardware.hostname": hostname},
-	}
-
-	if err := RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
-		return c.List(ctx, bmhList, opts...)
-	}); err != nil {
-		return nil, fmt.Errorf("failed to list BareMetalHosts: %w", err)
-	}
-
-	var matchedBMH *metal3v1alpha1.BareMetalHost
-	for _, bmh := range bmhList.Items {
-		if bmh.Status.HardwareDetails != nil && bmh.Status.HardwareDetails.Hostname == hostname {
-			if matchedBMH != nil {
-				return nil, fmt.Errorf("multiple BareMetalHosts found with hostname %s", hostname)
-			}
-			matchedBMH = bmh.DeepCopy()
-		}
-	}
-
-	if matchedBMH == nil {
-		return nil, fmt.Errorf("no BareMetalHost found with hostname %s", hostname)
-	}
-
-	return matchedBMH, nil
-}
-
-func GetBareMetalHostForAllocatedNode(ctx context.Context, c client.Client, allocatedNodeID string) *metal3v1alpha1.BareMetalHost {
+// GetBareMetalHostForAllocatedNode returns the BareMetalHost labeled with the
+// given allocatedNodeID. There is a 1:1 mapping between AllocatedNode and BMH,
+// so at most one BMH is expected to carry the label.
+func GetBareMetalHostForAllocatedNode(ctx context.Context, c client.Client, allocatedNodeID string) (*metal3v1alpha1.BareMetalHost, error) {
 	if allocatedNodeID == "" {
-		return nil
+		return nil, nil //nolint:nilnil
 	}
 
 	listOpts := []client.ListOption{
@@ -104,12 +75,15 @@ func GetBareMetalHostForAllocatedNode(ctx context.Context, c client.Client, allo
 	}
 
 	bmhList := &metal3v1alpha1.BareMetalHostList{}
-	if err := c.List(ctx, bmhList, listOpts...); err != nil || len(bmhList.Items) == 0 {
-		return nil
+	if err := c.List(ctx, bmhList, listOpts...); err != nil {
+		return nil, fmt.Errorf("failed to list BareMetalHosts for allocated node %s: %w", allocatedNodeID, err)
 	}
 
-	// return the first BareMetalHost item
-	return &bmhList.Items[0]
+	if len(bmhList.Items) == 0 {
+		return nil, nil //nolint:nilnil
+	}
+
+	return &bmhList.Items[0], nil
 }
 
 // copyHwMgrPluginBMCSecret copies the BMC secret from the plugin namespace to the cluster namespace

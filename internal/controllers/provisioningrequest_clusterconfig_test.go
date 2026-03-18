@@ -1800,6 +1800,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 		hwTemplate            = "hwTemplate-v1"
 		managedCluster        = &clusterv1.ManagedCluster{}
 		nodeAllocationRequest = &pluginsv1alpha1.NodeAllocationRequest{}
+		mockHwPluginServer    *MockHardwarePluginServer
 	)
 
 	BeforeEach(func() {
@@ -1907,7 +1908,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			},
 		}
 
-		c = getFakeClientFromObjects(crs...)
+		c, mockHwPluginServer = getFakeClientAndMockServer(crs...)
 
 		// Populate the NodeAllocationRequest without creating it.
 		nodeAllocationRequest = &pluginsv1alpha1.NodeAllocationRequest{
@@ -2054,7 +2055,6 @@ var _ = Describe("addPostProvisioningLabels", func() {
 
 			// Create the NodeAllocationRequest.
 			Expect(c.Create(ctx, nodeAllocationRequest)).To(Succeed())
-			testutils.CreateNodeResources(ctx, c, nodeAllocationRequest.Name)
 		})
 
 		It("Updates Agent and ManagedCluster labels as expected", func() {
@@ -2097,6 +2097,53 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			}))
 		})
 
+		It("Succeeds with a warning when BMH is not found for an allocated node", func() {
+			// Scenario: The allocated node exists and the agent hostname matches,
+			// but no BMH carries the allocated-node label. The function should
+			// succeed (no error) and skip setting hwMgrNodeId on the agent.
+			agentHostname := "node1.lab.example.com"
+
+			// Set up AllocatedNodeHostMap so the node maps to the agent hostname.
+			ProvReqTask.object.Status.Extensions.AllocatedNodeHostMap = map[string]string{
+				"test-node-1": agentHostname,
+			}
+			Expect(c.Status().Update(ctx, ProvReqTask.object)).To(Succeed())
+
+			// Create an Agent whose hostname matches.
+			agent := &assistedservicev1beta1.Agent{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      AgentName,
+					Namespace: mclName,
+					Labels: map[string]string{
+						"agent-install.openshift.io/clusterdeployment-namespace": mclName,
+					},
+				},
+				Spec: assistedservicev1beta1.AgentSpec{
+					Approved: true,
+					ClusterDeploymentName: &assistedservicev1beta1.ClusterReference{
+						Name: mclName, Namespace: mclName,
+					},
+					Hostname: agentHostname,
+				},
+			}
+			Expect(ProvReqTask.client.Create(ctx, agent)).To(Succeed())
+
+			// Do NOT create a BMH with the allocated-node label.
+
+			// Run the function — it should succeed despite the missing BMH.
+			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
+			Expect(err).ToNot(HaveOccurred())
+
+			// The agent should have the templateArtifacts label but NOT
+			// the hardwarePluginRef or hwMgrNodeId labels.
+			err = ProvReqTask.client.Get(ctx, types.NamespacedName{Name: AgentName, Namespace: mclName}, agent)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(agent.GetLabels()).To(Equal(map[string]string{
+				utils.ClusterTemplateArtifactsLabel:                      "57b39bda-ac56-4143-9b10-d1a71517d04f",
+				"agent-install.openshift.io/clusterdeployment-namespace": mclName,
+			}))
+		})
+
 		It("Fails to get a ClusterTemplate", func() {
 			// Update the ClusterTemplate to be invalid.
 			oranct := &provisioningv1alpha1.ClusterTemplate{}
@@ -2118,111 +2165,164 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				fmt.Sprintf("%s.%s", tName, tVersion)))
 		})
 
-		It("Sets the label for MNO when there are multiple Agents", func() {
-			// Set up AllocatedNodeHostMap for this test
-			ProvReqTask.object.Status.Extensions.AllocatedNodeHostMap = map[string]string{
-				"test-node-1": "some-other-cluster.lab.example.com", // Map test-node-1 to agent2's hostname
+		It("Sets the correct hwMgrNodeId label for MNO even when BMH inspected hostname differs from assigned hostname", func() {
+			// Scenario: 3 allocated nodes with shuffled hostname assignments.
+			// BMH-A has the same inspected hostname as its assigned hostname,
+			// while BMH-B and BMH-C have inspected hostnames that differ from
+			// their assigned hostnames (swapped), simulating same type of nodes
+			// in a resource pool where any node can be selected.
+			type testNode struct {
+				allocatedNodeID   string
+				assignedHostname  string
+				bmhName           string
+				bmhUID            string
+				bmhInspectedHost  string
+				bmcAddress        string
+				bmcCredentialName string
 			}
-			// Update the status in the fake client so the change persists
+
+			nodes := []testNode{
+				{
+					// BMH inspected hostname is the same as the assigned hostname.
+					allocatedNodeID:   "allocated-node-1",
+					assignedHostname:  "node1.lab.example.com",
+					bmhName:           "dell-r740-bmh-A",
+					bmhUID:            "uid-aaaa-1111",
+					bmhInspectedHost:  "node1.lab.example.com",
+					bmcAddress:        "redfish+http://192.168.111.20/redfish/v1/Systems/1",
+					bmcCredentialName: "bmc-secret-A",
+				},
+				{
+					// BMH inspected hostname is different from the assigned hostname.
+					allocatedNodeID:   "allocated-node-2",
+					assignedHostname:  "node2.lab.example.com",
+					bmhName:           "dell-r740-bmh-B",
+					bmhUID:            "uid-bbbb-2222",
+					bmhInspectedHost:  "node3.lab.example.com",
+					bmcAddress:        "redfish+http://192.168.111.21/redfish/v1/Systems/1",
+					bmcCredentialName: "bmc-secret-B",
+				},
+				{
+					// BMH inspected hostname is different from the assigned hostname.
+					allocatedNodeID:   "allocated-node-3",
+					assignedHostname:  "node3.lab.example.com",
+					bmhName:           "dell-r740-bmh-C",
+					bmhUID:            "uid-cccc-3333",
+					bmhInspectedHost:  "node2.lab.example.com",
+					bmcAddress:        "redfish+http://192.168.111.22/redfish/v1/Systems/1",
+					bmcCredentialName: "bmc-secret-C",
+				},
+			}
+
+			// Configure mock server to return 3 allocated nodes.
+			mockAllocatedNodes := make([]hwmgrpluginapi.AllocatedNode, len(nodes))
+			for i, n := range nodes {
+				mockAllocatedNodes[i] = hwmgrpluginapi.AllocatedNode{
+					Id:        n.allocatedNodeID,
+					GroupName: "controller",
+					HwProfile: "dell-r740-bios-v1",
+					Bmc: hwmgrpluginapi.BMC{
+						Address:         n.bmcAddress,
+						CredentialsName: n.bmcCredentialName,
+					},
+					Interfaces: []hwmgrpluginapi.Interface{
+						{Name: "eno1", MacAddress: fmt.Sprintf("AA:BB:CC:DD:EE:%02d", i), Label: constants.BootInterfaceLabel},
+					},
+				}
+			}
+			mockHwPluginServer.SetAllocatedNodes("cluster-1", mockAllocatedNodes)
+
+			// Set up AllocatedNodeHostMap: allocated-node-id -> assigned hostname.
+			hostMap := make(map[string]string, len(nodes))
+			for _, n := range nodes {
+				hostMap[n.allocatedNodeID] = n.assignedHostname
+			}
+			ProvReqTask.object.Status.Extensions.AllocatedNodeHostMap = hostMap
 			Expect(c.Status().Update(ctx, ProvReqTask.object)).To(Succeed())
 
-			// Create 2 Agents in the expected namespace
-			agent2Name := "agent-2-for-cluster-1"
-			agent2Hostname := "some-other-cluster.lab.example.com"
-			agent := &assistedservicev1beta1.Agent{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      AgentName,
-					Namespace: mclName,
-					Labels: map[string]string{
-						"agent-install.openshift.io/clusterdeployment-namespace": mclName,
-					},
-				},
-				Spec: assistedservicev1beta1.AgentSpec{
-					Approved: true,
-					ClusterDeploymentName: &assistedservicev1beta1.ClusterReference{
-						Name:      mclName,
+			// Create 3 Agents, one per assigned hostname.
+			for i, n := range nodes {
+				agent := &assistedservicev1beta1.Agent{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      fmt.Sprintf("agent-%d", i+1),
 						Namespace: mclName,
+						Labels: map[string]string{
+							"agent-install.openshift.io/clusterdeployment-namespace": mclName,
+						},
 					},
-					Hostname: fmt.Sprintf("%s.lab.example.com", mclName),
-				},
+					Spec: assistedservicev1beta1.AgentSpec{
+						Approved: true,
+						ClusterDeploymentName: &assistedservicev1beta1.ClusterReference{
+							Name: mclName, Namespace: mclName,
+						},
+						Hostname: n.assignedHostname,
+					},
+				}
+				Expect(ProvReqTask.client.Create(ctx, agent)).To(Succeed())
 			}
-			agent2 := agent.DeepCopy()
-			agent2.Name = agent2Name
-			agent2.Spec.Hostname = agent2Hostname
-			Expect(ProvReqTask.client.Create(ctx, agent)).To(Succeed())
-			Expect(ProvReqTask.client.Create(ctx, agent2)).To(Succeed())
 
-			// Create the corresponding Node for the 2nd Agent only.
-			masterNodeName2 := "master-node-2"
-			// #nosec G101
-			bmcSecretName2 := "bmc-secret-2"
-			node := testutils.CreateNode(
-				masterNodeName2, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1",
-				"bmc-secret", "controller", constants.DefaultNamespace, mclName, nil)
-			node.Status.Hostname = agent2Hostname
-			secrets := testutils.CreateSecrets([]string{bmcSecretName2}, constants.DefaultNamespace)
-			testutils.CreateResources(ctx, c, []*pluginsv1alpha1.AllocatedNode{node}, secrets)
-
-			// Create the corresponding BareMetalHost that the function will look for
-			bmhUID := "f47ac10b-58cc-4372-a567-0e02b2c3d479" // Fixed UUID for testing
-			bmh := &metal3v1alpha1.BareMetalHost{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      masterNodeName2,
-					Namespace: constants.DefaultNamespace,
-					UID:       types.UID(bmhUID),
-				},
-				Spec: metal3v1alpha1.BareMetalHostSpec{
-					BMC: metal3v1alpha1.BMCDetails{
-						Address:         "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1",
-						CredentialsName: bmcSecretName2,
+			// Create 3 BMHs. Each BMH's allocated-node label points to the
+			// corresponding AllocatedNode Id. The inspected hostname may or
+			// may not match the assigned hostname.
+			for _, n := range nodes {
+				bmh := &metal3v1alpha1.BareMetalHost{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      n.bmhName,
+						Namespace: constants.DefaultNamespace,
+						UID:       types.UID(n.bmhUID),
+						Labels: map[string]string{
+							utils.AllocatedNodeLabel: n.allocatedNodeID,
+						},
 					},
-				},
-				Status: metal3v1alpha1.BareMetalHostStatus{
-					HardwareDetails: &metal3v1alpha1.HardwareDetails{
-						Hostname: agent2Hostname, // This is what the function looks for
+					Spec: metal3v1alpha1.BareMetalHostSpec{
+						BMC: metal3v1alpha1.BMCDetails{
+							Address:         n.bmcAddress,
+							CredentialsName: n.bmcCredentialName,
+						},
 					},
-				},
+					Status: metal3v1alpha1.BareMetalHostStatus{
+						HardwareDetails: &metal3v1alpha1.HardwareDetails{
+							Hostname: n.bmhInspectedHost,
+						},
+					},
+				}
+				Expect(c.Create(ctx, bmh)).To(Succeed())
 			}
-			Expect(c.Create(ctx, bmh)).To(Succeed())
 
 			// Run the function.
 			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
 			Expect(err).To(Not(HaveOccurred()))
-			// Check that both agents have the expected labels.
-			listOpts := []client.ListOption{
-				client.MatchingLabels{
-					"agent-install.openshift.io/clusterdeployment-namespace": managedCluster.Name,
-				},
-				client.InNamespace(managedCluster.Name),
+
+			// Build expected mapping: assigned hostname -> BMH UID.
+			expectedBmhUID := make(map[string]string, len(nodes))
+			for _, n := range nodes {
+				expectedBmhUID[n.assignedHostname] = n.bmhUID
 			}
+
+			// Verify each agent got the correct hwMgrNodeId label.
 			agents := &assistedservicev1beta1.AgentList{}
-			err = ProvReqTask.client.List(ctx, agents, listOpts...)
-			Expect(err).To(Not(HaveOccurred()))
-			Expect(len(agents.Items)).To(Equal(2))
-			checkedAgents := 0
+			Expect(ProvReqTask.client.List(ctx, agents,
+				client.MatchingLabels{"agent-install.openshift.io/clusterdeployment-namespace": mclName},
+				client.InNamespace(mclName),
+			)).To(Succeed())
+			Expect(agents.Items).To(HaveLen(3))
+
 			for _, agent := range agents.Items {
-				if agent.Name == agent2Name {
-					checkedAgents += 1
-					Expect(agent.Labels).To(Equal(map[string]string{
-						utils.ClusterTemplateArtifactsLabel:                      "57b39bda-ac56-4143-9b10-d1a71517d04f",
-						"agent-install.openshift.io/clusterdeployment-namespace": mclName,
-						"clcm.openshift.io/hardwarePluginRef":                    utils.UnitTestHwPluginRef,
-						"clcm.openshift.io/hwMgrNodeId":                          bmhUID,
-					}))
-				}
-				if agent.Name == AgentName {
-					checkedAgents += 1
-					Expect(agents.Items[1].Labels).To(Equal(map[string]string{
-						utils.ClusterTemplateArtifactsLabel:                      "57b39bda-ac56-4143-9b10-d1a71517d04f",
-						"agent-install.openshift.io/clusterdeployment-namespace": mclName,
-					}))
-				}
+				Expect(agent.Labels).To(HaveKeyWithValue(
+					utils.ClusterTemplateArtifactsLabel, "57b39bda-ac56-4143-9b10-d1a71517d04f"))
+				Expect(agent.Labels).To(HaveKeyWithValue(
+					"clcm.openshift.io/hardwarePluginRef", utils.UnitTestHwPluginRef))
+				Expect(agent.Labels).To(HaveKeyWithValue(
+					"clcm.openshift.io/hwMgrNodeId", expectedBmhUID[agent.Spec.Hostname]),
+					fmt.Sprintf("agent %s (hostname %s) should have hwMgrNodeId=%s",
+						agent.Name, agent.Spec.Hostname, expectedBmhUID[agent.Spec.Hostname]))
 			}
-			Expect(checkedAgents).To(Equal(len(agents.Items)))
 		})
 
 		It("Fails for multiple Agents with unexpected labels", func() {
-			// Create 2 Agents in the expected namespace
+			// Create an Agent whose clusterdeployment-namespace label
+			// doesn't match the ManagedCluster name, so the agent list
+			// query returns no results.
 			agent := &assistedservicev1beta1.Agent{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      AgentName,
@@ -2241,17 +2341,6 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				},
 			}
 			Expect(ProvReqTask.client.Create(ctx, agent)).To(Succeed())
-
-			// Create the corresponding Node.
-			masterNodeName2 := "master-node-2"
-			// #nosec G101
-			bmcSecretName2 := "bmc-secret-2"
-			node := testutils.CreateNode(
-				masterNodeName2, "idrac-virtualmedia+https://10.16.2.1/redfish/v1/Systems/System.Embedded.1",
-				"bmc-secret", "controller", constants.DefaultNamespace, mclName, nil)
-			node.Status.Hostname = "some-other-cluster.lab.example.com"
-			secrets := testutils.CreateSecrets([]string{bmcSecretName2}, constants.DefaultNamespace)
-			testutils.CreateResources(ctx, c, []*pluginsv1alpha1.AllocatedNode{node}, secrets)
 
 			// Run the function.
 			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)

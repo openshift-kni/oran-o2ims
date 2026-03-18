@@ -37,7 +37,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
@@ -2054,18 +2053,6 @@ func (t *reconcilerTask) updateInventoryDeploymentStatus(ctx context.Context) er
 	}
 
 	return nil
-}
-
-// SetupBareMetalHostIndexes registers field indexes for BareMetalHost resources.
-func SetupBareMetalHostIndexer(ctx context.Context, mgr ctrl.Manager) error {
-	// nolint: wrapcheck
-	return mgr.GetFieldIndexer().IndexField(ctx, &metal3v1alpha1.BareMetalHost{}, "status.hardware.hostname", func(obj client.Object) []string {
-		bmh := obj.(*metal3v1alpha1.BareMetalHost)
-		if bmh.Status.HardwareDetails != nil && bmh.Status.HardwareDetails.Hostname != "" {
-			return []string{bmh.Status.HardwareDetails.Hostname}
-		}
-		return nil
-	})
 }
 
 // SetupWithManager sets up the controller with the Manager.
