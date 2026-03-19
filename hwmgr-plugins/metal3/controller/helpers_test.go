@@ -1288,6 +1288,41 @@ var _ = Describe("Helpers", func() {
 				Expect(result[0].NodeGroupData.Name).To(Equal("controller"))
 			})
 		})
+
+		Describe("getDesiredHwProfile", func() {
+			It("should return the hwProfile for a matching group name", func() {
+				nar := &pluginsv1alpha1.NodeAllocationRequest{
+					Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+						NodeGroup: []pluginsv1alpha1.NodeGroup{
+							{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "controller", HwProfile: "profile-A"}},
+							{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", HwProfile: "profile-B"}},
+						},
+					},
+				}
+				Expect(getDesiredHwProfile(nar, "controller")).To(Equal("profile-A"))
+				Expect(getDesiredHwProfile(nar, "worker")).To(Equal("profile-B"))
+			})
+
+			It("should return empty string when group is not found", func() {
+				nar := &pluginsv1alpha1.NodeAllocationRequest{
+					Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+						NodeGroup: []pluginsv1alpha1.NodeGroup{
+							{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "controller", HwProfile: "profile-A"}},
+						},
+					},
+				}
+				Expect(getDesiredHwProfile(nar, "nonexistent")).To(BeEmpty())
+			})
+
+			It("should return empty string for empty node groups", func() {
+				nar := &pluginsv1alpha1.NodeAllocationRequest{
+					Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+						NodeGroup: []pluginsv1alpha1.NodeGroup{},
+					},
+				}
+				Expect(getDesiredHwProfile(nar, "controller")).To(BeEmpty())
+			})
+		})
 	})
 
 	// Skip complex integration tests that require extensive mocking

@@ -235,6 +235,17 @@ func findNodeConfigRequested(nodelist *pluginsv1alpha1.AllocatedNodeList) *plugi
 	return nil
 }
 
+// getDesiredHwProfile returns the desired hwProfile for a given group name from the NodeAllocationRequest spec.
+// Returns empty string if the group is not found.
+func getDesiredHwProfile(nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest, groupName string) string {
+	for _, group := range nodeAllocationRequest.Spec.NodeGroup {
+		if group.NodeGroupData.Name == groupName {
+			return group.NodeGroupData.HwProfile
+		}
+	}
+	return ""
+}
+
 // getGroupsSortedByRole returns NodeGroups sorted master-first, preserving spec order within same role.
 func getGroupsSortedByRole(nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) []pluginsv1alpha1.NodeGroup {
 	var groupPriority = func(role string) int {
@@ -655,10 +666,47 @@ func handleNodeAllocationRequestConfiguring(
 	// STEP 1: If any node is already in the config-in-progress state, process it for completion.
 	node := findNodeConfigInProgress(nodelist)
 	if node != nil {
-		logger.InfoContext(ctx, "Node found with configuring in progress, handling node for completion", slog.String("node", node.Name))
-		res, err := handleNodeInProgressUpdate(ctx, c, noncachedClient, logger, pluginNamespace, node, nodeAllocationRequest)
-		if err != nil || res.Requeue || res.RequeueAfter > 0 {
-			return res, nodelist, err
+		// Check if the desired profile has changed while this update was in progress.
+		// If so, abandon the current update and let Step 3 initiate the new profile —
+		// but only if metal3 is not actively processing the update (servicing/preparing).
+		desiredProfile := getDesiredHwProfile(nodeAllocationRequest, node.Spec.GroupName)
+		if desiredProfile != "" && desiredProfile != node.Spec.HwProfile {
+			bmh, bmhErr := getBMHForNode(ctx, noncachedClient, node)
+			if bmhErr != nil {
+				return hwmgrutils.RequeueWithShortInterval(), nodelist,
+					fmt.Errorf("failed to get BMH for AllocatedNode %s: %w", node.Name, bmhErr)
+			}
+
+			// Do not interrupt metal3 while it is actively applying updates
+			if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusServicing ||
+				bmh.Status.Provisioning.State == metal3v1alpha1.StatePreparing {
+				logger.InfoContext(ctx, "Desired profile changed but metal3 is actively processing the current update, waiting for completion",
+					slog.String("node", node.Name),
+					slog.String("currentProfile", node.Spec.HwProfile),
+					slog.String("desiredProfile", desiredProfile),
+					slog.String("bmhOperationalStatus", string(bmh.Status.OperationalStatus)),
+					slog.String("bmhProvisioningState", string(bmh.Status.Provisioning.State)))
+				return hwmgrutils.RequeueWithMediumInterval(), nodelist, nil
+			}
+
+			logger.InfoContext(ctx, "Desired profile changed during in-progress update, abandoning current update",
+				slog.String("node", node.Name),
+				slog.String("currentProfile", node.Spec.HwProfile),
+				slog.String("desiredProfile", desiredProfile))
+			if err := clearConfigAnnotationWithPatch(ctx, c, node); err != nil {
+				return ctrl.Result{}, nodelist, fmt.Errorf("failed to clear config annotation on node %s: %w", node.Name, err)
+			}
+			// Clear BMH update-needed annotations to stop the stale update
+			bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+			_ = updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation, BiosUpdateNeededAnnotation, "", OpRemove)
+			_ = updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation, FirmwareUpdateNeededAnnotation, "", OpRemove)
+			// Fall through to Step 3 which will pick up the new profile
+		} else {
+			logger.InfoContext(ctx, "Node found with configuring in progress, handling node for completion", slog.String("node", node.Name))
+			res, err := handleNodeInProgressUpdate(ctx, c, noncachedClient, logger, pluginNamespace, node, nodeAllocationRequest)
+			if err != nil || res.Requeue || res.RequeueAfter > 0 {
+				return res, nodelist, err
+			}
 		}
 	}
 
@@ -666,10 +714,19 @@ func handleNodeAllocationRequestConfiguring(
 	// drive node reboot and handle node transition from updated-needed to config-in-progress.
 	node = findNodeConfigRequested(nodelist)
 	if node != nil {
-		logger.InfoContext(ctx, "Node found with config requested, handling node for transition", slog.String("node", node.Name))
-		res, err := handleTransitionNode(ctx, c, noncachedClient, logger, pluginNamespace, node, true)
-		if err != nil || res.Requeue || res.RequeueAfter > 0 {
-			return res, nodelist, err
+		// Check if the desired profile has changed since this update was requested.
+		if desiredProfile := getDesiredHwProfile(nodeAllocationRequest, node.Spec.GroupName); desiredProfile != "" && desiredProfile != node.Spec.HwProfile {
+			logger.InfoContext(ctx, "Desired profile changed for node with config requested, skipping to new profile",
+				slog.String("node", node.Name),
+				slog.String("currentProfile", node.Spec.HwProfile),
+				slog.String("desiredProfile", desiredProfile))
+			// Fall through to Step 3 which will pick up the new profile
+		} else {
+			logger.InfoContext(ctx, "Node found with config requested, handling node for transition", slog.String("node", node.Name))
+			res, err := handleTransitionNode(ctx, c, noncachedClient, logger, pluginNamespace, node, true)
+			if err != nil || res.Requeue || res.RequeueAfter > 0 {
+				return res, nodelist, err
+			}
 		}
 	}
 
