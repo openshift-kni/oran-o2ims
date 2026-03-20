@@ -32,134 +32,98 @@ policies:
 # CATALOG SOURCE - DISCONNECTED REGISTRY
 - name: v1-catalog-source-policy
   manifests:
-    - path: source-crs/DefaultCatsrc.yaml
+    - path: source-crs/disconnected-registry/DefaultCatsrc.yaml
       patches:
       - metadata:
           name: redhat-operators-disconnected
         spec:
           displayName: disconnected-redhat-operators
-          image: registry.example.com:5000/disconnected-redhat-operators/disconnected-redhat-operator-index:v4.17
+          image: registry.example.com:5000/disconnected-redhat-operators/disconnected-redhat-operator-index:v4.21
 # SUBSCRIPTIONS
 - name: v1-subscriptions-policy
   manifests:
     # Cluster Logging operator
-    - path: source-crs/ClusterLogNS.yaml
-    - path: source-crs/ClusterLogOperGroup.yaml
-    - path: source-crs/ClusterLogSubscription.yaml
+    - path: source-crs/cluster-logging/ClusterLogNS.yaml
+    - path: source-crs/cluster-logging/ClusterLogOperGroup.yaml
+    - path: source-crs/cluster-logging/ClusterLogSubscription.yaml
       patches:
       - spec:
           source: redhat-operators
           installPlanApproval:
             '{{hub $configMap:=(lookup "v1" "ConfigMap" "" (printf "%s-pg" .ManagedClusterName)) hub}}{{hub dig "data" "install-plan-approval" "Manual" $configMap hub}}'
-    - path: source-crs/ClusterLogOperatorStatus.yaml
-    - path: source-crs/ClusterLogServiceAccount.yaml
-    - path: source-crs/ClusterLogServiceAccountAuditBinding.yaml
-    - path: source-crs/ClusterLogServiceAccountInfrastructureBinding.yaml
+    - path: source-crs/cluster-logging/ClusterLogOperatorStatus.yaml
+    - path: source-crs/cluster-logging/ClusterLogServiceAccount.yaml
+    - path: source-crs/cluster-logging/ClusterLogServiceAccountAuditBinding.yaml
+    - path: source-crs/cluster-logging/ClusterLogServiceAccountInfrastructureBinding.yaml
     # PTP operator
-    - path: source-crs/PtpSubscriptionNS.yaml
-    - path: source-crs/PtpSubscription.yaml
+    - path: source-crs/ptp-operator/PtpSubscriptionNS.yaml
+    - path: source-crs/ptp-operator/PtpSubscription.yaml
       patches:
       - spec:
           source: redhat-operators
           installPlanApproval:
             '{{hub $configMap:=(lookup "v1" "ConfigMap" "" (printf "%s-pg" .ManagedClusterName)) hub}}{{hub or (index $configMap.data "install-plan-approval") "Manual" hub}}'
-    - path: source-crs/PtpSubscriptionOperGroup.yaml
-    - path: source-crs/PtpOperatorStatus.yaml
+    - path: source-crs/ptp-operator/PtpSubscriptionOperGroup.yaml
+    - path: source-crs/ptp-operator/PtpOperatorStatus.yaml
     # SRIOV operator
-    - path: source-crs/SriovSubscriptionNS.yaml
-    - path: source-crs/SriovSubscriptionOperGroup.yaml
-    - path: source-crs/SriovSubscription.yaml
+    - path: source-crs/sriov-operator/SriovSubscriptionNS.yaml
+    - path: source-crs/sriov-operator/SriovSubscriptionOperGroup.yaml
+    - path: source-crs/sriov-operator/SriovSubscription.yaml
       patches:
       - spec:
           source: redhat-operators
           installPlanApproval:
             '{{hub $configMap:=(lookup "v1" "ConfigMap" "" (printf "%s-pg" .ManagedClusterName)) hub}}{{hub dig "data" "install-plan-approval" "Manual" $configMap hub}}'
-    - path: source-crs/SriovOperatorStatus.yaml
+    - path: source-crs/sriov-operator/SriovOperatorStatus.yaml
     # SRIOV Accelerator
-    - path: source-crs/AcceleratorsNS.yaml
-    - path: source-crs/AcceleratorsOperGroup.yaml
-    - path: source-crs/AcceleratorsSubscription.yaml
+    - path: source-crs/sriov-fec-operator/AcceleratorsNS.yaml
+    - path: source-crs/sriov-fec-operator/AcceleratorsOperGroup.yaml
+    - path: source-crs/sriov-fec-operator/AcceleratorsSubscription.yaml
       patches:
       - spec:
           channel: "stable"
           source: certified-operators
           installPlanApproval:
             '{{hub $configMap:=(lookup "v1" "ConfigMap" "" (printf "%s-pg" .ManagedClusterName)) hub}}{{hub dig "data" "install-plan-approval" "Manual" $configMap hub}}'
-    - path: source-crs/AcceleratorsOperatorStatus.yaml
+    - path: source-crs/sriov-fec-operator/AcceleratorsOperatorStatus.yaml
     # LCA
-    - path: source-crs/LcaSubscriptionNS.yaml
-    - path: source-crs/LcaSubscriptionOperGroup.yaml
-    - path: source-crs/LcaSubscription.yaml
+    - path: source-crs/lca/LcaSubscriptionNS.yaml
+    - path: source-crs/lca/LcaSubscriptionOperGroup.yaml
+    - path: source-crs/lca/LcaSubscription.yaml
       patches:
       - spec:
           source: redhat-operators
           installPlanApproval:
             '{{hub $configMap:=(lookup "v1" "ConfigMap" "" (printf "%s-pg" .ManagedClusterName)) hub}}{{hub dig "data" "install-plan-approval" "Manual" $configMap hub}}'
-    - path: source-crs/LcaSubscriptionOperGroup.yaml
     # OADP
-    - path: source-crs/OadpSubscriptionNS.yaml
-    - path: source-crs/OadpSubscriptionOperGroup.yaml
-    - path: source-crs/OadpSubscription.yaml
+    - path: source-crs/data-protection/OadpSubscriptionNS.yaml
+    - path: source-crs/data-protection/OadpSubscriptionOperGroup.yaml
+    - path: source-crs/data-protection/OadpSubscription.yaml
       patches:
       - spec:
           source: redhat-operators
           installPlanApproval:
             '{{hub $configMap:=(lookup "v1" "ConfigMap" "" (printf "%s-pg" .ManagedClusterName)) hub}}{{hub dig "data" "install-plan-approval" "Manual" $configMap hub}}'
-    - path: source-crs/OadpOperatorStatus.yaml
+    - path: source-crs/data-protection/OadpOperatorStatus.yaml
     # Local storage operator
-    - path: source-crs/StorageNS.yaml
-    - path: source-crs/StorageOperGroup.yaml
-    - path: source-crs/StorageSubscription.yaml
+    - path: source-crs/storage-lso/StorageNS.yaml
+    - path: source-crs/storage-lso/StorageOperGroup.yaml
+    - path: source-crs/storage-lso/StorageSubscription.yaml
       patches:
       - spec:
           source: redhat-operators
           installPlanApproval:
             '{{hub $configMap:=(lookup "v1" "ConfigMap" "" (printf "%s-pg" .ManagedClusterName)) hub}}{{hub dig "data" "install-plan-approval" "Manual" $configMap hub}}'
-    - path: source-crs/StorageOperatorStatus.yaml
+    - path: source-crs/storage-lso/StorageOperatorStatus.yaml
 # CONFIGURATION POLICY
 - name: v1-config-policy
   manifests:
-    - path: source-crs/DisableOLMPprof.yaml
-    - path: source-crs/DisableSnoNetworkDiag.yaml
+    - path: source-crs/cluster-tuning/DisableOLMPprof.yaml
+    - path: source-crs/disabling-network-diagnostics/DisableSnoNetworkDiag.yaml
     # REDUCE FOOTPRINT
-    - path: source-crs/ReduceMonitoringFootprint.yaml
-      patches:
-      - data:
-          config.yaml: |
-            alertmanagerMain:
-              enabled: false
-            nodeExporter:
-              collectors:
-                buddyinfo: {}
-                cpufreq: {}
-                ksmd: {}
-                mountstats: {}
-                netclass: {}
-                netdev: {}
-                processes: {}
-                systemd: {}
-                tcpstat: {}
-            prometheusK8s:
-              additionalAlertmanagerConfigs:
-              - apiVersion: v2
-                bearerToken:
-                  key: token
-                  name: observability-alertmanager-accessor
-                scheme: https
-                staticConfigs:
-                - '{{hub fromConfigMap "" "acm-route" "route" hub}}'
-                tlsConfig:
-                  ca:
-                    key: service-ca.crt
-                    name: hub-alertmanager-router-ca
-                  insecureSkipVerify: false
-              externalLabels:
-                managed_cluster: {{hub index .ManagedClusterLabels "clusterID" hub}}
-              retention: 24h
-            telemeterClient:
-              enabled: false
+    - path: source-crs/cluster-tuning/monitoring-configuration/ReduceMonitoringFootprint.yaml
     # PERFORMANCE PROFILE
-    - path: source-crs/PerformanceProfile.yaml
+    - path: source-crs/node-tuning-operator/PerformanceProfile.yaml
       patches:
       - metadata:
           name: openshift-node-performance-profile
@@ -180,7 +144,7 @@ policies:
             $patch: replace
             node-role.kubernetes.io/master: ''
     # TUNED CONFIG
-    - path: source-crs/TunedPerformancePatch.yaml
+    - path: source-crs/node-tuning-operator/TunedPerformancePatch.yaml
       patches:
       - spec:
           recommend:
@@ -189,7 +153,7 @@ policies:
               priority: 19
               profile: performance-patch
     # PTP CONFIG
-    - path: source-crs/PtpOperatorConfig.yaml
+    - path: source-crs/ptp-operator/PtpOperatorConfig.yaml
       patches:
       - spec:
           daemonNodeSelector:
@@ -211,7 +175,7 @@ policies:
               priority: 4
               profile: slave
     # SRIOV OPERATOR CONFIG
-    - path: source-crs/SriovOperatorConfig.yaml
+    - path: source-crs/sriov-operator/SriovOperatorConfig.yaml
       complianceType: musthave
       patches:
       - spec:
@@ -220,7 +184,7 @@ policies:
             node-role.kubernetes.io/master: ""
           disableDrain: true
     # LOCAL STORAGE CONFIG
-    - path: source-crs/StorageLV.yaml
+    - path: source-crs/storage/StorageLV.yaml
       patches:
       - spec:
           storageClassDevices:
@@ -228,12 +192,12 @@ policies:
             volumeMode: Filesystem
             fsType: xfs
             devicePaths: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "storagelv-devicePaths-1" | toLiteral hub}}'
-    - path: source-crs/StorageClass.yaml
+    - path: source-crs/storage-lso/StorageClass.yaml
       patches:
       - metadata:
           name: example-storage-class-1
     # CLUSTER LOGGING
-    - path: source-crs/ClusterLogForwarder.yaml
+    - path: source-crs/cluster-logging/ClusterLogForwarder.yaml
       openapi:
         path: sno-ran-du/schema.openapi
       patches:
@@ -248,14 +212,14 @@ policies:
             # The name is needed for a correct merge with the source-cr.
             name: kafka-output
     # SRIOV
-    - path: source-crs/SriovNetwork.yaml
+    - path: source-crs/sriov-operator/SriovNetwork.yaml
       patches:
       - metadata:
           name: sriov-nw-du-fh
         spec:
           resourceName: du_fh
           vlan: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "sriov-network-vlan-1" | toInt hub}}'
-    - path: source-crs/SriovNetworkNodePolicy.yaml
+    - path: source-crs/sriov-operator/SriovNetworkNodePolicy.yaml
       patches:
       - metadata:
           name: "sriov-nnp-du-fh"
@@ -271,7 +235,7 @@ policies:
           numVfs: 8
           priority: 10
           resourceName: du_fh
-    - path: source-crs/SriovNetwork.yaml
+    - path: source-crs/sriov-operator/SriovNetwork.yaml
       patches:
       - metadata:
           name: sriov-nw-du-mh
@@ -295,7 +259,7 @@ policies:
           priority: 10
           resourceName: du_mh
     # FEC
-    - path: source-crs/SriovFecClusterConfig.yaml
+    - path: source-crs/sriov-fec-operator/SriovFecClusterConfig.yaml
       patches:
       - metadata:
           name: fec-config
@@ -331,7 +295,7 @@ policies:
 #      patches:
 #      - data:
 #          cloud: W2RlZmF1bHRdCmF3c19hY2Nlc3Nfa2V5X2lkPVdicktaSFpFOXZGWEVFemo2RU12CmF3c19zZWNyZXRfYWNjZXNzX2tleT1RRDNmRVZMNzVsOWJpSWswYW9PdlRSc2diN01ZRUlnZmF5bzVzRnlmCg==
-#    - path: source-crs/OadpDataProtectionApplication.yaml
+#    - path: source-crs/data-protection/OadpDataProtectionApplication.yaml
 #      patches:
 #      - spec:
 #          backupLocations:
@@ -350,4 +314,4 @@ policies:
 #              objectStorage:
 #                bucket: ibu
 #                prefix: '{{hub .ManagedClusterName hub}}'
-#    - path: source-crs/OadpBackupStorageLocationStatus.yaml
+#    - path: source-crs/data-protection/OadpBackupStorageLocationStatus.yaml

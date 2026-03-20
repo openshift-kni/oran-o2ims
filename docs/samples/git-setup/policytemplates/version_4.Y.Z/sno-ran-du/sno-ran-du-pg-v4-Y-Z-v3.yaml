@@ -29,46 +29,46 @@ policyDefaults:
 policies:
 - name: v3-subscriptions-policy
   manifests:
-    - path: source-crs/DefaultCatsrc.yaml
+    - path: source-crs/disconnected-registry/DefaultCatsrc.yaml
       patches:
       - metadata:
           name: redhat-operators
         spec:
           displayName: redhat-operators
-          image: registry.redhat.io/redhat/redhat-operator-index:v4.16
+          image: registry.redhat.io/redhat/redhat-operator-index:v4.21
     # Logging operator
-    - path: source-crs/ClusterLogNS.yaml
-    - path: source-crs/ClusterLogOperGroup.yaml
-    - path: source-crs/ClusterLogSubscription.yaml
+    - path: source-crs/cluster-logging/ClusterLogNS.yaml
+    - path: source-crs/cluster-logging/ClusterLogOperGroup.yaml
+    - path: source-crs/cluster-logging/ClusterLogSubscription.yaml
       patches:
       - spec:
           source: redhat-operators
           installPlanApproval:
             '{{hub $configMap:=(lookup "v1" "ConfigMap" "" (printf "%s-pg" .ManagedClusterName)) hub}}{{hub dig "data" "install-plan-approval" "Manual" $configMap hub}}'
-    - path: source-crs/ClusterLogOperatorStatus.yaml
+    - path: source-crs/cluster-logging/ClusterLogOperatorStatus.yaml
     # Ptp operator
-    - path: source-crs/PtpSubscriptionNS.yaml
-    - path: source-crs/PtpSubscription.yaml
+    - path: source-crs/ptp-operator/PtpSubscriptionNS.yaml
+    - path: source-crs/ptp-operator/PtpSubscription.yaml
       patches:
       - spec:
           source: redhat-operators
           installPlanApproval:
             '{{hub $configMap:=(lookup "v1" "ConfigMap" "" (printf "%s-pg" .ManagedClusterName)) hub}}{{hub or (index $configMap.data "install-plan-approval") "Manual" hub}}'
-    - path: source-crs/PtpSubscriptionOperGroup.yaml
-    - path: source-crs/PtpOperatorStatus.yaml
+    - path: source-crs/ptp-operator/PtpSubscriptionOperGroup.yaml
+    - path: source-crs/ptp-operator/PtpOperatorStatus.yaml
     # SRIOV operator
-    - path: source-crs/SriovSubscriptionNS.yaml
-    - path: source-crs/SriovSubscriptionOperGroup.yaml
-    - path: source-crs/SriovSubscription.yaml
+    - path: source-crs/sriov-operator/SriovSubscriptionNS.yaml
+    - path: source-crs/sriov-operator/SriovSubscriptionOperGroup.yaml
+    - path: source-crs/sriov-operator/SriovSubscription.yaml
       patches:
       - spec:
           source: redhat-operators
           installPlanApproval:
             '{{hub $configMap:=(lookup "v1" "ConfigMap" "" (printf "%s-pg" .ManagedClusterName)) hub}}{{hub dig "data" "install-plan-approval" "Manual" $configMap hub}}'
-    - path: source-crs/SriovOperatorStatus.yaml
+    - path: source-crs/sriov-operator/SriovOperatorStatus.yaml
 - name: v3-perf-configuration-policy
   manifests:
-    - path: source-crs/PerformanceProfile-SetSelector.yaml
+    - path: source-crs/node-tuning-operator/PerformanceProfile-SetSelector.yaml
       patches:
       - metadata:
           name: openshift-node-performance-profile
@@ -95,14 +95,14 @@ policies:
             node-role.kubernetes.io/master: ''
 - name: v3-sriov-configuration-policy
   manifests:
-    - path: source-crs/SriovNetwork.yaml
+    - path: source-crs/sriov-operator/SriovNetwork.yaml
       patches:
       - metadata:
           name: sriov-nw-du-fh
         spec:
           resourceName: du_fh
           vlan: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "sriov-network-vlan-1" | toInt hub}}'
-    - path: source-crs/SriovNetworkNodePolicy-SetSelector.yaml
+    - path: source-crs/sriov-operator/SriovNetworkNodePolicy-SetSelector.yaml
       patches:
       - metadata:
           name: sriov-nnp-du-fh
@@ -116,14 +116,14 @@ policies:
           numVfs: 8
           priority: 10
           resourceName: du_fh
-    - path: source-crs/SriovNetwork.yaml
+    - path: source-crs/sriov-operator/SriovNetwork.yaml
       patches:
       - metadata:
           name: sriov-nw-du-mh
         spec:
           resourceName: du_mh
           vlan: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "sriov-network-vlan-2" | toInt hub}}'
-    - path: source-crs/SriovNetworkNodePolicy-SetSelector.yaml
+    - path: source-crs/sriov-operator/SriovNetworkNodePolicy-SetSelector.yaml
       patches:
       - metadata:
           name: sriov-nnp-du-mh
@@ -139,7 +139,7 @@ policies:
           resourceName: du_mh
 - name: v3-tuned-configuration-policy
   manifests:
-    - path: source-crs/TunedPerformancePatch.yaml    
+    - path: source-crs/node-tuning-operator/TunedPerformancePatch.yaml    
       patches:
       - spec:
           profile:

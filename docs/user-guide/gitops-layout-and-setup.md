@@ -40,10 +40,10 @@ git-root/
 Notes
 
 * Keep content versioned by OCP release using the `version_4.Y.Z/` folders so templates and policies align with the target OCP.
-* The content of the `extra-manifest` directory should be copied over from the [cnf-features-deploy extra-manifest](https://github.com/openshift-kni/cnf-features-deploy/tree/master/ztp/source-crs/extra-manifest) repo
+* The content of the `extra-manifest` directory should be copied over from the [telco-reference extra-manifest](https://github.com/openshift-kni/telco-reference/tree/main/telco-ran/configuration/source-crs/extra-manifest) repo
 or extracted from the [ztp-site-generate](https://catalog.redhat.com/software/containers/openshift4/ztp-site-generate-rhel8/6154c29fd2c7f84a4d2edca1) container.
   * ArgoCD will assemble all the extra-manifests into a ConfigMap.
-* The content of the `source-crs` directory should be copied over from the [cnf-features-deploy source-crs](https://github.com/openshift-kni/cnf-features-deploy/tree/master/ztp/source-crs/) repo
+* The content of the `source-crs` directory should be copied over from the [telco-reference source-crs](https://github.com/openshift-kni/telco-reference/tree/main/telco-ran/configuration/source-crs) repo
 or extracted from the [ztp-site-generate](https://catalog.redhat.com/software/containers/openshift4/ztp-site-generate-rhel8/6154c29fd2c7f84a4d2edca1) container.
   * The ACM PGs will reference the source CRs to generate the ACM Policies that will be applied on the spoke cluster(s).
 * Make sure to bring over the `extra-manifest` and `source-crs` corresponding to the OCP release provided in the ClusterTemplate CR.
@@ -65,24 +65,12 @@ the following main samples can be used as a starting example:
 * [PolicyTemplate defaults ConfigMap](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-full-du/policytemplates-defaults-full-du-v1.yaml)
 * [ClusterTemplate](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-full-du/sno-ran-full-du-v4-Y-Z-1.yaml)
 * [Full DU profile ACM Policy Generator](../samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-full-du/sno-ran-full-du-pg-v4-Y-Z-v1.yaml)
-* Observability configuration. This requires the creation of an ACM policy in the
-`open-cluster-management-observability` namespace, as seen in [copy-acm-route-observability-v1.yaml](../samples/git-setup/policytemplates/common/copy-acm-route-observability-v1.yaml).
-This policy will create a ConfigMap containing the acm-route in the same namespace as the ACM policies such that it can be used in the hub templates.
-  * A custom source-cr ([source-cr-observability.yaml](../samples/git-setup/policytemplates/common/source-cr-observability.yaml)) is used. **Each `ztp-<cluster-template-namespace>` namespace must be manually added to the namespace list in this source CR.**
-  * For allowing the creation of this policy in the `open-cluster-management-observability` namespace,
-  the `AppProject` associated to the desired ACM policies needs to also contain the following in
-  its `spec.destinations`:
-
-  ```yaml
-    - namespace: open-cluster-management-observability
-      server: '*'
-  ```
 
 ## Preparation of ArgoCD applications
 
-Preparing the ArgoCD applications for provisioning clusters through the O-Cloud Manager is similar to the [ZTP approach](https://github.com/openshift-kni/cnf-features-deploy/tree/master/ztp/gitops-subscriptions/argocd#preparation-of-hub-cluster-for-ztp), with the following **distinctions**:
+Preparing the ArgoCD applications for provisioning clusters through the O-Cloud Manager is similar to the [ZTP approach](https://github.com/openshift-kni/telco-reference/tree/main/telco-ran/configuration/argocd#preparation-of-hub-cluster-for-ztp), with the following **distinctions**:
 
-* The source path for the ArgoCD Application [clusters](https://github.com/openshift-kni/cnf-features-deploy/blob/master/ztp/gitops-subscriptions/argocd/deployment/clusters-app.yaml) should point to the [clustertemplates](./clustertemplates/) directory.
+* The source path for the ArgoCD Application [clusters](https://github.com/openshift-kni/telco-reference/blob/main/telco-ran/configuration/argocd/deployment/clusters-app.yaml) should point to the [clustertemplates](../samples/git-setup/clustertemplates) directory.
 Additionally, configure `spec.ignoreDifferences` for the `BareMetalHost` kind to ignore the following fields:
 
 ```yaml
@@ -95,9 +83,9 @@ spec:
     kind: BareMetalHost
 ```
 
-* The source path for the ArgoCD Application [policies](https://github.com/openshift-kni/cnf-features-deploy/blob/master/ztp/gitops-subscriptions/argocd/deployment/policies-app.yaml) should point to the [policytemplates](./policytemplates/) directory.
+* The source path for the ArgoCD Application [policies](https://github.com/openshift-kni/telco-reference/blob/main/telco-ran/configuration/argocd/deployment/policies-app.yaml) should point to the [policytemplates](../samples/git-setup/policytemplates) directory.
 
-* The following **additional CRDs** should be added to the [AppProject](https://github.com/openshift-kni/cnf-features-deploy/blob/master/ztp/gitops-subscriptions/argocd/deployment/app-project.yaml), under `spec.clusterResourceWhitelist`:
+* The following **additional CRDs** should be added to the [AppProject](https://github.com/openshift-kni/telco-reference/blob/main/telco-ran/configuration/argocd/deployment/app-project.yaml), under `spec.clusterResourceWhitelist`:
 
 ```yaml
   - group: clcm.openshift.io
