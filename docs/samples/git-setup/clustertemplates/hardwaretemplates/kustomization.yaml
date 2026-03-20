@@ -1,2 +1,4 @@
 resources:
 - sno-ran-du/dell-xr8620t-blue.yaml
+- 3node-ran-du/dell-xr8620t-purple.yaml
+- std-ran-du/dell-r740-green-xr8620t-blue.yaml

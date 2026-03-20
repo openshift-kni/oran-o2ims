@@ -1,20 +1,20 @@
 apiVersion: policy.open-cluster-management.io/v1
 kind: PolicyGenerator
 metadata:
-  name: sno-ran-du-pg-v4-Y-Z-v3
+  name: 3node-ran-du-pg-v4-Y-Z-v1
 policyDefaults:
-  namespace: ztp-sno-ran-du-v4-Y-Z
+  namespace: ztp-3node-ran-du-v4-Y-Z
   # Use an existing placement rule so that placement bindings can be consolidated
   placement:
     # These labels must match the labels set for the ManagedCluster either through the ProvisioningRequest
     # or the ClusterInstance ConfigMap.
     labelSelector:
       cluster-version: "v4-Y-Z"
-      sno-ran-du-policy: "v3"
+      3node-ran-du-policy: "v1"
   policyAnnotations:
     # This annotation contains a comma-separated list of ClusterTemplates (metadata.name) this PG is associated with.
     # This is used for linking the generated root policies to the ClusterTemplate used by the ProvisioningRequest.
-    clustertemplates.clcm.openshift.io/templates: "sno-ran-du.v4-Y-Z-4"
+    clustertemplates.clcm.openshift.io/templates: "3node-ran-du.v4-Y-Z-1"
   remediationAction: enforce
   severity: low
   namespaceSelector:
@@ -27,33 +27,40 @@ policyDefaults:
     noncompliant: 10s
   orderPolicies: true
 policies:
-- name: v3-subscriptions-policy
+# CATALOG SOURCE - DISCONNECTED REGISTRY
+- name: v1-catalog-source-policy
   manifests:
     - path: source-crs/disconnected-registry/DefaultCatsrc.yaml
       patches:
       - metadata:
-          name: redhat-operators
+          name: redhat-operators-disconnected
         spec:
-          displayName: redhat-operators
-          image: registry.redhat.io/redhat/redhat-operator-index:v4.21
-    # Logging operator
+          displayName: disconnected-redhat-operators
+          image: registry.example.com:5000/disconnected-redhat-operators/disconnected-redhat-operator-index:v4.21
+# SUBSCRIPTIONS
+- name: v1-subscriptions-policy
+  manifests:
+    # Cluster Logging operator
     - path: source-crs/cluster-logging/ClusterLogNS.yaml
     - path: source-crs/cluster-logging/ClusterLogOperGroup.yaml
     - path: source-crs/cluster-logging/ClusterLogSubscription.yaml
       patches:
       - spec:
-          source: redhat-operators
+          source: redhat-operators-disconnected
           installPlanApproval:
             '{{hub $configMap:=(lookup "v1" "ConfigMap" "" (printf "%s-pg" .ManagedClusterName)) hub}}{{hub dig "data" "install-plan-approval" "Manual" $configMap hub}}'
     - path: source-crs/cluster-logging/ClusterLogOperatorStatus.yaml
+    - path: source-crs/cluster-logging/ClusterLogServiceAccount.yaml
+    - path: source-crs/cluster-logging/ClusterLogServiceAccountAuditBinding.yaml
+    - path: source-crs/cluster-logging/ClusterLogServiceAccountInfrastructureBinding.yaml
     # Ptp operator
     - path: source-crs/ptp-operator/PtpSubscriptionNS.yaml
     - path: source-crs/ptp-operator/PtpSubscription.yaml
       patches:
       - spec:
-          source: redhat-operators
+          source: redhat-operators-disconnected
           installPlanApproval:
-            '{{hub $configMap:=(lookup "v1" "ConfigMap" "" (printf "%s-pg" .ManagedClusterName)) hub}}{{hub or (index $configMap.data "install-plan-approval") "Manual" hub}}'
+            '{{hub $configMap:=(lookup "v1" "ConfigMap" "" (printf "%s-pg" .ManagedClusterName)) hub}}{{hub dig "data" "install-plan-approval" "Manual" $configMap hub}}'
     - path: source-crs/ptp-operator/PtpSubscriptionOperGroup.yaml
     - path: source-crs/ptp-operator/PtpOperatorStatus.yaml
     # SRIOV operator
@@ -62,22 +69,33 @@ policies:
     - path: source-crs/sriov-operator/SriovSubscription.yaml
       patches:
       - spec:
-          source: redhat-operators
+          source: redhat-operators-disconnected
           installPlanApproval:
             '{{hub $configMap:=(lookup "v1" "ConfigMap" "" (printf "%s-pg" .ManagedClusterName)) hub}}{{hub dig "data" "install-plan-approval" "Manual" $configMap hub}}'
     - path: source-crs/sriov-operator/SriovOperatorStatus.yaml
-- name: v3-perf-configuration-policy
+    # Storage operator
+    - path: source-crs/storage-lso/StorageNS.yaml
+    - path: source-crs/storage-lso/StorageOperGroup.yaml
+    - path: source-crs/storage-lso/StorageSubscription.yaml
+      patches:
+      - spec:
+          source: redhat-operators-disconnected
+          installPlanApproval:
+            '{{hub $configMap:=(lookup "v1" "ConfigMap" "" (printf "%s-pg" .ManagedClusterName)) hub}}{{hub dig "data" "install-plan-approval" "Manual" $configMap hub}}'
+    - path: source-crs/storage-lso/StorageOperatorStatus.yaml
+- name: v1-config-policy
   manifests:
+    - path: source-crs/sriov-operator/SriovOperatorConfig-SetSelector.yaml
+      complianceType: musthave
+      patches:
+      - spec:
+          configDaemonNodeSelector:
+            node-role.kubernetes.io/master: ""
     - path: source-crs/node-tuning-operator/x86_64/PerformanceProfile-SetSelector.yaml
       patches:
       - metadata:
           name: openshift-node-performance-profile
         spec:
-          additionalKernelArgs:
-          - rcupdate.rcu_normal_after_boot=0
-          - vfio_pci.enable_sriov=1
-          - vfio_pci.disable_idle_d3=1
-          - efi=runtime
           cpu:
             # These must be tailored for the specific hardware platform
             isolated: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "cpu-isolated" hub}}'
@@ -87,14 +105,18 @@ policies:
             pages:
               - size: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "hugepages-size" hub}}'
                 count: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "hugepages-count" | toInt hub}}'
-          realTimeKernel:
-            enabled: true
           machineConfigPoolSelector:
             pools.operator.machineconfiguration.openshift.io/master: ""
           nodeSelector:
             node-role.kubernetes.io/master: ''
-- name: v3-sriov-configuration-policy
-  manifests:
+    - path: source-crs/node-tuning-operator/TunedPerformancePatch.yaml    
+      patches:
+      - spec:
+          recommend:
+          - machineConfigLabels:
+              machineconfiguration.openshift.io/role: "master"
+            priority: 18
+            profile: ran-du-performance
     - path: source-crs/sriov-operator/SriovNetwork.yaml
       patches:
       - metadata:
@@ -137,17 +159,7 @@ policies:
           numVfs: 8
           priority: 10
           resourceName: du_mh
-- name: v3-tuned-configuration-policy
-  manifests:
-    - path: source-crs/node-tuning-operator/TunedPerformancePatch.yaml    
-      patches:
-      - spec:
-          recommend:
-          - machineConfigLabels:
-              machineconfiguration.openshift.io/role: "master"
-            priority: 18
-            profile: ran-du-performance
-- name: v3-du-validator-policy
+- name: v1-du-validator-policy
   remediationAction: inform
   # This policy is not re-evaluated after it becomes
   # compliant to reduce resource usage.

@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: Secret
 metadata:
-  name: network-data-dell-xr8620t-sno1
+  name: network-data-dell-xr8620t-node1
   namespace: dell-xr8620t-pool
 type: Opaque
 stringData:
@@ -23,11 +23,12 @@ stringData:
 ---
 apiVersion: v1
 data:
+  # Replace with real BMC credentials before applying.
   password: dGVzdA==
   username: dGVzdA==
 kind: Secret
 metadata:
-  name: bmc-secret-dell-xr8620t-sno1
+  name: bmc-secret-dell-xr8620t-node1
   namespace: dell-xr8620t-pool
 type: Opaque
 ---
@@ -39,7 +40,7 @@ metadata:
     resources.clcm.openshift.io/resourcePoolId: dell-xr8620t-pool
     resourceselector.clcm.openshift.io/server-colour: blue
     resourceselector.clcm.openshift.io/server-type: XR8620t
-    resourceselector.clcm.openshift.io/server-id: dell-xr8620t-sno1
+    resourceselector.clcm.openshift.io/server-id: dell-xr8620t-node1
     resourceselector.clcm.openshift.io/subnet: "192.0.2.0"
     interfacelabel.clcm.openshift.io/boot-interface: ens3f0
     interfacelabel.clcm.openshift.io/data-interface: ens3f1
@@ -50,13 +51,13 @@ metadata:
     resourceinfo.clcm.openshift.io/description: "XR8620t server with Blue label"
     resourceinfo.clcm.openshift.io/partNumber: "00001"
     resourceinfo.clcm.openshift.io/groups: "groupA, groupB"
-  name: dell-xr8620t-sno1
+  name: dell-xr8620t-node1
   namespace: dell-xr8620t-pool
 spec:
   online: false
   bmc:
     address: idrac-virtualmedia+https://198.51.100.10/redfish/v1/Systems/System.Embedded.1
-    credentialsName: bmc-secret-dell-xr8620t-sno1
+    credentialsName: bmc-secret-dell-xr8620t-node1
     disableCertificateVerification: true
   bootMACAddress: 02:00:00:00:00:01
-  preprovisioningNetworkDataName: network-data-dell-xr8620t-sno1
+  preprovisioningNetworkDataName: network-data-dell-xr8620t-node1

@@ -16,6 +16,7 @@ SPDX-License-Identifier: Apache-2.0
   - [Day-2: Firmware Updates on Provisioned Clusters](#day-2-firmware-updates-on-provisioned-clusters)
     - [Triggering a Day-2 Update](#triggering-a-day-2-update)
     - [Day-2 Workflow](#day-2-workflow)
+      - [Per-node sequence](#per-node-sequence)
     - [Monitoring Day-2 Progress](#monitoring-day-2-progress)
   - [Status Conditions Reference](#status-conditions-reference)
   - [Timeouts](#timeouts)
@@ -164,8 +165,6 @@ Key conditions during Day-0 firmware provisioning:
 | `HardwareTemplateRendered` | True | Completed | HardwareTemplate validated and NodeAllocationRequest created |
 | `HardwareProvisioned` | False | InProgress | BMH selection and allocation in progress |
 | `HardwareProvisioned` | True | Completed | All nodes allocated |
-| `HardwareConfigured` | False | InProgress | Firmware/BIOS updates being applied |
-| `HardwareConfigured` | True | Completed | All firmware/BIOS updates applied and validated |
 
 To monitor individual node status, check the AllocatedNode CRs:
 
@@ -202,13 +201,13 @@ spec:
   templateParameters:
     hwTemplateParameters:
       nodeGroupData:
-        controller:
+        master:
           hwProfile: dell-xr8620t-bios-2.6.3-bmc-7.20.30.50
 ```
 
 ```console
 oc patch provisioningrequests.clcm.openshift.io <name> --type merge \
-  -p '{"spec":{"templateParameters":{"hwTemplateParameters":{"nodeGroupData":{"controller":{"hwProfile":"dell-xr8620t-bios-2.6.3-bmc-7.20.30.50"}}}}}}'
+  -p '{"spec":{"templateParameters":{"hwTemplateParameters":{"nodeGroupData":{"master":{"hwProfile":"dell-xr8620t-bios-2.6.3-bmc-7.20.30.50"}}}}}}'
 ```
 
 The O-Cloud Manager detects the change and propagates it through the
@@ -220,36 +219,62 @@ with example status output, see
 
 The Day-2 flow differs from Day-0 in several important ways:
 
-1. **Serial execution** — Nodes are updated one at a time, with master nodes updated
-   before worker nodes. Each node must complete its update and rejoin the cluster before
-   the next node is updated.
-   <!-- TODO: Update when parallel worker node updates are implemented for MNO clusters -->
+1. **Group-priority ordering** — Node groups are processed by role: master group is
+   updated first, then worker groups. A group must fully complete before the next group
+   begins.
 
-2. **Host reboot** — Since the host is running a cluster workload, the plugin creates a
-   `HostUpdatePolicy` CR and adds a `reboot.metal3.io` annotation to the BMH to trigger
-   a controlled reboot after firmware is staged.
+2. **Rolling concurrency** — Master nodes are updated one at a time (serially). Worker
+   nodes can be updated in parallel — `spec.maxUnavailable` from the corresponding
+   MachineConfigPool (MCP) on the spoke cluster determines how many nodes in the group
+   can be updated concurrently. If the MCP is not found or `maxUnavailable` is not set,
+   the default is 1 (serial update).
 
-3. **Node readiness check** — After reboot, the plugin waits for the Kubernetes node to
-   rejoin the cluster and reach Ready state before proceeding to the next node.
+3. **Cordon and drain** — Before applying firmware to a node on a multi-node cluster,
+   the plugin cordons the Kubernetes node and drains its workloads to ensure pods are
+   safely evicted before the  host reboots. On **single-node (SNO) clusters**, cordon and
+   drain are skipped since there is no other node to receive the evicted workloads.
 
-The detailed sequence for each node:
+4. **Host reboot** — The plugin creates a `HostUpdatePolicy` CR and adds a
+   `reboot.metal3.io` annotation to the BMH to trigger a controlled reboot after firmware
+   is staged.
 
-1. **Diff computation** — The plugin compares the new HardwareProfile against the host's
-   current firmware/BIOS state (same as Day-0).
+5. **Node readiness and uncordon** — After reboot, the plugin waits for the Kubernetes
+   node to rejoin the cluster and reach Ready state. On multi-node clusters, the node is
+   then uncordoned to allow workloads to be scheduled back. This frees a slot in the
+   rolling concurrency window so the next node can begin its update.
 
-2. **Metal3 CR updates** — Updates `HostFirmwareSettings` and/or
-   `HostFirmwareComponents` with the new desired state.
+#### Per-node sequence
 
-3. **Change validation** — Waits for Metal3 BMO to detect and validate the changes
+For each node selected for hardware update:
+
+1. **Pending marking** — When a profile change is detected, all nodes whose current
+   profile does not match the target are marked `ConfigurationUpdatePending`.
+
+2. **Diff computation** — The plugin compares the new HardwareProfile against the host's
+   current firmware/BIOS state (same as Day-0). Nodes whose firmware already matches the
+   target profile are marked `ConfigurationApplied` without further action.
+
+3. **Cordon and drain** (MNO only) — The Kubernetes node is cordoned and drained.
+   Drain failures are retried on subsequent reconciliation cycles.
+
+4. **Metal3 CR updates** — Updates `HostFirmwareSettings` and/or
+   `HostFirmwareComponents` with the new desired state. The node is marked
+   `ConfigurationUpdateRequested` to indicate the update is actively in progress.
+
+5. **Change validation** — Waits for Metal3 BMO to detect and validate the changes
    (via `ChangeDetected` and `Valid` status conditions on the Metal3 CRs).
 
-4. **Reboot trigger** — Adds the `reboot.metal3.io` annotation to the BMH, causing
-   BMO to apply the firmware and reboot the host.
+6. **Reboot trigger** — Adds the `reboot.metal3.io` annotation to the BMH, causing
+   BMO to apply the firmware updates and reboot the host. The plugin monitors the BMH
+   status for completion.
 
-5. **Post-reboot validation** — Validates that firmware versions and BIOS settings match
-   the new profile and that the Kubernetes node is Ready.
+7. **Post-reboot validation** — Validates that firmware versions and BIOS settings match
+   the new profile.
 
-6. **Next node** — Proceeds to the next node in the group.
+8. **Completion** — The plugin waits for the Kubernetes node to rejoin the cluster and
+   reach Ready state. On multi-node clusters the node is then uncordoned so workloads
+   can be scheduled back, freeing a slot for the next node. The node is marked
+   `ConfigurationApplied` and `status.hwProfile` is set to the new profile.
 
 ### Monitoring Day-2 Progress
 
@@ -266,6 +291,31 @@ oc get provisioningrequests.clcm.openshift.io <name> -o jsonpath='{.status.condi
 | `HardwareConfigured` | False | TimedOut | Update exceeded timeout |
 | `HardwareConfigured` | False | Failed | Update failed on a node |
 
+For SNO clusters, the Configured condition message includes the AllocatedNode name:
+
+```text
+Configuration update in progress (AllocatedNode metal3-hwplugin-sno1-dell-xr8620t-pool-dell-xr8620t-node1)
+```
+
+On failure, the message includes the failed node and error details:
+
+```text
+Configuration update failed (AllocatedNode metal3-hwplugin-sno1-dell-xr8620t-pool-dell-xr8620t-node1: BMH Servicing Error)
+```
+
+For multi-node clusters, the message reports per-group progress:
+
+```text
+Configuration update in progress (group master: 1/3 completed, group worker: 0/2 completed)
+Configuration update in progress (group master: 3/3 completed, group worker: 2/2 completed)
+```
+
+On failure, the message reports per-group failed status:
+
+```text
+Configuration update failed (group master: 3/3 completed, group worker: 1/2 failed)
+```
+
 The NodeAllocationRequest `Configured` condition provides more detail:
 
 ```console
@@ -275,8 +325,12 @@ oc get nodeallocationrequests.plugins.clcm.openshift.io -A -o yaml
 Individual AllocatedNode CRs show per-node status:
 
 ```console
-oc get allocatednodes.plugins.clcm.openshift.io -A \
-  -o custom-columns=NAME:.metadata.name,HWPROFILE:.status.hwProfile,CONFIGURED:.status.conditions[*].reason
+oc get allocatednodes.plugins.clcm.openshift.io -A -o json | \
+  jq -r '["NAME","CURRENTPROFILE","REASON","DETAILS"],
+         (.items[] | [.metadata.name, .status.hwProfile,
+           (.status.conditions[]? | select(.type=="Configured") | .reason),
+           (.status.conditions[]? | select(.type=="Configured") | .message)]) | @tsv' | \
+  column -t -s $'\t'
 ```
 
 When a node's `status.hwProfile` matches `spec.hwProfile`, the update for that node is
@@ -303,25 +357,56 @@ oc get hostfirmwaresettings.metal3.io <bmh-name> -n <bmh-namespace> \
 | `HardwareTemplateRendered` | Day-0 | HardwareTemplate validated and NodeAllocationRequest created |
 | `HardwareProvisioned` | Day-0 | BMH allocation and initial provisioning status |
 | `HardwareNodeConfigApplied` | Day-0 | Node configuration (BMC, MAC addresses) applied to ClusterInstance |
-| `HardwareConfigured` | Day-0 and Day-2 | Firmware/BIOS configuration status |
+| `HardwareConfigured` | Day-2 | Firmware/BIOS configuration status |
+
+### NodeAllocationRequest Conditions
+
+| Condition | Description |
+|---|---|
+| `Provisioned` | Hardware provisioning status (BMH selection and allocation) |
+| `Configured` | Hardware configuration status (firmware/BIOS updates across all nodes) |
+
+### NodeAllocationRequest Condition Reasons
+
+| Reason | Meaning |
+|---|---|
+| `InProgress` | Hardware provisioning or configuration update is in progress |
+| `Completed` | Hardware provisioning has been completed successfully for all nodes |
+| `ConfigurationApplied` | Hardware configuration has been applied successfully across all nodes|
+| `Failed` | Hardware provisioning or configuration update has failed on one or more nodes |
+|`TimedOut`| Hardware provisioning or configuration update has timed out |
 
 ### AllocatedNode Conditions
 
 | Condition | Description |
 |---|---|
-| `Provisioned` | Node has been allocated and BMH selected |
-| `Configured` | Firmware/BIOS configuration status for this specific node |
+| `Provisioned` | Hardware provisioning status for this node |
+| `Configured` | Hardware configuration status for this node |
 
-### Condition Reasons
+### AllocatedNode Condition Reasons
 
 | Reason | Meaning |
 |---|---|
-| `Completed` | Operation completed successfully |
-| `InProgress` | Operation is ongoing |
-| `ConfigurationUpdateRequested` | Day-2 update has been requested (AllocatedNode) |
-| `ConfigurationApplied` | Firmware/BIOS successfully applied and validated |
-| `TimedOut` | Operation exceeded the configured timeout |
-| `Failed` | Operation failed (see condition message for details) |
+| `InProgress` | Hardware provisioning is in progress |
+| `Completed` | Hardware provisioning has been completed successfully |
+| `ConfigurationUpdatePending` | A new hardware profile is requested and the node is waiting to be processed |
+| `ConfigurationUpdateRequested` | Hardware configuration changes have been requested and are being applied |
+| `ConfigurationApplied` | Hardware configuration has been applied successfully |
+| `Failed` | Hardware provisioning or configuration update has failed |
+| `InvalidUserInput` | The requested hardware profile contains invalid input |
+
+During Day-2 updates, the AllocatedNode `Configured` condition message is updated at each stage of the
+node's update lifecycle for clear observability:
+
+| Reason | Message | Stage |
+|---|---|---|
+| `ConfigurationUpdatePending` | `Pending for updates evaluation` | Waiting for its turn |
+| `ConfigurationUpdatePending` | `Draining node` | Cordon/drain in progress (MNO only) |
+| `ConfigurationUpdateRequested` | `Update requested` | Metal3 CRs updated |
+| `ConfigurationUpdateRequested` | `Waiting for BMH to enter Servicing` | Waiting for BMH reboot |
+| `ConfigurationUpdateRequested` | `Waiting for BMH completion` | BMH applying firmware |
+| `ConfigurationUpdateRequested` | `BMH update complete, waiting for node to become Ready` | Post-reboot readiness check |
+| `ConfigurationApplied` | `Configuration has been applied successfully` | Update complete |
 
 ## Timeouts
 
@@ -339,8 +424,10 @@ The timeout applies independently to each phase:
 
 - **Day-0 provisioning** (`HardwareProvisioned`) — Time allowed for BMH selection and
   allocation.
-- **Day-0/Day-2 configuration** (`HardwareConfigured`) — Time allowed for firmware/BIOS
-  updates to complete across all nodes.
+- **Day-2 configuration** (`HardwareConfigured`) — Time allowed for firmware/BIOS
+  updates to complete across all nodes. This includes the time spent on cordon/drain
+  operations, firmware application, reboots, and node readiness checks for all nodes
+  across all groups.
 
 > [!NOTE]
 > For Day-2 updates, the timeout clock resets when a new HardwareProfile change is
@@ -380,6 +467,5 @@ For **hardware provisioning** timeouts or failures: delete and recreate the
 ProvisioningRequest.
 
 For **hardware configuration** (Day-2) timeouts or failures: update the
-ProvisioningRequest spec to trigger a retry. Changing the HardwareProfile (even to the
-same value with other spec changes) resets the timeout and restarts the configuration
-process.
+ProvisioningRequest to reference a new HardwareProfile. This resets the
+timeout clock and restarts the configuration process from the beginning.

@@ -48,7 +48,10 @@ The [CRD](../../config/crd/bases/clcm.openshift.io_clustertemplates.yaml)'s `spe
 The ClusterTemplate references defaults stored in Git (for example, installation and policy defaults) and, through its `templateParameterSchema`, specifies the inputs that the SMO can supply in the ProvisioningRequest.
 At provisioning time, the O‑Cloud Manager validates the SMO‑supplied values against the schema and merges them with the template’s defaults to render the concrete artifacts used to install and configure the cluster.
 
-A complete example of ClusterTemplate is available under the GitOps sample content: [sno-ran-du-v4-Y-Z-1.yaml](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1.yaml).
+Complete examples of ClusterTemplate are available under the GitOps sample content:
+[SNO](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1.yaml),
+[3node](../samples/git-setup/clustertemplates/version_4.Y.Z/3node-ran-du/3node-ran-du-v4-Y-Z-1.yaml) and
+[Standard](../samples/git-setup/clustertemplates/version_4.Y.Z/std-ran-du/std-ran-du-v4-Y-Z-1.yaml).
 
 ### Template name
 
@@ -88,7 +91,7 @@ For example, given a HardwareTemplate that selects XR8620t servers:
 # HardwareTemplate: xr8620t (shared across deployments)
 spec:
   nodeGroupData:
-    - name: controller
+    - name: master
       role: master
       resourceSelector:
         "resourceselector.clcm.openshift.io/server-type": "XR8620t"
@@ -104,7 +107,7 @@ spec:
     hwTemplateParameters:
       hardwareProvisioningTimeout: "120m"
       nodeGroupData:
-        controller:
+        master:
           hwProfile: rh-profile-xr8620t-idrac-7.20.30.50-bios-2.6.3
           resourceSelector:
             "resourceselector.clcm.openshift.io/server-id": "xr8620txdg16"
@@ -140,8 +143,15 @@ HardwareProfile describes the desired hardware state for a class of servers, suc
 
 HardwareTemplate defines the node groups that the cluster needs and how matching hosts
 are selected from the inventory. For each group, specify attributes such as the role
-and group name, and provide a `resourceSelector` with matching criteria. The Metal3
-hardware plugin uses a two-stage filtering process to find suitable BareMetalHosts:
+and group name, and provide a `resourceSelector` with matching criteria.
+
+A single-node cluster requires one node group, while multi-node clusters define
+multiple groups — for example, a `master` group and a `worker` group, each with its own
+hardware profile and resource selectors. The node group **name** should match the
+corresponding MachineConfigPool (MCP) name on the spoke cluster (e.g. `master`,
+`worker`).
+
+The Metal3 hardware plugin uses a two-stage filtering process to find suitable BareMetalHosts:
 
 1. **Label-based filtering** — selects BMHs by Kubernetes label.
 2. **Hardware data filtering** — further filters BMHs based on their HardwareData CR (hardware inventory details such as CPU, memory, storage, and NICs).
@@ -254,7 +264,7 @@ resourceSelector:
 
 ##### Complete example
 
-The following example combines label and hardware data selectors to match Dell XR8620t hosts with specific CPU, NIC, and storage requirements:
+The following example demonstrates the `master` node group with label and hardware data selectors to match Dell XR8620t hosts with specific CPU, NIC, and storage requirements:
 
 ```yaml
 apiVersion: clcm.openshift.io/v1alpha1
@@ -264,7 +274,7 @@ metadata:
   namespace: oran-o2ims
 spec:
   nodeGroupData:
-    - name: controller
+    - name: master
       role: master
       hwProfile: rh-profile-xr8620t-bios-settings
       resourceSelector:
@@ -286,7 +296,11 @@ HardwareTemplate, or via `templateParameters.hwTemplateParameters.nodeGroupData.
 ProvisioningRequest. When both are set, the ProvisioningRequest value takes precedence. The ClusterTemplate
 references the HardwareTemplate at `spec.templates.hwTemplate`.
 
-Example files are under [hardwaretemplates](../samples/git-setup/clustertemplates/hardwaretemplates/).
+Example of HardwareTemplates:
+[SNO](../samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/dell-xr8620t-blue.yaml),
+[3node](../samples/git-setup/clustertemplates/hardwaretemplates/3node-ran-du/dell-xr8620t-purple.yaml) and
+[Standard](../samples/git-setup/clustertemplates/hardwaretemplates/std-ran-du/dell-r740-green-xr8620t-blue.yaml).
+
 For details about server onboarding, refer to [Server Onboarding](./server-onboarding-orig.md).
 
 ### ClusterInstance defaults ConfigMap
@@ -307,14 +321,20 @@ nodes:
         - name: ens3f1
 ```
 
-A complete example of ClusterInstance defaults can be found in [clusterinstance-defaults-v1.yaml](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v1.yaml).
+Complete examples of ClusterInstance defaults:
+[SNO](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v1.yaml),
+[3node](../samples/git-setup/clustertemplates/version_4.Y.Z/3node-ran-du/clusterinstance-defaults-v1.yaml) and
+[Standard](../samples/git-setup/clustertemplates/version_4.Y.Z/std-ran-du/clusterinstance-defaults-v1.yaml).
 
 ### PolicyTemplate defaults ConfigMap
 
 Configuration is driven by ACM policies that are rendered from policy templates (See [PolicyTemplate example](../samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v1.yaml)). The ClusterTemplate references a ConfigMap with default input values for these templates.
 All parameters used in the policy templates must be declared in the schema `templateParameterSchema.policyTemplateParameters` and provided either through the PolicyTemplate default ConfigMap or via the ProvisioningRequest (`spec.templateParameters.policyTemplateParameters`).
 
-A complete example of PolicyTemplate defaults can be found in [policytemplates-defaults-v1.yaml](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/policytemplates-defaults-v1.yaml).
+Complete examples of PolicyTemplate defaults:
+[SNO](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/policytemplates-defaults-v1.yaml),
+[3node](../samples/git-setup/clustertemplates/version_4.Y.Z/3node-ran-du/policytemplates-defaults-v1.yaml) and
+[Standard](../samples/git-setup/clustertemplates/version_4.Y.Z/std-ran-du/policytemplates-defaults-v1.yaml).
 
 ## Validation
 

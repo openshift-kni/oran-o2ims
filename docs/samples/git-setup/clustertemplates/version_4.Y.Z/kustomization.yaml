@@ -26,9 +26,21 @@ resources:
 - sno-ran-du/clusterinstance-defaults-v4.yaml
 # sno-ran-du.v4-Y-Z-1-no-hwtemplate ClusterTemplate:
 - sno-ran-du/sno-ran-du-v4-Y-Z-1-no-hwtemplate.yaml
-# Full DU profile:
+# SNO Full DU profile:
 - sno-ran-full-du/ns.yaml
 - sno-ran-full-du/pull-secret.yaml
 - sno-ran-full-du/clusterinstance-defaults-full-du-v1.yaml
 - sno-ran-full-du/policytemplates-defaults-full-du-v1.yaml
 - sno-ran-full-du/sno-ran-full-du-v4-Y-Z-1.yaml
+# 3-node cluster:
+- 3node-ran-du/ns.yaml
+- 3node-ran-du/pull-secret.yaml
+- 3node-ran-du/policytemplates-defaults-v1.yaml
+- 3node-ran-du/3node-ran-du-v4-Y-Z-1.yaml
+- 3node-ran-du/clusterinstance-defaults-v1.yaml
+# Standard cluster:
+- std-ran-du/ns.yaml
+- std-ran-du/pull-secret.yaml
+- std-ran-du/policytemplates-defaults-v1.yaml
+- std-ran-du/std-ran-du-v4-Y-Z-1.yaml
+- std-ran-du/clusterinstance-defaults-v1.yaml

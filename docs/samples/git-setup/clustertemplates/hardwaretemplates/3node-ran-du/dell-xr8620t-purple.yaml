@@ -1,0 +1,19 @@
+apiVersion: clcm.openshift.io/v1alpha1
+kind: HardwareTemplate
+metadata:
+  name: 3node-dell-xr8620t-purple
+  namespace: oran-o2ims
+spec:
+  nodeGroupData:
+    - name: master
+      role: master
+      # hwProfile is optional. It can also be specified (or overridden) via
+      # templateParameters.hwTemplateParameters.nodeGroupData.<name>.hwProfile
+      # in the ProvisioningRequest.
+      # hwProfile: dell-xr8620t-bios-2.3.5-bmc-7.10.70.10
+      resourceSelector:
+        "resourceselector.clcm.openshift.io/server-type": "XR8620t"
+        "resourceselector.clcm.openshift.io/server-colour": "purple"
+        "hardwaredata/cpu_arch": "x86_64"
+        "hardwaredata/num_threads;>=": "128"
+  hardwareProvisioningTimeout: "120m"

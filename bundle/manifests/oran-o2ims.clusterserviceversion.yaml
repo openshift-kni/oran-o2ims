@@ -314,7 +314,7 @@ metadata:
             "hardwareProvisioningTimeout": "90m",
             "nodeGroupData": [
               {
-                "name": "controller",
+                "name": "master",
                 "resourceSelector": {
                   "resourceselector.clcm.openshift.io/server-colour": "blue",
                   "resourceselector.clcm.openshift.io/server-type": "xr8620t"
@@ -466,7 +466,7 @@ metadata:
               },
               "hwTemplateParameters": {
                 "nodeGroupData": {
-                  "controller": {
+                  "master": {
                     "hwProfile": "hardwareprofile-sample"
                   }
                 }
@@ -538,7 +538,7 @@ metadata:
             "namespace": "oran-o2ims"
           },
           "spec": {
-            "groupName": "controller",
+            "groupName": "master",
             "hardwarePluginRef": "metal3-hwplugin",
             "hwMgrNodeId": "xr8620txserver1",
             "hwMgrNodeNs": "xr8620t-pool",
@@ -623,7 +623,7 @@ metadata:
               {
                 "nodeGroupData": {
                   "hwProfile": "hardwareprofile-sample",
-                  "name": "controller",
+                  "name": "master",
                   "resourceSelector": {
                     "resourceselector.clcm.openshift.io/server-colour": "blue",
                     "resourceselector.clcm.openshift.io/server-type": "xr8620t"

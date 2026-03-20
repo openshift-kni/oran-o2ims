@@ -1,4 +1,14 @@
 resources:
 - common.yaml
-- dell-xr8620t-sno1.yaml
-- dell-xr8620t-sno2.yaml
+# XR8620t pool (blue, green, purple servers)
+- dell-xr8620t-node1.yaml
+- dell-xr8620t-node2.yaml
+- dell-xr8620t-node3.yaml
+- dell-xr8620t-node4.yaml
+- dell-xr8620t-node5.yaml
+- dell-xr8620t-node6.yaml
+- dell-xr8620t-node7.yaml
+# R740 pool (green servers)
+- dell-r740-node1.yaml
+- dell-r740-node2.yaml
+- dell-r740-node3.yaml

@@ -553,14 +553,14 @@ The following steps are required:
     * Update the kustomization files to include the new `HardwareProfile`. ArgoCD will automatically sync it to the hub cluster.
     * No changes to `HardwareTemplate` or `ClusterTemplate` CRs are needed.
 2. Update the `ProvisioningRequest` to reference the new `HardwareProfile`:
-    * Set `spec.templateParameters.hwTemplateParameters.nodeGroupData.controller.hwProfile` to the new profile name (`dell-xr8620t-bios-2.6.3-bmc-7.20.30.50`).
+    * Set `spec.templateParameters.hwTemplateParameters.nodeGroupData.master.hwProfile` to the new profile name (`dell-xr8620t-bios-2.6.3-bmc-7.20.30.50`).
 
     ```yaml
     spec:
       templateParameters:
         hwTemplateParameters:
           nodeGroupData:
-            controller:
+            master:
               hwProfile: dell-xr8620t-bios-2.6.3-bmc-7.20.30.50
     ```
 
@@ -573,7 +573,7 @@ The following steps are required:
         nodeGroup:
         - nodeGroupData:
             hwProfile: dell-xr8620t-bios-2.6.3-bmc-7.20.30.50
-            name: controller
+            name: master
             resourceSelector:
               server-colour: blue
               server-type: XR8620t
@@ -613,7 +613,7 @@ The following steps are required:
         status: "True"
         type: Provisioned
       - lastTransitionTime: "2025-10-01T21:36:01Z"
-        message: 'Configuration update in progress (AllocatedNode metal3-hwplugin-sno1-dell-xr8620t-pool-dell-xr8620t-sno1)'
+        message: 'Configuration update in progress (AllocatedNode metal3-hwplugin-sno1-dell-xr8620t-pool-dell-xr8620t-node1)'
         reason: InProgress
         status: "False"
         type: Configured
@@ -638,8 +638,8 @@ The following steps are required:
 5. The Metal3 hardware plugin waits for the Metal3 Bare Metal Operator (BMO) to detect and validate the changes on
    the `HostFirmwareSettings` and `HostFirmwareComponents` CRs, then triggers a host reboot via the
    `reboot.metal3.io` annotation on the BMH. BMO applies the firmware and BIOS updates during the reboot cycle.
-   For multi-node clusters, nodes are updated one at a time, with master nodes updated before worker nodes.
-   <!-- TODO: Update when parallel worker node updates are implemented for MNO clusters -->
+   For multi-node clusters, master nodes are updated serially first, then worker nodes can be updated in parallel
+   based on the MCP `maxUnavailable` setting. See [Day-2 Workflow](./firmware-update-workflow.md#day-2-workflow) for details.
 6. The hardware plugin validates the result by checking `HostFirmwareSettings`/`HostFirmwareComponents` status and confirming the Kubernetes node has rejoined the cluster and reached Ready state.
     * Success scenario:
         * It updates the status of the `AllocatedNode` CR to reflect the result of the operation.

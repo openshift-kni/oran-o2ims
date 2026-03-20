@@ -22,20 +22,40 @@ git-root/
     hardwaretemplates/                  # HardwareTemplate CRs for hardware provisioning
     inventory/                          # BareMetalHost inventory for sites
     version_4.Y.Z/                      # Version matches the OCP version to be installed
-      sno-ran-du/
-        clusterinstance-defaults-*.yaml # Defaults in ConfigMap for Cluster installation
-        policytemplates-defaults-*.yaml # Defaults in ConfigMap for ACM policy configuration
-        pull-secret.yaml                # Pull secret used for spoke installation
-        extra-manifest/                 # Extra manifests installed on day0
-        ns.yaml                         # Namespace where the ClusterTemplate is created
-        sno-ran-du-v4-Y-Z-*.yaml        # ClusterTemplate(s) for this OCP version
+      sno-ran-du/                       # Single-Node OpenShift (SNO)
+        clusterinstance-defaults-*.yaml
+        policytemplates-defaults-*.yaml
+        pull-secret.yaml
+        extra-manifest/
+        ns.yaml
+        sno-ran-du-v4-Y-Z-*.yaml
+      3node-ran-du/                     # 3-node compact cluster (all masters)
+        clusterinstance-defaults-*.yaml
+        policytemplates-defaults-*.yaml
+        pull-secret.yaml
+        ns.yaml
+        3node-ran-du-v4-Y-Z-*.yaml
+      std-ran-du/                       # Standard cluster (3 masters + N workers)
+        clusterinstance-defaults-*.yaml
+        policytemplates-defaults-*.yaml
+        pull-secret.yaml
+        ns.yaml
+        std-ran-du-v4-Y-Z-*.yaml
     version_4.Y.Z+1/                    # Optional upgrade content
   policytemplates/
     version_4.Y.Z/                      # Version matches the OCP version to be installed
       sno-ran-du/
-        ns.yaml                         # Namespace where policies are created
-        msc-binding.yaml                # ManagedClusterSetBinding for policy placement
-        sno-ran-du-pg-v4-Y-Z-*.yaml     # ACM PolicyGenerator(s) for this OCP version
+        ns.yaml
+        msc-binding.yaml
+        sno-ran-du-pg-v4-Y-Z-*.yaml
+      3node-ran-du/
+        ns.yaml
+        msc-binding.yaml
+        3node-ran-du-pg-v4-Y-Z-*.yaml
+      std-ran-du/
+        ns.yaml
+        msc-binding.yaml
+        std-ran-du-pg-v4-Y-Z-*.yaml
       source-crs/                       # ZTP source CRs; keep in sync with OCP version
     version_4.Y.Z+1/                    # Optional upgrade content
 ```
@@ -59,7 +79,7 @@ or extracted from the [ztp-site-generate](https://catalog.redhat.com/software/co
   ClusterTemplate used by a ProvisioningRequest, determine the expected child policies, and accurately detect when configuration
   is complete - ensuring correct provisioning status reporting during Day-2 policy configuration changes. See the [example](../samples/git-setup/policytemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-pg-v4-Y-Z-v1.yaml).
 
-## Full DU (Distributed Unit) profile
+## SNO Full DU (Distributed Unit) profile
 
 For configuring an SNO with a full DU profile according to the [RAN RDS](https://docs.redhat.com/en/documentation/openshift_container_platform/4.21/html/scalability_and_performance/telco-ran-du-ref-design-specs#telco-ran-du-reference-configuration-crs),
 the following main samples can be used as a starting example:

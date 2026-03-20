@@ -1,3 +1,4 @@
 resources:
 - dell-xr8620t-bios-2.3.5-bmc-7.10.70.10.yaml
 - dell-xr8620t-bios-2.6.3-bmc-7.20.30.50.yaml
+- dell-r740-bios-2.22.2-bmc-7.00.00.173.yaml

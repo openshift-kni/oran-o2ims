@@ -1,0 +1,137 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clusterinstance-defaults-v1
+  namespace: 3node-ran-du-v4-Y-Z
+data:
+  # clusterInstallationTimeout is optional.
+  # The value should be a duration string
+  # (e.g., "120m" for 120 minutes)
+  # clusterInstallationTimeout: "120m"
+  clusterinstance-defaults: |
+    baseDomain: example.com
+    extraLabels:
+      ManagedCluster:
+        cluster-version: "v4-Y-Z"
+        3node-ran-du-policy: "v1"
+    clusterType: HighlyAvailable
+    clusterImageSetNameRef: "4.Y.Z"
+    pullSecretRef:
+      name: pull-secret
+    networkType: OVNKubernetes
+    sshPublicKey: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDTca4Qyu5AYBmZbSl74cNTKuNINJ7d+ceBRzKUrhHcQpMbl8UnAYhjh/ffTyVCsgwzm1RjTAm6/tPj9euEa+YX4U78Sx+ioLHmjDvACYsti4DekIR+opFwfIw+JTDXoyVv06lOPaTOa/vtgpe+gDEL364j47f3p9H/tGhsLmpjeG3DVAhbqSh3s0IHpd4OzF/r6g6mbPyHadvedkBZp/qeUX054Gc2QqJeg/s/eddPlQDJbmL8yRVkZu+SsFTOEOAtrdA3czeaEaA8s+aWP9PN3X539Ddw3qahyOSCXpCE2eJXPh8DJCBWVEcFFYgmIFVvCQ+o9cjEmIYg6drGGvRV
+    installConfigOverrides: '{"capabilities": {"baselineCapabilitySet": "None", "additionalEnabledCapabilities": ["NodeTuning", "OperatorLifecycleManager", "Ingress", "baremetal", "MachineAPI"]}}'
+    clusterNetwork:
+      - cidr: 203.0.113.0/24
+        hostPrefix: 25
+    serviceNetwork:
+      - cidr: 198.51.100.0/24
+    additionalNTPSources:
+      - 1.pool.ntp.org
+    templateRefs:
+      - name: ai-cluster-templates-v1
+        namespace: open-cluster-management
+    cpuPartitioningMode: AllNodes
+    holdInstallation: false
+    extraManifestsRefs:
+      - name: 3node-ran-du-extra-manifest-1
+    nodes:
+      - role: master
+        bootMode: UEFI
+        ironicInspect: "disabled"
+        automatedCleaningMode: disabled
+        rootDeviceHints:
+          deviceName: /dev/disk/by-path/pci-0000:01:00.0-nvme-1
+        nodeNetwork:
+          interfaces:
+            - name: ens3f0
+              label: boot-interface
+            - name: ens3f1
+              label: data-interface
+            - name: ens2f0
+              label: sriov-1
+            - name: ens2f1
+              label: sriov-2
+          config:
+            routes:
+              config:
+                - destination: 0.0.0.0/0
+                  next-hop-interface: ens3f0
+                  table-id: 254
+            interfaces:
+              - ipv6:
+                  enabled: false
+                ipv4:
+                  enabled: true
+                name: ens3f0
+                state: up
+                type: ethernet
+        templateRefs:
+          - name: ai-node-templates-v1
+            namespace: open-cluster-management
+      - role: master
+        bootMode: UEFI
+        ironicInspect: "disabled"
+        automatedCleaningMode: disabled
+        rootDeviceHints:
+          deviceName: /dev/disk/by-path/pci-0000:01:00.0-nvme-1
+        nodeNetwork:
+          interfaces:
+            - name: ens3f0
+              label: boot-interface
+            - name: ens3f1
+              label: data-interface
+            - name: ens2f0
+              label: sriov-1
+            - name: ens2f1
+              label: sriov-2
+          config:
+            routes:
+              config:
+                - destination: 0.0.0.0/0
+                  next-hop-interface: ens3f0
+                  table-id: 254
+            interfaces:
+              - ipv6:
+                  enabled: false
+                ipv4:
+                  enabled: true
+                name: ens3f0
+                state: up
+                type: ethernet
+        templateRefs:
+          - name: ai-node-templates-v1
+            namespace: open-cluster-management
+      - role: master
+        bootMode: UEFI
+        ironicInspect: "disabled"
+        automatedCleaningMode: disabled
+        rootDeviceHints:
+          deviceName: /dev/disk/by-path/pci-0000:01:00.0-nvme-1
+        nodeNetwork:
+          interfaces:
+            - name: ens3f0
+              label: boot-interface
+            - name: ens3f1
+              label: data-interface
+            - name: ens2f0
+              label: sriov-1
+            - name: ens2f1
+              label: sriov-2
+          config:
+            routes:
+              config:
+                - destination: 0.0.0.0/0
+                  next-hop-interface: ens3f0
+                  table-id: 254
+            interfaces:
+              - ipv6:
+                  enabled: false
+                ipv4:
+                  enabled: true
+                name: ens3f0
+                state: up
+                type: ethernet
+        templateRefs:
+          - name: ai-node-templates-v1
+            namespace: open-cluster-management

@@ -68,7 +68,7 @@ policies:
     - path: source-crs/sriov-operator/SriovOperatorStatus.yaml
 - name: v1-perf-configuration-policy
   manifests:
-    - path: source-crs/node-tuning-operator/PerformanceProfile-SetSelector.yaml
+    - path: source-crs/node-tuning-operator/x86_64/PerformanceProfile-SetSelector.yaml
       patches:
       - metadata:
           name: openshift-node-performance-profile
@@ -121,21 +121,11 @@ policies:
     - path: source-crs/node-tuning-operator/TunedPerformancePatch.yaml    
       patches:
       - spec:
-          profile:
-            - name: performance-patch
-              data: |
-                [main]
-                summary=Configuration changes profile inherited from performance created tuned
-                include=openshift-node-performance-openshift-node-performance-profile
-                [bootloader]
-                cmdline_crash=-tsc=nowatchdog
-                cmdline_crash1=tsc=reliable
-                [scheduler]
-                group.ice-ptp=0:f:10:*:ice-ptp.*
-                group.ice-gnss=0:f:10:*:ice-gnss.*
-                [service]
-                service.stalld=start,enable
-                service.chronyd=stop,disable
+          recommend:
+          - machineConfigLabels:
+              machineconfiguration.openshift.io/role: "master"
+            priority: 18
+            profile: ran-du-performance
 - name: v1-du-validator-policy
   remediationAction: inform
   # This policy is not re-evaluated after it becomes

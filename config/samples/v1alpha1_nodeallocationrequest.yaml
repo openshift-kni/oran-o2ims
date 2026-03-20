@@ -13,7 +13,7 @@ spec:
   nodeGroup:
   - nodeGroupData:
       hwProfile: hardwareprofile-sample
-      name: controller
+      name: master
       resourceSelector:
         resourceselector.clcm.openshift.io/server-colour: blue
         resourceselector.clcm.openshift.io/server-type: xr8620t

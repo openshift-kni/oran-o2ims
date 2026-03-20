@@ -1,0 +1,17 @@
+apiVersion: clcm.openshift.io/v1alpha1
+kind: HardwareProfile
+metadata:
+  name: dell-r740-bios-2.22.2-bmc-7.00.00.173
+  namespace: oran-o2ims
+spec:
+  bios:
+    attributes:
+      SysProfile: Custom
+      WorkloadProfile: TelcoOptimizedProfile
+      SriovGlobalEnable: Enabled
+  biosFirmware:
+    version: 2.22.2
+    url: https://example.com:8888/firmware/r740/BIOS_R740_WN64_2.22.2.EXE
+  bmcFirmware:
+    version: 7.00.00.173
+    url: https://example.com:8888/firmware/r740/iDRAC-with-Lifecycle-Controller_Firmware_R740_WN64_7.00.00.173_A00.EXE

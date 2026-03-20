@@ -22,7 +22,7 @@ spec:
       # Override the hardware provisioning timeout (optional)
       # hardwareProvisioningTimeout: "120m"
       nodeGroupData:
-        controller:
+        master:
           hwProfile: hardwareprofile-sample
           # Additional resource selector criteria (optional, merged with HardwareTemplate selectors)
           # resourceSelector:

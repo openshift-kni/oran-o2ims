@@ -123,7 +123,7 @@ policies:
     # REDUCE FOOTPRINT
     - path: source-crs/cluster-tuning/monitoring-configuration/ReduceMonitoringFootprint.yaml
     # PERFORMANCE PROFILE
-    - path: source-crs/node-tuning-operator/PerformanceProfile.yaml
+    - path: source-crs/node-tuning-operator/x86_64/PerformanceProfile-SetSelector.yaml
       patches:
       - metadata:
           name: openshift-node-performance-profile
@@ -138,20 +138,18 @@ policies:
               - size: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "hugepages-size" hub}}'
                 count: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "hugepages-count" | toInt hub}}'
           machineConfigPoolSelector:
-            $patch: replace
             pools.operator.machineconfiguration.openshift.io/master: ""
           nodeSelector:
-            $patch: replace
             node-role.kubernetes.io/master: ''
     # TUNED CONFIG
     - path: source-crs/node-tuning-operator/TunedPerformancePatch.yaml
       patches:
       - spec:
           recommend:
-            - machineConfigLabels:
-                machineconfiguration.openshift.io/role: master
-              priority: 19
-              profile: performance-patch
+          - machineConfigLabels:
+              machineconfiguration.openshift.io/role: "master"
+            priority: 18
+            profile: ran-du-performance
     # PTP CONFIG
     - path: source-crs/ptp-operator/PtpOperatorConfig.yaml
       patches:

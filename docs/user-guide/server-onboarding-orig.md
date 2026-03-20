@@ -58,7 +58,7 @@ name matching the `resourcePoolId` value. Servers within a resource pool should 
 homogeneous (same hardware type and configuration) so that any server in the pool can
 satisfy a provisioning request targeting that pool.
 
-Create a namespace for your servers:
+Create a namespace for your dell xr8620t servers:
 
 ```yaml
 apiVersion: v1
@@ -76,7 +76,7 @@ be in the same namespace as the BareMetalHost:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: bmc-secret-dell-xr8620t-sno1
+  name: bmc-secret-dell-xr8620t-node1
   namespace: dell-xr8620t-pool
 type: Opaque
 data:
@@ -115,7 +115,7 @@ DHCP example:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: network-data-dell-xr8620t-sno1
+  name: network-data-dell-xr8620t-node1
   namespace: dell-xr8620t-pool
 type: Opaque
 stringData:
@@ -235,7 +235,7 @@ matched against the `resourceSelector` field in the
 ```yaml
 resourceselector.clcm.openshift.io/server-type: XR8620t
 resourceselector.clcm.openshift.io/server-colour: blue
-resourceselector.clcm.openshift.io/server-id: dell-xr8620t-sno1
+resourceselector.clcm.openshift.io/server-id: dell-xr8620t-node1
 resourceselector.clcm.openshift.io/subnet: "192.0.2.0"
 ```
 
@@ -307,7 +307,7 @@ metadata:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: network-data-dell-xr8620t-sno1
+  name: network-data-dell-xr8620t-node1
   namespace: dell-xr8620t-pool
 type: Opaque
 stringData:
@@ -332,7 +332,7 @@ data:
   password: <base64-encoded-password>
 kind: Secret
 metadata:
-  name: bmc-secret-dell-xr8620t-sno1
+  name: bmc-secret-dell-xr8620t-node1
   namespace: dell-xr8620t-pool
 type: Opaque
 ---
@@ -344,7 +344,7 @@ metadata:
     resources.clcm.openshift.io/resourcePoolId: dell-xr8620t-pool
     resourceselector.clcm.openshift.io/server-colour: blue
     resourceselector.clcm.openshift.io/server-type: XR8620t
-    resourceselector.clcm.openshift.io/server-id: dell-xr8620t-sno1
+    resourceselector.clcm.openshift.io/server-id: dell-xr8620t-node1
     interfacelabel.clcm.openshift.io/boot-interface: ens3f0
     interfacelabel.clcm.openshift.io/data-interface: ens3f1
     interfacelabel.clcm.openshift.io/sriov-1: ens2f0
@@ -353,16 +353,16 @@ metadata:
     resourceinfo.clcm.openshift.io/description: "XR8620t server with Blue label"
     resourceinfo.clcm.openshift.io/partNumber: "00001"
     resourceinfo.clcm.openshift.io/groups: "groupA, groupB"
-  name: dell-xr8620t-sno1
+  name: dell-xr8620t-node1
   namespace: dell-xr8620t-pool
 spec:
   online: false
   bmc:
     address: idrac-virtualmedia+https://198.51.100.10/redfish/v1/Systems/System.Embedded.1
-    credentialsName: bmc-secret-dell-xr8620t-sno1
+    credentialsName: bmc-secret-dell-xr8620t-node1
     disableCertificateVerification: true
   bootMACAddress: 02:00:00:00:00:01
-  preprovisioningNetworkDataName: network-data-dell-xr8620t-sno1 # Optional — can be omitted if using DHCP and no custom configuration
+  preprovisioningNetworkDataName: network-data-dell-xr8620t-node1 # Optional — can be omitted if using DHCP and no custom configuration
 ```
 
 Additional sample files are available under

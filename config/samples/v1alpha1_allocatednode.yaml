@@ -4,7 +4,7 @@ metadata:
   name: metal3-hwplugin-site-sno-du-1-xr8620t-pool-xr8620txserver1
   namespace: oran-o2ims
 spec:
-  groupName: controller
+  groupName: master
   hardwarePluginRef: metal3-hwplugin
   hwMgrNodeId: xr8620txserver1
   hwMgrNodeNs: xr8620t-pool

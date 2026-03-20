@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: Secret
 metadata:
-  name: network-data-dell-xr8620t-sno2
+  name: network-data-dell-xr8620t-node4
   namespace: dell-xr8620t-pool
 type: Opaque
 stringData:
@@ -23,11 +23,12 @@ stringData:
 ---
 apiVersion: v1
 data:
+  # Replace with real BMC credentials before applying.
   password: dGVzdA==
   username: dGVzdA==
 kind: Secret
 metadata:
-  name: bmc-secret-dell-xr8620t-sno2
+  name: bmc-secret-dell-xr8620t-node4
   namespace: dell-xr8620t-pool
 type: Opaque
 ---
@@ -37,9 +38,9 @@ metadata:
   labels:
     resources.clcm.openshift.io/siteId: local-west
     resources.clcm.openshift.io/resourcePoolId: dell-xr8620t-pool
-    resourceselector.clcm.openshift.io/server-colour: green
+    resourceselector.clcm.openshift.io/server-colour: purple
     resourceselector.clcm.openshift.io/server-type: XR8620t
-    resourceselector.clcm.openshift.io/server-id: dell-xr8620t-sno2
+    resourceselector.clcm.openshift.io/server-id: dell-xr8620t-node4
     resourceselector.clcm.openshift.io/subnet: "192.0.2.0"
     interfacelabel.clcm.openshift.io/boot-interface: ens3f0
     interfacelabel.clcm.openshift.io/data-interface: ens3f1
@@ -47,16 +48,15 @@ metadata:
     interfacelabel.clcm.openshift.io/sriov-2: ens2f1
   annotations:
     bmac.agent-install.openshift.io/allow-provisioned-host-management: ""
-    resourceinfo.clcm.openshift.io/description: "XR8620t server with Green label"
-    resourceinfo.clcm.openshift.io/partNumber: "00002"
-    resourceinfo.clcm.openshift.io/groups: "groupA"
-  name: dell-xr8620t-sno2
+    resourceinfo.clcm.openshift.io/description: "XR8620t server with Purple label"
+    resourceinfo.clcm.openshift.io/partNumber: "00004"
+  name: dell-xr8620t-node4
   namespace: dell-xr8620t-pool
 spec:
   online: false
   bmc:
-    address: idrac-virtualmedia+https://198.51.100.11/redfish/v1/Systems/System.Embedded.1
-    credentialsName: bmc-secret-dell-xr8620t-sno2
+    address: idrac-virtualmedia+https://198.51.100.31/redfish/v1/Systems/System.Embedded.1
+    credentialsName: bmc-secret-dell-xr8620t-node4
     disableCertificateVerification: true
-  bootMACAddress: 02:00:00:00:00:02
-  preprovisioningNetworkDataName: network-data-dell-xr8620t-sno2
+  bootMACAddress: 02:00:00:00:00:12
+  preprovisioningNetworkDataName: network-data-dell-xr8620t-node4

@@ -146,7 +146,7 @@ The O‑Cloud Metal3 hardware plugin consumes the CR, selects matching BareMetal
     status:
       extensions:
         allocatedNodeHostMap:
-          metal3-hwplugin-sno1-dell-xr8620t-pool-dell-xr8620t-sno1: sno1.example.com
+          metal3-hwplugin-sno1-dell-xr8620t-pool-dell-xr8620t-node1: sno1.example.com
         nodeAllocationRequestRef:
           hardwareProvisioningCheckStart: "2025-10-01T22:14:27Z"
           nodeAllocationRequestID: metal3-f5a72a45c49c41969b8d
@@ -171,7 +171,7 @@ The O‑Cloud Metal3 hardware plugin consumes the CR, selects matching BareMetal
     status:
       extensions:
         allocatedNodeHostMap:
-          metal3-hwplugin-sno1-dell-xr8620t-pool-dell-xr8620t-sno1: sno1.example.com
+          metal3-hwplugin-sno1-dell-xr8620t-pool-dell-xr8620t-node1: sno1.example.com
         nodeAllocationRequestRef:
           hardwareProvisioningCheckStart: "2025-10-01T22:14:27Z"
           nodeAllocationRequestID: metal3-f5a72a45c49c41969b8d

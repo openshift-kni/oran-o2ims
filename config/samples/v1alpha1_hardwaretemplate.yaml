@@ -5,7 +5,7 @@ metadata:
   namespace: oran-o2ims
 spec:
   nodeGroupData:
-    - name: controller
+    - name: master
       role: master
       resourceSelector:
         "resourceselector.clcm.openshift.io/server-type": "xr8620t"
