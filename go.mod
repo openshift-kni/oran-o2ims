@@ -1,6 +1,6 @@
 module github.com/openshift-kni/oran-o2ims
 
-go 1.24.0
+go 1.25.0
 
 // Needed for importing the siteconfig operator, taken from the siteconfig operator repo.
 replace (
@@ -16,7 +16,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/integralist/go-findroot v0.0.0-20160518114804-ac90681525dc
 	github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438
-	github.com/jackc/pgx/v5 v5.8.0
+	github.com/jackc/pgx/v5 v5.9.1
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/metal3-io/baremetal-operator/apis v0.12.2
 	github.com/oapi-codegen/nethttp-middleware v1.1.2
