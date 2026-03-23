@@ -14,7 +14,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"time"
 
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -101,15 +100,7 @@ func findNodesInProgress(nodelist *pluginsv1alpha1.AllocatedNodeList) []*plugins
 func applyPostConfigUpdates(ctx context.Context,
 	c client.Client,
 	noncachedClient client.Reader,
-	logger *slog.Logger,
-	bmhName types.NamespacedName, node *pluginsv1alpha1.AllocatedNode) (int, error) {
-
-	if res, err := clearBMHNetworkData(ctx, c, logger, bmhName); err != nil {
-		// preserve prior behavior: short retry on error
-		return RequeueAfterShortInterval, fmt.Errorf("clear BMH network data %s: %w", bmhName.String(), err)
-	} else if code := RequeueCodeFromResult(res); code > DoNotRequeue {
-		return code, nil
-	}
+	node *pluginsv1alpha1.AllocatedNode) (int, error) {
 
 	// nolint:wrapcheck
 	err := retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
@@ -749,8 +740,6 @@ func contains(slice []string, value string) bool {
 }
 
 // allocateBMHToNodeAllocationRequest assigns a BareMetalHost to a NodeAllocationRequest.
-// Returns a ctrl.Result (for precise requeue timing) and an error for unexpected failures.
-// Callers should propagate any non-zero Result (Requeue / RequeueAfter).
 func allocateBMHToNodeAllocationRequest(
 	ctx context.Context,
 	c client.Client,
@@ -760,7 +749,7 @@ func allocateBMHToNodeAllocationRequest(
 	bmh *metal3v1alpha1.BareMetalHost,
 	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
 	group pluginsv1alpha1.NodeGroup,
-) (ctrl.Result, error) {
+) error {
 
 	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 
@@ -771,7 +760,7 @@ func allocateBMHToNodeAllocationRequest(
 	if allocatedNodeLbl != nodeName {
 		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeLabel, ctlrutils.AllocatedNodeLabel,
 			nodeName, OpAdd); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to save AllocatedNode name label to BMH (%s): %w", bmh.Name, err)
+			return fmt.Errorf("failed to save AllocatedNode name label to BMH (%s): %w", bmh.Name, err)
 		}
 	}
 
@@ -780,38 +769,38 @@ func allocateBMHToNodeAllocationRequest(
 
 	// Ensure node is created
 	if err := createNode(ctx, c, logger, pluginNamespace, nodeAllocationRequest, nodeName, nodeId, nodeNs, group.NodeGroupData.Name, group.NodeGroupData.HwProfile); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to create allocated node (%s): %w", nodeName, err)
+		return fmt.Errorf("failed to create allocated node (%s): %w", nodeName, err)
 	}
 
 	// Process HW profile
 	nodeNamespace := pluginNamespace
 	updating, err := processHwProfileWithHandledError(ctx, c, noncachedClient, logger, pluginNamespace, bmh, nodeName, nodeNamespace, group.NodeGroupData.HwProfile, false)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to process hw profile for node (%s): %w", nodeName, err)
+		return fmt.Errorf("failed to process hw profile for node (%s): %w", nodeName, err)
 	}
 	logger.InfoContext(ctx, "processed hw profile", slog.Bool("updating", updating))
 
 	// Mark BMH allocated
 	if err := markBMHAllocated(ctx, c, logger, bmh); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to add allocated label to BMH (%s): %w", bmh.Name, err)
+		return fmt.Errorf("failed to add allocated label to BMH (%s): %w", bmh.Name, err)
 	}
 
 	// Allow Host Management
 	if err := allowHostManagement(ctx, c, logger, bmh); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to add host management annotation to BMH (%s): %w", bmh.Name, err)
+		return fmt.Errorf("failed to add host management annotation to BMH (%s): %w", bmh.Name, err)
 	}
 
 	// Set bootMACAddress from interface labels if not already set
 	// This enables the pre-provisioned hardware workflow where boot interface
 	// is identified via labels instead of requiring bootMACAddress in the spec
 	if err := setBootMACAddressFromLabel(ctx, c, logger, bmh); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to set bootMACAddress from interface label for BMH (%s): %w", bmh.Name, err)
+		return fmt.Errorf("failed to set bootMACAddress from interface label for BMH (%s): %w", bmh.Name, err)
 	}
 
 	// Update node status
 	bmhInterface, err := buildInterfacesFromBMH(bmh)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to build interfaces from BareMetalHost '%s': %w", bmh.Name, err)
+		return fmt.Errorf("failed to build interfaces from BareMetalHost '%s': %w", bmh.Name, err)
 	}
 	nodeInfo := bmhNodeInfo{
 		ResourcePoolID: group.NodeGroupData.ResourcePoolId,
@@ -822,63 +811,22 @@ func allocateBMHToNodeAllocationRequest(
 		Interfaces: bmhInterface,
 	}
 	if err := updateNodeStatus(ctx, c, noncachedClient, logger, pluginNamespace, nodeInfo, nodeName, group.NodeGroupData.HwProfile, updating); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to update node status (%s): %w", nodeName, err)
+		return fmt.Errorf("failed to update node status (%s): %w", nodeName, err)
 	}
 
-	// Update NodeAllocationRequest status BEFORE network data clearing
-	// This ensures the node is tracked even if we need to requeue for network data clearing
+	// Update NodeAllocationRequest status
 	if !contains(nodeAllocationRequest.Status.Properties.NodeNames, nodeName) {
 		nodeAllocationRequest.Status.Properties.NodeNames = append(nodeAllocationRequest.Status.Properties.NodeNames, nodeName)
 
-		// Immediately persist the NodeAllocationRequest status to the cluster
-		// This prevents loss of NodeNames when requeuing for network data clearing
 		if err := hwmgrutils.UpdateNodeAllocationRequestProperties(ctx, c, nodeAllocationRequest); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to update NodeAllocationRequest properties for node %s: %w", nodeName, err)
+			return fmt.Errorf("failed to update NodeAllocationRequest properties for node %s: %w", nodeName, err)
 		}
 		logger.InfoContext(ctx, "Updated NodeAllocationRequest with allocated node",
 			slog.String("nodeName", nodeName),
 			slog.String("nodeAllocationRequest", nodeAllocationRequest.Name))
 	}
 
-	if !updating {
-		if res, err := clearBMHNetworkData(ctx, c, logger, bmhName); err != nil || res.Requeue || res.RequeueAfter > 0 {
-			// transient / propagation wait → bubble up callee’s precise requeue
-			return res, err
-		}
-	}
-
-	return ctrl.Result{}, nil
-}
-
-// waitForPreprovisioningImageNetworkDataCleared waits for the PreprovisioningImage network status to be cleared
-// before proceeding with BMH NetworkData clearing. Returns true if network data is cleared, false if still waiting.
-func waitForPreprovisioningImageNetworkDataCleared(ctx context.Context, c client.Client, logger *slog.Logger, bmhName types.NamespacedName) (bool, error) {
-	// Get the corresponding PreprovisioningImage (same name/namespace as BMH)
-	image := &metal3v1alpha1.PreprovisioningImage{}
-	if err := c.Get(ctx, bmhName, image); err != nil {
-		if k8serrors.IsNotFound(err) {
-			// If PreprovisioningImage doesn't exist, consider network data as cleared
-			logger.InfoContext(ctx, "PreprovisioningImage not found, considering network data cleared",
-				slog.String("bmh", bmhName.String()))
-			return true, nil
-		}
-		return false, fmt.Errorf("failed to get PreprovisioningImage %s: %w", bmhName.String(), err)
-	}
-
-	// Check if network data is cleared (both Name and Version should be empty)
-	networkDataCleared := image.Status.NetworkData.Name == "" && image.Status.NetworkData.Version == ""
-
-	if networkDataCleared {
-		logger.InfoContext(ctx, "PreprovisioningImage network data is cleared",
-			slog.String("bmh", bmhName.String()))
-		return true, nil
-	}
-
-	logger.InfoContext(ctx, "Waiting for PreprovisioningImage network data to be cleared",
-		slog.String("bmh", bmhName.String()),
-		slog.String("networkDataName", image.Status.NetworkData.Name),
-		slog.String("networkDataVersion", image.Status.NetworkData.Version))
-	return false, nil
+	return nil
 }
 
 // processNodeAllocationRequestAllocation allocates BareMetalHosts to a NodeAllocationRequest while ensuring all
@@ -893,10 +841,9 @@ func processNodeAllocationRequestAllocation(
 ) (ctrl.Result, error) {
 
 	var (
-		wg         sync.WaitGroup
-		mu         sync.Mutex
-		aggErr     error
-		minBackoff time.Duration // 0 means "no requeue requested"
+		wg     sync.WaitGroup
+		mu     sync.Mutex
+		aggErr error
 	)
 
 	// For each NodeGroup, allocate pending nodes
@@ -945,31 +892,18 @@ func processNodeAllocationRequestAllocation(
 			go func(bmh *metal3v1alpha1.BareMetalHost) {
 				defer wg.Done()
 
-				res, err := allocateBMHToNodeAllocationRequest(
+				err := allocateBMHToNodeAllocationRequest(
 					ctx, c, noncachedClient, logger, pluginNamespace,
 					bmh, nodeAllocationRequest, nodeGroup,
 				)
 
-				mu.Lock()
-				defer mu.Unlock()
-
-				// Record the first error (or replace with a more informative one)
 				if err != nil {
-					// Prefer not to wrap multiple times; keep most specific context
+					mu.Lock()
+					// Record the first error
 					if aggErr == nil {
 						aggErr = err
 					}
-				}
-
-				// Track the shortest requested backoff to stay responsive
-				if res.RequeueAfter > 0 || res.Requeue {
-					b := res.RequeueAfter
-					if b == 0 {
-						b = 15 * time.Second
-					}
-					if minBackoff == 0 || b < minBackoff {
-						minBackoff = b
-					}
+					mu.Unlock()
 				}
 			}(bmh)
 		}
@@ -978,14 +912,7 @@ func processNodeAllocationRequestAllocation(
 	wg.Wait()
 
 	if aggErr != nil {
-		if minBackoff > 0 {
-			return ctrl.Result{RequeueAfter: minBackoff}, aggErr
-		}
 		return ctrl.Result{}, aggErr
-	}
-
-	if minBackoff > 0 {
-		return ctrl.Result{RequeueAfter: minBackoff}, nil
 	}
 
 	// Update NAR properties after all successful allocations
@@ -1002,32 +929,6 @@ func isNodeProvisioningInProgress(allocatednode *pluginsv1alpha1.AllocatedNode) 
 	return condition != nil &&
 		condition.Status == metav1.ConditionFalse &&
 		condition.Reason == string(hwmgmtv1alpha1.InProgress)
-}
-
-// RequeueCodeFromResult maps a ctrl.Result into the int-based requeue codes.
-//
-// NOTE: This is a compatibility shim. The idiomatic controller-runtime style
-// is to return ctrl.Result directly from Reconcile() and helpers.
-// Over time, callers should migrate to use ctrl.Result instead of int codes
-// so this mapping can be removed.
-func RequeueCodeFromResult(res ctrl.Result) int {
-	if res.RequeueAfter <= 0 && !res.Requeue {
-		return DoNotRequeue
-	}
-	// Prefer explicit buckets if you have them
-	switch res.RequeueAfter {
-	case hwmgrutils.RequeueWithShortInterval().RequeueAfter:
-		return RequeueAfterShortInterval
-	case hwmgrutils.RequeueWithMediumInterval().RequeueAfter:
-		return RequeueAfterMediumInterval
-	case hwmgrutils.RequeueWithLongInterval().RequeueAfter:
-		return RequeueAfterLongInterval
-	}
-	if res.RequeueAfter > 0 {
-		return int(res.RequeueAfter / time.Second) // generic seconds
-	}
-	// res.Requeue == true without After -> treat as short
-	return RequeueAfterShortInterval
 }
 
 // validateFirmwareVersions checks whether HostFirmwareComponents on the BMH

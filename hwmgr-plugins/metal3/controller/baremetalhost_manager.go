@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
+
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
@@ -405,49 +406,6 @@ func isBMHAllocated(bmh *metal3v1alpha1.BareMetalHost) bool {
 		return true
 	}
 	return false
-}
-
-// clearBMHNetworkData clears PreprovisioningNetworkDataName on the BMH
-// and waits for the PreprovisioningImage network data to reflect the change.
-// Returns a ctrl.Result (use RequeueAfter for short retries) and an error for unexpected failures.
-func clearBMHNetworkData(
-	ctx context.Context,
-	c client.Client,
-	logger *slog.Logger,
-	name types.NamespacedName,
-) (ctrl.Result, error) {
-	// Try to clear Spec.PreprovisioningNetworkDataName with conflict retry.
-	if err := retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
-		bmh := &metal3v1alpha1.BareMetalHost{}
-		if err := c.Get(ctx, name, bmh); err != nil {
-			return fmt.Errorf("fetch BMH %s/%s: %w", name.Namespace, name.Name, err)
-		}
-		if bmh.Spec.PreprovisioningNetworkDataName == "" {
-			return nil // nothing to do
-		}
-		bmh.Spec.PreprovisioningNetworkDataName = ""
-		return c.Update(ctx, bmh)
-	}); err != nil {
-		// Transient API issues: ask for a short retry and surface context
-		return hwmgrutils.RequeueWithShortInterval(),
-			fmt.Errorf("clear BMH network data %s/%s: %w", name.Namespace, name.Name, err)
-	}
-
-	// Wait for metal3 to propagate the change into PreprovisioningImage status.
-	cleared, err := waitForPreprovisioningImageNetworkDataCleared(ctx, c, logger, name)
-	if err != nil {
-		// Treat as transient; retry shortly with context
-		return hwmgrutils.RequeueWithShortInterval(),
-			fmt.Errorf("check PreprovisioningImage network status for BMH %s: %w", name.String(), err)
-	}
-	if !cleared {
-		logger.InfoContext(ctx, "Waiting for PreprovisioningImage network data to clear; requeueing",
-			slog.String("bmh", name.String()))
-		return hwmgrutils.RequeueWithShortInterval(), nil
-	}
-
-	// Done
-	return ctrl.Result{}, nil
 }
 
 func processHwProfileWithHandledError(
@@ -1064,7 +1022,7 @@ func handleSingleNodeCompletion(ctx context.Context,
 	}
 
 	// Apply post-config updates and finalize the process
-	if requeue, err := applyPostConfigUpdates(ctx, c, noncachedClient, logger, types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}, node); err != nil {
+	if requeue, err := applyPostConfigUpdates(ctx, c, noncachedClient, node); err != nil {
 		return true, fmt.Errorf("failed to apply post config update on node %s: %w", node.Name, err)
 	} else if requeue > DoNotRequeue {
 		return true, nil
