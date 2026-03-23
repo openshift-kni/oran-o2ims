@@ -16,6 +16,19 @@ infrastructure, including bare-metal server inventory, cluster provisioning and
 configuration, firmware management, and alarm monitoring — all exposed through
 O-RAN compliant REST APIs.
 
+## Workflow Overview
+
+The typical workflow for deploying and managing clusters with the O-Cloud Manager is:
+
+1. **Setup** — Install prerequisites, deploy the operator, prepare the GitOps
+   repository, onboard bare-metal servers, and define cluster templates.
+2. **Provision** — Create a ProvisioningRequest to allocate hardware, apply firmware
+   settings, and install a cluster.
+3. **Operate** — Perform Day-2 configuration changes, firmware updates, and cluster
+   upgrades on running clusters.
+4. **Monitor** — Use the O2 IMS REST APIs to query inventory, track cluster status,
+   and monitor alarms.
+
 ## User Guide
 
 ### Setup

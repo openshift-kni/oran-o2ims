@@ -21,6 +21,10 @@ SPDX-License-Identifier: Apache-2.0
   - [Complete Example](#complete-example)
   - [Deploying via GitOps](#deploying-via-gitops)
 
+**Prerequisites:** Set up the GitOps repository structure as described in
+[GitOps Repository Layout and Setup](./gitops-layout-and-setup.md). Server inventory
+resources are typically managed via GitOps.
+
 ## Overview
 
 Server onboarding is the process of registering bare-metal hosts with the O-Cloud Manager

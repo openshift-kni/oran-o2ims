@@ -6,6 +6,9 @@ SPDX-License-Identifier: Apache-2.0
 
 # Preparing GitOps repository
 
+**Prerequisites:** The O-Cloud Manager operator should be deployed on the hub cluster.
+See [Environment Setup](./environment-setup.md).
+
 ## Repository layout
 
 This guide describes the Git repository content required by the O‑Cloud Manager to deploy and configure a cluster. We recommend organizing the repo as follows. For concrete examples, see the sample content under [git-setup](../samples/git-setup/).

@@ -23,6 +23,10 @@ SPDX-License-Identifier: Apache-2.0
     - [Using the CLI](#using-the-cli)
     - [Using the REST API](#using-the-rest-api)
 
+**Prerequisites:** Familiarity with the [GitOps repository layout](./gitops-layout-and-setup.md)
+and [server onboarding](./server-onboarding-orig.md) process. Templates reference
+hardware resources and configuration defaults that are managed in the GitOps repository.
+
 ## ClusterTemplate CR
 
 A namespace-scoped CR that defines the resources and input parameters required for cluster provisioning. It is delivered via GitOps and reconciled by the O‑Cloud Manager.

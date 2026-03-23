@@ -10,6 +10,9 @@
     - [Acquiring a token using Service Account (development testing only)](#acquiring-a-token-using-service-account-development-testing-only)
     - [Access an API endpoint](#access-an-api-endpoint)
 
+**Prerequisites:** Ensure the hub cluster meets the requirements described in
+[Prerequisites](./prereqs.md) before proceeding.
+
 ## Operator Deployment
 
 The ORAN O2 IMS implementation in OpenShift is managed by the IMS operator.
