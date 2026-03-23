@@ -61,6 +61,10 @@ The typical workflow for deploying and managing clusters with the O-Cloud Manage
 - [Troubleshooting](./docs/troubleshooting.md)
 - [Must-Gather](./docs/user-guide/must-gather.md)
 
+### Reference
+
+- [Glossary](./docs/user-guide/glossary.md)
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow, testing requirements,
