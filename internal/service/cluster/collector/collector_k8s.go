@@ -307,6 +307,27 @@ func (d *K8SDataSource) convertManagedClusterToNodeCluster(cluster *v1.ManagedCl
 	// Add the cluster type so that clients don't have to depend on the local-cluster bool
 	extensions[ctlrutils.ClusterModelExtension] = clusterType
 
+	// Add kubernetes version from ManagedCluster status
+	if cluster.Status.Version.Kubernetes != "" {
+		extensions["kubernetesVersion"] = cluster.Status.Version.Kubernetes
+	}
+
+	// Add k8s resource capacity and allocatable from ManagedCluster status
+	if len(cluster.Status.Capacity) > 0 {
+		capacity := make(map[string]string)
+		for name, quantity := range cluster.Status.Capacity {
+			capacity[string(name)] = quantity.String()
+		}
+		extensions["capacity"] = capacity
+	}
+	if len(cluster.Status.Allocatable) > 0 {
+		allocatable := make(map[string]string)
+		for name, quantity := range cluster.Status.Allocatable {
+			allocatable[string(name)] = quantity.String()
+		}
+		extensions["allocatable"] = allocatable
+	}
+
 	to := models.NodeCluster{
 		NodeClusterID:                  resourceID,
 		NodeClusterTypeID:              resourceTypeID,
