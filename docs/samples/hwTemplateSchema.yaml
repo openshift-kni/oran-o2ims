@@ -1,8 +1,14 @@
 hwTemplateParameters:
   description: >
-    hwTemplateParameters allows overriding hardware template settings
-    per nodeGroup, such as the HardwareProfile to use.
+    hwTemplateParameters allows overriding hardware template settings,
+    such as the HardwareProfile, resource selector criteria, and the
+    hardware provisioning timeout.
   properties:
+    hardwareProvisioningTimeout:
+      description: >
+        Override the hardware provisioning timeout from the HardwareTemplate.
+        Must be a valid duration string (e.g., "90m", "2h").
+      type: string
     nodeGroupData:
       description: >
         Per-nodeGroup overrides, keyed by nodeGroup name as defined in
@@ -16,4 +22,13 @@ hwTemplateParameters:
               Name of the HardwareProfile CR to use for this node group.
               Overrides the hwProfile in the HardwareTemplate when both are set.
             type: string
+          resourceSelector:
+            description: >
+              Additional resource selector criteria for BMH selection.
+              These are merged with the selectors from the HardwareTemplate.
+              Existing criteria from the HardwareTemplate can be overridden
+              by specifying the same key with a different value.
+            type: object
+            additionalProperties:
+              type: string
   type: object

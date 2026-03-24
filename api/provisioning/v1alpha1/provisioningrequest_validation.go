@@ -13,6 +13,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/r3labs/diff/v3"
 	"github.com/xeipuuv/gojsonschema"
@@ -79,6 +80,102 @@ func ParseHwProfileOverrides(templateParametersRaw []byte) (map[string]string, e
 			if hwProfileStr, ok := hwProfile.(string); ok && hwProfileStr != "" {
 				overrides[groupName] = hwProfileStr
 			}
+		}
+	}
+
+	return overrides, nil
+}
+
+// ParseHwTemplateTimeoutOverride parses templateParameters.hwTemplateParameters.hardwareProvisioningTimeout
+// and returns the override value, or empty string if not specified.
+func ParseHwTemplateTimeoutOverride(templateParametersRaw []byte) (string, error) {
+	if templateParametersRaw == nil {
+		return "", nil
+	}
+
+	var params map[string]any
+	if err := json.Unmarshal(templateParametersRaw, &params); err != nil {
+		return "", fmt.Errorf("failed to unmarshal templateParameters: %w", err)
+	}
+
+	hwTemplateParams, ok := params[TemplateParamHwTemplate]
+	if !ok {
+		return "", nil
+	}
+	hwTemplateMap, ok := hwTemplateParams.(map[string]any)
+	if !ok {
+		return "", fmt.Errorf("templateParameters.%s must be an object", TemplateParamHwTemplate)
+	}
+
+	timeout, ok := hwTemplateMap["hardwareProvisioningTimeout"]
+	if !ok {
+		return "", nil
+	}
+	timeoutStr, ok := timeout.(string)
+	if !ok {
+		return "", fmt.Errorf("templateParameters.%s.hardwareProvisioningTimeout must be a string", TemplateParamHwTemplate)
+	}
+
+	return timeoutStr, nil
+}
+
+// ParseResourceSelectorOverrides parses templateParameters.hwTemplateParameters.nodeGroupData.<group>.resourceSelector
+// and returns a map of groupName -> map[string]string for any additional resource selector criteria specified.
+// These are additive — they will be merged with (not replace) the selectors from the HardwareTemplate.
+func ParseResourceSelectorOverrides(templateParametersRaw []byte) (map[string]map[string]string, error) {
+	overrides := make(map[string]map[string]string)
+
+	if templateParametersRaw == nil {
+		return overrides, nil
+	}
+
+	var params map[string]any
+	if err := json.Unmarshal(templateParametersRaw, &params); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal templateParameters: %w", err)
+	}
+
+	hwTemplateParams, ok := params[TemplateParamHwTemplate]
+	if !ok {
+		return overrides, nil
+	}
+	hwTemplateMap, ok := hwTemplateParams.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("templateParameters.%s must be an object", TemplateParamHwTemplate)
+	}
+
+	nodeGroupData, ok := hwTemplateMap[TemplateParamNodeGroupData]
+	if !ok {
+		return overrides, nil
+	}
+	nodeGroupMap, ok := nodeGroupData.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("templateParameters.%s.%s must be an object",
+			TemplateParamHwTemplate, TemplateParamNodeGroupData)
+	}
+
+	for groupName, groupData := range nodeGroupMap {
+		groupDataMap, ok := groupData.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("templateParameters.%s.%s.%s must be an object",
+				TemplateParamHwTemplate, TemplateParamNodeGroupData, groupName)
+		}
+		rs, ok := groupDataMap["resourceSelector"]
+		if !ok {
+			continue
+		}
+		rsMap, ok := rs.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("templateParameters.%s.%s.%s.resourceSelector must be an object",
+				TemplateParamHwTemplate, TemplateParamNodeGroupData, groupName)
+		}
+		selectors := make(map[string]string)
+		for k, v := range rsMap {
+			if vStr, ok := v.(string); ok {
+				selectors[k] = vStr
+			}
+		}
+		if len(selectors) > 0 {
+			overrides[groupName] = selectors
 		}
 	}
 
@@ -473,20 +570,32 @@ func schemaDefinesHwTemplateParameters(clusterTemplate *ClusterTemplate) bool {
 // - Each nodeGroup referenced in hwTemplateParameters.nodeGroupData matches a nodeGroup in the HardwareTemplate
 // - Every nodeGroup has an hwProfile from either the templateParameters or the HardwareTemplate
 // - Each referenced HardwareProfile CR exists
+// - hardwareProvisioningTimeout (if specified) is a valid duration string
+// - resourceSelector overrides reference valid nodeGroups
 func (r *ProvisioningRequest) ValidateHwTemplateParameters(
 	ctx context.Context, c client.Client, clusterTemplate *ClusterTemplate) error {
 
 	hwTemplateName := clusterTemplate.Spec.Templates.HwTemplate
 
-	// Parse hwProfile overrides early so we can check for mismatches
+	// Parse all overrides early so we can check for mismatches
 	hwProfileOverrides, err := ParseHwProfileOverrides(r.Spec.TemplateParameters.Raw)
 	if err != nil {
 		return err
 	}
+	timeoutOverride, err := ParseHwTemplateTimeoutOverride(r.Spec.TemplateParameters.Raw)
+	if err != nil {
+		return err
+	}
+	resourceSelectorOverrides, err := ParseResourceSelectorOverrides(r.Spec.TemplateParameters.Raw)
+	if err != nil {
+		return err
+	}
+
+	hasOverrides := len(hwProfileOverrides) > 0 || timeoutOverride != "" || len(resourceSelectorOverrides) > 0
 
 	if hwTemplateName == "" {
 		// Hardware provisioning is skipped; reject if the PR provides hwTemplateParameters
-		if len(hwProfileOverrides) > 0 {
+		if hasOverrides {
 			return fmt.Errorf(
 				"templateParameters.%s is not allowed: ClusterTemplate %q does not reference a HardwareTemplate",
 				TemplateParamHwTemplate, clusterTemplate.Name)
@@ -505,10 +614,19 @@ func (r *ProvisioningRequest) ValidateHwTemplateParameters(
 	}
 
 	// Reject hwTemplateParameters if the ClusterTemplate schema does not define them
-	if len(hwProfileOverrides) > 0 && !schemaDefinesHwTemplateParameters(clusterTemplate) {
+	if hasOverrides && !schemaDefinesHwTemplateParameters(clusterTemplate) {
 		return fmt.Errorf(
 			"templateParameters.%s is not defined in the ClusterTemplate %q schema",
 			TemplateParamHwTemplate, clusterTemplate.Name)
+	}
+
+	// Validate timeout override format
+	if timeoutOverride != "" {
+		if _, err := time.ParseDuration(timeoutOverride); err != nil {
+			return fmt.Errorf(
+				"templateParameters.%s.hardwareProvisioningTimeout %q is not a valid duration: %w",
+				TemplateParamHwTemplate, timeoutOverride, err)
+		}
 	}
 
 	// Build a set of valid nodeGroup names from the HardwareTemplate
@@ -519,6 +637,13 @@ func (r *ProvisioningRequest) ValidateHwTemplateParameters(
 
 	// Validate that each overridden nodeGroup exists in the HardwareTemplate
 	for groupName := range hwProfileOverrides {
+		if !validNodeGroups[groupName] {
+			return fmt.Errorf(
+				"nodeGroup %q in templateParameters.%s.%s does not match any nodeGroup in HardwareTemplate %s",
+				groupName, TemplateParamHwTemplate, TemplateParamNodeGroupData, hwTemplateName)
+		}
+	}
+	for groupName := range resourceSelectorOverrides {
 		if !validNodeGroups[groupName] {
 			return fmt.Errorf(
 				"nodeGroup %q in templateParameters.%s.%s does not match any nodeGroup in HardwareTemplate %s",
