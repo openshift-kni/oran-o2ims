@@ -33,3 +33,6 @@ updates:
     # ignore golang.org major/minor updates until this repo is 1.25-based
     - dependency-name: "golang.org/*"
       update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    # github.com/jackc/pgx/v5 moved to go 1.25 in v5.9.1, so ignore major/minor updates until this repo is 1.25-based
+    - dependency-name: "github.com/jackc/pgx/v5"
+      update-types: ["version-update:semver-major", "version-update:semver-minor"]
