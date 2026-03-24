@@ -789,17 +789,35 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(clusterIn
 		return nil, fmt.Errorf("failed to parse hwProfile overrides: %w", err)
 	}
 
+	resourceSelectorOverrides, err := provisioningv1alpha1.ParseResourceSelectorOverrides(t.object.Spec.TemplateParameters.Raw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse resourceSelector overrides: %w", err)
+	}
+
 	nodeGroups := []hwmgrpluginapi.NodeGroup{}
 	for _, group := range hwTemplate.Spec.NodeGroupData {
 		hwProfile, err := resolveHwProfile(group.Name, group.HwProfile, hwProfileOverrides)
 		if err != nil {
 			return nil, err
 		}
+
+		// Start with the resource selector from the HardwareTemplate
+		resourceSelector := make(map[string]string)
+		for k, v := range group.ResourceSelector {
+			resourceSelector[k] = v
+		}
+		// Merge any additional resource selector criteria from the ProvisioningRequest
+		if additionalSelectors, ok := resourceSelectorOverrides[group.Name]; ok {
+			for k, v := range additionalSelectors {
+				resourceSelector[k] = v
+			}
+		}
+
 		ngd := hwmgrpluginapi.NodeGroupData{
 			HwProfile:        hwProfile,
 			Name:             group.Name,
 			ResourceGroupId:  group.ResourcePoolId,
-			ResourceSelector: group.ResourceSelector,
+			ResourceSelector: resourceSelector,
 			Role:             group.Role,
 		}
 		nodeGroup := newNodeGroup(ngd, roleCounts)
@@ -833,10 +851,17 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(clusterIn
 	// providing a monotonic identifier for tracking configuration transactions.
 	nodeAllocationRequest.ConfigTransactionId = t.object.Generation
 
-	// Set HardwareProvisioningTimeout - use template value or default
-	timeoutStr := hwTemplate.Spec.HardwareProvisioningTimeout
+	// Set HardwareProvisioningTimeout - check ProvisioningRequest override first,
+	// then fall back to HardwareTemplate value, then default
+	timeoutOverride, err := provisioningv1alpha1.ParseHwTemplateTimeoutOverride(t.object.Spec.TemplateParameters.Raw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse hardwareProvisioningTimeout override: %w", err)
+	}
+	timeoutStr := timeoutOverride
 	if timeoutStr == "" {
-		// Use default timeout if not specified in hardware template
+		timeoutStr = hwTemplate.Spec.HardwareProvisioningTimeout
+	}
+	if timeoutStr == "" {
 		timeoutStr = ctlrutils.DefaultHardwareProvisioningTimeout.String()
 	}
 	nodeAllocationRequest.HardwareProvisioningTimeout = &timeoutStr
