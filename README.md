@@ -61,6 +61,11 @@ The typical workflow for deploying and managing clusters with the O-Cloud Manage
 - [Troubleshooting](./docs/troubleshooting.md)
 - [Must-Gather](./docs/user-guide/must-gather.md)
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow, testing requirements,
+and pull request guidelines.
+
 ## Submodules
 
 This repo uses submodules to pull in konflux scripts from another repo. The `hack/update_deps.sh` script, which is called from various Makefile targets,
