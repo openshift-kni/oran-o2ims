@@ -10,3 +10,9 @@ spec:
       WorkloadProfile: TelcoOptimizedProfile
       SriovGlobalEnable: Enabled
       AcPwrRcvryUserDelay: 120
+  biosFirmware:
+    version: 2.1.0
+    url: https://example.com:8888/firmware/xr8620t/BIOS_JDR1R_WN64_2.1.0.EXE
+  bmcFirmware:
+    version: 7.0.0
+    url: https://example.com:8888/firmware/xr8620t/iDRAC-with-Lifecycle-Controller_Firmware_W4NV9_WN64_7.0.0_A00.EXE

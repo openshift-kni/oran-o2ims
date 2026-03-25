@@ -8,6 +8,7 @@ package controllersE2Etest
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -42,6 +43,8 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 	const (
 		timeout     = time.Minute * 2
 		interval    = time.Second * 3
+		master      = "master"
+		worker      = "worker"
 		masterCount = 3
 		workerCount = 8
 
@@ -329,11 +332,11 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		for _, node := range nodeList.Items {
 			hostname := ""
 			switch node.Spec.GroupName {
-			case "master":
+			case master:
 				Expect(masterIdx).To(BeNumerically("<=", masterCount))
 				hostname = fmt.Sprintf("master-%d.%s.example.com", masterIdx, clusterName)
 				masterIdx++
-			case "worker":
+			case worker:
 				Expect(workerIdx).To(BeNumerically("<=", workerCount))
 				hostname = fmt.Sprintf("worker-%d.%s.example.com", workerIdx, clusterName)
 				workerIdx++
@@ -605,7 +608,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 				for i := range nodeList.Items {
 					node := &nodeList.Items[i]
 
-					if node.Spec.GroupName == "master" {
+					if node.Spec.GroupName == master {
 						continue
 					}
 
@@ -658,6 +661,206 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 				return cond != nil && cond.Status == metav1.ConditionFalse &&
 					cond.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed)
 			}, timeout, interval).Should(BeTrue(), "PR should reach HardwareConfigured=Failed")
+		})
+	})
+
+	// Test mid-flight profile change with mixed BMH states:
+	// 1. Trigger a real v1 update (BIOS + firmware changes) so workers enter ConfigUpdate
+	// 2. Advance ONE worker's BMH to Servicing with config-in-progress annotation
+	// 3. Change profile to v2 mid-flight
+	// 4. The 2 workers with BMH=OK are abandoned immediately
+	// 5. The 1 worker with BMH=Servicing defers abandon (controller requeues)
+	// 6. Transition the Servicing BMH to OK -> deferred abandon proceeds
+	// 7. All workers reconverge to v2
+	Describe("Handles mid-flight profile change by abandoning stale updates", func() {
+		var (
+			servicingNodeKey types.NamespacedName
+			servicingBMHKey  types.NamespacedName
+		)
+
+		v1Profile := "dell-xr8620t-bios-basic"
+		v2WorkerProfile := "dell-xr8620t-bios-2.3.5-bmc-7.10.70.10"
+
+		It("Should update PR with v1 worker profile requiring BIOS and firmware changes", func() {
+			// Start from pr-std-succeed (master=v2, worker=v2), then override worker
+			// hwProfile to v1. This forces real BIOS changes (AcPwrRcvryUserDelay 130→120)
+			// and firmware downgrades (bios 2.3.5→2.1.0, bmc 7.10.70.10→7.0.0).
+			Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
+			v2PR, err := testutils.LoadYAML[provisioningv1alpha1.ProvisioningRequest](
+				"../resources/mno_hw_configuration/pr-std-succeed.yaml")
+			Expect(err).ToNot(HaveOccurred())
+			pr.Spec.TemplateParameters = v2PR.Spec.TemplateParameters
+
+			var params map[string]interface{}
+			Expect(json.Unmarshal(pr.Spec.TemplateParameters.Raw, &params)).To(Succeed())
+			hwParams := params["hwTemplateParameters"].(map[string]interface{})
+			nodeGroupData := hwParams["nodeGroupData"].(map[string]interface{})
+			workerData := nodeGroupData["worker"].(map[string]interface{})
+			workerData["hwProfile"] = v1Profile
+			raw, err := json.Marshal(params)
+			Expect(err).ToNot(HaveOccurred())
+			pr.Spec.TemplateParameters = runtime.RawExtension{Raw: raw}
+			Expect(K8SClient.Update(testCtx, pr)).To(Succeed())
+		})
+
+		It("Should have 3 workers in ConfigUpdate and advance one BMH to Servicing", func() {
+			By("Detect worker configuration changes and begin update (NAR InProgress)")
+			Eventually(func() bool {
+				Expect(K8SClient.Get(testCtx, client.ObjectKeyFromObject(nar), nar)).To(Succeed())
+				cond := meta.FindStatusCondition(nar.Status.Conditions, string(hwmgmtv1alpha1.Configured))
+				return cond != nil && cond.Reason == string(hwmgmtv1alpha1.InProgress)
+			}, timeout, interval).Should(BeTrue(), "NAR should be in InProgress")
+
+			By("Waiting for at least 3 workers in ConfigUpdate with v1 profile")
+			Eventually(func() int {
+				count := 0
+				nodeList := listAllocatedNodesForNAR(testCtx, clusterName)
+				for i := range nodeList.Items {
+					node := &nodeList.Items[i]
+					if node.Spec.GroupName != worker || node.Spec.HwProfile != v1Profile {
+						continue
+					}
+					cond := meta.FindStatusCondition(node.Status.Conditions, string(hwmgmtv1alpha1.Configured))
+					if cond != nil && cond.Reason == string(hwmgmtv1alpha1.ConfigUpdate) {
+						count++
+					}
+				}
+				return count
+			}, timeout, interval).Should(BeNumerically(">=", 3),
+				"At least 3 workers should be in ConfigUpdate with v1 profile")
+
+			By("Picking one worker and advancing its BMH to Servicing with config-in-progress")
+			nodeList := listAllocatedNodesForNAR(testCtx, clusterName)
+			for i := range nodeList.Items {
+				node := &nodeList.Items[i]
+				if node.Spec.GroupName != worker || node.Spec.HwProfile != v1Profile {
+					continue
+				}
+				cond := meta.FindStatusCondition(node.Status.Conditions, string(hwmgmtv1alpha1.Configured))
+				if cond != nil && cond.Reason == string(hwmgmtv1alpha1.ConfigUpdate) {
+					servicingNodeKey = types.NamespacedName{Name: node.Name, Namespace: node.Namespace}
+					servicingBMHKey = types.NamespacedName{Name: node.Spec.HwMgrNodeId, Namespace: node.Spec.HwMgrNodeNs}
+					break
+				}
+			}
+			Expect(servicingNodeKey.Name).ToNot(BeEmpty(), "Should find a worker in ConfigUpdate")
+
+			// Simulate metal3 detecting HFS/HFC spec changes by setting
+			// ChangeDetected=True / UpdatesRequired=True on the status conditions.
+			// No actual BIOS or firmware values are changed — only the conditions are
+			// toggled so the controller proceeds to set the reboot annotation and
+			// advance the node through the Servicing path.
+			hfs := &metal3v1alpha1.HostFirmwareSettings{}
+			Expect(K8SClient.Get(testCtx, servicingBMHKey, hfs)).To(Succeed())
+			schemaName := hfs.Status.FirmwareSchema.Name
+			hfs.Status = testutils.UpdateHostFirmwareSettingsStatus(
+				schemaName, hfs.Namespace, hfs.Status.Settings,
+				metav1.ConditionTrue, metav1.ConditionTrue, hfs.Generation)
+			Expect(K8SClient.Status().Update(testCtx, hfs)).To(Succeed())
+
+			hfc := &metal3v1alpha1.HostFirmwareComponents{}
+			Expect(K8SClient.Get(testCtx, servicingBMHKey, hfc)).To(Succeed())
+			hfc.Status = testutils.UpdateHostFirmwareComponentsStatus(
+				hfc.Name, hfc.Namespace, hfc.Status.Components,
+				metav1.ConditionTrue, metav1.ConditionTrue, hfc.Generation)
+			Expect(K8SClient.Status().Update(testCtx, hfc)).To(Succeed())
+
+			// Transition BMH to Servicing (simulates metal3 processing the reboot annotation)
+			bmh := &metal3v1alpha1.BareMetalHost{}
+			Expect(K8SClient.Get(testCtx, servicingBMHKey, bmh)).To(Succeed())
+			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusServicing
+			Expect(K8SClient.Status().Update(testCtx, bmh)).To(Succeed())
+
+			// Wait for controller to set config-in-progress annotation on the AllocatedNode
+			Eventually(func() bool {
+				n := &pluginsv1alpha1.AllocatedNode{}
+				Expect(K8SClient.Get(testCtx, servicingNodeKey, n)).To(Succeed())
+				return n.Annotations[metal3pluginscontrollers.ConfigAnnotation] != ""
+			}, timeout, interval).Should(BeTrue(),
+				"Worker should have config-in-progress annotation")
+		})
+
+		It("Should change to v2 worker profile mid-flight, defer abandon for Servicing worker, then converge all", func() {
+			By("Changing worker profile to v2 while v1 updates are in-flight")
+			Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
+			v2PR, err := testutils.LoadYAML[provisioningv1alpha1.ProvisioningRequest](
+				"../resources/mno_hw_configuration/pr-std-succeed.yaml")
+			Expect(err).ToNot(HaveOccurred())
+			pr.Spec.TemplateParameters = v2PR.Spec.TemplateParameters
+			Expect(K8SClient.Update(testCtx, pr)).To(Succeed())
+
+			Expect(simulateCallback(testCtx, prName, string(hwmgmtv1alpha1.InProgress))).To(Succeed())
+
+			By("Waiting for 7 workers to converge to v2 while Servicing worker defers abandon")
+			// The 2 workers with BMH=OK are abandoned immediately -> re-initiated with v2 ->
+			// ConfigApplied quickly (HFS/HFC status already matches v2 from the success test,
+			// so no actual HW changes are needed).
+			// The 5 pending workers are reset to v2 -> initiated -> ConfigApplied quickly
+			// (same reason: HFS/HFC status already at v2 values).
+			// The 1 Servicing worker can't be abandoned (BMH Servicing) -> stays in ConfigUpdate.
+			Eventually(func() int {
+				count := 0
+				nodeList := listAllocatedNodesForNAR(testCtx, clusterName)
+				for _, node := range nodeList.Items {
+					if node.Spec.GroupName != worker {
+						continue
+					}
+					cond := meta.FindStatusCondition(node.Status.Conditions, string(hwmgmtv1alpha1.Configured))
+					if cond != nil && cond.Status == metav1.ConditionTrue &&
+						cond.Reason == string(hwmgmtv1alpha1.ConfigApplied) &&
+						node.Spec.HwProfile == v2WorkerProfile {
+						count++
+					}
+				}
+				return count
+			}, 3*time.Minute, interval).Should(Equal(7),
+				"7 workers should converge to v2 ConfigApplied while Servicing worker defers")
+
+			By("Verifying the Servicing worker is still in ConfigUpdate with v1 profile (deferred abandon)")
+			n := &pluginsv1alpha1.AllocatedNode{}
+			Expect(K8SClient.Get(testCtx, servicingNodeKey, n)).To(Succeed())
+			Expect(n.Spec.HwProfile).To(Equal(v1Profile),
+				"Servicing worker should still be in v1 profile")
+			cond := meta.FindStatusCondition(n.Status.Conditions, string(hwmgmtv1alpha1.Configured))
+			Expect(cond).ToNot(BeNil())
+			Expect(cond.Reason).To(Equal(string(hwmgmtv1alpha1.ConfigUpdate)), "Servicing worker should still be in ConfigUpdate")
+
+			By("Transitioning the Servicing BMH to OK to allow deferred abandon")
+			bmh := &metal3v1alpha1.BareMetalHost{}
+			Expect(K8SClient.Get(testCtx, servicingBMHKey, bmh)).To(Succeed())
+			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusOK
+			bmh.Status.ErrorMessage = ""
+			bmh.Status.ErrorType = ""
+			Expect(K8SClient.Status().Update(testCtx, bmh)).To(Succeed())
+
+			By("Waiting for NAR to reach ConfigApplied after all workers converge")
+			Eventually(func() bool {
+				Expect(K8SClient.Get(testCtx, client.ObjectKeyFromObject(nar), nar)).To(Succeed())
+				cond := meta.FindStatusCondition(nar.Status.Conditions, string(hwmgmtv1alpha1.Configured))
+				return cond != nil && cond.Status == metav1.ConditionTrue &&
+					cond.Reason == string(hwmgmtv1alpha1.ConfigApplied)
+			}, timeout, interval).Should(BeTrue(), "NAR should reach ConfigApplied")
+			Expect(simulateCallback(testCtx, prName, string(hwmgmtv1alpha1.ConfigApplied))).To(Succeed())
+
+			By("Verifying all 8 worker nodes converged to v2 profile")
+			nodeList := listAllocatedNodesForNAR(testCtx, clusterName)
+			for _, node := range nodeList.Items {
+				if node.Spec.GroupName != worker {
+					continue
+				}
+				Expect(node.Spec.HwProfile).To(Equal(v2WorkerProfile),
+					"Worker %s should have v2 profile", node.Name)
+			}
+		})
+
+		It("Should PR reach HardwareConfigured=True after callback", func() {
+			Expect(simulateCallback(testCtx, prName, string(hwmgmtv1alpha1.ConfigApplied))).To(Succeed())
+			Eventually(func() bool {
+				Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
+				cond := meta.FindStatusCondition(pr.Status.Conditions,
+					string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured))
+				return cond != nil && cond.Status == metav1.ConditionTrue
+			}, timeout, interval).Should(BeTrue(), "PR should reach HardwareConfigured=True")
 		})
 	})
 })

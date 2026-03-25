@@ -37,6 +37,11 @@ import (
 
 const ConfigAnnotation = "clcm.openshift.io/config-in-progress"
 
+// UpdateAbandonedAnnotation marks an AllocatedNode whose in-progress hardware update
+// was abandoned because the desired hardware profile changed mid-flight. The node is
+// safe to re-process with the new profile on the next reconcile.
+const UpdateAbandonedAnnotation = "clcm.openshift.io/update-abandoned"
+
 const (
 	DoNotRequeue               = 0
 	RequeueAfterShortInterval  = 15
@@ -84,6 +89,38 @@ func clearConfigAnnotationWithPatch(ctx context.Context, c client.Client, node *
 	// Apply the patch
 	if err := c.Patch(ctx, node, patch); err != nil {
 		return fmt.Errorf("failed to clear config annotation from AllocatedNode %s: %w", node.Name, err)
+	}
+	return nil
+}
+
+func hasUpdateAbandonedAnnotation(node *pluginsv1alpha1.AllocatedNode) bool {
+	if node.Annotations == nil {
+		return false
+	}
+	_, ok := node.Annotations[UpdateAbandonedAnnotation]
+	return ok
+}
+
+func setUpdateAbandonedAnnotation(ctx context.Context, c client.Client, node *pluginsv1alpha1.AllocatedNode) error {
+	patch := client.MergeFrom(node.DeepCopy())
+	if node.Annotations == nil {
+		node.Annotations = make(map[string]string)
+	}
+	node.Annotations[UpdateAbandonedAnnotation] = "true"
+	if err := c.Patch(ctx, node, patch); err != nil {
+		return fmt.Errorf("failed to set update-abandoned annotation on AllocatedNode %s: %w", node.Name, err)
+	}
+	return nil
+}
+
+func clearUpdateAbandonedAnnotation(ctx context.Context, c client.Client, node *pluginsv1alpha1.AllocatedNode) error {
+	if !hasUpdateAbandonedAnnotation(node) {
+		return nil
+	}
+	patch := client.MergeFrom(node.DeepCopy())
+	delete(node.Annotations, UpdateAbandonedAnnotation)
+	if err := c.Patch(ctx, node, patch); err != nil {
+		return fmt.Errorf("failed to clear update-abandoned annotation from AllocatedNode %s: %w", node.Name, err)
 	}
 	return nil
 }
@@ -266,17 +303,6 @@ func deriveNARStatusFromMultipleNodes(
 	}
 	return metav1.ConditionFalse, string(hwmgmtv1alpha1.InProgress),
 		fmt.Sprintf("%s (%s)", string(hwmgmtv1alpha1.ConfigInProgress), buildGroupDetail())
-}
-
-// getDesiredHwProfile returns the desired hwProfile for a given group name from the NodeAllocationRequest spec.
-// Returns empty string if the group is not found.
-func getDesiredHwProfile(nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest, groupName string) string {
-	for _, group := range nodeAllocationRequest.Spec.NodeGroup {
-		if group.NodeGroupData.Name == groupName {
-			return group.NodeGroupData.HwProfile
-		}
-	}
-	return ""
 }
 
 // getGroupsSortedByRole returns NodeGroups sorted master-first, preserving spec order within same role.
@@ -618,6 +644,67 @@ func handleNodeInProgressUpdate(ctx context.Context,
 	return hwmgrutils.RequeueWithMediumInterval(), nil
 }
 
+// abandonNodeUpdate safely stops an in-progress hardware update for a node whose desired
+// profile changed mid-flight. If the BMH is actively servicing or preparing, the update
+// cannot be interrupted and a requeue is returned so it can exit the state on its own.
+// Otherwise the node is uncordoned, stale annotations are cleared, and the update-abandoned
+// annotation is set so that the next reconcile can re-process the node with the new profile.
+func abandonNodeUpdate(
+	ctx context.Context,
+	c client.Client,
+	noncachedClient client.Reader,
+	logger *slog.Logger,
+	newHwProfile string,
+	node *pluginsv1alpha1.AllocatedNode,
+	nodeOps NodeOps,
+) (ctrl.Result, error) {
+	bmh, err := getBMHForNode(ctx, noncachedClient, node)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get BMH for abandoned node %s: %w", node.Name, err)
+	}
+
+	// Don't interrupt if BMH is actively servicing or preparing — the hardware
+	// operation is underway and must exit the state on its own (complete, fail,
+	// or time out at the NAR level) before the node can be safely re-processed.
+	if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusServicing ||
+		bmh.Status.Provisioning.State == metal3v1alpha1.StatePreparing {
+		logger.InfoContext(ctx, "Desired hardware profile changed but metal3 is actively processing the current update, cannot abandon yet, waiting for completion",
+			slog.String("node", node.Name),
+			slog.String("currentProfile", node.Spec.HwProfile),
+			slog.String("desiredProfile", newHwProfile),
+			slog.String("bmh", bmh.Name),
+			slog.String("bmhOperationalStatus", string(bmh.Status.OperationalStatus)),
+			slog.String("bmhProvisioningState", string(bmh.Status.Provisioning.State)))
+		return hwmgrutils.RequeueWithMediumInterval(), nil
+	}
+
+	logger.InfoContext(ctx, "Desired profile changed during in-progress update, abandoning current update",
+		slog.String("node", node.Name),
+		slog.String("currentProfile", node.Spec.HwProfile),
+		slog.String("desiredProfile", newHwProfile))
+
+	if err := nodeOps.UncordonNode(ctx, node.Status.Hostname); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to uncordon abandoned node %s: %w", node.Status.Hostname, err)
+	}
+
+	if getConfigAnnotation(node) != "" {
+		if err := clearConfigAnnotationWithPatch(ctx, c, node); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to clear config annotation on abandoned node %s: %w", node.Name, err)
+		}
+	}
+
+	if err := clearBMHUpdateAnnotations(ctx, c, logger, bmh); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to clear BMH annotations for abandoned node %s: %w", node.Name, err)
+	}
+
+	if err := setUpdateAbandonedAnnotation(ctx, c, node); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to set abandoned annotation on node %s: %w", node.Name, err)
+	}
+
+	// Return immediately to allow the next reconcile to re-process the node with the new profile.
+	return hwmgrutils.RequeueImmediately(), nil
+}
+
 // initiateNodeUpdate starts the day2 update process for the given AllocatedNode. It validates
 // whether HW changes are needed, cordons and drains the node if so (skipped for SNO), then
 // applies the hardware profile changes. If no update is needed, it marks the node as ConfigApplied
@@ -631,6 +718,12 @@ func initiateNodeUpdate(ctx context.Context,
 	newHwProfile string,
 	nodeOps NodeOps,
 ) (ctrl.Result, error) {
+
+	// Clear the abandoned annotation if this node was previously abandoned due to a
+	// mid-flight profile change. The node is now being re-processed with the new profile.
+	if err := clearUpdateAbandonedAnnotation(ctx, c, node); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to clear abandoned annotation on node %s: %w", node.Name, err)
+	}
 
 	bmh, err := getBMHForNode(ctx, noncachedClient, node)
 	if err != nil {
@@ -794,8 +887,9 @@ func handleNodeAllocationRequestConfiguring(
 // It selects nodes from one group at a time in priority order (master first, then workers).
 // The next group is not considered until all nodes in the current group have completed.
 // Within the active group, it retrieves the MCP maxUnavailable as a rolling concurrency ceiling.
-// As long as there capacity remains, pending nodes are selected for processing.
-// Nodes already in progress are also included so they can continue processing to completion.
+// As long as there capacity remains, pending nodes are selected for processing. If there are
+// abandoned nodes (from a mid-flight profile change), they are prioritized over regular pending
+// nodes. Nodes already in progress are also included so they can continue processing to completion.
 func selectNodesToProcess(
 	ctx context.Context,
 	logger *slog.Logger,
@@ -815,12 +909,13 @@ func selectNodesToProcess(
 			continue
 		}
 
-		nc := classifyNodes(nodesInGroup, newHwProfile)
+		nc := classifyNodes(ctx, logger, nodeOps, nodesInGroup, newHwProfile)
 		logger.InfoContext(ctx, "Node group classification",
 			slog.String("group", currentGroup),
 			slog.Int("doneNodes", len(nc.DoneNodes)),
 			slog.Int("inProgressNodes", len(nc.InProgressNodes)),
 			slog.Int("failedNodes", len(nc.FailedNodes)),
+			slog.Int("priorityNodes", len(nc.PriorityNodes)),
 			slog.Int("pendingNodes", len(nc.PendingNodes)),
 			slog.Int("totalNodes", len(nodesInGroup)))
 
@@ -840,21 +935,30 @@ func selectNodesToProcess(
 		// a terminal Failed state, stopping further reconciliation. We still account for it
 		// defensively in the unavailable count.
 		unavailable := len(nc.InProgressNodes) + len(nc.FailedNodes)
-		capacity := maxUnavailable - unavailable
+		capacity := max(maxUnavailable-unavailable, 0)
 		logger.InfoContext(ctx, "Rolling ceiling",
 			slog.String("group", currentGroup),
 			slog.Int("maxUnavailable", maxUnavailable),
 			slog.Int("unavailable", unavailable),
 			slog.Int("capacity", capacity))
 
-		for i := range nc.PendingNodes {
+		// Select candidates for initiation in priority order:
+		// 1. Not-ready nodes — already degraded, so updating them first avoids draining
+		//    healthy nodes while a down node sits idle.
+		// 2. Abandoned nodes — previous update was interrupted by a mid-flight profile
+		//    change, HFS/HFC may carry stale settings that may want to be updated first.
+		// 3. Pending nodes — regular candidates ready for a fresh update.
+		var candidates = []*pluginsv1alpha1.AllocatedNode{}
+		candidates = append(candidates, nc.PriorityNodes...)
+		candidates = append(candidates, nc.PendingNodes...)
+		for i := range candidates {
 			if capacity <= 0 {
 				// If we've reached the maxUnavailable capacity, break out of the loop.
 				break
 			}
 			// Process the node for update initiation.
 			nodesToProcess = append(nodesToProcess, nodeAction{
-				node:       nc.PendingNodes[i],
+				node:       candidates[i],
 				actionType: actionInitiate,
 			})
 			// Decrement the capacity for the next node.
@@ -916,17 +1020,31 @@ func executeNodeUpdates(
 			var res ctrl.Result
 			var err error
 
+			newHwProfile := getNewHwProfileForNode(nar, nodeToProcess.node)
+
+			// For actionTransition and actionInProgressUpdate nodes, detect mid-flight profile changes:
+			// if the desired profile no longer matches the node's current spec, safely abandon the stale
+			// update so the node can be re-processed with the new profile.
 			switch nodeToProcess.actionType {
 			case actionInitiate:
-				newHwProfile := getNewHwProfileForNode(nar, nodeToProcess.node)
 				res, err = initiateNodeUpdate(ctx, c, noncachedClient, logger,
 					pluginNamespace, nodeToProcess.node, newHwProfile, nodeOps)
 			case actionTransition:
-				res, err = handleTransitionNode(ctx, c, noncachedClient, logger,
-					pluginNamespace, nodeToProcess.node, true, nodeOps)
+				if nodeToProcess.node.Spec.HwProfile != newHwProfile {
+					res, err = abandonNodeUpdate(ctx, c, noncachedClient, logger,
+						newHwProfile, nodeToProcess.node, nodeOps)
+				} else {
+					res, err = handleTransitionNode(ctx, c, noncachedClient, logger,
+						pluginNamespace, nodeToProcess.node, true, nodeOps)
+				}
 			case actionInProgressUpdate:
-				res, err = handleNodeInProgressUpdate(ctx, c, noncachedClient, logger,
-					pluginNamespace, nodeToProcess.node, nodeOps)
+				if nodeToProcess.node.Spec.HwProfile != newHwProfile {
+					res, err = abandonNodeUpdate(ctx, c, noncachedClient, logger,
+						newHwProfile, nodeToProcess.node, nodeOps)
+				} else {
+					res, err = handleNodeInProgressUpdate(ctx, c, noncachedClient, logger,
+						pluginNamespace, nodeToProcess.node, nodeOps)
+				}
 			}
 
 			mu.Lock()
@@ -986,6 +1104,20 @@ func markPendingNodesForUpdate(
 				continue
 			}
 
+			// Skip nodes actively in ConfigUpdate (being processed or ready for processing by metal3) —
+			// they will either complete the current update or be abandoned by executeNodeUpdates if
+			// the profile changed mid-flight. If they have already been safely abandoned, reset them to
+			// the new profile and ConfigUpdatePending so they can be re-initiated.
+			// We don't clear the abandoned annotation here because classifyNodes needs to identify
+			// abandoned nodes based on the annotation, and initiateNodeUpdate will clear it.
+			cond := meta.FindStatusCondition(node.Status.Conditions, string(hwmgmtv1alpha1.Configured))
+			if cond != nil &&
+				cond.Status == metav1.ConditionFalse &&
+				cond.Reason == string(hwmgmtv1alpha1.ConfigUpdate) &&
+				!hasUpdateAbandonedAnnotation(node) {
+				continue
+			}
+
 			// Set condition to ConfigUpdatePending
 			if err := hwmgrutils.SetNodeConfigUpdatePending(ctx, c, noncachedClient, logger, node, newHwProfile,
 				string(hwmgmtv1alpha1.NodeUpdatePending)); err != nil {
@@ -1005,12 +1137,21 @@ type nodeClassification struct {
 	InProgressNodes []*pluginsv1alpha1.AllocatedNode
 	// FailedNodes: Configured=False with reason Failed or InvalidInput
 	FailedNodes []*pluginsv1alpha1.AllocatedNode
-	// PendingNodes: everything else (nodes that need to be evaluated, updated)
+	// PriorityNodes: nodes that should be processed before regular pending nodes.
+	// This includes nodes whose k8s node is not Ready (previous update failed)
+	// and nodes with the UpdateAbandonedAnnotation (previous update was abandoned
+	// due to a mid-flight profile change).
+	PriorityNodes []*pluginsv1alpha1.AllocatedNode
+	// PendingNodes: ready nodes without special conditions that need to be evaluated/updated
 	PendingNodes []*pluginsv1alpha1.AllocatedNode
 }
 
-func classifyNodes(nodes []*pluginsv1alpha1.AllocatedNode, newHwProfile string) nodeClassification {
+func classifyNodes(
+	ctx context.Context, logger *slog.Logger, nodeOps NodeOps,
+	nodes []*pluginsv1alpha1.AllocatedNode, newHwProfile string,
+) nodeClassification {
 	var nc nodeClassification
+	var notReadyNodes, abandonedNodes []*pluginsv1alpha1.AllocatedNode
 	for _, node := range nodes {
 		cond := meta.FindStatusCondition(node.Status.Conditions, string(hwmgmtv1alpha1.Configured))
 
@@ -1024,7 +1165,8 @@ func classifyNodes(nodes []*pluginsv1alpha1.AllocatedNode, newHwProfile string) 
 
 		if cond != nil &&
 			cond.Status == metav1.ConditionFalse &&
-			cond.Reason == string(hwmgmtv1alpha1.ConfigUpdate) {
+			cond.Reason == string(hwmgmtv1alpha1.ConfigUpdate) &&
+			!hasUpdateAbandonedAnnotation(node) {
 			nc.InProgressNodes = append(nc.InProgressNodes, node)
 			continue
 		}
@@ -1037,8 +1179,28 @@ func classifyNodes(nodes []*pluginsv1alpha1.AllocatedNode, newHwProfile string) 
 			continue
 		}
 
+		// Remaining nodes are pending or abandoned. Collect not-ready and abandoned
+		// nodes separately so PriorityNodes is ordered: not-ready first (already
+		// degraded, should recover promptly), then abandoned ready nodes (stale HFS/HFC).
+		ready, err := nodeOps.IsNodeReady(ctx, node.Status.Hostname)
+		if err != nil {
+			logger.WarnContext(ctx, "Failed to check node readiness, assuming not ready",
+				slog.String("node", node.Name), slog.String("error", err.Error()))
+			ready = false
+		}
+		if !ready {
+			notReadyNodes = append(notReadyNodes, node)
+			continue
+		}
+		if hasUpdateAbandonedAnnotation(node) {
+			abandonedNodes = append(abandonedNodes, node)
+			continue
+		}
+
 		nc.PendingNodes = append(nc.PendingNodes, node)
 	}
+	nc.PriorityNodes = append(nc.PriorityNodes, notReadyNodes...)
+	nc.PriorityNodes = append(nc.PriorityNodes, abandonedNodes...)
 	return nc
 }
 

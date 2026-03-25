@@ -1172,7 +1172,7 @@ func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.
 		if patched.Annotations == nil {
 			patched.Annotations = make(map[string]string)
 		}
-		patched.Annotations[BmhDeallocationDoneAnnotation] = "true"
+		patched.Annotations[BmhDeallocationDoneAnnotation] = ValueTrue
 
 		// Skip teardown steps if skip-cleanup is requested via annotation
 		_, skipCleanAndPower := patched.Annotations[SkipCleanupAnnotation]
@@ -1243,7 +1243,7 @@ func allowHostManagement(ctx context.Context, c client.Client, logger *slog.Logg
 }
 
 func isBMHDeallocated(bmh *metal3v1alpha1.BareMetalHost) bool {
-	return bmh.Annotations != nil && bmh.Annotations[BmhDeallocationDoneAnnotation] == "true"
+	return bmh.Annotations != nil && bmh.Annotations[BmhDeallocationDoneAnnotation] == ValueTrue
 }
 
 // clearBMHAnnotation clears both BmhDeallocationDoneAnnotation and BmhErrorTimestampAnnotation from a BareMetalHost in a single API call
