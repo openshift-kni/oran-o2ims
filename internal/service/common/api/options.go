@@ -15,10 +15,11 @@ import (
 
 // Fields that can be included/excluded (i.e., optional complex fields where 'complex' means an object or an array)
 const (
-	ExtensionsAttribute   = "extensions"
-	MemberOfAttribute     = "memberOf"
-	CapacityAttribute     = "capacity"
-	CapabilitiesAttribute = "capabilities"
+	ExtensionsAttribute      = "extensions"
+	MemberOfAttribute        = "memberOf"
+	CapacityAttribute        = "capacity"
+	CapabilitiesAttribute    = "capabilities"
+	CharacteristicsAttribute = "characteristics"
 )
 
 // FieldOptions implements the attribute selection algorithm specified in ETSI GS NFV-SOL 013 V3.5.1, Section 5.3.2.2

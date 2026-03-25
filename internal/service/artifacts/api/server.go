@@ -254,6 +254,10 @@ func clusterTemplateToManagedInfrastructureTemplate(clusterTemplate provisioning
 		ParameterSchema:    parameterSchema,
 	}
 
+	if options.IsIncluded(commonapi.CharacteristicsAttribute) && len(clusterTemplate.Spec.Characteristics) > 0 {
+		result.Characteristics = &clusterTemplate.Spec.Characteristics
+	}
+
 	if options.IsIncluded(commonapi.ExtensionsAttribute) {
 		result.Extensions = &clusterTemplateExtensions
 	}
