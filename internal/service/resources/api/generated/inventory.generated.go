@@ -54,6 +54,16 @@ const (
 	Point LocationInfoCoordinateType = "Point"
 )
 
+// Valid indicates whether the value is a known member of the LocationInfoCoordinateType enum.
+func (e LocationInfoCoordinateType) Valid() bool {
+	switch e {
+	case Point:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ResourceTypeResourceClass.
 const (
 	ResourceTypeResourceClassCOMPUTE    ResourceTypeResourceClass = "COMPUTE"
@@ -1549,7 +1559,7 @@ func (siw *ServerInterfaceWrapper) GetLocations(w http.ResponseWriter, r *http.R
 
 	// ------------- Optional query parameter "all_fields" -------------
 
-	err = runtime.BindQueryParameter("form", true, false, "all_fields", r.URL.Query(), &params.AllFields)
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "all_fields", r.URL.Query(), &params.AllFields, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "all_fields", Err: err})
 		return
@@ -1557,7 +1567,7 @@ func (siw *ServerInterfaceWrapper) GetLocations(w http.ResponseWriter, r *http.R
 
 	// ------------- Optional query parameter "exclude_fields" -------------
 
-	err = runtime.BindQueryParameter("form", true, false, "exclude_fields", r.URL.Query(), &params.ExcludeFields)
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "exclude_fields", r.URL.Query(), &params.ExcludeFields, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "exclude_fields", Err: err})
 		return
@@ -1565,7 +1575,7 @@ func (siw *ServerInterfaceWrapper) GetLocations(w http.ResponseWriter, r *http.R
 
 	// ------------- Optional query parameter "fields" -------------
 
-	err = runtime.BindQueryParameter("form", true, false, "fields", r.URL.Query(), &params.Fields)
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "fields", r.URL.Query(), &params.Fields, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fields", Err: err})
 		return
@@ -1573,7 +1583,7 @@ func (siw *ServerInterfaceWrapper) GetLocations(w http.ResponseWriter, r *http.R
 
 	// ------------- Optional query parameter "filter" -------------
 
-	err = runtime.BindQueryParameter("form", true, false, "filter", r.URL.Query(), &params.Filter)
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "filter", r.URL.Query(), &params.Filter, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "filter", Err: err})
 		return
@@ -1598,7 +1608,7 @@ func (siw *ServerInterfaceWrapper) GetLocation(w http.ResponseWriter, r *http.Re
 	// ------------- Path parameter "globalLocationId" -------------
 	var globalLocationId GlobalLocationId
 
-	err = runtime.BindStyledParameterWithOptions("simple", "globalLocationId", r.PathValue("globalLocationId"), &globalLocationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	err = runtime.BindStyledParameterWithOptions("simple", "globalLocationId", r.PathValue("globalLocationId"), &globalLocationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "globalLocationId", Err: err})
 		return
@@ -1637,7 +1647,7 @@ func (siw *ServerInterfaceWrapper) GetOCloudSites(w http.ResponseWriter, r *http
 
 	// ------------- Optional query parameter "all_fields" -------------
 
-	err = runtime.BindQueryParameter("form", true, false, "all_fields", r.URL.Query(), &params.AllFields)
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "all_fields", r.URL.Query(), &params.AllFields, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "all_fields", Err: err})
 		return
@@ -1645,7 +1655,7 @@ func (siw *ServerInterfaceWrapper) GetOCloudSites(w http.ResponseWriter, r *http
 
 	// ------------- Optional query parameter "exclude_fields" -------------
 
-	err = runtime.BindQueryParameter("form", true, false, "exclude_fields", r.URL.Query(), &params.ExcludeFields)
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "exclude_fields", r.URL.Query(), &params.ExcludeFields, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "exclude_fields", Err: err})
 		return
@@ -1653,7 +1663,7 @@ func (siw *ServerInterfaceWrapper) GetOCloudSites(w http.ResponseWriter, r *http
 
 	// ------------- Optional query parameter "fields" -------------
 
-	err = runtime.BindQueryParameter("form", true, false, "fields", r.URL.Query(), &params.Fields)
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "fields", r.URL.Query(), &params.Fields, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fields", Err: err})
 		return
@@ -1661,7 +1671,7 @@ func (siw *ServerInterfaceWrapper) GetOCloudSites(w http.ResponseWriter, r *http
 
 	// ------------- Optional query parameter "filter" -------------
 
-	err = runtime.BindQueryParameter("form", true, false, "filter", r.URL.Query(), &params.Filter)
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "filter", r.URL.Query(), &params.Filter, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "filter", Err: err})
 		return
@@ -1686,7 +1696,7 @@ func (siw *ServerInterfaceWrapper) GetOCloudSite(w http.ResponseWriter, r *http.
 	// ------------- Path parameter "oCloudSiteId" -------------
 	var oCloudSiteId OCloudSiteId
 
-	err = runtime.BindStyledParameterWithOptions("simple", "oCloudSiteId", r.PathValue("oCloudSiteId"), &oCloudSiteId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	err = runtime.BindStyledParameterWithOptions("simple", "oCloudSiteId", r.PathValue("oCloudSiteId"), &oCloudSiteId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "oCloudSiteId", Err: err})
 		return

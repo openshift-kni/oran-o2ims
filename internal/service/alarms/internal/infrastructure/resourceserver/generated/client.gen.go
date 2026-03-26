@@ -52,6 +52,15 @@ const (
 	Point LocationInfoCoordinateType = "Point"
 )
 
+// Valid indicates whether the value is a known member of the LocationInfoCoordinateType enum.
+func (e LocationInfoCoordinateType) Valid() bool {
+	switch e {
+	case Point:
+		return true
+	default:
+		return false
+	}
+}
 
 // Defines values for ResourceTypeResourceClass.
 const (
@@ -2048,7 +2057,7 @@ func NewGetLocationsRequest(server string, params *GetLocationsParams) (*http.Re
 
 		if params.AllFields != nil {
 
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "all_fields", runtime.ParamLocationQuery, *params.AllFields); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "all_fields", *params.AllFields, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 				return nil, err
@@ -2064,7 +2073,7 @@ func NewGetLocationsRequest(server string, params *GetLocationsParams) (*http.Re
 
 		if params.ExcludeFields != nil {
 
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "exclude_fields", runtime.ParamLocationQuery, *params.ExcludeFields); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "exclude_fields", *params.ExcludeFields, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 				return nil, err
@@ -2080,7 +2089,7 @@ func NewGetLocationsRequest(server string, params *GetLocationsParams) (*http.Re
 
 		if params.Fields != nil {
 
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "fields", runtime.ParamLocationQuery, *params.Fields); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "fields", *params.Fields, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 				return nil, err
@@ -2096,7 +2105,7 @@ func NewGetLocationsRequest(server string, params *GetLocationsParams) (*http.Re
 
 		if params.Filter != nil {
 
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "filter", runtime.ParamLocationQuery, *params.Filter); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter", *params.Filter, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 				return nil, err
@@ -2127,7 +2136,7 @@ func NewGetLocationRequest(server string, globalLocationId GlobalLocationId) (*h
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "globalLocationId", runtime.ParamLocationPath, globalLocationId)
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "globalLocationId", globalLocationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -2179,7 +2188,7 @@ func NewGetOCloudSitesRequest(server string, params *GetOCloudSitesParams) (*htt
 
 		if params.AllFields != nil {
 
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "all_fields", runtime.ParamLocationQuery, *params.AllFields); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "all_fields", *params.AllFields, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 				return nil, err
@@ -2195,7 +2204,7 @@ func NewGetOCloudSitesRequest(server string, params *GetOCloudSitesParams) (*htt
 
 		if params.ExcludeFields != nil {
 
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "exclude_fields", runtime.ParamLocationQuery, *params.ExcludeFields); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "exclude_fields", *params.ExcludeFields, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 				return nil, err
@@ -2211,7 +2220,7 @@ func NewGetOCloudSitesRequest(server string, params *GetOCloudSitesParams) (*htt
 
 		if params.Fields != nil {
 
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "fields", runtime.ParamLocationQuery, *params.Fields); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "fields", *params.Fields, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 				return nil, err
@@ -2227,7 +2236,7 @@ func NewGetOCloudSitesRequest(server string, params *GetOCloudSitesParams) (*htt
 
 		if params.Filter != nil {
 
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "filter", runtime.ParamLocationQuery, *params.Filter); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter", *params.Filter, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 				return nil, err
@@ -2258,7 +2267,7 @@ func NewGetOCloudSiteRequest(server string, oCloudSiteId OCloudSiteId) (*http.Re
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "oCloudSiteId", runtime.ParamLocationPath, oCloudSiteId)
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "oCloudSiteId", oCloudSiteId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
 	if err != nil {
 		return nil, err
 	}
