@@ -34,7 +34,7 @@ var _ = Describe("Location CEL Validation", Label("envtest"), func() {
 			},
 		}
 		err := k8sClient.Create(ctx, loc)
-		Expect(err).To(MatchError(ContainSubstring("at least one of coordinate, civicAddress, or address")))
+		Expect(err).To(MatchError(ContainSubstring("at least one of coordinate, non-empty civicAddress, or non-empty address must be specified")))
 	})
 
 	It("accepts Location with coordinate field", func() {

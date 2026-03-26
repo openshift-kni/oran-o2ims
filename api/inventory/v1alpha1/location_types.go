@@ -52,7 +52,7 @@ type CivicAddressElement struct {
 // Note: The globalLocationId for API responses is derived from metadata.name.
 // Use metadata.name as the SMO-defined identifier when creating Location CRs.
 //
-// +kubebuilder:validation:XValidation:rule="has(self.coordinate) || has(self.civicAddress) || has(self.address)",message="at least one of coordinate, civicAddress, or address must be specified"
+// +kubebuilder:validation:XValidation:rule="has(self.coordinate) || (has(self.civicAddress) && size(self.civicAddress) > 0) || (has(self.address) && size(self.address) > 0)",message="at least one of coordinate, non-empty civicAddress, or non-empty address must be specified"
 type LocationSpec struct {
 	// Description provides additional details about the location
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Description",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}

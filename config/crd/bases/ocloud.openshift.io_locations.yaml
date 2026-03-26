@@ -127,9 +127,10 @@ spec:
             - description
             type: object
             x-kubernetes-validations:
-            - message: at least one of coordinate, civicAddress, or address must be
-                specified
-              rule: has(self.coordinate) || has(self.civicAddress) || has(self.address)
+            - message: at least one of coordinate, non-empty civicAddress, or non-empty
+                address must be specified
+              rule: has(self.coordinate) || (has(self.civicAddress) && size(self.civicAddress)
+                > 0) || (has(self.address) && size(self.address) > 0)
           status:
             description: LocationStatus defines the observed state of Location
             properties:
