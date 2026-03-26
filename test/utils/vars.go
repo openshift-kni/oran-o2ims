@@ -382,7 +382,7 @@ var (
 		{
 			"repoName":    "multicluster-observability-operator",
 			"modulePath":  "github.com/stolostron/multicluster-observability-operator",
-			"crdPath":     "multicluster-observability-operator/operators/multiclusterobservability/manifests/endpoint-observability",
+			"crdPath":     "operators/multiclusterobservability/manifests/endpoint-observability",
 			"owner":       "stolostron",
 			"crdFileName": "observability.open-cluster-management.io_observabilityaddon_crd.yaml",
 		},
