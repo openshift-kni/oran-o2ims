@@ -32,7 +32,16 @@ SPDX-License-Identifier: Apache-2.0
 
   - Observability Operator
 
-    Enable Observablity in ACM by following the official guide: [Red Hat ACM Observability - Enabling the Observability service](https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_management_for_kubernetes/2.14/html-single/observability/index#enabling-observability)
+    Enable Observability in ACM by following the official guide: [Red Hat ACM Observability - Enabling the Observability service](https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_management_for_kubernetes/2.14/html-single/observability/index#enabling-observability)
+
+  - Image-Based Install Operator (optional, required for [IBI provisioning](./ibi-based-cluster-provisioning.md))
+
+    Enable the Image-Based Install Operator in the MultiClusterEngine:
+
+    ```console
+    oc patch multiclusterengines.multicluster.openshift.io multiclusterengine --type json --patch '[{"op": "add", "path":"/spec/overrides/components/-", "value": {"name":"image-based-install-operator","enabled": true}}]'
+    ```
+
 - Red Hat OpenShift GitOps Operator
 - Topology Aware Lifecycle Manager
 

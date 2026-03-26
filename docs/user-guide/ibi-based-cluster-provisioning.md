@@ -17,7 +17,10 @@ This document provides a walkthrough for provisioning single-node OpenShift (SNO
 * OpenShift cluster with Advanced Cluster Management (ACM) 2.14 or later
 * Red Hat OpenShift GitOps Operator
 * SiteConfig Operator enabled
-* Image-Based Install Operator enabled
+* Image-Based Install Operator enabled in the MultiClusterEngine — this is required
+  for IBI and is **not enabled by default**. See the
+  [Prerequisites](./prereqs.md#required-operators-and-addons-on-the-hub) for the
+  enable command.
 * O-Cloud Manager operator installed and running
 
 ### Git Repository Setup
@@ -154,28 +157,126 @@ spec:
 
 ### Step 2: Create the Live ISO
 
-After generating the seed image, use the `openshift-install` program to create a live installation ISO that embeds the seed image and installation logic:
+After generating the seed image, use the `openshift-install` program to create a
+live installation ISO that embeds the seed image.
+
+#### Getting the openshift-install binary
+
+The `openshift-install` binary must support the `image-based` subcommand (available
+in OpenShift 4.16+). You can obtain it in one of the following ways:
+
+**Option A:** Download from the OpenShift mirror:
 
 ```bash
-openshift-install image-based create image --dir ibi-iso-workdir
-INFO Consuming Image-based Installation ISO Config from target directory
-INFO Creating Image-based Installation ISO with embedded ignition
+curl -O https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable-4.21/openshift-install-linux.tar.gz
+tar xzf openshift-install-linux.tar.gz openshift-install
+chmod +x openshift-install
 ```
 
-> [!NOTE]
-> The `ibi-iso-workdir` directory must contain an `ImageBasedInstallationConfig` resource. If you don't already have one, you can generate a default template as follows:
+**Option B:** Extract from a specific OCP release image:
 
 ```bash
+oc adm release extract --command=openshift-install \
+  quay.io/openshift-release-dev/ocp-release:<version>-x86_64
+```
+
+#### Creating the ImageBasedInstallationConfig
+
+Create a working directory and generate a configuration template:
+
+```bash
+mkdir ibi-iso-workdir
 openshift-install image-based create image-config-template --dir ibi-iso-workdir
 ```
 
-The live ISO contains:
+This creates `ibi-iso-workdir/image-based-installation-config.yaml`. Edit the file
+to set the required fields:
 
-* The OpenShift seed image with preconfigured cluster state
-* Installation automation and configuration logic
+```yaml
+apiVersion: v1beta1
+kind: ImageBasedInstallationConfig
+metadata:
+  name: ibi-config
+seedImage: quay.io/<your-repo>/seed-image:<version>
+seedVersion: "<ocp-version>"
+installationDisk: /dev/disk/by-path/<disk-path>
+sshKey: "ssh-rsa AAAA..."
+pullSecret: '<pull-secret-json>'
+```
+
+| Field | Description |
+|---|---|
+| `seedImage` | Container image reference for the seed image created in Step 1 |
+| `seedVersion` | OCP version of the seed image (e.g., `"4.20.4"`) |
+| `installationDisk` | Disk device path on the target server (must match the hardware) |
+| `sshKey` | SSH public key for accessing the pre-provisioned server for debugging |
+| `pullSecret` | JSON pull secret (see below) |
+
+> [!WARNING]
+> The `pullSecret` must include credentials for both the seed image registry and
+> the OCP release image registries. If the pull secret only contains seed registry
+> credentials, the pre-provisioning will fail when trying to pull OCP container
+> images.
+
+To build the merged pull secret, extract the cluster pull secret from the hub cluster
+and merge it with your seed registry credentials:
+
+```bash
+# Extract the cluster pull secret
+oc get secret pull-secret -n openshift-config \
+  -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d > cluster-pull-secret.json
+
+# Merge with seed registry credentials
+jq -s '.[0] * .[1]' cluster-pull-secret.json seed-pull-secret.json > merged-pull-secret.json
+```
+
+Use the contents of `merged-pull-secret.json` as the `pullSecret` value in the config.
 
 > [!NOTE]
-> Network and hardware-specific configurations are applied later through the IBI templates provided by the SiteConfig Operator. These are not embedded in the live ISO.
+> Do not include `networkConfig` in the ISO configuration. Network and
+> hardware-specific configurations are applied later through the IBI templates
+> provided by the SiteConfig Operator, not embedded in the ISO.
+
+#### Building the ISO
+
+> [!WARNING]
+> The `openshift-install` command consumes (deletes) the configuration file and
+> generates state files during the build. If you need to rebuild the ISO (e.g.,
+> after updating the configuration), you must start with a clean working directory.
+> Reusing a directory from a previous build will cause the old configuration to be
+> used instead of your updated file.
+
+```bash
+# Save a backup of the config
+cp ibi-iso-workdir/image-based-installation-config.yaml image-based-installation-config.yaml.bak
+
+# Build the ISO
+openshift-install image-based create image --dir ibi-iso-workdir
+```
+
+To rebuild with an updated configuration:
+
+```bash
+rm -rf ibi-iso-workdir
+mkdir ibi-iso-workdir
+cp image-based-installation-config.yaml.bak ibi-iso-workdir/image-based-installation-config.yaml
+# Edit the config as needed, then rebuild:
+openshift-install image-based create image --dir ibi-iso-workdir
+```
+
+This pulls the seed image, generates ignition configuration, and produces
+`ibi-iso-workdir/rhcos-ibi.iso`. The process may take several minutes depending on
+the seed image size and network speed.
+
+#### Hosting the ISO
+
+The ISO must be accessible via HTTP for BMC virtual media mount during server
+pre-provisioning. Copy it to an HTTP server accessible from the BMC management
+network:
+
+```bash
+scp ibi-iso-workdir/rhcos-ibi.iso <http-server>:/var/www/html/ibi/rhcos-ibi.iso
+```
 
 ### Step 3: Server Pre-Provisioning
 
@@ -183,13 +284,38 @@ Pre-provision bare metal servers using the live installation ISO and BMC virtual
 This step is per-server but can be run in parallel across multiple servers using the
 same ISO.
 
-1. Mount the live ISO to the target server.
-2. Boot from virtual media. During installation, the ISO will:
+1. Mount the live ISO to the target server via BMC virtual media.
+2. Set a one-time boot override to boot from the virtual CD/ISO.
+3. Power on the server. During installation, the ISO will:
    * Install Red Hat Enterprise Linux CoreOS (RHCOS) to disk
    * Pull the seed image
    * Pre-cache OpenShift release container images
    * Apply the preconfigured OpenShift cluster state
    * Prepare the server for cluster provisioning
+
+> [!NOTE]
+> If the BMC does not have DNS resolution configured, you may need to use an
+> IP address rather than a hostname in the ISO URL.
+
+#### Monitoring Pre-Provisioning Progress
+
+If an `sshKey` was included in the `ImageBasedInstallationConfig`, you can SSH into
+the server as the `core` user to monitor progress:
+
+```bash
+ssh core@<server-ip>
+
+# Watch the installation service logs
+journalctl -f -u install-rhcos-and-restore-seed.service
+
+# Check overall system activity
+journalctl -f
+```
+
+The pre-provisioning process takes 15-30+ minutes depending on the seed image size
+and network speed. Look for the message `IBI preparation process finished successfully!`
+in the logs to confirm completion. The server does not automatically shut down after
+pre-provisioning — you must monitor the logs to determine when it is done.
 
 Once pre-provisioned, servers can be shipped to deployment sites ready for rapid cluster
 provisioning.
