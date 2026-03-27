@@ -101,6 +101,10 @@ func VerifyProvisioningStatus(provStatus provisioningv1alpha1.ProvisioningStatus
 // GetExternalCrdFiles downloads the external CRDs that IMS depends on based on
 // the content of the go.mod file. The files are saved in the destDir directory.
 func GetExternalCrdFiles(destDir string) error {
+	// Cache resolved full commit SHAs to avoid redundant GitHub API calls.
+	// Multiple CRDs from the same repo share the same commit SHA.
+	fullCommitShaCache := make(map[string]string)
+
 	for _, externalCrd := range ExternalCrdData {
 		// Get the commit sha from the go.mod of the IMS repo.
 		// Use modulePath if provided, otherwise construct from modName/repoName
@@ -117,32 +121,40 @@ func GetExternalCrdFiles(destDir string) error {
 		commitSha := GetGitCommitFromPseudoVersion(policyModPseudoVersionNew)
 
 		// Get the full sha of the commit by calling the github API.
-		// Retry with exponential backoff.
+		// Use cached value if we've already resolved this commit.
 		url := fmt.Sprintf(GithubCommitsAPI, externalCrd["owner"], externalCrd["repoName"], commitSha)
-		fullCommitSha, err := RetryWithExponentialBackoff(func() (string, error) {
-			req, err := http.NewRequest(http.MethodGet, url, nil) //nolint:noctx
-			if err != nil {
-				return "", fmt.Errorf("error creating request: %w", err)
-			}
-			if token := os.Getenv("GITHUB_TOKEN"); token != "" {
-				req.Header.Set("Authorization", "token "+token)
-			}
-			resp, err := http.DefaultClient.Do(req)
-			if err != nil {
-				return "", fmt.Errorf("error getting URL: %w", err)
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusOK {
-				return "", fmt.Errorf("unexpected status, got: %d", resp.StatusCode)
-			}
-			var commit map[string]interface{}
-			if err := json.NewDecoder(resp.Body).Decode(&commit); err != nil {
-				return "", fmt.Errorf("failed to decode")
-			}
-			Expect(commit).To(HaveKey("sha"))
-			return commit["sha"].(string), nil
-		})
-		Expect(err).NotTo(HaveOccurred())
+		fullCommitSha, cached := fullCommitShaCache[url]
+		if !cached {
+			// Retry with exponential backoff.
+			fullCommitSha, err = RetryWithExponentialBackoff(func() (string, error) {
+				req, err := http.NewRequest(http.MethodGet, url, nil) //nolint:noctx
+				if err != nil {
+					return "", fmt.Errorf("error creating request: %w", err)
+				}
+				if token := os.Getenv("GITHUB_TOKEN"); token != "" {
+					req.Header.Set("Authorization", "token "+token)
+				}
+				resp, err := http.DefaultClient.Do(req)
+				if err != nil {
+					return "", fmt.Errorf("error getting URL: %w", err)
+				}
+				defer resp.Body.Close()
+				if resp.StatusCode != http.StatusOK {
+					return "", fmt.Errorf("unexpected status, got: %d", resp.StatusCode)
+				}
+				var commit map[string]interface{}
+				if err := json.NewDecoder(resp.Body).Decode(&commit); err != nil {
+					return "", fmt.Errorf("failed to decode")
+				}
+				sha, ok := commit["sha"].(string)
+				if !ok {
+					return "", fmt.Errorf("unexpected type for sha field")
+				}
+				return sha, nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+			fullCommitShaCache[url] = fullCommitSha
+		}
 		// Get the CRD file.
 		crdFilePath := fmt.Sprintf(
 			GithubUserContentLink,
