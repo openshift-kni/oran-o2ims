@@ -134,9 +134,13 @@ func (r *OCloudSiteReconciler) validateAndSetConditions(ctx context.Context, sit
 		}
 	}
 
-	// Only update if the condition has changed
+	// Only update if the condition is missing, has changed, or ObservedGeneration is stale
 	existingCondition := meta.FindStatusCondition(site.Status.Conditions, inventoryv1alpha1.ConditionTypeReady)
-	if existingCondition == nil || existingCondition.Status != condition.Status || existingCondition.Reason != condition.Reason {
+	conditionMissing := existingCondition == nil
+	conditionChanged := !conditionMissing && (existingCondition.Status != condition.Status || existingCondition.Reason != condition.Reason)
+	generationStale := !conditionMissing && existingCondition.ObservedGeneration != site.Generation
+
+	if conditionMissing || conditionChanged || generationStale {
 		meta.SetStatusCondition(&site.Status.Conditions, condition)
 		if err := r.Status().Update(ctx, site); err != nil {
 			return result.Exists && result.Ready, fmt.Errorf("failed to update status: %w", err)

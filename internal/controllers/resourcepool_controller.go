@@ -142,10 +142,12 @@ func (r *ResourcePoolReconciler) validateAndSetConditions(ctx context.Context, p
 
 	// Check if status needs updating
 	existingCondition := meta.FindStatusCondition(pool.Status.Conditions, inventoryv1alpha1.ConditionTypeReady)
-	conditionChanged := existingCondition == nil || existingCondition.Status != condition.Status || existingCondition.Reason != condition.Reason
+	conditionMissing := existingCondition == nil
+	conditionChanged := !conditionMissing && (existingCondition.Status != condition.Status || existingCondition.Reason != condition.Reason)
+	generationStale := !conditionMissing && existingCondition.ObservedGeneration != pool.Generation
 	uidChanged := pool.Status.ResolvedOCloudSiteUID != resolvedUID
 
-	if conditionChanged || uidChanged {
+	if conditionMissing || conditionChanged || generationStale || uidChanged {
 		meta.SetStatusCondition(&pool.Status.Conditions, condition)
 		pool.Status.ResolvedOCloudSiteUID = resolvedUID
 		if err := r.Status().Update(ctx, pool); err != nil {

@@ -97,9 +97,13 @@ func (r *LocationReconciler) validateAndSetConditions(ctx context.Context, locat
 		ObservedGeneration: location.Generation,
 	}
 
-	// Only update if the condition has changed
+	// Only update if the condition is missing, has changed, or ObservedGeneration is stale
 	existingCondition := meta.FindStatusCondition(location.Status.Conditions, inventoryv1alpha1.ConditionTypeReady)
-	if existingCondition == nil || existingCondition.Status != condition.Status || existingCondition.Reason != condition.Reason {
+	conditionMissing := existingCondition == nil
+	conditionChanged := !conditionMissing && (existingCondition.Status != condition.Status || existingCondition.Reason != condition.Reason)
+	generationStale := !conditionMissing && existingCondition.ObservedGeneration != location.Generation
+
+	if conditionMissing || conditionChanged || generationStale {
 		meta.SetStatusCondition(&location.Status.Conditions, condition)
 		if err := r.Status().Update(ctx, location); err != nil {
 			return fmt.Errorf("failed to update status: %w", err)
