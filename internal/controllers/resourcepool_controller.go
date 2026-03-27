@@ -34,7 +34,6 @@ type ResourcePoolReconciler struct {
 //+kubebuilder:rbac:groups=ocloud.openshift.io,resources=resourcepools,verbs=get;list;watch
 //+kubebuilder:rbac:groups=ocloud.openshift.io,resources=resourcepools/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=ocloud.openshift.io,resources=ocloudsites,verbs=get;list;watch
-//+kubebuilder:rbac:groups=metal3.io,resources=baremetalhosts,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
