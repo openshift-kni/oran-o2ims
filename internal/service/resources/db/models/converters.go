@@ -259,6 +259,8 @@ func LocationToModel(record *Location, oCloudSiteIDs []uuid.UUID) generated.Loca
 	}
 
 	// Handle Coordinate (GeoJSON Point)
+	// Coordinates arrive as []float64 from the watch path (convertCoordinateToGeoJSON)
+	// or as []interface{} with float64 elements from the DB path (JSON deserialization).
 	if record.Coordinate != nil {
 		coord := struct {
 			Coordinates []float64                            `json:"coordinates"`
@@ -266,8 +268,10 @@ func LocationToModel(record *Location, oCloudSiteIDs []uuid.UUID) generated.Loca
 		}{
 			Type: generated.Point,
 		}
-		// Extract coordinates from the map if present
-		if coords, ok := record.Coordinate["coordinates"].([]interface{}); ok {
+		switch coords := record.Coordinate["coordinates"].(type) {
+		case []float64:
+			coord.Coordinates = coords
+		case []interface{}:
 			floatCoords := make([]float64, len(coords))
 			for i, c := range coords {
 				if f, ok := c.(float64); ok {
@@ -280,13 +284,18 @@ func LocationToModel(record *Location, oCloudSiteIDs []uuid.UUID) generated.Loca
 	}
 
 	// Handle CivicAddress (array of {caType, caValue})
+	// caType arrives as int from the watch path (convertCivicAddress stores CaType as int)
+	// or as float64 from the DB path (JSON numbers deserialize to float64).
 	if record.CivicAddress != nil && len(record.CivicAddress) > 0 {
 		civicAddr := make([]struct {
 			CaType  int    `json:"caType"`
 			CaValue string `json:"caValue"`
 		}, len(record.CivicAddress))
 		for i, ca := range record.CivicAddress {
-			if caType, ok := ca["caType"].(float64); ok {
+			switch caType := ca["caType"].(type) {
+			case int:
+				civicAddr[i].CaType = caType
+			case float64:
 				civicAddr[i].CaType = int(caType)
 			}
 			if caValue, ok := ca["caValue"].(string); ok {
