@@ -31,9 +31,8 @@ type ResourcePoolReconciler struct {
 	Logger *slog.Logger
 }
 
-//+kubebuilder:rbac:groups=ocloud.openshift.io,resources=resourcepools,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=ocloud.openshift.io,resources=resourcepools,verbs=get;list;watch
 //+kubebuilder:rbac:groups=ocloud.openshift.io,resources=resourcepools/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=ocloud.openshift.io,resources=resourcepools/finalizers,verbs=update
 //+kubebuilder:rbac:groups=ocloud.openshift.io,resources=ocloudsites,verbs=get;list;watch
 //+kubebuilder:rbac:groups=metal3.io,resources=baremetalhosts,verbs=get;list;watch
 

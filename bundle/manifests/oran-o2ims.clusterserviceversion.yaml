@@ -1746,9 +1746,6 @@ spec:
           - ocloud.openshift.io
           resources:
           - inventories
-          - locations
-          - ocloudsites
-          - resourcepools
           verbs:
           - create
           - delete
@@ -1761,9 +1758,6 @@ spec:
           - ocloud.openshift.io
           resources:
           - inventories/finalizers
-          - locations/finalizers
-          - ocloudsites/finalizers
-          - resourcepools/finalizers
           verbs:
           - update
         - apiGroups:
@@ -1777,6 +1771,16 @@ spec:
           - get
           - patch
           - update
+        - apiGroups:
+          - ocloud.openshift.io
+          resources:
+          - locations
+          - ocloudsites
+          - resourcepools
+          verbs:
+          - get
+          - list
+          - watch
         - apiGroups:
           - operator.openshift.io
           resources:

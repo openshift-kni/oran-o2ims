@@ -31,9 +31,8 @@ type OCloudSiteReconciler struct {
 	Logger *slog.Logger
 }
 
-//+kubebuilder:rbac:groups=ocloud.openshift.io,resources=ocloudsites,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=ocloud.openshift.io,resources=ocloudsites,verbs=get;list;watch
 //+kubebuilder:rbac:groups=ocloud.openshift.io,resources=ocloudsites/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=ocloud.openshift.io,resources=ocloudsites/finalizers,verbs=update
 //+kubebuilder:rbac:groups=ocloud.openshift.io,resources=locations,verbs=get;list;watch
 //+kubebuilder:rbac:groups=ocloud.openshift.io,resources=resourcepools,verbs=get;list;watch
 
