@@ -1302,7 +1302,7 @@ func clearBMHAnnotation(ctx context.Context, c client.Client, logger *slog.Logge
 	})
 }
 
-func patchOnlineFalse(ctx context.Context, c client.Client, bmh *metal3v1alpha1.BareMetalHost) error {
+func patchBMHOnline(ctx context.Context, c client.Client, bmh *metal3v1alpha1.BareMetalHost, online bool) error {
 	name := types.NamespacedName{Namespace: bmh.Namespace, Name: bmh.Name}
 	// nolint: wrapcheck
 	return retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
@@ -1311,7 +1311,7 @@ func patchOnlineFalse(ctx context.Context, c client.Client, bmh *metal3v1alpha1.
 			return err
 		}
 		patched := fresh.DeepCopy()
-		patched.Spec.Online = false
+		patched.Spec.Online = online
 
 		return c.Patch(ctx, patched, client.MergeFrom(&fresh))
 	})

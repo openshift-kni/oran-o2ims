@@ -729,6 +729,36 @@ func initiateNodeUpdate(ctx context.Context,
 	if err != nil {
 		return hwmgrutils.RequeueWithShortInterval(), fmt.Errorf("failed to get BMH for AllocatedNode %s: %w", node.Name, err)
 	}
+
+	// IBI-provisioned nodes have spec.externallyProvisioned=true and may initially
+	// have spec.online=false and the detached annotation. Prior to starting the
+	// day2 update, we need to set online=true and remove the detached annotation
+	// so that Metal3 will start to manage the node and perform the update.
+	if _, hasDetached := bmh.Annotations[metal3v1alpha1.DetachedAnnotation]; hasDetached && bmh.Spec.ExternallyProvisioned {
+		if !bmh.Spec.Online {
+			logger.InfoContext(ctx, "Setting BMH online=true for day2 management", slog.String("bmh", bmh.Name))
+			if err := patchBMHOnline(ctx, c, bmh, true); err != nil {
+				return hwmgrutils.RequeueWithShortInterval(),
+					fmt.Errorf("failed to set online=true on BMH %s: %w", bmh.Name, err)
+			}
+		}
+
+		logger.InfoContext(ctx, "Removing detached annotation for day2 management", slog.String("bmh", bmh.Name))
+		bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation,
+			metal3v1alpha1.DetachedAnnotation, "", OpRemove); err != nil {
+			return hwmgrutils.RequeueWithShortInterval(),
+				fmt.Errorf("failed to remove detached annotation from BMH %s: %w", bmh.Name, err)
+		}
+
+		// Re-fetch BMH after mutations to avoid stale state in subsequent processing.
+		bmh, err = getBMHForNode(ctx, noncachedClient, node)
+		if err != nil {
+			return hwmgrutils.RequeueWithShortInterval(),
+				fmt.Errorf("failed to refetch BMH for AllocatedNode %s after day2 prep: %w", node.Name, err)
+		}
+	}
+
 	logger.InfoContext(ctx, "Issuing profile update to AllocatedNode",
 		slog.String("hwMgrNodeId", node.Spec.HwMgrNodeId),
 		slog.String("curHwProfile", node.Spec.HwProfile),

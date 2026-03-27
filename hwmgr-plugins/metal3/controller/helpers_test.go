@@ -1494,6 +1494,7 @@ var _ = Describe("Helpers", func() {
 			// Extends createBMH by setting OperationalStatus instead of provisioning state
 			createBMH := func(name string, opStatus metal3v1alpha1.OperationalStatus) *metal3v1alpha1.BareMetalHost {
 				bmh := createBMH(name+"-bmh", testNamespace, nil, nil, metal3v1alpha1.StateAvailable)
+				bmh.Spec.Online = true
 				bmh.Status.OperationalStatus = opStatus
 				return bmh
 			}
@@ -1950,6 +1951,98 @@ var _ = Describe("Helpers", func() {
 					Expect(testClient.Get(ctx, types.NamespacedName{Name: "worker2", Namespace: testNamespace}, updatedWorker2)).To(Succeed())
 					Expect(updatedWorker2.Spec.HwProfile).To(Equal(newHwProfileName))
 					Expect(updatedWorker2.Status.Conditions[0].Reason).To(Equal(string(hwmgmtv1alpha1.ConfigUpdatePending)))
+				})
+			})
+
+			Context("IBI-provisioned cluster", func() {
+				BeforeEach(func() {
+					spokeNodeNames = []string{"node1"}
+				})
+
+				It("should not modify BMH when detached but not externally provisioned", func() {
+					node := createNode("node1", "test-nar", "master", currentHwProfileName, currentHwProfileName, nil, nil)
+					nar = createNAR([]pluginsv1alpha1.NodeGroup{
+						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "master", Role: hwmgmtv1alpha1.NodeRoleMaster, HwProfile: newHwProfileName}},
+					})
+					bmh := createBMH("node1", metal3v1alpha1.OperationalStatusOK)
+					bmh.Spec.Online = false
+					bmh.Annotations = map[string]string{
+						metal3v1alpha1.DetachedAnnotation: "",
+					}
+					// ExternallyProvisioned is false — neither online nor detached should be modified
+					testClient = buildClientWithIndex(scheme, node, nar, newHwProfile, bmh)
+					createPRWithHostMap(testClient, map[string]string{"node1": "node1"})
+
+					result, _, err := handleNodeAllocationRequestConfiguring(ctx, testClient, testClient, logger, testNamespace, nar)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(result.RequeueAfter).ToNot(BeZero())
+
+					// Verify BMH was NOT modified
+					updatedBMH := &metal3v1alpha1.BareMetalHost{}
+					Expect(testClient.Get(ctx, types.NamespacedName{Name: "node1-bmh", Namespace: testNamespace}, updatedBMH)).To(Succeed())
+					_, hasDetached := updatedBMH.Annotations[metal3v1alpha1.DetachedAnnotation]
+					Expect(hasDetached).To(BeTrue())
+					Expect(updatedBMH.Spec.Online).To(BeFalse())
+				})
+
+				It("should remove detached annotation and proceed with update when externally provisioned", func() {
+					node := createNode("node1", "test-nar", "master", currentHwProfileName, currentHwProfileName, nil, nil)
+					nar = createNAR([]pluginsv1alpha1.NodeGroup{
+						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "master", Role: hwmgmtv1alpha1.NodeRoleMaster, HwProfile: newHwProfileName}},
+					})
+					bmh := createBMH("node1", metal3v1alpha1.OperationalStatusOK)
+					bmh.Spec.ExternallyProvisioned = true
+					bmh.Annotations = map[string]string{
+						metal3v1alpha1.DetachedAnnotation: "",
+					}
+					testClient = buildClientWithIndex(scheme, node, nar, newHwProfile, bmh)
+					createPRWithHostMap(testClient, map[string]string{"node1": "node1"})
+
+					result, _, err := handleNodeAllocationRequestConfiguring(ctx, testClient, testClient, logger, testNamespace, nar)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(result.RequeueAfter).ToNot(BeZero())
+
+					// Verify detached annotation was removed
+					updatedBMH := &metal3v1alpha1.BareMetalHost{}
+					Expect(testClient.Get(ctx, types.NamespacedName{Name: "node1-bmh", Namespace: testNamespace}, updatedBMH)).To(Succeed())
+					_, hasDetached := updatedBMH.Annotations[metal3v1alpha1.DetachedAnnotation]
+					Expect(hasDetached).To(BeFalse())
+
+					// Verify node profile was updated (update proceeded in same pass)
+					updatedNode := &pluginsv1alpha1.AllocatedNode{}
+					Expect(testClient.Get(ctx, types.NamespacedName{Name: "node1", Namespace: testNamespace}, updatedNode)).To(Succeed())
+					Expect(updatedNode.Spec.HwProfile).To(Equal(newHwProfileName))
+				})
+
+				It("should set online=true and remove detached annotation and proceed with update", func() {
+					node := createNode("node1", "test-nar", "master", currentHwProfileName, currentHwProfileName, nil, nil)
+					nar = createNAR([]pluginsv1alpha1.NodeGroup{
+						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "master", Role: hwmgmtv1alpha1.NodeRoleMaster, HwProfile: newHwProfileName}},
+					})
+					bmh := createBMH("node1", metal3v1alpha1.OperationalStatusOK)
+					bmh.Spec.ExternallyProvisioned = true
+					bmh.Spec.Online = false
+					bmh.Annotations = map[string]string{
+						metal3v1alpha1.DetachedAnnotation: "",
+					}
+					testClient = buildClientWithIndex(scheme, node, nar, newHwProfile, bmh)
+					createPRWithHostMap(testClient, map[string]string{"node1": "node1"})
+
+					result, _, err := handleNodeAllocationRequestConfiguring(ctx, testClient, testClient, logger, testNamespace, nar)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(result.RequeueAfter).ToNot(BeZero())
+
+					// Verify BMH was updated to online and detached annotation removed
+					updatedBMH := &metal3v1alpha1.BareMetalHost{}
+					Expect(testClient.Get(ctx, types.NamespacedName{Name: "node1-bmh", Namespace: testNamespace}, updatedBMH)).To(Succeed())
+					Expect(updatedBMH.Spec.Online).To(BeTrue())
+					_, hasDetached := updatedBMH.Annotations[metal3v1alpha1.DetachedAnnotation]
+					Expect(hasDetached).To(BeFalse())
+
+					// Verify node profile was updated (update proceeded in same pass)
+					updatedNode := &pluginsv1alpha1.AllocatedNode{}
+					Expect(testClient.Get(ctx, types.NamespacedName{Name: "node1", Namespace: testNamespace}, updatedNode)).To(Succeed())
+					Expect(updatedNode.Spec.HwProfile).To(Equal(newHwProfileName))
 				})
 			})
 		})

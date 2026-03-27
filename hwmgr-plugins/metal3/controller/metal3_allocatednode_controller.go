@@ -179,8 +179,8 @@ func (r *AllocatedNodeReconciler) handleAllocatedNodeDeletion(ctx context.Contex
 	if bmh.Spec.Online {
 		// Skip power-off if skip-cleanup is requested
 		if _, present := bmh.Annotations[SkipCleanupAnnotation]; !present {
-			if err := patchOnlineFalse(ctx, r.Client, bmh); err != nil {
-				return false, fmt.Errorf("failed to patchOnlineFalse for BMH %s: %w", bmh.Name, err)
+			if err := patchBMHOnline(ctx, r.Client, bmh, false); err != nil {
+				return false, fmt.Errorf("failed to set online=false for BMH %s: %w", bmh.Name, err)
 			}
 		}
 	}
