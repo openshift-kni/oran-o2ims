@@ -267,6 +267,10 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			Expect(K8SClient.Status().Update(testCtx, hfc)).To(Succeed())
 		}
 
+		// Pause to let envtest's kube-apiserver watchcache fully stabilise after
+		// the burst of resource writes (BMHs, secrets, HardwareData, HFS, HFC).
+		time.Sleep(8 * time.Second)
+
 		By("Waiting for all 11 BMHs to be visible via List")
 		Eventually(func() int {
 			bmhListResult := &metal3v1alpha1.BareMetalHostList{}
