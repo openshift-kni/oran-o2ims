@@ -3,6 +3,12 @@ inheritance: true
 reviews:
   path_filters:
   - "!vendor/**"
+  path_instructions:
+    - path: '**'
+      instructions: >-
+        Focus on major issues impacting performance, readability,
+        maintainability and security. Do not flag nitpicks. Do not
+        suggest changes to pre-existing code that is not part of the diff.
   pre_merge_checks:
     docstrings:
       mode: off
