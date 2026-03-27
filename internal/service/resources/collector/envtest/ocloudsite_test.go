@@ -236,8 +236,16 @@ var _ = Describe("OCloudSiteDataSource Watch", Label("envtest"), func() {
 		}
 		Expect(k8sClient.Status().Update(ctx, site)).To(Succeed())
 
-		// Wait for the event
+		// First event: DELETE (CR created without Ready status)
 		event := waitForEvent(eventChannel)
+		Expect(event).ToNot(BeNil())
+		Expect(event.EventType).To(Equal(async.Deleted),
+			"OCloudSite created without Ready should emit DELETE")
+
+		// Second event: Updated (CR now Ready=True)
+		event = waitForEvent(eventChannel)
+		Expect(event).ToNot(BeNil())
+		Expect(event.EventType).To(Equal(async.Updated))
 
 		// Get the OCloudSiteID from the event
 		siteModel, ok := event.Object.(models.OCloudSite)
@@ -245,6 +253,5 @@ var _ = Describe("OCloudSiteDataSource Watch", Label("envtest"), func() {
 
 		// The OCloudSiteID should match the metadata.uid from Kubernetes
 		Expect(siteModel.OCloudSiteID).To(Equal(expectedUID))
-
 	})
 })
