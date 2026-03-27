@@ -1663,18 +1663,18 @@ components:
               description: GeoJSON geometry type
             coordinates:
               type: array
-              description: Longitude and latitude coordinates [longitude, latitude]
+              description: "Position coordinates [longitude, latitude] or [longitude, latitude, altitude] per RFC 7946"
               items:
                 type: number
                 format: double
               minItems: 2
-              maxItems: 2
+              maxItems: 3
           required:
             - type
             - coordinates
           example:
             type: "Point"
-            coordinates: [-77.0364, 38.8951]
+            coordinates: [-77.0364, 38.8951, 100.5]
         civicAddress: # see NOTE above
           type: array
           description: |
