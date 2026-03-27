@@ -191,6 +191,10 @@ func getObjectReference(objectType string, objectID uuid.UUID, parentID *uuid.UU
 		value = fmt.Sprintf("%s%s/%s", constants.O2IMSInventoryBaseURL, constants.ResourcePoolsPath, objectID.String())
 	case DeploymentManager{}.TableName():
 		value = fmt.Sprintf("%s%s/%s", constants.O2IMSInventoryBaseURL, constants.DeploymentManagersPath, objectID.String())
+	case Location{}.TableName():
+		value = fmt.Sprintf("%s%s/%s", constants.O2IMSInventoryBaseURL, constants.LocationsPath, objectID.String())
+	case OCloudSite{}.TableName():
+		value = fmt.Sprintf("%s%s/%s", constants.O2IMSInventoryBaseURL, constants.OCloudSitesPath, objectID.String())
 	default:
 		return nil
 	}
