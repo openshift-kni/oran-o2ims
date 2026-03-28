@@ -243,6 +243,8 @@ func (h *HardwarePluginServer) UpdateNodeAllocationRequest(
 			LocationSpec:        pluginsv1alpha1.LocationSpec{Site: request.Body.Site},
 			ClusterId:           request.Body.ClusterId,
 			ConfigTransactionId: request.Body.ConfigTransactionId,
+			// Preserve existing ClusterProvisioned value unless explicitly overridden
+			ClusterProvisioned: existingNodeAllocationRequest.Spec.ClusterProvisioned,
 		},
 	}
 
@@ -262,6 +264,11 @@ func (h *HardwarePluginServer) UpdateNodeAllocationRequest(
 	// Set HardwareProvisioningTimeout if provided
 	if request.Body.HardwareProvisioningTimeout != nil {
 		nodeAllocationRequest.Spec.HardwareProvisioningTimeout = *request.Body.HardwareProvisioningTimeout
+	}
+
+	// Override ClusterProvisioned if explicitly provided in the request
+	if request.Body.ClusterProvisioned != nil {
+		nodeAllocationRequest.Spec.ClusterProvisioned = *request.Body.ClusterProvisioned
 	}
 
 	if err := CreateOrUpdateNodeAllocationRequest(ctx, h.HubClient, h.Logger, nodeAllocationRequest); err != nil {

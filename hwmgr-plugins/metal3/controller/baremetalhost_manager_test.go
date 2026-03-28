@@ -876,6 +876,38 @@ var _ = Describe("BareMetalHost Manager", func() {
 			Expect(updatedBMH.Spec.AutomatedCleaningMode).To(Equal(metal3v1alpha1.CleaningModeMetadata))
 		})
 
+		It("should set automated cleaning mode for externally provisioned BMH", func() {
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateExternallyProvisioned
+			bmh.Spec.ExternallyProvisioned = true
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
+
+			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh)
+			Expect(err).NotTo(HaveOccurred())
+
+			var updatedBMH metal3v1alpha1.BareMetalHost
+			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+			err = fakeClient.Get(ctx, name, &updatedBMH)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedBMH.Spec.AutomatedCleaningMode).To(Equal(metal3v1alpha1.CleaningModeMetadata))
+			Expect(updatedBMH.Spec.Online).To(BeFalse())
+			Expect(updatedBMH.Annotations[IBIWarningAnnotation]).To(Equal(IBIWarningMessage))
+		})
+
+		It("should not set IBI warning annotation for non-IBI BMH", func() {
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioned
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
+
+			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh)
+			Expect(err).NotTo(HaveOccurred())
+
+			var updatedBMH metal3v1alpha1.BareMetalHost
+			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+			err = fakeClient.Get(ctx, name, &updatedBMH)
+			Expect(err).NotTo(HaveOccurred())
+			_, hasIBIWarning := updatedBMH.Annotations[IBIWarningAnnotation]
+			Expect(hasIBIWarning).To(BeFalse())
+		})
+
 		It("should not set cleaning mode or power off when SkipCleanupAnnotation is present", func() {
 			bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioned
 			bmh.Spec.Online = true

@@ -766,6 +766,7 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 		if err = t.checkProvisioningConditionsForFailures(ctx); err != nil {
 			return requeueWithError(err)
 		}
+
 		// Continue monitoring even after fulfillment for spec changes
 		t.logger.DebugContext(ctx, "Fulfilled provisioning check complete, continuing monitoring")
 		return requeueWithLongInterval(), nil
@@ -1307,6 +1308,18 @@ func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx c
 		err = t.addPostProvisioningLabels(ctx, mcl)
 		if err != nil {
 			return err
+		}
+
+		// Signal to the hardware plugin that the cluster is fully provisioned.
+		// This allows the plugin to perform post-provisioning steps such as
+		// enabling BMO management of IBI-provisioned nodes.
+		// Done after persisting FULFILLED state so a transient plugin failure
+		// does not block fulfillment. Logged and retried on next reconcile.
+		if !t.isHardwareProvisionSkipped() && t.hwpluginClient != nil {
+			if err := t.setNARClusterProvisioned(ctx); err != nil {
+				t.logger.ErrorContext(ctx, "Failed to set clusterProvisioned on NAR, will retry on next reconcile",
+					slog.String("error", err.Error()))
+			}
 		}
 	}
 

@@ -78,6 +78,11 @@ func NodeAllocationRequestCRToResponseObject(nodeAllocationRequest *pluginsv1alp
 		ConfigTransactionId: nodeAllocationRequest.Spec.ConfigTransactionId,
 	}
 
+	if nodeAllocationRequest.Spec.ClusterProvisioned {
+		clusterProvisioned := true
+		nodeAllocationRequestObject.ClusterProvisioned = &clusterProvisioned
+	}
+
 	nodeAllocationRequestStatus := NodeAllocationRequestStatus{}
 	conditions := []Condition{}
 	for _, condition := range nodeAllocationRequest.Status.Conditions {
@@ -146,9 +151,8 @@ func CreateOrUpdateNodeAllocationRequest(
 
 	// Update existing NodeAllocationRequest resource
 
-	// Compare NodeGroup and update it if necessary
-	if !equality.Semantic.DeepEqual(existingNodeAllocationRequest.Spec.NodeGroup, nodeAllocationRequest.Spec.NodeGroup) {
-		// Only process the configuration changes
+	// Compare spec and update if necessary
+	if !equality.Semantic.DeepEqual(existingNodeAllocationRequest.Spec, nodeAllocationRequest.Spec) {
 		patch := client.MergeFrom(existingNodeAllocationRequest.DeepCopy())
 		// Update the spec field with the new data
 		existingNodeAllocationRequest.Spec = nodeAllocationRequest.Spec
@@ -160,7 +164,7 @@ func CreateOrUpdateNodeAllocationRequest(
 		logger.InfoContext(
 			ctx,
 			fmt.Sprintf(
-				"NodeAllocationRequest (%s) in the namespace %s configuration changes have been detected",
+				"NodeAllocationRequest (%s) in the namespace %s spec changes have been detected",
 				nodeAllocationRequest.GetName(),
 				nodeAllocationRequest.GetNamespace(),
 			),

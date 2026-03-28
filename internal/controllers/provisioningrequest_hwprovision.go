@@ -27,6 +27,41 @@ import (
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
+// setNARClusterProvisioned sets the ClusterProvisioned field on the NodeAllocationRequest
+// to signal to the hardware plugin that the cluster is fully provisioned and operational.
+func (t *provisioningRequestReconcilerTask) setNARClusterProvisioned(ctx context.Context) error {
+	if t.object.Status.Extensions.NodeAllocationRequestRef == nil {
+		return nil
+	}
+	nodeAllocationRequestID := t.object.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID
+	if nodeAllocationRequestID == "" {
+		return nil
+	}
+
+	existingNAR, exists, err := t.hwpluginClient.GetNodeAllocationRequest(ctx, nodeAllocationRequestID)
+	if err != nil {
+		return fmt.Errorf("failed to get NodeAllocationRequest %s: %w", nodeAllocationRequestID, err)
+	}
+	if !exists || existingNAR.NodeAllocationRequest == nil {
+		return nil
+	}
+
+	// Skip if already set
+	if existingNAR.NodeAllocationRequest.ClusterProvisioned != nil && *existingNAR.NodeAllocationRequest.ClusterProvisioned {
+		return nil
+	}
+
+	// Set ClusterProvisioned on the existing NAR and update
+	clusterProvisioned := true
+	existingNAR.NodeAllocationRequest.ClusterProvisioned = &clusterProvisioned
+	if _, err := t.hwpluginClient.UpdateNodeAllocationRequest(ctx, nodeAllocationRequestID, *existingNAR.NodeAllocationRequest); err != nil {
+		return fmt.Errorf("failed to set clusterProvisioned on NodeAllocationRequest %s: %w", nodeAllocationRequestID, err)
+	}
+
+	t.logger.InfoContext(ctx, "Set clusterProvisioned on NodeAllocationRequest", slog.String("narID", nodeAllocationRequestID))
+	return nil
+}
+
 // createOrUpdateNodeAllocationRequest creates a new NodeAllocationRequest resource if it doesn't exist or updates it if the spec has changed.
 func (t *provisioningRequestReconcilerTask) createOrUpdateNodeAllocationRequest(ctx context.Context,
 	clusterNamespace string,

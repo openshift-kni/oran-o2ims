@@ -430,7 +430,12 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 	}
 
 	if len(agents.Items) == 0 {
-		return fmt.Errorf("the expected Agents were not found in the %s namespace", mcl.Name)
+		// No Agents found — this is expected for IBI-provisioned clusters which
+		// do not use assisted-service. Skip Agent labeling and return.
+		t.logger.Info(fmt.Sprintf(
+			"No Agents found in the %s namespace, skipping Agent labeling (expected for IBI clusters)",
+			mcl.Name))
+		return nil
 	}
 
 	// Get AllocatedNodes if hardware provisioning is not skipped.

@@ -37,6 +37,89 @@ import (
 
 const ConfigAnnotation = "clcm.openshift.io/config-in-progress"
 
+// hasNodeGroupHwProfileChanges checks whether any node group in the NAR has a different
+// HW profile than what is currently assigned to its allocated nodes.
+func hasNodeGroupHwProfileChanges(
+	ctx context.Context,
+	c client.Client,
+	logger *slog.Logger,
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
+) bool {
+	nodelist, err := hwmgrutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
+	if err != nil {
+		logger.ErrorContext(ctx, "Failed to get child nodes for HW profile change check",
+			slog.String("error", err.Error()))
+		return false
+	}
+
+	for _, group := range nodeAllocationRequest.Spec.NodeGroup {
+		for i := range nodelist.Items {
+			if nodelist.Items[i].Spec.GroupName == group.NodeGroupData.Name &&
+				nodelist.Items[i].Spec.HwProfile != group.NodeGroupData.HwProfile {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// enableBMOManagementForIBINodes sets spec.online=true and removes the detached annotation
+// on IBI-provisioned BMHs (externallyProvisioned=true with detached annotation) so that BMO
+// can fully manage them. This is called when the cluster is reported as fully provisioned.
+func enableBMOManagementForIBINodes(
+	ctx context.Context,
+	c client.Client,
+	noncachedClient client.Reader,
+	logger *slog.Logger,
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
+) error {
+	nodelist, err := hwmgrutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
+	if err != nil {
+		return fmt.Errorf("failed to get child nodes for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
+	}
+
+	for i := range nodelist.Items {
+		node := &nodelist.Items[i]
+		bmh, err := getBMHForNode(ctx, noncachedClient, node)
+		if err != nil {
+			logger.ErrorContext(ctx, "Failed to get BMH for node, skipping IBI management setup",
+				slog.String("node", node.Name), slog.String("error", err.Error()))
+			continue
+		}
+
+		if !bmh.Spec.ExternallyProvisioned {
+			continue
+		}
+
+		_, hasDetached := bmh.Annotations[metal3v1alpha1.DetachedAnnotation]
+		if !hasDetached && bmh.Spec.Online {
+			// Already managed by BMO
+			continue
+		}
+
+		bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+
+		if !bmh.Spec.Online {
+			logger.InfoContext(ctx, "Setting BMH online=true for IBI post-provisioning",
+				slog.String("bmh", bmh.Name))
+			if err := patchBMHOnline(ctx, c, bmh, true); err != nil {
+				return fmt.Errorf("failed to set online=true on BMH %s: %w", bmh.Name, err)
+			}
+		}
+
+		if hasDetached {
+			logger.InfoContext(ctx, "Removing detached annotation for IBI post-provisioning",
+				slog.String("bmh", bmh.Name))
+			if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation,
+				metal3v1alpha1.DetachedAnnotation, "", OpRemove); err != nil {
+				return fmt.Errorf("failed to remove detached annotation from BMH %s: %w", bmh.Name, err)
+			}
+		}
+	}
+
+	return nil
+}
+
 // UpdateAbandonedAnnotation marks an AllocatedNode whose in-progress hardware update
 // was abandoned because the desired hardware profile changed mid-flight. The node is
 // safe to re-process with the new profile on the next reconcile.

@@ -677,6 +677,31 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 	ctx context.Context,
 	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
 
+	// Handle post-provisioning setup for IBI nodes when ClusterProvisioned is set.
+	// This sets online=true and removes the detached annotation so BMO can manage the nodes.
+	// If no node group HW profiles have changed, this was only a ClusterProvisioned update
+	// and we skip the day-2 configuration handling.
+	if nodeAllocationRequest.Spec.ClusterProvisioned {
+		if err := enableBMOManagementForIBINodes(ctx, r.Client, r.NoncachedClient, r.Logger, nodeAllocationRequest); err != nil {
+			return hwmgrutils.RequeueWithShortInterval(),
+				fmt.Errorf("failed to enable BMO management for IBI nodes: %w", err)
+		}
+
+		// If no HW profile changes and no configuration is in progress, this was
+		// only a ClusterProvisioned update — acknowledge and skip config handling.
+		configCond := meta.FindStatusCondition(nodeAllocationRequest.Status.Conditions, string(hwmgmtv1alpha1.Configured))
+		configInProgress := configCond != nil && configCond.Status == metav1.ConditionFalse &&
+			configCond.Reason == string(hwmgmtv1alpha1.InProgress)
+		if !hasNodeGroupHwProfileChanges(ctx, r.Client, r.Logger, nodeAllocationRequest) && !configInProgress {
+			r.Logger.InfoContext(ctx, "ClusterProvisioned set with no HW profile changes, acknowledging spec change")
+			if err := hwmgrutils.UpdateNodeAllocationRequestPluginStatus(ctx, r.Client, nodeAllocationRequest); err != nil {
+				return hwmgrutils.RequeueWithShortInterval(),
+					fmt.Errorf("failed to update observedGeneration: %w", err)
+			}
+			return hwmgrutils.DoNotRequeue(), nil
+		}
+	}
+
 	configuredCondition := meta.FindStatusCondition(
 		nodeAllocationRequest.Status.Conditions,
 		string(hwmgmtv1alpha1.Configured))

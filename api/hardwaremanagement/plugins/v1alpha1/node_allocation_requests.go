@@ -93,6 +93,14 @@ type NodeAllocationRequestSpec struct {
 	// +optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Provisioning Timeout",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	HardwareProvisioningTimeout string `json:"hardwareProvisioningTimeout,omitempty"`
+
+	// ClusterProvisioned indicates that the cluster using the allocated nodes has been
+	// fully provisioned and is operational. The hardware plugin uses this signal to
+	// perform any post-provisioning steps, such as enabling BMO management of
+	// IBI-provisioned nodes.
+	// +optional
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cluster Provisioned",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:booleanSwitch"}
+	ClusterProvisioned bool `json:"clusterProvisioned,omitempty"`
 }
 
 type NodeGroup struct {
