@@ -59,6 +59,8 @@ const (
 	OpAdd                                    = "add"
 	OpRemove                                 = "remove"
 	BmhServicingErr                          = "BMH Servicing Error"
+	IBIWarningAnnotation                     = "clcm.openshift.io/ibi-warning"
+	IBIWarningMessage                        = "Warning - this node was used for IBI and has been deprovisioned. BMH deletion and IBI reinstall is required before it can be used in a new cluster"
 )
 
 // Struct definitions for the nodelist configmap
@@ -1184,11 +1186,15 @@ func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.
 			// Clear image reference
 			patched.Spec.Image = nil
 		}
-		if !skipCleanAndPower && bmh.Status.Provisioning.State == metal3v1alpha1.StateProvisioned {
+		if !skipCleanAndPower && (current.Status.Provisioning.State == metal3v1alpha1.StateProvisioned ||
+			current.Status.Provisioning.State == metal3v1alpha1.StateExternallyProvisioned) {
 			// Wipe partition tables using automated cleaning
 			patched.Spec.AutomatedCleaningMode = metal3v1alpha1.CleaningModeMetadata
 			// Power off the host
 			patched.Spec.Online = false
+		}
+		if !skipCleanAndPower && current.Spec.ExternallyProvisioned {
+			patched.Annotations[IBIWarningAnnotation] = IBIWarningMessage
 		}
 
 		// Patch changes
@@ -1302,7 +1308,7 @@ func clearBMHAnnotation(ctx context.Context, c client.Client, logger *slog.Logge
 	})
 }
 
-func patchOnlineFalse(ctx context.Context, c client.Client, bmh *metal3v1alpha1.BareMetalHost) error {
+func patchBMHOnline(ctx context.Context, c client.Client, bmh *metal3v1alpha1.BareMetalHost, online bool) error {
 	name := types.NamespacedName{Namespace: bmh.Namespace, Name: bmh.Name}
 	// nolint: wrapcheck
 	return retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
@@ -1311,7 +1317,7 @@ func patchOnlineFalse(ctx context.Context, c client.Client, bmh *metal3v1alpha1.
 			return err
 		}
 		patched := fresh.DeepCopy()
-		patched.Spec.Online = false
+		patched.Spec.Online = online
 
 		return c.Patch(ctx, patched, client.MergeFrom(&fresh))
 	})

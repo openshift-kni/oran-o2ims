@@ -157,6 +157,13 @@ spec:
                   manager may want to use this to tag the nodes in its database, and to generate
                   statistics.
                 type: string
+              clusterProvisioned:
+                description: |-
+                  ClusterProvisioned indicates that the cluster using the allocated nodes has been
+                  fully provisioned and is operational. The hardware plugin uses this signal to
+                  perform any post-provisioning steps, such as enabling BMO management of
+                  IBI-provisioned nodes.
+                type: boolean
               configTransactionId:
                 format: int64
                 type: integer

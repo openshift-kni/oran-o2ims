@@ -2025,7 +2025,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				"empty or unexpected error response for AllocatedNodesFromNodeAllocationRequest 'non-existent-cluster'"))
 		})
 
-		It("Returns error for missing Nodes", func() {
+		It("Succeeds with no Agents (IBI cluster case)", func() {
 			// Set a NodeAllocationRequestID that has no allocated nodes (hardware allocation failed)
 			ProvReqTask.object.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
 				NodeAllocationRequestID: "empty-cluster", // Use an ID that exists but has no allocated nodes
@@ -2036,15 +2036,10 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			// Create the NodeAllocationRequest, but not the nodes.
 			Expect(c.Create(ctx, nodeAllocationRequest)).To(Succeed())
 
-			// Don't create any Agents - if hardware allocation failed, no physical machines
-			// would be available, so no Agents would be discovered/created
-
-			// Run the function - it should return an error for missing Agents
-			// (which is what happens when hardware allocation fails)
+			// Don't create any Agents — this is expected for IBI-provisioned clusters
+			// which do not use assisted-service.
 			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring(
-				fmt.Sprintf("the expected Agents were not found in the %s namespace", managedCluster.Name)))
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 
@@ -2319,10 +2314,11 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			}
 		})
 
-		It("Fails for multiple Agents with unexpected labels", func() {
+		It("Succeeds when Agents have non-matching labels (no matching Agents found)", func() {
 			// Create an Agent whose clusterdeployment-namespace label
 			// doesn't match the ManagedCluster name, so the agent list
-			// query returns no results.
+			// query returns no results. This is handled gracefully as it
+			// may indicate an IBI cluster with no Agents.
 			agent := &assistedservicev1beta1.Agent{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      AgentName,
@@ -2342,11 +2338,9 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			}
 			Expect(ProvReqTask.client.Create(ctx, agent)).To(Succeed())
 
-			// Run the function.
+			// Run the function — no matching Agents is not an error.
 			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring(
-				fmt.Sprintf("the expected Agents were not found in the %s namespace", mclName)))
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 

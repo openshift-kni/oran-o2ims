@@ -391,6 +391,17 @@ var _ = Describe("Inventory", func() {
 			Expect(result).To(Equal(inventory.ResourceInfoOperationalStateENABLED))
 		})
 
+		It("should return ENABLED when externally provisioned BMH is fully operational", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusOK
+			bmh.Spec.Online = true
+			bmh.Status.PoweredOn = true
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateExternallyProvisioned
+
+			result := getResourceInfoOperationalState(bmh)
+			Expect(result).To(Equal(inventory.ResourceInfoOperationalStateENABLED))
+		})
+
 		It("should return DISABLED when BMH is not operational", func() {
 			bmh := createBasicBMH("test-bmh", "test-ns")
 			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusError
@@ -815,6 +826,17 @@ var _ = Describe("Inventory", func() {
 			Expect(result).To(Equal(inventory.ACTIVE))
 		})
 
+		It("should return ACTIVE for externally provisioned BMH with all conditions met", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateExternallyProvisioned
+			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusOK
+			bmh.Spec.Online = true
+			bmh.Status.PoweredOn = true
+
+			result := getResourceInfoUsageState(bmh)
+			Expect(result).To(Equal(inventory.ACTIVE))
+		})
+
 		It("should return BUSY for provisioned BMH when not operational", func() {
 			bmh := createBasicBMH("test-bmh", "test-ns")
 			bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioned
@@ -1060,6 +1082,12 @@ var _ = Describe("Inventory", func() {
 
 			It("should return true for StateProvisioned", func() {
 				bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioned
+				result := includeInInventory(bmh)
+				Expect(result).To(BeTrue())
+			})
+
+			It("should return true for StateExternallyProvisioned", func() {
+				bmh.Status.Provisioning.State = metal3v1alpha1.StateExternallyProvisioned
 				result := includeInInventory(bmh)
 				Expect(result).To(BeTrue())
 			})

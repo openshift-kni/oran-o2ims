@@ -126,7 +126,8 @@ func getResourceInfoOperationalState(bmh *metal3v1alpha1.BareMetalHost) inventor
 	if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusOK &&
 		bmh.Spec.Online &&
 		bmh.Status.PoweredOn &&
-		bmh.Status.Provisioning.State == metal3v1alpha1.StateProvisioned {
+		(bmh.Status.Provisioning.State == metal3v1alpha1.StateProvisioned ||
+			bmh.Status.Provisioning.State == metal3v1alpha1.StateExternallyProvisioned) {
 		return inventory.ResourceInfoOperationalStateENABLED
 	}
 
@@ -296,7 +297,7 @@ func getResourceInfoUsageState(bmh *metal3v1alpha1.BareMetalHost) inventory.Reso
 	// transition states such as provisioning or deprovisioning.
 
 	switch bmh.Status.Provisioning.State {
-	case metal3v1alpha1.StateProvisioned:
+	case metal3v1alpha1.StateProvisioned, metal3v1alpha1.StateExternallyProvisioned:
 		if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusOK && bmh.Spec.Online && bmh.Status.PoweredOn {
 			return inventory.ACTIVE
 		}
@@ -362,6 +363,7 @@ func includeInInventory(bmh *metal3v1alpha1.BareMetalHost) bool {
 	case metal3v1alpha1.StateAvailable,
 		metal3v1alpha1.StateProvisioning,
 		metal3v1alpha1.StateProvisioned,
+		metal3v1alpha1.StateExternallyProvisioned,
 		metal3v1alpha1.StatePreparing,
 		metal3v1alpha1.StateDeprovisioning:
 		return true

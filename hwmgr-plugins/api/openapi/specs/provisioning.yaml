@@ -589,6 +589,12 @@ components:
           description: |
             HardwareProvisioningTimeout defines the timeout duration string for the hardware provisioning.
             If not specified, the default timeout value will be applied.
+        clusterProvisioned:
+          type: boolean
+          description: |
+            ClusterProvisioned indicates that the cluster using the allocated nodes has been fully
+            provisioned and is operational. The hardware plugin uses this signal to perform any
+            post-provisioning steps, such as enabling BMO management of IBI-provisioned nodes.
       required:
         - nodeGroup
         - site
