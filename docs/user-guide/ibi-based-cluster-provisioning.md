@@ -320,6 +320,42 @@ pre-provisioning — you must monitor the logs to determine when it is done.
 Once pre-provisioned, servers can be shipped to deployment sites ready for rapid cluster
 provisioning.
 
+### Optional: Using Resource Selector Labels for IBI Servers
+
+O-Cloud Manager does not require any specific labels on BMHs for IBI provisioning.
+However, in environments with a mix of IBI and non-IBI servers, you may find it
+useful to add a user-defined resource selector label to BMHs that have been
+pre-provisioned with the IBI ISO. This allows you to limit the candidates for IBI
+ProvisioningRequests to only those servers that are ready for IBI deployment.
+
+For example, after pre-provisioning a server, you could label it:
+
+```console
+oc label bmh <bmh-name> -n <bmh-namespace> resourceselector.clcm.openshift.io/ibi-ready=true
+```
+
+Then add the matching label as selection criteria in the HardwareTemplate's
+`nodeGroupData.resourceSelector`:
+
+```yaml
+resourceSelector:
+  resourceselector.clcm.openshift.io/ibi-ready: "true"
+```
+
+The label name (`ibi-ready` in this example) is user-defined — you can use any
+label name that fits your workflow, as long as it uses the
+`resourceselector.clcm.openshift.io/` prefix and matches the selection criteria
+in your HardwareTemplate or ProvisioningRequest parameters. See the
+[resource selection documentation](./cluster-provisioning.md) for details on how
+resource selector labels work.
+
+> [!TIP]
+> A server pre-provisioned with an IBI ISO can still be used for a standard
+> assisted-installer provisioning. So labeling non-IBI servers with
+> `resourceselector.clcm.openshift.io/ibi-ready: "false"` is primarily useful
+> for reserving IBI-prepped servers for IBI provisioning, rather than being a
+> strict requirement.
+
 ## Site Deployment
 
 With servers pre-provisioned in the factory, cluster provisioning at the site skips the
@@ -383,4 +419,26 @@ To delete an IBI-provisioned cluster:
 oc delete provisioningrequest <UUID>
 ```
 
-The O-Cloud Manager automatically cleans up all IBI-specific resources.
+The O-Cloud Manager automatically cleans up all IBI-specific resources, including
+powering off the host and setting disk wipe mode.
+
+### Re-using Deprovisioned IBI Servers
+
+After an IBI-provisioned cluster is deleted, the BareMetalHost will have the
+`clcm.openshift.io/ibi-warning` annotation indicating that the server cannot be
+reused for a new cluster without additional steps. IBI-provisioned servers have
+`spec.externallyProvisioned: true` set by the IBI Operator, and unlike
+standard (assisted-installer) provisioned servers, they cannot be automatically
+recycled for new provisioning.
+
+To re-use a deprovisioned IBI server, choose one of the following options:
+
+**Option A: Re-provision for IBI** — Delete the BareMetalHost CR, reinstall using
+the IBI live ISO (repeat [Step 3](#step-3-server-pre-provisioning)), then recreate
+the BareMetalHost CR with the `ibi-ready` label. The server will be available for
+new IBI ProvisioningRequests.
+
+**Option B: Convert to standard provisioning** — Delete the BareMetalHost CR and
+recreate it without `spec.externallyProvisioned` and without the `ibi-ready`
+resource selector label. The server will be available for standard
+assisted-installer provisioning.
