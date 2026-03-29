@@ -1492,7 +1492,19 @@ func processNodeAllocationRequestAllocation(
 				nodeAllocationRequest.Spec.Site, nodeGroup.NodeGroupData.Name, err)
 		}
 		if len(unallocatedBMHs.Items) == 0 {
-			// No capacity available; surface error to upper layer
+			// No unallocated BMHs available. If some nodes have already been
+			// allocated (from a concurrent reconcile), requeue to let the
+			// in-flight allocation finish updating the NAR status. Otherwise,
+			// this is a genuine capacity shortage.
+			allocated := countNodesInGroup(ctx, noncachedClient, logger, pluginNamespace,
+				nodeAllocationRequest.Status.Properties.NodeNames, nodeGroup.NodeGroupData.Name)
+			if allocated > 0 {
+				logger.InfoContext(ctx, "No unallocated BMHs but some nodes already allocated, requeueing",
+					slog.String("nodegroup", nodeGroup.NodeGroupData.Name),
+					slog.Int("allocated", allocated),
+					slog.Int("pending", pending))
+				return hwmgrutils.RequeueWithShortInterval(), nil
+			}
 			return ctrl.Result{}, fmt.Errorf("no available nodes for site=%s, nodegroup=%s",
 				nodeAllocationRequest.Spec.Site, nodeGroup.NodeGroupData.Name)
 		}
