@@ -1314,11 +1314,10 @@ func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx c
 		// This allows the plugin to perform post-provisioning steps such as
 		// enabling BMO management of IBI-provisioned nodes.
 		// Done after persisting FULFILLED state so a transient plugin failure
-		// does not block fulfillment. Logged and retried on next reconcile.
+		// does not block fulfillment. Returns error to trigger retry via requeue.
 		if !t.isHardwareProvisionSkipped() && t.hwpluginClient != nil {
 			if err := t.setNARClusterProvisioned(ctx); err != nil {
-				t.logger.ErrorContext(ctx, "Failed to set clusterProvisioned on NAR, will retry on next reconcile",
-					slog.String("error", err.Error()))
+				return fmt.Errorf("failed to set clusterProvisioned on NAR: %w", err)
 			}
 		}
 	}

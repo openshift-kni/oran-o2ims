@@ -44,23 +44,21 @@ func hasNodeGroupHwProfileChanges(
 	c client.Client,
 	logger *slog.Logger,
 	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
-) bool {
+) (bool, error) {
 	nodelist, err := hwmgrutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
 	if err != nil {
-		logger.ErrorContext(ctx, "Failed to get child nodes for HW profile change check",
-			slog.String("error", err.Error()))
-		return false
+		return false, fmt.Errorf("failed to get child nodes for HW profile change check: %w", err)
 	}
 
 	for _, group := range nodeAllocationRequest.Spec.NodeGroup {
 		for i := range nodelist.Items {
 			if nodelist.Items[i].Spec.GroupName == group.NodeGroupData.Name &&
 				nodelist.Items[i].Spec.HwProfile != group.NodeGroupData.HwProfile {
-				return true
+				return true, nil
 			}
 		}
 	}
-	return false
+	return false, nil
 }
 
 // enableBMOManagementForIBINodes sets spec.online=true and removes the detached annotation
