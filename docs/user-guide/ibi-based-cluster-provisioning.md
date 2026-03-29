@@ -435,10 +435,12 @@ To re-use a deprovisioned IBI server, choose one of the following options:
 
 **Option A: Re-provision for IBI** — Delete the BareMetalHost CR, reinstall using
 the IBI live ISO (repeat [Step 3](#step-3-server-pre-provisioning)), then recreate
-the BareMetalHost CR with the `ibi-ready` label. The server will be available for
-new IBI ProvisioningRequests.
+the BareMetalHost CR. If you are using resource selector labels to identify
+IBI-ready servers, re-apply those labels to the new BMH. The server will be
+available for new IBI ProvisioningRequests.
 
 **Option B: Convert to standard provisioning** — Delete the BareMetalHost CR and
-recreate it without `spec.externallyProvisioned` and without the `ibi-ready`
-resource selector label. The server will be available for standard
-assisted-installer provisioning.
+recreate it without `spec.externallyProvisioned`. If you are using resource
+selector labels to distinguish IBI and non-IBI servers, update the labels on the
+new BMH accordingly. The server will be available for standard assisted-installer
+provisioning.
