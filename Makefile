@@ -612,8 +612,8 @@ go-generate:
 
 .PHONY: test tests
 test tests:
-	@echo "Run ginkgo"
-	ginkgo run -r ./internal ./api ./hwmgr-plugins $(ginkgo_flags)
+	@echo "Run ginkgo excluding envtest tests"
+	ginkgo run -r --label-filter="!envtest" ./internal ./api ./hwmgr-plugins $(ginkgo_flags)
 
 .PHONY: test-e2e
 test-e2e: envtest kubectl
@@ -621,6 +621,14 @@ ifeq ($(shell uname -s),Linux)
 	@chmod -R u+w $(LOCALBIN)
 endif
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -i --bin-dir $(LOCALBIN) -p path)" go test ./test/e2e/ -v ginkgo.v
+
+.PHONY: test-envtest
+test-envtest: envtest
+ifeq ($(shell uname -s),Linux)
+	@chmod -R u+w $(LOCALBIN)
+endif
+	@echo "Run ginkgo envtest tests"
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -i --bin-dir $(LOCALBIN) -p path)" ginkgo run -r --label-filter="envtest" ./internal $(ginkgo_flags)
 
 .PHONY: test-crd-watcher
 test-crd-watcher:
@@ -645,7 +653,7 @@ deps-update: mock-gen golangci-lint-download
 # TODO: add back `test-e2e` to ci-job
 # NOTE: `bundle-check` should be the last job in the list for `ci-job`
 .PHONY: ci-job
-ci-job: deps-update go-generate generate fmt vet lint test test-e2e test-crd-watcher bundle-check
+ci-job: deps-update go-generate generate fmt vet lint test test-e2e test-envtest test-crd-watcher bundle-check
 
 .PHONY: clean
 clean:
