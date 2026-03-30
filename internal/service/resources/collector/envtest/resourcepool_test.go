@@ -289,6 +289,11 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 		Expect(k8sClient.Create(ctx, rp)).To(Succeed())
 		DeferCleanup(func() { deleteAndWait(rp) })
 
+		// First event: DELETE (CR created without Ready status)
+		event := waitForEvent(eventChannel)
+		Expect(event).ToNot(BeNil())
+		Expect(event.EventType).To(Equal(async.Deleted))
+
 		// Set Ready=True status with ResolvedOCloudSiteUID
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rp), rp)).To(Succeed())
 		rp.Status.Conditions = []metav1.Condition{
@@ -297,8 +302,11 @@ var _ = Describe("ResourcePoolDataSource Watch", Label("envtest"), func() {
 		rp.Status.ResolvedOCloudSiteUID = fakeSiteUID
 		Expect(k8sClient.Status().Update(ctx, rp)).To(Succeed())
 
-		// Wait for the event
-		event := waitForEvent(eventChannel)
+		// Second event: Updated (CR now Ready=True with all optional fields)
+		event = waitForEvent(eventChannel)
+		Expect(event).ToNot(BeNil())
+		Expect(event.EventType).To(Equal(async.Updated),
+			"ResourcePool with Ready=True should emit UPDATE event")
 
 		// Verify all fields including optional ones
 		rpModel, ok := event.Object.(models.ResourcePool)
