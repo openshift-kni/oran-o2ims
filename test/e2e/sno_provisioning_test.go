@@ -139,7 +139,6 @@ var _ = Describe("SNO End-to-end ProvisioningRequestReconcile with metal3 plugin
 			BmcAddress:     bmhData.BmcAddress,
 			ServerType:     testutils.TestServerType,
 			Colour:         bmhData.Colour,
-			SiteId:         "local-123",
 			ResourcePoolId: testutils.TestPoolID,
 		})
 		hwData := testutils.CreateHardwareData(bmhData.Name, bmhData)

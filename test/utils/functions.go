@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	. "github.com/onsi/gomega"
@@ -193,37 +194,75 @@ func DownloadFile(rawUrl, filename, dirpath string) error {
 	// Parse the URL
 	parsedURL, err := url.Parse(rawUrl)
 	if err != nil {
-		return fmt.Errorf("invalid URL: %w", err)
+		return fmt.Errorf("download %s: invalid URL %q: %w", filename, rawUrl, err)
 	}
 
 	// Check that the scheme is "http" or "https" and the domain is trusted
 	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		return fmt.Errorf("url scheme must be http or https")
+		return fmt.Errorf("download %s: url scheme must be http or https, got %q", filename, parsedURL.Scheme)
 	}
 
 	_, err = os.Stat(filename)
 	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("error getting file: %w", err)
+		return fmt.Errorf("download %s: error checking existing file: %w", filename, err)
 	}
 
 	resp, err := http.Get(rawUrl) //nolint
 	if err != nil {
-		return fmt.Errorf("error getting URL: %w", err)
+		return fmt.Errorf("download %s: HTTP GET failed for %s: %w", filename, rawUrl, err)
 	}
 	defer resp.Body.Close()
 
-	filepath := filepath.Join(dirpath, filename)
-	out, err := os.Create(filepath)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("error creating file: %w", err)
+		return fmt.Errorf("download %s: failed to read response body from %s: %w", filename, rawUrl, err)
+	}
+
+	// Validate HTTP status code
+	if resp.StatusCode != http.StatusOK {
+		// Include the first 200 bytes of the response body for debugging (often reveals
+		// GitHub rate-limit messages or 404 HTML pages that would otherwise be silently
+		// saved as a "YAML" file and cause a cryptic parse error later).
+		bodyPreview := string(body)
+		if len(bodyPreview) > 200 {
+			bodyPreview = bodyPreview[:200] + "..."
+		}
+		return fmt.Errorf("download %s: unexpected HTTP status %d from %s — body preview: %s",
+			filename, resp.StatusCode, rawUrl, bodyPreview)
+	}
+
+	// Validate the downloaded content looks like a Kubernetes CRD YAML, not an HTML error page
+	content := string(body)
+	if strings.HasPrefix(strings.TrimSpace(content), "<") {
+		bodyPreview := content
+		if len(bodyPreview) > 200 {
+			bodyPreview = bodyPreview[:200] + "..."
+		}
+		return fmt.Errorf("download %s: received HTML instead of YAML from %s — body preview: %s",
+			filename, rawUrl, bodyPreview)
+	}
+	if !strings.Contains(content, "kind: CustomResourceDefinition") {
+		bodyPreview := content
+		if len(bodyPreview) > 200 {
+			bodyPreview = bodyPreview[:200] + "..."
+		}
+		return fmt.Errorf("download %s: content does not contain 'kind: CustomResourceDefinition' from %s — body preview: %s",
+			filename, rawUrl, bodyPreview)
+	}
+
+	destPath := filepath.Join(dirpath, filename)
+	out, err := os.Create(destPath)
+	if err != nil {
+		return fmt.Errorf("download %s: error creating file %s: %w", filename, destPath, err)
 	}
 	defer out.Close()
 
-	_, err = io.Copy(out, resp.Body)
+	_, err = out.Write(body)
 	if err != nil {
-		return fmt.Errorf("error writing to file: %w", err)
+		return fmt.Errorf("download %s: error writing to file %s: %w", filename, destPath, err)
 	}
 
+	fmt.Fprintf(os.Stderr, "INFO: Successfully downloaded CRD %s (%d bytes)\n", filename, len(body))
 	return nil
 }
 
@@ -312,7 +351,6 @@ type BMHData struct {
 	BmcAddress     string
 	ServerType     string
 	Colour         string
-	SiteId         string
 	ResourcePoolId string
 }
 
@@ -325,8 +363,7 @@ func CreateBareMetalHost(d BMHData) *metal3v1alpha1.BareMetalHost {
 			Labels: map[string]string{
 				"resourceselector.clcm.openshift.io/server-type":   d.ServerType,
 				"resourceselector.clcm.openshift.io/server-colour": d.Colour,
-				"resources.clcm.openshift.io/resourcePoolId":       d.ResourcePoolId,
-				"resources.clcm.openshift.io/siteId":               d.SiteId,
+				constants.LabelResourcePoolName:                    d.ResourcePoolId,
 			},
 		},
 		Spec: metal3v1alpha1.BareMetalHostSpec{

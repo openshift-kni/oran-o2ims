@@ -36,8 +36,8 @@ apiVersion: metal3.io/v1alpha1
 kind: BareMetalHost
 metadata:
   labels:
-    resources.clcm.openshift.io/siteId: local-west
-    resources.clcm.openshift.io/resourcePoolId: dell-xr8620t-pool
+    # resourcePoolName links the BMH to a ResourcePool by metadata.name
+    resources.clcm.openshift.io/resourcePoolName: dell-xr8620t-pool
     resourceselector.clcm.openshift.io/server-colour: blue
     resourceselector.clcm.openshift.io/server-type: XR8620t
     resourceselector.clcm.openshift.io/server-id: dell-xr8620t-node1

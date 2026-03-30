@@ -382,7 +382,7 @@ var (
 		{
 			"repoName":    "multicluster-observability-operator",
 			"modulePath":  "github.com/stolostron/multicluster-observability-operator",
-			"crdPath":     "multicluster-observability-operator/operators/multiclusterobservability/manifests/endpoint-observability",
+			"crdPath":     "operators/multiclusterobservability/manifests/endpoint-observability",
 			"owner":       "stolostron",
 			"crdFileName": "observability.open-cluster-management.io_observabilityaddon_crd.yaml",
 		},
@@ -476,7 +476,6 @@ var (
 				BmcAddress:     fmt.Sprintf("redfish://192.168.1.%d/redfish/v1/Systems/1", 100+i),
 				ServerType:     "R740",
 				Colour:         "green",
-				SiteId:         "local-123",
 				ResourcePoolId: "dell-r740-pool",
 			})
 		}
@@ -488,7 +487,6 @@ var (
 				BmcAddress:     fmt.Sprintf("redfish://192.168.2.%d/redfish/v1/Systems/1", 100+i),
 				ServerType:     "XR8620t",
 				Colour:         "blue",
-				SiteId:         "local-123",
 				ResourcePoolId: "dell-xr8620t-pool",
 			})
 		}

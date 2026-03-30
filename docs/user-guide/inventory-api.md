@@ -8,6 +8,12 @@
     - [GET deploymentManagers List](#get-deploymentmanagers-list)
     - [GET field or fields from the deploymentManagers List](#get-field-or-fields-from-the-deploymentmanagers-list)
     - [GET deploymentManagers List using filter](#get-deploymentmanagers-list-using-filter)
+  - [Query Locations](#query-locations)
+    - [GET Location List](#get-location-list)
+    - [GET Specific Location](#get-specific-location)
+  - [Query O-Cloud Sites](#query-o-cloud-sites)
+    - [GET O-Cloud Site List](#get-o-cloud-site-list)
+    - [GET Specific O-Cloud Site](#get-specific-o-cloud-site)
   - [Query the Resource server](#query-the-resource-server)
     - [GET Resource Type List](#get-resource-type-list)
     - [GET Specific Resource Type](#get-specific-resource-type)
@@ -20,6 +26,22 @@
     - [DELETE an Infrastructure Inventory Subscription](#delete-an-infrastructure-inventory-subscription)
 
 ## Request Examples
+
+> **Interactive API Documentation**
+>
+> You can explore the API interactively using Swagger UI. From the project root, run:
+>
+> ```bash
+> make swagger-ui-start
+> ```
+>
+> Then open <http://localhost:9090> in your browser. This provides an interactive interface
+> to browse endpoints, view schemas, and try out requests. To stop the Swagger UI container:
+>
+> ```bash
+> make swagger-ui-stop
+> ```
+>
 
 ### Query the Metadata endpoints
 
@@ -90,25 +112,107 @@ $ curl --insecure --silent --header "Authorization: Bearer ${MY_TOKEN}"
 To get a list of all the deploymentManagers whose name is **not** local-cluster in our O-Cloud:
 
 ```console
-$ curl --insecure --silent --header "Authorization: Bearer ${MY_TOKEN}" 
+$ curl --insecure --silent --header "Authorization: Bearer ${MY_TOKEN}" \
 "https://${API_URI}/o2ims-infrastructureInventory/v1/deploymentManagers?filter=(neq,name,local-cluster)" | jq
- | jq
+```
+
+### Query Locations
+
+Locations represent geographic places where O-Cloud Sites can be deployed. The Location API provides structured location data including geographic coordinates (GeoJSON), civic addresses (RFC 4776), and human-readable addresses.
+
+> :information_source: Locations are defined via `Location` Custom Resources (CRs) in the hub cluster. See [Server Onboarding](./server-onboarding.md) for details on creating Location CRs.
+
+#### GET Location List
+
+To get a list of all locations:
+
+```console
+$ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" \
+"https://${API_URI}/o2ims-infrastructureInventory/v1/locations" | jq
+```
+
+Example response:
+
+```json
+[
+  {
+    "globalLocationId": "location-east-1",
+    "name": "East Data Center",
+    "description": "Primary east coast facility",
+    "coordinate": {
+      "type": "Point",
+      "coordinates": [-77.0364, 38.8951]
+    },
+    "civicAddress": [
+      {"caType": 1, "caValue": "US"},
+      {"caType": 3, "caValue": "Virginia"},
+      {"caType": 6, "caValue": "Ashburn"}
+    ],
+    "address": "123 Data Center Way, Ashburn, VA",
+    "oCloudSiteIds": ["7fd364a0-6d82-4e0c-a418-5c1a2f8b9c3e"]
+  }
+]
+```
+
+#### GET Specific Location
+
+To get information about a specific location by its `globalLocationId`:
+
+```console
+$ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" \
+"https://${API_URI}/o2ims-infrastructureInventory/v1/locations/{globalLocationId}" | jq
+```
+
+### Query O-Cloud Sites
+
+O-Cloud Sites represent logical groupings of infrastructure within a Location. Each site can contain multiple Resource Pools.
+
+> :information_source: O-Cloud Sites are defined via `OCloudSite` Custom Resources (CRs) in the hub cluster. See [Server Onboarding](./server-onboarding.md) for details on creating OCloudSite CRs.
+
+#### GET O-Cloud Site List
+
+To get a list of all O-Cloud sites:
+
+```console
+$ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" \
+"https://${API_URI}/o2ims-infrastructureInventory/v1/oCloudSites" | jq
+```
+
+Example response:
+
+```json
+[
+  {
+    "oCloudSiteId": "7fd364a0-6d82-4e0c-a418-5c1a2f8b9c3e",
+    "globalLocationId": "location-east-1",
+    "name": "East Site 1",
+    "description": "Primary site at east data center",
+    "resourcePools": ["d3b27e14-4589-4d93-ae76-ddca559193ea"]
+  }
+]
+```
+
+#### GET Specific O-Cloud Site
+
+To get information about a specific O-Cloud site by its `oCloudSiteId`:
+
+```console
+$ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" \
+"https://${API_URI}/o2ims-infrastructureInventory/v1/oCloudSites/{oCloudSiteId}" | jq
 ```
 
 ### Query the Resource server
 
-The resource server exposes endpoints for retrieving resource types, resource pools and resources objects. The server relies on the Search Query API of ACM hub. Follow these [instructions](../dev/env_acm.md#search-query-api) to enable
-and configure the search API access. The resource server will translate those REST requests and send them to the ACM search server that implements a graphQL API.
+The resource server exposes endpoints for retrieving resource types, resource pools and resources objects. Resource data is collected by the hierarchy controllers (for Locations, OCloudSites, and ResourcePools) and by the hardware plugin (for Resources/BareMetalHosts), and stored in a PostgreSQL database.
 
-> [!IMPORTANT]
-> To obtain the requested information we need to enable the searchCollector of all the managed clusters, concretely, in the KlusterletAddonConfig CR.
+> :information_source: Resources (BareMetalHosts) are discovered via the hardware plugin, which polls on a configurable interval (default: 1 minute). Locations, OCloudSites, and ResourcePools are collected via Kubernetes watches and appear nearly immediately.
 
 #### GET Resource Type List
 
 To get a list of available resource types:
 
 ```console
-$ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" 
+$ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" \
 "https://${API_URI}/o2ims-infrastructureInventory/v1/resourceTypes" | jq
 ```
 
@@ -117,8 +221,8 @@ $ curl -ks --header "Authorization: Bearer ${MY_TOKEN}"
 To get information of a specific resource type:
 
 ```console
-$ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" 
-"https://${API_URI}/o2ims-infrastructureInventory/v1/resourceTypes/${resource_type_name} | jq
+$ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" \
+"https://${API_URI}/o2ims-infrastructureInventory/v1/resourceTypes/{resourceTypeId}" | jq
 ```
 
 #### GET Resource Pool List
@@ -126,8 +230,22 @@ $ curl -ks --header "Authorization: Bearer ${MY_TOKEN}"
 To get a list of available resource pools:
 
 ```console
-$ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" 
+$ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" \
 "https://${API_URI}/o2ims-infrastructureInventory/v1/resourcePools" | jq
+```
+
+Example response:
+
+```json
+[
+  {
+    "resourcePoolId": "7208c495-18c9-45ac-be47-e4b900c6f204",
+    "name": "pool-east-compute",
+    "oCloudSiteId": "a7390d7a-dfa6-4fca-a227-33cd17f6bcec",
+    "description": "Compute resources",
+    "extensions": {}
+  }
+]
 ```
 
 #### GET Specific Resource Pool
@@ -135,18 +253,45 @@ $ curl -ks --header "Authorization: Bearer ${MY_TOKEN}"
 To get information of a specific resource pool:
 
 ```console
-$ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" 
+$ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" \
 "https://${API_URI}/o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}" | jq
 ```
 
 #### GET all Resources of a specific Resource Pool
 
-We can filter down to get all the resources of a specific resourcePool.
+To get all the resources belonging to a specific resource pool:
 
 ```console
-$ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" 
-"https://${API_URI}/o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}
-/resources" | jq
+$ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" \
+"https://${API_URI}/o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources" | jq
+```
+
+Example response:
+
+```json
+[
+  {
+    "resourceId": "f3e79178-b199-4eb6-bfe3-b1417b7d5b8d",
+    "resourcePoolId": "7208c495-18c9-45ac-be47-e4b900c6f204",
+    "description": "Dell R740 server for RAN DU",
+    "resourceTypeId": "d1eabf91-f0e6-5170-97dc-797d35146dad",
+    "globalAssetId": "",
+    "elements": null,
+    "tags": ["server-id: server-001", "server-type: R740"],
+    "groups": null,
+    "extensions": {
+      "adminState": "LOCKED",
+      "operationalState": "DISABLED",
+      "usageState": "IDLE",
+      "powerState": "OFF",
+      "vendor": "",
+      "model": "",
+      "labels": {
+        "resources.clcm.openshift.io/resourcePoolName": "pool-east-compute"
+      }
+    }
+  }
+]
 ```
 
 ### Query the Infrastructure Inventory Subscription (Resource Server)
@@ -156,8 +301,8 @@ $ curl -ks --header "Authorization: Bearer ${MY_TOKEN}"
 To get a list of resource subscriptions:
 
 ```console
-$ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" 
-"https://${API_URI}/o2ims-infrastructureInventory/v1/subscriptions | jq
+$ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" \
+"https://${API_URI}/o2ims-infrastructureInventory/v1/subscriptions" | jq
 ```
 
 #### GET Infrastructure Inventory Subscription Information
@@ -165,8 +310,8 @@ $ curl -ks --header "Authorization: Bearer ${MY_TOKEN}"
 To get all the information about an existing resource subscription:
 
 ```console
-$ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" 
-"https://${API_URI}/o2ims-infrastructureInventory/v1/subscriptions/<subscription_uuid> | jq
+$ curl -ks --header "Authorization: Bearer ${MY_TOKEN}" \
+"https://${API_URI}/o2ims-infrastructureInventory/v1/subscriptions/<subscription_uuid>" | jq
 ```
 
 #### POST a new Infrastructure Inventory Subscription Information

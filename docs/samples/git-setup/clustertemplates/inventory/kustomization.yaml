@@ -12,3 +12,8 @@ resources:
 - dell-r740-node1.yaml
 - dell-r740-node2.yaml
 - dell-r740-node3.yaml
+- oran-ns.yaml
+- location.yaml
+- ocloudsite.yaml
+- resourcepool.yaml
+
