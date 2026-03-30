@@ -204,11 +204,14 @@ func (r *ResourcePoolReconciler) enqueueResourcePoolsForOCloudSite(ctx context.C
 		return nil
 	}
 
-	// Find all ResourcePools that reference this OCloudSite by name
+	// Find all ResourcePools in the same namespace that reference this OCloudSite by name
 	var poolList inventoryv1alpha1.ResourcePoolList
-	if err := r.List(ctx, &poolList, client.MatchingFields{
-		ctlrutils.ResourcePoolOCloudSiteNameIndex: site.Name,
-	}); err != nil {
+	if err := r.List(ctx, &poolList,
+		client.InNamespace(site.Namespace),
+		client.MatchingFields{
+			ctlrutils.ResourcePoolOCloudSiteNameIndex: site.Name,
+		},
+	); err != nil {
 		r.Logger.ErrorContext(ctx, "Failed to list ResourcePools for OCloudSite watch",
 			slog.String("error", err.Error()))
 		return nil

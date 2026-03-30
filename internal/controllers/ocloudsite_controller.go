@@ -194,11 +194,14 @@ func (r *OCloudSiteReconciler) enqueueOCloudSitesForLocation(ctx context.Context
 		return nil
 	}
 
-	// Find all OCloudSites that reference this Location by name (spec.globalLocationName)
+	// Find all OCloudSites in the same namespace that reference this Location by name
 	var siteList inventoryv1alpha1.OCloudSiteList
-	if err := r.List(ctx, &siteList, client.MatchingFields{
-		ctlrutils.OCloudSiteGlobalLocationNameIndex: location.Name,
-	}); err != nil {
+	if err := r.List(ctx, &siteList,
+		client.InNamespace(location.Namespace),
+		client.MatchingFields{
+			ctlrutils.OCloudSiteGlobalLocationNameIndex: location.Name,
+		},
+	); err != nil {
 		r.Logger.ErrorContext(ctx, "Failed to list OCloudSites for Location watch",
 			slog.String("error", err.Error()))
 		return nil
