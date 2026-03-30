@@ -37,11 +37,6 @@ func NewMetal3PluginInventoryServer(
 	}, nil
 }
 
-func (m *Metal3PluginInventoryServer) GetResourcePools(ctx context.Context, request inventory.GetResourcePoolsRequestObject) (inventory.GetResourcePoolsResponseObject, error) {
-	// nolint: wrapcheck
-	return metal3ctrl.GetResourcePools(ctx, m.HubClient)
-}
-
 func (m *Metal3PluginInventoryServer) GetResources(ctx context.Context, request inventory.GetResourcesRequestObject) (inventory.GetResourcesResponseObject, error) {
 	// nolint: wrapcheck
 	return metal3ctrl.GetResources(ctx, m.Logger, m.HubClient)

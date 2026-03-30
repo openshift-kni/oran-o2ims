@@ -590,8 +590,7 @@ var _ = Describe("Helpers", func() {
 					Name:      "bmh-1",
 					Namespace: "test-bmh-ns",
 					Labels: map[string]string{
-						LabelSiteID:         "test-site",
-						LabelResourcePoolID: "test-pool",
+						constants.LabelResourcePoolName: "test-pool",
 					},
 				},
 				Status: metal3v1alpha1.BareMetalHostStatus{
@@ -605,8 +604,7 @@ var _ = Describe("Helpers", func() {
 					Name:      "bmh-2",
 					Namespace: "test-bmh-ns",
 					Labels: map[string]string{
-						LabelSiteID:         "test-site",
-						LabelResourcePoolID: "test-pool",
+						constants.LabelResourcePoolName: "test-pool",
 					},
 				},
 				Status: metal3v1alpha1.BareMetalHostStatus{

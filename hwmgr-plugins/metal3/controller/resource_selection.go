@@ -33,6 +33,7 @@ import (
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
 
 // ============================================================================
@@ -145,7 +146,7 @@ var REPatternQualifierOp = regexp.MustCompile(`^([^!<>=~]+)([!<>=~]+)(.*)$`)
 //	    "hardwaredata/cpu_arch": "x86_64", // This will be skipped in primary filter
 //	  },
 //	}
-//	opts, err := ResourceSelectionPrimaryFilter(ctx, client, logger, "site1", nodeGroupData)
+//	opts, err := ResourceSelectionPrimaryFilter(ctx, client, logger, nodeGroupData)
 //	if err != nil {
 //	  return err
 //	}
@@ -155,7 +156,6 @@ var REPatternQualifierOp = regexp.MustCompile(`^([^!<>=~]+)([!<>=~]+)(.*)$`)
 func ResourceSelectionPrimaryFilter(ctx context.Context,
 	c client.Reader,
 	logger *slog.Logger,
-	site string,
 	nodeGroupData hwmgmtv1alpha1.NodeGroupData) ([]client.ListOption, error) {
 
 	opts := []client.ListOption{}
@@ -187,14 +187,9 @@ func ResourceSelectionPrimaryFilter(ctx context.Context,
 
 	matchingLabels := make(client.MatchingLabels)
 
-	// Add site ID filter if provided
-	if site != "" {
-		matchingLabels[LabelSiteID] = site
-	}
-
-	// Add pool ID filter if provided
+	// Add pool name filter if provided
 	if nodeGroupData.ResourcePoolId != "" {
-		matchingLabels[LabelResourcePoolID] = nodeGroupData.ResourcePoolId
+		matchingLabels[constants.LabelResourcePoolName] = nodeGroupData.ResourcePoolId
 	}
 
 	for key, value := range nodeGroupData.ResourceSelector {

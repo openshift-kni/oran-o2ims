@@ -207,13 +207,13 @@ var _ = Describe("BareMetalHost Manager", func() {
 			bmhList := metal3v1alpha1.BareMetalHostList{
 				Items: []metal3v1alpha1.BareMetalHost{
 					*createBMH("bmh1", "test-ns", map[string]string{
-						LabelResourcePoolID: "pool1",
+						constants.LabelResourcePoolName: "pool1",
 					}, nil, metal3v1alpha1.StateAvailable),
 					*createBMH("bmh2", "test-ns", map[string]string{
-						LabelResourcePoolID: "pool2",
+						constants.LabelResourcePoolName: "pool2",
 					}, nil, metal3v1alpha1.StateAvailable),
 					*createBMH("bmh3", "test-ns", map[string]string{
-						LabelResourcePoolID: "pool1",
+						constants.LabelResourcePoolName: "pool1",
 					}, nil, metal3v1alpha1.StateAvailable),
 				},
 			}
@@ -231,7 +231,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 			bmhList := metal3v1alpha1.BareMetalHostList{
 				Items: []metal3v1alpha1.BareMetalHost{
 					*createBMH("bmh1", "test-ns", map[string]string{
-						LabelResourcePoolID: "pool1",
+						constants.LabelResourcePoolName: "pool1",
 					}, nil, metal3v1alpha1.StateAvailable),
 					*createBMH("bmh2", "test-ns", nil, nil, metal3v1alpha1.StateAvailable),
 				},
@@ -664,14 +664,12 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 		BeforeEach(func() {
 			bmh1 = createBMH("bmh1", "test-ns", map[string]string{
-				LabelSiteID:         "site1",
-				LabelResourcePoolID: "pool1",
-				BmhAllocatedLabel:   ValueTrue,
+				constants.LabelResourcePoolName: "pool1",
+				BmhAllocatedLabel:               ValueTrue,
 			}, nil, metal3v1alpha1.StateAvailable)
 
 			bmh2 = createBMH("bmh2", "test-ns", map[string]string{
-				LabelSiteID:         "site1",
-				LabelResourcePoolID: "pool1",
+				constants.LabelResourcePoolName: "pool1",
 			}, nil, metal3v1alpha1.StateAvailable)
 
 			// Create corresponding HardwareData for each BMH
@@ -707,16 +705,15 @@ var _ = Describe("BareMetalHost Manager", func() {
 		})
 
 		It("should fetch only unallocated BMHs", func() {
-			bmhList, err := fetchBMHList(ctx, fakeClient, logger, "site1", nodeGroup)
+			bmhList, err := fetchBMHList(ctx, fakeClient, logger, nodeGroup)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(bmhList.Items)).To(Equal(1))
 			Expect(bmhList.Items[0].Name).To(Equal("bmh2"))
 		})
 
-		It("should filter by site ID", func() {
+		It("should filter by resource pool name", func() {
 			bmh3 := createBMH("bmh3", "test-ns", map[string]string{
-				LabelSiteID:         "site2",
-				LabelResourcePoolID: "pool1",
+				constants.LabelResourcePoolName: "pool2",
 			}, nil, metal3v1alpha1.StateAvailable)
 			hwData3 := &metal3v1alpha1.HardwareData{
 				ObjectMeta: metav1.ObjectMeta{
@@ -754,53 +751,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 			}
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh1, bmh2, bmh3, hwData1, hwData2, hwData3).Build()
 
-			bmhList, err := fetchBMHList(ctx, fakeClient, logger, "site1", nodeGroup)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(bmhList.Items)).To(Equal(1)) // Only bmh2 should match (bmh1 is allocated, bmh3 is site2)
-		})
-
-		It("should filter by resource pool ID", func() {
-			bmh3 := createBMH("bmh3", "test-ns", map[string]string{
-				LabelSiteID:         "site1",
-				LabelResourcePoolID: "pool2",
-			}, nil, metal3v1alpha1.StateAvailable)
-			hwData3 := &metal3v1alpha1.HardwareData{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "bmh3",
-					Namespace: "test-ns",
-				},
-				Spec: metal3v1alpha1.HardwareDataSpec{
-					HardwareDetails: &metal3v1alpha1.HardwareDetails{
-						CPU: metal3v1alpha1.CPU{Arch: "x86_64"},
-					},
-				},
-			}
-			// Need to also include the original hardware data objects
-			hwData1 := &metal3v1alpha1.HardwareData{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "bmh1",
-					Namespace: "test-ns",
-				},
-				Spec: metal3v1alpha1.HardwareDataSpec{
-					HardwareDetails: &metal3v1alpha1.HardwareDetails{
-						CPU: metal3v1alpha1.CPU{Arch: "x86_64"},
-					},
-				},
-			}
-			hwData2 := &metal3v1alpha1.HardwareData{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "bmh2",
-					Namespace: "test-ns",
-				},
-				Spec: metal3v1alpha1.HardwareDataSpec{
-					HardwareDetails: &metal3v1alpha1.HardwareDetails{
-						CPU: metal3v1alpha1.CPU{Arch: "x86_64"},
-					},
-				},
-			}
-			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh1, bmh2, bmh3, hwData1, hwData2, hwData3).Build()
-
-			bmhList, err := fetchBMHList(ctx, fakeClient, logger, "site1", nodeGroup)
+			bmhList, err := fetchBMHList(ctx, fakeClient, logger, nodeGroup)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(bmhList.Items)).To(Equal(1)) // Only bmh2 should match (bmh1 is allocated, bmh3 is pool2)
 		})

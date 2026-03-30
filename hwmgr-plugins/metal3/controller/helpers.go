@@ -604,9 +604,9 @@ func processNewNodeAllocationRequest(ctx context.Context,
 			continue // Skip groups with size 0
 		}
 
-		// Fetch unallocated BMHs for the specific site and NodeGroupData using non-cached client
+		// Fetch unallocated BMHs for the NodeGroupData using non-cached client
 		// to avoid race conditions with concurrent allocations
-		bmhListForGroup, err := fetchBMHList(ctx, noncachedClient, logger, nodeAllocationRequest.Spec.Site, nodeGroup.NodeGroupData)
+		bmhListForGroup, err := fetchBMHList(ctx, noncachedClient, logger, nodeGroup.NodeGroupData)
 		if err != nil {
 			return fmt.Errorf("unable to fetch BMHs for nodegroup=%s: %w", nodeGroup.NodeGroupData.Name, err)
 		}
@@ -1596,8 +1596,7 @@ func processNodeAllocationRequestAllocation(
 
 		// Only fetch unallocated BMHs if we actually need new nodes using non-cached client
 		// to avoid race conditions with concurrent allocations
-		unallocatedBMHs, err := fetchBMHList(ctx, noncachedClient, logger, nodeAllocationRequest.Spec.Site,
-			nodeGroup.NodeGroupData)
+		unallocatedBMHs, err := fetchBMHList(ctx, noncachedClient, logger, nodeGroup.NodeGroupData)
 		if err != nil {
 			return hwmgrutils.RequeueWithShortInterval(), fmt.Errorf("unable to fetch unallocated BMHs for site=%s, nodegroup=%s: %w",
 				nodeAllocationRequest.Spec.Site, nodeGroup.NodeGroupData.Name, err)

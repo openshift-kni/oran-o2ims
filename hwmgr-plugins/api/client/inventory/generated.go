@@ -239,7 +239,11 @@ type ResourceInfo struct {
 	Processors []ProcessorInfo         `json:"processors"`
 
 	// ResourceId Identifier for the Resource.
-	ResourceId     string `json:"resourceId"`
+	ResourceId string `json:"resourceId"`
+
+	// ResourcePoolId The Kubernetes metadata.uid of the ResourcePool CR that this resource belongs to.
+	// This value is obtained by looking up the ResourcePool CR by name (from the BMH's
+	// resourcePoolName label) and extracting its UID.
 	ResourcePoolId string `json:"resourcePoolId"`
 
 	// Storage Storage devices indexed by device path
@@ -264,21 +268,6 @@ type ResourceInfoPowerState string
 
 // ResourceInfoUsageState defines model for ResourceInfo.UsageState.
 type ResourceInfoUsageState string
-
-// ResourcePoolInfo Information about a resource pool.
-type ResourcePoolInfo struct {
-	// Description Human readable description of the resource pool.
-	Description string `json:"description"`
-
-	// Name Human readable name of the resource pool.
-	Name string `json:"name"`
-
-	// ResourcePoolId Identifier for the Resource Pool in the hardware manager instance.
-	ResourcePoolId string `json:"resourcePoolId"`
-
-	// SiteId Identifier for the location of the resource pool.
-	SiteId *string `json:"siteId,omitempty"`
-}
 
 // StorageInfo Information about a storage device
 type StorageInfo struct {
@@ -406,15 +395,6 @@ type ClientInterface interface {
 	// GetMinorVersions request
 	GetMinorVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetResourcePools request
-	GetResourcePools(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetResourcePool request
-	GetResourcePool(ctx context.Context, resourcePoolId string, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetResourcePoolResources request
-	GetResourcePoolResources(ctx context.Context, resourcePoolId string, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// GetResources request
 	GetResources(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -450,42 +430,6 @@ func (c *Client) GetAllVersions(ctx context.Context, reqEditors ...RequestEditor
 
 func (c *Client) GetMinorVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetMinorVersionsRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) GetResourcePools(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetResourcePoolsRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) GetResourcePool(ctx context.Context, resourcePoolId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetResourcePoolRequest(c.Server, resourcePoolId)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) GetResourcePoolResources(ctx context.Context, resourcePoolId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetResourcePoolResourcesRequest(c.Server, resourcePoolId)
 	if err != nil {
 		return nil, err
 	}
@@ -617,101 +561,6 @@ func NewGetMinorVersionsRequest(server string) (*http.Request, error) {
 	}
 
 	operationPath := fmt.Sprintf("/hardware-manager/inventory/v1/api_versions")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetResourcePoolsRequest generates requests for GetResourcePools
-func NewGetResourcePoolsRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/hardware-manager/inventory/v1/resourcePools")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetResourcePoolRequest generates requests for GetResourcePool
-func NewGetResourcePoolRequest(server string, resourcePoolId string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "resourcePoolId", resourcePoolId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/hardware-manager/inventory/v1/resourcePools/%s", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetResourcePoolResourcesRequest generates requests for GetResourcePoolResources
-func NewGetResourcePoolResourcesRequest(server string, resourcePoolId string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "resourcePoolId", resourcePoolId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/hardware-manager/inventory/v1/resourcePools/%s/resources", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -974,15 +823,6 @@ type ClientWithResponsesInterface interface {
 	// GetMinorVersionsWithResponse request
 	GetMinorVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMinorVersionsResponse, error)
 
-	// GetResourcePoolsWithResponse request
-	GetResourcePoolsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetResourcePoolsResponse, error)
-
-	// GetResourcePoolWithResponse request
-	GetResourcePoolWithResponse(ctx context.Context, resourcePoolId string, reqEditors ...RequestEditorFn) (*GetResourcePoolResponse, error)
-
-	// GetResourcePoolResourcesWithResponse request
-	GetResourcePoolResourcesWithResponse(ctx context.Context, resourcePoolId string, reqEditors ...RequestEditorFn) (*GetResourcePoolResourcesResponse, error)
-
 	// GetResourcesWithResponse request
 	GetResourcesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetResourcesResponse, error)
 
@@ -1046,82 +886,6 @@ func (r GetMinorVersionsResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r GetMinorVersionsResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type GetResourcePoolsResponse struct {
-	Body                      []byte
-	HTTPResponse              *http.Response
-	JSON200                   *[]ResourcePoolInfo
-	ApplicationProblemJSON400 *ProblemDetails
-	ApplicationProblemJSON403 *ProblemDetails
-	ApplicationProblemJSON404 *ProblemDetails
-	ApplicationProblemJSON500 *ProblemDetails
-	ApplicationProblemJSON503 *ProblemDetails
-}
-
-// Status returns HTTPResponse.Status
-func (r GetResourcePoolsResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetResourcePoolsResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type GetResourcePoolResponse struct {
-	Body                      []byte
-	HTTPResponse              *http.Response
-	JSON200                   *ResourcePoolInfo
-	ApplicationProblemJSON400 *ProblemDetails
-	ApplicationProblemJSON404 *ProblemDetails
-	ApplicationProblemJSON500 *ProblemDetails
-}
-
-// Status returns HTTPResponse.Status
-func (r GetResourcePoolResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetResourcePoolResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type GetResourcePoolResourcesResponse struct {
-	Body                      []byte
-	HTTPResponse              *http.Response
-	JSON200                   *[]ResourceInfo
-	ApplicationProblemJSON400 *ProblemDetails
-	ApplicationProblemJSON500 *ProblemDetails
-}
-
-// Status returns HTTPResponse.Status
-func (r GetResourcePoolResourcesResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetResourcePoolResourcesResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -1301,33 +1065,6 @@ func (c *ClientWithResponses) GetMinorVersionsWithResponse(ctx context.Context, 
 	return ParseGetMinorVersionsResponse(rsp)
 }
 
-// GetResourcePoolsWithResponse request returning *GetResourcePoolsResponse
-func (c *ClientWithResponses) GetResourcePoolsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetResourcePoolsResponse, error) {
-	rsp, err := c.GetResourcePools(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetResourcePoolsResponse(rsp)
-}
-
-// GetResourcePoolWithResponse request returning *GetResourcePoolResponse
-func (c *ClientWithResponses) GetResourcePoolWithResponse(ctx context.Context, resourcePoolId string, reqEditors ...RequestEditorFn) (*GetResourcePoolResponse, error) {
-	rsp, err := c.GetResourcePool(ctx, resourcePoolId, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetResourcePoolResponse(rsp)
-}
-
-// GetResourcePoolResourcesWithResponse request returning *GetResourcePoolResourcesResponse
-func (c *ClientWithResponses) GetResourcePoolResourcesWithResponse(ctx context.Context, resourcePoolId string, reqEditors ...RequestEditorFn) (*GetResourcePoolResourcesResponse, error) {
-	rsp, err := c.GetResourcePoolResources(ctx, resourcePoolId, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetResourcePoolResourcesResponse(rsp)
-}
-
 // GetResourcesWithResponse request returning *GetResourcesResponse
 func (c *ClientWithResponses) GetResourcesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetResourcesResponse, error) {
 	rsp, err := c.GetResources(ctx, reqEditors...)
@@ -1446,154 +1183,6 @@ func ParseGetMinorVersionsResponse(rsp *http.Response) (*GetMinorVersionsRespons
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest APIVersions
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest ProblemDetails
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest ProblemDetails
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetResourcePoolsResponse parses an HTTP response from a GetResourcePoolsWithResponse call
-func ParseGetResourcePoolsResponse(rsp *http.Response) (*GetResourcePoolsResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetResourcePoolsResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []ResourcePoolInfo
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest ProblemDetails
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest ProblemDetails
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest ProblemDetails
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest ProblemDetails
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON500 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
-		var dest ProblemDetails
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON503 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetResourcePoolResponse parses an HTTP response from a GetResourcePoolWithResponse call
-func ParseGetResourcePoolResponse(rsp *http.Response) (*GetResourcePoolResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetResourcePoolResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ResourcePoolInfo
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest ProblemDetails
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest ProblemDetails
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest ProblemDetails
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetResourcePoolResourcesResponse parses an HTTP response from a GetResourcePoolResourcesWithResponse call
-func ParseGetResourcePoolResourcesResponse(rsp *http.Response) (*GetResourcePoolResourcesResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetResourcePoolResourcesResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []ResourceInfo
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -1938,63 +1527,62 @@ func ParseGetSubscriptionResponse(rsp *http.Response) (*GetSubscriptionResponse,
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"luWJ23wu5q1aaMu75X8DAAD//2l8+32HSAAA",
+	"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",
+	"LvatW2iPd4//FwAA//9IbTVcVjwAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

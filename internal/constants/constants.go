@@ -180,6 +180,8 @@ const (
 // Label prefixes
 const (
 	LabelPrefixInterfaces = "interfacelabel.clcm.openshift.io/"
+	LabelPrefixResources  = "resources.clcm.openshift.io/"
+	LabelResourcePoolName = LabelPrefixResources + "resourcePoolName"
 )
 
 // Boot interface configuration

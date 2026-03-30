@@ -34,14 +34,7 @@ implementation, including inventory server, provisioning server, and serve funct
    - should be assignable to StrictServerInterface without errors
    - should satisfy the interface at compile time
 
-3. GetResourcePools Method Tests:
-   - Successful Operation:
-     • should call metal3ctrl.GetResourcePools with correct parameters
-     • should use the correct context when calling GetResourcePools
-   - Method Signature Validation:
-     • should have the correct method signature matching interface requirements
-
-4. GetResources Method Tests:
+3. GetResources Method Tests:
    - Successful Operation:
      • should call metal3ctrl.GetResources with correct parameters
      • should use the correct context and logger when calling GetResources
@@ -60,7 +53,6 @@ implementation, including inventory server, provisioning server, and serve funct
    - should properly handle server cleanup
 
 8. Method Delegation Tests:
-   - should properly delegate GetResourcePools to metal3ctrl package
    - should properly delegate GetResources to metal3ctrl package
 
 === PROVISIONING SERVER TESTS (provisioning_server_test.go) ===

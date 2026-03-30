@@ -281,6 +281,20 @@ func (t *reconcilerTask) createMetal3PluginServerClusterRole(ctx context.Context
 					"watch",
 				},
 			},
+			// ResourcePools: needed to lookup pool name -> UID mapping for inventory API
+			{
+				APIGroups: []string{
+					"ocloud.openshift.io",
+				},
+				Resources: []string{
+					"resourcepools",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
+				},
+			},
 			// Provisioning URL
 			{
 				NonResourceURLs: []string{

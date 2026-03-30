@@ -165,17 +165,16 @@ func updateBMHMetaWithRetry(
 	})
 }
 
-// FetchBMHList retrieves BareMetalHosts filtered by site ID, allocation status, and optional namespace.
+// FetchBMHList retrieves BareMetalHosts filtered by resource pool, allocation status, and resource selectors.
 func fetchBMHList(
 	ctx context.Context,
 	c client.Reader,
 	logger *slog.Logger,
-	site string,
 	nodeGroupData hwmgmtv1alpha1.NodeGroupData) (metal3v1alpha1.BareMetalHostList, error) {
 
 	var bmhList metal3v1alpha1.BareMetalHostList
 
-	opts, err := ResourceSelectionPrimaryFilter(ctx, c, logger, site, nodeGroupData)
+	opts, err := ResourceSelectionPrimaryFilter(ctx, c, logger, nodeGroupData)
 	if err != nil {
 		return bmhList, fmt.Errorf("failed to create primary filter: %w", err)
 	}
@@ -187,7 +186,7 @@ func fetchBMHList(
 
 	if len(bmhList.Items) == 0 {
 		logger.WarnContext(ctx, "No BareMetalHosts found matching criteria",
-			slog.String(LabelSiteID, site))
+			slog.String("resourcePool", nodeGroupData.ResourcePoolId))
 		return bmhList, nil
 	}
 
@@ -199,14 +198,14 @@ func fetchBMHList(
 	return bmhList, nil
 }
 
-// GroupBMHsByResourcePool groups unallocated BMHs by resource pool ID.
+// GroupBMHsByResourcePool groups unallocated BMHs by resource pool name.
 func GroupBMHsByResourcePool(
 	unallocatedBMHs metal3v1alpha1.BareMetalHostList,
 ) map[string][]metal3v1alpha1.BareMetalHost {
 	grouped := make(map[string][]metal3v1alpha1.BareMetalHost)
 	for _, bmh := range unallocatedBMHs.Items {
-		if resourcePoolID, exists := bmh.Labels[LabelResourcePoolID]; exists {
-			grouped[resourcePoolID] = append(grouped[resourcePoolID], bmh)
+		if resourcePoolName, exists := bmh.Labels[constants.LabelResourcePoolName]; exists {
+			grouped[resourcePoolName] = append(grouped[resourcePoolName], bmh)
 		}
 	}
 	return grouped
