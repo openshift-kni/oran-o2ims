@@ -324,10 +324,23 @@ rules:
   - ocloud.openshift.io
   resources:
   - inventories/status
+  - locations/status
+  - ocloudsites/status
+  - resourcepools/status
   verbs:
   - get
   - patch
   - update
+- apiGroups:
+  - ocloud.openshift.io
+  resources:
+  - locations
+  - ocloudsites
+  - resourcepools
+  verbs:
+  - get
+  - list
+  - watch
 - apiGroups:
   - operator.openshift.io
   resources:
