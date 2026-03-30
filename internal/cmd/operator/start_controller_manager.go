@@ -270,6 +270,13 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
+	// Register field indexes for hierarchy CRs (Location, OCloudSite, ResourcePool) for
+	// efficient lookups
+	if err := ctlrutils.SetupHierarchyIndexers(ctx, mgr); err != nil {
+		logger.ErrorContext(ctx, "Unable to set up hierarchy indexers", slog.Any("error", err))
+		return exit.Error(1)
+	}
+
 	// Start the Cluster Template controller.
 	if err = (&controllers.ClusterTemplateReconciler{
 		Client: mgr.GetClient(),
@@ -279,6 +286,48 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			ctx,
 			"Unable to create controller",
 			slog.String("controller", "ClusterTemplate"),
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
+
+	// Start the Location controller.
+	if err = (&controllers.LocationReconciler{
+		Client: mgr.GetClient(),
+		Logger: logger.With("controller", "Location"),
+	}).SetupWithManager(mgr); err != nil {
+		logger.ErrorContext(
+			ctx,
+			"Unable to create controller",
+			slog.String("controller", "Location"),
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
+
+	// Start the OCloudSite controller.
+	if err = (&controllers.OCloudSiteReconciler{
+		Client: mgr.GetClient(),
+		Logger: logger.With("controller", "OCloudSite"),
+	}).SetupWithManager(mgr); err != nil {
+		logger.ErrorContext(
+			ctx,
+			"Unable to create controller",
+			slog.String("controller", "OCloudSite"),
+			slog.String("error", err.Error()),
+		)
+		return exit.Error(1)
+	}
+
+	// Start the ResourcePool controller.
+	if err = (&controllers.ResourcePoolReconciler{
+		Client: mgr.GetClient(),
+		Logger: logger.With("controller", "ResourcePool"),
+	}).SetupWithManager(mgr); err != nil {
+		logger.ErrorContext(
+			ctx,
+			"Unable to create controller",
+			slog.String("controller", "ResourcePool"),
 			slog.String("error", err.Error()),
 		)
 		return exit.Error(1)
@@ -344,7 +393,6 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			)
 			return exit.Error(1)
 		}
-
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
