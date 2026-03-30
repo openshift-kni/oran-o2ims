@@ -33,7 +33,7 @@ func DeploymentManagerToModel(record *DeploymentManager, options *commonapi.Fiel
 		SupportedLocations:  record.Locations,
 	}
 
-	if options.IsIncluded(commonapi.ExtensionsAttribute) {
+	if options != nil && options.IsIncluded(commonapi.ExtensionsAttribute) {
 		if record.Extensions == nil {
 			extensions := make(map[string]interface{})
 			object.Extensions = &extensions
@@ -42,7 +42,7 @@ func DeploymentManagerToModel(record *DeploymentManager, options *commonapi.Fiel
 		}
 	}
 
-	if options.IsIncluded(commonapi.CapacityAttribute) {
+	if options != nil && options.IsIncluded(commonapi.CapacityAttribute) {
 		if record.CapacityInfo != nil {
 			object.Capacity = record.CapacityInfo
 		} else {
@@ -50,7 +50,7 @@ func DeploymentManagerToModel(record *DeploymentManager, options *commonapi.Fiel
 		}
 	}
 
-	if options.IsIncluded(commonapi.CapabilitiesAttribute) {
+	if options != nil && options.IsIncluded(commonapi.CapabilitiesAttribute) {
 		if record.Capabilities != nil {
 			object.Capabilities = record.Capabilities
 		} else {
@@ -62,19 +62,24 @@ func DeploymentManagerToModel(record *DeploymentManager, options *commonapi.Fiel
 }
 
 // ResourceTypeToModel converts a DB tuple to an API Model.
-// If alarmDictionary is provided, it will be included in the response; otherwise the field will be nil.
-func ResourceTypeToModel(record *ResourceType, alarmDictionary *common.AlarmDictionary) generated.ResourceType {
+func ResourceTypeToModel(record *ResourceType, alarmDictionaryID *uuid.UUID) generated.ResourceType {
 	object := generated.ResourceType{
-		AlarmDictionary: alarmDictionary,
-		Description:     record.Description,
-		Extensions:      record.Extensions,
-		Model:           record.Model,
-		Name:            record.Name,
-		ResourceClass:   generated.ResourceTypeResourceClass(record.ResourceClass),
-		ResourceKind:    generated.ResourceTypeResourceKind(record.ResourceKind),
-		ResourceTypeId:  record.ResourceTypeID,
-		Vendor:          record.Vendor,
-		Version:         record.Version,
+		AlarmDictionaryId: alarmDictionaryID,
+		Description:       record.Description,
+		Model:             record.Model,
+		Name:              record.Name,
+		ResourceClass:     generated.ResourceTypeResourceClass(record.ResourceClass),
+		ResourceKind:      generated.ResourceTypeResourceKind(record.ResourceKind),
+		ResourceTypeId:    record.ResourceTypeID,
+		Vendor:            record.Vendor,
+		Version:           record.Version,
+	}
+
+	// Extensions is mandatory per O-RAN spec, always include (even if empty)
+	if record.Extensions != nil {
+		object.Extensions = record.Extensions
+	} else {
+		object.Extensions = make(map[string]interface{})
 	}
 
 	return object
@@ -110,15 +115,13 @@ func SubscriptionFromModel(object *generated.Subscription) *models2.Subscription
 // ResourcePoolToModel converts a DB tuple to an API model
 func ResourcePoolToModel(record *ResourcePool, options *commonapi.FieldOptions) generated.ResourcePool {
 	object := generated.ResourcePool{
-		Description:      record.Description,
-		GlobalLocationId: record.GlobalLocationID,
-		Location:         record.Location,
-		Name:             record.Name,
-		OCloudId:         record.OCloudID,
-		ResourcePoolId:   record.ResourcePoolID,
+		Description:    record.Description,
+		Name:           record.Name,
+		OCloudSiteId:   record.OCloudSiteID,
+		ResourcePoolId: record.ResourcePoolID,
 	}
 
-	if options.IsIncluded(commonapi.ExtensionsAttribute) {
+	if options != nil && options.IsIncluded(commonapi.ExtensionsAttribute) {
 		if record.Extensions == nil {
 			extensions := make(map[string]interface{})
 			object.Extensions = &extensions
@@ -188,6 +191,10 @@ func getObjectReference(objectType string, objectID uuid.UUID, parentID *uuid.UU
 		value = fmt.Sprintf("%s%s/%s", constants.O2IMSInventoryBaseURL, constants.ResourcePoolsPath, objectID.String())
 	case DeploymentManager{}.TableName():
 		value = fmt.Sprintf("%s%s/%s", constants.O2IMSInventoryBaseURL, constants.DeploymentManagersPath, objectID.String())
+	case Location{}.TableName():
+		value = fmt.Sprintf("%s%s/%s", constants.O2IMSInventoryBaseURL, constants.LocationsPath, objectID.String())
+	case OCloudSite{}.TableName():
+		value = fmt.Sprintf("%s%s/%s", constants.O2IMSInventoryBaseURL, constants.OCloudSitesPath, objectID.String())
 	default:
 		return nil
 	}
@@ -233,6 +240,104 @@ func SubscriptionToInfo(record *models2.Subscription) *notifier.SubscriptionInfo
 		Filter:                 record.Filter,
 		EventCursor:            record.EventCursor,
 	}
+}
+
+// LocationToModel converts a Location DB record to an API model
+func LocationToModel(record *Location, oCloudSiteIDs []uuid.UUID) generated.LocationInfo {
+	object := generated.LocationInfo{
+		GlobalLocationId: record.GlobalLocationID,
+		Name:             record.Name,
+		Description:      record.Description,
+		Address:          record.Address,
+	}
+
+	// Extensions is mandatory per O-RAN spec, always include (even if empty)
+	if record.Extensions != nil {
+		object.Extensions = record.Extensions
+	} else {
+		object.Extensions = make(map[string]interface{})
+	}
+
+	// Handle Coordinate (GeoJSON Point)
+	// Coordinates arrive as []float64 from the watch path (convertCoordinateToGeoJSON)
+	// or as []interface{} with float64 elements from the DB path (JSON deserialization).
+	if record.Coordinate != nil {
+		coord := struct {
+			Coordinates []float64                            `json:"coordinates"`
+			Type        generated.LocationInfoCoordinateType `json:"type"`
+		}{
+			Type: generated.Point,
+		}
+		switch coords := record.Coordinate["coordinates"].(type) {
+		case []float64:
+			coord.Coordinates = coords
+		case []interface{}:
+			floatCoords := make([]float64, len(coords))
+			for i, c := range coords {
+				if f, ok := c.(float64); ok {
+					floatCoords[i] = f
+				}
+			}
+			coord.Coordinates = floatCoords
+		}
+		object.Coordinate = &coord
+	}
+
+	// Handle CivicAddress (array of {caType, caValue})
+	// caType arrives as int from the watch path (convertCivicAddress stores CaType as int)
+	// or as float64 from the DB path (JSON numbers deserialize to float64).
+	if record.CivicAddress != nil && len(record.CivicAddress) > 0 {
+		civicAddr := make([]struct {
+			CaType  int    `json:"caType"`
+			CaValue string `json:"caValue"`
+		}, len(record.CivicAddress))
+		for i, ca := range record.CivicAddress {
+			switch caType := ca["caType"].(type) {
+			case int:
+				civicAddr[i].CaType = caType
+			case float64:
+				civicAddr[i].CaType = int(caType)
+			}
+			if caValue, ok := ca["caValue"].(string); ok {
+				civicAddr[i].CaValue = caValue
+			}
+		}
+		object.CivicAddress = &civicAddr
+	}
+
+	// Handle OCloudSiteIds
+	if oCloudSiteIDs != nil {
+		object.OCloudSiteIds = oCloudSiteIDs
+	} else {
+		object.OCloudSiteIds = []uuid.UUID{}
+	}
+
+	return object
+}
+
+// OCloudSiteToModel converts an OCloudSite DB record to an API model
+func OCloudSiteToModel(record *OCloudSite, resourcePoolIDs []uuid.UUID) generated.OCloudSiteInfo {
+	object := generated.OCloudSiteInfo{
+		OCloudSiteId:     record.OCloudSiteID,
+		GlobalLocationId: record.GlobalLocationID,
+		Name:             record.Name,
+		Description:      record.Description,
+		ResourcePools:    resourcePoolIDs,
+	}
+
+	// Extensions is mandatory per O-RAN spec, always include (even if empty)
+	if record.Extensions != nil {
+		object.Extensions = record.Extensions
+	} else {
+		object.Extensions = make(map[string]interface{})
+	}
+
+	// Ensure ResourcePools is not nil (API requires it)
+	if object.ResourcePools == nil {
+		object.ResourcePools = []uuid.UUID{}
+	}
+
+	return object
 }
 
 // AlarmDictionaryToModel converts an AlarmDictionary DB record to an API model

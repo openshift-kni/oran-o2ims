@@ -31,7 +31,7 @@ func ClusterResourceToModel(record *ClusterResource, options *commonapi.FieldOpt
 		ResourceId:            record.ResourceID,
 	}
 
-	if options.IsIncluded(commonapi.ExtensionsAttribute) {
+	if options != nil && options.IsIncluded(commonapi.ExtensionsAttribute) {
 		if record.Extensions == nil {
 			extensions := make(map[string]interface{})
 			result.Extensions = &extensions
@@ -40,7 +40,7 @@ func ClusterResourceToModel(record *ClusterResource, options *commonapi.FieldOpt
 		}
 	}
 
-	if options.IsIncluded(commonapi.MemberOfAttribute) {
+	if options != nil && options.IsIncluded(commonapi.MemberOfAttribute) {
 		// TODO
 		value := make([]string, 0)
 		result.MemberOf = &value
@@ -57,7 +57,7 @@ func ClusterResourceTypeToModel(record *ClusterResourceType, options *commonapi.
 		Name:                  record.Name,
 	}
 
-	if options.IsIncluded(commonapi.ExtensionsAttribute) {
+	if options != nil && options.IsIncluded(commonapi.ExtensionsAttribute) {
 		if record.Extensions == nil {
 			extensions := make(map[string]interface{})
 			result.Extensions = &extensions
@@ -87,7 +87,7 @@ func NodeClusterToModel(record *NodeCluster, clusterResourceIDs []uuid.UUID, opt
 		object.ClusterResourceIds = []uuid.UUID{}
 	}
 
-	if options.IsIncluded(commonapi.ExtensionsAttribute) {
+	if options != nil && options.IsIncluded(commonapi.ExtensionsAttribute) {
 		if record.Extensions == nil {
 			extensions := make(map[string]interface{})
 			object.Extensions = &extensions
@@ -107,7 +107,7 @@ func NodeClusterTypeToModel(record *NodeClusterType, options *commonapi.FieldOpt
 		NodeClusterTypeId: record.NodeClusterTypeID,
 	}
 
-	if options.IsIncluded(commonapi.ExtensionsAttribute) {
+	if options != nil && options.IsIncluded(commonapi.ExtensionsAttribute) {
 		if record.Extensions == nil {
 			extensions := make(map[string]interface{})
 			result.Extensions = &extensions

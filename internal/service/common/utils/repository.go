@@ -29,6 +29,12 @@ import (
 // ErrNotFound represents the error returned by any repository when not record matches the requested criteria
 var ErrNotFound = errors.New("record not found")
 
+// PrimaryKeyType defines the allowed types for primary keys in database operations.
+// This constraint enables type-safe generic functions that work with both UUID and string keys.
+type PrimaryKeyType interface {
+	uuid.UUID | string
+}
+
 // Following functions are meant to fulfill basic CRUD operations on the database. More complex queries or bulk operations
 // for Insert or Update should be built in the repository files of the specific service and called one of the Execute helper functions.
 
@@ -43,16 +49,16 @@ type DBQuery interface {
 }
 
 // Find retrieves a specific tuple from the database table specified.
-// The `uuid` argument is the primary key of the record to retrieve.
+// The `key` argument is the primary key of the record to retrieve (supports uuid.UUID or string).
 // If no record is found ErrNotFound is returned as an error.
-func Find[T db.Model](ctx context.Context, db DBQuery, uuid uuid.UUID) (*T, error) {
+func Find[T db.Model, K PrimaryKeyType](ctx context.Context, db DBQuery, key K) (*T, error) {
 	var record T
 	tags := GetAllDBTagsFromStruct(record)
 
 	sql, args, err := psql.Select(
 		sm.Columns(tags.Columns()...),
 		sm.From(record.TableName()),
-		sm.Where(psql.Quote(record.PrimaryKey()).EQ(psql.Arg(uuid))),
+		sm.Where(psql.Quote(record.PrimaryKey()).EQ(psql.Arg(key))),
 	).Build(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build query: %w", err)
@@ -145,11 +151,11 @@ func Create[T db.Model](ctx context.Context, db DBQuery, record T, fields ...str
 }
 
 // Update attempts to update a record of the requested model type.
-// The `uuid` argument is the primary key of the record to update.
+// The `key` argument is the primary key of the record to update (supports uuid.UUID or string).
 // The `record` argument is the record to update in the database.
 // The `fields` argument is a list of columns to update. If no fields are specified only non-nil fields are updated.
 // The updated record is returned on success; otherwise an error is returned.
-func Update[T db.Model](ctx context.Context, db DBQuery, uuid uuid.UUID, record T, fields ...string) (*T, error) {
+func Update[T db.Model, K PrimaryKeyType](ctx context.Context, db DBQuery, key K, record T, fields ...string) (*T, error) {
 	all := GetAllDBTagsFromStruct(record)
 	tags := all
 	if len(fields) > 0 {
@@ -160,7 +166,7 @@ func Update[T db.Model](ctx context.Context, db DBQuery, uuid uuid.UUID, record 
 	// multiple Set(..) operation without having to add them one at a time separately.
 	mods := []bob.Mod[*dialect.UpdateQuery]{
 		um.Table(record.TableName()),
-		um.Where(psql.Quote(record.PrimaryKey()).EQ(psql.Arg(uuid))),
+		um.Where(psql.Quote(record.PrimaryKey()).EQ(psql.Arg(key))),
 		um.Returning(all.Columns()...)}
 
 	// Add the individual column sets
@@ -215,19 +221,19 @@ func UpdateAll[T db.Model](ctx context.Context, db DBQuery, whereExpr bob.Expres
 }
 
 // Exists checks whether a record exists in the database table specified.
-// The `uuid` argument is the primary key of the record to check.
-func Exists[T db.Model](ctx context.Context, db DBQuery, uuid uuid.UUID) (bool, error) {
+// The `key` argument is the primary key of the record to check (supports uuid.UUID or string).
+func Exists[T db.Model, K PrimaryKeyType](ctx context.Context, db DBQuery, key K) (bool, error) {
 	var record T
 
 	query := psql.RawQuery(fmt.Sprintf("SELECT EXISTS(SELECT 1 FROM %s WHERE %s=?)",
-		psql.Quote(record.TableName()), psql.Quote(record.PrimaryKey())), uuid)
+		psql.Quote(record.TableName()), psql.Quote(record.PrimaryKey())), key)
 
 	sql, args, err := query.Build(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to build query: %w", err)
 	}
 
-	slog.Error("executing query", "sql", sql, "args", args)
+	slog.Debug("executing query", "sql", sql, "args", args)
 
 	var result bool
 	err = db.QueryRow(ctx, sql, args...).Scan(&result)

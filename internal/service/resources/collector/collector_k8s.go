@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -58,7 +59,7 @@ type K8SDataSource struct {
 	cloudID           uuid.UUID
 	globalCloudID     uuid.UUID
 	hubClient         client.WithWatch
-	generationID      int
+	generationID      atomic.Int32
 	AsyncChangeEvents chan<- *async.AsyncChangeEvent
 }
 
@@ -72,7 +73,6 @@ func NewK8SDataSource(cloudID, globalCloudID uuid.UUID) (DataSource, error) {
 	}
 
 	return &K8SDataSource{
-		generationID:  0,
 		cloudID:       cloudID,
 		globalCloudID: globalCloudID,
 		hubClient:     hubClient,
@@ -93,25 +93,24 @@ func (d *K8SDataSource) GetID() uuid.UUID {
 // values if provided.
 func (d *K8SDataSource) Init(uuid uuid.UUID, generationID int, asyncEventChannel chan<- *async.AsyncChangeEvent) {
 	d.dataSourceID = uuid
-	d.generationID = generationID
+	d.generationID.Store(int32(generationID)) //nolint:gosec // generationID is a small counter, overflow impossible
 	d.AsyncChangeEvents = asyncEventChannel
 }
 
 // SetGenerationID sets the current generation id for this data source.  This value is expected to
 // be restored from persistent storage at initialization time.
 func (d *K8SDataSource) SetGenerationID(value int) {
-	d.generationID = value
+	d.generationID.Store(int32(value)) //nolint:gosec // generationID is a small counter, overflow impossible
 }
 
 // GetGenerationID retrieves the current generation id for this data source.
 func (d *K8SDataSource) GetGenerationID() int {
-	return d.generationID
+	return int(d.generationID.Load())
 }
 
 // IncrGenerationID increments the current generation id for this data source.
 func (d *K8SDataSource) IncrGenerationID() int {
-	d.generationID++
-	return d.generationID
+	return int(d.generationID.Add(1))
 }
 
 // makeCapacityInfo creates a map of strings of capacity attributes for the cluster
@@ -224,7 +223,7 @@ func (d *K8SDataSource) convertManagedClusterToDeploymentManager(ctx context.Con
 		CapacityInfo:        d.makeCapacityInfo(cluster),
 		Extensions:          extensions,
 		DataSourceID:        d.dataSourceID,
-		GenerationID:        d.generationID,
+		GenerationID:        int(d.generationID.Load()),
 		ExternalID:          fmt.Sprintf("managedcluster/label[clusterID]=%s", clusterID),
 	}
 
@@ -320,7 +319,7 @@ func (d *K8SDataSource) Watch(ctx context.Context) error {
 
 	// Create a Reflector to watch ManagedCluster objects
 	lister := cache.ListWatch{
-		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+		ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
 			var managedClusterList v1.ManagedClusterList
 			err := d.hubClient.List(ctx, &managedClusterList, &client.ListOptions{Raw: &options})
 			if err != nil {
@@ -328,7 +327,7 @@ func (d *K8SDataSource) Watch(ctx context.Context) error {
 			}
 			return &managedClusterList, nil
 		},
-		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+		WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
 			var managedClusterList v1.ManagedClusterList
 			w, err := d.hubClient.Watch(ctx, &managedClusterList, &client.ListOptions{Raw: &options})
 			if err != nil {
