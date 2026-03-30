@@ -687,12 +687,11 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 				fmt.Errorf("failed to enable BMO management for IBI nodes: %w", err)
 		}
 
-		// If no HW profile changes and no configuration is active or pending, this was
+		// If no HW profile changes and no configuration is in progress, this was
 		// only a ClusterProvisioned update — acknowledge and skip config handling.
 		configCond := meta.FindStatusCondition(nodeAllocationRequest.Status.Conditions, string(hwmgmtv1alpha1.Configured))
 		configActive := configCond != nil && configCond.Status == metav1.ConditionFalse &&
-			(configCond.Reason == string(hwmgmtv1alpha1.InProgress) ||
-				configCond.Reason == string(hwmgmtv1alpha1.ConfigUpdate))
+			configCond.Reason == string(hwmgmtv1alpha1.InProgress)
 		hwProfileChanged, err := hasNodeGroupHwProfileChanges(ctx, r.Client, r.Logger, nodeAllocationRequest)
 		if err != nil {
 			return hwmgrutils.RequeueWithShortInterval(), err
