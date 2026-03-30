@@ -49,9 +49,9 @@ type DBQuery interface {
 }
 
 // Find retrieves a specific tuple from the database table specified.
-// The `key` argument is the primary key of the record to retrieve (supports uuid.UUID, string, or other types).
+// The `key` argument is the primary key of the record to retrieve (supports uuid.UUID or string).
 // If no record is found ErrNotFound is returned as an error.
-func Find[T db.Model](ctx context.Context, db DBQuery, key any) (*T, error) {
+func Find[T db.Model, K PrimaryKeyType](ctx context.Context, db DBQuery, key K) (*T, error) {
 	var record T
 	tags := GetAllDBTagsFromStruct(record)
 
@@ -151,11 +151,11 @@ func Create[T db.Model](ctx context.Context, db DBQuery, record T, fields ...str
 }
 
 // Update attempts to update a record of the requested model type.
-// The `key` argument is the primary key of the record to update (supports uuid.UUID, string, or other types).
+// The `key` argument is the primary key of the record to update (supports uuid.UUID or string).
 // The `record` argument is the record to update in the database.
 // The `fields` argument is a list of columns to update. If no fields are specified only non-nil fields are updated.
 // The updated record is returned on success; otherwise an error is returned.
-func Update[T db.Model](ctx context.Context, db DBQuery, key any, record T, fields ...string) (*T, error) {
+func Update[T db.Model, K PrimaryKeyType](ctx context.Context, db DBQuery, key K, record T, fields ...string) (*T, error) {
 	all := GetAllDBTagsFromStruct(record)
 	tags := all
 	if len(fields) > 0 {

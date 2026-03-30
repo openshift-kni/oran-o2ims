@@ -45,9 +45,9 @@ func GetTrackingUUID(key any) uuid.UUID {
 // PersistObject persists an object to its database table.  If the object does not already have a
 // persisted representation then it is created; otherwise any modified fields are updated in the
 // database tuple.  The function returns both the before and after versions of the object.
-// The `key` argument is the primary key (supports uuid.UUID, string, or other types).
-func PersistObject[T db.Model](ctx context.Context, tx pgx.Tx,
-	object T, key any) (*T, *T, error) {
+// The `key` argument is the primary key (supports uuid.UUID or string).
+func PersistObject[T db.Model, K PrimaryKeyType](ctx context.Context, tx pgx.Tx,
+	object T, key K) (*T, *T, error) {
 	var before, after *T
 	// Store the object into the database handling cases for both insert/update separately so that we have access to the
 	// before & after view of the data.
@@ -147,10 +147,10 @@ func PersistDataChangeEvent(ctx context.Context, tx pgx.Tx, tableName string, uu
 // model representation of the object has changed, then a data change event is stored.  Persisting
 // of the object and its change event are captured under the same transaction to ensure we never
 // lose any change events.
-// The `key` argument is the primary key (supports uuid.UUID, string, or other types).
+// The `key` argument is the primary key (supports uuid.UUID or string).
 // For change event tracking, non-UUID keys are converted to a deterministic UUID via GetTrackingUUID.
-func PersistObjectWithChangeEvent[T db.Model](ctx context.Context, db *pgxpool.Pool, record T,
-	key any, parentUUID *uuid.UUID,
+func PersistObjectWithChangeEvent[T db.Model, K PrimaryKeyType](ctx context.Context, db *pgxpool.Pool, record T,
+	key K, parentUUID *uuid.UUID,
 	converter GenericModelConverter) (*models.DataChangeEvent, error) {
 	var dataChangeEvent *models.DataChangeEvent
 	trackingUUID := GetTrackingUUID(key)
