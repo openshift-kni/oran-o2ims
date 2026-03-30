@@ -63,6 +63,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -171,6 +172,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 		Expect(metal3v1alpha1.AddToScheme(scheme)).To(Succeed())
 		Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
 		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
+		Expect(corev1.AddToScheme(scheme)).To(Succeed())
 	})
 
 	Describe("isBMHAllocated", func() {
@@ -859,7 +861,43 @@ var _ = Describe("BareMetalHost Manager", func() {
 			Expect(updatedBMH.Spec.Online).To(BeFalse())
 			Expect(updatedBMH.Spec.CustomDeploy).To(BeNil())
 			Expect(updatedBMH.Spec.Image).To(BeNil())
-			Expect(updatedBMH.Spec.PreprovisioningNetworkDataName).To(Equal(BmhNetworkDataPrefx + "-" + bmh.Name))
+			// PreprovisioningNetworkDataName is not empty, so it should be preserved
+			Expect(updatedBMH.Spec.PreprovisioningNetworkDataName).To(Equal("old-network-data"))
+		})
+
+		It("should restore PreprovisioningNetworkDataName when empty and secret exists", func() {
+			bmh.Spec.PreprovisioningNetworkDataName = ""
+			expectedSecretName := BmhNetworkDataPrefx + "-" + bmh.Name
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      expectedSecretName,
+					Namespace: bmh.Namespace,
+				},
+			}
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh, secret).Build()
+
+			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh)
+			Expect(err).NotTo(HaveOccurred())
+
+			var updatedBMH metal3v1alpha1.BareMetalHost
+			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+			err = fakeClient.Get(ctx, name, &updatedBMH)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedBMH.Spec.PreprovisioningNetworkDataName).To(Equal(expectedSecretName))
+		})
+
+		It("should leave PreprovisioningNetworkDataName empty when empty and no secret exists", func() {
+			bmh.Spec.PreprovisioningNetworkDataName = ""
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
+
+			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh)
+			Expect(err).NotTo(HaveOccurred())
+
+			var updatedBMH metal3v1alpha1.BareMetalHost
+			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+			err = fakeClient.Get(ctx, name, &updatedBMH)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedBMH.Spec.PreprovisioningNetworkDataName).To(BeEmpty())
 		})
 
 		It("should set automated cleaning mode for provisioned BMH", func() {
