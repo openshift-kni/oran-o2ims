@@ -88,9 +88,11 @@ func (r *OCloudSiteReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if err != nil {
 		return requeueWithShortInterval(), err
 	}
-	// Requeue if parent doesn't exist or is not ready, it may be created/ready later
+
+	// If parent is not valid, stop without requeue: the Location watch will
+	// trigger reconciliation when the parent is created or becomes ready.
 	if !parentValid {
-		return requeueWithMediumInterval(), nil
+		return doNotRequeue(), nil
 	}
 
 	return result, nil
