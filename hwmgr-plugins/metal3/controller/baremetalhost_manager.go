@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -1179,8 +1180,21 @@ func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.
 		if !skipCleanAndPower {
 			// Clear CustomDeploy entirely
 			patched.Spec.CustomDeploy = nil
-			// Reset pre-provisioning data
-			patched.Spec.PreprovisioningNetworkDataName = BmhNetworkDataPrefx + "-" + bmh.Name
+			// Restore PreprovisioningNetworkDataName if it was cleared by a previous
+			// operator version during allocation. Only restore if the field is empty
+			// and a Secret with the expected name exists.
+			if patched.Spec.PreprovisioningNetworkDataName == "" {
+				expectedSecretName := BmhNetworkDataPrefx + "-" + bmh.Name
+				secret := &corev1.Secret{}
+				if err := c.Get(ctx, types.NamespacedName{
+					Name: expectedSecretName, Namespace: bmh.Namespace,
+				}, secret); err == nil {
+					patched.Spec.PreprovisioningNetworkDataName = expectedSecretName
+					logger.InfoContext(ctx, "Restored PreprovisioningNetworkDataName",
+						slog.String("bmh", bmh.Name),
+						slog.String("secretName", expectedSecretName))
+				}
+			}
 			// Clear image reference
 			patched.Spec.Image = nil
 		}
