@@ -1188,7 +1188,11 @@ func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.
 				secret := &corev1.Secret{}
 				if err := c.Get(ctx, types.NamespacedName{
 					Name: expectedSecretName, Namespace: bmh.Namespace,
-				}, secret); err == nil {
+				}, secret); err != nil {
+					if !k8serrors.IsNotFound(err) {
+						return fmt.Errorf("failed to get Secret %s/%s: %w", bmh.Namespace, expectedSecretName, err)
+					}
+				} else {
 					patched.Spec.PreprovisioningNetworkDataName = expectedSecretName
 					logger.InfoContext(ctx, "Restored PreprovisioningNetworkDataName",
 						slog.String("bmh", bmh.Name),

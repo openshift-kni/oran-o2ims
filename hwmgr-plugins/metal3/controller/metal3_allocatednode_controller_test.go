@@ -130,6 +130,7 @@ import (
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -203,6 +204,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 		Expect(metal3v1alpha1.AddToScheme(scheme)).To(Succeed())
 		Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
 		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
+		Expect(corev1.AddToScheme(scheme)).To(Succeed())
 
 		// Setup Mock Clients
 		mockClient = &MockClient{}
