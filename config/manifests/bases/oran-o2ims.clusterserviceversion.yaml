@@ -487,6 +487,33 @@ spec:
       - displayName: Deployed Server Configurations
         path: usedServerConfig
       version: v1alpha1
+    - description: |-
+        Location is the Schema for the locations API.
+        Represents a physical or logical location where O-Cloud Sites can be deployed.
+      displayName: Location
+      kind: Location
+      name: locations.ocloud.openshift.io
+      resources:
+      - kind: Location
+        name: ""
+        version: v1alpha1
+      specDescriptors:
+      - description: Address is a human-readable address string
+        displayName: Address
+        path: address
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: Description provides additional details about the location
+        displayName: Description
+        path: description
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      statusDescriptors:
+      - description: Conditions represent the latest available observations of the
+          Location's state
+        displayName: Conditions
+        path: conditions
+      version: v1alpha1
     - description: NodeAllocationRequest is the schema for an allocation request of
         nodes
       displayName: Node Allocation Request
@@ -632,6 +659,35 @@ spec:
       - displayName: Selected Groups
         path: selectedGroups
       version: v1alpha1
+    - description: |-
+        OCloudSite is the Schema for the ocloudsites API.
+        Represents an O-Cloud site instance at a specific location.
+      displayName: O-Cloud Site
+      kind: OCloudSite
+      name: ocloudsites.ocloud.openshift.io
+      resources:
+      - kind: OCloudSite
+        name: ""
+        version: v1alpha1
+      specDescriptors:
+      - description: Description provides additional details about the site
+        displayName: Description
+        path: description
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          GlobalLocationName references the parent Location CR by its metadata.name.
+          Must match an existing Location's metadata.name.
+        displayName: Global Location Name
+        path: globalLocationName
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      statusDescriptors:
+      - description: Conditions represent the latest available observations of the
+          OCloudSite's state
+        displayName: Conditions
+        path: conditions
+      version: v1alpha1
     - description: ProvisioningRequest is the Schema for the provisioningrequests
         API
       displayName: Provisioning Request
@@ -685,6 +741,35 @@ spec:
         - urn:alm:descriptor:com.tectonic.ui:text
       statusDescriptors:
       - displayName: Conditions
+        path: conditions
+      version: v1alpha1
+    - description: |-
+        ResourcePool is the Schema for the resourcepools API.
+        Represents a resource pool containing O-Cloud resources.
+      displayName: Resource Pool
+      kind: ResourcePool
+      name: resourcepools.ocloud.openshift.io
+      resources:
+      - kind: ResourcePool
+        name: ""
+        version: v1alpha1
+      specDescriptors:
+      - description: Description provides additional details about the resource pool
+        displayName: Description
+        path: description
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          OCloudSiteName references the parent OCloudSite CR by its metadata.name.
+          Must match an existing OCloudSite's metadata.name.
+        displayName: O-Cloud Site Name
+        path: oCloudSiteName
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      statusDescriptors:
+      - description: Conditions represent the latest available observations of the
+          ResourcePool's state
+        displayName: Conditions
         path: conditions
       version: v1alpha1
   description: |

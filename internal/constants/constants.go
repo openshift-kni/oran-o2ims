@@ -42,6 +42,8 @@ const (
 	ResourcePoolsPath      = "/resourcePools"
 	ResourcesPath          = "/resources"
 	DeploymentManagersPath = "/deploymentManagers"
+	LocationsPath          = "/locations"
+	OCloudSitesPath        = "/oCloudSites"
 
 	// Cluster API paths
 	ClusterResourceTypesPath = "/clusterResourceTypes"
