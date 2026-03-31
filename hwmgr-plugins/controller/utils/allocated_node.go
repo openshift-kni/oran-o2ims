@@ -182,6 +182,30 @@ func GetChildNodes(
 	return nodelist, nil
 }
 
+// GetChildNodesUncached lists AllocatedNode CRs for a NodeAllocationRequest using the non-cached client.
+func GetChildNodesUncached(
+	ctx context.Context,
+	noncachedClient client.Reader,
+	pluginNamespace string,
+	narName string,
+) (*pluginsv1alpha1.AllocatedNodeList, error) {
+
+	allNodes := &pluginsv1alpha1.AllocatedNodeList{}
+	if err := ctlrutils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
+		return noncachedClient.List(ctx, allNodes, client.InNamespace(pluginNamespace))
+	}); err != nil {
+		return nil, fmt.Errorf("failed to list AllocatedNodes in namespace %s: %w", pluginNamespace, err)
+	}
+
+	filtered := &pluginsv1alpha1.AllocatedNodeList{}
+	for i := range allNodes.Items {
+		if allNodes.Items[i].Spec.NodeAllocationRequest == narName {
+			filtered.Items = append(filtered.Items, allNodes.Items[i])
+		}
+	}
+	return filtered, nil
+}
+
 // SetNodeConditionStatus sets a condition on the AllocatedNode status with the provided
 // condition type. It sets both the in-memory node and the API node status condition.
 func SetNodeConditionStatus(

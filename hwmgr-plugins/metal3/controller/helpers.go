@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -523,7 +524,10 @@ func checkNodeAllocationRequestProgress(
 	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (ctrl.Result, bool, error) {
 
 	// Check if we're fully allocated now that processing is complete
-	full := isNodeAllocationRequestFullyAllocated(ctx, noncachedClient, logger, pluginNamespace, nodeAllocationRequest)
+	full, err := isNodeAllocationRequestFullyAllocated(ctx, noncachedClient, logger, pluginNamespace, nodeAllocationRequest)
+	if err != nil {
+		return ctrl.Result{}, false, err
+	}
 	if !full {
 		// Still not fully allocated, continue processing
 		res, err := processNodeAllocationRequestAllocation(ctx, c, noncachedClient, logger, pluginNamespace, nodeAllocationRequest)
@@ -574,19 +578,29 @@ func processNewNodeAllocationRequest(ctx context.Context,
 }
 
 // isNodeAllocationRequestFullyAllocated checks to see if a NodeAllocationRequest CR has been fully allocated
+// by listing the actual AllocatedNode CRs owned by the NAR via the non-cached client.
 func isNodeAllocationRequestFullyAllocated(ctx context.Context,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	pluginNamespace string,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) bool {
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (bool, error) {
+
+	childNodes, err := hwmgrutils.GetChildNodesUncached(ctx, noncachedClient, pluginNamespace, nodeAllocationRequest.Name)
+	if err != nil {
+		return false, fmt.Errorf("failed to list child nodes for NAR %s: %w", nodeAllocationRequest.Name, err)
+	}
 
 	for _, nodeGroup := range nodeAllocationRequest.Spec.NodeGroup {
-		allocatedNodes := countNodesInGroup(ctx, noncachedClient, logger, pluginNamespace, nodeAllocationRequest.Status.Properties.NodeNames, nodeGroup.NodeGroupData.Name)
-		if allocatedNodes < nodeGroup.Size {
-			return false // At least one group is not fully allocated
+		allocatedNodes := filterNodesByGroup(childNodes, nodeGroup.NodeGroupData.Name)
+		if len(allocatedNodes) < nodeGroup.Size {
+			logger.InfoContext(ctx, "Node group not fully allocated",
+				slog.String("group", nodeGroup.NodeGroupData.Name),
+				slog.Int("allocated", len(allocatedNodes)),
+				slog.Int("required", nodeGroup.Size))
+			return false, nil // At least one group is not fully allocated
 		}
 	}
-	return true
+	return true, nil
 }
 
 // handleNodeInProgressUpdate progresses a node that is in progress of being configured.
@@ -1433,16 +1447,8 @@ func releaseNodeAllocationRequest(ctx context.Context,
 	return false, nil
 }
 
-func contains(slice []string, value string) bool {
-	for _, v := range slice {
-		if v == value {
-			return true
-		}
-	}
-	return false
-}
-
 // allocateBMHToNodeAllocationRequest assigns a BareMetalHost to a NodeAllocationRequest.
+// It returns the allocated node name on success, or an error if the allocation fails.
 func allocateBMHToNodeAllocationRequest(
 	ctx context.Context,
 	c client.Client,
@@ -1452,7 +1458,7 @@ func allocateBMHToNodeAllocationRequest(
 	bmh *metal3v1alpha1.BareMetalHost,
 	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
 	group pluginsv1alpha1.NodeGroup,
-) error {
+) (string, error) {
 
 	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 
@@ -1463,7 +1469,7 @@ func allocateBMHToNodeAllocationRequest(
 	if allocatedNodeLbl != nodeName {
 		if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeLabel, ctlrutils.AllocatedNodeLabel,
 			nodeName, OpAdd); err != nil {
-			return fmt.Errorf("failed to save AllocatedNode name label to BMH (%s): %w", bmh.Name, err)
+			return "", fmt.Errorf("failed to save AllocatedNode name label to BMH (%s): %w", bmh.Name, err)
 		}
 	}
 
@@ -1473,37 +1479,37 @@ func allocateBMHToNodeAllocationRequest(
 	// Ensure node is created
 	node, err := createNode(ctx, c, logger, pluginNamespace, nodeAllocationRequest, nodeName, nodeId, nodeNs, group.NodeGroupData.Name, group.NodeGroupData.HwProfile)
 	if err != nil {
-		return fmt.Errorf("failed to create allocated node (%s): %w", nodeName, err)
+		return "", fmt.Errorf("failed to create allocated node (%s): %w", nodeName, err)
 	}
 
 	// Process HW profile
 	updating, err := processHwProfileWithHandledError(ctx, c, noncachedClient, logger, pluginNamespace, bmh, node, group.NodeGroupData.HwProfile, false, false)
 	if err != nil {
-		return fmt.Errorf("failed to process hw profile for node (%s): %w", nodeName, err)
+		return "", fmt.Errorf("failed to process hw profile for node (%s): %w", nodeName, err)
 	}
 	logger.InfoContext(ctx, "processed hw profile", slog.Bool("updating", updating))
 
 	// Mark BMH allocated
 	if err := markBMHAllocated(ctx, c, logger, bmh); err != nil {
-		return fmt.Errorf("failed to add allocated label to BMH (%s): %w", bmh.Name, err)
+		return "", fmt.Errorf("failed to add allocated label to BMH (%s): %w", bmh.Name, err)
 	}
 
 	// Allow Host Management
 	if err := allowHostManagement(ctx, c, logger, bmh); err != nil {
-		return fmt.Errorf("failed to add host management annotation to BMH (%s): %w", bmh.Name, err)
+		return "", fmt.Errorf("failed to add host management annotation to BMH (%s): %w", bmh.Name, err)
 	}
 
 	// Set bootMACAddress from interface labels if not already set
 	// This enables the pre-provisioned hardware workflow where boot interface
 	// is identified via labels instead of requiring bootMACAddress in the spec
 	if err := setBootMACAddressFromLabel(ctx, c, logger, bmh); err != nil {
-		return fmt.Errorf("failed to set bootMACAddress from interface label for BMH (%s): %w", bmh.Name, err)
+		return "", fmt.Errorf("failed to set bootMACAddress from interface label for BMH (%s): %w", bmh.Name, err)
 	}
 
 	// Update node status
 	bmhInterface, err := buildInterfacesFromBMH(bmh)
 	if err != nil {
-		return fmt.Errorf("failed to build interfaces from BareMetalHost '%s': %w", bmh.Name, err)
+		return "", fmt.Errorf("failed to build interfaces from BareMetalHost '%s': %w", bmh.Name, err)
 	}
 	nodeInfo := bmhNodeInfo{
 		ResourcePoolID: group.NodeGroupData.ResourcePoolId,
@@ -1514,22 +1520,14 @@ func allocateBMHToNodeAllocationRequest(
 		Interfaces: bmhInterface,
 	}
 	if err := updateNodeStatus(ctx, c, noncachedClient, logger, pluginNamespace, nodeInfo, nodeName, group.NodeGroupData.HwProfile, updating); err != nil {
-		return fmt.Errorf("failed to update node status (%s): %w", nodeName, err)
+		return "", fmt.Errorf("failed to update node status (%s): %w", nodeName, err)
 	}
 
-	// Update NodeAllocationRequest status
-	if !contains(nodeAllocationRequest.Status.Properties.NodeNames, nodeName) {
-		nodeAllocationRequest.Status.Properties.NodeNames = append(nodeAllocationRequest.Status.Properties.NodeNames, nodeName)
+	logger.InfoContext(ctx, "Allocated BMH to NodeAllocationRequest",
+		slog.String("nodeName", nodeName),
+		slog.String("nodeAllocationRequest", nodeAllocationRequest.Name))
 
-		if err := hwmgrutils.UpdateNodeAllocationRequestProperties(ctx, c, nodeAllocationRequest); err != nil {
-			return fmt.Errorf("failed to update NodeAllocationRequest properties for node %s: %w", nodeName, err)
-		}
-		logger.InfoContext(ctx, "Updated NodeAllocationRequest with allocated node",
-			slog.String("nodeName", nodeName),
-			slog.String("nodeAllocationRequest", nodeAllocationRequest.Name))
-	}
-
-	return nil
+	return nodeName, nil
 }
 
 // processNodeAllocationRequestAllocation allocates BareMetalHosts to a NodeAllocationRequest while ensuring all
@@ -1544,10 +1542,16 @@ func processNodeAllocationRequestAllocation(
 ) (ctrl.Result, error) {
 
 	var (
-		wg     sync.WaitGroup
-		mu     sync.Mutex
-		aggErr error
+		wg             sync.WaitGroup
+		mu             sync.Mutex
+		errs           []error
+		allocatedNames []string
 	)
+
+	childNodes, err := hwmgrutils.GetChildNodesUncached(ctx, noncachedClient, pluginNamespace, nodeAllocationRequest.Name)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to list child nodes for NAR %s: %w", nodeAllocationRequest.Name, err)
+	}
 
 	// For each NodeGroup, allocate pending nodes
 	for _, nodeGroup := range nodeAllocationRequest.Spec.NodeGroup {
@@ -1556,10 +1560,8 @@ func processNodeAllocationRequestAllocation(
 		}
 
 		// Calculate how many nodes are still needed for this group
-		pending := nodeGroup.Size - countNodesInGroup(
-			ctx, noncachedClient, logger, pluginNamespace,
-			nodeAllocationRequest.Status.Properties.NodeNames, nodeGroup.NodeGroupData.Name,
-		)
+		allocatedNodes := filterNodesByGroup(childNodes, nodeGroup.NodeGroupData.Name)
+		pending := nodeGroup.Size - len(allocatedNodes)
 		if pending <= 0 {
 			continue
 		}
@@ -1595,33 +1597,46 @@ func processNodeAllocationRequestAllocation(
 			go func(bmh *metal3v1alpha1.BareMetalHost) {
 				defer wg.Done()
 
-				err := allocateBMHToNodeAllocationRequest(
+				nodeName, err := allocateBMHToNodeAllocationRequest(
 					ctx, c, noncachedClient, logger, pluginNamespace,
 					bmh, nodeAllocationRequest, nodeGroup,
 				)
 
+				mu.Lock()
+				defer mu.Unlock()
+
+				if nodeName != "" {
+					allocatedNames = append(allocatedNames, nodeName)
+				}
 				if err != nil {
-					mu.Lock()
-					// Record the first error
-					if aggErr == nil {
-						aggErr = err
-					}
-					mu.Unlock()
+					logger.ErrorContext(ctx, "Failed to allocate BMH to NodeAllocationRequest",
+						slog.String("bmh", bmh.Name),
+						slog.String("error", err.Error()))
+					errs = append(errs, fmt.Errorf("bmh %s, error: %w", bmh.Name, err))
 				}
 			}(bmh)
 		}
+
+		// Wait for all goroutines in this group to finish before processing the next group,
+		// so that fetchBMHList won't return BMHs still being allocated by in-flight goroutines.
+		wg.Wait()
 	}
 
-	wg.Wait()
+	// Append all allocated node names and do a single NAR properties update
+	for _, name := range allocatedNames {
+		if !slices.Contains(nodeAllocationRequest.Status.Properties.NodeNames, name) {
+			nodeAllocationRequest.Status.Properties.NodeNames = append(
+				nodeAllocationRequest.Status.Properties.NodeNames, name)
+		}
+	}
+	if err := hwmgrutils.UpdateNodeAllocationRequestProperties(ctx, c, logger, nodeAllocationRequest); err != nil {
+		errs = append(errs, fmt.Errorf("failed to update NodeAllocationRequest %s properties: %w",
+			nodeAllocationRequest.Name, err))
+	}
 
-	if aggErr != nil {
+	if len(errs) > 0 {
+		aggErr := fmt.Errorf("failed to allocate BMHs to NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, errors.Join(errs...))
 		return ctrl.Result{}, aggErr
-	}
-
-	// Update NAR properties after all successful allocations
-	if err := hwmgrutils.UpdateNodeAllocationRequestProperties(ctx, c, nodeAllocationRequest); err != nil {
-		return ctrl.Result{}, fmt.Errorf("update NodeAllocationRequest %s properties: %w",
-			nodeAllocationRequest.Name, err)
 	}
 
 	return ctrl.Result{}, nil
