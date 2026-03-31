@@ -86,16 +86,22 @@ data:
 
 ## Preprovisioning Network Data Secret
 
-Each server requires a Secret containing an nmstate network configuration for the
-preprovisioning phase. This configuration is built into the Metal3 discovery ISO used
-during hardware inspection to provide network connectivity. Without it, the host will
-not have networking and inspection will fail.
+The preprovisioning network data Secret contains an nmstate network configuration
+that is built into the Metal3 discovery ISO used during hardware inspection. This
+Secret is **optional** — if not provided, all interfaces will default to up and
+DHCP-enabled during discovery and inspection.
 
-The Secret must be named `network-data-<bmh-name>` (e.g., `network-data-dell-xr8620t-sno1`
-for a BMH named `dell-xr8620t-sno1`). This naming convention is required by the Metal3
-hardware plugin, which uses it to restore the Secret reference during deprovisioning.
+You will need a network data Secret if:
 
-The Secret is referenced by the BMH's `preprovisioningNetworkDataName` field.
+- You are using static IP addresses for the inspection network
+- You need to configure VLANs for network connectivity during inspection
+- You need to customize DNS resolver settings or other network parameters
+
+If provided, the Secret is referenced by the BMH's `spec.preprovisioningNetworkDataName`
+field. Multiple BMHs can share a common network data Secret, as long as the same
+configuration applies to each BMH. For example, BMHs on the same VLAN with DHCP
+could share a single Secret, but BMHs with static IP addresses would each need
+their own Secret.
 
 > [!WARNING]
 > Interface names in the nmstate configuration must use the standard device name as
@@ -103,7 +109,7 @@ The Secret is referenced by the BMH's `preprovisioningNetworkDataName` field.
 > The device names may differ from those assigned by other Linux distributions. Using
 > alternate names can cause inspection failures, particularly with VLAN configurations.
 
-Basic example:
+DHCP example:
 
 ```yaml
 apiVersion: v1
@@ -132,6 +138,12 @@ stringData:
 VLAN example:
 
 ```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: network-data-vlan310
+  namespace: dell-xr8620t-pool
+type: Opaque
 stringData:
   nmstate: |
     interfaces:
@@ -253,7 +265,7 @@ Key fields in the BareMetalHost spec:
 | `spec.bmc.credentialsName` | Name of the BMC credentials Secret |
 | `spec.bmc.disableCertificateVerification` | Set to `true` if the BMC uses a self-signed certificate |
 | `spec.bootMACAddress` | MAC address of the boot NIC. Optional if `boot-interface` label is set. |
-| `spec.preprovisioningNetworkDataName` | Name of the network data Secret containing nmstate configuration for inspection. |
+| `spec.preprovisioningNetworkDataName` | Optional. Name of the network data Secret containing nmstate configuration for inspection. If not set, inspection uses DHCP on all interfaces. |
 
 ## Hardware Inspection
 
@@ -350,7 +362,7 @@ spec:
     credentialsName: bmc-secret-dell-xr8620t-sno1
     disableCertificateVerification: true
   bootMACAddress: 02:00:00:00:00:01
-  preprovisioningNetworkDataName: network-data-dell-xr8620t-sno1
+  preprovisioningNetworkDataName: network-data-dell-xr8620t-sno1 # Optional — can be omitted if using DHCP and no custom configuration
 ```
 
 Additional sample files are available under
