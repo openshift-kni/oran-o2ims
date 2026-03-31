@@ -386,24 +386,6 @@ func setBootMACAddressFromLabel(
 	})
 }
 
-func countNodesInGroup(ctx context.Context,
-	noncachedClient client.Reader,
-	logger *slog.Logger,
-	namespace string,
-	nodeNames []string,
-	groupName string) int {
-	count := 0
-	for _, nodeName := range nodeNames {
-		node, err := hwmgrutils.GetNode(ctx, logger, noncachedClient, namespace, nodeName)
-		if err == nil && node != nil {
-			if node.Spec.GroupName == groupName {
-				count++
-			}
-		}
-	}
-	return count
-}
-
 func isBMHAllocated(bmh *metal3v1alpha1.BareMetalHost) bool {
 	if currentValue, exists := bmh.Labels[BmhAllocatedLabel]; exists && currentValue == ValueTrue {
 		return true

@@ -9,6 +9,7 @@ package utils
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -235,6 +236,7 @@ func UpdateNodeAllocationRequestStatusCondition(
 func UpdateNodeAllocationRequestProperties(
 	ctx context.Context,
 	c client.Client,
+	logger *slog.Logger,
 	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) error {
 
 	// nolint: wrapcheck
@@ -243,7 +245,19 @@ func UpdateNodeAllocationRequestProperties(
 		if err := c.Get(ctx, client.ObjectKeyFromObject(nodeAllocationRequest), newNodeAllocationRequest); err != nil {
 			return err
 		}
-		newNodeAllocationRequest.Status.Properties = nodeAllocationRequest.Status.Properties
+
+		// Merge node names: union of what the API server has with the in-memory list
+		existing := make(map[string]struct{}, len(newNodeAllocationRequest.Status.Properties.NodeNames))
+		for _, name := range newNodeAllocationRequest.Status.Properties.NodeNames {
+			existing[name] = struct{}{}
+		}
+		for _, name := range nodeAllocationRequest.Status.Properties.NodeNames {
+			if _, found := existing[name]; !found {
+				newNodeAllocationRequest.Status.Properties.NodeNames = append(
+					newNodeAllocationRequest.Status.Properties.NodeNames, name)
+			}
+		}
+
 		if err := c.Status().Update(ctx, newNodeAllocationRequest); err != nil {
 			return err
 		}
@@ -254,6 +268,8 @@ func UpdateNodeAllocationRequestProperties(
 		return fmt.Errorf("failed to update NodeAllocationRequest properties: %w", err)
 	}
 
+	logger.InfoContext(ctx, "Updated NodeAllocationRequest properties",
+		slog.Int("nodeCount", len(nodeAllocationRequest.Status.Properties.NodeNames)))
 	return nil
 }
 

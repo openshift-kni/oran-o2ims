@@ -321,32 +321,6 @@ var _ = Describe("Helpers", func() {
 
 	})
 
-	Describe("contains function", func() {
-		It("should return true when value exists in slice", func() {
-			slice := []string{"apple", "banana", "cherry"}
-			result := contains(slice, "banana")
-			Expect(result).To(BeTrue())
-		})
-
-		It("should return false when value doesn't exist in slice", func() {
-			slice := []string{"apple", "banana", "cherry"}
-			result := contains(slice, "orange")
-			Expect(result).To(BeFalse())
-		})
-
-		It("should return false for empty slice", func() {
-			slice := []string{}
-			result := contains(slice, "apple")
-			Expect(result).To(BeFalse())
-		})
-
-		It("should return false for nil slice", func() {
-			var slice []string
-			result := contains(slice, "apple")
-			Expect(result).To(BeFalse())
-		})
-	})
-
 	Describe("createNode", func() {
 		var nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest
 
@@ -693,6 +667,65 @@ var _ = Describe("Helpers", func() {
 		})
 	})
 
+	Describe("filterNodesByGroup", func() {
+		It("should return only nodes matching the specified group", func() {
+			nodelist := &pluginsv1alpha1.AllocatedNodeList{
+				Items: []pluginsv1alpha1.AllocatedNode{
+					{Spec: pluginsv1alpha1.AllocatedNodeSpec{GroupName: "master"}},
+					{Spec: pluginsv1alpha1.AllocatedNodeSpec{GroupName: "worker"}},
+					{Spec: pluginsv1alpha1.AllocatedNodeSpec{GroupName: "master"}},
+				},
+			}
+			result := filterNodesByGroup(nodelist, "master")
+			Expect(result).To(HaveLen(2))
+			for _, node := range result {
+				Expect(node.Spec.GroupName).To(Equal("master"))
+			}
+		})
+
+		It("should return empty slice when no nodes match", func() {
+			nodelist := &pluginsv1alpha1.AllocatedNodeList{
+				Items: []pluginsv1alpha1.AllocatedNode{
+					{Spec: pluginsv1alpha1.AllocatedNodeSpec{GroupName: "worker"}},
+				},
+			}
+			result := filterNodesByGroup(nodelist, "master")
+			Expect(result).To(BeEmpty())
+		})
+
+		It("should return empty slice for empty node list", func() {
+			nodelist := &pluginsv1alpha1.AllocatedNodeList{}
+			result := filterNodesByGroup(nodelist, "master")
+			Expect(result).To(BeEmpty())
+		})
+
+		It("should return all nodes when all match the group", func() {
+			nodelist := &pluginsv1alpha1.AllocatedNodeList{
+				Items: []pluginsv1alpha1.AllocatedNode{
+					{Spec: pluginsv1alpha1.AllocatedNodeSpec{GroupName: "worker"}},
+					{Spec: pluginsv1alpha1.AllocatedNodeSpec{GroupName: "worker"}},
+					{Spec: pluginsv1alpha1.AllocatedNodeSpec{GroupName: "worker"}},
+				},
+			}
+			result := filterNodesByGroup(nodelist, "worker")
+			Expect(result).To(HaveLen(3))
+		})
+
+		It("should return pointers to the original slice elements", func() {
+			nodelist := &pluginsv1alpha1.AllocatedNodeList{
+				Items: []pluginsv1alpha1.AllocatedNode{
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "node-1"},
+						Spec:       pluginsv1alpha1.AllocatedNodeSpec{GroupName: "master"},
+					},
+				},
+			}
+			result := filterNodesByGroup(nodelist, "master")
+			Expect(result).To(HaveLen(1))
+			Expect(result[0]).To(BeIdenticalTo(&nodelist.Items[0]))
+		})
+	})
+
 	Describe("isNodeAllocationRequestFullyAllocated", func() {
 		var nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest
 
@@ -712,21 +745,17 @@ var _ = Describe("Helpers", func() {
 						},
 					},
 				},
-				Status: pluginsv1alpha1.NodeAllocationRequestStatus{
-					Properties: pluginsv1alpha1.Properties{
-						NodeNames: []string{"node-1", "node-2"},
-					},
-				},
 			}
 
-			// Create allocated nodes
+			// Create allocated nodes linked to the NAR
 			node1 := &pluginsv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "node-1",
 					Namespace: pluginNamespace,
 				},
 				Spec: pluginsv1alpha1.AllocatedNodeSpec{
-					GroupName: "test-group",
+					GroupName:             "test-group",
+					NodeAllocationRequest: "test-nar",
 				},
 			}
 			node2 := &pluginsv1alpha1.AllocatedNode{
@@ -735,7 +764,8 @@ var _ = Describe("Helpers", func() {
 					Namespace: pluginNamespace,
 				},
 				Spec: pluginsv1alpha1.AllocatedNodeSpec{
-					GroupName: "test-group",
+					GroupName:             "test-group",
+					NodeAllocationRequest: "test-nar",
 				},
 			}
 
@@ -747,14 +777,44 @@ var _ = Describe("Helpers", func() {
 		})
 
 		It("should return true when all groups are fully allocated", func() {
-			result := isNodeAllocationRequestFullyAllocated(ctx, fakeNoncached, logger, pluginNamespace, nodeAllocationRequest)
+			result, err := isNodeAllocationRequestFullyAllocated(ctx, fakeNoncached, logger, pluginNamespace, nodeAllocationRequest)
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeTrue())
 		})
 
 		It("should return false when a group is not fully allocated", func() {
-			// Increase the required size
 			nodeAllocationRequest.Spec.NodeGroup[0].Size = 3
-			result := isNodeAllocationRequestFullyAllocated(ctx, fakeNoncached, logger, pluginNamespace, nodeAllocationRequest)
+			result, err := isNodeAllocationRequestFullyAllocated(ctx, fakeNoncached, logger, pluginNamespace, nodeAllocationRequest)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeFalse())
+		})
+
+		It("should return true even when NodeNames in status is empty (counts CRs, not status)", func() {
+			nodeAllocationRequest.Status.Properties.NodeNames = nil
+			result, err := isNodeAllocationRequestFullyAllocated(ctx, fakeNoncached, logger, pluginNamespace, nodeAllocationRequest)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeTrue())
+		})
+
+		It("should not count nodes belonging to a different NAR", func() {
+			otherNode := &pluginsv1alpha1.AllocatedNode{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "other-node",
+					Namespace: pluginNamespace,
+				},
+				Spec: pluginsv1alpha1.AllocatedNodeSpec{
+					GroupName:             "test-group",
+					NodeAllocationRequest: "other-nar",
+				},
+			}
+			fakeClient = fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(otherNode).
+				Build()
+			fakeNoncached = fakeClient
+
+			result, err := isNodeAllocationRequestFullyAllocated(ctx, fakeNoncached, logger, pluginNamespace, nodeAllocationRequest)
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeFalse())
 		})
 	})

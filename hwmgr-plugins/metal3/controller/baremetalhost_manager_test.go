@@ -1082,40 +1082,6 @@ var _ = Describe("BareMetalHost Manager", func() {
 		})
 	})
 
-	Describe("countNodesInGroup", func() {
-		var (
-			fakeClient client.Reader
-			node1      *pluginsv1alpha1.AllocatedNode
-			node2      *pluginsv1alpha1.AllocatedNode
-		)
-
-		BeforeEach(func() {
-			node1 = createAllocatedNode("node1", "test-ns", "bmh1", "test-ns")
-			node1.Spec.GroupName = "group1"
-			node2 = createAllocatedNode("node2", "test-ns", "bmh2", "test-ns")
-			node2.Spec.GroupName = "group2"
-			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(node1, node2).Build()
-		})
-
-		It("should count nodes in specific group", func() {
-			nodeNames := []string{"node1", "node2"}
-			count := countNodesInGroup(ctx, fakeClient, logger, "test-ns", nodeNames, "group1")
-			Expect(count).To(Equal(1))
-		})
-
-		It("should return zero for non-existent group", func() {
-			nodeNames := []string{"node1", "node2"}
-			count := countNodesInGroup(ctx, fakeClient, logger, "test-ns", nodeNames, "nonexistent")
-			Expect(count).To(Equal(0))
-		})
-
-		It("should handle non-existent nodes gracefully", func() {
-			nodeNames := []string{"node1", "nonexistent-node"}
-			count := countNodesInGroup(ctx, fakeClient, logger, "test-ns", nodeNames, "group1")
-			Expect(count).To(Equal(1))
-		})
-	})
-
 	Describe("addRebootAnnotation", func() {
 		var (
 			fakeClient client.Client
@@ -1206,38 +1172,6 @@ var _ = Describe("BareMetalHost Manager", func() {
 			Expect(OpAdd).To(Equal("add"))
 			Expect(OpRemove).To(Equal("remove"))
 			Expect(BmhServicingErr).To(Equal("BMH Servicing Error"))
-		})
-	})
-
-	Describe("contains helper function", func() {
-		It("should return true when value exists in slice", func() {
-			slice := []string{"apple", "banana", "cherry"}
-			result := contains(slice, "banana")
-			Expect(result).To(BeTrue())
-		})
-
-		It("should return false when value doesn't exist in slice", func() {
-			slice := []string{"apple", "banana", "cherry"}
-			result := contains(slice, "orange")
-			Expect(result).To(BeFalse())
-		})
-
-		It("should return false for empty slice", func() {
-			slice := []string{}
-			result := contains(slice, "apple")
-			Expect(result).To(BeFalse())
-		})
-
-		It("should return true for exact string match", func() {
-			slice := []string{"test", "Test", "TEST"}
-			result := contains(slice, "test")
-			Expect(result).To(BeTrue())
-		})
-
-		It("should return false for case sensitive mismatch", func() {
-			slice := []string{"Test", "TEST"}
-			result := contains(slice, "test")
-			Expect(result).To(BeFalse())
 		})
 	})
 
