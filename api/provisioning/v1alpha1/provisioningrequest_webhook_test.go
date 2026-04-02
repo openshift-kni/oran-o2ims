@@ -1071,4 +1071,43 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 			})
 		})
 	})
+
+	Describe("ValidateDelete", func() {
+		It("should return a warning about deletion time", func() {
+			pr := &ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "123e4567-e89b-12d3-a456-426614174000",
+				},
+				Spec: ProvisioningRequestSpec{
+					Name: "cluster-1",
+				},
+			}
+			Expect(fakeClient.Create(ctx, pr)).To(Succeed())
+
+			warnings, err := validator.ValidateDelete(ctx, pr)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(warnings).To(HaveLen(1))
+			Expect(warnings[0]).To(ContainSubstring("several minutes"))
+		})
+
+		It("should block deletion when hardware configuration is in progress", func() {
+			pr := &ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "123e4567-e89b-12d3-a456-426614174001",
+				},
+				Spec: ProvisioningRequestSpec{
+					Name: "cluster-2",
+				},
+			}
+			Expect(fakeClient.Create(ctx, pr)).To(Succeed())
+
+			pr.Status.ProvisioningStatus.ProvisioningDetails = HardwareConfigInProgress
+			pr.Status.ProvisioningStatus.ProvisioningPhase = StateProgressing
+			Expect(fakeClient.Status().Update(ctx, pr)).To(Succeed())
+
+			_, err := validator.ValidateDelete(ctx, pr)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("hardware configuration is in progress"))
+		})
+	})
 })
