@@ -31,6 +31,7 @@ import (
 	observabilityv1beta1 "github.com/stolostron/multicluster-observability-operator/operators/multiclusterobservability/api/v1beta1"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
@@ -1120,6 +1121,31 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 		ctlrutils.SetProvisioningStateDeleting(provisioningRequest)
 		if err := ctlrutils.UpdateK8sCRStatus(ctx, r.Client, provisioningRequest); err != nil {
 			return false, fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", provisioningRequest.Name, err)
+		}
+	}
+
+	// Set hubAcceptsClient=false on the ManagedCluster to trigger ACM's
+	// force-detach path. Without this, after the NAR deletion powers off the
+	// spoke, ACM waits ~4 minutes trying to gracefully detach the unreachable
+	// spoke before falling back to force-detach.
+	if provisioningRequest.Status.Extensions.ClusterDetails != nil {
+		clusterName := provisioningRequest.Status.Extensions.ClusterDetails.Name
+		managedCluster := &clusterv1.ManagedCluster{}
+		if err := r.Client.Get(ctx, types.NamespacedName{Name: clusterName}, managedCluster); err != nil {
+			if client.IgnoreNotFound(err) != nil {
+				return false, fmt.Errorf("failed to get ManagedCluster %s: %w", clusterName, err)
+			}
+			// ManagedCluster not found — already deleted or never created
+		} else if managedCluster.Spec.HubAcceptsClient {
+			r.Logger.InfoContext(ctx, "Setting hubAcceptsClient=false on ManagedCluster to enable force-detach",
+				slog.String("managedCluster", clusterName))
+			patch := client.MergeFrom(managedCluster.DeepCopy())
+			managedCluster.Spec.HubAcceptsClient = false
+			if err := r.Client.Patch(ctx, managedCluster, patch); err != nil {
+				r.Logger.WarnContext(ctx, "Failed to set hubAcceptsClient=false, will continue with deletion",
+					slog.String("managedCluster", clusterName),
+					slog.String("error", err.Error()))
+			}
 		}
 	}
 

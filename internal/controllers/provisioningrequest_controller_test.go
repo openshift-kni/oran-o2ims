@@ -1025,6 +1025,34 @@ plan:
 			})
 		})
 
+		Context("when ManagedCluster exists during deletion", func() {
+			It("should set hubAcceptsClient=false to trigger force-detach", func() {
+				// Create a ManagedCluster with hubAcceptsClient=true
+				managedCluster := &clusterv1.ManagedCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: testClusterName,
+					},
+					Spec: clusterv1.ManagedClusterSpec{
+						HubAcceptsClient: true,
+					},
+				}
+				Expect(c.Create(ctx, managedCluster)).To(Succeed())
+
+				// Set ClusterDetails so the code finds the ManagedCluster
+				deletionCR.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
+					Name: testClusterName,
+				}
+				Expect(c.Status().Update(ctx, deletionCR)).To(Succeed())
+
+				_, _ = deletionReconciler.handleProvisioningRequestDeletion(ctx, deletionCR)
+
+				// Verify hubAcceptsClient was set to false
+				updatedMC := &clusterv1.ManagedCluster{}
+				Expect(c.Get(ctx, types.NamespacedName{Name: testClusterName}, updatedMC)).To(Succeed())
+				Expect(updatedMC.Spec.HubAcceptsClient).To(BeFalse())
+			})
+		})
+
 		Context("when NodeAllocationRequestRef is nil", func() {
 			It("should skip NodeAllocationRequest deletion and proceed to ClusterInstance", func() {
 				// Ensure NodeAllocationRequestRef is nil
