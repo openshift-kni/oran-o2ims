@@ -1044,7 +1044,8 @@ plan:
 				}
 				Expect(c.Status().Update(ctx, deletionCR)).To(Succeed())
 
-				_, _ = deletionReconciler.handleProvisioningRequestDeletion(ctx, deletionCR)
+				_, err := deletionReconciler.handleProvisioningRequestDeletion(ctx, deletionCR)
+				Expect(err).ToNot(HaveOccurred())
 
 				// Verify hubAcceptsClient was set to false
 				updatedMC := &clusterv1.ManagedCluster{}

@@ -1142,9 +1142,10 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 			patch := client.MergeFrom(managedCluster.DeepCopy())
 			managedCluster.Spec.HubAcceptsClient = false
 			if err := r.Client.Patch(ctx, managedCluster, patch); err != nil {
-				r.Logger.WarnContext(ctx, "Failed to set hubAcceptsClient=false, will continue with deletion",
+				r.Logger.WarnContext(ctx, "Failed to set hubAcceptsClient=false, will retry",
 					slog.String("managedCluster", clusterName),
 					slog.String("error", err.Error()))
+				return false, nil
 			}
 		}
 	}
