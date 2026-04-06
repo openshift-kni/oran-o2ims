@@ -189,6 +189,11 @@ func (h *HardwarePluginServer) CreateNodeAllocationRequest(
 		nodeAllocationRequest.Spec.HardwareProvisioningTimeout = *request.Body.HardwareProvisioningTimeout
 	}
 
+	// Set SkipCleanup if provided
+	if request.Body.SkipCleanup != nil {
+		nodeAllocationRequest.Spec.SkipCleanup = *request.Body.SkipCleanup
+	}
+
 	if err := CreateOrUpdateNodeAllocationRequest(ctx, h.HubClient, h.Logger, nodeAllocationRequest); err != nil {
 		return nil, fmt.Errorf("failed to create NodeAllocationRequest resource, err: %w", err)
 	}
@@ -243,8 +248,9 @@ func (h *HardwarePluginServer) UpdateNodeAllocationRequest(
 			LocationSpec:        pluginsv1alpha1.LocationSpec{Site: request.Body.Site},
 			ClusterId:           request.Body.ClusterId,
 			ConfigTransactionId: request.Body.ConfigTransactionId,
-			// Preserve existing ClusterProvisioned value unless explicitly overridden
+			// Preserve existing values unless explicitly overridden
 			ClusterProvisioned: existingNodeAllocationRequest.Spec.ClusterProvisioned,
+			SkipCleanup:        existingNodeAllocationRequest.Spec.SkipCleanup,
 		},
 	}
 
@@ -269,6 +275,11 @@ func (h *HardwarePluginServer) UpdateNodeAllocationRequest(
 	// Override ClusterProvisioned if explicitly provided in the request
 	if request.Body.ClusterProvisioned != nil {
 		nodeAllocationRequest.Spec.ClusterProvisioned = *request.Body.ClusterProvisioned
+	}
+
+	// Override SkipCleanup if explicitly provided in the request
+	if request.Body.SkipCleanup != nil {
+		nodeAllocationRequest.Spec.SkipCleanup = *request.Body.SkipCleanup
 	}
 
 	if err := CreateOrUpdateNodeAllocationRequest(ctx, h.HubClient, h.Logger, nodeAllocationRequest); err != nil {

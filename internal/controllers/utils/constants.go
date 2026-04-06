@@ -362,4 +362,9 @@ const (
 	// This is useful in scenarios where the ClusterImageSet validation needs to be bypassed,
 	// such as during testing or when using custom image sets that don't follow standard naming.
 	SkipClusterImageSetValidationAnnotation = "clcm.openshift.io/skip-clusterimageset-validation"
+
+	// SkipCleanupAnnotation is set on a ProvisioningRequest to indicate that cleanup
+	// operations (disk wipe, power off) should be skipped when the PR is deleted.
+	// This is propagated to the NAR and BMH during deletion processing.
+	SkipCleanupAnnotation = "clcm.openshift.io/skip-cleanup"
 )

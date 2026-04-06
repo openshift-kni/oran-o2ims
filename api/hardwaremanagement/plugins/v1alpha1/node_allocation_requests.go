@@ -101,6 +101,15 @@ type NodeAllocationRequestSpec struct {
 	// +optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cluster Provisioned",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:booleanSwitch"}
 	ClusterProvisioned bool `json:"clusterProvisioned,omitempty"`
+
+	// SkipCleanup indicates that the hardware plugin should skip cleanup operations
+	// (disk wipe, power off) when the NodeAllocationRequest is deleted. This is used
+	// when the spoke cluster needs to remain running, such as during seed image
+	// generation for IBI/IBU. The hardware plugin propagates this to the BMH as the
+	// clcm.openshift.io/skip-cleanup annotation.
+	// +optional
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Skip Cleanup",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:booleanSwitch"}
+	SkipCleanup bool `json:"skipCleanup,omitempty"`
 }
 
 type NodeGroup struct {

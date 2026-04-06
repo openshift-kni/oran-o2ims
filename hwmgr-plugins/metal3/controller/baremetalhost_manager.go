@@ -47,7 +47,6 @@ const (
 	BmhAllocatedLabel                        = "clcm.openshift.io/allocated"
 	BmhDeallocationDoneAnnotation            = "clcm.openshift.io/deallocation-complete"
 	BmhErrorTimestampAnnotation              = "clcm.openshift.io/bmh-error-timestamp"
-	SkipCleanupAnnotation                    = "clcm.openshift.io/skip-cleanup"
 	BmhHostMgmtAnnotation                    = "bmac.agent-install.openshift.io/allow-provisioned-host-management"
 	BmhInfraEnvLabel                         = "infraenvs.agent-install.openshift.io"
 	PreprovisioningImageDeprovisionFinalizer = "preprovisioningimage.agent-install.openshift.io/ai-deprovision"
@@ -1128,7 +1127,7 @@ func removeInfraEnvLabel(ctx context.Context, c client.Client, logger *slog.Logg
 }
 
 // finalizeBMHDeallocation deallocates a BareMetalHost that is no longer associated with a cluster deployment.
-func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
+func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost, skipCleanup bool) error {
 	name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	// nolint: wrapcheck
 	return retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
@@ -1159,9 +1158,7 @@ func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.
 		}
 		patched.Annotations[BmhDeallocationDoneAnnotation] = ValueTrue
 
-		// Skip teardown steps if skip-cleanup is requested via annotation
-		_, skipCleanAndPower := patched.Annotations[SkipCleanupAnnotation]
-		if !skipCleanAndPower {
+		if !skipCleanup {
 			// Clear CustomDeploy entirely
 			patched.Spec.CustomDeploy = nil
 			// Restore PreprovisioningNetworkDataName if it was cleared by a previous
@@ -1186,14 +1183,14 @@ func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.
 			// Clear image reference
 			patched.Spec.Image = nil
 		}
-		if !skipCleanAndPower && (current.Status.Provisioning.State == metal3v1alpha1.StateProvisioned ||
+		if !skipCleanup && (current.Status.Provisioning.State == metal3v1alpha1.StateProvisioned ||
 			current.Status.Provisioning.State == metal3v1alpha1.StateExternallyProvisioned) {
 			// Wipe partition tables using automated cleaning
 			patched.Spec.AutomatedCleaningMode = metal3v1alpha1.CleaningModeMetadata
 			// Power off the host
 			patched.Spec.Online = false
 		}
-		if !skipCleanAndPower && current.Spec.ExternallyProvisioned {
+		if !skipCleanup && current.Spec.ExternallyProvisioned {
 			patched.Annotations[IBIWarningAnnotation] = IBIWarningMessage
 		}
 
@@ -1213,7 +1210,7 @@ func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.
 }
 
 // deallocateBMH deallocates a BareMetalHost that is no longer associated with a cluster deployment.
-func deallocateBMH(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
+func deallocateBMH(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost, skipCleanup bool) error {
 	name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 
 	// Remove InfraEnvLabel: ensure the assisted-service is no longer managing PreprovisioningImage
@@ -1221,7 +1218,7 @@ func deallocateBMH(ctx context.Context, c client.Client, logger *slog.Logger, bm
 		return fmt.Errorf("unable to removeInfraEnvLabel: %w", err)
 	}
 	// Clean up BMH
-	if err := finalizeBMHDeallocation(ctx, c, logger, bmh); err != nil {
+	if err := finalizeBMHDeallocation(ctx, c, logger, bmh, skipCleanup); err != nil {
 		return fmt.Errorf("unable to finalizeBMHDeallocation: %w", err)
 	}
 

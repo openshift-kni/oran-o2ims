@@ -799,7 +799,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 			})
 
 			It("should deallocate BMH completely", func() {
-				err := deallocateBMH(ctx, fakeClient, logger, bmh)
+				err := deallocateBMH(ctx, fakeClient, logger, bmh, false)
 
 				Expect(err).NotTo(HaveOccurred())
 
@@ -839,7 +839,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				// Don't create the PreprovisioningImage to test error handling
 				fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(allocatedNode, bmh).Build()
 
-				err := deallocateBMH(ctx, fakeClient, logger, bmh)
+				err := deallocateBMH(ctx, fakeClient, logger, bmh, false)
 
 				// Should handle the missing image gracefully or return appropriate error
 				// The actual behavior depends on the implementation

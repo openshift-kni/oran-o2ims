@@ -83,6 +83,11 @@ func NodeAllocationRequestCRToResponseObject(nodeAllocationRequest *pluginsv1alp
 		nodeAllocationRequestObject.ClusterProvisioned = &clusterProvisioned
 	}
 
+	if nodeAllocationRequest.Spec.SkipCleanup {
+		skipCleanup := true
+		nodeAllocationRequestObject.SkipCleanup = &skipCleanup
+	}
+
 	nodeAllocationRequestStatus := NodeAllocationRequestStatus{}
 	conditions := []Condition{}
 	for _, condition := range nodeAllocationRequest.Status.Conditions {

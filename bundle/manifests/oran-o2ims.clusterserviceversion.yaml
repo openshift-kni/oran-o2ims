@@ -730,6 +730,13 @@ spec:
         path: nodeAllocationRequest
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          SkipCleanup indicates that cleanup operations (disk wipe, power off) should
+          be skipped when this node is deallocated. Propagated from the NAR spec.
+        displayName: Skip Cleanup
+        path: skipCleanup
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:booleanSwitch
       statusDescriptors:
       - displayName: BMC
         path: bmc
@@ -1251,6 +1258,16 @@ spec:
         path: site
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          SkipCleanup indicates that the hardware plugin should skip cleanup operations
+          (disk wipe, power off) when the NodeAllocationRequest is deleted. This is used
+          when the spoke cluster needs to remain running, such as during seed image
+          generation for IBI/IBU. The hardware plugin propagates this to the BMH as the
+          clcm.openshift.io/skip-cleanup annotation.
+        displayName: Skip Cleanup
+        path: skipCleanup
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:booleanSwitch
       statusDescriptors:
       - description: Conditions represent the latest available observations of an
           NodeAllocationRequest's state.

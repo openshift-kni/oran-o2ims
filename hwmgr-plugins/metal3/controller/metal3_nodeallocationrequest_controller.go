@@ -677,6 +677,12 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 	ctx context.Context,
 	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
 
+	// Propagate SkipCleanup from the NAR to all child AllocatedNodes
+	if err := syncSkipCleanupToAllocatedNodes(ctx, r.Client, r.Logger, nodeAllocationRequest); err != nil {
+		return hwmgrutils.RequeueWithShortInterval(),
+			fmt.Errorf("failed to sync skipCleanup to AllocatedNodes: %w", err)
+	}
+
 	// Handle post-provisioning setup for IBI nodes when ClusterProvisioned is set.
 	// This sets online=true and removes the detached annotation so BMO can manage the nodes.
 	// If no node group HW profiles have changed, this was only a ClusterProvisioned update

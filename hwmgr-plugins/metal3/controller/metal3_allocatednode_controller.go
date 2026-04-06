@@ -161,14 +161,16 @@ func (r *AllocatedNodeReconciler) handleAllocatedNodeDeletion(ctx context.Contex
 		return true, fmt.Errorf("failed to get BMH for node %s: %w", allocatednode.Name, err)
 	}
 
+	skipCleanup := allocatednode.Spec.SkipCleanup
+
 	if !isBMHDeallocated(bmh) {
-		if err = deallocateBMH(ctx, r.Client, r.Logger, bmh); err != nil {
+		if err = deallocateBMH(ctx, r.Client, r.Logger, bmh, skipCleanup); err != nil {
 			return false, fmt.Errorf("failed to deallocate BMH: %w", err)
 		}
 		return false, nil
 	}
 
-	if isNodeProvisioningInProgress(allocatednode) {
+	if !skipCleanup && isNodeProvisioningInProgress(allocatednode) {
 		// Wait for BMH to transition to Available before powering off
 		if bmh.Status.Provisioning.State != metal3v1alpha1.StateAvailable {
 			r.Logger.InfoContext(ctx, "BMH not yet Available — waiting before powering off", slog.String("bmh", bmh.Name))
@@ -176,12 +178,9 @@ func (r *AllocatedNodeReconciler) handleAllocatedNodeDeletion(ctx context.Contex
 		}
 	}
 
-	if bmh.Spec.Online {
-		// Skip power-off if skip-cleanup is requested
-		if _, present := bmh.Annotations[SkipCleanupAnnotation]; !present {
-			if err := patchBMHOnline(ctx, r.Client, bmh, false); err != nil {
-				return false, fmt.Errorf("failed to set online=false for BMH %s: %w", bmh.Name, err)
-			}
+	if bmh.Spec.Online && !skipCleanup {
+		if err := patchBMHOnline(ctx, r.Client, bmh, false); err != nil {
+			return false, fmt.Errorf("failed to set online=false for BMH %s: %w", bmh.Name, err)
 		}
 	}
 

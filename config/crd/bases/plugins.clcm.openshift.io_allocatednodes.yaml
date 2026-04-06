@@ -81,6 +81,11 @@ spec:
               nodeAllocationRequest:
                 description: NodeAllocationRequest
                 type: string
+              skipCleanup:
+                description: |-
+                  SkipCleanup indicates that cleanup operations (disk wipe, power off) should
+                  be skipped when this node is deallocated. Propagated from the NAR spec.
+                type: boolean
             required:
             - groupName
             - hwProfile

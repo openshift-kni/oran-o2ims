@@ -128,13 +128,13 @@ This ensures that a separate partition is created and the `/var/lib/containers` 
 > The `device` path in the MachineConfig (e.g., `/dev/disk/by-path/pci-0000:43:00.0-nvme-1`)
 > is hardware-specific and must be updated to match the storage device on your server.
 
-**1b.** Annotate the BareMetalHost to prevent cleanup when the ProvisioningRequest
-is deleted in the next step. This annotation prevents the Metal3 hardware plugin from
-powering off the host and clearing its provisioning state, which is necessary because
-you need the running cluster to generate the seed image.
+**1b.** Annotate the ProvisioningRequest to prevent cleanup when it is deleted in
+the next step. This annotation prevents the Metal3 hardware plugin from powering
+off the host and clearing its provisioning state, which is necessary because you
+need the running cluster to generate the seed image.
 
 ```console
-oc annotate bmh <bmh-name> -n <bmh-namespace> clcm.openshift.io/skip-cleanup=""
+oc annotate provisioningrequest <UUID> clcm.openshift.io/skip-cleanup=""
 ```
 
 **1c.** Detach the spoke cluster by deleting the ProvisioningRequest CR. This

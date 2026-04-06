@@ -1269,6 +1269,84 @@ var _ = Describe("Helpers", func() {
 	})
 
 	// Skip complex integration tests that require extensive mocking
+	Describe("syncSkipCleanupToAllocatedNodes", func() {
+		var pluginNamespace = "oran-o2ims"
+
+		It("should propagate skipCleanup from NAR to AllocatedNodes", func() {
+			nar := &pluginsv1alpha1.NodeAllocationRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-nar",
+					Namespace: pluginNamespace,
+				},
+				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+					SkipCleanup: true,
+				},
+			}
+			node := &pluginsv1alpha1.AllocatedNode{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "node1",
+					Namespace: pluginNamespace,
+				},
+				Spec: pluginsv1alpha1.AllocatedNodeSpec{
+					NodeAllocationRequest: "test-nar",
+					GroupName:             "master",
+					SkipCleanup:           false,
+				},
+			}
+
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(nar, node).
+				WithIndex(&pluginsv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", func(obj client.Object) []string {
+					n := obj.(*pluginsv1alpha1.AllocatedNode)
+					return []string{n.Spec.NodeAllocationRequest}
+				}).
+				Build()
+
+			err := syncSkipCleanupToAllocatedNodes(ctx, fakeClient, logger, nar)
+			Expect(err).ToNot(HaveOccurred())
+
+			updatedNode := &pluginsv1alpha1.AllocatedNode{}
+			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: "node1", Namespace: pluginNamespace}, updatedNode)).To(Succeed())
+			Expect(updatedNode.Spec.SkipCleanup).To(BeTrue())
+		})
+
+		It("should not patch when already in sync", func() {
+			nar := &pluginsv1alpha1.NodeAllocationRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-nar",
+					Namespace: pluginNamespace,
+				},
+				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+					SkipCleanup: true,
+				},
+			}
+			node := &pluginsv1alpha1.AllocatedNode{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "node1",
+					Namespace: pluginNamespace,
+				},
+				Spec: pluginsv1alpha1.AllocatedNodeSpec{
+					NodeAllocationRequest: "test-nar",
+					GroupName:             "master",
+					SkipCleanup:           true,
+				},
+			}
+
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(nar, node).
+				WithIndex(&pluginsv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", func(obj client.Object) []string {
+					n := obj.(*pluginsv1alpha1.AllocatedNode)
+					return []string{n.Spec.NodeAllocationRequest}
+				}).
+				Build()
+
+			err := syncSkipCleanupToAllocatedNodes(ctx, fakeClient, logger, nar)
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
 	Describe("Complex Integration Functions", func() {
 		Context("setAwaitConfigCondition", func() {
 			It("should be tested in integration tests", func() {

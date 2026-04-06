@@ -1054,6 +1054,40 @@ plan:
 			})
 		})
 
+		Context("when skip-cleanup annotation is set during deletion", func() {
+			It("should not set hubAcceptsClient=false", func() {
+				// Create a ManagedCluster with hubAcceptsClient=true
+				managedCluster := &clusterv1.ManagedCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: testClusterName,
+					},
+					Spec: clusterv1.ManagedClusterSpec{
+						HubAcceptsClient: true,
+					},
+				}
+				Expect(c.Create(ctx, managedCluster)).To(Succeed())
+
+				// Set ClusterDetails and skip-cleanup annotation
+				deletionCR.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
+					Name: testClusterName,
+				}
+				Expect(c.Status().Update(ctx, deletionCR)).To(Succeed())
+
+				deletionCR.Annotations = map[string]string{
+					utils.SkipCleanupAnnotation: "",
+				}
+				Expect(c.Update(ctx, deletionCR)).To(Succeed())
+
+				_, err := deletionReconciler.handleProvisioningRequestDeletion(ctx, deletionCR)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Verify hubAcceptsClient was NOT changed
+				updatedMC := &clusterv1.ManagedCluster{}
+				Expect(c.Get(ctx, types.NamespacedName{Name: testClusterName}, updatedMC)).To(Succeed())
+				Expect(updatedMC.Spec.HubAcceptsClient).To(BeTrue())
+			})
+		})
+
 		Context("when NodeAllocationRequestRef is nil", func() {
 			It("should skip NodeAllocationRequest deletion and proceed to ClusterInstance", func() {
 				// Ensure NodeAllocationRequestRef is nil

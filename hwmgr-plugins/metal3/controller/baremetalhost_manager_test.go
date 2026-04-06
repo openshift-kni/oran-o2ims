@@ -836,7 +836,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 		})
 
 		It("should deallocate BMH successfully", func() {
-			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh)
+			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh, false)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify BMH was deallocated correctly
@@ -876,7 +876,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 			}
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh, secret).Build()
 
-			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh)
+			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh, false)
 			Expect(err).NotTo(HaveOccurred())
 
 			var updatedBMH metal3v1alpha1.BareMetalHost
@@ -890,7 +890,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 			bmh.Spec.PreprovisioningNetworkDataName = ""
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
-			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh)
+			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh, false)
 			Expect(err).NotTo(HaveOccurred())
 
 			var updatedBMH metal3v1alpha1.BareMetalHost
@@ -904,7 +904,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 			bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioned
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
-			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh)
+			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh, false)
 			Expect(err).NotTo(HaveOccurred())
 
 			var updatedBMH metal3v1alpha1.BareMetalHost
@@ -919,7 +919,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 			bmh.Spec.ExternallyProvisioned = true
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
-			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh)
+			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh, false)
 			Expect(err).NotTo(HaveOccurred())
 
 			var updatedBMH metal3v1alpha1.BareMetalHost
@@ -935,7 +935,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 			bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioned
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
-			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh)
+			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh, false)
 			Expect(err).NotTo(HaveOccurred())
 
 			var updatedBMH metal3v1alpha1.BareMetalHost
@@ -946,16 +946,12 @@ var _ = Describe("BareMetalHost Manager", func() {
 			Expect(hasIBIWarning).To(BeFalse())
 		})
 
-		It("should not set cleaning mode or power off when SkipCleanupAnnotation is present", func() {
+		It("should not set cleaning mode or power off when skipCleanup is true", func() {
 			bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioned
 			bmh.Spec.Online = true
-			if bmh.Annotations == nil {
-				bmh.Annotations = map[string]string{}
-			}
-			bmh.Annotations[SkipCleanupAnnotation] = ""
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
-			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh)
+			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh, true)
 			Expect(err).NotTo(HaveOccurred())
 
 			var updatedBMH metal3v1alpha1.BareMetalHost
@@ -964,10 +960,30 @@ var _ = Describe("BareMetalHost Manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedBMH.Spec.AutomatedCleaningMode).To(BeEmpty())
 			Expect(updatedBMH.Spec.Online).To(BeTrue())
-			// Ensure deploy/image/networkdata were NOT cleared/reset when annotation is present
+			// Ensure deploy/image/networkdata were NOT cleared/reset when skipCleanup is true
 			Expect(updatedBMH.Spec.CustomDeploy).NotTo(BeNil())
 			Expect(updatedBMH.Spec.Image).NotTo(BeNil())
 			Expect(updatedBMH.Spec.PreprovisioningNetworkDataName).To(Equal("old-network-data"))
+		})
+
+		It("should not set IBI warning when skipCleanup is true for externally provisioned BMH", func() {
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateExternallyProvisioned
+			bmh.Spec.ExternallyProvisioned = true
+			bmh.Spec.Online = true
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
+
+			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh, true)
+			Expect(err).NotTo(HaveOccurred())
+
+			var updatedBMH metal3v1alpha1.BareMetalHost
+			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+			err = fakeClient.Get(ctx, name, &updatedBMH)
+			Expect(err).NotTo(HaveOccurred())
+			// skipCleanup=true should skip cleaning, power-off, and IBI warning
+			Expect(updatedBMH.Spec.AutomatedCleaningMode).To(BeEmpty())
+			Expect(updatedBMH.Spec.Online).To(BeTrue())
+			_, hasIBIWarning := updatedBMH.Annotations[IBIWarningAnnotation]
+			Expect(hasIBIWarning).To(BeFalse())
 		})
 	})
 

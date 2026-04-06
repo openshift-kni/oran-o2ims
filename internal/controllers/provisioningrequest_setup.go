@@ -61,7 +61,7 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 					oldAnnotations := e.ObjectOld.GetAnnotations()
 					newAnnotations := e.ObjectNew.GetAnnotations()
 
-					// Check if callback annotations were added or changed
+					// Check if relevant annotations were added, removed, or changed
 					callbackAnnotations := []string{
 						ctlrutils.CallbackReceivedAnnotation,
 						ctlrutils.CallbackStatusAnnotation,
@@ -80,6 +80,13 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 						if oldValue != newValue {
 							return true
 						}
+					}
+
+					// Check skip-cleanup annotation by presence (value is always empty)
+					_, oldHasSkipCleanup := oldAnnotations[ctlrutils.SkipCleanupAnnotation]
+					_, newHasSkipCleanup := newAnnotations[ctlrutils.SkipCleanupAnnotation]
+					if oldHasSkipCleanup != newHasSkipCleanup {
+						return true
 					}
 
 					return false

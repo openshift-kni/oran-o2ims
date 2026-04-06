@@ -46,6 +46,12 @@ type AllocatedNodeSpec struct {
 
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	Extensions map[string]string `json:"extensions,omitempty"`
+
+	// SkipCleanup indicates that cleanup operations (disk wipe, power off) should
+	// be skipped when this node is deallocated. Propagated from the NAR spec.
+	// +optional
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Skip Cleanup",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:booleanSwitch"}
+	SkipCleanup bool `json:"skipCleanup,omitempty"`
 }
 
 // BMC describes BMC details of a hardware server

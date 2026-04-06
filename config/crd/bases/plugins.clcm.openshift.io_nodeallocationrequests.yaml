@@ -226,6 +226,14 @@ spec:
               site:
                 description: Site
                 type: string
+              skipCleanup:
+                description: |-
+                  SkipCleanup indicates that the hardware plugin should skip cleanup operations
+                  (disk wipe, power off) when the NodeAllocationRequest is deleted. This is used
+                  when the spoke cluster needs to remain running, such as during seed image
+                  generation for IBI/IBU. The hardware plugin propagates this to the BMH as the
+                  clcm.openshift.io/skip-cleanup annotation.
+                type: boolean
             required:
             - clusterId
             - configTransactionId

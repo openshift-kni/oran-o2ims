@@ -760,19 +760,32 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 		return requeueWithError(err)
 	}
 
-	// If the existing provisioning has been fulfilled, check if there are any issues
-	// with the validation, rendering, or creation of resources due to updates to the
-	// ProvisioningRequest. If there are issues, transition the provisioningPhase to failed.
 	if ctlrutils.IsProvisioningStateFulfilled(t.object) {
-		if err = t.checkProvisioningConditionsForFailures(ctx); err != nil {
-			return requeueWithError(err)
-		}
-
-		// Continue monitoring even after fulfillment for spec changes
-		t.logger.DebugContext(ctx, "Fulfilled provisioning check complete, continuing monitoring")
-		return requeueWithLongInterval(), nil
+		return t.handleFulfilledStateMonitoring(ctx)
 	}
 	return doNotRequeue(), nil
+}
+
+// handleFulfilledStateMonitoring handles monitoring for a fulfilled ProvisioningRequest,
+// checking for condition failures and syncing skip-cleanup state.
+func (t *provisioningRequestReconcilerTask) handleFulfilledStateMonitoring(ctx context.Context) (ctrl.Result, error) {
+	if err := t.checkProvisioningConditionsForFailures(ctx); err != nil {
+		return requeueWithError(err)
+	}
+
+	// Sync skip-cleanup annotation to the NAR for fulfilled PRs.
+	// During provisioning this is handled by createOrUpdateNodeAllocationRequest,
+	// but after fulfillment that path is no longer called.
+	if !t.isHardwareProvisionSkipped() && t.hwpluginClient != nil {
+		if err := t.syncNARSkipCleanup(ctx); err != nil {
+			t.logger.WarnContext(ctx, "Failed to sync skipCleanup on NAR",
+				slog.String("error", err.Error()))
+		}
+	}
+
+	// Continue monitoring even after fulfillment for spec changes
+	t.logger.DebugContext(ctx, "Fulfilled provisioning check complete, continuing monitoring")
+	return requeueWithLongInterval(), nil
 }
 
 // checkClusterInstallationTimeout ensures reliable timeout detection even when other checks fail.
@@ -1128,7 +1141,10 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 	// force-detach path. Without this, after the NAR deletion powers off the
 	// spoke, ACM waits ~4 minutes trying to gracefully detach the unreachable
 	// spoke before falling back to force-detach.
-	if provisioningRequest.Status.Extensions.ClusterDetails != nil {
+	// Skip this when skip-cleanup is set, as the spoke will remain running and
+	// ACM needs to do a graceful detach to properly clean up its agents.
+	_, skipCleanup := provisioningRequest.Annotations[ctlrutils.SkipCleanupAnnotation]
+	if !skipCleanup && provisioningRequest.Status.Extensions.ClusterDetails != nil {
 		clusterName := provisioningRequest.Status.Extensions.ClusterDetails.Name
 		managedCluster := &clusterv1.ManagedCluster{}
 		if err := r.Client.Get(ctx, types.NamespacedName{Name: clusterName}, managedCluster); err != nil {
@@ -1345,6 +1361,10 @@ func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx c
 		if !t.isHardwareProvisionSkipped() && t.hwpluginClient != nil {
 			if err := t.setNARClusterProvisioned(ctx); err != nil {
 				return fmt.Errorf("failed to set clusterProvisioned on NAR: %w", err)
+			}
+			if err := t.syncNARSkipCleanup(ctx); err != nil {
+				t.logger.WarnContext(ctx, "Failed to sync skipCleanup on NAR",
+					slog.String("error", err.Error()))
 			}
 		}
 	}

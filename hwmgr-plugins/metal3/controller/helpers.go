@@ -38,6 +38,36 @@ import (
 
 const ConfigAnnotation = "clcm.openshift.io/config-in-progress"
 
+// syncSkipCleanupToAllocatedNodes propagates the SkipCleanup field from the NAR
+// to all child AllocatedNodes, so the AllocatedNode deletion handler can read it
+// directly without looking up the NAR.
+func syncSkipCleanupToAllocatedNodes(
+	ctx context.Context,
+	c client.Client,
+	logger *slog.Logger,
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
+) error {
+	nodelist, err := hwmgrutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
+	if err != nil {
+		return fmt.Errorf("failed to get child nodes: %w", err)
+	}
+
+	for i := range nodelist.Items {
+		node := &nodelist.Items[i]
+		if node.Spec.SkipCleanup != nodeAllocationRequest.Spec.SkipCleanup {
+			patch := client.MergeFrom(node.DeepCopy())
+			node.Spec.SkipCleanup = nodeAllocationRequest.Spec.SkipCleanup
+			if err := c.Patch(ctx, node, patch); err != nil {
+				return fmt.Errorf("failed to patch SkipCleanup on AllocatedNode %s: %w", node.Name, err)
+			}
+			logger.InfoContext(ctx, "Synced skipCleanup to AllocatedNode",
+				slog.String("node", node.Name),
+				slog.Bool("skipCleanup", nodeAllocationRequest.Spec.SkipCleanup))
+		}
+	}
+	return nil
+}
+
 // hasNodeGroupHwProfileChanges checks whether any node group in the NAR has a different
 // HW profile than what is currently assigned to its allocated nodes.
 func hasNodeGroupHwProfileChanges(
@@ -456,6 +486,7 @@ func createNode(ctx context.Context,
 			HardwarePluginRef:     nodeAllocationRequest.Spec.HardwarePluginRef,
 			HwMgrNodeNs:           nodeNs,
 			HwMgrNodeId:           nodeId,
+			SkipCleanup:           nodeAllocationRequest.Spec.SkipCleanup,
 		},
 	}
 
@@ -1434,7 +1465,7 @@ func releaseNodeAllocationRequest(ctx context.Context,
 		slog.String("clusterID", clusterID),
 	)
 
-	// remove the allocated label from BMHs and finalizer from the corresponding PreprovisioningImage resources
+	// Wait for all child nodes to be deleted
 	nodelist, err := hwmgrutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
 	if err != nil {
 		return false, fmt.Errorf("failed to get child nodes for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)

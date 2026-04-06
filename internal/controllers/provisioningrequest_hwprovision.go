@@ -62,6 +62,44 @@ func (t *provisioningRequestReconcilerTask) setNARClusterProvisioned(ctx context
 	return nil
 }
 
+// syncNARSkipCleanup synchronizes the skip-cleanup annotation from the ProvisioningRequest
+// to the SkipCleanup field on the NodeAllocationRequest. This is used for fulfilled PRs
+// where createOrUpdateNodeAllocationRequest is no longer called.
+func (t *provisioningRequestReconcilerTask) syncNARSkipCleanup(ctx context.Context) error {
+	if t.object.Status.Extensions.NodeAllocationRequestRef == nil {
+		return nil
+	}
+	nodeAllocationRequestID := t.object.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID
+	if nodeAllocationRequestID == "" {
+		return nil
+	}
+
+	existingNAR, exists, err := t.hwpluginClient.GetNodeAllocationRequest(ctx, nodeAllocationRequestID)
+	if err != nil {
+		return fmt.Errorf("failed to get NodeAllocationRequest %s: %w", nodeAllocationRequestID, err)
+	}
+	if !exists || existingNAR.NodeAllocationRequest == nil {
+		return nil
+	}
+
+	_, hasAnnotation := t.object.Annotations[ctlrutils.SkipCleanupAnnotation]
+	currentValue := existingNAR.NodeAllocationRequest.SkipCleanup != nil && *existingNAR.NodeAllocationRequest.SkipCleanup
+
+	if hasAnnotation == currentValue {
+		return nil // Already in sync
+	}
+
+	existingNAR.NodeAllocationRequest.SkipCleanup = &hasAnnotation
+	if _, err := t.hwpluginClient.UpdateNodeAllocationRequest(ctx, nodeAllocationRequestID, *existingNAR.NodeAllocationRequest); err != nil {
+		return fmt.Errorf("failed to sync skipCleanup on NodeAllocationRequest %s: %w", nodeAllocationRequestID, err)
+	}
+
+	t.logger.InfoContext(ctx, "Synced skipCleanup on NodeAllocationRequest",
+		slog.String("narID", nodeAllocationRequestID),
+		slog.Bool("skipCleanup", hasAnnotation))
+	return nil
+}
+
 // createOrUpdateNodeAllocationRequest creates a new NodeAllocationRequest resource if it doesn't exist or updates it if the spec has changed.
 func (t *provisioningRequestReconcilerTask) createOrUpdateNodeAllocationRequest(ctx context.Context,
 	clusterNamespace string,
@@ -86,8 +124,11 @@ func (t *provisioningRequestReconcilerTask) createOrUpdateNodeAllocationRequest(
 		}
 	}
 
-	// The template validate is already completed; compare NodeGroup and update them if necessary
-	if !equality.Semantic.DeepEqual(existingNodeAllocationRequest.NodeAllocationRequest.NodeGroup, nodeAllocationRequest.NodeGroup) {
+	// Compare the fields managed by the PR controller and update if any have changed.
+	// We compare against a copy of the existing NAR with server-managed fields (like
+	// ClusterProvisioned) carried over to avoid false-positive change detection.
+	nodeAllocationRequest.ClusterProvisioned = existingNodeAllocationRequest.NodeAllocationRequest.ClusterProvisioned
+	if !equality.Semantic.DeepEqual(existingNodeAllocationRequest.NodeAllocationRequest, nodeAllocationRequest) {
 		narID, err := t.hwpluginClient.UpdateNodeAllocationRequest(ctx, nodeAllocationRequestID, *nodeAllocationRequest)
 		if err != nil {
 			return fmt.Errorf("failed to update NodeAllocationRequest '%s': %w", nodeAllocationRequestID, err)
@@ -104,7 +145,7 @@ func (t *provisioningRequestReconcilerTask) createOrUpdateNodeAllocationRequest(
 		}
 
 		t.logger.InfoContext(ctx,
-			fmt.Sprintf("NodeAllocationRequest (%s) configuration changes have been detected", nodeAllocationRequestID))
+			fmt.Sprintf("NodeAllocationRequest (%s) spec changes have been detected", nodeAllocationRequestID))
 	}
 	return nil
 }
@@ -900,6 +941,11 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(clusterIn
 		timeoutStr = ctlrutils.DefaultHardwareProvisioningTimeout.String()
 	}
 	nodeAllocationRequest.HardwareProvisioningTimeout = &timeoutStr
+
+	// Always set SkipCleanup explicitly based on annotation presence,
+	// so the server knows to clear it when the annotation is removed.
+	_, hasSkipCleanup := t.object.Annotations[ctlrutils.SkipCleanupAnnotation]
+	nodeAllocationRequest.SkipCleanup = &hasSkipCleanup
 
 	// Create callback configuration with the callback URL
 	nodeAllocationRequest.Callback = &hwmgrpluginapi.Callback{
