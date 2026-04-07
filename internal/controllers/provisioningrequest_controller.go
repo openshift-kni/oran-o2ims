@@ -778,8 +778,7 @@ func (t *provisioningRequestReconcilerTask) handleFulfilledStateMonitoring(ctx c
 	// but after fulfillment that path is no longer called.
 	if !t.isHardwareProvisionSkipped() && t.hwpluginClient != nil {
 		if err := t.syncNARSkipCleanup(ctx); err != nil {
-			t.logger.WarnContext(ctx, "Failed to sync skipCleanup on NAR",
-				slog.String("error", err.Error()))
+			return requeueWithError(fmt.Errorf("failed to sync skipCleanup on NAR: %w", err))
 		}
 	}
 
@@ -1363,8 +1362,7 @@ func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx c
 				return fmt.Errorf("failed to set clusterProvisioned on NAR: %w", err)
 			}
 			if err := t.syncNARSkipCleanup(ctx); err != nil {
-				t.logger.WarnContext(ctx, "Failed to sync skipCleanup on NAR",
-					slog.String("error", err.Error()))
+				return fmt.Errorf("failed to sync skipCleanup on NAR: %w", err)
 			}
 		}
 	}
