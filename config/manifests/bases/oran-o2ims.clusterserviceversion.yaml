@@ -17,7 +17,7 @@ metadata:
     features.operators.openshift.io/token-auth-aws: "false"
     features.operators.openshift.io/token-auth-azure: "false"
     features.operators.openshift.io/token-auth-gcp: "false"
-    olm.skipRange: '>=4.21.0 <4.23.0'
+    olm.skipRange: '>=0.1.0 <0.2.0'
     operators.openshift.io/infrastructure-features: '["disconnected"]'
     operators.openshift.io/tech-preview: "true"
     operators.openshift.io/valid-subscription: '["OpenShift Container Platform", "OpenShift
@@ -27,7 +27,7 @@ metadata:
     support: Red Hat
   labels:
     operatorframework.io/arch.amd64: supported
-  name: oran-o2ims.v4.22.0
+  name: oran-o2ims.v0.1.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
