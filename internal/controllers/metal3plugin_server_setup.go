@@ -259,6 +259,19 @@ func (t *reconcilerTask) createMetal3PluginServerClusterRole(ctx context.Context
 					"metal3.io",
 				},
 				Resources: []string{
+					"dataimages",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"delete",
+				},
+			},
+			{
+				APIGroups: []string{
+					"metal3.io",
+				},
+				Resources: []string{
 					"firmwareschemas",
 					"hardwaredata",
 				},

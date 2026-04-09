@@ -1599,6 +1599,14 @@ spec:
         - apiGroups:
           - metal3.io
           resources:
+          - dataimages
+          verbs:
+          - delete
+          - get
+          - list
+        - apiGroups:
+          - metal3.io
+          resources:
           - firmwareschemas
           - hardwaredata
           verbs:

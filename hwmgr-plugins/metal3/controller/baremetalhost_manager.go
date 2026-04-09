@@ -1451,3 +1451,32 @@ func clearBMHUpdateAnnotations(ctx context.Context, c client.Client, logger *slo
 
 	return nil
 }
+
+// deleteDataImageIfExists deletes the DataImage CR matching the given BMH name/namespace,
+// if it exists. The IBI operator creates a DataImage during installation but never cleans
+// it up. If left around, BMO will spuriously re-mount the virtual media after firmware
+// updates complete, because it sees Spec.URL != Status.AttachedImage.URL and blindly
+// re-attaches. This causes stuck finalizers during deprovisioning.
+func deleteDataImageIfExists(ctx context.Context, c client.Client, logger *slog.Logger, bmhName, bmhNamespace string) error {
+	dataImage := &metal3v1alpha1.DataImage{}
+	key := types.NamespacedName{Name: bmhName, Namespace: bmhNamespace}
+
+	if err := c.Get(ctx, key, dataImage); err != nil {
+		if k8serrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to get DataImage %s/%s: %w", bmhNamespace, bmhName, err)
+	}
+
+	logger.InfoContext(ctx, "Deleting DataImage to prevent spurious re-mount after firmware updates",
+		slog.String("dataimage", bmhName), slog.String("namespace", bmhNamespace))
+
+	if err := c.Delete(ctx, dataImage); err != nil {
+		if k8serrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to delete DataImage %s/%s: %w", bmhNamespace, bmhName, err)
+	}
+
+	return nil
+}

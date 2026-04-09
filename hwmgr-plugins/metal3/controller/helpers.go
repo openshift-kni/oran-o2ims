@@ -128,6 +128,14 @@ func enableBMOManagementForIBINodes(
 
 		bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 
+		// Delete the DataImage CR (if it exists) before removing the detached annotation.
+		// The IBI operator creates a DataImage during installation but never deletes it.
+		// If left around, BMO will spuriously re-mount the virtual media after firmware
+		// updates, which causes stuck finalizers during deprovisioning.
+		if err := deleteDataImageIfExists(ctx, c, logger, bmh.Name, bmh.Namespace); err != nil {
+			return fmt.Errorf("failed to delete DataImage for BMH %s: %w", bmh.Name, err)
+		}
+
 		if !bmh.Spec.Online {
 			logger.InfoContext(ctx, "Setting BMH online=true for IBI post-provisioning",
 				slog.String("bmh", bmh.Name))

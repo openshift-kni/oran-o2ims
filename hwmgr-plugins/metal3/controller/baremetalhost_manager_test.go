@@ -1421,4 +1421,40 @@ var _ = Describe("BareMetalHost Manager", func() {
 			Expect(updating).To(BeTrue()) // BMHs are not Available yet
 		})
 	})
+
+	Describe("deleteDataImageIfExists", func() {
+		const testNs = "test-dataimage-ns"
+		var fakeClient client.Client
+
+		BeforeEach(func() {
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
+		})
+
+		It("should delete an existing DataImage", func() {
+			dataImage := &metal3v1alpha1.DataImage{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-bmh",
+					Namespace: testNs,
+				},
+				Spec: metal3v1alpha1.DataImageSpec{
+					URL: "https://example.com/image.iso",
+				},
+			}
+			Expect(fakeClient.Create(ctx, dataImage)).To(Succeed())
+
+			err := deleteDataImageIfExists(ctx, fakeClient, logger, "test-bmh", testNs)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify it was deleted
+			result := &metal3v1alpha1.DataImage{}
+			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: testNs}, result)
+			Expect(err).To(HaveOccurred())
+			Expect(client.IgnoreNotFound(err)).To(Succeed())
+		})
+
+		It("should succeed when no DataImage exists", func() {
+			err := deleteDataImageIfExists(ctx, fakeClient, logger, "nonexistent-bmh", testNs)
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
 })
