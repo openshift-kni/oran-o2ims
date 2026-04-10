@@ -59,6 +59,7 @@ const (
 	OpAdd                                    = "add"
 	OpRemove                                 = "remove"
 	BmhServicingErr                          = "BMH Servicing Error"
+	OrigNetworkDataAnnotation                = "clcm.openshift.io/origNetworkData"
 	IBIWarningAnnotation                     = "clcm.openshift.io/ibi-warning"
 	IBIWarningMessage                        = "Warning - this node was used for IBI and has been deprovisioned. BMH deletion and IBI reinstall is required before it can be used in a new cluster"
 )
@@ -1161,10 +1162,23 @@ func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.
 		if !skipCleanup {
 			// Clear CustomDeploy entirely
 			patched.Spec.CustomDeploy = nil
-			// Restore PreprovisioningNetworkDataName if it was cleared by a previous
-			// operator version during allocation. Only restore if the field is empty
-			// and a Secret with the expected name exists.
-			if patched.Spec.PreprovisioningNetworkDataName == "" {
+			// Restore PreprovisioningNetworkDataName from the saved annotation if it
+			// differs from the current value. During IBI provisioning, the field gets
+			// overwritten with a secret that is deleted during deprovisioning.
+			if origValue, exists := patched.Annotations[OrigNetworkDataAnnotation]; exists {
+				if patched.Spec.PreprovisioningNetworkDataName != origValue {
+					logger.InfoContext(ctx, "Restoring PreprovisioningNetworkDataName from annotation",
+						slog.String("bmh", bmh.Name),
+						slog.String("current", patched.Spec.PreprovisioningNetworkDataName),
+						slog.String("original", origValue))
+					patched.Spec.PreprovisioningNetworkDataName = origValue
+				}
+				delete(patched.Annotations, OrigNetworkDataAnnotation)
+			} else if patched.Spec.PreprovisioningNetworkDataName == "" {
+				// Fallback for upgrade scenario: if the annotation doesn't exist (BMH was
+				// allocated by an older operator version that cleared the field), check if
+				// a Secret with the legacy naming convention exists and restore it.
+				// TODO: Remove this fallback once upgrade-breaking changes are introduced.
 				expectedSecretName := BmhNetworkDataPrefx + "-" + bmh.Name
 				secret := &corev1.Secret{}
 				if err := c.Get(ctx, types.NamespacedName{
@@ -1175,7 +1189,7 @@ func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.
 					}
 				} else {
 					patched.Spec.PreprovisioningNetworkDataName = expectedSecretName
-					logger.InfoContext(ctx, "Restored PreprovisioningNetworkDataName",
+					logger.InfoContext(ctx, "Restored PreprovisioningNetworkDataName from legacy secret",
 						slog.String("bmh", bmh.Name),
 						slog.String("secretName", expectedSecretName))
 				}
@@ -1207,6 +1221,25 @@ func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.
 			slog.String("bmh", name.String()))
 		return nil
 	})
+}
+
+// saveOrigNetworkData saves the current PreprovisioningNetworkDataName value in an annotation
+// on the BMH so it can be restored during deprovisioning. IBI provisioning overwrites this
+// field with a secret that gets deleted when the cluster is deprovisioned.
+func saveOrigNetworkData(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
+	// Skip if the annotation already exists (re-entrant safety)
+	if _, exists := bmh.Annotations[OrigNetworkDataAnnotation]; exists {
+		return nil
+	}
+
+	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+	value := bmh.Spec.PreprovisioningNetworkDataName
+
+	logger.InfoContext(ctx, "Saving original PreprovisioningNetworkDataName",
+		slog.String("bmh", bmh.Name), slog.String("value", value))
+
+	return updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation,
+		OrigNetworkDataAnnotation, value, OpAdd)
 }
 
 // deallocateBMH deallocates a BareMetalHost that is no longer associated with a cluster deployment.

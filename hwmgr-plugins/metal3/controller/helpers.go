@@ -1533,6 +1533,13 @@ func allocateBMHToNodeAllocationRequest(
 		return "", fmt.Errorf("failed to add allocated label to BMH (%s): %w", bmh.Name, err)
 	}
 
+	// Save the original PreprovisioningNetworkDataName so it can be restored during
+	// deprovisioning. IBI provisioning overwrites this field with a secret that gets
+	// deleted when the cluster is deprovisioned, leaving a stale reference.
+	if err := saveOrigNetworkData(ctx, c, logger, bmh); err != nil {
+		return "", fmt.Errorf("failed to save original network data annotation on BMH (%s): %w", bmh.Name, err)
+	}
+
 	// Allow Host Management
 	if err := allowHostManagement(ctx, c, logger, bmh); err != nil {
 		return "", fmt.Errorf("failed to add host management annotation to BMH (%s): %w", bmh.Name, err)

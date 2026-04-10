@@ -865,8 +865,58 @@ var _ = Describe("BareMetalHost Manager", func() {
 			Expect(updatedBMH.Spec.PreprovisioningNetworkDataName).To(Equal("old-network-data"))
 		})
 
-		It("should restore PreprovisioningNetworkDataName when empty and secret exists", func() {
+		It("should restore PreprovisioningNetworkDataName from annotation when overwritten", func() {
+			// Simulate IBI overwriting the field while the annotation holds the original
+			bmh.Spec.PreprovisioningNetworkDataName = "ibi-generated-secret"
+			bmh.Annotations[OrigNetworkDataAnnotation] = "original-network-data"
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
+
+			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh, false)
+			Expect(err).NotTo(HaveOccurred())
+
+			var updatedBMH metal3v1alpha1.BareMetalHost
+			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+			err = fakeClient.Get(ctx, name, &updatedBMH)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedBMH.Spec.PreprovisioningNetworkDataName).To(Equal("original-network-data"))
+			_, hasAnnotation := updatedBMH.Annotations[OrigNetworkDataAnnotation]
+			Expect(hasAnnotation).To(BeFalse())
+		})
+
+		It("should restore empty PreprovisioningNetworkDataName from annotation", func() {
+			// Simulate IBI overwriting a field that was originally empty
+			bmh.Spec.PreprovisioningNetworkDataName = "ibi-generated-secret"
+			bmh.Annotations[OrigNetworkDataAnnotation] = ""
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
+
+			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh, false)
+			Expect(err).NotTo(HaveOccurred())
+
+			var updatedBMH metal3v1alpha1.BareMetalHost
+			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+			err = fakeClient.Get(ctx, name, &updatedBMH)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedBMH.Spec.PreprovisioningNetworkDataName).To(BeEmpty())
+		})
+
+		It("should not modify PreprovisioningNetworkDataName when no annotation exists", func() {
+			bmh.Spec.PreprovisioningNetworkDataName = "some-network-data"
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
+
+			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh, false)
+			Expect(err).NotTo(HaveOccurred())
+
+			var updatedBMH metal3v1alpha1.BareMetalHost
+			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+			err = fakeClient.Get(ctx, name, &updatedBMH)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedBMH.Spec.PreprovisioningNetworkDataName).To(Equal("some-network-data"))
+		})
+
+		It("should restore PreprovisioningNetworkDataName from legacy secret when no annotation and field is empty", func() {
+			// Upgrade scenario: allocated by older operator that cleared the field
 			bmh.Spec.PreprovisioningNetworkDataName = ""
+			delete(bmh.Annotations, OrigNetworkDataAnnotation)
 			expectedSecretName := BmhNetworkDataPrefx + "-" + bmh.Name
 			secret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
@@ -886,8 +936,9 @@ var _ = Describe("BareMetalHost Manager", func() {
 			Expect(updatedBMH.Spec.PreprovisioningNetworkDataName).To(Equal(expectedSecretName))
 		})
 
-		It("should leave PreprovisioningNetworkDataName empty when empty and no secret exists", func() {
+		It("should leave PreprovisioningNetworkDataName empty when no annotation and no legacy secret", func() {
 			bmh.Spec.PreprovisioningNetworkDataName = ""
+			delete(bmh.Annotations, OrigNetworkDataAnnotation)
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
 			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh, false)
@@ -1419,6 +1470,57 @@ var _ = Describe("BareMetalHost Manager", func() {
 			updating, err := handleBMHCompletion(ctx, fakeClient, fakeClient, logger, pluginNs, nodelist)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(updating).To(BeTrue()) // BMHs are not Available yet
+		})
+	})
+
+	Describe("saveOrigNetworkData", func() {
+		const testNs = "test-save-networkdata-ns"
+		var fakeClient client.Client
+
+		BeforeEach(func() {
+			fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
+		})
+
+		It("should save the current PreprovisioningNetworkDataName as an annotation", func() {
+			bmh := createBMH("test-bmh", testNs, nil, map[string]string{}, metal3v1alpha1.StateAvailable)
+			bmh.Spec.PreprovisioningNetworkDataName = "my-network-data"
+			Expect(fakeClient.Create(ctx, bmh)).To(Succeed())
+
+			err := saveOrigNetworkData(ctx, fakeClient, logger, bmh)
+			Expect(err).ToNot(HaveOccurred())
+
+			var updated metal3v1alpha1.BareMetalHost
+			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: testNs}, &updated)).To(Succeed())
+			Expect(updated.Annotations[OrigNetworkDataAnnotation]).To(Equal("my-network-data"))
+		})
+
+		It("should save empty string when PreprovisioningNetworkDataName is not set", func() {
+			bmh := createBMH("test-bmh", testNs, nil, map[string]string{}, metal3v1alpha1.StateAvailable)
+			Expect(fakeClient.Create(ctx, bmh)).To(Succeed())
+
+			err := saveOrigNetworkData(ctx, fakeClient, logger, bmh)
+			Expect(err).ToNot(HaveOccurred())
+
+			var updated metal3v1alpha1.BareMetalHost
+			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: testNs}, &updated)).To(Succeed())
+			val, exists := updated.Annotations[OrigNetworkDataAnnotation]
+			Expect(exists).To(BeTrue())
+			Expect(val).To(BeEmpty())
+		})
+
+		It("should not overwrite annotation if already set", func() {
+			bmh := createBMH("test-bmh", testNs, nil, map[string]string{
+				OrigNetworkDataAnnotation: "original-value",
+			}, metal3v1alpha1.StateAvailable)
+			bmh.Spec.PreprovisioningNetworkDataName = "new-value"
+			Expect(fakeClient.Create(ctx, bmh)).To(Succeed())
+
+			err := saveOrigNetworkData(ctx, fakeClient, logger, bmh)
+			Expect(err).ToNot(HaveOccurred())
+
+			var updated metal3v1alpha1.BareMetalHost
+			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: testNs}, &updated)).To(Succeed())
+			Expect(updated.Annotations[OrigNetworkDataAnnotation]).To(Equal("original-value"))
 		})
 	})
 
