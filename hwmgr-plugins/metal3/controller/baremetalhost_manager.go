@@ -1173,7 +1173,6 @@ func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.
 						slog.String("original", origValue))
 					patched.Spec.PreprovisioningNetworkDataName = origValue
 				}
-				delete(patched.Annotations, OrigNetworkDataAnnotation)
 			} else if patched.Spec.PreprovisioningNetworkDataName == "" {
 				// Fallback for upgrade scenario: if the annotation doesn't exist (BMH was
 				// allocated by an older operator version that cleared the field), check if
@@ -1197,6 +1196,11 @@ func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.
 			// Clear image reference
 			patched.Spec.Image = nil
 		}
+
+		// Always clear the origNetworkData annotation at the deallocation boundary
+		// to prevent stale values leaking into the next allocation cycle.
+		delete(patched.Annotations, OrigNetworkDataAnnotation)
+
 		if !skipCleanup && (current.Status.Provisioning.State == metal3v1alpha1.StateProvisioned ||
 			current.Status.Provisioning.State == metal3v1alpha1.StateExternallyProvisioned) {
 			// Wipe partition tables using automated cleaning
