@@ -48,7 +48,7 @@ type ResourcePoolStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:path=resourcepools,shortName=rp
+// +kubebuilder:resource:path=resourcepools,shortName=opool
 // +kubebuilder:printcolumn:name="Site",type="string",JSONPath=".spec.oCloudSiteName",description="Parent OCloudSite name"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
