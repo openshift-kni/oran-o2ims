@@ -12,7 +12,7 @@ spec:
     listKind: OCloudSiteList
     plural: ocloudsites
     shortNames:
-    - ocs
+    - osite
     singular: ocloudsite
   scope: Namespaced
   versions:

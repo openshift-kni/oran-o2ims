@@ -42,7 +42,7 @@ type OCloudSiteStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:path=ocloudsites,shortName=ocs
+// +kubebuilder:resource:path=ocloudsites,shortName=osite
 // +kubebuilder:printcolumn:name="Location",type="string",JSONPath=".spec.globalLocationName",description="Parent Location name"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"

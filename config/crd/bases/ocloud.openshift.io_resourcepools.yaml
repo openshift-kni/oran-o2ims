@@ -12,7 +12,7 @@ spec:
     listKind: ResourcePoolList
     plural: resourcepools
     shortNames:
-    - rp
+    - opool
     singular: resourcepool
   scope: Namespaced
   versions:
