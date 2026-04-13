@@ -16,12 +16,12 @@ SPDX-License-Identifier: Apache-2.0
 ### Platform
 
 - OpenShift Container Platform
-  - 4.20: 4.20.15 or newer
-  - 4.21: 4.21.2 or newer
+  - 4.20: 4.20.18 or newer
+  - 4.21: 4.21.9 or newer
 
 ### Required operators and add‑ons on the hub
 
-- Advanced Cluster Management (ACM) v2.14 or newer
+- Advanced Cluster Management (ACM) v2.15 or newer
   - SiteConfig Operator
 
     Enable SiteConfig in ACM by running the following command:
