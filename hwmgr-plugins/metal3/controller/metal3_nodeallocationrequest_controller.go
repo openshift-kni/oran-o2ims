@@ -686,55 +686,55 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 
 	// Handle post-provisioning setup for IBI nodes when ClusterProvisioned is set.
 	// This sets online=true and removes the detached annotation so BMO can manage the nodes.
-	// If no node group HW profiles have changed, this was only a ClusterProvisioned update
-	// and we skip the day-2 configuration handling.
 	if nodeAllocationRequest.Spec.ClusterProvisioned {
 		if err := enableBMOManagementForIBINodes(ctx, r.Client, r.NoncachedClient, r.Logger, nodeAllocationRequest); err != nil {
 			return hwmgrutils.RequeueWithShortInterval(),
 				fmt.Errorf("failed to enable BMO management for IBI nodes: %w", err)
 		}
-
-		// If no HW profile changes and no configuration is in progress, this was
-		// only a ClusterProvisioned update — acknowledge and skip config handling.
-		configCond := meta.FindStatusCondition(nodeAllocationRequest.Status.Conditions, string(hwmgmtv1alpha1.Configured))
-		configActive := configCond != nil && configCond.Status == metav1.ConditionFalse &&
-			configCond.Reason == string(hwmgmtv1alpha1.InProgress)
-		hwProfileChanged, err := hasNodeGroupHwProfileChanges(ctx, r.Client, r.Logger, nodeAllocationRequest)
-		if err != nil {
-			return hwmgrutils.RequeueWithShortInterval(), err
-		}
-		if !hwProfileChanged && !configActive {
-			r.Logger.InfoContext(ctx, "ClusterProvisioned set with no HW profile changes, acknowledging spec change")
-			if err := hwmgrutils.UpdateNodeAllocationRequestPluginStatus(ctx, r.Client, nodeAllocationRequest); err != nil {
-				return hwmgrutils.RequeueWithShortInterval(),
-					fmt.Errorf("failed to update observedGeneration: %w", err)
-			}
-			return hwmgrutils.DoNotRequeue(), nil
-		}
 	}
 
+	// Check whether configuration is already in progress.
 	configuredCondition := meta.FindStatusCondition(
 		nodeAllocationRequest.Status.Conditions,
 		string(hwmgmtv1alpha1.Configured))
+	configInProgress := configuredCondition != nil &&
+		configuredCondition.Status == metav1.ConditionFalse &&
+		configuredCondition.Reason == string(hwmgmtv1alpha1.InProgress)
 
-	// Set AwaitConfig condition when handling spec changes for retry scenarios
-	// Only update when the condition exists and is in a state that allows retry:
-	// - Status is True (completed configuration, now needs reconfiguration)
-	// - Reason is TimedOut or Failed (terminal states that can be retried on spec change)
-	// Do NOT set during initial provisioning when configuredCondition doesn't exist yet
-	if configuredCondition != nil && (configuredCondition.Status == metav1.ConditionTrue ||
-		configuredCondition.Reason == string(hwmgmtv1alpha1.TimedOut) ||
-		configuredCondition.Reason == string(hwmgmtv1alpha1.Failed)) {
-		if configuredCondition.Reason == string(hwmgmtv1alpha1.TimedOut) ||
-			configuredCondition.Reason == string(hwmgmtv1alpha1.Failed) {
+	// Check whether the HW profile has changed.
+	hwProfileChanged, err := hasNodeGroupHwProfileChanges(ctx, r.Client, r.Logger, nodeAllocationRequest)
+	if err != nil {
+		return hwmgrutils.RequeueWithShortInterval(), err
+	}
+	// If no HW profile actually changed and no configuration is in progress(e.g., only
+	// skipCleanup or clusterProvisioned was updated), acknowledge the spec change and skip.
+	if !hwProfileChanged && !configInProgress {
+		r.Logger.InfoContext(ctx, "No HW profile changes detected, acknowledging spec change")
+		if err := hwmgrutils.UpdateNodeAllocationRequestPluginStatus(ctx, r.Client, nodeAllocationRequest); err != nil {
+			return hwmgrutils.RequeueWithShortInterval(),
+				fmt.Errorf("failed to update observedGeneration: %w", err)
+		}
+		return hwmgrutils.DoNotRequeue(), nil
+	}
+
+	// Set Configured=InProgress with message AwaitConfig and send callback when HW profile changed and not already in progress.
+	// This covers first day2 config (nil condition), subsequent updates when previous configuration completed (ConfigApplied=True),
+	// and retries after terminal states (TimedOut, Failed).
+	if hwProfileChanged && !configInProgress {
+		if configuredCondition != nil &&
+			(configuredCondition.Reason == string(hwmgmtv1alpha1.TimedOut) ||
+				configuredCondition.Reason == string(hwmgmtv1alpha1.Failed)) {
 			r.Logger.InfoContext(ctx, "NodeAllocationRequest configuration is in terminal state, but config change detected - allowing retry",
 				slog.String("reason", configuredCondition.Reason))
 		}
-		if result, err := setAwaitConfigCondition(ctx, r.Client, nodeAllocationRequest); err != nil {
-			return result, err
+		if err := r.updateConditionAndSendCallback(ctx, nodeAllocationRequest,
+			hwmgmtv1alpha1.Configured, hwmgmtv1alpha1.InProgress,
+			metav1.ConditionFalse, string(hwmgmtv1alpha1.AwaitConfig)); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
 		}
 	}
 
+	// Handle the hardware configuration changes.
 	result, nodelist, err := handleNodeAllocationRequestConfiguring(ctx, r.Client, r.NoncachedClient, r.Logger, r.PluginNamespace, nodeAllocationRequest)
 
 	if nodelist != nil {

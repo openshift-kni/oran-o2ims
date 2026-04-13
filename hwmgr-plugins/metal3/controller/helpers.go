@@ -1438,29 +1438,6 @@ func populateNodeHostnames(
 	return nil
 }
 
-func setAwaitConfigCondition(
-	ctx context.Context,
-	c client.Client,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
-) (ctrl.Result, error) {
-	err := hwmgrutils.UpdateNodeAllocationRequestStatusCondition(
-		ctx, c,
-		nodeAllocationRequest,
-		hwmgmtv1alpha1.Configured,
-		hwmgmtv1alpha1.ConfigUpdate,
-		metav1.ConditionFalse,
-		string(hwmgmtv1alpha1.AwaitConfig),
-	)
-	if err != nil {
-		return hwmgrutils.RequeueWithMediumInterval(), fmt.Errorf(
-			"failed to update status for NodeAllocationRequest %s: %w",
-			nodeAllocationRequest.Name,
-			err,
-		)
-	}
-	return ctrl.Result{}, nil
-}
-
 // releaseNodeAllocationRequest frees resources allocated to a NodeAllocationRequest
 func releaseNodeAllocationRequest(ctx context.Context,
 	c client.Client,

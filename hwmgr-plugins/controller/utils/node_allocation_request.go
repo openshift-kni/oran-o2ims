@@ -197,7 +197,7 @@ func UpdateNodeAllocationRequestStatusCondition(
 
 				// Set/reset start time when configuration operation starts
 				// Only set when nil (first time) or when transitioning from terminal state
-				if conditionReason == hwmgmtv1alpha1.ConfigUpdate {
+				if conditionReason == hwmgmtv1alpha1.InProgress {
 					// Check if we're transitioning FROM a terminal state
 					existingCondition := meta.FindStatusCondition(newNodeAllocationRequest.Status.Conditions, string(hwmgmtv1alpha1.Configured))
 					isRetryAfterTerminal := existingCondition != nil &&

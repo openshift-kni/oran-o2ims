@@ -70,7 +70,6 @@ Test Cases Covered in this File:
 
 8. Integration Test Placeholders
    - Lists complex functions that require extensive mocking and should be tested in integration tests:
-     * setAwaitConfigCondition
      * releaseNodeAllocationRequest
      * getNodeAllocationRequestBMHNamespace
      * allocateBMHToNodeAllocationRequest
@@ -1348,12 +1347,6 @@ var _ = Describe("Helpers", func() {
 	})
 
 	Describe("Complex Integration Functions", func() {
-		Context("setAwaitConfigCondition", func() {
-			It("should be tested in integration tests", func() {
-				Skip("Requires complex external dependencies - test in integration suite")
-			})
-		})
-
 		Context("releaseNodeAllocationRequest", func() {
 			It("should be tested in integration tests", func() {
 				Skip("Requires field indexing setup - test in integration suite")
