@@ -16,9 +16,11 @@ metadata:
         '.tekton/build-pipeline.yaml'.pathChanged() ||
         '.tekton/o-cloud-manager-4-22-pull-request.yaml'.pathChanged() ||
         'api/***'.pathChanged() ||
+        'config/***'.pathChanged() ||
         'go.mod'.pathChanged() ||
         'go.sum'.pathChanged() ||
         'hack/***'.pathChanged() ||
+        'hwmgr-plugins/***'.pathChanged() ||
         'internal/***'.pathChanged() ||
         'main.go'.pathChanged() ||
         'pkg/***'.pathChanged() ||
