@@ -127,6 +127,7 @@ import (
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -224,11 +225,18 @@ func getFakeClientAndMockServer(objs ...client.Object) (client.WithWatch, *MockH
 	// Note: BMC secrets are created by individual tests in their BeforeEach blocks
 	// to avoid resource conflicts between tests
 
+	// Create the Inventory CRD object for CRD ownership of cluster-scoped resources
+	inventoryCRD := &apiextensionsv1.CustomResourceDefinition{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: ctlrutils.InventoryCRDName,
+		},
+	}
+
 	// First create the fake client
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(objs...).
-		WithObjects([]client.Object{authSecret}...).
+		WithObjects([]client.Object{authSecret, inventoryCRD}...).
 		WithStatusSubresource(&inventoryv1alpha1.Inventory{}).
 		WithStatusSubresource(&provisioningv1alpha1.ClusterTemplate{}).
 		WithStatusSubresource(&provisioningv1alpha1.ProvisioningRequest{}).
