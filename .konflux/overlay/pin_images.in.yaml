@@ -2,7 +2,7 @@
 ---
 - key: manager
   source: quay.io/openshift-kni/oran-o2ims-operator:4.21.0
-  target: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-4-21@sha256:cde98da1d44107fe5fa9381249c142bd22ebfa99a6d21fb6ec0d1e6fe57f10e4
+  target: quay.io/redhat-user-workloads/telco-5g-tenant/o-cloud-manager-4-21@sha256:09cbb9943cac06f4c7be2f39d3c5d2d504886066476653f3ef28be316bbef126
 - key: postgres_image
   source: registry.redhat.io/rhel9/postgresql-16:9.5-1731610873
   target: registry.redhat.io/rhel9/postgresql-16@sha256:4f46bed6bce211be83c110a3452bd3f151a1e8ab150c58f2a02c56e9cc83db98
