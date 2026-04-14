@@ -141,8 +141,7 @@ func CreateK8sCR(ctx context.Context, c client.Client,
 		} else if key.Namespace == "" {
 			// Cluster-scoped resource with namespace-scoped owner — use CRD ownership
 			if err := SetCRDOwnerRef(ctx, c, newObject, InventoryCRDName); err != nil {
-				oranUtilsLog.Error(err, "Failed to set CRD owner reference, continuing without it",
-					"name", newObject.GetName())
+				return fmt.Errorf("failed to set CRD owner reference for %s: %w", newObject.GetName(), err)
 			}
 		}
 	}
