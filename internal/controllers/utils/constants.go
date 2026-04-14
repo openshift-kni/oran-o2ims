@@ -52,6 +52,11 @@ const (
 	Metal3PluginServerName = Metal3Plugin + serverSuffix
 )
 
+// InventoryCRDName is the fully qualified name of the Inventory CRD, used as the
+// owner reference for runtime-created cluster-scoped resources (ClusterRoles,
+// ClusterRoleBindings) so they are garbage collected on operator uninstall.
+const InventoryCRDName = "inventories.ocloud.openshift.io"
+
 // IngressName defines the name of our ingress controller
 const IngressName = "oran-o2ims-ingress"
 

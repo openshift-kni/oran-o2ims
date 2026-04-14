@@ -20,7 +20,10 @@ import (
 	openshiftv1 "github.com/openshift/api/operator/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -1291,5 +1294,122 @@ var _ = Describe("IsHardwareConfigCompleted", func() {
 			result := IsHardwareConfigCompleted(pr)
 			Expect(result).To(BeTrue())
 		})
+	})
+})
+
+var _ = Describe("SetCRDOwnerRef", func() {
+	var fakeClient client.Client
+	var crd *unstructured.Unstructured
+	const crdName = "inventories.ocloud.openshift.io"
+	const crdUID = "test-crd-uid-12345"
+
+	BeforeEach(func() {
+		crd = &unstructured.Unstructured{}
+		crd.SetGroupVersionKind(schema.GroupVersionKind{
+			Group:   "apiextensions.k8s.io",
+			Version: "v1",
+			Kind:    "CustomResourceDefinition",
+		})
+		crd.SetName(crdName)
+		crd.SetUID(types.UID(crdUID))
+
+		fakeClient = fake.NewClientBuilder().
+			WithScheme(suitescheme).
+			WithObjects(crd).
+			Build()
+	})
+
+	It("should set CRD owner reference on a ClusterRole", func() {
+		role := &rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-clusterrole",
+			},
+		}
+		err := SetCRDOwnerRef(context.TODO(), fakeClient, role, crdName)
+		Expect(err).ToNot(HaveOccurred())
+
+		refs := role.GetOwnerReferences()
+		Expect(refs).To(HaveLen(1))
+		Expect(refs[0].Kind).To(Equal("CustomResourceDefinition"))
+		Expect(refs[0].Name).To(Equal(crdName))
+		Expect(refs[0].UID).To(Equal(types.UID(crdUID)))
+		Expect(*refs[0].Controller).To(BeFalse())
+		Expect(*refs[0].BlockOwnerDeletion).To(BeFalse())
+	})
+
+	It("should not duplicate owner reference if already set", func() {
+		role := &rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-clusterrole",
+			},
+		}
+		err := SetCRDOwnerRef(context.TODO(), fakeClient, role, crdName)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Call again
+		err = SetCRDOwnerRef(context.TODO(), fakeClient, role, crdName)
+		Expect(err).ToNot(HaveOccurred())
+
+		refs := role.GetOwnerReferences()
+		Expect(refs).To(HaveLen(1))
+	})
+
+	It("should return error when CRD does not exist", func() {
+		role := &rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-clusterrole",
+			},
+		}
+		err := SetCRDOwnerRef(context.TODO(), fakeClient, role, "nonexistent.crd.io")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to get CRD"))
+	})
+})
+
+var _ = Describe("CreateK8sCR with cluster-scoped resources", func() {
+	var fakeClient client.Client
+	var crd *unstructured.Unstructured
+	const crdUID = "test-crd-uid-12345"
+
+	BeforeEach(func() {
+		crd = &unstructured.Unstructured{}
+		crd.SetGroupVersionKind(schema.GroupVersionKind{
+			Group:   "apiextensions.k8s.io",
+			Version: "v1",
+			Kind:    "CustomResourceDefinition",
+		})
+		crd.SetName(InventoryCRDName)
+		crd.SetUID(types.UID(crdUID))
+
+		fakeClient = fake.NewClientBuilder().
+			WithScheme(suitescheme).
+			WithObjects(crd).
+			Build()
+	})
+
+	It("should set CRD owner on cluster-scoped resource with namespace-scoped owner", func() {
+		owner := &inventoryv1alpha1.Inventory{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-inventory",
+				Namespace: "oran-o2ims",
+			},
+		}
+		role := &rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-role",
+			},
+		}
+		err := CreateK8sCR(context.TODO(), fakeClient, role, owner, UPDATE)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Fetch the created role and check owner references
+		created := &rbacv1.ClusterRole{}
+		err = fakeClient.Get(context.TODO(), types.NamespacedName{Name: "test-role"}, created)
+		Expect(err).ToNot(HaveOccurred())
+
+		refs := created.GetOwnerReferences()
+		Expect(refs).To(HaveLen(1))
+		Expect(refs[0].Kind).To(Equal("CustomResourceDefinition"))
+		Expect(refs[0].Name).To(Equal(InventoryCRDName))
 	})
 })

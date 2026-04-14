@@ -79,6 +79,45 @@ func UpdateK8sCRStatus(ctx context.Context, c client.Client, object client.Objec
 	return nil
 }
 
+// SetCRDOwnerRef sets an ownerReference on a cluster-scoped resource, using the
+// specified CRD as the owner. This ensures the resource is garbage collected when
+// the CRD is deleted (e.g., on operator uninstall). The owner reference is set
+// with controller=false and blockOwnerDeletion=false, matching the pattern used
+// by OLM for CRD-owned ClusterRoles.
+func SetCRDOwnerRef(ctx context.Context, c client.Client, object metav1.Object, crdName string) error {
+	crd := &unstructured.Unstructured{}
+	crd.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "apiextensions.k8s.io",
+		Version: "v1",
+		Kind:    "CustomResourceDefinition",
+	})
+	if err := c.Get(ctx, types.NamespacedName{Name: crdName}, crd); err != nil {
+		return fmt.Errorf("failed to get CRD %s: %w", crdName, err)
+	}
+
+	isController := false
+	blockOwnerDeletion := false
+	ownerRef := metav1.OwnerReference{
+		APIVersion:         "apiextensions.k8s.io/v1",
+		Kind:               "CustomResourceDefinition",
+		Name:               crdName,
+		UID:                crd.GetUID(),
+		Controller:         &isController,
+		BlockOwnerDeletion: &blockOwnerDeletion,
+	}
+
+	// Check if the owner reference already exists
+	for _, ref := range object.GetOwnerReferences() {
+		if ref.UID == ownerRef.UID {
+			return nil
+		}
+	}
+
+	refs := append(object.GetOwnerReferences(), ownerRef)
+	object.SetOwnerReferences(refs)
+	return nil
+}
+
 // CreateK8sCR creates/updates/patches an object.
 func CreateK8sCR(ctx context.Context, c client.Client,
 	newObject client.Object, ownerObject client.Object,
@@ -87,14 +126,24 @@ func CreateK8sCR(ctx context.Context, c client.Client,
 	// Get the name and namespace of the object:
 	key := client.ObjectKeyFromObject(newObject)
 
-	// We can set the owner reference only for objects that live in the same namespace, as cross
-	// namespace owners are forbidden. This also applies to non-namespaced objects like cluster
-	// roles or cluster role bindings; those have empty namespaces, so the equals comparison
-	// should also work.
-	if ownerObject != nil && (ownerObject.GetNamespace() == key.Namespace || ownerObject.GetNamespace() == "") {
-		err = controllerutil.SetControllerReference(ownerObject, newObject, c.Scheme())
-		if err != nil {
-			return fmt.Errorf("failed to set controller reference: %w", err)
+	// Set owner references for garbage collection:
+	// - For namespace-scoped resources: set the ownerObject as the controller owner
+	//   (only when both are in the same namespace).
+	// - For cluster-scoped resources with a namespace-scoped owner: set the Inventory
+	//   CRD as a non-controller owner so the resource is cleaned up on operator uninstall.
+	if ownerObject != nil {
+		if ownerObject.GetNamespace() == key.Namespace || ownerObject.GetNamespace() == "" {
+			// Same namespace or both cluster-scoped — use controller reference
+			err = controllerutil.SetControllerReference(ownerObject, newObject, c.Scheme())
+			if err != nil {
+				return fmt.Errorf("failed to set controller reference: %w", err)
+			}
+		} else if key.Namespace == "" {
+			// Cluster-scoped resource with namespace-scoped owner — use CRD ownership
+			if err := SetCRDOwnerRef(ctx, c, newObject, InventoryCRDName); err != nil {
+				oranUtilsLog.Error(err, "Failed to set CRD owner reference, continuing without it",
+					"name", newObject.GetName())
+			}
 		}
 	}
 
