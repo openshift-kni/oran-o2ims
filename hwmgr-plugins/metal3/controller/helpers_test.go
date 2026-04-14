@@ -2086,6 +2086,108 @@ var _ = Describe("Helpers", func() {
 		})
 	})
 
+	Describe("hasNodeGroupHwProfileChanges", func() {
+		var (
+			ctx        context.Context
+			logger     *slog.Logger
+			scheme     *runtime.Scheme
+			testClient client.Client
+		)
+
+		const (
+			testNamespace = "test-ns"
+			testNARName   = "test-nar"
+		)
+
+		buildClientWithNodes := func(nodes ...client.Object) client.Client {
+			return fake.NewClientBuilder().WithScheme(scheme).WithObjects(nodes...).
+				WithIndex(&pluginsv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", func(obj client.Object) []string {
+					return []string{obj.(*pluginsv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
+				}).Build()
+		}
+
+		BeforeEach(func() {
+			ctx = context.Background()
+			logger = slog.Default()
+			scheme = runtime.NewScheme()
+			Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
+		})
+
+		It("should return true when a node has a different profile than the NAR group", func() {
+			node := createAllocatedNodeWithGroup("n1", testNamespace, "bmh1", testNamespace, "worker", "profile-v1")
+			node.Spec.NodeAllocationRequest = testNARName
+			testClient = buildClientWithNodes(node)
+
+			nar := &pluginsv1alpha1.NodeAllocationRequest{
+				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: testNamespace},
+				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+					NodeGroup: []pluginsv1alpha1.NodeGroup{
+						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", HwProfile: "profile-v2"}},
+					},
+				},
+			}
+
+			changed, err := hasNodeGroupHwProfileChanges(ctx, testClient, logger, nar)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(changed).To(BeTrue())
+		})
+
+		It("should return false when all nodes match their group profile", func() {
+			node := createAllocatedNodeWithGroup("n1", testNamespace, "bmh1", testNamespace, "worker", "profile-v2")
+			node.Spec.NodeAllocationRequest = testNARName
+			testClient = buildClientWithNodes(node)
+
+			nar := &pluginsv1alpha1.NodeAllocationRequest{
+				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: testNamespace},
+				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+					NodeGroup: []pluginsv1alpha1.NodeGroup{
+						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", HwProfile: "profile-v2"}},
+					},
+				},
+			}
+
+			changed, err := hasNodeGroupHwProfileChanges(ctx, testClient, logger, nar)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(changed).To(BeFalse())
+		})
+
+		It("should skip groups with empty hwProfile and return false", func() {
+			node := createAllocatedNodeWithGroup("n1", testNamespace, "bmh1", testNamespace, "worker", "profile-v1")
+			node.Spec.NodeAllocationRequest = testNARName
+			testClient = buildClientWithNodes(node)
+
+			nar := &pluginsv1alpha1.NodeAllocationRequest{
+				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: testNamespace},
+				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+					NodeGroup: []pluginsv1alpha1.NodeGroup{
+						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", HwProfile: ""}},
+					},
+				},
+			}
+
+			changed, err := hasNodeGroupHwProfileChanges(ctx, testClient, logger, nar)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(changed).To(BeFalse())
+		})
+
+		It("should return false when there are no child nodes", func() {
+			testClient = buildClientWithNodes()
+
+			nar := &pluginsv1alpha1.NodeAllocationRequest{
+				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: testNamespace},
+				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+					NodeGroup: []pluginsv1alpha1.NodeGroup{
+						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", HwProfile: "profile-v2"}},
+					},
+				},
+			}
+
+			changed, err := hasNodeGroupHwProfileChanges(ctx, testClient, logger, nar)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(changed).To(BeFalse())
+		})
+	})
+
 	Describe("classifyNodes", func() {
 		var (
 			ctx      context.Context

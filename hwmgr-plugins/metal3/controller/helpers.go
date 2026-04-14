@@ -82,6 +82,9 @@ func hasNodeGroupHwProfileChanges(
 	}
 
 	for _, group := range nodeAllocationRequest.Spec.NodeGroup {
+		if group.NodeGroupData.HwProfile == "" {
+			continue
+		}
 		for i := range nodelist.Items {
 			if nodelist.Items[i].Spec.GroupName == group.NodeGroupData.Name &&
 				nodelist.Items[i].Spec.HwProfile != group.NodeGroupData.HwProfile {
@@ -89,6 +92,8 @@ func hasNodeGroupHwProfileChanges(
 			}
 		}
 	}
+
+	// All nodes match their group's profile, or all groups have empty hwProfile (not specified), or there are no child nodes.
 	return false, nil
 }
 
