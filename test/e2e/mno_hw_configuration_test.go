@@ -18,7 +18,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	kubefake "k8s.io/client-go/kubernetes/fake"
@@ -47,6 +49,10 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		worker      = "worker"
 		masterCount = 3
 		workerCount = 8
+
+		// Resource pool label values on MNO BMHs (see testutils.MnoBMHs).
+		mnoBMHResourcePoolDellR740   = "dell-r740-pool"
+		mnoBMHResourcePoolDellXR8620 = "dell-xr8620t-pool"
 
 		annotationTrue = "true"
 	)
@@ -267,11 +273,17 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			Expect(K8SClient.Status().Update(testCtx, hfc)).To(Succeed())
 		}
 
+		mnoBMHPoolSel := labels.NewSelector()
+		req, reqErr := labels.NewRequirement(constants.LabelResourcePoolName, selection.In,
+			[]string{mnoBMHResourcePoolDellR740, mnoBMHResourcePoolDellXR8620})
+		Expect(reqErr).ToNot(HaveOccurred())
+		mnoBMHPoolSel = mnoBMHPoolSel.Add(*req)
+
 		By("Waiting for all 11 BMHs to be visible via List")
 		Eventually(func() int {
 			bmhListResult := &metal3v1alpha1.BareMetalHostList{}
 			Expect(K8SClient.List(testCtx, bmhListResult,
-				client.HasLabels{constants.LabelResourcePoolName})).To(Succeed())
+				client.MatchingLabelsSelector{Selector: mnoBMHPoolSel})).To(Succeed())
 			available := 0
 			for _, b := range bmhListResult.Items {
 				if b.Status.Provisioning.State == metal3v1alpha1.StateAvailable {
