@@ -557,13 +557,39 @@ func (c *Collector) handleAsyncDeploymentManagerEvent(ctx context.Context, deplo
 	return nil
 }
 
+// locationAPIForChangeEvent builds LocationInfo for data-change notifications with oCloudSiteIds
+// loaded from the repository, matching GET /locations/{globalLocationId}.
+func (c *Collector) locationAPIForChangeEvent(ctx context.Context, record *models.Location) any {
+	siteIDs, err := c.repository.GetOCloudSiteIDsForLocation(ctx, record.GlobalLocationID)
+	if err != nil {
+		slog.ErrorContext(ctx, "failed to load O-Cloud site IDs for location change event",
+			"globalLocationId", record.GlobalLocationID,
+			"error", err)
+		return models.LocationToModel(record, nil)
+	}
+	return models.LocationToModel(record, siteIDs)
+}
+
+// oCloudSiteAPIForChangeEvent builds OCloudSiteInfo for data-change notifications with resourcePools
+// loaded from the repository, matching GET /oCloudSites/{oCloudSiteId}.
+func (c *Collector) oCloudSiteAPIForChangeEvent(ctx context.Context, record *models.OCloudSite) any {
+	poolIDs, err := c.repository.GetResourcePoolIDsForSite(ctx, record.OCloudSiteID)
+	if err != nil {
+		slog.ErrorContext(ctx, "failed to load resource pool IDs for O-Cloud site change event",
+			"oCloudSiteId", record.OCloudSiteID,
+			"error", err)
+		return models.OCloudSiteToModel(record, nil)
+	}
+	return models.OCloudSiteToModel(record, poolIDs)
+}
+
 // handleAsyncLocationEvent handles an async event received for a Location object.
 func (c *Collector) handleAsyncLocationEvent(ctx context.Context, location models.Location, deleted bool) error {
 	var dataChangeEvent *models2.DataChangeEvent
 	var err error
 	converter := func(object interface{}) any {
 		record, _ := object.(models.Location)
-		return models.LocationToModel(&record, nil)
+		return c.locationAPIForChangeEvent(ctx, &record)
 	}
 
 	if deleted {
@@ -596,7 +622,7 @@ func (c *Collector) handleAsyncOCloudSiteEvent(ctx context.Context, site models.
 		dataChangeEvent, err = svcutils.DeleteObjectWithChangeEvent(
 			ctx, c.pool, site, site.OCloudSiteID, nil, func(object interface{}) any {
 				record, _ := object.(models.OCloudSite)
-				return models.OCloudSiteToModel(&record, nil)
+				return c.oCloudSiteAPIForChangeEvent(ctx, &record)
 			})
 
 		if err != nil {
@@ -606,7 +632,7 @@ func (c *Collector) handleAsyncOCloudSiteEvent(ctx context.Context, site models.
 		dataChangeEvent, err = svcutils.PersistObjectWithChangeEvent(
 			ctx, c.pool, site, site.OCloudSiteID, nil, func(object interface{}) any {
 				record, _ := object.(models.OCloudSite)
-				return models.OCloudSiteToModel(&record, nil)
+				return c.oCloudSiteAPIForChangeEvent(ctx, &record)
 			})
 
 		if err != nil {
@@ -639,7 +665,7 @@ func (c *Collector) handleLocationSyncCompletion(ctx context.Context, keys []uui
 
 	converter := func(object interface{}) any {
 		record, _ := object.(models.Location)
-		return models.LocationToModel(&record, nil)
+		return c.locationAPIForChangeEvent(ctx, &record)
 	}
 
 	count := 0
@@ -681,7 +707,7 @@ func (c *Collector) handleOCloudSiteSyncCompletion(ctx context.Context, ids []an
 	for _, record := range records {
 		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, record, record.OCloudSiteID, nil, func(object interface{}) any {
 			r, _ := object.(models.OCloudSite)
-			return models.OCloudSiteToModel(&r, nil)
+			return c.oCloudSiteAPIForChangeEvent(ctx, &r)
 		})
 
 		if err != nil {
