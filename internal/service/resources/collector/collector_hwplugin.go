@@ -171,11 +171,8 @@ func (d *HwPluginDataSource) convertResource(resource *inventoryclient.ResourceI
 		return nil, fmt.Errorf("failed to parse resource ID as UUID: %w", err)
 	}
 
-	// ResourcePoolId is now the Kubernetes UID of the ResourcePool CR
-	resourcePoolID, err := uuid.Parse(resource.ResourcePoolId)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse resource pool ID as UUID: %w", err)
-	}
+	// ResourcePoolId is the Kubernetes UID of the ResourcePool CR
+	resourcePoolID := resource.ResourcePoolId
 
 	name := fmt.Sprintf("%s/%s", resource.Vendor, resource.Model)
 	resourceTypeID := ctlrutils.MakeUUIDFromNames(ResourceTypeUUIDNamespace, d.cloudID, d.hwplugin.Name, name)

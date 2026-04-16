@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"regexp"
 
+	"github.com/google/uuid"
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -1144,7 +1145,7 @@ var _ = Describe("Inventory", func() {
 			Expect(*result.PowerState).To(Equal(inventory.ON))
 			Expect(result.Processors).To(HaveLen(1))
 			Expect(result.ResourceId).To(Equal(string(testUID)))
-			Expect(result.ResourcePoolId).To(Equal(testPoolUID))
+			Expect(result.ResourcePoolId).To(Equal(uuid.MustParse(testPoolUID)))
 			Expect(*result.Tags).To(ContainElement("zone: zone1"))
 			Expect(result.UsageState).To(Equal(inventory.ACTIVE))
 			Expect(result.Vendor).To(Equal("Dell Inc."))
@@ -1212,7 +1213,7 @@ var _ = Describe("Inventory", func() {
 			resource := response[0]
 			Expect(resource.Name).To(Equal("test-bmh"))
 			Expect(resource.ResourceId).To(Equal(string(testUID)))
-			Expect(resource.ResourcePoolId).To(Equal(string(poolUID)))
+			Expect(resource.ResourcePoolId).To(Equal(uuid.MustParse(string(poolUID))))
 			Expect(resource.HwProfile).To(Equal("profile123"))
 		})
 
@@ -1324,7 +1325,7 @@ var _ = Describe("Inventory", func() {
 			Expect(ok).To(BeTrue())
 			Expect(response).To(HaveLen(1))
 			Expect(response[0].Name).To(Equal("good-bmh"))
-			Expect(response[0].ResourcePoolId).To(Equal(string(poolUID)))
+			Expect(response[0].ResourcePoolId).To(Equal(uuid.MustParse(string(poolUID))))
 		})
 	})
 

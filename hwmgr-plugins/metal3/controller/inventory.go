@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"slices"
 
+	"github.com/google/uuid"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
@@ -398,7 +399,7 @@ func getResourceInfo(bmh *metal3v1alpha1.BareMetalHost, node *pluginsv1alpha1.Al
 		PowerState:       getResourceInfoPowerState(bmh),
 		Processors:       getResourceInfoProcessors(hwdata),
 		ResourceId:       getResourceInfoResourceId(bmh),
-		ResourcePoolId:   getResourceInfoResourcePoolUID(bmh, poolNameToUID),
+		ResourcePoolId:   uuid.MustParse(getResourceInfoResourcePoolUID(bmh, poolNameToUID)),
 		Tags:             getResourceInfoTags(bmh),
 		UsageState:       getResourceInfoUsageState(bmh),
 		Vendor:           getResourceInfoVendor(hwdata),
