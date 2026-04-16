@@ -196,16 +196,11 @@ func getResourceInfoResourceId(bmh *metal3v1alpha1.BareMetalHost) string {
 func getResourceInfoResourcePoolUID(bmh *metal3v1alpha1.BareMetalHost, poolNameToUID map[string]string) string {
 	poolName := bmh.Labels[constants.LabelResourcePoolName]
 	if poolName == "" {
-		slog.Debug("BMH has no resourcePoolName label",
-			slog.String("bmh", bmh.Namespace+"/"+bmh.Name))
 		return ""
 	}
 	if uid, ok := poolNameToUID[poolName]; ok {
 		return uid
 	}
-	slog.Debug("ResourcePool not found in pool map",
-		slog.String("bmh", bmh.Namespace+"/"+bmh.Name),
-		slog.String("poolName", poolName))
 	return ""
 }
 
@@ -456,10 +451,23 @@ func GetResources(ctx context.Context,
 	}
 
 	for _, bmh := range bmhList.Items {
-		if includeInInventory(&bmh) {
-			hwdata := bmhToHardwareData[bmh.Namespace+"/"+bmh.Name]
-			resp = append(resp, getResourceInfo(&bmh, hwmgrutils.GetNodeForBMH(nodes, &bmh), &hwdata, poolNameToUID))
+		if !includeInInventory(&bmh) {
+			logger.DebugContext(ctx, "skipping BMH inventory resource: not included in inventory listing",
+				slog.String("bmh", bmh.Namespace+"/"+bmh.Name),
+				slog.Bool("oCloudManaged", IsOCloudManaged(&bmh)),
+				slog.String("provisioningState", string(bmh.Status.Provisioning.State)))
+			continue
 		}
+		poolUID := getResourceInfoResourcePoolUID(&bmh, poolNameToUID)
+		if poolUID == "" {
+			poolName := bmh.Labels[constants.LabelResourcePoolName]
+			logger.Debug("skipping BMH inventory resource: unresolved resourcePoolId",
+				slog.String("bmh", bmh.Namespace+"/"+bmh.Name),
+				slog.String("poolName", poolName))
+			continue
+		}
+		hwdata := bmhToHardwareData[bmh.Namespace+"/"+bmh.Name]
+		resp = append(resp, getResourceInfo(&bmh, hwmgrutils.GetNodeForBMH(nodes, &bmh), &hwdata, poolNameToUID))
 	}
 
 	return inventory.GetResources200JSONResponse(resp), nil

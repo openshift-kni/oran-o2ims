@@ -1251,6 +1251,81 @@ var _ = Describe("Inventory", func() {
 			Expect(resource.Name).To(Equal("test-bmh"))
 			Expect(resource.HwProfile).To(Equal("")) // No corresponding node
 		})
+
+		It("should omit BMH when ResourcePool CR is missing for the pool label", func() {
+			bmh := createBMHWithLabels("test-bmh", "test-ns", map[string]string{
+				constants.LabelResourcePoolName: "pool123",
+			})
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateAvailable
+			hwdata := createHardwareData("test-bmh", "test-ns")
+
+			client := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(bmh, hwdata).
+				Build()
+
+			result, err := GetResources(ctx, logger, client)
+			Expect(err).ToNot(HaveOccurred())
+
+			response, ok := result.(inventory.GetResources200JSONResponse)
+			Expect(ok).To(BeTrue())
+			Expect(response).To(BeEmpty())
+		})
+
+		It("should omit BMH when only resource-selector labels exist (no resolvable resourcePoolId)", func() {
+			bmh := createBasicBMH("test-bmh", "test-ns")
+			bmh.Labels = map[string]string{
+				LabelPrefixResourceSelector + "zone": "east",
+			}
+			bmh.Status.Provisioning.State = metal3v1alpha1.StateAvailable
+			hwdata := createHardwareData("test-bmh", "test-ns")
+
+			client := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(bmh, hwdata).
+				Build()
+
+			result, err := GetResources(ctx, logger, client)
+			Expect(err).ToNot(HaveOccurred())
+
+			response, ok := result.(inventory.GetResources200JSONResponse)
+			Expect(ok).To(BeTrue())
+			Expect(response).To(BeEmpty())
+		})
+
+		It("should include only BMHs whose pool label maps to a ResourcePool CR", func() {
+			poolUID := types.UID("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
+			goodBMH := createBMHWithLabels("good-bmh", "test-ns", map[string]string{
+				constants.LabelResourcePoolName: "pool123",
+			})
+			goodBMH.Status.Provisioning.State = metal3v1alpha1.StateAvailable
+			badBMH := createBMHWithLabels("bad-bmh", "test-ns", map[string]string{
+				constants.LabelResourcePoolName: "missing-pool",
+			})
+			badBMH.Status.Provisioning.State = metal3v1alpha1.StateAvailable
+			hwGood := createHardwareData("good-bmh", "test-ns")
+			hwBad := createHardwareData("bad-bmh", "test-ns")
+			pool := &inventoryv1alpha1.ResourcePool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "pool123",
+					UID:  poolUID,
+				},
+			}
+
+			client := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(goodBMH, badBMH, hwGood, hwBad, pool).
+				Build()
+
+			result, err := GetResources(ctx, logger, client)
+			Expect(err).ToNot(HaveOccurred())
+
+			response, ok := result.(inventory.GetResources200JSONResponse)
+			Expect(ok).To(BeTrue())
+			Expect(response).To(HaveLen(1))
+			Expect(response[0].Name).To(Equal("good-bmh"))
+			Expect(response[0].ResourcePoolId).To(Equal(string(poolUID)))
+		})
 	})
 
 	Describe("Regex patterns", func() {
