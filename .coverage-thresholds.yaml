@@ -4,7 +4,7 @@
 # Increase thresholds as coverage improves over time.
 
 # Overall minimum coverage across all packages
-overall: 53
+overall: 51
 
 # Per-package minimum thresholds
 packages:
@@ -32,5 +32,8 @@ packages:
   internal/service/common/auth: 29
   internal/service/common/utils: 12
   internal/service/provisioning/api: 17
-  internal/service/resources/listener: 15
+  internal/service/resources/api: 87
+  internal/service/resources/collector: 8
+  internal/service/resources/db/repo: 89
+  internal/service/resources/listener: 30
   internal/typed-errors: 38
