@@ -17,6 +17,7 @@ import (
 
 	commonrepo "github.com/openshift-kni/oran-o2ims/internal/service/common/repo"
 	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/repo"
 )
 
@@ -665,6 +666,60 @@ var _ = Describe("DeploymentManager Repository", func() {
 			Expect(mock.ExpectationsWereMet()).To(Succeed())
 		})
 	})
+
+	Describe("GetDeploymentManagersNotIn", func() {
+		It("should return deployment managers not in the given list", func() {
+			dmID1 := uuid.New()
+			dmID2 := uuid.New()
+			excluded := uuid.New()
+
+			rows := pgxmock.NewRows([]string{
+				"deployment_manager_id", "name", "description", "o_cloud_id",
+				"url", "locations", "capabilities", "capacity_info",
+				"data_source_id", "generation_id", "extensions",
+			}).AddRow(
+				dmID1, "dm1", "First DM", uuid.New(),
+				"http://dm1.example.com", nil, nil, nil,
+				uuid.New(), 1, nil,
+			).AddRow(
+				dmID2, "dm2", "Second DM", uuid.New(),
+				"http://dm2.example.com", nil, nil, nil,
+				uuid.New(), 1, nil,
+			)
+
+			mock.ExpectQuery(`SELECT .* FROM deployment_manager WHERE .* NOT IN`).
+				WithArgs(excluded).
+				WillReturnRows(rows)
+
+			result, err := repository.GetDeploymentManagersNotIn(ctx, []any{excluded})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(HaveLen(2))
+			Expect(result[0].DeploymentManagerID).To(Equal(dmID1))
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+
+		It("should return all deployment managers when keys list is empty", func() {
+			dmID := uuid.New()
+			rows := pgxmock.NewRows([]string{
+				"deployment_manager_id", "name", "description", "o_cloud_id",
+				"url", "locations", "capabilities", "capacity_info",
+				"data_source_id", "generation_id", "extensions",
+			}).AddRow(
+				dmID, "dm1", "DM", uuid.New(),
+				"http://dm.example.com", nil, nil, nil,
+				uuid.New(), 1, nil,
+			)
+
+			mock.ExpectQuery(`SELECT .* FROM deployment_manager`).WillReturnRows(rows)
+
+			result, err := repository.GetDeploymentManagersNotIn(ctx, []any{})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(HaveLen(1))
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+	})
 })
 
 var _ = Describe("Batch Query Functions", func() {
@@ -952,6 +1007,432 @@ var _ = Describe("Batch Query Functions", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(BeEmpty())
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+	})
+})
+
+var _ = Describe("Extended ResourcesRepository coverage", func() {
+	var (
+		ctx        context.Context
+		mock       pgxmock.PgxPoolIface
+		repository *repo.ResourcesRepository
+	)
+
+	BeforeEach(func() {
+		var err error
+		ctx = context.Background()
+		mock, err = pgxmock.NewPool()
+		Expect(err).ToNot(HaveOccurred())
+		repository = &repo.ResourcesRepository{
+			CommonRepository: commonrepo.CommonRepository{Db: mock},
+		}
+	})
+
+	AfterEach(func() {
+		mock.Close()
+	})
+
+	Describe("GetResourceTypes", func() {
+		It("should return all resource types", func() {
+			rtID := uuid.New()
+			rows := pgxmock.NewRows([]string{
+				"resource_type_id", "name", "description", "vendor", "model", "version",
+				"resource_kind", "resource_class", "extensions", "data_source_id", "generation_id", "created_at",
+			}).AddRow(
+				rtID, "rt1", "desc", "ven", "mod", "1.0",
+				string(models.ResourceKindPhysical), string(models.ResourceClassCompute),
+				nil, uuid.New(), 1, nil,
+			)
+
+			mock.ExpectQuery(`SELECT .* FROM resource_type`).WillReturnRows(rows)
+
+			result, err := repository.GetResourceTypes(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(HaveLen(1))
+			Expect(result[0].ResourceTypeID).To(Equal(rtID))
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+	})
+
+	Describe("GetResourceType", func() {
+		It("should return a resource type by ID", func() {
+			rtID := uuid.New()
+			rows := pgxmock.NewRows([]string{
+				"resource_type_id", "name", "description", "vendor", "model", "version",
+				"resource_kind", "resource_class", "extensions", "data_source_id", "generation_id", "created_at",
+			}).AddRow(
+				rtID, "rt1", "desc", "ven", "mod", "1.0",
+				string(models.ResourceKindPhysical), string(models.ResourceClassCompute),
+				nil, uuid.New(), 1, nil,
+			)
+
+			mock.ExpectQuery(`SELECT .* FROM resource_type WHERE`).
+				WithArgs(rtID).
+				WillReturnRows(rows)
+
+			result, err := repository.GetResourceType(ctx, rtID)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.ResourceTypeID).To(Equal(rtID))
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+	})
+
+	Describe("GetResourcePoolResources", func() {
+		It("should return resources for a pool", func() {
+			poolID := uuid.New()
+			resID := uuid.New()
+			rtID := uuid.New()
+			dsID := uuid.New()
+			rows := pgxmock.NewRows([]string{
+				"resource_id", "description", "resource_type_id", "global_asset_id", "resource_pool_id",
+				"extensions", "groups", "tags", "data_source_id", "generation_id", "external_id", "created_at",
+			}).AddRow(
+				resID, "r1", rtID, nil, poolID,
+				nil, nil, nil, dsID, 1, "ext", nil,
+			)
+
+			mock.ExpectQuery(`SELECT .* FROM resource WHERE`).
+				WithArgs(poolID).
+				WillReturnRows(rows)
+
+			result, err := repository.GetResourcePoolResources(ctx, poolID)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(HaveLen(1))
+			Expect(result[0].ResourceID).To(Equal(resID))
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+	})
+
+	Describe("GetResource", func() {
+		It("should return a resource by ID", func() {
+			resID := uuid.New()
+			poolID := uuid.New()
+			rtID := uuid.New()
+			dsID := uuid.New()
+			rows := pgxmock.NewRows([]string{
+				"resource_id", "description", "resource_type_id", "global_asset_id", "resource_pool_id",
+				"extensions", "groups", "tags", "data_source_id", "generation_id", "external_id", "created_at",
+			}).AddRow(
+				resID, "r1", rtID, nil, poolID,
+				nil, nil, nil, dsID, 1, "ext", nil,
+			)
+
+			mock.ExpectQuery(`SELECT .* FROM resource WHERE`).
+				WithArgs(resID).
+				WillReturnRows(rows)
+
+			result, err := repository.GetResource(ctx, resID)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.ResourceID).To(Equal(resID))
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+	})
+
+	Describe("FindStaleResources", func() {
+		It("should return resources below generation for data source", func() {
+			dsID := uuid.New()
+			resID := uuid.New()
+			rows := pgxmock.NewRows([]string{
+				"resource_id", "description", "resource_type_id", "global_asset_id", "resource_pool_id",
+				"extensions", "groups", "tags", "data_source_id", "generation_id", "external_id", "created_at",
+			}).AddRow(
+				resID, "r1", uuid.New(), nil, uuid.New(),
+				nil, nil, nil, dsID, 0, "ext", nil,
+			)
+
+			mock.ExpectQuery(`SELECT .* FROM resource WHERE`).
+				WithArgs(dsID, 5).
+				WillReturnRows(rows)
+
+			result, err := repository.FindStaleResources(ctx, dsID, 5)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(HaveLen(1))
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+	})
+
+	Describe("FindStaleResourcePools", func() {
+		It("should return resource pools below generation for data source", func() {
+			dsID := uuid.New()
+			poolID := uuid.New()
+			siteID := uuid.New()
+			rows := pgxmock.NewRows([]string{
+				"resource_pool_id", "name", "description", "o_cloud_site_id",
+				"extensions", "data_source_id", "generation_id", "external_id", "created_at",
+			}).AddRow(
+				poolID, "p1", "d", siteID,
+				nil, dsID, 0, "ext", nil,
+			)
+
+			mock.ExpectQuery(`SELECT .* FROM resource_pool WHERE`).
+				WithArgs(dsID, 3).
+				WillReturnRows(rows)
+
+			result, err := repository.FindStaleResourcePools(ctx, dsID, 3)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(HaveLen(1))
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+	})
+
+	Describe("FindStaleResourceTypes", func() {
+		It("should return resource types below generation for data source", func() {
+			dsID := uuid.New()
+			rtID := uuid.New()
+			rows := pgxmock.NewRows([]string{
+				"resource_type_id", "name", "description", "vendor", "model", "version",
+				"resource_kind", "resource_class", "extensions", "data_source_id", "generation_id", "created_at",
+			}).AddRow(
+				rtID, "rt1", "d", "v", "m", "1",
+				string(models.ResourceKindPhysical), string(models.ResourceClassCompute),
+				nil, dsID, 0, nil,
+			)
+
+			mock.ExpectQuery(`SELECT .* FROM resource_type WHERE`).
+				WithArgs(dsID, 2).
+				WillReturnRows(rows)
+
+			result, err := repository.FindStaleResourceTypes(ctx, dsID, 2)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(HaveLen(1))
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+	})
+
+	Describe("GetAlarmDictionaries", func() {
+		It("should return all alarm dictionaries", func() {
+			adID := uuid.New()
+			rtID := uuid.New()
+			rows := pgxmock.NewRows([]string{
+				"alarm_dictionary_id", "alarm_dictionary_version", "alarm_dictionary_schema_version",
+				"entity_type", "vendor", "management_interface_id", "pk_notification_field",
+				"resource_type_id", "created_at",
+			}).AddRow(
+				adID, "v1", "s1", "e", "ven",
+				[]string{"m"}, []string{"pk"}, rtID, nil,
+			)
+
+			mock.ExpectQuery(`SELECT .* FROM alarm_dictionary`).WillReturnRows(rows)
+
+			result, err := repository.GetAlarmDictionaries(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(HaveLen(1))
+			Expect(result[0].AlarmDictionaryID).To(Equal(adID))
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+	})
+
+	Describe("GetAlarmDictionary", func() {
+		It("should return an alarm dictionary by ID", func() {
+			adID := uuid.New()
+			rtID := uuid.New()
+			rows := pgxmock.NewRows([]string{
+				"alarm_dictionary_id", "alarm_dictionary_version", "alarm_dictionary_schema_version",
+				"entity_type", "vendor", "management_interface_id", "pk_notification_field",
+				"resource_type_id", "created_at",
+			}).AddRow(
+				adID, "v1", "s1", "e", "ven",
+				[]string{"m"}, []string{"pk"}, rtID, nil,
+			)
+
+			mock.ExpectQuery(`SELECT .* FROM alarm_dictionary WHERE`).
+				WithArgs(adID).
+				WillReturnRows(rows)
+
+			result, err := repository.GetAlarmDictionary(ctx, adID)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.AlarmDictionaryID).To(Equal(adID))
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+	})
+
+	Describe("GetResourceTypeAlarmDictionary", func() {
+		It("should return alarm dictionaries for a resource type", func() {
+			adID := uuid.New()
+			rtID := uuid.New()
+			rows := pgxmock.NewRows([]string{
+				"alarm_dictionary_id", "alarm_dictionary_version", "alarm_dictionary_schema_version",
+				"entity_type", "vendor", "management_interface_id", "pk_notification_field",
+				"resource_type_id", "created_at",
+			}).AddRow(
+				adID, "v1", "s1", "e", "ven",
+				[]string{"m"}, []string{"pk"}, rtID, nil,
+			)
+
+			mock.ExpectQuery(`SELECT .* FROM alarm_dictionary WHERE`).
+				WithArgs(rtID).
+				WillReturnRows(rows)
+
+			result, err := repository.GetResourceTypeAlarmDictionary(ctx, rtID)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(HaveLen(1))
+			Expect(result[0].ResourceTypeID).To(Equal(rtID))
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+	})
+
+	Describe("UpsertAlarmDefinitions", func() {
+		It("should return empty slice when no records", func() {
+			out, err := repository.UpsertAlarmDefinitions(ctx, mock, nil)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(out).To(BeEmpty())
+			out, err = repository.UpsertAlarmDefinitions(ctx, mock, []models.AlarmDefinition{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(out).To(BeEmpty())
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+
+		It("should upsert alarm definitions", func() {
+			dictID := uuid.New()
+			def := models.AlarmDefinition{
+				AlarmName: "a", AlarmLastChange: "lc", AlarmChangeType: "ct",
+				AlarmDescription: "d", ProposedRepairActions: "p", ClearingType: "clr",
+				ManagementInterfaceID: []string{"m"}, PKNotificationField: []string{"pk"},
+				Severity: "s", AlarmDictionaryID: &dictID,
+			}
+			defID := uuid.New()
+			ret := pgxmock.NewRows([]string{"alarm_definition_id"}).AddRow(defID)
+
+			mock.ExpectQuery(`INSERT INTO alarm_definition\(`).
+				WithArgs("a", "lc", "ct", "d", "p", "clr", []string{"m"}, []string{"pk"}, pgxmock.AnyArg(), "s", pgxmock.AnyArg()).
+				WillReturnRows(ret)
+
+			out, err := repository.UpsertAlarmDefinitions(ctx, mock, []models.AlarmDefinition{def})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(out).To(HaveLen(1))
+			Expect(out[0].AlarmDefinitionID).To(Equal(defID))
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+	})
+
+	Describe("UpsertAlarmDictionary", func() {
+		It("should upsert an alarm dictionary", func() {
+			rtID := uuid.New()
+			rec := models.AlarmDictionary{
+				AlarmDictionaryVersion: "v", AlarmDictionarySchemaVersion: "s",
+				EntityType: "e", Vendor: "ven",
+				ManagementInterfaceID: []string{"m"}, PKNotificationField: []string{"pk"},
+				ResourceTypeID: rtID,
+			}
+			adID := uuid.New()
+			ret := pgxmock.NewRows([]string{"alarm_dictionary_id"}).AddRow(adID)
+
+			mock.ExpectQuery(`INSERT INTO alarm_dictionary\(`).
+				WithArgs("v", "s", "e", "ven", []string{"m"}, []string{"pk"}, rtID).
+				WillReturnRows(ret)
+
+			out, err := repository.UpsertAlarmDictionary(ctx, mock, rec)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(out.AlarmDictionaryID).To(Equal(adID))
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+	})
+
+	Describe("CreateResourcePool", func() {
+		It("should insert and return a resource pool", func() {
+			poolID := uuid.New()
+			siteID := uuid.New()
+			dsID := uuid.New()
+			pool := &models.ResourcePool{
+				ResourcePoolID: poolID,
+				Name:           "n", Description: "d",
+				OCloudSiteID: siteID, DataSourceID: dsID,
+				GenerationID: 1, ExternalID: "ext",
+			}
+			ret := pgxmock.NewRows([]string{
+				"resource_pool_id", "name", "description", "o_cloud_site_id",
+				"extensions", "data_source_id", "generation_id", "external_id", "created_at",
+			}).AddRow(poolID, "n", "d", siteID, nil, dsID, 1, "ext", nil)
+
+			mock.ExpectQuery(`INSERT INTO resource_pool\(`).
+				WithArgs(dsID, "d", pgxmock.AnyArg(), "ext", 1, "n", siteID, poolID).
+				WillReturnRows(ret)
+
+			out, err := repository.CreateResourcePool(ctx, pool)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(out.ResourcePoolID).To(Equal(poolID))
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+	})
+
+	Describe("UpdateResourcePool", func() {
+		It("should update and return a resource pool", func() {
+			poolID := uuid.New()
+			siteID := uuid.New()
+			dsID := uuid.New()
+			pool := &models.ResourcePool{
+				ResourcePoolID: poolID,
+				Name:           "n2", Description: "d2",
+				OCloudSiteID: siteID, DataSourceID: dsID,
+				GenerationID: 2, ExternalID: "ext2",
+			}
+			ret := pgxmock.NewRows([]string{
+				"resource_pool_id", "name", "description", "o_cloud_site_id",
+				"extensions", "data_source_id", "generation_id", "external_id", "created_at",
+			}).AddRow(poolID, "n2", "d2", siteID, nil, dsID, 2, "ext2", nil)
+
+			mock.ExpectQuery(`UPDATE resource_pool SET`).
+				WithArgs(dsID, "d2", pgxmock.AnyArg(), "ext2", 2, "n2", siteID, poolID, poolID).
+				WillReturnRows(ret)
+
+			out, err := repository.UpdateResourcePool(ctx, pool)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(out.Name).To(Equal("n2"))
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+	})
+
+	Describe("CreateResource", func() {
+		It("should insert and return a resource", func() {
+			resID := uuid.New()
+			poolID := uuid.New()
+			rtID := uuid.New()
+			dsID := uuid.New()
+			res := &models.Resource{
+				ResourceID: resID, Description: "d",
+				ResourceTypeID: rtID, ResourcePoolID: poolID,
+				DataSourceID: dsID, GenerationID: 1, ExternalID: "e",
+			}
+			ret := pgxmock.NewRows([]string{
+				"resource_id", "description", "resource_type_id", "global_asset_id", "resource_pool_id",
+				"extensions", "groups", "tags", "data_source_id", "generation_id", "external_id", "created_at",
+			}).AddRow(resID, "d", rtID, nil, poolID, nil, nil, nil, dsID, 1, "e", nil)
+
+			mock.ExpectQuery(`INSERT INTO resource\(`).
+				WithArgs(dsID, "d", pgxmock.AnyArg(), "e", 1, resID, poolID, rtID).
+				WillReturnRows(ret)
+
+			out, err := repository.CreateResource(ctx, res)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(out.ResourceID).To(Equal(resID))
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+	})
+
+	Describe("UpdateResource", func() {
+		It("should update and return a resource", func() {
+			resID := uuid.New()
+			poolID := uuid.New()
+			rtID := uuid.New()
+			dsID := uuid.New()
+			res := &models.Resource{
+				ResourceID: resID, Description: "d2",
+				ResourceTypeID: rtID, ResourcePoolID: poolID,
+				DataSourceID: dsID, GenerationID: 2, ExternalID: "e2",
+			}
+			ret := pgxmock.NewRows([]string{
+				"resource_id", "description", "resource_type_id", "global_asset_id", "resource_pool_id",
+				"extensions", "groups", "tags", "data_source_id", "generation_id", "external_id", "created_at",
+			}).AddRow(resID, "d2", rtID, nil, poolID, nil, nil, nil, dsID, 2, "e2", nil)
+
+			mock.ExpectQuery(`UPDATE resource SET`).
+				WithArgs(dsID, "d2", pgxmock.AnyArg(), "e2", 2, resID, poolID, rtID, resID).
+				WillReturnRows(ret)
+
+			out, err := repository.UpdateResource(ctx, res)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(out.Description).To(Equal("d2"))
 			Expect(mock.ExpectationsWereMet()).To(Succeed())
 		})
 	})

@@ -131,4 +131,77 @@ var _ = Describe("Hierarchy Helpers", func() {
 			Expect(result).To(BeEmpty())
 		})
 	})
+
+	Describe("convertCoordinateToGeoJSON", func() {
+		It("returns nil for nil coordinate", func() {
+			m, err := convertCoordinateToGeoJSON(nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(m).To(BeNil())
+		})
+
+		It("builds a Point without altitude", func() {
+			m, err := convertCoordinateToGeoJSON(&inventoryv1alpha1.GeoLocation{
+				Latitude:  "38.8951",
+				Longitude: "-77.0364",
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(m["type"]).To(Equal("Point"))
+			Expect(m["coordinates"]).To(Equal([]float64{-77.0364, 38.8951}))
+		})
+
+		It("includes altitude when set", func() {
+			alt := "100.5"
+			m, err := convertCoordinateToGeoJSON(&inventoryv1alpha1.GeoLocation{
+				Latitude:  "0",
+				Longitude: "0",
+				Altitude:  &alt,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(m["coordinates"]).To(Equal([]float64{0, 0, 100.5}))
+		})
+
+		It("returns error on invalid latitude", func() {
+			_, err := convertCoordinateToGeoJSON(&inventoryv1alpha1.GeoLocation{
+				Latitude:  "x",
+				Longitude: "0",
+			})
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("returns error on invalid longitude", func() {
+			_, err := convertCoordinateToGeoJSON(&inventoryv1alpha1.GeoLocation{
+				Latitude:  "0",
+				Longitude: "y",
+			})
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("returns error on invalid altitude", func() {
+			bad := "z"
+			_, err := convertCoordinateToGeoJSON(&inventoryv1alpha1.GeoLocation{
+				Latitude:  "1",
+				Longitude: "2",
+				Altitude:  &bad,
+			})
+			Expect(err).To(HaveOccurred())
+		})
+	})
+
+	Describe("convertCivicAddress", func() {
+		It("returns nil for empty input", func() {
+			Expect(convertCivicAddress(nil)).To(BeNil())
+			Expect(convertCivicAddress([]inventoryv1alpha1.CivicAddressElement{})).To(BeNil())
+		})
+
+		It("maps civic elements to generic maps", func() {
+			out := convertCivicAddress([]inventoryv1alpha1.CivicAddressElement{
+				{CaType: 1, CaValue: "CA"},
+				{CaType: 6, CaValue: "Toronto"},
+			})
+			Expect(out).To(HaveLen(2))
+			Expect(out[0]["caType"]).To(Equal(1))
+			Expect(out[0]["caValue"]).To(Equal("CA"))
+			Expect(out[1]["caValue"]).To(Equal("Toronto"))
+		})
+	})
 })

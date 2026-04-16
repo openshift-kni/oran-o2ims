@@ -102,6 +102,16 @@ var _ = Describe("Serve", func() {
 	})
 
 	Describe("Function behavior and error handling", func() {
+		It("should use the default logger when logger is nil", func() {
+			timeoutCtx, timeoutCancel := context.WithTimeout(ctx, 5*time.Second)
+			defer timeoutCancel()
+
+			err := Serve(timeoutCtx, nil, config, mockClient, mockClient)
+			if err != nil {
+				Expect(err.Error()).NotTo(ContainSubstring("swagger"))
+			}
+		})
+
 		It("should fail early when not in Kubernetes environment", func() {
 			// Create a context with short timeout to prevent hanging in CI
 			timeoutCtx, timeoutCancel := context.WithTimeout(ctx, 5*time.Second)
