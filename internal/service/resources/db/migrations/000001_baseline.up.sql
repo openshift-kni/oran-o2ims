@@ -109,6 +109,10 @@ CREATE TABLE IF NOT EXISTS resource
     FOREIGN KEY (resource_pool_id) REFERENCES resource_pool (resource_pool_id) ON DELETE CASCADE
 );
 
+-- Index on resource.resource_pool_id for pool -> resources lookups and CASCADE deletes
+CREATE INDEX IF NOT EXISTS idx_resource_resource_pool_id
+    ON resource (resource_pool_id);
+
 -- Table: resource_pool_member
 CREATE TABLE IF NOT EXISTS resource_pool_member
 (
