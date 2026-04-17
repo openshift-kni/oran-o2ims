@@ -186,7 +186,7 @@ func fetchBMHList(
 
 	if len(bmhList.Items) == 0 {
 		logger.WarnContext(ctx, "No BareMetalHosts found matching criteria",
-			slog.String("resourcePool", nodeGroupData.ResourcePoolId))
+			slog.String("resourcePoolName", nodeGroupData.ResourcePoolId))
 		return bmhList, nil
 	}
 
