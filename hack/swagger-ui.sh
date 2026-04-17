@@ -104,10 +104,27 @@ start_swagger_ui() {
         exit 1
     fi
 
+    # Check for container runtime (binary exists and daemon is reachable)
+    if ! command -v "${ENGINE}" &> /dev/null; then
+        echo "Error: ${ENGINE} is not installed."
+        echo "  Set ENGINE=podman or ENGINE=docker, or install one of them."
+        exit 1
+    fi
+    if ! ${ENGINE} info &> /dev/null; then
+        echo "Error: ${ENGINE} is installed but not running or not accessible."
+        echo "  Start the daemon, or set ENGINE to a working runtime (e.g. ENGINE=podman)."
+        exit 1
+    fi
+
+    # Clean up stale temp dirs from previous runs that weren't stopped
+    for stale in "${TMPDIR_PREFIX}"*; do
+        [ -d "${stale}" ] && [ -O "${stale}" ] && rm -rf -- "${stale}"
+    done
+
     # Create temporary directory with identifiable prefix and set up cleanup trap
     OPENAPI_BUNDLED_DIR="$(mktemp -d "${TMPDIR_PREFIX}XXXXXX")"
     chmod 755 "${OPENAPI_BUNDLED_DIR}"
-    trap cleanup_on_error EXIT
+    trap cleanup_on_error EXIT INT TERM
 
     echo "Bundling OpenAPI specs to ${OPENAPI_BUNDLED_DIR}..."
     for spec in "${OPENAPI_SPECS[@]}"; do
@@ -151,8 +168,8 @@ start_swagger_ui() {
         -p "${SWAGGER_UI_PORT}:8080" \
         -e URLS="${URLS}" \
         -e "URLS_PRIMARY_NAME=Infrastructure Inventory" \
-        -v "${OPENAPI_BUNDLED_DIR}:/usr/share/nginx/html/api:ro" \
-        swaggerapi/swagger-ui
+        -v "${OPENAPI_BUNDLED_DIR}:/usr/share/nginx/html/api:ro,Z" \
+        docker.io/swaggerapi/swagger-ui
 
     # Save the temp directory path for cleanup on stop
     mkdir -p "${STATE_DIR}" && chmod 700 "${STATE_DIR}"
@@ -165,7 +182,7 @@ start_swagger_ui() {
     echo ""
     echo "=============================================="
     echo "  Swagger UI is running!"
-    echo "  Open your browser at: http://localhost:${SWAGGER_UI_PORT}"
+    echo "  Open your browser at: http://127.0.0.1:${SWAGGER_UI_PORT}"
     echo ""
     echo "  Available APIs (use dropdown in top-right):"
     for spec in "${OPENAPI_SPECS[@]}"; do
