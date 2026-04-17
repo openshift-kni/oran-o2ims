@@ -170,10 +170,10 @@ func (d *OCloudSiteDataSource) handleOCloudSiteWatchEvent(ctx context.Context, s
 
 	// If CR is not ready (e.g., validation failed, parent missing), treat as deletion
 	// from API perspective. This ensures stale data is removed when CRs become invalid.
-	if eventType != async.Deleted && !isResourceReady(site.Status.Conditions) {
+	if eventType != async.Deleted && !inventoryv1alpha1.IsResourceReady(site.Status.Conditions) {
 		slog.Debug("OCloudSite not ready, treating as deletion",
 			"name", site.Name,
-			"reason", getReadyReason(site.Status.Conditions))
+			"reason", inventoryv1alpha1.GetReadyReason(site.Status.Conditions))
 		eventType = async.Deleted
 	}
 

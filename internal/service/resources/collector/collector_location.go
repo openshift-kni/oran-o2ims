@@ -171,10 +171,10 @@ func (d *LocationDataSource) handleLocationWatchEvent(ctx context.Context, locat
 
 	// If CR is not ready (e.g., validation failed, parent missing), treat as deletion
 	// from API perspective. This ensures stale data is removed when CRs become invalid.
-	if eventType != async.Deleted && !isResourceReady(location.Status.Conditions) {
+	if eventType != async.Deleted && !inventoryv1alpha1.IsResourceReady(location.Status.Conditions) {
 		slog.Debug("Location not ready, treating as deletion",
 			"name", location.Name,
-			"reason", getReadyReason(location.Status.Conditions))
+			"reason", inventoryv1alpha1.GetReadyReason(location.Status.Conditions))
 		eventType = async.Deleted
 	}
 

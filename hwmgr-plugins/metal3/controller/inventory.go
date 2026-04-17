@@ -443,6 +443,12 @@ func GetResources(ctx context.Context,
 	}
 	poolNameToUID := make(map[string]string, len(poolList.Items))
 	for _, pool := range poolList.Items {
+		if !inventoryv1alpha1.IsResourceReady(pool.Status.Conditions) {
+			logger.DebugContext(ctx, "skipping ResourcePool: not Ready",
+				slog.String("pool", pool.Name),
+				slog.String("reason", inventoryv1alpha1.GetReadyReason(pool.Status.Conditions)))
+			continue
+		}
 		poolNameToUID[pool.Name] = string(pool.UID)
 	}
 

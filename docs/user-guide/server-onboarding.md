@@ -438,11 +438,13 @@ $ curl -sk -H "Authorization: Bearer ${SA_TOKEN}" \
 The hardware plugin response shows the raw data before it's stored in the database.
 Check for:
 
-- **Empty response `[]`**: No BMHs match the criteria (check labels and provisioning state)
-- **`resourcePoolId` is empty**: The BMH has a `resourcePoolName` label but the corresponding
-  ResourcePool CR doesn't exist or isn't Ready
-- **BMH missing**: Verify the BMH has the `resources.clcm.openshift.io/resourcePoolName` label
-  and is in a valid provisioning state (available, provisioned, etc.)
+- **Empty response `[]`**: No BMHs match the criteria. Common causes:
+  - BMH is missing the `resources.clcm.openshift.io/resourcePoolName` label
+  - BMH is not in a valid provisioning state (available, provisioned, etc.)
+  - The referenced ResourcePool CR doesn't exist or its Ready condition is not True
+- **BMH missing from response**: The plugin only includes BMHs whose `resourcePoolName`
+  label maps to a ResourcePool CR with `Ready=True`. Verify the ResourcePool status:
+  `oc get resourcepool <name> -n oran-o2ims -o jsonpath='{.status.conditions}'`
 
 When done, stop the port-forward:
 

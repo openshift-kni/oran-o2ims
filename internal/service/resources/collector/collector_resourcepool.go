@@ -170,10 +170,10 @@ func (d *ResourcePoolDataSource) handleResourcePoolWatchEvent(ctx context.Contex
 
 	// If CR is not ready (e.g., validation failed, parent missing), treat as deletion
 	// from API perspective. This ensures stale data is removed when CRs become invalid.
-	if eventType != async.Deleted && !isResourceReady(pool.Status.Conditions) {
+	if eventType != async.Deleted && !inventoryv1alpha1.IsResourceReady(pool.Status.Conditions) {
 		slog.Debug("ResourcePool not ready, treating as deletion",
 			"name", pool.Name,
-			"reason", getReadyReason(pool.Status.Conditions))
+			"reason", inventoryv1alpha1.GetReadyReason(pool.Status.Conditions))
 		eventType = async.Deleted
 	}
 
