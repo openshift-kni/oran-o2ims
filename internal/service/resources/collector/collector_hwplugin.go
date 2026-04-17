@@ -152,24 +152,15 @@ func (d *HwPluginDataSource) GetResources(ctx context.Context) ([]models.Resourc
 
 	resources := make([]models.Resource, 0)
 	for _, resource := range *result.JSON200 {
-		converted, err := d.convertResource(&resource)
-		if err != nil {
-			// Log error but continue processing other resources
-			slog.Error("Skipping resource due to conversion error", "error", err, "resourceId", resource.ResourceId)
-			continue
-		}
+		converted := d.convertResource(&resource)
 		resources = append(resources, *converted)
 	}
 
 	return resources, nil
 }
 
-func (d *HwPluginDataSource) convertResource(resource *inventoryclient.ResourceInfo) (*models.Resource, error) {
-	// Parse the resource ID directly (now it's the BMH UID from the hardware plugin)
-	resourceID, err := uuid.Parse(resource.ResourceId)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse resource ID as UUID: %w", err)
-	}
+func (d *HwPluginDataSource) convertResource(resource *inventoryclient.ResourceInfo) *models.Resource {
+	resourceID := resource.ResourceId
 
 	// ResourcePoolId is the Kubernetes UID of the ResourcePool CR
 	resourcePoolID := resource.ResourcePoolId
@@ -220,5 +211,5 @@ func (d *HwPluginDataSource) convertResource(resource *inventoryclient.ResourceI
 		result.Extensions[storageExtension] = *resource.Storage
 	}
 
-	return result, nil
+	return result
 }

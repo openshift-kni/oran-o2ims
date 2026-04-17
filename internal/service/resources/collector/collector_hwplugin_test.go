@@ -64,7 +64,7 @@ var _ = Describe("HwPluginDataSource", func() {
 			poolID := uuid.MustParse("44444444-4444-4444-4444-444444444444")
 			resID := uuid.MustParse("55555555-5555-5555-5555-555555555555")
 			in := inventoryclient.ResourceInfo{
-				ResourceId:       resID.String(),
+				ResourceId:       resID,
 				ResourcePoolId:   poolID,
 				Description:      "node-a",
 				Vendor:           "Dell",
@@ -76,8 +76,7 @@ var _ = Describe("HwPluginDataSource", func() {
 				HwProfile:        "profile-1",
 				Processors:       []inventoryclient.ProcessorInfo{},
 			}
-			out, err := ds.convertResource(&in)
-			Expect(err).NotTo(HaveOccurred())
+			out := ds.convertResource(&in)
 			Expect(out.ResourceID).To(Equal(resID))
 			Expect(out.ResourcePoolID).To(Equal(poolID))
 			Expect(out.Description).To(Equal("node-a"))
@@ -86,23 +85,6 @@ var _ = Describe("HwPluginDataSource", func() {
 			Expect(out.Extensions[memoryExtension]).To(Equal("16384 MiB"))
 			Expect(out.Extensions[hwProfileExtension]).To(Equal("profile-1"))
 			Expect(out.ExternalID).To(Equal(pluginID + "/" + resID.String()))
-		})
-
-		It("returns error when resource id is not a UUID", func() {
-			in := inventoryclient.ResourceInfo{
-				ResourceId:       "not-a-uuid",
-				ResourcePoolId:   uuid.MustParse("44444444-4444-4444-4444-444444444444"),
-				Vendor:           "Dell",
-				Model:            "R640",
-				Memory:           8192,
-				AdminState:       inventoryclient.ResourceInfoAdminStateUNLOCKED,
-				OperationalState: inventoryclient.ResourceInfoOperationalStateENABLED,
-				UsageState:       inventoryclient.IDLE,
-				Processors:       nil,
-			}
-			_, err := ds.convertResource(&in)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to parse resource ID"))
 		})
 
 		It("includes optional power, labels, allocated, nics, and storage extensions", func() {
@@ -114,7 +96,7 @@ var _ = Describe("HwPluginDataSource", func() {
 			nics := map[string]inventoryclient.NicInfo{"eth0": {Mac: ptr("00:11:22:33:44:55")}}
 			storage := map[string]inventoryclient.StorageInfo{"sda": {SizeBytes: ptrInt64(1024)}}
 			in := inventoryclient.ResourceInfo{
-				ResourceId:       resID.String(),
+				ResourceId:       resID,
 				ResourcePoolId:   poolID,
 				Description:      "full",
 				Vendor:           "Vendor",
@@ -131,8 +113,7 @@ var _ = Describe("HwPluginDataSource", func() {
 				Nics:             &nics,
 				Storage:          &storage,
 			}
-			out, err := ds.convertResource(&in)
-			Expect(err).NotTo(HaveOccurred())
+			out := ds.convertResource(&in)
 			Expect(out.Extensions[powerStateExtension]).To(Equal(string(inventoryclient.ON)))
 			Expect(out.Extensions[labelsExtension]).To(Equal(labels))
 			Expect(out.Extensions[allocatedExtension]).To(BeTrue())

@@ -187,8 +187,8 @@ func getResourceInfoProcessors(hwdata *metal3v1alpha1.HardwareData) []inventory.
 	return processors
 }
 
-func getResourceInfoResourceId(bmh *metal3v1alpha1.BareMetalHost) string {
-	return string(bmh.UID)
+func getResourceInfoResourceId(bmh *metal3v1alpha1.BareMetalHost) uuid.UUID {
+	return uuid.MustParse(string(bmh.UID))
 }
 
 // getResourceInfoResourcePoolUID returns the Kubernetes UID of the ResourcePool CR.

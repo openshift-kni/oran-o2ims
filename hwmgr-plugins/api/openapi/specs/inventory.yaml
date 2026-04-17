@@ -129,7 +129,8 @@ paths:
           required: true
           schema:
             type: string
-          example: server-a
+            format: uuid
+          example: f47ac10b-58cc-4372-a567-0e02b2c3d479
       responses:
         '200':
           description: Successful response
@@ -513,8 +514,9 @@ components:
       properties:
         resourceId:
           type: string
-          description: Identifier for the Resource.
-          example: "server-a"
+          format: uuid
+          description: Identifier for the Resource (BMH metadata.uid).
+          example: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
         resourcePoolId:
           type: string
           format: uuid

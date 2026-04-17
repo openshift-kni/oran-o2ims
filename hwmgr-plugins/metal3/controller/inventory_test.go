@@ -593,7 +593,7 @@ var _ = Describe("Inventory", func() {
 			testUID := types.UID("f47ac10b-58cc-4372-a567-0e02b2c3d479")
 			bmh.UID = testUID
 			result := getResourceInfoResourceId(bmh)
-			Expect(result).To(Equal(string(testUID)))
+			Expect(result).To(Equal(uuid.MustParse(string(testUID))))
 		})
 	})
 
@@ -1144,7 +1144,7 @@ var _ = Describe("Inventory", func() {
 			Expect(result.OperationalState).To(Equal(inventory.ResourceInfoOperationalStateENABLED))
 			Expect(*result.PowerState).To(Equal(inventory.ON))
 			Expect(result.Processors).To(HaveLen(1))
-			Expect(result.ResourceId).To(Equal(string(testUID)))
+			Expect(result.ResourceId).To(Equal(uuid.MustParse(string(testUID))))
 			Expect(result.ResourcePoolId).To(Equal(uuid.MustParse(testPoolUID)))
 			Expect(*result.Tags).To(ContainElement("zone: zone1"))
 			Expect(result.UsageState).To(Equal(inventory.ACTIVE))
@@ -1212,7 +1212,7 @@ var _ = Describe("Inventory", func() {
 
 			resource := response[0]
 			Expect(resource.Name).To(Equal("test-bmh"))
-			Expect(resource.ResourceId).To(Equal(string(testUID)))
+			Expect(resource.ResourceId).To(Equal(uuid.MustParse(string(testUID))))
 			Expect(resource.ResourcePoolId).To(Equal(uuid.MustParse(string(poolUID))))
 			Expect(resource.HwProfile).To(Equal("profile123"))
 		})
@@ -1223,6 +1223,7 @@ var _ = Describe("Inventory", func() {
 			bmh := createBMHWithLabels("test-bmh", "test-ns", map[string]string{
 				constants.LabelResourcePoolName: "pool123",
 			})
+			bmh.UID = types.UID("b2c3d4e5-f6a7-8901-bcde-f12345678901")
 			bmh.Status.Provisioning.State = metal3v1alpha1.StateAvailable
 
 			// Create HardwareData for the BMH
@@ -1299,10 +1300,12 @@ var _ = Describe("Inventory", func() {
 			goodBMH := createBMHWithLabels("good-bmh", "test-ns", map[string]string{
 				constants.LabelResourcePoolName: "pool123",
 			})
+			goodBMH.UID = types.UID("c3d4e5f6-a7b8-9012-cdef-123456789012")
 			goodBMH.Status.Provisioning.State = metal3v1alpha1.StateAvailable
 			badBMH := createBMHWithLabels("bad-bmh", "test-ns", map[string]string{
 				constants.LabelResourcePoolName: "missing-pool",
 			})
+			badBMH.UID = types.UID("d4e5f6a7-b8c9-0123-defa-234567890123")
 			badBMH.Status.Provisioning.State = metal3v1alpha1.StateAvailable
 			hwGood := createHardwareData("good-bmh", "test-ns")
 			hwBad := createHardwareData("bad-bmh", "test-ns")
