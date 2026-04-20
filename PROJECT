@@ -71,15 +71,6 @@ resources:
   controller: true
   domain: openshift.io
   group: clcm
-  kind: HardwareTemplate
-  path: github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1
-  version: v1alpha1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: openshift.io
-  group: clcm
   kind: HardwarePlugin
   path: github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1
   version: v1alpha1

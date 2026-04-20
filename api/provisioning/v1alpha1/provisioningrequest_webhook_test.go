@@ -11,12 +11,11 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
-	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 )
 
 var _ = Describe("ProvisioningRequestValidator", func() {
@@ -78,7 +77,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 					Name:       testClusterTemplateB,
 					Version:    testVersionB,
 					TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
-					Templates: Templates{
+					TemplateDefaults: TemplateDefaults{
 						ClusterInstanceDefaults: "clusterinstance-defaults-v1",
 						PolicyTemplateDefaults:  "policytemplate-defaults-v1",
 					},
@@ -179,7 +178,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 						Name:       "clustertemplate-a",
 						Version:    "v1.0.1",
 						TemplateID: "test-template-id",
-						Templates: Templates{
+						TemplateDefaults: TemplateDefaults{
 							ClusterInstanceDefaults: "defaults-v1",
 							PolicyTemplateDefaults:  "policy-defaults-v1",
 						},
@@ -699,7 +698,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 						Name:       "clustertemplate-a",
 						Version:    "v1.0.1",
 						TemplateID: "test-template-id",
-						Templates: Templates{
+						TemplateDefaults: TemplateDefaults{
 							ClusterInstanceDefaults: "defaults-v1",
 							PolicyTemplateDefaults:  "policy-defaults-v1",
 						},
@@ -726,7 +725,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 						Name:       testClusterTemplateB,
 						Version:    testVersionB,
 						TemplateID: "test-template-id-b",
-						Templates: Templates{
+						TemplateDefaults: TemplateDefaults{
 							ClusterInstanceDefaults: "defaults-v1",
 							PolicyTemplateDefaults:  "policy-defaults-v1",
 						},
@@ -817,210 +816,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 	})
 
 	Describe("ValidateCreate - HwProfile Validation", func() {
-		const hwTemplateNamespace = "oran-o2ims"
-
-		Context("when HwTemplate is set in ClusterTemplate", func() {
-			BeforeEach(func() {
-				// Create a ClusterTemplate referencing a HwTemplate
-				ct := &ClusterTemplate{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "clustertemplate-a.v1.0.1",
-						Namespace: "default",
-					},
-					Spec: ClusterTemplateSpec{
-						Name:       "clustertemplate-a",
-						Version:    "v1.0.1",
-						TemplateID: "test-template-id",
-						Templates: Templates{
-							ClusterInstanceDefaults: "defaults-v1",
-							PolicyTemplateDefaults:  "policy-defaults-v1",
-							HwTemplate:              "hw-template-1",
-						},
-						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testTemplate)},
-					},
-					Status: ClusterTemplateStatus{
-						Conditions: []metav1.Condition{
-							{
-								Type:   string(CTconditionTypes.Validated),
-								Status: metav1.ConditionTrue,
-							},
-						},
-					},
-				}
-				Expect(fakeClient.Create(ctx, ct)).To(Succeed())
-
-				// Create a HardwareTemplate
-				hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "hw-template-1",
-						Namespace: hwTemplateNamespace,
-					},
-					Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-						HardwarePluginRef: "test-plugin",
-						NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-							{
-								Name:      "master",
-								Role:      "master",
-								HwProfile: "profile-sno-du-4",
-							},
-							{
-								Name: "worker",
-								Role: "worker",
-								// No hwProfile set in HardwareTemplate
-							},
-						},
-					},
-				}
-				Expect(fakeClient.Create(ctx, hwTemplate)).To(Succeed())
-			})
-
-			It("should reject create when HardwareProfile CR does not exist", func() {
-				pr := &ProvisioningRequest{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "123e4567-e89b-12d3-a456-426614174000",
-					},
-					Spec: ProvisioningRequestSpec{
-						Name:            "cluster-1",
-						TemplateName:    "clustertemplate-a",
-						TemplateVersion: "v1.0.1",
-						TemplateParameters: runtime.RawExtension{Raw: []byte(`{
-							"oCloudSiteId": "local-123",
-							"nodeClusterName": "exampleCluster",
-							"clusterInstanceParameters": {"additionalNTPSources": ["1.1.1.1"]},
-							"policyTemplateParameters": {"sriov-network-vlan-1": "140"},
-							"hwTemplateParameters": {
-								"nodeGroupData": {
-									"worker": {
-										"hwProfile": "profile-worker-1"
-									}
-								}
-							}
-						}`)},
-					},
-				}
-
-				_, err := validator.ValidateCreate(ctx, pr)
-				Expect(err).To(HaveOccurred())
-				// No HardwareProfile CRs exist, so validation fails for the first nodeGroup checked
-				Expect(err.Error()).To(ContainSubstring("HardwareProfile"))
-				Expect(err.Error()).To(ContainSubstring("does not exist"))
-			})
-
-			It("should succeed when all HardwareProfile CRs exist", func() {
-				// Create the HardwareProfile CRs
-				hwProfile1 := &hwmgmtv1alpha1.HardwareProfile{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "profile-sno-du-4",
-						Namespace: hwTemplateNamespace,
-					},
-					Spec: hwmgmtv1alpha1.HardwareProfileSpec{},
-				}
-				hwProfile2 := &hwmgmtv1alpha1.HardwareProfile{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "profile-worker-1",
-						Namespace: hwTemplateNamespace,
-					},
-					Spec: hwmgmtv1alpha1.HardwareProfileSpec{},
-				}
-				Expect(fakeClient.Create(ctx, hwProfile1)).To(Succeed())
-				Expect(fakeClient.Create(ctx, hwProfile2)).To(Succeed())
-
-				pr := &ProvisioningRequest{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "123e4567-e89b-12d3-a456-426614174000",
-					},
-					Spec: ProvisioningRequestSpec{
-						Name:            "cluster-1",
-						TemplateName:    "clustertemplate-a",
-						TemplateVersion: "v1.0.1",
-						TemplateParameters: runtime.RawExtension{Raw: []byte(`{
-							"oCloudSiteId": "local-123",
-							"nodeClusterName": "exampleCluster",
-							"clusterInstanceParameters": {"additionalNTPSources": ["1.1.1.1"]},
-							"policyTemplateParameters": {"sriov-network-vlan-1": "140"},
-							"hwTemplateParameters": {
-								"nodeGroupData": {
-									"worker": {
-										"hwProfile": "profile-worker-1"
-									}
-								}
-							}
-						}`)},
-					},
-				}
-
-				_, err := validator.ValidateCreate(ctx, pr)
-				Expect(err).NotTo(HaveOccurred())
-			})
-
-			It("should reject when nodeGroup name does not match HardwareTemplate", func() {
-				pr := &ProvisioningRequest{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "123e4567-e89b-12d3-a456-426614174000",
-					},
-					Spec: ProvisioningRequestSpec{
-						Name:            "cluster-1",
-						TemplateName:    "clustertemplate-a",
-						TemplateVersion: "v1.0.1",
-						TemplateParameters: runtime.RawExtension{Raw: []byte(`{
-							"oCloudSiteId": "local-123",
-							"nodeClusterName": "exampleCluster",
-							"clusterInstanceParameters": {"additionalNTPSources": ["1.1.1.1"]},
-							"policyTemplateParameters": {"sriov-network-vlan-1": "140"},
-							"hwTemplateParameters": {
-								"nodeGroupData": {
-									"nonexistent-group": {
-										"hwProfile": "some-profile"
-									}
-								}
-							}
-						}`)},
-					},
-				}
-
-				_, err := validator.ValidateCreate(ctx, pr)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("nonexistent-group"))
-				Expect(err.Error()).To(ContainSubstring("does not match any nodeGroup"))
-			})
-
-			It("should reject when no hwProfile is specified for a nodeGroup", func() {
-				// worker has no hwProfile in HardwareTemplate and no override
-				// Create master's profile so the check gets to worker
-				hwProfile := &hwmgmtv1alpha1.HardwareProfile{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "profile-sno-du-4",
-						Namespace: hwTemplateNamespace,
-					},
-					Spec: hwmgmtv1alpha1.HardwareProfileSpec{},
-				}
-				Expect(fakeClient.Create(ctx, hwProfile)).To(Succeed())
-
-				pr := &ProvisioningRequest{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "123e4567-e89b-12d3-a456-426614174000",
-					},
-					Spec: ProvisioningRequestSpec{
-						Name:            "cluster-1",
-						TemplateName:    "clustertemplate-a",
-						TemplateVersion: "v1.0.1",
-						TemplateParameters: runtime.RawExtension{Raw: []byte(`{
-							"oCloudSiteId": "local-123",
-							"nodeClusterName": "exampleCluster",
-							"clusterInstanceParameters": {"additionalNTPSources": ["1.1.1.1"]},
-							"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
-						}`)},
-					},
-				}
-
-				_, err := validator.ValidateCreate(ctx, pr)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("no hwProfile specified"))
-				Expect(err.Error()).To(ContainSubstring("worker"))
-			})
-		})
-
-		Context("when HwTemplate is empty in ClusterTemplate", func() {
+		Context("when HwMgmtDefaults is empty in ClusterTemplate", func() {
 			It("should skip hwProfile validation", func() {
 				ct := &ClusterTemplate{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1031,10 +827,10 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 						Name:       "clustertemplate-a",
 						Version:    "v1.0.1",
 						TemplateID: "test-template-id",
-						Templates: Templates{
+						TemplateDefaults: TemplateDefaults{
 							ClusterInstanceDefaults: "defaults-v1",
 							PolicyTemplateDefaults:  "policy-defaults-v1",
-							HwTemplate:              "", // empty = hw provisioning skipped
+							HwMgmtDefaults:          HwMgmtDefaults{}, // empty = hw provisioning skipped
 						},
 						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testTemplate)},
 					},
@@ -1069,6 +865,364 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				_, err := validator.ValidateCreate(ctx, pr)
 				Expect(err).NotTo(HaveOccurred())
 			})
+		})
+
+		Context("when HwMgmtDefaults has nodeGroupData", func() {
+			var ct *ClusterTemplate
+
+			BeforeEach(func() {
+				ct = &ClusterTemplate{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "clustertemplate-hw.v1.0.0",
+						Namespace: "default",
+					},
+					Spec: ClusterTemplateSpec{
+						Name:       "clustertemplate-hw",
+						Version:    "v1.0.0",
+						TemplateID: "test-hw-template-id",
+						TemplateDefaults: TemplateDefaults{
+							ClusterInstanceDefaults: "defaults-v1",
+							PolicyTemplateDefaults:  "policy-defaults-v1",
+							HwMgmtDefaults: HwMgmtDefaults{
+								NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+									{Name: "controller", Role: "master"},
+								},
+							},
+						},
+						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testTemplate)},
+					},
+					Status: ClusterTemplateStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(CTconditionTypes.Validated),
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				}
+				Expect(fakeClient.Create(ctx, ct)).To(Succeed())
+			})
+
+			It("should reject a PR referencing a non-existent HardwareProfile", func() {
+				pr := &ProvisioningRequest{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "123e4567-e89b-12d3-a456-426614174001",
+					},
+					Spec: ProvisioningRequestSpec{
+						Name:            "cluster-hw-1",
+						TemplateName:    "clustertemplate-hw",
+						TemplateVersion: "v1.0.0",
+						TemplateParameters: runtime.RawExtension{Raw: []byte(`{
+							"oCloudSiteId": "local-123",
+							"nodeClusterName": "exampleCluster",
+							"clusterInstanceParameters": {"additionalNTPSources": ["1.1.1.1"]},
+							"policyTemplateParameters": {"sriov-network-vlan-1": "140"},
+							"hwMgmtParameters": {
+								"nodeGroupData": [
+									{"name": "controller", "hwProfile": "nonexistent-profile"}
+								]
+							}
+						}`)},
+					},
+				}
+
+				_, err := validator.ValidateCreate(ctx, pr)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("does not exist"))
+			})
+
+			It("should accept a PR referencing an existing HardwareProfile", func() {
+				hwProfile := &hwmgmtv1alpha1.HardwareProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "valid-profile",
+						Namespace: "oran-o2ims",
+					},
+				}
+				Expect(fakeClient.Create(ctx, hwProfile)).To(Succeed())
+
+				pr := &ProvisioningRequest{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "123e4567-e89b-12d3-a456-426614174002",
+					},
+					Spec: ProvisioningRequestSpec{
+						Name:            "cluster-hw-2",
+						TemplateName:    "clustertemplate-hw",
+						TemplateVersion: "v1.0.0",
+						TemplateParameters: runtime.RawExtension{Raw: []byte(`{
+							"oCloudSiteId": "local-123",
+							"nodeClusterName": "exampleCluster",
+							"clusterInstanceParameters": {"additionalNTPSources": ["1.1.1.1"]},
+							"policyTemplateParameters": {"sriov-network-vlan-1": "140"},
+							"hwMgmtParameters": {
+								"nodeGroupData": [
+									{"name": "controller", "hwProfile": "valid-profile"}
+								]
+							}
+						}`)},
+					},
+				}
+
+				_, err := validator.ValidateCreate(ctx, pr)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should skip hwProfile validation when PR has no hwMgmtParameters at all", func() {
+				pr := &ProvisioningRequest{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "123e4567-e89b-12d3-a456-426614174004",
+					},
+					Spec: ProvisioningRequestSpec{
+						Name:            "cluster-hw-4",
+						TemplateName:    "clustertemplate-hw",
+						TemplateVersion: "v1.0.0",
+						TemplateParameters: runtime.RawExtension{Raw: []byte(`{
+							"oCloudSiteId": "local-123",
+							"nodeClusterName": "exampleCluster",
+							"clusterInstanceParameters": {"additionalNTPSources": ["1.1.1.1"]},
+							"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+						}`)},
+					},
+				}
+
+				_, err := validator.ValidateCreate(ctx, pr)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should skip validation when hwMgmtParameters has no nodeGroupData", func() {
+				pr := &ProvisioningRequest{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "123e4567-e89b-12d3-a456-426614174005",
+					},
+					Spec: ProvisioningRequestSpec{
+						Name:            "cluster-hw-5",
+						TemplateName:    "clustertemplate-hw",
+						TemplateVersion: "v1.0.0",
+						TemplateParameters: runtime.RawExtension{Raw: []byte(`{
+							"oCloudSiteId": "local-123",
+							"nodeClusterName": "exampleCluster",
+							"clusterInstanceParameters": {"additionalNTPSources": ["1.1.1.1"]},
+							"policyTemplateParameters": {"sriov-network-vlan-1": "140"},
+							"hwMgmtParameters": {
+								"hardwareProvisioningTimeout": "120m"
+							}
+						}`)},
+					},
+				}
+
+				_, err := validator.ValidateCreate(ctx, pr)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should reject when hwMgmtParameters is not an object", func() {
+				pr := &ProvisioningRequest{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "123e4567-e89b-12d3-a456-426614174007",
+					},
+					Spec: ProvisioningRequestSpec{
+						Name:            "cluster-hw-7",
+						TemplateName:    "clustertemplate-hw",
+						TemplateVersion: "v1.0.0",
+						TemplateParameters: runtime.RawExtension{Raw: []byte(`{
+							"oCloudSiteId": "local-123",
+							"nodeClusterName": "exampleCluster",
+							"clusterInstanceParameters": {"additionalNTPSources": ["1.1.1.1"]},
+							"policyTemplateParameters": {"sriov-network-vlan-1": "140"},
+							"hwMgmtParameters": "not-an-object"
+						}`)},
+					},
+				}
+
+				_, err := validator.ValidateCreate(ctx, pr)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("Invalid type"))
+			})
+
+			It("should skip validation when nodeGroupData is not an array", func() {
+				pr := &ProvisioningRequest{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "123e4567-e89b-12d3-a456-426614174008",
+					},
+					Spec: ProvisioningRequestSpec{
+						Name:            "cluster-hw-8",
+						TemplateName:    "clustertemplate-hw",
+						TemplateVersion: "v1.0.0",
+						TemplateParameters: runtime.RawExtension{Raw: []byte(`{
+							"oCloudSiteId": "local-123",
+							"nodeClusterName": "exampleCluster",
+							"clusterInstanceParameters": {"additionalNTPSources": ["1.1.1.1"]},
+							"policyTemplateParameters": {"sriov-network-vlan-1": "140"},
+							"hwMgmtParameters": {
+								"nodeGroupData": "not-an-array"
+							}
+						}`)},
+					},
+				}
+
+				_, err := validator.ValidateCreate(ctx, pr)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should skip validation when nodeGroupData entry has no hwProfile", func() {
+				pr := &ProvisioningRequest{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "123e4567-e89b-12d3-a456-426614174006",
+					},
+					Spec: ProvisioningRequestSpec{
+						Name:            "cluster-hw-6",
+						TemplateName:    "clustertemplate-hw",
+						TemplateVersion: "v1.0.0",
+						TemplateParameters: runtime.RawExtension{Raw: []byte(`{
+							"oCloudSiteId": "local-123",
+							"nodeClusterName": "exampleCluster",
+							"clusterInstanceParameters": {"additionalNTPSources": ["1.1.1.1"]},
+							"policyTemplateParameters": {"sriov-network-vlan-1": "140"},
+							"hwMgmtParameters": {
+								"nodeGroupData": [
+									{"name": "controller"}
+								]
+							}
+						}`)},
+					},
+				}
+
+				_, err := validator.ValidateCreate(ctx, pr)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should skip validation when PR has no hwMgmtParameters", func() {
+				pr := &ProvisioningRequest{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "123e4567-e89b-12d3-a456-426614174003",
+					},
+					Spec: ProvisioningRequestSpec{
+						Name:            "cluster-hw-3",
+						TemplateName:    "clustertemplate-hw",
+						TemplateVersion: "v1.0.0",
+						TemplateParameters: runtime.RawExtension{Raw: []byte(`{
+							"oCloudSiteId": "local-123",
+							"nodeClusterName": "exampleCluster",
+							"clusterInstanceParameters": {"additionalNTPSources": ["1.1.1.1"]},
+							"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+						}`)},
+					},
+				}
+
+				_, err := validator.ValidateCreate(ctx, pr)
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+	})
+
+	Describe("GetHardwarePluginRef", func() {
+		It("should return default when field is empty", func() {
+			defaults := &HwMgmtDefaults{}
+			Expect(defaults.GetHardwarePluginRef()).To(Equal(hwmgmtv1alpha1.DefaultHardwarePluginRef))
+		})
+
+		It("should return custom value when set", func() {
+			defaults := &HwMgmtDefaults{HardwarePluginRef: "custom-plugin"}
+			Expect(defaults.GetHardwarePluginRef()).To(Equal("custom-plugin"))
+		})
+	})
+
+	Describe("SchemaDefinesHwMgmtParameters", func() {
+		It("should return true when schema defines hwMgmtParameters", func() {
+			ct := &ClusterTemplate{
+				Spec: ClusterTemplateSpec{
+					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testTemplate)},
+				},
+			}
+			Expect(SchemaDefinesHwMgmtParameters(ct)).To(BeTrue())
+		})
+
+		It("should return false when schema has no hwMgmtParameters", func() {
+			ct := &ClusterTemplate{
+				Spec: ClusterTemplateSpec{
+					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`{
+						"properties": {
+							"nodeClusterName": {"type": "string"}
+						}
+					}`)},
+				},
+			}
+			Expect(SchemaDefinesHwMgmtParameters(ct)).To(BeFalse())
+		})
+
+		It("should return false when schema is nil", func() {
+			ct := &ClusterTemplate{}
+			Expect(SchemaDefinesHwMgmtParameters(ct)).To(BeFalse())
+		})
+
+		It("should return false when schema is invalid JSON", func() {
+			ct := &ClusterTemplate{
+				Spec: ClusterTemplateSpec{
+					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`not json`)},
+				},
+			}
+			Expect(SchemaDefinesHwMgmtParameters(ct)).To(BeFalse())
+		})
+
+		It("should return false when schema has no properties key", func() {
+			ct := &ClusterTemplate{
+				Spec: ClusterTemplateSpec{
+					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`{"type": "object"}`)},
+				},
+			}
+			Expect(SchemaDefinesHwMgmtParameters(ct)).To(BeFalse())
+		})
+	})
+
+	Describe("ValidateTemplateInputMatchesSchema - hwMgmt stripping", func() {
+		It("should not reject partial hwMgmtParameters overrides", func() {
+			ct := &ClusterTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ct-hwmgmt-test.v1",
+					Namespace: "default",
+				},
+				Spec: ClusterTemplateSpec{
+					Name:       "ct-hwmgmt-test",
+					Version:    "v1",
+					TemplateID: "test-id",
+					TemplateDefaults: TemplateDefaults{
+						ClusterInstanceDefaults: "defaults-v1",
+						PolicyTemplateDefaults:  "policy-defaults-v1",
+						HwMgmtDefaults: HwMgmtDefaults{
+							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+								{Name: "controller", Role: "master"},
+							},
+						},
+					},
+					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testTemplate)},
+				},
+				Status: ClusterTemplateStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   string(CTconditionTypes.Validated),
+							Status: metav1.ConditionTrue,
+						},
+					},
+				},
+			}
+
+			pr := &ProvisioningRequest{
+				Spec: ProvisioningRequestSpec{
+					TemplateParameters: runtime.RawExtension{Raw: []byte(`{
+						"nodeClusterName": "test",
+						"oCloudSiteId": "site-1",
+						"clusterInstanceParameters": {"additionalNTPSources": ["1.1.1.1"]},
+						"policyTemplateParameters": {"sriov-network-vlan-1": "140"},
+						"hwMgmtParameters": {
+							"nodeGroupData": [
+								{"name": "controller", "hwProfile": "my-profile"}
+							]
+						}
+					}`)},
+				},
+			}
+
+			// Should not fail — hwMgmtParameters properties are stripped before schema validation
+			err := pr.ValidateTemplateInputMatchesSchema(ct)
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 

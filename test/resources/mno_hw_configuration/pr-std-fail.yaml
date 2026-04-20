@@ -9,11 +9,11 @@ spec:
   templateParameters:
     nodeClusterName: std-test
     oCloudSiteId: "local-123"
-    hwTemplateParameters:
+    hwMgmtParameters:
       nodeGroupData:
-        master:
+        - name: master
           hwProfile: dell-r740-bios-2.22.2-bmc-7.00.00.173-nic-16.35.30.06
-        worker:
+        - name: worker
           hwProfile: dell-xr8620t-bios-2.4.0-bmc-7.10.80.00
     policyTemplateParameters: {}
     clusterInstanceParameters:

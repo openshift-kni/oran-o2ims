@@ -11,9 +11,15 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"strings"
+	"time"
 
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // validateProvisioningRequestCR validates the ProvisioningRequest CR
@@ -25,7 +31,7 @@ func (t *provisioningRequestReconcilerTask) validateProvisioningRequestCR(ctx co
 	}
 	t.ctDetails = &clusterTemplateDetails{
 		namespace: clusterTemplate.Namespace,
-		templates: clusterTemplate.Spec.Templates,
+		templates: clusterTemplate.Spec.TemplateDefaults,
 	}
 
 	if err = t.validateAndLoadTimeouts(ctx, clusterTemplate); err != nil {
@@ -44,6 +50,10 @@ func (t *provisioningRequestReconcilerTask) validateProvisioningRequestCR(ctx co
 		return fmt.Errorf("failed to validate PolicyTemplate input: %w", err)
 	}
 
+	if err = t.validateAndMergeHwMgmtInput(ctx, clusterTemplate); err != nil {
+		return fmt.Errorf("failed to validate hwMgmt input: %w", err)
+	}
+
 	// TODO: Verify that ClusterInstance is per ClusterRequest basis.
 	//       There should not be multiple ClusterRequests for the same ClusterInstance.
 	return nil
@@ -59,21 +69,10 @@ func (t *provisioningRequestReconcilerTask) validateAndLoadTimeouts(
 	t.timeouts.hardwareProvisioning = ctlrutils.DefaultHardwareProvisioningTimeout
 	t.timeouts.clusterConfiguration = ctlrutils.DefaultClusterConfigurationTimeout
 
-	// Load hardware provisioning timeout if exists.
-	if !t.isHardwareProvisionSkipped() {
-		hwCmName := clusterTemplate.Spec.Templates.HwTemplate
-		hwTimeout, err := ctlrutils.GetTimeoutFromHWTemplate(ctx, t.client, hwCmName)
-		if err != nil {
-			return fmt.Errorf("failed to get timeout from hardware template %s: %w", hwCmName, err)
-		}
-
-		if hwTimeout != 0 {
-			t.timeouts.hardwareProvisioning = hwTimeout
-		}
-	}
+	// Hardware provisioning timeout is loaded after hwMgmt merge in validateAndMergeHwMgmtInput
 
 	// Load cluster provisioning timeout if exists.
-	ciCmName := clusterTemplate.Spec.Templates.ClusterInstanceDefaults
+	ciCmName := clusterTemplate.Spec.TemplateDefaults.ClusterInstanceDefaults
 	ciCm, err := ctlrutils.GetConfigmap(
 		ctx, t.client, ciCmName, clusterTemplate.Namespace)
 	if err != nil {
@@ -89,7 +88,7 @@ func (t *provisioningRequestReconcilerTask) validateAndLoadTimeouts(
 	}
 
 	// Load configuration timeout if exists.
-	ptCmName := clusterTemplate.Spec.Templates.PolicyTemplateDefaults
+	ptCmName := clusterTemplate.Spec.TemplateDefaults.PolicyTemplateDefaults
 	ptCm, err := ctlrutils.GetConfigmap(
 		ctx, t.client, ptCmName, clusterTemplate.Namespace)
 	if err != nil {
@@ -122,7 +121,7 @@ func (t *provisioningRequestReconcilerTask) validateClusterInstanceInputMatchesS
 
 	// Get the merged ClusterInstance input data
 	mergedClusterInstanceData, err := t.getMergedClusterInputData(
-		ctx, clusterTemplate.Spec.Templates.ClusterInstanceDefaults,
+		ctx, clusterTemplate.Spec.TemplateDefaults.ClusterInstanceDefaults,
 		clusterInstanceMatchingInputMap,
 		ctlrutils.TemplateParamClusterInstance)
 	if err != nil {
@@ -157,7 +156,7 @@ func (t *provisioningRequestReconcilerTask) validatePolicyTemplateInputMatchesSc
 
 	// Get the merged PolicyTemplate input data
 	mergedPolicyTemplateData, err := t.getMergedClusterInputData(
-		ctx, clusterTemplate.Spec.Templates.PolicyTemplateDefaults,
+		ctx, clusterTemplate.Spec.TemplateDefaults.PolicyTemplateDefaults,
 		policyTemplateMatchingInputMap,
 		ctlrutils.TemplateParamPolicyConfig)
 	if err != nil {
@@ -175,6 +174,230 @@ func (t *provisioningRequestReconcilerTask) validatePolicyTemplateInputMatchesSc
 
 	t.clusterInput.policyTemplateData = mergedPolicyTemplateData
 	return nil
+}
+
+// validateAndMergeHwMgmtInput converts the inline hwMgmtDefaults to a map, extracts any
+// hwMgmtParameters from the ProvisioningRequest, performs a name-keyed merge of
+// nodeGroupData, and stores the merged result. It also loads the hardware provisioning
+// timeout from the merged data.
+func (t *provisioningRequestReconcilerTask) validateAndMergeHwMgmtInput(
+	ctx context.Context, clusterTemplate *provisioningv1alpha1.ClusterTemplate) error {
+
+	// Convert the inline hwMgmtDefaults struct to map[string]any for merging
+	hwMgmtDefaults := hwMgmtDefaultsToMap(clusterTemplate.Spec.TemplateDefaults.HwMgmtDefaults)
+
+	// Start with defaults
+	mergedData := maps.Clone(hwMgmtDefaults)
+
+	// Extract hwMgmtParameters from ProvisioningRequest if present.
+	// ExtractMatchingInput returns an error both for unmarshal failures and missing keys.
+	// Missing key is expected (no overrides); unmarshal failure is a real input error.
+	hwMgmtParams, extractErr := provisioningv1alpha1.ExtractMatchingInput(
+		t.object.Spec.TemplateParameters.Raw, ctlrutils.TemplateParamHwMgmt)
+	if extractErr != nil && strings.Contains(extractErr.Error(), "failed to unmarshal") {
+		return ctlrutils.NewInputError("failed to extract %s from templateParameters: %s",
+			ctlrutils.TemplateParamHwMgmt, extractErr.Error())
+	}
+	if hwMgmtParams != nil {
+		if !provisioningv1alpha1.SchemaDefinesHwMgmtParameters(clusterTemplate) {
+			return ctlrutils.NewInputError(
+				"templateParameters.%s is not defined in ClusterTemplate %q spec.templateParameterSchema",
+				ctlrutils.TemplateParamHwMgmt, clusterTemplate.Name)
+		}
+
+		// Validate the raw hwMgmtParameters input against the CT's hwMgmt subschema
+		hwMgmtSubSchema, err := provisioningv1alpha1.ExtractSubSchema(
+			clusterTemplate.Spec.TemplateParameterSchema.Raw, ctlrutils.TemplateParamHwMgmt)
+		if err == nil {
+			if err := provisioningv1alpha1.ValidateJsonAgainstJsonSchema(hwMgmtSubSchema, hwMgmtParams); err != nil {
+				return ctlrutils.NewInputError(
+					"templateParameters.%s does not match the schema defined in ClusterTemplate (%s): %s",
+					ctlrutils.TemplateParamHwMgmt, clusterTemplate.Name, err.Error())
+			}
+		}
+
+		hwMgmtParamsMap, ok := hwMgmtParams.(map[string]any)
+		if !ok {
+			return ctlrutils.NewInputError("templateParameters.%s must be an object", ctlrutils.TemplateParamHwMgmt)
+		}
+
+		// Handle nodeGroupData with name-keyed merge
+		srcNodeGroups, srcHasNG := hwMgmtParamsMap["nodeGroupData"]
+		if srcHasNG {
+			srcSlice, ok := srcNodeGroups.([]any)
+			if !ok {
+				return ctlrutils.NewInputError("templateParameters.%s.nodeGroupData must be an array", ctlrutils.TemplateParamHwMgmt)
+			}
+			dstSlice := []any{}
+			if dstNodeGroups, dstHasNG := mergedData["nodeGroupData"]; dstHasNG {
+				dstSlice, ok = dstNodeGroups.([]any)
+				if !ok {
+					return ctlrutils.NewInputError("hwMgmtDefaults nodeGroupData must be an array")
+				}
+			}
+			mergedNG, err := ctlrutils.MergeNodeGroupData(dstSlice, srcSlice)
+			if err != nil {
+				return ctlrutils.NewInputError("failed to merge nodeGroupData: %s", err.Error())
+			}
+			mergedData["nodeGroupData"] = mergedNG
+			// Remove nodeGroupData from params so DeepMergeMaps doesn't overwrite
+			delete(hwMgmtParamsMap, "nodeGroupData")
+		}
+
+		// Merge remaining scalar fields (e.g., hardwareProvisioningTimeout)
+		if len(hwMgmtParamsMap) > 0 {
+			if err := ctlrutils.DeepMergeMaps(mergedData, hwMgmtParamsMap, false); err != nil {
+				return ctlrutils.NewInputError("failed to merge hwMgmt parameters: %s", err.Error())
+			}
+		}
+	}
+
+	t.clusterInput.hwMgmtData = mergedData
+
+	// Validate merged nodeGroupData constraints (name, role, selectors)
+	if err := validateMergedNodeGroups(mergedData); err != nil {
+		return err
+	}
+
+	// Validate that referenced HardwareProfile CRs exist in the merged data
+	if err := t.validateMergedHwProfiles(ctx, mergedData); err != nil {
+		return err
+	}
+
+	// Load hardware provisioning timeout from the merged data
+	if timeoutStr, ok := mergedData["hardwareProvisioningTimeout"].(string); ok && timeoutStr != "" {
+		timeout, err := time.ParseDuration(timeoutStr)
+		if err != nil {
+			return ctlrutils.NewInputError(
+				"hardwareProvisioningTimeout %q is not a valid duration: %s", timeoutStr, err.Error())
+		}
+		if timeout <= 0 {
+			return ctlrutils.NewInputError(
+				"hardwareProvisioningTimeout %q must be a positive duration", timeoutStr)
+		}
+		t.timeouts.hardwareProvisioning = timeout
+	}
+
+	t.logger.Info(
+		fmt.Sprintf("Merged hwMgmt default data with hwMgmtParameters for ProvisioningRequest"),
+		slog.String("name", t.object.Name),
+	)
+	return nil
+}
+
+// validateMergedNodeGroups checks that the merged nodeGroupData entries have valid
+// name and role values. Selector fields (hwProfile, resourcePoolId, resourceSelector) are optional.
+func validateMergedNodeGroups(mergedData map[string]any) error {
+	ngRaw, ok := mergedData["nodeGroupData"]
+	if !ok {
+		return nil
+	}
+	ngSlice, ok := ngRaw.([]any)
+	if !ok {
+		return nil
+	}
+
+	seenRoles := map[string]string{}
+	for _, ng := range ngSlice {
+		ngMap, ok := ng.(map[string]any)
+		if !ok {
+			return ctlrutils.NewInputError("nodeGroupData element is not a map")
+		}
+		name, _ := ngMap["name"].(string)
+		if name == "" {
+			return ctlrutils.NewInputError("nodeGroupData element is missing required field 'name'")
+		}
+		role, _ := ngMap["role"].(string)
+		if role == "" {
+			return ctlrutils.NewInputError("no role specified for nodeGroup %q", name)
+		}
+		if role != "master" && role != "worker" {
+			return ctlrutils.NewInputError("invalid role %q for nodeGroup %q: must be 'master' or 'worker'", role, name)
+		}
+		if prev, exists := seenRoles[role]; exists {
+			return ctlrutils.NewInputError("duplicate role %q in nodeGroupData for groups %q and %q", role, prev, name)
+		}
+		seenRoles[role] = name
+
+		// hwProfile, resourcePoolId, and resourceSelector are all optional.
+		// The hardware plugin handles node selection based on whatever criteria are provided.
+		// Type validation for resourceSelector is handled by schema validation in validateAndMergeHwMgmtInput.
+	}
+
+	return nil
+}
+
+// validateMergedHwProfiles checks that hwProfile values in the merged nodeGroupData
+// reference existing HardwareProfile CRs.
+func (t *provisioningRequestReconcilerTask) validateMergedHwProfiles(ctx context.Context, mergedData map[string]any) error {
+	ngRaw, ok := mergedData["nodeGroupData"]
+	if !ok {
+		return nil
+	}
+	ngSlice, ok := ngRaw.([]any)
+	if !ok {
+		return nil
+	}
+
+	hwProfileNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
+	for _, ng := range ngSlice {
+		ngMap, ok := ng.(map[string]any)
+		if !ok {
+			continue
+		}
+		hwProfile, ok := ngMap["hwProfile"].(string)
+		if !ok || hwProfile == "" {
+			continue
+		}
+		name, _ := ngMap["name"].(string)
+
+		hwProfileObj := &hwmgmtv1alpha1.HardwareProfile{}
+		if err := t.client.Get(ctx, client.ObjectKey{Name: hwProfile, Namespace: hwProfileNS}, hwProfileObj); err != nil {
+			if k8serrors.IsNotFound(err) {
+				return ctlrutils.NewInputError("HardwareProfile %q referenced by nodeGroup %q does not exist", hwProfile, name)
+			}
+			return fmt.Errorf("failed to get HardwareProfile %q for nodeGroup %q: %w", hwProfile, name, err)
+		}
+	}
+
+	return nil
+}
+
+// hwMgmtDefaultsToMap converts the inline HwMgmtDefaults struct to a map[string]any
+// for use with the deep merge functions.
+func hwMgmtDefaultsToMap(defaults provisioningv1alpha1.HwMgmtDefaults) map[string]any {
+	result := make(map[string]any)
+
+	if defaults.HardwareProvisioningTimeout != "" {
+		result["hardwareProvisioningTimeout"] = defaults.HardwareProvisioningTimeout
+	}
+
+	if len(defaults.NodeGroupData) > 0 {
+		ngSlice := make([]any, len(defaults.NodeGroupData))
+		for i, ng := range defaults.NodeGroupData {
+			ngMap := map[string]any{
+				"name": ng.Name,
+				"role": ng.Role,
+			}
+			if ng.HwProfile != "" {
+				ngMap["hwProfile"] = ng.HwProfile
+			}
+			if ng.ResourcePoolId != "" {
+				ngMap["resourcePoolId"] = ng.ResourcePoolId
+			}
+			if len(ng.ResourceSelector) > 0 {
+				rs := make(map[string]any, len(ng.ResourceSelector))
+				for k, v := range ng.ResourceSelector {
+					rs[k] = v
+				}
+				ngMap["resourceSelector"] = rs
+			}
+			ngSlice[i] = ngMap
+		}
+		result["nodeGroupData"] = ngSlice
+	}
+
+	return result
 }
 
 func (t *provisioningRequestReconcilerTask) getMergedClusterInputData(

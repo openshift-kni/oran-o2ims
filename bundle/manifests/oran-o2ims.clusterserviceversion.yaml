@@ -21,6 +21,32 @@ metadata:
             },
             "name": "clustertemplate-sample",
             "release": "4.20.15",
+            "templateDefaults": {
+              "clusterInstanceDefaults": "clustertemplate-sample.v1.0.0-clusterinstance-defaults",
+              "hwMgmtDefaults": {
+                "hardwareProvisioningTimeout": "90m",
+                "nodeGroupData": [
+                  {
+                    "hwProfile": "hardwareprofile-sample",
+                    "name": "controller",
+                    "resourceSelector": {
+                      "resourceselector.clcm.openshift.io/server-type": "xr8620t"
+                    },
+                    "role": "master"
+                  },
+                  {
+                    "hwProfile": "hardwareprofile-sample",
+                    "name": "worker",
+                    "resourceSelector": {
+                      "resourceselector.clcm.openshift.io/server-type": "xr12380c"
+                    },
+                    "role": "worker"
+                  }
+                ]
+              },
+              "policyTemplateDefaults": "clustertemplate-sample.v1.0.0-policytemplate-defaults",
+              "upgradeDefaults": "upgrade-defaults-v1"
+            },
             "templateParameterSchema": {
               "properties": {
                 "clusterInstanceParameters": {
@@ -176,21 +202,45 @@ metadata:
                   ],
                   "type": "object"
                 },
-                "hwTemplateParameters": {
-                  "description": "hwTemplateParameters allows overriding hardware template settings per nodeGroup, such as the HardwareProfile to use.\n",
+                "hwMgmtParameters": {
+                  "description": "hwMgmtParameters allows overriding hardware management defaults such as hardwareProvisioningTimeout and per-nodeGroup settings.\n",
                   "properties": {
+                    "hardwareProvisioningTimeout": {
+                      "type": "string"
+                    },
                     "nodeGroupData": {
-                      "additionalProperties": {
+                      "items": {
                         "properties": {
                           "hwProfile": {
-                            "description": "Name of the HardwareProfile CR to use for this node group. Overrides the hwProfile in the HardwareTemplate when both are set.\n",
+                            "type": "string"
+                          },
+                          "name": {
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "resourcePoolId": {
+                            "type": "string"
+                          },
+                          "resourceSelector": {
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "type": "object"
+                          },
+                          "role": {
+                            "enum": [
+                              "master",
+                              "worker"
+                            ],
                             "type": "string"
                           }
                         },
+                        "required": [
+                          "name"
+                        ],
                         "type": "object"
                       },
-                      "description": "Per-nodeGroup overrides, keyed by nodeGroup name as defined in the HardwareTemplate's nodeGroupData.\n",
-                      "type": "object"
+                      "type": "array"
                     }
                   },
                   "type": "object"
@@ -246,12 +296,6 @@ metadata:
               ],
               "type": "object"
             },
-            "templates": {
-              "clusterInstanceDefaults": "clustertemplate-sample.v1.0.0-clusterinstance-defaults",
-              "hwTemplate": "hwtemplate-sample",
-              "policyTemplateDefaults": "clustertemplate-sample.v1.0.0-policytemplate-defaults",
-              "upgradeDefaults": "upgrade-defaults-v1"
-            },
             "version": "v1.0.0"
           },
           "status": {
@@ -301,27 +345,6 @@ metadata:
           },
           "status": {
             "conditions": []
-          }
-        },
-        {
-          "apiVersion": "clcm.openshift.io/v1alpha1",
-          "kind": "HardwareTemplate",
-          "metadata": {
-            "name": "hwtemplate-sample",
-            "namespace": "oran-o2ims"
-          },
-          "spec": {
-            "hardwareProvisioningTimeout": "90m",
-            "nodeGroupData": [
-              {
-                "name": "master",
-                "resourceSelector": {
-                  "resourceselector.clcm.openshift.io/server-colour": "blue",
-                  "resourceselector.clcm.openshift.io/server-type": "xr8620t"
-                },
-                "role": "master"
-              }
-            ]
           }
         },
         {
@@ -464,12 +487,13 @@ metadata:
                 ],
                 "sshPublicKey": "ssh-rsa"
               },
-              "hwTemplateParameters": {
-                "nodeGroupData": {
-                  "master": {
-                    "hwProfile": "hardwareprofile-sample"
+              "hwMgmtParameters": {
+                "nodeGroupData": [
+                  {
+                    "hwProfile": "hardwareprofile-sample",
+                    "name": "controller"
                   }
-                }
+                ]
               },
               "nodeClusterName": "site-sno-du-1",
               "oCloudSiteId": "local-west-12345",
@@ -824,6 +848,12 @@ spec:
         path: release
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      - description: TemplateDefaults defines the default values for templates required
+          for ClusterTemplate.
+        displayName: TemplateDefaults
+        path: templateDefaults
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
       - description: TemplateId defines a Identifier for the O-Cloud Template. This
           identifier is allocated by the O-Cloud.
         displayName: TemplateId
@@ -836,12 +866,6 @@ spec:
           explicitly define required fields.
         displayName: Template Parameter Schema
         path: templateParameterSchema
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: Templates defines the references to the templates required for
-          ClusterTemplate.
-        displayName: Templates
-        path: templates
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: Version defines a version or generation of the resource as defined
@@ -949,42 +973,6 @@ spec:
         path: conditions
       - displayName: Observed Generation
         path: observedGeneration
-      version: v1alpha1
-    - description: HardwareTemplate is the Schema for the hardwaretemplates API
-      displayName: Hardware Template
-      kind: HardwareTemplate
-      name: hardwaretemplates.clcm.openshift.io
-      resources:
-      - kind: ConfigMap
-        name: ""
-        version: v1
-      specDescriptors:
-      - description: |-
-          BootInterfaceLabel is the label of the boot interface.
-          Deprecated: This field is deprecated and will be ignored. The boot interface label is now fixed as "boot-interface".
-        displayName: Boot Interface Label (Deprecated)
-        path: bootInterfaceLabel
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: |-
-          HardwarePluginRef is the name of the HardwarePlugin.
-          When not specified, the internal metal3 hardware plugin is used.
-        displayName: Hardware Plugin Reference
-        path: hardwarePluginRef
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: HardwareProvisioningTimeout defines the timeout duration string
-          for the hardware provisioning.
-        displayName: Hardware Provisioning Timeout
-        path: hardwareProvisioningTimeout
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: NodeGroupData defines a collection of NodeGroupData items
-        displayName: Node Group Data
-        path: nodeGroupData
-      statusDescriptors:
-      - displayName: Conditions
-        path: conditions
       version: v1alpha1
     - description: Inventory is the Schema for the Inventory API
       displayName: O-Cloud Manager Inventory
@@ -1601,7 +1589,6 @@ spec:
           resources:
           - clustertemplates
           - hardwareplugins
-          - hardwaretemplates
           - nodes
           - provisioningrequests
           verbs:
@@ -1625,7 +1612,6 @@ spec:
           - clustertemplates/status
           - hardwareplugins/status
           - hardwareprofiles/status
-          - hardwaretemplates/status
           - nodes/status
           - provisioningrequests/status
           verbs:

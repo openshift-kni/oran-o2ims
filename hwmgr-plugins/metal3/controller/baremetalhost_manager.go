@@ -450,6 +450,13 @@ func processHwProfile(ctx context.Context,
 		}
 	}
 
+	// Skip processing if no hardware profile is specified
+	if profileName == "" {
+		logger.InfoContext(ctx, "No hardware profile specified, skipping HW profile processing",
+			slog.String("bmh", bmh.Name))
+		return false, nil
+	}
+
 	var err error
 	name := types.NamespacedName{
 		Name:      profileName,

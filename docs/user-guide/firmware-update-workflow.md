@@ -79,11 +79,11 @@ spec:
 
 The HardwareProfile can be specified in two places:
 
-1. **[HardwareTemplate](./template-overview.md#hardwaretemplate)** —
-   `spec.nodeGroupData[].hwProfile` sets the default profile for a node group.
+1. **ClusterTemplate `hwMgmtDefaults`** —
+   `spec.templateDefaults.hwMgmtDefaults.nodeGroupData[].hwProfile` sets the default profile for a node group.
 2. **ProvisioningRequest** —
-   `spec.templateParameters.hwTemplateParameters.nodeGroupData.<name>.hwProfile`
-   overrides the HardwareTemplate default.
+   `spec.templateParameters.hwMgmtParameters.nodeGroupData[].hwProfile`
+   overrides the ClusterTemplate default.
 
 When both are set, the ProvisioningRequest value takes precedence.
 
@@ -93,8 +93,8 @@ When both are set, the ProvisioningRequest value takes precedence.
 
 When a ProvisioningRequest is created, the following sequence occurs:
 
-1. **HardwareTemplate rendering** — The O-Cloud Manager resolves the HardwareProfile
-   for each node group (from the ProvisioningRequest override or HardwareTemplate
+1. **Hardware template rendering** — The O-Cloud Manager resolves the HardwareProfile
+   for each node group (from the ProvisioningRequest override or hwMgmtDefaults
    default) and creates a `NodeAllocationRequest` CR.
 
 2. **BMH selection** — The Metal3 hardware plugin selects available BareMetalHosts
@@ -137,7 +137,7 @@ The following diagram shows how CRs relate during firmware provisioning:
 ```text
 ProvisioningRequest
   └─ references ClusterTemplate
-       └─ references HardwareTemplate
+       └─ references hwMgmtDefaults
             └─ specifies HardwareProfile per node group
 
 NodeAllocationRequest (created by O-Cloud Manager)
@@ -162,7 +162,7 @@ Key conditions during Day-0 firmware provisioning:
 
 | Condition | Status | Reason | Meaning |
 |---|---|---|---|
-| `HardwareTemplateRendered` | True | Completed | HardwareTemplate validated and NodeAllocationRequest created |
+| `HardwareTemplateRendered` | True | Completed | Hardware template validated and NodeAllocationRequest created |
 | `HardwareProvisioned` | False | InProgress | BMH selection and allocation in progress |
 | `HardwareProvisioned` | True | Completed | All nodes allocated |
 
@@ -199,15 +199,15 @@ ProvisioningRequest:
 ```yaml
 spec:
   templateParameters:
-    hwTemplateParameters:
+    hwMgmtParameters:
       nodeGroupData:
-        master:
+        - name: master
           hwProfile: dell-xr8620t-bios-2.6.3-bmc-7.20.30.50
 ```
 
 ```console
 oc patch provisioningrequests.clcm.openshift.io <name> --type merge \
-  -p '{"spec":{"templateParameters":{"hwTemplateParameters":{"nodeGroupData":{"master":{"hwProfile":"dell-xr8620t-bios-2.6.3-bmc-7.20.30.50"}}}}}}'
+  -p '{"spec":{"templateParameters":{"hwMgmtParameters":{"nodeGroupData":[{"name":"master","hwProfile":"dell-xr8620t-bios-2.6.3-bmc-7.20.30.50"}]}}}}'
 ```
 
 The O-Cloud Manager detects the change and propagates it through the
@@ -354,7 +354,7 @@ oc get hostfirmwaresettings.metal3.io <bmh-name> -n <bmh-namespace> \
 
 | Condition | Context | Description |
 |---|---|---|
-| `HardwareTemplateRendered` | Day-0 | HardwareTemplate validated and NodeAllocationRequest created |
+| `HardwareTemplateRendered` | Day-0 | Hardware template validated and NodeAllocationRequest created |
 | `HardwareProvisioned` | Day-0 | BMH allocation and initial provisioning status |
 | `HardwareNodeConfigApplied` | Day-0 | Node configuration (BMC, MAC addresses) applied to ClusterInstance |
 | `HardwareConfigured` | Day-2 | Firmware/BIOS configuration status |
@@ -411,11 +411,13 @@ node's update lifecycle for clear observability:
 ## Timeouts
 
 Hardware provisioning and configuration share a single timeout value, configured in the
-HardwareTemplate:
+ClusterTemplate's `hwMgmtDefaults`:
 
 ```yaml
 spec:
-  hardwareProvisioningTimeout: "90m"
+  templateDefaults:
+    hwMgmtDefaults:
+      hardwareProvisioningTimeout: "90m"
 ```
 
 If not specified, the default timeout is 90 minutes.

@@ -140,7 +140,7 @@ var _ = Describe("handleRenderClusterInstance", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
-				Templates: provisioningv1alpha1.Templates{
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					ClusterInstanceDefaults: ciDefaultsCm,
 				},
 			},
@@ -313,7 +313,7 @@ var _ = Describe("handleClusterInstallation", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
-				Templates: provisioningv1alpha1.Templates{
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					ClusterInstanceDefaults: ciDefaultsCm,
 				},
 			},

@@ -40,7 +40,7 @@ var _ = Describe("clusterTemplateToManagedInfrastructureTemplate", func() {
 				TemplateID:              validUUID,
 				Characteristics:         characteristics,
 				TemplateParameterSchema: runtime.RawExtension{Raw: paramSchemaJSON},
-				Templates: provisioningv1alpha1.Templates{
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					ClusterInstanceDefaults: "cluster-defaults",
 					PolicyTemplateDefaults:  "policy-defaults",
 				},

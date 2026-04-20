@@ -48,6 +48,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -366,7 +367,7 @@ var _ = Describe("createOrUpdateClusterResources", func() {
 			clusterInput: &clusterInput{},
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
-				templates: provisioningv1alpha1.Templates{},
+				templates: provisioningv1alpha1.TemplateDefaults{},
 			},
 		}
 	})
@@ -424,7 +425,11 @@ var _ = Describe("createOrUpdateClusterResources", func() {
 			},
 		}
 
-		task.ctDetails.templates.HwTemplate = "hwTemplate-v1"
+		task.ctDetails.templates.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{
+			NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+				{Name: "controller", Role: "master", HwProfile: "profile-64G"},
+			},
+		}
 		err := task.createOrUpdateClusterResources(ctx, renderedClusterInstance)
 		Expect(err).To(HaveOccurred())
 

@@ -16,15 +16,14 @@ spec:
   templateParameters:
     nodeClusterName: "site-sno-du-1"
     oCloudSiteId: "local-west-12345"
-    # hwTemplateParameters allows overriding settings from the HardwareTemplate.
-    # See docs/samples/hwTemplateSchema.yaml for the full schema definition.
-    hwTemplateParameters:
+    # hwMgmtParameters allows overriding hardware management defaults.
+    hwMgmtParameters:
       # Override the hardware provisioning timeout (optional)
       # hardwareProvisioningTimeout: "120m"
       nodeGroupData:
-        master:
+        - name: controller
           hwProfile: hardwareprofile-sample
-          # Additional resource selector criteria (optional, merged with HardwareTemplate selectors)
+          # Additional resource selector criteria (optional, merged with hwMgmtDefaults selectors)
           # resourceSelector:
           #   resourceselector.clcm.openshift.io/server-rack: "rack-1"
     policyTemplateParameters:

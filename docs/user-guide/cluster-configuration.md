@@ -263,7 +263,7 @@ The following steps need to be taken:
     * Create a new version of the [sno-ran-du.v4-Y-Z-1](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1.yaml) `ClusterTemplate` CR - [sno-ran-du.v4-Y-Z-2](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-2.yaml)
         * Update the `metadata.name` from `sno-ran-du.v4-Y-Z-1` to `sno-ran-du.v4-Y-Z-2`
         * Update `spec.version` from `v4-Y-Z-1` to `v4-Y-Z-2`
-        * Update `spec.templates.clusterInstanceDefaults` to `clusterinstance-defaults-v2`
+        * Update `spec.templateDefaults.clusterInstanceDefaults` to `clusterinstance-defaults-v2`
 2. ArgoCD sync to the hub cluster:
     * Add the newly created files to their corresponding kustomization.yaml.
     * All the resources from above are created on the hub cluster.
@@ -293,7 +293,7 @@ For updating a manifest in an existing ACM PolicyGenerator, the following steps 
     * Create a new version of the [sno-ran-du.v4-Y-Z-2](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-2.yaml) `ClusterTemplate` CR - [sno-ran-du.v4-Y-Z-3](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-3.yaml)
         * Update the `metadata.name` from `sno-ran-du.v4-Y-Z-2` to `sno-ran-du.v4-Y-Z-3`.
         * Update `spec.version` from `v4-Y-Z-2` to `v4-Y-Z-3`.
-        * Update `spec.templates.clusterInstanceDefaults` to `clusterinstance-defaults-v3`.
+        * Update `spec.templateDefaults.clusterInstanceDefaults` to `clusterinstance-defaults-v3`.
 2. ArgoCD sync to the hub cluster:
     * Add the newly created files to their corresponding kustomization.yaml.
     * All the resources created from above are created on the hub cluster, including the `v2` policies and the new ClusterTemplate is validated.
@@ -487,8 +487,8 @@ The following steps need to be taken:
     * Create a new version of the [sno-ran-du.v4-Y-Z-3](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-3.yaml) `ClusterTemplate` CR - [sno-ran-du.v4-Y-Z-4](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml)
         * Update the `metadata.name` from `sno-ran-du.v4-Y-Z-3` to `sno-ran-du.v4-Y-Z-4`.
         * Update `spec.version` from `v4-Y-Z-3` to `v4-Y-Z-4`.
-        * Update `spec.templates.clusterInstanceDefaults` to `clusterinstance-defaults-v4`.
-        * Update `spec.templates.policyTemplateDefaults` to `policytemplate-defaults-v2`.
+        * Update `spec.templateDefaults.clusterInstanceDefaults` to `clusterinstance-defaults-v4`.
+        * Update `spec.templateDefaults.policyTemplateDefaults` to `policytemplate-defaults-v2`.
         * Update `spec.templateParameterSchema.properties.policyTemplateParameters` to include the newly desired configuration options:
 
         ```yaml
@@ -534,13 +534,11 @@ relationship, status conditions, timeouts, and failure handling, see the
 
 We assume a ManagedCluster has been installed through a `ProvisioningRequest` referencing the
 [sno-ran-du.v4-Y-Z-4](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-4.yaml)
-`ClusterTemplate` CR, which uses the static
-[dell-xr8620t-blue](../samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/dell-xr8620t-blue.yaml)
-`HardwareTemplate`.
+`ClusterTemplate` CR with inline `hwMgmtDefaults`.
 
 In this example we are updating BIOS settings, BIOS firmware, and BMC firmware by changing
-the `HardwareProfile` referenced via `templateParameters.hwTemplateParameters` in the
-`ProvisioningRequest`. The `HardwareTemplate` and `ClusterTemplate` remain unchanged —
+the `HardwareProfile` referenced via `templateParameters.hwMgmtParameters` in the
+`ProvisioningRequest`. The `hwMgmtDefaults` and `ClusterTemplate` remain unchanged —
 only the `ProvisioningRequest` and the `HardwareProfile` CR need to be updated.
 
 The following steps are required:
@@ -551,16 +549,16 @@ The following steps are required:
         * Update the `spec.bios`, `spec.biosFirmware` and `spec.bmcFirmware` with desired settings/versions.
         * Add or update `spec.nicFirmware` if NIC firmware updates are also required.
     * Update the kustomization files to include the new `HardwareProfile`. ArgoCD will automatically sync it to the hub cluster.
-    * No changes to `HardwareTemplate` or `ClusterTemplate` CRs are needed.
+    * No changes to `hwMgmtDefaults` or `ClusterTemplate` CRs are needed.
 2. Update the `ProvisioningRequest` to reference the new `HardwareProfile`:
-    * Set `spec.templateParameters.hwTemplateParameters.nodeGroupData.master.hwProfile` to the new profile name (`dell-xr8620t-bios-2.6.3-bmc-7.20.30.50`).
+    * Set the `hwProfile` for the controller node group in `spec.templateParameters.hwMgmtParameters.nodeGroupData` to the new profile name (`dell-xr8620t-bios-2.6.3-bmc-7.20.30.50`).
 
     ```yaml
     spec:
       templateParameters:
-        hwTemplateParameters:
+        hwMgmtParameters:
           nodeGroupData:
-            master:
+            - name: controller
               hwProfile: dell-xr8620t-bios-2.6.3-bmc-7.20.30.50
     ```
 

@@ -190,11 +190,8 @@ spec:
                         for populating a node allocation request
                       properties:
                         hwProfile:
-                          description: |-
-                            HwProfile is the name of the HardwareProfile to use for this node group.
-                            The HardwareProfile must be set here or in the ProvisioningRequest templateParameters
-                            as hwTemplateParameters.nodeGroupData.<name>.hwProfile, which overrides the value set
-                            in the template.
+                          description: HwProfile is the name of the HardwareProfile
+                            to use for this node group.
                           type: string
                         name:
                           minLength: 1

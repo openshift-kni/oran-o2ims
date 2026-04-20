@@ -7,8 +7,21 @@ spec:
   name: std-dell-r740-green-xr8620t-blue
   version: v4-20-15-v1
   release: 4.20.15
-  templates:
-    hwTemplate: dell-r740-green-xr8620t-blue
+  templateDefaults:
+    hwMgmtDefaults:
+      hardwarePluginRef: hwmgr
+      hardwareProvisioningTimeout: "90m"
+      nodeGroupData:
+        - name: master
+          role: master
+          resourceSelector:
+            "resourceselector.clcm.openshift.io/server-type": "R740"
+            "resourceselector.clcm.openshift.io/server-colour": "green"
+        - name: worker
+          role: worker
+          resourceSelector:
+            "resourceselector.clcm.openshift.io/server-type": "XR8620t"
+            "resourceselector.clcm.openshift.io/server-colour": "blue"
     clusterInstanceDefaults: clusterinstance-defaults-v1
     policyTemplateDefaults: policytemplate-defaults-v1
   templateParameterSchema:
@@ -17,25 +30,34 @@ spec:
         type: string
       oCloudSiteId:
         type: string
-      hwTemplateParameters:
-        description: >
-          hwTemplateParameters allows overriding hardware template settings
-          per nodeGroup, such as the HardwareProfile to use.
-        properties:
-          nodeGroupData:
-            description: >
-              Per-nodeGroup overrides, keyed by nodeGroup name as defined in
-              the HardwareTemplate's nodeGroupData.
-            type: object
-            additionalProperties:
-              type: object
-              properties:
-                hwProfile:
-                  description: >
-                    Name of the HardwareProfile CR to use for this node group.
-                    Overrides the hwProfile in the HardwareTemplate when both are set.
-                  type: string
+      hwMgmtParameters:
         type: object
+        properties:
+          hardwareProvisioningTimeout:
+            type: string
+          nodeGroupData:
+            type: array
+            items:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                role:
+                  type: string
+                  enum:
+                    - master
+                    - worker
+                hwProfile:
+                  type: string
+                resourcePoolId:
+                  type: string
+                resourceSelector:
+                  type: object
+                  additionalProperties:
+                    type: string
       policyTemplateParameters:
         description: policyTemplateSchema defines the available parameters for cluster configuration
         properties:

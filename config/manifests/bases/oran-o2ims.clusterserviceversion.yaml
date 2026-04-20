@@ -132,6 +132,12 @@ spec:
         path: release
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      - description: TemplateDefaults defines the default values for templates required
+          for ClusterTemplate.
+        displayName: TemplateDefaults
+        path: templateDefaults
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
       - description: TemplateId defines a Identifier for the O-Cloud Template. This
           identifier is allocated by the O-Cloud.
         displayName: TemplateId
@@ -144,12 +150,6 @@ spec:
           explicitly define required fields.
         displayName: Template Parameter Schema
         path: templateParameterSchema
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: Templates defines the references to the templates required for
-          ClusterTemplate.
-        displayName: Templates
-        path: templates
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: Version defines a version or generation of the resource as defined
@@ -257,42 +257,6 @@ spec:
         path: conditions
       - displayName: Observed Generation
         path: observedGeneration
-      version: v1alpha1
-    - description: HardwareTemplate is the Schema for the hardwaretemplates API
-      displayName: Hardware Template
-      kind: HardwareTemplate
-      name: hardwaretemplates.clcm.openshift.io
-      resources:
-      - kind: ConfigMap
-        name: ""
-        version: v1
-      specDescriptors:
-      - description: |-
-          BootInterfaceLabel is the label of the boot interface.
-          Deprecated: This field is deprecated and will be ignored. The boot interface label is now fixed as "boot-interface".
-        displayName: Boot Interface Label (Deprecated)
-        path: bootInterfaceLabel
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: |-
-          HardwarePluginRef is the name of the HardwarePlugin.
-          When not specified, the internal metal3 hardware plugin is used.
-        displayName: Hardware Plugin Reference
-        path: hardwarePluginRef
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: HardwareProvisioningTimeout defines the timeout duration string
-          for the hardware provisioning.
-        displayName: Hardware Provisioning Timeout
-        path: hardwareProvisioningTimeout
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: NodeGroupData defines a collection of NodeGroupData items
-        displayName: Node Group Data
-        path: nodeGroupData
-      statusDescriptors:
-      - displayName: Conditions
-        path: conditions
       version: v1alpha1
     - description: Inventory is the Schema for the Inventory API
       displayName: O-Cloud Manager Inventory

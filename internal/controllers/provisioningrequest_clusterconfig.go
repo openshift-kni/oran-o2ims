@@ -440,7 +440,7 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 
 	// Get AllocatedNodes if hardware provisioning is not skipped.
 	nodes := &[]hwprovisioningapi.AllocatedNode{}
-	if oranct.Spec.Templates.HwTemplate != "" {
+	if !t.isHardwareProvisionSkipped() {
 		nodeAllocationRequestID := t.getNodeAllocationRequestID()
 		if nodeAllocationRequestID != "" {
 			nodes, err = t.hwpluginClient.GetAllocatedNodesFromNodeAllocationRequest(ctx, nodeAllocationRequestID)
@@ -457,7 +457,7 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 			return err
 		}
 
-		if oranct.Spec.Templates.HwTemplate == "" {
+		if t.isHardwareProvisionSkipped() {
 			// Skip adding hardwarePluginRef and hwMgrNodeId labels if hardware provisioning is skipped.
 			continue
 		}

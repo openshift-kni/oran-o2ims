@@ -74,30 +74,65 @@ spec:
                 description: Release defines the openshift release version of the
                   template
                 type: string
-              templateId:
-                description: TemplateId defines a Identifier for the O-Cloud Template.
-                  This identifier is allocated by the O-Cloud.
-                type: string
-              templateParameterSchema:
-                description: |-
-                  TemplateParameterSchema defines the parameters required for ClusterTemplate.
-                  The parameter definitions should follow the OpenAPI V3 schema and
-                  explicitly define required fields.
-                type: object
-                x-kubernetes-preserve-unknown-fields: true
-              templates:
-                description: Templates defines the references to the templates required
-                  for ClusterTemplate.
+              templateDefaults:
+                description: TemplateDefaults defines the default values for templates
+                  required for ClusterTemplate.
                 properties:
                   clusterInstanceDefaults:
                     description: |-
                       ClusterInstanceDefaults defines a reference to a configmap with
                       default values for ClusterInstance
                     type: string
-                  hwTemplate:
-                    description: HwTemplate defines a reference to a HardwareTemplate
-                      resource
-                    type: string
+                  hwMgmtDefaults:
+                    description: |-
+                      HwMgmtDefaults defines the default hardware management parameters.
+                      When nodeGroupData is empty, hardware provisioning is skipped.
+                    properties:
+                      hardwarePluginRef:
+                        description: |-
+                          HardwarePluginRef is the name of the HardwarePlugin.
+                          When not specified, the internal metal3 hardware plugin is used.
+                        type: string
+                      hardwareProvisioningTimeout:
+                        description: HardwareProvisioningTimeout defines the timeout
+                          duration string for the hardware provisioning.
+                        type: string
+                      nodeGroupData:
+                        description: NodeGroupData defines a collection of node group
+                          configurations.
+                        items:
+                          description: NodeGroupData provides the necessary information
+                            for populating a node allocation request
+                          properties:
+                            hwProfile:
+                              description: HwProfile is the name of the HardwareProfile
+                                to use for this node group.
+                              type: string
+                            name:
+                              minLength: 1
+                              type: string
+                            resourcePoolId:
+                              description: ResourcePoolId is the identifier for the
+                                Resource Pool in the hardware manager instance.
+                              type: string
+                            resourceSelector:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            role:
+                              enum:
+                              - master
+                              - worker
+                              type: string
+                          required:
+                          - name
+                          - role
+                          type: object
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - name
+                        x-kubernetes-list-type: map
+                    type: object
                   policyTemplateDefaults:
                     description: |-
                       PolicyTemplateDefaults defines a reference to a configmap with
@@ -112,6 +147,17 @@ spec:
                 - clusterInstanceDefaults
                 - policyTemplateDefaults
                 type: object
+              templateId:
+                description: TemplateId defines a Identifier for the O-Cloud Template.
+                  This identifier is allocated by the O-Cloud.
+                type: string
+              templateParameterSchema:
+                description: |-
+                  TemplateParameterSchema defines the parameters required for ClusterTemplate.
+                  The parameter definitions should follow the OpenAPI V3 schema and
+                  explicitly define required fields.
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
               version:
                 description: Version defines a version or generation of the resource
                   as defined by its provider.
@@ -119,8 +165,8 @@ spec:
             required:
             - name
             - release
+            - templateDefaults
             - templateParameterSchema
-            - templates
             - version
             type: object
           status:

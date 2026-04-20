@@ -159,7 +159,7 @@ func (r *ArtifactsServer) GetManagedInfrastructureTemplateDefaults(
 	// Get the response for the ClusterInstance default values.
 	clusterInstanceResults, err := ctlrutils.GetDefaultsFromConfigMap(
 		ctx, r.HubClient,
-		oranct.Spec.Templates.ClusterInstanceDefaults,
+		oranct.Spec.TemplateDefaults.ClusterInstanceDefaults,
 		oranct.Namespace,
 		ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
 		oranct.Spec.TemplateParameterSchema.Raw,
@@ -172,7 +172,7 @@ func (r *ArtifactsServer) GetManagedInfrastructureTemplateDefaults(
 	// Get the response for the Policy default values.
 	policyTemplateResults, err := ctlrutils.GetDefaultsFromConfigMap(
 		ctx, r.HubClient,
-		oranct.Spec.Templates.PolicyTemplateDefaults,
+		oranct.Spec.TemplateDefaults.PolicyTemplateDefaults,
 		oranct.Namespace,
 		ctlrutils.PolicyTemplateDefaultsConfigmapKey,
 		oranct.Spec.TemplateParameterSchema.Raw,

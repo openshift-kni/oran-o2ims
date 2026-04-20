@@ -463,7 +463,7 @@ var _ = Describe("GetClusterTemplateRef", func() {
 				Name:       "other-cluster-template-name",
 				Version:    "v1.0.0",
 				TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
-				Templates: Templates{
+				TemplateDefaults: TemplateDefaults{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 				},
@@ -494,7 +494,7 @@ var _ = Describe("GetClusterTemplateRef", func() {
 				Name:       tName,
 				Version:    tVersion,
 				TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
-				Templates: Templates{
+				TemplateDefaults: TemplateDefaults{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 				},
@@ -517,8 +517,8 @@ var _ = Describe("GetClusterTemplateRef", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(retCt.Name).To(Equal(ctName))
 		Expect(retCt.Namespace).To(Equal(ctNamespace))
-		Expect(retCt.Spec.Templates.ClusterInstanceDefaults).To(Equal(ciDefaultsCm))
-		Expect(retCt.Spec.Templates.PolicyTemplateDefaults).To(Equal(ptDefaultsCm))
+		Expect(retCt.Spec.TemplateDefaults.ClusterInstanceDefaults).To(Equal(ciDefaultsCm))
+		Expect(retCt.Spec.TemplateDefaults.PolicyTemplateDefaults).To(Equal(ptDefaultsCm))
 	})
 })
 
@@ -554,12 +554,26 @@ const testTemplate = `{
 		  }
 		}
 	  },
-	  "hwTemplateParameters": {
-		"description": "hwTemplateParameters.",
+	  "hwMgmtParameters": {
+		"description": "hwMgmtParameters allows overriding hardware management defaults.",
 		"type": "object",
 		"properties": {
+		  "hardwareProvisioningTimeout": {
+			"type": "string"
+		  },
 		  "nodeGroupData": {
-			"type": "object"
+			"type": "array",
+			"items": {
+			  "type": "object",
+			  "required": ["name"],
+			  "properties": {
+				"name": {"type": "string"},
+				"role": {"type": "string"},
+				"hwProfile": {"type": "string"},
+				"resourcePoolId": {"type": "string"},
+				"resourceSelector": {"type": "object", "additionalProperties": {"type": "string"}}
+			  }
+			}
 		  }
 		}
 	  }
@@ -601,6 +615,42 @@ func TestExtractSubSchema(t *testing.T) {
 				},
 			},
 			wantErr: false,
+		},
+		{
+			name: "empty schema",
+			args: args{
+				mainSchema: []byte{},
+				node:       "anything",
+			},
+			wantSubSchema: nil,
+			wantErr:       false,
+		},
+		{
+			name: "invalid JSON",
+			args: args{
+				mainSchema: []byte(`not json`),
+				node:       "anything",
+			},
+			wantSubSchema: nil,
+			wantErr:       true,
+		},
+		{
+			name: "missing properties section",
+			args: args{
+				mainSchema: []byte(`{"type": "object"}`),
+				node:       "anything",
+			},
+			wantSubSchema: nil,
+			wantErr:       true,
+		},
+		{
+			name: "subSchema not found",
+			args: args{
+				mainSchema: []byte(testTemplate),
+				node:       "nonExistentKey",
+			},
+			wantSubSchema: nil,
+			wantErr:       true,
 		},
 	}
 	for _, tt := range tests {
@@ -706,118 +756,3 @@ func TestExtractMatchingInput(t *testing.T) {
 		})
 	}
 }
-
-var _ = Describe("ParseHwTemplateTimeoutOverride", func() {
-	It("should return empty string for nil input", func() {
-		result, err := ParseHwTemplateTimeoutOverride(nil)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(result).To(BeEmpty())
-	})
-
-	It("should return empty string when hwTemplateParameters is absent", func() {
-		raw := []byte(`{"clusterInstanceParameters": {}}`)
-		result, err := ParseHwTemplateTimeoutOverride(raw)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(result).To(BeEmpty())
-	})
-
-	It("should return empty string when hardwareProvisioningTimeout is not set", func() {
-		raw := []byte(`{"hwTemplateParameters": {"nodeGroupData": {}}}`)
-		result, err := ParseHwTemplateTimeoutOverride(raw)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(result).To(BeEmpty())
-	})
-
-	It("should return the timeout override value", func() {
-		raw := []byte(`{"hwTemplateParameters": {"hardwareProvisioningTimeout": "120m"}}`)
-		result, err := ParseHwTemplateTimeoutOverride(raw)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(result).To(Equal("120m"))
-	})
-
-	It("should return error for non-string timeout value", func() {
-		raw := []byte(`{"hwTemplateParameters": {"hardwareProvisioningTimeout": 120}}`)
-		_, err := ParseHwTemplateTimeoutOverride(raw)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("must be a string"))
-	})
-})
-
-var _ = Describe("ParseResourceSelectorOverrides", func() {
-	It("should return empty map for nil input", func() {
-		result, err := ParseResourceSelectorOverrides(nil)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(result).To(BeEmpty())
-	})
-
-	It("should return empty map when hwTemplateParameters is absent", func() {
-		raw := []byte(`{"clusterInstanceParameters": {}}`)
-		result, err := ParseResourceSelectorOverrides(raw)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(result).To(BeEmpty())
-	})
-
-	It("should return empty map when nodeGroupData has no resourceSelector", func() {
-		raw := []byte(`{"hwTemplateParameters": {"nodeGroupData": {"controller": {"hwProfile": "profile-1"}}}}`)
-		result, err := ParseResourceSelectorOverrides(raw)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(result).To(BeEmpty())
-	})
-
-	It("should parse resource selector overrides for a single group", func() {
-		raw := []byte(`{
-			"hwTemplateParameters": {
-				"nodeGroupData": {
-					"controller": {
-						"resourceSelector": {
-							"server-colour": "blue",
-							"server-rack": "rack-1"
-						}
-					}
-				}
-			}
-		}`)
-		result, err := ParseResourceSelectorOverrides(raw)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(result).To(HaveLen(1))
-		Expect(result["controller"]).To(Equal(map[string]string{
-			"server-colour": "blue",
-			"server-rack":   "rack-1",
-		}))
-	})
-
-	It("should parse resource selector overrides for multiple groups", func() {
-		raw := []byte(`{
-			"hwTemplateParameters": {
-				"nodeGroupData": {
-					"controller": {
-						"resourceSelector": {"server-type": "XR8620t"}
-					},
-					"worker": {
-						"resourceSelector": {"server-type": "R740"}
-					}
-				}
-			}
-		}`)
-		result, err := ParseResourceSelectorOverrides(raw)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(result).To(HaveLen(2))
-		Expect(result["controller"]).To(Equal(map[string]string{"server-type": "XR8620t"}))
-		Expect(result["worker"]).To(Equal(map[string]string{"server-type": "R740"}))
-	})
-
-	It("should return error for non-object resourceSelector", func() {
-		raw := []byte(`{
-			"hwTemplateParameters": {
-				"nodeGroupData": {
-					"controller": {
-						"resourceSelector": "invalid"
-					}
-				}
-			}
-		}`)
-		_, err := ParseResourceSelectorOverrides(raw)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("resourceSelector must be an object"))
-	})
-})

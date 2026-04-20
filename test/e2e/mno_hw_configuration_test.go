@@ -131,7 +131,6 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		"../resources/mno_hw_configuration/hw-profile-dell-xr860t-v3.yaml",
 	}
 
-	hwTemplateYaml := "../resources/mno_hw_configuration/hw-std-dell-r740-green-xr8620t-blue.yaml"
 	ctYaml := "../resources/mno_hw_configuration/ct-std-dell-r740-green-xr8620t-blue.yaml"
 
 	BeforeAll(func() {
@@ -150,7 +149,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			}
 		}
 
-		By("Creating ClusterTemplate, HardwareTemplate, HardwareProfiles, and supporting resources")
+		By("Creating ClusterTemplate, HardwareProfiles, and supporting resources")
 		for _, yaml := range cmYamls {
 			cm, err := testutils.LoadYAML[corev1.ConfigMap](yaml)
 			Expect(err).ToNot(HaveOccurred())
@@ -162,9 +161,6 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			Expect(K8SClient.Create(testCtx, hwProfile)).To(Succeed())
 		}
 
-		hwTemplate, err := testutils.LoadYAML[hwmgmtv1alpha1.HardwareTemplate](hwTemplateYaml)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(K8SClient.Create(testCtx, hwTemplate)).To(Succeed())
 		ct, err := testutils.LoadYAML[provisioningv1alpha1.ClusterTemplate](ctYaml)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(K8SClient.Create(testCtx, ct)).To(Succeed())
@@ -419,12 +415,6 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		Expect(err).ToNot(HaveOccurred())
 		if err := K8SClient.Get(testCtx, types.NamespacedName{Name: ct.Name, Namespace: ct.Namespace}, ct); err == nil {
 			_ = K8SClient.Delete(testCtx, ct)
-		}
-
-		hwTemplate, err := testutils.LoadYAML[hwmgmtv1alpha1.HardwareTemplate](hwTemplateYaml)
-		Expect(err).ToNot(HaveOccurred())
-		if err := K8SClient.Get(testCtx, types.NamespacedName{Name: hwTemplate.Name, Namespace: hwTemplate.Namespace}, hwTemplate); err == nil {
-			_ = K8SClient.Delete(testCtx, hwTemplate)
 		}
 
 		for _, yaml := range cmYamls {
@@ -705,10 +695,14 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 
 			var params map[string]interface{}
 			Expect(json.Unmarshal(pr.Spec.TemplateParameters.Raw, &params)).To(Succeed())
-			hwParams := params["hwTemplateParameters"].(map[string]interface{})
-			nodeGroupData := hwParams["nodeGroupData"].(map[string]interface{})
-			workerData := nodeGroupData["worker"].(map[string]interface{})
-			workerData["hwProfile"] = v1Profile
+			hwParams := params["hwMgmtParameters"].(map[string]interface{})
+			nodeGroupData := hwParams["nodeGroupData"].([]interface{})
+			for _, ng := range nodeGroupData {
+				ngMap := ng.(map[string]interface{})
+				if ngMap["name"] == "worker" {
+					ngMap["hwProfile"] = v1Profile
+				}
+			}
 			raw, err := json.Marshal(params)
 			Expect(err).ToNot(HaveOccurred())
 			pr.Spec.TemplateParameters = runtime.RawExtension{Raw: raw}

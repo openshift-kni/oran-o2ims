@@ -104,7 +104,7 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(ctx context.Context, c
 
 		// Create IBGU if it doesn't exist
 		ibgu, err = ctlrutils.GetIBGUFromUpgradeDefaultsConfigmap(
-			ctx, t.client, clusterTemplate.Spec.Templates.UpgradeDefaults,
+			ctx, t.client, clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults,
 			clusterTemplate.Namespace, ctlrutils.UpgradeDefaultsConfigmapKey,
 			clusterName, t.object.Name, clusterName)
 		if err != nil {

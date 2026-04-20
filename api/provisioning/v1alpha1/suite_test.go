@@ -27,7 +27,6 @@ var s = scheme.Scheme
 var _ = BeforeSuite(func() {
 	s.AddKnownTypes(GroupVersion, &ProvisioningRequest{}, &ClusterTemplate{}, &ClusterTemplateList{})
 	s.AddKnownTypes(hwmgmtv1alpha1.GroupVersion,
-		&hwmgmtv1alpha1.HardwareTemplate{}, &hwmgmtv1alpha1.HardwareTemplateList{},
 		&hwmgmtv1alpha1.HardwareProfile{}, &hwmgmtv1alpha1.HardwareProfileList{},
 	)
 	os.Setenv("OCLOUD_MANAGER_NAMESPACE", "oran-o2ims")

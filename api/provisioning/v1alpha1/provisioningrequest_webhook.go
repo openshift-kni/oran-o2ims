@@ -133,7 +133,7 @@ func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Contex
 		return err
 	}
 
-	if err := newPr.ValidateHwTemplateParameters(ctx, v.Client, clusterTemplate); err != nil {
+	if err := newPr.ValidateHwMgmtHwProfiles(ctx, v.Client, clusterTemplate); err != nil {
 		return err
 	}
 

@@ -35,7 +35,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/google/uuid"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"gopkg.in/yaml.v3"
 )
@@ -85,6 +87,7 @@ func requeueWithCustomInterval(interval time.Duration) ctrl.Result {
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=clustertemplates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=clustertemplates/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=clustertemplates/finalizers,verbs=update
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwareprofiles,verbs=get;list;watch
 //+kubebuilder:rbac:groups=hive.openshift.io,resources=clusterimagesets,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -205,25 +208,24 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 		validationErrs = append(validationErrs, err.Error())
 	}
 
-	// Validate the timeout value from the hardware template if it's present
-	if t.object.Spec.Templates.HwTemplate != "" {
-		_, err = ctlrutils.GetTimeoutFromHWTemplate(ctx, t.client, t.object.Spec.Templates.HwTemplate)
-		if err != nil {
-			validationErrs = append(validationErrs, err.Error())
-		}
+	// Validate the hwMgmtDefaults inline data
+	hwMgmtErrs, err := t.validateHwMgmtDefaults(ctx)
+	if err != nil {
+		return false, err
 	}
+	validationErrs = append(validationErrs, hwMgmtErrs...)
 
 	// Validate the ClusterInstance defaults configmap
 	err = validateConfigmapReference[map[string]any](
 		ctx, t.client,
-		t.object.Spec.Templates.ClusterInstanceDefaults,
+		t.object.Spec.TemplateDefaults.ClusterInstanceDefaults,
 		t.object.Namespace,
 		ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
 		ctlrutils.ClusterInstallationTimeoutConfigKey)
 	if err != nil {
 		if !ctlrutils.IsInputError(err) {
 			return false, fmt.Errorf("failed to validate the ConfigMap %s for ClusterInstance defaults: %w",
-				t.object.Spec.Templates.ClusterInstanceDefaults, err)
+				t.object.Spec.TemplateDefaults.ClusterInstanceDefaults, err)
 		}
 		validationErrs = append(validationErrs, err.Error())
 	}
@@ -250,28 +252,28 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 	// Validation for the policy template defaults configmap.
 	err = validateConfigmapReference[map[string]any](
 		ctx, t.client,
-		t.object.Spec.Templates.PolicyTemplateDefaults,
+		t.object.Spec.TemplateDefaults.PolicyTemplateDefaults,
 		t.object.Namespace,
 		ctlrutils.PolicyTemplateDefaultsConfigmapKey,
 		ctlrutils.ClusterConfigurationTimeoutConfigKey)
 	if err != nil {
 		if !ctlrutils.IsInputError(err) {
 			return false, fmt.Errorf("failed to validate the ConfigMap %s for policy template defaults: %w",
-				t.object.Spec.Templates.PolicyTemplateDefaults, err)
+				t.object.Spec.TemplateDefaults.PolicyTemplateDefaults, err)
 		}
 		validationErrs = append(validationErrs, err.Error())
 	}
 
 	// Validation for upgrade defaults confimap
-	if t.object.Spec.Templates.UpgradeDefaults != "" {
+	if t.object.Spec.TemplateDefaults.UpgradeDefaults != "" {
 		err = t.validateUpgradeDefaultsConfigmap(
-			ctx, t.client, t.object.Spec.Templates.UpgradeDefaults,
+			ctx, t.client, t.object.Spec.TemplateDefaults.UpgradeDefaults,
 			t.object.Namespace,
 		)
 		if err != nil {
 			if !ctlrutils.IsInputError(err) {
 				return false, fmt.Errorf("failed to validate the ConfigMap %s for upgrade defaults: %w",
-					t.object.Spec.Templates.UpgradeDefaults, err)
+					t.object.Spec.TemplateDefaults.UpgradeDefaults, err)
 			}
 			validationErrs = append(validationErrs, err.Error())
 		}
@@ -292,6 +294,57 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 		return false, err
 	}
 	return validationErrsMsg == "", nil
+}
+
+// validateHwMgmtDefaults validates the hwMgmtDefaults inline data in the ClusterTemplate.
+// Returns validation error messages and a fatal error if a transient failure occurs.
+func (t *clusterTemplateReconcilerTask) validateHwMgmtDefaults(ctx context.Context) ([]string, error) {
+	var validationErrs []string
+
+	if len(t.object.Spec.TemplateDefaults.HwMgmtDefaults.NodeGroupData) > 0 {
+		seenNodeGroups := map[string]struct{}{}
+		seenRoles := map[string]string{}
+		hwProfileNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
+		for _, ng := range t.object.Spec.TemplateDefaults.HwMgmtDefaults.NodeGroupData {
+			if _, exists := seenNodeGroups[ng.Name]; exists {
+				validationErrs = append(validationErrs,
+					fmt.Sprintf("duplicate nodeGroupData name %q in hwMgmtDefaults", ng.Name))
+			}
+			seenNodeGroups[ng.Name] = struct{}{}
+			if prev, exists := seenRoles[ng.Role]; exists {
+				validationErrs = append(validationErrs,
+					fmt.Sprintf("duplicate role %q in hwMgmtDefaults for groups %q and %q", ng.Role, prev, ng.Name))
+			}
+			seenRoles[ng.Role] = ng.Name
+			if ng.HwProfile != "" {
+				hwProfileObj := &hwmgmtv1alpha1.HardwareProfile{}
+				if err := t.client.Get(ctx, client.ObjectKey{Name: ng.HwProfile, Namespace: hwProfileNS}, hwProfileObj); err != nil {
+					if errors.IsNotFound(err) {
+						validationErrs = append(validationErrs,
+							fmt.Sprintf("HardwareProfile %q referenced by nodeGroup %q does not exist", ng.HwProfile, ng.Name))
+					} else {
+						return nil, fmt.Errorf("failed to get HardwareProfile %q for nodeGroup %q: %w", ng.HwProfile, ng.Name, err)
+					}
+				}
+			}
+		}
+	}
+
+	// Validate hardwareProvisioningTimeout independently of nodeGroupData
+	if t.object.Spec.TemplateDefaults.HwMgmtDefaults.HardwareProvisioningTimeout != "" {
+		d, err := time.ParseDuration(t.object.Spec.TemplateDefaults.HwMgmtDefaults.HardwareProvisioningTimeout)
+		if err != nil {
+			validationErrs = append(validationErrs,
+				fmt.Sprintf("hardwareProvisioningTimeout %q is not a valid duration: %v",
+					t.object.Spec.TemplateDefaults.HwMgmtDefaults.HardwareProvisioningTimeout, err))
+		} else if d <= 0 {
+			validationErrs = append(validationErrs,
+				fmt.Sprintf("hardwareProvisioningTimeout %q must be a positive duration",
+					t.object.Spec.TemplateDefaults.HwMgmtDefaults.HardwareProvisioningTimeout))
+		}
+	}
+
+	return validationErrs, nil
 }
 
 func (t *clusterTemplateReconcilerTask) validateUpgradeDefaultsConfigmap(
@@ -521,7 +574,11 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 		return ctlrutils.NewInputError("Error validating the policyTemplateParameters schema: %s", err.Error())
 	}
 	clusterInstanceParamsSchema := subSchemas[ctlrutils.TemplateParamClusterInstance].(map[string]any)
-	if err := validateClusterInstanceParamsSchema(object.Spec.Templates.HwTemplate, clusterInstanceParamsSchema); err != nil {
+	// Hardware provisioning is active if the CT has hwMgmtDefaults.nodeGroupData OR
+	// if the templateParameterSchema exposes hwMgmtParameters (allowing the PR to supply it).
+	hasHwMgmt := len(object.Spec.TemplateDefaults.HwMgmtDefaults.NodeGroupData) > 0 ||
+		provisioningv1alpha1.SchemaDefinesHwMgmtParameters(object)
+	if err := validateClusterInstanceParamsSchema(hasHwMgmt, clusterInstanceParamsSchema); err != nil {
 		return ctlrutils.NewInputError("Error validating the clusterInstanceParameters schema: %s", err.Error())
 	}
 	return nil
@@ -576,20 +633,20 @@ func validatePolicyTemplateParamsSchema(schema map[string]any) error {
 }
 
 // validateClusterInstanceParamsSchema validates the cluster instance parameters schema.
-func validateClusterInstanceParamsSchema(hwTemplate string, schema map[string]any) error {
-	if hwTemplate == "" {
-		return validateSchemaWithoutHWTemplate(schema)
+func validateClusterInstanceParamsSchema(hasHwMgmt bool, schema map[string]any) error {
+	if !hasHwMgmt {
+		return validateSchemaWithoutHwMgmt(schema)
 	}
 	return nil
 }
 
-// validateSchemaWithoutHWTemplate checks if the schema contains the expected properties
-// when hardware template is not provided.
-func validateSchemaWithoutHWTemplate(schema map[string]any) error {
+// validateSchemaWithoutHwMgmt checks if the schema contains the expected properties
+// when hardware management defaults are not provided.
+func validateSchemaWithoutHwMgmt(schema map[string]any) error {
 	var expectedSubSchema map[string]any
 	err := yaml.Unmarshal([]byte(ctlrutils.ClusterInstanceParamsSubSchemaForNoHWTemplate), &expectedSubSchema)
 	if err != nil {
-		return fmt.Errorf("failed to parse expected clusterInstanceParams subschema for no hwTemplate: %w", err)
+		return fmt.Errorf("failed to parse expected clusterInstanceParams subschema for no hwMgmtDefaults: %w", err)
 	}
 
 	if err := checkSchemaContains(schema, expectedSubSchema, ctlrutils.TemplateParamClusterInstance); err != nil {
@@ -717,9 +774,9 @@ func (r *ClusterTemplateReconciler) enqueueClusterTemplatesForConfigmap(ctx cont
 
 	for _, clusterTemplate := range clusterTemplates.Items {
 		if clusterTemplate.Namespace == obj.GetNamespace() {
-			if clusterTemplate.Spec.Templates.ClusterInstanceDefaults == obj.GetName() ||
-				clusterTemplate.Spec.Templates.PolicyTemplateDefaults == obj.GetName() ||
-				clusterTemplate.Spec.Templates.UpgradeDefaults == obj.GetName() {
+			if clusterTemplate.Spec.TemplateDefaults.ClusterInstanceDefaults == obj.GetName() ||
+				clusterTemplate.Spec.TemplateDefaults.PolicyTemplateDefaults == obj.GetName() ||
+				clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults == obj.GetName() {
 				// The configmap is referenced in this cluster template , enqueue it
 				requests = append(requests, reconcile.Request{
 					NamespacedName: types.NamespacedName{
@@ -740,10 +797,10 @@ func (t *clusterTemplateReconcilerTask) validateClusterImageSetMatchesRelease(ct
 
 	// Get the ClusterInstanceDefaults ConfigMap
 	clusterInstanceDefaultsCm, err := ctlrutils.GetConfigmap(
-		ctx, t.client, t.object.Spec.Templates.ClusterInstanceDefaults, t.object.Namespace)
+		ctx, t.client, t.object.Spec.TemplateDefaults.ClusterInstanceDefaults, t.object.Namespace)
 	if err != nil {
 		return fmt.Errorf("failed to get ClusterInstanceDefaults ConfigMap %s: %w",
-			t.object.Spec.Templates.ClusterInstanceDefaults, err)
+			t.object.Spec.TemplateDefaults.ClusterInstanceDefaults, err)
 	}
 
 	// Extract the clusterinstance-defaults data from the ConfigMap
@@ -751,7 +808,7 @@ func (t *clusterTemplateReconcilerTask) validateClusterImageSetMatchesRelease(ct
 		clusterInstanceDefaultsCm, ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey)
 	if err != nil {
 		return fmt.Errorf("failed to extract clusterinstance-defaults from ConfigMap %s: %w",
-			t.object.Spec.Templates.ClusterInstanceDefaults, err)
+			t.object.Spec.TemplateDefaults.ClusterInstanceDefaults, err)
 	}
 
 	// Extract the clusterImageSetNameRef from the cluster instance data
@@ -759,14 +816,14 @@ func (t *clusterTemplateReconcilerTask) validateClusterImageSetMatchesRelease(ct
 	if !exists {
 		return ctlrutils.NewInputError(
 			"clusterImageSetNameRef not found in ClusterInstanceDefaults ConfigMap %s",
-			t.object.Spec.Templates.ClusterInstanceDefaults)
+			t.object.Spec.TemplateDefaults.ClusterInstanceDefaults)
 	}
 
 	clusterImageSetName, ok := clusterImageSetNameRef.(string)
 	if !ok {
 		return ctlrutils.NewInputError(
 			"clusterImageSetNameRef in ClusterInstanceDefaults ConfigMap %s is not a string: %T",
-			t.object.Spec.Templates.ClusterInstanceDefaults, clusterImageSetNameRef)
+			t.object.Spec.TemplateDefaults.ClusterInstanceDefaults, clusterImageSetNameRef)
 	}
 
 	// Fetch the ClusterImageSet resource

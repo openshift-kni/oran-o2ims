@@ -242,7 +242,6 @@ func getFakeClientAndMockServer(objs ...client.Object) (client.WithWatch, *MockH
 		WithStatusSubresource(&provisioningv1alpha1.ProvisioningRequest{}).
 		WithStatusSubresource(&siteconfig.ClusterInstance{}).
 		WithStatusSubresource(&clusterv1.ManagedCluster{}).
-		WithStatusSubresource(&hwmgmtv1alpha1.HardwareTemplate{}).
 		WithStatusSubresource(&pluginsv1alpha1.NodeAllocationRequest{}).
 		WithStatusSubresource(&pluginsv1alpha1.AllocatedNode{}).
 		WithStatusSubresource(&openshiftv1.ClusterVersion{}).
@@ -332,7 +331,6 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(appsv1.SchemeGroupVersion, &appsv1.DeploymentList{})
 	scheme.AddKnownTypes(siteconfig.GroupVersion, &siteconfig.ClusterInstance{})
 	scheme.AddKnownTypes(siteconfig.GroupVersion, &siteconfig.ClusterInstanceList{})
-	scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion, &hwmgmtv1alpha1.HardwareTemplate{})
 	scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion, &hwmgmtv1alpha1.HardwareProfile{})
 	scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion, &hwmgmtv1alpha1.HardwareProfileList{})
 	scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion, &hwmgmtv1alpha1.HardwarePlugin{})

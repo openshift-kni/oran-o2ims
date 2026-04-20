@@ -692,6 +692,74 @@ func DeepMergeSlices[K comparable, V any](dst, src []V, checkType bool) ([]V, er
 	return result, nil
 }
 
+// MergeNodeGroupData performs a name-keyed merge of src node groups into dst node groups.
+// Node groups are matched by the "name" field. For matched pairs, the src fields are
+// deep-merged over the dst fields (src wins). Unmatched dst groups are preserved.
+// Unmatched src groups are appended as new node groups.
+func MergeNodeGroupData(dst, src []any) ([]any, error) {
+	// Build index of dst groups by name
+	dstByName := make(map[string]int)
+	for i, item := range dst {
+		itemMap, ok := item.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("dst nodeGroupData element at index %d is not a map", i)
+		}
+		name, ok := itemMap["name"].(string)
+		if !ok {
+			return nil, fmt.Errorf("dst nodeGroupData element at index %d missing 'name' field", i)
+		}
+		if _, exists := dstByName[name]; exists {
+			return nil, fmt.Errorf("duplicate nodeGroup name %q in defaults", name)
+		}
+		dstByName[name] = i
+	}
+
+	// Deep copy dst as the starting result
+	result := make([]any, len(dst))
+	for i, item := range dst {
+		dstMap := item.(map[string]any)
+		merged := make(map[string]any)
+		for k, v := range dstMap {
+			merged[k] = v
+		}
+		result[i] = merged
+	}
+
+	// Track which src groups have been seen
+	srcSeen := make(map[string]bool)
+
+	for _, srcItem := range src {
+		srcMap, ok := srcItem.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("src nodeGroupData element is not a map")
+		}
+		name, ok := srcMap["name"].(string)
+		if !ok {
+			return nil, fmt.Errorf("src nodeGroupData element missing 'name' field")
+		}
+		if srcSeen[name] {
+			return nil, fmt.Errorf("duplicate nodeGroup name %q in overrides", name)
+		}
+		srcSeen[name] = true
+
+		if dstIdx, exists := dstByName[name]; exists {
+			// Merge src over dst for this group
+			dstMap := result[dstIdx].(map[string]any)
+			if err := DeepMergeMaps(dstMap, srcMap, false); err != nil {
+				return nil, fmt.Errorf("failed to merge nodeGroup %q: %w", name, err)
+			}
+		} else {
+			// New group from src — validate required fields before appending
+			if role, _ := srcMap["role"].(string); role == "" {
+				return nil, fmt.Errorf("new nodeGroup %q is missing required field 'role'", name)
+			}
+			result = append(result, srcMap)
+		}
+	}
+
+	return result, nil
+}
+
 // GetDefaultsFromConfigMap returns the data of a defaults ConfigMap with its content
 // separated in 2 sections:
 //   - immutable: the values for configuration that is not exposed through the ClusterTemplate.

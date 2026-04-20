@@ -540,14 +540,17 @@ func updateNodeStatus(ctx context.Context,
 		node.Status.Interfaces = info.Interfaces
 
 		if updating {
-			reason := hwmgmtv1alpha1.InProgress
-			message := "Hardware configuration in progress"
-			status := metav1.ConditionFalse
 			hwmgrutils.SetStatusCondition(&node.Status.Conditions,
 				string(hwmgmtv1alpha1.Provisioned),
-				string(reason),
-				status,
-				message)
+				string(hwmgmtv1alpha1.InProgress),
+				metav1.ConditionFalse,
+				"Hardware configuration in progress")
+		} else {
+			hwmgrutils.SetStatusCondition(&node.Status.Conditions,
+				string(hwmgmtv1alpha1.Provisioned),
+				string(hwmgmtv1alpha1.Completed),
+				metav1.ConditionTrue,
+				"Hardware provisioning completed")
 		}
 
 		node.Status.HwProfile = hwprofile

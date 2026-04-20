@@ -7,8 +7,14 @@ spec:
   name: sno-ran-du
   version: v4-Y-Z-3
   release: 4.Y.Z
-  templates:
-    hwTemplate: dell-xr8620t-blue
+  templateDefaults:
+    hwMgmtDefaults:
+      hardwareProvisioningTimeout: "90m"
+      nodeGroupData:
+        - name: controller
+          role: master
+          resourceSelector:
+            resourceselector.clcm.openshift.io/server-type: XR8620t
     clusterInstanceDefaults: clusterinstance-defaults-v3
     policyTemplateDefaults: policytemplate-defaults-v1
   templateParameterSchema:
@@ -17,24 +23,35 @@ spec:
         type: string
       oCloudSiteId:
         type: string
-      hwTemplateParameters:
+      hwMgmtParameters:
         description: >
-          hwTemplateParameters allows overriding hardware template settings
-          per nodeGroup, such as the HardwareProfile to use.
+          hwMgmtParameters allows overriding hardware management defaults.
         properties:
+          hardwareProvisioningTimeout:
+            type: string
           nodeGroupData:
-            description: >
-              Per-nodeGroup overrides, keyed by nodeGroup name as defined in
-              the HardwareTemplate's nodeGroupData.
-            type: object
-            additionalProperties:
+            type: array
+            items:
               type: object
+              required:
+                - name
               properties:
-                hwProfile:
-                  description: >
-                    Name of the HardwareProfile CR to use for this node group.
-                    Overrides the hwProfile in the HardwareTemplate when both are set.
+                name:
                   type: string
+                  minLength: 1
+                role:
+                  type: string
+                  enum:
+                    - master
+                    - worker
+                hwProfile:
+                  type: string
+                resourcePoolId:
+                  type: string
+                resourceSelector:
+                  type: object
+                  additionalProperties:
+                    type: string
         type: object
       policyTemplateParameters:
         description: policyTemplateSchema defines the available parameters for cluster configuration

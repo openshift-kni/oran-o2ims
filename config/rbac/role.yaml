@@ -127,7 +127,6 @@ rules:
   resources:
   - clustertemplates
   - hardwareplugins
-  - hardwaretemplates
   - nodes
   - provisioningrequests
   verbs:
@@ -151,7 +150,6 @@ rules:
   - clustertemplates/status
   - hardwareplugins/status
   - hardwareprofiles/status
-  - hardwaretemplates/status
   - nodes/status
   - provisioningrequests/status
   verbs:

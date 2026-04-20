@@ -625,6 +625,188 @@ var _ = Describe("DeepMergeMaps and DeepMergeMapsSlices", func() {
 	})
 })
 
+var _ = Describe("MergeNodeGroupData", func() {
+	It("should merge matched groups by name, preserving dst fields and overriding with src", func() {
+		dst := []any{
+			map[string]any{"name": "controller", "role": "master", "hwProfile": "profile-64G", "resourcePoolId": "pool-1"},
+			map[string]any{"name": "worker", "role": "worker", "hwProfile": "profile-128G", "resourcePoolId": "pool-1"},
+		}
+		src := []any{
+			map[string]any{"name": "controller", "resourcePoolId": "pool-2"},
+			map[string]any{"name": "worker", "resourcePoolId": "pool-2", "resourceSelector": map[string]any{"rack": "rack-3"}},
+		}
+		result, err := MergeNodeGroupData(dst, src)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(result).To(HaveLen(2))
+
+		controller := result[0].(map[string]any)
+		Expect(controller["name"]).To(Equal("controller"))
+		Expect(controller["role"]).To(Equal("master"))
+		Expect(controller["hwProfile"]).To(Equal("profile-64G"))
+		Expect(controller["resourcePoolId"]).To(Equal("pool-2"))
+
+		worker := result[1].(map[string]any)
+		Expect(worker["name"]).To(Equal("worker"))
+		Expect(worker["role"]).To(Equal("worker"))
+		Expect(worker["hwProfile"]).To(Equal("profile-128G"))
+		Expect(worker["resourcePoolId"]).To(Equal("pool-2"))
+		Expect(worker["resourceSelector"]).To(Equal(map[string]any{"rack": "rack-3"}))
+	})
+
+	It("should preserve unmatched dst groups", func() {
+		dst := []any{
+			map[string]any{"name": "controller", "role": "master"},
+			map[string]any{"name": "worker", "role": "worker"},
+		}
+		src := []any{
+			map[string]any{"name": "controller", "resourcePoolId": "pool-1"},
+		}
+		result, err := MergeNodeGroupData(dst, src)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(result).To(HaveLen(2))
+
+		worker := result[1].(map[string]any)
+		Expect(worker["name"]).To(Equal("worker"))
+		Expect(worker["role"]).To(Equal("worker"))
+	})
+
+	It("should append new src groups not in dst", func() {
+		dst := []any{
+			map[string]any{"name": "controller", "role": "master"},
+		}
+		src := []any{
+			map[string]any{"name": "extra-worker", "role": "worker", "hwProfile": "profile-128G", "resourcePoolId": "pool-2"},
+		}
+		result, err := MergeNodeGroupData(dst, src)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(result).To(HaveLen(2))
+
+		Expect(result[0].(map[string]any)["name"]).To(Equal("controller"))
+		Expect(result[1].(map[string]any)["name"]).To(Equal("extra-worker"))
+		Expect(result[1].(map[string]any)["role"]).To(Equal("worker"))
+	})
+
+	It("should handle mixed matched, unmatched, and new groups", func() {
+		dst := []any{
+			map[string]any{"name": "controller", "role": "master", "hwProfile": "profile-64G"},
+			map[string]any{"name": "worker", "role": "worker", "hwProfile": "profile-128G"},
+		}
+		src := []any{
+			map[string]any{"name": "worker", "resourcePoolId": "pool-east"},
+			map[string]any{"name": "extra-worker", "role": "worker", "hwProfile": "profile-256G"},
+		}
+		result, err := MergeNodeGroupData(dst, src)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(result).To(HaveLen(3))
+
+		Expect(result[0].(map[string]any)["name"]).To(Equal("controller"))
+		Expect(result[0].(map[string]any)["hwProfile"]).To(Equal("profile-64G"))
+
+		Expect(result[1].(map[string]any)["name"]).To(Equal("worker"))
+		Expect(result[1].(map[string]any)["hwProfile"]).To(Equal("profile-128G"))
+		Expect(result[1].(map[string]any)["resourcePoolId"]).To(Equal("pool-east"))
+
+		Expect(result[2].(map[string]any)["name"]).To(Equal("extra-worker"))
+	})
+
+	It("should work with empty src", func() {
+		dst := []any{
+			map[string]any{"name": "controller", "role": "master"},
+		}
+		result, err := MergeNodeGroupData(dst, []any{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(result).To(HaveLen(1))
+		Expect(result[0].(map[string]any)["name"]).To(Equal("controller"))
+	})
+
+	It("should work with empty dst", func() {
+		src := []any{
+			map[string]any{"name": "controller", "role": "master"},
+		}
+		result, err := MergeNodeGroupData([]any{}, src)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(result).To(HaveLen(1))
+		Expect(result[0].(map[string]any)["name"]).To(Equal("controller"))
+	})
+
+	It("should not mutate the original dst slice", func() {
+		dst := []any{
+			map[string]any{"name": "controller", "role": "master", "hwProfile": "old-profile"},
+		}
+		src := []any{
+			map[string]any{"name": "controller", "hwProfile": "new-profile"},
+		}
+		result, err := MergeNodeGroupData(dst, src)
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(result[0].(map[string]any)["hwProfile"]).To(Equal("new-profile"))
+		Expect(dst[0].(map[string]any)["hwProfile"]).To(Equal("old-profile"))
+	})
+
+	It("should return error when dst element is not a map", func() {
+		dst := []any{"not-a-map"}
+		src := []any{}
+		_, err := MergeNodeGroupData(dst, src)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("is not a map"))
+	})
+
+	It("should return error when dst element is missing name", func() {
+		dst := []any{
+			map[string]any{"role": "master"},
+		}
+		src := []any{}
+		_, err := MergeNodeGroupData(dst, src)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("missing 'name' field"))
+	})
+
+	It("should return error when src element is not a map", func() {
+		dst := []any{
+			map[string]any{"name": "controller", "role": "master"},
+		}
+		src := []any{"not-a-map"}
+		_, err := MergeNodeGroupData(dst, src)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("is not a map"))
+	})
+
+	It("should return error when src element is missing name", func() {
+		dst := []any{
+			map[string]any{"name": "controller", "role": "master"},
+		}
+		src := []any{
+			map[string]any{"role": "worker"},
+		}
+		_, err := MergeNodeGroupData(dst, src)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("missing 'name' field"))
+	})
+
+	It("should return error for duplicate names in dst", func() {
+		dst := []any{
+			map[string]any{"name": "controller", "role": "master"},
+			map[string]any{"name": "controller", "role": "worker"},
+		}
+		_, err := MergeNodeGroupData(dst, []any{})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("duplicate nodeGroup name \"controller\" in defaults"))
+	})
+
+	It("should return error for duplicate names in src", func() {
+		dst := []any{
+			map[string]any{"name": "controller", "role": "master"},
+		}
+		src := []any{
+			map[string]any{"name": "worker", "role": "worker"},
+			map[string]any{"name": "worker", "hwProfile": "profile-2"},
+		}
+		_, err := MergeNodeGroupData(dst, src)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("duplicate nodeGroup name \"worker\" in overrides"))
+	})
+})
+
 func Test_mapKeysToSlice(t *testing.T) {
 	type args struct {
 		inputMap map[string]bool

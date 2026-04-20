@@ -450,15 +450,9 @@ func (t *provisioningRequestReconcilerTask) applyNodeConfiguration(
 			updatedNode["hostRef"] = hostRef
 		}
 		// Boot MAC
-		bootMAC := ""
-		if !t.isHardwareProvisionSkipped() {
-
-			bootMAC, err = ctlrutils.GetBootMacAddress(nodeInfos[0].Interfaces, constants.BootInterfaceLabel)
-			if err != nil {
-				return fmt.Errorf("failed to get boot MAC for node '%s': %w", hostName, err)
-			}
-		} else {
-			return fmt.Errorf("failed to get boot MAC for node '%s'", hostName)
+		bootMAC, err := ctlrutils.GetBootMacAddress(nodeInfos[0].Interfaces, constants.BootInterfaceLabel)
+		if err != nil {
+			return fmt.Errorf("failed to get boot MAC for node '%s': %w", hostName, err)
 		}
 		updatedNode["bootMACAddress"] = bootMAC
 
@@ -799,7 +793,7 @@ func isConfigTransactionObserved(observedID, expectedGeneration int64) bool {
 // checkExistingNodeAllocationRequest checks for an existing NodeAllocationRequest and verifies changes if necessary
 func (t *provisioningRequestReconcilerTask) checkExistingNodeAllocationRequest(
 	ctx context.Context,
-	hwTemplate *hwmgmtv1alpha1.HardwareTemplate,
+	hwMgmtData map[string]any,
 	nodeAllocationRequestId string) (*hwmgrpluginapi.NodeAllocationRequestResponse, error) {
 
 	if t.hwpluginClient == nil {
@@ -811,7 +805,7 @@ func (t *provisioningRequestReconcilerTask) checkExistingNodeAllocationRequest(
 		return nil, fmt.Errorf("failed to get NodeAllocationRequest '%s': %w", nodeAllocationRequestId, err)
 	}
 	if exist {
-		err = validateNodeGroupsMatchNAR(hwTemplate, nodeAllocationRequestResponse.NodeAllocationRequest)
+		err = validateNodeGroupsMatchNAR(hwMgmtData, nodeAllocationRequestResponse.NodeAllocationRequest)
 		if err != nil {
 			return nil, ctlrutils.NewInputError("%w", err)
 		}
@@ -820,26 +814,11 @@ func (t *provisioningRequestReconcilerTask) checkExistingNodeAllocationRequest(
 	return nodeAllocationRequestResponse, nil
 }
 
-// resolveHwProfile returns the hwProfile for a given nodeGroup, checking
-// the overrides map first (from templateParameters), then falling back to
-// the HardwareTemplate's nodeGroupData value.
-func resolveHwProfile(groupName, templateHwProfile string, overrides map[string]string) (string, error) {
-	if profile, ok := overrides[groupName]; ok {
-		return profile, nil
-	}
+// buildNodeAllocationRequest builds the NodeAllocationRequest from the pre-merged hwMgmt data and cluster instance
+func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(
+	clusterInstance *unstructured.Unstructured) (*hwmgrpluginapi.NodeAllocationRequest, error) {
 
-	if templateHwProfile != "" {
-		return templateHwProfile, nil
-	}
-
-	return "", fmt.Errorf("no hwProfile specified for nodeGroup %s: "+
-		"provide it via templateParameters.%s.%s.%s.hwProfile or in the HardwareTemplate nodeGroupData",
-		groupName, provisioningv1alpha1.TemplateParamHwTemplate, provisioningv1alpha1.TemplateParamNodeGroupData, groupName)
-}
-
-// buildNodeAllocationRequest builds the NodeAllocationRequest based on the templates and cluster instance
-func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(clusterInstance *unstructured.Unstructured,
-	hwTemplate *hwmgmtv1alpha1.HardwareTemplate) (*hwmgrpluginapi.NodeAllocationRequest, error) {
+	hwMgmtData := t.clusterInput.hwMgmtData
 
 	roleCounts := make(map[string]int)
 	nodes, found, err := unstructured.NestedSlice(clusterInstance.Object, "spec", "nodes")
@@ -860,41 +839,45 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(clusterIn
 		roleCounts[role]++
 	}
 
-	hwProfileOverrides, err := provisioningv1alpha1.ParseHwProfileOverrides(t.object.Spec.TemplateParameters.Raw)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse hwProfile overrides: %w", err)
+	// Extract nodeGroupData from the pre-merged hwMgmt data
+	nodeGroupDataRaw, ok := hwMgmtData["nodeGroupData"]
+	if !ok {
+		return nil, ctlrutils.NewInputError("nodeGroupData not found in merged hwMgmt data")
+	}
+	nodeGroupDataSlice, ok := nodeGroupDataRaw.([]any)
+	if !ok {
+		return nil, ctlrutils.NewInputError("nodeGroupData must be an array")
 	}
 
-	resourceSelectorOverrides, err := provisioningv1alpha1.ParseResourceSelectorOverrides(t.object.Spec.TemplateParameters.Raw)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse resourceSelector overrides: %w", err)
-	}
-
+	// Node group validation (name, role, duplicates) is handled by validateMergedNodeGroups
+	// which runs before this function. Here we only extract values to build the NAR.
 	nodeGroups := []hwmgrpluginapi.NodeGroup{}
-	for _, group := range hwTemplate.Spec.NodeGroupData {
-		hwProfile, err := resolveHwProfile(group.Name, group.HwProfile, hwProfileOverrides)
-		if err != nil {
-			return nil, err
+	for _, ngRaw := range nodeGroupDataSlice {
+		ngMap, ok := ngRaw.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("nodeGroupData element is not a map")
 		}
 
-		// Start with the resource selector from the HardwareTemplate
+		name, _ := ngMap["name"].(string)
+		role, _ := ngMap["role"].(string)
+		hwProfile, _ := ngMap["hwProfile"].(string)
+		resourcePoolId, _ := ngMap["resourcePoolId"].(string)
+
 		resourceSelector := make(map[string]string)
-		for k, v := range group.ResourceSelector {
-			resourceSelector[k] = v
-		}
-		// Merge any additional resource selector criteria from the ProvisioningRequest
-		if additionalSelectors, ok := resourceSelectorOverrides[group.Name]; ok {
-			for k, v := range additionalSelectors {
-				resourceSelector[k] = v
+		if rs, ok := ngMap["resourceSelector"].(map[string]any); ok {
+			for k, v := range rs {
+				if vStr, ok := v.(string); ok {
+					resourceSelector[k] = vStr
+				}
 			}
 		}
 
 		ngd := hwmgrpluginapi.NodeGroupData{
 			HwProfile:        hwProfile,
-			Name:             group.Name,
-			ResourceGroupId:  group.ResourcePoolId,
+			Name:             name,
+			ResourceGroupId:  resourcePoolId,
 			ResourceSelector: resourceSelector,
-			Role:             group.Role,
+			Role:             role,
 		}
 		nodeGroup := newNodeGroup(ngd, roleCounts)
 		nodeGroups = append(nodeGroups, nodeGroup)
@@ -921,24 +904,12 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(clusterIn
 	nodeAllocationRequest.Site = siteID.(string)
 	nodeAllocationRequest.ClusterId = clusterId.(string)
 	nodeAllocationRequest.NodeGroup = nodeGroups
-	// Use Generation as ConfigTransactionId: Generation tracks spec changes in Kubernetes,
-	// which is exactly what ConfigTransactionId represents - a unique identifier for each
-	// configuration change. When the ProvisioningRequest spec changes, Generation increments,
-	// providing a monotonic identifier for tracking configuration transactions.
 	nodeAllocationRequest.ConfigTransactionId = t.object.Generation
 
-	// Set HardwareProvisioningTimeout - check ProvisioningRequest override first,
-	// then fall back to HardwareTemplate value, then default
-	timeoutOverride, err := provisioningv1alpha1.ParseHwTemplateTimeoutOverride(t.object.Spec.TemplateParameters.Raw)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse hardwareProvisioningTimeout override: %w", err)
-	}
-	timeoutStr := timeoutOverride
-	if timeoutStr == "" {
-		timeoutStr = hwTemplate.Spec.HardwareProvisioningTimeout
-	}
-	if timeoutStr == "" {
-		timeoutStr = ctlrutils.DefaultHardwareProvisioningTimeout.String()
+	// Set HardwareProvisioningTimeout from merged data, or use default
+	timeoutStr := ctlrutils.DefaultHardwareProvisioningTimeout.String()
+	if ts, ok := hwMgmtData["hardwareProvisioningTimeout"].(string); ok && ts != "" {
+		timeoutStr = ts
 	}
 	nodeAllocationRequest.HardwareProvisioningTimeout = &timeoutStr
 
@@ -950,9 +921,6 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(clusterIn
 	// Create callback configuration with the callback URL
 	nodeAllocationRequest.Callback = &hwmgrpluginapi.Callback{
 		CallbackURL: callbackURL,
-		// Note: CaBundleName and AuthClientConfig are optional and can be added later if needed
-		// CaBundleName: nil,
-		// AuthClientConfig: nil,
 	}
 
 	return nodeAllocationRequest, nil
@@ -961,55 +929,25 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(clusterIn
 func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx context.Context,
 	clusterInstance *unstructured.Unstructured) (*hwmgrpluginapi.NodeAllocationRequest, error) {
 
-	clusterTemplate, err := t.object.GetClusterTemplateRef(ctx, t.client)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get the ClusterTemplate for ProvisioningRequest %s: %w ", t.object.Name, err)
-	}
-
-	hwTemplateName := clusterTemplate.Spec.Templates.HwTemplate
-	hwTemplate, err := ctlrutils.GetHardwareTemplate(ctx, t.client, hwTemplateName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get the HardwareTemplate %s resource: %w ", hwTemplateName, err)
-	}
+	hwMgmtData := t.clusterInput.hwMgmtData
 
 	if t.object.Status.Extensions.NodeAllocationRequestRef != nil {
 		nodeAllocationRequestID := t.object.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID
-		if _, err := t.checkExistingNodeAllocationRequest(ctx, hwTemplate, nodeAllocationRequestID); err != nil {
-			if ctlrutils.IsInputError(err) {
-				updateErr := ctlrutils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, provisioningv1alpha1.ConditionType(hwmgmtv1alpha1.Validation),
-					provisioningv1alpha1.ConditionReason(hwmgmtv1alpha1.Failed), metav1.ConditionFalse, err.Error())
-				if updateErr != nil {
-					// nolint: wrapcheck
-					return nil, updateErr
-				}
-			}
+		if _, err := t.checkExistingNodeAllocationRequest(ctx, hwMgmtData, nodeAllocationRequestID); err != nil {
 			return nil, err
 		}
 	}
 
-	hwPluginRef := hwTemplate.Spec.GetHardwarePluginRef()
+	// Get the hardware plugin reference, defaulting to metal3
+	hwPluginRef := t.ctDetails.templates.HwMgmtDefaults.GetHardwarePluginRef()
 
 	hwplugin := &hwmgmtv1alpha1.HardwarePlugin{}
 	hwpluginNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
 	if err := t.client.Get(ctx, types.NamespacedName{Namespace: hwpluginNS, Name: hwPluginRef}, hwplugin); err != nil {
-		updateErr := ctlrutils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, provisioningv1alpha1.ConditionType(hwmgmtv1alpha1.Validation),
-			provisioningv1alpha1.ConditionReason(hwmgmtv1alpha1.Failed), metav1.ConditionFalse,
-			"Unable to find specified HardwarePlugin: "+hwPluginRef)
-		if updateErr != nil {
-			return nil, fmt.Errorf("failed to update hwtemplate %s status: %w", hwTemplateName, updateErr)
-		}
 		return nil, fmt.Errorf("could not find specified HardwarePlugin: %s/%s, err=%w", hwpluginNS, hwPluginRef, err)
 	}
 
-	// The HardwareTemplate is validated by the CRD schema and no additional validation is needed
-	updateErr := ctlrutils.UpdateHardwareTemplateStatusCondition(ctx, t.client, hwTemplate, provisioningv1alpha1.ConditionType(hwmgmtv1alpha1.Validation),
-		provisioningv1alpha1.ConditionReason(hwmgmtv1alpha1.Completed), metav1.ConditionTrue, "Validated")
-	if updateErr != nil {
-		// nolint: wrapcheck
-		return nil, updateErr
-	}
-
-	nodeAllocationRequest, err := t.buildNodeAllocationRequest(clusterInstance, hwTemplate)
+	nodeAllocationRequest, err := t.buildNodeAllocationRequest(clusterInstance)
 	if err != nil {
 		return nil, err
 	}

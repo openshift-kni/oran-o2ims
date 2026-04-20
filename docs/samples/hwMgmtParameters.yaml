@@ -1,0 +1,58 @@
+hwMgmtParameters:
+  description: >
+    hwMgmtParameters allows overriding hardware management defaults,
+    such as the HardwareProfile, resource selector criteria, and the
+    hardware provisioning timeout.
+  properties:
+    hardwareProvisioningTimeout:
+      description: >
+        Override the hardware provisioning timeout from the ClusterTemplate
+        hwMgmtDefaults. Must be a valid duration string (e.g., "90m", "2h").
+      type: string
+    nodeGroupData:
+      description: >
+        Per-nodeGroup overrides, matched by name against the
+        ClusterTemplate's hwMgmtDefaults.nodeGroupData entries.
+        New node groups can be added by specifying a name not in the defaults;
+        new groups must include the role field (master or worker).
+      type: array
+      items:
+        type: object
+        required:
+          - name
+        properties:
+          name:
+            description: >
+              Name of the node group. Must match a name in the ClusterTemplate's
+              hwMgmtDefaults.nodeGroupData for overrides, or be a new name to
+              add a node group.
+            type: string
+            minLength: 1
+          role:
+            description: >
+              Role of the node group. Required when adding a new node group
+              that does not exist in the ClusterTemplate hwMgmtDefaults.
+              For overrides of existing groups, role is inherited from the defaults.
+            type: string
+            enum:
+              - master
+              - worker
+          hwProfile:
+            description: >
+              Name of the HardwareProfile CR to use for this node group.
+              Overrides the hwProfile in the ClusterTemplate hwMgmtDefaults.
+            type: string
+          resourcePoolId:
+            description: >
+              Identifier for the Resource Pool in the hardware manager instance.
+            type: string
+          resourceSelector:
+            description: >
+              Additional resource selector criteria for BMH selection.
+              These are merged with the selectors from the ClusterTemplate
+              hwMgmtDefaults. Existing criteria can be overridden by
+              specifying the same key with a different value.
+            type: object
+            additionalProperties:
+              type: string
+  type: object

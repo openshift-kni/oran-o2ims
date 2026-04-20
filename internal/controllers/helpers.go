@@ -13,7 +13,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
-	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
@@ -60,24 +59,33 @@ func collectNodeDetails(ctx context.Context, c client.Client, nodes *[]hwmgrplug
 }
 
 // validateNodeGroupsMatchNAR verifies that every node group in the existing
-// NodeAllocationRequest has a corresponding entry in the HardwareTemplate.
-// This is a sanity check that the HardwareTemplate is still applicable to the NAR.
-func validateNodeGroupsMatchNAR(hardwareTemplate *hwmgmtv1alpha1.HardwareTemplate, nodeAllocationRequest *hwmgrpluginapi.NodeAllocationRequest) error {
-
-	for _, specNodeGroup := range nodeAllocationRequest.NodeGroup {
-		var found bool
-		for _, ng := range hardwareTemplate.Spec.NodeGroupData {
-			if specNodeGroup.NodeGroupData.Name != ng.Name {
-				continue
+// NodeAllocationRequest has a corresponding entry in the merged hwMgmt data.
+func validateNodeGroupsMatchNAR(hwMgmtData map[string]any, nodeAllocationRequest *hwmgrpluginapi.NodeAllocationRequest) error {
+	// Build set of valid group names from merged hwMgmt data
+	validNames := make(map[string]bool)
+	if ngData, ok := hwMgmtData["nodeGroupData"].([]any); ok {
+		for _, ng := range ngData {
+			if ngMap, ok := ng.(map[string]any); ok {
+				if name, ok := ngMap["name"].(string); ok {
+					validNames[name] = true
+				}
 			}
-
-			found = true
-			break
 		}
+	}
 
-		// If no match was found for the current specNodeGroup, return an error
-		if !found {
-			return fmt.Errorf("node group %s found in NodeAllocationRequest but not in Hardware Template", specNodeGroup.NodeGroupData.Name)
+	// Check NAR groups exist in hwMgmt data
+	narNames := make(map[string]bool)
+	for _, specNodeGroup := range nodeAllocationRequest.NodeGroup {
+		narNames[specNodeGroup.NodeGroupData.Name] = true
+		if !validNames[specNodeGroup.NodeGroupData.Name] {
+			return fmt.Errorf("node group %s found in NodeAllocationRequest but not in hwMgmt data", specNodeGroup.NodeGroupData.Name)
+		}
+	}
+
+	// Check hwMgmt data groups exist in NAR
+	for name := range validNames {
+		if !narNames[name] {
+			return fmt.Errorf("node group %s found in hwMgmt data but not in NodeAllocationRequest", name)
 		}
 	}
 

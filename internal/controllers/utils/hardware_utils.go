@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -303,25 +302,7 @@ func GetStatusMessage(condition hwmgmtv1alpha1.ConditionType) string {
 	return "provisioning"
 }
 
-// GetHardwareTemplate retrieves the hardware template resource for a given name.
-// HardwareTemplates are expected to be in the operator's namespace (OCLOUD_MANAGER_NAMESPACE).
-func GetHardwareTemplate(ctx context.Context, c client.Client, hwTemplateName string) (*hwmgmtv1alpha1.HardwareTemplate, error) {
-	hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{}
-
-	hwTemplateNS := GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
-	exists, err := DoesK8SResourceExist(ctx, c, hwTemplateName, hwTemplateNS, hwTemplate)
-	if err != nil {
-		return hwTemplate, fmt.Errorf("failed to retrieve hardware template resource %s: %w", hwTemplateName, err)
-	}
-	if !exists {
-		return hwTemplate, fmt.Errorf("hardware template resource %s does not exist", hwTemplateName)
-	}
-	return hwTemplate, nil
-}
-
 // GetHardwarePluginRefFromProvisioningRequest retrieves the HardwarePlugin Reference from the ProvisioningRequest.
-// The HardwarePluginRef is stored in the HardwareTemplate which can be obtained by fetching the ClusterTemplate
-// associated with the given ProvisioningRequest.
 func GetHardwarePluginRefFromProvisioningRequest(ctx context.Context, c client.Client,
 	pr *provisioningv1alpha1.ProvisioningRequest) (string, error) {
 
@@ -331,17 +312,7 @@ func GetHardwarePluginRefFromProvisioningRequest(ctx context.Context, c client.C
 		return "", fmt.Errorf("failed to get ClusterTemplate: %w", err)
 	}
 
-	// Get the HardwarePluginRef from the HardwareTemplate
-	if clusterTemplate.Spec.Templates.HwTemplate == "" {
-		return "", fmt.Errorf("missing HardwareTemplate reference in ClusterTemplate")
-	}
-
-	hwTemplate, err := GetHardwareTemplate(ctx, c, clusterTemplate.Spec.Templates.HwTemplate)
-	if err != nil {
-		return "", fmt.Errorf("failed to get HardwareTemplate: %w", err)
-	}
-
-	return hwTemplate.Spec.GetHardwarePluginRef(), nil
+	return clusterTemplate.Spec.TemplateDefaults.HwMgmtDefaults.GetHardwarePluginRef(), nil
 }
 
 // GetHardwarePlugin retrieves the HardwarePlugin resource for a given name.
@@ -377,53 +348,6 @@ func GetHardwarePluginFromProvisioningRequest(ctx context.Context,
 	}
 
 	return hwPlugin, nil
-}
-
-// UpdateHardwareTemplateStatusCondition updates the status condition of the HardwareTemplate resource
-func UpdateHardwareTemplateStatusCondition(ctx context.Context, c client.Client, hardwareTemplate *hwmgmtv1alpha1.HardwareTemplate,
-	conditionType provisioningv1alpha1.ConditionType, conditionReason provisioningv1alpha1.ConditionReason,
-	conditionStatus metav1.ConditionStatus, message string) error {
-
-	SetStatusCondition(&hardwareTemplate.Status.Conditions,
-		conditionType,
-		conditionReason,
-		conditionStatus,
-		message)
-
-	err := UpdateK8sCRStatus(ctx, c, hardwareTemplate)
-	if err != nil {
-		return fmt.Errorf("failed to update status for HardwareTemplate %s: %w", hardwareTemplate.Name, err)
-	}
-	return nil
-}
-
-// GetTimeoutFromHWTemplate retrieves the timeout value from the hardware template resource.
-// converting it from duration string to time.Duration. Returns an error if the value is not a
-// valid duration string.
-func GetTimeoutFromHWTemplate(ctx context.Context, c client.Client, name string) (time.Duration, error) {
-
-	hwTemplate, err := GetHardwareTemplate(ctx, c, name)
-	if err != nil {
-		return 0, err
-	}
-
-	if hwTemplate.Spec.HardwareProvisioningTimeout != "" {
-		timeout, err := time.ParseDuration(hwTemplate.Spec.HardwareProvisioningTimeout)
-		if err != nil {
-			errMessage := fmt.Sprintf("the value of HardwareProvisioningTimeout from hardware template %s is not a valid duration string: %v",
-				name, err)
-			updateErr := UpdateHardwareTemplateStatusCondition(ctx, c, hwTemplate, provisioningv1alpha1.ConditionType(hwmgmtv1alpha1.Validation),
-				provisioningv1alpha1.ConditionReason(hwmgmtv1alpha1.Failed), metav1.ConditionFalse, errMessage)
-			if updateErr != nil {
-				// nolint: wrapcheck
-				return 0, updateErr
-			}
-			return 0, NewInputError("%s", errMessage)
-		}
-		return timeout, nil
-	}
-
-	return 0, nil
 }
 
 // GetBMHNamespace returns the BMH namespace for the given node.

@@ -12,7 +12,7 @@ SPDX-License-Identifier: Apache-2.0
     - [Template schema](#template-schema)
     - [Hardware resources](#hardware-resources)
       - [HardwareProfile](#hardwareprofile)
-      - [HardwareTemplate](#hardwaretemplate)
+      - [hwMgmtDefaults](#hwmgmtdefaults)
         - [Label selectors](#label-selectors)
         - [Hardware data selectors](#hardware-data-selectors)
         - [Complete example](#complete-example)
@@ -37,8 +37,8 @@ The [CRD](../../config/crd/bases/clcm.openshift.io_clustertemplates.yaml)'s `spe
 - version: Defines the version of the ClusterTemplate.
 - release: OCP release version that will be installed with this template. The Git layout uses a matching directory name `version_4.Y.Z/`; keep the release here and the directory version aligned.
 - description: A description of the ClusterTemplate.
-- templates: Contains multiple sub-templates.
-  - hwTemplate: (Optional) References the HardwareTemplate resource containing the hardware template used for node allocation. See details below.
+- templateDefaults: Contains default values for templates.
+  - hwMgmtDefaults: (Optional) Inline hardware management defaults including nodeGroupData, hardwareProvisioningTimeout, and hardwarePluginRef. When nodeGroupData is empty, hardware provisioning is skipped.
   - clusterInstanceDefaults: References the ConfigMap containing default values for ClusterInstance.
   - policyTemplateDefaults: References the ConfigMap containing default values for ACM policy templates.
 - templateParameterSchema: Specifies the OpenAPI v3 schema that defines which parameters the SMO must provide and which values are accepted in the ProvisioningRequest.
@@ -66,36 +66,39 @@ The schema defined in the `templateParameterSchema` must include the following *
 - policyTemplateParameters: A subschema that defines the parameters for cluster configuration.
 - clusterInstanceParameters: A subschema for [ClusterInstance](https://github.com/stolostron/siteconfig/blob/main/config/crd/bases/siteconfig.open-cluster-management.io_clusterinstances.yaml), defining the parameters that are allowed in the ProvisioningRequest for cluster installation.
 
-The schema may also include the **optional** `hwTemplateParameters` property, which
-allows the ProvisioningRequest to override settings from the HardwareTemplate:
+The schema may also include the **optional** `hwMgmtParameters` property, which
+allows the ProvisioningRequest to override settings from the ClusterTemplate's
+`hwMgmtDefaults`:
 
-- **`hwTemplateParameters.hardwareProvisioningTimeout`**: Override the hardware
+- **`hwMgmtParameters.hardwareProvisioningTimeout`**: Override the hardware
   provisioning timeout (e.g., `"120m"`).
-- **`hwTemplateParameters.nodeGroupData.<name>.hwProfile`**: Override the HardwareProfile
-  for a specific node group.
-- **`hwTemplateParameters.nodeGroupData.<name>.resourceSelector`**: Add or override
+- **`hwMgmtParameters.nodeGroupData[].hwProfile`**: Override the HardwareProfile
+  for a specific node group (matched by `name`).
+- **`hwMgmtParameters.nodeGroupData[].resourceSelector`**: Add or override
   resource selector criteria for a specific node group. These are merged with the
-  selectors from the HardwareTemplate — existing criteria can be overridden by
+  selectors from `hwMgmtDefaults` — existing criteria can be overridden by
   specifying the same key, but cannot be removed.
 
-Using `hwTemplateParameters` overrides allows a single HardwareTemplate and
-ClusterTemplate to be shared across multiple deployments with different hardware
-configurations. Instead of creating separate templates for each server type, color, or
-firmware profile, you can define a base template with common settings and push the
-per-deployment specifics (such as server selection criteria and firmware profiles) into
-each ProvisioningRequest.
+Using `hwMgmtParameters` overrides allows a single ClusterTemplate to be shared
+across multiple deployments with different hardware configurations. Instead of
+creating separate templates for each server type, color, or firmware profile, you
+can define a base template with common settings and push the per-deployment
+specifics (such as server selection criteria and firmware profiles) into each
+ProvisioningRequest.
 
-For example, given a HardwareTemplate that selects XR8620t servers:
+For example, given a ClusterTemplate with `hwMgmtDefaults` that selects XR8620t servers:
 
 ```yaml
-# HardwareTemplate: xr8620t (shared across deployments)
+# ClusterTemplate hwMgmtDefaults (shared across deployments)
 spec:
-  nodeGroupData:
-    - name: master
-      role: master
-      resourceSelector:
-        "resourceselector.clcm.openshift.io/server-type": "XR8620t"
-  hardwareProvisioningTimeout: "90m"
+  templateDefaults:
+    hwMgmtDefaults:
+      hardwareProvisioningTimeout: "90m"
+      nodeGroupData:
+        - name: master
+          role: master
+          resourceSelector:
+            "resourceselector.clcm.openshift.io/server-type": "XR8620t"
 ```
 
 Each ProvisioningRequest can then override settings as needed:
@@ -104,10 +107,10 @@ Each ProvisioningRequest can then override settings as needed:
 # ProvisioningRequest: target a specific server, with a specific firmware profile
 spec:
   templateParameters:
-    hwTemplateParameters:
+    hwMgmtParameters:
       hardwareProvisioningTimeout: "120m"
       nodeGroupData:
-        master:
+        - name: master
           hwProfile: rh-profile-xr8620t-idrac-7.20.30.50-bios-2.6.3
           resourceSelector:
             "resourceselector.clcm.openshift.io/server-id": "xr8620txdg16"
@@ -115,35 +118,40 @@ spec:
 
 In this example, the ProvisioningRequest overrides the timeout, specifies the firmware
 profile, and narrows the BMH selection to a specific server — all without requiring a
-dedicated HardwareTemplate or ClusterTemplate.
+dedicated ClusterTemplate.
 
 > [!NOTE]
-> The `hwProfile` must be specified either in the HardwareTemplate's
-> `nodeGroupData[].hwProfile` or via `hwTemplateParameters` in the ProvisioningRequest.
-> If both are omitted, provisioning will fail with a validation error. When using a
-> shared HardwareTemplate without a default `hwProfile`, every ProvisioningRequest must
-> include the `hwProfile` in its `hwTemplateParameters`.
+> The `hwProfile` is optional. When specified, it must reference an existing
+> `HardwareProfile` CR. The `hwProfile` can be set in `hwMgmtDefaults.nodeGroupData[]`
+> or overridden via `hwMgmtParameters` in the ProvisioningRequest.
 
-See the [hwTemplateSchema sample](../samples/hwTemplateSchema.yaml) for the schema
-definition of `hwTemplateParameters`.
+See the [hwMgmtParameters sample](../samples/hwMgmtParameters.yaml) for the schema
+definition of `hwMgmtParameters`.
 
 ### Hardware resources
 
 The template references hardware artifacts that the O‑Cloud Metal3 hardware plugin uses to allocate and prepare bare‑metal nodes.
 
 > [!NOTE]
-> `spec.templates.hwTemplate` can be optional. In scenarios where the hwTemplate is not provided, hardware provisioning will not be performed, and hardware-related parameters for each node
-> (e.g, bmcAddress, bmcCredentialsDetails, bootMACAddress, nodeNetwork.interfaces[*].macAddress) should be specified in the ProvisioningRequest. See this [example](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1-no-hwtemplate.yaml) of a ClusterTemplate without `hwTemplate`.
+> `spec.templateDefaults.hwMgmtDefaults` is optional. When `nodeGroupData` is empty or not provided,
+> hardware provisioning is skipped, and hardware-related parameters for each node
+> (e.g, bmcAddress, bmcCredentialsDetails, bootMACAddress, nodeNetwork.interfaces[*].macAddress)
+> should be specified in the ProvisioningRequest. Alternatively, hardware config can be provided
+> entirely via `hwMgmtParameters` in the ProvisioningRequest when the ClusterTemplate's
+> `templateParameterSchema` defines it. See this
+> [example](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1-no-hwtemplate.yaml)
+> of a ClusterTemplate without `hwMgmtDefaults`.
 
 #### HardwareProfile
 
-HardwareProfile describes the desired hardware state for a class of servers, such as BIOS settings and target firmware levels. It is applied by the Metal3 hardware plugin during Day‑0 (initial provision) and can also be used for Day‑2 updates. Example profiles are provided under [hardwareprofiles](../samples/git-setup/clustertemplates/hardwareprofiles/).
+HardwareProfile describes the desired hardware state for a class of servers, such as BIOS settings
+and target firmware levels. It is applied by the Metal3 hardware plugin during Day‑0 (initial provision)
+and can also be used for Day‑2 updates. HardwareProfile is optional — nodes can be provisioned without one.
+Example profiles are provided under [hardwareprofiles](../samples/git-setup/clustertemplates/hardwareprofiles/).
 
-#### HardwareTemplate
+#### hwMgmtDefaults
 
-HardwareTemplate defines the node groups that the cluster needs and how matching hosts
-are selected from the inventory. For each group, specify attributes such as the role
-and group name, and provide a `resourceSelector` with matching criteria.
+The `hwMgmtDefaults` section of the ClusterTemplate defines the node groups that the cluster needs and how matching hosts are selected from the inventory. For each group, specify attributes such as the role and group name, and optionally provide a `resourceSelector` with matching criteria.
 
 A single-node cluster requires one node group, while multi-node clusters define
 multiple groups — for example, a `master` group and a `worker` group, each with its own
@@ -267,12 +275,9 @@ resourceSelector:
 The following example demonstrates the `master` node group with label and hardware data selectors to match Dell XR8620t hosts with specific CPU, NIC, and storage requirements:
 
 ```yaml
-apiVersion: clcm.openshift.io/v1alpha1
-kind: HardwareTemplate
-metadata:
-  name: dell-xr8620t-blue
-  namespace: oran-o2ims
-spec:
+# ClusterTemplate spec.templateDefaults.hwMgmtDefaults
+hwMgmtDefaults:
+  hardwareProvisioningTimeout: "90m"
   nodeGroupData:
     - name: master
       role: master
@@ -287,19 +292,16 @@ spec:
         "hardwaredata/num_threads;>=": "64"
         "hardwaredata/storage;type==NVME;count>=2": "present"
         "hardwaredata/nics;model~0x8086;count=8;speedGbps>=25": "present"
-  hardwareProvisioningTimeout: "90m"
 ```
 
-The template includes a `hardwarePluginRef`, which defaults to `metal3-hwplugin` (automatically created by the operator) and can be omitted.
-The HardwareProfile to apply to matched hosts can be specified either in `nodeGroupData[].hwProfile` within the
-HardwareTemplate, or via `templateParameters.hwTemplateParameters.nodeGroupData.<name>.hwProfile` in the
-ProvisioningRequest. When both are set, the ProvisioningRequest value takes precedence. The ClusterTemplate
-references the HardwareTemplate at `spec.templates.hwTemplate`.
+The HardwareProfile to apply to matched hosts can be specified either in `hwMgmtDefaults.nodeGroupData[].hwProfile`
+or via `templateParameters.hwMgmtParameters.nodeGroupData[].hwProfile` in the
+ProvisioningRequest. When both are set, the ProvisioningRequest value takes precedence.
 
-Example of HardwareTemplates:
-[SNO](../samples/git-setup/clustertemplates/hardwaretemplates/sno-ran-du/dell-xr8620t-blue.yaml),
-[3node](../samples/git-setup/clustertemplates/hardwaretemplates/3node-ran-du/dell-xr8620t-purple.yaml) and
-[Standard](../samples/git-setup/clustertemplates/hardwaretemplates/std-ran-du/dell-r740-green-xr8620t-blue.yaml).
+Example ClusterTemplates with hwMgmtDefaults:
+[SNO](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1.yaml),
+[3node](../samples/git-setup/clustertemplates/version_4.Y.Z/3node-ran-du/3node-ran-du-v4-Y-Z-1.yaml) and
+[Standard](../samples/git-setup/clustertemplates/version_4.Y.Z/std-ran-du/std-ran-du-v4-Y-Z-1.yaml).
 
 For details about server onboarding, refer to [Server Onboarding](./server-onboarding.md).
 

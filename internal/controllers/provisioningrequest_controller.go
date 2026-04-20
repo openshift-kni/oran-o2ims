@@ -57,12 +57,13 @@ type provisioningRequestReconcilerTask struct {
 type clusterInput struct {
 	clusterInstanceData map[string]any
 	policyTemplateData  map[string]any
+	hwMgmtData          map[string]any
 }
 
 // clusterTemplateDetails holds the details for the referenced ClusterTemplate
 type clusterTemplateDetails struct {
 	namespace string
-	templates provisioningv1alpha1.Templates
+	templates provisioningv1alpha1.TemplateDefaults
 }
 
 // timeouts holds the timeout values, in minutes,
@@ -89,9 +90,8 @@ func GetClusterTemplateRefName(name, version string) string {
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=provisioningrequests/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=provisioningrequests/finalizers,verbs=update
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=clustertemplates,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwareprofiles,verbs=get;list;watch
 //+kubebuilder:rbac:groups=siteconfig.open-cluster-management.io,resources=clusterinstances,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwaretemplates,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwaretemplates/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=nodeallocationrequests,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=nodeallocationrequests/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=nodes,verbs=get;list;watch;create;update;patch;delete
@@ -451,11 +451,28 @@ func (t *provisioningRequestReconcilerTask) checkOverallProvisioningTimeout(ctx 
 // initializeHardwarePluginIfNeeded initializes the hardware plugin client if hardware template is present
 func (t *provisioningRequestReconcilerTask) initializeHardwarePluginIfNeeded(ctx context.Context) error {
 	clusterTemplate, err := t.object.GetClusterTemplateRef(ctx, t.client)
-	if err == nil && clusterTemplate.Spec.Templates.HwTemplate != "" {
-		if t.hwpluginClient == nil {
-			if err := t.initializeHardwarePluginClientWithRetry(ctx); err != nil {
-				return err
+	if err != nil {
+		return nil
+	}
+
+	// Check if hardware provisioning might be needed: either the CT has default
+	// nodeGroupData, or the PR supplies hwMgmtParameters with nodeGroupData.
+	needsHwPlugin := len(clusterTemplate.Spec.TemplateDefaults.HwMgmtDefaults.NodeGroupData) > 0
+	if !needsHwPlugin {
+		hwMgmtParams, extractErr := provisioningv1alpha1.ExtractMatchingInput(
+			t.object.Spec.TemplateParameters.Raw, ctlrutils.TemplateParamHwMgmt)
+		if extractErr == nil && hwMgmtParams != nil {
+			if m, ok := hwMgmtParams.(map[string]any); ok {
+				if ng, ok := m["nodeGroupData"].([]any); ok && len(ng) > 0 {
+					needsHwPlugin = true
+				}
 			}
+		}
+	}
+
+	if needsHwPlugin && t.hwpluginClient == nil {
+		if err := t.initializeHardwarePluginClientWithRetry(ctx); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -1325,7 +1342,17 @@ func (r *ProvisioningRequestReconciler) handleObservabilityAddonCleanup(ctx cont
 }
 
 func (t *provisioningRequestReconcilerTask) isHardwareProvisionSkipped() bool {
-	return t.ctDetails.templates.HwTemplate == ""
+	// Hardware provisioning is skipped when no nodeGroupData exists in either
+	// the CT's hwMgmtDefaults or the PR's hwMgmtParameters (after merge).
+	if t.clusterInput != nil && t.clusterInput.hwMgmtData != nil {
+		if ngData, ok := t.clusterInput.hwMgmtData["nodeGroupData"].([]any); ok && len(ngData) > 0 {
+			return false
+		}
+	}
+	if t.ctDetails != nil && len(t.ctDetails.templates.HwMgmtDefaults.NodeGroupData) > 0 {
+		return false
+	}
+	return true
 }
 
 // finalizeProvisioningIfComplete checks if the provisioning/upgrade process is completed.

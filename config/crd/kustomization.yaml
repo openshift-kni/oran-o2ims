@@ -8,7 +8,6 @@ resources:
 
 # Hardware management:
 - bases/clcm.openshift.io_hardwareplugins.yaml
-- bases/clcm.openshift.io_hardwaretemplates.yaml
 - bases/clcm.openshift.io_hardwareprofiles.yaml
 - bases/plugins.clcm.openshift.io_nodeallocationrequests.yaml
 - bases/plugins.clcm.openshift.io_allocatednodes.yaml

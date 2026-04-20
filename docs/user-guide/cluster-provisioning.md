@@ -101,7 +101,7 @@ Pending (Validating and preparing resources)
     - Copy the extra-manifests ConfigMap from the ClusterTemplate namespace to the cluster namespace
     - Copy the pull-secret from the ClusterTemplate namespace to the cluster namespace
     - Create the ConfigMap for templated ACM policies in the ClusterTemplate namespace
-4. Render the NodeAllocationRequest CR based on the provided hardware template in the `hwTemplate` resource.
+4. Render the NodeAllocationRequest CR based on the provided hardware template in the `hwMgmtDefaults` section.
 
    Example status:
 
@@ -135,7 +135,7 @@ Pending (Validating and preparing resources)
     ```
 
 5. Create the NodeAllocationRequest to start hardware provisioning. The `provisioningStatus.provisioningPhase`transitions to progressing.
-The O‑Cloud Metal3 hardware plugin consumes the CR, selects matching BareMetalHosts using the label selectors from the referenced HardwareTemplate, and allocates them to the request. For each selected host, the plugin:
+The O‑Cloud Metal3 hardware plugin consumes the CR, selects matching BareMetalHosts using the label selectors from the hwMgmtDefaults and merged hwMgmtParameters, and allocates them to the request. For each selected host, the plugin:
    - Creates an `AllocatedNode` CR.
    - Applies the hardware settings by creating/updating the relevant Metal3 CRs (HostFirmwareSettings/HostFirmwareComponents).
    - Reports progress through the statuses of both `NodeAllocationRequest` and `AllocatedNode` resources.
@@ -342,20 +342,22 @@ Default timeouts:
 
 #### Hardware Provisioning Timeout
 
-The timeout is configured in the `HardwareTemplate` resource.
+The timeout is configured in the `hwMgmtDefaults` section of the `ClusterTemplate` resource.
 
-Configure hardware provisioning timeout in the `spec.templates.hwTemplate` hardware template resource:
+Configure hardware provisioning timeout in `spec.templateDefaults.hwMgmtDefaults`:
 
 ```yaml
 spec:
-  hardwareProvisioningTimeout: "100m"
+  templateDefaults:
+    hwMgmtDefaults:
+      hardwareProvisioningTimeout: "100m"
 ```
 
 If not specified, the default timeout value (90m) will be applied.
 
 #### Cluster Installation Timeout
 
-For cluster installation, set in the `spec.templates.clusterInstanceDefaults` ConfigMap:
+For cluster installation, set in the `spec.templateDefaults.clusterInstanceDefaults` ConfigMap:
 
 ```yaml
 data:
@@ -364,7 +366,7 @@ data:
 
 #### Cluster Configuration Timeout
 
-For cluster configuration, set in the `spec.templates.policyTemplateDefaults` ConfigMap:
+For cluster configuration, set in the `spec.templateDefaults.policyTemplateDefaults` ConfigMap:
 
 ```yaml
 data:
@@ -448,7 +450,7 @@ curl -sk -X POST \
   "templateParameters": {
     "nodeClusterName": "sno1",
     "oCloudSiteId": "local-west",
-    "hwTemplateParameters": {
+    "hwMgmtParameters": {
       "nodeGroupData": {
         "controller": {
           "hwProfile": "rh-profile-xr8620t-bios-settings"
@@ -524,7 +526,7 @@ curl -sk -X PUT \
   "templateParameters": {
     "nodeClusterName": "sno1",
     "oCloudSiteId": "local-west",
-    "hwTemplateParameters": {
+    "hwMgmtParameters": {
       "nodeGroupData": {
         "controller": {
           "hwProfile": "rh-profile-xr8620t-bios-settings"
