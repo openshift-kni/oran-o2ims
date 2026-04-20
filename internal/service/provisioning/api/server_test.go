@@ -9,6 +9,7 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -21,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/service/provisioning/api"
 	provisioningapi "github.com/openshift-kni/oran-o2ims/internal/service/provisioning/api/generated"
 )
@@ -279,6 +281,114 @@ var _ = Describe("ProvisioningServer", func() {
 				problemResp := resp.(provisioningapi.UpdateProvisioningRequest404ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(404))
 			})
+		})
+	})
+
+	Describe("CreateProvisioningRequest Location header", func() {
+		var (
+			server *api.ProvisioningServer
+			scheme *runtime.Scheme
+		)
+
+		BeforeEach(func() {
+			scheme = runtime.NewScheme()
+			Expect(provisioningv1alpha1.AddToScheme(scheme)).To(Succeed())
+		})
+
+		It("should populate the Location header with the resource URI", func() {
+			templateParams := map[string]interface{}{"key": "value"}
+
+			prUID := uuid.New().String()
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithInterceptorFuncs(interceptor.Funcs{
+					Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+						if obj.GetUID() == "" {
+							obj.SetUID(types.UID(prUID))
+						}
+						return c.Create(ctx, obj, opts...)
+					},
+				}).
+				Build()
+
+			server = &api.ProvisioningServer{
+				HubClient: fakeClient,
+			}
+
+			createRequest := provisioningapi.CreateProvisioningRequestRequestObject{
+				Body: &provisioningapi.ProvisioningRequestData{
+					ProvisioningRequestId: testUUID,
+					Name:                  "test",
+					Description:           "test description",
+					TemplateName:          "template",
+					TemplateVersion:       "v1.0.0",
+					TemplateParameters:    templateParams,
+				},
+			}
+
+			resp, err := server.CreateProvisioningRequest(ctx, createRequest)
+			Expect(err).NotTo(HaveOccurred())
+
+			created, ok := resp.(provisioningapi.CreateProvisioningRequest201JSONResponse)
+			Expect(ok).To(BeTrue())
+
+			expectedLocation := fmt.Sprintf("%s/provisioningRequests/%s", constants.O2IMSProvisioningBaseURL, testUUID)
+			Expect(created.Headers.Location).To(Equal(expectedLocation))
+		})
+	})
+
+	Describe("DeleteProvisioningRequest Location header", func() {
+		var (
+			server *api.ProvisioningServer
+			scheme *runtime.Scheme
+		)
+
+		BeforeEach(func() {
+			scheme = runtime.NewScheme()
+			Expect(provisioningv1alpha1.AddToScheme(scheme)).To(Succeed())
+		})
+
+		It("should populate the Location header with the resource URI", func() {
+			templateParams := map[string]interface{}{"key": "value"}
+			templateParamsBytes, err := json.Marshal(templateParams)
+			Expect(err).NotTo(HaveOccurred())
+
+			prUID := uuid.New().String()
+			initialPR := &provisioningv1alpha1.ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testUUID.String(),
+					UID:  types.UID(prUID),
+				},
+				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+					Name:               "test",
+					Description:        "test description",
+					TemplateName:       "template",
+					TemplateVersion:    "v1.0.0",
+					TemplateParameters: runtime.RawExtension{Raw: templateParamsBytes},
+				},
+			}
+
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(initialPR).
+				Build()
+
+			server = &api.ProvisioningServer{
+				HubClient: fakeClient,
+			}
+
+			deleteRequest := provisioningapi.DeleteProvisioningRequestRequestObject{
+				ProvisioningRequestId: testUUID,
+			}
+
+			resp, err := server.DeleteProvisioningRequest(ctx, deleteRequest)
+			Expect(err).NotTo(HaveOccurred())
+
+			deleted, ok := resp.(provisioningapi.DeleteProvisioningRequest202Response)
+			Expect(ok).To(BeTrue())
+
+			expectedLocation := fmt.Sprintf("%s/provisioningRequests/%s", constants.O2IMSProvisioningBaseURL, testUUID)
+			Expect(deleted.Headers.Location).To(Equal(expectedLocation))
 		})
 	})
 })

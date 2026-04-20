@@ -43,7 +43,7 @@ var _ api.StrictServerInterface = (*ProvisioningServer)(nil)
 
 // baseURL is the prefix for all of our supported API endpoints
 var baseURL = constants.O2IMSProvisioningBaseURL
-var currentVersion = "1.0.0"
+var currentVersion = "1.2.0"
 
 // GetAllVersions handles an API request to fetch all versions
 func (r *ProvisioningServer) GetAllVersions(ctx context.Context, request api.GetAllVersionsRequestObject) (api.GetAllVersionsResponseObject, error) {
@@ -176,7 +176,13 @@ func (r *ProvisioningServer) CreateProvisioningRequest(ctx context.Context, requ
 	}
 
 	slog.Info("Created ProvisioningRequest", "provisioningRequestId", request.Body.ProvisioningRequestId.String())
-	return api.CreateProvisioningRequest201JSONResponse(provisioningRequestInfo), nil
+	location := fmt.Sprintf("%s/provisioningRequests/%s", constants.O2IMSProvisioningBaseURL, request.Body.ProvisioningRequestId)
+	return api.CreateProvisioningRequest201JSONResponse{
+		Body: provisioningRequestInfo,
+		Headers: api.CreateProvisioningRequest201ResponseHeaders{
+			Location: location,
+		},
+	}, nil
 }
 
 // UpdateProvisioningRequest handles an API request to update a provisioning request
@@ -272,7 +278,12 @@ func (r *ProvisioningServer) DeleteProvisioningRequest(ctx context.Context, requ
 		return nil, fmt.Errorf("failed to delete ProvisioningRequest (%s): %w", request.ProvisioningRequestId.String(), err)
 	}
 	slog.Info("The deletion request for ProvisioningRequest has been sent successfully", "provisioningRequestId", request.ProvisioningRequestId.String())
-	return api.DeleteProvisioningRequest200Response{}, nil
+	location := fmt.Sprintf("%s/provisioningRequests/%s", constants.O2IMSProvisioningBaseURL, request.ProvisioningRequestId)
+	return api.DeleteProvisioningRequest202Response{
+		Headers: api.DeleteProvisioningRequest202ResponseHeaders{
+			Location: location,
+		},
+	}, nil
 }
 
 // convertProvisioningRequestCRToApi converts a ProvisioningRequest CR to an API model ProvisioningRequestInfo
@@ -285,7 +296,7 @@ func convertProvisioningRequestCRToApi(id uuid.UUID, provisioningRequest provisi
 		return api.ProvisioningRequestInfo{}, fmt.Errorf("could not convert ProvisioningRequest UID (%s) to uuid: %w",
 			string(provisioningRequest.UID), err)
 	}
-	provisioningRequestInfo.ProvisioningRequestReference = &provisioningRequestReferenceId
+	provisioningRequestInfo.ProvisioningRequestReference = provisioningRequestReferenceId
 
 	// Unmarshal the TemplateParameters bytes into a map
 	var templateParameters = make(map[string]interface{})
@@ -315,15 +326,10 @@ func convertProvisioningRequestCRToApi(id uuid.UUID, provisioningRequest provisi
 	}
 	provisioningRequestInfo.Status = status
 
-	// Convert the OCloudNodeClusterId string to uuid if it exists
 	if provisioningRequest.Status.ProvisioningStatus.ProvisionedResources != nil &&
 		provisioningRequest.Status.ProvisioningStatus.ProvisionedResources.OCloudNodeClusterId != "" {
-		nodeClusterId, err := uuid.Parse(provisioningRequest.Status.ProvisioningStatus.ProvisionedResources.OCloudNodeClusterId)
-		if err != nil {
-			return api.ProvisioningRequestInfo{}, fmt.Errorf("could not convert OCloudNodeClusterId (%s) to uuid: %w",
-				provisioningRequest.Status.ProvisioningStatus.ProvisionedResources.OCloudNodeClusterId, err)
-		}
-		provisioningRequestInfo.ProvisionedResourceSets = api.ProvisionedResourceSets{
+		nodeClusterId := provisioningRequest.Status.ProvisioningStatus.ProvisionedResources.OCloudNodeClusterId
+		provisioningRequestInfo.ProvisionedResourceSet = &api.ProvisionedResourceSet{
 			NodeClusterId: &nodeClusterId,
 		}
 	}
