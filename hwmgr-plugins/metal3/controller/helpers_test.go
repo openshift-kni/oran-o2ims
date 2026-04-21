@@ -361,7 +361,6 @@ var _ = Describe("Helpers", func() {
 			Expect(createdNode.Spec.HwProfile).To(Equal("test-profile"))
 			Expect(createdNode.Spec.HwMgrNodeId).To(Equal("test-node-id"))
 			Expect(createdNode.Spec.HwMgrNodeNs).To(Equal("test-node-ns"))
-			Expect(createdNode.Labels[hwmgrutils.HardwarePluginLabel]).To(Equal(hwmgrutils.Metal3HardwarePluginID))
 		})
 
 		It("should skip creation if AllocatedNode already exists", func() {

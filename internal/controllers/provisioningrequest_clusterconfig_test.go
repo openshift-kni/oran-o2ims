@@ -80,7 +80,6 @@ import (
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
@@ -1780,7 +1779,6 @@ var _ = Describe("addPostProvisioningLabels", func() {
 		ProvReqTask           *provisioningRequestReconcilerTask
 		managedCluster        = &clusterv1.ManagedCluster{}
 		nodeAllocationRequest = &pluginsv1alpha1.NodeAllocationRequest{}
-		mockHwPluginServer    *MockHardwarePluginServer
 	)
 
 	BeforeEach(func() {
@@ -1895,7 +1893,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			},
 		}
 
-		c, mockHwPluginServer = getFakeClientAndMockServer(crs...)
+		c = getFakeClientFromObjects(crs...)
 
 		// Populate the NodeAllocationRequest without creating it.
 		nodeAllocationRequest = &pluginsv1alpha1.NodeAllocationRequest{
@@ -1946,28 +1944,10 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			Logger: logger,
 		}
 
-		// Get hwpluginClient for the test
-		hwpluginKey := types.NamespacedName{
-			Name:      utils.UnitTestHwPluginRef,
-			Namespace: constants.DefaultNamespace,
-		}
-		hwplugin := &hwmgmtv1alpha1.HardwarePlugin{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      hwpluginKey.Name,
-				Namespace: hwpluginKey.Namespace,
-			},
-		}
-		err := c.Get(ctx, hwpluginKey, hwplugin)
-		Expect(err).ToNot(HaveOccurred())
-
-		hwpluginClient, err := hwmgrpluginapi.NewHardwarePluginClient(ctx, c, ProvReqReconciler.Logger, hwplugin)
-		Expect(err).ToNot(HaveOccurred())
-
 		ProvReqTask = &provisioningRequestReconcilerTask{
-			logger:         ProvReqReconciler.Logger,
-			client:         ProvReqReconciler.Client,
-			object:         provisioningRequest, // cluster-1 request
-			hwpluginClient: hwpluginClient,
+			logger: ProvReqReconciler.Logger,
+			client: ProvReqReconciler.Client,
+			object: provisioningRequest, // cluster-1 request
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
 				templates: provisioningv1alpha1.TemplateDefaults{
@@ -1991,12 +1971,10 @@ var _ = Describe("addPostProvisioningLabels", func() {
 	})
 
 	Context("When the HW template is provided and the HW CRs do not exist", func() {
-		It("Returns error for the NodeAllocationRequest missing", func() {
-			// Set a NodeAllocationRequestID that doesn't exist in the mock server
-			ProvReqTask.object.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
-				NodeAllocationRequestID: "non-existent-cluster", // Use an ID that doesn't exist in mock server
-			}
-			// Update the status in the fake client so the change persists
+		It("Succeeds with no AllocatedNodes when Agents exist", func() {
+			// No AllocatedNodes exist for this PR — the function should succeed
+			// but log warnings about missing nodes for each Agent.
+			ProvReqTask.object.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{}
 			Expect(c.Status().Update(ctx, ProvReqTask.object)).To(Succeed())
 
 			// Create an Agent so the function proceeds beyond the Agent check
@@ -2018,11 +1996,9 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			}
 			Expect(c.Create(ctx, agent)).To(Succeed())
 
-			// Run the function.
+			// Run the function — should succeed (no AllocatedNodes → warning, not error)
 			err := ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring(
-				"empty or unexpected error response for AllocatedNodesFromNodeAllocationRequest 'non-existent-cluster'"))
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("Succeeds with no Agents (IBI cluster case)", func() {
@@ -2209,23 +2185,20 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				},
 			}
 
-			// Configure mock server to return 3 allocated nodes.
-			mockAllocatedNodes := make([]hwmgrpluginapi.AllocatedNode, len(nodes))
-			for i, n := range nodes {
-				mockAllocatedNodes[i] = hwmgrpluginapi.AllocatedNode{
-					Id:        n.allocatedNodeID,
-					GroupName: "controller",
-					HwProfile: "dell-r740-bios-v1",
-					Bmc: hwmgrpluginapi.BMC{
-						Address:         n.bmcAddress,
-						CredentialsName: n.bmcCredentialName,
+			// Create AllocatedNode CRs in the fake client.
+			for _, n := range nodes {
+				allocatedNode := &pluginsv1alpha1.AllocatedNode{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      n.allocatedNodeID,
+						Namespace: constants.DefaultNamespace,
 					},
-					Interfaces: []hwmgrpluginapi.Interface{
-						{Name: "eno1", MacAddress: fmt.Sprintf("AA:BB:CC:DD:EE:%02d", i), Label: constants.BootInterfaceLabel},
+					Spec: pluginsv1alpha1.AllocatedNodeSpec{
+						NodeAllocationRequest: "cluster-1",
+						GroupName:             "controller",
 					},
 				}
+				Expect(c.Create(ctx, allocatedNode)).To(Succeed())
 			}
-			mockHwPluginServer.SetAllocatedNodes("cluster-1", mockAllocatedNodes)
 
 			// Set up AllocatedNodeHostMap: allocated-node-id -> assigned hostname.
 			hostMap := make(map[string]string, len(nodes))

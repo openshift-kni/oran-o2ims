@@ -481,9 +481,6 @@ func createNode(ctx context.Context,
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      nodename,
 			Namespace: pluginNamespace,
-			Labels: map[string]string{
-				hwmgrutils.HardwarePluginLabel: hwmgrutils.Metal3HardwarePluginID,
-			},
 			OwnerReferences: []metav1.OwnerReference{{
 				APIVersion:         nodeAllocationRequest.APIVersion,
 				Kind:               nodeAllocationRequest.Kind,

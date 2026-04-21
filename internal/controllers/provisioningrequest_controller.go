@@ -8,7 +8,6 @@ package controllers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -19,14 +18,14 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	observabilityv1beta1 "github.com/stolostron/multicluster-observability-operator/operators/multiclusterobservability/api/v1beta1"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
@@ -45,7 +44,6 @@ type ProvisioningRequestReconciler struct {
 type provisioningRequestReconcilerTask struct {
 	logger         *slog.Logger
 	client         client.Client
-	hwpluginClient hwmgrpluginapi.HardwarePluginClientInterface
 	object         *provisioningv1alpha1.ProvisioningRequest
 	clusterInput   *clusterInput
 	ctDetails      *clusterTemplateDetails
@@ -77,9 +75,7 @@ type timeouts struct {
 
 // Hardware plugin client retry configuration constants
 const (
-	maxHardwareClientRetries = 3
-	baseRetryDelay           = 5 * time.Second
-	timedOutMessage          = "timed out"
+	timedOutMessage = "timed out"
 )
 
 func GetClusterTemplateRefName(name, version string) string {
@@ -235,12 +231,6 @@ func (t *provisioningRequestReconcilerTask) executePreProvisioningPhase(ctx cont
 	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "pre_provisioning")
 	phaseStartTime := time.Now()
 
-	// Initialize hardware plugin client if needed
-	if err := t.initializeHardwarePluginIfNeeded(ctx); err != nil {
-		result, _ := requeueWithError(err)
-		return nil, nil, result, err
-	}
-
 	// Handle validation, rendering and creation of required resources
 	renderedClusterInstance, res, err := t.handlePreProvisioning(ctx)
 	if renderedClusterInstance == nil {
@@ -274,11 +264,6 @@ func (t *provisioningRequestReconcilerTask) executeHardwareProvisioningPhase(ctx
 
 	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "hardware_provisioning")
 	phaseStartTime := time.Now()
-
-	if t.hwpluginClient == nil {
-		result, _ := requeueWithError(errors.New("hwpluginClient is not initialized"))
-		return result, errors.New("hwpluginClient is not initialized")
-	}
 
 	res, proceed, err := t.handleNodeAllocationRequestProvisioning(ctx, unstructuredClusterInstance)
 	if err != nil || (res == doNotRequeue() && !proceed) || res.RequeueAfter > 0 {
@@ -448,36 +433,6 @@ func (t *provisioningRequestReconcilerTask) checkOverallProvisioningTimeout(ctx 
 	return ctrl.Result{}
 }
 
-// initializeHardwarePluginIfNeeded initializes the hardware plugin client if hardware template is present
-func (t *provisioningRequestReconcilerTask) initializeHardwarePluginIfNeeded(ctx context.Context) error {
-	clusterTemplate, err := t.object.GetClusterTemplateRef(ctx, t.client)
-	if err != nil {
-		return nil
-	}
-
-	// Check if hardware provisioning might be needed: either the CT has default
-	// nodeGroupData, or the PR supplies hwMgmtParameters with nodeGroupData.
-	needsHwPlugin := len(clusterTemplate.Spec.TemplateDefaults.HwMgmtDefaults.NodeGroupData) > 0
-	if !needsHwPlugin {
-		hwMgmtParams, extractErr := provisioningv1alpha1.ExtractMatchingInput(
-			t.object.Spec.TemplateParameters.Raw, ctlrutils.TemplateParamHwMgmt)
-		if extractErr == nil && hwMgmtParams != nil {
-			if m, ok := hwMgmtParams.(map[string]any); ok {
-				if ng, ok := m["nodeGroupData"].([]any); ok && len(ng) > 0 {
-					needsHwPlugin = true
-				}
-			}
-		}
-	}
-
-	if needsHwPlugin && t.hwpluginClient == nil {
-		if err := t.initializeHardwarePluginClientWithRetry(ctx); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // handleClusterUpgrades handles cluster upgrade logic
 func (t *provisioningRequestReconcilerTask) handleClusterUpgrades(ctx context.Context, clusterName string) (ctrl.Result, error) {
 	shouldUpgrade, result, err := t.IsUpgradeRequested(ctx, clusterName)
@@ -517,7 +472,7 @@ func (t *provisioningRequestReconcilerTask) shouldStopReconciliation() bool {
 //
 //nolint:unparam // Kept for API compatibility, always returns empty Result
 func (t *provisioningRequestReconcilerTask) checkHardwareProvisioningTimeout() ctrl.Result {
-	if t.isHardwareProvisionSkipped() || t.object.Status.Extensions.NodeAllocationRequestRef == nil {
+	if t.isHardwareProvisionSkipped() {
 		return ctrl.Result{}
 	}
 
@@ -620,7 +575,7 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 		return requeueWithMediumInterval(), false, err
 	}
 
-	nodeAllocationRequestID := t.getNodeAllocationRequestID()
+	nodeAllocationRequestID := t.object.Name
 	if nodeAllocationRequestID == "" {
 		t.logger.WarnContext(ctx, "Missing NodeAllocationRequest identifier, will retry")
 		return requeueWithShortInterval(), false, fmt.Errorf("missing nodeAllocationRequest identifier")
@@ -670,17 +625,13 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 	if !t.isHardwareProvisionSkipped() {
 		// Check the NodeAllocationRequest status if exists
 		nodeAllocationRequestResponse, exists, err := t.getNodeAllocationRequestResponse(ctx)
-		if err != nil || !exists {
-			// If NodeAllocationRequest doesn't exist and this is likely initial validation phase,
-			// skip hardware status checks and proceed to resource preparation status check
-			if t.object.Status.Extensions.NodeAllocationRequestRef == nil {
-				// No NodeAllocationRequestRef means this is initial phase, skip hardware checks
-				t.logger.InfoContext(ctx, "NodeAllocationRequestRef is nil, skipping hardware status checks during initial phase")
-			} else {
-				// NodeAllocationRequestRef exists but getNodeAllocationRequestResponse failed,
-				// this indicates a real hardware plugin error
-				return requeueWithError(err)
-			}
+		if err != nil {
+			return requeueWithError(err)
+		}
+		if !exists {
+			// NAR not found — either not yet created or already deleted.
+			// Skip hardware status checks and proceed to resource preparation status check.
+			t.logger.InfoContext(ctx, "NodeAllocationRequest not found, skipping hardware status checks")
 		} else {
 			hwProvisioned, timedOutOrFailed, err := t.checkNodeAllocationRequestStatus(ctx, nodeAllocationRequestResponse, hwmgmtv1alpha1.Provisioned)
 			if err != nil {
@@ -793,7 +744,7 @@ func (t *provisioningRequestReconcilerTask) handleFulfilledStateMonitoring(ctx c
 	// Sync skip-cleanup annotation to the NAR for fulfilled PRs.
 	// During provisioning this is handled by createOrUpdateNodeAllocationRequest,
 	// but after fulfillment that path is no longer called.
-	if !t.isHardwareProvisionSkipped() && t.hwpluginClient != nil {
+	if !t.isHardwareProvisionSkipped() {
 		if err := t.syncNARSkipCleanup(ctx); err != nil {
 			return requeueWithError(fmt.Errorf("failed to sync skipCleanup on NAR: %w", err))
 		}
@@ -1064,7 +1015,7 @@ func (t *provisioningRequestReconcilerTask) handleClusterResources(ctx context.C
 }
 
 func (t *provisioningRequestReconcilerTask) renderHardwareTemplate(ctx context.Context,
-	clusterInstance *unstructured.Unstructured) (*hwmgrpluginapi.NodeAllocationRequest, error) {
+	clusterInstance *unstructured.Unstructured) (*pluginsv1alpha1.NodeAllocationRequest, error) {
 	renderedNodeAllocationRequest, err := t.handleRenderHardwareTemplate(ctx, clusterInstance)
 	if err != nil {
 		hardwareTemplateFailureMsg := "Failed to render the Hardware template"
@@ -1182,36 +1133,28 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 		}
 	}
 
-	// Delete the NodeAllocationRequest CR first
-	if provisioningRequest.Status.Extensions.NodeAllocationRequestRef != nil {
-		// Get hwplugin client for the HardwarePlugin
-		hwpluginClient, err := getHardwarePluginClient(ctx, r.Client, r.Logger, provisioningRequest)
-		if err != nil {
-			return false, fmt.Errorf("failed to get HardwarePlugin client: %w", err)
+	// Delete the NodeAllocationRequest CR first.
+	// The NAR name matches the ProvisioningRequest name (1:1 relationship).
+	narNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
+	nar := &pluginsv1alpha1.NodeAllocationRequest{}
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: provisioningRequest.Name, Namespace: narNS}, nar); err != nil {
+		if !k8serrors.IsNotFound(err) {
+			return false, fmt.Errorf("failed to get NodeAllocationRequest %s: %w", provisioningRequest.Name, err)
 		}
-
-		nodeAllocationRequestID := provisioningRequest.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID
-		if nodeAllocationRequestID != "" {
+		// NAR not found — already deleted or never created
+	} else {
+		// NAR exists — initiate deletion if not already deleting
+		if nar.DeletionTimestamp.IsZero() {
 			r.Logger.InfoContext(ctx, "Deleting NodeAllocationRequest",
-				slog.String("nodeAllocationRequestID", nodeAllocationRequestID))
-			// Create adapter for the hardware plugin client
-			clientAdapter := hwmgrpluginapi.NewHardwarePluginClientAdapter(hwpluginClient)
-			resp, narExists, err := clientAdapter.DeleteNodeAllocationRequest(ctx, nodeAllocationRequestID)
-			if err != nil {
-				return false, fmt.Errorf("failed to delete NodeAllocationRequest '%s': %w", nodeAllocationRequestID, err)
-			}
-
-			if resp == nodeAllocationRequestID {
-				r.Logger.InfoContext(ctx, "Deletion request for NodeAllocationRequest successful",
-					slog.String("nodeAllocationRequestID", nodeAllocationRequestID))
-			}
-
-			if narExists {
-				r.Logger.InfoContext(ctx, "Waiting for NodeAllocationRequest to be deleted",
-					slog.String("nodeAllocationRequestID", nodeAllocationRequestID))
-				return false, nil
+				slog.String("nar", provisioningRequest.Name))
+			deletePolicy := metav1.DeletePropagationForeground
+			if err := r.Client.Delete(ctx, nar, &client.DeleteOptions{PropagationPolicy: &deletePolicy}); err != nil {
+				return false, fmt.Errorf("failed to delete NodeAllocationRequest %s: %w", provisioningRequest.Name, err)
 			}
 		}
+		r.Logger.InfoContext(ctx, "Waiting for NodeAllocationRequest to be deleted",
+			slog.String("nar", provisioningRequest.Name))
+		return false, nil
 	}
 
 	// Delete the ClusterInstance CR next
@@ -1384,7 +1327,7 @@ func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx c
 		// enabling BMO management of IBI-provisioned nodes.
 		// Done after persisting FULFILLED state so a transient plugin failure
 		// does not block fulfillment. Returns error to trigger retry via requeue.
-		if !t.isHardwareProvisionSkipped() && t.hwpluginClient != nil {
+		if !t.isHardwareProvisionSkipped() {
 			if err := t.setNARClusterProvisioned(ctx); err != nil {
 				return fmt.Errorf("failed to set clusterProvisioned on NAR: %w", err)
 			}
@@ -1397,138 +1340,19 @@ func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx c
 	return nil
 }
 
-// initializeHardwarePluginClientWithRetry attempts to initialize the hardware plugin client
-// with synchronous exponential backoff retry logic to handle temporary failures.
-func (t *provisioningRequestReconcilerTask) initializeHardwarePluginClientWithRetry(ctx context.Context) error {
-	var lastErr error
-
-	for attempt := 1; attempt <= maxHardwareClientRetries; attempt++ {
-		hwclient, err := getHardwarePluginClient(ctx, t.client, t.logger, t.object)
-		if err == nil {
-			// Success - initialize client and return
-			t.hwpluginClient = hwmgrpluginapi.NewHardwarePluginClientAdapter(hwclient)
-
-			if attempt > 1 {
-				t.logger.InfoContext(ctx,
-					"Hardware plugin client initialized successfully after retries",
-					slog.String("provisioningRequest", t.object.Name),
-					slog.Int("attempts", attempt))
-			} else {
-				t.logger.InfoContext(ctx,
-					"Hardware plugin client initialized successfully",
-					slog.String("provisioningRequest", t.object.Name))
-			}
-
-			return nil
-		}
-
-		lastErr = err
-
-		if attempt == maxHardwareClientRetries {
-			// Maximum retries exceeded, fail permanently
-			t.logger.ErrorContext(ctx,
-				"Failed to initialize hardware plugin client after maximum retries",
-				slog.String("provisioningRequest", t.object.Name),
-				slog.Int("maxRetries", maxHardwareClientRetries),
-				slog.String("error", err.Error()))
-			break
-		}
-
-		// Calculate exponential backoff delay: baseRetryDelay * 2^(attempt-1)
-		delay := baseRetryDelay * time.Duration(1<<(attempt-1))
-
-		t.logger.WarnContext(ctx,
-			"Hardware plugin client initialization failed, retrying",
-			slog.String("provisioningRequest", t.object.Name),
-			slog.Int("attempt", attempt),
-			slog.Int("maxRetries", maxHardwareClientRetries),
-			slog.Duration("retryDelay", delay),
-			slog.String("error", err.Error()))
-
-		// Sleep before retry (except for the last attempt)
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-		case <-time.After(delay):
-			// Continue to next attempt
-		}
-	}
-
-	return fmt.Errorf("hardware plugin client initialization failed after %d retries: %w",
-		maxHardwareClientRetries, lastErr)
-}
-
-// getHardwarePluginClient is a convenience wrapper function to get the HardwarePluginClient object
-func getHardwarePluginClient(
-	ctx context.Context,
-	c client.Client,
-	logger *slog.Logger,
-	pr *provisioningv1alpha1.ProvisioningRequest,
-) (*hwmgrpluginapi.HardwarePluginClient, error) {
-	// Get the HardwarePlugin CR
-	hwplugin, err := ctlrutils.GetHardwarePluginFromProvisioningRequest(ctx, c, pr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve HardwarePlugin: %w", err)
-	}
-
-	// Validate that the HardwarePlugin CR is registered successfully
-	validated := meta.FindStatusCondition(hwplugin.Status.Conditions, string(hwmgmtv1alpha1.ConditionTypes.Registration))
-	if validated == nil || validated.Status != metav1.ConditionTrue {
-		return nil, fmt.Errorf("hardwarePlugin '%s' is not registered", hwplugin.Name)
-	}
-
-	// Get hwplugin client for the HardwarePlugin
-	// nolint: wrapcheck
-	return hwmgrpluginapi.NewHardwarePluginClient(ctx, c, logger, hwplugin)
-}
-
-// getNodeAllocationRequestID returns the NodeAllocationRequest identifier associated with the ProvisioningRequest CR.
-// If no identifier is set, a null string is returned.
-func (t *provisioningRequestReconcilerTask) getNodeAllocationRequestID() string {
-	if t.object.Status.Extensions.NodeAllocationRequestRef != nil {
-		return t.object.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID
-	}
-	return ""
-}
-
 // getNodeAllocationRequestResponse retrieves the NodeAllocationRequest from the HardwarePlugin server.
 // It returns the NodeAllocationRequestResponse, boolean value indicating whether the NodeAllocationRequest object was found (exists),
 // and any error encountered while attempting to fetch the NodeAllocationRequest.
-func (t *provisioningRequestReconcilerTask) getNodeAllocationRequestResponse(ctx context.Context) (*hwmgrpluginapi.NodeAllocationRequestResponse, bool, error) {
-	nodeAllocationRequestID := t.getNodeAllocationRequestID()
-	if nodeAllocationRequestID == "" {
-		return nil, false, fmt.Errorf("missing status.nodeAllocationRequestRef.NodeAllocationRequestID")
-	}
-
-	// Check if hardware plugin client is available
-	if t.hwpluginClient == nil {
-		return nil, false, fmt.Errorf("hardware plugin client is not available")
-	}
-
-	var (
-		nodeAllocationRequestResponse *hwmgrpluginapi.NodeAllocationRequestResponse
-		exists                        bool
-		err                           error
-	)
-	// Get the generated NodeAllocationRequest and its status.
-	if err = ctlrutils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
-		nodeAllocationRequestResponse, exists, err = t.hwpluginClient.GetNodeAllocationRequest(ctx, nodeAllocationRequestID)
-		if err != nil {
-			return fmt.Errorf("failed to get NodeAllocationRequest '%s': %w", nodeAllocationRequestID, err)
-		}
-		if !exists {
-			return fmt.Errorf("nodeAllocationRequest '%s' does not exist", nodeAllocationRequestID)
-		}
-		return nil
-	}); err != nil {
-		if strings.Contains(err.Error(), "does not exist") {
+func (t *provisioningRequestReconcilerTask) getNodeAllocationRequestResponse(ctx context.Context) (*pluginsv1alpha1.NodeAllocationRequest, bool, error) {
+	nar, err := t.getNAR(ctx)
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
 			return nil, false, nil
 		}
-		// nolint: wrapcheck
-		return nil, false, err
+		return nil, false, fmt.Errorf("failed to get NodeAllocationRequest %s: %w", t.object.Name, err)
 	}
 
-	return nodeAllocationRequestResponse, true, nil
+	return nar, true, nil
 }
 
 func (t *provisioningRequestReconcilerTask) resetHardwareTimers() {

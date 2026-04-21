@@ -75,20 +75,17 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/mock/gomock"
-
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/mocks"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	"github.com/openshift/assisted-service/api/v1beta1"
@@ -192,22 +189,6 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 		}
 
 		// Set up hwpluginClient using the test Metal3 hardware plugin
-		hwplugin := &hwmgmtv1alpha1.HardwarePlugin{}
-		hwpluginKey := client.ObjectKey{
-			Name:      testMetal3HardwarePluginRef,
-			Namespace: testHwMgrPluginNameSpace,
-		}
-		err := c.Get(ctx, hwpluginKey, hwplugin)
-		if err != nil {
-			reconciler.Logger.Warn("Could not get hwplugin for test", "error", err)
-		} else {
-			hwpluginClient, err := hwmgrpluginapi.NewHardwarePluginClient(ctx, c, reconciler.Logger, hwplugin)
-			if err != nil {
-				reconciler.Logger.Warn("Could not create hwpluginClient for test", "error", err)
-			} else {
-				task.hwpluginClient = hwpluginClient
-			}
-		}
 	})
 
 	It("returns no error when handleRenderHardwareTemplate succeeds", func() {
@@ -234,7 +215,7 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 			// Count the nodes per group
 			roleCounts[node.Role]++
 		}
-		Expect(nodeAllocationRequest.NodeGroup).To(HaveLen(2))
+		Expect(nodeAllocationRequest.Spec.NodeGroup).To(HaveLen(2))
 		expectedNodeGroups := map[string]struct {
 			size int
 		}{
@@ -242,10 +223,10 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 			groupNameWorker:     {size: roleCounts["worker"]},
 		}
 
-		for _, group := range nodeAllocationRequest.NodeGroup {
+		for _, group := range nodeAllocationRequest.Spec.NodeGroup {
 			expected, found := expectedNodeGroups[group.NodeGroupData.Name]
 			Expect(found).To(BeTrue())
-			Expect(group.NodeGroupData.Size).To(Equal(expected.size))
+			Expect(group.Size).To(Equal(expected.size))
 		}
 	})
 
@@ -283,52 +264,52 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 
 // createMockNodeAllocationRequestResponse creates a mock NodeAllocationRequestResponse for testing
 // By default, it creates a mock with current transaction ID (both spec and status match)
-func createMockNodeAllocationRequestResponse(conditionStatus, conditionReason, conditionMessage string) *hwmgrpluginapi.NodeAllocationRequestResponse {
+func createMockNodeAllocationRequestResponse(conditionStatus, conditionReason, conditionMessage string) *pluginsv1alpha1.NodeAllocationRequest {
 	return createMockNodeAllocationRequestResponseWithTransactionId(conditionStatus, conditionReason, conditionMessage, 0, 0)
 }
 
-// createMockNodeAllocationRequestResponseWithTransactionId creates a mock with specific transaction IDs
-func createMockNodeAllocationRequestResponseWithTransactionId(conditionStatus, conditionReason, conditionMessage string, specTransactionId, statusTransactionId int64) *hwmgrpluginapi.NodeAllocationRequestResponse {
-	nodeNames := []string{"test-node-1", "test-node-2"}
-
-	conditions := []hwmgrpluginapi.Condition{
-		{
-			Type:               "Provisioned",
-			Status:             conditionStatus,
-			Reason:             conditionReason,
-			Message:            conditionMessage,
-			LastTransitionTime: time.Now(),
+// createMockNodeAllocationRequestResponseWithTransactionId creates a mock NAR with specific transaction IDs
+func createMockNodeAllocationRequestResponseWithTransactionId(conditionStatus, conditionReason, conditionMessage string, specTransactionId, statusTransactionId int64) *pluginsv1alpha1.NodeAllocationRequest {
+	return &pluginsv1alpha1.NodeAllocationRequest{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-nar",
+			Namespace: constants.DefaultNamespace,
 		},
-	}
-
-	return &hwmgrpluginapi.NodeAllocationRequestResponse{
-		NodeAllocationRequest: &hwmgrpluginapi.NodeAllocationRequest{
+		Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 			ClusterId:           "test-cluster",
 			ConfigTransactionId: specTransactionId,
-			NodeGroup: []hwmgrpluginapi.NodeGroup{
+			NodeGroup: []pluginsv1alpha1.NodeGroup{
 				{
-					NodeGroupData: hwmgrpluginapi.NodeGroupData{
+					NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
 						Name:      "controller",
 						Role:      "master",
 						HwProfile: "profile-spr-single-processor-64G",
-						Size:      1,
 					},
+					Size: 1,
 				},
 				{
-					NodeGroupData: hwmgrpluginapi.NodeGroupData{
+					NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
 						Name:      "worker",
 						Role:      "worker",
 						HwProfile: "profile-spr-dual-processor-128G",
-						Size:      1,
 					},
+					Size: 1,
 				},
 			},
 		},
-		Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
-			Conditions:                  &conditions,
+		Status: pluginsv1alpha1.NodeAllocationRequestStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:               "Provisioned",
+					Status:             metav1.ConditionStatus(conditionStatus),
+					Reason:             conditionReason,
+					Message:            conditionMessage,
+					LastTransitionTime: metav1.Now(),
+				},
+			},
 			ObservedConfigTransactionId: statusTransactionId,
-			Properties: &hwmgrpluginapi.Properties{
-				NodeNames: &nodeNames,
+			Properties: pluginsv1alpha1.Properties{
+				NodeNames: []string{"test-node-1", "test-node-2"},
 			},
 		},
 	}
@@ -542,13 +523,15 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 		// This should still update status because configuration was started but not completed
 		completedMock := createMockNodeAllocationRequestResponse("True", "Completed", "Hardware configured successfully")
 		// Add configured condition to the mock
-		configuredCond := hwmgrpluginapi.Condition{
-			Type:    "Configured",
-			Status:  "True",
-			Reason:  "Completed",
-			Message: "Hardware configured successfully",
+		completedMock.Status.Conditions = []metav1.Condition{
+			{
+				Type:               "Configured",
+				Status:             metav1.ConditionTrue,
+				Reason:             "Completed",
+				Message:            "Hardware configured successfully",
+				LastTransitionTime: metav1.Now(),
+			},
 		}
-		completedMock.Status.Conditions = &[]hwmgrpluginapi.Condition{configuredCond}
 
 		configured, timedOutOrFailed, err := task.checkNodeAllocationRequestConfigStatus(ctx, completedMock)
 		Expect(err).ToNot(HaveOccurred())
@@ -599,14 +582,15 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 		// Simulate non-callback reconciliation with stale failed state
 		// This should NOT update status because the condition reason is Failed (terminal state)
 		staleMock := createMockNodeAllocationRequestResponse("False", "Failed", "Old failure message")
-		detailedError := "Old failure message"
-		failedCond := hwmgrpluginapi.Condition{
-			Type:    "Configured",
-			Status:  "False",
-			Reason:  "Failed",
-			Message: detailedError,
+		staleMock.Status.Conditions = []metav1.Condition{
+			{
+				Type:               "Configured",
+				Status:             metav1.ConditionFalse,
+				Reason:             "Failed",
+				Message:            "Old failure message",
+				LastTransitionTime: metav1.Now(),
+			},
 		}
-		staleMock.Status.Conditions = &[]hwmgrpluginapi.Condition{failedCond}
 
 		configured, timedOutOrFailed, err := task.checkNodeAllocationRequestConfigStatus(ctx, staleMock)
 
@@ -622,7 +606,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 		condition := meta.FindStatusCondition(updatedCR.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured))
 		Expect(condition).ToNot(BeNil())
 		Expect(condition.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.Failed))) // Should remain as original failed state
-		Expect(condition.Message).To(Equal("Hardware configuring failed: " + detailedError))       // Reflects the current plugin response with the detailed error
+		Expect(condition.Message).To(Equal("Hardware configuring failed: Old failure message"))    // Reflects the current plugin response with the detailed error
 	})
 
 	It("returns false when NodeAllocationRequest is not provisioned", func() {
@@ -706,35 +690,25 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 		}
 
 		// Set up hwpluginClient using the test Metal3 hardware plugin
-		hwplugin := &hwmgmtv1alpha1.HardwarePlugin{}
-		hwpluginKey := client.ObjectKey{
-			Name:      testMetal3HardwarePluginRef,
-			Namespace: testHwMgrPluginNameSpace,
-		}
-		err := c.Get(ctx, hwpluginKey, hwplugin)
-		if err != nil {
-			reconciler.Logger.Warn("Could not get hwplugin for test", "error", err)
-		} else {
-			hwpluginClient, err := hwmgrpluginapi.NewHardwarePluginClient(ctx, c, reconciler.Logger, hwplugin)
-			if err != nil {
-				reconciler.Logger.Warn("Could not create hwpluginClient for test", "error", err)
-			} else {
-				task.hwpluginClient = hwpluginClient
-			}
-		}
 	})
 
 	It("creates new NodeAllocationRequest when none exists", func() {
-		nodeAllocationRequest := &hwmgrpluginapi.NodeAllocationRequest{
-			ClusterId: crName,
-			Site:      "test-site",
-			NodeGroup: []hwmgrpluginapi.NodeGroup{
-				{
-					NodeGroupData: hwmgrpluginapi.NodeGroupData{
-						Name:      "controller",
-						Role:      "master",
-						HwProfile: "profile-spr-single-processor-64G",
-						Size:      1,
+		nodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      cr.Name,
+				Namespace: constants.DefaultNamespace,
+			},
+			Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+				ClusterId:    crName,
+				LocationSpec: pluginsv1alpha1.LocationSpec{Site: "test-site"},
+				NodeGroup: []pluginsv1alpha1.NodeGroup{
+					{
+						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
+							Name:      "controller",
+							Role:      "master",
+							HwProfile: "profile-spr-single-processor-64G",
+						},
+						Size: 1,
 					},
 				},
 			},
@@ -743,28 +717,54 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 		err := task.createOrUpdateNodeAllocationRequest(ctx, ctNamespace, nodeAllocationRequest)
 		Expect(err).ToNot(HaveOccurred())
 
-		// Verify NodeAllocationRequestRef is set
-		Expect(cr.Status.Extensions.NodeAllocationRequestRef).ToNot(BeNil())
-		Expect(cr.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID).To(Equal("cluster-1"))
+		// Verify the NAR was created in the cluster
+		createdNAR := &pluginsv1alpha1.NodeAllocationRequest{}
+		err = c.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: constants.DefaultNamespace}, createdNAR)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(createdNAR.Spec.ClusterId).To(Equal(crName))
 	})
 
 	It("updates existing NodeAllocationRequest when spec changes", func() {
-		// Set up existing NodeAllocationRequest
-		existingID := crName
-		task.object.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
-			NodeAllocationRequestID: existingID,
+		// Create existing NAR CR
+		existingNAR := &pluginsv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      cr.Name,
+				Namespace: constants.DefaultNamespace,
+			},
+			Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+				ClusterId:    crName,
+				LocationSpec: pluginsv1alpha1.LocationSpec{Site: "test-site"},
+				NodeGroup: []pluginsv1alpha1.NodeGroup{
+					{
+						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
+							Name:      "controller",
+							Role:      "master",
+							HwProfile: "profile-spr-single-processor-64G",
+						},
+						Size: 1,
+					},
+				},
+			},
 		}
+		Expect(c.Create(ctx, existingNAR)).To(Succeed())
 
-		nodeAllocationRequest := &hwmgrpluginapi.NodeAllocationRequest{
-			ClusterId: crName,
-			Site:      "test-site",
-			NodeGroup: []hwmgrpluginapi.NodeGroup{
-				{
-					NodeGroupData: hwmgrpluginapi.NodeGroupData{
-						Name:      "controller",
-						Role:      "master",
-						HwProfile: "profile-spr-single-processor-64G",
-						Size:      2, // Changed size to trigger update
+		// New NAR with changed size
+		nodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      cr.Name,
+				Namespace: constants.DefaultNamespace,
+			},
+			Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+				ClusterId:    crName,
+				LocationSpec: pluginsv1alpha1.LocationSpec{Site: "test-site"},
+				NodeGroup: []pluginsv1alpha1.NodeGroup{
+					{
+						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
+							Name:      "controller",
+							Role:      "master",
+							HwProfile: "profile-spr-single-processor-64G",
+						},
+						Size: 2, // Changed size
 					},
 				},
 			},
@@ -775,51 +775,46 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 	})
 
 	It("updates configuring timer when NAR spec changes", func() {
-		// Set up existing NodeAllocationRequest
-		existingID := crName
-		task.object.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
-			NodeAllocationRequestID: existingID,
-		}
-
-		// Update the CR to persist the old timers
-		Expect(c.Status().Update(ctx, cr)).To(Succeed())
-
-		// Update task object to reflect the updated CR status
-		task.object = cr
-
-		// Set up mock hwpluginClient that returns existing NAR with different NodeGroup
-		existingNAR := &hwmgrpluginapi.NodeAllocationRequestResponse{
-			NodeAllocationRequest: &hwmgrpluginapi.NodeAllocationRequest{
-				ClusterId: crName,
-				Site:      "test-site",
-				NodeGroup: []hwmgrpluginapi.NodeGroup{
+		// Create existing NAR CR in fake client with original profile
+		existingNAR := &pluginsv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      cr.Name,
+				Namespace: constants.DefaultNamespace,
+			},
+			Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+				ClusterId:    crName,
+				LocationSpec: pluginsv1alpha1.LocationSpec{Site: "test-site"},
+				NodeGroup: []pluginsv1alpha1.NodeGroup{
 					{
-						NodeGroupData: hwmgrpluginapi.NodeGroupData{
+						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
 							Name:      "controller",
 							Role:      "master",
-							HwProfile: "profile-spr-single-processor-64G", // Different profile to trigger update
-							Size:      1,
+							HwProfile: "profile-spr-single-processor-64G",
 						},
+						Size: 1,
 					},
 				},
 			},
 		}
-		ctrl := gomock.NewController(GinkgoT())
-		mockClient := mocks.NewMockHardwarePluginClientInterface(ctrl)
-		mockClient.EXPECT().GetNodeAllocationRequest(gomock.Any(), existingID).Return(existingNAR, true, nil)
-		mockClient.EXPECT().UpdateNodeAllocationRequest(gomock.Any(), existingID, gomock.Any()).Return(existingID, nil)
-		task.hwpluginClient = mockClient
+		Expect(c.Create(ctx, existingNAR)).To(Succeed())
 
-		nodeAllocationRequest := &hwmgrpluginapi.NodeAllocationRequest{
-			ClusterId: crName,
-			Site:      "test-site",
-			NodeGroup: []hwmgrpluginapi.NodeGroup{
-				{
-					NodeGroupData: hwmgrpluginapi.NodeGroupData{
-						Name:      "controller",
-						Role:      "master",
-						HwProfile: "profile-spr-single-processor-128G", // Changed profile to trigger update
-						Size:      1,
+		// New NAR with changed profile to trigger update
+		nodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      cr.Name,
+				Namespace: constants.DefaultNamespace,
+			},
+			Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+				ClusterId:    crName,
+				LocationSpec: pluginsv1alpha1.LocationSpec{Site: "test-site"},
+				NodeGroup: []pluginsv1alpha1.NodeGroup{
+					{
+						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
+							Name:      "controller",
+							Role:      "master",
+							HwProfile: "profile-spr-single-processor-128G", // Changed profile
+						},
+						Size: 1,
 					},
 				},
 			},
@@ -828,13 +823,10 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 		err := task.createOrUpdateNodeAllocationRequest(ctx, ctNamespace, nodeAllocationRequest)
 		Expect(err).ToNot(HaveOccurred())
 
-		// Read the updated CR to get the latest status
-		var updatedCR provisioningv1alpha1.ProvisioningRequest
-		Expect(c.Get(ctx, client.ObjectKeyFromObject(cr), &updatedCR)).To(Succeed())
-
-		// Verify NodeAllocationRequestRef is updated
-		Expect(updatedCR.Status.Extensions.NodeAllocationRequestRef).ToNot(BeNil())
-		Expect(updatedCR.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID).To(Equal("cluster-1"))
+		// Verify the NAR spec was updated in the cluster
+		updatedNAR := &pluginsv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: constants.DefaultNamespace}, updatedNAR)).To(Succeed())
+		Expect(updatedNAR.Spec.NodeGroup[0].NodeGroupData.HwProfile).To(Equal("profile-spr-single-processor-128G"))
 	})
 })
 
@@ -912,26 +904,26 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		nar, err := task.buildNodeAllocationRequest(clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
-		Expect(nar.Site).To(Equal("local-123"))
-		Expect(nar.ClusterId).To(Equal("exampleCluster"))
-		Expect(nar.NodeGroup).To(HaveLen(2))
+		Expect(nar.Spec.LocationSpec.Site).To(Equal("local-123"))
+		Expect(nar.Spec.ClusterId).To(Equal("exampleCluster"))
+		Expect(nar.Spec.NodeGroup).To(HaveLen(2))
 
 		// Check master nodes
-		var masterGroup, workerGroup *hwmgrpluginapi.NodeGroup
-		for i := range nar.NodeGroup {
-			if nar.NodeGroup[i].NodeGroupData.Name == "controller" {
-				masterGroup = &nar.NodeGroup[i]
-			} else if nar.NodeGroup[i].NodeGroupData.Name == groupNameWorker {
-				workerGroup = &nar.NodeGroup[i]
+		var masterGroup, workerGroup *pluginsv1alpha1.NodeGroup
+		for i := range nar.Spec.NodeGroup {
+			if nar.Spec.NodeGroup[i].NodeGroupData.Name == "controller" {
+				masterGroup = &nar.Spec.NodeGroup[i]
+			} else if nar.Spec.NodeGroup[i].NodeGroupData.Name == groupNameWorker {
+				workerGroup = &nar.Spec.NodeGroup[i]
 			}
 		}
 
 		Expect(masterGroup).ToNot(BeNil())
-		Expect(masterGroup.NodeGroupData.Size).To(Equal(2)) // 2 master nodes
+		Expect(masterGroup.Size).To(Equal(2)) // 2 master nodes
 		Expect(masterGroup.NodeGroupData.Role).To(Equal("master"))
 
 		Expect(workerGroup).ToNot(BeNil())
-		Expect(workerGroup.NodeGroupData.Size).To(Equal(1)) // 1 worker node
+		Expect(workerGroup.Size).To(Equal(1)) // 1 worker node
 		Expect(workerGroup.NodeGroupData.Role).To(Equal("worker"))
 	})
 
@@ -967,9 +959,9 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		nar, err := task.buildNodeAllocationRequest(clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
-		Expect(nar.ConfigTransactionId).To(Equal(int64(1))) // Should match PR generation
-		Expect(nar.HardwareProvisioningTimeout).ToNot(BeNil())
-		Expect(*nar.HardwareProvisioningTimeout).To(Equal("60m"))
+		Expect(nar.Spec.ConfigTransactionId).To(Equal(int64(1))) // Should match PR generation
+		Expect(nar.Spec.HardwareProvisioningTimeout).ToNot(BeNil())
+		Expect(nar.Spec.HardwareProvisioningTimeout).To(Equal("60m"))
 	})
 
 	It("should use default timeout when template timeout is empty", func() {
@@ -1004,8 +996,8 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		nar, err := task.buildNodeAllocationRequest(clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
-		Expect(nar.HardwareProvisioningTimeout).ToNot(BeNil())
-		Expect(*nar.HardwareProvisioningTimeout).To(Equal("1h30m0s")) // Default timeout
+		Expect(nar.Spec.HardwareProvisioningTimeout).ToNot(BeNil())
+		Expect(nar.Spec.HardwareProvisioningTimeout).To(Equal("1h30m0s")) // Default timeout
 	})
 
 	It("returns error when spec.nodes not found", func() {
@@ -1054,15 +1046,15 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		nar, err := task.buildNodeAllocationRequest(clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
-		Expect(nar.NodeGroup).To(HaveLen(2))
+		Expect(nar.Spec.NodeGroup).To(HaveLen(2))
 
 		// Check that controller group uses the overridden profile
-		var controllerGroup, workerGroup *hwmgrpluginapi.NodeGroup
-		for i := range nar.NodeGroup {
-			if nar.NodeGroup[i].NodeGroupData.Name == "controller" {
-				controllerGroup = &nar.NodeGroup[i]
-			} else if nar.NodeGroup[i].NodeGroupData.Name == groupNameWorker {
-				workerGroup = &nar.NodeGroup[i]
+		var controllerGroup, workerGroup *pluginsv1alpha1.NodeGroup
+		for i := range nar.Spec.NodeGroup {
+			if nar.Spec.NodeGroup[i].NodeGroupData.Name == "controller" {
+				controllerGroup = &nar.Spec.NodeGroup[i]
+			} else if nar.Spec.NodeGroup[i].NodeGroupData.Name == groupNameWorker {
+				workerGroup = &nar.Spec.NodeGroup[i]
 			}
 		}
 
@@ -1097,8 +1089,8 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		nar, err := task.buildNodeAllocationRequest(clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
-		Expect(nar.NodeGroup).To(HaveLen(1))
-		Expect(nar.NodeGroup[0].NodeGroupData.HwProfile).To(Equal("template-profile-1"))
+		Expect(nar.Spec.NodeGroup).To(HaveLen(1))
+		Expect(nar.Spec.NodeGroup[0].NodeGroupData.HwProfile).To(Equal("template-profile-1"))
 	})
 
 	It("succeeds when nodeGroup has no hwProfile, resourcePoolId, or resourceSelector", func() {
@@ -1124,9 +1116,9 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		nar, err := task.buildNodeAllocationRequest(clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
-		Expect(nar.NodeGroup).To(HaveLen(1))
-		Expect(nar.NodeGroup[0].NodeGroupData.Name).To(Equal("controller"))
-		Expect(nar.NodeGroup[0].NodeGroupData.Role).To(Equal("master"))
+		Expect(nar.Spec.NodeGroup).To(HaveLen(1))
+		Expect(nar.Spec.NodeGroup[0].NodeGroupData.Name).To(Equal("controller"))
+		Expect(nar.Spec.NodeGroup[0].NodeGroupData.Role).To(Equal("master"))
 	})
 })
 
@@ -1314,49 +1306,19 @@ var _ = Describe("waitForHardwareData", func() {
 		}
 
 		// Set up hwpluginClient using the test Metal3 hardware plugin
-		hwplugin := &hwmgmtv1alpha1.HardwarePlugin{}
-		hwpluginKey := client.ObjectKey{
-			Name:      testMetal3HardwarePluginRef,
-			Namespace: testHwMgrPluginNameSpace,
-		}
-		err := c.Get(ctx, hwpluginKey, hwplugin)
-		if err != nil {
-			reconciler.Logger.Warn("Could not get hwplugin for test", "error", err)
-		} else {
-			hwpluginClient, err := hwmgrpluginapi.NewHardwarePluginClient(ctx, c, reconciler.Logger, hwplugin)
-			if err != nil {
-				reconciler.Logger.Warn("Could not create hwpluginClient for test", "error", err)
-			} else {
-				task.hwpluginClient = hwpluginClient
-			}
-		}
 	})
 
 	It("returns provisioned=true and configured=true when both conditions are met", func() {
-		// Create mock with both provisioned and configured true
-		provisionedConfiguredMock := &hwmgrpluginapi.NodeAllocationRequestResponse{
-			Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
-				Conditions: &[]hwmgrpluginapi.Condition{
-					{
-						Type:               "Provisioned",
-						Status:             "True",
-						Reason:             "Completed",
-						Message:            "Hardware provisioned",
-						LastTransitionTime: time.Now(),
-					},
-					{
-						Type:               "Configured",
-						Status:             "True",
-						Reason:             "Completed",
-						Message:            "Hardware configured",
-						LastTransitionTime: time.Now(),
-					},
+		provisionedConfiguredMock := &pluginsv1alpha1.NodeAllocationRequest{
+			Status: pluginsv1alpha1.NodeAllocationRequestStatus{
+				Conditions: []metav1.Condition{
+					{Type: "Provisioned", Status: metav1.ConditionTrue, Reason: "Completed", Message: "Hardware provisioned", LastTransitionTime: metav1.Now()},
+					{Type: "Configured", Status: metav1.ConditionTrue, Reason: "Completed", Message: "Hardware configured", LastTransitionTime: metav1.Now()},
 				},
 				ObservedConfigTransactionId: cr.Generation,
 			},
 		}
 
-		// Test just the status checking, not the full flow
 		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, provisionedConfiguredMock, hwmgmtv1alpha1.Provisioned)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(provisioned).To(BeTrue())
@@ -1370,17 +1332,10 @@ var _ = Describe("waitForHardwareData", func() {
 	})
 
 	It("returns provisioned=false when provisioning is not complete", func() {
-		// Create mock with provisioned false
-		notProvisionedMock := &hwmgrpluginapi.NodeAllocationRequestResponse{
-			Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
-				Conditions: &[]hwmgrpluginapi.Condition{
-					{
-						Type:               "Provisioned",
-						Status:             "False",
-						Reason:             "InProgress",
-						Message:            "Hardware provisioning in progress",
-						LastTransitionTime: time.Now(),
-					},
+		notProvisionedMock := &pluginsv1alpha1.NodeAllocationRequest{
+			Status: pluginsv1alpha1.NodeAllocationRequestStatus{
+				Conditions: []metav1.Condition{
+					{Type: "Provisioned", Status: metav1.ConditionFalse, Reason: "InProgress", Message: "Hardware provisioning in progress", LastTransitionTime: metav1.Now()},
 				},
 			},
 		}
@@ -1393,30 +1348,22 @@ var _ = Describe("waitForHardwareData", func() {
 	})
 
 	It("returns configured=nil when configured condition does not exist", func() {
-		// Create mock with only provisioned condition
-		onlyProvisionedMock := &hwmgrpluginapi.NodeAllocationRequestResponse{
-			Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
-				Conditions: &[]hwmgrpluginapi.Condition{
-					{
-						Type:               "Provisioned",
-						Status:             "True",
-						Reason:             "Completed",
-						Message:            "Hardware provisioned",
-						LastTransitionTime: time.Now(),
-					},
+		onlyProvisionedMock := &pluginsv1alpha1.NodeAllocationRequest{
+			Status: pluginsv1alpha1.NodeAllocationRequestStatus{
+				Conditions: []metav1.Condition{
+					{Type: "Provisioned", Status: metav1.ConditionTrue, Reason: "Completed", Message: "Hardware provisioned", LastTransitionTime: metav1.Now()},
 				},
 			},
 		}
 
-		// Test just the status checking, not the full flow
 		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, onlyProvisionedMock, hwmgmtv1alpha1.Provisioned)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(provisioned).To(BeTrue())
 		Expect(timedOutOrFailed).To(BeFalse())
 
 		configured, timedOutOrFailed, err := task.checkNodeAllocationRequestConfigStatus(ctx, onlyProvisionedMock)
-		Expect(err).ToNot(HaveOccurred()) // Function returns nil error when condition doesn't exist
-		Expect(configured).To(BeNil())    // But configured should be nil
+		Expect(err).ToNot(HaveOccurred())
+		Expect(configured).To(BeNil())
 		Expect(timedOutOrFailed).To(BeFalse())
 	})
 })
@@ -1462,37 +1409,42 @@ var _ = Describe("checkExistingNodeAllocationRequest", func() {
 		}
 
 		// Set up hwpluginClient using the test Metal3 hardware plugin
-		hwplugin := &hwmgmtv1alpha1.HardwarePlugin{}
-		hwpluginKey := client.ObjectKey{
-			Name:      testMetal3HardwarePluginRef,
-			Namespace: testHwMgrPluginNameSpace,
-		}
-		err := c.Get(ctx, hwpluginKey, hwplugin)
-		if err != nil {
-			reconciler.Logger.Warn("Could not get hwplugin for test", "error", err)
-		} else {
-			hwpluginClient, err := hwmgrpluginapi.NewHardwarePluginClient(ctx, c, reconciler.Logger, hwplugin)
-			if err != nil {
-				reconciler.Logger.Warn("Could not create hwpluginClient for test", "error", err)
-			} else {
-				task.hwpluginClient = hwpluginClient
-			}
-		}
 	})
 
-	It("returns error when hwpluginClient is nil", func() {
-		task.hwpluginClient = nil
-
+	It("returns nil when NAR does not exist", func() {
 		hwMgmtData := map[string]any{}
 		nodeAllocationRequestId := "test-id"
 
 		response, err := task.checkExistingNodeAllocationRequest(ctx, hwMgmtData, nodeAllocationRequestId)
-		Expect(err).To(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(response).To(BeNil())
-		Expect(err.Error()).To(ContainSubstring("hwpluginClient is nil"))
 	})
 
 	It("returns response when NodeAllocationRequest exists and matches", func() {
+		// Create a NAR CR in the fake client
+		nar := &pluginsv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      crName,
+				Namespace: constants.DefaultNamespace,
+			},
+			Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+				ClusterId: crName,
+				NodeGroup: []pluginsv1alpha1.NodeGroup{
+					{
+						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
+							Name: "controller", Role: "master", HwProfile: "profile-spr-single-processor-64G",
+						},
+					},
+					{
+						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
+							Name: "worker", Role: "worker", HwProfile: "profile-spr-dual-processor-128G",
+						},
+					},
+				},
+			},
+		}
+		Expect(c.Create(ctx, nar)).To(Succeed())
+
 		hwMgmtData := map[string]any{
 			"hardwarePluginRef": testMetal3HardwarePluginRef,
 			"nodeGroupData": []any{
@@ -1517,7 +1469,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 		cr          *provisioningv1alpha1.ProvisioningRequest
 		ci          *unstructured.Unstructured
 		hwNodes     map[string][]utils.NodeInfo
-		nar         *hwmgrpluginapi.NodeAllocationRequestResponse
+		nar         *pluginsv1alpha1.NodeAllocationRequest
 		crName      = "cluster-1"
 		ctNamespace = "clustertemplate-a-v4-16"
 		tName       = "clustertemplate-a"
@@ -1652,18 +1604,18 @@ var _ = Describe("applyNodeConfiguration", func() {
 			},
 		}
 
-		// Set up node allocation request response
-		nar = &hwmgrpluginapi.NodeAllocationRequestResponse{
-			NodeAllocationRequest: &hwmgrpluginapi.NodeAllocationRequest{
-				NodeGroup: []hwmgrpluginapi.NodeGroup{
+		// Set up node allocation request
+		nar = &pluginsv1alpha1.NodeAllocationRequest{
+			Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+				NodeGroup: []pluginsv1alpha1.NodeGroup{
 					{
-						NodeGroupData: hwmgrpluginapi.NodeGroupData{
+						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
 							Name: "controller",
 							Role: "master",
 						},
 					},
 					{
-						NodeGroupData: hwmgrpluginapi.NodeGroupData{
+						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
 							Name: "worker",
 							Role: "worker",
 						},
@@ -2282,9 +2234,9 @@ var _ = Describe("processExistingHardwareCondition", func() {
 	Context("when HardwareProvisioned condition fails", func() {
 		It("preserves detailed NAR error message in PR condition", func() {
 			detailedError := "Creation request failed: not enough free resources matching nodegroup=controller criteria: freenodes=0, required=1"
-			hwCondition := &hwmgrpluginapi.Condition{
+			hwCondition := &metav1.Condition{
 				Type:    string(hwmgmtv1alpha1.Provisioned),
-				Status:  string(metav1.ConditionFalse),
+				Status:  metav1.ConditionFalse,
 				Reason:  string(hwmgmtv1alpha1.Failed),
 				Message: detailedError,
 			}
@@ -2302,9 +2254,9 @@ var _ = Describe("processExistingHardwareCondition", func() {
 	Context("when HardwareConfigured condition fails", func() {
 		It("preserves detailed NAR error message in PR condition", func() {
 			detailedError := "Configuration failed: unable to apply BIOS settings on node controller-0"
-			hwCondition := &hwmgrpluginapi.Condition{
+			hwCondition := &metav1.Condition{
 				Type:    string(hwmgmtv1alpha1.Configured),
-				Status:  string(metav1.ConditionFalse),
+				Status:  metav1.ConditionFalse,
 				Reason:  string(hwmgmtv1alpha1.Failed),
 				Message: detailedError,
 			}
@@ -2324,9 +2276,9 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			// With the new timeout handling approach, timeouts are detected at the NodeAllocationRequest level
 			// and propagated via callbacks. The ProvisioningRequest controller no longer detects timeouts directly.
 			// Instead, it receives timeout status via callbacks from the hardware plugin.
-			hwCondition := &hwmgrpluginapi.Condition{
+			hwCondition := &metav1.Condition{
 				Type:    string(hwmgmtv1alpha1.Provisioned),
-				Status:  string(metav1.ConditionFalse),
+				Status:  metav1.ConditionFalse,
 				Reason:  string(hwmgmtv1alpha1.TimedOut), // Hardware plugin reports timeout via callback
 				Message: "Hardware provisioning timed out",
 			}
@@ -2345,9 +2297,9 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			// With the new timeout handling approach, timeouts are detected at the NodeAllocationRequest level
 			// and propagated via callbacks. The ProvisioningRequest controller no longer detects timeouts directly.
 			// Instead, it receives timeout status via callbacks from the hardware plugin.
-			hwCondition := &hwmgrpluginapi.Condition{
+			hwCondition := &metav1.Condition{
 				Type:    string(hwmgmtv1alpha1.Configured),
-				Status:  string(metav1.ConditionFalse),
+				Status:  metav1.ConditionFalse,
 				Reason:  string(hwmgmtv1alpha1.TimedOut), // Hardware plugin reports timeout via callback
 				Message: "Hardware configuration timed out",
 			}
@@ -2362,9 +2314,9 @@ var _ = Describe("processExistingHardwareCondition", func() {
 
 	Context("when HardwareProvisioned completes successfully", func() {
 		It("updates provisioningStatus with success message", func() {
-			hwCondition := &hwmgrpluginapi.Condition{
+			hwCondition := &metav1.Condition{
 				Type:    string(hwmgmtv1alpha1.Provisioned),
-				Status:  string(metav1.ConditionTrue),
+				Status:  metav1.ConditionTrue,
 				Reason:  string(hwmgmtv1alpha1.Completed),
 				Message: "Created",
 			}
@@ -2383,9 +2335,9 @@ var _ = Describe("processExistingHardwareCondition", func() {
 
 	Context("when HardwareConfigured completes successfully", func() {
 		It("updates provisioningStatus with success message", func() {
-			hwCondition := &hwmgrpluginapi.Condition{
+			hwCondition := &metav1.Condition{
 				Type:    string(hwmgmtv1alpha1.Configured),
-				Status:  string(metav1.ConditionTrue),
+				Status:  metav1.ConditionTrue,
 				Reason:  string(hwmgmtv1alpha1.Completed),
 				Message: "Configuration applied",
 			}
@@ -2405,9 +2357,9 @@ var _ = Describe("processExistingHardwareCondition", func() {
 	Context("when HardwareProvisioned is in progress with context", func() {
 		It("preserves NAR context message", func() {
 			narContextMessage := "Handling creation"
-			hwCondition := &hwmgrpluginapi.Condition{
+			hwCondition := &metav1.Condition{
 				Type:    string(hwmgmtv1alpha1.Provisioned),
-				Status:  string(metav1.ConditionFalse),
+				Status:  metav1.ConditionFalse,
 				Reason:  string(hwmgmtv1alpha1.InProgress),
 				Message: narContextMessage,
 			}
@@ -2424,9 +2376,9 @@ var _ = Describe("processExistingHardwareCondition", func() {
 
 	Context("when HardwareProvisioned is in progress without context", func() {
 		It("uses generic in-progress message", func() {
-			hwCondition := &hwmgrpluginapi.Condition{
+			hwCondition := &metav1.Condition{
 				Type:    string(hwmgmtv1alpha1.Provisioned),
-				Status:  string(metav1.ConditionFalse),
+				Status:  metav1.ConditionFalse,
 				Reason:  string(hwmgmtv1alpha1.InProgress),
 				Message: "", // Empty message
 			}
@@ -2444,9 +2396,9 @@ var _ = Describe("processExistingHardwareCondition", func() {
 	Context("when HardwareConfigured is in progress with context", func() {
 		It("preserves NAR context message", func() {
 			narContextMessage := "AwaitConfig"
-			hwCondition := &hwmgrpluginapi.Condition{
+			hwCondition := &metav1.Condition{
 				Type:    string(hwmgmtv1alpha1.Configured),
-				Status:  string(metav1.ConditionFalse),
+				Status:  metav1.ConditionFalse,
 				Reason:  string(hwmgmtv1alpha1.InProgress),
 				Message: narContextMessage,
 			}
@@ -2458,149 +2410,6 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			Expect(timedOutOrFailed).To(BeFalse())
 			// Verify the NAR context is preserved with "configuring" (verb form)
 			Expect(message).To(Equal("Hardware configuring is in progress: " + narContextMessage))
-		})
-	})
-
-	Context("shouldUpdateHardwareStatus day 2 retry logic", func() {
-		var task *provisioningRequestReconcilerTask
-		var cr *provisioningv1alpha1.ProvisioningRequest
-
-		BeforeEach(func() {
-			cr = &provisioningv1alpha1.ProvisioningRequest{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       "test-pr",
-					Namespace:  "default",
-					Generation: 2,
-				},
-				Status: provisioningv1alpha1.ProvisioningRequestStatus{
-					ObservedGeneration: 1, // Different from generation, indicating spec change
-					ProvisioningStatus: provisioningv1alpha1.ProvisioningStatus{
-						ProvisioningPhase: provisioningv1alpha1.StatePending,
-					},
-				},
-			}
-			Expect(c.Create(ctx, cr)).To(Succeed())
-
-			task = &provisioningRequestReconcilerTask{
-				logger: reconciler.Logger,
-				client: reconciler.Client,
-				object: cr,
-			}
-		})
-
-		Context("when Configured condition is in terminal state and PR is pending", func() {
-			BeforeEach(func() {
-				// Set up terminal state (TimedOut) for HardwareConfigured condition
-				utils.SetStatusCondition(&cr.Status.Conditions,
-					provisioningv1alpha1.PRconditionTypes.HardwareConfigured,
-					provisioningv1alpha1.CRconditionReasons.TimedOut,
-					metav1.ConditionFalse,
-					"Hardware configuration timed out")
-				Expect(c.Status().Update(ctx, cr)).To(Succeed())
-			})
-
-			It("should NOT allow status update for terminal Configured condition", func() {
-				// This should return false because:
-				// 1. isTerminalState = true (TimedOut reason)
-				// 2. condition = hwmgmtv1alpha1.Configured
-				// 3. With new implementation, terminal states always return false
-				result := task.shouldUpdateHardwareStatus(hwmgmtv1alpha1.Configured)
-				Expect(result).To(BeFalse())
-			})
-
-			It("should NOT allow status update for Provisioned condition", func() {
-				// Set up terminal state (TimedOut) for HardwareProvisioned condition
-				utils.SetStatusCondition(&cr.Status.Conditions,
-					provisioningv1alpha1.PRconditionTypes.HardwareProvisioned,
-					provisioningv1alpha1.CRconditionReasons.TimedOut,
-					metav1.ConditionFalse,
-					"Hardware provisioning timed out")
-				Expect(c.Status().Update(ctx, cr)).To(Succeed())
-
-				// This should return false because:
-				// 1. isTerminalState = true (TimedOut reason)
-				// 2. condition = hwmgmtv1alpha1.Provisioned (not Configured)
-				// 3. Day 2 retry exception only applies to Configured condition
-				result := task.shouldUpdateHardwareStatus(hwmgmtv1alpha1.Provisioned)
-				Expect(result).To(BeFalse())
-			})
-
-			It("should NOT allow status update when PR is not pending", func() {
-				// Change PR phase to progressing
-				cr.Status.ProvisioningStatus.ProvisioningPhase = provisioningv1alpha1.StateProgressing
-				Expect(c.Status().Update(ctx, cr)).To(Succeed())
-
-				// This should return false because ProvisioningPhase is not StatePending
-				result := task.shouldUpdateHardwareStatus(hwmgmtv1alpha1.Configured)
-				Expect(result).To(BeFalse())
-			})
-		})
-
-		Context("when Configured condition is in terminal state (Failed) and PR is pending", func() {
-			BeforeEach(func() {
-				// Set up terminal state (Failed) for HardwareConfigured condition
-				utils.SetStatusCondition(&cr.Status.Conditions,
-					provisioningv1alpha1.PRconditionTypes.HardwareConfigured,
-					provisioningv1alpha1.CRconditionReasons.Failed,
-					metav1.ConditionFalse,
-					"Hardware configuration failed")
-				Expect(c.Status().Update(ctx, cr)).To(Succeed())
-			})
-
-			It("should NOT allow status update for terminal Configured condition", func() {
-				result := task.shouldUpdateHardwareStatus(hwmgmtv1alpha1.Configured)
-				Expect(result).To(BeFalse())
-			})
-		})
-
-		Context("when Configured condition is NOT in terminal state", func() {
-			BeforeEach(func() {
-				// Set up non-terminal state (InProgress) for HardwareConfigured condition
-				utils.SetStatusCondition(&cr.Status.Conditions,
-					provisioningv1alpha1.PRconditionTypes.HardwareConfigured,
-					provisioningv1alpha1.CRconditionReasons.InProgress,
-					metav1.ConditionFalse,
-					"Hardware configuration in progress")
-				Expect(c.Status().Update(ctx, cr)).To(Succeed())
-			})
-
-			It("should allow status update regardless of PR phase", func() {
-				// Should return true because condition is not in terminal state
-				result := task.shouldUpdateHardwareStatus(hwmgmtv1alpha1.Configured)
-				Expect(result).To(BeTrue())
-			})
-		})
-
-		Context("when no condition exists yet", func() {
-			It("should allow status update", func() {
-				// Should return true because no condition exists yet
-				result := task.shouldUpdateHardwareStatus(hwmgmtv1alpha1.Configured)
-				Expect(result).To(BeTrue())
-			})
-		})
-
-		Context("when callback-triggered reconciliation", func() {
-			BeforeEach(func() {
-				// Set up callback annotations
-				cr.Annotations = map[string]string{
-					utils.CallbackReceivedAnnotation: "test-callback",
-				}
-				Expect(c.Update(ctx, cr)).To(Succeed())
-
-				// Set up terminal state
-				utils.SetStatusCondition(&cr.Status.Conditions,
-					provisioningv1alpha1.PRconditionTypes.HardwareConfigured,
-					provisioningv1alpha1.CRconditionReasons.TimedOut,
-					metav1.ConditionFalse,
-					"Hardware configuration timed out")
-				Expect(c.Status().Update(ctx, cr)).To(Succeed())
-			})
-
-			It("should always allow status update", func() {
-				// Should return true because it's callback-triggered, regardless of terminal state
-				result := task.shouldUpdateHardwareStatus(hwmgmtv1alpha1.Configured)
-				Expect(result).To(BeTrue())
-			})
 		})
 	})
 
@@ -2712,10 +2521,10 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			// Create NAR response without Configured condition and ObservedConfigTransactionId not matching
 			// This simulates waiting for a new configuration transaction to start
 			observedID := int64(3) // Different from PR Generation (5)
-			mockResponse := &hwmgrpluginapi.NodeAllocationRequestResponse{
-				Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
+			mockResponse := &pluginsv1alpha1.NodeAllocationRequest{
+				Status: pluginsv1alpha1.NodeAllocationRequestStatus{
 					ObservedConfigTransactionId: observedID,
-					Conditions:                  &[]hwmgrpluginapi.Condition{}, // No Configured condition
+					Conditions:                  []metav1.Condition{}, // No Configured condition
 				},
 			}
 
@@ -2730,10 +2539,10 @@ var _ = Describe("processExistingHardwareCondition", func() {
 		It("should return ConditionDoesNotExistsErr when ObservedConfigTransactionId is zero", func() {
 			// Create NAR response without Configured condition and zero ObservedConfigTransactionId
 			// Zero indicates the transaction has not been observed yet
-			mockResponse := &hwmgrpluginapi.NodeAllocationRequestResponse{
-				Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
+			mockResponse := &pluginsv1alpha1.NodeAllocationRequest{
+				Status: pluginsv1alpha1.NodeAllocationRequestStatus{
 					ObservedConfigTransactionId: 0,
-					Conditions:                  &[]hwmgrpluginapi.Condition{}, // No Configured condition
+					Conditions:                  []metav1.Condition{}, // No Configured condition
 				},
 			}
 
@@ -2748,16 +2557,16 @@ var _ = Describe("processExistingHardwareCondition", func() {
 		It("should proceed normally when ObservedConfigTransactionId matches Generation", func() {
 			// Create NAR response with matching ObservedConfigTransactionId
 			observedID := int64(5) // Matches PR Generation
-			configuredCondition := hwmgrpluginapi.Condition{
+			configuredCondition := metav1.Condition{
 				Type:    "Configured",
 				Status:  "True",
 				Reason:  "Completed",
 				Message: "Hardware configured successfully",
 			}
-			mockResponse := &hwmgrpluginapi.NodeAllocationRequestResponse{
-				Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
+			mockResponse := &pluginsv1alpha1.NodeAllocationRequest{
+				Status: pluginsv1alpha1.NodeAllocationRequestStatus{
 					ObservedConfigTransactionId: observedID,
-					Conditions:                  &[]hwmgrpluginapi.Condition{configuredCondition},
+					Conditions:                  []metav1.Condition{configuredCondition},
 				},
 			}
 
@@ -2808,10 +2617,10 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			// Simulate a race condition: PR Generation changes during reconciliation
 			// Step 1: Start reconciliation with Generation=5
 			observedID := int64(5) // Matches initial Generation
-			mockResponse1 := &hwmgrpluginapi.NodeAllocationRequestResponse{
-				Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
+			mockResponse1 := &pluginsv1alpha1.NodeAllocationRequest{
+				Status: pluginsv1alpha1.NodeAllocationRequestStatus{
 					ObservedConfigTransactionId: observedID,
-					Conditions:                  &[]hwmgrpluginapi.Condition{}, // No Configured condition yet
+					Conditions:                  []metav1.Condition{}, // No Configured condition yet
 				},
 			}
 
@@ -2840,16 +2649,16 @@ var _ = Describe("processExistingHardwareCondition", func() {
 
 			// Step 2: Plugin eventually processes the new transaction (Generation 6)
 			observedID := int64(6) // Matches new Generation
-			configuredCondition := hwmgrpluginapi.Condition{
+			configuredCondition := metav1.Condition{
 				Type:    "Configured",
 				Status:  "True",
 				Reason:  "Completed",
 				Message: "Hardware configured successfully",
 			}
-			mockResponse := &hwmgrpluginapi.NodeAllocationRequestResponse{
-				Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
+			mockResponse := &pluginsv1alpha1.NodeAllocationRequest{
+				Status: pluginsv1alpha1.NodeAllocationRequestStatus{
 					ObservedConfigTransactionId: observedID,
-					Conditions:                  &[]hwmgrpluginapi.Condition{configuredCondition},
+					Conditions:                  []metav1.Condition{configuredCondition},
 				},
 			}
 

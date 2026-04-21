@@ -306,12 +306,12 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		By("Waiting for NAR creation")
 		Eventually(func() error {
 			return K8SClient.Get(testCtx, types.NamespacedName{
-				Name: clusterName, Namespace: constants.DefaultNamespace}, nar)
+				Name: prName, Namespace: constants.DefaultNamespace}, nar)
 		}, timeout, interval).Should(Succeed())
 
 		By("Waiting for all 11 AllocatedNodes to be created")
 		Eventually(func() int {
-			return len(listAllocatedNodesForNAR(testCtx, clusterName).Items)
+			return len(listAllocatedNodesForNAR(testCtx, prName).Items)
 		}, timeout, interval).Should(Equal(masterCount + workerCount))
 
 		By("Waiting for day0 to complete (NAR Provisioned=True)")
@@ -333,7 +333,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 
 		By("Simulating AllocatedNodeHostMap on PR")
 		Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
-		nodeList := listAllocatedNodesForNAR(testCtx, clusterName)
+		nodeList := listAllocatedNodesForNAR(testCtx, prName)
 		hostMap := make(map[string]string)
 		masterIdx, workerIdx := 1, 1
 		hostnames := []string{}
@@ -400,13 +400,13 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		// Clean up NARs and AllocatedNodes (not cascade-deleted since PR finalizer was stripped)
 		narObj := &pluginsv1alpha1.NodeAllocationRequest{}
 		if err := K8SClient.Get(testCtx, types.NamespacedName{
-			Name: clusterName, Namespace: constants.DefaultNamespace,
+			Name: prName, Namespace: constants.DefaultNamespace,
 		}, narObj); err == nil {
 			narObj.Finalizers = nil
 			_ = K8SClient.Update(testCtx, narObj)
 			_ = K8SClient.Delete(testCtx, narObj)
 		}
-		anList := listAllocatedNodesForNAR(testCtx, clusterName)
+		anList := listAllocatedNodesForNAR(testCtx, prName)
 		for i := range anList.Items {
 			_ = K8SClient.Delete(testCtx, &anList.Items[i])
 		}
@@ -482,7 +482,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			By("Polling and advancing BMH state transitions for each node")
 			Eventually(func() bool {
 				allComplete := true
-				nodeList := listAllocatedNodesForNAR(testCtx, clusterName)
+				nodeList := listAllocatedNodesForNAR(testCtx, prName)
 
 				// Track rolling-update invariants
 				mastersAllDone := true
@@ -606,7 +606,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		It("Should fail when one worker BMH enters error state during update", func() {
 			By("Failing one worker BMH and waiting for NAR to reach Failed")
 			Eventually(func() bool {
-				nodeList := listAllocatedNodesForNAR(testCtx, clusterName)
+				nodeList := listAllocatedNodesForNAR(testCtx, prName)
 				for i := range nodeList.Items {
 					node := &nodeList.Items[i]
 
@@ -720,7 +720,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			By("Waiting for at least 3 workers in ConfigUpdate with v1 profile")
 			Eventually(func() int {
 				count := 0
-				nodeList := listAllocatedNodesForNAR(testCtx, clusterName)
+				nodeList := listAllocatedNodesForNAR(testCtx, prName)
 				for i := range nodeList.Items {
 					node := &nodeList.Items[i]
 					if node.Spec.GroupName != worker || node.Spec.HwProfile != v1Profile {
@@ -736,7 +736,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 				"At least 3 workers should be in ConfigUpdate with v1 profile")
 
 			By("Picking one worker and advancing its BMH to Servicing with config-in-progress")
-			nodeList := listAllocatedNodesForNAR(testCtx, clusterName)
+			nodeList := listAllocatedNodesForNAR(testCtx, prName)
 			for i := range nodeList.Items {
 				node := &nodeList.Items[i]
 				if node.Spec.GroupName != worker || node.Spec.HwProfile != v1Profile {
@@ -806,7 +806,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			// The 1 Servicing worker can't be abandoned (BMH Servicing) -> stays in ConfigUpdate.
 			Eventually(func() int {
 				count := 0
-				nodeList := listAllocatedNodesForNAR(testCtx, clusterName)
+				nodeList := listAllocatedNodesForNAR(testCtx, prName)
 				for _, node := range nodeList.Items {
 					if node.Spec.GroupName != worker {
 						continue
@@ -849,7 +849,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			Expect(simulateCallback(testCtx, prName, string(hwmgmtv1alpha1.ConfigApplied))).To(Succeed())
 
 			By("Verifying all 8 worker nodes converged to v2 profile")
-			nodeList := listAllocatedNodesForNAR(testCtx, clusterName)
+			nodeList := listAllocatedNodesForNAR(testCtx, prName)
 			for _, node := range nodeList.Items {
 				if node.Spec.GroupName != worker {
 					continue

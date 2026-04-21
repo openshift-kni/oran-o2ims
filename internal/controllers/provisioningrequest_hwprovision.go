@@ -14,51 +14,55 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/api/meta"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// getNAR retrieves the NodeAllocationRequest CR for this ProvisioningRequest.
+// The NAR name matches the ProvisioningRequest name (1:1 relationship).
+func (t *provisioningRequestReconcilerTask) getNAR(ctx context.Context) (*pluginsv1alpha1.NodeAllocationRequest, error) {
+	narNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
+	nar := &pluginsv1alpha1.NodeAllocationRequest{}
+	if err := t.client.Get(ctx, types.NamespacedName{Name: t.object.Name, Namespace: narNS}, nar); err != nil {
+		return nil, fmt.Errorf("failed to get NodeAllocationRequest %s/%s: %w", narNS, t.object.Name, err)
+	}
+	return nar, nil
+}
 
 // setNARClusterProvisioned sets the ClusterProvisioned field on the NodeAllocationRequest
 // to signal to the hardware plugin that the cluster is fully provisioned and operational.
 func (t *provisioningRequestReconcilerTask) setNARClusterProvisioned(ctx context.Context) error {
-	if t.object.Status.Extensions.NodeAllocationRequestRef == nil {
-		return nil
-	}
-	nodeAllocationRequestID := t.object.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID
-	if nodeAllocationRequestID == "" {
-		return nil
-	}
-
-	existingNAR, exists, err := t.hwpluginClient.GetNodeAllocationRequest(ctx, nodeAllocationRequestID)
+	nar, err := t.getNAR(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get NodeAllocationRequest %s: %w", nodeAllocationRequestID, err)
-	}
-	if !exists || existingNAR.NodeAllocationRequest == nil {
-		return nil
+		if k8serrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to get NodeAllocationRequest %s: %w", t.object.Name, err)
 	}
 
 	// Skip if already set
-	if existingNAR.NodeAllocationRequest.ClusterProvisioned != nil && *existingNAR.NodeAllocationRequest.ClusterProvisioned {
+	if nar.Spec.ClusterProvisioned {
 		return nil
 	}
 
-	// Set ClusterProvisioned on the existing NAR and update
-	clusterProvisioned := true
-	existingNAR.NodeAllocationRequest.ClusterProvisioned = &clusterProvisioned
-	if _, err := t.hwpluginClient.UpdateNodeAllocationRequest(ctx, nodeAllocationRequestID, *existingNAR.NodeAllocationRequest); err != nil {
-		return fmt.Errorf("failed to set clusterProvisioned on NodeAllocationRequest %s: %w", nodeAllocationRequestID, err)
+	// Set ClusterProvisioned and update
+	patch := client.MergeFrom(nar.DeepCopy())
+	nar.Spec.ClusterProvisioned = true
+	if err := t.client.Patch(ctx, nar, patch); err != nil {
+		return fmt.Errorf("failed to set clusterProvisioned on NodeAllocationRequest %s: %w", t.object.Name, err)
 	}
 
-	t.logger.InfoContext(ctx, "Set clusterProvisioned on NodeAllocationRequest", slog.String("narID", nodeAllocationRequestID))
+	t.logger.InfoContext(ctx, "Set clusterProvisioned on NodeAllocationRequest", slog.String("nar", t.object.Name))
 	return nil
 }
 
@@ -66,36 +70,28 @@ func (t *provisioningRequestReconcilerTask) setNARClusterProvisioned(ctx context
 // to the SkipCleanup field on the NodeAllocationRequest. This is used for fulfilled PRs
 // where createOrUpdateNodeAllocationRequest is no longer called.
 func (t *provisioningRequestReconcilerTask) syncNARSkipCleanup(ctx context.Context) error {
-	if t.object.Status.Extensions.NodeAllocationRequestRef == nil {
-		return nil
-	}
-	nodeAllocationRequestID := t.object.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID
-	if nodeAllocationRequestID == "" {
-		return nil
-	}
-
-	existingNAR, exists, err := t.hwpluginClient.GetNodeAllocationRequest(ctx, nodeAllocationRequestID)
+	nar, err := t.getNAR(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get NodeAllocationRequest %s: %w", nodeAllocationRequestID, err)
-	}
-	if !exists || existingNAR.NodeAllocationRequest == nil {
-		return nil
+		if k8serrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to get NodeAllocationRequest %s: %w", t.object.Name, err)
 	}
 
 	_, hasAnnotation := t.object.Annotations[ctlrutils.SkipCleanupAnnotation]
-	currentValue := existingNAR.NodeAllocationRequest.SkipCleanup != nil && *existingNAR.NodeAllocationRequest.SkipCleanup
 
-	if hasAnnotation == currentValue {
+	if hasAnnotation == nar.Spec.SkipCleanup {
 		return nil // Already in sync
 	}
 
-	existingNAR.NodeAllocationRequest.SkipCleanup = &hasAnnotation
-	if _, err := t.hwpluginClient.UpdateNodeAllocationRequest(ctx, nodeAllocationRequestID, *existingNAR.NodeAllocationRequest); err != nil {
-		return fmt.Errorf("failed to sync skipCleanup on NodeAllocationRequest %s: %w", nodeAllocationRequestID, err)
+	patch := client.MergeFrom(nar.DeepCopy())
+	nar.Spec.SkipCleanup = hasAnnotation
+	if err := t.client.Patch(ctx, nar, patch); err != nil {
+		return fmt.Errorf("failed to sync skipCleanup on NodeAllocationRequest %s: %w", t.object.Name, err)
 	}
 
 	t.logger.InfoContext(ctx, "Synced skipCleanup on NodeAllocationRequest",
-		slog.String("narID", nodeAllocationRequestID),
+		slog.String("nar", t.object.Name),
 		slog.Bool("skipCleanup", hasAnnotation))
 	return nil
 }
@@ -103,56 +99,37 @@ func (t *provisioningRequestReconcilerTask) syncNARSkipCleanup(ctx context.Conte
 // createOrUpdateNodeAllocationRequest creates a new NodeAllocationRequest resource if it doesn't exist or updates it if the spec has changed.
 func (t *provisioningRequestReconcilerTask) createOrUpdateNodeAllocationRequest(ctx context.Context,
 	clusterNamespace string,
-	nodeAllocationRequest *hwmgrpluginapi.NodeAllocationRequest) error {
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) error {
 
-	var (
-		nodeAllocationRequestID       string
-		existingNodeAllocationRequest *hwmgrpluginapi.NodeAllocationRequestResponse
-		err                           error
-	)
-
-	if t.object.Status.Extensions.NodeAllocationRequestRef != nil {
-		nodeAllocationRequestID = t.object.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID
-	}
-
-	if nodeAllocationRequestID == "" {
+	// Check if the NAR already exists
+	existingNAR, err := t.getNAR(ctx)
+	if err != nil {
+		if !k8serrors.IsNotFound(err) {
+			return fmt.Errorf("failed to get NodeAllocationRequest %s: %w", t.object.Name, err)
+		}
+		// NAR doesn't exist — create it
 		return t.createNodeAllocationRequestResources(ctx, clusterNamespace, nodeAllocationRequest)
-	} else {
-		existingNodeAllocationRequest, _, err = t.hwpluginClient.GetNodeAllocationRequest(ctx, nodeAllocationRequestID)
-		if err != nil {
-			return fmt.Errorf("failed to get NodeAllocationRequest %s: %w", nodeAllocationRequestID, err)
-		}
 	}
 
-	// Compare the fields managed by the PR controller and update if any have changed.
-	// We compare against a copy of the existing NAR with server-managed fields (like
-	// ClusterProvisioned) carried over to avoid false-positive change detection.
-	nodeAllocationRequest.ClusterProvisioned = existingNodeAllocationRequest.NodeAllocationRequest.ClusterProvisioned
-	if !equality.Semantic.DeepEqual(existingNodeAllocationRequest.NodeAllocationRequest, nodeAllocationRequest) {
-		narID, err := t.hwpluginClient.UpdateNodeAllocationRequest(ctx, nodeAllocationRequestID, *nodeAllocationRequest)
-		if err != nil {
-			return fmt.Errorf("failed to update NodeAllocationRequest '%s': %w", nodeAllocationRequestID, err)
-		}
-
-		if narID != nodeAllocationRequestID {
-			return fmt.Errorf("received nodeAllocationRequestID '%s' != expected nodeAllocationRequestID '%s'", narID, nodeAllocationRequestID)
-		}
-
-		// Update the ProvisioningRequest status after updating the NodeAllocationRequest
-		err = ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object)
-		if err != nil {
-			return fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", t.object.Name, err)
+	// NAR exists — compare spec and update if changed.
+	// Carry over fields managed by the plugin to avoid false-positive change detection.
+	nodeAllocationRequest.Spec.ClusterProvisioned = existingNAR.Spec.ClusterProvisioned
+	if !equality.Semantic.DeepEqual(existingNAR.Spec, nodeAllocationRequest.Spec) {
+		patch := client.MergeFrom(existingNAR.DeepCopy())
+		existingNAR.Spec = nodeAllocationRequest.Spec
+		if err := t.client.Patch(ctx, existingNAR, patch); err != nil {
+			return fmt.Errorf("failed to update NodeAllocationRequest %s: %w", t.object.Name, err)
 		}
 
 		t.logger.InfoContext(ctx,
-			fmt.Sprintf("NodeAllocationRequest (%s) spec changes have been detected", nodeAllocationRequestID))
+			fmt.Sprintf("NodeAllocationRequest (%s) spec changes have been detected", t.object.Name))
 	}
 	return nil
 }
 
 func (t *provisioningRequestReconcilerTask) createNodeAllocationRequestResources(ctx context.Context,
 	clusterNamespace string,
-	nodeAllocationRequest *hwmgrpluginapi.NodeAllocationRequest) error {
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) error {
 
 	// Create/update the clusterInstance namespace, adding ProvisioningRequest labels to the namespace
 	err := t.createClusterInstanceNamespace(ctx, clusterNamespace)
@@ -160,26 +137,13 @@ func (t *provisioningRequestReconcilerTask) createNodeAllocationRequestResources
 		return err
 	}
 
-	// Create the node allocation request resource
-	nodeAllocationRequestID, err := t.hwpluginClient.CreateNodeAllocationRequest(ctx, *nodeAllocationRequest)
-	if err != nil {
+	// Create the NodeAllocationRequest CR
+	if err := t.client.Create(ctx, nodeAllocationRequest); err != nil {
 		t.logger.ErrorContext(ctx, "Failed to create the NodeAllocationRequest", slog.String("error", err.Error()))
-		return fmt.Errorf("failed to create/update the NodeAllocationRequest: %w", err)
+		return fmt.Errorf("failed to create NodeAllocationRequest %s: %w", t.object.Name, err)
 	}
 
-	// Set NodeAllocationRequestRef
-	if t.object.Status.Extensions.NodeAllocationRequestRef == nil {
-		t.object.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{}
-	}
-	t.object.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID = nodeAllocationRequestID
-
-	// Update the ProvisioningRequest status after creating the NodeAllocationRequest
-	err = ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object)
-	if err != nil {
-		return fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", t.object.Name, err)
-	}
-
-	t.logger.InfoContext(ctx, fmt.Sprintf("Created NodeAllocationRequest (%s) if not already exist", nodeAllocationRequestID))
+	t.logger.InfoContext(ctx, fmt.Sprintf("Created NodeAllocationRequest (%s)", t.object.Name))
 
 	return nil
 }
@@ -189,7 +153,7 @@ func (t *provisioningRequestReconcilerTask) createNodeAllocationRequestResources
 func (t *provisioningRequestReconcilerTask) waitForHardwareData(
 	ctx context.Context,
 	clusterInstance *unstructured.Unstructured,
-	nodeAllocationRequestResponse *hwmgrpluginapi.NodeAllocationRequestResponse) (bool, *bool, bool, error) {
+	nodeAllocationRequestResponse *pluginsv1alpha1.NodeAllocationRequest) (bool, *bool, bool, error) {
 
 	var configured *bool
 	provisioned, timedOutOrFailed, err := t.checkNodeAllocationRequestProvisionStatus(ctx, clusterInstance, nodeAllocationRequestResponse)
@@ -226,21 +190,17 @@ func (t *provisioningRequestReconcilerTask) waitForHardwareData(
 
 // updateClusterInstance updates the given ClusterInstance object based on the provisioned nodeAllocationRequest.
 func (t *provisioningRequestReconcilerTask) updateClusterInstance(ctx context.Context,
-	clusterInstance *unstructured.Unstructured, nodeAllocationRequest *hwmgrpluginapi.NodeAllocationRequestResponse) error {
+	clusterInstance *unstructured.Unstructured, nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) error {
 
-	nodeAllocationRequestID := t.getNodeAllocationRequestID()
-	if nodeAllocationRequestID == "" {
-		return fmt.Errorf("missing nodeAllocationRequest identifier")
+	narNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
+	allocatedNodeList, err := listAllocatedNodesForNAR(ctx, t.client, t.object.Name, narNS)
+	if err != nil {
+		return fmt.Errorf("failed to list AllocatedNodes for NodeAllocationRequest '%s': %w", t.object.Name, err)
 	}
 
-	nodes, err := t.hwpluginClient.GetAllocatedNodesFromNodeAllocationRequest(ctx, nodeAllocationRequestID)
+	hwNodes, err := collectNodeDetails(ctx, t.client, allocatedNodeList)
 	if err != nil {
-		return fmt.Errorf("failed to get AllocatedNodes for NodeAllocationRequest '%s': %w", nodeAllocationRequestID, err)
-	}
-
-	hwNodes, err := collectNodeDetails(ctx, t.client, nodes)
-	if err != nil {
-		return fmt.Errorf("failed to collect hardware node %s details for node allocation request: %w", nodeAllocationRequestID, err)
+		return fmt.Errorf("failed to collect hardware node %s details for node allocation request: %w", t.object.Name, err)
 	}
 
 	hwpluginRef, err := ctlrutils.GetHardwarePluginRefFromProvisioningRequest(ctx, t.client, t.object)
@@ -285,69 +245,33 @@ func (t *provisioningRequestReconcilerTask) updateClusterInstance(ctx context.Co
 	}
 
 	if configErr != nil {
-		return fmt.Errorf("failed to apply node configuration for NodeAllocationRequest '%s': %w", nodeAllocationRequestID, configErr)
+		return fmt.Errorf("failed to apply node configuration for NodeAllocationRequest '%s': %w", t.object.Name, configErr)
 	}
 	return nil
-}
-
-// getHardwareStatusFromConditions reads hardware status from existing ProvisioningRequest conditions
-func (t *provisioningRequestReconcilerTask) getHardwareStatusFromConditions(condition hwmgmtv1alpha1.ConditionType) (bool, bool) {
-	var conditionType string
-	switch condition {
-	case hwmgmtv1alpha1.Provisioned:
-		conditionType = string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned)
-	case hwmgmtv1alpha1.Configured:
-		conditionType = string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured)
-	default:
-		return false, false
-	}
-
-	hwCondition := meta.FindStatusCondition(t.object.Status.Conditions, conditionType)
-	if hwCondition == nil {
-		return false, false
-	}
-
-	status := hwCondition.Status == metav1.ConditionTrue
-	timedOutOrFailed := hwCondition.Reason == string(provisioningv1alpha1.CRconditionReasons.TimedOut) ||
-		hwCondition.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed)
-
-	return status, timedOutOrFailed
 }
 
 // checkNodeAllocationRequestStatus checks the NodeAllocationRequest status of a given condition type
 // and updates the provisioning request status accordingly.
 func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestStatus(
 	ctx context.Context,
-	nodeAllocationRequestResponse *hwmgrpluginapi.NodeAllocationRequestResponse,
+	nodeAllocationRequestResponse *pluginsv1alpha1.NodeAllocationRequest,
 	condition hwmgmtv1alpha1.ConditionType) (bool, bool, error) {
 
 	var status bool
 	var timedOutOrFailed bool
 	var err error
 
-	// Only update hardware status on callback notifications or initial setup
-	// This eliminates the read-after-write race condition
-	if t.shouldUpdateHardwareStatus(condition) {
-		t.logger.InfoContext(ctx, "Updating hardware status",
-			slog.String("condition", string(condition)))
-
-		// Update the provisioning request Status with status from the NodeAllocationRequest object.
-		status, timedOutOrFailed, err = t.updateHardwareStatus(ctx, nodeAllocationRequestResponse, condition)
-		if err != nil && !ctlrutils.IsConditionDoesNotExistsErr(err) {
-			t.logger.ErrorContext(
-				ctx,
-				"Failed to update the NodeAllocationRequest status for ProvisioningRequest",
-				slog.String("name", t.object.Name),
-				slog.String("error", err.Error()),
-			)
-		}
-	} else {
-		// For non-callback reconciliation, read current status from PR conditions instead of querying plugin
-		status, timedOutOrFailed = t.getHardwareStatusFromConditions(condition)
-		t.logger.InfoContext(ctx, "Skipping hardware status update - not callback triggered",
-			slog.String("condition", string(condition)),
-			slog.Bool("currentStatus", status),
-			slog.Bool("timedOut", timedOutOrFailed))
+	// Update the provisioning request Status with status from the NodeAllocationRequest object.
+	// With direct K8s client access (no REST API), there is no read-after-write race,
+	// so we always read the latest NAR status.
+	status, timedOutOrFailed, err = t.updateHardwareStatus(ctx, nodeAllocationRequestResponse, condition)
+	if err != nil && !ctlrutils.IsConditionDoesNotExistsErr(err) {
+		t.logger.ErrorContext(
+			ctx,
+			"Failed to update the NodeAllocationRequest status for ProvisioningRequest",
+			slog.String("name", t.object.Name),
+			slog.String("error", err.Error()),
+		)
 	}
 
 	return status, timedOutOrFailed, err
@@ -357,10 +281,10 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestStatus(
 func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestProvisionStatus(
 	ctx context.Context,
 	clusterInstance *unstructured.Unstructured,
-	nodeAllocationRequestResponse *hwmgrpluginapi.NodeAllocationRequestResponse,
+	nodeAllocationRequestResponse *pluginsv1alpha1.NodeAllocationRequest,
 ) (bool, bool, error) {
 
-	nodeAllocationRequestID := t.getNodeAllocationRequestID()
+	nodeAllocationRequestID := t.object.Name
 	if nodeAllocationRequestID == "" {
 		return false, false, fmt.Errorf("missing NodeAllocationRequest identifier")
 	}
@@ -379,7 +303,7 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestProvisionS
 // checkNodeAllocationRequestConfigStatus checks the Configured status of the node allocation request.
 func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestConfigStatus(
 	ctx context.Context,
-	nodeAllocationRequestResponse *hwmgrpluginapi.NodeAllocationRequestResponse,
+	nodeAllocationRequestResponse *pluginsv1alpha1.NodeAllocationRequest,
 ) (*bool, bool, error) {
 
 	status, timedOutOrFailed, err := t.checkNodeAllocationRequestStatus(ctx, nodeAllocationRequestResponse, hwmgmtv1alpha1.Configured)
@@ -397,14 +321,14 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestConfigStat
 func (t *provisioningRequestReconcilerTask) applyNodeConfiguration(
 	ctx context.Context,
 	hwNodes map[string][]ctlrutils.NodeInfo,
-	nar *hwmgrpluginapi.NodeAllocationRequestResponse,
+	nar *pluginsv1alpha1.NodeAllocationRequest,
 	clusterInstance *unstructured.Unstructured,
 ) error {
 
 	// Create a map to track unmatched nodes
 	unmatchedNodes := make(map[int]string)
 
-	roleToNodeGroupName := getRoleToGroupNameMap(nar.NodeAllocationRequest)
+	roleToNodeGroupName := getRoleToGroupNameMap(&nar.Spec)
 
 	// Extract the nodes slice
 	nodes, found, err := unstructured.NestedSlice(clusterInstance.Object, "spec", "nodes")
@@ -521,10 +445,10 @@ func (t *provisioningRequestReconcilerTask) updateAllocatedNodeHostMap(ctx conte
 
 // processExistingHardwareCondition processes an existing hardware condition and returns the appropriate status
 func (t *provisioningRequestReconcilerTask) processExistingHardwareCondition(
-	hwCondition *hwmgrpluginapi.Condition,
+	hwCondition *metav1.Condition,
 	condition hwmgmtv1alpha1.ConditionType,
 ) (metav1.ConditionStatus, string, string, bool) {
-	status := metav1.ConditionStatus(hwCondition.Status)
+	status := hwCondition.Status
 	reason := hwCondition.Reason
 	message := hwCondition.Message
 	timedOutOrFailed := false
@@ -581,11 +505,11 @@ func (t *provisioningRequestReconcilerTask) processExistingHardwareCondition(
 //   - error: any error that occurred during status processing
 func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 	ctx context.Context,
-	nodeAllocationRequest *hwmgrpluginapi.NodeAllocationRequestResponse,
+	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
 	condition hwmgmtv1alpha1.ConditionType,
 ) (bool, bool, error) {
 
-	nodeAllocationRequestID := t.getNodeAllocationRequestID()
+	nodeAllocationRequestID := t.object.Name
 	if nodeAllocationRequestID == "" {
 		return false, false, fmt.Errorf("missing NodeAllocationRequest identifier")
 	}
@@ -599,12 +523,10 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 	timedOutOrFailed := false // Default to false unless explicitly needed
 
 	// Retrieve the given hardware condition(Provisioned or Configured) from the nodeAllocationRequest status.
-	var hwCondition *hwmgrpluginapi.Condition
-	if nodeAllocationRequest.Status.Conditions != nil {
-		for _, cond := range *nodeAllocationRequest.Status.Conditions {
-			if cond.Type == string(condition) {
-				hwCondition = &cond
-			}
+	var hwCondition *metav1.Condition
+	for i := range nodeAllocationRequest.Status.Conditions {
+		if nodeAllocationRequest.Status.Conditions[i].Type == string(condition) {
+			hwCondition = &nodeAllocationRequest.Status.Conditions[i]
 		}
 	}
 
@@ -682,102 +604,6 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 	return status == metav1.ConditionTrue, timedOutOrFailed, err
 }
 
-// isCallbackTriggeredReconciliation checks if this reconciliation was triggered by a hardware plugin callback
-func (t *provisioningRequestReconcilerTask) isCallbackTriggeredReconciliation() bool {
-	ann := t.object.GetAnnotations()
-	if ann == nil {
-		return false
-	}
-
-	// Must have a non-empty "callback received" marker
-	if ann[ctlrutils.CallbackReceivedAnnotation] == "" {
-		return false
-	}
-
-	// If the callback specified a NAR ID, ensure it matches
-	if narFromCallback := ann[ctlrutils.CallbackNodeAllocationRequestIdAnnotation]; narFromCallback != "" {
-		var narFromStatus string
-		if t.object.Status.Extensions.NodeAllocationRequestRef != nil {
-			narFromStatus = t.object.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID
-		}
-		if narFromStatus != "" && narFromCallback != narFromStatus {
-			return false
-		}
-	}
-
-	return true
-}
-
-// shouldUpdateHardwareStatus decides whether to update hardware status during reconciliation.
-// Rules:
-// - Always update on callback-triggered reconciliations.
-// - During polling (non-callback), for Provisioned/Configured:
-//   - If no prior condition exists, update.
-//   - If prior condition is terminal (TimedOut/Failed), do not update.
-//   - Otherwise, update only if prior Status != True.
-func (t *provisioningRequestReconcilerTask) shouldUpdateHardwareStatus(
-	condition hwmgmtv1alpha1.ConditionType,
-) bool {
-	// Callbacks always allowed to update.
-	if shouldAllowCallbackUpdate(t) {
-		return true
-	}
-
-	// During polling, check if updates are allowed based on current condition state.
-	return shouldAllowPollingUpdate(t, condition)
-}
-
-// shouldAllowCallbackUpdate returns true if the reconciliation is callback-triggered.
-// Callbacks are always allowed to update hardware status.
-func shouldAllowCallbackUpdate(t *provisioningRequestReconcilerTask) bool {
-	return t.isCallbackTriggeredReconciliation()
-}
-
-// shouldAllowPollingUpdate determines if hardware status updates are allowed during polling
-// (non-callback reconciliations). Updates are allowed if:
-// - The condition type is supported (Provisioned/Configured)
-// - No prior condition exists (first write)
-// - Prior condition is not terminal (TimedOut/Failed)
-// - Prior condition status is not True (allows updates for False/Unknown)
-func shouldAllowPollingUpdate(t *provisioningRequestReconcilerTask, condition hwmgmtv1alpha1.ConditionType) bool {
-	// Map HW condition → PR condition type stored in Status.Conditions.
-	prTypeByHW := map[hwmgmtv1alpha1.ConditionType]string{
-		hwmgmtv1alpha1.Provisioned: string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
-		hwmgmtv1alpha1.Configured:  string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured),
-	}
-
-	prCondType, ok := prTypeByHW[condition]
-	if !ok {
-		// Unknown/non-actionable condition types: do not update during polling.
-		return false
-	}
-
-	hwCond := meta.FindStatusCondition(t.object.Status.Conditions, prCondType)
-	if hwCond == nil {
-		// No status yet → allow first write.
-		return true
-	}
-
-	// Do not update if condition is in terminal state.
-	if isTerminalState(hwCond) {
-		return false
-	}
-
-	// Update only if not already True (i.e., False or Unknown).
-	return hwCond.Status != metav1.ConditionTrue
-}
-
-// isTerminalState returns true if the condition is in a terminal state (TimedOut or Failed).
-// Terminal states should not be overwritten by polling updates.
-func isTerminalState(condition *metav1.Condition) bool {
-	return isTerminalReason(condition.Reason)
-}
-
-func isTerminalReason(reason string) bool {
-	return reason == string(provisioningv1alpha1.CRconditionReasons.TimedOut) ||
-		reason == string(provisioningv1alpha1.CRconditionReasons.Failed)
-}
-
 // isConfigTransactionObserved checks if the observed config transaction ID matches the expected generation.
 // Returns true if the transaction has been observed (not zero and matches generation).
 // A value of 0 indicates the transaction has not been observed yet.
@@ -794,29 +620,27 @@ func isConfigTransactionObserved(observedID, expectedGeneration int64) bool {
 func (t *provisioningRequestReconcilerTask) checkExistingNodeAllocationRequest(
 	ctx context.Context,
 	hwMgmtData map[string]any,
-	nodeAllocationRequestId string) (*hwmgrpluginapi.NodeAllocationRequestResponse, error) {
+	nodeAllocationRequestId string) (*pluginsv1alpha1.NodeAllocationRequest, error) {
 
-	if t.hwpluginClient == nil {
-		return nil, fmt.Errorf("hwpluginClient is nil")
-	}
-
-	nodeAllocationRequestResponse, exist, err := t.hwpluginClient.GetNodeAllocationRequest(ctx, nodeAllocationRequestId)
+	nar, err := t.getNAR(ctx)
 	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return nil, nil //nolint:nilnil // NAR not found is not an error
+		}
 		return nil, fmt.Errorf("failed to get NodeAllocationRequest '%s': %w", nodeAllocationRequestId, err)
 	}
-	if exist {
-		err = validateNodeGroupsMatchNAR(hwMgmtData, nodeAllocationRequestResponse.NodeAllocationRequest)
-		if err != nil {
-			return nil, ctlrutils.NewInputError("%w", err)
-		}
+
+	err = validateNodeGroupsMatchNAR(hwMgmtData, &nar.Spec)
+	if err != nil {
+		return nil, ctlrutils.NewInputError("%w", err)
 	}
 
-	return nodeAllocationRequestResponse, nil
+	return nar, nil
 }
 
 // buildNodeAllocationRequest builds the NodeAllocationRequest from the pre-merged hwMgmt data and cluster instance
 func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(
-	clusterInstance *unstructured.Unstructured) (*hwmgrpluginapi.NodeAllocationRequest, error) {
+	clusterInstance *unstructured.Unstructured) (*pluginsv1alpha1.NodeAllocationRequest, error) {
 
 	hwMgmtData := t.clusterInput.hwMgmtData
 
@@ -851,7 +675,7 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(
 
 	// Node group validation (name, role, duplicates) is handled by validateMergedNodeGroups
 	// which runs before this function. Here we only extract values to build the NAR.
-	nodeGroups := []hwmgrpluginapi.NodeGroup{}
+	nodeGroups := []pluginsv1alpha1.NodeGroup{}
 	for _, ngRaw := range nodeGroupDataSlice {
 		ngMap, ok := ngRaw.(map[string]any)
 		if !ok {
@@ -872,10 +696,10 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(
 			}
 		}
 
-		ngd := hwmgrpluginapi.NodeGroupData{
+		ngd := hwmgmtv1alpha1.NodeGroupData{
 			HwProfile:        hwProfile,
 			Name:             name,
-			ResourceGroupId:  resourcePoolId,
+			ResourcePoolId:   resourcePoolId,
 			ResourceSelector: resourceSelector,
 			Role:             role,
 		}
@@ -883,16 +707,24 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(
 		nodeGroups = append(nodeGroups, nodeGroup)
 	}
 
-	siteID, err := provisioningv1alpha1.ExtractMatchingInput(
+	siteIDRaw, err := provisioningv1alpha1.ExtractMatchingInput(
 		t.object.Spec.TemplateParameters.Raw, ctlrutils.TemplateParamOCloudSiteId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get %s from templateParameters: %w", ctlrutils.TemplateParamOCloudSiteId, err)
 	}
+	siteID, ok := siteIDRaw.(string)
+	if !ok {
+		return nil, fmt.Errorf("%s is not a string", ctlrutils.TemplateParamOCloudSiteId)
+	}
 
-	clusterId, err := provisioningv1alpha1.ExtractMatchingInput(
+	clusterIdRaw, err := provisioningv1alpha1.ExtractMatchingInput(
 		t.object.Spec.TemplateParameters.Raw, ctlrutils.TemplateParamNodeClusterName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get %s from templateParameters: %w", ctlrutils.TemplateParamNodeClusterName, err)
+	}
+	clusterId, ok := clusterIdRaw.(string)
+	if !ok {
+		return nil, fmt.Errorf("%s is not a string", ctlrutils.TemplateParamNodeClusterName)
 	}
 
 	callbackURL, err := t.callbackConfig.BuildCallbackURL(t.object.Name)
@@ -900,51 +732,48 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(
 		return nil, fmt.Errorf("failed to build callback url: %w", err)
 	}
 
-	nodeAllocationRequest := &hwmgrpluginapi.NodeAllocationRequest{}
-	nodeAllocationRequest.Site = siteID.(string)
-	nodeAllocationRequest.ClusterId = clusterId.(string)
-	nodeAllocationRequest.NodeGroup = nodeGroups
-	nodeAllocationRequest.ConfigTransactionId = t.object.Generation
+	// Get the hardware plugin reference, defaulting to metal3
+	hwPluginRef := t.ctDetails.templates.HwMgmtDefaults.GetHardwarePluginRef()
+	narNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
 
 	// Set HardwareProvisioningTimeout from merged data, or use default
 	timeoutStr := ctlrutils.DefaultHardwareProvisioningTimeout.String()
 	if ts, ok := hwMgmtData["hardwareProvisioningTimeout"].(string); ok && ts != "" {
 		timeoutStr = ts
 	}
-	nodeAllocationRequest.HardwareProvisioningTimeout = &timeoutStr
 
-	// Always set SkipCleanup explicitly based on annotation presence,
-	// so the server knows to clear it when the annotation is removed.
 	_, hasSkipCleanup := t.object.Annotations[ctlrutils.SkipCleanupAnnotation]
-	nodeAllocationRequest.SkipCleanup = &hasSkipCleanup
 
-	// Create callback configuration with the callback URL
-	nodeAllocationRequest.Callback = &hwmgrpluginapi.Callback{
-		CallbackURL: callbackURL,
+	nar := &pluginsv1alpha1.NodeAllocationRequest{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      t.object.Name,
+			Namespace: narNS,
+		},
+		Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+			ClusterId:                   clusterId,
+			HardwarePluginRef:           hwPluginRef,
+			NodeGroup:                   nodeGroups,
+			LocationSpec:                pluginsv1alpha1.LocationSpec{Site: siteID},
+			ConfigTransactionId:         t.object.Generation,
+			HardwareProvisioningTimeout: timeoutStr,
+			SkipCleanup:                 hasSkipCleanup,
+			Callback: &pluginsv1alpha1.Callback{
+				CallbackURL: callbackURL,
+			},
+		},
 	}
 
-	return nodeAllocationRequest, nil
+	return nar, nil
 }
 
 func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx context.Context,
-	clusterInstance *unstructured.Unstructured) (*hwmgrpluginapi.NodeAllocationRequest, error) {
+	clusterInstance *unstructured.Unstructured) (*pluginsv1alpha1.NodeAllocationRequest, error) {
 
 	hwMgmtData := t.clusterInput.hwMgmtData
 
-	if t.object.Status.Extensions.NodeAllocationRequestRef != nil {
-		nodeAllocationRequestID := t.object.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID
-		if _, err := t.checkExistingNodeAllocationRequest(ctx, hwMgmtData, nodeAllocationRequestID); err != nil {
-			return nil, err
-		}
-	}
-
-	// Get the hardware plugin reference, defaulting to metal3
-	hwPluginRef := t.ctDetails.templates.HwMgmtDefaults.GetHardwarePluginRef()
-
-	hwplugin := &hwmgmtv1alpha1.HardwarePlugin{}
-	hwpluginNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
-	if err := t.client.Get(ctx, types.NamespacedName{Namespace: hwpluginNS, Name: hwPluginRef}, hwplugin); err != nil {
-		return nil, fmt.Errorf("could not find specified HardwarePlugin: %s/%s, err=%w", hwpluginNS, hwPluginRef, err)
+	// Check if an existing NAR needs validation against current hw config
+	if _, err := t.checkExistingNodeAllocationRequest(ctx, hwMgmtData, t.object.Name); err != nil {
+		return nil, err
 	}
 
 	nodeAllocationRequest, err := t.buildNodeAllocationRequest(clusterInstance)

@@ -16,8 +16,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	hwprovisioningapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -439,14 +440,13 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 	}
 
 	// Get AllocatedNodes if hardware provisioning is not skipped.
-	nodes := &[]hwprovisioningapi.AllocatedNode{}
+	narNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
+	allocatedNodeList := &pluginsv1alpha1.AllocatedNodeList{}
 	if !t.isHardwareProvisionSkipped() {
-		nodeAllocationRequestID := t.getNodeAllocationRequestID()
-		if nodeAllocationRequestID != "" {
-			nodes, err = t.hwpluginClient.GetAllocatedNodesFromNodeAllocationRequest(ctx, nodeAllocationRequestID)
-			if err != nil {
-				return fmt.Errorf("failed to get AllocatedNodes for NodeAllocationRequest '%s': %w", nodeAllocationRequestID, err)
-			}
+		var err error
+		allocatedNodeList, err = listAllocatedNodesForNAR(ctx, t.client, t.object.Name, narNS)
+		if err != nil {
+			return fmt.Errorf("failed to list AllocatedNodes for NodeAllocationRequest '%s': %w", t.object.Name, err)
 		}
 	}
 
@@ -467,9 +467,10 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 		// hostname assigned during cluster installation (not the BMH inspected hostname).
 		foundNode := false
 
-		for _, node := range *nodes {
+		for i := range allocatedNodeList.Items {
+			node := &allocatedNodeList.Items[i]
 
-			hostName := t.object.Status.Extensions.AllocatedNodeHostMap[node.Id]
+			hostName := t.object.Status.Extensions.AllocatedNodeHostMap[node.Name]
 			if hostName == "" {
 				continue
 			}
@@ -481,14 +482,14 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 			// Look up the BMH via the allocated-node label rather than by
 			// BMH status hostname, because the inspected hostname on the BMH
 			// may differ from the hostname actually assigned to the node.
-			bmh, err := ctlrutils.GetBareMetalHostForAllocatedNode(ctx, t.client, node.Id)
+			bmh, err := ctlrutils.GetBareMetalHostForAllocatedNode(ctx, t.client, node.Name)
 			if err != nil {
 				return fmt.Errorf("failed to get BareMetalHost: %w", err)
 			}
 			if bmh == nil {
 				t.logger.WarnContext(ctx,
 					"BareMetalHost not found for AllocatedNode",
-					"allocatedNodeId", node.Id,
+					"allocatedNodeId", node.Name,
 					"hostname", hostName,
 				)
 				continue
@@ -496,7 +497,8 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 
 			foundNode = true
 
-			err = t.setLabelValue(ctx, &agent, ctlrutils.HardwarePluginRefLabel, t.hwpluginClient.GetHardwarePluginRef())
+			hwPluginRef := t.ctDetails.templates.HwMgmtDefaults.GetHardwarePluginRef()
+			err = t.setLabelValue(ctx, &agent, ctlrutils.HardwarePluginRefLabel, hwPluginRef)
 			if err != nil {
 				return err
 			}

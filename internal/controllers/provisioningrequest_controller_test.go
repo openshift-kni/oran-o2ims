@@ -172,8 +172,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/mock/gomock"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -184,10 +182,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ibgu "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
-	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning/mocks"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
@@ -1116,22 +1113,19 @@ plan:
 			})
 		})
 
-		Context("when NodeAllocationRequestRef exists but ID is empty", func() {
-			It("should handle hardware plugin client error gracefully", func() {
-				// Set NodeAllocationRequestRef with empty ID
-				deletionCR.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
-					NodeAllocationRequestID: "", // Empty ID
-				}
+		Context("when NodeAllocationRequestRef exists but NAR does not exist", func() {
+			It("should proceed gracefully when NAR is not found", func() {
+				// Set NodeAllocationRequestRef (NAR looked up by PR name, not by ID)
+				deletionCR.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{}
 				deletionCR.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
 					Name: testClusterName,
 				}
 				Expect(c.Status().Update(ctx, deletionCR)).To(Succeed())
 
-				// This will fail due to missing HardwarePlugin resource, which is expected behavior
-				// when the test setup doesn't include proper hardware plugin dependencies
-				_, err := deletionReconciler.handleProvisioningRequestDeletion(ctx, deletionCR)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to get HardwarePlugin client"))
+				// NAR not found is handled gracefully — deletion proceeds to ClusterInstance
+				deleteCompleted, err := deletionReconciler.handleProvisioningRequestDeletion(ctx, deletionCR)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(deleteCompleted).To(BeFalse()) // Should wait for ClusterInstance deletion
 			})
 		})
 
@@ -2857,23 +2851,17 @@ nodes:
 
 	Describe("getNodeAllocationRequestResponse", func() {
 		var (
-			narResponseTask    *provisioningRequestReconcilerTask
-			narResponseCR      *provisioningv1alpha1.ProvisioningRequest
-			testNARID          = "cluster-1" // Use mock server's default NodeAllocationRequest ID
-			testClusterName    = "test-nar-response-cluster"
-			mockCtrl           *gomock.Controller
-			mockHwPluginClient *mocks.MockHardwarePluginClientInterface
+			narResponseTask *provisioningRequestReconcilerTask
+			narResponseCR   *provisioningv1alpha1.ProvisioningRequest
+			testPRName      = "test-nar-response-pr"
+			testClusterName = "test-nar-response-cluster"
 		)
 
 		BeforeEach(func() {
 			// Create a ProvisioningRequest for NAR response testing
 			narResponseCR = &provisioningv1alpha1.ProvisioningRequest{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-nar-response-pr",
-					Namespace: "test-ns",
-					Labels: map[string]string{
-						"test-type": "nar-response",
-					},
+					Name: testPRName,
 				},
 				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 					TemplateName:    "test-nar-response-template",
@@ -2882,22 +2870,8 @@ nodes:
 						Raw: []byte(`{"clusterName": "` + testClusterName + `"}`),
 					},
 				},
-				Status: provisioningv1alpha1.ProvisioningRequestStatus{
-					ProvisioningStatus: provisioningv1alpha1.ProvisioningStatus{
-						ProvisioningPhase: provisioningv1alpha1.StateProgressing,
-					},
-					Extensions: provisioningv1alpha1.Extensions{
-						NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
-							NodeAllocationRequestID: testNARID,
-						},
-					},
-				},
 			}
 			Expect(c.Create(ctx, narResponseCR)).To(Succeed())
-
-			// Create the mock controller and hardware plugin client
-			mockCtrl = gomock.NewController(GinkgoT())
-			mockHwPluginClient = mocks.NewMockHardwarePluginClientInterface(mockCtrl)
 
 			// Create the reconciler task
 			narResponseTask = &provisioningRequestReconcilerTask{
@@ -2908,259 +2882,45 @@ nodes:
 				ctDetails:      &clusterTemplateDetails{},
 				timeouts:       &timeouts{},
 				callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
-				hwpluginClient: mockHwPluginClient,
 			}
-
-		})
-
-		AfterEach(func() {
-			// Clean up the mock controller
-			if mockCtrl != nil {
-				mockCtrl.Finish()
-			}
-		})
-
-		Context("when NodeAllocationRequestID is missing", func() {
-			BeforeEach(func() {
-				// Remove the NodeAllocationRequestID to test missing identifier
-				narResponseCR.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID = ""
-				Expect(c.Status().Update(ctx, narResponseCR)).To(Succeed())
-			})
-
-			It("should return error for missing nodeAllocationRequestID", func() {
-				response, exists, err := narResponseTask.getNodeAllocationRequestResponse(ctx)
-
-				// Should return error for missing ID
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("missing status.nodeAllocationRequestRef.NodeAllocationRequestID"))
-				Expect(response).To(BeNil())
-				Expect(exists).To(BeFalse())
-			})
-		})
-
-		Context("when hwpluginClient is nil", func() {
-			BeforeEach(func() {
-				// Set hwpluginClient to nil to test error handling
-				narResponseTask.hwpluginClient = nil
-			})
-
-			It("should return error when hardware plugin client is not available", func() {
-				response, exists, err := narResponseTask.getNodeAllocationRequestResponse(ctx)
-
-				// Should return error due to nil hwpluginClient - no panic expected
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(Equal("hardware plugin client is not available"))
-				Expect(response).To(BeNil())
-				Expect(exists).To(BeFalse())
-			})
-		})
-
-		Context("when hwpluginClient.GetNodeAllocationRequest returns error", func() {
-			It("should return error from hardware plugin client", func() {
-				// Set up mock to return an error
-				expectedError := fmt.Errorf("hardware plugin error")
-				mockHwPluginClient.EXPECT().
-					GetNodeAllocationRequest(gomock.Any(), testNARID).
-					Return(nil, false, expectedError)
-
-				response, exists, err := narResponseTask.getNodeAllocationRequestResponse(ctx)
-
-				// Should return the error from the mock (may be wrapped)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("hardware plugin error"))
-				Expect(response).To(BeNil())
-				Expect(exists).To(BeFalse())
-			})
 		})
 
 		Context("when NodeAllocationRequest does not exist", func() {
 			It("should return nil response and false exists", func() {
-				// Set up mock to return not found (no error, but not exists)
-				mockHwPluginClient.EXPECT().
-					GetNodeAllocationRequest(gomock.Any(), testNARID).
-					Return(nil, false, nil)
-
 				response, exists, err := narResponseTask.getNodeAllocationRequestResponse(ctx)
 
-				// Should return no error, but exists should be false
 				Expect(err).ToNot(HaveOccurred())
 				Expect(response).To(BeNil())
 				Expect(exists).To(BeFalse())
 			})
 		})
 
-		Context("when retry mechanism is triggered", func() {
-			It("should retry on retriable errors and eventually succeed", func() {
-				// Import k8s errors for proper retry simulation
-				k8sErrors := metav1.Status{
-					Reason: metav1.StatusReasonServiceUnavailable,
-					Code:   503,
-				}
-				retriableError := &errors.StatusError{ErrStatus: k8sErrors}
-
-				// Simulate retry scenario: first call fails with retriable error, second call succeeds
-				gomock.InOrder(
-					mockHwPluginClient.EXPECT().
-						GetNodeAllocationRequest(gomock.Any(), testNARID).
-						Return(nil, false, retriableError).
-						Times(1),
-					mockHwPluginClient.EXPECT().
-						GetNodeAllocationRequest(gomock.Any(), testNARID).
-						Return(&hwmgrpluginapi.NodeAllocationRequestResponse{
-							NodeAllocationRequest: &hwmgrpluginapi.NodeAllocationRequest{
-								ClusterId: testClusterName,
-								Site:      "test-site",
-							},
-						}, true, nil).
-						Times(1),
-				)
-
-				response, exists, err := narResponseTask.getNodeAllocationRequestResponse(ctx)
-
-				// Should eventually succeed after retry
-				Expect(err).ToNot(HaveOccurred())
-				Expect(response).ToNot(BeNil())
-				Expect(exists).To(BeTrue())
-				Expect(response.NodeAllocationRequest.ClusterId).To(Equal(testClusterName))
-			})
-
-			It("should stop retrying after persistent errors", func() {
-				// Return the same error multiple times to simulate persistent failure
-				mockHwPluginClient.EXPECT().
-					GetNodeAllocationRequest(gomock.Any(), testNARID).
-					Return(nil, false, fmt.Errorf("persistent hardware error")).
-					MinTimes(1) // Should be called at least once, potentially more due to retries
-
-				response, exists, err := narResponseTask.getNodeAllocationRequestResponse(ctx)
-
-				// Should eventually give up and return the error
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("persistent hardware error"))
-				Expect(response).To(BeNil())
-				Expect(exists).To(BeFalse())
-			})
-		})
-
-		Context("when GetNodeAllocationRequest returns different error types", func() {
-			It("should handle timeout errors appropriately", func() {
-				timeoutError := fmt.Errorf("context deadline exceeded")
-				mockHwPluginClient.EXPECT().
-					GetNodeAllocationRequest(gomock.Any(), testNARID).
-					Return(nil, false, timeoutError)
-
-				response, exists, err := narResponseTask.getNodeAllocationRequestResponse(ctx)
-
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("context deadline exceeded"))
-				Expect(response).To(BeNil())
-				Expect(exists).To(BeFalse())
-			})
-
-			It("should handle authentication errors appropriately", func() {
-				authError := fmt.Errorf("unauthorized: invalid credentials")
-				mockHwPluginClient.EXPECT().
-					GetNodeAllocationRequest(gomock.Any(), testNARID).
-					Return(nil, false, authError)
-
-				response, exists, err := narResponseTask.getNodeAllocationRequestResponse(ctx)
-
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("unauthorized"))
-				Expect(response).To(BeNil())
-				Expect(exists).To(BeFalse())
-			})
-		})
-
-		Context("when NodeAllocationRequest exists and is retrieved successfully", func() {
-			It("should return response, true exists, and nil error", func() {
-				// Set up mock to return a successful response
-				mockResponse := &hwmgrpluginapi.NodeAllocationRequestResponse{
-					NodeAllocationRequest: &hwmgrpluginapi.NodeAllocationRequest{
-						ClusterId: testClusterName,
-						Site:      "test-site",
+		Context("when NodeAllocationRequest exists", func() {
+			BeforeEach(func() {
+				// Create a NAR CR with the same name as the PR
+				nar := &pluginsv1alpha1.NodeAllocationRequest{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      testPRName,
+						Namespace: constants.DefaultNamespace,
 					},
-				}
-				mockHwPluginClient.EXPECT().
-					GetNodeAllocationRequest(gomock.Any(), testNARID).
-					Return(mockResponse, true, nil)
-
-				response, exists, err := narResponseTask.getNodeAllocationRequestResponse(ctx)
-
-				// Should successfully retrieve the NodeAllocationRequest
-				Expect(err).ToNot(HaveOccurred())
-				Expect(response).ToNot(BeNil())
-				Expect(exists).To(BeTrue())
-				Expect(response.NodeAllocationRequest.ClusterId).To(Equal(testClusterName))
-			})
-		})
-
-		Context("integration with getNodeAllocationRequestID", func() {
-			It("should use the correct NodeAllocationRequestID from the CR", func() {
-				// Test that the method calls the hardware plugin with the correct ID
-				customNARID := "custom-nar-id-123"
-
-				// Update the CR with a custom NAR ID
-				narResponseCR.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID = customNARID
-				Expect(c.Status().Update(ctx, narResponseCR)).To(Succeed())
-
-				// Set up mock to expect the custom ID
-				mockResponse := &hwmgrpluginapi.NodeAllocationRequestResponse{
-					NodeAllocationRequest: &hwmgrpluginapi.NodeAllocationRequest{
-						ClusterId: testClusterName,
-						Site:      "test-site",
-					},
-				}
-				mockHwPluginClient.EXPECT().
-					GetNodeAllocationRequest(gomock.Any(), customNARID). // Should use the custom ID
-					Return(mockResponse, true, nil)
-
-				response, exists, err := narResponseTask.getNodeAllocationRequestResponse(ctx)
-
-				// Should successfully retrieve using the custom ID
-				Expect(err).ToNot(HaveOccurred())
-				Expect(response).ToNot(BeNil())
-				Expect(exists).To(BeTrue())
-				Expect(response.NodeAllocationRequest.ClusterId).To(Equal(testClusterName))
-			})
-		})
-
-		Context("response structure validation", func() {
-			It("should handle responses with complete NodeAllocationRequest data", func() {
-				// Set up mock to return a comprehensive response
-				mockResponse := &hwmgrpluginapi.NodeAllocationRequestResponse{
-					NodeAllocationRequest: &hwmgrpluginapi.NodeAllocationRequest{
+					Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 						ClusterId:           testClusterName,
-						Site:                "test-site",
+						LocationSpec:        pluginsv1alpha1.LocationSpec{Site: "test-site"},
 						ConfigTransactionId: 12345,
 					},
-					Status: &hwmgrpluginapi.NodeAllocationRequestStatus{
-						Conditions: &[]hwmgrpluginapi.Condition{
-							{
-								Type:   "Ready",
-								Status: "True",
-							},
-						},
-					},
 				}
-				mockHwPluginClient.EXPECT().
-					GetNodeAllocationRequest(gomock.Any(), testNARID).
-					Return(mockResponse, true, nil)
+				Expect(c.Create(ctx, nar)).To(Succeed())
+			})
 
+			It("should return response, true exists, and nil error", func() {
 				response, exists, err := narResponseTask.getNodeAllocationRequestResponse(ctx)
 
-				// Should handle complete response data
 				Expect(err).ToNot(HaveOccurred())
 				Expect(response).ToNot(BeNil())
 				Expect(exists).To(BeTrue())
-
-				// Verify response structure
-				Expect(response.NodeAllocationRequest.ClusterId).To(Equal(testClusterName))
-				Expect(response.NodeAllocationRequest.Site).To(Equal("test-site"))
-				Expect(response.NodeAllocationRequest.ConfigTransactionId).To(Equal(int64(12345)))
-				Expect(response.Status).ToNot(BeNil())
-				Expect(response.Status.Conditions).ToNot(BeNil())
-				Expect(*response.Status.Conditions).To(HaveLen(1))
-				Expect((*response.Status.Conditions)[0].Type).To(Equal("Ready"))
+				Expect(response.Spec.ClusterId).To(Equal(testClusterName))
+				Expect(response.Spec.LocationSpec.Site).To(Equal("test-site"))
+				Expect(response.Spec.ConfigTransactionId).To(Equal(int64(12345)))
 			})
 		})
 	})
@@ -3665,7 +3425,10 @@ plan:
 		// Create fake client with all objects
 		c = fake.NewClientBuilder().WithScheme(scheme).WithObjects(
 			cr, clusterTemplate, upgradeDefaults,
-		).WithStatusSubresource(&provisioningv1alpha1.ProvisioningRequest{}).Build()
+		).WithStatusSubresource(
+			&provisioningv1alpha1.ProvisioningRequest{},
+			&pluginsv1alpha1.NodeAllocationRequest{},
+		).Build()
 		reconciler.Client = c
 
 		// Create task
@@ -4833,23 +4596,6 @@ plan:
 				callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			}
 
-			// Set up hwpluginClient using the test Metal3 hardware plugin for deploy config tests
-			hwplugin := &hwmgmtv1alpha1.HardwarePlugin{}
-			hwpluginKey := client.ObjectKey{
-				Name:      testMetal3HardwarePluginRef,
-				Namespace: testHwMgrPluginNameSpace,
-			}
-			err := c.Get(ctx, hwpluginKey, hwplugin)
-			if err != nil {
-				reconciler.Logger.Warn("Could not get hwplugin for deploy config test", "error", err)
-			} else {
-				hwpluginClient, err := hwmgrpluginapi.NewHardwarePluginClient(ctx, c, reconciler.Logger, hwplugin)
-				if err != nil {
-					reconciler.Logger.Warn("Could not create hwpluginClient for deploy config test", "error", err)
-				} else {
-					deployConfigTask.hwpluginClient = hwpluginClient
-				}
-			}
 		})
 
 		Context("when hardware provisioning is not skipped", func() {
@@ -4900,25 +4646,37 @@ plan:
 			})
 
 			Context("when hardware provisioning times out or fails", func() {
-				It("should return doNotRequeue without error", func() {
-					defer func() {
-						if r := recover(); r != nil {
-							// Panic is expected when hardware plugin client is not fully functional in unit tests
-							// This validates that the method reaches the hardware plugin integration point
-							return
-						}
-					}()
-
-					result, err := deployConfigTask.checkClusterDeployConfigState(ctx)
-
-					// In test environment, will likely error before reaching timeout logic
-					if err == nil {
-						// If method reaches timeout logic, should not requeue
-						Expect(result).To(Equal(doNotRequeue()))
-					} else {
-						// Error is expected in test environment
-						Expect(result).ToNot(BeNil())
+				BeforeEach(func() {
+					// Create a NAR with a timed-out provisioning condition
+					nar := &pluginsv1alpha1.NodeAllocationRequest{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      deployConfigCR.Name,
+							Namespace: constants.DefaultNamespace,
+						},
+						Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+							ClusterId: deployConfigCR.Name,
+						},
 					}
+					Expect(c.Create(ctx, nar)).To(Succeed())
+
+					// Set status after creation (fake client strips status on Create)
+					nar.Status.Conditions = []metav1.Condition{
+						{
+							Type:               string(hwmgmtv1alpha1.Provisioned),
+							Status:             metav1.ConditionFalse,
+							Reason:             string(hwmgmtv1alpha1.Failed),
+							Message:            "Hardware provisioning timed out",
+							LastTransitionTime: metav1.Now(),
+						},
+					}
+					Expect(c.Status().Update(ctx, nar)).To(Succeed())
+				})
+
+				It("should return requeueWithMediumInterval without error", func() {
+					result, err := deployConfigTask.checkClusterDeployConfigState(ctx)
+					Expect(err).ToNot(HaveOccurred())
+					// Hardware timed out or failed → requeue to allow recovery
+					Expect(result.RequeueAfter).To(Equal(requeueWithMediumInterval().RequeueAfter))
 				})
 			})
 
@@ -5252,74 +5010,19 @@ plan:
 			})
 		})
 
-		Context("when getNodeAllocationRequestResponse returns error", func() {
+		Context("when NAR does not exist", func() {
 			BeforeEach(func() {
-				// Ensure Extensions are initialized before modifying NodeAllocationRequestID
-				if deployConfigCR.Status.Extensions.NodeAllocationRequestRef == nil {
-					deployConfigCR.Status.Extensions = provisioningv1alpha1.Extensions{
-						NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{},
-					}
-				}
-				// Use empty NodeAllocationRequest ID to trigger missing ID error
-				deployConfigCR.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID = ""
+				// Set NodeAllocationRequestRef but don't create NAR in client
+				deployConfigCR.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{}
 				Expect(c.Status().Update(ctx, deployConfigCR)).To(Succeed())
 			})
 
-			It("should return error and valid result", func() {
+			It("should skip hardware checks and not return error", func() {
 				result, err := deployConfigTask.checkClusterDeployConfigState(ctx)
 
-				// Should error due to missing NodeAllocationRequest ID
-				Expect(err).To(HaveOccurred())
-				Expect(result).ToNot(BeNil()) // Should return a valid ctrl.Result
-			})
-		})
-
-		Context("when checkNodeAllocationRequestStatus returns error", func() {
-			BeforeEach(func() {
-				// Remove hardware plugin client to cause checkNodeAllocationRequestStatus to fail
-				deployConfigTask.hwpluginClient = nil
-				deployConfigCR.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
-					NodeAllocationRequestID: "test-node-allocation-request-id",
-				}
-				Expect(c.Status().Update(ctx, deployConfigCR)).To(Succeed())
-			})
-
-			It("should return error and valid result", func() {
-				result, err := deployConfigTask.checkClusterDeployConfigState(ctx)
-
-				// Should not error due to missing hardware plugin client for status check
-				Expect(err).To(HaveOccurred())
-				Expect(result).ToNot(BeNil()) // Should return a valid ctrl.Result
-			})
-		})
-
-		Context("when checkNodeAllocationRequestStatus returns error", func() {
-			BeforeEach(func() {
-				// Ensure Extensions are initialized to prevent panic in BeforeEach
-				if deployConfigCR.Status.Extensions.NodeAllocationRequestRef == nil {
-					deployConfigCR.Status.Extensions = provisioningv1alpha1.Extensions{
-						NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{},
-					}
-				}
-				// Use empty NodeAllocationRequest ID to trigger error in getNodeAllocationRequestResponse
-				deployConfigCR.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID = ""
-				Expect(c.Status().Update(ctx, deployConfigCR)).To(Succeed())
-			})
-
-			It("should return error and valid result", func() {
-				defer func() {
-					if r := recover(); r != nil {
-						// Panic is expected when hardware plugin client is not fully functional in unit tests
-						// This validates that the method attempts to call hardware plugin
-						return
-					}
-				}()
-
-				result, err := deployConfigTask.checkClusterDeployConfigState(ctx)
-
-				// Should error due to missing NodeAllocationRequest ID
-				Expect(err).To(HaveOccurred())
-				Expect(result).ToNot(BeNil()) // Should return a valid ctrl.Result
+				// NAR not found is not an error — hardware checks are skipped
+				Expect(err).ToNot(HaveOccurred())
+				Expect(result).ToNot(BeNil())
 			})
 		})
 	})
@@ -5413,23 +5116,6 @@ plan:
 				callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			}
 
-			// Set up hwpluginClient using the test Metal3 hardware plugin
-			hwplugin := &hwmgmtv1alpha1.HardwarePlugin{}
-			hwpluginKey := client.ObjectKey{
-				Name:      testMetal3HardwarePluginRef,
-				Namespace: testHwMgrPluginNameSpace,
-			}
-			err := c.Get(ctx, hwpluginKey, hwplugin)
-			if err != nil {
-				reconciler.Logger.Warn("Could not get hwplugin for validation test", "error", err)
-			} else {
-				hwpluginClient, err := hwmgrpluginapi.NewHardwarePluginClient(ctx, c, reconciler.Logger, hwplugin)
-				if err != nil {
-					reconciler.Logger.Warn("Could not create hwpluginClient for validation test", "error", err)
-				} else {
-					validationTask.hwpluginClient = hwpluginClient
-				}
-			}
 		})
 
 		Context("when validation fails during initial provisioning", func() {
@@ -5513,96 +5199,8 @@ plan:
 		})
 	})
 
-	Describe("initializeHardwarePluginClientWithRetry", func() {
-		var (
-			retryTask *provisioningRequestReconcilerTask
-			ctx       context.Context
-			logger    *slog.Logger
-		)
-
-		BeforeEach(func() {
-			ctx = context.TODO()
-			logger = slog.New(slog.DiscardHandler)
-
-			// Create a minimal test ProvisioningRequest
-			testCR := &provisioningv1alpha1.ProvisioningRequest{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-retry-cr",
-					Namespace: "test-namespace",
-				},
-				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
-					TemplateName:    "test-template",
-					TemplateVersion: "v1.0.0",
-				},
-			}
-
-			retryTask = &provisioningRequestReconcilerTask{
-				logger: logger,
-				client: c,
-				object: testCR,
-			}
-		})
-
-		Context("when hardware plugin client initialization fails", func() {
-			It("should fail after maximum retries", func() {
-				Skip("Skipping timing tests as they would take 15+ seconds and slow down test suite")
-
-				// This test would verify:
-				// - Exponential backoff with 5s base delay (5s, 10s, 20s)
-				// - Total delay of at least 15 seconds
-				// - Final error message indicating 3 retries attempted
-
-				err := retryTask.initializeHardwarePluginClientWithRetry(ctx)
-
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("hardware plugin client initialization failed after 3 retries"))
-				Expect(retryTask.hwpluginClient).To(BeNil())
-			})
-
-			It("should respect context cancellation during retries", func() {
-				Skip("Skipping timing tests as they would take 2+ seconds and slow down test suite")
-
-				// This test would verify:
-				// - Context cancellation is respected during sleep periods
-				// - Returns context error when cancelled
-				// - Does not complete all retries when cancelled early
-			})
-		})
-
-		Context("retry configuration", func() {
-			It("should have correct retry parameters", func() {
-				// Test the configuration constants without actually running retries
-				Expect(maxHardwareClientRetries).To(Equal(3))
-				Expect(baseRetryDelay).To(Equal(5 * time.Second))
-			})
-
-			It("should calculate correct exponential backoff delays", func() {
-				// Verify the mathematical correctness of delay calculation
-				// without actually sleeping
-
-				// Expected delays: 5s * 2^0 = 5s, 5s * 2^1 = 10s, 5s * 2^2 = 20s
-				expectedDelays := []time.Duration{
-					5 * time.Second,  // First retry
-					10 * time.Second, // Second retry
-					20 * time.Second, // Third retry (not used since it's the final attempt)
-				}
-
-				for attempt := 1; attempt <= 2; attempt++ { // Only test first 2 delays
-					expectedDelay := baseRetryDelay * time.Duration(1<<(attempt-1))
-					Expect(expectedDelay).To(Equal(expectedDelays[attempt-1]))
-				}
-			})
-		})
-
-		Context("successful initialization", func() {
-			// Note: This test would require setting up a valid hardware plugin,
-			// which is complex in a unit test environment. The success path is
-			// tested implicitly in integration tests.
-			It("should be tested in integration tests with real hardware plugin setup", func() {
-				Skip("Success path requires complex hardware plugin setup, tested in integration tests")
-			})
-		})
-	})
+	// initializeHardwarePluginClientWithRetry tests removed — function eliminated
+	// in NAR API re-architecture (Phase 1). Hardware plugin REST client is no longer used.
 
 	Describe("checkOverallProvisioningTimeout", func() {
 		var (
@@ -6105,19 +5703,12 @@ clustertemplate-test-policy-v1-cpu-reserved: "0-1"`,
 			}
 		})
 
-		Context("when provisioning phases fail and timeout is exceeded", func() {
-			It("should trigger timeout check and continue reconciling", func() {
-				// This test simulates the integration point at line 191 in the controller
-				// executeProvisioningPhases will fail (due to missing templates), triggering the timeout check
+		Context("when provisioning is pending and timeout is exceeded", func() {
+			It("should trigger timeout check and set failed state", func() {
+				// Verify the state is Pending with old UpdateTime (set in BeforeEach)
+				Expect(testObject.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StatePending))
 
-				renderedClusterInstance, _, err := testTask.executeProvisioningPhases(ctx)
-
-				// Should get an error from the provisioning phases
-				Expect(err).To(HaveOccurred())
-				Expect(renderedClusterInstance).To(BeNil())
-
-				// The error should be related to provisioning failure, not timeout
-				// But if we now run the timeout check manually (as done at line 191), it should trigger
+				// Run the timeout check directly — it should trigger
 				timeoutResult := testTask.checkOverallProvisioningTimeout(ctx)
 
 				// Should continue reconciling after timeout
@@ -6129,19 +5720,13 @@ clustertemplate-test-policy-v1-cpu-reserved: "0-1"`,
 			})
 		})
 
-		Context("when provisioning phases fail but timeout is not exceeded", func() {
+		Context("when provisioning is pending but timeout is not exceeded", func() {
 			BeforeEach(func() {
 				// Set recent UpdateTime to avoid timeout
 				testObject.Status.ProvisioningStatus.UpdateTime = metav1.Time{Time: currentTime.Add(-5 * time.Minute)}
 			})
 
-			It("should not trigger timeout and return original error", func() {
-				renderedClusterInstance, _, err := testTask.executeProvisioningPhases(ctx)
-
-				// Should get an error from the provisioning phases
-				Expect(err).To(HaveOccurred())
-				Expect(renderedClusterInstance).To(BeNil())
-
+			It("should not trigger timeout and keep pending state", func() {
 				// Timeout check should not trigger
 				timeoutResult := testTask.checkOverallProvisioningTimeout(ctx)
 				Expect(timeoutResult).To(Equal(ctrl.Result{}))

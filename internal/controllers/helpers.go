@@ -13,46 +13,32 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
-	hwmgrpluginapi "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/provisioning"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 // collectNodeDetails collects BMC and node interfaces details
-func collectNodeDetails(ctx context.Context, c client.Client, nodes *[]hwmgrpluginapi.AllocatedNode) (map[string][]ctlrutils.NodeInfo, error) {
+func collectNodeDetails(_ context.Context, _ client.Client, nodeList *pluginsv1alpha1.AllocatedNodeList) (map[string][]ctlrutils.NodeInfo, error) {
 	// hwNodes maps a group name to a slice of NodeInfo
 	hwNodes := make(map[string][]ctlrutils.NodeInfo)
-	for _, node := range *nodes {
-		if node.Bmc.CredentialsName == "" {
-			return nil, fmt.Errorf("the AllocatedNode does not have BMC details")
-		}
+	for i := range nodeList.Items {
+		node := &nodeList.Items[i]
 
-		interfaces := []*pluginsv1alpha1.Interface{}
-		for _, ifc := range node.Interfaces {
-			interfaces = append(interfaces, &pluginsv1alpha1.Interface{
-				Name:       ifc.Name,
-				MACAddress: ifc.MacAddress,
-				Label:      ifc.Label,
-			})
+		if node.Status.BMC == nil || node.Status.BMC.CredentialsName == "" {
+			return nil, fmt.Errorf("allocatedNode %s does not have BMC details", node.Name)
 		}
 
 		tmpNode := ctlrutils.NodeInfo{
-			BmcAddress:     node.Bmc.Address,
-			BmcCredentials: node.Bmc.CredentialsName,
-			NodeID:         node.Id,
-			Interfaces:     interfaces,
-		}
-
-		bmh, err := ctlrutils.GetBareMetalHostForAllocatedNode(ctx, c, node.Id)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get BareMetalHost: %w", err)
-		}
-		if bmh != nil {
-			tmpNode.HwMgrNodeId = bmh.Name
-			tmpNode.HwMgrNodeNs = bmh.Namespace
+			BmcAddress:     node.Status.BMC.Address,
+			BmcCredentials: node.Status.BMC.CredentialsName,
+			NodeID:         node.Name,
+			Interfaces:     node.Status.Interfaces,
+			HwMgrNodeId:    node.Spec.HwMgrNodeId,
+			HwMgrNodeNs:    node.Spec.HwMgrNodeNs,
 		}
 
 		// Store the nodeInfo per group
-		hwNodes[node.GroupName] = append(hwNodes[node.GroupName], tmpNode)
+		hwNodes[node.Spec.GroupName] = append(hwNodes[node.Spec.GroupName], tmpNode)
 	}
 
 	return hwNodes, nil
@@ -60,7 +46,7 @@ func collectNodeDetails(ctx context.Context, c client.Client, nodes *[]hwmgrplug
 
 // validateNodeGroupsMatchNAR verifies that every node group in the existing
 // NodeAllocationRequest has a corresponding entry in the merged hwMgmt data.
-func validateNodeGroupsMatchNAR(hwMgmtData map[string]any, nodeAllocationRequest *hwmgrpluginapi.NodeAllocationRequest) error {
+func validateNodeGroupsMatchNAR(hwMgmtData map[string]any, narSpec *pluginsv1alpha1.NodeAllocationRequestSpec) error {
 	// Build set of valid group names from merged hwMgmt data
 	validNames := make(map[string]bool)
 	if ngData, ok := hwMgmtData["nodeGroupData"].([]any); ok {
@@ -75,7 +61,7 @@ func validateNodeGroupsMatchNAR(hwMgmtData map[string]any, nodeAllocationRequest
 
 	// Check NAR groups exist in hwMgmt data
 	narNames := make(map[string]bool)
-	for _, specNodeGroup := range nodeAllocationRequest.NodeGroup {
+	for _, specNodeGroup := range narSpec.NodeGroup {
 		narNames[specNodeGroup.NodeGroupData.Name] = true
 		if !validNames[specNodeGroup.NodeGroupData.Name] {
 			return fmt.Errorf("node group %s found in NodeAllocationRequest but not in hwMgmt data", specNodeGroup.NodeGroupData.Name)
@@ -93,24 +79,38 @@ func validateNodeGroupsMatchNAR(hwMgmtData map[string]any, nodeAllocationRequest
 }
 
 // newNodeGroup populates NodeGroup
-func newNodeGroup(group hwmgrpluginapi.NodeGroupData, roleCounts map[string]int) hwmgrpluginapi.NodeGroup {
-	var nodeGroup hwmgrpluginapi.NodeGroup
-
-	// Populate embedded NodeAllocationRequestData fields
-	nodeGroup.NodeGroupData = group
+func newNodeGroup(group hwmgmtv1alpha1.NodeGroupData, roleCounts map[string]int) pluginsv1alpha1.NodeGroup {
+	nodeGroup := pluginsv1alpha1.NodeGroup{
+		NodeGroupData: group,
+	}
 
 	// Assign size if available in roleCounts
 	if count, ok := roleCounts[group.Role]; ok {
-		nodeGroup.NodeGroupData.Size = count
+		nodeGroup.Size = count
 	}
 
 	return nodeGroup
 }
 
+// listAllocatedNodesForNAR lists AllocatedNodes that belong to the given NodeAllocationRequest.
+func listAllocatedNodesForNAR(ctx context.Context, c client.Client, narName, narNS string) (*pluginsv1alpha1.AllocatedNodeList, error) {
+	allNodes := &pluginsv1alpha1.AllocatedNodeList{}
+	if err := c.List(ctx, allNodes, client.InNamespace(narNS)); err != nil {
+		return nil, fmt.Errorf("failed to list AllocatedNodes: %w", err)
+	}
+	filtered := &pluginsv1alpha1.AllocatedNodeList{}
+	for i := range allNodes.Items {
+		if allNodes.Items[i].Spec.NodeAllocationRequest == narName {
+			filtered.Items = append(filtered.Items, allNodes.Items[i])
+		}
+	}
+	return filtered, nil
+}
+
 // getRoleToGroupNameMap creates a mapping of Role to Group Name from NodeAllocationRequest
-func getRoleToGroupNameMap(nodeAllocationRequest *hwmgrpluginapi.NodeAllocationRequest) map[string]string {
+func getRoleToGroupNameMap(narSpec *pluginsv1alpha1.NodeAllocationRequestSpec) map[string]string {
 	roleToNodeGroupName := make(map[string]string)
-	for _, nodeGroup := range nodeAllocationRequest.NodeGroup {
+	for _, nodeGroup := range narSpec.NodeGroup {
 
 		if _, exists := roleToNodeGroupName[nodeGroup.NodeGroupData.Role]; !exists {
 			roleToNodeGroupName[nodeGroup.NodeGroupData.Role] = nodeGroup.NodeGroupData.Name

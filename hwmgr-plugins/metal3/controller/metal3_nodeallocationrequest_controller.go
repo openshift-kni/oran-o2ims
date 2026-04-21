@@ -23,7 +23,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
@@ -309,23 +308,8 @@ func (r *NodeAllocationRequestReconciler) Reconcile(ctx context.Context, req ctr
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *NodeAllocationRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
-
-	// Create a label selector for filtering NodeAllocationRequests pertaining to the Metal3 HardwarePlugin
-	labelSelector := metav1.LabelSelector{
-		MatchLabels: map[string]string{
-			hwmgrutils.HardwarePluginLabel: hwmgrutils.Metal3HardwarePluginID,
-		},
-	}
-
-	// Create a predicate to filter NodeAllocationRequests with the specified metal3 H/W plugin label
-	pred, err := predicate.LabelSelectorPredicate(labelSelector)
-	if err != nil {
-		return fmt.Errorf("failed to create label selector predicate: %w", err)
-	}
-
 	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&pluginsv1alpha1.NodeAllocationRequest{}).
-		WithEventFilter(pred).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to create controller: %w", err)
 	}
