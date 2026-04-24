@@ -1340,9 +1340,9 @@ func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx c
 	return nil
 }
 
-// getNodeAllocationRequestResponse retrieves the NodeAllocationRequest from the HardwarePlugin server.
-// It returns the NodeAllocationRequestResponse, boolean value indicating whether the NodeAllocationRequest object was found (exists),
-// and any error encountered while attempting to fetch the NodeAllocationRequest.
+// getNodeAllocationRequestResponse retrieves the NodeAllocationRequest CR by PR name.
+// It returns the NodeAllocationRequest, a boolean indicating whether it exists,
+// and any error encountered.
 func (t *provisioningRequestReconcilerTask) getNodeAllocationRequestResponse(ctx context.Context) (*pluginsv1alpha1.NodeAllocationRequest, bool, error) {
 	nar, err := t.getNAR(ctx)
 	if err != nil {

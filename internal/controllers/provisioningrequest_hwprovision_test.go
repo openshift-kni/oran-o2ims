@@ -2413,6 +2413,95 @@ var _ = Describe("processExistingHardwareCondition", func() {
 		})
 	})
 
+	Context("stale terminal NAR status guard", func() {
+		It("skips update when NAR has Failed condition and plugin has not observed new transaction", func() {
+			narWithStaleFailure := &pluginsv1alpha1.NodeAllocationRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cluster-1",
+					Namespace: constants.DefaultNamespace,
+				},
+				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+					ConfigTransactionId: 3,
+				},
+				Status: pluginsv1alpha1.NodeAllocationRequestStatus{
+					ObservedConfigTransactionId: 2,
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(hwmgmtv1alpha1.Configured),
+							Status:             metav1.ConditionFalse,
+							Reason:             string(hwmgmtv1alpha1.Failed),
+							Message:            "Previous attempt failed",
+							LastTransitionTime: metav1.Now(),
+						},
+					},
+				},
+			}
+
+			status, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, narWithStaleFailure, hwmgmtv1alpha1.Configured)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(status).To(BeFalse())
+			Expect(timedOutOrFailed).To(BeFalse())
+		})
+
+		It("skips update when NAR has TimedOut condition and plugin has not observed new transaction", func() {
+			narWithStaleTimeout := &pluginsv1alpha1.NodeAllocationRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cluster-1",
+					Namespace: constants.DefaultNamespace,
+				},
+				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+					ConfigTransactionId: 3,
+				},
+				Status: pluginsv1alpha1.NodeAllocationRequestStatus{
+					ObservedConfigTransactionId: 2,
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(hwmgmtv1alpha1.Configured),
+							Status:             metav1.ConditionFalse,
+							Reason:             string(hwmgmtv1alpha1.TimedOut),
+							Message:            "Previous attempt timed out",
+							LastTransitionTime: metav1.Now(),
+						},
+					},
+				},
+			}
+
+			status, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, narWithStaleTimeout, hwmgmtv1alpha1.Configured)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(status).To(BeFalse())
+			Expect(timedOutOrFailed).To(BeFalse())
+		})
+
+		It("allows update when plugin has observed the current transaction", func() {
+			narWithCurrentFailure := &pluginsv1alpha1.NodeAllocationRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cluster-1",
+					Namespace: constants.DefaultNamespace,
+				},
+				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+					ConfigTransactionId: 3,
+				},
+				Status: pluginsv1alpha1.NodeAllocationRequestStatus{
+					ObservedConfigTransactionId: 3,
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(hwmgmtv1alpha1.Configured),
+							Status:             metav1.ConditionFalse,
+							Reason:             string(hwmgmtv1alpha1.Failed),
+							Message:            "Current attempt failed",
+							LastTransitionTime: metav1.Now(),
+						},
+					},
+				},
+			}
+
+			status, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, narWithCurrentFailure, hwmgmtv1alpha1.Configured)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(status).To(BeFalse())
+			Expect(timedOutOrFailed).To(BeTrue())
+		})
+	})
+
 	Context("integration test: updateHardwareStatus with callback for failed condition", func() {
 		It("propagates detailed error through the full flow", func() {
 			detailedError := "Creation request failed: not enough free resources matching nodegroup=controller criteria: freenodes=0, required=1"

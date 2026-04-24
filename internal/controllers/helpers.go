@@ -18,7 +18,7 @@ import (
 )
 
 // collectNodeDetails collects BMC and node interfaces details
-func collectNodeDetails(_ context.Context, _ client.Client, nodeList *pluginsv1alpha1.AllocatedNodeList) (map[string][]ctlrutils.NodeInfo, error) {
+func collectNodeDetails(nodeList *pluginsv1alpha1.AllocatedNodeList) (map[string][]ctlrutils.NodeInfo, error) {
 	// hwNodes maps a group name to a slice of NodeInfo
 	hwNodes := make(map[string][]ctlrutils.NodeInfo)
 	for i := range nodeList.Items {

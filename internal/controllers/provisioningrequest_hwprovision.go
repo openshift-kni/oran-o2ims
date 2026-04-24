@@ -198,7 +198,7 @@ func (t *provisioningRequestReconcilerTask) updateClusterInstance(ctx context.Co
 		return fmt.Errorf("failed to list AllocatedNodes for NodeAllocationRequest '%s': %w", t.object.Name, err)
 	}
 
-	hwNodes, err := collectNodeDetails(ctx, t.client, allocatedNodeList)
+	hwNodes, err := collectNodeDetails(allocatedNodeList)
 	if err != nil {
 		return fmt.Errorf("failed to collect hardware node %s details for node allocation request: %w", t.object.Name, err)
 	}
@@ -261,9 +261,25 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestStatus(
 	var timedOutOrFailed bool
 	var err error
 
+	// Guard against consuming stale terminal status from the NAR during day-2 retries.
+	// After a PR spec change, the NAR may still carry a Failed/TimedOut condition from the
+	// previous attempt until the plugin processes the new ConfigTransactionId. Skip the
+	// update and requeue until the plugin has observed the new transaction.
+	if nodeAllocationRequestResponse.Spec.ConfigTransactionId != 0 &&
+		nodeAllocationRequestResponse.Status.ObservedConfigTransactionId != nodeAllocationRequestResponse.Spec.ConfigTransactionId {
+		for _, c := range nodeAllocationRequestResponse.Status.Conditions {
+			if c.Type == string(condition) &&
+				(c.Reason == string(hwmgmtv1alpha1.Failed) || c.Reason == string(hwmgmtv1alpha1.TimedOut)) {
+				t.logger.InfoContext(ctx, "Skipping stale terminal NAR status — plugin has not observed new transaction",
+					slog.String("condition", string(condition)),
+					slog.Int64("specTransaction", nodeAllocationRequestResponse.Spec.ConfigTransactionId),
+					slog.Int64("observedTransaction", nodeAllocationRequestResponse.Status.ObservedConfigTransactionId))
+				return false, false, nil
+			}
+		}
+	}
+
 	// Update the provisioning request Status with status from the NodeAllocationRequest object.
-	// With direct K8s client access (no REST API), there is no read-after-write race,
-	// so we always read the latest NAR status.
 	status, timedOutOrFailed, err = t.updateHardwareStatus(ctx, nodeAllocationRequestResponse, condition)
 	if err != nil && !ctlrutils.IsConditionDoesNotExistsErr(err) {
 		t.logger.ErrorContext(
