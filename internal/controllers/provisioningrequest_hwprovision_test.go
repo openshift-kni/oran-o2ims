@@ -2472,6 +2472,35 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			Expect(timedOutOrFailed).To(BeFalse())
 		})
 
+		It("skips update when NAR has stale True condition from previous success", func() {
+			narWithStaleSuccess := &pluginsv1alpha1.NodeAllocationRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cluster-1",
+					Namespace: constants.DefaultNamespace,
+				},
+				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+					ConfigTransactionId: 3,
+				},
+				Status: pluginsv1alpha1.NodeAllocationRequestStatus{
+					ObservedConfigTransactionId: 2,
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(hwmgmtv1alpha1.Configured),
+							Status:             metav1.ConditionTrue,
+							Reason:             string(hwmgmtv1alpha1.ConfigApplied),
+							Message:            "Previous config applied",
+							LastTransitionTime: metav1.Now(),
+						},
+					},
+				},
+			}
+
+			status, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, narWithStaleSuccess, hwmgmtv1alpha1.Configured)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(status).To(BeFalse())
+			Expect(timedOutOrFailed).To(BeFalse())
+		})
+
 		It("allows update when plugin has observed the current transaction", func() {
 			narWithCurrentFailure := &pluginsv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{
@@ -2499,6 +2528,35 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(status).To(BeFalse())
 			Expect(timedOutOrFailed).To(BeTrue())
+		})
+
+		It("does not apply guard to Provisioned condition during initial provisioning", func() {
+			narInitialProvisioning := &pluginsv1alpha1.NodeAllocationRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cluster-1",
+					Namespace: constants.DefaultNamespace,
+				},
+				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+					ConfigTransactionId: 1,
+				},
+				Status: pluginsv1alpha1.NodeAllocationRequestStatus{
+					ObservedConfigTransactionId: 0,
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(hwmgmtv1alpha1.Provisioned),
+							Status:             metav1.ConditionTrue,
+							Reason:             string(hwmgmtv1alpha1.Completed),
+							Message:            "Hardware provisioning completed",
+							LastTransitionTime: metav1.Now(),
+						},
+					},
+				},
+			}
+
+			status, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, narInitialProvisioning, hwmgmtv1alpha1.Provisioned)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(status).To(BeTrue())
+			Expect(timedOutOrFailed).To(BeFalse())
 		})
 	})
 

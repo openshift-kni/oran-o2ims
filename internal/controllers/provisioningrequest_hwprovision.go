@@ -261,17 +261,21 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestStatus(
 	var timedOutOrFailed bool
 	var err error
 
-	// Guard against consuming stale terminal status from the NAR during day-2 retries.
-	// After a PR spec change, the NAR may still carry a Failed/TimedOut condition from the
-	// previous attempt until the plugin processes the new ConfigTransactionId. Skip the
-	// update and requeue until the plugin has observed the new transaction.
-	if nodeAllocationRequestResponse.Spec.ConfigTransactionId != 0 &&
+	// Guard against consuming stale Configured status during day-2 retries.
+	// After a PR spec change, the NAR may still carry a Configured condition
+	// from the previous attempt (Failed, TimedOut, or True from a prior success)
+	// until the plugin processes the new ConfigTransactionId. Skip the update
+	// and requeue until the plugin has observed the new transaction.
+	// This only applies to Configured — the Provisioned condition transitions
+	// once during initial provisioning and is not affected by spec changes.
+	if condition == hwmgmtv1alpha1.Configured &&
+		nodeAllocationRequestResponse.Spec.ConfigTransactionId != 0 &&
 		nodeAllocationRequestResponse.Status.ObservedConfigTransactionId != nodeAllocationRequestResponse.Spec.ConfigTransactionId {
 		for _, c := range nodeAllocationRequestResponse.Status.Conditions {
-			if c.Type == string(condition) &&
-				(c.Reason == string(hwmgmtv1alpha1.Failed) || c.Reason == string(hwmgmtv1alpha1.TimedOut)) {
-				t.logger.InfoContext(ctx, "Skipping stale terminal NAR status — plugin has not observed new transaction",
+			if c.Type == string(condition) {
+				t.logger.InfoContext(ctx, "Skipping stale NAR status — plugin has not observed new transaction",
 					slog.String("condition", string(condition)),
+					slog.String("reason", c.Reason),
 					slog.Int64("specTransaction", nodeAllocationRequestResponse.Spec.ConfigTransactionId),
 					slog.Int64("observedTransaction", nodeAllocationRequestResponse.Status.ObservedConfigTransactionId))
 				return false, false, nil
