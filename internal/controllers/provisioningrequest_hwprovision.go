@@ -164,27 +164,6 @@ func (t *provisioningRequestReconcilerTask) waitForHardwareData(
 		configured, timedOutOrFailed, err = t.checkNodeAllocationRequestConfigStatus(ctx, nodeAllocationRequestResponse)
 	}
 
-	// Clear callback annotations after hardware processing to prevent false callback detection
-	// This ensures future reconciliations aren't incorrectly treated as callback-triggered
-	// If no annotations exist, this does nothing
-	annotations := t.object.GetAnnotations()
-	hasCallbackAnnotations := annotations != nil && annotations[ctlrutils.CallbackReceivedAnnotation] != ""
-
-	if hasCallbackAnnotations {
-		t.logger.InfoContext(ctx, "Clearing PR callback annotations after hardware processing",
-			"callbackReceived", annotations[ctlrutils.CallbackReceivedAnnotation],
-			"callbackStatus", annotations[ctlrutils.CallbackStatusAnnotation],
-			"narId", annotations[ctlrutils.CallbackNodeAllocationRequestIdAnnotation],
-			"hadError", err != nil)
-
-		// Clear annotations and persist to cluster to prevent false callback detection on next reconciliation
-		if clearErr := ctlrutils.ClearPRCallbackAnnotationsWithPatch(ctx, t.client, t.object); clearErr != nil {
-			t.logger.WarnContext(ctx, "Failed to clear PR callback annotations", "error", clearErr.Error())
-		} else {
-			t.logger.InfoContext(ctx, "Successfully cleared PR callback annotations")
-		}
-	}
-
 	return provisioned, configured, timedOutOrFailed, err
 }
 
@@ -747,11 +726,6 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(
 		return nil, fmt.Errorf("%s is not a string", ctlrutils.TemplateParamNodeClusterName)
 	}
 
-	callbackURL, err := t.callbackConfig.BuildCallbackURL(t.object.Name)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build callback url: %w", err)
-	}
-
 	// Get the hardware plugin reference, defaulting to metal3
 	hwPluginRef := t.ctDetails.templates.HwMgmtDefaults.GetHardwarePluginRef()
 	narNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
@@ -776,10 +750,7 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(
 			LocationSpec:                pluginsv1alpha1.LocationSpec{Site: siteID},
 			ConfigTransactionId:         t.object.Generation,
 			HardwareProvisioningTimeout: timeoutStr,
-			SkipCleanup:                 hasSkipCleanup,
-			Callback: &pluginsv1alpha1.Callback{
-				CallbackURL: callbackURL,
-			},
+			SkipCleanup: hasSkipCleanup,
 		},
 	}
 

@@ -23,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	ibgu "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
@@ -38,8 +39,6 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 		Named("o2ims-cluster-request").
 		For(
 			&provisioningv1alpha1.ProvisioningRequest{},
-			// Watch for create and update events for ProvisioningRequest.
-			// Trigger on spec changes OR callback annotation changes.
 			builder.WithPredicates(predicate.Funcs{
 				UpdateFunc: func(e event.UpdateEvent) bool {
 					// Trigger on generation changes (spec updates)
@@ -47,32 +46,9 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 						return true
 					}
 
-					// Trigger on callback annotation changes
+					// Check skip-cleanup annotation by presence (value is always empty)
 					oldAnnotations := e.ObjectOld.GetAnnotations()
 					newAnnotations := e.ObjectNew.GetAnnotations()
-
-					// Check if relevant annotations were added, removed, or changed
-					callbackAnnotations := []string{
-						ctlrutils.CallbackReceivedAnnotation,
-						ctlrutils.CallbackStatusAnnotation,
-						ctlrutils.CallbackNodeAllocationRequestIdAnnotation,
-					}
-
-					for _, annotation := range callbackAnnotations {
-						oldValue := ""
-						newValue := ""
-						if oldAnnotations != nil {
-							oldValue = oldAnnotations[annotation]
-						}
-						if newAnnotations != nil {
-							newValue = newAnnotations[annotation]
-						}
-						if oldValue != newValue {
-							return true
-						}
-					}
-
-					// Check skip-cleanup annotation by presence (value is always empty)
 					_, oldHasSkipCleanup := oldAnnotations[ctlrutils.SkipCleanupAnnotation]
 					_, newHasSkipCleanup := newAnnotations[ctlrutils.SkipCleanupAnnotation]
 					if oldHasSkipCleanup != newHasSkipCleanup {
@@ -84,6 +60,20 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 				CreateFunc:  func(e event.CreateEvent) bool { return true },
 				GenericFunc: func(e event.GenericEvent) bool { return false },
 				DeleteFunc:  func(e event.DeleteEvent) bool { return true },
+			})).
+		Watches(
+			&pluginsv1alpha1.NodeAllocationRequest{},
+			handler.EnqueueRequestsFromMapFunc(r.enqueueProvisioningRequestForNAR),
+			builder.WithPredicates(predicate.Funcs{
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					// Trigger on status condition changes only
+					narOld := e.ObjectOld.(*pluginsv1alpha1.NodeAllocationRequest)
+					narNew := e.ObjectNew.(*pluginsv1alpha1.NodeAllocationRequest)
+					return !equality.Semantic.DeepEqual(narOld.Status.Conditions, narNew.Status.Conditions)
+				},
+				CreateFunc:  func(ce event.CreateEvent) bool { return false },
+				GenericFunc: func(ge event.GenericEvent) bool { return false },
+				DeleteFunc:  func(de event.DeleteEvent) bool { return false },
 			})).
 		Owns(
 			&corev1.Namespace{},
@@ -192,6 +182,19 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 
 // enqueueProvisioningRequestForClusterTemplate maps the ClusterTemplates used by ProvisioningRequests
 // to reconciling requests for those ProvisioningRequests.
+// enqueueProvisioningRequestForNAR maps NodeAllocationRequest status changes to
+// reconciliation requests for the corresponding ProvisioningRequest.
+// Since NAR name = PR name (1:1 relationship), the mapping is direct.
+func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForNAR(
+	_ context.Context, obj client.Object) []reconcile.Request {
+	r.Logger.Info(
+		"[enqueueProvisioningRequestForNAR] NAR status changed, triggering PR reconciliation",
+		"name", obj.GetName())
+	return []reconcile.Request{
+		{NamespacedName: types.NamespacedName{Name: obj.GetName()}},
+	}
+}
+
 func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForClusterTemplate(
 	ctx context.Context, obj client.Object) []reconcile.Request {
 	var requests []reconcile.Request

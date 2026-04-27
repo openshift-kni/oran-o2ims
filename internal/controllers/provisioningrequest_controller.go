@@ -37,18 +37,16 @@ import (
 // ProvisioningRequestReconciler reconciles a ProvisioningRequest object
 type ProvisioningRequestReconciler struct {
 	client.Client
-	Logger         *slog.Logger
-	CallbackConfig *ctlrutils.NarCallbackConfig
+	Logger *slog.Logger
 }
 
 type provisioningRequestReconcilerTask struct {
-	logger         *slog.Logger
-	client         client.Client
-	object         *provisioningv1alpha1.ProvisioningRequest
-	clusterInput   *clusterInput
-	ctDetails      *clusterTemplateDetails
-	timeouts       *timeouts
-	callbackConfig *ctlrutils.NarCallbackConfig
+	logger       *slog.Logger
+	client       client.Client
+	object       *provisioningv1alpha1.ProvisioningRequest
+	clusterInput *clusterInput
+	ctDetails    *clusterTemplateDetails
+	timeouts     *timeouts
 }
 
 // clusterInput holds the merged input data for a cluster
@@ -172,8 +170,7 @@ func (r *ProvisioningRequestReconciler) Reconcile(
 		object:         object,
 		clusterInput:   &clusterInput{},
 		ctDetails:      &clusterTemplateDetails{},
-		timeouts:       &timeouts{},
-		callbackConfig: r.CallbackConfig,
+		timeouts: &timeouts{},
 	}
 	result, err = task.run(ctx)
 	return

@@ -356,23 +356,10 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		}
 	}()
 
-	// Extract port from callback server address for callback URL construction
-	callbackPort, err := ctlrutils.ExtractPortFromAddress(c.narCallbackServerAddr)
-	if err != nil {
-		logger.ErrorContext(
-			ctx,
-			"Failed to extract port from callback server address",
-			slog.String("address", c.narCallbackServerAddr),
-			slog.String("error", err.Error()),
-		)
-		return exit.Error(1)
-	}
-
 	// Start the Provisioning Request controller.
 	if err = (&controllers.ProvisioningRequestReconciler{
-		Client:         mgr.GetClient(),
-		Logger:         logger.With("controller", "ProvisioningRequest"),
-		CallbackConfig: ctlrutils.NewNarCallbackConfig(callbackPort),
+		Client: mgr.GetClient(),
+		Logger: logger.With("controller", "ProvisioningRequest"),
 	}).SetupWithManager(mgr); err != nil {
 		logger.ErrorContext(
 			ctx,
