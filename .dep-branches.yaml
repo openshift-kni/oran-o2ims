@@ -1,0 +1,39 @@
+# Target branches for pseudo-version (non-semver) go.mod dependencies.
+# These dependencies use commit-pinned versions (v0.0.0-<timestamp>-<hash>)
+# that dependabot cannot track. This file maps each module to the branch
+# it should be updated from.
+#
+# Usage: hack/check-dep-branches.sh
+#
+# The script compares the commit pinned in go.mod against the HEAD of the
+# target branch and reports which dependencies are behind.
+#
+# Subdependencies (alignWith): modules whose version should match what the
+# parent module pins in its own go.mod (including replace directives) on
+# the target branch. When the parent is updated, the script checks that
+# subdependencies are aligned. The --update modes will update replace
+# directives in our go.mod to match.
+#
+# A module can only appear once in this file (either as a standalone entry
+# or as a subdependency, not both).
+
+dependencies:
+  - module: github.com/openshift-kni/cluster-group-upgrades-operator
+    branch: release-4.22
+    repo: openshift-kni/cluster-group-upgrades-operator
+
+  - module: github.com/openshift/api
+    branch: release-4.22
+    repo: openshift/api
+
+  - module: github.com/stolostron/multicluster-observability-operator
+    branch: release-2.15
+    repo: stolostron/multicluster-observability-operator
+
+  - module: github.com/stolostron/siteconfig
+    branch: release-2.15
+    repo: stolostron/siteconfig
+    alignWith:
+      - github.com/openshift/hive/apis
+      - github.com/openshift/assisted-service/api
+      - github.com/openshift/assisted-service/models
