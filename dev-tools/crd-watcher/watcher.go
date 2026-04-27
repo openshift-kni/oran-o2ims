@@ -54,6 +54,8 @@ type CRDWatcher struct {
 	eventRefreshTimer *time.Timer
 	eventRefreshMutex sync.Mutex
 	lastEventRefresh  time.Time
+	// Inventory error tracking for suppressing transient errors
+	inventoryConsecutiveFailures int
 }
 
 type WatchEvent struct {
@@ -804,6 +806,12 @@ func (w *CRDWatcher) performInventoryRefresh(ctx context.Context) {
 	w.performInventoryRefreshWithReason(ctx, "periodic")
 }
 
+// inventoryConsecutiveFailureThreshold is the number of consecutive failures
+// before inventory refresh errors are logged at error level. Below this
+// threshold, errors are logged at V(1) to avoid noise from transient issues
+// like TLS certificate timing.
+const inventoryConsecutiveFailureThreshold = 3
+
 // performInventoryRefreshWithReason fetches fresh inventory data with a specified reason for logging
 func (w *CRDWatcher) performInventoryRefreshWithReason(ctx context.Context, reason string) {
 	if w.inventoryClient == nil {
@@ -819,22 +827,49 @@ func (w *CRDWatcher) performInventoryRefreshWithReason(ctx context.Context, reas
 	// Clean up stale inventory objects before fetching fresh data
 	w.cleanupStaleInventoryObjects()
 
+	hadError := false
+
 	// Refresh inventory resource pools
 	if err := w.refreshInventoryResourcePools(refreshCtx); err != nil {
-		klog.Errorf("Failed to refresh inventory resource pools: %v", err)
+		hadError = true
+		w.logInventoryRefreshError("resource pools", err)
 	}
 
 	// Refresh inventory resources
 	if err := w.refreshInventoryResources(refreshCtx); err != nil {
-		klog.Errorf("Failed to refresh inventory resources: %v", err)
+		hadError = true
+		w.logInventoryRefreshError("resources", err)
 	}
 
 	// Refresh inventory node clusters
 	if err := w.refreshInventoryNodeClusters(refreshCtx); err != nil {
-		klog.Errorf("Failed to refresh inventory node clusters: %v", err)
+		hadError = true
+		w.logInventoryRefreshError("node clusters", err)
+	}
+
+	if hadError {
+		w.inventoryConsecutiveFailures++
+	} else {
+		if w.inventoryConsecutiveFailures > 0 {
+			klog.V(1).Infof("Inventory refresh recovered after %d consecutive failure(s)", w.inventoryConsecutiveFailures)
+		}
+		w.inventoryConsecutiveFailures = 0
 	}
 
 	klog.V(1).Infof("Completed %s inventory refresh", reason)
+}
+
+// logInventoryRefreshError logs an inventory refresh error at the appropriate level.
+// Transient errors (below the consecutive failure threshold) are logged at V(1)
+// to avoid noise. Persistent errors are logged at error level.
+func (w *CRDWatcher) logInventoryRefreshError(component string, err error) {
+	if w.inventoryConsecutiveFailures < inventoryConsecutiveFailureThreshold {
+		klog.V(1).Infof("Failed to refresh inventory %s (transient, attempt %d): %v",
+			component, w.inventoryConsecutiveFailures+1, err)
+	} else {
+		klog.Errorf("Failed to refresh inventory %s (persistent, %d consecutive failures): %v",
+			component, w.inventoryConsecutiveFailures+1, err)
+	}
 }
 
 // cleanupStaleInventoryObjects triggers immediate cleanup of stale inventory objects in the watch display
