@@ -54,6 +54,8 @@ type CRDWatcher struct {
 	eventRefreshTimer *time.Timer
 	eventRefreshMutex sync.Mutex
 	lastEventRefresh  time.Time
+	// Inventory refresh execution mutex — ensures only one refresh runs at a time
+	inventoryRefreshExecMutex sync.Mutex
 	// Inventory error tracking for suppressing transient errors
 	inventoryConsecutiveFailures int
 }
@@ -817,6 +819,11 @@ func (w *CRDWatcher) performInventoryRefreshWithReason(ctx context.Context, reas
 	if w.inventoryClient == nil {
 		return
 	}
+
+	// Serialize refresh execution — periodic and event-triggered refreshes
+	// can fire concurrently from separate timer goroutines.
+	w.inventoryRefreshExecMutex.Lock()
+	defer w.inventoryRefreshExecMutex.Unlock()
 
 	klog.V(1).Infof("Performing %s inventory refresh", reason)
 
