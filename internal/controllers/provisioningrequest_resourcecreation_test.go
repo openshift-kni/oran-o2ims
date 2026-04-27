@@ -50,7 +50,6 @@ import (
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 )
@@ -93,7 +92,6 @@ var _ = Describe("createPolicyTemplateConfigMap", func() {
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
 			},
-			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Define the cluster template.
@@ -223,7 +221,6 @@ var _ = Describe("createClusterInstanceBMCSecrets", func() {
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
 			},
-			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 	})
 

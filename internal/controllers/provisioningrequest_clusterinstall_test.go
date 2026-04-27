@@ -63,7 +63,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 )
@@ -161,7 +160,6 @@ var _ = Describe("handleRenderClusterInstance", func() {
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
 			},
-			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		clusterInstanceInputParams, err := provisioningv1alpha1.ExtractMatchingInput(
@@ -334,7 +332,6 @@ var _ = Describe("handleClusterInstallation", func() {
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
 			},
-			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		clusterInstanceInputParams, err := provisioningv1alpha1.ExtractMatchingInput(

@@ -338,7 +338,6 @@ defaultHugepagesSize: "1G"`,
 		CRReconciler = &ProvisioningRequestReconciler{
 			Client:         c,
 			Logger:         logger,
-			CallbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Create the provisioned NodeAllocationRequest
@@ -441,7 +440,6 @@ defaultHugepagesSize: "1G"`,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
-			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 	})
 
@@ -1663,7 +1661,6 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 		CRReconciler = &ProvisioningRequestReconciler{
 			Client:         c,
 			Logger:         logger,
-			CallbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		CRTask = &provisioningRequestReconcilerTask{
@@ -1966,7 +1963,6 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
 				clusterConfiguration: utils.DefaultClusterConfigurationTimeout,
 			},
-			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 	})
 

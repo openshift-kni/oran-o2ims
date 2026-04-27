@@ -221,7 +221,6 @@ var _ = Describe("ProvisioningRequestReconciler Unit Tests", func() {
 		reconciler = &ProvisioningRequestReconciler{
 			Client:         c,
 			Logger:         slog.New(slog.DiscardHandler),
-			CallbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Create basic test objects
@@ -295,7 +294,6 @@ plan:
 			client:         c,
 			object:         cr,
 			logger:         reconciler.Logger,
-			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 	})
 
@@ -508,7 +506,6 @@ plan:
 				client:         c,
 				object:         testCR,
 				logger:         reconciler.Logger,
-				callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			}
 		})
 
@@ -917,7 +914,6 @@ plan:
 			deletionReconciler = &ProvisioningRequestReconciler{
 				Client:         c,
 				Logger:         reconciler.Logger,
-				CallbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			}
 
 			// Create a ClusterTemplate to avoid hardware plugin errors
@@ -1392,7 +1388,6 @@ plan:
 				clusterInput:   &clusterInput{},
 				ctDetails:      &clusterTemplateDetails{},
 				timeouts:       &timeouts{},
-				callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			}
 		})
 
@@ -1750,7 +1745,6 @@ plan:
 				clusterInput:   &clusterInput{},
 				ctDetails:      &clusterTemplateDetails{},
 				timeouts:       &timeouts{},
-				callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			}
 		})
 
@@ -2479,7 +2473,6 @@ nodes:
 					},
 				},
 				clusterInput:   &clusterInput{},
-				callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			}
 
 			// Extract and merge cluster instance parameters
@@ -2881,7 +2874,6 @@ nodes:
 				clusterInput:   &clusterInput{},
 				ctDetails:      &clusterTemplateDetails{},
 				timeouts:       &timeouts{},
-				callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			}
 		})
 
@@ -2945,7 +2937,6 @@ var _ = Describe("ProvisioningRequestReconciler Policy Tests", func() {
 		ctx = context.Background()
 		reconciler = &ProvisioningRequestReconciler{
 			Logger:         slog.New(slog.DiscardHandler),
-			CallbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Create basic test objects
@@ -3073,7 +3064,6 @@ source-crs:
 			client:         c,
 			object:         cr,
 			logger:         reconciler.Logger,
-			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 	})
 
@@ -3351,7 +3341,6 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 		ctx = context.Background()
 		reconciler = &ProvisioningRequestReconciler{
 			Logger:         slog.New(slog.DiscardHandler),
-			CallbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 
 		// Create more realistic integration test objects
@@ -3436,7 +3425,6 @@ plan:
 			client:         c,
 			object:         cr,
 			logger:         reconciler.Logger,
-			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 	})
 
@@ -3968,7 +3956,6 @@ plan:
 					client:         c,
 					object:         integrationCR,
 					logger:         reconciler.Logger,
-					callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 				}
 
 				// Set up cluster as ZTP completed with configuration applied
@@ -4175,7 +4162,6 @@ plan:
 			finalizerReconciler = &ProvisioningRequestReconciler{
 				Client:         c,
 				Logger:         reconciler.Logger,
-				CallbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			}
 
 			// Create a base ProvisioningRequest for finalizer testing
@@ -4593,7 +4579,6 @@ plan:
 					},
 				},
 				timeouts:       &timeouts{},
-				callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			}
 
 		})
@@ -5113,7 +5098,6 @@ plan:
 					},
 				},
 				timeouts:       &timeouts{},
-				callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			}
 
 		})

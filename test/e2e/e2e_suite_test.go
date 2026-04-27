@@ -42,7 +42,6 @@ import (
 	metal3pluginscontrollers "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/metal3/controller"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	provisioningcontrollers "github.com/openshift-kni/oran-o2ims/internal/controllers"
-	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
@@ -197,7 +196,6 @@ var _ = BeforeSuite(func() {
 	ProvReqTestReconciler := &provisioningcontrollers.ProvisioningRequestReconciler{
 		Client:         K8SClient,
 		Logger:         logger,
-		CallbackConfig: ctlrutils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 	}
 	err = ProvReqTestReconciler.SetupWithManager(ProvisioningManager)
 	Expect(err).ToNot(HaveOccurred())
@@ -267,7 +265,6 @@ var _ = BeforeSuite(func() {
 	err = K8SClient.Status().Update(context.Background(), mockHwPlugin)
 	Expect(err).ToNot(HaveOccurred())
 
-	NodeAllocationRequestTestReconciler.InitializeCallbackContext(ctx)
 
 	// Start the main O2IMS manager
 	go func() {

@@ -177,7 +177,6 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 			logger:         reconciler.Logger,
 			client:         reconciler.Client,
 			object:         cr,
-			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
 				templates: provisioningv1alpha1.TemplateDefaults{
@@ -381,7 +380,6 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 			timeouts: &timeouts{
 				hardwareProvisioning: 1 * time.Minute,
 			},
-			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
 				templates: provisioningv1alpha1.TemplateDefaults{
@@ -678,7 +676,6 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 			logger:         reconciler.Logger,
 			client:         reconciler.Client,
 			object:         cr,
-			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
 				templates: provisioningv1alpha1.TemplateDefaults{
@@ -862,7 +859,6 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			logger:         reconciler.Logger,
 			client:         reconciler.Client,
 			object:         cr,
-			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			ctDetails: &clusterTemplateDetails{
 				namespace: "test-ns",
 				templates: provisioningv1alpha1.TemplateDefaults{
@@ -1151,7 +1147,6 @@ var _ = Describe("updateAllocatedNodeHostMap", func() {
 			logger:         reconciler.Logger,
 			client:         reconciler.Client,
 			object:         cr,
-			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			ctDetails: &clusterTemplateDetails{
 				namespace: "test-ns",
 				templates: provisioningv1alpha1.TemplateDefaults{
@@ -1294,7 +1289,6 @@ var _ = Describe("waitForHardwareData", func() {
 			timeouts: &timeouts{
 				hardwareProvisioning: 1 * time.Minute,
 			},
-			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
 				templates: provisioningv1alpha1.TemplateDefaults{
@@ -1397,7 +1391,6 @@ var _ = Describe("checkExistingNodeAllocationRequest", func() {
 			logger:         reconciler.Logger,
 			client:         reconciler.Client,
 			object:         cr,
-			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			ctDetails: &clusterTemplateDetails{
 				namespace: "test-ns",
 				templates: provisioningv1alpha1.TemplateDefaults{
@@ -1682,7 +1675,6 @@ var _ = Describe("applyNodeConfiguration", func() {
 					},
 				},
 			},
-			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 	})
 
@@ -2004,7 +1996,6 @@ var _ = Describe("ProvisioningRequest Status Update After Hardware Failure", fun
 			timeouts: &timeouts{
 				hardwareProvisioning: 30 * time.Minute,
 			},
-			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 		}
 	})
 
@@ -2219,7 +2210,6 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			timeouts: &timeouts{
 				hardwareProvisioning: 1 * time.Minute,
 			},
-			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			ctDetails: &clusterTemplateDetails{
 				namespace: "test-ns",
 				templates: provisioningv1alpha1.TemplateDefaults{

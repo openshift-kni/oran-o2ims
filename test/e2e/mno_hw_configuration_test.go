@@ -34,7 +34,6 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	metal3pluginscontrollers "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/metal3/controller"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	machineconfigv1 "github.com/openshift/api/machineconfiguration/v1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
@@ -321,8 +320,6 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			return cond != nil && cond.Status == metav1.ConditionTrue
 		}, timeout, interval).Should(BeTrue(), "NAR should reach Provisioned=True")
 
-		By("Triggering callback to complete hardware provisioning on the PR")
-		Expect(simulateCallback(testCtx, prName, string(hwmgmtv1alpha1.Completed))).To(Succeed())
 
 		By("Waiting for PR HardwareProvisioned=True")
 		Eventually(func() bool {
@@ -468,8 +465,6 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		})
 
 		It("Should PR reach InProgress", func() {
-			// Simulate hardware plugin sending in progress callback.
-			Expect(simulateCallback(testCtx, prName, string(hwmgmtv1alpha1.InProgress))).To(Succeed())
 			Eventually(func() bool {
 				Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
 				cond := meta.FindStatusCondition(pr.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured))
@@ -560,8 +555,6 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		})
 
 		It("Should PR reach HardwareConfigured=True", func() {
-			// Simulate hardware plugin sending completion callback.
-			Expect(simulateCallback(testCtx, prName, string(hwmgmtv1alpha1.ConfigApplied))).To(Succeed())
 			Eventually(func() bool {
 				Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
 				cond := meta.FindStatusCondition(pr.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured))
@@ -589,12 +582,9 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 				return cond != nil && cond.Reason == string(hwmgmtv1alpha1.InProgress)
 			}, timeout, interval).Should(BeTrue(), "NAR should be in InProgress")
 
-			Expect(simulateCallback(testCtx, prName, string(hwmgmtv1alpha1.InProgress))).To(Succeed())
 		})
 
 		It("Should PR reach InProgress", func() {
-			// Simulate hardware plugin sending in progress callback.
-			Expect(simulateCallback(testCtx, prName, string(hwmgmtv1alpha1.InProgress))).To(Succeed())
 			Eventually(func() bool {
 				Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
 				cond := meta.FindStatusCondition(pr.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured))
@@ -655,8 +645,6 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		})
 
 		It("Should PR reach HardwareConfigured=Failed after callback", func() {
-			// Simulate hardware plugin sending failed callback.
-			Expect(simulateCallback(testCtx, prName, string(hwmgmtv1alpha1.Failed))).To(Succeed())
 			Eventually(func() bool {
 				Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
 				cond := meta.FindStatusCondition(pr.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured))
@@ -795,7 +783,6 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			pr.Spec.TemplateParameters = v2PR.Spec.TemplateParameters
 			Expect(K8SClient.Update(testCtx, pr)).To(Succeed())
 
-			Expect(simulateCallback(testCtx, prName, string(hwmgmtv1alpha1.InProgress))).To(Succeed())
 
 			By("Waiting for 7 workers to converge to v2 while Servicing worker defers abandon")
 			// The 2 workers with BMH=OK are abandoned immediately -> re-initiated with v2 ->
@@ -846,7 +833,6 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 				return cond != nil && cond.Status == metav1.ConditionTrue &&
 					cond.Reason == string(hwmgmtv1alpha1.ConfigApplied)
 			}, timeout, interval).Should(BeTrue(), "NAR should reach ConfigApplied")
-			Expect(simulateCallback(testCtx, prName, string(hwmgmtv1alpha1.ConfigApplied))).To(Succeed())
 
 			By("Verifying all 8 worker nodes converged to v2 profile")
 			nodeList := listAllocatedNodesForNAR(testCtx, prName)
@@ -860,7 +846,6 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		})
 
 		It("Should PR reach HardwareConfigured=True after callback", func() {
-			Expect(simulateCallback(testCtx, prName, string(hwmgmtv1alpha1.ConfigApplied))).To(Succeed())
 			Eventually(func() bool {
 				Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
 				cond := meta.FindStatusCondition(pr.Status.Conditions,
@@ -872,22 +857,6 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 })
 
 func intPtr(v int) *int { return &v }
-
-func simulateCallback(ctx context.Context, prName, status string) error {
-	pr := &provisioningv1alpha1.ProvisioningRequest{}
-	if err := K8SClient.Get(ctx, types.NamespacedName{Name: prName}, pr); err != nil {
-		return fmt.Errorf("failed to get ProvisioningRequest %s: %w", prName, err)
-	}
-	if pr.Annotations == nil {
-		pr.Annotations = make(map[string]string)
-	}
-	pr.Annotations[ctlrutils.CallbackReceivedAnnotation] = fmt.Sprintf("%d", time.Now().Unix())
-	pr.Annotations[ctlrutils.CallbackStatusAnnotation] = status
-	if err := K8SClient.Update(ctx, pr); err != nil {
-		return fmt.Errorf("failed to update ProvisioningRequest %s: %w", prName, err)
-	}
-	return nil
-}
 
 func listAllocatedNodesForNAR(ctx context.Context, narName string) *pluginsv1alpha1.AllocatedNodeList {
 	all := &pluginsv1alpha1.AllocatedNodeList{}
