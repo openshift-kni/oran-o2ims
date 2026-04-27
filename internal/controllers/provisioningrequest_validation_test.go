@@ -50,11 +50,11 @@ var _ = Describe("overrideClusterInstanceLabelsOrAnnotations", func() {
 		srcConfigmap = make(map[string]any)
 
 		task = &provisioningRequestReconcilerTask{
-			logger:         logger,
-			client:         nil,
-			object:         nil,
-			clusterInput:   &clusterInput{},
-			ctDetails:      &clusterTemplateDetails{},
+			logger:       logger,
+			client:       nil,
+			object:       nil,
+			clusterInput: &clusterInput{},
+			ctDetails:    &clusterTemplateDetails{},
 		}
 	})
 

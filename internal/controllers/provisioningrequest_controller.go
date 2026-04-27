@@ -165,12 +165,12 @@ func (r *ProvisioningRequestReconciler) Reconcile(
 
 	// Create and run the task:
 	task := &provisioningRequestReconcilerTask{
-		logger:         r.Logger,
-		client:         r.Client,
-		object:         object,
-		clusterInput:   &clusterInput{},
-		ctDetails:      &clusterTemplateDetails{},
-		timeouts: &timeouts{},
+		logger:       r.Logger,
+		client:       r.Client,
+		object:       object,
+		clusterInput: &clusterInput{},
+		ctDetails:    &clusterTemplateDetails{},
+		timeouts:     &timeouts{},
 	}
 	result, err = task.run(ctx)
 	return

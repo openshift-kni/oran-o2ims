@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/url"
 	"slices"
 	"sort"
 	"strings"
@@ -32,7 +31,6 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
@@ -1364,33 +1362,6 @@ func filterNodesByGroup(nodelist *pluginsv1alpha1.AllocatedNodeList, groupName s
 	return result
 }
 
-// extractPRNameFromCallback extracts the ProvisioningRequest name from the callback URL.
-// The callback URL follows the pattern: /nar-callback/v1/provisioning-requests/{provisioningRequestName}
-//
-// Note: The callback URL is automatically populated by the provisioning controller when creating
-// the NAR, so format errors indicate a bug in the provisioning controller that should be fixed there
-// or user corruption should be fixed by the user.
-func extractPRNameFromCallback(callback *pluginsv1alpha1.Callback) (string, error) {
-	if callback == nil || callback.CallbackURL == "" {
-		return "", fmt.Errorf("no callback configured")
-	}
-
-	callbackURL, err := url.Parse(callback.CallbackURL)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse callback URL: %w", err)
-	}
-
-	if !strings.HasPrefix(callbackURL.Path, constants.NarCallbackServicePath+"/") {
-		return "", fmt.Errorf("callback URL does not match expected pattern: %s", callback.CallbackURL)
-	}
-
-	prName := strings.TrimPrefix(callbackURL.Path, constants.NarCallbackServicePath+"/")
-	if prName == "" {
-		return "", fmt.Errorf("could not extract provisioning request name from callback URL: %s", callback.CallbackURL)
-	}
-	return prName, nil
-}
-
 // populateNodeHostnames ensures each given AllocatedNode has Status.Hostname set.
 // It reads the ProvisioningRequest's status.extensions.allocatedNodeHostMap once
 // and patches any node with hostname that is not yet persisted. In-memory nodelist
@@ -1413,10 +1384,8 @@ func populateNodeHostnames(
 		return nil
 	}
 
-	prName, err := extractPRNameFromCallback(nar.Spec.Callback)
-	if err != nil {
-		return fmt.Errorf("failed to extract provisioning request name: %w", err)
-	}
+	// NAR name matches the ProvisioningRequest name (1:1 mapping).
+	prName := nar.Name
 
 	pr := &provisioningv1alpha1.ProvisioningRequest{}
 	if err := hubClient.Get(ctx, client.ObjectKey{Name: prName}, pr); err != nil {

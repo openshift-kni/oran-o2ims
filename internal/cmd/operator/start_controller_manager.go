@@ -113,13 +113,13 @@ func ControllerManager() *cobra.Command {
 // ControllerManagerCommand contains the data and logic needed to run the `start controller-manager`
 // command.
 type ControllerManagerCommand struct {
-	metricsAddr           string
-	metricsCertDir        string
-	enableHTTP2           bool
-	enableLeaderElection  bool
-	enableWebhooks        bool
-	probeAddr             string
-	image                 string
+	metricsAddr          string
+	metricsCertDir       string
+	enableHTTP2          bool
+	enableLeaderElection bool
+	enableWebhooks       bool
+	probeAddr            string
+	image                string
 	svcutils.CommonServerConfig
 }
 

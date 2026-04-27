@@ -336,8 +336,8 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 
 		CRReconciler = &ProvisioningRequestReconciler{
-			Client:         c,
-			Logger:         logger,
+			Client: c,
+			Logger: logger,
 		}
 
 		// Create the provisioned NodeAllocationRequest
@@ -1659,8 +1659,8 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		CRReconciler = &ProvisioningRequestReconciler{
-			Client:         c,
-			Logger:         logger,
+			Client: c,
+			Logger: logger,
 		}
 
 		CRTask = &provisioningRequestReconcilerTask{

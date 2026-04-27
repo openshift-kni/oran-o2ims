@@ -750,7 +750,7 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(
 			LocationSpec:                pluginsv1alpha1.LocationSpec{Site: siteID},
 			ConfigTransactionId:         t.object.Generation,
 			HardwareProvisioningTimeout: timeoutStr,
-			SkipCleanup: hasSkipCleanup,
+			SkipCleanup:                 hasSkipCleanup,
 		},
 	}
 

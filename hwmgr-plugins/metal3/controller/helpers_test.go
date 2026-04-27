@@ -1626,21 +1626,19 @@ var _ = Describe("Helpers", func() {
 				return bmh
 			}
 
-			// Helper to create NAR with node groups and callback for config tests
+			// Helper to create NAR with node groups for config tests
 			createNAR := func(nodeGroups []pluginsv1alpha1.NodeGroup) *pluginsv1alpha1.NodeAllocationRequest {
 				nar := createNodeAllocationRequest("test-nar", testNamespace)
 				nar.Spec.NodeGroup = nodeGroups
-				nar.Spec.Callback = &pluginsv1alpha1.Callback{
-					CallbackURL: "/nar-callback/v1/provisioning-requests/test-pr",
-				}
 				return nar
 			}
 
 			// createPRWithHostMap creates a ProvisioningRequest and sets up its status with the
 			// node-to-hostname mapping after the client is built (status is a subresource).
+			// The PR name must match the NAR name (1:1 mapping).
 			createPRWithHostMap := func(c client.Client, nodeHostMap map[string]string) {
 				pr := &provisioningv1alpha1.ProvisioningRequest{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-pr"},
+					ObjectMeta: metav1.ObjectMeta{Name: "test-nar"},
 				}
 				Expect(c.Create(ctx, pr)).To(Succeed())
 				pr.Status.Extensions.AllocatedNodeHostMap = nodeHostMap
@@ -3346,73 +3344,6 @@ var _ = Describe("Helpers", func() {
 		})
 	})
 
-	Describe("extractPRNameFromCallback", func() {
-		It("should return error when callback is nil", func() {
-			result, err := extractPRNameFromCallback(nil)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("no callback configured"))
-			Expect(result).To(BeEmpty())
-		})
-
-		It("should return error when callback URL is empty", func() {
-			callback := &pluginsv1alpha1.Callback{
-				CallbackURL: "",
-			}
-			result, err := extractPRNameFromCallback(callback)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("no callback configured"))
-			Expect(result).To(BeEmpty())
-		})
-
-		It("should return error when URL is malformed", func() {
-			callback := &pluginsv1alpha1.Callback{
-				CallbackURL: "://invalid-url",
-			}
-			result, err := extractPRNameFromCallback(callback)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to parse callback URL"))
-			Expect(result).To(BeEmpty())
-		})
-
-		It("should return error when URL path doesn't match expected pattern", func() {
-			callback := &pluginsv1alpha1.Callback{
-				CallbackURL: "http://localhost/wrong-path/my-pr",
-			}
-			result, err := extractPRNameFromCallback(callback)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("callback URL does not match expected pattern"))
-			Expect(result).To(BeEmpty())
-		})
-
-		It("should return error when PR name is empty in URL", func() {
-			callback := &pluginsv1alpha1.Callback{
-				CallbackURL: "http://localhost" + constants.NarCallbackServicePath + "/",
-			}
-			result, err := extractPRNameFromCallback(callback)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("could not extract provisioning request name"))
-			Expect(result).To(BeEmpty())
-		})
-
-		It("should extract PR name from valid callback URL", func() {
-			callback := &pluginsv1alpha1.Callback{
-				CallbackURL: "http://localhost" + constants.NarCallbackServicePath + "/my-provisioning-request",
-			}
-			result, err := extractPRNameFromCallback(callback)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(result).To(Equal("my-provisioning-request"))
-		})
-
-		It("should extract PR name with complex characters", func() {
-			callback := &pluginsv1alpha1.Callback{
-				CallbackURL: "http://localhost:8080" + constants.NarCallbackServicePath + "/cluster-123-pr",
-			}
-			result, err := extractPRNameFromCallback(callback)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(result).To(Equal("cluster-123-pr"))
-		})
-	})
-
 	Describe("populateNodeHostnames", func() {
 		var (
 			ctx       context.Context
@@ -3460,20 +3391,6 @@ var _ = Describe("Helpers", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("should return error when callback is nil", func() {
-			node := &pluginsv1alpha1.AllocatedNode{
-				ObjectMeta: metav1.ObjectMeta{Name: "node-1", Namespace: "default"},
-			}
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{Items: []pluginsv1alpha1.AllocatedNode{*node}}
-			hubClient = fake.NewClientBuilder().WithScheme(scheme).
-				WithObjects(node).WithStatusSubresource(node).Build()
-			nar.Spec.Callback = nil
-
-			err := populateNodeHostnames(ctx, hubClient, logger, nodelist, nar)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to extract provisioning request name"))
-		})
-
 		It("should return error when ProvisioningRequest doesn't exist", func() {
 			node := &pluginsv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-1", Namespace: "default"},
@@ -3481,9 +3398,6 @@ var _ = Describe("Helpers", func() {
 			nodelist := &pluginsv1alpha1.AllocatedNodeList{Items: []pluginsv1alpha1.AllocatedNode{*node}}
 			hubClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(node).WithStatusSubresource(node).Build()
-			nar.Spec.Callback = &pluginsv1alpha1.Callback{
-				CallbackURL: "http://localhost" + constants.NarCallbackServicePath + "/non-existent-pr",
-			}
 
 			err := populateNodeHostnames(ctx, hubClient, logger, nodelist, nar)
 			Expect(err).To(HaveOccurred())
@@ -3492,7 +3406,7 @@ var _ = Describe("Helpers", func() {
 
 		It("should return error when node is not in host map", func() {
 			pr := &provisioningv1alpha1.ProvisioningRequest{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-pr"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-nar"},
 				Status: provisioningv1alpha1.ProvisioningRequestStatus{
 					Extensions: provisioningv1alpha1.Extensions{
 						AllocatedNodeHostMap: map[string]string{
@@ -3507,9 +3421,6 @@ var _ = Describe("Helpers", func() {
 			nodelist := &pluginsv1alpha1.AllocatedNodeList{Items: []pluginsv1alpha1.AllocatedNode{*node}}
 			hubClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(pr, node).WithStatusSubresource(node).Build()
-			nar.Spec.Callback = &pluginsv1alpha1.Callback{
-				CallbackURL: "http://localhost" + constants.NarCallbackServicePath + "/test-pr",
-			}
 
 			err := populateNodeHostnames(ctx, hubClient, logger, nodelist, nar)
 			Expect(err).To(HaveOccurred())
@@ -3518,7 +3429,7 @@ var _ = Describe("Helpers", func() {
 
 		It("should populate hostnames and persist to status", func() {
 			pr := &provisioningv1alpha1.ProvisioningRequest{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-pr"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-nar"},
 				Status: provisioningv1alpha1.ProvisioningRequestStatus{
 					Extensions: provisioningv1alpha1.Extensions{
 						AllocatedNodeHostMap: map[string]string{
@@ -3539,9 +3450,6 @@ var _ = Describe("Helpers", func() {
 			}
 			hubClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(pr, node1, node2).WithStatusSubresource(node1, node2).Build()
-			nar.Spec.Callback = &pluginsv1alpha1.Callback{
-				CallbackURL: "http://localhost" + constants.NarCallbackServicePath + "/test-pr",
-			}
 
 			err := populateNodeHostnames(ctx, hubClient, logger, nodelist, nar)
 			Expect(err).ToNot(HaveOccurred())
@@ -3560,7 +3468,7 @@ var _ = Describe("Helpers", func() {
 
 		It("should only patch nodes missing hostname", func() {
 			pr := &provisioningv1alpha1.ProvisioningRequest{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-pr"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-nar"},
 				Status: provisioningv1alpha1.ProvisioningRequestStatus{
 					Extensions: provisioningv1alpha1.Extensions{
 						AllocatedNodeHostMap: map[string]string{
@@ -3582,9 +3490,6 @@ var _ = Describe("Helpers", func() {
 			}
 			hubClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(pr, node1, node2).WithStatusSubresource(node1, node2).Build()
-			nar.Spec.Callback = &pluginsv1alpha1.Callback{
-				CallbackURL: "http://localhost" + constants.NarCallbackServicePath + "/test-pr",
-			}
 
 			err := populateNodeHostnames(ctx, hubClient, logger, nodelist, nar)
 			Expect(err).ToNot(HaveOccurred())

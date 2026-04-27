@@ -174,9 +174,9 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 			Logger: logger,
 		}
 		task = &provisioningRequestReconcilerTask{
-			logger:         reconciler.Logger,
-			client:         reconciler.Client,
-			object:         cr,
+			logger: reconciler.Logger,
+			client: reconciler.Client,
+			object: cr,
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
 				templates: provisioningv1alpha1.TemplateDefaults{
@@ -673,9 +673,9 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 			Logger: logger,
 		}
 		task = &provisioningRequestReconcilerTask{
-			logger:         reconciler.Logger,
-			client:         reconciler.Client,
-			object:         cr,
+			logger: reconciler.Logger,
+			client: reconciler.Client,
+			object: cr,
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
 				templates: provisioningv1alpha1.TemplateDefaults{
@@ -856,9 +856,9 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			Logger: logger,
 		}
 		task = &provisioningRequestReconcilerTask{
-			logger:         reconciler.Logger,
-			client:         reconciler.Client,
-			object:         cr,
+			logger: reconciler.Logger,
+			client: reconciler.Client,
+			object: cr,
 			ctDetails: &clusterTemplateDetails{
 				namespace: "test-ns",
 				templates: provisioningv1alpha1.TemplateDefaults{
@@ -1144,9 +1144,9 @@ var _ = Describe("updateAllocatedNodeHostMap", func() {
 			Logger: logger,
 		}
 		task = &provisioningRequestReconcilerTask{
-			logger:         reconciler.Logger,
-			client:         reconciler.Client,
-			object:         cr,
+			logger: reconciler.Logger,
+			client: reconciler.Client,
+			object: cr,
 			ctDetails: &clusterTemplateDetails{
 				namespace: "test-ns",
 				templates: provisioningv1alpha1.TemplateDefaults{
@@ -1388,9 +1388,9 @@ var _ = Describe("checkExistingNodeAllocationRequest", func() {
 			Logger: logger,
 		}
 		task = &provisioningRequestReconcilerTask{
-			logger:         reconciler.Logger,
-			client:         reconciler.Client,
-			object:         cr,
+			logger: reconciler.Logger,
+			client: reconciler.Client,
+			object: cr,
 			ctDetails: &clusterTemplateDetails{
 				namespace: "test-ns",
 				templates: provisioningv1alpha1.TemplateDefaults{

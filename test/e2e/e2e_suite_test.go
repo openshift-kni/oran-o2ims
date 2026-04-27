@@ -194,8 +194,8 @@ var _ = BeforeSuite(func() {
 
 	// Setup the ProvisioningRequest Reconciler on main manager.
 	ProvReqTestReconciler := &provisioningcontrollers.ProvisioningRequestReconciler{
-		Client:         K8SClient,
-		Logger:         logger,
+		Client: K8SClient,
+		Logger: logger,
 	}
 	err = ProvReqTestReconciler.SetupWithManager(ProvisioningManager)
 	Expect(err).ToNot(HaveOccurred())
@@ -264,7 +264,6 @@ var _ = BeforeSuite(func() {
 	}
 	err = K8SClient.Status().Update(context.Background(), mockHwPlugin)
 	Expect(err).ToNot(HaveOccurred())
-
 
 	// Start the main O2IMS manager
 	go func() {

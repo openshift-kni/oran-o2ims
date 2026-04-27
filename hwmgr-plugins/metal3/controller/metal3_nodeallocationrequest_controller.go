@@ -172,8 +172,6 @@ func (r *NodeAllocationRequestReconciler) SetupWithManager(mgr ctrl.Manager) err
 	return nil
 }
 
-
-
 // HandleNodeAllocationRequest processes the NodeAllocationRequest CR
 func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 	ctx context.Context, nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {

@@ -320,7 +320,6 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			return cond != nil && cond.Status == metav1.ConditionTrue
 		}, timeout, interval).Should(BeTrue(), "NAR should reach Provisioned=True")
 
-
 		By("Waiting for PR HardwareProvisioned=True")
 		Eventually(func() bool {
 			Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
@@ -782,7 +781,6 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			Expect(err).ToNot(HaveOccurred())
 			pr.Spec.TemplateParameters = v2PR.Spec.TemplateParameters
 			Expect(K8SClient.Update(testCtx, pr)).To(Succeed())
-
 
 			By("Waiting for 7 workers to converge to v2 while Servicing worker defers abandon")
 			// The 2 workers with BMH=OK are abandoned immediately -> re-initiated with v2 ->
