@@ -180,8 +180,6 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 		Complete(r)
 }
 
-// enqueueProvisioningRequestForClusterTemplate maps the ClusterTemplates used by ProvisioningRequests
-// to reconciling requests for those ProvisioningRequests.
 // enqueueProvisioningRequestForNAR maps NodeAllocationRequest status changes to
 // reconciliation requests for the corresponding ProvisioningRequest.
 // Since NAR name = PR name (1:1 relationship), the mapping is direct.
@@ -195,6 +193,8 @@ func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForNAR(
 	}
 }
 
+// enqueueProvisioningRequestForClusterTemplate maps the ClusterTemplates used by ProvisioningRequests
+// to reconciling requests for those ProvisioningRequests.
 func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForClusterTemplate(
 	ctx context.Context, obj client.Object) []reconcile.Request {
 	var requests []reconcile.Request
