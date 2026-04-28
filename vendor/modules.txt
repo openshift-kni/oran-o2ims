@@ -75,8 +75,8 @@ github.com/fsnotify/fsnotify/internal
 # github.com/fxamacker/cbor/v2 v2.9.0
 ## explicit; go 1.20
 github.com/fxamacker/cbor/v2
-# github.com/getkin/kin-openapi v0.133.0
-## explicit; go 1.22.5
+# github.com/getkin/kin-openapi v0.137.0
+## explicit; go 1.25
 github.com/getkin/kin-openapi/openapi3
 github.com/getkin/kin-openapi/openapi3filter
 github.com/getkin/kin-openapi/routers
@@ -361,10 +361,10 @@ github.com/oapi-codegen/oapi-codegen/v2/pkg/util
 github.com/oapi-codegen/runtime
 github.com/oapi-codegen/runtime/strictmiddleware/nethttp
 github.com/oapi-codegen/runtime/types
-# github.com/oasdiff/yaml v0.0.0-20250309154309-f31be36b4037
+# github.com/oasdiff/yaml v0.0.9
 ## explicit; go 1.22.5
 github.com/oasdiff/yaml
-# github.com/oasdiff/yaml3 v0.0.0-20250309153720-d2182401db90
+# github.com/oasdiff/yaml3 v0.0.12
 ## explicit; go 1.22.5
 github.com/oasdiff/yaml3
 # github.com/oklog/ulid/v2 v2.1.1
@@ -505,6 +505,10 @@ github.com/r3labs/diff/v3
 # github.com/russross/blackfriday/v2 v2.1.0
 ## explicit
 github.com/russross/blackfriday/v2
+# github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
+## explicit; go 1.21
+github.com/santhosh-tekuri/jsonschema/v6
+github.com/santhosh-tekuri/jsonschema/v6/kind
 # github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3
 ## explicit; go 1.13
 # github.com/speakeasy-api/jsonpath v0.6.0
