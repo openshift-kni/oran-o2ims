@@ -1,6 +1,6 @@
 module github.com/openshift-kni/oran-o2ims
 
-go 1.24.0
+go 1.25.0
 
 // Needed for importing the siteconfig operator, taken from the siteconfig operator repo.
 replace (
@@ -22,8 +22,8 @@ require (
 	github.com/oapi-codegen/nethttp-middleware v1.1.2
 	github.com/oapi-codegen/oapi-codegen/v2 v2.6.0
 	github.com/oapi-codegen/runtime v1.4.0
-	github.com/onsi/ginkgo/v2 v2.28.1
-	github.com/onsi/gomega v1.39.1
+	github.com/onsi/ginkgo/v2 v2.28.3
+	github.com/onsi/gomega v1.40.0
 	github.com/openshift-kni/cluster-group-upgrades-operator v0.0.0-20250725152424-e89f9c91fea5
 	github.com/openshift/api v0.0.0-20250725072657-92b1455121e1
 	github.com/openshift/assisted-service/api v0.0.0
@@ -39,10 +39,10 @@ require (
 	github.com/stolostron/siteconfig v0.0.0-20260323052035-0ba6f160cfd2
 	github.com/xeipuuv/gojsonschema v1.2.0
 	go.uber.org/mock v0.6.0
-	golang.org/x/mod v0.33.0
+	golang.org/x/mod v0.35.0
 	golang.org/x/oauth2 v0.35.0
-	golang.org/x/sync v0.19.0
-	golang.org/x/term v0.40.0
+	golang.org/x/sync v0.20.0
+	golang.org/x/term v0.42.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.34.7
 	k8s.io/apiextensions-apiserver v0.34.7
@@ -110,7 +110,7 @@ require (
 	github.com/google/cel-go v0.27.0 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/google/pprof v0.0.0-20260115054156-294ebfa9ad83 // indirect
+	github.com/google/pprof v0.0.0-20260402051712-545e8a4df936 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79 // indirect
@@ -183,13 +183,13 @@ require (
 	go.opentelemetry.io/proto/otlp v1.9.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.48.0 // indirect
+	golang.org/x/crypto v0.50.0 // indirect
 	golang.org/x/exp v0.0.0-20250718183923-645b1fa84792 // indirect
-	golang.org/x/net v0.50.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
-	golang.org/x/text v0.34.0 // indirect
+	golang.org/x/net v0.53.0 // indirect
+	golang.org/x/sys v0.43.0 // indirect
+	golang.org/x/text v0.36.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
-	golang.org/x/tools v0.42.0 // indirect
+	golang.org/x/tools v0.44.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260209200024-4cfbd4190f57 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260209200024-4cfbd4190f57 // indirect
