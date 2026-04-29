@@ -9,19 +9,14 @@ set -e
 
 PINNED_GO="1.24.0"
 
-# Handle the exported api/hardwaremanagement submodule first
-pushd api/hardwaremanagement >/dev/null
-go mod tidy -go="${PINNED_GO}"
-popd >/dev/null
+# Use of GOTOOLCHAIN=local will cause failure if the local go version doesn't
+# support the pinned go version, rather than automatically downloading a newer
+# go version
+GOFLAGS='' GOTOOLCHAIN=local go mod tidy -go="${PINNED_GO}"
+GOFLAGS='' GOTOOLCHAIN=local go mod vendor
 
-pushd api/provisioning >/dev/null
-go mod tidy -go="${PINNED_GO}"
-popd >/dev/null
-
-pushd api/inventory >/dev/null
-go mod tidy -go="${PINNED_GO}"
-popd >/dev/null
-
-go mod vendor
-go mod tidy -go="${PINNED_GO}"
-
+if grep -q "^toolchain " go.mod; then
+    # Remove the toolchain directive from go.mod, if one was added by the go mod tidy command
+    echo "Removing toolchain directive..."
+    go get toolchain@none 2>&1 | sed 's/^/  /'
+fi

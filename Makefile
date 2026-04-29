@@ -692,11 +692,6 @@ scorecard-test: operator-sdk
 	oc create ns $(OCLOUD_MANAGER_NAMESPACE) --dry-run=client -o yaml | oc apply -f -
 	$(OPERATOR_SDK) scorecard bundle -o text --kubeconfig "$(KUBECONFIG)" -n $(OCLOUD_MANAGER_NAMESPACE) --pod-security=restricted --wait-time=120s
 
-.PHONY: sync-api-submodules
-sync-api-submodules:
-	@echo "Syncing api submodules"
-	$(PROJECT_DIR)/hack/sync-api-submodules.sh
-
 # markdownlint rules, following: https://github.com/openshift/enhancements/blob/master/Makefile
 .PHONY: markdownlint-image
 markdownlint-image:  ## Build local container markdownlint-image
