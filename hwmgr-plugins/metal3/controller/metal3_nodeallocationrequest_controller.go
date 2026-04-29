@@ -351,7 +351,7 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 		return hwmgrutils.DoNotRequeue(), nil
 	}
 
-	// Set Configured=InProgress with message AwaitConfig and send callback when HW profile changed and not already in progress.
+	// Set Configured=InProgress with message AwaitConfig when HW profile changed and not already in progress.
 	// This covers first day2 config (nil condition), subsequent updates when previous configuration completed (ConfigApplied=True),
 	// and retries after terminal states (TimedOut, Failed).
 	if hwProfileChanged && !configInProgress {
@@ -403,7 +403,7 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 		} else {
 			status, reason, message = deriveNARStatusFromMultipleNodes(ctx, r.NoncachedClient, r.Logger, nodelist, nodeAllocationRequest)
 		}
-		// Update the NAR status with callback
+		// Update the NAR status
 		if updateErr := hwmgrutils.UpdateNodeAllocationRequestStatusCondition(ctx, r.Client, nodeAllocationRequest,
 			hwmgmtv1alpha1.Configured, hwmgmtv1alpha1.ConditionReason(reason), status, message); updateErr != nil {
 
