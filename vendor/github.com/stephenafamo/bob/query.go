@@ -24,6 +24,8 @@ const (
 	QueryTypeInsert
 	QueryTypeUpdate
 	QueryTypeDelete
+	QueryTypeValues
+	QueryTypeMerge
 )
 
 func (q QueryType) String() string {
@@ -36,6 +38,10 @@ func (q QueryType) String() string {
 		return "UPDATE"
 	case QueryTypeDelete:
 		return "DELETE"
+	case QueryTypeValues:
+		return "VALUES"
+	case QueryTypeMerge:
+		return "MERGE"
 	default:
 		return "UNKNOWN"
 	}

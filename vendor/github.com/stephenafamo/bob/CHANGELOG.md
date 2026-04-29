@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.43.0] - 2026-04-29
+
+### Added
+
+- Added PostgreSQL `MERGE` statement support with full syntax including:
+  - `MERGE INTO ... USING ... ON ...` with table aliases and `ONLY` modifier
+  - `WHEN MATCHED`, `WHEN NOT MATCHED`, `WHEN NOT MATCHED BY SOURCE` clauses
+  - `UPDATE`, `INSERT`, `DELETE`, `DO NOTHING` actions
+  - Support for `AND condition` in WHEN clauses
+  - `OVERRIDING SYSTEM VALUE` and `OVERRIDING USER VALUE` for INSERT actions
+  - `RETURNING` clause support (PostgreSQL 17+) (thanks @atzedus)
+  - Note: the SQL parser used for sql-to-code generation does not yet support `MERGE` statements
+- Added `psql.SetVersion`, `psql.GetVersion`, and `psql.VersionAtLeast` functions for context-based PostgreSQL version management (thanks @atzedus)
+- Added `Table.Merge()` method for ORM-style MERGE operations with automatic `RETURNING *` for PostgreSQL 17+ (thanks @atzedus)
+- Added `mm` package with modifiers for building MERGE queries (`mm.Into`, `mm.Using`, `mm.WhenMatched`, `mm.WhenNotMatched`, `mm.WhenNotMatchedBySource`, etc.) (thanks @atzedus)
+- Added `enum_format` configuration option to control enum value identifier formatting. Options: `"title_case"` (default, e.g., `InProgress`) or `"screaming_snake_case"` (e.g., `IN_PROGRESS`).
+- Added `Unqualified()` method to generated column structures that returns columns without table alias/prefix. (thanks @atzedus)
+- Added `PreloadCount` and `ThenLoadCount` to generate code for preloading and then loading counts for relationships. (thanks @jacobmolby)
+- MySQL support for insert queries executing loaders (e.g., `InsertThenLoad`, `InsertThenLoadCount`). (thanks @jacobmolby)
+- Added overwritable hooks that are run before the exec or scanning test of generated queries. This allows seeding data before the test runs.
+- Added `bob.Each` function to iterate over query results (range-over-func). (thanks @toqueteos)
+- Added support for the `VALUES` statement in MySQL, PostgreSQL, and SQLite. (thanks @manhrev)
+- Added MariaDB compatibility check in gen/bobgen-mysql (thanks @dumdev25)
+- Added `ALL`, `SOME`, `ANY` expressions for MySQL and PostgreSQL dialects. Added `EXISTS` expression for all dialects. (thanks @manhrev)
+- Added a customizable MySQL and PostgreSQL driver image setting for `bobgen-sql`. (thanks @manhrev)
+
+### Fixed
+
+- Fix `pgx` driver `Commit()` returning `nil` instead of `pgx.ErrTxClosed` when the transaction is already closed (e.g., rolled back by context expiry). This prevented silent data loss by correctly propagating the error to the caller. (thanks @wucm667)
+- Fix self-referencing relationship back-references so generated preload/load helpers no longer create cyclic parent links. (thanks @atzedus)
+- Fix collisions for preloader alias generation. Replaced `RandInt` with `NextUniqueInt` (thanks @atzedus)
+- Fix an issue where the random function of aliased custom types were not being used in generated query tests.
+- Properly recognize placeholders in LIMIT and OFFSET when generating queries for PostgreSQL.
+- Throw an error on an empty SET clause during SQL generation rather than sending invalid syntax to database. (thanks @Xaeroxe)
+- Fix MySQL `Insert().One()`/`All()`/`Cursor()` using `SELECT *` instead of explicit model columns when re-fetching inserted rows, consistent with PostgreSQL/SQLite `RETURNING`. (thanks @tak848)
+
 ## [v0.42.0] - 2025-11-25
 
 ### Fixed
