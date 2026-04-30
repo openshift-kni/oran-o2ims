@@ -52,6 +52,406 @@ var _ = Describe("ProvisioningServer", func() {
 		testUUID = uuid.New()
 	})
 
+	Describe("GetProvisioningRequest nodeClusterProvisioningStatus", func() {
+		var (
+			server *api.ProvisioningServer
+			scheme *runtime.Scheme
+		)
+
+		BeforeEach(func() {
+			scheme = runtime.NewScheme()
+			Expect(provisioningv1alpha1.AddToScheme(scheme)).To(Succeed())
+		})
+
+		newProvisioningRequest := func(
+			name string,
+			clusterDetails *provisioningv1alpha1.ClusterDetails,
+			provisionedResources *provisioningv1alpha1.ProvisionedResources,
+			conditions []metav1.Condition,
+			provisioningPhase provisioningv1alpha1.ProvisioningPhase,
+			provisioningDetails string,
+		) *provisioningv1alpha1.ProvisioningRequest {
+			templateParamsBytes, err := json.Marshal(map[string]interface{}{"key": "value"})
+			Expect(err).NotTo(HaveOccurred())
+
+			pr := &provisioningv1alpha1.ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+					UID:  types.UID(name),
+				},
+				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+					Name:               "test",
+					Description:        "test provisioning request",
+					TemplateName:       "test-template",
+					TemplateVersion:    "v1.0.0",
+					TemplateParameters: runtime.RawExtension{Raw: templateParamsBytes},
+				},
+			}
+			pr.Status.Extensions.ClusterDetails = clusterDetails
+			pr.Status.ProvisioningStatus.ProvisionedResources = provisionedResources
+			pr.Status.ProvisioningStatus.ProvisioningPhase = provisioningPhase
+			pr.Status.ProvisioningStatus.ProvisioningDetails = provisioningDetails
+			pr.Status.Conditions = conditions
+			return pr
+		}
+
+		getNodeClusterStatus := func(prName string) provisioningapi.ResourceProvisioningStatus {
+			reqUUID, err := uuid.Parse(prName)
+			Expect(err).NotTo(HaveOccurred())
+
+			resp, err := server.GetProvisioningRequest(ctx, provisioningapi.GetProvisioningRequestRequestObject{
+				ProvisioningRequestId: reqUUID,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			result := resp.(provisioningapi.GetProvisioningRequest200JSONResponse)
+			return result.Status.NodeClusterProvisioningStatus
+		}
+
+		When("ClusterDetails is nil", func() {
+			It("should return PROCESSING phase with no resource name", func() {
+				prName := uuid.New().String()
+				pr := newProvisioningRequest(prName, nil, nil, nil, "", "")
+
+				fakeClient := fake.NewClientBuilder().
+					WithScheme(scheme).
+					WithObjects(pr).
+					WithStatusSubresource(pr).
+					Build()
+				server = &api.ProvisioningServer{HubClient: fakeClient}
+
+				status := getNodeClusterStatus(prName)
+				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.PROCESSING))
+				Expect(status.ResourceName).To(BeEmpty())
+				Expect(status.ResourceId).To(BeEmpty())
+			})
+		})
+
+		When("ClusterDetails.Name is empty", func() {
+			It("should return PROCESSING phase with no resource name", func() {
+				prName := uuid.New().String()
+				pr := newProvisioningRequest(prName,
+					&provisioningv1alpha1.ClusterDetails{Name: ""},
+					nil, nil, "", "")
+
+				fakeClient := fake.NewClientBuilder().
+					WithScheme(scheme).
+					WithObjects(pr).
+					WithStatusSubresource(pr).
+					Build()
+				server = &api.ProvisioningServer{HubClient: fakeClient}
+
+				status := getNodeClusterStatus(prName)
+				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.PROCESSING))
+				Expect(status.ResourceName).To(BeEmpty())
+				Expect(status.ResourceId).To(BeEmpty())
+			})
+		})
+
+		When("ClusterInstanceProcessed is False/InProgress", func() {
+			It("should return PROCESSING phase with cluster name", func() {
+				prName := uuid.New().String()
+				pr := newProvisioningRequest(prName,
+					&provisioningv1alpha1.ClusterDetails{Name: "cluster-inprog"},
+					nil,
+					[]metav1.Condition{{
+						Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed),
+						Status: metav1.ConditionFalse,
+						Reason: string(provisioningv1alpha1.CRconditionReasons.InProgress),
+					}},
+					provisioningv1alpha1.StateProgressing, "Waiting for ClusterInstance")
+
+				fakeClient := fake.NewClientBuilder().
+					WithScheme(scheme).
+					WithObjects(pr).
+					WithStatusSubresource(pr).
+					Build()
+				server = &api.ProvisioningServer{HubClient: fakeClient}
+
+				status := getNodeClusterStatus(prName)
+				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.PROCESSING))
+				Expect(status.ResourceName).To(Equal("cluster-inprog"))
+				Expect(status.ResourceId).To(BeEmpty())
+			})
+		})
+
+		When("ClusterInstanceProcessed is False/Failed", func() {
+			It("should return FAILED phase with cluster name", func() {
+				prName := uuid.New().String()
+				pr := newProvisioningRequest(prName,
+					&provisioningv1alpha1.ClusterDetails{Name: "cluster-cifail"},
+					nil,
+					[]metav1.Condition{{
+						Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed),
+						Status: metav1.ConditionFalse,
+						Reason: string(provisioningv1alpha1.CRconditionReasons.Failed),
+					}},
+					provisioningv1alpha1.StateFailed, "ClusterInstance validation failed")
+
+				fakeClient := fake.NewClientBuilder().
+					WithScheme(scheme).
+					WithObjects(pr).
+					WithStatusSubresource(pr).
+					Build()
+				server = &api.ProvisioningServer{HubClient: fakeClient}
+
+				status := getNodeClusterStatus(prName)
+				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.FAILED))
+				Expect(status.ResourceName).To(Equal("cluster-cifail"))
+				Expect(status.ResourceId).To(BeEmpty())
+			})
+		})
+
+		When("ClusterInstance exists but no ClusterProvisioned condition yet", func() {
+			It("should return PROCESSING phase", func() {
+				prName := uuid.New().String()
+				pr := newProvisioningRequest(prName,
+					&provisioningv1alpha1.ClusterDetails{Name: "cluster-001"},
+					nil,
+					[]metav1.Condition{{
+						Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed),
+						Status: metav1.ConditionTrue,
+						Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+					}},
+					provisioningv1alpha1.StateProgressing, "Cluster installation in progress")
+
+				fakeClient := fake.NewClientBuilder().
+					WithScheme(scheme).
+					WithObjects(pr).
+					WithStatusSubresource(pr).
+					Build()
+				server = &api.ProvisioningServer{HubClient: fakeClient}
+
+				status := getNodeClusterStatus(prName)
+				Expect(status).NotTo(BeZero())
+				Expect(status.ResourceName).To(Equal("cluster-001"))
+				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.PROCESSING))
+				Expect(status.ResourceId).To(BeEmpty())
+			})
+		})
+
+		When("ClusterProvisioned condition is InProgress", func() {
+			It("should return PROCESSING phase", func() {
+				prName := uuid.New().String()
+				pr := newProvisioningRequest(prName,
+					&provisioningv1alpha1.ClusterDetails{Name: "cluster-002"},
+					nil,
+					[]metav1.Condition{
+						{
+							Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed),
+							Status: metav1.ConditionTrue,
+							Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+						},
+						{
+							Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
+							Status: metav1.ConditionFalse,
+							Reason: string(provisioningv1alpha1.CRconditionReasons.InProgress),
+						},
+					},
+					provisioningv1alpha1.StateProgressing, "Cluster installation in progress")
+
+				fakeClient := fake.NewClientBuilder().
+					WithScheme(scheme).
+					WithObjects(pr).
+					WithStatusSubresource(pr).
+					Build()
+				server = &api.ProvisioningServer{HubClient: fakeClient}
+
+				status := getNodeClusterStatus(prName)
+				Expect(status).NotTo(BeZero())
+				Expect(status.ResourceName).To(Equal("cluster-002"))
+				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.PROCESSING))
+				Expect(status.ResourceId).To(BeEmpty())
+			})
+		})
+
+		When("ClusterProvisioned condition is True", func() {
+			It("should return PROVISIONED phase with resourceId", func() {
+				prName := uuid.New().String()
+				clusterId := "a1478db9-651f-4d30-96d6-8af13481d779"
+				pr := newProvisioningRequest(prName,
+					&provisioningv1alpha1.ClusterDetails{Name: "cluster-003"},
+					&provisioningv1alpha1.ProvisionedResources{OCloudNodeClusterId: clusterId},
+					[]metav1.Condition{
+						{
+							Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed),
+							Status: metav1.ConditionTrue,
+							Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+						},
+						{
+							Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
+							Status: metav1.ConditionTrue,
+							Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+						},
+					},
+					provisioningv1alpha1.StateFulfilled, "Cluster provisioned successfully")
+
+				fakeClient := fake.NewClientBuilder().
+					WithScheme(scheme).
+					WithObjects(pr).
+					WithStatusSubresource(pr).
+					Build()
+				server = &api.ProvisioningServer{HubClient: fakeClient}
+
+				status := getNodeClusterStatus(prName)
+				Expect(status).NotTo(BeZero())
+				Expect(status.ResourceName).To(Equal("cluster-003"))
+				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.PROVISIONED))
+				Expect(status.ResourceId).To(Equal(clusterId))
+			})
+		})
+
+		When("ClusterProvisioned condition is True but resourceId not yet populated", func() {
+			It("should return PROVISIONED phase with nil resourceId", func() {
+				prName := uuid.New().String()
+				pr := newProvisioningRequest(prName,
+					&provisioningv1alpha1.ClusterDetails{Name: "cluster-004"},
+					nil,
+					[]metav1.Condition{
+						{
+							Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed),
+							Status: metav1.ConditionTrue,
+							Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+						},
+						{
+							Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
+							Status: metav1.ConditionTrue,
+							Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+						},
+					},
+					provisioningv1alpha1.StateFulfilled, "Cluster provisioned successfully")
+
+				fakeClient := fake.NewClientBuilder().
+					WithScheme(scheme).
+					WithObjects(pr).
+					WithStatusSubresource(pr).
+					Build()
+				server = &api.ProvisioningServer{HubClient: fakeClient}
+
+				status := getNodeClusterStatus(prName)
+				Expect(status).NotTo(BeZero())
+				Expect(status.ResourceName).To(Equal("cluster-004"))
+				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.PROVISIONED))
+				Expect(status.ResourceId).To(BeEmpty())
+			})
+		})
+
+		When("ClusterProvisioned condition Failed", func() {
+			It("should return FAILED phase", func() {
+				prName := uuid.New().String()
+				pr := newProvisioningRequest(prName,
+					&provisioningv1alpha1.ClusterDetails{Name: "cluster-005"},
+					nil,
+					[]metav1.Condition{
+						{
+							Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed),
+							Status: metav1.ConditionTrue,
+							Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+						},
+						{
+							Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
+							Status: metav1.ConditionFalse,
+							Reason: string(provisioningv1alpha1.CRconditionReasons.Failed),
+						},
+					},
+					provisioningv1alpha1.StateFailed, "Cluster installation failed")
+
+				fakeClient := fake.NewClientBuilder().
+					WithScheme(scheme).
+					WithObjects(pr).
+					WithStatusSubresource(pr).
+					Build()
+				server = &api.ProvisioningServer{HubClient: fakeClient}
+
+				status := getNodeClusterStatus(prName)
+				Expect(status).NotTo(BeZero())
+				Expect(status.ResourceName).To(Equal("cluster-005"))
+				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.FAILED))
+				Expect(status.ResourceId).To(BeEmpty())
+			})
+		})
+
+		When("ClusterProvisioned condition TimedOut", func() {
+			It("should return FAILED phase", func() {
+				prName := uuid.New().String()
+				pr := newProvisioningRequest(prName,
+					&provisioningv1alpha1.ClusterDetails{Name: "cluster-006"},
+					nil,
+					[]metav1.Condition{
+						{
+							Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed),
+							Status: metav1.ConditionTrue,
+							Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+						},
+						{
+							Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
+							Status: metav1.ConditionFalse,
+							Reason: string(provisioningv1alpha1.CRconditionReasons.TimedOut),
+						},
+					},
+					provisioningv1alpha1.StateFailed, "Cluster installation timed out")
+
+				fakeClient := fake.NewClientBuilder().
+					WithScheme(scheme).
+					WithObjects(pr).
+					WithStatusSubresource(pr).
+					Build()
+				server = &api.ProvisioningServer{HubClient: fakeClient}
+
+				status := getNodeClusterStatus(prName)
+				Expect(status).NotTo(BeZero())
+				Expect(status.ResourceName).To(Equal("cluster-006"))
+				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.FAILED))
+				Expect(status.ResourceId).To(BeEmpty())
+			})
+		})
+
+		When("multiple conditions exist but ClusterProvisioned is among them", func() {
+			It("should pick the ClusterProvisioned condition correctly", func() {
+				prName := uuid.New().String()
+				clusterId := "b2589ec0-762g-5e41-a7bf-9bg24592e880"
+				pr := newProvisioningRequest(prName,
+					&provisioningv1alpha1.ClusterDetails{Name: "cluster-007"},
+					&provisioningv1alpha1.ProvisionedResources{OCloudNodeClusterId: clusterId},
+					[]metav1.Condition{
+						{
+							Type:   string(provisioningv1alpha1.PRconditionTypes.Validated),
+							Status: metav1.ConditionTrue,
+							Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+						},
+						{
+							Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed),
+							Status: metav1.ConditionTrue,
+							Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+						},
+						{
+							Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
+							Status: metav1.ConditionTrue,
+							Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
+						},
+						{
+							Type:   string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied),
+							Status: metav1.ConditionFalse,
+							Reason: string(provisioningv1alpha1.CRconditionReasons.InProgress),
+						},
+					},
+					provisioningv1alpha1.StateProgressing, "Configuration in progress")
+
+				fakeClient := fake.NewClientBuilder().
+					WithScheme(scheme).
+					WithObjects(pr).
+					WithStatusSubresource(pr).
+					Build()
+				server = &api.ProvisioningServer{HubClient: fakeClient}
+
+				status := getNodeClusterStatus(prName)
+				Expect(status).NotTo(BeZero())
+				Expect(status.ResourceName).To(Equal("cluster-007"))
+				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.PROVISIONED))
+				Expect(status.ResourceId).To(Equal(clusterId))
+			})
+		})
+	})
+
 	Describe("UpdateProvisioningRequest with concurrent updates", func() {
 		var (
 			server *api.ProvisioningServer

@@ -18,6 +18,7 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -313,28 +314,82 @@ func convertProvisioningRequestCRToApi(id uuid.UUID, provisioningRequest provisi
 		TemplateParameters:    templateParameters,
 	}
 
-	status := api.ProvisioningStatus{}
-	if provisioningRequest.Status.ProvisioningStatus.ProvisioningPhase != "" {
-		provisioningPhase := api.ProvisioningStatusProvisioningPhase(provisioningRequest.Status.ProvisioningStatus.ProvisioningPhase)
-		status.ProvisioningPhase = &provisioningPhase
-	}
-	if provisioningRequest.Status.ProvisioningStatus.ProvisioningDetails != "" {
-		status.Message = &provisioningRequest.Status.ProvisioningStatus.ProvisioningDetails
-	}
-	if !provisioningRequest.Status.ProvisioningStatus.UpdateTime.IsZero() {
-		status.UpdateTime = &provisioningRequest.Status.ProvisioningStatus.UpdateTime.Time
+	status := api.ProvisioningStatus{
+		ProvisioningPhase:             api.ProvisioningStatusProvisioningPhase(provisioningRequest.Status.ProvisioningStatus.ProvisioningPhase),
+		Message:                       provisioningRequest.Status.ProvisioningStatus.ProvisioningDetails,
+		UpdateTime:                    provisioningRequest.Status.ProvisioningStatus.UpdateTime.Time,
+		NodeClusterProvisioningStatus: getNodeClusterProvisioningStatus(provisioningRequest),
 	}
 	provisioningRequestInfo.Status = status
 
-	if provisioningRequest.Status.ProvisioningStatus.ProvisionedResources != nil &&
-		provisioningRequest.Status.ProvisioningStatus.ProvisionedResources.OCloudNodeClusterId != "" {
-		nodeClusterId := provisioningRequest.Status.ProvisioningStatus.ProvisionedResources.OCloudNodeClusterId
-		provisioningRequestInfo.ProvisionedResourceSet = &api.ProvisionedResourceSet{
-			NodeClusterId: &nodeClusterId,
+	if nodeClusterId := getNodeClusterId(provisioningRequest); nodeClusterId != "" {
+		provisioningRequestInfo.ProvisionedResourceSet = api.ProvisionedResourceSet{
+			NodeClusterId: nodeClusterId,
 		}
 	}
 
 	return provisioningRequestInfo, nil
+}
+
+func getClusterName(pr provisioningv1alpha1.ProvisioningRequest) string {
+	if pr.Status.Extensions.ClusterDetails == nil {
+		return ""
+	}
+	return pr.Status.Extensions.ClusterDetails.Name
+}
+
+// getNodeClusterId returns the OCloudNodeClusterId from ProvisionedResources, or empty string if unavailable.
+func getNodeClusterId(pr provisioningv1alpha1.ProvisioningRequest) string {
+	if pr.Status.ProvisioningStatus.ProvisionedResources == nil {
+		return ""
+	}
+	return pr.Status.ProvisioningStatus.ProvisionedResources.OCloudNodeClusterId
+}
+
+// getNodeClusterProvisioningStatus builds the per-cluster ResourceProvisioningStatus
+// from existing fields on the ProvisioningRequest CR.
+func getNodeClusterProvisioningStatus(pr provisioningv1alpha1.ProvisioningRequest) api.ResourceProvisioningStatus {
+	ciCond := meta.FindStatusCondition(pr.Status.Conditions,
+		string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed))
+
+	if ciCond == nil {
+		return api.ResourceProvisioningStatus{
+			ResourceProvisioningPhase: api.PROCESSING,
+		}
+	}
+
+	// ClusterInstance processing itself failed
+	if ciCond.Status != metav1.ConditionTrue {
+		phase := api.PROCESSING
+		if ciCond.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed) ||
+			ciCond.Reason == string(provisioningv1alpha1.CRconditionReasons.TimedOut) {
+			phase = api.FAILED
+		}
+		return api.ResourceProvisioningStatus{
+			ResourceName:              getClusterName(pr),
+			ResourceId:                getNodeClusterId(pr),
+			ResourceProvisioningPhase: phase,
+		}
+	}
+
+	// CI applied successfully: determine phase from ClusterProvisioned condition.
+	phase := api.PROCESSING
+	if cond := meta.FindStatusCondition(pr.Status.Conditions,
+		string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned)); cond != nil {
+		switch {
+		case cond.Status == metav1.ConditionTrue:
+			phase = api.PROVISIONED
+		case cond.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed) ||
+			cond.Reason == string(provisioningv1alpha1.CRconditionReasons.TimedOut):
+			phase = api.FAILED
+		}
+	}
+
+	return api.ResourceProvisioningStatus{
+		ResourceName:              getClusterName(pr),
+		ResourceId:                getNodeClusterId(pr),
+		ResourceProvisioningPhase: phase,
+	}
 }
 
 // convertProvisioningRequestApiToCR converts an API model ProvisioningRequestData to a ProvisioningRequest CR
