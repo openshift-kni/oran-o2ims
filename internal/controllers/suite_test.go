@@ -113,7 +113,6 @@ import (
 
 	bmhv1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/api/common"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
@@ -195,20 +194,6 @@ func (c *SSACompatibleClient) handleServerSideApply(ctx context.Context, obj cli
 }
 
 func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
-	// Create a basic auth secret for test authentication
-	basicAuthSecret := "test-auth-secret"
-	authSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      basicAuthSecret,
-			Namespace: testHwMgrPluginNameSpace,
-		},
-		Type: corev1.SecretTypeOpaque,
-		Data: map[string][]byte{
-			"username": []byte("test-user"),
-			"password": []byte("test-password"),
-		},
-	}
-
 	// Create the Inventory CRD object for CRD ownership of cluster-scoped resources
 	inventoryCRD := &apiextensionsv1.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{
@@ -219,7 +204,7 @@ func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(objs...).
-		WithObjects([]client.Object{authSecret, inventoryCRD}...).
+		WithObjects(inventoryCRD).
 		WithStatusSubresource(&inventoryv1alpha1.Inventory{}).
 		WithStatusSubresource(&provisioningv1alpha1.ClusterTemplate{}).
 		WithStatusSubresource(&provisioningv1alpha1.ProvisioningRequest{}).
@@ -236,7 +221,8 @@ func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 		}).
 		Build()
 
-	// Add fake Metal3 hardware plugin CR with Basic auth
+	// Add fake Metal3 hardware plugin CR.
+	// ApiRoot is a required field but unused since the PR controller accesses NARs directly.
 	metal3HwPlugin := &hwmgmtv1alpha1.HardwarePlugin{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: testHwMgrPluginNameSpace,
@@ -244,10 +230,6 @@ func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 		},
 		Spec: hwmgmtv1alpha1.HardwarePluginSpec{
 			ApiRoot: "https://localhost:8443",
-			AuthClientConfig: &common.AuthClientConfig{
-				Type:            common.Basic,
-				BasicAuthSecret: &basicAuthSecret,
-			},
 		},
 		Status: hwmgmtv1alpha1.HardwarePluginStatus{
 			Conditions: []metav1.Condition{
