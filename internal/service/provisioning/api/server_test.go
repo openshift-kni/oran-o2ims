@@ -452,6 +452,140 @@ var _ = Describe("ProvisioningServer", func() {
 		})
 	})
 
+	Describe("GetProvisioningRequest returns infrastructureResourceProvisioningStatus", func() {
+		var (
+			server *api.ProvisioningServer
+			scheme *runtime.Scheme
+			ctx    context.Context
+		)
+
+		BeforeEach(func() {
+			ctx = context.Background()
+			scheme = runtime.NewScheme()
+			Expect(provisioningv1alpha1.AddToScheme(scheme)).To(Succeed())
+		})
+
+		newPRWithInfraStatuses := func(
+			name string,
+			statuses []provisioningv1alpha1.InfrastructureResourceStatus,
+		) *provisioningv1alpha1.ProvisioningRequest {
+			templateParamsBytes, err := json.Marshal(map[string]interface{}{"key": "value"})
+			Expect(err).NotTo(HaveOccurred())
+
+			pr := &provisioningv1alpha1.ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+					UID:  types.UID(name),
+				},
+				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+					Name:               "test",
+					Description:        "test provisioning request",
+					TemplateName:       "test-template",
+					TemplateVersion:    "v1.0.0",
+					TemplateParameters: runtime.RawExtension{Raw: templateParamsBytes},
+				},
+			}
+			pr.Status.Extensions.InfrastructureResourceStatuses = statuses
+			return pr
+		}
+
+		getInfraStatuses := func(prName string) []provisioningapi.ResourceProvisioningStatus {
+			reqUUID, err := uuid.Parse(prName)
+			Expect(err).NotTo(HaveOccurred())
+
+			resp, err := server.GetProvisioningRequest(ctx, provisioningapi.GetProvisioningRequestRequestObject{
+				ProvisioningRequestId: reqUUID,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			result := resp.(provisioningapi.GetProvisioningRequest200JSONResponse)
+			return result.Status.InfrastructureResourceProvisioningStatus
+		}
+
+		When("no infrastructure resource statuses on CRD", func() {
+			It("should return an empty array", func() {
+				prName := uuid.New().String()
+				pr := newPRWithInfraStatuses(prName, nil)
+
+				fakeClient := fake.NewClientBuilder().
+					WithScheme(scheme).
+					WithObjects(pr).
+					WithStatusSubresource(pr).
+					Build()
+				server = &api.ProvisioningServer{HubClient: fakeClient}
+
+				statuses := getInfraStatuses(prName)
+				Expect(statuses).To(HaveLen(0))
+			})
+		})
+
+		When("single node is PROCESSING", func() {
+			It("should return one status with PROCESSING phase", func() {
+				prName := uuid.New().String()
+				pr := newPRWithInfraStatuses(prName, []provisioningv1alpha1.InfrastructureResourceStatus{
+					{ResourceName: "host-a", ResourceId: "node-a", ResourceProvisioningPhase: "PROCESSING"},
+				})
+
+				fakeClient := fake.NewClientBuilder().
+					WithScheme(scheme).
+					WithObjects(pr).
+					WithStatusSubresource(pr).
+					Build()
+				server = &api.ProvisioningServer{HubClient: fakeClient}
+
+				statuses := getInfraStatuses(prName)
+				Expect(statuses).To(HaveLen(1))
+				Expect(statuses[0].ResourceName).To(Equal("host-a"))
+				Expect(statuses[0].ResourceId).To(Equal("node-a"))
+				Expect(statuses[0].ResourceProvisioningPhase).To(Equal(provisioningapi.PROCESSING))
+			})
+		})
+
+		When("multiple nodes with mixed phases", func() {
+			It("should return all statuses with correct phases", func() {
+				prName := uuid.New().String()
+				pr := newPRWithInfraStatuses(prName, []provisioningv1alpha1.InfrastructureResourceStatus{
+					{ResourceName: "host-a", ResourceId: "node-a", ResourceProvisioningPhase: "PROVISIONED"},
+					{ResourceName: "host-b", ResourceId: "node-b", ResourceProvisioningPhase: "PROCESSING"},
+					{ResourceName: "host-c", ResourceId: "node-c", ResourceProvisioningPhase: "FAILED"},
+				})
+
+				fakeClient := fake.NewClientBuilder().
+					WithScheme(scheme).
+					WithObjects(pr).
+					WithStatusSubresource(pr).
+					Build()
+				server = &api.ProvisioningServer{HubClient: fakeClient}
+
+				statuses := getInfraStatuses(prName)
+				Expect(statuses).To(HaveLen(3))
+				Expect(statuses[0].ResourceProvisioningPhase).To(Equal(provisioningapi.PROVISIONED))
+				Expect(statuses[1].ResourceProvisioningPhase).To(Equal(provisioningapi.PROCESSING))
+				Expect(statuses[2].ResourceProvisioningPhase).To(Equal(provisioningapi.FAILED))
+			})
+		})
+
+		When("node has empty resourceId", func() {
+			It("should return status with empty resourceId", func() {
+				prName := uuid.New().String()
+				pr := newPRWithInfraStatuses(prName, []provisioningv1alpha1.InfrastructureResourceStatus{
+					{ResourceName: "host-x", ResourceId: "", ResourceProvisioningPhase: "PROCESSING"},
+				})
+
+				fakeClient := fake.NewClientBuilder().
+					WithScheme(scheme).
+					WithObjects(pr).
+					WithStatusSubresource(pr).
+					Build()
+				server = &api.ProvisioningServer{HubClient: fakeClient}
+
+				statuses := getInfraStatuses(prName)
+				Expect(statuses).To(HaveLen(1))
+				Expect(statuses[0].ResourceName).To(Equal("host-x"))
+				Expect(statuses[0].ResourceId).To(BeEmpty())
+			})
+		})
+	})
+
 	Describe("UpdateProvisioningRequest with concurrent updates", func() {
 		var (
 			server *api.ProvisioningServer

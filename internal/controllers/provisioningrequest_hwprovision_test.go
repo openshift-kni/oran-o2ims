@@ -2695,3 +2695,198 @@ var _ = Describe("processExistingHardwareCondition", func() {
 		})
 	})
 })
+
+var _ = Describe("mapAllocatedNodeToResourceProvisioningPhase", func() {
+	It("returns PROCESSING when conditions are empty", func() {
+		Expect(mapAllocatedNodeToResourceProvisioningPhase(nil)).To(Equal(provisioningv1alpha1.ResourceProvisioningPhaseProcessing))
+		Expect(mapAllocatedNodeToResourceProvisioningPhase([]metav1.Condition{})).To(Equal(provisioningv1alpha1.ResourceProvisioningPhaseProcessing))
+	})
+
+	It("returns PROCESSING when no Provisioned condition exists", func() {
+		conds := []metav1.Condition{
+			{Type: "Configured", Status: metav1.ConditionTrue, Reason: "Completed"},
+		}
+		Expect(mapAllocatedNodeToResourceProvisioningPhase(conds)).To(Equal(provisioningv1alpha1.ResourceProvisioningPhaseProcessing))
+	})
+
+	It("returns PROVISIONED when Provisioned condition is True", func() {
+		conds := []metav1.Condition{
+			{Type: "Provisioned", Status: metav1.ConditionTrue, Reason: "Completed"},
+		}
+		Expect(mapAllocatedNodeToResourceProvisioningPhase(conds)).To(Equal(provisioningv1alpha1.ResourceProvisioningPhaseProvisioned))
+	})
+
+	It("returns PROCESSING when Provisioned condition is InProgress", func() {
+		conds := []metav1.Condition{
+			{Type: "Provisioned", Status: metav1.ConditionFalse, Reason: "InProgress"},
+		}
+		Expect(mapAllocatedNodeToResourceProvisioningPhase(conds)).To(Equal(provisioningv1alpha1.ResourceProvisioningPhaseProcessing))
+	})
+
+	It("returns FAILED when Provisioned condition reason is Failed", func() {
+		conds := []metav1.Condition{
+			{Type: "Provisioned", Status: metav1.ConditionFalse, Reason: "Failed"},
+		}
+		Expect(mapAllocatedNodeToResourceProvisioningPhase(conds)).To(Equal(provisioningv1alpha1.ResourceProvisioningPhaseFailed))
+	})
+
+	It("returns FAILED when Provisioned condition reason is TimedOut", func() {
+		conds := []metav1.Condition{
+			{Type: "Provisioned", Status: metav1.ConditionFalse, Reason: "TimedOut"},
+		}
+		Expect(mapAllocatedNodeToResourceProvisioningPhase(conds)).To(Equal(provisioningv1alpha1.ResourceProvisioningPhaseFailed))
+	})
+})
+
+var _ = Describe("updateInfrastructureResourceStatuses", func() {
+	var (
+		ctx    context.Context
+		c      client.Client
+		task   *provisioningRequestReconcilerTask
+		cr     *provisioningv1alpha1.ProvisioningRequest
+		crName = "infra-status-test"
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+
+		cr = &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crName,
+			},
+			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+				TemplateName:    "clustertemplate-a",
+				TemplateVersion: "v1.0.0",
+				TemplateParameters: runtime.RawExtension{
+					Raw: []byte(testutils.TestFullTemplateParameters),
+				},
+			},
+			Status: provisioningv1alpha1.ProvisioningRequestStatus{
+				Extensions: provisioningv1alpha1.Extensions{
+					NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
+						NodeAllocationRequestID: crName,
+					},
+				},
+			},
+		}
+
+		c = getFakeClientFromObjects([]client.Object{cr}...)
+		task = &provisioningRequestReconcilerTask{
+			logger: logger,
+			client: c,
+			object: cr,
+		}
+	})
+
+	createAllocatedNode := func(name string, conditions []metav1.Condition) {
+		node := &pluginsv1alpha1.AllocatedNode{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: constants.DefaultNamespace,
+			},
+			Spec: pluginsv1alpha1.AllocatedNodeSpec{
+				NodeAllocationRequest: crName,
+				GroupName:             "worker",
+			},
+			Status: pluginsv1alpha1.AllocatedNodeStatus{
+				Conditions: conditions,
+			},
+		}
+		Expect(c.Create(ctx, node)).To(Succeed())
+	}
+
+	It("does nothing when NodeAllocationRequestRef is nil", func() {
+		task.object.Status.Extensions.NodeAllocationRequestRef = nil
+		err := task.updateInfrastructureResourceStatuses(ctx)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(task.object.Status.Extensions.InfrastructureResourceStatuses).To(BeNil())
+	})
+
+	It("does nothing when no allocated nodes exist and no stale statuses", func() {
+		err := task.updateInfrastructureResourceStatuses(ctx)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(task.object.Status.Extensions.InfrastructureResourceStatuses).To(BeNil())
+	})
+
+	It("clears stale statuses when no allocated nodes exist", func() {
+		task.object.Status.Extensions.InfrastructureResourceStatuses = []provisioningv1alpha1.InfrastructureResourceStatus{
+			{ResourceName: "old-node", ResourceId: "old-node", ResourceProvisioningPhase: provisioningv1alpha1.ResourceProvisioningPhaseProcessing},
+		}
+		Expect(task.client.Status().Update(ctx, task.object)).To(Succeed())
+
+		err := task.updateInfrastructureResourceStatuses(ctx)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(task.object.Status.Extensions.InfrastructureResourceStatuses).To(BeNil())
+	})
+
+	It("populates per-node statuses with mixed conditions", func() {
+		createAllocatedNode("node-a", []metav1.Condition{
+			{Type: "Provisioned", Status: metav1.ConditionTrue, Reason: "Completed"},
+		})
+		createAllocatedNode("node-b", []metav1.Condition{
+			{Type: "Provisioned", Status: metav1.ConditionFalse, Reason: "InProgress"},
+		})
+		createAllocatedNode("node-c", []metav1.Condition{
+			{Type: "Provisioned", Status: metav1.ConditionFalse, Reason: "Failed"},
+		})
+
+		err := task.updateInfrastructureResourceStatuses(ctx)
+		Expect(err).ToNot(HaveOccurred())
+
+		statuses := task.object.Status.Extensions.InfrastructureResourceStatuses
+		Expect(statuses).To(HaveLen(3))
+
+		statusByID := map[string]provisioningv1alpha1.InfrastructureResourceStatus{}
+		for _, s := range statuses {
+			statusByID[s.ResourceId] = s
+		}
+
+		Expect(statusByID["node-a"].ResourceProvisioningPhase).To(Equal(provisioningv1alpha1.ResourceProvisioningPhaseProvisioned))
+		Expect(statusByID["node-b"].ResourceProvisioningPhase).To(Equal(provisioningv1alpha1.ResourceProvisioningPhaseProcessing))
+		Expect(statusByID["node-c"].ResourceProvisioningPhase).To(Equal(provisioningv1alpha1.ResourceProvisioningPhaseFailed))
+	})
+
+	It("falls back to node ID as resource name when host map is empty", func() {
+		createAllocatedNode("node-y", []metav1.Condition{
+			{Type: "Provisioned", Status: metav1.ConditionFalse, Reason: "InProgress"},
+		})
+
+		err := task.updateInfrastructureResourceStatuses(ctx)
+		Expect(err).ToNot(HaveOccurred())
+
+		statuses := task.object.Status.Extensions.InfrastructureResourceStatuses
+		Expect(statuses).To(HaveLen(1))
+		Expect(statuses[0].ResourceName).To(Equal("node-y"))
+		Expect(statuses[0].ResourceId).To(Equal("node-y"))
+	})
+
+	It("uses hostname from AllocatedNodeHostMap when available", func() {
+		task.object.Status.Extensions.AllocatedNodeHostMap = map[string]string{
+			"node-a": "worker-01.example.com",
+		}
+		Expect(task.client.Status().Update(ctx, task.object)).To(Succeed())
+
+		createAllocatedNode("node-a", []metav1.Condition{
+			{Type: "Provisioned", Status: metav1.ConditionTrue, Reason: "Completed"},
+		})
+		createAllocatedNode("node-b", []metav1.Condition{
+			{Type: "Provisioned", Status: metav1.ConditionFalse, Reason: "InProgress"},
+		})
+
+		err := task.updateInfrastructureResourceStatuses(ctx)
+		Expect(err).ToNot(HaveOccurred())
+
+		statuses := task.object.Status.Extensions.InfrastructureResourceStatuses
+		Expect(statuses).To(HaveLen(2))
+
+		statusByID := map[string]provisioningv1alpha1.InfrastructureResourceStatus{}
+		for _, s := range statuses {
+			statusByID[s.ResourceId] = s
+		}
+
+		Expect(statusByID["node-a"].ResourceName).To(Equal("worker-01.example.com"))
+		Expect(statusByID["node-a"].ResourceId).To(Equal("node-a"))
+		Expect(statusByID["node-b"].ResourceName).To(Equal("node-b"))
+		Expect(statusByID["node-b"].ResourceId).To(Equal("node-b"))
+	})
+})

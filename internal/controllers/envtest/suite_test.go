@@ -32,7 +32,9 @@ import (
 	k8senvtest "sigs.k8s.io/controller-runtime/pkg/envtest"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
@@ -152,6 +154,8 @@ var _ = BeforeSuite(func() {
 	Expect(corev1.AddToScheme(scheme)).To(Succeed())
 	Expect(inventoryv1alpha1.AddToScheme(scheme)).To(Succeed())
 	Expect(bmhv1alpha1.AddToScheme(scheme)).To(Succeed())
+	Expect(provisioningv1alpha1.AddToScheme(scheme)).To(Succeed())
+	Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 
 	testEnv = &k8senvtest.Environment{
 		CRDDirectoryPaths: []string{

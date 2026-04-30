@@ -314,18 +314,23 @@ func convertProvisioningRequestCRToApi(id uuid.UUID, provisioningRequest provisi
 		TemplateParameters:    templateParameters,
 	}
 
+	provisioningPhase := api.ProvisioningStatusProvisioningPhase(provisioningRequest.Status.ProvisioningStatus.ProvisioningPhase)
+	if provisioningPhase == "" {
+		provisioningPhase = api.Pending
+	}
+
 	status := api.ProvisioningStatus{
-		ProvisioningPhase:             api.ProvisioningStatusProvisioningPhase(provisioningRequest.Status.ProvisioningStatus.ProvisioningPhase),
-		Message:                       provisioningRequest.Status.ProvisioningStatus.ProvisioningDetails,
-		UpdateTime:                    provisioningRequest.Status.ProvisioningStatus.UpdateTime.Time,
-		NodeClusterProvisioningStatus: getNodeClusterProvisioningStatus(provisioningRequest),
+		ProvisioningPhase:                        provisioningPhase,
+		Message:                                  provisioningRequest.Status.ProvisioningStatus.ProvisioningDetails,
+		UpdateTime:                               provisioningRequest.Status.ProvisioningStatus.UpdateTime.Time,
+		NodeClusterProvisioningStatus:            getNodeClusterProvisioningStatus(provisioningRequest),
+		InfrastructureResourceProvisioningStatus: getInfrastructureResourceProvisioningStatus(provisioningRequest),
 	}
 	provisioningRequestInfo.Status = status
 
-	if nodeClusterId := getNodeClusterId(provisioningRequest); nodeClusterId != "" {
-		provisioningRequestInfo.ProvisionedResourceSet = api.ProvisionedResourceSet{
-			NodeClusterId: nodeClusterId,
-		}
+	provisioningRequestInfo.ProvisionedResourceSet = api.ProvisionedResourceSet{
+		NodeClusterId:             getNodeClusterId(provisioningRequest),
+		InfrastructureResourceIds: getProvisionedInfrastructureResourceIds(provisioningRequest),
 	}
 
 	return provisioningRequestInfo, nil
@@ -358,7 +363,7 @@ func getNodeClusterProvisioningStatus(pr provisioningv1alpha1.ProvisioningReques
 		}
 	}
 
-	// ClusterInstance processing itself failed
+	// CI processing failed
 	if ciCond.Status != metav1.ConditionTrue {
 		phase := api.PROCESSING
 		if ciCond.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed) ||
@@ -414,4 +419,33 @@ func convertProvisioningRequestApiToCR(request api.ProvisioningRequestData) (*pr
 	}
 
 	return provisioningRequest, nil
+}
+
+// getInfrastructureResourceProvisioningStatus converts the per-node statuses
+// stored on the ProvisioningRequest CRD to the API []ResourceProvisioningStatus.
+func getInfrastructureResourceProvisioningStatus(pr provisioningv1alpha1.ProvisioningRequest) []api.ResourceProvisioningStatus {
+	if len(pr.Status.Extensions.InfrastructureResourceStatuses) == 0 {
+		return []api.ResourceProvisioningStatus{}
+	}
+	result := make([]api.ResourceProvisioningStatus, 0, len(pr.Status.Extensions.InfrastructureResourceStatuses))
+	for _, s := range pr.Status.Extensions.InfrastructureResourceStatuses {
+		result = append(result, api.ResourceProvisioningStatus{
+			ResourceName:              s.ResourceName,
+			ResourceId:                s.ResourceId,
+			ResourceProvisioningPhase: api.ResourceProvisioningPhase(s.ResourceProvisioningPhase),
+		})
+	}
+	return result
+}
+
+// getProvisionedInfrastructureResourceIds collects ResourceId values from nodes
+// that have reached the PROVISIONED phase.
+func getProvisionedInfrastructureResourceIds(pr provisioningv1alpha1.ProvisioningRequest) []string {
+	ids := make([]string, 0)
+	for _, s := range pr.Status.Extensions.InfrastructureResourceStatuses {
+		if s.ResourceProvisioningPhase == provisioningv1alpha1.ResourceProvisioningPhaseProvisioned {
+			ids = append(ids, s.ResourceId)
+		}
+	}
+	return ids
 }

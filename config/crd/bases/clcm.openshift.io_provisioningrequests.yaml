@@ -181,6 +181,36 @@ spec:
                         description: Says if ZTP has complete or not.
                         type: string
                     type: object
+                  infrastructureResourceStatuses:
+                    description: |-
+                      Per-node infrastructure resource provisioning statuses, populated by the
+                      controller from individual AllocatedNode conditions.
+                    items:
+                      description: |-
+                        InfrastructureResourceStatus tracks the provisioning status of a single
+                        infrastructure resource (e.g. a bare-metal node) within a ProvisioningRequest.
+                      properties:
+                        resourceId:
+                          description: Identifier of the infrastructure resource (AllocatedNode
+                            ID).
+                          type: string
+                        resourceName:
+                          description: Name of the infrastructure resource (hostname).
+                          type: string
+                        resourceProvisioningPhase:
+                          description: Current provisioning phase of this resource.
+                          enum:
+                          - PROCESSING
+                          - PROVISIONED
+                          - AWAITING_FREE_RESOURCES
+                          - FAILED
+                          type: string
+                      required:
+                      - resourceId
+                      - resourceName
+                      - resourceProvisioningPhase
+                      type: object
+                    type: array
                   policies:
                     description: Holds policies that are matched with the ManagedCluster
                       created by the ProvisioningRequest.

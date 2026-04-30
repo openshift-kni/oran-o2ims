@@ -62,6 +62,28 @@ type ClusterDetails struct {
 	NonCompliantAt *metav1.Time `json:"nonCompliantAt,omitempty"`
 }
 
+// ResourceProvisioningPhase defines the provisioning phase of an individual infrastructure resource.
+type ResourceProvisioningPhase string
+
+const (
+	ResourceProvisioningPhaseProcessing            ResourceProvisioningPhase = "PROCESSING"
+	ResourceProvisioningPhaseProvisioned           ResourceProvisioningPhase = "PROVISIONED"
+	ResourceProvisioningPhaseAwaitingFreeResources ResourceProvisioningPhase = "AWAITING_FREE_RESOURCES"
+	ResourceProvisioningPhaseFailed                ResourceProvisioningPhase = "FAILED"
+)
+
+// InfrastructureResourceStatus tracks the provisioning status of a single
+// infrastructure resource (e.g. a bare-metal node) within a ProvisioningRequest.
+type InfrastructureResourceStatus struct {
+	// Name of the infrastructure resource (hostname).
+	ResourceName string `json:"resourceName"`
+	// Identifier of the infrastructure resource (AllocatedNode ID).
+	ResourceId string `json:"resourceId"`
+	// Current provisioning phase of this resource.
+	// +kubebuilder:validation:Enum=PROCESSING;PROVISIONED;AWAITING_FREE_RESOURCES;FAILED
+	ResourceProvisioningPhase ResourceProvisioningPhase `json:"resourceProvisioningPhase"`
+}
+
 type Extensions struct {
 	// ClusterDetails references to the ClusterInstance.
 	ClusterDetails *ClusterDetails `json:"clusterDetails,omitempty"`
@@ -71,6 +93,10 @@ type Extensions struct {
 
 	// Holds policies that are matched with the ManagedCluster created by the ProvisioningRequest.
 	Policies []PolicyDetails `json:"policies,omitempty"`
+
+	// Per-node infrastructure resource provisioning statuses, populated by the
+	// controller from individual AllocatedNode conditions.
+	InfrastructureResourceStatuses []InfrastructureResourceStatus `json:"infrastructureResourceStatuses,omitempty"`
 }
 
 // PolicyDetails holds information about an ACM policy.

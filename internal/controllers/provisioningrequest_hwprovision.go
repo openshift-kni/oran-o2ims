@@ -11,10 +11,12 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"slices"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -156,6 +158,14 @@ func (t *provisioningRequestReconcilerTask) waitForHardwareData(
 
 	var configured *bool
 	provisioned, timedOutOrFailed, err := t.checkNodeAllocationRequestProvisionStatus(ctx, clusterInstance, nodeAllocationRequestResponse)
+
+	// Update per-node infrastructure resource statuses on every hardware check,
+	// regardless of whether provisioning is complete, in-progress, or failed.
+	if updateErr := t.updateInfrastructureResourceStatuses(ctx); updateErr != nil {
+		t.logger.WarnContext(ctx, "Failed to update infrastructure resource statuses",
+			slog.String("error", updateErr.Error()))
+	}
+
 	if err != nil {
 		return provisioned, nil, timedOutOrFailed, err
 	}
@@ -285,6 +295,103 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestProvisionS
 	}
 
 	return provisioned, timedOutOrFailed, err
+}
+
+// mapAllocatedNodeToResourceProvisioningPhase derives a ResourceProvisioningPhase from an
+// AllocatedNode's status conditions by inspecting the "Provisioned" condition.
+func mapAllocatedNodeToResourceProvisioningPhase(conditions []metav1.Condition) provisioningv1alpha1.ResourceProvisioningPhase {
+	cond := meta.FindStatusCondition(conditions, string(hwmgmtv1alpha1.Provisioned))
+	if cond == nil {
+		return provisioningv1alpha1.ResourceProvisioningPhaseProcessing
+	}
+	switch {
+	case cond.Status == metav1.ConditionTrue:
+		return provisioningv1alpha1.ResourceProvisioningPhaseProvisioned
+	case cond.Reason == string(hwmgmtv1alpha1.Failed) ||
+		cond.Reason == string(hwmgmtv1alpha1.TimedOut):
+		return provisioningv1alpha1.ResourceProvisioningPhaseFailed
+	default:
+		return provisioningv1alpha1.ResourceProvisioningPhaseProcessing
+	}
+}
+
+// hasInfrastructureResourceStatuses returns true when the CRD still
+// holds per-node statuses that should be cleared.
+func (t *provisioningRequestReconcilerTask) hasInfrastructureResourceStatuses() bool {
+	return len(t.object.Status.Extensions.InfrastructureResourceStatuses) > 0
+}
+
+// updateInfrastructureResourceStatuses updates the infrastructure resource statuses for the ProvisioningRequest.
+func (t *provisioningRequestReconcilerTask) updateInfrastructureResourceStatuses(ctx context.Context) error {
+
+	// Skip the update if the NodeAllocationRequestRef is not set
+	if t.object.Status.Extensions.NodeAllocationRequestRef == nil {
+		t.logger.InfoContext(ctx, "NodeAllocationRequestRef is nil, skipping update of infrastructure resource statuses")
+		return nil
+	}
+
+	// Get the AllocatedNodes for the NAR
+	narNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
+	allocatedNodeList, err := listAllocatedNodesForNAR(ctx, t.client, t.object.Name, narNS)
+	if err != nil {
+		return fmt.Errorf("failed to list AllocatedNodes for NAR '%s': %w", t.object.Name, err)
+	}
+
+	// Clear stale statuses when AllocatedNodes no longer exist but previous statuses
+	// are still recorded on the CRD (e.g. nodes were deallocated while the NAR reference remains).
+	hasAllocatedNodes := len(allocatedNodeList.Items) > 0
+	if !hasAllocatedNodes {
+		if t.hasInfrastructureResourceStatuses() {
+			t.object.Status.Extensions.InfrastructureResourceStatuses = nil
+			if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+				return fmt.Errorf("failed to clear stale infrastructure resource statuses: %w", err)
+			}
+			t.logger.InfoContext(ctx, "cleared stale infrastructure resource statuses",
+				slog.String("nar", t.object.Name))
+		}
+		t.logger.InfoContext(ctx, "no allocated nodes found, skipping infrastructure resource statuses update",
+			slog.String("nar", t.object.Name))
+		return nil
+	}
+
+	// Compute the new statuses
+	statuses := make([]provisioningv1alpha1.InfrastructureResourceStatus, 0, len(allocatedNodeList.Items))
+	for i := range allocatedNodeList.Items {
+		node := &allocatedNodeList.Items[i]
+		// Prefer the assigned hostname from AllocatedNodeHostMap once available; fall back to the
+		// AllocatedNode CR name (the hardware manager's node identifier).
+		resourceName := node.Name
+		if host := t.object.Status.Extensions.AllocatedNodeHostMap[node.Name]; host != "" {
+			resourceName = host
+		}
+		statuses = append(statuses, provisioningv1alpha1.InfrastructureResourceStatus{
+			ResourceName:              resourceName,
+			ResourceId:                node.Name,
+			ResourceProvisioningPhase: mapAllocatedNodeToResourceProvisioningPhase(node.Status.Conditions),
+		})
+	}
+
+	// Sort by ResourceId for deterministic comparison (List order is not guaranteed).
+	slices.SortFunc(statuses, func(a, b provisioningv1alpha1.InfrastructureResourceStatus) int {
+		return strings.Compare(a.ResourceId, b.ResourceId)
+	})
+
+	// Skip the statuses update if the computed statuses are the same as the previous ones.
+	if equality.Semantic.DeepEqual(t.object.Status.Extensions.InfrastructureResourceStatuses, statuses) {
+		t.logger.InfoContext(ctx, "No changes in infrastructure resource statuses; skipping update",
+			slog.Int("nodeCount", len(statuses)))
+		return nil
+	}
+
+	// Update the statuses
+	t.object.Status.Extensions.InfrastructureResourceStatuses = statuses
+	if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+		return fmt.Errorf("failed to update infrastructure resource statuses: %w", err)
+	}
+
+	t.logger.InfoContext(ctx, "Updated infrastructure resource statuses",
+		slog.Int("nodeCount", len(statuses)))
+	return nil
 }
 
 // checkNodeAllocationRequestConfigStatus checks the Configured status of the node allocation request.
