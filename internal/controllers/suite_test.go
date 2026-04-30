@@ -70,17 +70,9 @@ of the O2IMS controllers package. The suite supports the following test categori
    - Pod readiness and status monitoring
    - Inventory service lifecycle
 
-9. Mock Hardware Plugin Server (mock_hardware_plugin_server.go):
-   - Simulated hardware plugin API endpoints
-   - NodeAllocationRequest lifecycle testing
-   - AllocatedNode management simulation
-   - Authentication testing scenarios
-   - Status and condition management simulation
-
 Test Infrastructure:
 - Ginkgo BDD-style test framework with Gomega assertions
 - Fake Kubernetes client with comprehensive scheme registration
-- Mock hardware plugin server for integration testing
 - BMC secret and authentication setup for realistic scenarios
 - Status subresource support for all custom resources
 - Indexing support for efficient resource lookups
@@ -203,11 +195,6 @@ func (c *SSACompatibleClient) handleServerSideApply(ctx context.Context, obj cli
 }
 
 func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
-	c, _ := getFakeClientAndMockServer(objs...)
-	return c
-}
-
-func getFakeClientAndMockServer(objs ...client.Object) (client.WithWatch, *MockHardwarePluginServer) {
 	// Create a basic auth secret for test authentication
 	basicAuthSecret := "test-auth-secret"
 	authSecret := &corev1.Secret{
@@ -222,9 +209,6 @@ func getFakeClientAndMockServer(objs ...client.Object) (client.WithWatch, *MockH
 		},
 	}
 
-	// Note: BMC secrets are created by individual tests in their BeforeEach blocks
-	// to avoid resource conflicts between tests
-
 	// Create the Inventory CRD object for CRD ownership of cluster-scoped resources
 	inventoryCRD := &apiextensionsv1.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{
@@ -232,7 +216,6 @@ func getFakeClientAndMockServer(objs ...client.Object) (client.WithWatch, *MockH
 		},
 	}
 
-	// First create the fake client
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(objs...).
@@ -253,17 +236,14 @@ func getFakeClientAndMockServer(objs ...client.Object) (client.WithWatch, *MockH
 		}).
 		Build()
 
-	// Start mock hardware plugin server for tests with the client
-	mockServer := NewMockHardwarePluginServerWithClient(fakeClient)
-
-	// Add fake Metal3 hardware plugin CR pointing to mock server with Basic auth
+	// Add fake Metal3 hardware plugin CR with Basic auth
 	metal3HwPlugin := &hwmgmtv1alpha1.HardwarePlugin{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: testHwMgrPluginNameSpace,
 			Name:      testMetal3HardwarePluginRef,
 		},
 		Spec: hwmgmtv1alpha1.HardwarePluginSpec{
-			ApiRoot: mockServer.GetURL(), // Point to mock server instead of localhost:8443
+			ApiRoot: "https://localhost:8443",
 			AuthClientConfig: &common.AuthClientConfig{
 				Type:            common.Basic,
 				BasicAuthSecret: &basicAuthSecret,
@@ -289,7 +269,7 @@ func getFakeClientAndMockServer(objs ...client.Object) (client.WithWatch, *MockH
 	}
 
 	// Wrap the fake client with SSA compatibility for testing
-	return &SSACompatibleClient{WithWatch: fakeClient}, mockServer
+	return &SSACompatibleClient{WithWatch: fakeClient}
 }
 
 // Logger used for tests:

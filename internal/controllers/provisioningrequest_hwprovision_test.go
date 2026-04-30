@@ -420,14 +420,6 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 		nar.Status.Conditions = append(nar.Status.Conditions, provisionedCondition)
 		Expect(c.Create(ctx, nar)).To(Succeed())
 
-		// Simulate a timeout scenario via callback for testing
-		// Note: In reality, main controller detects timeouts, not the hardware plugin
-		// Simulate a timeout callback from hardware plugin
-		if cr.Annotations == nil {
-			cr.Annotations = make(map[string]string)
-		}
-		cr.Annotations[utils.CallbackReceivedAnnotation] = "timeout-callback"
-
 		// Hardware plugin sends callback with timed out status
 		timedOutMock := createMockNodeAllocationRequestResponse("False", "TimedOut", "Hardware provisioning timed out")
 		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, timedOutMock, hwmgmtv1alpha1.Provisioned)
@@ -454,27 +446,11 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 			NodeAllocationRequestID: "test-nar-id",
 		}
 
-		// Set up callback annotations to simulate callback-triggered reconciliation
-		if cr.Annotations == nil {
-			cr.Annotations = make(map[string]string)
-		}
-		cr.Annotations[utils.CallbackReceivedAnnotation] = "1234567890"
-		cr.Annotations[utils.CallbackStatusAnnotation] = "Completed"
-		cr.Annotations[utils.CallbackNodeAllocationRequestIdAnnotation] = "test-nar-id"
-
-		// Update the CR in the fake client to persist the annotations and status
-		Expect(c.Update(ctx, cr)).To(Succeed())
+		// Update the CR in the fake client to persist the status
 		Expect(c.Status().Update(ctx, cr)).To(Succeed())
 
-		// Update task object to reflect the annotations (since task was created before annotations were added)
+		// Update task object to reflect the status (since task was created before status was added)
 		task.object = cr
-
-		// Verify annotations exist before processing
-		var updatedCR provisioningv1alpha1.ProvisioningRequest
-		Expect(c.Get(ctx, client.ObjectKeyFromObject(cr), &updatedCR)).To(Succeed())
-		Expect(updatedCR.Annotations[utils.CallbackReceivedAnnotation]).To(Equal("1234567890"))
-		Expect(updatedCR.Annotations[utils.CallbackStatusAnnotation]).To(Equal("Completed"))
-		Expect(updatedCR.Annotations[utils.CallbackNodeAllocationRequestIdAnnotation]).To(Equal("test-nar-id"))
 
 		// Process callback with completed status
 		completedMock := createMockNodeAllocationRequestResponse("True", "Completed", "Hardware provisioning completed")
@@ -484,6 +460,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		// Verify status was updated correctly
+		var updatedCR provisioningv1alpha1.ProvisioningRequest
 		Expect(c.Get(ctx, client.ObjectKeyFromObject(cr), &updatedCR)).To(Succeed())
 		condition := meta.FindStatusCondition(updatedCR.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned))
 		Expect(condition).ToNot(BeNil())
@@ -2007,13 +1984,6 @@ var _ = Describe("ProvisioningRequest Status Update After Hardware Failure", fun
 			// Create a mock NodeAllocationRequest response that shows failure
 			failedMock := createMockNodeAllocationRequestResponse("False", "Failed", "Hardware provisioning failed")
 
-			// Simulate a callback-triggered reconciliation by setting the annotation
-			if cr.Annotations == nil {
-				cr.Annotations = make(map[string]string)
-			}
-			cr.Annotations[utils.CallbackReceivedAnnotation] = "hardware-failure"
-			Expect(c.Update(ctx, cr)).To(Succeed())
-
 			// Call updateHardwareStatus - should process failure since it's callback-triggered
 			provisioned, timedOutOrFailed, err := task.updateHardwareStatus(ctx, failedMock, hwmgmtv1alpha1.Provisioned)
 
@@ -2581,14 +2551,7 @@ var _ = Describe("processExistingHardwareCondition", func() {
 				Expect(c.Get(ctx, key, pr)).To(Succeed())
 			}
 
-			// Simulate callback-triggered reconciliation
-			if pr.Annotations == nil {
-				pr.Annotations = make(map[string]string)
-			}
-			pr.Annotations[utils.CallbackReceivedAnnotation] = "test-callback"
-			Expect(c.Update(ctx, pr)).To(Succeed())
-
-			// Update task object to reflect the annotations
+			// Update task object to reflect the current PR
 			task.object = pr
 
 			// Create mock NAR response with detailed error

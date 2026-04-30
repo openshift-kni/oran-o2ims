@@ -19,7 +19,6 @@ import (
 )
 
 // SetupOAuthClientConfig constructs an OAuth client configuration from generic parameters.
-// This is the common implementation used by both HardwarePlugin and Callback configurations.
 func SetupOAuthClientConfig(
 	ctx context.Context,
 	c client.Client,

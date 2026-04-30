@@ -171,19 +171,6 @@ func (h *HardwarePluginServer) CreateNodeAllocationRequest(
 		},
 	}
 
-	if request.Body.Callback != nil {
-		callback := &pluginsv1alpha1.Callback{
-			CallbackURL:  request.Body.Callback.CallbackURL,
-			CaBundleName: request.Body.Callback.CaBundleName,
-		}
-		if request.Body.Callback.AuthClientConfig != nil {
-			// Convert from OpenAPI type to Go type
-			// This will need proper conversion logic
-			callback.AuthClientConfig = convertToCommonAuthClientConfig(request.Body.Callback.AuthClientConfig)
-		}
-		nodeAllocationRequest.Spec.Callback = callback
-	}
-
 	// Set HardwareProvisioningTimeout if provided
 	if request.Body.HardwareProvisioningTimeout != nil {
 		nodeAllocationRequest.Spec.HardwareProvisioningTimeout = *request.Body.HardwareProvisioningTimeout
@@ -252,19 +239,6 @@ func (h *HardwarePluginServer) UpdateNodeAllocationRequest(
 			ClusterProvisioned: existingNodeAllocationRequest.Spec.ClusterProvisioned,
 			SkipCleanup:        existingNodeAllocationRequest.Spec.SkipCleanup,
 		},
-	}
-
-	if request.Body.Callback != nil {
-		callback := &pluginsv1alpha1.Callback{
-			CallbackURL:  request.Body.Callback.CallbackURL,
-			CaBundleName: request.Body.Callback.CaBundleName,
-		}
-		if request.Body.Callback.AuthClientConfig != nil {
-			// Convert from OpenAPI type to Go type
-			// This will need proper conversion logic
-			callback.AuthClientConfig = convertToCommonAuthClientConfig(request.Body.Callback.AuthClientConfig)
-		}
-		nodeAllocationRequest.Spec.Callback = callback
 	}
 
 	// Set HardwareProvisioningTimeout if provided

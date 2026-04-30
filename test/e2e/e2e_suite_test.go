@@ -34,7 +34,6 @@ import (
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	ibgu "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/api/common"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
@@ -200,11 +199,6 @@ var _ = BeforeSuite(func() {
 	err = ProvReqTestReconciler.SetupWithManager(ProvisioningManager)
 	Expect(err).ToNot(HaveOccurred())
 
-	// Start mock hardware plugin server for e2e tests with Kubernetes client
-	// Use queryKubernetes=true to make the mock server query real Kubernetes resources
-	// instead of returning default mock data, enabling integration with Metal3 controllers
-	mockServer := provisioningcontrollers.NewMockHardwarePluginServerWithK8SQuery(K8SClient, true)
-
 	suiteCrs := []client.Object{
 		// oran-o2ims operator namespace
 		&corev1.Namespace{
@@ -212,30 +206,15 @@ var _ = BeforeSuite(func() {
 				Name: constants.DefaultNamespace,
 			},
 		},
-		// Basic auth secret for hardware plugin
-		&corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-hwmgr-auth-secret",
-				Namespace: constants.DefaultNamespace,
-			},
-			Type: corev1.SecretTypeOpaque,
-			Data: map[string][]byte{
-				"username": []byte("test-user"),
-				"password": []byte("test-password"),
-			},
-		},
-		// HardwarePlugin CRs - must be in HWMGR_PLUGIN_NAMESPACE where controller looks for it
+		// HardwarePlugin CR - must be in HWMGR_PLUGIN_NAMESPACE where controller looks for it.
+		// ApiRoot is a required field but unused since the PR controller accesses NARs directly.
 		&hwmgmtv1alpha1.HardwarePlugin{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: constants.DefaultNamespace,
 				Name:      testutils.TestHwPluginRef,
 			},
 			Spec: hwmgmtv1alpha1.HardwarePluginSpec{
-				ApiRoot: mockServer.GetURL(),
-				AuthClientConfig: &common.AuthClientConfig{
-					Type:            common.Basic,
-					BasicAuthSecret: stringPtr("test-hwmgr-auth-secret"),
-				},
+				ApiRoot: "https://localhost:8443",
 			},
 		},
 	}
@@ -286,8 +265,3 @@ var _ = AfterSuite(func() {
 	err := testEnv.Stop()
 	Expect(err).NotTo(HaveOccurred())
 })
-
-// stringPtr is a helper function to get a pointer to a string
-func stringPtr(s string) *string {
-	return &s
-}

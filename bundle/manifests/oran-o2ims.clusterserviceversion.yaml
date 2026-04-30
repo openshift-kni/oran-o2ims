@@ -672,9 +672,6 @@ metadata:
             "namespace": "oran-o2ims"
           },
           "spec": {
-            "callback": {
-              "callbackURL": "https://oran-o2ims-nar-callback-service.oran-o2ims.svc.cluster.local:8090/nar-callback/v1/provisioning-requests/123e4567-e89b-12d3-a456-426614174000"
-            },
             "clusterId": "site-sno-du-1123e4567-e89b-12d3-a456-426614174000",
             "configTransactionId": 1,
             "hardwarePluginRef": "metal3-hwplugin",
@@ -1470,7 +1467,6 @@ spec:
           - list
         - nonResourceURLs:
           - /hardware-manager/provisioning/*
-          - /nar-callback/*
           verbs:
           - create
           - delete

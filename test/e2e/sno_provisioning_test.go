@@ -768,15 +768,6 @@ defaultHugepagesSize: "1G"`,
 	})
 
 	It("Completes hardware provisioning", func() {
-		// Trigger callback-based reconciliation to notify ProvisioningRequest that hardware provisioning is complete.
-		// This simulates the hardware plugin sending a completion callback.
-		Expect(K8SClient.Get(testCtx, client.ObjectKeyFromObject(ProvRequestCR), ProvRequestCR)).To(Succeed())
-		if ProvRequestCR.Annotations == nil {
-			ProvRequestCR.Annotations = make(map[string]string)
-		}
-		ProvRequestCR.Annotations[ctlrutils.CallbackReceivedAnnotation] = fmt.Sprintf("%d", time.Now().Unix())
-		Expect(K8SClient.Update(testCtx, ProvRequestCR)).To(Succeed())
-
 		// The ProvisioningRequest should complete hardware provisioning.
 		Eventually(func() bool {
 			err := K8SClient.Get(testCtx, client.ObjectKeyFromObject(ProvRequestCR), reconciledPR)

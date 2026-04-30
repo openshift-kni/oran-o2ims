@@ -345,13 +345,6 @@ const AllocatedNodeLabel = "clcm.openshift.io/allocated-node"
 // Status message constants
 const ValidationMessage = "Validating and preparing resources"
 
-// Callback annotation keys used by both the NAR callback server and provisioning request controller
-const (
-	CallbackReceivedAnnotation                = "callback.received"
-	CallbackStatusAnnotation                  = "callback.status"
-	CallbackNodeAllocationRequestIdAnnotation = "callback.nodeAllocationRequestId"
-)
-
 // ClusterTemplate annotation keys
 const (
 	// SkipClusterImageSetValidationAnnotation when set to "true" (case-insensitive),

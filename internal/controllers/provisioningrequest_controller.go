@@ -376,8 +376,6 @@ func (t *provisioningRequestReconcilerTask) checkOverallProvisioningTimeout(ctx 
 	}
 
 	// Check hardware provisioning timeout
-	// Check hardware provisioning timeout (with callback awareness)
-	// Timeout detection is now handled by the Metal3 plugin via callbacks
 	if result := t.checkHardwareProvisioningTimeout(); result.RequeueAfter > 0 {
 		return result
 	}
@@ -464,8 +462,8 @@ func (t *provisioningRequestReconcilerTask) shouldStopReconciliation() bool {
 		t.object.Status.ObservedGeneration == t.object.Generation
 }
 
-// checkHardwareProvisioningTimeout checks for hardware provisioning timeout with callback awareness
-// Timeout detection is now handled by the Metal3 plugin, so this function only checks terminal states
+// checkHardwareProvisioningTimeout checks for hardware provisioning timeout.
+// Timeout detection is handled by the Metal3 plugin, so this function only checks terminal states.
 //
 //nolint:unparam // Kept for API compatibility, always returns empty Result
 func (t *provisioningRequestReconcilerTask) checkHardwareProvisioningTimeout() ctrl.Result {
@@ -475,7 +473,6 @@ func (t *provisioningRequestReconcilerTask) checkHardwareProvisioningTimeout() c
 
 	hwProvisionedCond := meta.FindStatusCondition(t.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned))
 	// Skip only on outcomes: succeeded, failed or timed-out
-	// Timeout is now detected by the Metal3 plugin and reported via callbacks
 	if hwProvisionedCond != nil && (hwProvisionedCond.Status == metav1.ConditionTrue ||
 		hwProvisionedCond.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed) ||
 		hwProvisionedCond.Reason == string(provisioningv1alpha1.CRconditionReasons.TimedOut)) {

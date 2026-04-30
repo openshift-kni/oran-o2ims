@@ -308,19 +308,6 @@ func (t *reconcilerTask) createMetal3PluginServerClusterRole(ctx context.Context
 					"delete",
 				},
 			},
-			// Nar Callback
-			{
-				NonResourceURLs: []string{
-					"/nar-callback/*",
-				},
-				Verbs: []string{
-					"get",
-					"list",
-					"create",
-					"update",
-					"delete",
-				},
-			},
 		},
 	}
 
