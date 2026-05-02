@@ -6,7 +6,6 @@ metadata:
 spec:
   clusterId: site-sno-du-1123e4567-e89b-12d3-a456-426614174000
   configTransactionId: 1
-  hardwarePluginRef: metal3-hwplugin
   hardwareProvisioningTimeout: 90m
   nodeGroup:
   - nodeGroupData:

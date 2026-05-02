@@ -262,19 +262,6 @@ func (r *NodeAllocationRequestReconciler) Reconcile(ctx context.Context, req ctr
     ctx = logging.AppendCtx(ctx, slog.Int("requestedNodes", nodeRequest.Spec.NodeCount))
     r.Logger.InfoContext(ctx, "Fetched NodeAllocationRequest successfully")
     
-    // Check if hardware plugin is available
-    ctx = ctlrutils.LogOperation(ctx, r.Logger, "plugin_check", "Checking hardware plugin availability")
-    
-    plugin, err := r.getHardwarePlugin(ctx, nodeRequest.Spec.HardwareProfile)
-    if err != nil {
-        ctlrutils.LogError(ctx, r.Logger, "Hardware plugin not available", err,
-            slog.String("hardwareProfile", nodeRequest.Spec.HardwareProfile))
-        return
-    }
-    
-    ctx = logging.AppendCtx(ctx, slog.String("pluginVersion", plugin.Status.Version))
-    r.Logger.InfoContext(ctx, "Hardware plugin available")
-    
     // Phase 1: Node Discovery
     ctx = ctlrutils.LogPhaseStart(ctx, r.Logger, "node_discovery")
     phaseStartTime := time.Now()

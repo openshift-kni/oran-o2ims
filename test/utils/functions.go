@@ -317,8 +317,8 @@ func CreateNode(name, bmcAddress, bmcSecret, groupName, namespace, narName strin
 		Spec: pluginsv1alpha1.AllocatedNodeSpec{
 			NodeAllocationRequest: narName,
 			GroupName:             groupName,
-			HardwarePluginRef:     constants.DefaultNamespace,
 			HwMgrNodeId:           name,
+			HwMgrNodeNs:           namespace,
 		},
 		Status: pluginsv1alpha1.AllocatedNodeStatus{
 			BMC: &pluginsv1alpha1.BMC{

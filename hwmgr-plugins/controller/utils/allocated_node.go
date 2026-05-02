@@ -150,9 +150,9 @@ func sanitizeKubernetesName(name string) string {
 	return result
 }
 
-func FindNodeInList(nodelist pluginsv1alpha1.AllocatedNodeList, hardwarePluginRef, nodeId string) string {
+func FindNodeInList(nodelist pluginsv1alpha1.AllocatedNodeList, nodeId string) string {
 	for _, node := range nodelist.Items {
-		if node.Spec.HardwarePluginRef == hardwarePluginRef && node.Spec.HwMgrNodeId == nodeId {
+		if node.Spec.HwMgrNodeId == nodeId {
 			return node.Name
 		}
 	}

@@ -48,22 +48,6 @@ type ProvisioningRequestSpec struct {
 	Extensions runtime.RawExtension `json:"extensions,omitempty"`
 }
 
-// NodeAllocationRequestRef references a node allocation request.
-type NodeAllocationRequestRef struct {
-	// Contains the identifier of the created NodeAllocationRequest.
-	NodeAllocationRequestID string `json:"nodeAllocationRequestID,omitempty"`
-	// Represents the timestamp of the first status check for hardware provisioning
-	HardwareProvisioningCheckStart *metav1.Time `json:"hardwareProvisioningCheckStart,omitempty"`
-	// Represents the timestamp of the first status check for hardware configuring
-	HardwareConfiguringCheckStart *metav1.Time `json:"hardwareConfiguringCheckStart,omitempty"`
-	// ObservedConfigTransactionId tracks the ConfigTransactionId that has been observed
-	// by the hardware plugin. This helps with debugging by showing which configuration
-	// transaction the plugin has processed.
-	// A value of 0 indicates the transaction has not been observed yet. Since Kubernetes
-	// Generation starts at 1, 0 serves as a natural sentinel value for "not observed".
-	ObservedConfigTransactionId int64 `json:"observedConfigTransactionId,omitempty"`
-}
-
 type ClusterDetails struct {
 	// Contains the name of the created ClusterInstance.
 	Name string `json:"name,omitempty"`
@@ -81,9 +65,6 @@ type ClusterDetails struct {
 type Extensions struct {
 	// ClusterDetails references to the ClusterInstance.
 	ClusterDetails *ClusterDetails `json:"clusterDetails,omitempty"`
-
-	// NodeAllocationRequestRef references to the NodeAllocationRequest.
-	NodeAllocationRequestRef *NodeAllocationRequestRef `json:"nodeAllocationRequestRef,omitempty"`
 
 	// AllocatedNodeHostMap stores the mapping of AllocatedNode IDs to Hostnames
 	AllocatedNodeHostMap map[string]string `json:"allocatedNodeHostMap,omitempty"`

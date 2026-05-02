@@ -147,9 +147,6 @@ The O‑Cloud Metal3 hardware plugin consumes the CR, selects matching BareMetal
       extensions:
         allocatedNodeHostMap:
           metal3-hwplugin-sno1-dell-xr8620t-pool-dell-xr8620t-node1: sno1.example.com
-        nodeAllocationRequestRef:
-          hardwareProvisioningCheckStart: "2025-10-01T22:14:27Z"
-          nodeAllocationRequestID: metal3-f5a72a45c49c41969b8d
       conditions:
       ...
       - lastTransitionTime: "2025-10-01T22:14:27Z"
@@ -163,7 +160,7 @@ The O‑Cloud Metal3 hardware plugin consumes the CR, selects matching BareMetal
         updateTime: "2025-10-01T22:14:27Z"
     ```
 
-6. Wait for hardware provisioning to complete. Once it completes, the Metal3 hardware plugin sends the allocated node infomation (BMC secret, BMC url, interface MAC addresses, etc.) in the `AllocatedNode` status. O-Cloud Manager retrieves this data and updates the rendered ClusterInstance CR with it.
+6. Wait for hardware provisioning to complete. Once it completes, the Metal3 hardware manager sends the allocated node information (BMC secret, BMC url, interface MAC addresses, etc.) in the `AllocatedNode` status. O-Cloud Manager retrieves this data and updates the rendered ClusterInstance CR with it.
 
    Example status:
 
@@ -172,9 +169,6 @@ The O‑Cloud Metal3 hardware plugin consumes the CR, selects matching BareMetal
       extensions:
         allocatedNodeHostMap:
           metal3-hwplugin-sno1-dell-xr8620t-pool-dell-xr8620t-node1: sno1.example.com
-        nodeAllocationRequestRef:
-          hardwareProvisioningCheckStart: "2025-10-01T22:14:27Z"
-          nodeAllocationRequestID: metal3-f5a72a45c49c41969b8d
       conditions:
       ...
       - lastTransitionTime: "2025-10-01T22:47:16Z"

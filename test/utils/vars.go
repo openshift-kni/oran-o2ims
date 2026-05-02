@@ -341,7 +341,6 @@ const (
 	BmcSecretName     = "bmc-secret"
 	BmhPoolName       = "test-pool"
 	TestHwProfileName = "profile-spr-dual-processor-128g"
-	TestHwPluginRef   = "hwmgr"
 	TestPoolID        = "test-pool-001"
 	TestServerType    = "test-server-type"
 )

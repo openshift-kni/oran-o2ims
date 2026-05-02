@@ -491,7 +491,6 @@ func createNode(ctx context.Context,
 			NodeAllocationRequest: nodeAllocationRequest.Name,
 			GroupName:             groupname,
 			HwProfile:             hwprofile,
-			HardwarePluginRef:     nodeAllocationRequest.Spec.HardwarePluginRef,
 			HwMgrNodeNs:           nodeNs,
 			HwMgrNodeId:           nodeId,
 			SkipCleanup:           nodeAllocationRequest.Spec.SkipCleanup,
@@ -1452,7 +1451,7 @@ func allocateBMHToNodeAllocationRequest(
 
 	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 
-	nodeName := hwmgrutils.GenerateNodeName(hwmgrutils.Metal3HardwarePluginID, nodeAllocationRequest.Spec.ClusterId, bmh.Namespace, bmh.Name)
+	nodeName := hwmgrutils.GenerateNodeName(hwmgrutils.Metal3NodeNamePrefix, nodeAllocationRequest.Spec.ClusterId, bmh.Namespace, bmh.Name)
 
 	// Set AllocatedNode label
 	allocatedNodeLbl := bmh.Labels[ctlrutils.AllocatedNodeLabel]

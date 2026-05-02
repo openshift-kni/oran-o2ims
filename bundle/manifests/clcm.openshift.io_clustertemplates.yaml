@@ -88,11 +88,6 @@ spec:
                       HwMgmtDefaults defines the default hardware management parameters.
                       When nodeGroupData is empty, hardware provisioning is skipped.
                     properties:
-                      hardwarePluginRef:
-                        description: |-
-                          HardwarePluginRef is the name of the HardwarePlugin.
-                          When not specified, the internal metal3 hardware plugin is used.
-                        type: string
                       hardwareProvisioningTimeout:
                         description: HardwareProvisioningTimeout defines the timeout
                           duration string for the hardware provisioning.

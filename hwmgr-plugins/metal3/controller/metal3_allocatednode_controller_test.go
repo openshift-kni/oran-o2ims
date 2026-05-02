@@ -49,8 +49,6 @@ Detailed Test Case Descriptions:
 
 3. Controller Setup and Configuration:
    a) SetupWithManager validation:
-      - should create label selector predicate correctly
-      - should use correct hardware plugin label
       - should handle manager setup failure gracefully
       - Ensures proper controller registration and filtering
 
@@ -138,7 +136,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
@@ -213,11 +210,8 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 		// Create test AllocatedNode
 		allocatedNode = &pluginsv1alpha1.AllocatedNode{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-node",
-				Namespace: pluginNamespace,
-				Labels: map[string]string{
-					hwmgrutils.HardwarePluginLabel: hwmgrutils.Metal3HardwarePluginID,
-				},
+				Name:            "test-node",
+				Namespace:       pluginNamespace,
 				ResourceVersion: "1000",
 			},
 			Spec: pluginsv1alpha1.AllocatedNodeSpec{
@@ -548,24 +542,6 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 	})
 
 	Describe("SetupWithManager", func() {
-		It("should create label selector predicate correctly", func() {
-			// Test the label selector creation logic directly
-			labelSelector := metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					hwmgrutils.HardwarePluginLabel: hwmgrutils.Metal3HardwarePluginID,
-				},
-			}
-
-			_, err := predicate.LabelSelectorPredicate(labelSelector)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("should use correct hardware plugin label", func() {
-			// Verify the label matches what we expect
-			Expect(hwmgrutils.HardwarePluginLabel).To(Equal("clcm.openshift.io/hardware-plugin"))
-			Expect(hwmgrutils.Metal3HardwarePluginID).To(Equal("metal3-hwplugin"))
-		})
-
 		It("should handle manager setup failure gracefully", func() {
 			reconciler = &AllocatedNodeReconciler{
 				Client:          fakeClient,

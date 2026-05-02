@@ -23,7 +23,6 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
@@ -206,43 +205,12 @@ var _ = BeforeSuite(func() {
 				Name: constants.DefaultNamespace,
 			},
 		},
-		// HardwarePlugin CR - must be in HWMGR_PLUGIN_NAMESPACE where controller looks for it.
-		// ApiRoot is a required field but unused since the PR controller accesses NARs directly.
-		&hwmgmtv1alpha1.HardwarePlugin{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: constants.DefaultNamespace,
-				Name:      testutils.TestHwPluginRef,
-			},
-			Spec: hwmgmtv1alpha1.HardwarePluginSpec{
-				ApiRoot: "https://localhost:8443",
-			},
-		},
 	}
 
 	for _, cr := range suiteCrs {
 		err := K8SClient.Create(context.Background(), cr)
 		Expect(err).ToNot(HaveOccurred())
 	}
-
-	// Update HardwarePlugin status to mark it as registered
-	mockHwPlugin := &hwmgmtv1alpha1.HardwarePlugin{}
-	err = K8SClient.Get(context.Background(), types.NamespacedName{
-		Namespace: constants.DefaultNamespace,
-		Name:      testutils.TestHwPluginRef,
-	}, mockHwPlugin)
-	Expect(err).ToNot(HaveOccurred())
-
-	mockHwPlugin.Status.Conditions = []metav1.Condition{
-		{
-			Type:               string(hwmgmtv1alpha1.ConditionTypes.Registration),
-			Status:             metav1.ConditionTrue,
-			LastTransitionTime: metav1.Now(),
-			Reason:             string(hwmgmtv1alpha1.ConditionReasons.Completed),
-			Message:            "Mock HardwarePlugin registered successfully for e2e tests",
-		},
-	}
-	err = K8SClient.Status().Update(context.Background(), mockHwPlugin)
-	Expect(err).ToNot(HaveOccurred())
 
 	// Start the main O2IMS manager
 	go func() {

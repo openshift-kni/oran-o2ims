@@ -5,7 +5,6 @@ metadata:
   namespace: oran-o2ims
 spec:
   groupName: master
-  hardwarePluginRef: metal3-hwplugin
   hwMgrNodeId: xr8620txserver1
   hwMgrNodeNs: xr8620t-pool
   hwProfile: hardwareprofile-sample

@@ -181,32 +181,6 @@ spec:
                         description: Says if ZTP has complete or not.
                         type: string
                     type: object
-                  nodeAllocationRequestRef:
-                    description: NodeAllocationRequestRef references to the NodeAllocationRequest.
-                    properties:
-                      hardwareConfiguringCheckStart:
-                        description: Represents the timestamp of the first status
-                          check for hardware configuring
-                        format: date-time
-                        type: string
-                      hardwareProvisioningCheckStart:
-                        description: Represents the timestamp of the first status
-                          check for hardware provisioning
-                        format: date-time
-                        type: string
-                      nodeAllocationRequestID:
-                        description: Contains the identifier of the created NodeAllocationRequest.
-                        type: string
-                      observedConfigTransactionId:
-                        description: |-
-                          ObservedConfigTransactionId tracks the ConfigTransactionId that has been observed
-                          by the hardware plugin. This helps with debugging by showing which configuration
-                          transaction the plugin has processed.
-                          A value of 0 indicates the transaction has not been observed yet. Since Kubernetes
-                          Generation starts at 1, 0 serves as a natural sentinel value for "not observed".
-                        format: int64
-                        type: integer
-                    type: object
                   policies:
                     description: Holds policies that are matched with the ManagedCluster
                       created by the ProvisioningRequest.

@@ -10,7 +10,7 @@ The following data is collected:
 
 - O-Cloud Manager custom resources (from all namespaces)
   - `clcm.openshift.io`: ClusterTemplates, ProvisioningRequests,
-    HardwarePlugins, HardwareProfiles, HardwareTemplates
+    HardwareProfiles
   - `ocloud.openshift.io`: Inventories
   - `plugins.clcm.openshift.io`: NodeAllocationRequests, AllocatedNodes
 - Metal3 resources (from all namespaces)
@@ -23,8 +23,7 @@ The following data is collected:
 - Pod logs
   - All O-Cloud Manager pods (controller manager, resource-server,
     cluster-server, alarms-server, artifacts-server, provisioning-server,
-    postgres-server, metal3-hardwareplugin-server,
-    hardwareplugin-manager-server)
+    postgres-server, metal3-hardwareplugin-server)
   - Metal3 pods in `openshift-machine-api` (metal3-baremetal-operator, metal3)
   - Both current and previous container logs are collected
 

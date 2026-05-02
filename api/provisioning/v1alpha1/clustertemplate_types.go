@@ -56,10 +56,6 @@ type ClusterTemplateSpec struct {
 // HwMgmtDefaults defines the default hardware management parameters.
 // When NodeGroupData is empty, hardware provisioning is skipped.
 type HwMgmtDefaults struct {
-	// HardwarePluginRef is the name of the HardwarePlugin.
-	// When not specified, the internal metal3 hardware plugin is used.
-	// +optional
-	HardwarePluginRef string `json:"hardwarePluginRef,omitempty"`
 	// HardwareProvisioningTimeout defines the timeout duration string for the hardware provisioning.
 	// +optional
 	HardwareProvisioningTimeout string `json:"hardwareProvisioningTimeout,omitempty"`
@@ -68,15 +64,6 @@ type HwMgmtDefaults struct {
 	// +listType=map
 	// +listMapKey=name
 	NodeGroupData []hwmgmtv1alpha1.NodeGroupData `json:"nodeGroupData,omitempty"`
-}
-
-// GetHardwarePluginRef returns the HardwarePluginRef if set, or
-// DefaultHardwarePluginRef when the field is empty.
-func (d *HwMgmtDefaults) GetHardwarePluginRef() string {
-	if d.HardwarePluginRef == "" {
-		return hwmgmtv1alpha1.DefaultHardwarePluginRef
-	}
-	return d.HardwarePluginRef
 }
 
 // TemplateDefaults defines the default values for templates required for ClusterTemplate.

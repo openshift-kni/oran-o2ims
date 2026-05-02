@@ -12,10 +12,6 @@ const (
 	NodeRoleWorker = "worker"
 )
 
-// DefaultHardwarePluginRef is the default hardware plugin used when
-// HardwareTemplateSpec.HardwarePluginRef is not specified.
-const DefaultHardwarePluginRef = "metal3-hwplugin"
-
 // NodeGroupData provides the necessary information for populating a node allocation request
 type NodeGroupData struct {
 	// +kubebuilder:validation:MinLength=1

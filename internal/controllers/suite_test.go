@@ -129,9 +129,6 @@ func TestControllers(t *testing.T) {
 	RunSpecs(t, "Controllers")
 }
 
-const testHwMgrPluginNameSpace = constants.DefaultNamespace
-const testMetal3HardwarePluginRef = "hwmgr"
-
 // SSACompatibleClient wraps a fake client and converts Server-Side Apply operations
 // to traditional create/update operations, providing compatibility for testing.
 type SSACompatibleClient struct {
@@ -221,35 +218,6 @@ func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 		}).
 		Build()
 
-	// Add fake Metal3 hardware plugin CR.
-	// ApiRoot is a required field but unused since the PR controller accesses NARs directly.
-	metal3HwPlugin := &hwmgmtv1alpha1.HardwarePlugin{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: testHwMgrPluginNameSpace,
-			Name:      testMetal3HardwarePluginRef,
-		},
-		Spec: hwmgmtv1alpha1.HardwarePluginSpec{
-			ApiRoot: "https://localhost:8443",
-		},
-		Status: hwmgmtv1alpha1.HardwarePluginStatus{
-			Conditions: []metav1.Condition{
-				{
-					Type:               string(hwmgmtv1alpha1.ConditionTypes.Registration),
-					Status:             metav1.ConditionTrue,
-					LastTransitionTime: metav1.Now(),
-					Reason:             string(hwmgmtv1alpha1.ConditionReasons.Completed),
-					Message:            "HardwarePlugin registered successfully",
-				},
-			},
-		},
-	}
-
-	// Add the hardware plugin to the client
-	err := fakeClient.Create(context.Background(), metal3HwPlugin)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to create hardware plugin: %v", err))
-	}
-
 	// Wrap the fake client with SSA compatibility for testing
 	return &SSACompatibleClient{WithWatch: fakeClient}
 }
@@ -295,8 +263,6 @@ var _ = BeforeSuite(func() {
 	scheme.AddKnownTypes(siteconfig.GroupVersion, &siteconfig.ClusterInstanceList{})
 	scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion, &hwmgmtv1alpha1.HardwareProfile{})
 	scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion, &hwmgmtv1alpha1.HardwareProfileList{})
-	scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion, &hwmgmtv1alpha1.HardwarePlugin{})
-	scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion, &hwmgmtv1alpha1.HardwarePluginList{})
 	scheme.AddKnownTypes(pluginsv1alpha1.GroupVersion, &pluginsv1alpha1.NodeAllocationRequest{})
 	scheme.AddKnownTypes(pluginsv1alpha1.GroupVersion, &pluginsv1alpha1.AllocatedNode{})
 	scheme.AddKnownTypes(pluginsv1alpha1.GroupVersion, &pluginsv1alpha1.AllocatedNodeList{})

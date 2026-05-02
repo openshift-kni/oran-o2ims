@@ -48,11 +48,8 @@ The controller manager and Metal3 hardware plugin logs are the most common to ch
 Other server logs may be useful depending on the issue:
 
 ```console
-# Metal3 hardware plugin
+# Metal3 hardware manager
 oc logs -n oran-o2ims -l app=metal3-hardwareplugin-server --tail=100
-
-# Hardware plugin manager
-oc logs -n oran-o2ims -l app=hardwareplugin-manager-server --tail=100
 
 # Resource server
 oc logs -n oran-o2ims -l app=resource-server --tail=100

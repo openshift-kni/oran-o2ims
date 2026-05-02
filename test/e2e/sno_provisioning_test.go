@@ -233,7 +233,6 @@ defaultHugepagesSize: "1G"`,
 				ClusterInstanceDefaults: ciDefaultsCmIncomplete,
 				PolicyTemplateDefaults:  ptDefaultsCm,
 				HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-					HardwarePluginRef:           testutils.TestHwPluginRef,
 					HardwareProvisioningTimeout: "10m",
 					NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 						{
@@ -265,7 +264,6 @@ defaultHugepagesSize: "1G"`,
 				ClusterInstanceDefaults: ciDefaultsCmComplete,
 				PolicyTemplateDefaults:  ptDefaultsCm,
 				HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-					HardwarePluginRef:           testutils.TestHwPluginRef,
 					HardwareProvisioningTimeout: "10m",
 					NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 						{

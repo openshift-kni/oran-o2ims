@@ -55,7 +55,7 @@ Test Suites:
      - Sets the label for MNO when there are multiple Agents
      - Fails for multiple Agents with unexpected labels
    • When the HW template is not provided:
-     - Does not add hardwarePluginRef and hwMgrNodeId labels to the Agents
+     - Does not add hwMgrNodeId label to the Agents when hardware provisioning is skipped
 */
 
 package controllers
@@ -174,7 +174,6 @@ var _ = Describe("policyManagement", func() {
 						ClusterInstanceDefaults: ciDefaultsCm,
 						PolicyTemplateDefaults:  ptDefaultsCm,
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-							HardwarePluginRef:           utils.UnitTestHwPluginRef,
 							HardwareProvisioningTimeout: "1m",
 							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 								{Name: "controller", Role: "master", ResourcePoolId: "xyz", HwProfile: "profile-spr-single-processor-64G"},
@@ -290,11 +289,7 @@ defaultHugepagesSize: "1G"`,
 							Status: metav1.ConditionTrue,
 						},
 					},
-					Extensions: provisioningv1alpha1.Extensions{
-						NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
-							NodeAllocationRequestID: "cluster-1", // Use the default ID that exists in mock server
-						},
-					},
+					Extensions: provisioningv1alpha1.Extensions{},
 				},
 			},
 			// Managed clusters
@@ -350,7 +345,6 @@ defaultHugepagesSize: "1G"`,
 				Namespace: constants.DefaultNamespace,
 			},
 			Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-				HardwarePluginRef: utils.UnitTestHwPluginRef,
 				NodeGroup: []pluginsv1alpha1.NodeGroup{
 					{
 						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
@@ -1803,11 +1797,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 						Status: metav1.ConditionTrue,
 					},
 				},
-				Extensions: provisioningv1alpha1.Extensions{
-					NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
-						NodeAllocationRequestID: "cluster-1", // Use the default ID that exists in mock server
-					},
-				},
+				Extensions: provisioningv1alpha1.Extensions{},
 			},
 		}
 
@@ -1856,7 +1846,6 @@ var _ = Describe("addPostProvisioningLabels", func() {
 						ClusterInstanceDefaults: ciDefaultsCm,
 						PolicyTemplateDefaults:  ptDefaultsCm,
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-							HardwarePluginRef:           utils.UnitTestHwPluginRef,
 							HardwareProvisioningTimeout: "1m",
 							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 								{Name: "controller", Role: "master", ResourcePoolId: "xyz", HwProfile: "profile-spr-single-processor-64G"},
@@ -1899,7 +1888,6 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				Namespace: constants.DefaultNamespace,
 			},
 			Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-				HardwarePluginRef: utils.UnitTestHwPluginRef,
 				NodeGroup: []pluginsv1alpha1.NodeGroup{
 					{
 						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
@@ -1949,7 +1937,6 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				namespace: ctNamespace,
 				templates: provisioningv1alpha1.TemplateDefaults{
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-						HardwarePluginRef:           utils.UnitTestHwPluginRef,
 						HardwareProvisioningTimeout: "1m",
 						NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 							{Name: "controller", Role: "master", ResourcePoolId: "xyz", HwProfile: "profile-spr-single-processor-64G"},
@@ -1970,8 +1957,6 @@ var _ = Describe("addPostProvisioningLabels", func() {
 		It("Succeeds with no AllocatedNodes when Agents exist", func() {
 			// No AllocatedNodes exist for this PR — the function should succeed
 			// but log warnings about missing nodes for each Agent.
-			ProvReqTask.object.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{}
-			Expect(c.Status().Update(ctx, ProvReqTask.object)).To(Succeed())
 
 			// Create an Agent so the function proceeds beyond the Agent check
 			agent := &assistedservicev1beta1.Agent{
@@ -1998,13 +1983,6 @@ var _ = Describe("addPostProvisioningLabels", func() {
 		})
 
 		It("Succeeds with no Agents (IBI cluster case)", func() {
-			// Set a NodeAllocationRequestID that has no allocated nodes (hardware allocation failed)
-			ProvReqTask.object.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
-				NodeAllocationRequestID: "empty-cluster", // Use an ID that exists but has no allocated nodes
-			}
-			// Update the status in the fake client so the change persists
-			Expect(c.Status().Update(ctx, ProvReqTask.object)).To(Succeed())
-
 			// Create the NodeAllocationRequest, but not the nodes.
 			Expect(c.Create(ctx, nodeAllocationRequest)).To(Succeed())
 
@@ -2102,7 +2080,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// The agent should have the templateArtifacts label but NOT
-			// the hardwarePluginRef or hwMgrNodeId labels.
+			// the hwMgrNodeId label.
 			err = ProvReqTask.client.Get(ctx, types.NamespacedName{Name: AgentName, Namespace: mclName}, agent)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(agent.GetLabels()).To(Equal(map[string]string{
@@ -2275,8 +2253,6 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				Expect(agent.Labels).To(HaveKeyWithValue(
 					utils.ClusterTemplateArtifactsLabel, "57b39bda-ac56-4143-9b10-d1a71517d04f"))
 				Expect(agent.Labels).To(HaveKeyWithValue(
-					"clcm.openshift.io/hardwarePluginRef", utils.UnitTestHwPluginRef))
-				Expect(agent.Labels).To(HaveKeyWithValue(
 					"clcm.openshift.io/hwMgrNodeId", expectedBmhUID[agent.Spec.Hostname]),
 					fmt.Sprintf("agent %s (hostname %s) should have hwMgrNodeId=%s",
 						agent.Name, agent.Spec.Hostname, expectedBmhUID[agent.Spec.Hostname]))
@@ -2327,7 +2303,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			ProvReqTask.ctDetails.templates.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{}
 		})
 
-		It("Does not add hardwarePluginRef and hwMgrNodeId labels to the Agents", func() {
+		It("Does not add hwMgrNodeId label to the Agents when hardware provisioning is skipped", func() {
 			// Create an Agent CR with the expected label.
 			agent := &assistedservicev1beta1.Agent{
 				ObjectMeta: metav1.ObjectMeta{
@@ -2360,14 +2336,13 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				utils.ClusterTemplateArtifactsLabel: "57b39bda-ac56-4143-9b10-d1a71517d04f",
 			}))
 
-			// Check that the templateArtifacts label is present and hardwarePluginRef and hwMgrNodeId labels are not present.
+			// Check that the templateArtifacts label is present and hwMgrNodeId label is not present.
 			err = ProvReqTask.client.Get(ctx, types.NamespacedName{Name: AgentName, Namespace: mclName}, agent)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(agent.GetLabels()).To(Equal(map[string]string{
 				utils.ClusterTemplateArtifactsLabel:                      "57b39bda-ac56-4143-9b10-d1a71517d04f",
 				"agent-install.openshift.io/clusterdeployment-namespace": mclName,
 			}))
-			Expect(agent.Labels).To(Not(HaveKey("clcm.openshift.io/hardwarePluginRef")))
 			Expect(agent.Labels).To(Not(HaveKey("clcm.openshift.io/hwMgrNodeId")))
 		})
 	})

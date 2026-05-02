@@ -114,7 +114,6 @@ Controller Utilities → Standard Patterns
 |------------|--------|----------|
 | **ProvisioningRequest** | ✅ Complete | Multi-phase logging, duration tracking, rich context |
 | **Inventory** | ✅ Complete | Infrastructure deployment phases, server setup tracking |
-| **HardwarePlugin** | ✅ Complete | Validation phases, plugin connectivity logging |
 | **NodeAllocationRequest** | ✅ Complete | Hardware provisioning workflow, node tracking |
 | **AllocatedNode** | ✅ Complete | Node lifecycle management, allocation tracking |
 

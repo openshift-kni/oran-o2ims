@@ -38,7 +38,7 @@ The [CRD](../../config/crd/bases/clcm.openshift.io_clustertemplates.yaml)'s `spe
 - release: OCP release version that will be installed with this template. The Git layout uses a matching directory name `version_4.Y.Z/`; keep the release here and the directory version aligned.
 - description: A description of the ClusterTemplate.
 - templateDefaults: Contains default values for templates.
-  - hwMgmtDefaults: (Optional) Inline hardware management defaults including nodeGroupData, hardwareProvisioningTimeout, and hardwarePluginRef. When nodeGroupData is empty, hardware provisioning is skipped.
+  - hwMgmtDefaults: (Optional) Inline hardware management defaults including nodeGroupData and hardwareProvisioningTimeout. When nodeGroupData is empty, hardware provisioning is skipped.
   - clusterInstanceDefaults: References the ConfigMap containing default values for ClusterInstance.
   - policyTemplateDefaults: References the ConfigMap containing default values for ACM policy templates.
 - templateParameterSchema: Specifies the OpenAPI v3 schema that defines which parameters the SMO must provide and which values are accepted in the ProvisioningRequest.

@@ -112,7 +112,7 @@ func copyHwMgrPluginBMCSecret(ctx context.Context, c client.Client, name, source
 func CopyBMCSecrets(ctx context.Context, c client.Client, hwNodes map[string][]NodeInfo,
 	clusterNamespace string) error {
 
-	// BMC secrets are in the operator's namespace (same as HardwarePlugins)
+	// BMC secrets are in the operator's namespace
 	sourceNamespace := GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
 	for _, nodeInfos := range hwNodes {
 		for _, node := range nodeInfos {
@@ -300,54 +300,6 @@ func GetStatusMessage(condition hwmgmtv1alpha1.ConditionType) string {
 		return "configuring"
 	}
 	return "provisioning"
-}
-
-// GetHardwarePluginRefFromProvisioningRequest retrieves the HardwarePlugin Reference from the ProvisioningRequest.
-func GetHardwarePluginRefFromProvisioningRequest(ctx context.Context, c client.Client,
-	pr *provisioningv1alpha1.ProvisioningRequest) (string, error) {
-
-	// Get the ClusterTemplate used by the current ProvisioningRequest.
-	clusterTemplate, err := pr.GetClusterTemplateRef(ctx, c)
-	if err != nil {
-		return "", fmt.Errorf("failed to get ClusterTemplate: %w", err)
-	}
-
-	return clusterTemplate.Spec.TemplateDefaults.HwMgmtDefaults.GetHardwarePluginRef(), nil
-}
-
-// GetHardwarePlugin retrieves the HardwarePlugin resource for a given name.
-// HardwarePlugins are always expected to be in the operator's namespace (OCLOUD_MANAGER_NAMESPACE).
-func GetHardwarePlugin(ctx context.Context, c client.Client, hwPluginName string) (*hwmgmtv1alpha1.HardwarePlugin, error) {
-	hwPlugin := &hwmgmtv1alpha1.HardwarePlugin{}
-
-	namespace := GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
-	exists, err := DoesK8SResourceExist(ctx, c, hwPluginName, namespace, hwPlugin)
-	if err != nil {
-		return hwPlugin, fmt.Errorf("failed to retrieve HardwarePlugin resource %s: %w", hwPluginName, err)
-	}
-	if !exists {
-		return hwPlugin, fmt.Errorf("hardwarePlugin resource %s does not exist", hwPluginName)
-	}
-	return hwPlugin, nil
-}
-
-// GetHardwarePluginFromProvisioningRequest retrieves the HardwarePlugin resource associated with a given ProvisioningRequest resource
-func GetHardwarePluginFromProvisioningRequest(ctx context.Context,
-	c client.Client,
-	pr *provisioningv1alpha1.ProvisioningRequest) (*hwmgmtv1alpha1.HardwarePlugin, error) {
-
-	hwpluginRef, err := GetHardwarePluginRefFromProvisioningRequest(ctx, c, pr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve the HardwarePluginRef from the ProvisioningRequest '%s': %w", pr.Name, err)
-	}
-
-	// Get and return the HardwarePlugin CR from the HardwarePluginRef
-	hwPlugin, err := GetHardwarePlugin(ctx, c, hwpluginRef)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get HardwarePlugin: %w", err)
-	}
-
-	return hwPlugin, nil
 }
 
 // GetBMHNamespace returns the BMH namespace for the given node.

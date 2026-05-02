@@ -180,9 +180,7 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
 				templates: provisioningv1alpha1.TemplateDefaults{
-					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-						HardwarePluginRef: testMetal3HardwarePluginRef,
-					},
+					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{},
 				},
 			},
 		}
@@ -232,9 +230,7 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 	It("returns an error when hwMgmtData has no nodeGroupData", func() {
 		// Set up clusterInput with hwMgmtData that has no nodeGroupData
 		task.clusterInput = &clusterInput{
-			hwMgmtData: map[string]any{
-				"hardwarePluginRef": testMetal3HardwarePluginRef,
-			},
+			hwMgmtData: map[string]any{},
 		}
 
 		unstructuredCi, err := utils.ConvertToUnstructured(*clusterInstance)
@@ -349,11 +345,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 				Name: crName,
 			},
 			Status: provisioningv1alpha1.ProvisioningRequestStatus{
-				Extensions: provisioningv1alpha1.Extensions{
-					NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
-						NodeAllocationRequestID: crName,
-					},
-				},
+				Extensions: provisioningv1alpha1.Extensions{},
 			},
 		}
 
@@ -383,9 +375,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
 				templates: provisioningv1alpha1.TemplateDefaults{
-					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-						HardwarePluginRef: testMetal3HardwarePluginRef,
-					},
+					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{},
 				},
 			},
 		}
@@ -441,11 +431,6 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 		nar.Status.Conditions = append(nar.Status.Conditions, provisionedCondition)
 		Expect(c.Create(ctx, nar)).To(Succeed())
 
-		// Set up PR status with matching NAR ID
-		cr.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
-			NodeAllocationRequestID: "test-nar-id",
-		}
-
 		// Update the CR in the fake client to persist the status
 		Expect(c.Status().Update(ctx, cr)).To(Succeed())
 
@@ -470,9 +455,6 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 
 	It("continues checking hardware configured status for ongoing operations", func() {
 		// Set up initial state with configuration started but not completed
-		cr.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
-			NodeAllocationRequestID: "test-nar-id",
-		}
 
 		// Set initial configured condition to false (in progress)
 		utils.SetStatusCondition(&cr.Status.Conditions,
@@ -525,9 +507,6 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 
 	It("does not pick up stale failed status after spec update", func() {
 		// Set up initial state with configuration started and a stale failed condition
-		cr.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
-			NodeAllocationRequestID: "test-nar-id",
-		}
 
 		// Set initial configured condition to failed (simulating old failed state)
 		failedCondition := metav1.Condition{
@@ -656,9 +635,7 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
 				templates: provisioningv1alpha1.TemplateDefaults{
-					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-						HardwarePluginRef: testMetal3HardwarePluginRef,
-					},
+					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{},
 				},
 			},
 		}
@@ -839,9 +816,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			ctDetails: &clusterTemplateDetails{
 				namespace: "test-ns",
 				templates: provisioningv1alpha1.TemplateDefaults{
-					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-						HardwarePluginRef: testMetal3HardwarePluginRef,
-					},
+					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{},
 				},
 			},
 		}
@@ -921,7 +896,6 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 
 		task.clusterInput = &clusterInput{
 			hwMgmtData: map[string]any{
-				"hardwarePluginRef":           "test-plugin",
 				"hardwareProvisioningTimeout": "60m",
 				"nodeGroupData": []any{
 					map[string]any{"name": "controller", "role": "master", "hwProfile": "test-profile"},
@@ -958,7 +932,6 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 
 		task.clusterInput = &clusterInput{
 			hwMgmtData: map[string]any{
-				"hardwarePluginRef":           "test-plugin",
 				"hardwareProvisioningTimeout": "", // Empty timeout
 				"nodeGroupData": []any{
 					map[string]any{"name": "controller", "role": "master", "hwProfile": "test-profile"},
@@ -1127,9 +1100,7 @@ var _ = Describe("updateAllocatedNodeHostMap", func() {
 			ctDetails: &clusterTemplateDetails{
 				namespace: "test-ns",
 				templates: provisioningv1alpha1.TemplateDefaults{
-					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-						HardwarePluginRef: testMetal3HardwarePluginRef,
-					},
+					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{},
 				},
 			},
 		}
@@ -1218,11 +1189,7 @@ var _ = Describe("waitForHardwareData", func() {
 				},
 			},
 			Status: provisioningv1alpha1.ProvisioningRequestStatus{
-				Extensions: provisioningv1alpha1.Extensions{
-					NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
-						NodeAllocationRequestID: crName,
-					},
-				},
+				Extensions: provisioningv1alpha1.Extensions{},
 			},
 		}
 
@@ -1235,7 +1202,6 @@ var _ = Describe("waitForHardwareData", func() {
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-						HardwarePluginRef:           testMetal3HardwarePluginRef,
 						HardwareProvisioningTimeout: "90m",
 						NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 							{Name: "controller", Role: "master", HwProfile: "profile-64G"},
@@ -1269,9 +1235,7 @@ var _ = Describe("waitForHardwareData", func() {
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
 				templates: provisioningv1alpha1.TemplateDefaults{
-					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-						HardwarePluginRef: testMetal3HardwarePluginRef,
-					},
+					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{},
 				},
 			},
 		}
@@ -1371,9 +1335,7 @@ var _ = Describe("checkExistingNodeAllocationRequest", func() {
 			ctDetails: &clusterTemplateDetails{
 				namespace: "test-ns",
 				templates: provisioningv1alpha1.TemplateDefaults{
-					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-						HardwarePluginRef: testMetal3HardwarePluginRef,
-					},
+					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{},
 				},
 			},
 		}
@@ -1416,7 +1378,6 @@ var _ = Describe("checkExistingNodeAllocationRequest", func() {
 		Expect(c.Create(ctx, nar)).To(Succeed())
 
 		hwMgmtData := map[string]any{
-			"hardwarePluginRef": testMetal3HardwarePluginRef,
 			"nodeGroupData": []any{
 				map[string]any{"name": "controller", "role": "master", "hwProfile": "profile-spr-single-processor-64G"},
 				map[string]any{"name": "worker", "role": "worker", "hwProfile": "profile-spr-dual-processor-128G"},
@@ -1514,7 +1475,6 @@ var _ = Describe("applyNodeConfiguration", func() {
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-						HardwarePluginRef:           testMetal3HardwarePluginRef,
 						HardwareProvisioningTimeout: "90m",
 						NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 							{Name: "controller", Role: "master", HwProfile: "profile-64G"},
@@ -1606,7 +1566,6 @@ var _ = Describe("applyNodeConfiguration", func() {
 			ctDetails: &clusterTemplateDetails{
 				templates: provisioningv1alpha1.TemplateDefaults{
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-						HardwarePluginRef:           testMetal3HardwarePluginRef,
 						HardwareProvisioningTimeout: "90m",
 						NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 							{Name: "controller", Role: "master", HwProfile: "profile-64G"},
@@ -1877,7 +1836,6 @@ var _ = Describe("ProvisioningRequest Status Update After Hardware Failure", fun
 		cr              *provisioningv1alpha1.ProvisioningRequest
 		template        *provisioningv1alpha1.ClusterTemplate
 		testClusterName = "test-update-after-failure-cluster"
-		testNARID       = "test-nar-failed-update"
 	)
 
 	BeforeEach(func() {
@@ -1895,7 +1853,6 @@ var _ = Describe("ProvisioningRequest Status Update After Hardware Failure", fun
 				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					ClusterInstanceDefaults: "test-cluster-defaults",
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-						HardwarePluginRef:           testMetal3HardwarePluginRef,
 						HardwareProvisioningTimeout: "90m",
 						NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 							{Name: "controller", Role: "master", HwProfile: "profile-64G"},
@@ -1937,11 +1894,7 @@ var _ = Describe("ProvisioningRequest Status Update After Hardware Failure", fun
 					ProvisioningPhase:   provisioningv1alpha1.StateFailed,
 					ProvisioningDetails: "Hardware provisioning failed",
 				},
-				Extensions: provisioningv1alpha1.Extensions{
-					NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
-						NodeAllocationRequestID: testNARID,
-					},
-				},
+				Extensions: provisioningv1alpha1.Extensions{},
 				Conditions: []metav1.Condition{
 					{
 						Type:    string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
@@ -1965,9 +1918,7 @@ var _ = Describe("ProvisioningRequest Status Update After Hardware Failure", fun
 			clusterInput: &clusterInput{},
 			ctDetails: &clusterTemplateDetails{
 				templates: provisioningv1alpha1.TemplateDefaults{
-					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-						HardwarePluginRef: testMetal3HardwarePluginRef,
-					},
+					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{},
 				},
 			},
 			timeouts: &timeouts{
@@ -2160,11 +2111,7 @@ var _ = Describe("processExistingHardwareCondition", func() {
 				Name: clusterName,
 			},
 			Status: provisioningv1alpha1.ProvisioningRequestStatus{
-				Extensions: provisioningv1alpha1.Extensions{
-					NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
-						NodeAllocationRequestID: clusterName,
-					},
-				},
+				Extensions: provisioningv1alpha1.Extensions{},
 			},
 		}
 
@@ -2183,9 +2130,7 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			ctDetails: &clusterTemplateDetails{
 				namespace: "test-ns",
 				templates: provisioningv1alpha1.TemplateDefaults{
-					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-						HardwarePluginRef: testMetal3HardwarePluginRef,
-					},
+					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{},
 				},
 			},
 		}
@@ -2541,16 +2486,6 @@ var _ = Describe("processExistingHardwareCondition", func() {
 				Expect(c.Get(ctx, key, pr)).To(Succeed())
 			}
 
-			// Set up NodeAllocationRequestRef if not already set (required for updateHardwareStatus)
-			if pr.Status.Extensions.NodeAllocationRequestRef == nil {
-				pr.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
-					NodeAllocationRequestID: "test-nar-id",
-				}
-				Expect(c.Status().Update(ctx, pr)).To(Succeed())
-				// Refresh to get the updated status
-				Expect(c.Get(ctx, key, pr)).To(Succeed())
-			}
-
 			// Update task object to reflect the current PR
 			task.object = pr
 
@@ -2593,11 +2528,7 @@ var _ = Describe("processExistingHardwareCondition", func() {
 					Generation: 5,
 				},
 				Status: provisioningv1alpha1.ProvisioningRequestStatus{
-					Extensions: provisioningv1alpha1.Extensions{
-						NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
-							NodeAllocationRequestID: "test-nar-id",
-						},
-					},
+					Extensions: provisioningv1alpha1.Extensions{},
 				},
 			}
 			// Try to get it first, if it doesn't exist, create it
@@ -2607,7 +2538,6 @@ var _ = Describe("processExistingHardwareCondition", func() {
 				Expect(c.Create(ctx, pr)).To(Succeed())
 			} else {
 				// Object exists, update it with our test configuration
-				existing.Status.Extensions.NodeAllocationRequestRef = pr.Status.Extensions.NodeAllocationRequestRef
 				existing.Generation = 5
 				Expect(c.Status().Update(ctx, existing)).To(Succeed())
 				pr = existing
@@ -2689,11 +2619,7 @@ var _ = Describe("processExistingHardwareCondition", func() {
 					Generation: 5,
 				},
 				Status: provisioningv1alpha1.ProvisioningRequestStatus{
-					Extensions: provisioningv1alpha1.Extensions{
-						NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
-							NodeAllocationRequestID: "test-nar-id",
-						},
-					},
+					Extensions: provisioningv1alpha1.Extensions{},
 				},
 			}
 			// Try to get it first, if it doesn't exist, create it
@@ -2703,7 +2629,6 @@ var _ = Describe("processExistingHardwareCondition", func() {
 				Expect(c.Create(ctx, pr)).To(Succeed())
 			} else {
 				// Object exists, update it with our test configuration
-				existing.Status.Extensions.NodeAllocationRequestRef = pr.Status.Extensions.NodeAllocationRequestRef
 				existing.Generation = 5
 				Expect(c.Status().Update(ctx, existing)).To(Succeed())
 				pr = existing

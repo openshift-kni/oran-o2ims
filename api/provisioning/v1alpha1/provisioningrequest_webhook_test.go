@@ -1113,18 +1113,6 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 		})
 	})
 
-	Describe("GetHardwarePluginRef", func() {
-		It("should return default when field is empty", func() {
-			defaults := &HwMgmtDefaults{}
-			Expect(defaults.GetHardwarePluginRef()).To(Equal(hwmgmtv1alpha1.DefaultHardwarePluginRef))
-		})
-
-		It("should return custom value when set", func() {
-			defaults := &HwMgmtDefaults{HardwarePluginRef: "custom-plugin"}
-			Expect(defaults.GetHardwarePluginRef()).To(Equal("custom-plugin"))
-		})
-	})
-
 	Describe("SchemaDefinesHwMgmtParameters", func() {
 		It("should return true when schema defines hwMgmtParameters", func() {
 			ct := &ClusterTemplate{

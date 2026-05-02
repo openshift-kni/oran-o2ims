@@ -22,7 +22,6 @@ import (
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -182,24 +181,13 @@ func (t *provisioningRequestReconcilerTask) updateClusterInstance(ctx context.Co
 		return fmt.Errorf("failed to collect hardware node %s details for node allocation request: %w", t.object.Name, err)
 	}
 
-	hwpluginRef, err := ctlrutils.GetHardwarePluginRefFromProvisioningRequest(ctx, t.client, t.object)
+	// The pull secret must be in the same namespace as the BMH.
+	pullSecretName, err := ctlrutils.GetPullSecretName(clusterInstance)
 	if err != nil {
-		return fmt.Errorf("failed to get HardwarePluginRef: %w", err)
+		return fmt.Errorf("failed to get pull secret name from cluster instance: %w", err)
 	}
-
-	if hwpluginRef != hwmgrutils.Metal3HardwarePluginID {
-		if err := ctlrutils.CopyBMCSecrets(ctx, t.client, hwNodes, clusterInstance.GetNamespace()); err != nil {
-			return fmt.Errorf("failed to copy BMC secret: %w", err)
-		}
-	} else {
-		// The pull secret must be in the same namespace as the BMH.
-		pullSecretName, err := ctlrutils.GetPullSecretName(clusterInstance)
-		if err != nil {
-			return fmt.Errorf("failed to get pull secret name from cluster instance: %w", err)
-		}
-		if err := ctlrutils.CopyPullSecret(ctx, t.client, t.object, t.ctDetails.namespace, pullSecretName, hwNodes); err != nil {
-			return fmt.Errorf("failed to copy pull secret: %w", err)
-		}
+	if err := ctlrutils.CopyPullSecret(ctx, t.client, t.object, t.ctDetails.namespace, pullSecretName, hwNodes); err != nil {
+		return fmt.Errorf("failed to copy pull secret: %w", err)
 	}
 
 	configErr := t.applyNodeConfiguration(ctx, hwNodes, nodeAllocationRequest, clusterInstance)
@@ -583,18 +571,6 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 	t.logger.InfoContext(ctx, fmt.Sprintf("NodeAllocationRequest (%s) %s status: %s",
 		nodeAllocationRequestID, ctlrutils.GetStatusMessage(condition), message))
 
-	// Update ObservedConfigTransactionId on ProvisioningRequest to track which transaction
-	// the plugin has observed. This helps with debugging by providing visibility into the
-	// transaction synchronization between the ProvisioningRequest and the hardware plugin.
-	if nodeAllocationRequest.Status.ObservedConfigTransactionId != 0 {
-		if t.object.Status.Extensions.NodeAllocationRequestRef == nil {
-			t.object.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
-				NodeAllocationRequestID: nodeAllocationRequestID,
-			}
-		}
-		t.object.Status.Extensions.NodeAllocationRequestRef.ObservedConfigTransactionId = nodeAllocationRequest.Status.ObservedConfigTransactionId
-	}
-
 	// Update the CR status for the ProvisioningRequest.
 	if err = ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 		err = fmt.Errorf("failed to update Hardware %s status: %w", ctlrutils.GetStatusMessage(condition), err)
@@ -726,8 +702,6 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(
 		return nil, fmt.Errorf("%s is not a string", ctlrutils.TemplateParamNodeClusterName)
 	}
 
-	// Get the hardware plugin reference, defaulting to metal3
-	hwPluginRef := t.ctDetails.templates.HwMgmtDefaults.GetHardwarePluginRef()
 	narNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
 
 	// Set HardwareProvisioningTimeout from merged data, or use default
@@ -745,7 +719,6 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(
 		},
 		Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 			ClusterId:                   clusterId,
-			HardwarePluginRef:           hwPluginRef,
 			NodeGroup:                   nodeGroups,
 			LocationSpec:                pluginsv1alpha1.LocationSpec{Site: siteID},
 			ConfigTransactionId:         t.object.Generation,

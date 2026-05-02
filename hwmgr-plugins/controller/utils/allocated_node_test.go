@@ -11,6 +11,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 )
 
 var _ = Describe("AllocatedNode Utilities", func() {
@@ -316,5 +319,42 @@ var _ = Describe("AllocatedNode Utilities", func() {
 				Expect(len(results)).To(Equal(16)) // 2^4 combinations
 			})
 		})
+	})
+})
+
+var _ = Describe("FindNodeInList", func() {
+	var nodelist pluginsv1alpha1.AllocatedNodeList
+
+	BeforeEach(func() {
+		nodelist = pluginsv1alpha1.AllocatedNodeList{
+			Items: []pluginsv1alpha1.AllocatedNode{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "node-1"},
+					Spec: pluginsv1alpha1.AllocatedNodeSpec{
+						HwMgrNodeId: "bmh-1",
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "node-2"},
+					Spec: pluginsv1alpha1.AllocatedNodeSpec{
+						HwMgrNodeId: "bmh-2",
+					},
+				},
+			},
+		}
+	})
+
+	It("returns the node name when nodeId matches", func() {
+		Expect(FindNodeInList(nodelist, "bmh-1")).To(Equal("node-1"))
+		Expect(FindNodeInList(nodelist, "bmh-2")).To(Equal("node-2"))
+	})
+
+	It("returns empty string when nodeId is not found", func() {
+		Expect(FindNodeInList(nodelist, "bmh-missing")).To(BeEmpty())
+	})
+
+	It("returns empty string for empty list", func() {
+		empty := pluginsv1alpha1.AllocatedNodeList{}
+		Expect(FindNodeInList(empty, "bmh-1")).To(BeEmpty())
 	})
 })

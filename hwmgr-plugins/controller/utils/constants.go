@@ -6,8 +6,6 @@ SPDX-License-Identifier: Apache-2.0
 
 package utils
 
-const HardwarePluginLabel = "clcm.openshift.io/hardware-plugin"
-
-const (
-	Metal3HardwarePluginID = "metal3-hwplugin"
-)
+// Metal3NodeNamePrefix is used as the prefix when generating AllocatedNode
+// names. This value must remain stable to ensure consistent naming.
+const Metal3NodeNamePrefix = "metal3-hwplugin"

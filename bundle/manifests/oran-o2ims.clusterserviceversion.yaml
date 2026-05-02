@@ -304,23 +304,6 @@ metadata:
         },
         {
           "apiVersion": "clcm.openshift.io/v1alpha1",
-          "kind": "HardwarePlugin",
-          "metadata": {
-            "name": "metal3-hwplugin",
-            "namespace": "oran-o2ims"
-          },
-          "spec": {
-            "apiRoot": "https://metal3-hardwareplugin-server.oran-o2ims.svc.cluster.local:8443",
-            "authClientConfig": {
-              "type": "ServiceAccount"
-            }
-          },
-          "status": {
-            "conditions": []
-          }
-        },
-        {
-          "apiVersion": "clcm.openshift.io/v1alpha1",
           "kind": "HardwareProfile",
           "metadata": {
             "name": "hardwareprofile-sample",
@@ -599,7 +582,6 @@ metadata:
           },
           "spec": {
             "groupName": "master",
-            "hardwarePluginRef": "metal3-hwplugin",
             "hwMgrNodeId": "xr8620txserver1",
             "hwMgrNodeNs": "xr8620t-pool",
             "hwProfile": "hardwareprofile-sample",
@@ -674,7 +656,6 @@ metadata:
           "spec": {
             "clusterId": "site-sno-du-1123e4567-e89b-12d3-a456-426614174000",
             "configTransactionId": 1,
-            "hardwarePluginRef": "metal3-hwplugin",
             "hardwareProvisioningTimeout": "90m",
             "nodeGroup": [
               {
@@ -760,11 +741,6 @@ spec:
       - description: GroupName
         displayName: Group Name
         path: groupName
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: HardwarePluginRef is the identifier for the HardwarePlugin instance.
-        displayName: Hardware Plugin Reference
-        path: hardwarePluginRef
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: HwMgrNodeId is the node identifier from the hardware manager.
@@ -874,66 +850,6 @@ spec:
       statusDescriptors:
       - displayName: Conditions
         path: conditions
-      version: v1alpha1
-    - description: HardwarePlugin is the Schema for the hardwareplugins API
-      displayName: Hardware Plugin
-      kind: HardwarePlugin
-      name: hardwareplugins.clcm.openshift.io
-      resources:
-      - kind: Namespace
-        name: ""
-        version: v1
-      specDescriptors:
-      - description: ApiRoot is the root URL for the Hardware Plugin.
-        displayName: Hardware Plugin API root
-        path: apiRoot
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: AuthClientConfig defines the configurable client attributes required
-          to access the OAuth2 authorization server
-        displayName: SMO OAuth Configuration
-        path: authClientConfig
-      - description: |-
-          BasicAuthSecret represents the name of a secret (in the current namespace) containing the username
-          and password for Basic authentication. The secret is expected to contain 'username' and 'password' keys.
-          This field is required when Type is set to "Basic".
-        displayName: Basic Auth Secret
-        path: authClientConfig.basicAuthSecret
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: |-
-          OAuthConfig holds the configuration for OAuth2-based authentication, including the authorization server
-          URL, token endpoint, and client credentials. This field is required when Type is set to "OAuth".
-        displayName: OAuth Configuration
-        path: authClientConfig.oauthConfig
-      - description: |-
-          TLSConfig specifies the TLS configuration for secure communication, including the certificate and private
-          key. This field is optional and can be used with any authentication type to enable TLS for the connection.
-        displayName: TLS Configuration
-        path: authClientConfig.tlsConfig
-      - description: Type specifies the authentication type to be used (e.g., ServiceAccount,
-          Basic, or OAuth).
-        displayName: Authentication Type
-        path: authClientConfig.type
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:select:ServiceAccount
-        - urn:alm:descriptor:com.tectonic.ui:select:Basic
-        - urn:alm:descriptor:com.tectonic.ui:select:OAuth
-      - description: |-
-          CaBundleName references a config map that contains a set of custom CA certificates to be used when communicating
-          with any outside HardwarePlugin server that has its TLS certificate signed by a non-public CA certificate.
-          The config map is expected to contain a single file called 'ca-bundle.crt' containing all trusted CA certificates
-          in PEM format.
-        displayName: Custom CA Certificates
-        path: caBundleName
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      statusDescriptors:
-      - description: Conditions describe the state of the UpdateService resource.
-        displayName: Conditions
-        path: conditions
-      - displayName: Observed Generation
-        path: observedGeneration
       version: v1alpha1
     - description: HardwareProfile is the Schema for the hardwareprofiles API
       displayName: Hardware Profile
@@ -1202,59 +1118,6 @@ spec:
         version: v1
       specDescriptors:
       - description: |-
-          Callback defines the configuration for receiving notifications when the NodeAllocationRequest
-          operation is completed or fails. If not specified, no callback will be made.
-        displayName: Callback Configuration
-        path: callback
-      - description: |-
-          AuthClientConfig defines the authentication configuration for the callback requests.
-          This allows configuring how the plugin should authenticate when making callback requests
-          to the specified CallbackURL.
-        displayName: Authentication Configuration
-        path: callback.authClientConfig
-      - description: |-
-          BasicAuthSecret represents the name of a secret (in the current namespace) containing the username
-          and password for Basic authentication. The secret is expected to contain 'username' and 'password' keys.
-          This field is required when Type is set to "Basic".
-        displayName: Basic Auth Secret
-        path: callback.authClientConfig.basicAuthSecret
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: |-
-          OAuthConfig holds the configuration for OAuth2-based authentication, including the authorization server
-          URL, token endpoint, and client credentials. This field is required when Type is set to "OAuth".
-        displayName: OAuth Configuration
-        path: callback.authClientConfig.oauthConfig
-      - description: |-
-          TLSConfig specifies the TLS configuration for secure communication, including the certificate and private
-          key. This field is optional and can be used with any authentication type to enable TLS for the connection.
-        displayName: TLS Configuration
-        path: callback.authClientConfig.tlsConfig
-      - description: Type specifies the authentication type to be used (e.g., ServiceAccount,
-          Basic, or OAuth).
-        displayName: Authentication Type
-        path: callback.authClientConfig.type
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:select:ServiceAccount
-        - urn:alm:descriptor:com.tectonic.ui:select:Basic
-        - urn:alm:descriptor:com.tectonic.ui:select:OAuth
-      - description: |-
-          CaBundleName references a config map that contains a set of custom CA certificates
-          to use when verifying the certificate of the callback URL server. The config map
-          must contain a key named 'ca-bundle.crt' which contains one or more CA certificates
-          in PEM format.
-        displayName: CA Bundle Name
-        path: callback.caBundleName
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: |-
-          CallbackURL is the URL to call when the NodeAllocationRequest operation is completed or fails.
-          The callback will be made as a POST request with CallbackPayload in the request body.
-        displayName: Callback URL
-        path: callback.callbackURL
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: |-
           ClusterID is the identifier of the O-Cloud that generated this request. The hardware
           manager may want to use this to tag the nodes in its database, and to generate
           statistics.
@@ -1275,11 +1138,6 @@ spec:
         path: configTransactionId
       - displayName: Extensions
         path: extensions
-      - description: HardwarePluginRef is the name of the HardwarePlugin.
-        displayName: Hardware Plugin Reference
-        path: hardwarePluginRef
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-
           HardwareProvisioningTimeout defines the timeout duration string for the hardware provisioning.
           If not specified, the default timeout value will be applied.
@@ -1457,7 +1315,11 @@ spec:
       clusterPermissions:
       - rules:
         - nonResourceURLs:
-          - /hardware-manager/inventory/*
+          - /internal/v1/caas-alerts/alertmanager
+          verbs:
+          - create
+          - post
+        - nonResourceURLs:
           - /o2ims-infrastructureCluster/v1/alarmDictionaries
           - /o2ims-infrastructureCluster/v1/nodeClusterTypes
           - /o2ims-infrastructureCluster/v1/nodeClusters
@@ -1465,19 +1327,6 @@ spec:
           verbs:
           - get
           - list
-        - nonResourceURLs:
-          - /hardware-manager/provisioning/*
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - update
-        - nonResourceURLs:
-          - /internal/v1/caas-alerts/alertmanager
-          verbs:
-          - create
-          - post
         - nonResourceURLs:
           - /o2ims-infrastructureCluster/v1/alarmDictionaries/*
           - /o2ims-infrastructureCluster/v1/nodeClusterTypes/*
@@ -1577,7 +1426,6 @@ spec:
           - clcm.openshift.io
           resources:
           - clustertemplates
-          - hardwareplugins
           - nodes
           - provisioningrequests
           verbs:
@@ -1599,19 +1447,11 @@ spec:
           - clcm.openshift.io
           resources:
           - clustertemplates/status
-          - hardwareplugins/status
           - hardwareprofiles/status
           - nodes/status
           - provisioningrequests/status
           verbs:
           - get
-          - patch
-          - update
-        - apiGroups:
-          - clcm.openshift.io
-          resources:
-          - hardwareplugins/finalizers
-          verbs:
           - patch
           - update
         - apiGroups:

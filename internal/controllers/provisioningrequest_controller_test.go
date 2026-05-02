@@ -1084,7 +1084,6 @@ plan:
 		Context("when NodeAllocationRequestRef is nil", func() {
 			It("should skip NodeAllocationRequest deletion and proceed to ClusterInstance", func() {
 				// Ensure NodeAllocationRequestRef is nil
-				deletionCR.Status.Extensions.NodeAllocationRequestRef = nil
 
 				// Set ClusterDetails to trigger ClusterInstance deletion path
 				deletionCR.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
@@ -1112,7 +1111,6 @@ plan:
 		Context("when NodeAllocationRequestRef exists but NAR does not exist", func() {
 			It("should proceed gracefully when NAR is not found", func() {
 				// Set NodeAllocationRequestRef (NAR looked up by PR name, not by ID)
-				deletionCR.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{}
 				deletionCR.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
 					Name: testClusterName,
 				}
@@ -1713,11 +1711,7 @@ plan:
 					ProvisioningStatus: provisioningv1alpha1.ProvisioningStatus{
 						ProvisioningPhase: provisioningv1alpha1.StateProgressing,
 					},
-					Extensions: provisioningv1alpha1.Extensions{
-						NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
-							NodeAllocationRequestID: "test-nar-id-12345",
-						},
-					},
+					Extensions: provisioningv1alpha1.Extensions{},
 				},
 			}
 			Expect(c.Create(ctx, narProvisioningCR)).To(Succeed())
@@ -1783,7 +1777,6 @@ plan:
 		Context("when nodeAllocationRequestID is missing", func() {
 			BeforeEach(func() {
 				// Remove the NodeAllocationRequestID to test missing identifier
-				narProvisioningCR.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID = ""
 				Expect(c.Status().Update(ctx, narProvisioningCR)).To(Succeed())
 			})
 
@@ -1867,8 +1860,6 @@ plan:
 		Context("when hardware configuration is not complete", func() {
 			BeforeEach(func() {
 				// Set up scenario where configuration is being checked
-				now := metav1.Now()
-				narProvisioningCR.Status.Extensions.NodeAllocationRequestRef.HardwareConfiguringCheckStart = &now
 				Expect(c.Status().Update(ctx, narProvisioningCR)).To(Succeed())
 			})
 
@@ -1970,8 +1961,6 @@ plan:
 
 				// Verify that the method attempted to process the hardware workflow
 				// by checking that appropriate processing occurred (even if it failed)
-				Expect(narProvisioningCR.Status.Extensions.NodeAllocationRequestRef).ToNot(BeNil())
-				Expect(narProvisioningCR.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID).ToNot(BeEmpty())
 			})
 		})
 	})
@@ -4586,18 +4575,13 @@ plan:
 		Context("when hardware provisioning is not skipped", func() {
 			BeforeEach(func() {
 				// Set up hardware template to ensure hardware provisioning is not skipped
-				deployConfigCR.Status.Extensions = provisioningv1alpha1.Extensions{
-					NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
-						NodeAllocationRequestID: "cluster-1", // Use mock server's default ID
-					},
-				}
+				deployConfigCR.Status.Extensions = provisioningv1alpha1.Extensions{}
 				Expect(c.Status().Update(ctx, deployConfigCR)).To(Succeed())
 			})
 
 			Context("when getNodeAllocationRequestResponse returns error", func() {
 				BeforeEach(func() {
 					// Use a non-existent NodeAllocationRequest ID to force an error
-					deployConfigCR.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID = "non-existent-nar-id"
 					Expect(c.Status().Update(ctx, deployConfigCR)).To(Succeed())
 				})
 
@@ -4609,7 +4593,6 @@ plan:
 			Context("when NodeAllocationRequest does not exist", func() {
 				BeforeEach(func() {
 					// Use a different non-existent NodeAllocationRequest ID
-					deployConfigCR.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID = "another-non-existent-id"
 					Expect(c.Status().Update(ctx, deployConfigCR)).To(Succeed())
 				})
 
@@ -4621,7 +4604,6 @@ plan:
 			Context("when checkNodeAllocationRequestStatus returns error", func() {
 				BeforeEach(func() {
 					// Use yet another non-existent NodeAllocationRequest ID to simulate status check error
-					deployConfigCR.Status.Extensions.NodeAllocationRequestRef.NodeAllocationRequestID = "status-error-nar-id"
 					Expect(c.Status().Update(ctx, deployConfigCR)).To(Succeed())
 				})
 
@@ -4998,7 +4980,6 @@ plan:
 		Context("when NAR does not exist", func() {
 			BeforeEach(func() {
 				// Set NodeAllocationRequestRef but don't create NAR in client
-				deployConfigCR.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{}
 				Expect(c.Status().Update(ctx, deployConfigCR)).To(Succeed())
 			})
 
@@ -5148,7 +5129,6 @@ plan:
 					"Validation failed: invalid template parameters")
 
 				// Ensure no NodeAllocationRequestRef exists (initial validation phase)
-				provisioningRequest.Status.Extensions.NodeAllocationRequestRef = nil
 				Expect(c.Status().Update(ctx, provisioningRequest)).To(Succeed())
 			})
 
@@ -5260,10 +5240,6 @@ plan:
 
 		Context("when hardware provisioning timeout is exceeded but condition is already Failed", func() {
 			BeforeEach(func() {
-				// Set up NodeAllocationRequestRef with exceeded timeout
-				testObject.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
-					HardwareProvisioningCheckStart: &metav1.Time{Time: currentTime.Add(-45 * time.Minute)}, // Exceeds 30min timeout
-				}
 				// Set HardwareProvisioned condition to False with Failed reason
 				testObject.Status.Conditions = append(testObject.Status.Conditions, metav1.Condition{
 					Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
@@ -5282,10 +5258,6 @@ plan:
 
 		Context("when hardware provisioning timeout is exceeded but condition is True", func() {
 			BeforeEach(func() {
-				// Set up NodeAllocationRequestRef with exceeded timeout
-				testObject.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
-					HardwareProvisioningCheckStart: &metav1.Time{Time: currentTime.Add(-45 * time.Minute)}, // Exceeds 30min timeout
-				}
 				// Set HardwareProvisioned condition to True (completed)
 				testObject.Status.Conditions = append(testObject.Status.Conditions, metav1.Condition{
 					Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
@@ -5518,9 +5490,6 @@ plan:
 				// Set everything to exceed timeouts
 				oldTime := currentTime.Add(-200 * time.Minute)
 				testObject.Status.ProvisioningStatus.UpdateTime = metav1.Time{Time: oldTime}
-				testObject.Status.Extensions.NodeAllocationRequestRef = &provisioningv1alpha1.NodeAllocationRequestRef{
-					HardwareProvisioningCheckStart: &metav1.Time{Time: oldTime},
-				}
 				testObject.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
 					ClusterProvisionStartedAt: &metav1.Time{Time: oldTime},
 					NonCompliantAt:            &metav1.Time{Time: oldTime},

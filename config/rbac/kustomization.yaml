@@ -30,6 +30,4 @@ resources:
 # if you do not want those helpers be installed with your Project.
 - clcm_hardwareprofile_editor_role.yaml
 - clcm_hardwareprofile_viewer_role.yaml
-- clcm_hardwareplugin_editor_role.yaml
-- clcm_hardwareplugin_viewer_role.yaml
 

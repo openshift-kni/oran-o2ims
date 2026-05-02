@@ -334,9 +334,7 @@ var _ = Describe("Helpers", func() {
 					Namespace: pluginNamespace,
 					UID:       "test-uid",
 				},
-				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-					HardwarePluginRef: "test-plugin",
-				},
+				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{},
 			}
 
 			fakeClient = fake.NewClientBuilder().

@@ -415,7 +415,6 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 
 	// Add the needed label to the Agent(s) associated to the current ProvisioningRequest:
 	//   clustertemplates.clcm.openshift.io/templateIds
-	//   clcm.openshift.io/hardwarePluginRef
 	//   clcm.openshift.io/hwMgrNodeId
 
 	agents := &assistedservicev1beta1.AgentList{}
@@ -458,7 +457,7 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 		}
 
 		if t.isHardwareProvisionSkipped() {
-			// Skip adding hardwarePluginRef and hwMgrNodeId labels if hardware provisioning is skipped.
+			// Skip adding hwMgrNodeId label if hardware provisioning is skipped.
 			continue
 		}
 
@@ -496,12 +495,6 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 			}
 
 			foundNode = true
-
-			hwPluginRef := t.ctDetails.templates.HwMgmtDefaults.GetHardwarePluginRef()
-			err = t.setLabelValue(ctx, &agent, ctlrutils.HardwarePluginRefLabel, hwPluginRef)
-			if err != nil {
-				return err
-			}
 
 			err = t.setLabelValue(ctx, &agent, ctlrutils.HardwareManagerNodeIdLabel, string(bmh.UID))
 			if err != nil {
