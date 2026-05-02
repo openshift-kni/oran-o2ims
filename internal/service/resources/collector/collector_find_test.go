@@ -42,7 +42,7 @@ var _ = Describe("Collector findDataSource", func() {
 	It("returns the data source whose Name matches", func() {
 		a := &stubDataSource{name: "alpha"}
 		b := &stubDataSource{name: "beta"}
-		c := NewCollector(nil, nil, nil, nil, []DataSource{a, b})
+		c := NewCollector(nil, nil, nil, []DataSource{a, b})
 		Expect(c.findDataSource("beta")).To(Equal(b))
 		Expect(c.findDataSource("missing")).To(BeNil())
 	})

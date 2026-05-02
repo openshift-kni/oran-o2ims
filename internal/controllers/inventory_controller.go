@@ -73,13 +73,9 @@ import (
 //+kubebuilder:rbac:urls="/o2ims-infrastructureInventory/v1/internal/resources/*",verbs=get
 //+kubebuilder:rbac:urls="/o2ims-infrastructureInventory/v1/resourceTypes",verbs=get;list
 //+kubebuilder:rbac:urls="/o2ims-infrastructureInventory/v1/resourceTypes/*",verbs=get
-//+kubebuilder:rbac:urls="/hardware-manager/inventory/*",verbs=get;list
 //+kubebuilder:rbac:groups="batch",resources=cronjobs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=events,verbs=create;patch;update
 //+kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwareplugins,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwareplugins/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwareplugins/finalizers,verbs=update;patch
 //+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=nodeallocationrequests,verbs=get;list;watch;update;patch;delete
 //+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=nodeallocationrequests/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=nodeallocationrequests/finalizers,verbs=update;patch
@@ -94,7 +90,6 @@ import (
 //+kubebuilder:rbac:groups=metal3.io,resources=hostfirmwarecomponents,verbs=get;create;list;watch;update;patch
 //+kubebuilder:rbac:groups=metal3.io,resources=hostupdatepolicies,verbs=get;create;list;watch;update;patch
 //+kubebuilder:rbac:groups=metal3.io,resources=firmwareschemas,verbs=get;list;watch
-//+kubebuilder:rbac:urls="/hardware-manager/provisioning/*",verbs=get;list;create;update;delete
 
 // Reconciler reconciles a Inventory object
 type Reconciler struct {
@@ -915,14 +910,6 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "hardware_plugin_setup")
 	phaseStartTime = time.Now()
 
-	// Setup HardwarePlugin Manager
-	t.logger.InfoContext(ctx, "Setting up HardwarePlugin Manager")
-	nextReconcile, err = t.setupHardwarePluginManager(ctx, nextReconcile)
-	if err != nil {
-		ctlrutils.LogError(ctx, t.logger, "Failed to setup HardwarePlugin Manager", err)
-		return
-	}
-
 	// Setup Metal3 HardwarePlugin Server
 	t.logger.InfoContext(ctx, "Setting up Metal3 HardwarePlugin Server")
 	nextReconcile, err = t.setupMetal3PluginServer(ctx, nextReconcile)
@@ -1087,19 +1074,6 @@ func (t *reconcilerTask) createResourceServerClusterRole(ctx context.Context) er
 			},
 			{
 				APIGroups: []string{
-					"clcm.openshift.io",
-				},
-				Resources: []string{
-					"hardwareplugins",
-				},
-				Verbs: []string{
-					"get",
-					"list",
-					"watch",
-				},
-			},
-			{
-				APIGroups: []string{
 					"",
 				},
 				Resources: []string{
@@ -1142,13 +1116,33 @@ func (t *reconcilerTask) createResourceServerClusterRole(ctx context.Context) er
 					"watch",
 				},
 			},
+			// The resource collector calls GetResources directly to gather
+			// hardware inventory from BMHs, HardwareData, and AllocatedNodes.
 			{
-				NonResourceURLs: []string{
-					"/hardware-manager/inventory/*",
+				APIGroups: []string{
+					"metal3.io",
+				},
+				Resources: []string{
+					"baremetalhosts",
+					"hardwaredata",
 				},
 				Verbs: []string{
 					"get",
 					"list",
+					"watch",
+				},
+			},
+			{
+				APIGroups: []string{
+					"plugins.clcm.openshift.io",
+				},
+				Resources: []string{
+					"allocatednodes",
+				},
+				Verbs: []string{
+					"get",
+					"list",
+					"watch",
 				},
 			},
 		},

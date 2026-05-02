@@ -11,7 +11,6 @@ packages:
   api/provisioning/v1alpha1: 64
   hwmgr-plugins/controller/utils: 0
   hwmgr-plugins/metal3/controller: 63
-  hwmgr-plugins/metal3/server: 46
   internal: 16
   internal/cmd/server: 40
   internal/controllers: 32

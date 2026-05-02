@@ -5,7 +5,11 @@ metadata:
   name: manager-role
 rules:
 - nonResourceURLs:
-  - /hardware-manager/inventory/*
+  - /internal/v1/caas-alerts/alertmanager
+  verbs:
+  - create
+  - post
+- nonResourceURLs:
   - /o2ims-infrastructureCluster/v1/alarmDictionaries
   - /o2ims-infrastructureCluster/v1/nodeClusterTypes
   - /o2ims-infrastructureCluster/v1/nodeClusters
@@ -13,19 +17,6 @@ rules:
   verbs:
   - get
   - list
-- nonResourceURLs:
-  - /hardware-manager/provisioning/*
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - update
-- nonResourceURLs:
-  - /internal/v1/caas-alerts/alertmanager
-  verbs:
-  - create
-  - post
 - nonResourceURLs:
   - /o2ims-infrastructureCluster/v1/alarmDictionaries/*
   - /o2ims-infrastructureCluster/v1/nodeClusterTypes/*
@@ -125,7 +116,6 @@ rules:
   - clcm.openshift.io
   resources:
   - clustertemplates
-  - hardwareplugins
   - nodes
   - provisioningrequests
   verbs:
@@ -147,19 +137,11 @@ rules:
   - clcm.openshift.io
   resources:
   - clustertemplates/status
-  - hardwareplugins/status
   - hardwareprofiles/status
   - nodes/status
   - provisioningrequests/status
   verbs:
   - get
-  - patch
-  - update
-- apiGroups:
-  - clcm.openshift.io
-  resources:
-  - hardwareplugins/finalizers
-  verbs:
   - patch
   - update
 - apiGroups:

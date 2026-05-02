@@ -10,28 +10,21 @@ import (
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	inventoryclient "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/inventory"
+	metal3controller "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/metal3/controller"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
 )
 
-var _ = Describe("HwPluginDataSource", func() {
+var _ = Describe("HardwareDataSource", func() {
 	var (
-		ds       *HwPluginDataSource
-		cloudID  uuid.UUID
-		pluginID string
+		ds      *HardwareDataSource
+		cloudID uuid.UUID
 	)
 
 	BeforeEach(func() {
 		cloudID = uuid.MustParse("11111111-1111-1111-1111-111111111111")
-		pluginID = "metal3-plugin"
-		ds = &HwPluginDataSource{
-			hwplugin: &hwmgmtv1alpha1.HardwarePlugin{
-				ObjectMeta: metav1.ObjectMeta{Name: pluginID},
-			},
+		ds = &HardwareDataSource{
 			cloudID: cloudID,
 		}
 	})
@@ -43,7 +36,7 @@ var _ = Describe("HwPluginDataSource", func() {
 			ds.Init(id, 3, ch)
 			Expect(ds.GetID()).To(Equal(id))
 			Expect(ds.GetGenerationID()).To(Equal(3))
-			Expect(ds.Name()).To(ContainSubstring(pluginID))
+			Expect(ds.Name()).To(Equal("HardwareDataSource"))
 		})
 
 		It("updates generation via SetGenerationID and IncrGenerationID", func() {
@@ -63,18 +56,18 @@ var _ = Describe("HwPluginDataSource", func() {
 		It("maps a minimal ResourceInfo to models.Resource", func() {
 			poolID := uuid.MustParse("44444444-4444-4444-4444-444444444444")
 			resID := uuid.MustParse("55555555-5555-5555-5555-555555555555")
-			in := inventoryclient.ResourceInfo{
+			in := metal3controller.ResourceInfo{
 				ResourceId:       resID,
 				ResourcePoolId:   poolID,
 				Description:      "node-a",
 				Vendor:           "Dell",
 				Model:            "R640",
 				Memory:           16384,
-				AdminState:       inventoryclient.ResourceInfoAdminStateUNLOCKED,
-				OperationalState: inventoryclient.ResourceInfoOperationalStateENABLED,
-				UsageState:       inventoryclient.ACTIVE,
+				AdminState:       metal3controller.ResourceInfoAdminStateUNLOCKED,
+				OperationalState: metal3controller.ResourceInfoOperationalStateENABLED,
+				UsageState:       metal3controller.ACTIVE,
 				HwProfile:        "profile-1",
-				Processors:       []inventoryclient.ProcessorInfo{},
+				Processors:       []metal3controller.ProcessorInfo{},
 			}
 			out := ds.convertResource(&in)
 			Expect(out.ResourceID).To(Equal(resID))
@@ -84,29 +77,29 @@ var _ = Describe("HwPluginDataSource", func() {
 			Expect(out.Extensions[modelExtension]).To(Equal("R640"))
 			Expect(out.Extensions[memoryExtension]).To(Equal("16384 MiB"))
 			Expect(out.Extensions[hwProfileExtension]).To(Equal("profile-1"))
-			Expect(out.ExternalID).To(Equal(pluginID + "/" + resID.String()))
+			Expect(out.ExternalID).To(Equal(hardwareDataSourceName + "/" + resID.String()))
 		})
 
 		It("includes optional power, labels, allocated, nics, and storage extensions", func() {
 			resID := uuid.MustParse("66666666-6666-6666-6666-666666666666")
 			poolID := uuid.MustParse("77777777-7777-7777-7777-777777777777")
-			ps := inventoryclient.ON
+			ps := metal3controller.ON
 			allocated := true
 			labels := map[string]string{"k": "v"}
-			nics := map[string]inventoryclient.NicInfo{"eth0": {Mac: ptr("00:11:22:33:44:55")}}
-			storage := map[string]inventoryclient.StorageInfo{"sda": {SizeBytes: ptrInt64(1024)}}
-			in := inventoryclient.ResourceInfo{
+			nics := map[string]metal3controller.NicInfo{"eth0": {Mac: ptr("00:11:22:33:44:55")}}
+			storage := map[string]metal3controller.StorageInfo{"sda": {SizeBytes: ptrInt64(1024)}}
+			in := metal3controller.ResourceInfo{
 				ResourceId:       resID,
 				ResourcePoolId:   poolID,
 				Description:      "full",
 				Vendor:           "Vendor",
 				Model:            "Model",
 				Memory:           4096,
-				AdminState:       inventoryclient.ResourceInfoAdminStateLOCKED,
-				OperationalState: inventoryclient.ResourceInfoOperationalStateDISABLED,
-				UsageState:       inventoryclient.BUSY,
+				AdminState:       metal3controller.ResourceInfoAdminStateLOCKED,
+				OperationalState: metal3controller.ResourceInfoOperationalStateDISABLED,
+				UsageState:       metal3controller.BUSY,
 				HwProfile:        "p",
-				Processors:       []inventoryclient.ProcessorInfo{{}},
+				Processors:       []metal3controller.ProcessorInfo{{}},
 				PowerState:       &ps,
 				Labels:           &labels,
 				Allocated:        &allocated,
@@ -114,7 +107,7 @@ var _ = Describe("HwPluginDataSource", func() {
 				Storage:          &storage,
 			}
 			out := ds.convertResource(&in)
-			Expect(out.Extensions[powerStateExtension]).To(Equal(string(inventoryclient.ON)))
+			Expect(out.Extensions[powerStateExtension]).To(Equal(string(metal3controller.ON)))
 			Expect(out.Extensions[labelsExtension]).To(Equal(labels))
 			Expect(out.Extensions[allocatedExtension]).To(BeTrue())
 			Expect(out.Extensions[nicsExtension]).To(Equal(nics))
@@ -129,7 +122,7 @@ var _ = Describe("HwPluginDataSource", func() {
 
 		It("builds a resource type from resource extensions", func() {
 			res := &models.Resource{
-				Extensions: map[string]interface{}{
+				Extensions: map[string]any{
 					vendorExtension: "Acme",
 					modelExtension:  "Box",
 				},

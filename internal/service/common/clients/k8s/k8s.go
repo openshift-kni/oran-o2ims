@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
+	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
@@ -74,6 +75,7 @@ func GetSchemeForHub() *runtime.Scheme {
 	utilruntime.Must(batchv1.AddToScheme(scheme))
 	utilruntime.Must(hwmgmtv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(pluginsv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(metal3v1alpha1.AddToScheme(scheme))
 	utilruntime.Must(inventoryv1alpha1.AddToScheme(scheme))
 
 	return scheme

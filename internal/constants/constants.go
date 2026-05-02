@@ -17,8 +17,7 @@ const (
 
 // Hardware Manager API path prefixes
 const (
-	HardwareManagerProvisioningAPIPath = "/hardware-manager/provisioning"
-	HardwareManagerInventoryAPIPath    = "/hardware-manager/inventory"
+	HardwareManagerInventoryAPIPath = "/hardware-manager/inventory"
 )
 
 // API version suffix
@@ -26,13 +25,12 @@ const APIVersionV1 = "/v1"
 
 // Full API base URLs (computed constants)
 var (
-	O2IMSInventoryBaseURL              = O2IMSInventoryAPIPath + APIVersionV1
-	O2IMSClusterBaseURL                = O2IMSClusterAPIPath + APIVersionV1
-	O2IMSMonitoringBaseURL             = O2IMSMonitoringAPIPath + APIVersionV1
-	O2IMSArtifactsBaseURL              = O2IMSArtifactsAPIPath + APIVersionV1
-	O2IMSProvisioningBaseURL           = O2IMSProvisioningAPIPath + APIVersionV1
-	HardwareManagerProvisioningBaseURL = HardwareManagerProvisioningAPIPath + APIVersionV1
-	HardwareManagerInventoryBaseURL    = HardwareManagerInventoryAPIPath + APIVersionV1
+	O2IMSInventoryBaseURL           = O2IMSInventoryAPIPath + APIVersionV1
+	O2IMSClusterBaseURL             = O2IMSClusterAPIPath + APIVersionV1
+	O2IMSMonitoringBaseURL          = O2IMSMonitoringAPIPath + APIVersionV1
+	O2IMSArtifactsBaseURL           = O2IMSArtifactsAPIPath + APIVersionV1
+	O2IMSProvisioningBaseURL        = O2IMSProvisioningAPIPath + APIVersionV1
+	HardwareManagerInventoryBaseURL = HardwareManagerInventoryAPIPath + APIVersionV1
 )
 
 // API endpoint path segments
@@ -79,7 +77,6 @@ const (
 
 // Hardware plugin command names
 const (
-	HardwarePluginManagerCmd       = "hardwareplugin-manager"
 	Metal3HardwarePluginManagerCmd = "metal3-hardwareplugin-manager"
 )
 

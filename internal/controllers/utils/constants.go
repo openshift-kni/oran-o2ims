@@ -41,11 +41,6 @@ const (
 	InventoryProvisioningServerName = InventoryProvisioning + serverSuffix
 )
 
-const (
-	HardwarePluginManager           = "hardwareplugin-manager"
-	HardwarePluginManagerServerName = HardwarePluginManager + serverSuffix
-)
-
 // HardwarePlugins
 const (
 	Metal3Plugin           = "metal3-hardwareplugin"
@@ -122,15 +117,6 @@ var (
 		fmt.Sprintf("--tls-server-key=%s/%s", constants.TLSServerMountPath, constants.TLSKeyField),
 	}
 
-	HardwarePluginManagerArgs = []string{
-		constants.HardwarePluginManagerCmd,
-		constants.StartSubcommand,
-		constants.HealthProbeFlag + "=" + constants.HealthProbePort,
-		constants.MetricsFlag + "=" + constants.MetricsPort,
-		fmt.Sprintf("--metrics-tls-cert-dir=%s", constants.TLSServerMountPath),
-		constants.LeaderElectFlag,
-	}
-
 	Metal3PluginServerArgs = []string{
 		constants.Metal3HardwarePluginManagerCmd,
 		constants.StartSubcommand,
@@ -138,9 +124,6 @@ var (
 		constants.MetricsFlag + "=" + constants.MetricsPort,
 		fmt.Sprintf("--metrics-tls-cert-dir=%s", constants.TLSServerMountPath),
 		constants.LeaderElectFlag,
-		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", constants.DefaultContainerPort),
-		fmt.Sprintf("--tls-server-cert=%s/%s", constants.TLSServerMountPath, constants.TLSCertField),
-		fmt.Sprintf("--tls-server-key=%s/%s", constants.TLSServerMountPath, constants.TLSKeyField),
 	}
 )
 
@@ -258,11 +241,6 @@ const (
 	CTPolicyTemplatesAnnotation = "clustertemplates.clcm.openshift.io/templates"
 )
 
-// Hardware Manager plugin constants
-const (
-	UnitTestHwPluginRef = "hwmgr"
-)
-
 // POD Port Values
 const (
 	DefaultServiceTargetPort = "https"
@@ -309,7 +287,6 @@ const (
 	LocalClusterLabelName     = "local-cluster"
 
 	ClusterTemplateArtifactsLabel = "clustertemplates.clcm.openshift.io/templateId"
-	HardwarePluginRefLabel        = "clcm.openshift.io/hardwarePluginRef"
 	HardwareManagerNodeIdLabel    = "clcm.openshift.io/hwMgrNodeId"
 )
 
@@ -335,10 +312,6 @@ const (
 	OAuthClientIDField     = "client-id"
 	OAuthClientSecretField = "client-secret"
 )
-
-// HardwarePluginValidationEndpoint is the endpoint that the HardwarePlugin manager will try to reach for the plugin being
-// registered.
-const HardwarePluginValidationEndpoint = "/hardware-manager/provisioning/api_versions"
 
 const AllocatedNodeLabel = "clcm.openshift.io/allocated-node"
 

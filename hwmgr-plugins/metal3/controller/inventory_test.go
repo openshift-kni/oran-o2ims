@@ -26,7 +26,6 @@ import (
 
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/inventory"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
 
@@ -214,14 +213,14 @@ var _ = Describe("Inventory", func() {
 			bmh := createBasicBMH("test-bmh", "test-ns")
 			bmh.Spec.Online = true
 			result := getResourceInfoAdminState(bmh)
-			Expect(result).To(Equal(inventory.ResourceInfoAdminStateUNLOCKED))
+			Expect(result).To(Equal(ResourceInfoAdminStateUNLOCKED))
 		})
 
 		It("should return LOCKED when BMH is offline", func() {
 			bmh := createBasicBMH("test-bmh", "test-ns")
 			bmh.Spec.Online = false
 			result := getResourceInfoAdminState(bmh)
-			Expect(result).To(Equal(inventory.ResourceInfoAdminStateLOCKED))
+			Expect(result).To(Equal(ResourceInfoAdminStateLOCKED))
 		})
 	})
 
@@ -387,7 +386,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioned
 
 			result := getResourceInfoOperationalState(bmh)
-			Expect(result).To(Equal(inventory.ResourceInfoOperationalStateENABLED))
+			Expect(result).To(Equal(ResourceInfoOperationalStateENABLED))
 		})
 
 		It("should return ENABLED when externally provisioned BMH is fully operational", func() {
@@ -398,7 +397,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.Provisioning.State = metal3v1alpha1.StateExternallyProvisioned
 
 			result := getResourceInfoOperationalState(bmh)
-			Expect(result).To(Equal(inventory.ResourceInfoOperationalStateENABLED))
+			Expect(result).To(Equal(ResourceInfoOperationalStateENABLED))
 		})
 
 		It("should return DISABLED when BMH is not operational", func() {
@@ -409,7 +408,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioned
 
 			result := getResourceInfoOperationalState(bmh)
-			Expect(result).To(Equal(inventory.ResourceInfoOperationalStateDISABLED))
+			Expect(result).To(Equal(ResourceInfoOperationalStateDISABLED))
 		})
 
 		It("should return DISABLED when BMH is offline", func() {
@@ -420,7 +419,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioned
 
 			result := getResourceInfoOperationalState(bmh)
-			Expect(result).To(Equal(inventory.ResourceInfoOperationalStateDISABLED))
+			Expect(result).To(Equal(ResourceInfoOperationalStateDISABLED))
 		})
 
 		It("should return DISABLED when BMH is not powered on", func() {
@@ -431,7 +430,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioned
 
 			result := getResourceInfoOperationalState(bmh)
-			Expect(result).To(Equal(inventory.ResourceInfoOperationalStateDISABLED))
+			Expect(result).To(Equal(ResourceInfoOperationalStateDISABLED))
 		})
 
 		It("should return DISABLED when BMH is not provisioned", func() {
@@ -442,7 +441,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.Provisioning.State = metal3v1alpha1.StateAvailable
 
 			result := getResourceInfoOperationalState(bmh)
-			Expect(result).To(Equal(inventory.ResourceInfoOperationalStateDISABLED))
+			Expect(result).To(Equal(ResourceInfoOperationalStateDISABLED))
 		})
 	})
 
@@ -452,7 +451,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.PoweredOn = true
 			result := getResourceInfoPowerState(bmh)
 			Expect(result).ToNot(BeNil())
-			Expect(*result).To(Equal(inventory.ON))
+			Expect(*result).To(Equal(ON))
 		})
 
 		It("should return OFF when BMH is powered off", func() {
@@ -460,7 +459,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.PoweredOn = false
 			result := getResourceInfoPowerState(bmh)
 			Expect(result).ToNot(BeNil())
-			Expect(*result).To(Equal(inventory.OFF))
+			Expect(*result).To(Equal(OFF))
 		})
 	})
 
@@ -844,7 +843,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.PoweredOn = true
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.ACTIVE))
+			Expect(result).To(Equal(ACTIVE))
 		})
 
 		It("should return ACTIVE for externally provisioned BMH with all conditions met", func() {
@@ -855,7 +854,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.PoweredOn = true
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.ACTIVE))
+			Expect(result).To(Equal(ACTIVE))
 		})
 
 		It("should return BUSY for provisioned BMH when not operational", func() {
@@ -864,7 +863,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusError
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.BUSY))
+			Expect(result).To(Equal(BUSY))
 		})
 
 		It("should return BUSY for provisioned BMH when offline", func() {
@@ -874,7 +873,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Spec.Online = false
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.BUSY))
+			Expect(result).To(Equal(BUSY))
 		})
 
 		It("should return BUSY for provisioned BMH when powered off", func() {
@@ -885,7 +884,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.PoweredOn = false
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.BUSY))
+			Expect(result).To(Equal(BUSY))
 		})
 
 		It("should return IDLE for available BMH with operational status OK", func() {
@@ -894,7 +893,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusOK
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.IDLE))
+			Expect(result).To(Equal(IDLE))
 		})
 
 		It("should return BUSY for available BMH when not operational", func() {
@@ -903,7 +902,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusError
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.BUSY))
+			Expect(result).To(Equal(BUSY))
 		})
 
 		It("should return BUSY for transitional states - provisioning", func() {
@@ -911,7 +910,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioning
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.BUSY))
+			Expect(result).To(Equal(BUSY))
 		})
 
 		It("should return BUSY for transitional states - preparing", func() {
@@ -919,7 +918,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.Provisioning.State = metal3v1alpha1.StatePreparing
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.BUSY))
+			Expect(result).To(Equal(BUSY))
 		})
 
 		It("should return BUSY for transitional states - deprovisioning", func() {
@@ -927,7 +926,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.Provisioning.State = metal3v1alpha1.StateDeprovisioning
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.BUSY))
+			Expect(result).To(Equal(BUSY))
 		})
 
 		It("should return BUSY for transitional states - inspecting", func() {
@@ -935,7 +934,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.Provisioning.State = metal3v1alpha1.StateInspecting
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.BUSY))
+			Expect(result).To(Equal(BUSY))
 		})
 
 		It("should return BUSY for transitional states - powering off before delete", func() {
@@ -943,7 +942,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.Provisioning.State = metal3v1alpha1.StatePoweringOffBeforeDelete
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.BUSY))
+			Expect(result).To(Equal(BUSY))
 		})
 
 		It("should return BUSY for transitional states - deleting", func() {
@@ -951,7 +950,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.Provisioning.State = metal3v1alpha1.StateDeleting
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.BUSY))
+			Expect(result).To(Equal(BUSY))
 		})
 
 		It("should return UNKNOWN for unrecognized states", func() {
@@ -960,7 +959,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.Provisioning.State = ""
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.UNKNOWN))
+			Expect(result).To(Equal(UNKNOWN))
 		})
 	})
 
@@ -1135,19 +1134,19 @@ var _ = Describe("Inventory", func() {
 
 			result := getResourceInfo(bmh, node, hwdata, poolNameToUID)
 
-			Expect(result.AdminState).To(Equal(inventory.ResourceInfoAdminStateUNLOCKED))
+			Expect(result.AdminState).To(Equal(ResourceInfoAdminStateUNLOCKED))
 			Expect(result.Description).To(Equal("Test description"))
 			Expect(result.HwProfile).To(Equal("profile123"))
 			Expect(result.Memory).To(Equal(8192))
 			Expect(result.Model).To(Equal("PowerEdge R640"))
 			Expect(result.Name).To(Equal("test-bmh"))
-			Expect(result.OperationalState).To(Equal(inventory.ResourceInfoOperationalStateENABLED))
-			Expect(*result.PowerState).To(Equal(inventory.ON))
+			Expect(result.OperationalState).To(Equal(ResourceInfoOperationalStateENABLED))
+			Expect(*result.PowerState).To(Equal(ON))
 			Expect(result.Processors).To(HaveLen(1))
 			Expect(result.ResourceId).To(Equal(uuid.MustParse(string(testUID))))
 			Expect(result.ResourcePoolId).To(Equal(uuid.MustParse(testPoolUID)))
 			Expect(*result.Tags).To(ContainElement("zone: zone1"))
-			Expect(result.UsageState).To(Equal(inventory.ACTIVE))
+			Expect(result.UsageState).To(Equal(ACTIVE))
 			Expect(result.Vendor).To(Equal("Dell Inc."))
 			Expect(*result.GlobalAssetId).To(Equal("ABC123456"))
 			Expect(result.Allocated).ToNot(BeNil())
@@ -1212,11 +1211,9 @@ var _ = Describe("Inventory", func() {
 			result, err := GetResources(ctx, logger, client)
 			Expect(err).ToNot(HaveOccurred())
 
-			response, ok := result.(inventory.GetResources200JSONResponse)
-			Expect(ok).To(BeTrue())
-			Expect(response).To(HaveLen(1))
+			Expect(result).To(HaveLen(1))
 
-			resource := response[0]
+			resource := result[0]
 			Expect(resource.Name).To(Equal("test-bmh"))
 			Expect(resource.ResourceId).To(Equal(uuid.MustParse(string(testUID))))
 			Expect(resource.ResourcePoolId).To(Equal(uuid.MustParse(string(poolUID))))
@@ -1257,11 +1254,9 @@ var _ = Describe("Inventory", func() {
 			result, err := GetResources(ctx, logger, client)
 			Expect(err).ToNot(HaveOccurred())
 
-			response, ok := result.(inventory.GetResources200JSONResponse)
-			Expect(ok).To(BeTrue())
-			Expect(response).To(HaveLen(1))
+			Expect(result).To(HaveLen(1))
 
-			resource := response[0]
+			resource := result[0]
 			Expect(resource.Name).To(Equal("test-bmh"))
 			Expect(resource.HwProfile).To(Equal("")) // No corresponding node
 		})
@@ -1281,9 +1276,7 @@ var _ = Describe("Inventory", func() {
 			result, err := GetResources(ctx, logger, client)
 			Expect(err).ToNot(HaveOccurred())
 
-			response, ok := result.(inventory.GetResources200JSONResponse)
-			Expect(ok).To(BeTrue())
-			Expect(response).To(BeEmpty())
+			Expect(result).To(BeEmpty())
 		})
 
 		It("should omit BMH when only resource-selector labels exist (no resolvable resourcePoolId)", func() {
@@ -1302,9 +1295,7 @@ var _ = Describe("Inventory", func() {
 			result, err := GetResources(ctx, logger, client)
 			Expect(err).ToNot(HaveOccurred())
 
-			response, ok := result.(inventory.GetResources200JSONResponse)
-			Expect(ok).To(BeTrue())
-			Expect(response).To(BeEmpty())
+			Expect(result).To(BeEmpty())
 		})
 
 		It("should include only BMHs whose pool label maps to a ResourcePool CR", func() {
@@ -1342,11 +1333,9 @@ var _ = Describe("Inventory", func() {
 			result, err := GetResources(ctx, logger, client)
 			Expect(err).ToNot(HaveOccurred())
 
-			response, ok := result.(inventory.GetResources200JSONResponse)
-			Expect(ok).To(BeTrue())
-			Expect(response).To(HaveLen(1))
-			Expect(response[0].Name).To(Equal("good-bmh"))
-			Expect(response[0].ResourcePoolId).To(Equal(uuid.MustParse(string(poolUID))))
+			Expect(result).To(HaveLen(1))
+			Expect(result[0].Name).To(Equal("good-bmh"))
+			Expect(result[0].ResourcePoolId).To(Equal(uuid.MustParse(string(poolUID))))
 		})
 
 		It("should skip BMHs whose ResourcePool exists but is not Ready", func() {
@@ -1380,9 +1369,7 @@ var _ = Describe("Inventory", func() {
 			result, err := GetResources(ctx, logger, client)
 			Expect(err).ToNot(HaveOccurred())
 
-			response, ok := result.(inventory.GetResources200JSONResponse)
-			Expect(ok).To(BeTrue())
-			Expect(response).To(BeEmpty())
+			Expect(result).To(BeEmpty())
 		})
 	})
 

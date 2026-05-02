@@ -214,9 +214,22 @@ func HasApiEndpoints(serverName string) bool {
 		serverName == InventoryAlarmServerName ||
 		serverName == InventoryResourceServerName ||
 		serverName == InventoryArtifactsServerName ||
-		serverName == InventoryProvisioningServerName ||
-		serverName == HardwarePluginManagerServerName ||
-		serverName == Metal3PluginServerName
+		serverName == InventoryProvisioningServerName
+}
+
+// HasMetrics determines whether a server exposes a metrics endpoint that
+// requires TLS. Servers with API endpoints also serve metrics, but this
+// function identifies servers that serve metrics without API endpoints.
+func HasMetrics(serverName string) bool {
+	return serverName == Metal3PluginServerName
+}
+
+// NeedsServingCert determines whether a server needs a TLS serving
+// certificate. This is true for servers with API endpoints or metrics.
+// The certificate is auto-provisioned by OpenShift's service-ca controller
+// from a Service with a serving-cert-secret-name annotation.
+func NeedsServingCert(serverName string) bool {
+	return HasApiEndpoints(serverName) || HasMetrics(serverName)
 }
 
 // HasDatabase determines whether a server owns a logical database instance
@@ -232,9 +245,7 @@ func HasDatabase(serverName string) bool {
 func RequiresInternalListener(serverName string) bool {
 	return serverName == InventoryResourceServerName ||
 		serverName == InventoryClusterServerName ||
-		serverName == InventoryAlarmServerName ||
-		serverName == HardwarePluginManagerServerName ||
-		serverName == Metal3PluginServerName
+		serverName == InventoryAlarmServerName
 }
 
 // IsOAuthEnabled determines if the Inventory CR has OAuth attributes provided.
@@ -250,9 +261,7 @@ func NeedsOAuthAccess(serverName string) bool {
 		serverName == InventoryClusterServerName ||
 		serverName == InventoryAlarmServerName ||
 		serverName == InventoryArtifactsServerName ||
-		serverName == InventoryProvisioningServerName ||
-		serverName == HardwarePluginManagerServerName ||
-		serverName == Metal3PluginServerName
+		serverName == InventoryProvisioningServerName
 }
 
 // getTLSClientCertificateSecret determines whether there is a TLS secret configured.
@@ -269,7 +278,7 @@ func getTLSClientCertificateSecret(inventory *inventoryv1alpha1.Inventory) *stri
 func GetDeploymentVolumes(serverName string, inventory *inventoryv1alpha1.Inventory) []corev1.Volume {
 	var volumes []corev1.Volume
 	tlsDefaultMode := int32(os.FileMode(0o400))
-	if HasApiEndpoints(serverName) {
+	if NeedsServingCert(serverName) {
 		volumes = append(volumes, []corev1.Volume{
 			{
 				Name: "tls",
@@ -318,7 +327,7 @@ func GetDeploymentVolumes(serverName string, inventory *inventoryv1alpha1.Invent
 // GetDeploymentVolumeMounts builds the list of volume mounts applicable to the specified server
 func GetDeploymentVolumeMounts(serverName string, inventory *inventoryv1alpha1.Inventory) []corev1.VolumeMount {
 	var mounts []corev1.VolumeMount
-	if HasApiEndpoints(serverName) {
+	if NeedsServingCert(serverName) {
 		mounts = append(mounts, []corev1.VolumeMount{
 			{
 				Name:      "tls",
@@ -533,12 +542,6 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 
 		// Add OAuth command line arguments
 		result = addArgsForOAuth(inventory, result)
-		return
-	}
-
-	// HwMgr Plugin Controller
-	if serverName == HardwarePluginManagerServerName {
-		result = slices.Clone(HardwarePluginManagerArgs)
 		return
 	}
 

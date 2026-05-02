@@ -7,9 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package cmd
 
 import (
-	"context"
 	"crypto/tls"
-	"fmt"
 	"log/slog"
 
 	"github.com/go-logr/logr"
@@ -29,14 +27,12 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	hwpluginserver "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/provisioning"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	metal3ctrl "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/metal3/controller"
-	metal3server "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/metal3/server"
 	"github.com/openshift-kni/oran-o2ims/internal"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/exit"
-	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
 var (
@@ -52,7 +48,7 @@ func init() {
 	utilruntime.Must(inventoryv1alpha1.AddToScheme(scheme))
 }
 
-// Create creates and returns the `start` command.
+// Start creates and returns the `metal3-hardwareplugin-manager` command.
 func Start() *cobra.Command {
 	result := &cobra.Command{
 		Use:   constants.Metal3HardwarePluginManagerCmd,
@@ -63,17 +59,18 @@ func Start() *cobra.Command {
 	return result
 }
 
-// ControllerManagerCommand contains the data and logic needed to run the `metal3-hardwareplugin-manager start` command.
+// ControllerManagerCommand contains the data and logic needed to run the
+// `metal3-hardwareplugin-manager start` command.
 type ControllerManagerCommand struct {
 	metricsAddr          string
 	metricsCertDir       string
 	enableHTTP2          bool
 	enableLeaderElection bool
 	probeAddr            string
-	svcutils.CommonServerConfig
 }
 
-// NewControllerManager creates a new runner that knows how to execute the `metal3-hardwareplugin-manager start` command.
+// NewControllerManager creates a new runner that knows how to execute the
+// `metal3-hardwareplugin-manager start` command.
 func NewControllerManager() *ControllerManagerCommand {
 	return &ControllerManagerCommand{}
 }
@@ -121,50 +118,22 @@ func ControllerManager() *cobra.Command {
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.",
 	)
-	flags.StringVar(
-		&c.Listener.Address,
-		svcutils.ListenerFlagName,
-		fmt.Sprintf("%s:%d", constants.Localhost, constants.DefaultContainerPort),
-		"API listener address",
-	)
-	flags.StringVar(
-		&c.TLS.CertFile,
-		svcutils.ServerCertFileFlagName,
-		fmt.Sprintf("%s/tls.crt", constants.TLSServerMountPath),
-		"Server certificate file",
-	)
-	flags.StringVar(
-		&c.TLS.KeyFile,
-		svcutils.ServerKeyFileFlagName,
-		fmt.Sprintf("%s/tls.key", constants.TLSServerMountPath),
-		"Server private key file",
-	)
 	return result
 }
 
 // run executes the `metal3-hardwareplugin-manager start` command.
 func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error {
-
+	_ = argv
 	ctx := cmd.Context()
 
-	// Set the logger from context
 	logger := internal.LoggerFromContext(ctx)
 
-	// Configure klog to use our structured logger for vendor modules:
 	klog.SetSlogLogger(logger)
-
 	logAdapter := logr.FromSlogHandler(logger.Handler())
 	ctrl.SetLogger(logAdapter)
 	klog.SetLogger(logAdapter)
 
-	// Set the TLS options
-	// If the enable-http2 flag is false (the default), http/2 will be disabled due to its vulnerabilities.
-	// More specifically, disabling http/2 will prevent from being vulnerable to the HTTP/2 Stream
-	// Cancelation and Rapid Reset CVEs. For more information see:
-	// - https://github.com/advisories/GHSA-qppj-fm5r-hxr3
-	// - https://github.com/advisories/GHSA-4374-p667-p6c8
 	tlsOpts := []func(*tls.Config){}
-
 	if !c.enableHTTP2 {
 		tlsOpts = append(tlsOpts, func(c *tls.Config) {
 			logger.InfoContext(ctx, "disabling http/2")
@@ -195,7 +164,8 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
-	_, err = metal3ctrl.SetupMetal3Controllers(mgr, hwpluginserver.GetMetal3HWPluginNamespace(), logger)
+	pluginNamespace := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
+	_, err = metal3ctrl.SetupMetal3Controllers(mgr, pluginNamespace, logger)
 	if err != nil {
 		logger.ErrorContext(ctx, "Unable to create metal3 plugin controller",
 			slog.String("controller", "Metal3HWPlugin"), slog.String("error", err.Error()))
@@ -212,32 +182,11 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
-	serverErrors := make(chan error, 1)
-
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	go func() {
-		logger.Info("Starting Metal3 HardwarePlugin API server")
-		err = metal3server.Serve(ctx, logger, c.CommonServerConfig, mgr.GetClient(), mgr.GetAPIReader())
-	}()
-
-	go func() {
-		logger.Info("Starting manager")
-		if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-			logger.ErrorContext(ctx, "Problem running manager", slog.String("error", err.Error()))
-			serverErrors <- err
-			return
-		}
-		// The manager has terminated normally. Cancel the context to allow the API server to shutdown
-		cancel()
-	}()
-
-	select {
-	case err = <-serverErrors:
-		// Server failed to start
-		logger.ErrorContext(ctx, "Problem running internal server", slog.String("error", err.Error()))
+	logger.Info("Starting manager")
+	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+		logger.ErrorContext(ctx, "Problem running manager", slog.String("error", err.Error()))
 		return exit.Error(1)
-	case <-ctx.Done():
-		return exit.Error(0)
 	}
+
+	return nil
 }

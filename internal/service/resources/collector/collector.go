@@ -61,11 +61,6 @@ type NotificationHandler interface {
 	Notify(ctx context.Context, event *notifier.Notification)
 }
 
-// DataSourceLoader defines an interface to be used to load dynamic data sources
-type DataSourceLoader interface {
-	Load(ctx context.Context) ([]DataSource, error)
-}
-
 // Collector defines the attributes required by the collector implementation.
 type Collector struct {
 	pool                *pgxpool.Pool // Direct pool injection for transaction operations
@@ -73,17 +68,15 @@ type Collector struct {
 	repository          *repo.ResourcesRepository
 	dataSources         []DataSource
 	AsyncChangeEvents   chan *async.AsyncChangeEvent
-	loader              DataSourceLoader
 }
 
 // NewCollector creates a new collector instance
-func NewCollector(pool *pgxpool.Pool, repo *repo.ResourcesRepository, notificationHandler NotificationHandler, loader DataSourceLoader, dataSources []DataSource) *Collector {
+func NewCollector(pool *pgxpool.Pool, repo *repo.ResourcesRepository, notificationHandler NotificationHandler, dataSources []DataSource) *Collector {
 	return &Collector{
 		pool:                pool,
 		repository:          repo,
 		notificationHandler: notificationHandler,
 		dataSources:         dataSources,
-		loader:              loader,
 		AsyncChangeEvents:   make(chan *async.AsyncChangeEvent, asyncEventBufferSize),
 	}
 }
@@ -92,11 +85,6 @@ func NewCollector(pool *pgxpool.Pool, repo *repo.ResourcesRepository, notificati
 func (c *Collector) Run(ctx context.Context) error {
 	if err := c.init(ctx); err != nil {
 		return err
-	}
-
-	if err := c.loadDynamicDataSources(ctx); err != nil {
-		slog.Warn("failed to load dynamic data sources", "error", err)
-		// this will get retried later
 	}
 
 	// Start listening for async events
@@ -130,34 +118,6 @@ func (c *Collector) findDataSource(name string) DataSource {
 			return dataSource
 		}
 	}
-	return nil
-}
-
-// loadDynamicDataSources attempts to load any dynamic data sources that aren't necessarily known at init time.
-func (c *Collector) loadDynamicDataSources(ctx context.Context) error {
-	slog.Info("Loading dynamic data sources")
-	result, err := c.loader.Load(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to load data sources: %w", err)
-	}
-
-	count := 0
-	for _, dataSource := range result {
-		if found := c.findDataSource(dataSource.Name()); found != nil {
-			continue
-		}
-
-		err = c.initDataSource(ctx, dataSource)
-		if err != nil {
-			return fmt.Errorf("failed to initialize dynamic data source %s: %w", dataSource.Name(), err)
-		}
-
-		c.dataSources = append(c.dataSources, dataSource)
-		slog.Info("Data source dynamically loaded", "name", dataSource.Name())
-		count++
-	}
-
-	slog.Info("Loaded dynamic data sources", "count", count)
 	return nil
 }
 
@@ -222,11 +182,6 @@ func (c *Collector) watchForChanges(ctx context.Context) error {
 // gracefully.  If a truly unrecoverable error happens then a panic should be used to restart the process.
 func (c *Collector) execute(ctx context.Context) {
 	slog.Debug("collector loop running", "sources", len(c.dataSources))
-
-	if err := c.loadDynamicDataSources(ctx); err != nil {
-		slog.Warn("failed to load dynamic data sources", "error", err)
-		// this will get retried later
-	}
 
 	for _, d := range c.dataSources {
 		rd, ok := d.(ResourceDataSource)

@@ -10,32 +10,34 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"sync/atomic"
 
 	"github.com/google/uuid"
 
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	inventoryclient "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/inventory"
+	metal3controller "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/metal3/controller"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
 )
 
 // Interface compile enforcement
-var _ ResourceDataSource = (*HwPluginDataSource)(nil)
+var _ ResourceDataSource = (*HardwareDataSource)(nil)
 
-// HwPluginDataSource defines an instance of a data source collector that interacts with the ACM search-api
-type HwPluginDataSource struct {
+// HardwareDataSource collects hardware inventory data (BMHs, AllocatedNodes)
+// directly via the K8s client.
+type HardwareDataSource struct {
 	dataSourceID  uuid.UUID
 	generationID  atomic.Int32
-	hwplugin      *hwmgmtv1alpha1.HardwarePlugin
 	cloudID       uuid.UUID
 	globalCloudID uuid.UUID
-	client        *inventoryclient.InventoryClient
+	hubClient     rtclient.Client
 }
+
+// hardwareDataSourceName is used for UUID generation and external IDs.
+// This value must remain stable to ensure consistent resource UUIDs.
+const hardwareDataSourceName = "metal3-hwplugin"
 
 // Defines the UUID namespace values used to generate name based UUID values for inventory objects.
 // These values are selected arbitrarily.
@@ -60,62 +62,55 @@ const (
 	storageExtension          = "storage"
 )
 
-// NewHwPluginDataSource creates a new instance of an ACM data source collector whose purpose is to collect data from the
-// ACM search API to be included in the resource, resource pool, and resource type tables.
-func NewHwPluginDataSource(ctx context.Context, hubClient rtclient.Client, hwplugin *hwmgmtv1alpha1.HardwarePlugin, cloudID, globalCloudID uuid.UUID) (DataSource, error) {
-	slog.Info("Creating inventory API client", "name", hwplugin.Name)
-	inventoryClient, err := inventoryclient.NewInventoryClient(ctx, hubClient, hwplugin)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get inventory client for HardwarePlugin '%s': %w", hwplugin.Name, err)
-	}
-
-	return &HwPluginDataSource{
-		hwplugin:      hwplugin,
+// NewHardwareDataSource creates a hardware inventory data source that collects
+// BMH resource data directly via the K8s client.
+func NewHardwareDataSource(hubClient rtclient.Client, cloudID, globalCloudID uuid.UUID) DataSource {
+	return &HardwareDataSource{
 		cloudID:       cloudID,
 		globalCloudID: globalCloudID,
-		client:        inventoryClient,
-	}, nil
+		hubClient:     hubClient,
+	}
 }
 
 // Name returns the name of this data source
-func (d *HwPluginDataSource) Name() string {
-	return fmt.Sprintf("HardwarePlugin(name=%s)", d.hwplugin.Name)
+func (d *HardwareDataSource) Name() string {
+	return "HardwareDataSource"
 }
 
 // GetID returns the data source ID for this data source
-func (d *HwPluginDataSource) GetID() uuid.UUID {
+func (d *HardwareDataSource) GetID() uuid.UUID {
 	return d.dataSourceID
 }
 
 // Init initializes the data source with its configuration data; including the ID, the GenerationID, and its extension
 // values if provided.
-func (d *HwPluginDataSource) Init(uuid uuid.UUID, generationID int, asyncEventChannel chan<- *async.AsyncChangeEvent) {
+func (d *HardwareDataSource) Init(uuid uuid.UUID, generationID int, asyncEventChannel chan<- *async.AsyncChangeEvent) {
 	d.dataSourceID = uuid
 	d.generationID.Store(int32(generationID)) //nolint:gosec // generationID is a small counter, overflow impossible
 }
 
 // SetGenerationID sets the current generation id for this data source.  This value is expected to
 // be restored from persistent storage at initialization time.
-func (d *HwPluginDataSource) SetGenerationID(value int) {
+func (d *HardwareDataSource) SetGenerationID(value int) {
 	d.generationID.Store(int32(value)) //nolint:gosec // generationID is a small counter, overflow impossible
 }
 
 // GetGenerationID retrieves the current generation id for this data source.
-func (d *HwPluginDataSource) GetGenerationID() int {
+func (d *HardwareDataSource) GetGenerationID() int {
 	return int(d.generationID.Load())
 }
 
 // IncrGenerationID increments the current generation id for this data source.
-func (d *HwPluginDataSource) IncrGenerationID() int {
+func (d *HardwareDataSource) IncrGenerationID() int {
 	return int(d.generationID.Add(1))
 }
 
 // MakeResourceType creates an instance of a ResourceType from a Resource object.
-func (d *HwPluginDataSource) MakeResourceType(resource *models.Resource) (*models.ResourceType, error) {
+func (d *HardwareDataSource) MakeResourceType(resource *models.Resource) (*models.ResourceType, error) {
 	vendor := resource.Extensions[vendorExtension].(string)
 	model := resource.Extensions[modelExtension].(string)
 	name := fmt.Sprintf("%s/%s", vendor, model)
-	resourceTypeID := ctlrutils.MakeUUIDFromNames(ResourceTypeUUIDNamespace, d.cloudID, d.hwplugin.Name, name)
+	resourceTypeID := ctlrutils.MakeUUIDFromNames(ResourceTypeUUIDNamespace, d.cloudID, hardwareDataSourceName, name)
 
 	// TODO: finish filling this in with data
 	result := models.ResourceType{
@@ -136,37 +131,29 @@ func (d *HwPluginDataSource) MakeResourceType(resource *models.Resource) (*model
 }
 
 // GetResources returns the list of resources available for this data source.
-func (d *HwPluginDataSource) GetResources(ctx context.Context) ([]models.Resource, error) {
-	result, err := d.client.GetResourcesWithResponse(ctx)
+func (d *HardwareDataSource) GetResources(ctx context.Context) ([]models.Resource, error) {
+	resourceInfos, err := metal3controller.GetResources(ctx, slog.Default(), d.hubClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resources: %w", err)
 	}
 
-	if result.StatusCode() != http.StatusOK {
-		return nil, fmt.Errorf("failed to get resources, status: %d", result.StatusCode())
-	}
-
-	if result.JSON200 == nil {
-		return nil, fmt.Errorf("failed to get resources, empty response")
-	}
-
-	resources := make([]models.Resource, 0)
-	for _, resource := range *result.JSON200 {
-		converted := d.convertResource(&resource)
+	resources := make([]models.Resource, 0, len(resourceInfos))
+	for i := range resourceInfos {
+		converted := d.convertResource(&resourceInfos[i])
 		resources = append(resources, *converted)
 	}
 
 	return resources, nil
 }
 
-func (d *HwPluginDataSource) convertResource(resource *inventoryclient.ResourceInfo) *models.Resource {
+func (d *HardwareDataSource) convertResource(resource *metal3controller.ResourceInfo) *models.Resource {
 	resourceID := resource.ResourceId
 
 	// ResourcePoolId is the Kubernetes UID of the ResourcePool CR
 	resourcePoolID := resource.ResourcePoolId
 
 	name := fmt.Sprintf("%s/%s", resource.Vendor, resource.Model)
-	resourceTypeID := ctlrutils.MakeUUIDFromNames(ResourceTypeUUIDNamespace, d.cloudID, d.hwplugin.Name, name)
+	resourceTypeID := ctlrutils.MakeUUIDFromNames(ResourceTypeUUIDNamespace, d.cloudID, hardwareDataSourceName, name)
 
 	result := &models.Resource{
 		ResourceID:     resourceID,
@@ -188,7 +175,7 @@ func (d *HwPluginDataSource) convertResource(resource *inventoryclient.ResourceI
 		Tags:         resource.Tags,
 		DataSourceID: d.dataSourceID,
 		GenerationID: int(d.generationID.Load()),
-		ExternalID:   fmt.Sprintf("%s/%s", d.hwplugin.Name, resource.ResourceId),
+		ExternalID:   fmt.Sprintf("%s/%s", hardwareDataSourceName, resource.ResourceId),
 	}
 
 	if resource.PowerState != nil {

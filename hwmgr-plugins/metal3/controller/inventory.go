@@ -19,7 +19,6 @@ import (
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/server/inventory"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
@@ -52,13 +51,13 @@ var REPatternResourceSelectorLabel = regexp.MustCompile(`^` + LabelPrefixResourc
 var REPatternResourceSelectorLabelMatch = regexp.MustCompile(`^` + LabelPrefixResourceSelector + `(.*)`)
 var emptyString = ""
 
-func getResourceInfoAdminState(bmh *metal3v1alpha1.BareMetalHost) inventory.ResourceInfoAdminState {
+func getResourceInfoAdminState(bmh *metal3v1alpha1.BareMetalHost) ResourceInfoAdminState {
 	// TODO: This should also consider whether the node has been cordoned, at least for an MNO
 	if bmh.Spec.Online {
-		return inventory.ResourceInfoAdminStateUNLOCKED
+		return ResourceInfoAdminStateUNLOCKED
 	}
 
-	return inventory.ResourceInfoAdminStateLOCKED
+	return ResourceInfoAdminStateLOCKED
 }
 
 func getResourceInfoDescription(bmh *metal3v1alpha1.BareMetalHost) string {
@@ -121,22 +120,22 @@ func getResourceInfoName(bmh *metal3v1alpha1.BareMetalHost) string {
 	return bmh.Name
 }
 
-func getResourceInfoOperationalState(bmh *metal3v1alpha1.BareMetalHost) inventory.ResourceInfoOperationalState {
+func getResourceInfoOperationalState(bmh *metal3v1alpha1.BareMetalHost) ResourceInfoOperationalState {
 	if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusOK &&
 		bmh.Spec.Online &&
 		bmh.Status.PoweredOn &&
 		(bmh.Status.Provisioning.State == metal3v1alpha1.StateProvisioned ||
 			bmh.Status.Provisioning.State == metal3v1alpha1.StateExternallyProvisioned) {
-		return inventory.ResourceInfoOperationalStateENABLED
+		return ResourceInfoOperationalStateENABLED
 	}
 
-	return inventory.ResourceInfoOperationalStateDISABLED
+	return ResourceInfoOperationalStateDISABLED
 }
 
-func getResourceInfoPowerState(bmh *metal3v1alpha1.BareMetalHost) *inventory.ResourceInfoPowerState {
-	state := inventory.OFF
+func getResourceInfoPowerState(bmh *metal3v1alpha1.BareMetalHost) *ResourceInfoPowerState {
+	state := OFF
 	if bmh.Status.PoweredOn {
-		state = inventory.ON
+		state = ON
 	}
 
 	return &state
@@ -173,11 +172,11 @@ func getProcessorInfoModel(hwdata *metal3v1alpha1.HardwareData) *string {
 	return &emptyString
 }
 
-func getResourceInfoProcessors(hwdata *metal3v1alpha1.HardwareData) []inventory.ProcessorInfo {
-	processors := []inventory.ProcessorInfo{}
+func getResourceInfoProcessors(hwdata *metal3v1alpha1.HardwareData) []ProcessorInfo {
+	processors := []ProcessorInfo{}
 
 	if hwdata.Spec.HardwareDetails != nil {
-		processors = append(processors, inventory.ProcessorInfo{
+		processors = append(processors, ProcessorInfo{
 			Architecture: getProcessorInfoArchitecture(hwdata),
 			Cpus:         getProcessorInfoCpus(hwdata),
 			Frequency:    getProcessorInfoFrequency(hwdata),
@@ -212,7 +211,7 @@ func getResourceInfoResourceProfileId(node *pluginsv1alpha1.AllocatedNode) strin
 	return emptyString
 }
 
-func getResourceInfoNics(bmh *metal3v1alpha1.BareMetalHost, hwdata *metal3v1alpha1.HardwareData) map[string]inventory.NicInfo {
+func getResourceInfoNics(bmh *metal3v1alpha1.BareMetalHost, hwdata *metal3v1alpha1.HardwareData) map[string]NicInfo {
 	if hwdata.Spec.HardwareDetails == nil || len(hwdata.Spec.HardwareDetails.NIC) == 0 {
 		return nil
 	}
@@ -230,9 +229,9 @@ func getResourceInfoNics(bmh *metal3v1alpha1.BareMetalHost, hwdata *metal3v1alph
 		}
 	}
 
-	nics := make(map[string]inventory.NicInfo)
+	nics := make(map[string]NicInfo)
 	for _, nic := range hwdata.Spec.HardwareDetails.NIC {
-		nicInfo := inventory.NicInfo{
+		nicInfo := NicInfo{
 			Mac:       &nic.MAC,
 			Model:     &nic.Model,
 			SpeedGbps: &nic.SpeedGbps,
@@ -251,15 +250,15 @@ func getResourceInfoNics(bmh *metal3v1alpha1.BareMetalHost, hwdata *metal3v1alph
 	return nics
 }
 
-func getResourceInfoStorage(hwdata *metal3v1alpha1.HardwareData) map[string]inventory.StorageInfo {
+func getResourceInfoStorage(hwdata *metal3v1alpha1.HardwareData) map[string]StorageInfo {
 	if hwdata.Spec.HardwareDetails == nil || len(hwdata.Spec.HardwareDetails.Storage) == 0 {
 		return nil
 	}
 
-	storage := make(map[string]inventory.StorageInfo)
+	storage := make(map[string]StorageInfo)
 	for _, disk := range hwdata.Spec.HardwareDetails.Storage {
-		storageType := inventory.StorageInfoType(disk.Type)
-		storage[disk.Name] = inventory.StorageInfo{
+		storageType := StorageInfoType(disk.Type)
+		storage[disk.Name] = StorageInfo{
 			AlternateNames: &disk.AlternateNames,
 			Model:          &disk.Model,
 			SerialNumber:   &disk.SerialNumber,
@@ -298,7 +297,7 @@ func getResourceInfoTags(bmh *metal3v1alpha1.BareMetalHost) *[]string {
 	return &tags
 }
 
-func getResourceInfoUsageState(bmh *metal3v1alpha1.BareMetalHost) inventory.ResourceInfoUsageState {
+func getResourceInfoUsageState(bmh *metal3v1alpha1.BareMetalHost) ResourceInfoUsageState {
 	// The following switch statement determines the ResourceInfoUsageState of a BareMetalHost
 	// based on its current provisioning state and operational status. It maps the internal
 	// Metal3 states to the external API usage states (ACTIVE, BUSY, IDLE, UNKNOWN) as defined
@@ -308,25 +307,25 @@ func getResourceInfoUsageState(bmh *metal3v1alpha1.BareMetalHost) inventory.Reso
 	switch bmh.Status.Provisioning.State {
 	case metal3v1alpha1.StateProvisioned, metal3v1alpha1.StateExternallyProvisioned:
 		if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusOK && bmh.Spec.Online && bmh.Status.PoweredOn {
-			return inventory.ACTIVE
+			return ACTIVE
 		}
 
-		return inventory.BUSY
+		return BUSY
 	case metal3v1alpha1.StateAvailable:
 		if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusOK {
-			return inventory.IDLE
+			return IDLE
 		}
 
-		return inventory.BUSY
+		return BUSY
 	case metal3v1alpha1.StateProvisioning,
 		metal3v1alpha1.StatePreparing,
 		metal3v1alpha1.StateDeprovisioning,
 		metal3v1alpha1.StateInspecting,
 		metal3v1alpha1.StatePoweringOffBeforeDelete,
 		metal3v1alpha1.StateDeleting:
-		return inventory.BUSY
+		return BUSY
 	default:
-		return inventory.UNKNOWN
+		return UNKNOWN
 	}
 }
 
@@ -380,11 +379,11 @@ func includeInInventory(bmh *metal3v1alpha1.BareMetalHost) bool {
 	return false
 }
 
-func getResourceInfo(bmh *metal3v1alpha1.BareMetalHost, node *pluginsv1alpha1.AllocatedNode, hwdata *metal3v1alpha1.HardwareData, poolNameToUID map[string]string) inventory.ResourceInfo {
+func getResourceInfo(bmh *metal3v1alpha1.BareMetalHost, node *pluginsv1alpha1.AllocatedNode, hwdata *metal3v1alpha1.HardwareData, poolNameToUID map[string]string) ResourceInfo {
 	nics := getResourceInfoNics(bmh, hwdata)
 	storage := getResourceInfoStorage(hwdata)
 
-	result := inventory.ResourceInfo{
+	result := ResourceInfo{
 		AdminState:       getResourceInfoAdminState(bmh),
 		Allocated:        getResourceInfoAllocated(bmh),
 		Description:      getResourceInfoDescription(bmh),
@@ -418,8 +417,8 @@ func getResourceInfo(bmh *metal3v1alpha1.BareMetalHost, node *pluginsv1alpha1.Al
 
 func GetResources(ctx context.Context,
 	logger *slog.Logger,
-	c client.Client) (inventory.GetResourcesResponseObject, error) {
-	var resp []inventory.ResourceInfo
+	c client.Client) ([]ResourceInfo, error) {
+	var resp []ResourceInfo
 
 	nodes, err := hwmgrutils.GetBMHToNodeMap(ctx, logger, c)
 	if err != nil {
@@ -477,5 +476,5 @@ func GetResources(ctx context.Context,
 		resp = append(resp, getResourceInfo(&bmh, hwmgrutils.GetNodeForBMH(nodes, &bmh), &hwdata, poolNameToUID))
 	}
 
-	return inventory.GetResources200JSONResponse(resp), nil
+	return resp, nil
 }
