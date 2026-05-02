@@ -1595,3 +1595,111 @@ var _ = Describe("CreateK8sCR with cluster-scoped resources", func() {
 		Expect(refs[0].Name).To(Equal(InventoryCRDName))
 	})
 })
+
+var _ = Describe("Server predicate functions", func() {
+	apiServers := []string{
+		InventoryDatabaseServerName,
+		InventoryClusterServerName,
+		InventoryAlarmServerName,
+		InventoryResourceServerName,
+		InventoryArtifactsServerName,
+		InventoryProvisioningServerName,
+	}
+
+	metricsOnlyServers := []string{
+		Metal3PluginServerName,
+	}
+
+	Describe("HasApiEndpoints", func() {
+		It("returns true for API servers", func() {
+			for _, name := range apiServers {
+				Expect(HasApiEndpoints(name)).To(BeTrue(), "expected true for %s", name)
+			}
+		})
+
+		It("returns false for metrics-only servers", func() {
+			for _, name := range metricsOnlyServers {
+				Expect(HasApiEndpoints(name)).To(BeFalse(), "expected false for %s", name)
+			}
+		})
+
+		It("returns false for unknown servers", func() {
+			Expect(HasApiEndpoints("unknown-server")).To(BeFalse())
+		})
+	})
+
+	Describe("HasMetrics", func() {
+		It("returns true for metrics-only servers", func() {
+			for _, name := range metricsOnlyServers {
+				Expect(HasMetrics(name)).To(BeTrue(), "expected true for %s", name)
+			}
+		})
+
+		It("returns false for API servers", func() {
+			for _, name := range apiServers {
+				Expect(HasMetrics(name)).To(BeFalse(), "expected false for %s", name)
+			}
+		})
+	})
+
+	Describe("NeedsServingCert", func() {
+		It("returns true for API servers", func() {
+			for _, name := range apiServers {
+				Expect(NeedsServingCert(name)).To(BeTrue(), "expected true for %s", name)
+			}
+		})
+
+		It("returns true for metrics-only servers", func() {
+			for _, name := range metricsOnlyServers {
+				Expect(NeedsServingCert(name)).To(BeTrue(), "expected true for %s", name)
+			}
+		})
+
+		It("returns false for unknown servers", func() {
+			Expect(NeedsServingCert("unknown-server")).To(BeFalse())
+		})
+	})
+
+	Describe("HasDatabase", func() {
+		It("returns true for servers with databases", func() {
+			Expect(HasDatabase(InventoryResourceServerName)).To(BeTrue())
+			Expect(HasDatabase(InventoryClusterServerName)).To(BeTrue())
+			Expect(HasDatabase(InventoryAlarmServerName)).To(BeTrue())
+		})
+
+		It("returns false for servers without databases", func() {
+			Expect(HasDatabase(InventoryArtifactsServerName)).To(BeFalse())
+			Expect(HasDatabase(InventoryProvisioningServerName)).To(BeFalse())
+			Expect(HasDatabase(Metal3PluginServerName)).To(BeFalse())
+		})
+	})
+
+	Describe("RequiresInternalListener", func() {
+		It("returns true for servers requiring internal listener", func() {
+			Expect(RequiresInternalListener(InventoryResourceServerName)).To(BeTrue())
+			Expect(RequiresInternalListener(InventoryClusterServerName)).To(BeTrue())
+			Expect(RequiresInternalListener(InventoryAlarmServerName)).To(BeTrue())
+		})
+
+		It("returns false for servers not requiring internal listener", func() {
+			Expect(RequiresInternalListener(InventoryArtifactsServerName)).To(BeFalse())
+			Expect(RequiresInternalListener(InventoryProvisioningServerName)).To(BeFalse())
+			Expect(RequiresInternalListener(Metal3PluginServerName)).To(BeFalse())
+		})
+	})
+
+	Describe("NeedsOAuthAccess", func() {
+		It("returns true for servers needing OAuth", func() {
+			Expect(NeedsOAuthAccess(InventoryResourceServerName)).To(BeTrue())
+			Expect(NeedsOAuthAccess(InventoryClusterServerName)).To(BeTrue())
+			Expect(NeedsOAuthAccess(InventoryAlarmServerName)).To(BeTrue())
+			Expect(NeedsOAuthAccess(InventoryArtifactsServerName)).To(BeTrue())
+			Expect(NeedsOAuthAccess(InventoryProvisioningServerName)).To(BeTrue())
+		})
+
+		It("returns false for servers not needing OAuth", func() {
+			Expect(NeedsOAuthAccess(Metal3PluginServerName)).To(BeFalse())
+			Expect(NeedsOAuthAccess(InventoryDatabaseServerName)).To(BeFalse())
+		})
+	})
+})
