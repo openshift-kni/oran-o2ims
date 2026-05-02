@@ -150,15 +150,6 @@ func sanitizeKubernetesName(name string) string {
 	return result
 }
 
-func FindNodeInList(nodelist pluginsv1alpha1.AllocatedNodeList, nodeId string) string {
-	for _, node := range nodelist.Items {
-		if node.Spec.HwMgrNodeId == nodeId {
-			return node.Name
-		}
-	}
-	return ""
-}
-
 // GetChildNodes gets a list of nodes allocated to a NodeAllocationRequest
 func GetChildNodes(
 	ctx context.Context,

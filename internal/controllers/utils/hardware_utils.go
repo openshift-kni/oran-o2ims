@@ -14,22 +14,16 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
 
 const (
 	bmhNamespaceLabel = "baremetalhost.metal3.io/namespace"
-)
-
-var (
-	oranHwUtilsLog = ctrl.Log.WithName("oranHwUtilsLog")
 )
 
 // ConditionDoesNotExistsErr represents an error when a specific condition is missing
@@ -83,50 +77,6 @@ func GetBareMetalHostForAllocatedNode(ctx context.Context, c client.Client, allo
 	}
 
 	return &bmhList.Items[0], nil
-}
-
-// copyHwMgrPluginBMCSecret copies the BMC secret from the plugin namespace to the cluster namespace
-func copyHwMgrPluginBMCSecret(ctx context.Context, c client.Client, name, sourceNamespace, targetNamespace string) error {
-
-	// if the secret already exists in the target namespace, do nothing
-	secret := &corev1.Secret{}
-	exists, err := DoesK8SResourceExist(
-		ctx, c, name, targetNamespace, secret)
-	if err != nil {
-		return fmt.Errorf("failed to check if secret exists in namespace %s: %w", targetNamespace, err)
-	}
-	if exists {
-		oranHwUtilsLog.Info("BMC secret already exists in the cluster namespace",
-			"name", name, "namespace", targetNamespace)
-		return nil
-	}
-
-	if err := CopyK8sSecret(ctx, c, name, sourceNamespace, targetNamespace); err != nil {
-		return fmt.Errorf("failed to copy Kubernetes secret: %w", err)
-	}
-
-	return nil
-}
-
-// CopyBMCSecrets copies BMC secrets from the operator namespace to the cluster namespace.
-func CopyBMCSecrets(ctx context.Context, c client.Client, hwNodes map[string][]NodeInfo,
-	clusterNamespace string) error {
-
-	// BMC secrets are in the operator's namespace
-	sourceNamespace := GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
-	for _, nodeInfos := range hwNodes {
-		for _, node := range nodeInfos {
-
-			// TODO: change the copying of secrets functionality -> create secret with BMC.Username, BMC.Password
-
-			err := copyHwMgrPluginBMCSecret(ctx, c, node.BmcCredentials, sourceNamespace, clusterNamespace)
-			if err != nil {
-				return fmt.Errorf("copy BMC secret %s from the operator namespace %s to the cluster namespace %s failed: %w",
-					node.BmcCredentials, sourceNamespace, clusterNamespace, err)
-			}
-		}
-	}
-	return nil
 }
 
 func GetPullSecretName(clusterInstance *unstructured.Unstructured) (string, error) {

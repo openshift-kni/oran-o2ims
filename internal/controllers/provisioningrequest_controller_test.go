@@ -60,14 +60,7 @@ Core Reconciliation:
 - handlePreProvisioning: Pre-deployment validation and preparation
 - handleNodeAllocationRequestProvisioning: Hardware allocation workflow
 - Reconcile: Main controller reconciliation entry point
-- getNodeAllocationRequestResponse: Hardware plugin communication with comprehensive mock testing:
-  * Missing NodeAllocationRequestID validation
-  * Nil hardware plugin client error handling
-  * Various error types (timeout, authentication, service unavailable)
-  * Not found scenarios with proper response handling
-  * Retry mechanism with retriable vs non-retriable errors
-  * Successful retrieval with response structure validation
-  * Custom NodeAllocationRequestID integration testing
+- NodeAllocationRequest status handling and hardware provisioning workflow
 
 Hardware Integration:
 - Hardware template rendering and validation
@@ -1783,7 +1776,7 @@ plan:
 			It("should handle missing nodeAllocationRequest identifier appropriately", func() {
 				result, proceed, err := narProvisioningTask.handleNodeAllocationRequestProvisioning(ctx, renderedClusterInstance)
 
-				// Missing NAR ID scenario - will likely fail earlier in hardware template processing
+				// NAR creation fails due to missing hardware template data
 				Expect(err).To(HaveOccurred())
 				Expect(proceed).To(BeFalse())
 				Expect(result).ToNot(BeNil()) // Should return a valid ctrl.Result
@@ -4592,7 +4585,6 @@ plan:
 
 			Context("when NodeAllocationRequest does not exist", func() {
 				BeforeEach(func() {
-					// Use a different non-existent NodeAllocationRequest ID
 					Expect(c.Status().Update(ctx, deployConfigCR)).To(Succeed())
 				})
 
@@ -4603,7 +4595,6 @@ plan:
 
 			Context("when checkNodeAllocationRequestStatus returns error", func() {
 				BeforeEach(func() {
-					// Use yet another non-existent NodeAllocationRequest ID to simulate status check error
 					Expect(c.Status().Update(ctx, deployConfigCR)).To(Succeed())
 				})
 
