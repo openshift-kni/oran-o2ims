@@ -10,7 +10,7 @@ Generated-By: Cursor/claude-4-sonnet
 
 /*
 Package controller provides unit tests for BareMetalHost (BMH) management functionality
-in the Metal3 hardware plugin controller.
+in the Metal3 hardware manager controller.
 
 This test file contains comprehensive test coverage for the following areas:
 
@@ -1351,8 +1351,8 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 	Describe("handleBMHCompletion", func() {
 		var (
-			fakeClient client.Client
-			pluginNs   = "test-plugin-ns"
+			fakeClient    client.Client
+			testNamespace = "test-namespace"
 		)
 
 		BeforeEach(func() {
@@ -1363,13 +1363,13 @@ var _ = Describe("BareMetalHost Manager", func() {
 			// All nodes have Provisioned=True
 			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{
 				Items: []hwmgmtv1alpha1.AllocatedNode{
-					*createNodeWithCondition("node1", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
-					*createNodeWithCondition("node2", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
-					*createNodeWithCondition("node3", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
+					*createNodeWithCondition("node1", testNamespace, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
+					*createNodeWithCondition("node2", testNamespace, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
+					*createNodeWithCondition("node3", testNamespace, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
 				},
 			}
 
-			updating, err := handleBMHCompletion(ctx, fakeClient, fakeClient, logger, pluginNs, nodelist)
+			updating, err := handleBMHCompletion(ctx, fakeClient, fakeClient, logger, testNamespace, nodelist)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(updating).To(BeFalse())
 		})
@@ -1378,16 +1378,16 @@ var _ = Describe("BareMetalHost Manager", func() {
 			// Mix of nodes: some completed, some in progress, some with no condition
 			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{
 				Items: []hwmgmtv1alpha1.AllocatedNode{
-					*createNodeWithCondition("node1", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
-					*createNodeWithCondition("fail-node2", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
-					*createAllocatedNode("fail-node3", pluginNs, "bmh-node3", pluginNs), // no condition
-					*createNodeWithCondition("fail-node4", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
+					*createNodeWithCondition("node1", testNamespace, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
+					*createNodeWithCondition("fail-node2", testNamespace, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
+					*createAllocatedNode("fail-node3", testNamespace, "bmh-node3", testNamespace), // no condition
+					*createNodeWithCondition("fail-node4", testNamespace, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
 				},
 			}
 
 			// The function will return error because BMHs don't exist, but it should
 			// process all 3 nodes that need completion (node2, node3, node4)
-			updating, err := handleBMHCompletion(ctx, fakeClient, fakeClient, logger, pluginNs, nodelist)
+			updating, err := handleBMHCompletion(ctx, fakeClient, fakeClient, logger, testNamespace, nodelist)
 
 			// Expect errors because BMHs don't exist for the nodes
 			Expect(err).To(HaveOccurred())
@@ -1402,8 +1402,8 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 		It("should return anyUpdating=true when nodes are still in progress", func() {
 			// Create nodes with corresponding BMHs that are NOT in Available state
-			bmh1 := createBMH("bmh-progress-node1", pluginNs, nil, nil, metal3v1alpha1.StatePreparing)
-			bmh2 := createBMH("bmh-progress-node2", pluginNs, nil, nil, metal3v1alpha1.StatePreparing)
+			bmh1 := createBMH("bmh-progress-node1", testNamespace, nil, nil, metal3v1alpha1.StatePreparing)
+			bmh2 := createBMH("bmh-progress-node2", testNamespace, nil, nil, metal3v1alpha1.StatePreparing)
 
 			err := fakeClient.Create(ctx, bmh1)
 			Expect(err).ToNot(HaveOccurred())
@@ -1412,12 +1412,12 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{
 				Items: []hwmgmtv1alpha1.AllocatedNode{
-					*createNodeWithCondition("progress-node1", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
-					*createNodeWithCondition("progress-node2", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
+					*createNodeWithCondition("progress-node1", testNamespace, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
+					*createNodeWithCondition("progress-node2", testNamespace, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
 				},
 			}
 
-			updating, err := handleBMHCompletion(ctx, fakeClient, fakeClient, logger, pluginNs, nodelist)
+			updating, err := handleBMHCompletion(ctx, fakeClient, fakeClient, logger, testNamespace, nodelist)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(updating).To(BeTrue()) // BMHs are not Available yet
 		})

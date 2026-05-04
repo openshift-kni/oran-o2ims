@@ -162,8 +162,8 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
-	hwMgrNamespace := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
-	err = metal3ctrl.SetupMetal3Controllers(mgr, hwMgrNamespace, logger)
+	namespace := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
+	err = metal3ctrl.SetupMetal3Controllers(mgr, namespace, logger)
 	if err != nil {
 		logger.ErrorContext(ctx, "Unable to create metal3 hardware manager controller",
 			slog.String("error", err.Error()))

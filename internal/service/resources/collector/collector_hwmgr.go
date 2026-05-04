@@ -35,8 +35,6 @@ type HardwareDataSource struct {
 	hubClient     rtclient.Client
 }
 
-const hardwareDataSourceName = "metal3-hwmgr"
-
 // Defines the UUID namespace values used to generate name based UUID values for inventory objects.
 // These values are selected arbitrarily.
 // TODO: move to somewhere more generic
@@ -108,7 +106,7 @@ func (d *HardwareDataSource) MakeResourceType(resource *models.Resource) (*model
 	vendor := resource.Extensions[vendorExtension].(string)
 	model := resource.Extensions[modelExtension].(string)
 	name := fmt.Sprintf("%s/%s", vendor, model)
-	resourceTypeID := ctlrutils.MakeUUIDFromNames(ResourceTypeUUIDNamespace, d.cloudID, hardwareDataSourceName, name)
+	resourceTypeID := ctlrutils.MakeUUIDFromNames(ResourceTypeUUIDNamespace, d.cloudID, name)
 
 	// TODO: finish filling this in with data
 	result := models.ResourceType{
@@ -151,7 +149,7 @@ func (d *HardwareDataSource) convertResource(resource *metal3controller.Resource
 	resourcePoolID := resource.ResourcePoolId
 
 	name := fmt.Sprintf("%s/%s", resource.Vendor, resource.Model)
-	resourceTypeID := ctlrutils.MakeUUIDFromNames(ResourceTypeUUIDNamespace, d.cloudID, hardwareDataSourceName, name)
+	resourceTypeID := ctlrutils.MakeUUIDFromNames(ResourceTypeUUIDNamespace, d.cloudID, name)
 
 	result := &models.Resource{
 		ResourceID:     resourceID,
@@ -173,7 +171,7 @@ func (d *HardwareDataSource) convertResource(resource *metal3controller.Resource
 		Tags:         resource.Tags,
 		DataSourceID: d.dataSourceID,
 		GenerationID: int(d.generationID.Load()),
-		ExternalID:   fmt.Sprintf("%s/%s", hardwareDataSourceName, resource.ResourceId),
+		ExternalID:   resource.ResourceId.String(),
 	}
 
 	if resource.PowerState != nil {

@@ -23,7 +23,7 @@ TEST SUITES:
 1. ProvisioningRequestReconciler Unit Tests
    - Core reconciliation logic and workflow management
    - Validation, rendering, and resource creation processes
-   - Hardware provisioning integration with mocked hardware plugin clients
+   - Hardware provisioning integration with mocked hardware managers
    - Upgrade management via Image Based Upgrades (IBU)
    - Deletion and cleanup workflows
    - Finalizer management
@@ -34,8 +34,8 @@ TEST SUITES:
    - ZTP (Zero Touch Provisioning) policy enforcement
    - Policy template processing and defaults
 
-3. Hardware Plugin Integration Tests (Mock-Based)
-   - Mock hardware plugin client using gomock-generated interfaces
+3. Hardware Manager Integration Tests (Mock-Based)
+   - Mock hardware manager using gomock-generated interfaces
    - Node allocation request processing with controlled responses
    - Hardware error scenarios and retry mechanisms
    - Response structure validation and data processing
@@ -70,8 +70,8 @@ Hardware Integration:
 - Comprehensive timeout management with generation awareness
 - IBU (Image Based Upgrade) workflow testing
 
-Hardware Plugin Integration (Mock-Based):
-- Mock hardware plugin client with gomock-generated interfaces
+Hardware Manager Integration (Mock-Based):
+- Mock hardware manager with gomock-generated interfaces
 - Node allocation request retrieval with controlled responses
 - Hardware error scenarios (timeout, authentication, service unavailable)
 - Retry mechanism testing with retriable vs non-retriable errors
@@ -108,7 +108,7 @@ Status and State Management:
 
 Error Scenarios:
 - Missing dependencies (ClusterTemplate, ConfigMaps, etc.)
-- Hardware plugin communication failures
+- Hardware manager communication failures
 - Resource creation conflicts
 - Validation failures
 - Timeout scenarios (legacy individual checks)
@@ -138,7 +138,7 @@ Integration Scenarios:
 
 Mock and Test Infrastructure:
 - Fake Kubernetes client for API operations (using controller-runtime/client/fake)
-- Mock hardware plugin client (using gomock-generated interfaces)
+- Mock hardware manager (using gomock-generated interfaces)
 - Deterministic test scenarios with controlled mock expectations
 - Test data creation and management
 - Parallel test execution safety
@@ -908,7 +908,7 @@ plan:
 				Logger: reconciler.Logger,
 			}
 
-			// Create a ClusterTemplate to avoid hardware plugin errors
+			// Create a ClusterTemplate to avoid hardware manager errors
 			deletionClusterTemplate := &provisioningv1alpha1.ClusterTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-deletion-template.v1.0.0",
@@ -917,7 +917,7 @@ plan:
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
 					Release:          "4.17.0",
 					TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
-						// Don't include HwTemplate to avoid hardware plugin dependency
+						// Don't include HwTemplate to avoid hardware manager dependency
 					},
 				},
 				Status: provisioningv1alpha1.ClusterTemplateStatus{
@@ -1845,7 +1845,7 @@ plan:
 
 		Context("when hardware is not yet provisioned", func() {
 			It("should return requeueWithShortInterval", func() {
-				Skip("Integration test requiring hardware plugin status checks - not suitable for unit testing")
+				Skip("Integration test requiring hardware manager status checks - not suitable for unit testing")
 			})
 		})
 
@@ -4266,7 +4266,7 @@ plan:
 					}
 					Expect(isValidResult).To(BeTrue(), "Result should be doNotRequeue or requeueWithShortInterval")
 
-					// Error might occur due to missing hardware plugin dependencies
+					// Error might occur due to missing hardware manager dependencies
 					// This is acceptable in test environment due to missing dependencies
 					_ = err // Explicitly ignore error in test environment
 
@@ -4578,7 +4578,7 @@ plan:
 				})
 
 				It("should return error and valid result", func() {
-					Skip("Integration test requiring full hardware plugin client functionality - not suitable for unit testing")
+					Skip("Integration test requiring full hardware manager functionality - not suitable for unit testing")
 				})
 			})
 
@@ -4588,7 +4588,7 @@ plan:
 				})
 
 				It("should return error and valid result", func() {
-					Skip("Integration test requiring full hardware plugin client functionality - not suitable for unit testing")
+					Skip("Integration test requiring full hardware manager functionality - not suitable for unit testing")
 				})
 			})
 
@@ -4598,7 +4598,7 @@ plan:
 				})
 
 				It("should return error and valid result", func() {
-					Skip("Integration test requiring full hardware plugin client functionality - not suitable for unit testing")
+					Skip("Integration test requiring full hardware manager functionality - not suitable for unit testing")
 				})
 			})
 
@@ -4639,7 +4639,7 @@ plan:
 
 			Context("when hardware is not yet provisioned", func() {
 				It("should return requeueWithShortInterval", func() {
-					Skip("Integration test requiring hardware plugin status checks - not suitable for unit testing")
+					Skip("Integration test requiring hardware manager status checks - not suitable for unit testing")
 				})
 			})
 		})

@@ -449,7 +449,7 @@ func getGroupsSortedByRole(nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationR
 func createNode(ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
-	hwMgrNamespace string,
+	namespace string,
 	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
 	nodename, nodeId, nodeNs, groupname, hwprofile string) (*hwmgmtv1alpha1.AllocatedNode, error) {
 	logger.InfoContext(ctx, "Ensuring AllocatedNode exists",
@@ -459,7 +459,7 @@ func createNode(ctx context.Context,
 
 	nodeKey := types.NamespacedName{
 		Name:      nodename,
-		Namespace: hwMgrNamespace,
+		Namespace: namespace,
 	}
 
 	existing := &hwmgmtv1alpha1.AllocatedNode{}
@@ -477,7 +477,7 @@ func createNode(ctx context.Context,
 	node := &hwmgmtv1alpha1.AllocatedNode{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      nodename,
-			Namespace: hwMgrNamespace,
+			Namespace: namespace,
 			OwnerReferences: []metav1.OwnerReference{{
 				APIVersion:         nodeAllocationRequest.APIVersion,
 				Kind:               nodeAllocationRequest.Kind,
@@ -509,14 +509,14 @@ func updateNodeStatus(ctx context.Context,
 	c client.Client,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
-	hwMgrNamespace string,
+	namespace string,
 	info bmhNodeInfo, nodename, hwprofile string, updating bool) error {
 	logger.InfoContext(ctx, "Updating AllocatedNode", slog.String("nodename", nodename))
 	// nolint:wrapcheck
 	return retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
 		node := &hwmgmtv1alpha1.AllocatedNode{}
 
-		if err := noncachedClient.Get(ctx, types.NamespacedName{Name: nodename, Namespace: hwMgrNamespace}, node); err != nil {
+		if err := noncachedClient.Get(ctx, types.NamespacedName{Name: nodename, Namespace: namespace}, node); err != nil {
 			return fmt.Errorf("failed to fetch AllocatedNode: %w", err)
 		}
 
@@ -560,22 +560,22 @@ func checkNodeAllocationRequestProgress(
 	c client.Client,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
-	hwMgrNamespace string,
+	namespace string,
 	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (ctrl.Result, bool, error) {
 
 	// Check if we're fully allocated now that processing is complete
-	full, err := isNodeAllocationRequestFullyAllocated(ctx, noncachedClient, logger, hwMgrNamespace, nodeAllocationRequest)
+	full, err := isNodeAllocationRequestFullyAllocated(ctx, noncachedClient, logger, namespace, nodeAllocationRequest)
 	if err != nil {
 		return ctrl.Result{}, false, err
 	}
 	if !full {
 		// Still not fully allocated, continue processing
-		res, err := processNodeAllocationRequestAllocation(ctx, c, noncachedClient, logger, hwMgrNamespace, nodeAllocationRequest)
+		res, err := processNodeAllocationRequestAllocation(ctx, c, noncachedClient, logger, namespace, nodeAllocationRequest)
 		return res, false, err
 	}
 
 	// check if there are any pending work such as bios configuring
-	res, updating, err := checkForPendingUpdate(ctx, c, noncachedClient, logger, hwMgrNamespace, nodeAllocationRequest)
+	res, updating, err := checkForPendingUpdate(ctx, c, noncachedClient, logger, namespace, nodeAllocationRequest)
 	if err != nil || res.Requeue || res.RequeueAfter > 0 {
 		return res, false, err
 	}
@@ -622,10 +622,10 @@ func processNewNodeAllocationRequest(ctx context.Context,
 func isNodeAllocationRequestFullyAllocated(ctx context.Context,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
-	hwMgrNamespace string,
+	namespace string,
 	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (bool, error) {
 
-	childNodes, err := hwmgrutils.GetChildNodesUncached(ctx, noncachedClient, hwMgrNamespace, nodeAllocationRequest.Name)
+	childNodes, err := hwmgrutils.GetChildNodesUncached(ctx, noncachedClient, namespace, nodeAllocationRequest.Name)
 	if err != nil {
 		return false, fmt.Errorf("failed to list child nodes for NAR %s: %w", nodeAllocationRequest.Name, err)
 	}
@@ -651,7 +651,7 @@ func handleNodeInProgressUpdate(ctx context.Context,
 	c client.Client,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
-	hwMgrNamespace string,
+	namespace string,
 	node *hwmgmtv1alpha1.AllocatedNode,
 	nodeOps NodeOps,
 ) (ctrl.Result, error) {
@@ -665,7 +665,7 @@ func handleNodeInProgressUpdate(ctx context.Context,
 		logger.InfoContext(ctx, "BMH update complete", slog.String("BMH", bmh.Name))
 
 		// Validate node configuration (firmware versions and BIOS settings)
-		configValid, err := validateNodeConfiguration(ctx, c, noncachedClient, logger, bmh, hwMgrNamespace, node.Spec.HwProfile)
+		configValid, err := validateNodeConfiguration(ctx, c, noncachedClient, logger, bmh, namespace, node.Spec.HwProfile)
 		if err != nil {
 			return hwmgrutils.RequeueWithMediumInterval(), err
 		}
@@ -848,7 +848,7 @@ func initiateNodeUpdate(ctx context.Context,
 	c client.Client,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
-	hwMgrNamespace string,
+	namespace string,
 	node *hwmgmtv1alpha1.AllocatedNode,
 	newHwProfile string,
 	nodeOps NodeOps,
@@ -871,7 +871,7 @@ func initiateNodeUpdate(ctx context.Context,
 
 	// Step 1: Validate — determine if HW changes are actually needed (no updates to HFS/HFC/HUP).
 	validateOnly := true
-	updateNeeded, err := processHwProfileWithHandledError(ctx, c, noncachedClient, logger, hwMgrNamespace,
+	updateNeeded, err := processHwProfileWithHandledError(ctx, c, noncachedClient, logger, namespace,
 		bmh, node, newHwProfile, true, validateOnly)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to evaluate HW profile for node (%s): %w", node.Name, err)
@@ -905,7 +905,7 @@ func initiateNodeUpdate(ctx context.Context,
 	// Step 3: Apply HW profile changes (create/update HFS/HFC/HUP, annotate BMH).
 	logger.InfoContext(ctx, "Applying HW profile", slog.String("node", node.Name), slog.String("hwProfile", newHwProfile))
 	validateOnly = false
-	updateRequired, err := processHwProfileWithHandledError(ctx, c, noncachedClient, logger, hwMgrNamespace,
+	updateRequired, err := processHwProfileWithHandledError(ctx, c, noncachedClient, logger, namespace,
 		bmh, node, newHwProfile, true, validateOnly)
 	if err != nil {
 		if err := nodeOps.UncordonNode(ctx, node.Status.Hostname); err != nil {
@@ -970,7 +970,7 @@ func handleNodeAllocationRequestConfiguring(
 	c client.Client,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
-	hwMgrNamespace string,
+	namespace string,
 	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
 ) (ctrl.Result, *hwmgmtv1alpha1.AllocatedNodeList, error) {
 
@@ -1009,7 +1009,7 @@ func handleNodeAllocationRequestConfiguring(
 		return ctrl.Result{}, nodelist, err
 	}
 
-	result, err := executeNodeUpdates(ctx, c, noncachedClient, logger, hwMgrNamespace,
+	result, err := executeNodeUpdates(ctx, c, noncachedClient, logger, namespace,
 		nodeAllocationRequest, nodeOps, nodesToProcess)
 	if err != nil {
 		return ctrl.Result{}, nodelist, err
@@ -1135,7 +1135,7 @@ func executeNodeUpdates(
 	c client.Client,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
-	hwMgrNamespace string,
+	namespace string,
 	nar *hwmgmtv1alpha1.NodeAllocationRequest,
 	nodeOps NodeOps,
 	nodesToProcess []nodeAction,
@@ -1163,14 +1163,14 @@ func executeNodeUpdates(
 			switch nodeToProcess.actionType {
 			case actionInitiate:
 				res, err = initiateNodeUpdate(ctx, c, noncachedClient, logger,
-					hwMgrNamespace, nodeToProcess.node, newHwProfile, nodeOps)
+					namespace, nodeToProcess.node, newHwProfile, nodeOps)
 			case actionTransition:
 				if nodeToProcess.node.Spec.HwProfile != newHwProfile {
 					res, err = abandonNodeUpdate(ctx, c, noncachedClient, logger,
 						newHwProfile, nodeToProcess.node, nodeOps)
 				} else {
 					res, err = handleTransitionNode(ctx, c, noncachedClient, logger,
-						hwMgrNamespace, nodeToProcess.node, true, nodeOps)
+						namespace, nodeToProcess.node, true, nodeOps)
 				}
 			case actionInProgressUpdate:
 				if nodeToProcess.node.Spec.HwProfile != newHwProfile {
@@ -1178,7 +1178,7 @@ func executeNodeUpdates(
 						newHwProfile, nodeToProcess.node, nodeOps)
 				} else {
 					res, err = handleNodeInProgressUpdate(ctx, c, noncachedClient, logger,
-						hwMgrNamespace, nodeToProcess.node, nodeOps)
+						namespace, nodeToProcess.node, nodeOps)
 				}
 			}
 
@@ -1442,7 +1442,7 @@ func allocateBMHToNodeAllocationRequest(
 	c client.Client,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
-	hwMgrNamespace string,
+	namespace string,
 	bmh *metal3v1alpha1.BareMetalHost,
 	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
 	group hwmgmtv1alpha1.NodeGroup,
@@ -1465,13 +1465,13 @@ func allocateBMHToNodeAllocationRequest(
 	nodeNs := bmh.Namespace
 
 	// Ensure node is created
-	node, err := createNode(ctx, c, logger, hwMgrNamespace, nodeAllocationRequest, nodeName, nodeId, nodeNs, group.NodeGroupData.Name, group.NodeGroupData.HwProfile)
+	node, err := createNode(ctx, c, logger, namespace, nodeAllocationRequest, nodeName, nodeId, nodeNs, group.NodeGroupData.Name, group.NodeGroupData.HwProfile)
 	if err != nil {
 		return "", fmt.Errorf("failed to create allocated node (%s): %w", nodeName, err)
 	}
 
 	// Process HW profile
-	updating, err := processHwProfileWithHandledError(ctx, c, noncachedClient, logger, hwMgrNamespace, bmh, node, group.NodeGroupData.HwProfile, false, false)
+	updating, err := processHwProfileWithHandledError(ctx, c, noncachedClient, logger, namespace, bmh, node, group.NodeGroupData.HwProfile, false, false)
 	if err != nil {
 		return "", fmt.Errorf("failed to process hw profile for node (%s): %w", nodeName, err)
 	}
@@ -1514,7 +1514,7 @@ func allocateBMHToNodeAllocationRequest(
 		},
 		Interfaces: bmhInterface,
 	}
-	if err := updateNodeStatus(ctx, c, noncachedClient, logger, hwMgrNamespace, nodeInfo, nodeName, group.NodeGroupData.HwProfile, updating); err != nil {
+	if err := updateNodeStatus(ctx, c, noncachedClient, logger, namespace, nodeInfo, nodeName, group.NodeGroupData.HwProfile, updating); err != nil {
 		return "", fmt.Errorf("failed to update node status (%s): %w", nodeName, err)
 	}
 
@@ -1532,7 +1532,7 @@ func processNodeAllocationRequestAllocation(
 	c client.Client,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
-	hwMgrNamespace string,
+	namespace string,
 	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
 ) (ctrl.Result, error) {
 
@@ -1543,7 +1543,7 @@ func processNodeAllocationRequestAllocation(
 		allocatedNames []string
 	)
 
-	childNodes, err := hwmgrutils.GetChildNodesUncached(ctx, noncachedClient, hwMgrNamespace, nodeAllocationRequest.Name)
+	childNodes, err := hwmgrutils.GetChildNodesUncached(ctx, noncachedClient, namespace, nodeAllocationRequest.Name)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to list child nodes for NAR %s: %w", nodeAllocationRequest.Name, err)
 	}
@@ -1592,7 +1592,7 @@ func processNodeAllocationRequestAllocation(
 				defer wg.Done()
 
 				nodeName, err := allocateBMHToNodeAllocationRequest(
-					ctx, c, noncachedClient, logger, hwMgrNamespace,
+					ctx, c, noncachedClient, logger, namespace,
 					bmh, nodeAllocationRequest, nodeGroup,
 				)
 
@@ -1654,14 +1654,14 @@ func validateFirmwareVersions(
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	bmh *metal3v1alpha1.BareMetalHost,
-	hwMgrNamespace string,
+	namespace string,
 	hwProfileName string,
 ) (bool, error) {
 
 	// 1) Fetch HardwareProfile
 	prof := &hwmgmtv1alpha1.HardwareProfile{}
-	if err := c.Get(ctx, types.NamespacedName{Name: hwProfileName, Namespace: hwMgrNamespace}, prof); err != nil {
-		return false, fmt.Errorf("get HardwareProfile %s/%s: %w", hwMgrNamespace, hwProfileName, err)
+	if err := c.Get(ctx, types.NamespacedName{Name: hwProfileName, Namespace: namespace}, prof); err != nil {
+		return false, fmt.Errorf("get HardwareProfile %s/%s: %w", namespace, hwProfileName, err)
 	}
 
 	// 2) Build expected versions map (normalized)
@@ -1745,14 +1745,14 @@ func validateAppliedBiosSettings(
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	bmh *metal3v1alpha1.BareMetalHost,
-	hwMgrNamespace string,
+	namespace string,
 	hwProfileName string,
 ) (bool, error) {
 
 	// 1) Fetch HardwareProfile
 	prof := &hwmgmtv1alpha1.HardwareProfile{}
-	if err := c.Get(ctx, types.NamespacedName{Name: hwProfileName, Namespace: hwMgrNamespace}, prof); err != nil {
-		return false, fmt.Errorf("get HardwareProfile %s/%s: %w", hwMgrNamespace, hwProfileName, err)
+	if err := c.Get(ctx, types.NamespacedName{Name: hwProfileName, Namespace: namespace}, prof); err != nil {
+		return false, fmt.Errorf("get HardwareProfile %s/%s: %w", namespace, hwProfileName, err)
 	}
 
 	// 2) Check if any BIOS settings are specified
@@ -1867,11 +1867,11 @@ func validateNodeConfiguration(
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	bmh *metal3v1alpha1.BareMetalHost,
-	hwMgrNamespace string,
+	namespace string,
 	hwProfileName string,
 ) (bool, error) {
 	// Validate firmware versions
-	firmwareValid, err := validateFirmwareVersions(ctx, c, noncachedClient, logger, bmh, hwMgrNamespace, hwProfileName)
+	firmwareValid, err := validateFirmwareVersions(ctx, c, noncachedClient, logger, bmh, namespace, hwProfileName)
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to validate firmware versions",
 			slog.String("BMH", bmh.Name),
@@ -1885,7 +1885,7 @@ func validateNodeConfiguration(
 	}
 
 	// Validate BIOS settings
-	biosValid, err := validateAppliedBiosSettings(ctx, c, noncachedClient, logger, bmh, hwMgrNamespace, hwProfileName)
+	biosValid, err := validateAppliedBiosSettings(ctx, c, noncachedClient, logger, bmh, namespace, hwProfileName)
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to validate BIOS settings",
 			slog.String("BMH", bmh.Name),

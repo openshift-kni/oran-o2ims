@@ -77,7 +77,7 @@ var _ = Describe("HardwareDataSource", func() {
 			Expect(out.Extensions[modelExtension]).To(Equal("R640"))
 			Expect(out.Extensions[memoryExtension]).To(Equal("16384 MiB"))
 			Expect(out.Extensions[hwProfileExtension]).To(Equal("profile-1"))
-			Expect(out.ExternalID).To(Equal(hardwareDataSourceName + "/" + resID.String()))
+			Expect(out.ExternalID).To(Equal(resID.String()))
 		})
 
 		It("includes optional power, labels, allocated, nics, and storage extensions", func() {

@@ -104,7 +104,7 @@ Key Validation Areas:
 - BMH deallocation workflow (labels, annotations, spec cleanup)
 - PreprovisioningImage label management
 - Error handling and requeue behavior
-- Hardware plugin label filtering
+- Hardware manager label filtering
 - Resource reference validation
 - Concurrent operation handling
 - Context cancellation resilience
@@ -190,7 +190,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 		allocatedNode *hwmgmtv1alpha1.AllocatedNode
 		bmh           *metal3v1alpha1.BareMetalHost
 		req           ctrl.Request
-		testNamespace = "test-plugin-namespace"
+		testNamespace = "test-namespace"
 	)
 
 	BeforeEach(func() {

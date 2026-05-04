@@ -32,7 +32,7 @@ import (
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 )
 
-var _ = Describe("SNO End-to-end ProvisioningRequestReconcile with metal3 plugin", Ordered, Label("sno-provisioning"), func() {
+var _ = Describe("SNO End-to-end ProvisioningRequestReconcile with metal3 hardware manager", Ordered, Label("sno-provisioning"), func() {
 	// This test suite runs with both O2IMS and Metal3 controllers active
 	// Metal3 manager runs alongside Provisioning manager for all tests
 	const timeout = time.Second * 60

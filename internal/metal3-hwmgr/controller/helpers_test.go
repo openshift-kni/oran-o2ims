@@ -128,7 +128,7 @@ var _ = Describe("Helpers", func() {
 		scheme        *runtime.Scheme
 		fakeClient    client.Client
 		fakeNoncached client.Reader
-		testNamespace = "test-plugin-namespace"
+		testNamespace = "test-namespace"
 	)
 
 	BeforeEach(func() {
@@ -325,7 +325,7 @@ var _ = Describe("Helpers", func() {
 		BeforeEach(func() {
 			nodeAllocationRequest = &hwmgmtv1alpha1.NodeAllocationRequest{
 				TypeMeta: metav1.TypeMeta{
-					APIVersion: "plugins.hardwaremanagement.oran.openshift.io/v1alpha1",
+					APIVersion: "clcm.openshift.io/v1alpha1",
 					Kind:       "NodeAllocationRequest",
 				},
 				ObjectMeta: metav1.ObjectMeta{
@@ -1408,7 +1408,7 @@ var _ = Describe("Helpers", func() {
 				testHwProfile := &hwmgmtv1alpha1.HardwareProfile{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-hw-profile",
-						Namespace: "test-plugin-namespace",
+						Namespace: "test-namespace",
 					},
 					Spec: hwmgmtv1alpha1.HardwareProfileSpec{},
 				}
@@ -1451,7 +1451,7 @@ var _ = Describe("Helpers", func() {
 
 			It("should clean up config annotation when BMH is in error state", func() {
 				mockOps.EXPECT().UncordonNode(gomock.Any(), "test-node.example.com").Return(nil)
-				result, err := handleNodeInProgressUpdate(ctx, testClient, testClient, logger, "test-plugin-namespace", testNode, mockOps)
+				result, err := handleNodeInProgressUpdate(ctx, testClient, testClient, logger, "test-namespace", testNode, mockOps)
 
 				// Verify the function handled the error case
 				Expect(err).To(HaveOccurred())
@@ -1484,7 +1484,7 @@ var _ = Describe("Helpers", func() {
 				// Update the client with the modified BMH
 				Expect(testClient.Update(ctx, testBMH)).To(Succeed())
 
-				result, err := handleNodeInProgressUpdate(ctx, testClient, testClient, logger, "test-plugin-namespace", testNode, mockOps)
+				result, err := handleNodeInProgressUpdate(ctx, testClient, testClient, logger, "test-namespace", testNode, mockOps)
 
 				// Verify the function continues waiting
 				Expect(err).ToNot(HaveOccurred())
@@ -1517,7 +1517,7 @@ var _ = Describe("Helpers", func() {
 				mockOps.EXPECT().IsNodeReady(gomock.Any(), "test-node.example.com").Return(true, nil)
 				mockOps.EXPECT().UncordonNode(gomock.Any(), "test-node.example.com").Return(nil)
 
-				result, err := handleNodeInProgressUpdate(ctx, testClient, testClient, logger, "test-plugin-namespace", testNode, mockOps)
+				result, err := handleNodeInProgressUpdate(ctx, testClient, testClient, logger, "test-namespace", testNode, mockOps)
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(Equal(hwmgrutils.RequeueImmediately()))
@@ -1545,7 +1545,7 @@ var _ = Describe("Helpers", func() {
 
 				mockOps.EXPECT().IsNodeReady(gomock.Any(), "test-node.example.com").Return(false, nil)
 
-				result, err := handleNodeInProgressUpdate(ctx, testClient, testClient, logger, "test-plugin-namespace", testNode, mockOps)
+				result, err := handleNodeInProgressUpdate(ctx, testClient, testClient, logger, "test-namespace", testNode, mockOps)
 
 				// Verify no error but should requeue
 				Expect(err).ToNot(HaveOccurred())

@@ -11,7 +11,7 @@ Generated-By: Cursor/claude-4-sonnet
 /*
 Metal3 Controller Test Suite
 
-This test suite provides comprehensive coverage for the Metal3 hardware management plugin controllers.
+This test suite provides comprehensive coverage for the Metal3 hardware manager controllers.
 The tests validate controller functionality, resource management, and integration with Kubernetes APIs.
 
 TEST FILES AND COVERAGE:

@@ -48,7 +48,7 @@ Test Suites:
    - Tests handling of missing configuration conditions
 
 7. checkExistingNodeAllocationRequest Tests:
-   - Tests error handling when hardware plugin client is unavailable
+   - Tests error handling when hardware manager is unavailable
    - Tests successful retrieval of existing NodeAllocationRequest
 
 8. applyNodeConfiguration Tests:
@@ -241,7 +241,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 	})
 
 	It("returns an error when hwMgmtData is empty", func() {
-		// hwMgmtData is empty — plugin exists but nodeGroupData is missing
+		// hwMgmtData is empty — hardware manager exists but nodeGroupData is missing
 		task.clusterInput = &clusterInput{
 			hwMgmtData: map[string]any{},
 		}
@@ -400,7 +400,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 		Expect(condition.Reason).To(Equal(string(hwmgmtv1alpha1.Failed)))
 	})
 
-	It("processes hardware plugin timeout via callback", func() {
+	It("processes hardware manager timeout via callback", func() {
 		provisionedCondition := metav1.Condition{
 			Type:   "Provisioned",
 			Status: metav1.ConditionFalse,
@@ -408,7 +408,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 		nar.Status.Conditions = append(nar.Status.Conditions, provisionedCondition)
 		Expect(c.Create(ctx, nar)).To(Succeed())
 
-		// Hardware plugin sends callback with timed out status
+		// Hardware hardware manager sends callback with timed out status
 		timedOutMock := createMockNodeAllocationRequestResponse("False", "TimedOut", "Hardware provisioning timed out")
 		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, timedOutMock, hwmgmtv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(false))
@@ -523,7 +523,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 		// Update task object to reflect the updated CR status
 		task.object = cr
 
-		// Create NAR with still-failed status (plugin hasn't processed new spec yet)
+		// Create NAR with still-failed status (hardware manager hasn't processed new spec yet)
 		narFailedCondition := metav1.Condition{
 			Type:   "Configured",
 			Status: metav1.ConditionFalse,
@@ -546,19 +546,19 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 
 		configured, timedOutOrFailed, err := task.checkNodeAllocationRequestConfigStatus(ctx, staleMock)
 
-		// Should read from existing conditions instead of updating with stale plugin status
+		// Should read from existing conditions instead of updating with stale hardware manager status
 		Expect(err).ToNot(HaveOccurred())
 		Expect(configured).ToNot(BeNil())
-		Expect(*configured).To(BeFalse())     // Should reflect current PR condition, not plugin
+		Expect(*configured).To(BeFalse())     // Should reflect current PR condition, not hardware manager
 		Expect(timedOutOrFailed).To(BeTrue()) // Should be true since the condition reason is Failed
 
-		// Verify that the status was NOT overwritten with stale plugin data
+		// Verify that the status was NOT overwritten with stale hardware manager data
 		var updatedCR provisioningv1alpha1.ProvisioningRequest
 		Expect(c.Get(ctx, client.ObjectKeyFromObject(cr), &updatedCR)).To(Succeed())
 		condition := meta.FindStatusCondition(updatedCR.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured))
 		Expect(condition).ToNot(BeNil())
 		Expect(condition.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.Failed))) // Should remain as original failed state
-		Expect(condition.Message).To(Equal("Hardware configuring failed: Old failure message"))    // Reflects the current plugin response with the detailed error
+		Expect(condition.Message).To(Equal("Hardware configuring failed: Old failure message"))    // Reflects the current hardware manager response with the detailed error
 	})
 
 	It("returns false when NodeAllocationRequest is not provisioned", func() {
@@ -1954,7 +1954,7 @@ var _ = Describe("ProvisioningRequest Status Update After Hardware Failure", fun
 			cr.Status.ObservedGeneration = cr.Generation // They match, so no update detected
 
 			// Create a mock NodeAllocationRequest response that shows failure with matching transaction ID
-			// This simulates the case where hardware plugin has processed the current generation and reports genuine failure
+			// This simulates the case where hardware manager has processed the current generation and reports genuine failure
 			failedMock := createMockNodeAllocationRequestResponseWithTransactionId("False", "Failed", "Hardware provisioning failed", cr.Generation, cr.Generation)
 
 			// Call updateHardwareStatus - this SHOULD set to failed since transaction IDs match (no stale status)
@@ -2058,7 +2058,7 @@ var _ = Describe("ProvisioningRequest Status Update After Hardware Failure", fun
 		})
 
 		It("should allow hardware status updates when transaction ID is current", func() {
-			// Simulate a ProvisioningRequest that has been updated and hardware plugin has processed it
+			// Simulate a ProvisioningRequest that has been updated and hardware manager has processed it
 			cr.Generation = 2
 			cr.Status.ObservedGeneration = cr.Generation // SAME as generation
 			cr.Status.ProvisioningStatus.ProvisioningPhase = provisioningv1alpha1.StateProgressing
@@ -2178,11 +2178,11 @@ var _ = Describe("processExistingHardwareCondition", func() {
 		It("preserves timeout message", func() {
 			// With the new timeout handling approach, timeouts are detected at the NodeAllocationRequest level
 			// and propagated via callbacks. The ProvisioningRequest controller no longer detects timeouts directly.
-			// Instead, it receives timeout status via callbacks from the hardware plugin.
+			// Instead, it receives timeout status via callbacks from the hardware manager.
 			hwCondition := &metav1.Condition{
 				Type:    string(hwmgmtv1alpha1.Provisioned),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(hwmgmtv1alpha1.TimedOut), // Hardware plugin reports timeout via callback
+				Reason:  string(hwmgmtv1alpha1.TimedOut), // Hardware hardware manager reports timeout via callback
 				Message: "Hardware provisioning timed out",
 			}
 
@@ -2199,11 +2199,11 @@ var _ = Describe("processExistingHardwareCondition", func() {
 		It("preserves timeout message", func() {
 			// With the new timeout handling approach, timeouts are detected at the NodeAllocationRequest level
 			// and propagated via callbacks. The ProvisioningRequest controller no longer detects timeouts directly.
-			// Instead, it receives timeout status via callbacks from the hardware plugin.
+			// Instead, it receives timeout status via callbacks from the hardware manager.
 			hwCondition := &metav1.Condition{
 				Type:    string(hwmgmtv1alpha1.Configured),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(hwmgmtv1alpha1.TimedOut), // Hardware plugin reports timeout via callback
+				Reason:  string(hwmgmtv1alpha1.TimedOut), // Hardware hardware manager reports timeout via callback
 				Message: "Hardware configuration timed out",
 			}
 			status, reason, message, timedOutOrFailed := task.processExistingHardwareCondition(hwCondition, hwmgmtv1alpha1.Configured)
@@ -2317,7 +2317,7 @@ var _ = Describe("processExistingHardwareCondition", func() {
 	})
 
 	Context("stale terminal NAR status guard", func() {
-		It("skips update when NAR has Failed condition and plugin has not observed new transaction", func() {
+		It("skips update when NAR has Failed condition and hardware manager has not observed new transaction", func() {
 			narWithStaleFailure := &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "cluster-1",
@@ -2346,7 +2346,7 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			Expect(timedOutOrFailed).To(BeFalse())
 		})
 
-		It("skips update when NAR has TimedOut condition and plugin has not observed new transaction", func() {
+		It("skips update when NAR has TimedOut condition and hardware manager has not observed new transaction", func() {
 			narWithStaleTimeout := &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "cluster-1",
@@ -2404,7 +2404,7 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			Expect(timedOutOrFailed).To(BeFalse())
 		})
 
-		It("allows update when plugin has observed the current transaction", func() {
+		It("allows update when hardware manager has observed the current transaction", func() {
 			narWithCurrentFailure := &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "cluster-1",
@@ -2663,14 +2663,14 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			Expect(timedOutOrFailed).To(BeFalse())
 		})
 
-		It("should process new ConfigTransactionId when plugin catches up", func() {
+		It("should process new ConfigTransactionId when hardware manager catches up", func() {
 			// Step 1: PR Generation changes from 5 to 6
 			task.object.Generation = 6
 			Expect(c.Update(ctx, task.object)).To(Succeed())
 			// Refresh from client to get updated generation
 			Expect(c.Get(ctx, client.ObjectKeyFromObject(task.object), task.object)).To(Succeed())
 
-			// Step 2: Plugin eventually processes the new transaction (Generation 6)
+			// Step 2: Hardware manager eventually processes the new transaction (Generation 6)
 			observedID := int64(6) // Matches new Generation
 			configuredCondition := metav1.Condition{
 				Type:    "Configured",

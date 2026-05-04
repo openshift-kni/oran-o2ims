@@ -27,7 +27,7 @@ of the O2IMS controllers package. The suite supports the following test categori
    - Complete provisioning request lifecycle management
    - Multi-phase reconciliation (validation, resource creation, hardware provisioning,
      cluster installation, configuration)
-   - Hardware plugin integration and node allocation
+   - Hardware manager integration and node allocation
    - Cluster template resolution and application
    - BMC secret creation and management
    - Status condition tracking through provisioning phases
@@ -36,7 +36,7 @@ of the O2IMS controllers package. The suite supports the following test categori
    - Hardware template rendering and validation
    - Node allocation request creation and management
    - AllocatedNode resource handling
-   - Hardware plugin API integration
+   - Hardware manager API integration
    - BMC credential management
    - Node group processing (controller/worker nodes)
 

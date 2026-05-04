@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 /*
 Test Cases for Metal3 NodeAllocationRequest Controller
 
-This test suite covers the Metal3 hardware plugin's NodeAllocationRequest controller,
+This test suite covers the Metal3 hardware manager's NodeAllocationRequest controller,
 focusing on the new timeout handling implementation that was moved from the O-Cloud Manager.
 
 Key Test Areas:

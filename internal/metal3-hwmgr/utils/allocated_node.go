@@ -174,15 +174,15 @@ func GetChildNodes(
 func GetChildNodesUncached(
 	ctx context.Context,
 	noncachedClient client.Reader,
-	hwMgrNamespace string,
+	namespace string,
 	narName string,
 ) (*hwmgmtv1alpha1.AllocatedNodeList, error) {
 
 	allNodes := &hwmgmtv1alpha1.AllocatedNodeList{}
 	if err := ctlrutils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
-		return noncachedClient.List(ctx, allNodes, client.InNamespace(hwMgrNamespace))
+		return noncachedClient.List(ctx, allNodes, client.InNamespace(namespace))
 	}); err != nil {
-		return nil, fmt.Errorf("failed to list AllocatedNodes in namespace %s: %w", hwMgrNamespace, err)
+		return nil, fmt.Errorf("failed to list AllocatedNodes in namespace %s: %w", namespace, err)
 	}
 
 	filtered := &hwmgmtv1alpha1.AllocatedNodeList{}

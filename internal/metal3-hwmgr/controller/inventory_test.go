@@ -33,7 +33,7 @@ import (
 TEST CASE DESCRIPTIONS:
 
 This file contains comprehensive unit tests for the inventory management functionality
-in the Metal3 hardware management plugin. The tests cover:
+in the Metal3 hardware manager. The tests cover:
 
 RESOURCE INFO EXTRACTION FUNCTIONS:
 - getResourceInfoAdminState: Tests admin state based on BMH online status
