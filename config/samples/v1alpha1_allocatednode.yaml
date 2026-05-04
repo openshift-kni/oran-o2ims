@@ -1,14 +1,14 @@
 apiVersion: clcm.openshift.io/v1alpha1
 kind: AllocatedNode
 metadata:
-  name: metal3-hwplugin-site-sno-du-1-xr8620t-pool-xr8620txserver1
+  name: site-sno-du-1-xr8620t-pool-xr8620t-server1
   namespace: oran-o2ims
 spec:
   groupName: master
-  hwMgrNodeId: xr8620txserver1
+  hwMgrNodeId: xr8620t-server1
   hwMgrNodeNs: xr8620t-pool
   hwProfile: hardwareprofile-sample
-  nodeAllocationRequest: metal3-b12f3e77848a4002bf40
+  nodeAllocationRequest: site-sno-du-1
 status:
   bmc:
     address: idrac-virtualmedia+https://192.0.2.100/redfish/v1/Systems/System.Embedded.1

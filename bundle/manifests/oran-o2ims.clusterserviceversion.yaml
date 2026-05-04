@@ -8,15 +8,15 @@ metadata:
           "apiVersion": "clcm.openshift.io/v1alpha1",
           "kind": "AllocatedNode",
           "metadata": {
-            "name": "metal3-hwplugin-site-sno-du-1-xr8620t-pool-xr8620txserver1",
+            "name": "site-sno-du-1-xr8620t-pool-xr8620t-server1",
             "namespace": "oran-o2ims"
           },
           "spec": {
             "groupName": "master",
-            "hwMgrNodeId": "xr8620txserver1",
+            "hwMgrNodeId": "xr8620t-server1",
             "hwMgrNodeNs": "xr8620t-pool",
             "hwProfile": "hardwareprofile-sample",
-            "nodeAllocationRequest": "metal3-b12f3e77848a4002bf40"
+            "nodeAllocationRequest": "site-sno-du-1"
           },
           "status": {
             "bmc": {
@@ -407,11 +407,11 @@ metadata:
           "apiVersion": "clcm.openshift.io/v1alpha1",
           "kind": "NodeAllocationRequest",
           "metadata": {
-            "name": "metal3-b12f3e77848a4002bf40",
+            "name": "site-sno-du-1",
             "namespace": "oran-o2ims"
           },
           "spec": {
-            "clusterId": "site-sno-du-1123e4567-e89b-12d3-a456-426614174000",
+            "clusterId": "site-sno-du-1-123e4567-e89b-12d3-a456-426614174000",
             "configTransactionId": 1,
             "hardwareProvisioningTimeout": "90m",
             "nodeGroup": [
@@ -440,13 +440,11 @@ metadata:
                 "type": "Provisioned"
               }
             ],
-            "hwMgrPlugin": {
-              "observedGeneration": 1
-            },
             "observedConfigTransactionId": 0,
+            "observedGeneration": 1,
             "properties": {
               "nodeNames": [
-                "metal3-hwplugin-site-sno-du-1-xr8620t-pool-xr8620txserver1"
+                "site-sno-du-1-xr8620t-pool-xr8620t-server1"
               ]
             }
           }

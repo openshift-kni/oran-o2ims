@@ -1,10 +1,10 @@
 apiVersion: clcm.openshift.io/v1alpha1
 kind: NodeAllocationRequest
 metadata:
-  name: metal3-b12f3e77848a4002bf40
+  name: site-sno-du-1
   namespace: oran-o2ims
 spec:
-  clusterId: site-sno-du-1123e4567-e89b-12d3-a456-426614174000
+  clusterId: site-sno-du-1-123e4567-e89b-12d3-a456-426614174000
   configTransactionId: 1
   hardwareProvisioningTimeout: 90m
   nodeGroup:
@@ -24,9 +24,8 @@ status:
     reason: Completed
     status: "True"
     type: Provisioned
-  hwMgrPlugin:
-    observedGeneration: 1
+  observedGeneration: 1
   observedConfigTransactionId: 0
   properties:
     nodeNames:
-    - metal3-hwplugin-site-sno-du-1-xr8620t-pool-xr8620txserver1
+    - site-sno-du-1-xr8620t-pool-xr8620t-server1
