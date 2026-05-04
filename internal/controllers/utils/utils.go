@@ -221,7 +221,7 @@ func HasApiEndpoints(serverName string) bool {
 // requires TLS. Servers with API endpoints also serve metrics, but this
 // function identifies servers that serve metrics without API endpoints.
 func HasMetrics(serverName string) bool {
-	return serverName == Metal3PluginServerName
+	return serverName == Metal3HwMgrServerName
 }
 
 // NeedsServingCert determines whether a server needs a TLS serving
@@ -546,8 +546,8 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 	}
 
 	// Metal3 Hardware Plugin Server
-	if serverName == Metal3PluginServerName {
-		result = slices.Clone(Metal3PluginServerArgs)
+	if serverName == Metal3HwMgrServerName {
+		result = slices.Clone(Metal3HwMgrServerArgs)
 		return
 	}
 

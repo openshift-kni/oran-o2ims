@@ -37,7 +37,7 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/utils"
-	metal3pluginscontrollers "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/controller"
+	metal3controllers "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/controller"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	provisioningcontrollers "github.com/openshift-kni/oran-o2ims/internal/controllers"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
@@ -51,8 +51,8 @@ var (
 	Metal3Manager                       ctrl.Manager
 	ProvisioningRequestTestReconciler   *provisioningcontrollers.ProvisioningRequestReconciler
 	ClusterTemplateTestReconciler       *provisioningcontrollers.ClusterTemplateReconciler
-	NodeAllocationRequestTestReconciler *metal3pluginscontrollers.NodeAllocationRequestReconciler
-	AllocatedNodeTestReconciler         *metal3pluginscontrollers.AllocatedNodeReconciler
+	NodeAllocationRequestTestReconciler *metal3controllers.NodeAllocationRequestReconciler
+	AllocatedNodeTestReconciler         *metal3controllers.AllocatedNodeReconciler
 	testEnv                             *envtest.Environment
 	ctx                                 context.Context
 	cancel                              context.CancelFunc
@@ -176,7 +176,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred())
 
 	// Setup Metal3 controllers on separate manager (simulates separate pod deployment)
-	metal3controllers, err := metal3pluginscontrollers.SetupMetal3Controllers(Metal3Manager, constants.DefaultNamespace, logger)
+	metal3controllers, err := metal3controllers.SetupMetal3Controllers(Metal3Manager, constants.DefaultNamespace, logger)
 	Expect(err).ToNot(HaveOccurred())
 	NodeAllocationRequestTestReconciler = metal3controllers.NodeAllocationReconciler
 	AllocatedNodeTestReconciler = metal3controllers.AllocatedNodeReconciler

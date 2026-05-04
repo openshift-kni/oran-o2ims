@@ -36,7 +36,7 @@ TEST FILES AND COVERAGE:
    - PreprovisioningImage label handling
    - BMC information processing
 
-3. Hardware Plugin Setup Tests (metal3_hardwareplugin_setup_test.go):
+3. Hardware Manager Setup Tests (metal3_setup_test.go):
    - SetupMetal3Controllers function structure validation
    - Reconciler creation and field assignment verification
    - Error handling and message formatting

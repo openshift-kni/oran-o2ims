@@ -26,7 +26,7 @@ func SetupMetal3Controllers(mgr ctrl.Manager, namespace string, baseLogger *slog
 		NoncachedClient: mgr.GetAPIReader(),
 		Scheme:          mgr.GetScheme(),
 		Logger:          baseLogger.With("controller", "metal3_nodeallocationrequest_controller"),
-		PluginNamespace: namespace,
+		Namespace: namespace,
 		Manager:         mgr,
 	}
 
@@ -39,7 +39,7 @@ func SetupMetal3Controllers(mgr ctrl.Manager, namespace string, baseLogger *slog
 		NoncachedClient: mgr.GetAPIReader(),
 		Scheme:          mgr.GetScheme(),
 		Logger:          baseLogger.With("controller", "metal3_allocatednode_controller"),
-		PluginNamespace: namespace,
+		Namespace: namespace,
 		Manager:         mgr,
 	}
 
@@ -52,7 +52,7 @@ func SetupMetal3Controllers(mgr ctrl.Manager, namespace string, baseLogger *slog
 		NoncachedClient: mgr.GetAPIReader(),
 		Scheme:          mgr.GetScheme(),
 		Logger:          baseLogger.With("controller", "metal3_hostfirmwarecomponents_controller"),
-		PluginNamespace: namespace,
+		Namespace: namespace,
 		Manager:         mgr,
 	}
 

@@ -185,12 +185,11 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 			},
 		}
 
-		// Set up hwpluginClient using the test Metal3 hardware plugin
+		// Set up test Metal3 hardware manager
 	})
 
 	It("returns no error when handleRenderHardwareTemplate succeeds", func() {
-		// The default HardwarePlugin (metal3-hwplugin) is created in suite_test.go
-		// Set up the merged hwMgmt data on the task (handleRenderHardwareTemplate reads from t.clusterInput.hwMgmtData)
+		// Set up the merged hwMgmt data on the task
 		task.clusterInput = &clusterInput{
 			hwMgmtData: map[string]any{
 				"nodeGroupData": []any{
@@ -640,7 +639,7 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 			},
 		}
 
-		// Set up hwpluginClient using the test Metal3 hardware plugin
+		// Set up test Metal3 hardware manager
 	})
 
 	It("creates new NodeAllocationRequest when none exists", func() {
@@ -1240,7 +1239,7 @@ var _ = Describe("waitForHardwareData", func() {
 			},
 		}
 
-		// Set up hwpluginClient using the test Metal3 hardware plugin
+		// Set up test Metal3 hardware manager
 	})
 
 	It("returns provisioned=true and configured=true when both conditions are met", func() {
@@ -1340,7 +1339,7 @@ var _ = Describe("checkExistingNodeAllocationRequest", func() {
 			},
 		}
 
-		// Set up hwpluginClient using the test Metal3 hardware plugin
+		// Set up test Metal3 hardware manager
 	})
 
 	It("returns nil when NAR does not exist", func() {

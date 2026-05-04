@@ -17,7 +17,7 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 )
 
-// HardwarePlugin FSM for NodeAllocationRequest
+// Hardware manager FSM for NodeAllocationRequest
 type fsmAction int
 
 const (

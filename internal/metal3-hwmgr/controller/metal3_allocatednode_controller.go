@@ -34,7 +34,7 @@ type AllocatedNodeReconciler struct {
 	NoncachedClient client.Reader
 	Scheme          *runtime.Scheme
 	Logger          *slog.Logger
-	PluginNamespace string
+	Namespace string
 }
 
 // +kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=allocatednodes,verbs=get;create;list;watch;update;patch;delete

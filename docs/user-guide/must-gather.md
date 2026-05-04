@@ -23,7 +23,7 @@ The following data is collected:
 - Pod logs
   - All O-Cloud Manager pods (controller manager, resource-server,
     cluster-server, alarms-server, artifacts-server, provisioning-server,
-    postgres-server, metal3-hardwareplugin-server)
+    postgres-server, metal3-hwmgr-server)
   - Metal3 pods in `openshift-machine-api` (metal3-baremetal-operator, metal3)
   - Both current and previous container logs are collected
 

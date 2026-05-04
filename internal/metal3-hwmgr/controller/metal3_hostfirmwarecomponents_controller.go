@@ -41,7 +41,7 @@ type HostFirmwareComponentsReconciler struct {
 	NoncachedClient client.Reader
 	Scheme          *runtime.Scheme
 	Logger          *slog.Logger
-	PluginNamespace string
+	Namespace string
 }
 
 // +kubebuilder:rbac:groups=metal3.io,resources=hostfirmwarecomponents,verbs=get;list;watch

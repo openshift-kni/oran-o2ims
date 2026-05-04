@@ -22,13 +22,13 @@ This file contains comprehensive unit tests for the SetupMetal3Controllers funct
      * Client and NoncachedClient assignment from manager
      * Scheme configuration with required types
      * Logger setup with controller-specific context
-     * PluginNamespace assignment from parameter
+     * Namespace assignment from parameter
      * Manager reference assignment
    - Tests AllocatedNodeReconciler creation with correct field assignments:
      * Client and NoncachedClient assignment from manager
      * Scheme configuration with required types
      * Logger setup with controller-specific context
-     * PluginNamespace assignment from parameter
+     * Namespace assignment from parameter
      * Manager reference assignment
 
 3. Error Handling Structure:
@@ -41,7 +41,7 @@ This file contains comprehensive unit tests for the SetupMetal3Controllers funct
    - Tests behavior with empty namespace parameter (should not cause immediate failure)
    - Tests behavior with special characters in namespace (hyphens, underscores, dots)
    - Validates that namespace values are properly passed to reconciler instances
-   - Ensures namespace parameter is correctly assigned to PluginNamespace field
+   - Ensures namespace parameter is correctly assigned to Namespace field
 
 5. Logger Configuration:
    - Tests creation of contextual loggers for each controller type
@@ -126,7 +126,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 				NoncachedClient: fakeClient,
 				Scheme:          scheme,
 				Logger:          baseLogger.With(slog.String("controller", "metal3_nodeallocationrequest_controller")),
-				PluginNamespace: namespace,
+				Namespace: namespace,
 				Manager:         nil, // We can't provide a real manager in this test
 			}
 
@@ -135,7 +135,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 			Expect(nodeAllocationReconciler.NoncachedClient).ToNot(BeNil())
 			Expect(nodeAllocationReconciler.Scheme).To(Equal(scheme))
 			Expect(nodeAllocationReconciler.Logger).ToNot(BeNil())
-			Expect(nodeAllocationReconciler.PluginNamespace).To(Equal(namespace))
+			Expect(nodeAllocationReconciler.Namespace).To(Equal(namespace))
 		})
 
 		It("should create AllocatedNodeReconciler with correct fields", func() {
@@ -151,7 +151,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 				NoncachedClient: fakeClient,
 				Scheme:          scheme,
 				Logger:          baseLogger.With(slog.String("controller", "metal3_allocatednode_controller")),
-				PluginNamespace: namespace,
+				Namespace: namespace,
 				Manager:         nil, // We can't provide a real manager in this test
 			}
 
@@ -160,7 +160,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 			Expect(allocatedReconciler.NoncachedClient).ToNot(BeNil())
 			Expect(allocatedReconciler.Scheme).To(Equal(scheme))
 			Expect(allocatedReconciler.Logger).ToNot(BeNil())
-			Expect(allocatedReconciler.PluginNamespace).To(Equal(namespace))
+			Expect(allocatedReconciler.Namespace).To(Equal(namespace))
 		})
 	})
 

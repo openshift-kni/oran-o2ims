@@ -48,11 +48,11 @@ func init() {
 	utilruntime.Must(inventoryv1alpha1.AddToScheme(scheme))
 }
 
-// Start creates and returns the `metal3-hardwareplugin-manager` command.
+// Start creates and returns the `metal3-hwmgr` command.
 func Start() *cobra.Command {
 	result := &cobra.Command{
-		Use:   constants.Metal3HardwarePluginManagerCmd,
-		Short: "Metal3 HardwarePlugin Manager",
+		Use:   constants.Metal3HwMgrCmd,
+		Short: "Metal3 Hardware Manager",
 		Args:  cobra.NoArgs,
 	}
 	result.AddCommand(ControllerManager())
@@ -60,7 +60,7 @@ func Start() *cobra.Command {
 }
 
 // ControllerManagerCommand contains the data and logic needed to run the
-// `metal3-hardwareplugin-manager start` command.
+// `metal3-hwmgr start` command.
 type ControllerManagerCommand struct {
 	metricsAddr          string
 	metricsCertDir       string
@@ -70,17 +70,17 @@ type ControllerManagerCommand struct {
 }
 
 // NewControllerManager creates a new runner that knows how to execute the
-// `metal3-hardwareplugin-manager start` command.
+// `metal3-hwmgr start` command.
 func NewControllerManager() *ControllerManagerCommand {
 	return &ControllerManagerCommand{}
 }
 
-// ControllerManager represents the start command for the Metal3 HardwarePlugin Manager
+// ControllerManager represents the start command for the Metal3 hardware manager
 func ControllerManager() *cobra.Command {
 	c := NewControllerManager()
 	result := &cobra.Command{
 		Use:   "start",
-		Short: "Start the Metal3 HardwarePlugin manager",
+		Short: "Start the Metal3 hardware manager",
 		Args:  cobra.NoArgs,
 		RunE:  c.run,
 	}
@@ -121,7 +121,7 @@ func ControllerManager() *cobra.Command {
 	return result
 }
 
-// run executes the `metal3-hardwareplugin-manager start` command.
+// run executes the `metal3-hwmgr start` command.
 func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error {
 	_ = argv
 	ctx := cmd.Context()
@@ -164,11 +164,11 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
-	pluginNamespace := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
-	_, err = metal3ctrl.SetupMetal3Controllers(mgr, pluginNamespace, logger)
+	hwMgrNamespace := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
+	_, err = metal3ctrl.SetupMetal3Controllers(mgr, hwMgrNamespace, logger)
 	if err != nil {
-		logger.ErrorContext(ctx, "Unable to create metal3 plugin controller",
-			slog.String("controller", "Metal3HWPlugin"), slog.String("error", err.Error()))
+		logger.ErrorContext(ctx, "Unable to create metal3 hardware manager controller",
+			slog.String("error", err.Error()))
 		return exit.Error(1)
 	}
 

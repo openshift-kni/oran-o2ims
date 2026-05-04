@@ -129,7 +129,7 @@ var _ = Describe("Helpers", func() {
 		scheme          *runtime.Scheme
 		fakeClient      client.Client
 		fakeNoncached   client.Reader
-		pluginNamespace = "test-plugin-namespace"
+		testNamespace = "test-plugin-namespace"
 	)
 
 	BeforeEach(func() {
@@ -148,7 +148,7 @@ var _ = Describe("Helpers", func() {
 			testNode = &pluginsv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-node",
-					Namespace: pluginNamespace,
+					Namespace: testNamespace,
 				},
 			}
 		})
@@ -331,7 +331,7 @@ var _ = Describe("Helpers", func() {
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-nar",
-					Namespace: pluginNamespace,
+					Namespace: testNamespace,
 					UID:       "test-uid",
 				},
 				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{},
@@ -344,7 +344,7 @@ var _ = Describe("Helpers", func() {
 		})
 
 		It("should create a new AllocatedNode successfully", func() {
-			_, err := createNode(ctx, fakeClient, logger, pluginNamespace, nodeAllocationRequest,
+			_, err := createNode(ctx, fakeClient, logger, testNamespace, nodeAllocationRequest,
 				"test-node", "test-node-id", "test-node-ns", "test-group", "test-profile")
 			Expect(err).NotTo(HaveOccurred())
 
@@ -352,7 +352,7 @@ var _ = Describe("Helpers", func() {
 			createdNode := &pluginsv1alpha1.AllocatedNode{}
 			err = fakeClient.Get(ctx, types.NamespacedName{
 				Name:      "test-node",
-				Namespace: pluginNamespace,
+				Namespace: testNamespace,
 			}, createdNode)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(createdNode.Spec.GroupName).To(Equal("test-group"))
@@ -366,12 +366,12 @@ var _ = Describe("Helpers", func() {
 			existingNode := &pluginsv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "existing-node",
-					Namespace: pluginNamespace,
+					Namespace: testNamespace,
 				},
 			}
 			Expect(fakeClient.Create(ctx, existingNode)).To(Succeed())
 
-			_, err := createNode(ctx, fakeClient, logger, pluginNamespace, nodeAllocationRequest,
+			_, err := createNode(ctx, fakeClient, logger, testNamespace, nodeAllocationRequest,
 				"existing-node", "test-node-id", "test-node-ns", "test-group", "test-profile")
 			Expect(err).NotTo(HaveOccurred())
 
@@ -379,7 +379,7 @@ var _ = Describe("Helpers", func() {
 			retrievedNode := &pluginsv1alpha1.AllocatedNode{}
 			err = fakeClient.Get(ctx, types.NamespacedName{
 				Name:      "existing-node",
-				Namespace: pluginNamespace,
+				Namespace: testNamespace,
 			}, retrievedNode)
 			Expect(err).NotTo(HaveOccurred())
 			// Original spec should be empty since we didn't set it
@@ -397,7 +397,7 @@ var _ = Describe("Helpers", func() {
 
 		It("should return InProgress when node is missing Configured condition", func() {
 			node := &pluginsv1alpha1.AllocatedNode{
-				ObjectMeta: metav1.ObjectMeta{Name: "n1", Namespace: pluginNamespace},
+				ObjectMeta: metav1.ObjectMeta{Name: "n1", Namespace: testNamespace},
 			}
 			Expect(fakeClient.Create(ctx, node)).To(Succeed())
 
@@ -408,7 +408,7 @@ var _ = Describe("Helpers", func() {
 		})
 
 		It("should return ConfigApplied when node is successfully configured", func() {
-			node := createNodeWithCondition("n1", pluginNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
+			node := createNodeWithCondition("n1", testNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
 			Expect(fakeClient.Create(ctx, node)).To(Succeed())
 
 			status, reason, message := deriveNARStatusFromSingleNode(ctx, fakeNoncached, logger, node)
@@ -418,7 +418,7 @@ var _ = Describe("Helpers", func() {
 		})
 
 		It("should return InProgress for ConfigUpdatePending node", func() {
-			node := createNodeWithCondition("n1", pluginNamespace, configured, string(hwmgmtv1alpha1.ConfigUpdatePending), metav1.ConditionFalse)
+			node := createNodeWithCondition("n1", testNamespace, configured, string(hwmgmtv1alpha1.ConfigUpdatePending), metav1.ConditionFalse)
 			Expect(fakeClient.Create(ctx, node)).To(Succeed())
 
 			status, reason, message := deriveNARStatusFromSingleNode(ctx, fakeNoncached, logger, node)
@@ -428,7 +428,7 @@ var _ = Describe("Helpers", func() {
 		})
 
 		It("should return InProgress for ConfigUpdate node", func() {
-			node := createNodeWithCondition("n1", pluginNamespace, configured, string(hwmgmtv1alpha1.ConfigUpdate), metav1.ConditionFalse)
+			node := createNodeWithCondition("n1", testNamespace, configured, string(hwmgmtv1alpha1.ConfigUpdate), metav1.ConditionFalse)
 			Expect(fakeClient.Create(ctx, node)).To(Succeed())
 
 			status, reason, message := deriveNARStatusFromSingleNode(ctx, fakeNoncached, logger, node)
@@ -438,7 +438,7 @@ var _ = Describe("Helpers", func() {
 		})
 
 		It("should return Failed with error message for Failed node", func() {
-			node := createNodeWithCondition("n1", pluginNamespace, configured, string(hwmgmtv1alpha1.Failed), metav1.ConditionFalse)
+			node := createNodeWithCondition("n1", testNamespace, configured, string(hwmgmtv1alpha1.Failed), metav1.ConditionFalse)
 			node.Status.Conditions[0].Message = "BIOS update failed"
 			Expect(fakeClient.Create(ctx, node)).To(Succeed())
 
@@ -449,7 +449,7 @@ var _ = Describe("Helpers", func() {
 		})
 
 		It("should return Failed with error message for InvalidInput node", func() {
-			node := createNodeWithCondition("n1", pluginNamespace, configured, string(hwmgmtv1alpha1.InvalidInput), metav1.ConditionFalse)
+			node := createNodeWithCondition("n1", testNamespace, configured, string(hwmgmtv1alpha1.InvalidInput), metav1.ConditionFalse)
 			node.Status.Conditions[0].Message = "Invalid BIOS setting"
 			Expect(fakeClient.Create(ctx, node)).To(Succeed())
 
@@ -471,7 +471,7 @@ var _ = Describe("Helpers", func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
 			fakeNoncached = fakeClient
 			mnoNAR = &pluginsv1alpha1.NodeAllocationRequest{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-nar", Namespace: pluginNamespace},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-nar", Namespace: testNamespace},
 				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 					NodeGroup: []pluginsv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "master", HwProfile: "profile-v2", Role: "master"}, Size: 3},
@@ -482,15 +482,15 @@ var _ = Describe("Helpers", func() {
 		})
 
 		It("should report in-progress with per-group completed counts", func() {
-			m1 := createNodeWithCondition("m1", pluginNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
+			m1 := createNodeWithCondition("m1", testNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
 			m1.Spec.GroupName = testGroupMaster
-			m2 := createNodeWithCondition("m2", pluginNamespace, configured, string(hwmgmtv1alpha1.ConfigUpdate), metav1.ConditionTrue)
+			m2 := createNodeWithCondition("m2", testNamespace, configured, string(hwmgmtv1alpha1.ConfigUpdate), metav1.ConditionTrue)
 			m2.Spec.GroupName = testGroupMaster
-			m3 := createNodeWithCondition("m3", pluginNamespace, configured, string(hwmgmtv1alpha1.ConfigUpdatePending), metav1.ConditionFalse)
+			m3 := createNodeWithCondition("m3", testNamespace, configured, string(hwmgmtv1alpha1.ConfigUpdatePending), metav1.ConditionFalse)
 			m3.Spec.GroupName = testGroupMaster
-			w1 := createNodeWithCondition("w1", pluginNamespace, configured, string(hwmgmtv1alpha1.ConfigUpdatePending), metav1.ConditionFalse)
+			w1 := createNodeWithCondition("w1", testNamespace, configured, string(hwmgmtv1alpha1.ConfigUpdatePending), metav1.ConditionFalse)
 			w1.Spec.GroupName = testGroupWorker
-			w2 := createNodeWithCondition("w2", pluginNamespace, configured, string(hwmgmtv1alpha1.ConfigUpdatePending), metav1.ConditionFalse)
+			w2 := createNodeWithCondition("w2", testNamespace, configured, string(hwmgmtv1alpha1.ConfigUpdatePending), metav1.ConditionFalse)
 			w2.Spec.GroupName = testGroupWorker
 
 			nodes := []pluginsv1alpha1.AllocatedNode{*m1, *m2, *m3, *w1, *w2}
@@ -506,15 +506,15 @@ var _ = Describe("Helpers", func() {
 		})
 
 		It("should report failed with per-group failed counts", func() {
-			m1 := createNodeWithCondition("m1", pluginNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
+			m1 := createNodeWithCondition("m1", testNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
 			m1.Spec.GroupName = testGroupMaster
-			m2 := createNodeWithCondition("m2", pluginNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
+			m2 := createNodeWithCondition("m2", testNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
 			m2.Spec.GroupName = testGroupMaster
-			m3 := createNodeWithCondition("m3", pluginNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
+			m3 := createNodeWithCondition("m3", testNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
 			m3.Spec.GroupName = testGroupMaster
-			w1 := createNodeWithCondition("w1", pluginNamespace, configured, string(hwmgmtv1alpha1.Failed), metav1.ConditionFalse)
+			w1 := createNodeWithCondition("w1", testNamespace, configured, string(hwmgmtv1alpha1.Failed), metav1.ConditionFalse)
 			w1.Spec.GroupName = testGroupWorker
-			w2 := createNodeWithCondition("w2", pluginNamespace, configured, string(hwmgmtv1alpha1.InvalidInput), metav1.ConditionFalse)
+			w2 := createNodeWithCondition("w2", testNamespace, configured, string(hwmgmtv1alpha1.InvalidInput), metav1.ConditionFalse)
 			w2.Spec.GroupName = testGroupWorker
 
 			nodes := []pluginsv1alpha1.AllocatedNode{*m1, *m2, *m3, *w1, *w2}
@@ -531,15 +531,15 @@ var _ = Describe("Helpers", func() {
 		})
 
 		It("should return ConfigApplied when all nodes are configured", func() {
-			m1 := createNodeWithCondition("m1", pluginNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
+			m1 := createNodeWithCondition("m1", testNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
 			m1.Spec.GroupName = testGroupMaster
-			m2 := createNodeWithCondition("m2", pluginNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
+			m2 := createNodeWithCondition("m2", testNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
 			m2.Spec.GroupName = testGroupMaster
-			m3 := createNodeWithCondition("m3", pluginNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
+			m3 := createNodeWithCondition("m3", testNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
 			m3.Spec.GroupName = testGroupMaster
-			w1 := createNodeWithCondition("w1", pluginNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
+			w1 := createNodeWithCondition("w1", testNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
 			w1.Spec.GroupName = testGroupWorker
-			w2 := createNodeWithCondition("w2", pluginNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
+			w2 := createNodeWithCondition("w2", testNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
 			w2.Spec.GroupName = testGroupWorker
 
 			nodes := []pluginsv1alpha1.AllocatedNode{*m1, *m2, *m3, *w1, *w2}
@@ -562,7 +562,7 @@ var _ = Describe("Helpers", func() {
 			nodeAllocationRequest = &pluginsv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-nar",
-					Namespace: pluginNamespace,
+					Namespace: testNamespace,
 				},
 				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 					LocationSpec: pluginsv1alpha1.LocationSpec{
@@ -727,7 +727,7 @@ var _ = Describe("Helpers", func() {
 			nodeAllocationRequest = &pluginsv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-nar",
-					Namespace: pluginNamespace,
+					Namespace: testNamespace,
 				},
 				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 					NodeGroup: []pluginsv1alpha1.NodeGroup{
@@ -745,7 +745,7 @@ var _ = Describe("Helpers", func() {
 			node1 := &pluginsv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "node-1",
-					Namespace: pluginNamespace,
+					Namespace: testNamespace,
 				},
 				Spec: pluginsv1alpha1.AllocatedNodeSpec{
 					GroupName:             "test-group",
@@ -755,7 +755,7 @@ var _ = Describe("Helpers", func() {
 			node2 := &pluginsv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "node-2",
-					Namespace: pluginNamespace,
+					Namespace: testNamespace,
 				},
 				Spec: pluginsv1alpha1.AllocatedNodeSpec{
 					GroupName:             "test-group",
@@ -771,21 +771,21 @@ var _ = Describe("Helpers", func() {
 		})
 
 		It("should return true when all groups are fully allocated", func() {
-			result, err := isNodeAllocationRequestFullyAllocated(ctx, fakeNoncached, logger, pluginNamespace, nodeAllocationRequest)
+			result, err := isNodeAllocationRequestFullyAllocated(ctx, fakeNoncached, logger, testNamespace, nodeAllocationRequest)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeTrue())
 		})
 
 		It("should return false when a group is not fully allocated", func() {
 			nodeAllocationRequest.Spec.NodeGroup[0].Size = 3
-			result, err := isNodeAllocationRequestFullyAllocated(ctx, fakeNoncached, logger, pluginNamespace, nodeAllocationRequest)
+			result, err := isNodeAllocationRequestFullyAllocated(ctx, fakeNoncached, logger, testNamespace, nodeAllocationRequest)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeFalse())
 		})
 
 		It("should return true even when NodeNames in status is empty (counts CRs, not status)", func() {
 			nodeAllocationRequest.Status.Properties.NodeNames = nil
-			result, err := isNodeAllocationRequestFullyAllocated(ctx, fakeNoncached, logger, pluginNamespace, nodeAllocationRequest)
+			result, err := isNodeAllocationRequestFullyAllocated(ctx, fakeNoncached, logger, testNamespace, nodeAllocationRequest)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeTrue())
 		})
@@ -794,7 +794,7 @@ var _ = Describe("Helpers", func() {
 			otherNode := &pluginsv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "other-node",
-					Namespace: pluginNamespace,
+					Namespace: testNamespace,
 				},
 				Spec: pluginsv1alpha1.AllocatedNodeSpec{
 					GroupName:             "test-group",
@@ -807,7 +807,7 @@ var _ = Describe("Helpers", func() {
 				Build()
 			fakeNoncached = fakeClient
 
-			result, err := isNodeAllocationRequestFullyAllocated(ctx, fakeNoncached, logger, pluginNamespace, nodeAllocationRequest)
+			result, err := isNodeAllocationRequestFullyAllocated(ctx, fakeNoncached, logger, testNamespace, nodeAllocationRequest)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeFalse())
 		})
@@ -838,7 +838,7 @@ var _ = Describe("Helpers", func() {
 			testHwProfile = &hwmgmtv1alpha1.HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-profile",
-					Namespace: pluginNamespace,
+					Namespace: testNamespace,
 				},
 				Spec: hwmgmtv1alpha1.HardwareProfileSpec{
 					BiosFirmware: hwmgmtv1alpha1.Firmware{
@@ -925,7 +925,7 @@ var _ = Describe("Helpers", func() {
 
 		Describe("validateFirmwareVersions", func() {
 			It("should return true when firmware versions match", func() {
-				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
@@ -936,7 +936,7 @@ var _ = Describe("Helpers", func() {
 				testHwProfile.Spec.BmcFirmware.Version = ""
 				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
 
-				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
@@ -946,7 +946,7 @@ var _ = Describe("Helpers", func() {
 				testHFC.Status.Components[0].CurrentVersion = "1.0.0" // Different BIOS version
 				Expect(testClient.Update(ctx, testHFC)).To(Succeed())
 
-				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
@@ -955,13 +955,13 @@ var _ = Describe("Helpers", func() {
 				// Delete HFC
 				Expect(testClient.Delete(ctx, testHFC)).To(Succeed())
 
-				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
 
 			It("should return error when HardwareProfile is missing", func() {
-				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "nonexistent-profile")
+				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, testNamespace, "nonexistent-profile")
 				Expect(err).To(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
@@ -969,7 +969,7 @@ var _ = Describe("Helpers", func() {
 
 		Describe("validateAppliedBiosSettings", func() {
 			It("should return true when BIOS settings match", func() {
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
@@ -979,7 +979,7 @@ var _ = Describe("Helpers", func() {
 				testHwProfile.Spec.Bios.Attributes = map[string]intstr.IntOrString{}
 				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
@@ -989,7 +989,7 @@ var _ = Describe("Helpers", func() {
 				testHFS.Status.Settings["VirtualizationTechnology"] = "Disabled" // Different value
 				Expect(testClient.Update(ctx, testHFS)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
@@ -999,7 +999,7 @@ var _ = Describe("Helpers", func() {
 				delete(testHFS.Status.Settings, "HyperThreading")
 				Expect(testClient.Update(ctx, testHFS)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
@@ -1008,13 +1008,13 @@ var _ = Describe("Helpers", func() {
 				// Delete HFS
 				Expect(testClient.Delete(ctx, testHFS)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
 
 			It("should return true when NIC firmware versions match", func() {
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
@@ -1024,7 +1024,7 @@ var _ = Describe("Helpers", func() {
 				testHwProfile.Spec.NicFirmware = []hwmgmtv1alpha1.Nic{}
 				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
@@ -1034,7 +1034,7 @@ var _ = Describe("Helpers", func() {
 				testHFC.Status.Components[2].CurrentVersion = "7.0.0" // Different version for nic1
 				Expect(testClient.Update(ctx, testHFC)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
@@ -1044,7 +1044,7 @@ var _ = Describe("Helpers", func() {
 				testHFC.Status.Components = testHFC.Status.Components[:3] // Remove the second NIC
 				Expect(testClient.Update(ctx, testHFC)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
@@ -1053,7 +1053,7 @@ var _ = Describe("Helpers", func() {
 				// Delete HFC
 				Expect(testClient.Delete(ctx, testHFC)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
@@ -1068,7 +1068,7 @@ var _ = Describe("Helpers", func() {
 				}
 				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
@@ -1076,7 +1076,7 @@ var _ = Describe("Helpers", func() {
 
 		Describe("validateNodeConfiguration", func() {
 			It("should return true when both firmware and BIOS validation pass", func() {
-				valid, err := validateNodeConfiguration(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				valid, err := validateNodeConfiguration(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
@@ -1086,7 +1086,7 @@ var _ = Describe("Helpers", func() {
 				testHFC.Status.Components[0].CurrentVersion = "1.0.0" // Different BIOS version
 				Expect(testClient.Update(ctx, testHFC)).To(Succeed())
 
-				valid, err := validateNodeConfiguration(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				valid, err := validateNodeConfiguration(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
@@ -1096,7 +1096,7 @@ var _ = Describe("Helpers", func() {
 				testHFS.Status.Settings["VirtualizationTechnology"] = "Disabled" // Different value
 				Expect(testClient.Update(ctx, testHFS)).To(Succeed())
 
-				valid, err := validateNodeConfiguration(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				valid, err := validateNodeConfiguration(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
@@ -1108,13 +1108,13 @@ var _ = Describe("Helpers", func() {
 				testHwProfile.Spec.Bios.Attributes = map[string]intstr.IntOrString{}
 				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
 
-				valid, err := validateNodeConfiguration(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "test-profile")
+				valid, err := validateNodeConfiguration(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
 
 			It("should return error when HardwareProfile is missing", func() {
-				valid, err := validateNodeConfiguration(ctx, testClient, testClient, logger, testBMH, pluginNamespace, "nonexistent-profile")
+				valid, err := validateNodeConfiguration(ctx, testClient, testClient, logger, testBMH, testNamespace, "nonexistent-profile")
 				Expect(err).To(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
@@ -1264,13 +1264,13 @@ var _ = Describe("Helpers", func() {
 
 	// Skip complex integration tests that require extensive mocking
 	Describe("syncSkipCleanupToAllocatedNodes", func() {
-		var pluginNamespace = "oran-o2ims"
+		var testNamespace = "oran-o2ims"
 
 		It("should propagate skipCleanup from NAR to AllocatedNodes", func() {
 			nar := &pluginsv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-nar",
-					Namespace: pluginNamespace,
+					Namespace: testNamespace,
 				},
 				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 					SkipCleanup: true,
@@ -1279,7 +1279,7 @@ var _ = Describe("Helpers", func() {
 			node := &pluginsv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "node1",
-					Namespace: pluginNamespace,
+					Namespace: testNamespace,
 				},
 				Spec: pluginsv1alpha1.AllocatedNodeSpec{
 					NodeAllocationRequest: "test-nar",
@@ -1301,7 +1301,7 @@ var _ = Describe("Helpers", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			updatedNode := &pluginsv1alpha1.AllocatedNode{}
-			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: "node1", Namespace: pluginNamespace}, updatedNode)).To(Succeed())
+			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: "node1", Namespace: testNamespace}, updatedNode)).To(Succeed())
 			Expect(updatedNode.Spec.SkipCleanup).To(BeTrue())
 		})
 
@@ -1309,7 +1309,7 @@ var _ = Describe("Helpers", func() {
 			nar := &pluginsv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-nar",
-					Namespace: pluginNamespace,
+					Namespace: testNamespace,
 				},
 				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 					SkipCleanup: true,
@@ -1318,7 +1318,7 @@ var _ = Describe("Helpers", func() {
 			node := &pluginsv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "node1",
-					Namespace: pluginNamespace,
+					Namespace: testNamespace,
 				},
 				Spec: pluginsv1alpha1.AllocatedNodeSpec{
 					NodeAllocationRequest: "test-nar",
@@ -2600,7 +2600,7 @@ var _ = Describe("Helpers", func() {
 			testClient      client.Client
 			mockCtrl        *gomock.Controller
 			mockOps         *MockNodeOps
-			pluginNamespace string
+			testNamespace string
 		)
 
 		const (
@@ -2613,7 +2613,7 @@ var _ = Describe("Helpers", func() {
 		BeforeEach(func() {
 			ctx = context.Background()
 			logger = slog.New(slog.NewTextHandler(GinkgoWriter, &slog.HandlerOptions{}))
-			pluginNamespace = testNS
+			testNamespace = testNS
 			mockCtrl = gomock.NewController(GinkgoT())
 			mockOps = NewMockNodeOps(mockCtrl)
 
@@ -2628,10 +2628,10 @@ var _ = Describe("Helpers", func() {
 		})
 
 		It("should requeue with medium interval when BMH is servicing", func() {
-			node := createAllocatedNodeWithGroup("n1", pluginNamespace, "n1-bmh", pluginNamespace, "worker", oldProfile)
+			node := createAllocatedNodeWithGroup("n1", testNamespace, "n1-bmh", testNamespace, "worker", oldProfile)
 			node.Status.Hostname = hostname
 			bmh := &metal3v1alpha1.BareMetalHost{
-				ObjectMeta: metav1.ObjectMeta{Name: "n1-bmh", Namespace: pluginNamespace},
+				ObjectMeta: metav1.ObjectMeta{Name: "n1-bmh", Namespace: testNamespace},
 				Status:     metal3v1alpha1.BareMetalHostStatus{OperationalStatus: metal3v1alpha1.OperationalStatusServicing},
 			}
 
@@ -2646,15 +2646,15 @@ var _ = Describe("Helpers", func() {
 
 			// Verify node was NOT abandoned
 			updatedNode := &pluginsv1alpha1.AllocatedNode{}
-			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: pluginNamespace}, updatedNode)).To(Succeed())
+			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: testNamespace}, updatedNode)).To(Succeed())
 			Expect(updatedNode.Annotations).ToNot(HaveKey(UpdateAbandonedAnnotation))
 		})
 
 		It("should requeue with medium interval when BMH is preparing", func() {
-			node := createAllocatedNodeWithGroup("n1", pluginNamespace, "n1-bmh", pluginNamespace, "worker", oldProfile)
+			node := createAllocatedNodeWithGroup("n1", testNamespace, "n1-bmh", testNamespace, "worker", oldProfile)
 			node.Status.Hostname = hostname
 			bmh := &metal3v1alpha1.BareMetalHost{
-				ObjectMeta: metav1.ObjectMeta{Name: "n1-bmh", Namespace: pluginNamespace},
+				ObjectMeta: metav1.ObjectMeta{Name: "n1-bmh", Namespace: testNamespace},
 				Status: metal3v1alpha1.BareMetalHostStatus{
 					Provisioning: metal3v1alpha1.ProvisionStatus{State: metal3v1alpha1.StatePreparing},
 				},
@@ -2670,18 +2670,18 @@ var _ = Describe("Helpers", func() {
 			Expect(result).To(Equal(hwmgrutils.RequeueWithMediumInterval()))
 
 			updatedNode := &pluginsv1alpha1.AllocatedNode{}
-			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: pluginNamespace}, updatedNode)).To(Succeed())
+			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: testNamespace}, updatedNode)).To(Succeed())
 			Expect(updatedNode.Annotations).ToNot(HaveKey(UpdateAbandonedAnnotation))
 		})
 
 		It("should abandon node, uncordon, clear annotations, and set abandoned annotation when BMH is OK", func() {
-			node := createAllocatedNodeWithGroup("n1", pluginNamespace, "n1-bmh", pluginNamespace, "worker", oldProfile)
+			node := createAllocatedNodeWithGroup("n1", testNamespace, "n1-bmh", testNamespace, "worker", oldProfile)
 			node.Status.Hostname = hostname
 
 			bmh := &metal3v1alpha1.BareMetalHost{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        "n1-bmh",
-					Namespace:   pluginNamespace,
+					Namespace:   testNamespace,
 					Annotations: map[string]string{BiosUpdateNeededAnnotation: "true", FirmwareUpdateNeededAnnotation: "true"},
 				},
 				Status: metal3v1alpha1.BareMetalHostStatus{OperationalStatus: metal3v1alpha1.OperationalStatusOK},
@@ -2699,25 +2699,25 @@ var _ = Describe("Helpers", func() {
 			Expect(result).To(Equal(hwmgrutils.RequeueImmediately()))
 
 			updatedNode := &pluginsv1alpha1.AllocatedNode{}
-			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: pluginNamespace}, updatedNode)).To(Succeed())
+			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: testNamespace}, updatedNode)).To(Succeed())
 			Expect(updatedNode.Annotations).To(HaveKey(UpdateAbandonedAnnotation))
 			Expect(updatedNode.Annotations).ToNot(HaveKey(ConfigAnnotation))
 
 			updatedBMH := &metal3v1alpha1.BareMetalHost{}
-			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1-bmh", Namespace: pluginNamespace}, updatedBMH)).To(Succeed())
+			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1-bmh", Namespace: testNamespace}, updatedBMH)).To(Succeed())
 			Expect(updatedBMH.Annotations).ToNot(HaveKey(BiosUpdateNeededAnnotation))
 			Expect(updatedBMH.Annotations).ToNot(HaveKey(FirmwareUpdateNeededAnnotation))
 		})
 
 		It("should abandon node, uncordon, clear annotations, and set abandoned annotation when BMH is error", func() {
-			node := createAllocatedNodeWithGroup("n1", pluginNamespace, "n1-bmh", pluginNamespace, "worker", oldProfile)
+			node := createAllocatedNodeWithGroup("n1", testNamespace, "n1-bmh", testNamespace, "worker", oldProfile)
 			node.Status.Hostname = hostname
 			node.Annotations = map[string]string{ConfigAnnotation: "bios-update"}
 
 			bmh := &metal3v1alpha1.BareMetalHost{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        "n1-bmh",
-					Namespace:   pluginNamespace,
+					Namespace:   testNamespace,
 					Annotations: map[string]string{BiosUpdateNeededAnnotation: "true", FirmwareUpdateNeededAnnotation: "true"},
 				},
 				Status: metal3v1alpha1.BareMetalHostStatus{OperationalStatus: metal3v1alpha1.OperationalStatusError},
@@ -2735,12 +2735,12 @@ var _ = Describe("Helpers", func() {
 			Expect(result).To(Equal(hwmgrutils.RequeueImmediately()))
 
 			updatedNode := &pluginsv1alpha1.AllocatedNode{}
-			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: pluginNamespace}, updatedNode)).To(Succeed())
+			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: testNamespace}, updatedNode)).To(Succeed())
 			Expect(updatedNode.Annotations).To(HaveKey(UpdateAbandonedAnnotation))
 			Expect(updatedNode.Annotations).ToNot(HaveKey(ConfigAnnotation))
 
 			updatedBMH := &metal3v1alpha1.BareMetalHost{}
-			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1-bmh", Namespace: pluginNamespace}, updatedBMH)).To(Succeed())
+			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1-bmh", Namespace: testNamespace}, updatedBMH)).To(Succeed())
 			Expect(updatedBMH.Annotations).ToNot(HaveKey(BiosUpdateNeededAnnotation))
 			Expect(updatedBMH.Annotations).ToNot(HaveKey(FirmwareUpdateNeededAnnotation))
 		})
@@ -2754,7 +2754,6 @@ var _ = Describe("Helpers", func() {
 			testClient      client.Client
 			mockCtrl        *gomock.Controller
 			mockOps         *MockNodeOps
-			pluginNamespace string
 		)
 
 		const (
@@ -2769,7 +2768,7 @@ var _ = Describe("Helpers", func() {
 		BeforeEach(func() {
 			ctx = context.Background()
 			logger = slog.New(slog.NewTextHandler(GinkgoWriter, &slog.HandlerOptions{}))
-			pluginNamespace = "test-ns"
+
 			mockCtrl = gomock.NewController(GinkgoT())
 			mockOps = NewMockNodeOps(mockCtrl)
 
@@ -2790,35 +2789,35 @@ var _ = Describe("Helpers", func() {
 			}
 			testClient = fake.NewClientBuilder().WithScheme(scheme).Build()
 
-			result, err := executeNodeUpdates(ctx, testClient, testClient, logger, pluginNamespace, nar, mockOps, nil)
+			result, err := executeNodeUpdates(ctx, testClient, testClient, logger, testNamespace, nar, mockOps, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.Requeue).To(BeFalse())
 			Expect(result.RequeueAfter).To(BeZero())
 		})
 
 		It("should dispatch parallel actionInitiate for multiple nodes and return requeue", func() {
-			node1 := createAllocatedNodeWithGroup("n1", pluginNamespace, "n1-bmh", pluginNamespace, "worker", currentProfile)
+			node1 := createAllocatedNodeWithGroup("n1", testNamespace, "n1-bmh", testNamespace, "worker", currentProfile)
 			node1.Spec.NodeAllocationRequest = testNARName
 			node1.Status.Hostname = workerHostname1
 			bmh1 := &metal3v1alpha1.BareMetalHost{
-				ObjectMeta: metav1.ObjectMeta{Name: "n1-bmh", Namespace: pluginNamespace},
+				ObjectMeta: metav1.ObjectMeta{Name: "n1-bmh", Namespace: testNamespace},
 				Status:     metal3v1alpha1.BareMetalHostStatus{OperationalStatus: metal3v1alpha1.OperationalStatusOK},
 			}
 
-			node2 := createAllocatedNodeWithGroup("n2", pluginNamespace, "n2-bmh", pluginNamespace, "worker", currentProfile)
+			node2 := createAllocatedNodeWithGroup("n2", testNamespace, "n2-bmh", testNamespace, "worker", currentProfile)
 			node2.Spec.NodeAllocationRequest = testNARName
 			node2.Status.Hostname = workerHostname2
 			bmh2 := &metal3v1alpha1.BareMetalHost{
-				ObjectMeta: metav1.ObjectMeta{Name: "n2-bmh", Namespace: pluginNamespace},
+				ObjectMeta: metav1.ObjectMeta{Name: "n2-bmh", Namespace: testNamespace},
 				Status:     metal3v1alpha1.BareMetalHostStatus{OperationalStatus: metal3v1alpha1.OperationalStatusOK},
 			}
 
 			hwProfile := &hwmgmtv1alpha1.HardwareProfile{
-				ObjectMeta: metav1.ObjectMeta{Name: newProfile, Namespace: pluginNamespace},
+				ObjectMeta: metav1.ObjectMeta{Name: newProfile, Namespace: testNamespace},
 				Spec:       hwmgmtv1alpha1.HardwareProfileSpec{},
 			}
 			nar := &pluginsv1alpha1.NodeAllocationRequest{
-				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: pluginNamespace},
+				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: testNamespace},
 				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 					NodeGroup: []pluginsv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newProfile}},
@@ -2840,13 +2839,13 @@ var _ = Describe("Helpers", func() {
 				{node: node2, actionType: actionInitiate},
 			}
 
-			result, err := executeNodeUpdates(ctx, testClient, testClient, logger, pluginNamespace, nar, mockOps, nodesToProcess)
+			result, err := executeNodeUpdates(ctx, testClient, testClient, logger, testNamespace, nar, mockOps, nodesToProcess)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 		})
 
 		It("should dispatch actionTransition and return requeue when BMH is in Servicing state", func() {
-			node1 := createAllocatedNodeWithGroup("n1", pluginNamespace, "n1-bmh", pluginNamespace, "worker", newProfile)
+			node1 := createAllocatedNodeWithGroup("n1", testNamespace, "n1-bmh", testNamespace, "worker", newProfile)
 			node1.Spec.NodeAllocationRequest = testNARName
 			node1.Status.Hostname = workerHostname1
 			node1.Status.Conditions = []metav1.Condition{
@@ -2854,7 +2853,7 @@ var _ = Describe("Helpers", func() {
 			}
 
 			bmh1 := &metal3v1alpha1.BareMetalHost{
-				ObjectMeta: metav1.ObjectMeta{Name: "n1-bmh", Namespace: pluginNamespace},
+				ObjectMeta: metav1.ObjectMeta{Name: "n1-bmh", Namespace: testNamespace},
 				Status:     metal3v1alpha1.BareMetalHostStatus{OperationalStatus: metal3v1alpha1.OperationalStatusServicing},
 			}
 			bmh1.Annotations = map[string]string{
@@ -2865,7 +2864,7 @@ var _ = Describe("Helpers", func() {
 			hfs := &metal3v1alpha1.HostFirmwareSettings{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "n1-bmh",
-					Namespace:  pluginNamespace,
+					Namespace:  testNamespace,
 					Generation: 2,
 				},
 				Status: metal3v1alpha1.HostFirmwareSettingsStatus{
@@ -2884,7 +2883,7 @@ var _ = Describe("Helpers", func() {
 			}
 
 			nar := &pluginsv1alpha1.NodeAllocationRequest{
-				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: pluginNamespace},
+				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: testNamespace},
 				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 					NodeGroup: []pluginsv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newProfile}},
@@ -2901,23 +2900,23 @@ var _ = Describe("Helpers", func() {
 				{node: node1, actionType: actionTransition},
 			}
 
-			result, err := executeNodeUpdates(ctx, testClient, testClient, logger, pluginNamespace, nar, mockOps, nodesToProcess)
+			result, err := executeNodeUpdates(ctx, testClient, testClient, logger, testNamespace, nar, mockOps, nodesToProcess)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
 			// Verify config-in-progress annotation was set on the node
 			updatedNode := &pluginsv1alpha1.AllocatedNode{}
-			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: pluginNamespace}, updatedNode)).To(Succeed())
+			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: testNamespace}, updatedNode)).To(Succeed())
 			Expect(getConfigAnnotation(updatedNode)).To(Equal(UpdateReasonBIOSSettings))
 
 			// Verify BiosUpdateNeeded annotation was removed from BMH
 			updatedBMH := &metal3v1alpha1.BareMetalHost{}
-			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1-bmh", Namespace: pluginNamespace}, updatedBMH)).To(Succeed())
+			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1-bmh", Namespace: testNamespace}, updatedBMH)).To(Succeed())
 			Expect(updatedBMH.Annotations).ToNot(HaveKey(BiosUpdateNeededAnnotation))
 		})
 
 		It("should abandon actionTransition node when profile changed and BMH is OK", func() {
-			node1 := createAllocatedNodeWithGroup("n1", pluginNamespace, "n1-bmh", pluginNamespace, "worker", currentProfile)
+			node1 := createAllocatedNodeWithGroup("n1", testNamespace, "n1-bmh", testNamespace, "worker", currentProfile)
 			node1.Spec.NodeAllocationRequest = testNARName
 			node1.Status.Hostname = workerHostname1
 			node1.Status.Conditions = []metav1.Condition{{
@@ -2928,13 +2927,13 @@ var _ = Describe("Helpers", func() {
 			}
 
 			bmh1 := &metal3v1alpha1.BareMetalHost{
-				ObjectMeta: metav1.ObjectMeta{Name: "n1-bmh", Namespace: pluginNamespace},
+				ObjectMeta: metav1.ObjectMeta{Name: "n1-bmh", Namespace: testNamespace},
 				Status:     metal3v1alpha1.BareMetalHostStatus{OperationalStatus: metal3v1alpha1.OperationalStatusOK},
 			}
 
 			// New profile is requested mid-flight
 			nar := &pluginsv1alpha1.NodeAllocationRequest{
-				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: pluginNamespace},
+				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: testNamespace},
 				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 					NodeGroup: []pluginsv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newProfile}},
@@ -2953,17 +2952,17 @@ var _ = Describe("Helpers", func() {
 				{node: node1, actionType: actionTransition},
 			}
 
-			result, err := executeNodeUpdates(ctx, testClient, testClient, logger, pluginNamespace, nar, mockOps, nodesToProcess)
+			result, err := executeNodeUpdates(ctx, testClient, testClient, logger, testNamespace, nar, mockOps, nodesToProcess)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
 			updatedNode := &pluginsv1alpha1.AllocatedNode{}
-			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: pluginNamespace}, updatedNode)).To(Succeed())
+			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: testNamespace}, updatedNode)).To(Succeed())
 			Expect(updatedNode.Annotations).To(HaveKey(UpdateAbandonedAnnotation))
 		})
 
 		It("should abandon actionInProgressUpdate node when profile changed and BMH is OK", func() {
-			node1 := createAllocatedNodeWithGroup("n1", pluginNamespace, "n1-bmh", pluginNamespace, "worker", currentProfile)
+			node1 := createAllocatedNodeWithGroup("n1", testNamespace, "n1-bmh", testNamespace, "worker", currentProfile)
 			node1.Spec.NodeAllocationRequest = testNARName
 			node1.Status.Hostname = workerHostname1
 			node1.Status.Conditions = []metav1.Condition{
@@ -2972,13 +2971,13 @@ var _ = Describe("Helpers", func() {
 			node1.Annotations = map[string]string{ConfigAnnotation: "bios-update"}
 
 			bmh1 := &metal3v1alpha1.BareMetalHost{
-				ObjectMeta: metav1.ObjectMeta{Name: "n1-bmh", Namespace: pluginNamespace},
+				ObjectMeta: metav1.ObjectMeta{Name: "n1-bmh", Namespace: testNamespace},
 				Status:     metal3v1alpha1.BareMetalHostStatus{OperationalStatus: metal3v1alpha1.OperationalStatusOK},
 			}
 
 			// New profile is requested mid-flight
 			nar := &pluginsv1alpha1.NodeAllocationRequest{
-				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: pluginNamespace},
+				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: testNamespace},
 				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 					NodeGroup: []pluginsv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newProfile}},
@@ -2997,18 +2996,18 @@ var _ = Describe("Helpers", func() {
 				{node: node1, actionType: actionInProgressUpdate},
 			}
 
-			result, err := executeNodeUpdates(ctx, testClient, testClient, logger, pluginNamespace, nar, mockOps, nodesToProcess)
+			result, err := executeNodeUpdates(ctx, testClient, testClient, logger, testNamespace, nar, mockOps, nodesToProcess)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
 			updatedNode := &pluginsv1alpha1.AllocatedNode{}
-			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: pluginNamespace}, updatedNode)).To(Succeed())
+			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: testNamespace}, updatedNode)).To(Succeed())
 			Expect(updatedNode.Annotations).To(HaveKey(UpdateAbandonedAnnotation))
 			Expect(updatedNode.Annotations).ToNot(HaveKey(ConfigAnnotation))
 		})
 
 		It("should abandon actionInProgressUpdate node when profile changed and BMH is ERROR", func() {
-			node1 := createAllocatedNodeWithGroup("n1", pluginNamespace, "n1-bmh", pluginNamespace, "worker", currentProfile)
+			node1 := createAllocatedNodeWithGroup("n1", testNamespace, "n1-bmh", testNamespace, "worker", currentProfile)
 			node1.Spec.NodeAllocationRequest = testNARName
 			node1.Status.Hostname = workerHostname1
 			node1.Status.Conditions = []metav1.Condition{{
@@ -3020,13 +3019,13 @@ var _ = Describe("Helpers", func() {
 			node1.Annotations = map[string]string{ConfigAnnotation: "bios-update"}
 
 			bmh1 := &metal3v1alpha1.BareMetalHost{
-				ObjectMeta: metav1.ObjectMeta{Name: "n1-bmh", Namespace: pluginNamespace},
+				ObjectMeta: metav1.ObjectMeta{Name: "n1-bmh", Namespace: testNamespace},
 				Status:     metal3v1alpha1.BareMetalHostStatus{OperationalStatus: metal3v1alpha1.OperationalStatusError},
 			}
 
 			// New profile is requested mid-flight
 			nar := &pluginsv1alpha1.NodeAllocationRequest{
-				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: pluginNamespace},
+				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: testNamespace},
 				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 					NodeGroup: []pluginsv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newProfile}},
@@ -3045,18 +3044,18 @@ var _ = Describe("Helpers", func() {
 				{node: node1, actionType: actionInProgressUpdate},
 			}
 
-			result, err := executeNodeUpdates(ctx, testClient, testClient, logger, pluginNamespace, nar, mockOps, nodesToProcess)
+			result, err := executeNodeUpdates(ctx, testClient, testClient, logger, testNamespace, nar, mockOps, nodesToProcess)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
 			updatedNode := &pluginsv1alpha1.AllocatedNode{}
-			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: pluginNamespace}, updatedNode)).To(Succeed())
+			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: testNamespace}, updatedNode)).To(Succeed())
 			Expect(updatedNode.Annotations).To(HaveKey(UpdateAbandonedAnnotation))
 			Expect(updatedNode.Annotations).ToNot(HaveKey(ConfigAnnotation))
 		})
 
 		It("should not abandon actionInProgressUpdate node when profile changed but BMH is servicing", func() {
-			node1 := createAllocatedNodeWithGroup("n1", pluginNamespace, "n1-bmh", pluginNamespace, "worker", currentProfile)
+			node1 := createAllocatedNodeWithGroup("n1", testNamespace, "n1-bmh", testNamespace, "worker", currentProfile)
 			node1.Spec.NodeAllocationRequest = testNARName
 			node1.Status.Hostname = workerHostname1
 			node1.Status.Conditions = []metav1.Condition{{
@@ -3067,13 +3066,13 @@ var _ = Describe("Helpers", func() {
 			}
 
 			bmh1 := &metal3v1alpha1.BareMetalHost{
-				ObjectMeta: metav1.ObjectMeta{Name: "n1-bmh", Namespace: pluginNamespace},
+				ObjectMeta: metav1.ObjectMeta{Name: "n1-bmh", Namespace: testNamespace},
 				Status:     metal3v1alpha1.BareMetalHostStatus{OperationalStatus: metal3v1alpha1.OperationalStatusServicing},
 			}
 
 			// New profile is requested mid-flight
 			nar := &pluginsv1alpha1.NodeAllocationRequest{
-				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: pluginNamespace},
+				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: testNamespace},
 				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 					NodeGroup: []pluginsv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newProfile}},
@@ -3090,19 +3089,19 @@ var _ = Describe("Helpers", func() {
 				{node: node1, actionType: actionInProgressUpdate},
 			}
 
-			result, err := executeNodeUpdates(ctx, testClient, testClient, logger, pluginNamespace, nar, mockOps, nodesToProcess)
+			result, err := executeNodeUpdates(ctx, testClient, testClient, logger, testNamespace, nar, mockOps, nodesToProcess)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
 			// Verify node was NOT abandoned
 			updatedNode := &pluginsv1alpha1.AllocatedNode{}
-			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: pluginNamespace}, updatedNode)).To(Succeed())
+			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: testNamespace}, updatedNode)).To(Succeed())
 			Expect(updatedNode.Annotations).ToNot(HaveKey(UpdateAbandonedAnnotation))
 		})
 
 		It("should aggregate errors from multiple nodes", func() {
 			// Nodes reference BMHs that do not exist, causing getBMHForNode to fail
-			node1 := createAllocatedNodeWithGroup("n1", pluginNamespace, "n1-bmh", pluginNamespace, "worker", newProfile)
+			node1 := createAllocatedNodeWithGroup("n1", testNamespace, "n1-bmh", testNamespace, "worker", newProfile)
 			node1.Spec.NodeAllocationRequest = testNARName
 			node1.Status.Hostname = workerHostname1
 			node1.Status.Conditions = []metav1.Condition{
@@ -3110,7 +3109,7 @@ var _ = Describe("Helpers", func() {
 			}
 			node1.Annotations = map[string]string{ConfigAnnotation: "bios-update"}
 
-			node2 := createAllocatedNodeWithGroup("n2", pluginNamespace, "n2-bmh", pluginNamespace, "worker", newProfile)
+			node2 := createAllocatedNodeWithGroup("n2", testNamespace, "n2-bmh", testNamespace, "worker", newProfile)
 			node2.Spec.NodeAllocationRequest = testNARName
 			node2.Status.Hostname = workerHostname2
 			node2.Status.Conditions = []metav1.Condition{
@@ -3119,7 +3118,7 @@ var _ = Describe("Helpers", func() {
 			node2.Annotations = map[string]string{ConfigAnnotation: "bios-update"}
 
 			nar := &pluginsv1alpha1.NodeAllocationRequest{
-				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: pluginNamespace},
+				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: testNamespace},
 				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
 					NodeGroup: []pluginsv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newProfile}},
@@ -3138,7 +3137,7 @@ var _ = Describe("Helpers", func() {
 				{node: node2, actionType: actionInProgressUpdate},
 			}
 
-			_, err := executeNodeUpdates(ctx, testClient, testClient, logger, pluginNamespace, nar, mockOps, nodesToProcess)
+			_, err := executeNodeUpdates(ctx, testClient, testClient, logger, testNamespace, nar, mockOps, nodesToProcess)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to process nodes"))
 		})

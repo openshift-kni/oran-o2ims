@@ -191,7 +191,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 		allocatedNode   *pluginsv1alpha1.AllocatedNode
 		bmh             *metal3v1alpha1.BareMetalHost
 		req             ctrl.Request
-		pluginNamespace = "test-plugin-namespace"
+		testNamespace = "test-plugin-namespace"
 	)
 
 	BeforeEach(func() {
@@ -211,7 +211,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 		allocatedNode = &pluginsv1alpha1.AllocatedNode{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            "test-node",
-				Namespace:       pluginNamespace,
+				Namespace:       testNamespace,
 				ResourceVersion: "1000",
 			},
 			Spec: pluginsv1alpha1.AllocatedNodeSpec{
@@ -261,7 +261,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				NoncachedClient: fakeClient,
 				Scheme:          scheme,
 				Logger:          logger,
-				PluginNamespace: pluginNamespace,
+				Namespace: testNamespace,
 			}
 		})
 
@@ -366,7 +366,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				NoncachedClient: mockNoncached,
 				Scheme:          scheme,
 				Logger:          logger,
-				PluginNamespace: pluginNamespace,
+				Namespace: testNamespace,
 			}
 		})
 
@@ -548,7 +548,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				NoncachedClient: fakeClient,
 				Scheme:          scheme,
 				Logger:          logger,
-				PluginNamespace: pluginNamespace,
+				Namespace: testNamespace,
 			}
 
 			// Note: In a real test environment, we would need to mock the manager
@@ -564,7 +564,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				NoncachedClient: fakeClient,
 				Scheme:          scheme,
 				Logger:          logger,
-				PluginNamespace: pluginNamespace,
+				Namespace: testNamespace,
 			}
 		})
 
@@ -833,7 +833,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				NoncachedClient: fakeClient,
 				Scheme:          scheme,
 				Logger:          logger,
-				PluginNamespace: pluginNamespace,
+				Namespace: testNamespace,
 			}
 		})
 
@@ -870,7 +870,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				NoncachedClient: fakeClient,
 				Scheme:          scheme,
 				Logger:          logger,
-				PluginNamespace: pluginNamespace,
+				Namespace: testNamespace,
 			}
 		})
 

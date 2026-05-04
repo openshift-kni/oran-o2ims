@@ -77,7 +77,7 @@ const (
 
 // Hardware plugin command names
 const (
-	Metal3HardwarePluginManagerCmd = "metal3-hardwareplugin-manager"
+	Metal3HwMgrCmd = "metal3-hwmgr"
 )
 
 // TLS/Certificate field names

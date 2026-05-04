@@ -25,7 +25,7 @@ import (
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	metal3pluginscontrollers "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/controller"
+	metal3controllers "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/controller"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	provisioningcontrollers "github.com/openshift-kni/oran-o2ims/internal/controllers"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -672,7 +672,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 
 		// Check that the BMH has the FirmwareUpdateNeededAnnotation set.
-		Expect(bmh.Annotations[metal3pluginscontrollers.FirmwareUpdateNeededAnnotation]).To(Equal("true"))
+		Expect(bmh.Annotations[metal3controllers.FirmwareUpdateNeededAnnotation]).To(Equal("true"))
 
 		// Update the BMH status to Preparing.
 		bmh.Status.Provisioning.State = metal3v1alpha1.StatePreparing
@@ -683,7 +683,7 @@ defaultHugepagesSize: "1G"`,
 		Eventually(func() bool {
 			err := K8SClient.Get(testCtx, types.NamespacedName{Name: allocatedNode.Name, Namespace: constants.DefaultNamespace}, allocatedNode)
 			Expect(err).ToNot(HaveOccurred())
-			return allocatedNode.Annotations[metal3pluginscontrollers.ConfigAnnotation] != ""
+			return allocatedNode.Annotations[metal3controllers.ConfigAnnotation] != ""
 		}, time.Minute*3, time.Second*3).Should(BeTrue())
 
 		// Check if the HostFirmwareComponents already exists.
@@ -745,7 +745,7 @@ defaultHugepagesSize: "1G"`,
 		bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusOK
 		Expect(K8SClient.Status().Update(testCtx, bmh)).To(Succeed())
 		// Remove the FirmwareUpdateNeededAnnotation.
-		delete(bmh.Annotations, metal3pluginscontrollers.FirmwareUpdateNeededAnnotation)
+		delete(bmh.Annotations, metal3controllers.FirmwareUpdateNeededAnnotation)
 		Expect(K8SClient.Update(testCtx, bmh)).To(Succeed())
 
 		// Make sure the NodeAllocationRequest and AllocatedNode are completed.

@@ -397,14 +397,14 @@ func processHwProfileWithHandledError(
 	c client.Client,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
-	pluginNamespace string,
+	hwMgrNamespace string,
 	bmh *metal3v1alpha1.BareMetalHost,
 	node *pluginsv1alpha1.AllocatedNode,
 	profileName string,
 	postInstall, validateOnly bool,
 ) (bool, error) {
 
-	updateRequired, err := processHwProfile(ctx, c, logger, pluginNamespace, bmh, profileName, postInstall, validateOnly)
+	updateRequired, err := processHwProfile(ctx, c, logger, hwMgrNamespace, bmh, profileName, postInstall, validateOnly)
 	contType := string(hwmgmtv1alpha1.Provisioned)
 	if postInstall {
 		contType = string(hwmgmtv1alpha1.Configured)
@@ -433,7 +433,7 @@ func processHwProfileWithHandledError(
 func processHwProfile(ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
-	pluginNamespace string,
+	hwMgrNamespace string,
 	bmh *metal3v1alpha1.BareMetalHost, profileName string,
 	postInstall, validateOnly bool) (bool, error) {
 
@@ -460,7 +460,7 @@ func processHwProfile(ctx context.Context,
 	var err error
 	name := types.NamespacedName{
 		Name:      profileName,
-		Namespace: pluginNamespace,
+		Namespace: hwMgrNamespace,
 	}
 
 	hwProfile := &hwmgmtv1alpha1.HardwareProfile{}
@@ -579,11 +579,11 @@ func handleTransitionNodes(ctx context.Context,
 	c client.Client,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
-	pluginNamespace string,
+	hwMgrNamespace string,
 	nodelist *pluginsv1alpha1.AllocatedNodeList, postInstall bool) (ctrl.Result, error) {
 
 	for _, node := range nodelist.Items {
-		res, err := handleTransitionNode(ctx, c, noncachedClient, logger, pluginNamespace, &node, postInstall, nil)
+		res, err := handleTransitionNode(ctx, c, noncachedClient, logger, hwMgrNamespace, &node, postInstall, nil)
 		if err != nil || res.Requeue || res.RequeueAfter > 0 {
 			return res, err
 		}
@@ -601,7 +601,7 @@ func handleTransitionNode(ctx context.Context,
 	c client.Client,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
-	pluginNamespace string,
+	hwMgrNamespace string,
 	node *pluginsv1alpha1.AllocatedNode,
 	postInstall bool,
 	nodeOps NodeOps,
@@ -638,7 +638,7 @@ func handleTransitionNode(ctx context.Context,
 		if _, exists := bmh.Annotations[uc.AnnotationKey]; !exists {
 			continue
 		}
-		res, err := processBMHUpdateCase(ctx, c, noncachedClient, logger, pluginNamespace, node, bmh, uc, postInstall, nodeOps)
+		res, err := processBMHUpdateCase(ctx, c, noncachedClient, logger, hwMgrNamespace, node, bmh, uc, postInstall, nodeOps)
 		if err != nil || res.Requeue || res.RequeueAfter > 0 {
 			// Propagate either requeue or error
 			return res, err
@@ -924,7 +924,7 @@ func handleBMHCompletion(ctx context.Context,
 	c client.Client,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
-	pluginNamespace string,
+	hwMgrNamespace string,
 	nodelist *pluginsv1alpha1.AllocatedNodeList) (bool, error) {
 
 	logger.InfoContext(ctx, "Checking for nodes with config in progress")
@@ -949,7 +949,7 @@ func handleBMHCompletion(ctx context.Context,
 		go func(node *pluginsv1alpha1.AllocatedNode) {
 			defer wg.Done()
 
-			updating, err := handleSingleNodeCompletion(ctx, c, noncachedClient, logger, pluginNamespace, node)
+			updating, err := handleSingleNodeCompletion(ctx, c, noncachedClient, logger, hwMgrNamespace, node)
 
 			mu.Lock()
 			defer mu.Unlock()
@@ -982,7 +982,7 @@ func handleSingleNodeCompletion(ctx context.Context,
 	c client.Client,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
-	pluginNamespace string,
+	hwMgrNamespace string,
 	node *pluginsv1alpha1.AllocatedNode) (bool, error) {
 
 	// Get BMH associated with the node
@@ -1027,7 +1027,7 @@ func handleSingleNodeCompletion(ctx context.Context,
 	}
 
 	// Validate node configuration (firmware versions and BIOS settings) before finalizing
-	configValid, err := validateNodeConfiguration(ctx, c, noncachedClient, logger, bmh, pluginNamespace, node.Spec.HwProfile)
+	configValid, err := validateNodeConfiguration(ctx, c, noncachedClient, logger, bmh, hwMgrNamespace, node.Spec.HwProfile)
 	if err != nil {
 		return true, err
 	}

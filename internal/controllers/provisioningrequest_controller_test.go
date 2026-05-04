@@ -5154,8 +5154,6 @@ plan:
 		})
 	})
 
-	// initializeHardwarePluginClientWithRetry tests removed — function eliminated
-	// in NAR API re-architecture (Phase 1). Hardware plugin REST client is no longer used.
 
 	Describe("checkOverallProvisioningTimeout", func() {
 		var (

@@ -910,11 +910,11 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "hardware_plugin_setup")
 	phaseStartTime = time.Now()
 
-	// Setup Metal3 HardwarePlugin Server
-	t.logger.InfoContext(ctx, "Setting up Metal3 HardwarePlugin Server")
-	nextReconcile, err = t.setupMetal3PluginServer(ctx, nextReconcile)
+	// Setup Metal3 hardware manager
+	t.logger.InfoContext(ctx, "Setting up Metal3 hardware manager")
+	nextReconcile, err = t.setupMetal3HwMgr(ctx, nextReconcile)
 	if err != nil {
-		ctlrutils.LogError(ctx, t.logger, "Failed to setup Metal3 HardwarePlugin Server", err)
+		ctlrutils.LogError(ctx, t.logger, "Failed to setup Metal3 hardware manager", err)
 		return
 	}
 	ctlrutils.LogPhaseComplete(ctx, t.logger, "hardware_plugin_setup", time.Since(phaseStartTime))

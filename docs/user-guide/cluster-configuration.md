@@ -53,7 +53,7 @@ To troubleshoot:
 2. **Check Metal3 plugin logs**:
 
    ```console
-   oc logs -n <metal3-plugin-namespace> -l app=metal3-hardwareplugin-server -f
+   oc logs -n oran-o2ims -l app=metal3-hwmgr-server -f
    ```
 
 3. **Retry configuration**:

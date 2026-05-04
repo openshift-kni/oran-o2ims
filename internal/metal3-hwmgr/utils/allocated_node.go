@@ -177,15 +177,15 @@ func GetChildNodes(
 func GetChildNodesUncached(
 	ctx context.Context,
 	noncachedClient client.Reader,
-	pluginNamespace string,
+	hwMgrNamespace string,
 	narName string,
 ) (*pluginsv1alpha1.AllocatedNodeList, error) {
 
 	allNodes := &pluginsv1alpha1.AllocatedNodeList{}
 	if err := ctlrutils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
-		return noncachedClient.List(ctx, allNodes, client.InNamespace(pluginNamespace))
+		return noncachedClient.List(ctx, allNodes, client.InNamespace(hwMgrNamespace))
 	}); err != nil {
-		return nil, fmt.Errorf("failed to list AllocatedNodes in namespace %s: %w", pluginNamespace, err)
+		return nil, fmt.Errorf("failed to list AllocatedNodes in namespace %s: %w", hwMgrNamespace, err)
 	}
 
 	filtered := &pluginsv1alpha1.AllocatedNodeList{}

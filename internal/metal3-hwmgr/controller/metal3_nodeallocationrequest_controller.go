@@ -37,7 +37,7 @@ type NodeAllocationRequestReconciler struct {
 	Scheme          *runtime.Scheme
 	Logger          *slog.Logger
 	indexerEnabled  bool
-	PluginNamespace string
+	Namespace string
 }
 
 func (r *NodeAllocationRequestReconciler) SetupIndexer(ctx context.Context) error {
@@ -369,7 +369,7 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 	}
 
 	// Handle the hardware configuration changes.
-	result, nodelist, err := handleNodeAllocationRequestConfiguring(ctx, r.Client, r.NoncachedClient, r.Logger, r.PluginNamespace, nodeAllocationRequest)
+	result, nodelist, err := handleNodeAllocationRequestConfiguring(ctx, r.Client, r.NoncachedClient, r.Logger, r.Namespace, nodeAllocationRequest)
 
 	if nodelist != nil {
 		// Check if NAR already has a terminal condition (Failed or TimedOut) - if so, skip aggregation
@@ -443,7 +443,7 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestProcessing(
 
 	// New API: returns (ctrl.Result, full bool, error)
 	res, full, err := checkNodeAllocationRequestProgress(
-		ctx, r.Client, r.NoncachedClient, r.Logger, r.PluginNamespace, nodeAllocationRequest,
+		ctx, r.Client, r.NoncachedClient, r.Logger, r.Namespace, nodeAllocationRequest,
 	)
 
 	// If the checker asked for a specific requeue or returned an error, handle that first.
