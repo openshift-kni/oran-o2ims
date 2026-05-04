@@ -450,7 +450,7 @@ defaultHugepagesSize: "1G"`,
 			}
 		}
 
-		// Delete ClusterTemplates, HardwareTemplates, HardwareProfile, ClusterImageSet
+		// Delete ClusterTemplates, HardwareProfiles, ClusterImageSet
 		for _, ct := range []*provisioningv1alpha1.ClusterTemplate{ctComplete, ctIncomplete} {
 			if ct != nil {
 				obj := &provisioningv1alpha1.ClusterTemplate{}

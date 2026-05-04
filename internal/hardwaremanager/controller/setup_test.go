@@ -85,7 +85,7 @@ var _ = Describe("SetupControllers", func() {
 		scheme = runtime.NewScheme()
 		Expect(metal3v1alpha1.AddToScheme(scheme)).To(Succeed())
 		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
-		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
+
 	})
 
 	Context("function structure validation", func() {

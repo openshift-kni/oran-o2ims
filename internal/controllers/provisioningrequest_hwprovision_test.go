@@ -408,7 +408,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 		nar.Status.Conditions = append(nar.Status.Conditions, provisionedCondition)
 		Expect(c.Create(ctx, nar)).To(Succeed())
 
-		// Hardware hardware manager sends callback with timed out status
+		// Hardware manager sends callback with timed out status
 		timedOutMock := createMockNodeAllocationRequestResponse("False", "TimedOut", "Hardware provisioning timed out")
 		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, timedOutMock, hwmgmtv1alpha1.Provisioned)
 		Expect(provisioned).To(Equal(false))
@@ -2182,7 +2182,7 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			hwCondition := &metav1.Condition{
 				Type:    string(hwmgmtv1alpha1.Provisioned),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(hwmgmtv1alpha1.TimedOut), // Hardware hardware manager reports timeout via callback
+				Reason:  string(hwmgmtv1alpha1.TimedOut), // Hardware manager reports timeout via callback
 				Message: "Hardware provisioning timed out",
 			}
 
@@ -2203,7 +2203,7 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			hwCondition := &metav1.Condition{
 				Type:    string(hwmgmtv1alpha1.Configured),
 				Status:  metav1.ConditionFalse,
-				Reason:  string(hwmgmtv1alpha1.TimedOut), // Hardware hardware manager reports timeout via callback
+				Reason:  string(hwmgmtv1alpha1.TimedOut), // Hardware manager reports timeout via callback
 				Message: "Hardware configuration timed out",
 			}
 			status, reason, message, timedOutOrFailed := task.processExistingHardwareCondition(hwCondition, hwmgmtv1alpha1.Configured)

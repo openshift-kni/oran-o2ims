@@ -170,7 +170,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 		scheme = runtime.NewScheme()
 		Expect(metal3v1alpha1.AddToScheme(scheme)).To(Succeed())
 		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
-		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
+
 		Expect(corev1.AddToScheme(scheme)).To(Succeed())
 	})
 

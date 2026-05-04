@@ -137,7 +137,7 @@ var _ = Describe("Helpers", func() {
 		scheme = runtime.NewScheme()
 		Expect(metal3v1alpha1.AddToScheme(scheme)).To(Succeed())
 		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
-		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
+
 	})
 
 	Describe("Config Annotation Functions", func() {
@@ -914,7 +914,6 @@ var _ = Describe("Helpers", func() {
 			scheme = runtime.NewScheme()
 			Expect(metal3v1alpha1.AddToScheme(scheme)).To(Succeed())
 			Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
-			Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 
 			testClient = fake.NewClientBuilder().
 				WithScheme(scheme).
@@ -1434,7 +1433,7 @@ var _ = Describe("Helpers", func() {
 				scheme := runtime.NewScheme()
 				Expect(metal3v1alpha1.AddToScheme(scheme)).To(Succeed())
 				Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
-				Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
+
 				Expect(corev1.AddToScheme(scheme)).To(Succeed())
 
 				testClient = fake.NewClientBuilder().
@@ -1663,7 +1662,7 @@ var _ = Describe("Helpers", func() {
 				scheme = runtime.NewScheme()
 				Expect(metal3v1alpha1.AddToScheme(scheme)).To(Succeed())
 				Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
-				Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
+
 				Expect(corev1.AddToScheme(scheme)).To(Succeed())
 				Expect(provisioningv1alpha1.AddToScheme(scheme)).To(Succeed())
 
@@ -2774,7 +2773,7 @@ var _ = Describe("Helpers", func() {
 			scheme = runtime.NewScheme()
 			Expect(metal3v1alpha1.AddToScheme(scheme)).To(Succeed())
 			Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
-			Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
+
 			Expect(corev1.AddToScheme(scheme)).To(Succeed())
 		})
 
@@ -3173,7 +3172,7 @@ var _ = Describe("Helpers", func() {
 			logger = slog.Default()
 			scheme = runtime.NewScheme()
 			Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
-			Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
+
 			nar = createNAR([]hwmgmtv1alpha1.NodeGroup{
 				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "master", HwProfile: newProfile}},
 				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", HwProfile: newProfile}},
