@@ -11,58 +11,64 @@ import (
 	"log/slog"
 
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// Metal3Controllers holds references to the metal3 controllers for lifecycle management
-type Metal3Controllers struct {
-	NodeAllocationReconciler         *NodeAllocationRequestReconciler
-	AllocatedNodeReconciler          *AllocatedNodeReconciler
-	HostFirmwareComponentsReconciler *HostFirmwareComponentsReconciler
-}
+// Reconciler references, populated by SetupMetal3Controllers for test access.
+var (
+	nodeAllocationReconciler         *NodeAllocationRequestReconciler
+	allocatedNodeReconciler          *AllocatedNodeReconciler
+	hostFirmwareComponentsReconciler *HostFirmwareComponentsReconciler
+)
 
-func SetupMetal3Controllers(mgr ctrl.Manager, namespace string, baseLogger *slog.Logger) (*Metal3Controllers, error) {
-	nodeAllocationReconciler := &NodeAllocationRequestReconciler{
+func SetupMetal3Controllers(mgr ctrl.Manager, namespace string, baseLogger *slog.Logger) error {
+	nodeAllocationReconciler = &NodeAllocationRequestReconciler{
 		Client:          mgr.GetClient(),
 		NoncachedClient: mgr.GetAPIReader(),
 		Scheme:          mgr.GetScheme(),
 		Logger:          baseLogger.With("controller", "metal3_nodeallocationrequest_controller"),
-		Namespace: namespace,
+		Namespace:       namespace,
 		Manager:         mgr,
 	}
 
 	if err := nodeAllocationReconciler.SetupWithManager(mgr); err != nil {
-		return nil, fmt.Errorf("failed to setup NodeAllocationRequest controller: %w", err)
+		return fmt.Errorf("failed to setup NodeAllocationRequest controller: %w", err)
 	}
 
-	allocatedReconciler := &AllocatedNodeReconciler{
+	allocatedNodeReconciler = &AllocatedNodeReconciler{
 		Client:          mgr.GetClient(),
 		NoncachedClient: mgr.GetAPIReader(),
 		Scheme:          mgr.GetScheme(),
 		Logger:          baseLogger.With("controller", "metal3_allocatednode_controller"),
-		Namespace: namespace,
+		Namespace:       namespace,
 		Manager:         mgr,
 	}
 
-	if err := allocatedReconciler.SetupWithManager(mgr); err != nil {
-		return nil, fmt.Errorf("failed to setup AllocatedNode controller: %w", err)
+	if err := allocatedNodeReconciler.SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("failed to setup AllocatedNode controller: %w", err)
 	}
 
-	hfcReconciler := &HostFirmwareComponentsReconciler{
+	hostFirmwareComponentsReconciler = &HostFirmwareComponentsReconciler{
 		Client:          mgr.GetClient(),
 		NoncachedClient: mgr.GetAPIReader(),
 		Scheme:          mgr.GetScheme(),
 		Logger:          baseLogger.With("controller", "metal3_hostfirmwarecomponents_controller"),
-		Namespace: namespace,
+		Namespace:       namespace,
 		Manager:         mgr,
 	}
 
-	if err := hfcReconciler.SetupWithManager(mgr); err != nil {
-		return nil, fmt.Errorf("failed to setup HostFirmwareComponents controller: %w", err)
+	if err := hostFirmwareComponentsReconciler.SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("failed to setup HostFirmwareComponents controller: %w", err)
 	}
 
-	return &Metal3Controllers{
-		NodeAllocationReconciler:         nodeAllocationReconciler,
-		AllocatedNodeReconciler:          allocatedReconciler,
-		HostFirmwareComponentsReconciler: hfcReconciler,
-	}, nil
+	return nil
+}
+
+// OverrideNoncachedClient replaces the NoncachedClient on all Metal3
+// reconcilers. This is intended for e2e tests that need to use a shared
+// client to avoid envtest watchcache timing discrepancies.
+func OverrideNoncachedClient(c client.Reader) {
+	nodeAllocationReconciler.NoncachedClient = c
+	allocatedNodeReconciler.NoncachedClient = c
+	hostFirmwareComponentsReconciler.NoncachedClient = c
 }

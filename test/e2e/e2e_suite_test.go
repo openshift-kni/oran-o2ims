@@ -51,9 +51,7 @@ var (
 	Metal3Manager                       ctrl.Manager
 	ProvisioningRequestTestReconciler   *provisioningcontrollers.ProvisioningRequestReconciler
 	ClusterTemplateTestReconciler       *provisioningcontrollers.ClusterTemplateReconciler
-	NodeAllocationRequestTestReconciler *metal3controllers.NodeAllocationRequestReconciler
-	AllocatedNodeTestReconciler         *metal3controllers.AllocatedNodeReconciler
-	testEnv                             *envtest.Environment
+	testEnv *envtest.Environment
 	ctx                                 context.Context
 	cancel                              context.CancelFunc
 	// store external CRDs
@@ -176,19 +174,15 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred())
 
 	// Setup Metal3 controllers on separate manager (simulates separate pod deployment)
-	metal3controllers, err := metal3controllers.SetupMetal3Controllers(Metal3Manager, constants.DefaultNamespace, logger)
+	err = metal3controllers.SetupMetal3Controllers(Metal3Manager, constants.DefaultNamespace, logger)
 	Expect(err).ToNot(HaveOccurred())
-	NodeAllocationRequestTestReconciler = metal3controllers.NodeAllocationReconciler
-	AllocatedNodeTestReconciler = metal3controllers.AllocatedNodeReconciler
 
 	// Override Metal3 NoncachedClient to use the same direct K8SClient used by
 	// provisioning controllers and test assertions, avoiding envtest watchcache
 	// timing discrepancies between different API reader instances.
 	// Client (cached) is kept as mgr.GetClient() because it has field indexers
 	// (e.g., spec.nodeAllocationRequest) required by field selector queries.
-	NodeAllocationRequestTestReconciler.NoncachedClient = K8SClient
-	AllocatedNodeTestReconciler.NoncachedClient = K8SClient
-	metal3controllers.HostFirmwareComponentsReconciler.NoncachedClient = K8SClient
+	metal3controllers.OverrideNoncachedClient(K8SClient)
 
 	// Setup the ProvisioningRequest Reconciler on main manager.
 	ProvReqTestReconciler := &provisioningcontrollers.ProvisioningRequestReconciler{

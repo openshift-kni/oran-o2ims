@@ -106,7 +106,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 				}
 			}()
 
-			_, _ = SetupMetal3Controllers(mgr, namespace, testLogger)
+			_ = SetupMetal3Controllers(mgr, namespace, testLogger)
 		})
 	})
 
@@ -181,7 +181,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 			}()
 
 			testLogger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelInfo}))
-			_, testError = SetupMetal3Controllers(nil, namespace, testLogger)
+			testError = SetupMetal3Controllers(nil, namespace, testLogger)
 
 			// If we get here without panic, check the error message
 			if testError != nil {
@@ -210,7 +210,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 			}()
 
 			testLogger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelInfo}))
-			_, _ = SetupMetal3Controllers(nil, "", testLogger)
+			_ = SetupMetal3Controllers(nil, "", testLogger)
 		})
 
 		It("should accept namespace with special characters", func() {
@@ -224,7 +224,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 
 			specialNamespace := "test-namespace_with.special-chars"
 			testLogger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelInfo}))
-			_, _ = SetupMetal3Controllers(nil, specialNamespace, testLogger)
+			_ = SetupMetal3Controllers(nil, specialNamespace, testLogger)
 		})
 	})
 
