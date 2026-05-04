@@ -2761,13 +2761,6 @@ var _ = Describe("updateInfrastructureResourceStatuses", func() {
 					Raw: []byte(testutils.TestFullTemplateParameters),
 				},
 			},
-			Status: provisioningv1alpha1.ProvisioningRequestStatus{
-				Extensions: provisioningv1alpha1.Extensions{
-					NodeAllocationRequestRef: &provisioningv1alpha1.NodeAllocationRequestRef{
-						NodeAllocationRequestID: crName,
-					},
-				},
-			},
 		}
 
 		c = getFakeClientFromObjects([]client.Object{cr}...)
@@ -2775,6 +2768,15 @@ var _ = Describe("updateInfrastructureResourceStatuses", func() {
 			logger: logger,
 			client: c,
 			object: cr,
+			ctDetails: &clusterTemplateDetails{
+				templates: provisioningv1alpha1.TemplateDefaults{
+					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
+						NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+							{Name: "worker", Role: "worker"},
+						},
+					},
+				},
+			},
 		}
 	})
 
@@ -2795,8 +2797,8 @@ var _ = Describe("updateInfrastructureResourceStatuses", func() {
 		Expect(c.Create(ctx, node)).To(Succeed())
 	}
 
-	It("does nothing when NodeAllocationRequestRef is nil", func() {
-		task.object.Status.Extensions.NodeAllocationRequestRef = nil
+	It("does nothing when hardware provisioning is skipped", func() {
+		task.ctDetails = &clusterTemplateDetails{}
 		err := task.updateInfrastructureResourceStatuses(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(task.object.Status.Extensions.InfrastructureResourceStatuses).To(BeNil())

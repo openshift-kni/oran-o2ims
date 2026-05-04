@@ -324,9 +324,8 @@ func (t *provisioningRequestReconcilerTask) hasInfrastructureResourceStatuses() 
 // updateInfrastructureResourceStatuses updates the infrastructure resource statuses for the ProvisioningRequest.
 func (t *provisioningRequestReconcilerTask) updateInfrastructureResourceStatuses(ctx context.Context) error {
 
-	// Skip the update if the NodeAllocationRequestRef is not set
-	if t.object.Status.Extensions.NodeAllocationRequestRef == nil {
-		t.logger.InfoContext(ctx, "NodeAllocationRequestRef is nil, skipping update of infrastructure resource statuses")
+	// Skip when hardware provisioning is not active (no nodes to track).
+	if t.isHardwareProvisionSkipped() {
 		return nil
 	}
 
