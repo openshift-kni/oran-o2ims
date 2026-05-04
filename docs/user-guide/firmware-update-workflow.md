@@ -294,13 +294,13 @@ oc get provisioningrequests.clcm.openshift.io <name> -o jsonpath='{.status.condi
 For SNO clusters, the Configured condition message includes the AllocatedNode name:
 
 ```text
-Configuration update in progress (AllocatedNode metal3-hwplugin-sno1-dell-xr8620t-pool-dell-xr8620t-node1)
+Configuration update in progress (AllocatedNode sno1-dell-xr8620t-pool-dell-xr8620t-node1)
 ```
 
 On failure, the message includes the failed node and error details:
 
 ```text
-Configuration update failed (AllocatedNode metal3-hwplugin-sno1-dell-xr8620t-pool-dell-xr8620t-node1: BMH Servicing Error)
+Configuration update failed (AllocatedNode sno1-dell-xr8620t-pool-dell-xr8620t-node1: BMH Servicing Error)
 ```
 
 For multi-node clusters, the message reports per-group progress:

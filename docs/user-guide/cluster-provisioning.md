@@ -146,7 +146,7 @@ The O‑Cloud Metal3 hardware manager consumes the CR, selects matching BareMeta
     status:
       extensions:
         allocatedNodeHostMap:
-          metal3-hwplugin-sno1-dell-xr8620t-pool-dell-xr8620t-node1: sno1.example.com
+          sno1-dell-xr8620t-pool-dell-xr8620t-node1: sno1.example.com
       conditions:
       ...
       - lastTransitionTime: "2025-10-01T22:14:27Z"
@@ -168,7 +168,7 @@ The O‑Cloud Metal3 hardware manager consumes the CR, selects matching BareMeta
     status:
       extensions:
         allocatedNodeHostMap:
-          metal3-hwplugin-sno1-dell-xr8620t-pool-dell-xr8620t-node1: sno1.example.com
+          sno1-dell-xr8620t-pool-dell-xr8620t-node1: sno1.example.com
       conditions:
       ...
       - lastTransitionTime: "2025-10-01T22:47:16Z"

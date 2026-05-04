@@ -18,7 +18,7 @@ var _ = Describe("AllocatedNode Utilities", func() {
 	Describe("sanitizeKubernetesName", func() {
 		Context("when input is valid", func() {
 			It("should return the same name for already valid names", func() {
-				input := "metal3-hwplugin-cluster1-namespace-host"
+				input := "metal3-hwmgr-cluster1-namespace-host"
 				result := sanitizeKubernetesName(input)
 				Expect(result).To(Equal(input))
 			})
@@ -32,65 +32,65 @@ var _ = Describe("AllocatedNode Utilities", func() {
 
 		Context("when input has invalid characters", func() {
 			It("should convert uppercase to lowercase", func() {
-				input := "METAL3-HWPLUGIN"
+				input := "METAL3-HWMGR"
 				result := sanitizeKubernetesName(input)
-				Expect(result).To(Equal("metal3-hwplugin"))
+				Expect(result).To(Equal("metal3-hwmgr"))
 			})
 
 			It("should replace underscores with hyphens", func() {
-				input := "metal3_hwplugin_test"
+				input := "metal3_hwmgr_test"
 				result := sanitizeKubernetesName(input)
-				Expect(result).To(Equal("metal3-hwplugin-test"))
+				Expect(result).To(Equal("metal3-hwmgr-test"))
 			})
 
 			It("should replace special characters with hyphens", func() {
-				input := "metal3@hwplugin#test$name"
+				input := "metal3@hwmgr#test$name"
 				result := sanitizeKubernetesName(input)
-				Expect(result).To(Equal("metal3-hwplugin-test-name"))
+				Expect(result).To(Equal("metal3-hwmgr-test-name"))
 			})
 
 			It("should replace spaces with hyphens", func() {
-				input := "metal3 hwplugin test"
+				input := "metal3 hwmgr test"
 				result := sanitizeKubernetesName(input)
-				Expect(result).To(Equal("metal3-hwplugin-test"))
+				Expect(result).To(Equal("metal3-hwmgr-test"))
 			})
 
 			It("should remove consecutive hyphens", func() {
-				input := "metal3---hwplugin--test"
+				input := "metal3---hwmgr--test"
 				result := sanitizeKubernetesName(input)
-				Expect(result).To(Equal("metal3-hwplugin-test"))
+				Expect(result).To(Equal("metal3-hwmgr-test"))
 			})
 		})
 
 		Context("when input has leading/trailing invalid characters", func() {
 			It("should remove leading hyphens", func() {
-				input := "---metal3-hwplugin"
+				input := "---metal3-hwmgr"
 				result := sanitizeKubernetesName(input)
-				Expect(result).To(Equal("metal3-hwplugin"))
+				Expect(result).To(Equal("metal3-hwmgr"))
 			})
 
 			It("should remove trailing hyphens", func() {
-				input := "metal3-hwplugin---"
+				input := "metal3-hwmgr---"
 				result := sanitizeKubernetesName(input)
-				Expect(result).To(Equal("metal3-hwplugin"))
+				Expect(result).To(Equal("metal3-hwmgr"))
 			})
 
 			It("should remove leading special characters", func() {
-				input := "@#$metal3-hwplugin"
+				input := "@#$metal3-hwmgr"
 				result := sanitizeKubernetesName(input)
-				Expect(result).To(Equal("metal3-hwplugin"))
+				Expect(result).To(Equal("metal3-hwmgr"))
 			})
 
 			It("should remove trailing special characters", func() {
-				input := "metal3-hwplugin@#$"
+				input := "metal3-hwmgr@#$"
 				result := sanitizeKubernetesName(input)
-				Expect(result).To(Equal("metal3-hwplugin"))
+				Expect(result).To(Equal("metal3-hwmgr"))
 			})
 
 			It("should handle both leading and trailing invalid characters", func() {
-				input := "---@#$metal3-hwplugin@#$---"
+				input := "---@#$metal3-hwmgr@#$---"
 				result := sanitizeKubernetesName(input)
-				Expect(result).To(Equal("metal3-hwplugin"))
+				Expect(result).To(Equal("metal3-hwmgr"))
 			})
 		})
 
@@ -140,14 +140,12 @@ var _ = Describe("AllocatedNode Utilities", func() {
 
 	Describe("GenerateNodeName", func() {
 		var (
-			pluginID     string
 			clusterID    string
 			bmhNamespace string
 			bmhName      string
 		)
 
 		BeforeEach(func() {
-			pluginID = "metal3-hwplugin"
 			clusterID = "cluster1"
 			bmhNamespace = "openshift-machine-api"
 			bmhName = "master-0"
@@ -155,117 +153,113 @@ var _ = Describe("AllocatedNode Utilities", func() {
 
 		Context("when all inputs are valid", func() {
 			It("should generate deterministic names", func() {
-				result1 := GenerateNodeName(pluginID, clusterID, bmhNamespace, bmhName)
-				result2 := GenerateNodeName(pluginID, clusterID, bmhNamespace, bmhName)
+				result1 := GenerateNodeName(clusterID, bmhNamespace, bmhName)
+				result2 := GenerateNodeName(clusterID, bmhNamespace, bmhName)
 				Expect(result1).To(Equal(result2))
 			})
 
 			It("should include all components in the name", func() {
-				result := GenerateNodeName(pluginID, clusterID, bmhNamespace, bmhName)
-				expectedFormat := "metal3-hwplugin-cluster1-openshift-machine-api-master-0"
-				Expect(result).To(Equal(expectedFormat))
+				result := GenerateNodeName(clusterID, bmhNamespace, bmhName)
+				Expect(result).To(Equal("cluster1-openshift-machine-api-master-0"))
 			})
 
 			It("should be Kubernetes compliant", func() {
-				result := GenerateNodeName(pluginID, clusterID, bmhNamespace, bmhName)
+				result := GenerateNodeName(clusterID, bmhNamespace, bmhName)
 				Expect(result).To(MatchRegexp("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"))
 				Expect(len(result)).To(BeNumerically("<=", 253))
 			})
 
 			It("should generate different names for different BMH names", func() {
-				result1 := GenerateNodeName(pluginID, clusterID, bmhNamespace, "master-0")
-				result2 := GenerateNodeName(pluginID, clusterID, bmhNamespace, "master-1")
+				result1 := GenerateNodeName(clusterID, bmhNamespace, "master-0")
+				result2 := GenerateNodeName(clusterID, bmhNamespace, "master-1")
 				Expect(result1).NotTo(Equal(result2))
 			})
 
 			It("should generate different names for different namespaces", func() {
-				result1 := GenerateNodeName(pluginID, clusterID, "namespace1", bmhName)
-				result2 := GenerateNodeName(pluginID, clusterID, "namespace2", bmhName)
+				result1 := GenerateNodeName(clusterID, "namespace1", bmhName)
+				result2 := GenerateNodeName(clusterID, "namespace2", bmhName)
 				Expect(result1).NotTo(Equal(result2))
 			})
 
 			It("should generate different names for different cluster IDs", func() {
-				result1 := GenerateNodeName(pluginID, "cluster1", bmhNamespace, bmhName)
-				result2 := GenerateNodeName(pluginID, "cluster2", bmhNamespace, bmhName)
+				result1 := GenerateNodeName("cluster1", bmhNamespace, bmhName)
+				result2 := GenerateNodeName("cluster2", bmhNamespace, bmhName)
 				Expect(result1).NotTo(Equal(result2))
 			})
 		})
 
 		Context("when inputs contain invalid characters", func() {
 			It("should sanitize special characters", func() {
-				result := GenerateNodeName("metal3@hwplugin", "cluster#1", "namespace_test", "host$name")
+				result := GenerateNodeName("cluster#1", "namespace_test", "host$name")
 				Expect(result).To(MatchRegexp("^[a-z0-9-]+$"))
-				Expect(result).To(ContainSubstring("metal3-hwplugin"))
 				Expect(result).To(ContainSubstring("cluster-1"))
 				Expect(result).To(ContainSubstring("namespace-test"))
 				Expect(result).To(ContainSubstring("host-name"))
 			})
 
 			It("should handle uppercase characters", func() {
-				result := GenerateNodeName("METAL3-HWPLUGIN", "CLUSTER1", "NAMESPACE", "HOST")
-				Expect(result).To(Equal("metal3-hwplugin-cluster1-namespace-host"))
+				result := GenerateNodeName("CLUSTER1", "NAMESPACE", "HOST")
+				Expect(result).To(Equal("cluster1-namespace-host"))
 			})
 		})
 
 		Context("when the generated name is too long", func() {
 			It("should use hash-based fallback for very long names", func() {
-				longPluginID := strings.Repeat("very-long-plugin-id", 10)
 				longClusterID := strings.Repeat("very-long-cluster-id", 10)
 				longNamespace := strings.Repeat("very-long-namespace", 10)
 				longBMHName := strings.Repeat("very-long-bmh-name", 10)
 
-				result := GenerateNodeName(longPluginID, longClusterID, longNamespace, longBMHName)
+				result := GenerateNodeName(longClusterID, longNamespace, longBMHName)
 
 				Expect(len(result)).To(BeNumerically("<=", 253))
-				Expect(result).To(HavePrefix(longPluginID[:len(longPluginID)-1])) // Should start with truncated plugin ID
 				Expect(result).To(MatchRegexp("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"))
 			})
 
 			It("should generate deterministic hash-based names", func() {
 				longName := strings.Repeat("a", 300)
-				result1 := GenerateNodeName(longName, longName, longName, longName)
-				result2 := GenerateNodeName(longName, longName, longName, longName)
+				result1 := GenerateNodeName(longName, longName, longName)
+				result2 := GenerateNodeName(longName, longName, longName)
 				Expect(result1).To(Equal(result2))
 			})
 
 			It("should generate different hash-based names for different inputs", func() {
 				longName1 := strings.Repeat("a", 300)
 				longName2 := strings.Repeat("b", 300)
-				result1 := GenerateNodeName(longName1, "cluster1", "namespace", "bmh")
-				result2 := GenerateNodeName(longName2, "cluster1", "namespace", "bmh")
+				result1 := GenerateNodeName(longName1, "namespace", "bmh")
+				result2 := GenerateNodeName(longName2, "namespace", "bmh")
 				Expect(result1).NotTo(Equal(result2))
 			})
 		})
 
 		Context("when inputs result in empty sanitized name", func() {
 			It("should use hash-based fallback for empty sanitized names", func() {
-				result := GenerateNodeName("@#$", "###", "!!!", "%%%")
+				result := GenerateNodeName("###", "!!!", "%%%")
 				Expect(result).NotTo(BeEmpty())
 				Expect(len(result)).To(BeNumerically("<=", 253))
 				Expect(result).To(MatchRegexp("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"))
 			})
 
 			It("should be deterministic even with invalid characters", func() {
-				result1 := GenerateNodeName("@#$", "###", "!!!", "%%%")
-				result2 := GenerateNodeName("@#$", "###", "!!!", "%%%")
+				result1 := GenerateNodeName("###", "!!!", "%%%")
+				result2 := GenerateNodeName("###", "!!!", "%%%")
 				Expect(result1).To(Equal(result2))
 			})
 		})
 
 		Context("when testing edge cases", func() {
 			It("should handle empty strings", func() {
-				result := GenerateNodeName("", "", "", "")
+				result := GenerateNodeName("", "", "")
 				Expect(result).NotTo(BeEmpty())
 				Expect(result).To(MatchRegexp("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"))
 			})
 
 			It("should handle single characters", func() {
-				result := GenerateNodeName("a", "b", "c", "d")
-				Expect(result).To(Equal("a-b-c-d"))
+				result := GenerateNodeName("a", "b", "c")
+				Expect(result).To(Equal("a-b-c"))
 			})
 
 			It("should handle names with only hyphens", func() {
-				result := GenerateNodeName("---", "---", "---", "---")
+				result := GenerateNodeName("---", "---", "---")
 				Expect(result).NotTo(BeEmpty())
 				Expect(result).To(MatchRegexp("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"))
 			})
@@ -273,18 +267,17 @@ var _ = Describe("AllocatedNode Utilities", func() {
 
 		Context("when testing name length constraints", func() {
 			It("should never exceed 253 characters", func() {
-				// Test with various input lengths
 				for i := 1; i <= 10; i++ {
 					longInput := strings.Repeat("x", i*50)
-					result := GenerateNodeName(longInput, longInput, longInput, longInput)
+					result := GenerateNodeName(longInput, longInput, longInput)
 					Expect(len(result)).To(BeNumerically("<=", 253),
-						"Failed for input length: %d, result: %s", i*50*4, result)
+						"Failed for input length: %d, result: %s", i*50*3, result)
 				}
 			})
 
 			It("should handle exactly 253 character inputs gracefully", func() {
-				longInput := strings.Repeat("a", 63) // Each component ~63 chars, total ~252 with hyphens
-				result := GenerateNodeName(longInput, longInput, longInput, longInput)
+				longInput := strings.Repeat("a", 84)
+				result := GenerateNodeName(longInput, longInput, longInput)
 				Expect(len(result)).To(BeNumerically("<=", 253))
 				Expect(result).To(MatchRegexp("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"))
 			})
@@ -294,26 +287,23 @@ var _ = Describe("AllocatedNode Utilities", func() {
 			It("should generate unique names for different parameter combinations", func() {
 				results := make(map[string]bool)
 
-				plugins := []string{"metal3-hwplugin", "other-plugin"}
 				clusters := []string{"cluster1", "cluster2"}
 				namespaces := []string{"ns1", "ns2"}
 				bmhs := []string{"bmh1", "bmh2"}
 
-				for _, p := range plugins {
-					for _, c := range clusters {
-						for _, n := range namespaces {
-							for _, b := range bmhs {
-								result := GenerateNodeName(p, c, n, b)
-								Expect(results[result]).To(BeFalse(),
-									"Duplicate name generated: %s for params (%s, %s, %s, %s)",
-									result, p, c, n, b)
-								results[result] = true
-							}
+				for _, c := range clusters {
+					for _, n := range namespaces {
+						for _, b := range bmhs {
+							result := GenerateNodeName(c, n, b)
+							Expect(results[result]).To(BeFalse(),
+								"Duplicate name generated: %s for params (%s, %s, %s)",
+								result, c, n, b)
+							results[result] = true
 						}
 					}
 				}
 
-				Expect(len(results)).To(Equal(16)) // 2^4 combinations
+				Expect(len(results)).To(Equal(8)) // 2^3 combinations
 			})
 		})
 	})

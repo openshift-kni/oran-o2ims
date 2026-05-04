@@ -335,9 +335,9 @@ defaultHugepagesSize: "1G"`,
 		}
 
 		// Create the provisioned NodeAllocationRequest
-		hwPluginNs := &corev1.Namespace{}
-		hwPluginNs.SetName(constants.DefaultNamespace)
-		Expect(c.Create(ctx, hwPluginNs)).To(Succeed())
+		operatorNs := &corev1.Namespace{}
+		operatorNs.SetName(constants.DefaultNamespace)
+		Expect(c.Create(ctx, operatorNs)).To(Succeed())
 		nodeAllocationRequest := &hwmgmtv1alpha1.NodeAllocationRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "cluster-1",
@@ -1809,8 +1809,8 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			},
 		}
 
-		hwPluginNs := &corev1.Namespace{}
-		hwPluginNs.SetName(constants.DefaultNamespace)
+		operatorNs := &corev1.Namespace{}
+		operatorNs.SetName(constants.DefaultNamespace)
 
 		crs := []client.Object{
 			// Cluster Template Namespace.
@@ -1994,8 +1994,8 @@ var _ = Describe("addPostProvisioningLabels", func() {
 
 	Context("When the HW template is provided and the expected HW CRs exist", func() {
 		BeforeEach(func() {
-			hwPluginNs := &corev1.Namespace{}
-			hwPluginNs.SetName(constants.DefaultNamespace)
+			operatorNs := &corev1.Namespace{}
+			operatorNs.SetName(constants.DefaultNamespace)
 
 			// Create the NodeAllocationRequest.
 			Expect(c.Create(ctx, nodeAllocationRequest)).To(Succeed())

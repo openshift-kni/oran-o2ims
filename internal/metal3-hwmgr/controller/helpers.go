@@ -1450,7 +1450,7 @@ func allocateBMHToNodeAllocationRequest(
 
 	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 
-	nodeName := hwmgrutils.GenerateNodeName(hwmgrutils.Metal3NodeNamePrefix, nodeAllocationRequest.Spec.ClusterId, bmh.Namespace, bmh.Name)
+	nodeName := hwmgrutils.GenerateNodeName(nodeAllocationRequest.Spec.ClusterId, bmh.Namespace, bmh.Name)
 
 	// Set AllocatedNode label
 	allocatedNodeLbl := bmh.Labels[ctlrutils.AllocatedNodeLabel]

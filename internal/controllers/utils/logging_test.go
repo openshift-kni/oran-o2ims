@@ -100,8 +100,7 @@ func TestAddObjectContext(t *testing.T) {
 			ResourceVersion: "12345",
 			Generation:      3,
 			Labels: map[string]string{
-				"cluster-id":      "test-cluster",
-				"hardware-plugin": "metal3",
+				"cluster-id": "test-cluster",
 			},
 		},
 	}

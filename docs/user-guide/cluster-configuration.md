@@ -611,7 +611,7 @@ The following steps are required:
         status: "True"
         type: Provisioned
       - lastTransitionTime: "2025-10-01T21:36:01Z"
-        message: 'Configuration update in progress (AllocatedNode metal3-hwplugin-sno1-dell-xr8620t-pool-dell-xr8620t-node1)'
+        message: 'Configuration update in progress (AllocatedNode sno1-dell-xr8620t-pool-dell-xr8620t-node1)'
         reason: InProgress
         status: "False"
         type: Configured

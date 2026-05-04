@@ -35,9 +35,7 @@ type HardwareDataSource struct {
 	hubClient     rtclient.Client
 }
 
-// hardwareDataSourceName is used for UUID generation and external IDs.
-// This value must remain stable to ensure consistent resource UUIDs.
-const hardwareDataSourceName = "metal3-hwplugin"
+const hardwareDataSourceName = "metal3-hwmgr"
 
 // Defines the UUID namespace values used to generate name based UUID values for inventory objects.
 // These values are selected arbitrarily.

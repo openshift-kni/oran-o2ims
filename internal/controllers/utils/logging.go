@@ -52,12 +52,8 @@ func AddObjectContext(ctx context.Context, obj client.Object) context.Context {
 
 		// Add any relevant labels or annotations as context
 		if labels := obj.GetLabels(); len(labels) > 0 {
-			// Add important labels - customize based on your needs
 			if clusterID, exists := labels["cluster-id"]; exists {
 				ctx = logging.AppendCtx(ctx, slog.String("clusterID", clusterID))
-			}
-			if hwMgr, exists := labels["hardware-plugin"]; exists {
-				ctx = logging.AppendCtx(ctx, slog.String("hardwareManager", hwMgr))
 			}
 		}
 	}
