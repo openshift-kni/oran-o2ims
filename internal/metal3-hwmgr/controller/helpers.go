@@ -30,8 +30,8 @@ import (
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/utils"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/utils"
 )
 
 const ConfigAnnotation = "clcm.openshift.io/config-in-progress"

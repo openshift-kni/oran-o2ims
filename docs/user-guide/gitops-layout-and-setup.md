@@ -19,7 +19,6 @@ Recommended layout:
 git-root/
   clustertemplates/
     hardwareprofiles/                   # HardwareProfile CRs for hardware provisioning
-    hardwaretemplates/                  # HardwareTemplate CRs for hardware provisioning
     inventory/                          # BareMetalHost inventory for sites
     version_4.Y.Z/                      # Version matches the OCP version to be installed
       sno-ran-du/                       # Single-Node OpenShift (SNO)
@@ -115,6 +114,4 @@ spec:
     kind: ClusterTemplate
   - group: clcm.openshift.io
     kind: HardwareProfile
-  - group: clcm.openshift.io
-    kind: HardwareTemplate
 ```

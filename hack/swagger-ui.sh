@@ -55,9 +55,6 @@ declare -A API_PATHS=(
     [provisioning]="${PROJECT_ROOT}/internal/service/provisioning/api/openapi.yaml"
     [artifacts]="${PROJECT_ROOT}/internal/service/artifacts/api/openapi.yaml"
     [cluster]="${PROJECT_ROOT}/internal/service/cluster/api/openapi.yaml"
-    [hwplugin-inventory]="${PROJECT_ROOT}/hwmgr-plugins/api/openapi/specs/inventory.yaml"
-    [hwplugin-provisioning]="${PROJECT_ROOT}/hwmgr-plugins/api/openapi/specs/provisioning.yaml"
-    [hwplugin-nar-callback]="${PROJECT_ROOT}/hwmgr-plugins/api/openapi/specs/nar_callback.yaml"
 )
 
 # Cleanup function for error cases

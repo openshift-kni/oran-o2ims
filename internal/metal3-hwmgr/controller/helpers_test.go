@@ -104,8 +104,8 @@ import (
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/utils"
 )
 
 // Helper functions
@@ -124,11 +124,11 @@ func createNodeWithCondition(name, namespace, conditionType, reason string, stat
 
 var _ = Describe("Helpers", func() {
 	var (
-		ctx             context.Context
-		logger          *slog.Logger
-		scheme          *runtime.Scheme
-		fakeClient      client.Client
-		fakeNoncached   client.Reader
+		ctx           context.Context
+		logger        *slog.Logger
+		scheme        *runtime.Scheme
+		fakeClient    client.Client
+		fakeNoncached client.Reader
 		testNamespace = "test-plugin-namespace"
 	)
 
@@ -2594,12 +2594,12 @@ var _ = Describe("Helpers", func() {
 
 	Describe("abandonNodeUpdate", func() {
 		var (
-			ctx             context.Context
-			logger          *slog.Logger
-			scheme          *runtime.Scheme
-			testClient      client.Client
-			mockCtrl        *gomock.Controller
-			mockOps         *MockNodeOps
+			ctx           context.Context
+			logger        *slog.Logger
+			scheme        *runtime.Scheme
+			testClient    client.Client
+			mockCtrl      *gomock.Controller
+			mockOps       *MockNodeOps
 			testNamespace string
 		)
 
@@ -2748,12 +2748,12 @@ var _ = Describe("Helpers", func() {
 
 	Describe("executeNodeUpdates", func() {
 		var (
-			ctx             context.Context
-			logger          *slog.Logger
-			scheme          *runtime.Scheme
-			testClient      client.Client
-			mockCtrl        *gomock.Controller
-			mockOps         *MockNodeOps
+			ctx        context.Context
+			logger     *slog.Logger
+			scheme     *runtime.Scheme
+			testClient client.Client
+			mockCtrl   *gomock.Controller
+			mockOps    *MockNodeOps
 		)
 
 		const (

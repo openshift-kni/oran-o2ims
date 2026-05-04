@@ -719,8 +719,8 @@ func (t *provisioningRequestReconcilerTask) checkExistingNodeAllocationRequest(
 	return nar, nil
 }
 
-// buildNodeAllocationRequest builds the NodeAllocationRequest from the pre-merged hwMgmt data and cluster instance
-func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(
+// buildNodeAllocationRequestSpec builds the NodeAllocationRequest from the pre-merged hwMgmt data and cluster instance
+func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec(
 	clusterInstance *unstructured.Unstructured) (*pluginsv1alpha1.NodeAllocationRequest, error) {
 
 	hwMgmtData := t.clusterInput.hwMgmtData
@@ -836,7 +836,7 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(
 	return nar, nil
 }
 
-func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx context.Context,
+func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(ctx context.Context,
 	clusterInstance *unstructured.Unstructured) (*pluginsv1alpha1.NodeAllocationRequest, error) {
 
 	hwMgmtData := t.clusterInput.hwMgmtData
@@ -846,7 +846,7 @@ func (t *provisioningRequestReconcilerTask) handleRenderHardwareTemplate(ctx con
 		return nil, err
 	}
 
-	nodeAllocationRequest, err := t.buildNodeAllocationRequest(clusterInstance)
+	nodeAllocationRequest, err := t.buildNodeAllocationRequestSpec(clusterInstance)
 	if err != nil {
 		return nil, err
 	}

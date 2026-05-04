@@ -27,7 +27,7 @@ import (
 )
 
 // ClusterInstanceParamsSubSchemaForNoHWTemplate is the expected subschema for the
-// ClusterInstanceParams when no hardware template is provided.
+// ClusterInstanceParams when hardware provisioning is skipped.
 const ClusterInstanceParamsSubSchemaForNoHWTemplate = `
 type: object
 properties:

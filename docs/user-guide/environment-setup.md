@@ -167,7 +167,6 @@ hack/catalog-undeploy.sh --package oran-o2ims --namespace oran-o2ims --crd-searc
 subscription.operators.coreos.com "oran-o2ims" deleted
 clusterserviceversion.operators.coreos.com "oran-o2ims.v4.22.0" deleted
 customresourcedefinition.apiextensions.k8s.io "clustertemplates.clcm.openshift.io" deleted
-customresourcedefinition.apiextensions.k8s.io "hardwaretemplates.clcm.openshift.io" deleted
 customresourcedefinition.apiextensions.k8s.io "inventories.ocloud.openshift.io" deleted
 customresourcedefinition.apiextensions.k8s.io "nodeallocationrequests.plugins.clcm.openshift.io" deleted
 customresourcedefinition.apiextensions.k8s.io "allocatednodes.plugins.clcm.openshift.io" deleted

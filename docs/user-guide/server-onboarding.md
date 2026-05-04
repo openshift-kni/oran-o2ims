@@ -76,8 +76,8 @@ The onboarding process has two parts:
 Once onboarded, servers are available for selection by the O-Cloud Manager
 when processing [ProvisioningRequests](./cluster-provisioning.md). Servers are
 matched based on
-[resource selector criteria](./template-overview.md#hardwaretemplate) defined in
-the HardwareTemplate.
+[resource selector criteria](./template-overview.md#hwmgmtdefaults) defined in
+the ClusterTemplate hwMgmtDefaults.
 
 ## Data Model Relationships
 
@@ -435,7 +435,7 @@ the actual NIC names and MAC addresses on that specific server.
 Resource selector labels use the `resourceselector.clcm.openshift.io/` prefix
 and provide custom criteria for matching servers to provisioning requests.
 These labels are matched against the `resourceSelector` field in the
-[HardwareTemplate](./template-overview.md#hardwaretemplate):
+ClusterTemplate hwMgmtDefaults:
 
 ```yaml
 resourceselector.clcm.openshift.io/server-type: XR8620t
@@ -489,8 +489,8 @@ The HardwareData CR contains:
 - System manufacturer and product name
 
 This data is used by the O-Cloud Manager for
-[hardware data selectors](./template-overview.md#hardwaretemplate) in the
-HardwareTemplate `resourceSelector`. For example, a selector like
+[hardware data selectors](./template-overview.md#hwmgmtdefaults) in the
+ClusterTemplate hwMgmtDefaults `resourceSelector`. For example, a selector like
 `hardwaredata/num_threads;>=: "64"` is evaluated against the HardwareData CR
 for each candidate BMH.
 

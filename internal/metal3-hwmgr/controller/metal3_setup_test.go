@@ -126,7 +126,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 				NoncachedClient: fakeClient,
 				Scheme:          scheme,
 				Logger:          baseLogger.With(slog.String("controller", "metal3_nodeallocationrequest_controller")),
-				Namespace: namespace,
+				Namespace:       namespace,
 				Manager:         nil, // We can't provide a real manager in this test
 			}
 
@@ -151,7 +151,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 				NoncachedClient: fakeClient,
 				Scheme:          scheme,
 				Logger:          baseLogger.With(slog.String("controller", "metal3_allocatednode_controller")),
-				Namespace: namespace,
+				Namespace:       namespace,
 				Manager:         nil, // We can't provide a real manager in this test
 			}
 

@@ -334,7 +334,7 @@ For example, after pre-provisioning a server, you could label it:
 oc label bmh <bmh-name> -n <bmh-namespace> resourceselector.clcm.openshift.io/ibi-ready=true
 ```
 
-Then add the matching label as selection criteria in the HardwareTemplate's
+Then add the matching label as selection criteria in the ClusterTemplate's hwMgmtDefaults
 `nodeGroupData.resourceSelector`:
 
 ```yaml
@@ -345,7 +345,7 @@ resourceSelector:
 The label name (`ibi-ready` in this example) is user-defined — you can use any
 label name that fits your workflow, as long as it uses the
 `resourceselector.clcm.openshift.io/` prefix and matches the selection criteria
-in your HardwareTemplate or ProvisioningRequest parameters. See the
+in your ClusterTemplate hwMgmtDefaults or ProvisioningRequest parameters. See the
 [resource selection documentation](./cluster-provisioning.md) for details on how
 resource selector labels work.
 
@@ -386,7 +386,7 @@ pre-provisioned hardware:
 1. ProvisioningRequestValidated – Parameters validated against the ClusterTemplate schema
 2. ClusterInstanceRendered – Renders ClusterInstance with IBI-specific templates
 3. ClusterResourcesCreated – Creates required cluster resources
-4. HardwareTemplateRendered – Processes hardware allocation for pre-provisioned servers
+4. NodeAllocationRequestRendered – Renders NodeAllocationRequest for pre-provisioned servers
 5. HardwareProvisioned – Allocates pre-provisioned hardware resources
 6. ClusterProvisioned – Installs the cluster using the IBI Operator
 7. ConfigurationApplied – Applies cluster configuration via ACM policies

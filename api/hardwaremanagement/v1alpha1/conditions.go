@@ -9,7 +9,7 @@ package v1alpha1
 type ConditionType string
 
 // TODO: Refactor condition types, reasons, and messages to clearly indicate which
-// hardware related CR (NodeAllocationRequest, AllocatedNode, HardwareTemplate, etc.) each belongs to.
+// hardware related CR (NodeAllocationRequest, AllocatedNode, etc.) each belongs to.
 
 // The following constants define the different types of conditions that will be set
 const (

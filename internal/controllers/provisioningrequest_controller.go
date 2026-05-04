@@ -544,21 +544,21 @@ func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Co
 }
 
 // handleNodeAllocationRequestProvisioning handles the rendering, creation, and provisioning of the NodeAllocationRequest.
-// It first renders the hardware template for the NodeAllocationRequest based on the provided ClusterInstance,
+// It first builds the NodeAllocationRequest based on the provided ClusterInstance,
 // then creates or updates the NodeAllocationRequest resource, and finally waits for the NodeAllocationRequest to be provisioned.
 // The function returns a ctrl.Result to indicate if/when to requeue, the rendered NodeAllocationRequest, a bool
 // to indicate whether to process with further processing and an error if any issues occur.
 func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvisioning(ctx context.Context,
 	renderedClusterInstance *unstructured.Unstructured) (ctrl.Result, bool, error) {
 
-	// Render the hardware template for NodeAllocationRequest
-	renderedNodeAllocationRequest, err := t.renderHardwareTemplate(ctx, renderedClusterInstance)
+	// Build the NodeAllocationRequest
+	renderedNodeAllocationRequest, err := t.renderNodeAllocationRequest(ctx, renderedClusterInstance)
 	if err != nil {
 		if ctlrutils.IsInputError(err) {
 			res, err := t.checkClusterDeployConfigState(ctx)
 			return res, false, err
 		}
-		t.logger.ErrorContext(ctx, "Hardware template rendering error", slog.String("error", err.Error()))
+		t.logger.ErrorContext(ctx, "NodeAllocationRequest build error", slog.String("error", err.Error()))
 		return doNotRequeue(), false, err
 	}
 
@@ -804,7 +804,7 @@ func (t *provisioningRequestReconcilerTask) checkProvisioningConditionsForFailur
 		provisioningv1alpha1.PRconditionTypes.Validated,
 		provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered,
 		provisioningv1alpha1.PRconditionTypes.ClusterResourcesCreated,
-		provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered,
+		provisioningv1alpha1.PRconditionTypes.NodeAllocationRequestRendered,
 		provisioningv1alpha1.PRconditionTypes.HardwareProvisioned,
 		provisioningv1alpha1.PRconditionTypes.HardwareConfigured,
 	}
@@ -1007,33 +1007,33 @@ func (t *provisioningRequestReconcilerTask) handleClusterResources(ctx context.C
 	return err
 }
 
-func (t *provisioningRequestReconcilerTask) renderHardwareTemplate(ctx context.Context,
+func (t *provisioningRequestReconcilerTask) renderNodeAllocationRequest(ctx context.Context,
 	clusterInstance *unstructured.Unstructured) (*pluginsv1alpha1.NodeAllocationRequest, error) {
-	renderedNodeAllocationRequest, err := t.handleRenderHardwareTemplate(ctx, clusterInstance)
+	renderedNodeAllocationRequest, err := t.buildNodeAllocationRequest(ctx, clusterInstance)
 	if err != nil {
-		hardwareTemplateFailureMsg := "Failed to render the Hardware template"
-		hardwareTemplateFailureMsgWithError := hardwareTemplateFailureMsg + ": " + err.Error()
-		ctlrutils.LogError(ctx, t.logger, hardwareTemplateFailureMsg, err, slog.String("name", t.object.Name))
+		narRenderFailureMsg := "Failed to build the NodeAllocationRequest"
+		narRenderFailureMsgWithError := narRenderFailureMsg + ": " + err.Error()
+		ctlrutils.LogError(ctx, t.logger, narRenderFailureMsg, err, slog.String("name", t.object.Name))
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
-			provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered,
+			provisioningv1alpha1.PRconditionTypes.NodeAllocationRequestRendered,
 			provisioningv1alpha1.CRconditionReasons.Failed,
 			metav1.ConditionFalse,
-			hardwareTemplateFailureMsgWithError,
+			narRenderFailureMsgWithError,
 		)
-		// Update provisioning status to failed to ensure consistency with the HardwareTemplateRendered condition Failed status
-		ctlrutils.SetProvisioningStateFailed(t.object, hardwareTemplateFailureMsgWithError)
+		// Update provisioning status to failed to ensure consistency with the NodeAllocationRequestRendered condition Failed status
+		ctlrutils.SetProvisioningStateFailed(t.object, narRenderFailureMsgWithError)
 	} else {
 		t.logger.InfoContext(
 			ctx,
-			"Successfully rendered Hardware template for NodeAllocationRequest",
+			"Successfully built NodeAllocationRequest",
 			slog.String("name", t.object.Name),
 		)
 
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
-			provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered,
+			provisioningv1alpha1.PRconditionTypes.NodeAllocationRequestRendered,
 			provisioningv1alpha1.CRconditionReasons.Completed,
 			metav1.ConditionTrue,
-			"Rendered Hardware template successfully",
+			"Built NodeAllocationRequest successfully",
 		)
 	}
 

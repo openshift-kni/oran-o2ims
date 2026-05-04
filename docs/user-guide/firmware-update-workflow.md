@@ -97,8 +97,8 @@ When a ProvisioningRequest is created, the following sequence occurs:
    for each node group (from the ProvisioningRequest override or hwMgmtDefaults
    default) and creates a `NodeAllocationRequest` CR.
 
-2. **BMH selection** — The Metal3 hardware plugin selects available BareMetalHosts
-   matching the [resource selector criteria](./template-overview.md#hardwaretemplate)
+2. **BMH selection** — The Metal3 hardware manager selects available BareMetalHosts
+   matching the [resource selector criteria](./template-overview.md#hwmgmtdefaults)
    (labels and hardware data).
 
 3. **AllocatedNode creation** — For each selected BMH, the plugin creates an
@@ -162,7 +162,7 @@ Key conditions during Day-0 firmware provisioning:
 
 | Condition | Status | Reason | Meaning |
 |---|---|---|---|
-| `HardwareTemplateRendered` | True | Completed | Hardware template validated and NodeAllocationRequest created |
+| `NodeAllocationRequestRendered` | True | Completed | NodeAllocationRequest rendered and validated |
 | `HardwareProvisioned` | False | InProgress | BMH selection and allocation in progress |
 | `HardwareProvisioned` | True | Completed | All nodes allocated |
 
@@ -354,7 +354,7 @@ oc get hostfirmwaresettings.metal3.io <bmh-name> -n <bmh-namespace> \
 
 | Condition | Context | Description |
 |---|---|---|
-| `HardwareTemplateRendered` | Day-0 | Hardware template validated and NodeAllocationRequest created |
+| `NodeAllocationRequestRendered` | Day-0 | NodeAllocationRequest rendered and validated |
 | `HardwareProvisioned` | Day-0 | BMH allocation and initial provisioning status |
 | `HardwareNodeConfigApplied` | Day-0 | Node configuration (BMC, MAC addresses) applied to ClusterInstance |
 | `HardwareConfigured` | Day-2 | Firmware/BIOS configuration status |

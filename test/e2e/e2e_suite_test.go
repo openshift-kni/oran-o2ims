@@ -36,24 +36,24 @@ import (
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/utils"
-	metal3controllers "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/controller"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	provisioningcontrollers "github.com/openshift-kni/oran-o2ims/internal/controllers"
+	metal3controllers "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/controller"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 )
 
 var (
-	K8SClient                           client.Client
-	ProvisioningManager                 ctrl.Manager
-	Metal3Manager                       ctrl.Manager
-	ProvisioningRequestTestReconciler   *provisioningcontrollers.ProvisioningRequestReconciler
-	ClusterTemplateTestReconciler       *provisioningcontrollers.ClusterTemplateReconciler
-	testEnv *envtest.Environment
-	ctx                                 context.Context
-	cancel                              context.CancelFunc
+	K8SClient                         client.Client
+	ProvisioningManager               ctrl.Manager
+	Metal3Manager                     ctrl.Manager
+	ProvisioningRequestTestReconciler *provisioningcontrollers.ProvisioningRequestReconciler
+	ClusterTemplateTestReconciler     *provisioningcontrollers.ClusterTemplateReconciler
+	testEnv                           *envtest.Environment
+	ctx                               context.Context
+	cancel                            context.CancelFunc
 	// store external CRDs
 	tmpDir string
 )

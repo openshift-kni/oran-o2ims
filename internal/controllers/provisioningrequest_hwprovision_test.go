@@ -17,8 +17,8 @@ provisioning workflow from template rendering to node configuration.
 
 Test Suites:
 
-1. handleRenderHardwareTemplate Tests:
-   - Validates successful hardware template rendering and validation
+1. buildNodeAllocationRequest Tests:
+   - Validates successful NodeAllocationRequest building and validation
    - Tests error handling when hwMgmtData has no nodeGroupData
    - Tests error handling when ClusterTemplate is not found
 
@@ -58,7 +58,7 @@ Test Suites:
    - Tests error handling when no matching hardware nodes are found
    - Tests error handling when hardware provisioning is disabled
    - Tests error handling for missing cluster templates
-   - Tests error handling for missing hardware templates
+   - Tests error handling for missing hardware management configuration
    - Tests handling of nodes without hardware manager references
    - Tests correct consumption and assignment of hardware nodes to cluster nodes
 
@@ -99,7 +99,7 @@ const (
 	testHostName        = "host-1"
 )
 
-var _ = Describe("handleRenderHardwareTemplate", func() {
+var _ = Describe("buildNodeAllocationRequest", func() {
 	var (
 		ctx             context.Context
 		c               client.Client
@@ -188,7 +188,7 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 		// Set up test Metal3 hardware manager
 	})
 
-	It("returns no error when handleRenderHardwareTemplate succeeds", func() {
+	It("returns no error when buildNodeAllocationRequest succeeds", func() {
 		// Set up the merged hwMgmt data on the task
 		task.clusterInput = &clusterInput{
 			hwMgmtData: map[string]any{
@@ -201,7 +201,7 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 
 		unstructuredCi, err := utils.ConvertToUnstructured(*clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
-		nodeAllocationRequest, err := task.handleRenderHardwareTemplate(ctx, unstructuredCi)
+		nodeAllocationRequest, err := task.buildNodeAllocationRequest(ctx, unstructuredCi)
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(nodeAllocationRequest).ToNot(BeNil())
@@ -234,8 +234,8 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 
 		unstructuredCi, err := utils.ConvertToUnstructured(*clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
-		// Test buildNodeAllocationRequest directly since it validates nodeGroupData
-		nodeAllocationRequest, err := task.buildNodeAllocationRequest(unstructuredCi)
+		// Test buildNodeAllocationRequestSpec directly since it validates nodeGroupData
+		nodeAllocationRequest, err := task.buildNodeAllocationRequestSpec(unstructuredCi)
 		Expect(err).To(HaveOccurred())
 		Expect(nodeAllocationRequest).To(BeNil())
 		Expect(err.Error()).To(ContainSubstring("nodeGroupData not found"))
@@ -249,7 +249,7 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 
 		unstructuredCi, err := utils.ConvertToUnstructured(*clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
-		nodeAllocationRequest, err := task.handleRenderHardwareTemplate(ctx, unstructuredCi)
+		nodeAllocationRequest, err := task.buildNodeAllocationRequest(ctx, unstructuredCi)
 		Expect(err).To(HaveOccurred())
 		Expect(nodeAllocationRequest).To(BeNil())
 		Expect(err.Error()).To(ContainSubstring("nodeGroupData not found"))
@@ -848,7 +848,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		nar, err := task.buildNodeAllocationRequest(clusterInstance)
+		nar, err := task.buildNodeAllocationRequestSpec(clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
 		Expect(nar.Spec.LocationSpec.Site).To(Equal("local-123"))
@@ -902,7 +902,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		nar, err := task.buildNodeAllocationRequest(clusterInstance)
+		nar, err := task.buildNodeAllocationRequestSpec(clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
 		Expect(nar.Spec.ConfigTransactionId).To(Equal(int64(1))) // Should match PR generation
@@ -938,7 +938,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		nar, err := task.buildNodeAllocationRequest(clusterInstance)
+		nar, err := task.buildNodeAllocationRequestSpec(clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
 		Expect(nar.Spec.HardwareProvisioningTimeout).ToNot(BeNil())
@@ -957,7 +957,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			hwMgmtData: map[string]any{},
 		}
 
-		nar, err := task.buildNodeAllocationRequest(clusterInstance)
+		nar, err := task.buildNodeAllocationRequestSpec(clusterInstance)
 		Expect(err).To(HaveOccurred())
 		Expect(nar).To(BeNil())
 		Expect(err.Error()).To(ContainSubstring("spec.nodes not found in cluster instance"))
@@ -978,7 +978,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		// The hwMgmtData is already merged with overrides before buildNodeAllocationRequest is called
+		// The hwMgmtData is already merged with overrides before buildNodeAllocationRequestSpec is called
 		task.clusterInput = &clusterInput{
 			hwMgmtData: map[string]any{
 				"nodeGroupData": []any{
@@ -988,7 +988,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		nar, err := task.buildNodeAllocationRequest(clusterInstance)
+		nar, err := task.buildNodeAllocationRequestSpec(clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
 		Expect(nar.Spec.NodeGroup).To(HaveLen(2))
@@ -1031,7 +1031,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		nar, err := task.buildNodeAllocationRequest(clusterInstance)
+		nar, err := task.buildNodeAllocationRequestSpec(clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
 		Expect(nar.Spec.NodeGroup).To(HaveLen(1))
@@ -1058,7 +1058,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		nar, err := task.buildNodeAllocationRequest(clusterInstance)
+		nar, err := task.buildNodeAllocationRequestSpec(clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
 		Expect(nar.Spec.NodeGroup).To(HaveLen(1))

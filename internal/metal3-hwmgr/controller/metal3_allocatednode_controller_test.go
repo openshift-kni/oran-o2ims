@@ -181,16 +181,16 @@ func (m *MockClient) Delete(ctx context.Context, obj client.Object, opts ...clie
 
 var _ = Describe("AllocatedNodeReconciler", func() {
 	var (
-		ctx             context.Context
-		logger          *slog.Logger
-		scheme          *runtime.Scheme
-		fakeClient      client.Client
-		mockClient      *MockClient
-		mockNoncached   *MockClient
-		reconciler      *AllocatedNodeReconciler
-		allocatedNode   *pluginsv1alpha1.AllocatedNode
-		bmh             *metal3v1alpha1.BareMetalHost
-		req             ctrl.Request
+		ctx           context.Context
+		logger        *slog.Logger
+		scheme        *runtime.Scheme
+		fakeClient    client.Client
+		mockClient    *MockClient
+		mockNoncached *MockClient
+		reconciler    *AllocatedNodeReconciler
+		allocatedNode *pluginsv1alpha1.AllocatedNode
+		bmh           *metal3v1alpha1.BareMetalHost
+		req           ctrl.Request
 		testNamespace = "test-plugin-namespace"
 	)
 
@@ -261,7 +261,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				NoncachedClient: fakeClient,
 				Scheme:          scheme,
 				Logger:          logger,
-				Namespace: testNamespace,
+				Namespace:       testNamespace,
 			}
 		})
 
@@ -366,7 +366,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				NoncachedClient: mockNoncached,
 				Scheme:          scheme,
 				Logger:          logger,
-				Namespace: testNamespace,
+				Namespace:       testNamespace,
 			}
 		})
 
@@ -548,7 +548,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				NoncachedClient: fakeClient,
 				Scheme:          scheme,
 				Logger:          logger,
-				Namespace: testNamespace,
+				Namespace:       testNamespace,
 			}
 
 			// Note: In a real test environment, we would need to mock the manager
@@ -564,7 +564,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				NoncachedClient: fakeClient,
 				Scheme:          scheme,
 				Logger:          logger,
-				Namespace: testNamespace,
+				Namespace:       testNamespace,
 			}
 		})
 
@@ -833,7 +833,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				NoncachedClient: fakeClient,
 				Scheme:          scheme,
 				Logger:          logger,
-				Namespace: testNamespace,
+				Namespace:       testNamespace,
 			}
 		})
 
@@ -870,7 +870,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				NoncachedClient: fakeClient,
 				Scheme:          scheme,
 				Logger:          logger,
-				Namespace: testNamespace,
+				Namespace:       testNamespace,
 			}
 		})
 

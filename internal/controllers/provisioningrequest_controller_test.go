@@ -524,10 +524,10 @@ plan:
 					"Cluster resources created successfully")
 
 				utils.SetStatusCondition(&testTask.object.Status.Conditions,
-					provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered,
+					provisioningv1alpha1.PRconditionTypes.NodeAllocationRequestRendered,
 					provisioningv1alpha1.CRconditionReasons.Completed,
 					metav1.ConditionTrue,
-					"Hardware template rendered successfully")
+					"NodeAllocationRequest rendered successfully")
 			})
 
 			It("should not set provisioning state to failed", func() {
@@ -556,7 +556,7 @@ plan:
 					provisioningv1alpha1.CRconditionReasons.Completed,
 					metav1.ConditionTrue,
 					"ClusterInstance rendered successfully")
-				// Leave ClusterResourcesCreated and HardwareTemplateRendered missing
+				// Leave ClusterResourcesCreated and NodeAllocationRequestRendered missing
 			})
 
 			It("should not set provisioning state to failed when conditions are missing", func() {
@@ -668,9 +668,9 @@ plan:
 			})
 		})
 
-		Context("when hardware template rendering fails", func() {
+		Context("when NodeAllocationRequest rendering fails", func() {
 			BeforeEach(func() {
-				// Set other conditions to true but hardware template rendering to false
+				// Set other conditions to true but NodeAllocationRequest rendering to false
 				utils.SetStatusCondition(&testTask.object.Status.Conditions,
 					provisioningv1alpha1.PRconditionTypes.Validated,
 					provisioningv1alpha1.CRconditionReasons.Completed,
@@ -690,13 +690,13 @@ plan:
 					"Cluster resources created successfully")
 
 				utils.SetStatusCondition(&testTask.object.Status.Conditions,
-					provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered,
+					provisioningv1alpha1.PRconditionTypes.NodeAllocationRequestRendered,
 					provisioningv1alpha1.CRconditionReasons.Failed,
 					metav1.ConditionFalse,
-					"Failed to render hardware template: invalid hardware profile")
+					"Failed to build NodeAllocationRequest: invalid hardware profile")
 			})
 
-			It("should set provisioning state to failed with hardware template error message", func() {
+			It("should set provisioning state to failed with NodeAllocationRequest error message", func() {
 				err := testTask.checkProvisioningConditionsForFailures(ctx)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -706,7 +706,7 @@ plan:
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(updatedCR.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StateFailed))
-				Expect(updatedCR.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring("Failed to render hardware template: invalid hardware profile"))
+				Expect(updatedCR.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring("Failed to build NodeAllocationRequest: invalid hardware profile"))
 			})
 		})
 
@@ -726,12 +726,12 @@ plan:
 					metav1.ConditionFalse,
 					"Rendering failed: second error")
 
-				// Set hardware template rendering to false (third in the list)
+				// Set NodeAllocationRequest rendering to false (third in the list)
 				utils.SetStatusCondition(&testTask.object.Status.Conditions,
-					provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered,
+					provisioningv1alpha1.PRconditionTypes.NodeAllocationRequestRendered,
 					provisioningv1alpha1.CRconditionReasons.Failed,
 					metav1.ConditionFalse,
-					"Hardware template failed: third error")
+					"NodeAllocationRequest build failed: third error")
 			})
 
 			It("should set provisioning state to failed with the first failed condition's message", func() {
@@ -769,10 +769,10 @@ plan:
 					"Resource creation failed")
 
 				utils.SetStatusCondition(&testTask.object.Status.Conditions,
-					provisioningv1alpha1.PRconditionTypes.HardwareTemplateRendered,
+					provisioningv1alpha1.PRconditionTypes.NodeAllocationRequestRendered,
 					provisioningv1alpha1.CRconditionReasons.InProgress,
 					metav1.ConditionUnknown,
-					"Hardware template rendering in progress")
+					"NodeAllocationRequest build in progress")
 			})
 
 			It("should set provisioning state to failed based on the first false condition encountered", func() {
@@ -1651,7 +1651,7 @@ plan:
 		)
 
 		BeforeEach(func() {
-			// Create a ClusterTemplate with hardware template for NAR provisioning tests
+			// Create a ClusterTemplate with hardware configuration for NAR provisioning tests
 			narProvisioningTemplate = &provisioningv1alpha1.ClusterTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-nar-provisioning-template.v1.0.0",
@@ -1735,19 +1735,19 @@ plan:
 			}
 		})
 
-		Context("when renderHardwareTemplate returns input error", func() {
+		Context("when renderNodeAllocationRequest returns input error", func() {
 			It("should call checkClusterDeployConfigState and return appropriate result", func() {
-				// This will trigger hardware template rendering error due to missing template
+				// This will trigger NodeAllocationRequest build error due to missing template
 				result, proceed, err := narProvisioningTask.handleNodeAllocationRequestProvisioning(ctx, renderedClusterInstance)
 
-				// Input error from hardware template rendering should trigger checkClusterDeployConfigState
+				// Input error from NodeAllocationRequest build should trigger checkClusterDeployConfigState
 				Expect(err).To(HaveOccurred())
 				Expect(proceed).To(BeFalse())
 				Expect(result).ToNot(BeNil()) // Should return a valid ctrl.Result
 			})
 		})
 
-		Context("when renderHardwareTemplate returns internal error", func() {
+		Context("when renderNodeAllocationRequest returns internal error", func() {
 			It("should return doNotRequeue with error", func() {
 				result, proceed, err := narProvisioningTask.handleNodeAllocationRequestProvisioning(ctx, renderedClusterInstance)
 
@@ -1776,13 +1776,13 @@ plan:
 			It("should handle missing nodeAllocationRequest identifier appropriately", func() {
 				result, proceed, err := narProvisioningTask.handleNodeAllocationRequestProvisioning(ctx, renderedClusterInstance)
 
-				// NAR creation fails due to missing hardware template data
+				// NAR creation fails due to missing hardware configuration data
 				Expect(err).To(HaveOccurred())
 				Expect(proceed).To(BeFalse())
 				Expect(result).ToNot(BeNil()) // Should return a valid ctrl.Result
 
 				// The specific error depends on where the failure occurs in the processing chain
-				// Could be hardware template error, missing identifier, or other validation errors
+				// Could be NodeAllocationRequest build error, missing identifier, or other validation errors
 			})
 		})
 
@@ -1940,7 +1940,7 @@ plan:
 		})
 
 		Context("integration with hardware provisioning workflow", func() {
-			It("should properly integrate with hardware template rendering and NAR creation", func() {
+			It("should properly integrate with NodeAllocationRequest build and NAR creation", func() {
 				// Test that the method correctly integrates with hardware provisioning components
 				result, proceed, err := narProvisioningTask.handleNodeAllocationRequestProvisioning(ctx, renderedClusterInstance)
 
@@ -2308,7 +2308,7 @@ plan:
 			}
 			Expect(c.Create(ctx, ns)).To(Succeed())
 
-			// Create ClusterTemplate without hardware template (no hardware provisioning)
+			// Create ClusterTemplate without hardware configuration (no hardware provisioning)
 			noHwTemplate := &provisioningv1alpha1.ClusterTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-no-hw.v1.0.0",
@@ -2442,7 +2442,7 @@ nodes:
 			}
 			Expect(c.Create(ctx, cr)).To(Succeed())
 
-			// Create provisioning request reconciler task with no hardware template (simulates no hardware provisioning)
+			// Create provisioning request reconciler task with no hardware configuration (simulates no hardware provisioning)
 			task = &provisioningRequestReconcilerTask{
 				logger: reconciler.Logger,
 				client: c,
@@ -4567,7 +4567,7 @@ plan:
 
 		Context("when hardware provisioning is not skipped", func() {
 			BeforeEach(func() {
-				// Set up hardware template to ensure hardware provisioning is not skipped
+				// Set up hardware configuration to ensure hardware provisioning is not skipped
 				deployConfigCR.Status.Extensions = provisioningv1alpha1.Extensions{}
 				Expect(c.Status().Update(ctx, deployConfigCR)).To(Succeed())
 			})
@@ -4647,7 +4647,7 @@ plan:
 
 		Context("when hardware provisioning is skipped", func() {
 			BeforeEach(func() {
-				// Ensure hardware template is empty to skip hardware provisioning
+				// Ensure hardware configuration is empty to skip hardware provisioning
 				deployConfigTemplate.Spec.TemplateDefaults.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{}
 				deployConfigTask.ctDetails.templates.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{}
 				Expect(c.Update(ctx, deployConfigTemplate)).To(Succeed())
@@ -5153,7 +5153,6 @@ plan:
 			})
 		})
 	})
-
 
 	Describe("checkOverallProvisioningTimeout", func() {
 		var (

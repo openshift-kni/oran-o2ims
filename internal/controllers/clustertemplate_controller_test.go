@@ -15,7 +15,7 @@ This file contains comprehensive test cases for the ClusterTemplate controller a
 The tests are organized into the following test suites:
 
 1. ClusterTemplateReconciler Tests:
-   - Validates that a valid ClusterTemplate with all required ConfigMaps and HardwareTemplate does not requeue
+   - Validates that a valid ClusterTemplate with all required ConfigMaps and hardware management defaults does not requeue
    - Validates that an invalid ClusterTemplate (missing ConfigMaps) requeues with appropriate error conditions
 
 2. enqueueClusterTemplatesForConfigmap Tests:
@@ -28,10 +28,10 @@ The tests are organized into the following test suites:
    - Tests validation of nested property structures and type constraints
 
 4. validateClusterTemplateCR Tests:
-   - Tests complete ClusterTemplate validation including ConfigMaps and HardwareTemplate
+   - Tests complete ClusterTemplate validation including ConfigMaps and hardware management defaults
    - Tests status condition setting for both valid and invalid templates
    - Tests validation of timeout configurations in ConfigMaps
-   - Tests hardware template timeout validation
+   - Tests hardware management timeout validation
 
 5. validateConfigmapReference Tests:
    - Tests ConfigMap existence and structure validation
@@ -58,13 +58,13 @@ The tests are organized into the following test suites:
    - Tests error message formatting for various validation failures
 
 9. validateClusterInstanceParamsSchema Tests:
-   - Tests schema validation behavior when hardware template is provided vs not provided
-   - Tests that hardware template presence skips schema validation entirely
-   - Tests schema validation for cases without hardware template
+   - Tests schema validation behavior when hardware management is provided vs not provided
+   - Tests that hardware management presence skips schema validation entirely
+   - Tests schema validation for cases without hardware management
    - Tests edge cases including whitespace handling and large/nested schemas
 
 10. validateSchemaWithoutHwMgmt Tests:
-    - Tests detailed schema structure validation for cluster instances without hardware templates
+    - Tests detailed schema structure validation for cluster instances without hardware managements
     - Tests required node properties and BMC credential validation
     - Tests network interface configuration validation
     - Tests schema structure integrity and required field presence

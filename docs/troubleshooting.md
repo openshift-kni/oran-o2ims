@@ -30,7 +30,7 @@ the failed phase. Common failure conditions:
 | Condition | Phase | Common Causes |
 |---|---|---|
 | `ProvisioningRequestValidated` | Validation | Invalid template parameters, missing ConfigMaps |
-| `HardwareTemplateRendered` | Hardware template | Missing HardwareTemplate or HardwareProfile CR |
+| `NodeAllocationRequestRendered` | NodeAllocationRequest rendering | Invalid hwMgmtDefaults or HardwareProfile CR |
 | `HardwareProvisioned` | BMH allocation | No available BMHs matching resource selector |
 | `HardwareConfigured` | Firmware/BIOS | Firmware URL unreachable, BMC errors |
 | `ClusterProvisioned` | Cluster install | Installation timeout, network issues |
@@ -82,10 +82,10 @@ If `HardwareProvisioned` shows `Failed` with a message about no available resour
    oc get baremetalhosts -A --show-labels
    ```
 
-2. Verify the resource selector in the HardwareTemplate matches the BMH labels:
+2. Verify the resource selector in the ClusterTemplate hwMgmtDefaults matches the BMH labels:
 
    ```console
-   oc get hardwaretemplates.clcm.openshift.io <name> -n <namespace> -o yaml
+   oc get clustertemplates.clcm.openshift.io <name> -n <namespace> -o jsonpath='{.spec.templateDefaults.hwMgmtDefaults}'
    ```
 
 3. Check that BMHs are not already allocated:

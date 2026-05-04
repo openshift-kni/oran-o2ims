@@ -54,7 +54,7 @@ The status of the provisioning process is tracked via the following `status.cond
 - ProvisioningRequestValidated: The ProvisioningRequest has been validated.
 - ClusterInstanceRendered: The ClusterInstance has been successfully rendered and validated.
 - ClusterResourcesCreated: The necessary cluster resources have been created.
-- HardwareTemplateRendered: The hardware template has been successfully rendered.
+- NodeAllocationRequestRendered: The NodeAllocationRequest has been successfully rendered.
 - HardwareProvisioned: Hardware provisioning is complete.
 - HardwareConfigured: Firmware and BIOS configuration has been applied. See [Firmware Update Workflow](./firmware-update-workflow.md) for details.
 - HardwareNodeConfigApplied: Hardware node configuration is applied to the rendered ClusterInstance.
@@ -82,7 +82,7 @@ The O-Cloud Manager orchestrates the cluster provisioning process, which is init
 **The general success workflow**:
 
 - `status.conditions`:
-ProvisioningRequestValidated -> ClusterInstanceRendered -> ClusterResourcesCreated -> HardwareTemplateRendered -> HardwareProvisioned -> HardwareNodeConfigApplied -> ClusterProvisioned -> ConfigurationApplied
+ProvisioningRequestValidated -> ClusterInstanceRendered -> ClusterResourcesCreated -> NodeAllocationRequestRendered -> HardwareProvisioned -> HardwareNodeConfigApplied -> ClusterProvisioned -> ConfigurationApplied
 - `status.provisioningStatus`:
 Pending (Validating and preparing resources)
 -> Progressing (Hardware provisioning is in progress)
@@ -124,10 +124,10 @@ Pending (Validating and preparing resources)
         status: "True"
         type: ClusterResourcesCreated
       - lastTransitionTime: "2025-10-01T22:14:26Z"
-        message: Rendered Hardware template successfully
+        message: Rendered NodeAllocationRequest successfully
         reason: Completed
         status: "True"
-        type: HardwareTemplateRendered
+        type: NodeAllocationRequestRendered
       provisioningStatus:
         provisioningDetails: Validating and preparing resources
         provisioningPhase: pending
