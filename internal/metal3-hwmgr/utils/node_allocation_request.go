@@ -107,7 +107,7 @@ func UpdateNodeAllocationRequestSelectedGroups(
 	return nil
 }
 
-func UpdateNodeAllocationRequestPluginStatus(
+func UpdateNodeAllocationRequestObservedGeneration(
 	ctx context.Context,
 	c client.Client,
 	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) error {

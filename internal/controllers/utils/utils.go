@@ -545,7 +545,7 @@ func GetServerArgs(inventory *inventoryv1alpha1.Inventory, serverName string) (r
 		return
 	}
 
-	// Metal3 Hardware Plugin Server
+	// Metal3 Hardware Manager Server
 	if serverName == Metal3HwMgrServerName {
 		result = slices.Clone(Metal3HwMgrServerArgs)
 		return

@@ -135,7 +135,7 @@ Pending (Validating and preparing resources)
     ```
 
 5. Create the NodeAllocationRequest to start hardware provisioning. The `provisioningStatus.provisioningPhase`transitions to progressing.
-The O‑Cloud Metal3 hardware plugin consumes the CR, selects matching BareMetalHosts using the label selectors from the hwMgmtDefaults and merged hwMgmtParameters, and allocates them to the request. For each selected host, the plugin:
+The O‑Cloud Metal3 hardware manager consumes the CR, selects matching BareMetalHosts using the label selectors from the hwMgmtDefaults and merged hwMgmtParameters, and allocates them to the request. For each selected host, the hardware manager:
    - Creates an `AllocatedNode` CR.
    - Applies the hardware settings by creating/updating the relevant Metal3 CRs (HostFirmwareSettings/HostFirmwareComponents).
    - Reports progress through the statuses of both `NodeAllocationRequest` and `AllocatedNode` resources.

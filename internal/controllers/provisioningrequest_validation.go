@@ -320,7 +320,7 @@ func validateMergedNodeGroups(mergedData map[string]any) error {
 		seenRoles[role] = name
 
 		// hwProfile, resourcePoolId, and resourceSelector are all optional.
-		// The hardware plugin handles node selection based on whatever criteria are provided.
+		// The hardware manager handles node selection based on whatever criteria are provided.
 		// Type validation for resourceSelector is handled by schema validation in validateAndMergeHwMgmtInput.
 	}
 

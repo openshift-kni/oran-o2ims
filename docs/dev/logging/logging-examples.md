@@ -14,7 +14,7 @@ This document provides comprehensive examples of the O-Cloud Manager structured 
 
 1. [Basic Controller Pattern](#basic-controller-pattern)
 2. [Complex Multi-Phase Controller](#complex-multi-phase-controller)
-3. [Hardware Plugin Controller](#hardware-plugin-controller)
+3. [Hardware Manager Controller](#hardware-manager-controller)
 4. [Error Handling Examples](#error-handling-examples)
 5. [Performance Monitoring](#performance-monitoring)
 6. [Context Enrichment](#context-enrichment)
@@ -218,7 +218,7 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (re
 {"time":"2025-08-14T15:26:34Z","level":"INFO","msg":"Reconciliation completed","resource":"Cluster","name":"prod-cluster","namespace":"clusters","duration":"3m58s","requeue":false,"requeueAfter":"0s"}
 ```
 
-## Hardware Plugin Controller
+## Hardware Manager Controller
 
 ### NodeAllocationRequest Controller
 
@@ -334,13 +334,13 @@ func (r *NodeAllocationRequestReconciler) Reconcile(ctx context.Context, req ctr
 ```json
 {"time":"2025-08-14T15:23:36Z","level":"INFO","msg":"Starting reconciliation","resource":"NodeAllocationRequest","name":"cluster-nodes","namespace":"hwmgr","action":"reconcile_start"}
 {"time":"2025-08-14T15:23:36Z","level":"INFO","msg":"Fetched NodeAllocationRequest successfully","resource":"NodeAllocationRequest","name":"cluster-nodes","namespace":"hwmgr","resourceVersion":"67890","generation":1,"clusterID":"prod-cluster-001","hardwareProfile":"baremetal-large","requestedNodes":3}
-{"time":"2025-08-14T15:23:36Z","level":"INFO","msg":"Checking hardware plugin availability","resource":"NodeAllocationRequest","name":"cluster-nodes","namespace":"hwmgr","clusterID":"prod-cluster-001","hardwareProfile":"baremetal-large","requestedNodes":3,"operation":"plugin_check"}
-{"time":"2025-08-14T15:23:37Z","level":"INFO","msg":"Hardware plugin available","resource":"NodeAllocationRequest","name":"cluster-nodes","namespace":"hwmgr","clusterID":"prod-cluster-001","hardwareProfile":"baremetal-large","requestedNodes":3,"pluginVersion":"v1.2.3"}
-{"time":"2025-08-14T15:23:37Z","level":"INFO","msg":"Phase started","resource":"NodeAllocationRequest","name":"cluster-nodes","namespace":"hwmgr","clusterID":"prod-cluster-001","hardwareProfile":"baremetal-large","requestedNodes":3,"pluginVersion":"v1.2.3","phase":"node_discovery"}
-{"time":"2025-08-14T15:23:42Z","level":"INFO","msg":"Node discovery completed","resource":"NodeAllocationRequest","name":"cluster-nodes","namespace":"hwmgr","clusterID":"prod-cluster-001","hardwareProfile":"baremetal-large","requestedNodes":3,"pluginVersion":"v1.2.3","phase":"node_discovery","availableNodes":5}
-{"time":"2025-08-14T15:23:42Z","level":"INFO","msg":"Phase completed","resource":"NodeAllocationRequest","name":"cluster-nodes","namespace":"hwmgr","clusterID":"prod-cluster-001","hardwareProfile":"baremetal-large","requestedNodes":3,"pluginVersion":"v1.2.3","phase":"node_discovery","duration":"5.1s"}
-{"time":"2025-08-14T15:23:45Z","level":"INFO","msg":"Node allocation completed","resource":"NodeAllocationRequest","name":"cluster-nodes","namespace":"hwmgr","clusterID":"prod-cluster-001","hardwareProfile":"baremetal-large","requestedNodes":3,"pluginVersion":"v1.2.3","phase":"node_allocation","allocatedNodes":3,"node0":"worker-001","node1":"worker-002","node2":"worker-003"}
-{"time":"2025-08-14T15:23:52Z","level":"INFO","msg":"NodeAllocationRequest processing completed successfully","resource":"NodeAllocationRequest","name":"cluster-nodes","namespace":"hwmgr","clusterID":"prod-cluster-001","hardwareProfile":"baremetal-large","requestedNodes":3,"pluginVersion":"v1.2.3","allocatedNodes":3}
+{"time":"2025-08-14T15:23:36Z","level":"INFO","msg":"Checking hardware manager availability","resource":"NodeAllocationRequest","name":"cluster-nodes","namespace":"hwmgr","clusterID":"prod-cluster-001","hardwareProfile":"baremetal-large","requestedNodes":3,"operation":"hwmgr_check"}
+{"time":"2025-08-14T15:23:37Z","level":"INFO","msg":"Hardware manager available","resource":"NodeAllocationRequest","name":"cluster-nodes","namespace":"hwmgr","clusterID":"prod-cluster-001","hardwareProfile":"baremetal-large","requestedNodes":3,"hwMgrVersion":"v1.2.3"}
+{"time":"2025-08-14T15:23:37Z","level":"INFO","msg":"Phase started","resource":"NodeAllocationRequest","name":"cluster-nodes","namespace":"hwmgr","clusterID":"prod-cluster-001","hardwareProfile":"baremetal-large","requestedNodes":3,"hwMgrVersion":"v1.2.3","phase":"node_discovery"}
+{"time":"2025-08-14T15:23:42Z","level":"INFO","msg":"Node discovery completed","resource":"NodeAllocationRequest","name":"cluster-nodes","namespace":"hwmgr","clusterID":"prod-cluster-001","hardwareProfile":"baremetal-large","requestedNodes":3,"hwMgrVersion":"v1.2.3","phase":"node_discovery","availableNodes":5}
+{"time":"2025-08-14T15:23:42Z","level":"INFO","msg":"Phase completed","resource":"NodeAllocationRequest","name":"cluster-nodes","namespace":"hwmgr","clusterID":"prod-cluster-001","hardwareProfile":"baremetal-large","requestedNodes":3,"hwMgrVersion":"v1.2.3","phase":"node_discovery","duration":"5.1s"}
+{"time":"2025-08-14T15:23:45Z","level":"INFO","msg":"Node allocation completed","resource":"NodeAllocationRequest","name":"cluster-nodes","namespace":"hwmgr","clusterID":"prod-cluster-001","hardwareProfile":"baremetal-large","requestedNodes":3,"hwMgrVersion":"v1.2.3","phase":"node_allocation","allocatedNodes":3,"node0":"worker-001","node1":"worker-002","node2":"worker-003"}
+{"time":"2025-08-14T15:23:52Z","level":"INFO","msg":"NodeAllocationRequest processing completed successfully","resource":"NodeAllocationRequest","name":"cluster-nodes","namespace":"hwmgr","clusterID":"prod-cluster-001","hardwareProfile":"baremetal-large","requestedNodes":3,"hwMgrVersion":"v1.2.3","allocatedNodes":3}
 ```
 
 ## Error Handling Examples

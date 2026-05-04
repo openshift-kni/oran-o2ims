@@ -252,7 +252,7 @@ func GetStatusMessage(condition hwmgmtv1alpha1.ConditionType) string {
 }
 
 // GetBMHNamespace returns the BMH namespace for the given node.
-// Check both node label and Spec.HwMgrNodeNs to ensure compatibility until plugin transitions to Spec.HwMgrNodeNs
+// Check both node label and Spec.HwMgrNodeNs to ensure compatibility
 func GetBMHNamespace(node *hwmgmtv1alpha1.AllocatedNode) string {
 
 	if ns, ok := node.ObjectMeta.Labels[bmhNamespaceLabel]; ok {

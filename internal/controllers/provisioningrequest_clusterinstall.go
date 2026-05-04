@@ -142,7 +142,7 @@ func (t *provisioningRequestReconcilerTask) buildClusterInstanceUnstructured() (
 	}
 
 	// Override the hardware properties with placeholders if they are empty, as they will come
-	// from the HW Manager plugin if they have not been set through the ProvisioningRequest.
+	// from the hardware manager if they have not been set through the ProvisioningRequest.
 	// If hardware provisioning is disabled, then the values should have been set, so they will not be changed here.
 	nodes := renderedClusterInstanceUnstructured.Object["spec"].(map[string]interface{})["nodes"].([]interface{})
 

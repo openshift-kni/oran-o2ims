@@ -26,38 +26,38 @@ func (t *reconcilerTask) setupMetal3HwMgr(ctx context.Context, defaultResult ctr
 	nextReconcile = defaultResult
 
 	if err = t.createServiceAccount(ctx, ctlrutils.Metal3HwMgrServerName); err != nil {
-		t.logger.ErrorContext(ctx, "Failed to deploy ServiceAccount for the Metal3 hardware plugin server.",
+		t.logger.ErrorContext(ctx, "Failed to deploy ServiceAccount for the Metal3 hardware manager server.",
 			slog.String("error", err.Error()))
 		return
 	}
 
 	if err = t.createMetal3HwMgrClusterRole(ctx); err != nil {
-		t.logger.ErrorContext(ctx, "Failed to create ClusterRole for the Metal3 hardware plugin server.",
+		t.logger.ErrorContext(ctx, "Failed to create ClusterRole for the Metal3 hardware manager server.",
 			slog.String("error", err.Error()))
 		return
 	}
 
 	if err = t.createServerClusterRoleBinding(ctx, ctlrutils.Metal3HwMgrServerName); err != nil {
-		t.logger.ErrorContext(ctx, "Failed to create server ClusterRoleBinding for the Metal3 hardware plugin server.",
+		t.logger.ErrorContext(ctx, "Failed to create server ClusterRoleBinding for the Metal3 hardware manager server.",
 			slog.String("error", err.Error()))
 		return
 	}
 
 	if err = t.createServerRbacClusterRoleBinding(ctx, ctlrutils.Metal3HwMgrServerName); err != nil {
-		t.logger.ErrorContext(ctx, "Failed to create RBAC ClusterRoleBinding for the Metal3 hardware plugin server.",
+		t.logger.ErrorContext(ctx, "Failed to create RBAC ClusterRoleBinding for the Metal3 hardware manager server.",
 			slog.String("error", err.Error()))
 		return
 	}
 
 	if err = t.createService(ctx, ctlrutils.Metal3HwMgrServerName, constants.DefaultServicePort, ctlrutils.DefaultServiceTargetPort); err != nil {
-		t.logger.ErrorContext(ctx, "Failed to deploy Service for the Metal3 hardware plugin server.",
+		t.logger.ErrorContext(ctx, "Failed to deploy Service for the Metal3 hardware manager server.",
 			slog.String("error", err.Error()))
 		return
 	}
 
 	errorReason, err := t.deployServer(ctx, ctlrutils.Metal3HwMgrServerName)
 	if err != nil {
-		t.logger.ErrorContext(ctx, "Failed to deploy the Metal3 hardware plugin server.",
+		t.logger.ErrorContext(ctx, "Failed to deploy the Metal3 hardware manager server.",
 			slog.String("error", err.Error()))
 		if errorReason == "" {
 			nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}

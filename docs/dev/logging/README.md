@@ -47,7 +47,7 @@ Comprehensive examples showing structured logging patterns in action.
 
 - Basic Controller Pattern Examples
 - Complex Multi-Phase Controllers  
-- Hardware Plugin Controller Examples
+- Hardware Manager Controller Examples
 - Error Handling & Performance Monitoring
 - Context Enrichment & Integration Patterns
 

@@ -96,15 +96,14 @@ func GetNodeForBMH(nodes map[string]hwmgmtv1alpha1.AllocatedNode, bmh *metal3v1a
 	return nil
 }
 
-// GenerateNodeName generates a deterministic AllocatedNode name based on the hardware plugin identifier,
-// clusterID, BareMetalHost namespace and name. The generated name complies with Kubernetes
-// Custom Resource naming specifications (RFC 1123 subdomain).
-func GenerateNodeName(pluginID, clusterID, bmhNamespace, bmhName string) string {
+// GenerateNodeName generates a deterministic AllocatedNode name based on the hardware manager
+// name prefix, clusterID, BareMetalHost namespace and name. The generated name complies with
+// Kubernetes Custom Resource naming specifications (RFC 1123 subdomain).
+func GenerateNodeName(hwMgrID, clusterID, bmhNamespace, bmhName string) string {
 
-	// Create deterministic name using hardware pluginID, clusterID, BMH namespace, BMH name
-	// Format: <plugin-id>-<cluster-id>-<bmh-namespace>-<bmh-name>
-	// This ensures uniqueness across different namespaces and BMHs
-	baseName := fmt.Sprintf("%s-%s-%s-%s", pluginID, clusterID, bmhNamespace, bmhName)
+	// Create deterministic name using hwMgrID, clusterID, BMH namespace, BMH name
+	// Format: <hwmgr-id>-<cluster-id>-<bmh-namespace>-<bmh-name>
+	baseName := fmt.Sprintf("%s-%s-%s-%s", hwMgrID, clusterID, bmhNamespace, bmhName)
 
 	// Sanitize the name to ensure Kubernetes compliance
 	sanitizedName := sanitizeKubernetesName(baseName)
@@ -113,8 +112,8 @@ func GenerateNodeName(pluginID, clusterID, bmhNamespace, bmhName string) string 
 	if sanitizedName == "" || len(sanitizedName) > 253 {
 		// If too long, use a hash-based approach for deterministic truncation
 		clusterUUID := uuid.NewSHA1(uuid.Nil, []byte(clusterID))
-		hash := ctlrutils.MakeUUIDFromNames(bmhNamespace, clusterUUID, bmhName, pluginID)
-		sanitizedName = fmt.Sprintf("%s-%s", pluginID, hash.String()[:10])
+		hash := ctlrutils.MakeUUIDFromNames(bmhNamespace, clusterUUID, bmhName, hwMgrID)
+		sanitizedName = fmt.Sprintf("%s-%s", hwMgrID, hash.String()[:10])
 	}
 
 	return sanitizedName

@@ -97,9 +97,8 @@ Key locations within the output:
 
 | Path | Contents |
 |---|---|
-| `clcm/` | O-Cloud Manager CRs (ClusterTemplates, ProvisioningRequests, etc.) |
+| `clcm/` | O-Cloud Manager CRs (ClusterTemplates, ProvisioningRequests, NodeAllocationRequests, AllocatedNodes, etc.) |
 | `ocloud/` | Inventory CRs |
-| `plugins/` | NodeAllocationRequests, AllocatedNodes |
 | `metal3/` | BareMetalHosts, HostFirmwareSettings, HostFirmwareComponents, HardwareData |
 | `metal3/preprovisioning-secrets/` | Secrets referenced by BMH preprovisioningNetworkDataName |
 | `logs/ocloud-manager/` | Pod logs from O-Cloud Manager namespace |

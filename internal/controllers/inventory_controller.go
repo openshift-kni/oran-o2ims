@@ -906,8 +906,8 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 	}
 	ctlrutils.LogPhaseComplete(ctx, t.logger, "o2ims_servers_setup", time.Since(phaseStartTime))
 
-	// Phase 5: Hardware Plugin setup
-	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "hardware_plugin_setup")
+	// Phase 5: Hardware manager setup
+	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "hardware_manager_setup")
 	phaseStartTime = time.Now()
 
 	// Setup Metal3 hardware manager
@@ -917,7 +917,7 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		ctlrutils.LogError(ctx, t.logger, "Failed to setup Metal3 hardware manager", err)
 		return
 	}
-	ctlrutils.LogPhaseComplete(ctx, t.logger, "hardware_plugin_setup", time.Since(phaseStartTime))
+	ctlrutils.LogPhaseComplete(ctx, t.logger, "hardware_manager_setup", time.Since(phaseStartTime))
 
 	// Phase 6: Readiness validation
 	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "readiness_validation")

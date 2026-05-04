@@ -40,7 +40,7 @@ func (t *provisioningRequestReconcilerTask) getNAR(ctx context.Context) (*hwmgmt
 }
 
 // setNARClusterProvisioned sets the ClusterProvisioned field on the NodeAllocationRequest
-// to signal to the hardware plugin that the cluster is fully provisioned and operational.
+// to signal to the hardware manager that the cluster is fully provisioned and operational.
 func (t *provisioningRequestReconcilerTask) setNARClusterProvisioned(ctx context.Context) error {
 	nar, err := t.getNAR(ctx)
 	if err != nil {
@@ -112,7 +112,7 @@ func (t *provisioningRequestReconcilerTask) createOrUpdateNodeAllocationRequest(
 	}
 
 	// NAR exists — compare spec and update if changed.
-	// Carry over fields managed by the plugin to avoid false-positive change detection.
+	// Carry over fields managed by the hardware manager to avoid false-positive change detection.
 	nodeAllocationRequest.Spec.ClusterProvisioned = existingNAR.Spec.ClusterProvisioned
 	if !equality.Semantic.DeepEqual(existingNAR.Spec, nodeAllocationRequest.Spec) {
 		patch := client.MergeFrom(existingNAR.DeepCopy())
@@ -240,8 +240,8 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestStatus(
 	// Guard against consuming stale Configured status during day-2 retries.
 	// After a PR spec change, the NAR may still carry a Configured condition
 	// from the previous attempt (Failed, TimedOut, or True from a prior success)
-	// until the plugin processes the new ConfigTransactionId. Skip the update
-	// and requeue until the plugin has observed the new transaction.
+	// until the hardware manager processes the new ConfigTransactionId. Skip the update
+	// and requeue until the hardware manager has observed the new transaction.
 	// This only applies to Configured — the Provisioned condition transitions
 	// once during initial provisioning and is not affected by spec changes.
 	if condition == hwmgmtv1alpha1.Configured &&
@@ -249,7 +249,7 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestStatus(
 		nodeAllocationRequestResponse.Status.ObservedConfigTransactionId != nodeAllocationRequestResponse.Spec.ConfigTransactionId {
 		for _, c := range nodeAllocationRequestResponse.Status.Conditions {
 			if c.Type == string(condition) {
-				t.logger.InfoContext(ctx, "Skipping stale NAR status — plugin has not observed new transaction",
+				t.logger.InfoContext(ctx, "Skipping stale NAR status — hardware manager has not observed new transaction",
 					slog.String("condition", string(condition)),
 					slog.String("reason", c.Reason),
 					slog.Int64("specTransaction", nodeAllocationRequestResponse.Spec.ConfigTransactionId),
@@ -551,7 +551,7 @@ func (t *provisioningRequestReconcilerTask) processExistingHardwareCondition(
 		ctlrutils.SetProvisioningStateFailed(t.object, message)
 	}
 
-	// Ensure a consistent message for the provisioning request, regardless of which plugin is used.
+	// Ensure a consistent message for the provisioning request, regardless of which hardware manager is used.
 	// The message is augmented with additional NAR context for in-progress, failure, and success states.
 	// - Success: update provisioningStatus to indicate hardware provisioning/configuration is complete
 	// - Timeout/Failure: enrich the base failure message with detailed NAR error context
@@ -628,7 +628,7 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 		!isConfigTransactionObserved(nodeAllocationRequest.Status.ObservedConfigTransactionId, t.object.Generation)
 
 	if hwCondition == nil {
-		// Condition does not exist in plugin response
+		// Condition does not exist in NAR status
 		if waitingForConfigStart {
 			// We're waiting for a new configuration to start - return ConditionDoesNotExistsErr
 			// to indicate that configuration hasn't started yet for this transaction
@@ -646,8 +646,8 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 		}
 		ctlrutils.SetProvisioningStateInProgress(t.object, message)
 	} else {
-		// A hardware condition was found in plugin response - always process it
-		// (even if we're waiting for config start, the plugin has provided valid state)
+		// A hardware condition was found in NAR status - always process it
+		// (even if we're waiting for config start, the hardware manager has provided valid state)
 		status, reason, message, timedOutOrFailed = t.processExistingHardwareCondition(hwCondition, condition)
 	}
 

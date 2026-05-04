@@ -162,7 +162,7 @@ curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
 ## Resources
 
 Resources represent individual physical servers (BareMetalHosts) within a
-resource pool. Resource data is collected by polling the hardware plugin on
+resource pool. Resource data is collected by polling the hardware manager on
 a configurable interval (default: 1 minute).
 
 Resources are accessed as sub-resources of a resource pool.

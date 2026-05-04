@@ -33,9 +33,9 @@ const (
 	NotInitialized ConditionReason = "NotInitialized" // TODO: Remove this condition reason as it is not used.
 	// TimedOut indicates that the hardware provisioning or configuration update has timed out.
 	TimedOut ConditionReason = "TimedOut"
-	// ConfigUpdatePending indicates that a new hardware profile is requested for the AllocatedNode and the node is waiting to be processed by the hardware plugin.
+	// ConfigUpdatePending indicates that a new hardware profile is requested for the AllocatedNode and the node is waiting to be processed by the hardware manager.
 	ConfigUpdatePending ConditionReason = "ConfigurationUpdatePending"
-	// ConfigUpdate indicates that the hardware configuration changes has been requested by the hardware plugin for the AllocatedNode.
+	// ConfigUpdate indicates that the hardware configuration changes have been requested by the hardware manager for the AllocatedNode.
 	ConfigUpdate ConditionReason = "ConfigurationUpdateRequested"
 	// ConfigApplied indicates that the hardware configuration update has been applied successfully.
 	ConfigApplied ConditionReason = "ConfigurationApplied"
@@ -48,7 +48,7 @@ type ConditionMessage string
 
 // NAR condition messages
 const (
-	AwaitConfig      ConditionMessage = "Spec updated; awaiting configuration application by the hardware plugin"
+	AwaitConfig      ConditionMessage = "Spec updated; awaiting configuration application by the hardware manager"
 	ConfigSuccess    ConditionMessage = "Configuration has been applied successfully"
 	ConfigInProgress ConditionMessage = "Configuration update in progress"
 	ConfigFailed     ConditionMessage = "Configuration update failed"

@@ -56,8 +56,8 @@ func AddObjectContext(ctx context.Context, obj client.Object) context.Context {
 			if clusterID, exists := labels["cluster-id"]; exists {
 				ctx = logging.AppendCtx(ctx, slog.String("clusterID", clusterID))
 			}
-			if hwPlugin, exists := labels["hardware-plugin"]; exists {
-				ctx = logging.AppendCtx(ctx, slog.String("hardwarePlugin", hwPlugin))
+			if hwMgr, exists := labels["hardware-plugin"]; exists {
+				ctx = logging.AppendCtx(ctx, slog.String("hardwareManager", hwMgr))
 			}
 		}
 	}

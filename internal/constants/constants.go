@@ -75,7 +75,7 @@ const (
 	ResourceServerCmd     = "resource-server"
 )
 
-// Hardware plugin command names
+// Hardware manager command names
 const (
 	Metal3HwMgrCmd = "metal3-hwmgr"
 )

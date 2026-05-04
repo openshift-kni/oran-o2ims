@@ -50,7 +50,7 @@ To troubleshoot:
 
    Look for `HardwareConfigured` condition with `reason: TimedOut`
 
-2. **Check Metal3 plugin logs**:
+2. **Check Metal3 hardware manager logs**:
 
    ```console
    oc logs -n oran-o2ims -l app=metal3-hwmgr-server -f
@@ -595,7 +595,7 @@ The following steps are required:
           provisioningPhase: progressing
     ```
 
-4. The O-Cloud Metal3 hardware plugin detects the updated `NodeAllocationRequest` CR:
+4. The O-Cloud Metal3 hardware manager detects the updated `NodeAllocationRequest` CR:
     * It lists the `AllocatedNode` CRs that reference the `NodeAllocationRequest` and updates `spec.hwProfile` in each `AllocatedNode` CR to the new profile.
     * It computes BIOS/firmware changes from the new `HardwareProfile` and requests the updates by updating the Metal3 resources—`HostFirmwareSettings` and `HostFirmwareComponents`—with the changes.
     * The `NodeAllocationRequest` and `AllocatedNode` CRs status conditions are also updated to reflect the configuration change.
@@ -633,12 +633,12 @@ The following steps are required:
       type: Configured
     ```
 
-5. The Metal3 hardware plugin waits for the Metal3 Bare Metal Operator (BMO) to detect and validate the changes on
+5. The Metal3 hardware manager waits for the Metal3 Bare Metal Operator (BMO) to detect and validate the changes on
    the `HostFirmwareSettings` and `HostFirmwareComponents` CRs, then triggers a host reboot via the
    `reboot.metal3.io` annotation on the BMH. BMO applies the firmware and BIOS updates during the reboot cycle.
    For multi-node clusters, master nodes are updated serially first, then worker nodes can be updated in parallel
    based on the MCP `maxUnavailable` setting. See [Day-2 Workflow](./firmware-update-workflow.md#day-2-workflow) for details.
-6. The hardware plugin validates the result by checking `HostFirmwareSettings`/`HostFirmwareComponents` status and confirming the Kubernetes node has rejoined the cluster and reached Ready state.
+6. The hardware manager validates the result by checking `HostFirmwareSettings`/`HostFirmwareComponents` status and confirming the Kubernetes node has rejoined the cluster and reached Ready state.
     * Success scenario:
         * It updates the status of the `AllocatedNode` CR to reflect the result of the operation.
 

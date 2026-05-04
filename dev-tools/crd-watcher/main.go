@@ -321,9 +321,6 @@ func createScheme() (*runtime.Scheme, error) {
 	if err := provisioningv1alpha1.AddToScheme(scheme); err != nil {
 		return nil, fmt.Errorf("failed to add provisioning scheme: %w", err)
 	}
-	if err := hwmgmtv1alpha1.AddToScheme(scheme); err != nil {
-		return nil, fmt.Errorf("failed to add plugins scheme: %w", err)
-	}
 	if err := metal3v1alpha1.AddToScheme(scheme); err != nil {
 		return nil, fmt.Errorf("failed to add metal3 scheme: %w", err)
 	}

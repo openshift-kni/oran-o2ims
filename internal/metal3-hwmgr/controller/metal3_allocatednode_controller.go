@@ -27,7 +27,7 @@ import (
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/utils"
 )
 
-// AllocatedNodeReconciler reconciles NodeAllocationRequest objects associated with the Metal3 H/W plugin
+// AllocatedNodeReconciler reconciles AllocatedNode objects for the Metal3 hardware manager
 type AllocatedNodeReconciler struct {
 	ctrl.Manager
 	client.Client

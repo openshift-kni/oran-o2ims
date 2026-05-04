@@ -28,7 +28,7 @@ import (
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 )
 
-// NodeAllocationRequestReconciler reconciles NodeAllocationRequest objects associated with the Metal3 H/W plugin
+// NodeAllocationRequestReconciler reconciles NodeAllocationRequest objects for the Metal3 hardware manager
 type NodeAllocationRequestReconciler struct {
 	ctrl.Manager
 	client.Client
@@ -221,7 +221,7 @@ func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 
 		// Update ObservedGeneration to mark this generation as processed
 		// This prevents FSM from treating this as a spec change on next reconciliation
-		if updateErr := hwmgrutils.UpdateNodeAllocationRequestPluginStatus(ctx, r.Client, nodeAllocationRequest); updateErr != nil {
+		if updateErr := hwmgrutils.UpdateNodeAllocationRequestObservedGeneration(ctx, r.Client, nodeAllocationRequest); updateErr != nil {
 			r.Logger.ErrorContext(ctx, "Failed to update ObservedGeneration after timeout",
 				slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
 				slog.String("error", updateErr.Error()))
@@ -299,9 +299,9 @@ func (r *NodeAllocationRequestReconciler) handleNewNodeAllocationRequestCreate(
 		return hwmgrutils.RequeueWithMediumInterval(),
 			fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
 	}
-	// Update the NodeAllocationRequest hwMgrPlugin status
-	if err := hwmgrutils.UpdateNodeAllocationRequestPluginStatus(ctx, r.Client, nodeAllocationRequest); err != nil {
-		return hwmgrutils.RequeueWithShortInterval(), fmt.Errorf("failed to update hwMgrPlugin observedGeneration Status: %w", err)
+	// Update the NodeAllocationRequest ObservedGeneration status
+	if err := hwmgrutils.UpdateNodeAllocationRequestObservedGeneration(ctx, r.Client, nodeAllocationRequest); err != nil {
+		return hwmgrutils.RequeueWithShortInterval(), fmt.Errorf("failed to update ObservedGeneration status: %w", err)
 	}
 
 	return hwmgrutils.DoNotRequeue(), nil
@@ -343,7 +343,7 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 	// skipCleanup or clusterProvisioned was updated), acknowledge the spec change and skip.
 	if !hwProfileChanged && !configInProgress {
 		r.Logger.InfoContext(ctx, "No HW profile changes detected, acknowledging spec change")
-		if err := hwmgrutils.UpdateNodeAllocationRequestPluginStatus(ctx, r.Client, nodeAllocationRequest); err != nil {
+		if err := hwmgrutils.UpdateNodeAllocationRequestObservedGeneration(ctx, r.Client, nodeAllocationRequest); err != nil {
 			return hwmgrutils.RequeueWithShortInterval(),
 				fmt.Errorf("failed to update observedGeneration: %w", err)
 		}
@@ -383,13 +383,13 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 
 			// Update observedGeneration to acknowledge the spec change was processed
 			// This prevents the FSM from re-triggering spec change handling
-			if updateErr := hwmgrutils.UpdateNodeAllocationRequestPluginStatus(ctx, r.Client, nodeAllocationRequest); updateErr != nil {
-				r.Logger.ErrorContext(ctx, "Failed to update hwMgrPlugin observedGeneration Status",
+			if updateErr := hwmgrutils.UpdateNodeAllocationRequestObservedGeneration(ctx, r.Client, nodeAllocationRequest); updateErr != nil {
+				r.Logger.ErrorContext(ctx, "Failed to update ObservedGeneration status",
 					slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
 					slog.String("error", updateErr.Error()))
 				// Return error to trigger requeue
 				return hwmgrutils.RequeueWithShortInterval(),
-					fmt.Errorf("failed to update hwMgrPlugin observedGeneration Status: %w", updateErr)
+					fmt.Errorf("failed to update ObservedGeneration status: %w", updateErr)
 			}
 
 			return result, err
@@ -419,13 +419,13 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 		if status == metav1.ConditionTrue ||
 			reason == string(hwmgmtv1alpha1.Failed) ||
 			reason == string(hwmgmtv1alpha1.TimedOut) {
-			if updateErr := hwmgrutils.UpdateNodeAllocationRequestPluginStatus(ctx, r.Client, nodeAllocationRequest); updateErr != nil {
-				r.Logger.ErrorContext(ctx, "Failed to update hwMgrPlugin observedGeneration Status",
+			if updateErr := hwmgrutils.UpdateNodeAllocationRequestObservedGeneration(ctx, r.Client, nodeAllocationRequest); updateErr != nil {
+				r.Logger.ErrorContext(ctx, "Failed to update ObservedGeneration status",
 					slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
 					slog.String("error", updateErr.Error()))
 				// Return error to trigger requeue
 				return hwmgrutils.RequeueWithShortInterval(),
-					fmt.Errorf("failed to update hwMgrPlugin observedGeneration Status: %w", updateErr)
+					fmt.Errorf("failed to update ObservedGeneration status: %w", updateErr)
 			}
 		}
 	}

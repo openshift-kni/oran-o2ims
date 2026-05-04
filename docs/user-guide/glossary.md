@@ -47,8 +47,8 @@ SPDX-License-Identifier: Apache-2.0
 | ClusterTemplate (ct) | A CR that references the templates, defaults, and schemas needed to provision a cluster. |
 | ProvisioningRequest (pr) | A CR that triggers cluster provisioning by referencing a ClusterTemplate and providing site-specific parameters. |
 | HardwareProfile (hwprofile) | A CR that defines desired firmware versions and BIOS settings for a class of servers. |
-| NodeAllocationRequest (nar) | A CR created by the O-Cloud Manager to request BMH allocation from the hardware plugin. |
-| AllocatedNode (allocatednode) | A CR created by the hardware plugin representing a BMH that has been allocated to a provisioning request. |
+| NodeAllocationRequest (nar) | A CR created by the O-Cloud Manager to request BMH allocation from the hardware manager. |
+| AllocatedNode (allocatednode) | A CR created by the hardware manager representing a BMH that has been allocated to a provisioning request. |
 
 ## Provisioning and Lifecycle Terms
 

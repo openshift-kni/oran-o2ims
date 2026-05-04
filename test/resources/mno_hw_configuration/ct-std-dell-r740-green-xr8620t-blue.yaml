@@ -9,7 +9,6 @@ spec:
   release: 4.20.15
   templateDefaults:
     hwMgmtDefaults:
-      hardwarePluginRef: hwmgr
       hardwareProvisioningTimeout: "90m"
       nodeGroupData:
         - name: master

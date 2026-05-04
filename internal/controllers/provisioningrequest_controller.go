@@ -70,7 +70,7 @@ type timeouts struct {
 	clusterConfiguration time.Duration
 }
 
-// Hardware plugin client retry configuration constants
+// Hardware manager client retry configuration constants
 const (
 	timedOutMessage = "timed out"
 )
@@ -461,7 +461,7 @@ func (t *provisioningRequestReconcilerTask) shouldStopReconciliation() bool {
 }
 
 // checkHardwareProvisioningTimeout checks for hardware provisioning timeout.
-// Timeout detection is handled by the Metal3 plugin, so this function only checks terminal states.
+// Timeout detection is handled by the Metal3 hardware manager, so this function only checks terminal states.
 //
 //nolint:unparam // Kept for API compatibility, always returns empty Result
 func (t *provisioningRequestReconcilerTask) checkHardwareProvisioningTimeout() ctrl.Result {
@@ -1314,10 +1314,10 @@ func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx c
 			return err
 		}
 
-		// Signal to the hardware plugin that the cluster is fully provisioned.
-		// This allows the plugin to perform post-provisioning steps such as
+		// Signal to the hardware manager that the cluster is fully provisioned.
+		// This allows it to perform post-provisioning steps such as
 		// enabling BMO management of IBI-provisioned nodes.
-		// Done after persisting FULFILLED state so a transient plugin failure
+		// Done after persisting FULFILLED state so a transient failure
 		// does not block fulfillment. Returns error to trigger retry via requeue.
 		if !t.isHardwareProvisionSkipped() {
 			if err := t.setNARClusterProvisioned(ctx); err != nil {
@@ -1348,13 +1348,13 @@ func (t *provisioningRequestReconcilerTask) getNodeAllocationRequestResponse(ctx
 }
 
 func (t *provisioningRequestReconcilerTask) resetHardwareTimers() {
-	// Hardware timers are no longer tracked in O-Cloud Manager - timeout handling moved to Metal3 plugin
+	// Hardware timers are no longer tracked in O-Cloud Manager - timeout handling moved to Metal3 hardware manager
 	// This function is kept for compatibility but no longer resets any timers
 }
 
 //nolint:unparam // Kept for API compatibility, always returns nil
 func (t *provisioningRequestReconcilerTask) resetHardwareTimersAndPersist() error {
-	// Hardware timers are no longer tracked in O-Cloud Manager - timeout handling moved to Metal3 plugin
+	// Hardware timers are no longer tracked in O-Cloud Manager - timeout handling moved to Metal3 hardware manager
 	// This function is kept for compatibility but no longer performs any operations
 	t.resetHardwareTimers()
 	return nil
