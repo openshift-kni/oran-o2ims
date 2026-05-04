@@ -204,15 +204,13 @@ spec:
                   This timestamp is used for timeout calculations. The active operation is determined from the conditions.
                 format: date-time
                 type: string
-              hwMgrPlugin:
-                description: GenerationStatus represents the observed generation for
-                  an operator.
-                properties:
-                  observedGeneration:
-                    format: int64
-                    type: integer
-                type: object
               observedConfigTransactionId:
+                format: int64
+                type: integer
+              observedGeneration:
+                description: |-
+                  ObservedGeneration is the most recent generation observed by the controller.
+                  Used to detect spec changes that require re-processing.
                 format: int64
                 type: integer
               properties:

@@ -118,7 +118,7 @@ func UpdateNodeAllocationRequestPluginStatus(
 		if err := c.Get(ctx, client.ObjectKeyFromObject(nodeAllocationRequest), newNodeAllocationRequest); err != nil {
 			return err
 		}
-		newNodeAllocationRequest.Status.HwMgrPlugin.ObservedGeneration = newNodeAllocationRequest.ObjectMeta.Generation
+		newNodeAllocationRequest.Status.ObservedGeneration = newNodeAllocationRequest.ObjectMeta.Generation
 		if err := c.Status().Update(ctx, newNodeAllocationRequest); err != nil {
 			return err
 		}

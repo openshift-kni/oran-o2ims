@@ -38,7 +38,7 @@ func DetermineAction(ctx context.Context, logger *slog.Logger, nodeAllocationReq
 	if provisionedCondition != nil {
 		if provisionedCondition.Status == metav1.ConditionTrue {
 			// Check if the generation has changed
-			if nodeAllocationRequest.ObjectMeta.Generation != nodeAllocationRequest.Status.HwMgrPlugin.ObservedGeneration {
+			if nodeAllocationRequest.ObjectMeta.Generation != nodeAllocationRequest.Status.ObservedGeneration {
 				logger.InfoContext(ctx, "Handling NodeAllocationRequest Spec change")
 				return NodeAllocationRequestFSMSpecChanged
 			}

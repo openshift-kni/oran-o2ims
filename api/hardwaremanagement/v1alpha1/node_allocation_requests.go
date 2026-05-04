@@ -77,11 +77,6 @@ type Properties struct {
 	NodeNames []string `json:"nodeNames,omitempty"`
 }
 
-// GenerationStatus represents the observed generation for an operator.
-type GenerationStatus struct {
-	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
-}
-
 // NodeAllocationRequestStatus describes the observed state of a request to allocate and prepare
 // a node that will eventually be part of a deployment manager.
 type NodeAllocationRequestStatus struct {
@@ -96,8 +91,10 @@ type NodeAllocationRequestStatus struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=status
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 
+	// ObservedGeneration is the most recent generation observed by the controller.
+	// Used to detect spec changes that require re-processing.
 	//+operator-sdk:csv:customresourcedefinitions:type=status
-	HwMgrPlugin GenerationStatus `json:"hwMgrPlugin,omitempty"`
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
 	//+operator-sdk:csv:customresourcedefinitions:type=status
 	ObservedConfigTransactionId int64 `json:"observedConfigTransactionId"`
