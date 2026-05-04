@@ -8,12 +8,12 @@ overall: 51
 
 # Per-package minimum thresholds
 packages:
-  api/provisioning/v1alpha1: 64
+  api/provisioning/v1alpha1: 65
   hwmgr-plugins/controller/utils: 0
   hwmgr-plugins/metal3/controller: 63
   internal: 16
-  internal/cmd/server: 40
-  internal/controllers: 32
+  internal/cmd/server: 80
+  internal/controllers: 60
   internal/controllers/utils: 19
   internal/logging: 39
   internal/search: 38
@@ -29,7 +29,7 @@ packages:
   internal/service/common/async: 48
   internal/service/common/auth: 29
   internal/service/common/utils: 12
-  internal/service/provisioning/api: 17
+  internal/service/provisioning/api: 66
   internal/service/resources/api: 87
   internal/service/resources/collector: 8
   internal/service/resources/db/repo: 89
