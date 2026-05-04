@@ -83,6 +83,25 @@ This project has not reached GA, so there are no production databases to migrate
 - `ocloud.openshift.io` - Inventory
 - `plugins.clcm.openshift.io` - NodeAllocationRequest, AllocatedNode
 
+### Design Decisions
+
+The following are accepted design decisions. Do not flag these patterns as
+issues during code review.
+
+- **DD-001: In-memory filtering for AllocatedNode lookups.**
+  `listAllocatedNodesForNAR` in the PR controller uses in-memory filtering
+  instead of server-side `MatchingFields` because the fake Kubernetes client
+  in unit tests does not support field selectors. Per-cluster node counts are
+  small (1-11 nodes), so the cost is negligible. The Metal3 NAR controller
+  uses a proper field index (`spec.nodeAllocationRequest`) since it runs with
+  a real manager cache.
+
+- **DD-002: Cluster-scoped ProvisioningRequest watch mappers.**
+  Watch mappers that enqueue ProvisioningRequests (e.g.,
+  `enqueueProvisioningRequestForNAR`) intentionally omit the namespace from
+  `NamespacedName`. `ProvisioningRequest` is cluster-scoped (`scope: Cluster`
+  in the CRD) and has no namespace.
+
 ## Contributing Requirements
 
 - All commits must be signed off with DCO: `git commit -s`
