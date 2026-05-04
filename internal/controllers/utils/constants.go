@@ -41,10 +41,10 @@ const (
 	InventoryProvisioningServerName = InventoryProvisioning + serverSuffix
 )
 
-// Metal3 hardware manager
+// Hardware manager
 const (
-	Metal3HwMgr           = "metal3-hwmgr"
-	Metal3HwMgrServerName = Metal3HwMgr + serverSuffix
+	HardwareManager           = "hardwaremanager"
+	HardwareManagerServerName = HardwareManager + serverSuffix
 )
 
 // InventoryCRDName is the fully qualified name of the Inventory CRD, used as the
@@ -117,8 +117,8 @@ var (
 		fmt.Sprintf("--tls-server-key=%s/%s", constants.TLSServerMountPath, constants.TLSKeyField),
 	}
 
-	Metal3HwMgrServerArgs = []string{
-		constants.Metal3HwMgrCmd,
+	HardwareManagerServerArgs = []string{
+		constants.HardwareManagerCmd,
 		constants.StartSubcommand,
 		constants.HealthProbeFlag + "=" + constants.HealthProbePort,
 		constants.MetricsFlag + "=" + constants.MetricsPort,

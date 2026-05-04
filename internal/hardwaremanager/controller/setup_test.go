@@ -9,9 +9,9 @@ Generated-By: Cursor/claude-4-sonnet
 */
 
 /*
-Test Cases for SetupMetal3Controllers Function
+Test Cases for SetupControllers Function
 
-This file contains comprehensive unit tests for the SetupMetal3Controllers function that validates:
+This file contains comprehensive unit tests for the SetupControllers function that validates:
 
 1. Function Structure Validation:
    - Tests that the function exists and has the expected signature
@@ -72,7 +72,7 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 )
 
-var _ = Describe("SetupMetal3Controllers", func() {
+var _ = Describe("SetupControllers", func() {
 	var (
 		scheme    *runtime.Scheme
 		namespace string
@@ -105,7 +105,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 				}
 			}()
 
-			_ = SetupMetal3Controllers(mgr, namespace, testLogger)
+			_ = SetupControllers(mgr, namespace, testLogger)
 		})
 	})
 
@@ -124,7 +124,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 				Client:          fakeClient,
 				NoncachedClient: fakeClient,
 				Scheme:          scheme,
-				Logger:          baseLogger.With(slog.String("controller", "metal3_nodeallocationrequest_controller")),
+				Logger:          baseLogger.With(slog.String("controller", "hwmgr_nodeallocationrequest_controller")),
 				Namespace:       namespace,
 				Manager:         nil, // We can't provide a real manager in this test
 			}
@@ -149,7 +149,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 				Client:          fakeClient,
 				NoncachedClient: fakeClient,
 				Scheme:          scheme,
-				Logger:          baseLogger.With(slog.String("controller", "metal3_allocatednode_controller")),
+				Logger:          baseLogger.With(slog.String("controller", "hwmgr_allocatednode_controller")),
 				Namespace:       namespace,
 				Manager:         nil, // We can't provide a real manager in this test
 			}
@@ -180,7 +180,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 			}()
 
 			testLogger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelInfo}))
-			testError = SetupMetal3Controllers(nil, namespace, testLogger)
+			testError = SetupControllers(nil, namespace, testLogger)
 
 			// If we get here without panic, check the error message
 			if testError != nil {
@@ -209,7 +209,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 			}()
 
 			testLogger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelInfo}))
-			_ = SetupMetal3Controllers(nil, "", testLogger)
+			_ = SetupControllers(nil, "", testLogger)
 		})
 
 		It("should accept namespace with special characters", func() {
@@ -223,7 +223,7 @@ var _ = Describe("SetupMetal3Controllers", func() {
 
 			specialNamespace := "test-namespace_with.special-chars"
 			testLogger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelInfo}))
-			_ = SetupMetal3Controllers(nil, specialNamespace, testLogger)
+			_ = SetupControllers(nil, specialNamespace, testLogger)
 		})
 	})
 
@@ -232,8 +232,8 @@ var _ = Describe("SetupMetal3Controllers", func() {
 			// Test the logger creation logic
 			baseLogger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
-			nodeLogger := baseLogger.With(slog.String("controller", "metal3_nodeallocationrequest_controller"))
-			allocatedLogger := baseLogger.With(slog.String("controller", "metal3_allocatednode_controller"))
+			nodeLogger := baseLogger.With(slog.String("controller", "hwmgr_nodeallocationrequest_controller"))
+			allocatedLogger := baseLogger.With(slog.String("controller", "hwmgr_allocatednode_controller"))
 
 			// Verify loggers are created (we can't easily test the content without complex setup)
 			Expect(nodeLogger).ToNot(BeNil())

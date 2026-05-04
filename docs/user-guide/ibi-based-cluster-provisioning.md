@@ -129,7 +129,7 @@ This ensures that a separate partition is created and the `/var/lib/containers` 
 > is hardware-specific and must be updated to match the storage device on your server.
 
 **1b.** Annotate the ProvisioningRequest to prevent cleanup when it is deleted in
-the next step. This annotation prevents the Metal3 hardware manager from powering
+the next step. This annotation prevents the hardware manager from powering
 off the host and clearing its provisioning state, which is necessary because you
 need the running cluster to generate the seed image.
 

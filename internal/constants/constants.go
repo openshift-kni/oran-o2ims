@@ -77,7 +77,7 @@ const (
 
 // Hardware manager command names
 const (
-	Metal3HwMgrCmd = "metal3-hwmgr"
+	HardwareManagerCmd = "hardwaremanager"
 )
 
 // TLS/Certificate field names

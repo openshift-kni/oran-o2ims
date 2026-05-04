@@ -30,8 +30,8 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/exit"
-	metal3ctrl "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/controller"
-	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/utils"
+	hwmgrctrl "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/controller"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/utils"
 )
 
 var (
@@ -46,11 +46,11 @@ func init() {
 	utilruntime.Must(inventoryv1alpha1.AddToScheme(scheme))
 }
 
-// Start creates and returns the `metal3-hwmgr` command.
+// Start creates and returns the `hardwaremanager` command.
 func Start() *cobra.Command {
 	result := &cobra.Command{
-		Use:   constants.Metal3HwMgrCmd,
-		Short: "Metal3 Hardware Manager",
+		Use:   constants.HardwareManagerCmd,
+		Short: "Hardware Manager",
 		Args:  cobra.NoArgs,
 	}
 	result.AddCommand(ControllerManager())
@@ -58,7 +58,7 @@ func Start() *cobra.Command {
 }
 
 // ControllerManagerCommand contains the data and logic needed to run the
-// `metal3-hwmgr start` command.
+// `hardwaremanager start` command.
 type ControllerManagerCommand struct {
 	metricsAddr          string
 	metricsCertDir       string
@@ -68,17 +68,17 @@ type ControllerManagerCommand struct {
 }
 
 // NewControllerManager creates a new runner that knows how to execute the
-// `metal3-hwmgr start` command.
+// `hardwaremanager start` command.
 func NewControllerManager() *ControllerManagerCommand {
 	return &ControllerManagerCommand{}
 }
 
-// ControllerManager represents the start command for the Metal3 hardware manager
+// ControllerManager represents the start command for the hardware manager
 func ControllerManager() *cobra.Command {
 	c := NewControllerManager()
 	result := &cobra.Command{
 		Use:   "start",
-		Short: "Start the Metal3 hardware manager",
+		Short: "Start the hardware manager",
 		Args:  cobra.NoArgs,
 		RunE:  c.run,
 	}
@@ -119,7 +119,7 @@ func ControllerManager() *cobra.Command {
 	return result
 }
 
-// run executes the `metal3-hwmgr start` command.
+// run executes the `hardwaremanager start` command.
 func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error {
 	_ = argv
 	ctx := cmd.Context()
@@ -163,9 +163,9 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	}
 
 	namespace := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
-	err = metal3ctrl.SetupMetal3Controllers(mgr, namespace, logger)
+	err = hwmgrctrl.SetupControllers(mgr, namespace, logger)
 	if err != nil {
-		logger.ErrorContext(ctx, "Unable to create metal3 hardware manager controller",
+		logger.ErrorContext(ctx, "Unable to create hardware manager controller",
 			slog.String("error", err.Error()))
 		return exit.Error(1)
 	}

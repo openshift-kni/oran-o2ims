@@ -461,7 +461,7 @@ func (t *provisioningRequestReconcilerTask) shouldStopReconciliation() bool {
 }
 
 // checkHardwareProvisioningTimeout checks for hardware provisioning timeout.
-// Timeout detection is handled by the Metal3 hardware manager, so this function only checks terminal states.
+// Timeout detection is handled by the hardware manager, so this function only checks terminal states.
 //
 //nolint:unparam // Kept for API compatibility, always returns empty Result
 func (t *provisioningRequestReconcilerTask) checkHardwareProvisioningTimeout() ctrl.Result {
@@ -1348,13 +1348,13 @@ func (t *provisioningRequestReconcilerTask) getNodeAllocationRequestResponse(ctx
 }
 
 func (t *provisioningRequestReconcilerTask) resetHardwareTimers() {
-	// Hardware timers are no longer tracked in O-Cloud Manager - timeout handling moved to Metal3 hardware manager
+	// Hardware timers are no longer tracked in O-Cloud Manager - timeout handling moved to Hardware Manager
 	// This function is kept for compatibility but no longer resets any timers
 }
 
 //nolint:unparam // Kept for API compatibility, always returns nil
 func (t *provisioningRequestReconcilerTask) resetHardwareTimersAndPersist() error {
-	// Hardware timers are no longer tracked in O-Cloud Manager - timeout handling moved to Metal3 hardware manager
+	// Hardware timers are no longer tracked in O-Cloud Manager - timeout handling moved to Hardware Manager
 	// This function is kept for compatibility but no longer performs any operations
 	t.resetHardwareTimers()
 	return nil

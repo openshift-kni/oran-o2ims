@@ -32,7 +32,7 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	metal3controllers "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/controller"
+	hwmgrcontrollers "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/controller"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	machineconfigv1 "github.com/openshift/api/machineconfiguration/v1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
@@ -518,8 +518,8 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 						continue
 					}
 
-					hasBiosAnnotation := bmh.Annotations[metal3controllers.BiosUpdateNeededAnnotation] == annotationTrue
-					hasFirmwareAnnotation := bmh.Annotations[metal3controllers.FirmwareUpdateNeededAnnotation] == annotationTrue
+					hasBiosAnnotation := bmh.Annotations[hwmgrcontrollers.BiosUpdateNeededAnnotation] == annotationTrue
+					hasFirmwareAnnotation := bmh.Annotations[hwmgrcontrollers.FirmwareUpdateNeededAnnotation] == annotationTrue
 					// For nodes that require BIOS or firmware updates, simulate the BMO BIOS and firmware updates.
 					if (hasBiosAnnotation || hasFirmwareAnnotation) &&
 						bmh.Status.OperationalStatus != metal3v1alpha1.OperationalStatusServicing {
@@ -618,8 +618,8 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 						continue
 					}
 
-					hasBiosAnnotation := bmh.Annotations[metal3controllers.BiosUpdateNeededAnnotation] == annotationTrue
-					hasFirmwareAnnotation := bmh.Annotations[metal3controllers.FirmwareUpdateNeededAnnotation] == annotationTrue
+					hasBiosAnnotation := bmh.Annotations[hwmgrcontrollers.BiosUpdateNeededAnnotation] == annotationTrue
+					hasFirmwareAnnotation := bmh.Annotations[hwmgrcontrollers.FirmwareUpdateNeededAnnotation] == annotationTrue
 					if !(hasBiosAnnotation || hasFirmwareAnnotation) ||
 						bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusServicing {
 						continue
@@ -767,7 +767,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			Eventually(func() bool {
 				n := &hwmgmtv1alpha1.AllocatedNode{}
 				Expect(K8SClient.Get(testCtx, servicingNodeKey, n)).To(Succeed())
-				return n.Annotations[metal3controllers.ConfigAnnotation] != ""
+				return n.Annotations[hwmgrcontrollers.ConfigAnnotation] != ""
 			}, timeout, interval).Should(BeTrue(),
 				"Worker should have config-in-progress annotation")
 		})
@@ -909,7 +909,7 @@ func setupSpokeClientMock(ctx context.Context, hostnames []string) func() {
 		Build()
 	spokeClientset := kubefake.NewSimpleClientset(k8sNodes...)
 
-	return metal3controllers.SetTestSpokeClientCreators(
+	return hwmgrcontrollers.SetTestSpokeClientCreators(
 		func(_ context.Context, _ client.Client, _ string) (client.Client, error) {
 			return spokeClient, nil
 		},
@@ -949,7 +949,7 @@ func failBMHDay2(ctx context.Context, node *hwmgmtv1alpha1.AllocatedNode, bmh *m
 	Eventually(func() bool {
 		n := &hwmgmtv1alpha1.AllocatedNode{}
 		Expect(K8SClient.Get(ctx, nodeKey, n)).To(Succeed())
-		return n.Annotations[metal3controllers.ConfigAnnotation] != ""
+		return n.Annotations[hwmgrcontrollers.ConfigAnnotation] != ""
 	}, time.Minute*3, time.Second*2).Should(BeTrue(),
 		"AllocatedNode %s should have config annotation", node.Name)
 
@@ -960,7 +960,7 @@ func failBMHDay2(ctx context.Context, node *hwmgmtv1alpha1.AllocatedNode, bmh *m
 	if bmh.Annotations == nil {
 		bmh.Annotations = make(map[string]string)
 	}
-	bmh.Annotations[metal3controllers.BmhErrorTimestampAnnotation] = time.Now().Add(-10 * time.Minute).Format(time.RFC3339)
+	bmh.Annotations[hwmgrcontrollers.BmhErrorTimestampAnnotation] = time.Now().Add(-10 * time.Minute).Format(time.RFC3339)
 	Expect(K8SClient.Update(ctx, bmh)).To(Succeed())
 
 	Expect(K8SClient.Get(ctx, bmhKey, bmh)).To(Succeed())
@@ -1003,7 +1003,7 @@ func completeBMHDay2(ctx context.Context, node *hwmgmtv1alpha1.AllocatedNode, bm
 	Eventually(func() bool {
 		n := &hwmgmtv1alpha1.AllocatedNode{}
 		Expect(K8SClient.Get(ctx, nodeKey, n)).To(Succeed())
-		return n.Annotations[metal3controllers.ConfigAnnotation] != ""
+		return n.Annotations[hwmgrcontrollers.ConfigAnnotation] != ""
 	}, time.Minute*3, time.Second*2).Should(BeTrue(),
 		"AllocatedNode %s should have config annotation", node.Name)
 

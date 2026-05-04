@@ -20,44 +20,44 @@ import (
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
-// setupMetal3HwMgr creates the Kubernetes resources necessary to start the metal3 hardware manager.
-func (t *reconcilerTask) setupMetal3HwMgr(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
+// setupHardwareManager creates the Kubernetes resources necessary to start the hardware manager.
+func (t *reconcilerTask) setupHardwareManager(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
 
 	nextReconcile = defaultResult
 
-	if err = t.createServiceAccount(ctx, ctlrutils.Metal3HwMgrServerName); err != nil {
-		t.logger.ErrorContext(ctx, "Failed to deploy ServiceAccount for the Metal3 hardware manager server.",
+	if err = t.createServiceAccount(ctx, ctlrutils.HardwareManagerServerName); err != nil {
+		t.logger.ErrorContext(ctx, "Failed to deploy ServiceAccount for the hardware manager server.",
 			slog.String("error", err.Error()))
 		return
 	}
 
-	if err = t.createMetal3HwMgrClusterRole(ctx); err != nil {
-		t.logger.ErrorContext(ctx, "Failed to create ClusterRole for the Metal3 hardware manager server.",
+	if err = t.createHardwareManagerClusterRole(ctx); err != nil {
+		t.logger.ErrorContext(ctx, "Failed to create ClusterRole for the hardware manager server.",
 			slog.String("error", err.Error()))
 		return
 	}
 
-	if err = t.createServerClusterRoleBinding(ctx, ctlrutils.Metal3HwMgrServerName); err != nil {
-		t.logger.ErrorContext(ctx, "Failed to create server ClusterRoleBinding for the Metal3 hardware manager server.",
+	if err = t.createServerClusterRoleBinding(ctx, ctlrutils.HardwareManagerServerName); err != nil {
+		t.logger.ErrorContext(ctx, "Failed to create server ClusterRoleBinding for the hardware manager server.",
 			slog.String("error", err.Error()))
 		return
 	}
 
-	if err = t.createServerRbacClusterRoleBinding(ctx, ctlrutils.Metal3HwMgrServerName); err != nil {
-		t.logger.ErrorContext(ctx, "Failed to create RBAC ClusterRoleBinding for the Metal3 hardware manager server.",
+	if err = t.createServerRbacClusterRoleBinding(ctx, ctlrutils.HardwareManagerServerName); err != nil {
+		t.logger.ErrorContext(ctx, "Failed to create RBAC ClusterRoleBinding for the hardware manager server.",
 			slog.String("error", err.Error()))
 		return
 	}
 
-	if err = t.createService(ctx, ctlrutils.Metal3HwMgrServerName, constants.DefaultServicePort, ctlrutils.DefaultServiceTargetPort); err != nil {
-		t.logger.ErrorContext(ctx, "Failed to deploy Service for the Metal3 hardware manager server.",
+	if err = t.createService(ctx, ctlrutils.HardwareManagerServerName, constants.DefaultServicePort, ctlrutils.DefaultServiceTargetPort); err != nil {
+		t.logger.ErrorContext(ctx, "Failed to deploy Service for the hardware manager server.",
 			slog.String("error", err.Error()))
 		return
 	}
 
-	errorReason, err := t.deployServer(ctx, ctlrutils.Metal3HwMgrServerName)
+	errorReason, err := t.deployServer(ctx, ctlrutils.HardwareManagerServerName)
 	if err != nil {
-		t.logger.ErrorContext(ctx, "Failed to deploy the Metal3 hardware manager server.",
+		t.logger.ErrorContext(ctx, "Failed to deploy the hardware manager server.",
 			slog.String("error", err.Error()))
 		if errorReason == "" {
 			nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
@@ -67,11 +67,11 @@ func (t *reconcilerTask) setupMetal3HwMgr(ctx context.Context, defaultResult ctr
 	return nextReconcile, err
 }
 
-func (t *reconcilerTask) createMetal3HwMgrClusterRole(ctx context.Context) error {
+func (t *reconcilerTask) createHardwareManagerClusterRole(ctx context.Context) error {
 	role := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(
-				"%s-%s", t.object.Namespace, ctlrutils.Metal3HwMgrServerName,
+				"%s-%s", t.object.Namespace, ctlrutils.HardwareManagerServerName,
 			),
 		},
 		Rules: []rbacv1.PolicyRule{

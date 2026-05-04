@@ -184,7 +184,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		// Set up test Metal3 hardware manager
+		// Set up test Hardware Manager
 	})
 
 	It("returns no error when buildNodeAllocationRequest succeeds", func() {
@@ -638,7 +638,7 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 			},
 		}
 
-		// Set up test Metal3 hardware manager
+		// Set up test Hardware Manager
 	})
 
 	It("creates new NodeAllocationRequest when none exists", func() {
@@ -1238,7 +1238,7 @@ var _ = Describe("waitForHardwareData", func() {
 			},
 		}
 
-		// Set up test Metal3 hardware manager
+		// Set up test Hardware Manager
 	})
 
 	It("returns provisioned=true and configured=true when both conditions are met", func() {
@@ -1338,7 +1338,7 @@ var _ = Describe("checkExistingNodeAllocationRequest", func() {
 			},
 		}
 
-		// Set up test Metal3 hardware manager
+		// Set up test Hardware Manager
 	})
 
 	It("returns nil when NAR does not exist", func() {

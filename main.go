@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"os"
 
-	metal3cmd "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/cmd"
+	hwmgrcmd "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/cmd"
 	alarmscmd "github.com/openshift-kni/oran-o2ims/internal/service/alarms/cmd"
 	artifactscmd "github.com/openshift-kni/oran-o2ims/internal/service/artifacts/cmd"
 	clustercmd "github.com/openshift-kni/oran-o2ims/internal/service/cluster/cmd"
@@ -38,7 +38,7 @@ func main() {
 		SetErr(os.Stderr).
 		AddCommand(cmd.Start).
 		AddCommand(cmd.Version).
-		AddCommand(metal3cmd.Start).
+		AddCommand(hwmgrcmd.Start).
 		AddCommand(alarmscmd.GetAlarmRootCmd).             // TODO: all server should have same root to share init info
 		AddCommand(clustercmd.GetClusterRootCmd).          // TODO: all server should have same root to share init info
 		AddCommand(inventorycmd.GetResourcesRootCmd).      // TODO: all server should have same root to share init info

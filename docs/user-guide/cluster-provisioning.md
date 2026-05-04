@@ -135,7 +135,7 @@ Pending (Validating and preparing resources)
     ```
 
 5. Create the NodeAllocationRequest to start hardware provisioning. The `provisioningStatus.provisioningPhase`transitions to progressing.
-The O‑Cloud Metal3 hardware manager consumes the CR, selects matching BareMetalHosts using the label selectors from the hwMgmtDefaults and merged hwMgmtParameters, and allocates them to the request. For each selected host, the hardware manager:
+The O‑Cloud hardware manager consumes the CR, selects matching BareMetalHosts using the label selectors from the hwMgmtDefaults and merged hwMgmtParameters, and allocates them to the request. For each selected host, the hardware manager:
    - Creates an `AllocatedNode` CR.
    - Applies the hardware settings by creating/updating the relevant Metal3 CRs (HostFirmwareSettings/HostFirmwareComponents).
    - Reports progress through the statuses of both `NodeAllocationRequest` and `AllocatedNode` resources.
@@ -160,7 +160,7 @@ The O‑Cloud Metal3 hardware manager consumes the CR, selects matching BareMeta
         updateTime: "2025-10-01T22:14:27Z"
     ```
 
-6. Wait for hardware provisioning to complete. Once it completes, the Metal3 hardware manager sends the allocated node information (BMC secret, BMC url, interface MAC addresses, etc.) in the `AllocatedNode` status. O-Cloud Manager retrieves this data and updates the rendered ClusterInstance CR with it.
+6. Wait for hardware provisioning to complete. Once it completes, the hardware manager sends the allocated node information (BMC secret, BMC url, interface MAC addresses, etc.) in the `AllocatedNode` status. O-Cloud Manager retrieves this data and updates the rendered ClusterInstance CR with it.
 
    Example status:
 

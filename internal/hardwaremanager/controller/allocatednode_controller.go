@@ -24,10 +24,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/utils"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/utils"
 )
 
-// AllocatedNodeReconciler reconciles AllocatedNode objects for the Metal3 hardware manager
+// AllocatedNodeReconciler reconciles AllocatedNode objects for the hardware manager
 type AllocatedNodeReconciler struct {
 	ctrl.Manager
 	client.Client

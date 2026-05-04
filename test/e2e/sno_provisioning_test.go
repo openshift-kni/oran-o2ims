@@ -27,14 +27,14 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	provisioningcontrollers "github.com/openshift-kni/oran-o2ims/internal/controllers"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	metal3controllers "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/controller"
+	hwmgrcontrollers "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/controller"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 )
 
-var _ = Describe("SNO End-to-end ProvisioningRequestReconcile with metal3 hardware manager", Ordered, Label("sno-provisioning"), func() {
-	// This test suite runs with both O2IMS and Metal3 controllers active
-	// Metal3 manager runs alongside Provisioning manager for all tests
+var _ = Describe("SNO End-to-end ProvisioningRequestReconcile with hardware manager", Ordered, Label("sno-provisioning"), func() {
+	// This test suite runs with both O2IMS and hardware manager controllers active
+	// Hardware manager runs alongside Provisioning manager for all tests
 	const timeout = time.Second * 60
 	const interval = time.Second * 3
 
@@ -616,7 +616,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(singleNodeGroup.Size).To(Equal(1))
 		Expect(singleNodeGroup.NodeGroupData.HwProfile).To(Equal(testutils.TestHwProfileName))
 
-		// Wait for Metal3 controllers to automatically create AllocatedNode resources.
+		// Wait for hardware manager controllers to automatically create AllocatedNode resources.
 		allocatedNodes := &hwmgmtv1alpha1.AllocatedNodeList{}
 		Eventually(func() bool {
 			err := K8SClient.List(testCtx, allocatedNodes, client.InNamespace(constants.DefaultNamespace))
@@ -671,7 +671,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(err).ToNot(HaveOccurred())
 
 		// Check that the BMH has the FirmwareUpdateNeededAnnotation set.
-		Expect(bmh.Annotations[metal3controllers.FirmwareUpdateNeededAnnotation]).To(Equal("true"))
+		Expect(bmh.Annotations[hwmgrcontrollers.FirmwareUpdateNeededAnnotation]).To(Equal("true"))
 
 		// Update the BMH status to Preparing.
 		bmh.Status.Provisioning.State = metal3v1alpha1.StatePreparing
@@ -682,7 +682,7 @@ defaultHugepagesSize: "1G"`,
 		Eventually(func() bool {
 			err := K8SClient.Get(testCtx, types.NamespacedName{Name: allocatedNode.Name, Namespace: constants.DefaultNamespace}, allocatedNode)
 			Expect(err).ToNot(HaveOccurred())
-			return allocatedNode.Annotations[metal3controllers.ConfigAnnotation] != ""
+			return allocatedNode.Annotations[hwmgrcontrollers.ConfigAnnotation] != ""
 		}, time.Minute*3, time.Second*3).Should(BeTrue())
 
 		// Check if the HostFirmwareComponents already exists.
@@ -744,7 +744,7 @@ defaultHugepagesSize: "1G"`,
 		bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusOK
 		Expect(K8SClient.Status().Update(testCtx, bmh)).To(Succeed())
 		// Remove the FirmwareUpdateNeededAnnotation.
-		delete(bmh.Annotations, metal3controllers.FirmwareUpdateNeededAnnotation)
+		delete(bmh.Annotations, hwmgrcontrollers.FirmwareUpdateNeededAnnotation)
 		Expect(K8SClient.Update(testCtx, bmh)).To(Succeed())
 
 		// Make sure the NodeAllocationRequest and AllocatedNode are completed.

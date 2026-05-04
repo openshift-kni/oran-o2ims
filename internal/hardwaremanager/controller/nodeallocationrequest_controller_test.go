@@ -5,9 +5,9 @@ SPDX-License-Identifier: Apache-2.0
 */
 
 /*
-Test Cases for Metal3 NodeAllocationRequest Controller
+Test Cases for NodeAllocationRequest Controller
 
-This test suite covers the Metal3 hardware manager's NodeAllocationRequest controller,
+This test suite covers the hardware manager's NodeAllocationRequest controller,
 focusing on the new timeout handling implementation that was moved from the O-Cloud Manager.
 
 Key Test Areas:
@@ -33,10 +33,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/utils"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/utils"
 )
 
-var _ = Describe("Metal3 NodeAllocationRequest Controller Timeout Handling", func() {
+var _ = Describe("NodeAllocationRequest Controller Timeout Handling", func() {
 	var (
 		c          client.Client
 		reconciler *NodeAllocationRequestReconciler
@@ -330,7 +330,7 @@ var _ = Describe("Metal3 NodeAllocationRequest Controller Timeout Handling", fun
 			})
 
 			It("should allow retry when spec changes", func() {
-				// The Metal3 controller should detect the spec change and skip timeout checking
+				// The hardware manager controller should detect the spec change and skip timeout checking
 				// This allows retry even when the previous configuration failed/timed out
 				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(nar)
 				Expect(err).ToNot(HaveOccurred())

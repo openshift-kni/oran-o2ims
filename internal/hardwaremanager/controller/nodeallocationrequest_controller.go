@@ -23,12 +23,12 @@ import (
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
-	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/utils"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 )
 
-// NodeAllocationRequestReconciler reconciles NodeAllocationRequest objects for the Metal3 hardware manager
+// NodeAllocationRequestReconciler reconciles NodeAllocationRequest objects for the hardware manager
 type NodeAllocationRequestReconciler struct {
 	ctrl.Manager
 	client.Client

@@ -11,7 +11,7 @@ Generated-By: Cursor/claude-4-sonnet
 /*
 Test Coverage for AllocatedNodeReconciler
 
-This file provides comprehensive test coverage for the Metal3 AllocatedNode controller,
+This file provides comprehensive test coverage for the AllocatedNode controller,
 which manages the lifecycle of allocated bare metal nodes in the hardware management system.
 
 Detailed Test Case Descriptions:
@@ -138,7 +138,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/utils"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/utils"
 )
 
 // Simple mock client for testing - avoiding external mock generators

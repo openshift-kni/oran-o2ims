@@ -130,7 +130,7 @@ definition of `hwMgmtParameters`.
 
 ### Hardware resources
 
-The template references hardware artifacts that the O‑Cloud Metal3 hardware manager uses to allocate and prepare bare‑metal nodes.
+The template references hardware artifacts that the O‑Cloud hardware manager uses to allocate and prepare bare‑metal nodes.
 
 > [!NOTE]
 > `spec.templateDefaults.hwMgmtDefaults` is optional. When `nodeGroupData` is empty or not provided,
@@ -145,7 +145,7 @@ The template references hardware artifacts that the O‑Cloud Metal3 hardware ma
 #### HardwareProfile
 
 HardwareProfile describes the desired hardware state for a class of servers, such as BIOS settings
-and target firmware levels. It is applied by the Metal3 hardware manager during Day‑0 (initial provision)
+and target firmware levels. It is applied by the hardware manager during Day‑0 (initial provision)
 and can also be used for Day‑2 updates. HardwareProfile is optional — nodes can be provisioned without one.
 Example profiles are provided under [hardwareprofiles](../samples/git-setup/clustertemplates/hardwareprofiles/).
 
@@ -159,7 +159,7 @@ hardware profile and resource selectors. The node group **name** should match th
 corresponding MachineConfigPool (MCP) name on the spoke cluster (e.g. `master`,
 `worker`).
 
-The Metal3 hardware manager uses a two-stage filtering process to find suitable BareMetalHosts:
+The hardware manager uses a two-stage filtering process to find suitable BareMetalHosts:
 
 1. **Label-based filtering** — selects BMHs by Kubernetes label.
 2. **Hardware data filtering** — further filters BMHs based on their HardwareData CR (hardware inventory details such as CPU, memory, storage, and NICs).
@@ -309,7 +309,7 @@ For details about server onboarding, refer to [Server Onboarding](./server-onboa
 
 Cluster installation defaults that are common across clusters are provided in a ConfigMap and referenced by the ClusterTemplate. These defaults can include node configuration, networking, and other baseline settings. All fields must comply with the SiteConfig `ClusterInstance` schema.
 
-Each node’s boot interface in the `interfaces` list must include a `boot-interface` label.  This allows the O-Cloud manager to resolve the boot NIC’s MAC address from the NIC-to-MAC mappings retrieved from the Metal3 hardware manager.
+Each node’s boot interface in the `interfaces` list must include a `boot-interface` label.  This allows the O-Cloud manager to resolve the boot NIC’s MAC address from the NIC-to-MAC mappings retrieved from the hardware manager.
 
 For example,
 

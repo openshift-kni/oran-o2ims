@@ -10,7 +10,7 @@ Generated-By: Cursor/claude-4-sonnet
 
 /*
 Package controller provides unit tests for BareMetalHost (BMH) management functionality
-in the Metal3 hardware manager controller.
+in the hardware manager controller.
 
 This test file contains comprehensive test coverage for the following areas:
 

@@ -11,7 +11,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	metal3controller "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/controller"
+	hwmgrcontroller "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/controller"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
 )
@@ -56,18 +56,18 @@ var _ = Describe("HardwareDataSource", func() {
 		It("maps a minimal ResourceInfo to models.Resource", func() {
 			poolID := uuid.MustParse("44444444-4444-4444-4444-444444444444")
 			resID := uuid.MustParse("55555555-5555-5555-5555-555555555555")
-			in := metal3controller.ResourceInfo{
+			in := hwmgrcontroller.ResourceInfo{
 				ResourceId:       resID,
 				ResourcePoolId:   poolID,
 				Description:      "node-a",
 				Vendor:           "Dell",
 				Model:            "R640",
 				Memory:           16384,
-				AdminState:       metal3controller.ResourceInfoAdminStateUNLOCKED,
-				OperationalState: metal3controller.ResourceInfoOperationalStateENABLED,
-				UsageState:       metal3controller.ACTIVE,
+				AdminState:       hwmgrcontroller.ResourceInfoAdminStateUNLOCKED,
+				OperationalState: hwmgrcontroller.ResourceInfoOperationalStateENABLED,
+				UsageState:       hwmgrcontroller.ACTIVE,
 				HwProfile:        "profile-1",
-				Processors:       []metal3controller.ProcessorInfo{},
+				Processors:       []hwmgrcontroller.ProcessorInfo{},
 			}
 			out := ds.convertResource(&in)
 			Expect(out.ResourceID).To(Equal(resID))
@@ -83,23 +83,23 @@ var _ = Describe("HardwareDataSource", func() {
 		It("includes optional power, labels, allocated, nics, and storage extensions", func() {
 			resID := uuid.MustParse("66666666-6666-6666-6666-666666666666")
 			poolID := uuid.MustParse("77777777-7777-7777-7777-777777777777")
-			ps := metal3controller.ON
+			ps := hwmgrcontroller.ON
 			allocated := true
 			labels := map[string]string{"k": "v"}
-			nics := map[string]metal3controller.NicInfo{"eth0": {Mac: ptr("00:11:22:33:44:55")}}
-			storage := map[string]metal3controller.StorageInfo{"sda": {SizeBytes: ptrInt64(1024)}}
-			in := metal3controller.ResourceInfo{
+			nics := map[string]hwmgrcontroller.NicInfo{"eth0": {Mac: ptr("00:11:22:33:44:55")}}
+			storage := map[string]hwmgrcontroller.StorageInfo{"sda": {SizeBytes: ptrInt64(1024)}}
+			in := hwmgrcontroller.ResourceInfo{
 				ResourceId:       resID,
 				ResourcePoolId:   poolID,
 				Description:      "full",
 				Vendor:           "Vendor",
 				Model:            "Model",
 				Memory:           4096,
-				AdminState:       metal3controller.ResourceInfoAdminStateLOCKED,
-				OperationalState: metal3controller.ResourceInfoOperationalStateDISABLED,
-				UsageState:       metal3controller.BUSY,
+				AdminState:       hwmgrcontroller.ResourceInfoAdminStateLOCKED,
+				OperationalState: hwmgrcontroller.ResourceInfoOperationalStateDISABLED,
+				UsageState:       hwmgrcontroller.BUSY,
 				HwProfile:        "p",
-				Processors:       []metal3controller.ProcessorInfo{{}},
+				Processors:       []hwmgrcontroller.ProcessorInfo{{}},
 				PowerState:       &ps,
 				Labels:           &labels,
 				Allocated:        &allocated,
@@ -107,7 +107,7 @@ var _ = Describe("HardwareDataSource", func() {
 				Storage:          &storage,
 			}
 			out := ds.convertResource(&in)
-			Expect(out.Extensions[powerStateExtension]).To(Equal(string(metal3controller.ON)))
+			Expect(out.Extensions[powerStateExtension]).To(Equal(string(hwmgrcontroller.ON)))
 			Expect(out.Extensions[labelsExtension]).To(Equal(labels))
 			Expect(out.Extensions[allocatedExtension]).To(BeTrue())
 			Expect(out.Extensions[nicsExtension]).To(Equal(nics))

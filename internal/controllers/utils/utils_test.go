@@ -1607,7 +1607,7 @@ var _ = Describe("Server predicate functions", func() {
 	}
 
 	metricsOnlyServers := []string{
-		Metal3HwMgrServerName,
+		HardwareManagerServerName,
 	}
 
 	Describe("HasApiEndpoints", func() {
@@ -1670,7 +1670,7 @@ var _ = Describe("Server predicate functions", func() {
 		It("returns false for servers without databases", func() {
 			Expect(HasDatabase(InventoryArtifactsServerName)).To(BeFalse())
 			Expect(HasDatabase(InventoryProvisioningServerName)).To(BeFalse())
-			Expect(HasDatabase(Metal3HwMgrServerName)).To(BeFalse())
+			Expect(HasDatabase(HardwareManagerServerName)).To(BeFalse())
 		})
 	})
 
@@ -1684,7 +1684,7 @@ var _ = Describe("Server predicate functions", func() {
 		It("returns false for servers not requiring internal listener", func() {
 			Expect(RequiresInternalListener(InventoryArtifactsServerName)).To(BeFalse())
 			Expect(RequiresInternalListener(InventoryProvisioningServerName)).To(BeFalse())
-			Expect(RequiresInternalListener(Metal3HwMgrServerName)).To(BeFalse())
+			Expect(RequiresInternalListener(HardwareManagerServerName)).To(BeFalse())
 		})
 	})
 
@@ -1698,7 +1698,7 @@ var _ = Describe("Server predicate functions", func() {
 		})
 
 		It("returns false for servers not needing OAuth", func() {
-			Expect(NeedsOAuthAccess(Metal3HwMgrServerName)).To(BeFalse())
+			Expect(NeedsOAuthAccess(HardwareManagerServerName)).To(BeFalse())
 			Expect(NeedsOAuthAccess(InventoryDatabaseServerName)).To(BeFalse())
 		})
 	})

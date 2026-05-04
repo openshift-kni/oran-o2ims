@@ -28,7 +28,7 @@ SPDX-License-Identifier: Apache-2.0
 ## Overview
 
 The O-Cloud Manager coordinates firmware and BIOS updates on bare-metal hosts through
-the Metal3 hardware manager. Firmware updates can occur in two contexts:
+the hardware manager. Firmware updates can occur in two contexts:
 
 - **Day-0 (initial provisioning):** When a cluster is first
   [provisioned](./cluster-provisioning.md) via a ProvisioningRequest, the hardware manager
@@ -97,7 +97,7 @@ When a ProvisioningRequest is created, the following sequence occurs:
    for each node group (from the ProvisioningRequest override or hwMgmtDefaults
    default) and creates a `NodeAllocationRequest` CR.
 
-2. **BMH selection** — The Metal3 hardware manager selects available BareMetalHosts
+2. **BMH selection** — The hardware manager selects available BareMetalHosts
    matching the [resource selector criteria](./template-overview.md#hwmgmtdefaults)
    (labels and hardware data).
 
@@ -142,7 +142,7 @@ ProvisioningRequest
 
 NodeAllocationRequest (created by O-Cloud Manager)
   └─ contains node groups with hwProfile references
-       └─ AllocatedNode (created by Metal3 hardware manager, one per host)
+       └─ AllocatedNode (created by hardware manager, one per host)
             ├─ spec.hwProfile → HardwareProfile CR
             ├─ maps to BareMetalHost
             │    ├─ HostFirmwareSettings (BIOS attributes)
@@ -211,7 +211,7 @@ oc patch provisioningrequests.clcm.openshift.io <name> --type merge \
 ```
 
 The O-Cloud Manager detects the change and propagates it through the
-NodeAllocationRequest to the Metal3 hardware manager. For a step-by-step walkthrough
+NodeAllocationRequest to the hardware manager. For a step-by-step walkthrough
 with example status output, see
 [Switching to a new hardware profile](./cluster-configuration.md#switching-to-a-new-hardware-profile).
 

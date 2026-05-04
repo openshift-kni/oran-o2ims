@@ -14,19 +14,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// Reconciler references, populated by SetupMetal3Controllers for test access.
+// Reconciler references, populated by SetupControllers for test access.
 var (
 	nodeAllocationReconciler         *NodeAllocationRequestReconciler
 	allocatedNodeReconciler          *AllocatedNodeReconciler
 	hostFirmwareComponentsReconciler *HostFirmwareComponentsReconciler
 )
 
-func SetupMetal3Controllers(mgr ctrl.Manager, namespace string, baseLogger *slog.Logger) error {
+func SetupControllers(mgr ctrl.Manager, namespace string, baseLogger *slog.Logger) error {
 	nodeAllocationReconciler = &NodeAllocationRequestReconciler{
 		Client:          mgr.GetClient(),
 		NoncachedClient: mgr.GetAPIReader(),
 		Scheme:          mgr.GetScheme(),
-		Logger:          baseLogger.With("controller", "metal3_nodeallocationrequest_controller"),
+		Logger:          baseLogger.With("controller", "hwmgr_nodeallocationrequest_controller"),
 		Namespace:       namespace,
 		Manager:         mgr,
 	}
@@ -39,7 +39,7 @@ func SetupMetal3Controllers(mgr ctrl.Manager, namespace string, baseLogger *slog
 		Client:          mgr.GetClient(),
 		NoncachedClient: mgr.GetAPIReader(),
 		Scheme:          mgr.GetScheme(),
-		Logger:          baseLogger.With("controller", "metal3_allocatednode_controller"),
+		Logger:          baseLogger.With("controller", "hwmgr_allocatednode_controller"),
 		Namespace:       namespace,
 		Manager:         mgr,
 	}
@@ -52,7 +52,7 @@ func SetupMetal3Controllers(mgr ctrl.Manager, namespace string, baseLogger *slog
 		Client:          mgr.GetClient(),
 		NoncachedClient: mgr.GetAPIReader(),
 		Scheme:          mgr.GetScheme(),
-		Logger:          baseLogger.With("controller", "metal3_hostfirmwarecomponents_controller"),
+		Logger:          baseLogger.With("controller", "hwmgr_hostfirmwarecomponents_controller"),
 		Namespace:       namespace,
 		Manager:         mgr,
 	}
@@ -64,7 +64,7 @@ func SetupMetal3Controllers(mgr ctrl.Manager, namespace string, baseLogger *slog
 	return nil
 }
 
-// OverrideNoncachedClient replaces the NoncachedClient on all Metal3
+// OverrideNoncachedClient replaces the NoncachedClient on all hardware manager
 // reconcilers. This is intended for e2e tests that need to use a shared
 // client to avoid envtest watchcache timing discrepancies.
 func OverrideNoncachedClient(c client.Reader) {

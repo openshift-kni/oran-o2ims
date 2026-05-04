@@ -87,7 +87,7 @@ linters:
           alias: inventoryv1alpha1
         - pkg: github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1
           alias: provisioningv1alpha1
-        - pkg: github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/utils
+        - pkg: github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/utils
           alias: hwmgrutils
         - pkg: github.com/openshift-kni/oran-o2ims/internal/controllers/utils
           alias: ctlrutils

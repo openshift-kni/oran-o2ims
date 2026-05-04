@@ -9,14 +9,14 @@ Generated-By: Cursor/claude-4-sonnet
 */
 
 /*
-Metal3 Controller Test Suite
+Hardware Manager Controller Test Suite
 
-This test suite provides comprehensive coverage for the Metal3 hardware manager controllers.
+This test suite provides comprehensive coverage for the hardware manager controllers.
 The tests validate controller functionality, resource management, and integration with Kubernetes APIs.
 
 TEST FILES AND COVERAGE:
 
-1. AllocatedNode Controller Tests (metal3_allocatednode_controller_test.go):
+1. AllocatedNode Controller Tests (allocatednode_controller_test.go):
    - Basic reconciliation flow with AllocatedNode lifecycle management
    - Finalizer management (addition/removal during create/delete operations)
    - BMH (BareMetalHost) allocation and deallocation workflows
@@ -36,8 +36,8 @@ TEST FILES AND COVERAGE:
    - PreprovisioningImage label handling
    - BMC information processing
 
-3. Hardware Manager Setup Tests (metal3_setup_test.go):
-   - SetupMetal3Controllers function structure validation
+3. Hardware Manager Setup Tests (setup_test.go):
+   - SetupControllers function structure validation
    - Reconciler creation and field assignment verification
    - Error handling and message formatting
    - Namespace parameter handling and validation
@@ -116,5 +116,5 @@ import (
 
 func TestController(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Metal3 Controller")
+	RunSpecs(t, "Hardware Manager Controller")
 }

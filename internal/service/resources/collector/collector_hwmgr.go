@@ -17,7 +17,7 @@ import (
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	metal3controller "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/controller"
+	hwmgrcontroller "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/controller"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
 )
@@ -128,7 +128,7 @@ func (d *HardwareDataSource) MakeResourceType(resource *models.Resource) (*model
 
 // GetResources returns the list of resources available for this data source.
 func (d *HardwareDataSource) GetResources(ctx context.Context) ([]models.Resource, error) {
-	resourceInfos, err := metal3controller.GetResources(ctx, slog.Default(), d.hubClient)
+	resourceInfos, err := hwmgrcontroller.GetResources(ctx, slog.Default(), d.hubClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resources: %w", err)
 	}
@@ -142,7 +142,7 @@ func (d *HardwareDataSource) GetResources(ctx context.Context) ([]models.Resourc
 	return resources, nil
 }
 
-func (d *HardwareDataSource) convertResource(resource *metal3controller.ResourceInfo) *models.Resource {
+func (d *HardwareDataSource) convertResource(resource *hwmgrcontroller.ResourceInfo) *models.Resource {
 	resourceID := resource.ResourceId
 
 	// ResourcePoolId is the Kubernetes UID of the ResourcePool CR

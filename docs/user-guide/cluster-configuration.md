@@ -50,10 +50,10 @@ To troubleshoot:
 
    Look for `HardwareConfigured` condition with `reason: TimedOut`
 
-2. **Check Metal3 hardware manager logs**:
+2. **Check hardware manager logs**:
 
    ```console
-   oc logs -n oran-o2ims -l app=metal3-hwmgr-server -f
+   oc logs -n oran-o2ims -l app=hardwaremanager-server -f
    ```
 
 3. **Retry configuration**:
@@ -595,7 +595,7 @@ The following steps are required:
           provisioningPhase: progressing
     ```
 
-4. The O-Cloud Metal3 hardware manager detects the updated `NodeAllocationRequest` CR:
+4. The O-Cloud hardware manager detects the updated `NodeAllocationRequest` CR:
     * It lists the `AllocatedNode` CRs that reference the `NodeAllocationRequest` and updates `spec.hwProfile` in each `AllocatedNode` CR to the new profile.
     * It computes BIOS/firmware changes from the new `HardwareProfile` and requests the updates by updating the Metal3 resources—`HostFirmwareSettings` and `HostFirmwareComponents`—with the changes.
     * The `NodeAllocationRequest` and `AllocatedNode` CRs status conditions are also updated to reflect the configuration change.
@@ -633,7 +633,7 @@ The following steps are required:
       type: Configured
     ```
 
-5. The Metal3 hardware manager waits for the Metal3 Bare Metal Operator (BMO) to detect and validate the changes on
+5. The hardware manager waits for the Metal3 Bare Metal Operator (BMO) to detect and validate the changes on
    the `HostFirmwareSettings` and `HostFirmwareComponents` CRs, then triggers a host reboot via the
    `reboot.metal3.io` annotation on the BMH. BMO applies the firmware and BIOS updates during the reboot cycle.
    For multi-node clusters, master nodes are updated serially first, then worker nodes can be updated in parallel

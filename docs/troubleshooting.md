@@ -44,12 +44,12 @@ Find the controller manager pod and view logs:
 oc logs -n oran-o2ims -l app=o-cloud-manager --tail=100
 ```
 
-The controller manager and Metal3 hardware manager logs are the most common to check.
+The controller manager and hardware manager logs are the most common to check.
 Other server logs may be useful depending on the issue:
 
 ```console
-# Metal3 hardware manager
-oc logs -n oran-o2ims -l app=metal3-hwmgr-server --tail=100
+# Hardware manager
+oc logs -n oran-o2ims -l app=hardwaremanager-server --tail=100
 
 # Resource server
 oc logs -n oran-o2ims -l app=resource-server --tail=100
