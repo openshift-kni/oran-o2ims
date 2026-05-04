@@ -7,7 +7,6 @@
 !/go.mod
 !/go.sum
 !/internal
-!/hwmgr-plugins
 !/main.go
 !/cmd
 !/api

@@ -20,7 +20,7 @@ Shows cluster provisioning requests with their current status and details.
 - PHASE: Current provisioning phase
 - DETAILS: Additional provisioning details
 
-### 2. NodeAllocationRequests (plugins.clcm.openshift.io/v1alpha1)
+### 2. NodeAllocationRequests (clcm.openshift.io/v1alpha1)
 
 Shows requests for node allocation within clusters.
 
@@ -31,7 +31,7 @@ Shows requests for node allocation within clusters.
 - PROVISIONING: Provisioning condition status
 - DAY2-UPDATE: Configuration condition status
 
-### 3. AllocatedNodes (plugins.clcm.openshift.io/v1alpha1)
+### 3. AllocatedNodes (clcm.openshift.io/v1alpha1)
 
 Shows nodes that have been allocated and their current state.
 

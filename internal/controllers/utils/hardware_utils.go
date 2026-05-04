@@ -17,7 +17,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 )
@@ -44,7 +43,7 @@ func IsConditionDoesNotExistsErr(err error) bool {
 }
 
 // GetBootMacAddress selects the boot interface based on label and return the interface MAC address
-func GetBootMacAddress(interfaces []*pluginsv1alpha1.Interface, bootIfaceLabel string) (string, error) {
+func GetBootMacAddress(interfaces []*hwmgmtv1alpha1.Interface, bootIfaceLabel string) (string, error) {
 	for _, iface := range interfaces {
 		if iface.Label == bootIfaceLabel {
 			return iface.MACAddress, nil
@@ -164,7 +163,7 @@ func getInterfaces(nodeMap map[string]interface{}) []map[string]interface{} {
 //
 // Returns:
 // - error: An error if any unexpected structure or data is encountered; otherwise, nil.
-func AssignMacAddress(clusterInput map[string]any, hwInterfaces []*pluginsv1alpha1.Interface,
+func AssignMacAddress(clusterInput map[string]any, hwInterfaces []*hwmgmtv1alpha1.Interface,
 	nodeSpec map[string]interface{}) error {
 
 	nodesInput, ok := clusterInput["nodes"].([]any)
@@ -254,7 +253,7 @@ func GetStatusMessage(condition hwmgmtv1alpha1.ConditionType) string {
 
 // GetBMHNamespace returns the BMH namespace for the given node.
 // Check both node label and Spec.HwMgrNodeNs to ensure compatibility until plugin transitions to Spec.HwMgrNodeNs
-func GetBMHNamespace(node *pluginsv1alpha1.AllocatedNode) string {
+func GetBMHNamespace(node *hwmgmtv1alpha1.AllocatedNode) string {
 
 	if ns, ok := node.ObjectMeta.Labels[bmhNamespaceLabel]; ok {
 		return ns

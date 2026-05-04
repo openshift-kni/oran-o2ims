@@ -138,7 +138,7 @@ func (t *reconcilerTask) createMetal3HwMgrClusterRole(ctx context.Context) error
 			},
 			{
 				APIGroups: []string{
-					"plugins.clcm.openshift.io",
+					"clcm.openshift.io",
 				},
 				Resources: []string{
 					"nodeallocationrequests",
@@ -156,7 +156,7 @@ func (t *reconcilerTask) createMetal3HwMgrClusterRole(ctx context.Context) error
 			},
 			{
 				APIGroups: []string{
-					"plugins.clcm.openshift.io",
+					"clcm.openshift.io",
 				},
 				Resources: []string{
 					"nodeallocationrequests/status",
@@ -170,7 +170,7 @@ func (t *reconcilerTask) createMetal3HwMgrClusterRole(ctx context.Context) error
 			},
 			{
 				APIGroups: []string{
-					"plugins.clcm.openshift.io",
+					"clcm.openshift.io",
 				},
 				Resources: []string{
 					"nodeallocationrequests/finalizers",

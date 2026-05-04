@@ -83,15 +83,11 @@ linters:
           alias: $1$2
         - pkg: github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1
           alias: hwmgmtv1alpha1
-        - pkg: github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1
-          alias: pluginsv1alpha1
         - pkg: github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1
           alias: inventoryv1alpha1
         - pkg: github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1
           alias: provisioningv1alpha1
-        - pkg: github.com/openshift-kni/oran-o2ims/hwmgr-plugins/api/client/utils
-          alias: hwmgrclientutils
-        - pkg: github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils
+        - pkg: github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/utils
           alias: hwmgrutils
         - pkg: github.com/openshift-kni/oran-o2ims/internal/controllers/utils
           alias: ctlrutils

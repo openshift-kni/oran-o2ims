@@ -12,13 +12,12 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 // collectNodeDetails collects BMC and node interfaces details
-func collectNodeDetails(nodeList *pluginsv1alpha1.AllocatedNodeList) (map[string][]ctlrutils.NodeInfo, error) {
+func collectNodeDetails(nodeList *hwmgmtv1alpha1.AllocatedNodeList) (map[string][]ctlrutils.NodeInfo, error) {
 	// hwNodes maps a group name to a slice of NodeInfo
 	hwNodes := make(map[string][]ctlrutils.NodeInfo)
 	for i := range nodeList.Items {
@@ -46,7 +45,7 @@ func collectNodeDetails(nodeList *pluginsv1alpha1.AllocatedNodeList) (map[string
 
 // validateNodeGroupsMatchNAR verifies that every node group in the existing
 // NodeAllocationRequest has a corresponding entry in the merged hwMgmt data.
-func validateNodeGroupsMatchNAR(hwMgmtData map[string]any, narSpec *pluginsv1alpha1.NodeAllocationRequestSpec) error {
+func validateNodeGroupsMatchNAR(hwMgmtData map[string]any, narSpec *hwmgmtv1alpha1.NodeAllocationRequestSpec) error {
 	// Build set of valid group names from merged hwMgmt data
 	validNames := make(map[string]bool)
 	if ngData, ok := hwMgmtData["nodeGroupData"].([]any); ok {
@@ -79,8 +78,8 @@ func validateNodeGroupsMatchNAR(hwMgmtData map[string]any, narSpec *pluginsv1alp
 }
 
 // newNodeGroup populates NodeGroup
-func newNodeGroup(group hwmgmtv1alpha1.NodeGroupData, roleCounts map[string]int) pluginsv1alpha1.NodeGroup {
-	nodeGroup := pluginsv1alpha1.NodeGroup{
+func newNodeGroup(group hwmgmtv1alpha1.NodeGroupData, roleCounts map[string]int) hwmgmtv1alpha1.NodeGroup {
+	nodeGroup := hwmgmtv1alpha1.NodeGroup{
 		NodeGroupData: group,
 	}
 
@@ -93,12 +92,12 @@ func newNodeGroup(group hwmgmtv1alpha1.NodeGroupData, roleCounts map[string]int)
 }
 
 // listAllocatedNodesForNAR lists AllocatedNodes that belong to the given NodeAllocationRequest.
-func listAllocatedNodesForNAR(ctx context.Context, c client.Client, narName, narNS string) (*pluginsv1alpha1.AllocatedNodeList, error) {
-	allNodes := &pluginsv1alpha1.AllocatedNodeList{}
+func listAllocatedNodesForNAR(ctx context.Context, c client.Client, narName, narNS string) (*hwmgmtv1alpha1.AllocatedNodeList, error) {
+	allNodes := &hwmgmtv1alpha1.AllocatedNodeList{}
 	if err := c.List(ctx, allNodes, client.InNamespace(narNS)); err != nil {
 		return nil, fmt.Errorf("failed to list AllocatedNodes: %w", err)
 	}
-	filtered := &pluginsv1alpha1.AllocatedNodeList{}
+	filtered := &hwmgmtv1alpha1.AllocatedNodeList{}
 	for i := range allNodes.Items {
 		if allNodes.Items[i].Spec.NodeAllocationRequest == narName {
 			filtered.Items = append(filtered.Items, allNodes.Items[i])
@@ -108,7 +107,7 @@ func listAllocatedNodesForNAR(ctx context.Context, c client.Client, narName, nar
 }
 
 // getRoleToGroupNameMap creates a mapping of Role to Group Name from NodeAllocationRequest
-func getRoleToGroupNameMap(narSpec *pluginsv1alpha1.NodeAllocationRequestSpec) map[string]string {
+func getRoleToGroupNameMap(narSpec *hwmgmtv1alpha1.NodeAllocationRequestSpec) map[string]string {
 	roleToNodeGroupName := make(map[string]string)
 	for _, nodeGroup := range narSpec.NodeGroup {
 

@@ -619,7 +619,7 @@ COVERAGE_MERGED := $(COVERAGE_DIR)/merged.out
 test tests:
 	@echo "Run ginkgo excluding envtest tests"
 	@mkdir -p $(COVERAGE_DIR)
-	ginkgo run -r --label-filter="!envtest" --coverprofile=unit.out --output-dir=$(COVERAGE_DIR) ./internal ./api ./hwmgr-plugins $(ginkgo_flags)
+	ginkgo run -r --label-filter="!envtest" --coverprofile=unit.out --output-dir=$(COVERAGE_DIR) ./internal ./api $(ginkgo_flags)
 
 .PHONY: test-e2e
 test-e2e: envtest kubectl

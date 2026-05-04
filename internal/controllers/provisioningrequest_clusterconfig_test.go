@@ -77,7 +77,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
@@ -339,13 +338,13 @@ defaultHugepagesSize: "1G"`,
 		hwPluginNs := &corev1.Namespace{}
 		hwPluginNs.SetName(constants.DefaultNamespace)
 		Expect(c.Create(ctx, hwPluginNs)).To(Succeed())
-		nodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{
+		nodeAllocationRequest := &hwmgmtv1alpha1.NodeAllocationRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "cluster-1",
 				Namespace: constants.DefaultNamespace,
 			},
-			Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-				NodeGroup: []pluginsv1alpha1.NodeGroup{
+			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+				NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 					{
 						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
 							Name:           "controller",
@@ -366,7 +365,7 @@ defaultHugepagesSize: "1G"`,
 					},
 				},
 			},
-			Status: pluginsv1alpha1.NodeAllocationRequestStatus{
+			Status: hwmgmtv1alpha1.NodeAllocationRequestStatus{
 				Conditions: []metav1.Condition{
 					{
 						Type:   string(hwmgmtv1alpha1.Provisioned),
@@ -374,7 +373,7 @@ defaultHugepagesSize: "1G"`,
 						Reason: string(hwmgmtv1alpha1.Completed),
 					},
 				},
-				Properties: pluginsv1alpha1.Properties{
+				Properties: hwmgmtv1alpha1.Properties{
 					NodeNames: []string{testutils.MasterNodeName},
 				},
 			},
@@ -1769,7 +1768,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 		ProvReqReconciler     *ProvisioningRequestReconciler
 		ProvReqTask           *provisioningRequestReconcilerTask
 		managedCluster        = &clusterv1.ManagedCluster{}
-		nodeAllocationRequest = &pluginsv1alpha1.NodeAllocationRequest{}
+		nodeAllocationRequest = &hwmgmtv1alpha1.NodeAllocationRequest{}
 	)
 
 	BeforeEach(func() {
@@ -1882,13 +1881,13 @@ var _ = Describe("addPostProvisioningLabels", func() {
 		c = getFakeClientFromObjects(crs...)
 
 		// Populate the NodeAllocationRequest without creating it.
-		nodeAllocationRequest = &pluginsv1alpha1.NodeAllocationRequest{
+		nodeAllocationRequest = &hwmgmtv1alpha1.NodeAllocationRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      mclName,
 				Namespace: constants.DefaultNamespace,
 			},
-			Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-				NodeGroup: []pluginsv1alpha1.NodeGroup{
+			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+				NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 					{
 						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
 							Name:           "controller",
@@ -1909,7 +1908,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 					},
 				},
 			},
-			Status: pluginsv1alpha1.NodeAllocationRequestStatus{
+			Status: hwmgmtv1alpha1.NodeAllocationRequestStatus{
 				Conditions: []metav1.Condition{
 					{
 						Type:   string(hwmgmtv1alpha1.Provisioned),
@@ -1917,7 +1916,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 						Reason: string(hwmgmtv1alpha1.Completed),
 					},
 				},
-				Properties: pluginsv1alpha1.Properties{
+				Properties: hwmgmtv1alpha1.Properties{
 					NodeNames: []string{testutils.MasterNodeName},
 				},
 			},
@@ -2161,12 +2160,12 @@ var _ = Describe("addPostProvisioningLabels", func() {
 
 			// Create AllocatedNode CRs in the fake client.
 			for _, n := range nodes {
-				allocatedNode := &pluginsv1alpha1.AllocatedNode{
+				allocatedNode := &hwmgmtv1alpha1.AllocatedNode{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      n.allocatedNodeID,
 						Namespace: constants.DefaultNamespace,
 					},
-					Spec: pluginsv1alpha1.AllocatedNodeSpec{
+					Spec: hwmgmtv1alpha1.AllocatedNodeSpec{
 						NodeAllocationRequest: "cluster-1",
 						GroupName:             "controller",
 					},

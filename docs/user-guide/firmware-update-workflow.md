@@ -169,8 +169,8 @@ Key conditions during Day-0 firmware provisioning:
 To monitor individual node status, check the AllocatedNode CRs:
 
 ```console
-oc get allocatednodes.plugins.clcm.openshift.io -A
-oc get allocatednodes.plugins.clcm.openshift.io <name> -n <namespace> -o yaml
+oc get allocatednodes.clcm.openshift.io -A
+oc get allocatednodes.clcm.openshift.io <name> -n <namespace> -o yaml
 ```
 
 To check the Metal3 CRs directly:
@@ -319,13 +319,13 @@ Configuration update failed (group master: 3/3 completed, group worker: 1/2 fail
 The NodeAllocationRequest `Configured` condition provides more detail:
 
 ```console
-oc get nodeallocationrequests.plugins.clcm.openshift.io -A -o yaml
+oc get nodeallocationrequests.clcm.openshift.io -A -o yaml
 ```
 
 Individual AllocatedNode CRs show per-node status:
 
 ```console
-oc get allocatednodes.plugins.clcm.openshift.io -A -o json | \
+oc get allocatednodes.clcm.openshift.io -A -o json | \
   jq -r '["NAME","CURRENTPROFILE","REASON","DETAILS"],
          (.items[] | [.metadata.name, .status.hwProfile,
            (.status.conditions[]? | select(.type=="Configured") | .reason),

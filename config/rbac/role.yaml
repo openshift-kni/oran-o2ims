@@ -115,7 +115,9 @@ rules:
 - apiGroups:
   - clcm.openshift.io
   resources:
+  - allocatednodes
   - clustertemplates
+  - nodeallocationrequests
   - nodes
   - provisioningrequests
   verbs:
@@ -129,20 +131,30 @@ rules:
 - apiGroups:
   - clcm.openshift.io
   resources:
-  - clustertemplates/finalizers
-  - provisioningrequests/finalizers
+  - allocatednodes/finalizers
+  - nodeallocationrequests/finalizers
   verbs:
+  - patch
   - update
 - apiGroups:
   - clcm.openshift.io
   resources:
+  - allocatednodes/status
   - clustertemplates/status
   - hardwareprofiles/status
+  - nodeallocationrequests/status
   - nodes/status
   - provisioningrequests/status
   verbs:
   - get
   - patch
+  - update
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - clustertemplates/finalizers
+  - provisioningrequests/finalizers
+  verbs:
   - update
 - apiGroups:
   - clcm.openshift.io
@@ -328,36 +340,6 @@ rules:
   - get
   - list
   - watch
-- apiGroups:
-  - plugins.clcm.openshift.io
-  resources:
-  - allocatednodes
-  - nodeallocationrequests
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - plugins.clcm.openshift.io
-  resources:
-  - allocatednodes/finalizers
-  - nodeallocationrequests/finalizers
-  verbs:
-  - patch
-  - update
-- apiGroups:
-  - plugins.clcm.openshift.io
-  resources:
-  - allocatednodes/status
-  - nodeallocationrequests/status
-  verbs:
-  - get
-  - patch
-  - update
 - apiGroups:
   - policy.open-cluster-management.io
   resources:

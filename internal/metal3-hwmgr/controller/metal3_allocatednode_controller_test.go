@@ -137,7 +137,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/utils"
 )
@@ -188,7 +187,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 		mockClient    *MockClient
 		mockNoncached *MockClient
 		reconciler    *AllocatedNodeReconciler
-		allocatedNode *pluginsv1alpha1.AllocatedNode
+		allocatedNode *hwmgmtv1alpha1.AllocatedNode
 		bmh           *metal3v1alpha1.BareMetalHost
 		req           ctrl.Request
 		testNamespace = "test-plugin-namespace"
@@ -199,7 +198,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 		logger = slog.Default()
 		scheme = runtime.NewScheme()
 		Expect(metal3v1alpha1.AddToScheme(scheme)).To(Succeed())
-		Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
+		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 		Expect(corev1.AddToScheme(scheme)).To(Succeed())
 
@@ -208,13 +207,13 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 		mockNoncached = &MockClient{}
 
 		// Create test AllocatedNode
-		allocatedNode = &pluginsv1alpha1.AllocatedNode{
+		allocatedNode = &hwmgmtv1alpha1.AllocatedNode{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            "test-node",
 				Namespace:       testNamespace,
 				ResourceVersion: "1000",
 			},
-			Spec: pluginsv1alpha1.AllocatedNodeSpec{
+			Spec: hwmgmtv1alpha1.AllocatedNodeSpec{
 				HwMgrNodeId: "test-bmh",
 				HwMgrNodeNs: "test-bmh-namespace",
 			},
@@ -285,7 +284,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				Expect(result).To(Equal(hwmgrutils.DoNotRequeue()))
 
 				// Verify finalizer was added
-				var updatedNode pluginsv1alpha1.AllocatedNode
+				var updatedNode hwmgmtv1alpha1.AllocatedNode
 				Expect(fakeClient.Get(ctx, req.NamespacedName, &updatedNode)).To(Succeed())
 				Expect(controllerutil.ContainsFinalizer(&updatedNode, hwmgrutils.AllocatedNodeFinalizer)).To(BeTrue())
 			})
@@ -301,7 +300,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				Expect(result).To(Equal(hwmgrutils.DoNotRequeue()))
 
 				// Verify finalizer is still present
-				var updatedNode pluginsv1alpha1.AllocatedNode
+				var updatedNode hwmgmtv1alpha1.AllocatedNode
 				Expect(fakeClient.Get(ctx, req.NamespacedName, &updatedNode)).To(Succeed())
 				Expect(controllerutil.ContainsFinalizer(&updatedNode, hwmgrutils.AllocatedNodeFinalizer)).To(BeTrue())
 			})
@@ -314,7 +313,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 
 				// Create a new node with deletion timestamp and finalizer
 				now := metav1.Now()
-				deletingNode := &pluginsv1alpha1.AllocatedNode{
+				deletingNode := &hwmgmtv1alpha1.AllocatedNode{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:              allocatedNode.Name,
 						Namespace:         allocatedNode.Namespace,
@@ -388,7 +387,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				getCallCount := 0
 				mockNoncached.getFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 					getCallCount++
-					allocatedNode.DeepCopyInto(obj.(*pluginsv1alpha1.AllocatedNode))
+					allocatedNode.DeepCopyInto(obj.(*hwmgmtv1alpha1.AllocatedNode))
 					return nil
 				}
 
@@ -415,7 +414,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				mockNoncached.getFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 					// Handle different object types
 					switch v := obj.(type) {
-					case *pluginsv1alpha1.AllocatedNode:
+					case *hwmgmtv1alpha1.AllocatedNode:
 						deletingNode.DeepCopyInto(v)
 						return nil
 					case *metal3v1alpha1.BareMetalHost:
@@ -452,7 +451,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				mockNoncached.getFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 					// Handle different object types
 					switch v := obj.(type) {
-					case *pluginsv1alpha1.AllocatedNode:
+					case *hwmgmtv1alpha1.AllocatedNode:
 						deletingNode.DeepCopyInto(v)
 						return nil
 					case *metal3v1alpha1.BareMetalHost:
@@ -504,7 +503,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				mockNoncached.getFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 					// Handle different object types
 					switch v := obj.(type) {
-					case *pluginsv1alpha1.AllocatedNode:
+					case *hwmgmtv1alpha1.AllocatedNode:
 						nodeWithEmptyBMH.DeepCopyInto(v)
 						return nil
 					case *metal3v1alpha1.BareMetalHost:
@@ -529,7 +528,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 
 				// Mock successful Get call for node
 				mockNoncached.getFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-					nodeWithoutFinalizer.DeepCopyInto(obj.(*pluginsv1alpha1.AllocatedNode))
+					nodeWithoutFinalizer.DeepCopyInto(obj.(*hwmgmtv1alpha1.AllocatedNode))
 					return nil
 				}
 
@@ -645,7 +644,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				mockNoncached.getFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 					// Handle different object types
 					switch v := obj.(type) {
-					case *pluginsv1alpha1.AllocatedNode:
+					case *hwmgmtv1alpha1.AllocatedNode:
 						allocatedNode.DeepCopyInto(v)
 						return nil
 					case *metal3v1alpha1.BareMetalHost:
@@ -671,7 +670,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				mockNoncached.getFunc = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 					// Handle different object types
 					switch v := obj.(type) {
-					case *pluginsv1alpha1.AllocatedNode:
+					case *hwmgmtv1alpha1.AllocatedNode:
 						allocatedNode.DeepCopyInto(v)
 						return nil
 					case *metal3v1alpha1.BareMetalHost:
@@ -881,7 +880,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 			Expect(result).To(Equal(hwmgrutils.DoNotRequeue()))
 
 			// Get the updated resource version
-			var updatedNode pluginsv1alpha1.AllocatedNode
+			var updatedNode hwmgmtv1alpha1.AllocatedNode
 			Expect(fakeClient.Get(ctx, req.NamespacedName, &updatedNode)).To(Succeed())
 
 			// Simulate a second reconciliation with the same request (same resource version)

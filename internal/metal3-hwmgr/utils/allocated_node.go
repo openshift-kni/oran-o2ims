@@ -23,7 +23,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
@@ -38,11 +37,11 @@ func GetNode(
 	ctx context.Context,
 	logger *slog.Logger,
 	c client.Reader,
-	namespace, nodename string) (*pluginsv1alpha1.AllocatedNode, error) {
+	namespace, nodename string) (*hwmgmtv1alpha1.AllocatedNode, error) {
 
 	logger.InfoContext(ctx, "Getting AllocatedNode", slog.String("nodename", nodename))
 
-	node := &pluginsv1alpha1.AllocatedNode{}
+	node := &hwmgmtv1alpha1.AllocatedNode{}
 
 	if err := ctlrutils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
 		return c.Get(ctx, types.NamespacedName{Name: nodename, Namespace: namespace}, node)
@@ -53,9 +52,9 @@ func GetNode(
 }
 
 // GetNodeList retrieves the node list
-func GetNodeList(ctx context.Context, c client.Client) (*pluginsv1alpha1.AllocatedNodeList, error) {
+func GetNodeList(ctx context.Context, c client.Client) (*hwmgmtv1alpha1.AllocatedNodeList, error) {
 
-	nodeList := &pluginsv1alpha1.AllocatedNodeList{}
+	nodeList := &hwmgmtv1alpha1.AllocatedNodeList{}
 	if err := c.List(ctx, nodeList); err != nil {
 		return nodeList, fmt.Errorf("failed to list AllocatedNodes: %w", err)
 	}
@@ -66,8 +65,8 @@ func GetNodeList(ctx context.Context, c client.Client) (*pluginsv1alpha1.Allocat
 // GetBMHToNodeMap get a list of nodes, mapped to BMH namespace/name
 func GetBMHToNodeMap(ctx context.Context,
 	logger *slog.Logger,
-	c client.Client) (map[string]pluginsv1alpha1.AllocatedNode, error) {
-	nodes := make(map[string]pluginsv1alpha1.AllocatedNode)
+	c client.Client) (map[string]hwmgmtv1alpha1.AllocatedNode, error) {
+	nodes := make(map[string]hwmgmtv1alpha1.AllocatedNode)
 
 	nodelist, err := GetNodeList(ctx, c)
 	if err != nil {
@@ -87,7 +86,7 @@ func GetBMHToNodeMap(ctx context.Context,
 	return nodes, nil
 }
 
-func GetNodeForBMH(nodes map[string]pluginsv1alpha1.AllocatedNode, bmh *metal3v1alpha1.BareMetalHost) *pluginsv1alpha1.AllocatedNode {
+func GetNodeForBMH(nodes map[string]hwmgmtv1alpha1.AllocatedNode, bmh *metal3v1alpha1.BareMetalHost) *hwmgmtv1alpha1.AllocatedNode {
 	bmhName := bmh.Name
 	bmhNamespace := bmh.Namespace
 
@@ -155,9 +154,9 @@ func GetChildNodes(
 	ctx context.Context,
 	logger *slog.Logger,
 	c client.Client,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (*pluginsv1alpha1.AllocatedNodeList, error) {
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (*hwmgmtv1alpha1.AllocatedNodeList, error) {
 
-	nodelist := &pluginsv1alpha1.AllocatedNodeList{}
+	nodelist := &hwmgmtv1alpha1.AllocatedNodeList{}
 
 	opts := []client.ListOption{
 		client.MatchingFields{"spec.nodeAllocationRequest": nodeAllocationRequest.Name},
@@ -179,16 +178,16 @@ func GetChildNodesUncached(
 	noncachedClient client.Reader,
 	hwMgrNamespace string,
 	narName string,
-) (*pluginsv1alpha1.AllocatedNodeList, error) {
+) (*hwmgmtv1alpha1.AllocatedNodeList, error) {
 
-	allNodes := &pluginsv1alpha1.AllocatedNodeList{}
+	allNodes := &hwmgmtv1alpha1.AllocatedNodeList{}
 	if err := ctlrutils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
 		return noncachedClient.List(ctx, allNodes, client.InNamespace(hwMgrNamespace))
 	}); err != nil {
 		return nil, fmt.Errorf("failed to list AllocatedNodes in namespace %s: %w", hwMgrNamespace, err)
 	}
 
-	filtered := &pluginsv1alpha1.AllocatedNodeList{}
+	filtered := &hwmgmtv1alpha1.AllocatedNodeList{}
 	for i := range allNodes.Items {
 		if allNodes.Items[i].Spec.NodeAllocationRequest == narName {
 			filtered.Items = append(filtered.Items, allNodes.Items[i])
@@ -203,7 +202,7 @@ func SetNodeConditionStatus(
 	ctx context.Context,
 	c client.Client,
 	noncachedClient client.Reader,
-	node *pluginsv1alpha1.AllocatedNode,
+	node *hwmgmtv1alpha1.AllocatedNode,
 	conditionType string,
 	conditionStatus metav1.ConditionStatus,
 	reason, message string,
@@ -213,7 +212,7 @@ func SetNodeConditionStatus(
 
 	// nolint: wrapcheck
 	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
-		freshNode := &pluginsv1alpha1.AllocatedNode{}
+		freshNode := &hwmgmtv1alpha1.AllocatedNode{}
 		if err := noncachedClient.Get(ctx, types.NamespacedName{Name: node.Name, Namespace: node.Namespace}, freshNode); err != nil {
 			return fmt.Errorf("failed to fetch Node: %w", err)
 		}
@@ -227,7 +226,7 @@ func SetNodeFailedStatus(
 	ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
-	node *pluginsv1alpha1.AllocatedNode,
+	node *hwmgmtv1alpha1.AllocatedNode,
 	conditionType string,
 	message string,
 ) error {
@@ -253,7 +252,7 @@ func SetNodeFailedStatus(
 // updates the node's status.hwProfile to the new hardware profile.
 func SetNodeConfigApplied(ctx context.Context,
 	c client.Client, noncachedClient client.Reader, logger *slog.Logger,
-	node *pluginsv1alpha1.AllocatedNode, newHwProfile string) error {
+	node *hwmgmtv1alpha1.AllocatedNode, newHwProfile string) error {
 	if err := SetNodeHwProfile(ctx, c, node, newHwProfile); err != nil {
 		return fmt.Errorf("failed to update node hwProfile on node %s: %w", node.Name, err)
 	}
@@ -268,7 +267,7 @@ func SetNodeConfigApplied(ctx context.Context,
 
 	// nolint: wrapcheck
 	return retry.OnError(retry.DefaultRetry, errors.IsConflict, func() error {
-		freshNode := &pluginsv1alpha1.AllocatedNode{}
+		freshNode := &hwmgmtv1alpha1.AllocatedNode{}
 		if err := noncachedClient.Get(ctx, types.NamespacedName{Name: node.Name, Namespace: node.Namespace}, freshNode); err != nil {
 			return fmt.Errorf("failed to fetch Node: %w", err)
 		}
@@ -291,7 +290,7 @@ func SetNodeConfigApplied(ctx context.Context,
 // and ensures the node's hardware profile is the new one.
 func SetNodeConfigUpdatePending(ctx context.Context,
 	c client.Client, noncachedClient client.Reader, logger *slog.Logger,
-	node *pluginsv1alpha1.AllocatedNode, newHwProfile, message string) error {
+	node *hwmgmtv1alpha1.AllocatedNode, newHwProfile, message string) error {
 
 	if err := SetNodeHwProfile(ctx, c, node, newHwProfile); err != nil {
 		return fmt.Errorf("failed to update node hwProfile on node %s: %w", node.Name, err)
@@ -321,7 +320,7 @@ func SetNodeConfigUpdatePending(ctx context.Context,
 // Skips the condition update if the condition already matches (avoids unnecessary API writes).
 func SetNodeConfigUpdateRequested(ctx context.Context,
 	c client.Client, noncachedClient client.Reader, logger *slog.Logger,
-	node *pluginsv1alpha1.AllocatedNode, newHwProfile, message string) error {
+	node *hwmgmtv1alpha1.AllocatedNode, newHwProfile, message string) error {
 	// Ensure the node's hardware profile is the new one
 	err := SetNodeHwProfile(ctx, c, node, newHwProfile)
 	if err != nil {
@@ -348,7 +347,7 @@ func SetNodeConfigUpdateRequested(ctx context.Context,
 }
 
 // SetNodeHwProfile sets the node's hardware profile to the new one if it's not already set.
-func SetNodeHwProfile(ctx context.Context, c client.Client, node *pluginsv1alpha1.AllocatedNode, newHwProfile string) error {
+func SetNodeHwProfile(ctx context.Context, c client.Client, node *hwmgmtv1alpha1.AllocatedNode, newHwProfile string) error {
 	if newHwProfile != "" && node.Spec.HwProfile != newHwProfile {
 		patch := client.MergeFrom(node.DeepCopy())
 		node.Spec.HwProfile = newHwProfile
@@ -363,11 +362,11 @@ func AllocatedNodeAddFinalizer(
 	ctx context.Context,
 	noncachedClient client.Reader,
 	c client.Client,
-	allocatedNode *pluginsv1alpha1.AllocatedNode,
+	allocatedNode *hwmgmtv1alpha1.AllocatedNode,
 ) error {
 	// nolint: wrapcheck
 	err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
-		newAllocatedNode := &pluginsv1alpha1.AllocatedNode{}
+		newAllocatedNode := &hwmgmtv1alpha1.AllocatedNode{}
 		if err := noncachedClient.Get(ctx, client.ObjectKeyFromObject(allocatedNode), newAllocatedNode); err != nil {
 			return err
 		}
@@ -387,11 +386,11 @@ func AllocatedNodeRemoveFinalizer(
 	ctx context.Context,
 	noncachedClient client.Reader,
 	c client.Client,
-	allocatedNode *pluginsv1alpha1.AllocatedNode,
+	allocatedNode *hwmgmtv1alpha1.AllocatedNode,
 ) error {
 	// nolint: wrapcheck
 	err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
-		newAllocatedNode := &pluginsv1alpha1.AllocatedNode{}
+		newAllocatedNode := &hwmgmtv1alpha1.AllocatedNode{}
 		if err := noncachedClient.Get(ctx, client.ObjectKeyFromObject(allocatedNode), newAllocatedNode); err != nil {
 			return err
 		}

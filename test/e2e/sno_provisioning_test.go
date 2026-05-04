@@ -22,7 +22,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
@@ -53,8 +52,8 @@ var _ = Describe("SNO End-to-end ProvisioningRequestReconcile with metal3 plugin
 		ciDefaultsCmComplete   = "clusterinstance-defaults-v2"
 		crName                 = ""
 		ptDefaultsCm           = "policytemplate-defaults-v1"
-		allocatedNode          *pluginsv1alpha1.AllocatedNode
-		nar                    *pluginsv1alpha1.NodeAllocationRequest
+		allocatedNode          *hwmgmtv1alpha1.AllocatedNode
+		nar                    *hwmgmtv1alpha1.NodeAllocationRequest
 	)
 
 	testCtx = context.Background()
@@ -303,8 +302,8 @@ defaultHugepagesSize: "1G"`,
 
 	BeforeAll(func() {
 		reconciledPR = &provisioningv1alpha1.ProvisioningRequest{}
-		allocatedNode = &pluginsv1alpha1.AllocatedNode{}
-		nar = &pluginsv1alpha1.NodeAllocationRequest{}
+		allocatedNode = &hwmgmtv1alpha1.AllocatedNode{}
+		nar = &hwmgmtv1alpha1.NodeAllocationRequest{}
 
 		for _, cr := range mainCRs {
 			crCopy := cr.DeepCopyObject().(client.Object)
@@ -439,7 +438,7 @@ defaultHugepagesSize: "1G"`,
 		// Clean up NARs and AllocatedNodes
 		crNames := []string{"cluster-1", "cluster-2"}
 		for _, crName := range crNames {
-			nar := &pluginsv1alpha1.NodeAllocationRequest{}
+			nar := &hwmgmtv1alpha1.NodeAllocationRequest{}
 			if err := K8SClient.Get(testCtx, types.NamespacedName{Name: crName, Namespace: constants.DefaultNamespace}, nar); err == nil {
 				nar.Finalizers = nil
 				_ = K8SClient.Update(testCtx, nar)
@@ -618,7 +617,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(singleNodeGroup.NodeGroupData.HwProfile).To(Equal(testutils.TestHwProfileName))
 
 		// Wait for Metal3 controllers to automatically create AllocatedNode resources.
-		allocatedNodes := &pluginsv1alpha1.AllocatedNodeList{}
+		allocatedNodes := &hwmgmtv1alpha1.AllocatedNodeList{}
 		Eventually(func() bool {
 			err := K8SClient.List(testCtx, allocatedNodes, client.InNamespace(constants.DefaultNamespace))
 			Expect(err).ToNot(HaveOccurred())

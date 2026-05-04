@@ -70,7 +70,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
@@ -113,46 +112,46 @@ func createBMH(name, namespace string, labels, annotations map[string]string, st
 }
 
 // nolint:unparam
-func createNodeAllocationRequest(name, namespace string) *pluginsv1alpha1.NodeAllocationRequest {
-	return &pluginsv1alpha1.NodeAllocationRequest{
+func createNodeAllocationRequest(name, namespace string) *hwmgmtv1alpha1.NodeAllocationRequest {
+	return &hwmgmtv1alpha1.NodeAllocationRequest{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: pluginsv1alpha1.NodeAllocationRequestSpec{},
+		Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{},
 	}
 }
 
-func createAllocatedNode(name, namespace, hwMgrNodeId, hwMgrNodeNs string) *pluginsv1alpha1.AllocatedNode {
-	return &pluginsv1alpha1.AllocatedNode{
+func createAllocatedNode(name, namespace, hwMgrNodeId, hwMgrNodeNs string) *hwmgmtv1alpha1.AllocatedNode {
+	return &hwmgmtv1alpha1.AllocatedNode{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: pluginsv1alpha1.AllocatedNodeSpec{
+		Spec: hwmgmtv1alpha1.AllocatedNodeSpec{
 			HwMgrNodeId: hwMgrNodeId,
 			HwMgrNodeNs: hwMgrNodeNs,
 		},
-		Status: pluginsv1alpha1.AllocatedNodeStatus{
+		Status: hwmgmtv1alpha1.AllocatedNodeStatus{
 			Conditions: []metav1.Condition{},
 		},
 	}
 }
 
 // nolint:unparam
-func createAllocatedNodeWithGroup(name, namespace, hwMgrNodeId, hwMgrNodeNs, groupName, hwProfile string) *pluginsv1alpha1.AllocatedNode {
-	return &pluginsv1alpha1.AllocatedNode{
+func createAllocatedNodeWithGroup(name, namespace, hwMgrNodeId, hwMgrNodeNs, groupName, hwProfile string) *hwmgmtv1alpha1.AllocatedNode {
+	return &hwmgmtv1alpha1.AllocatedNode{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: pluginsv1alpha1.AllocatedNodeSpec{
+		Spec: hwmgmtv1alpha1.AllocatedNodeSpec{
 			HwMgrNodeId: hwMgrNodeId,
 			HwMgrNodeNs: hwMgrNodeNs,
 			GroupName:   groupName,
 			HwProfile:   hwProfile,
 		},
-		Status: pluginsv1alpha1.AllocatedNodeStatus{
+		Status: hwmgmtv1alpha1.AllocatedNodeStatus{
 			Conditions: []metav1.Condition{},
 		},
 	}
@@ -170,7 +169,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 		logger = slog.Default()
 		scheme = runtime.NewScheme()
 		Expect(metal3v1alpha1.AddToScheme(scheme)).To(Succeed())
-		Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
+		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 		Expect(corev1.AddToScheme(scheme)).To(Succeed())
 	})
@@ -421,7 +420,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 			Expect(len(interfaces)).To(Equal(2))
 
 			// Find boot interface
-			var bootInterface *pluginsv1alpha1.Interface
+			var bootInterface *hwmgmtv1alpha1.Interface
 			for _, iface := range interfaces {
 				if iface.MACAddress == testBootMAC {
 					bootInterface = iface
@@ -443,7 +442,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 			Expect(len(interfaces)).To(Equal(2))
 
 			// Find labeled interface
-			var labeledInterface *pluginsv1alpha1.Interface
+			var labeledInterface *hwmgmtv1alpha1.Interface
 			for _, iface := range interfaces {
 				if iface.MACAddress == "00:11:22:33:44:56" {
 					labeledInterface = iface
@@ -631,7 +630,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 		var (
 			fakeClient client.Client
 			bmh        *metal3v1alpha1.BareMetalHost
-			node       *pluginsv1alpha1.AllocatedNode
+			node       *hwmgmtv1alpha1.AllocatedNode
 		)
 
 		BeforeEach(func() {
@@ -1065,7 +1064,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 	Describe("annotateNodeConfigInProgress", func() {
 		var (
 			fakeClient client.Client
-			node       *pluginsv1alpha1.AllocatedNode
+			node       *hwmgmtv1alpha1.AllocatedNode
 		)
 
 		BeforeEach(func() {
@@ -1078,7 +1077,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify annotation was added
-			var updatedNode pluginsv1alpha1.AllocatedNode
+			var updatedNode hwmgmtv1alpha1.AllocatedNode
 			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-node", Namespace: "test-ns"}, &updatedNode)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedNode.Annotations[ConfigAnnotation]).To(Equal(UpdateReasonBIOSSettings))
@@ -1092,7 +1091,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify both annotations exist
-			var updatedNode pluginsv1alpha1.AllocatedNode
+			var updatedNode hwmgmtv1alpha1.AllocatedNode
 			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-node", Namespace: "test-ns"}, &updatedNode)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedNode.Annotations[ConfigAnnotation]).To(Equal(UpdateReasonFirmware))
@@ -1238,7 +1237,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 	})
 
 	Describe("config annotation helper functions", func() {
-		var node *pluginsv1alpha1.AllocatedNode
+		var node *hwmgmtv1alpha1.AllocatedNode
 
 		BeforeEach(func() {
 			node = createAllocatedNode("test-node", "test-ns", "test-bmh", "test-ns")
@@ -1335,7 +1334,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 					Address:         "192.168.1.100",
 					CredentialsName: "test-credentials",
 				},
-				Interfaces: []*pluginsv1alpha1.Interface{
+				Interfaces: []*hwmgmtv1alpha1.Interface{
 					{
 						Name:       "eth0",
 						MACAddress: testBootMAC,
@@ -1362,8 +1361,8 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 		It("should return false when no nodes are updating", func() {
 			// All nodes have Provisioned=True
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{
-				Items: []pluginsv1alpha1.AllocatedNode{
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{
+				Items: []hwmgmtv1alpha1.AllocatedNode{
 					*createNodeWithCondition("node1", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
 					*createNodeWithCondition("node2", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
 					*createNodeWithCondition("node3", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
@@ -1377,8 +1376,8 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 		It("should aggregate errors from multiple node failures", func() {
 			// Mix of nodes: some completed, some in progress, some with no condition
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{
-				Items: []pluginsv1alpha1.AllocatedNode{
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{
+				Items: []hwmgmtv1alpha1.AllocatedNode{
 					*createNodeWithCondition("node1", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
 					*createNodeWithCondition("fail-node2", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
 					*createAllocatedNode("fail-node3", pluginNs, "bmh-node3", pluginNs), // no condition
@@ -1411,8 +1410,8 @@ var _ = Describe("BareMetalHost Manager", func() {
 			err = fakeClient.Create(ctx, bmh2)
 			Expect(err).ToNot(HaveOccurred())
 
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{
-				Items: []pluginsv1alpha1.AllocatedNode{
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{
+				Items: []hwmgmtv1alpha1.AllocatedNode{
 					*createNodeWithCondition("progress-node1", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
 					*createNodeWithCondition("progress-node2", pluginNs, string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
 				},

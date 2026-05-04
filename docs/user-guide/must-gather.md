@@ -10,9 +10,8 @@ The following data is collected:
 
 - O-Cloud Manager custom resources (from all namespaces)
   - `clcm.openshift.io`: ClusterTemplates, ProvisioningRequests,
-    HardwareProfiles
+    HardwareProfiles, NodeAllocationRequests, AllocatedNodes
   - `ocloud.openshift.io`: Inventories
-  - `plugins.clcm.openshift.io`: NodeAllocationRequests, AllocatedNodes
 - Metal3 resources (from all namespaces)
   - BareMetalHosts
   - HostFirmwareSettings

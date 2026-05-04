@@ -6,6 +6,79 @@ metadata:
       [
         {
           "apiVersion": "clcm.openshift.io/v1alpha1",
+          "kind": "AllocatedNode",
+          "metadata": {
+            "name": "metal3-hwplugin-site-sno-du-1-xr8620t-pool-xr8620txserver1",
+            "namespace": "oran-o2ims"
+          },
+          "spec": {
+            "groupName": "master",
+            "hwMgrNodeId": "xr8620txserver1",
+            "hwMgrNodeNs": "xr8620t-pool",
+            "hwProfile": "hardwareprofile-sample",
+            "nodeAllocationRequest": "metal3-b12f3e77848a4002bf40"
+          },
+          "status": {
+            "bmc": {
+              "address": "idrac-virtualmedia+https://192.0.2.100/redfish/v1/Systems/System.Embedded.1",
+              "credentialsName": "bmc-secret-xr8620txserver1"
+            },
+            "conditions": [
+              {
+                "lastTransitionTime": "2026-03-03T15:04:57Z",
+                "message": "Provisioned",
+                "reason": "Completed",
+                "status": "True",
+                "type": "Provisioned"
+              }
+            ],
+            "hwProfile": "hardwareprofile-sample",
+            "interfaces": [
+              {
+                "label": "sriov-1",
+                "macAddress": "02:00:00:00:01:01",
+                "name": "ens2f0"
+              },
+              {
+                "label": "",
+                "macAddress": "02:00:00:00:01:02",
+                "name": "ens3f3"
+              },
+              {
+                "label": "data-interface",
+                "macAddress": "02:00:00:00:01:03",
+                "name": "ens3f1"
+              },
+              {
+                "label": "",
+                "macAddress": "02:00:00:00:01:04",
+                "name": "ens2f3"
+              },
+              {
+                "label": "sriov-2",
+                "macAddress": "02:00:00:00:01:05",
+                "name": "ens2f1"
+              },
+              {
+                "label": "",
+                "macAddress": "02:00:00:00:01:06",
+                "name": "ens3f2"
+              },
+              {
+                "label": "boot-interface",
+                "macAddress": "02:00:00:00:01:07",
+                "name": "ens3f0"
+              },
+              {
+                "label": "",
+                "macAddress": "02:00:00:00:01:08",
+                "name": "ens2f2"
+              }
+            ]
+          }
+        },
+        {
+          "apiVersion": "clcm.openshift.io/v1alpha1",
           "kind": "ClusterTemplate",
           "metadata": {
             "name": "clustertemplate-sample.v1.0.0",
@@ -332,6 +405,54 @@ metadata:
         },
         {
           "apiVersion": "clcm.openshift.io/v1alpha1",
+          "kind": "NodeAllocationRequest",
+          "metadata": {
+            "name": "metal3-b12f3e77848a4002bf40",
+            "namespace": "oran-o2ims"
+          },
+          "spec": {
+            "clusterId": "site-sno-du-1123e4567-e89b-12d3-a456-426614174000",
+            "configTransactionId": 1,
+            "hardwareProvisioningTimeout": "90m",
+            "nodeGroup": [
+              {
+                "nodeGroupData": {
+                  "hwProfile": "hardwareprofile-sample",
+                  "name": "master",
+                  "resourceSelector": {
+                    "resourceselector.clcm.openshift.io/server-colour": "blue",
+                    "resourceselector.clcm.openshift.io/server-type": "xr8620t"
+                  },
+                  "role": "master"
+                },
+                "size": 1
+              }
+            ],
+            "site": "local-west-12345"
+          },
+          "status": {
+            "conditions": [
+              {
+                "lastTransitionTime": "2026-03-03T15:04:57Z",
+                "message": "Created",
+                "reason": "Completed",
+                "status": "True",
+                "type": "Provisioned"
+              }
+            ],
+            "hwMgrPlugin": {
+              "observedGeneration": 1
+            },
+            "observedConfigTransactionId": 0,
+            "properties": {
+              "nodeNames": [
+                "metal3-hwplugin-site-sno-du-1-xr8620t-pool-xr8620txserver1"
+              ]
+            }
+          }
+        },
+        {
+          "apiVersion": "clcm.openshift.io/v1alpha1",
           "kind": "ProvisioningRequest",
           "metadata": {
             "labels": {
@@ -572,127 +693,6 @@ metadata:
             "description": "Compute resources for production workloads",
             "oCloudSiteName": "site-east-1"
           }
-        },
-        {
-          "apiVersion": "plugins.clcm.openshift.io/v1alpha1",
-          "kind": "AllocatedNode",
-          "metadata": {
-            "name": "metal3-hwplugin-site-sno-du-1-xr8620t-pool-xr8620txserver1",
-            "namespace": "oran-o2ims"
-          },
-          "spec": {
-            "groupName": "master",
-            "hwMgrNodeId": "xr8620txserver1",
-            "hwMgrNodeNs": "xr8620t-pool",
-            "hwProfile": "hardwareprofile-sample",
-            "nodeAllocationRequest": "metal3-b12f3e77848a4002bf40"
-          },
-          "status": {
-            "bmc": {
-              "address": "idrac-virtualmedia+https://192.0.2.100/redfish/v1/Systems/System.Embedded.1",
-              "credentialsName": "bmc-secret-xr8620txserver1"
-            },
-            "conditions": [
-              {
-                "lastTransitionTime": "2026-03-03T15:04:57Z",
-                "message": "Provisioned",
-                "reason": "Completed",
-                "status": "True",
-                "type": "Provisioned"
-              }
-            ],
-            "hwProfile": "hardwareprofile-sample",
-            "interfaces": [
-              {
-                "label": "sriov-1",
-                "macAddress": "02:00:00:00:01:01",
-                "name": "ens2f0"
-              },
-              {
-                "label": "",
-                "macAddress": "02:00:00:00:01:02",
-                "name": "ens3f3"
-              },
-              {
-                "label": "data-interface",
-                "macAddress": "02:00:00:00:01:03",
-                "name": "ens3f1"
-              },
-              {
-                "label": "",
-                "macAddress": "02:00:00:00:01:04",
-                "name": "ens2f3"
-              },
-              {
-                "label": "sriov-2",
-                "macAddress": "02:00:00:00:01:05",
-                "name": "ens2f1"
-              },
-              {
-                "label": "",
-                "macAddress": "02:00:00:00:01:06",
-                "name": "ens3f2"
-              },
-              {
-                "label": "boot-interface",
-                "macAddress": "02:00:00:00:01:07",
-                "name": "ens3f0"
-              },
-              {
-                "label": "",
-                "macAddress": "02:00:00:00:01:08",
-                "name": "ens2f2"
-              }
-            ]
-          }
-        },
-        {
-          "apiVersion": "plugins.clcm.openshift.io/v1alpha1",
-          "kind": "NodeAllocationRequest",
-          "metadata": {
-            "name": "metal3-b12f3e77848a4002bf40",
-            "namespace": "oran-o2ims"
-          },
-          "spec": {
-            "clusterId": "site-sno-du-1123e4567-e89b-12d3-a456-426614174000",
-            "configTransactionId": 1,
-            "hardwareProvisioningTimeout": "90m",
-            "nodeGroup": [
-              {
-                "nodeGroupData": {
-                  "hwProfile": "hardwareprofile-sample",
-                  "name": "master",
-                  "resourceSelector": {
-                    "resourceselector.clcm.openshift.io/server-colour": "blue",
-                    "resourceselector.clcm.openshift.io/server-type": "xr8620t"
-                  },
-                  "role": "master"
-                },
-                "size": 1
-              }
-            ],
-            "site": "local-west-12345"
-          },
-          "status": {
-            "conditions": [
-              {
-                "lastTransitionTime": "2026-03-03T15:04:57Z",
-                "message": "Created",
-                "reason": "Completed",
-                "status": "True",
-                "type": "Provisioned"
-              }
-            ],
-            "hwMgrPlugin": {
-              "observedGeneration": 1
-            },
-            "observedConfigTransactionId": 0,
-            "properties": {
-              "nodeNames": [
-                "metal3-hwplugin-site-sno-du-1-xr8620t-pool-xr8620txserver1"
-              ]
-            }
-          }
         }
       ]
     capabilities: Basic Install
@@ -730,7 +730,7 @@ spec:
     - description: AllocatedNode is the schema for an allocated node
       displayName: Allocated Node
       kind: AllocatedNode
-      name: allocatednodes.plugins.clcm.openshift.io
+      name: allocatednodes.clcm.openshift.io
       resources:
       - kind: Namespace
         name: ""
@@ -1111,7 +1111,7 @@ spec:
         nodes
       displayName: Node Allocation Request
       kind: NodeAllocationRequest
-      name: nodeallocationrequests.plugins.clcm.openshift.io
+      name: nodeallocationrequests.clcm.openshift.io
       resources:
       - kind: Namespace
         name: ""
@@ -1425,7 +1425,9 @@ spec:
         - apiGroups:
           - clcm.openshift.io
           resources:
+          - allocatednodes
           - clustertemplates
+          - nodeallocationrequests
           - nodes
           - provisioningrequests
           verbs:
@@ -1439,20 +1441,30 @@ spec:
         - apiGroups:
           - clcm.openshift.io
           resources:
-          - clustertemplates/finalizers
-          - provisioningrequests/finalizers
+          - allocatednodes/finalizers
+          - nodeallocationrequests/finalizers
           verbs:
+          - patch
           - update
         - apiGroups:
           - clcm.openshift.io
           resources:
+          - allocatednodes/status
           - clustertemplates/status
           - hardwareprofiles/status
+          - nodeallocationrequests/status
           - nodes/status
           - provisioningrequests/status
           verbs:
           - get
           - patch
+          - update
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - clustertemplates/finalizers
+          - provisioningrequests/finalizers
+          verbs:
           - update
         - apiGroups:
           - clcm.openshift.io
@@ -1638,36 +1650,6 @@ spec:
           - get
           - list
           - watch
-        - apiGroups:
-          - plugins.clcm.openshift.io
-          resources:
-          - allocatednodes
-          - nodeallocationrequests
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - plugins.clcm.openshift.io
-          resources:
-          - allocatednodes/finalizers
-          - nodeallocationrequests/finalizers
-          verbs:
-          - patch
-          - update
-        - apiGroups:
-          - plugins.clcm.openshift.io
-          resources:
-          - allocatednodes/status
-          - nodeallocationrequests/status
-          verbs:
-          - get
-          - patch
-          - update
         - apiGroups:
           - policy.open-cluster-management.io
           resources:

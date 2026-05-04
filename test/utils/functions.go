@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
@@ -271,10 +271,10 @@ func CreateNodeResources(ctx context.Context, c client.Client, npName string) {
 	// Create both the standard secret and the mock server expected secrets
 	secretNames := []string{BmcSecretName, "test-node-1-bmc-secret", "master-node-2-bmc-secret"}
 	secrets := CreateSecrets(secretNames, constants.DefaultNamespace)
-	CreateResources(ctx, c, []*pluginsv1alpha1.AllocatedNode{node}, secrets)
+	CreateResources(ctx, c, []*hwmgmtv1alpha1.AllocatedNode{node}, secrets)
 }
 
-func CreateResources(ctx context.Context, c client.Client, nodes []*pluginsv1alpha1.AllocatedNode, secrets []*corev1.Secret) {
+func CreateResources(ctx context.Context, c client.Client, nodes []*hwmgmtv1alpha1.AllocatedNode, secrets []*corev1.Secret) {
 	for _, node := range nodes {
 		err := c.Create(ctx, node)
 		if err != nil && !errors.IsAlreadyExists(err) {
@@ -289,9 +289,9 @@ func CreateResources(ctx context.Context, c client.Client, nodes []*pluginsv1alp
 	}
 }
 
-func CreateNode(name, bmcAddress, bmcSecret, groupName, namespace, narName string, interfaces []*pluginsv1alpha1.Interface) *pluginsv1alpha1.AllocatedNode {
+func CreateNode(name, bmcAddress, bmcSecret, groupName, namespace, narName string, interfaces []*hwmgmtv1alpha1.Interface) *hwmgmtv1alpha1.AllocatedNode {
 	if interfaces == nil {
-		interfaces = []*pluginsv1alpha1.Interface{
+		interfaces = []*hwmgmtv1alpha1.Interface{
 			{
 				Name:       "eno1",
 				Label:      constants.BootInterfaceLabel,
@@ -309,19 +309,19 @@ func CreateNode(name, bmcAddress, bmcSecret, groupName, namespace, narName strin
 			},
 		}
 	}
-	return &pluginsv1alpha1.AllocatedNode{
+	return &hwmgmtv1alpha1.AllocatedNode{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: pluginsv1alpha1.AllocatedNodeSpec{
+		Spec: hwmgmtv1alpha1.AllocatedNodeSpec{
 			NodeAllocationRequest: narName,
 			GroupName:             groupName,
 			HwMgrNodeId:           name,
 			HwMgrNodeNs:           namespace,
 		},
-		Status: pluginsv1alpha1.AllocatedNodeStatus{
-			BMC: &pluginsv1alpha1.BMC{
+		Status: hwmgmtv1alpha1.AllocatedNodeStatus{
+			BMC: &hwmgmtv1alpha1.BMC{
 				Address:         bmcAddress,
 				CredentialsName: bmcSecret,
 			},

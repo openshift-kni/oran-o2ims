@@ -36,7 +36,7 @@ spec:
     - description: AllocatedNode is the schema for an allocated node
       displayName: Allocated Node
       kind: AllocatedNode
-      name: allocatednodes.plugins.clcm.openshift.io
+      name: allocatednodes.clcm.openshift.io
       resources:
       - kind: Namespace
         name: ""
@@ -417,7 +417,7 @@ spec:
         nodes
       displayName: Node Allocation Request
       kind: NodeAllocationRequest
-      name: nodeallocationrequests.plugins.clcm.openshift.io
+      name: nodeallocationrequests.clcm.openshift.io
       resources:
       - kind: Namespace
         name: ""

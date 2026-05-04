@@ -13,6 +13,7 @@ import (
 	"time"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -23,7 +24,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/utils"
 )
 
@@ -37,9 +37,9 @@ type AllocatedNodeReconciler struct {
 	Namespace       string
 }
 
-// +kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=allocatednodes,verbs=get;create;list;watch;update;patch;delete
-// +kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=allocatednodes/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=allocatednodes/finalizers,verbs=update
+// +kubebuilder:rbac:groups=clcm.openshift.io,resources=allocatednodes,verbs=get;create;list;watch;update;patch;delete
+// +kubebuilder:rbac:groups=clcm.openshift.io,resources=allocatednodes/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=clcm.openshift.io,resources=allocatednodes/finalizers,verbs=update
 func (r *AllocatedNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 	_ = log.FromContext(ctx)
 	startTime := time.Now()
@@ -119,7 +119,7 @@ func (r *AllocatedNodeReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 // SetupWithManager sets up the controller with the Manager.
 func (r *AllocatedNodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err := ctrl.NewControllerManagedBy(mgr).
-		For(&pluginsv1alpha1.AllocatedNode{}).
+		For(&hwmgmtv1alpha1.AllocatedNode{}).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to create allocated node controller: %w", err)
 	}
@@ -128,7 +128,7 @@ func (r *AllocatedNodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // CleanupForDeletedNode
-func (r *AllocatedNodeReconciler) handleAllocatedNodeDeletion(ctx context.Context, allocatednode *pluginsv1alpha1.AllocatedNode) (bool, error) {
+func (r *AllocatedNodeReconciler) handleAllocatedNodeDeletion(ctx context.Context, allocatednode *hwmgmtv1alpha1.AllocatedNode) (bool, error) {
 
 	r.Logger.InfoContext(ctx, "handleAllocatedNodeDeletion", slog.String("node", allocatednode.Name))
 	bmh, err := getBMHForNode(ctx, r.NoncachedClient, allocatednode)

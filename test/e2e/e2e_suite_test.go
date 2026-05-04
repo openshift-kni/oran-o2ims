@@ -33,7 +33,6 @@ import (
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	ibgu "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
@@ -110,7 +109,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	err = clusterv1.AddToScheme(testScheme)
 	Expect(err).NotTo(HaveOccurred())
-	err = pluginsv1alpha1.AddToScheme(testScheme)
+	err = hwmgmtv1alpha1.AddToScheme(testScheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = hivev1.AddToScheme(testScheme)
 	Expect(err).NotTo(HaveOccurred())

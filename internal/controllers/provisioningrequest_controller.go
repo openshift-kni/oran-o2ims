@@ -22,7 +22,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
@@ -86,8 +85,8 @@ func GetClusterTemplateRefName(name, version string) string {
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=clustertemplates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwareprofiles,verbs=get;list;watch
 //+kubebuilder:rbac:groups=siteconfig.open-cluster-management.io,resources=clusterinstances,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=nodeallocationrequests,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=nodeallocationrequests/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=nodeallocationrequests,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=nodeallocationrequests/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=nodes,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=nodes/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;create;update;patch;watch
@@ -1008,7 +1007,7 @@ func (t *provisioningRequestReconcilerTask) handleClusterResources(ctx context.C
 }
 
 func (t *provisioningRequestReconcilerTask) renderNodeAllocationRequest(ctx context.Context,
-	clusterInstance *unstructured.Unstructured) (*pluginsv1alpha1.NodeAllocationRequest, error) {
+	clusterInstance *unstructured.Unstructured) (*hwmgmtv1alpha1.NodeAllocationRequest, error) {
 	renderedNodeAllocationRequest, err := t.buildNodeAllocationRequest(ctx, clusterInstance)
 	if err != nil {
 		narRenderFailureMsg := "Failed to build the NodeAllocationRequest"
@@ -1129,7 +1128,7 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 	// Delete the NodeAllocationRequest CR first.
 	// The NAR name matches the ProvisioningRequest name (1:1 relationship).
 	narNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
-	nar := &pluginsv1alpha1.NodeAllocationRequest{}
+	nar := &hwmgmtv1alpha1.NodeAllocationRequest{}
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: provisioningRequest.Name, Namespace: narNS}, nar); err != nil {
 		if !k8serrors.IsNotFound(err) {
 			return false, fmt.Errorf("failed to get NodeAllocationRequest %s: %w", provisioningRequest.Name, err)
@@ -1336,7 +1335,7 @@ func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx c
 // getNodeAllocationRequestResponse retrieves the NodeAllocationRequest CR by PR name.
 // It returns the NodeAllocationRequest, a boolean indicating whether it exists,
 // and any error encountered.
-func (t *provisioningRequestReconcilerTask) getNodeAllocationRequestResponse(ctx context.Context) (*pluginsv1alpha1.NodeAllocationRequest, bool, error) {
+func (t *provisioningRequestReconcilerTask) getNodeAllocationRequestResponse(ctx context.Context) (*hwmgmtv1alpha1.NodeAllocationRequest, bool, error) {
 	nar, err := t.getNAR(ctx)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {

@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
@@ -171,12 +171,12 @@ var _ = Describe("Inventory", func() {
 	}
 
 	// Helper function to create AllocatedNode
-	createAllocatedNode := func(name, hwProfile string) *pluginsv1alpha1.AllocatedNode {
-		return &pluginsv1alpha1.AllocatedNode{
+	createAllocatedNode := func(name, hwProfile string) *hwmgmtv1alpha1.AllocatedNode {
+		return &hwmgmtv1alpha1.AllocatedNode{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: name,
 			},
-			Status: pluginsv1alpha1.AllocatedNodeStatus{
+			Status: hwmgmtv1alpha1.AllocatedNodeStatus{
 				HwProfile: hwProfile,
 			},
 		}
@@ -1166,7 +1166,7 @@ var _ = Describe("Inventory", func() {
 			logger = slog.Default()
 			scheme = runtime.NewScheme()
 			Expect(metal3v1alpha1.AddToScheme(scheme)).To(Succeed())
-			Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
+			Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 			Expect(inventoryv1alpha1.AddToScheme(scheme)).To(Succeed())
 		})
 

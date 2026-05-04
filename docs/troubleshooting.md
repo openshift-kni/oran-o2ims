@@ -152,7 +152,7 @@ If `HardwareConfigured` shows `Failed` or `TimedOut`:
 1. Check the AllocatedNode status for the specific node that failed:
 
    ```console
-   oc get allocatednodes.plugins.clcm.openshift.io -A \
+   oc get allocatednodes.clcm.openshift.io -A \
      -o custom-columns=NAME:.metadata.name,CONFIGURED:.status.conditions[*].reason,MSG:.status.conditions[*].message
    ```
 

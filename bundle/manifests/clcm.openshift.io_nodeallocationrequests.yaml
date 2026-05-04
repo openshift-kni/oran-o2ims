@@ -4,9 +4,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
   creationTimestamp: null
-  name: nodeallocationrequests.plugins.clcm.openshift.io
+  name: nodeallocationrequests.clcm.openshift.io
 spec:
-  group: plugins.clcm.openshift.io
+  group: clcm.openshift.io
   names:
     kind: NodeAllocationRequest
     listKind: NodeAllocationRequestList

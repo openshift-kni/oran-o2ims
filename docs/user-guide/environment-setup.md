@@ -168,8 +168,8 @@ subscription.operators.coreos.com "oran-o2ims" deleted
 clusterserviceversion.operators.coreos.com "oran-o2ims.v4.22.0" deleted
 customresourcedefinition.apiextensions.k8s.io "clustertemplates.clcm.openshift.io" deleted
 customresourcedefinition.apiextensions.k8s.io "inventories.ocloud.openshift.io" deleted
-customresourcedefinition.apiextensions.k8s.io "nodeallocationrequests.plugins.clcm.openshift.io" deleted
-customresourcedefinition.apiextensions.k8s.io "allocatednodes.plugins.clcm.openshift.io" deleted
+customresourcedefinition.apiextensions.k8s.io "nodeallocationrequests.clcm.openshift.io" deleted
+customresourcedefinition.apiextensions.k8s.io "allocatednodes.clcm.openshift.io" deleted
 customresourcedefinition.apiextensions.k8s.io "provisioningrequests.clcm.openshift.io" deleted
 namespace "oran-o2ims" deleted
 clusterrole.rbac.authorization.k8s.io "oran-o2ims-alarms-server" deleted

@@ -27,7 +27,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -43,7 +42,7 @@ func syncSkipCleanupToAllocatedNodes(
 	ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
 ) error {
 	nodelist, err := hwmgrutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
 	if err != nil {
@@ -72,7 +71,7 @@ func hasNodeGroupHwProfileChanges(
 	ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
 ) (bool, error) {
 	nodelist, err := hwmgrutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
 	if err != nil {
@@ -103,7 +102,7 @@ func enableBMOManagementForIBINodes(
 	c client.Client,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
 ) error {
 	nodelist, err := hwmgrutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
 	if err != nil {
@@ -202,7 +201,7 @@ func removeConfigAnnotation(object client.Object) {
 }
 
 // clearConfigAnnotationWithPatch removes the config-in-progress annotation from an AllocatedNode and patches it
-func clearConfigAnnotationWithPatch(ctx context.Context, c client.Client, node *pluginsv1alpha1.AllocatedNode) error {
+func clearConfigAnnotationWithPatch(ctx context.Context, c client.Client, node *hwmgmtv1alpha1.AllocatedNode) error {
 	// Create a patch to remove the annotation
 	patch := client.MergeFrom(node.DeepCopy())
 
@@ -216,7 +215,7 @@ func clearConfigAnnotationWithPatch(ctx context.Context, c client.Client, node *
 	return nil
 }
 
-func hasUpdateAbandonedAnnotation(node *pluginsv1alpha1.AllocatedNode) bool {
+func hasUpdateAbandonedAnnotation(node *hwmgmtv1alpha1.AllocatedNode) bool {
 	if node.Annotations == nil {
 		return false
 	}
@@ -224,7 +223,7 @@ func hasUpdateAbandonedAnnotation(node *pluginsv1alpha1.AllocatedNode) bool {
 	return ok
 }
 
-func setUpdateAbandonedAnnotation(ctx context.Context, c client.Client, node *pluginsv1alpha1.AllocatedNode) error {
+func setUpdateAbandonedAnnotation(ctx context.Context, c client.Client, node *hwmgmtv1alpha1.AllocatedNode) error {
 	patch := client.MergeFrom(node.DeepCopy())
 	if node.Annotations == nil {
 		node.Annotations = make(map[string]string)
@@ -236,7 +235,7 @@ func setUpdateAbandonedAnnotation(ctx context.Context, c client.Client, node *pl
 	return nil
 }
 
-func clearUpdateAbandonedAnnotation(ctx context.Context, c client.Client, node *pluginsv1alpha1.AllocatedNode) error {
+func clearUpdateAbandonedAnnotation(ctx context.Context, c client.Client, node *hwmgmtv1alpha1.AllocatedNode) error {
 	if !hasUpdateAbandonedAnnotation(node) {
 		return nil
 	}
@@ -249,8 +248,8 @@ func clearUpdateAbandonedAnnotation(ctx context.Context, c client.Client, node *
 }
 
 // findNodesInProgress scans the nodelist to find all nodes in InProgress state or no condition
-func findNodesInProgress(nodelist *pluginsv1alpha1.AllocatedNodeList) []*pluginsv1alpha1.AllocatedNode {
-	var nodes []*pluginsv1alpha1.AllocatedNode
+func findNodesInProgress(nodelist *hwmgmtv1alpha1.AllocatedNodeList) []*hwmgmtv1alpha1.AllocatedNode {
+	var nodes []*hwmgmtv1alpha1.AllocatedNode
 	for _, node := range nodelist.Items {
 		condition := meta.FindStatusCondition(node.Status.Conditions, (string(hwmgmtv1alpha1.Provisioned)))
 		if condition == nil || (condition.Status == metav1.ConditionFalse && condition.Reason == string(hwmgmtv1alpha1.InProgress)) {
@@ -264,11 +263,11 @@ func findNodesInProgress(nodelist *pluginsv1alpha1.AllocatedNodeList) []*plugins
 func applyPostConfigUpdates(ctx context.Context,
 	c client.Client,
 	noncachedClient client.Reader,
-	node *pluginsv1alpha1.AllocatedNode) (int, error) {
+	node *hwmgmtv1alpha1.AllocatedNode) (int, error) {
 
 	// nolint:wrapcheck
 	err := retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
-		updatedNode := &pluginsv1alpha1.AllocatedNode{}
+		updatedNode := &hwmgmtv1alpha1.AllocatedNode{}
 
 		if err := noncachedClient.Get(ctx, types.NamespacedName{Name: node.Name, Namespace: node.Namespace}, updatedNode); err != nil {
 			return fmt.Errorf("failed to fetch Node: %w", err)
@@ -307,7 +306,7 @@ func deriveNARStatusFromSingleNode(
 	ctx context.Context,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
-	node *pluginsv1alpha1.AllocatedNode,
+	node *hwmgmtv1alpha1.AllocatedNode,
 ) (metav1.ConditionStatus, string, string) {
 	updatedNode, err := hwmgrutils.GetNode(ctx, logger, noncachedClient, node.Namespace, node.Name)
 	if err != nil {
@@ -346,8 +345,8 @@ func deriveNARStatusFromMultipleNodes(
 	ctx context.Context,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
-	nodelist *pluginsv1alpha1.AllocatedNodeList,
-	nar *pluginsv1alpha1.NodeAllocationRequest,
+	nodelist *hwmgmtv1alpha1.AllocatedNodeList,
+	nar *hwmgmtv1alpha1.NodeAllocationRequest,
 ) (metav1.ConditionStatus, string, string) {
 
 	// Track the number of completed, failed, and total nodes per group
@@ -429,7 +428,7 @@ func deriveNARStatusFromMultipleNodes(
 }
 
 // getGroupsSortedByRole returns NodeGroups sorted master-first, preserving spec order within same role.
-func getGroupsSortedByRole(nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) []pluginsv1alpha1.NodeGroup {
+func getGroupsSortedByRole(nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) []hwmgmtv1alpha1.NodeGroup {
 	var groupPriority = func(role string) int {
 		switch strings.ToLower(role) {
 		case hwmgmtv1alpha1.NodeRoleMaster:
@@ -439,7 +438,7 @@ func getGroupsSortedByRole(nodeAllocationRequest *pluginsv1alpha1.NodeAllocation
 		}
 	}
 
-	groups := append([]pluginsv1alpha1.NodeGroup(nil), nodeAllocationRequest.Spec.NodeGroup...)
+	groups := append([]hwmgmtv1alpha1.NodeGroup(nil), nodeAllocationRequest.Spec.NodeGroup...)
 	sort.SliceStable(groups, func(i, j int) bool {
 		return groupPriority(groups[i].NodeGroupData.Role) < groupPriority(groups[j].NodeGroupData.Role)
 	})
@@ -451,8 +450,8 @@ func createNode(ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
 	hwMgrNamespace string,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
-	nodename, nodeId, nodeNs, groupname, hwprofile string) (*pluginsv1alpha1.AllocatedNode, error) {
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
+	nodename, nodeId, nodeNs, groupname, hwprofile string) (*hwmgmtv1alpha1.AllocatedNode, error) {
 	logger.InfoContext(ctx, "Ensuring AllocatedNode exists",
 		slog.String("nodegroup name", groupname),
 		slog.String("nodename", nodename),
@@ -463,7 +462,7 @@ func createNode(ctx context.Context,
 		Namespace: hwMgrNamespace,
 	}
 
-	existing := &pluginsv1alpha1.AllocatedNode{}
+	existing := &hwmgmtv1alpha1.AllocatedNode{}
 	err := c.Get(ctx, nodeKey, existing)
 	if err == nil {
 		logger.InfoContext(ctx, "AllocatedNode already exists, skipping create", slog.String("nodename", nodename))
@@ -475,7 +474,7 @@ func createNode(ctx context.Context,
 	}
 
 	blockDeletion := true
-	node := &pluginsv1alpha1.AllocatedNode{
+	node := &hwmgmtv1alpha1.AllocatedNode{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      nodename,
 			Namespace: hwMgrNamespace,
@@ -487,7 +486,7 @@ func createNode(ctx context.Context,
 				BlockOwnerDeletion: &blockDeletion,
 			}},
 		},
-		Spec: pluginsv1alpha1.AllocatedNodeSpec{
+		Spec: hwmgmtv1alpha1.AllocatedNodeSpec{
 			NodeAllocationRequest: nodeAllocationRequest.Name,
 			GroupName:             groupname,
 			HwProfile:             hwprofile,
@@ -515,7 +514,7 @@ func updateNodeStatus(ctx context.Context,
 	logger.InfoContext(ctx, "Updating AllocatedNode", slog.String("nodename", nodename))
 	// nolint:wrapcheck
 	return retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
-		node := &pluginsv1alpha1.AllocatedNode{}
+		node := &hwmgmtv1alpha1.AllocatedNode{}
 
 		if err := noncachedClient.Get(ctx, types.NamespacedName{Name: nodename, Namespace: hwMgrNamespace}, node); err != nil {
 			return fmt.Errorf("failed to fetch AllocatedNode: %w", err)
@@ -527,7 +526,7 @@ func updateNodeStatus(ctx context.Context,
 			slog.String("nodename", nodename),
 			slog.Any("info", info))
 
-		node.Status.BMC = &pluginsv1alpha1.BMC{
+		node.Status.BMC = &hwmgmtv1alpha1.BMC{
 			Address:         info.BMC.Address,
 			CredentialsName: info.BMC.CredentialsName,
 		}
@@ -562,7 +561,7 @@ func checkNodeAllocationRequestProgress(
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	hwMgrNamespace string,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (ctrl.Result, bool, error) {
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (ctrl.Result, bool, error) {
 
 	// Check if we're fully allocated now that processing is complete
 	full, err := isNodeAllocationRequestFullyAllocated(ctx, noncachedClient, logger, hwMgrNamespace, nodeAllocationRequest)
@@ -591,7 +590,7 @@ func checkNodeAllocationRequestProgress(
 func processNewNodeAllocationRequest(ctx context.Context,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) error {
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) error {
 
 	logger.InfoContext(ctx, "Processing processNewNodeAllocationRequest request")
 
@@ -624,7 +623,7 @@ func isNodeAllocationRequestFullyAllocated(ctx context.Context,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	hwMgrNamespace string,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (bool, error) {
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (bool, error) {
 
 	childNodes, err := hwmgrutils.GetChildNodesUncached(ctx, noncachedClient, hwMgrNamespace, nodeAllocationRequest.Name)
 	if err != nil {
@@ -653,7 +652,7 @@ func handleNodeInProgressUpdate(ctx context.Context,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	hwMgrNamespace string,
-	node *pluginsv1alpha1.AllocatedNode,
+	node *hwmgmtv1alpha1.AllocatedNode,
 	nodeOps NodeOps,
 ) (ctrl.Result, error) {
 	bmh, err := getBMHForNode(ctx, noncachedClient, node)
@@ -791,7 +790,7 @@ func abandonNodeUpdate(
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	newHwProfile string,
-	node *pluginsv1alpha1.AllocatedNode,
+	node *hwmgmtv1alpha1.AllocatedNode,
 	nodeOps NodeOps,
 ) (ctrl.Result, error) {
 	bmh, err := getBMHForNode(ctx, noncachedClient, node)
@@ -850,7 +849,7 @@ func initiateNodeUpdate(ctx context.Context,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	hwMgrNamespace string,
-	node *pluginsv1alpha1.AllocatedNode,
+	node *hwmgmtv1alpha1.AllocatedNode,
 	newHwProfile string,
 	nodeOps NodeOps,
 ) (ctrl.Result, error) {
@@ -940,7 +939,7 @@ func initiateNodeUpdate(ctx context.Context,
 // - actionTransition: Reboot annotation, wait for servicing, mark config-in-progress
 // - actionInProgressUpdate: Check ready, uncordon, mark complete
 type nodeAction struct {
-	node       *pluginsv1alpha1.AllocatedNode
+	node       *hwmgmtv1alpha1.AllocatedNode
 	actionType nodeActionType
 }
 
@@ -972,8 +971,8 @@ func handleNodeAllocationRequestConfiguring(
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	hwMgrNamespace string,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
-) (ctrl.Result, *pluginsv1alpha1.AllocatedNodeList, error) {
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
+) (ctrl.Result, *hwmgmtv1alpha1.AllocatedNodeList, error) {
 
 	logger.InfoContext(ctx, "Handling NodeAllocationRequest Configuring")
 
@@ -1030,8 +1029,8 @@ func selectNodesToProcess(
 	ctx context.Context,
 	logger *slog.Logger,
 	nodeOps NodeOps,
-	nodelist *pluginsv1alpha1.AllocatedNodeList,
-	nar *pluginsv1alpha1.NodeAllocationRequest,
+	nodelist *hwmgmtv1alpha1.AllocatedNodeList,
+	nar *hwmgmtv1alpha1.NodeAllocationRequest,
 ) ([]nodeAction, error) {
 
 	var nodesToProcess []nodeAction
@@ -1084,7 +1083,7 @@ func selectNodesToProcess(
 		// 2. Abandoned nodes — previous update was interrupted by a mid-flight profile
 		//    change, HFS/HFC may carry stale settings that may want to be updated first.
 		// 3. Pending nodes — regular candidates ready for a fresh update.
-		var candidates = []*pluginsv1alpha1.AllocatedNode{}
+		var candidates = []*hwmgmtv1alpha1.AllocatedNode{}
 		candidates = append(candidates, nc.PriorityNodes...)
 		candidates = append(candidates, nc.PendingNodes...)
 		for i := range candidates {
@@ -1137,7 +1136,7 @@ func executeNodeUpdates(
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	hwMgrNamespace string,
-	nar *pluginsv1alpha1.NodeAllocationRequest,
+	nar *hwmgmtv1alpha1.NodeAllocationRequest,
 	nodeOps NodeOps,
 	nodesToProcess []nodeAction,
 ) (ctrl.Result, error) {
@@ -1226,8 +1225,8 @@ func markPendingNodesForUpdate(
 	c client.Client,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
-	nodelist *pluginsv1alpha1.AllocatedNodeList,
-	nar *pluginsv1alpha1.NodeAllocationRequest,
+	nodelist *hwmgmtv1alpha1.AllocatedNodeList,
+	nar *hwmgmtv1alpha1.NodeAllocationRequest,
 ) error {
 	for _, nodegroup := range nar.Spec.NodeGroup {
 		newHwProfile := nodegroup.NodeGroupData.HwProfile
@@ -1268,26 +1267,26 @@ func markPendingNodesForUpdate(
 // distinct lifecycle state for nodes within a single group.
 type nodeClassification struct {
 	// DoneNodes: ConfigApplied and spec.hwProfile == newHwProfile
-	DoneNodes []*pluginsv1alpha1.AllocatedNode
+	DoneNodes []*hwmgmtv1alpha1.AllocatedNode
 	// InProgressNodes: Configured=False with reason ConfigUpdate (without abandoned annotation)
-	InProgressNodes []*pluginsv1alpha1.AllocatedNode
+	InProgressNodes []*hwmgmtv1alpha1.AllocatedNode
 	// FailedNodes: Configured=False with reason Failed or InvalidInput
-	FailedNodes []*pluginsv1alpha1.AllocatedNode
+	FailedNodes []*hwmgmtv1alpha1.AllocatedNode
 	// PriorityNodes: nodes that should be processed before regular pending nodes.
 	// This includes nodes whose k8s node is not Ready (previous update failed)
 	// and nodes with the UpdateAbandonedAnnotation (previous update was abandoned
 	// due to a mid-flight profile change).
-	PriorityNodes []*pluginsv1alpha1.AllocatedNode
+	PriorityNodes []*hwmgmtv1alpha1.AllocatedNode
 	// PendingNodes: ready nodes without special conditions that need to be evaluated/updated
-	PendingNodes []*pluginsv1alpha1.AllocatedNode
+	PendingNodes []*hwmgmtv1alpha1.AllocatedNode
 }
 
 func classifyNodes(
 	ctx context.Context, logger *slog.Logger, nodeOps NodeOps,
-	nodes []*pluginsv1alpha1.AllocatedNode, newHwProfile string,
+	nodes []*hwmgmtv1alpha1.AllocatedNode, newHwProfile string,
 ) nodeClassification {
 	var nc nodeClassification
-	var notReadyNodes, abandonedNodes []*pluginsv1alpha1.AllocatedNode
+	var notReadyNodes, abandonedNodes []*hwmgmtv1alpha1.AllocatedNode
 	for _, node := range nodes {
 		cond := meta.FindStatusCondition(node.Status.Conditions, string(hwmgmtv1alpha1.Configured))
 
@@ -1341,7 +1340,7 @@ func classifyNodes(
 }
 
 // getNewHwProfileForNode finds the target HwProfile for a node based on its group.
-func getNewHwProfileForNode(nar *pluginsv1alpha1.NodeAllocationRequest, node *pluginsv1alpha1.AllocatedNode) string {
+func getNewHwProfileForNode(nar *hwmgmtv1alpha1.NodeAllocationRequest, node *hwmgmtv1alpha1.AllocatedNode) string {
 	for _, group := range nar.Spec.NodeGroup {
 		if group.NodeGroupData.Name == node.Spec.GroupName {
 			return group.NodeGroupData.HwProfile
@@ -1351,8 +1350,8 @@ func getNewHwProfileForNode(nar *pluginsv1alpha1.NodeAllocationRequest, node *pl
 }
 
 // filterNodesByGroup returns AllocatedNodes belonging to the specified group.
-func filterNodesByGroup(nodelist *pluginsv1alpha1.AllocatedNodeList, groupName string) []*pluginsv1alpha1.AllocatedNode {
-	var result []*pluginsv1alpha1.AllocatedNode
+func filterNodesByGroup(nodelist *hwmgmtv1alpha1.AllocatedNodeList, groupName string) []*hwmgmtv1alpha1.AllocatedNode {
+	var result []*hwmgmtv1alpha1.AllocatedNode
 	for i := range nodelist.Items {
 		if nodelist.Items[i].Spec.GroupName == groupName {
 			result = append(result, &nodelist.Items[i])
@@ -1369,8 +1368,8 @@ func populateNodeHostnames(
 	ctx context.Context,
 	hubClient client.Client,
 	logger *slog.Logger,
-	nodelist *pluginsv1alpha1.AllocatedNodeList,
-	nar *pluginsv1alpha1.NodeAllocationRequest,
+	nodelist *hwmgmtv1alpha1.AllocatedNodeList,
+	nar *hwmgmtv1alpha1.NodeAllocationRequest,
 ) error {
 	// Quick check: skip if all nodes already have hostnames
 	var needsPatch []int
@@ -1415,7 +1414,7 @@ func populateNodeHostnames(
 func releaseNodeAllocationRequest(ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (bool, error) {
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (bool, error) {
 
 	clusterID := nodeAllocationRequest.Spec.ClusterId
 
@@ -1445,8 +1444,8 @@ func allocateBMHToNodeAllocationRequest(
 	logger *slog.Logger,
 	hwMgrNamespace string,
 	bmh *metal3v1alpha1.BareMetalHost,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
-	group pluginsv1alpha1.NodeGroup,
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
+	group hwmgmtv1alpha1.NodeGroup,
 ) (string, error) {
 
 	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
@@ -1534,7 +1533,7 @@ func processNodeAllocationRequestAllocation(
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	hwMgrNamespace string,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
 ) (ctrl.Result, error) {
 
 	var (
@@ -1637,7 +1636,7 @@ func processNodeAllocationRequestAllocation(
 	return ctrl.Result{}, nil
 }
 
-func isNodeProvisioningInProgress(allocatednode *pluginsv1alpha1.AllocatedNode) bool {
+func isNodeProvisioningInProgress(allocatednode *hwmgmtv1alpha1.AllocatedNode) bool {
 	condition := meta.FindStatusCondition(allocatednode.Status.Conditions, string(hwmgmtv1alpha1.Provisioned))
 	return condition != nil &&
 		condition.Status == metav1.ConditionFalse &&
@@ -1910,7 +1909,7 @@ func clearBMHUpdateAnnotationsForNAR(
 	ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
 ) error {
 	logger.InfoContext(ctx, "Clearing BMH update annotations for NodeAllocationRequest",
 		slog.String("nodeAllocationRequest", nodeAllocationRequest.Name))
@@ -1959,7 +1958,7 @@ func clearConfigAnnotationForAllocatedNodes(
 	c client.Client,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
 ) error {
 	logger.InfoContext(ctx, "Clearing config-in-progress annotations for AllocatedNodes",
 		slog.String("nodeAllocationRequest", nodeAllocationRequest.Name))
@@ -1971,7 +1970,7 @@ func clearConfigAnnotationForAllocatedNodes(
 
 	for _, node := range nodeList.Items {
 		// Fetch latest to avoid conflicts
-		updatedNode := &pluginsv1alpha1.AllocatedNode{}
+		updatedNode := &hwmgmtv1alpha1.AllocatedNode{}
 		if err := noncachedClient.Get(ctx, types.NamespacedName{Name: node.Name, Namespace: node.Namespace}, updatedNode); err != nil {
 			logger.ErrorContext(ctx, "Failed to fetch AllocatedNode for annotation clear",
 				slog.String("allocatedNode", node.Name), slog.String("error", err.Error()))

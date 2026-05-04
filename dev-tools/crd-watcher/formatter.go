@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	controller "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/controller"
 )
@@ -292,7 +292,7 @@ func (f *TableFormatter) getProvisioningRequestDisplayName(obj runtime.Object) s
 }
 
 func (f *TableFormatter) getNodeAllocationRequestClusterId(obj runtime.Object) string {
-	if nar, ok := obj.(*pluginsv1alpha1.NodeAllocationRequest); ok {
+	if nar, ok := obj.(*hwmgmtv1alpha1.NodeAllocationRequest); ok {
 		if nar.Spec.ClusterId != "" {
 			return nar.Spec.ClusterId
 		}
@@ -443,7 +443,7 @@ func (f *TableFormatter) formatProvisioningRequest(age string, obj runtime.Objec
 
 //nolint:unparam // age parameter required for interface consistency
 func (f *TableFormatter) formatNodeAllocationRequest(age string, obj runtime.Object, widths FieldWidths) error {
-	nar, ok := obj.(*pluginsv1alpha1.NodeAllocationRequest)
+	nar, ok := obj.(*hwmgmtv1alpha1.NodeAllocationRequest)
 	if !ok {
 		return fmt.Errorf("expected NodeAllocationRequest, got %T", obj)
 	}
@@ -474,7 +474,7 @@ func (f *TableFormatter) formatNodeAllocationRequest(age string, obj runtime.Obj
 
 //nolint:unparam // age parameter required for interface consistency
 func (f *TableFormatter) formatAllocatedNode(age string, obj runtime.Object, widths FieldWidths) error {
-	an, ok := obj.(*pluginsv1alpha1.AllocatedNode)
+	an, ok := obj.(*hwmgmtv1alpha1.AllocatedNode)
 	if !ok {
 		return fmt.Errorf("expected AllocatedNode, got %T", obj)
 	}
@@ -1248,7 +1248,7 @@ func (f *TableFormatter) calculateProvisioningRequestWidths(events []WatchEvent,
 
 func (f *TableFormatter) calculateNodeAllocationRequestWidths(events []WatchEvent, widths FieldWidths) FieldWidths {
 	for _, event := range events {
-		nar, ok := event.Object.(*pluginsv1alpha1.NodeAllocationRequest)
+		nar, ok := event.Object.(*hwmgmtv1alpha1.NodeAllocationRequest)
 		if !ok {
 			continue
 		}
@@ -1269,7 +1269,7 @@ func (f *TableFormatter) calculateNodeAllocationRequestWidths(events []WatchEven
 
 func (f *TableFormatter) calculateAllocatedNodeWidths(events []WatchEvent, widths FieldWidths) FieldWidths {
 	for _, event := range events {
-		an, ok := event.Object.(*pluginsv1alpha1.AllocatedNode)
+		an, ok := event.Object.(*hwmgmtv1alpha1.AllocatedNode)
 		if !ok {
 			continue
 		}

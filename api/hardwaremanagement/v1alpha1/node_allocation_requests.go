@@ -7,7 +7,6 @@ SPDX-License-Identifier: Apache-2.0
 package v1alpha1
 
 import (
-	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -70,8 +69,8 @@ type NodeAllocationRequestSpec struct {
 }
 
 type NodeGroup struct {
-	NodeGroupData hwmgmtv1alpha1.NodeGroupData `json:"nodeGroupData"` // Explicitly include as a named field
-	Size          int                          `json:"size" yaml:"size"`
+	NodeGroupData NodeGroupData `json:"nodeGroupData"` // Explicitly include as a named field
+	Size          int           `json:"size" yaml:"size"`
 }
 
 type Properties struct {

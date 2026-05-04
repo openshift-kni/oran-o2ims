@@ -101,7 +101,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
@@ -110,7 +109,7 @@ import (
 
 // Helper functions
 // nolint:unparam
-func createNodeWithCondition(name, namespace, conditionType, reason string, status metav1.ConditionStatus) *pluginsv1alpha1.AllocatedNode {
+func createNodeWithCondition(name, namespace, conditionType, reason string, status metav1.ConditionStatus) *hwmgmtv1alpha1.AllocatedNode {
 	node := createAllocatedNode(name, namespace, "bmh-"+name, namespace)
 	node.Status.Conditions = []metav1.Condition{
 		{
@@ -137,15 +136,15 @@ var _ = Describe("Helpers", func() {
 		logger = slog.Default()
 		scheme = runtime.NewScheme()
 		Expect(metal3v1alpha1.AddToScheme(scheme)).To(Succeed())
-		Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
+		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 	})
 
 	Describe("Config Annotation Functions", func() {
-		var testNode *pluginsv1alpha1.AllocatedNode
+		var testNode *hwmgmtv1alpha1.AllocatedNode
 
 		BeforeEach(func() {
-			testNode = &pluginsv1alpha1.AllocatedNode{
+			testNode = &hwmgmtv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-node",
 					Namespace: testNamespace,
@@ -222,12 +221,12 @@ var _ = Describe("Helpers", func() {
 			var (
 				ctx        context.Context
 				testClient client.Client
-				allocNode  *pluginsv1alpha1.AllocatedNode
+				allocNode  *hwmgmtv1alpha1.AllocatedNode
 			)
 
 			BeforeEach(func() {
 				ctx = context.Background()
-				allocNode = &pluginsv1alpha1.AllocatedNode{
+				allocNode = &hwmgmtv1alpha1.AllocatedNode{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-node",
 						Namespace: "test-namespace",
@@ -239,7 +238,7 @@ var _ = Describe("Helpers", func() {
 				}
 
 				scheme := runtime.NewScheme()
-				Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
+				Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 				testClient = fake.NewClientBuilder().
 					WithScheme(scheme).
 					WithObjects(allocNode).
@@ -255,7 +254,7 @@ var _ = Describe("Helpers", func() {
 				Expect(allocNode.Annotations["other"]).To(Equal("value"))
 
 				// Verify the change was persisted
-				updatedNode := &pluginsv1alpha1.AllocatedNode{}
+				updatedNode := &hwmgmtv1alpha1.AllocatedNode{}
 				err = testClient.Get(ctx, types.NamespacedName{Name: "test-node", Namespace: "test-namespace"}, updatedNode)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(updatedNode.Annotations).NotTo(HaveKey(ConfigAnnotation))
@@ -276,18 +275,18 @@ var _ = Describe("Helpers", func() {
 	})
 
 	Describe("Node Finding Functions", func() {
-		var nodeList *pluginsv1alpha1.AllocatedNodeList
+		var nodeList *hwmgmtv1alpha1.AllocatedNodeList
 
 		BeforeEach(func() {
-			nodeList = &pluginsv1alpha1.AllocatedNodeList{
-				Items: []pluginsv1alpha1.AllocatedNode{},
+			nodeList = &hwmgmtv1alpha1.AllocatedNodeList{
+				Items: []hwmgmtv1alpha1.AllocatedNode{},
 			}
 		})
 
 		Describe("findNodesInProgress", func() {
 			It("should return empty slice when no nodes are in progress", func() {
-				nodeList := &pluginsv1alpha1.AllocatedNodeList{
-					Items: []pluginsv1alpha1.AllocatedNode{
+				nodeList := &hwmgmtv1alpha1.AllocatedNodeList{
+					Items: []hwmgmtv1alpha1.AllocatedNode{
 						*createNodeWithCondition("node1", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
 						*createNodeWithCondition("node2", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Failed), metav1.ConditionFalse),
 					},
@@ -298,8 +297,8 @@ var _ = Describe("Helpers", func() {
 			})
 
 			It("should return all nodes with InProgress status or no condition", func() {
-				nodeList := &pluginsv1alpha1.AllocatedNodeList{
-					Items: []pluginsv1alpha1.AllocatedNode{
+				nodeList := &hwmgmtv1alpha1.AllocatedNodeList{
+					Items: []hwmgmtv1alpha1.AllocatedNode{
 						*createNodeWithCondition("node1", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed), metav1.ConditionTrue),
 						*createNodeWithCondition("node2", "test-ns", string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.InProgress), metav1.ConditionFalse),
 						*createAllocatedNode("node3", "test-ns", "bmh-node3", "test-ns"),
@@ -321,10 +320,10 @@ var _ = Describe("Helpers", func() {
 	})
 
 	Describe("createNode", func() {
-		var nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest
+		var nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest
 
 		BeforeEach(func() {
-			nodeAllocationRequest = &pluginsv1alpha1.NodeAllocationRequest{
+			nodeAllocationRequest = &hwmgmtv1alpha1.NodeAllocationRequest{
 				TypeMeta: metav1.TypeMeta{
 					APIVersion: "plugins.hardwaremanagement.oran.openshift.io/v1alpha1",
 					Kind:       "NodeAllocationRequest",
@@ -334,7 +333,7 @@ var _ = Describe("Helpers", func() {
 					Namespace: testNamespace,
 					UID:       "test-uid",
 				},
-				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{},
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{},
 			}
 
 			fakeClient = fake.NewClientBuilder().
@@ -349,7 +348,7 @@ var _ = Describe("Helpers", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify node was created
-			createdNode := &pluginsv1alpha1.AllocatedNode{}
+			createdNode := &hwmgmtv1alpha1.AllocatedNode{}
 			err = fakeClient.Get(ctx, types.NamespacedName{
 				Name:      "test-node",
 				Namespace: testNamespace,
@@ -363,7 +362,7 @@ var _ = Describe("Helpers", func() {
 
 		It("should skip creation if AllocatedNode already exists", func() {
 			// Create existing node
-			existingNode := &pluginsv1alpha1.AllocatedNode{
+			existingNode := &hwmgmtv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "existing-node",
 					Namespace: testNamespace,
@@ -376,7 +375,7 @@ var _ = Describe("Helpers", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify original node wasn't modified
-			retrievedNode := &pluginsv1alpha1.AllocatedNode{}
+			retrievedNode := &hwmgmtv1alpha1.AllocatedNode{}
 			err = fakeClient.Get(ctx, types.NamespacedName{
 				Name:      "existing-node",
 				Namespace: testNamespace,
@@ -396,7 +395,7 @@ var _ = Describe("Helpers", func() {
 		})
 
 		It("should return InProgress when node is missing Configured condition", func() {
-			node := &pluginsv1alpha1.AllocatedNode{
+			node := &hwmgmtv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{Name: "n1", Namespace: testNamespace},
 			}
 			Expect(fakeClient.Create(ctx, node)).To(Succeed())
@@ -461,7 +460,7 @@ var _ = Describe("Helpers", func() {
 	})
 
 	Describe("deriveNARStatusFromMultipleNodes", func() {
-		var mnoNAR *pluginsv1alpha1.NodeAllocationRequest
+		var mnoNAR *hwmgmtv1alpha1.NodeAllocationRequest
 		configured := string(hwmgmtv1alpha1.Configured)
 
 		const testGroupMaster = "master"
@@ -470,10 +469,10 @@ var _ = Describe("Helpers", func() {
 		BeforeEach(func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
 			fakeNoncached = fakeClient
-			mnoNAR = &pluginsv1alpha1.NodeAllocationRequest{
+			mnoNAR = &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-nar", Namespace: testNamespace},
-				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-					NodeGroup: []pluginsv1alpha1.NodeGroup{
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+					NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "master", HwProfile: "profile-v2", Role: "master"}, Size: 3},
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", HwProfile: "profile-v2", Role: "worker"}, Size: 2},
 					},
@@ -493,12 +492,12 @@ var _ = Describe("Helpers", func() {
 			w2 := createNodeWithCondition("w2", testNamespace, configured, string(hwmgmtv1alpha1.ConfigUpdatePending), metav1.ConditionFalse)
 			w2.Spec.GroupName = testGroupWorker
 
-			nodes := []pluginsv1alpha1.AllocatedNode{*m1, *m2, *m3, *w1, *w2}
+			nodes := []hwmgmtv1alpha1.AllocatedNode{*m1, *m2, *m3, *w1, *w2}
 			for i := range nodes {
 				Expect(fakeClient.Create(ctx, &nodes[i])).To(Succeed())
 			}
 
-			nodeList := &pluginsv1alpha1.AllocatedNodeList{Items: nodes}
+			nodeList := &hwmgmtv1alpha1.AllocatedNodeList{Items: nodes}
 			status, reason, message := deriveNARStatusFromMultipleNodes(ctx, fakeNoncached, logger, nodeList, mnoNAR)
 			Expect(status).To(Equal(metav1.ConditionFalse))
 			Expect(reason).To(Equal(string(hwmgmtv1alpha1.InProgress)))
@@ -517,13 +516,13 @@ var _ = Describe("Helpers", func() {
 			w2 := createNodeWithCondition("w2", testNamespace, configured, string(hwmgmtv1alpha1.InvalidInput), metav1.ConditionFalse)
 			w2.Spec.GroupName = testGroupWorker
 
-			nodes := []pluginsv1alpha1.AllocatedNode{*m1, *m2, *m3, *w1, *w2}
+			nodes := []hwmgmtv1alpha1.AllocatedNode{*m1, *m2, *m3, *w1, *w2}
 			for i := range nodes {
 				Expect(fakeClient.Create(ctx, &nodes[i])).To(Succeed())
 			}
 
 			// NAR reports failed because of the failed node in the worker group.
-			nodeList := &pluginsv1alpha1.AllocatedNodeList{Items: nodes}
+			nodeList := &hwmgmtv1alpha1.AllocatedNodeList{Items: nodes}
 			status, reason, message := deriveNARStatusFromMultipleNodes(ctx, fakeNoncached, logger, nodeList, mnoNAR)
 			Expect(status).To(Equal(metav1.ConditionFalse))
 			Expect(reason).To(Equal(string(hwmgmtv1alpha1.Failed)))
@@ -542,12 +541,12 @@ var _ = Describe("Helpers", func() {
 			w2 := createNodeWithCondition("w2", testNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
 			w2.Spec.GroupName = testGroupWorker
 
-			nodes := []pluginsv1alpha1.AllocatedNode{*m1, *m2, *m3, *w1, *w2}
+			nodes := []hwmgmtv1alpha1.AllocatedNode{*m1, *m2, *m3, *w1, *w2}
 			for i := range nodes {
 				Expect(fakeClient.Create(ctx, &nodes[i])).To(Succeed())
 			}
 
-			nodeList := &pluginsv1alpha1.AllocatedNodeList{Items: nodes}
+			nodeList := &hwmgmtv1alpha1.AllocatedNodeList{Items: nodes}
 			status, reason, message := deriveNARStatusFromMultipleNodes(ctx, fakeNoncached, logger, nodeList, mnoNAR)
 			Expect(status).To(Equal(metav1.ConditionTrue))
 			Expect(reason).To(Equal(string(hwmgmtv1alpha1.ConfigApplied)))
@@ -556,19 +555,19 @@ var _ = Describe("Helpers", func() {
 	})
 
 	Describe("processNewNodeAllocationRequest", func() {
-		var nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest
+		var nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest
 
 		BeforeEach(func() {
-			nodeAllocationRequest = &pluginsv1alpha1.NodeAllocationRequest{
+			nodeAllocationRequest = &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-nar",
 					Namespace: testNamespace,
 				},
-				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-					LocationSpec: pluginsv1alpha1.LocationSpec{
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+					LocationSpec: hwmgmtv1alpha1.LocationSpec{
 						Site: "test-site",
 					},
-					NodeGroup: []pluginsv1alpha1.NodeGroup{
+					NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 						{
 							Size: 2,
 							NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
@@ -663,11 +662,11 @@ var _ = Describe("Helpers", func() {
 
 	Describe("filterNodesByGroup", func() {
 		It("should return only nodes matching the specified group", func() {
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{
-				Items: []pluginsv1alpha1.AllocatedNode{
-					{Spec: pluginsv1alpha1.AllocatedNodeSpec{GroupName: "master"}},
-					{Spec: pluginsv1alpha1.AllocatedNodeSpec{GroupName: "worker"}},
-					{Spec: pluginsv1alpha1.AllocatedNodeSpec{GroupName: "master"}},
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{
+				Items: []hwmgmtv1alpha1.AllocatedNode{
+					{Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "master"}},
+					{Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "worker"}},
+					{Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "master"}},
 				},
 			}
 			result := filterNodesByGroup(nodelist, "master")
@@ -678,9 +677,9 @@ var _ = Describe("Helpers", func() {
 		})
 
 		It("should return empty slice when no nodes match", func() {
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{
-				Items: []pluginsv1alpha1.AllocatedNode{
-					{Spec: pluginsv1alpha1.AllocatedNodeSpec{GroupName: "worker"}},
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{
+				Items: []hwmgmtv1alpha1.AllocatedNode{
+					{Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "worker"}},
 				},
 			}
 			result := filterNodesByGroup(nodelist, "master")
@@ -688,17 +687,17 @@ var _ = Describe("Helpers", func() {
 		})
 
 		It("should return empty slice for empty node list", func() {
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{}
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{}
 			result := filterNodesByGroup(nodelist, "master")
 			Expect(result).To(BeEmpty())
 		})
 
 		It("should return all nodes when all match the group", func() {
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{
-				Items: []pluginsv1alpha1.AllocatedNode{
-					{Spec: pluginsv1alpha1.AllocatedNodeSpec{GroupName: "worker"}},
-					{Spec: pluginsv1alpha1.AllocatedNodeSpec{GroupName: "worker"}},
-					{Spec: pluginsv1alpha1.AllocatedNodeSpec{GroupName: "worker"}},
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{
+				Items: []hwmgmtv1alpha1.AllocatedNode{
+					{Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "worker"}},
+					{Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "worker"}},
+					{Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "worker"}},
 				},
 			}
 			result := filterNodesByGroup(nodelist, "worker")
@@ -706,11 +705,11 @@ var _ = Describe("Helpers", func() {
 		})
 
 		It("should return pointers to the original slice elements", func() {
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{
-				Items: []pluginsv1alpha1.AllocatedNode{
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{
+				Items: []hwmgmtv1alpha1.AllocatedNode{
 					{
 						ObjectMeta: metav1.ObjectMeta{Name: "node-1"},
-						Spec:       pluginsv1alpha1.AllocatedNodeSpec{GroupName: "master"},
+						Spec:       hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "master"},
 					},
 				},
 			}
@@ -721,16 +720,16 @@ var _ = Describe("Helpers", func() {
 	})
 
 	Describe("isNodeAllocationRequestFullyAllocated", func() {
-		var nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest
+		var nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest
 
 		BeforeEach(func() {
-			nodeAllocationRequest = &pluginsv1alpha1.NodeAllocationRequest{
+			nodeAllocationRequest = &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-nar",
 					Namespace: testNamespace,
 				},
-				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-					NodeGroup: []pluginsv1alpha1.NodeGroup{
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+					NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 						{
 							Size: 2,
 							NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
@@ -742,22 +741,22 @@ var _ = Describe("Helpers", func() {
 			}
 
 			// Create allocated nodes linked to the NAR
-			node1 := &pluginsv1alpha1.AllocatedNode{
+			node1 := &hwmgmtv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "node-1",
 					Namespace: testNamespace,
 				},
-				Spec: pluginsv1alpha1.AllocatedNodeSpec{
+				Spec: hwmgmtv1alpha1.AllocatedNodeSpec{
 					GroupName:             "test-group",
 					NodeAllocationRequest: "test-nar",
 				},
 			}
-			node2 := &pluginsv1alpha1.AllocatedNode{
+			node2 := &hwmgmtv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "node-2",
 					Namespace: testNamespace,
 				},
-				Spec: pluginsv1alpha1.AllocatedNodeSpec{
+				Spec: hwmgmtv1alpha1.AllocatedNodeSpec{
 					GroupName:             "test-group",
 					NodeAllocationRequest: "test-nar",
 				},
@@ -791,12 +790,12 @@ var _ = Describe("Helpers", func() {
 		})
 
 		It("should not count nodes belonging to a different NAR", func() {
-			otherNode := &pluginsv1alpha1.AllocatedNode{
+			otherNode := &hwmgmtv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "other-node",
 					Namespace: testNamespace,
 				},
-				Spec: pluginsv1alpha1.AllocatedNodeSpec{
+				Spec: hwmgmtv1alpha1.AllocatedNodeSpec{
 					GroupName:             "test-group",
 					NodeAllocationRequest: "other-nar",
 				},
@@ -914,7 +913,7 @@ var _ = Describe("Helpers", func() {
 
 			scheme = runtime.NewScheme()
 			Expect(metal3v1alpha1.AddToScheme(scheme)).To(Succeed())
-			Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
+			Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 			Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 
 			testClient = fake.NewClientBuilder().
@@ -1156,9 +1155,9 @@ var _ = Describe("Helpers", func() {
 
 		Describe("getGroupsSortedByRole", func() {
 			It("should return empty slice for NAR with no groups", func() {
-				nar := &pluginsv1alpha1.NodeAllocationRequest{
-					Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-						NodeGroup: []pluginsv1alpha1.NodeGroup{},
+				nar := &hwmgmtv1alpha1.NodeAllocationRequest{
+					Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+						NodeGroup: []hwmgmtv1alpha1.NodeGroup{},
 					},
 				}
 				result := getGroupsSortedByRole(nar)
@@ -1166,9 +1165,9 @@ var _ = Describe("Helpers", func() {
 			})
 
 			It("should sort master group before worker group", func() {
-				nar := &pluginsv1alpha1.NodeAllocationRequest{
-					Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-						NodeGroup: []pluginsv1alpha1.NodeGroup{
+				nar := &hwmgmtv1alpha1.NodeAllocationRequest{
+					Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+						NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 							{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "workers", Role: hwmgmtv1alpha1.NodeRoleWorker}},
 							{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "masters", Role: hwmgmtv1alpha1.NodeRoleMaster}},
 						},
@@ -1181,9 +1180,9 @@ var _ = Describe("Helpers", func() {
 			})
 
 			It("should preserve order when all groups have same role", func() {
-				nar := &pluginsv1alpha1.NodeAllocationRequest{
-					Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-						NodeGroup: []pluginsv1alpha1.NodeGroup{
+				nar := &hwmgmtv1alpha1.NodeAllocationRequest{
+					Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+						NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 							{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "group-a", Role: hwmgmtv1alpha1.NodeRoleWorker}},
 							{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "group-b", Role: hwmgmtv1alpha1.NodeRoleWorker}},
 							{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "group-c", Role: hwmgmtv1alpha1.NodeRoleWorker}},
@@ -1198,9 +1197,9 @@ var _ = Describe("Helpers", func() {
 			})
 
 			It("should handle case-insensitive master role", func() {
-				nar := &pluginsv1alpha1.NodeAllocationRequest{
-					Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-						NodeGroup: []pluginsv1alpha1.NodeGroup{
+				nar := &hwmgmtv1alpha1.NodeAllocationRequest{
+					Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+						NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 							{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "workers", Role: hwmgmtv1alpha1.NodeRoleWorker}},
 							{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "masters", Role: "MASTER"}},
 						},
@@ -1213,9 +1212,9 @@ var _ = Describe("Helpers", func() {
 			})
 
 			It("should handle single group", func() {
-				nar := &pluginsv1alpha1.NodeAllocationRequest{
-					Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-						NodeGroup: []pluginsv1alpha1.NodeGroup{
+				nar := &hwmgmtv1alpha1.NodeAllocationRequest{
+					Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+						NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 							{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "controller", Role: hwmgmtv1alpha1.NodeRoleMaster}},
 						},
 					},
@@ -1228,36 +1227,36 @@ var _ = Describe("Helpers", func() {
 
 		Describe("getNewHwProfileForNode", func() {
 			It("should return the hwProfile for a matching group name", func() {
-				nar := &pluginsv1alpha1.NodeAllocationRequest{
-					Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-						NodeGroup: []pluginsv1alpha1.NodeGroup{
+				nar := &hwmgmtv1alpha1.NodeAllocationRequest{
+					Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+						NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 							{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "controller", HwProfile: "profile-A"}},
 							{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", HwProfile: "profile-B"}},
 						},
 					},
 				}
-				Expect(getNewHwProfileForNode(nar, &pluginsv1alpha1.AllocatedNode{Spec: pluginsv1alpha1.AllocatedNodeSpec{GroupName: "controller", HwProfile: "profile-A"}})).To(Equal("profile-A"))
-				Expect(getNewHwProfileForNode(nar, &pluginsv1alpha1.AllocatedNode{Spec: pluginsv1alpha1.AllocatedNodeSpec{GroupName: "worker", HwProfile: "profile-A"}})).To(Equal("profile-B"))
+				Expect(getNewHwProfileForNode(nar, &hwmgmtv1alpha1.AllocatedNode{Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "controller", HwProfile: "profile-A"}})).To(Equal("profile-A"))
+				Expect(getNewHwProfileForNode(nar, &hwmgmtv1alpha1.AllocatedNode{Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "worker", HwProfile: "profile-A"}})).To(Equal("profile-B"))
 			})
 
 			It("should return the current node's hwProfile when group is not found", func() {
-				nar := &pluginsv1alpha1.NodeAllocationRequest{
-					Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-						NodeGroup: []pluginsv1alpha1.NodeGroup{
+				nar := &hwmgmtv1alpha1.NodeAllocationRequest{
+					Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+						NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 							{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "controller", HwProfile: "profile-A"}},
 						},
 					},
 				}
-				Expect(getNewHwProfileForNode(nar, &pluginsv1alpha1.AllocatedNode{Spec: pluginsv1alpha1.AllocatedNodeSpec{GroupName: "nonexistent", HwProfile: "profile-A"}})).To(Equal("profile-A"))
+				Expect(getNewHwProfileForNode(nar, &hwmgmtv1alpha1.AllocatedNode{Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "nonexistent", HwProfile: "profile-A"}})).To(Equal("profile-A"))
 			})
 
 			It("should return the current node's hwProfile for empty node groups", func() {
-				nar := &pluginsv1alpha1.NodeAllocationRequest{
-					Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-						NodeGroup: []pluginsv1alpha1.NodeGroup{},
+				nar := &hwmgmtv1alpha1.NodeAllocationRequest{
+					Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+						NodeGroup: []hwmgmtv1alpha1.NodeGroup{},
 					},
 				}
-				Expect(getNewHwProfileForNode(nar, &pluginsv1alpha1.AllocatedNode{Spec: pluginsv1alpha1.AllocatedNodeSpec{GroupName: "controller", HwProfile: "profile-A"}})).To(Equal("profile-A"))
+				Expect(getNewHwProfileForNode(nar, &hwmgmtv1alpha1.AllocatedNode{Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "controller", HwProfile: "profile-A"}})).To(Equal("profile-A"))
 			})
 		})
 	})
@@ -1267,21 +1266,21 @@ var _ = Describe("Helpers", func() {
 		var testNamespace = "oran-o2ims"
 
 		It("should propagate skipCleanup from NAR to AllocatedNodes", func() {
-			nar := &pluginsv1alpha1.NodeAllocationRequest{
+			nar := &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-nar",
 					Namespace: testNamespace,
 				},
-				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
 					SkipCleanup: true,
 				},
 			}
-			node := &pluginsv1alpha1.AllocatedNode{
+			node := &hwmgmtv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "node1",
 					Namespace: testNamespace,
 				},
-				Spec: pluginsv1alpha1.AllocatedNodeSpec{
+				Spec: hwmgmtv1alpha1.AllocatedNodeSpec{
 					NodeAllocationRequest: "test-nar",
 					GroupName:             "master",
 					SkipCleanup:           false,
@@ -1291,8 +1290,8 @@ var _ = Describe("Helpers", func() {
 			fakeClient := fake.NewClientBuilder().
 				WithScheme(scheme).
 				WithObjects(nar, node).
-				WithIndex(&pluginsv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", func(obj client.Object) []string {
-					n := obj.(*pluginsv1alpha1.AllocatedNode)
+				WithIndex(&hwmgmtv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", func(obj client.Object) []string {
+					n := obj.(*hwmgmtv1alpha1.AllocatedNode)
 					return []string{n.Spec.NodeAllocationRequest}
 				}).
 				Build()
@@ -1300,27 +1299,27 @@ var _ = Describe("Helpers", func() {
 			err := syncSkipCleanupToAllocatedNodes(ctx, fakeClient, logger, nar)
 			Expect(err).ToNot(HaveOccurred())
 
-			updatedNode := &pluginsv1alpha1.AllocatedNode{}
+			updatedNode := &hwmgmtv1alpha1.AllocatedNode{}
 			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: "node1", Namespace: testNamespace}, updatedNode)).To(Succeed())
 			Expect(updatedNode.Spec.SkipCleanup).To(BeTrue())
 		})
 
 		It("should not patch when already in sync", func() {
-			nar := &pluginsv1alpha1.NodeAllocationRequest{
+			nar := &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-nar",
 					Namespace: testNamespace,
 				},
-				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
 					SkipCleanup: true,
 				},
 			}
-			node := &pluginsv1alpha1.AllocatedNode{
+			node := &hwmgmtv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "node1",
 					Namespace: testNamespace,
 				},
-				Spec: pluginsv1alpha1.AllocatedNodeSpec{
+				Spec: hwmgmtv1alpha1.AllocatedNodeSpec{
 					NodeAllocationRequest: "test-nar",
 					GroupName:             "master",
 					SkipCleanup:           true,
@@ -1330,8 +1329,8 @@ var _ = Describe("Helpers", func() {
 			fakeClient := fake.NewClientBuilder().
 				WithScheme(scheme).
 				WithObjects(nar, node).
-				WithIndex(&pluginsv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", func(obj client.Object) []string {
-					n := obj.(*pluginsv1alpha1.AllocatedNode)
+				WithIndex(&hwmgmtv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", func(obj client.Object) []string {
+					n := obj.(*hwmgmtv1alpha1.AllocatedNode)
 					return []string{n.Spec.NodeAllocationRequest}
 				}).
 				Build()
@@ -1369,7 +1368,7 @@ var _ = Describe("Helpers", func() {
 		Context("handleNodeInProgressUpdate", func() {
 			var (
 				testBMH            *metal3v1alpha1.BareMetalHost
-				testNode           *pluginsv1alpha1.AllocatedNode
+				testNode           *hwmgmtv1alpha1.AllocatedNode
 				testClient         client.Client
 				mockOps            *MockNodeOps
 				mockCtrl           *gomock.Controller
@@ -1388,7 +1387,7 @@ var _ = Describe("Helpers", func() {
 				originalClientFunc = newClientForClusterFunc
 
 				// Create a test AllocatedNode with config-in-progress annotation and pre-populated hostname
-				testNode = &pluginsv1alpha1.AllocatedNode{
+				testNode = &hwmgmtv1alpha1.AllocatedNode{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-node",
 						Namespace: "test-namespace",
@@ -1396,12 +1395,12 @@ var _ = Describe("Helpers", func() {
 							ConfigAnnotation: "firmware-update", // Node has config in progress
 						},
 					},
-					Spec: pluginsv1alpha1.AllocatedNodeSpec{
+					Spec: hwmgmtv1alpha1.AllocatedNodeSpec{
 						HwMgrNodeId: "test-bmh",
 						HwMgrNodeNs: "test-namespace",
 						HwProfile:   "test-hw-profile",
 					},
-					Status: pluginsv1alpha1.AllocatedNodeStatus{
+					Status: hwmgmtv1alpha1.AllocatedNodeStatus{
 						Hostname: "test-node.example.com",
 					},
 				}
@@ -1434,14 +1433,14 @@ var _ = Describe("Helpers", func() {
 				// Create fake hub client with the test objects
 				scheme := runtime.NewScheme()
 				Expect(metal3v1alpha1.AddToScheme(scheme)).To(Succeed())
-				Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
+				Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 				Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 				Expect(corev1.AddToScheme(scheme)).To(Succeed())
 
 				testClient = fake.NewClientBuilder().
 					WithScheme(scheme).
 					WithObjects(testBMH, testNode, testHwProfile).
-					WithStatusSubresource(&pluginsv1alpha1.AllocatedNode{}).
+					WithStatusSubresource(&hwmgmtv1alpha1.AllocatedNode{}).
 					Build()
 			})
 
@@ -1459,7 +1458,7 @@ var _ = Describe("Helpers", func() {
 				Expect(err.Error()).To(ContainSubstring("bmh test-namespace/test-bmh is in error state, node status updated to Failed"))
 
 				// Verify that the config annotation was removed
-				updatedNode := &pluginsv1alpha1.AllocatedNode{}
+				updatedNode := &hwmgmtv1alpha1.AllocatedNode{}
 				nodeKey := types.NamespacedName{Name: testNode.Name, Namespace: testNode.Namespace}
 				Expect(testClient.Get(ctx, nodeKey, updatedNode)).To(Succeed())
 
@@ -1491,7 +1490,7 @@ var _ = Describe("Helpers", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				// Verify that the config annotation was NOT removed (still in progress)
-				updatedNode := &pluginsv1alpha1.AllocatedNode{}
+				updatedNode := &hwmgmtv1alpha1.AllocatedNode{}
 				nodeKey := types.NamespacedName{Name: testNode.Name, Namespace: testNode.Namespace}
 				Expect(testClient.Get(ctx, nodeKey, updatedNode)).To(Succeed())
 
@@ -1524,7 +1523,7 @@ var _ = Describe("Helpers", func() {
 				Expect(result).To(Equal(hwmgrutils.RequeueImmediately()))
 
 				// Verify that the config annotation was removed
-				updatedNode := &pluginsv1alpha1.AllocatedNode{}
+				updatedNode := &hwmgmtv1alpha1.AllocatedNode{}
 				nodeKey := types.NamespacedName{Name: testNode.Name, Namespace: testNode.Namespace}
 				Expect(testClient.Get(ctx, nodeKey, updatedNode)).To(Succeed())
 				Expect(updatedNode.Annotations).NotTo(HaveKey(ConfigAnnotation))
@@ -1553,7 +1552,7 @@ var _ = Describe("Helpers", func() {
 				Expect(result).To(Equal(hwmgrutils.RequeueWithMediumInterval()))
 
 				// Verify that the config annotation was NOT removed (still waiting)
-				updatedNode := &pluginsv1alpha1.AllocatedNode{}
+				updatedNode := &hwmgmtv1alpha1.AllocatedNode{}
 				nodeKey := types.NamespacedName{Name: testNode.Name, Namespace: testNode.Namespace}
 				Expect(testClient.Get(ctx, nodeKey, updatedNode)).To(Succeed())
 				Expect(updatedNode.Annotations).To(HaveKey(ConfigAnnotation))
@@ -1592,7 +1591,7 @@ var _ = Describe("Helpers", func() {
 				newHwProfile         *hwmgmtv1alpha1.HardwareProfile
 				currentHwProfileName string = "profile-v1"
 				newHwProfileName     string = "profile-v2"
-				nar                  *pluginsv1alpha1.NodeAllocationRequest
+				nar                  *hwmgmtv1alpha1.NodeAllocationRequest
 
 				savedClientForClusterFunc    func(ctx context.Context, hubClient client.Client, clusterName string) (client.Client, error)
 				savedClientsetForClusterFunc func(ctx context.Context, hubClient client.Client, clusterName string) (kubernetes.Interface, error)
@@ -1603,7 +1602,7 @@ var _ = Describe("Helpers", func() {
 			// Helper to create node with all fields needed for handleNodeAllocationRequestConfiguring tests
 			// Extends createAllocatedNodeWithGroup by adding NodeAllocationRequest, status profile, and conditions
 			createNode := func(name, narName, groupName, specProfile, statusProfile string,
-				configuredCondition *metav1.Condition, annotations map[string]string) *pluginsv1alpha1.AllocatedNode {
+				configuredCondition *metav1.Condition, annotations map[string]string) *hwmgmtv1alpha1.AllocatedNode {
 				node := createAllocatedNodeWithGroup(name, testNamespace, name+"-bmh", testNamespace, groupName, specProfile)
 				node.Spec.NodeAllocationRequest = narName
 				node.Status.HwProfile = statusProfile
@@ -1625,7 +1624,7 @@ var _ = Describe("Helpers", func() {
 			}
 
 			// Helper to create NAR with node groups for config tests
-			createNAR := func(nodeGroups []pluginsv1alpha1.NodeGroup) *pluginsv1alpha1.NodeAllocationRequest {
+			createNAR := func(nodeGroups []hwmgmtv1alpha1.NodeGroup) *hwmgmtv1alpha1.NodeAllocationRequest {
 				nar := createNodeAllocationRequest("test-nar", testNamespace)
 				nar.Spec.NodeGroup = nodeGroups
 				return nar
@@ -1647,11 +1646,11 @@ var _ = Describe("Helpers", func() {
 				return fake.NewClientBuilder().
 					WithScheme(scheme).
 					WithObjects(objs...).
-					WithStatusSubresource(&pluginsv1alpha1.AllocatedNode{}).
+					WithStatusSubresource(&hwmgmtv1alpha1.AllocatedNode{}).
 					WithStatusSubresource(&metal3v1alpha1.BareMetalHost{}).
 					WithStatusSubresource(&provisioningv1alpha1.ProvisioningRequest{}).
-					WithIndex(&pluginsv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", func(obj client.Object) []string {
-						node := obj.(*pluginsv1alpha1.AllocatedNode)
+					WithIndex(&hwmgmtv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", func(obj client.Object) []string {
+						node := obj.(*hwmgmtv1alpha1.AllocatedNode)
 						return []string{node.Spec.NodeAllocationRequest}
 					}).
 					Build()
@@ -1663,7 +1662,7 @@ var _ = Describe("Helpers", func() {
 
 				scheme = runtime.NewScheme()
 				Expect(metal3v1alpha1.AddToScheme(scheme)).To(Succeed())
-				Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
+				Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 				Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 				Expect(corev1.AddToScheme(scheme)).To(Succeed())
 				Expect(provisioningv1alpha1.AddToScheme(scheme)).To(Succeed())
@@ -1731,7 +1730,7 @@ var _ = Describe("Helpers", func() {
 					node := createNode("node1", "test-nar", "master", currentHwProfileName, currentHwProfileName, nil, nil)
 
 					// Create NodeAllocationRequest with new profile
-					nar = createNAR([]pluginsv1alpha1.NodeGroup{
+					nar = createNAR([]hwmgmtv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "master", Role: hwmgmtv1alpha1.NodeRoleMaster, HwProfile: newHwProfileName}},
 					})
 
@@ -1767,7 +1766,7 @@ var _ = Describe("Helpers", func() {
 					Expect(result.RequeueAfter).To(Equal(1 * time.Minute))
 
 					// Verify node spec was updated to new profile
-					updatedNode := &pluginsv1alpha1.AllocatedNode{}
+					updatedNode := &hwmgmtv1alpha1.AllocatedNode{}
 					Expect(testClient.Get(ctx, types.NamespacedName{Name: "node1", Namespace: testNamespace}, updatedNode)).To(Succeed())
 					Expect(updatedNode.Spec.HwProfile).To(Equal(newHwProfileName))
 					// Verify node status condition was updated to ConfigurationUpdateRequested
@@ -1780,9 +1779,9 @@ var _ = Describe("Helpers", func() {
 
 			Context("3-node compact cluster", func() {
 				var (
-					node1 *pluginsv1alpha1.AllocatedNode
-					node2 *pluginsv1alpha1.AllocatedNode
-					node3 *pluginsv1alpha1.AllocatedNode
+					node1 *hwmgmtv1alpha1.AllocatedNode
+					node2 *hwmgmtv1alpha1.AllocatedNode
+					node3 *hwmgmtv1alpha1.AllocatedNode
 					bmh1  *metal3v1alpha1.BareMetalHost
 					bmh2  *metal3v1alpha1.BareMetalHost
 					bmh3  *metal3v1alpha1.BareMetalHost
@@ -1798,7 +1797,7 @@ var _ = Describe("Helpers", func() {
 					bmh2 = createBMH("node2", metal3v1alpha1.OperationalStatusOK)
 					bmh3 = createBMH("node3", metal3v1alpha1.OperationalStatusOK)
 					// NAR with new profile
-					nar = createNAR([]pluginsv1alpha1.NodeGroup{
+					nar = createNAR([]hwmgmtv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "master", Role: hwmgmtv1alpha1.NodeRoleMaster, HwProfile: newHwProfileName}},
 					})
 
@@ -1813,7 +1812,7 @@ var _ = Describe("Helpers", func() {
 					Expect(result.RequeueAfter).To(Equal(1 * time.Minute))
 
 					// Only node1 (first alphabetically) should have its spec updated
-					updatedNode1 := &pluginsv1alpha1.AllocatedNode{}
+					updatedNode1 := &hwmgmtv1alpha1.AllocatedNode{}
 					Expect(testClient.Get(ctx, types.NamespacedName{Name: "node1", Namespace: testNamespace}, updatedNode1)).To(Succeed())
 					Expect(updatedNode1.Spec.HwProfile).To(Equal(newHwProfileName))
 					// Verify node status condition was updated to ConfigurationUpdateRequested
@@ -1823,14 +1822,14 @@ var _ = Describe("Helpers", func() {
 					Expect(updatedNode1.Status.Conditions[0].Message).To(Equal(string(hwmgmtv1alpha1.NodeUpdateRequested)))
 
 					// node2 and node3 should have new profile and be marked as ConfigUpdatePending
-					updatedNode2 := &pluginsv1alpha1.AllocatedNode{}
+					updatedNode2 := &hwmgmtv1alpha1.AllocatedNode{}
 					Expect(testClient.Get(ctx, types.NamespacedName{Name: "node2", Namespace: testNamespace}, updatedNode2)).To(Succeed())
 					Expect(updatedNode2.Spec.HwProfile).To(Equal(newHwProfileName))
 					Expect(updatedNode2.Status.Conditions).To(HaveLen(1))
 					Expect(updatedNode2.Status.Conditions[0].Reason).To(Equal(string(hwmgmtv1alpha1.ConfigUpdatePending)))
 					Expect(updatedNode2.Status.Conditions[0].Message).To(Equal(string(hwmgmtv1alpha1.NodeUpdatePending)))
 
-					updatedNode3 := &pluginsv1alpha1.AllocatedNode{}
+					updatedNode3 := &hwmgmtv1alpha1.AllocatedNode{}
 					Expect(testClient.Get(ctx, types.NamespacedName{Name: "node3", Namespace: testNamespace}, updatedNode3)).To(Succeed())
 					Expect(updatedNode3.Spec.HwProfile).To(Equal(newHwProfileName))
 					Expect(updatedNode3.Status.Conditions).To(HaveLen(1))
@@ -1923,7 +1922,7 @@ var _ = Describe("Helpers", func() {
 					Expect(result.RequeueAfter).To(Equal(1 * time.Minute))
 
 					// node2 should be updated next
-					updatedNode2 := &pluginsv1alpha1.AllocatedNode{}
+					updatedNode2 := &hwmgmtv1alpha1.AllocatedNode{}
 					Expect(testClient.Get(ctx, types.NamespacedName{Name: "node2", Namespace: testNamespace}, updatedNode2)).To(Succeed())
 					Expect(updatedNode2.Spec.HwProfile).To(Equal(newHwProfileName))
 					// Verify node status condition was updated to ConfigurationUpdateRequested
@@ -1935,11 +1934,11 @@ var _ = Describe("Helpers", func() {
 
 			Context("Standard cluster (masters + workers)", func() {
 				var (
-					master1    *pluginsv1alpha1.AllocatedNode
-					master2    *pluginsv1alpha1.AllocatedNode
-					master3    *pluginsv1alpha1.AllocatedNode
-					worker1    *pluginsv1alpha1.AllocatedNode
-					worker2    *pluginsv1alpha1.AllocatedNode
+					master1    *hwmgmtv1alpha1.AllocatedNode
+					master2    *hwmgmtv1alpha1.AllocatedNode
+					master3    *hwmgmtv1alpha1.AllocatedNode
+					worker1    *hwmgmtv1alpha1.AllocatedNode
+					worker2    *hwmgmtv1alpha1.AllocatedNode
 					bmhMaster1 *metal3v1alpha1.BareMetalHost
 					bmhMaster2 *metal3v1alpha1.BareMetalHost
 					bmhMaster3 *metal3v1alpha1.BareMetalHost
@@ -1962,7 +1961,7 @@ var _ = Describe("Helpers", func() {
 					bmhWorker2 = createBMH("worker2", metal3v1alpha1.OperationalStatusOK)
 
 					// Define worker BEFORE master in spec to test that master is still processed first
-					nar = createNAR([]pluginsv1alpha1.NodeGroup{
+					nar = createNAR([]hwmgmtv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newHwProfileName}},
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "master", Role: hwmgmtv1alpha1.NodeRoleMaster, HwProfile: newHwProfileName}},
 					})
@@ -1982,13 +1981,13 @@ var _ = Describe("Helpers", func() {
 					Expect(result.RequeueAfter).To(Equal(1 * time.Minute))
 
 					// Master1 (first master alphabetically) should be updated first
-					updatedMaster1 := &pluginsv1alpha1.AllocatedNode{}
+					updatedMaster1 := &hwmgmtv1alpha1.AllocatedNode{}
 					Expect(testClient.Get(ctx, types.NamespacedName{Name: "master1", Namespace: testNamespace}, updatedMaster1)).To(Succeed())
 					Expect(updatedMaster1.Spec.HwProfile).To(Equal(newHwProfileName))
 					Expect(updatedMaster1.Status.Conditions[0].Reason).To(Equal(string(hwmgmtv1alpha1.ConfigUpdate)))
 
 					// Workers should have new profile set with ConfigUpdatePending
-					updatedWorker1 := &pluginsv1alpha1.AllocatedNode{}
+					updatedWorker1 := &hwmgmtv1alpha1.AllocatedNode{}
 					Expect(testClient.Get(ctx, types.NamespacedName{Name: "worker1", Namespace: testNamespace}, updatedWorker1)).To(Succeed())
 					Expect(updatedWorker1.Spec.HwProfile).To(Equal(newHwProfileName))
 					Expect(updatedWorker1.Status.Conditions[0].Reason).To(Equal(string(hwmgmtv1alpha1.ConfigUpdatePending)))
@@ -2018,7 +2017,7 @@ var _ = Describe("Helpers", func() {
 					Expect(result.RequeueAfter).To(Equal(1 * time.Minute))
 
 					// master3 should be updated next
-					updatedMaster3 := &pluginsv1alpha1.AllocatedNode{}
+					updatedMaster3 := &hwmgmtv1alpha1.AllocatedNode{}
 					Expect(testClient.Get(ctx, types.NamespacedName{Name: "master3", Namespace: testNamespace}, updatedMaster3)).To(Succeed())
 					Expect(updatedMaster3.Spec.HwProfile).To(Equal(newHwProfileName))
 					// Verify node status condition was updated to ConfigurationUpdateRequested
@@ -2027,7 +2026,7 @@ var _ = Describe("Helpers", func() {
 					Expect(updatedMaster3.Status.Conditions[0].Reason).To(Equal(string(hwmgmtv1alpha1.ConfigUpdate)))
 
 					// Workers should have new profile but still be pending (not actively processed)
-					updatedWorker1 := &pluginsv1alpha1.AllocatedNode{}
+					updatedWorker1 := &hwmgmtv1alpha1.AllocatedNode{}
 					Expect(testClient.Get(ctx, types.NamespacedName{Name: "worker1", Namespace: testNamespace}, updatedWorker1)).To(Succeed())
 					Expect(updatedWorker1.Spec.HwProfile).To(Equal(newHwProfileName))
 					Expect(updatedWorker1.Status.Conditions[0].Reason).To(Equal(string(hwmgmtv1alpha1.ConfigUpdatePending)))
@@ -2065,12 +2064,12 @@ var _ = Describe("Helpers", func() {
 					Expect(result.RequeueAfter).To(Equal(1 * time.Minute))
 
 					// Worker1 (first worker alphabetically) should be updated
-					updatedWorker1 := &pluginsv1alpha1.AllocatedNode{}
+					updatedWorker1 := &hwmgmtv1alpha1.AllocatedNode{}
 					Expect(testClient.Get(ctx, types.NamespacedName{Name: "worker1", Namespace: testNamespace}, updatedWorker1)).To(Succeed())
 					Expect(updatedWorker1.Spec.HwProfile).To(Equal(newHwProfileName))
 
 					// Worker2 should have new profile but still be pending
-					updatedWorker2 := &pluginsv1alpha1.AllocatedNode{}
+					updatedWorker2 := &hwmgmtv1alpha1.AllocatedNode{}
 					Expect(testClient.Get(ctx, types.NamespacedName{Name: "worker2", Namespace: testNamespace}, updatedWorker2)).To(Succeed())
 					Expect(updatedWorker2.Spec.HwProfile).To(Equal(newHwProfileName))
 					Expect(updatedWorker2.Status.Conditions[0].Reason).To(Equal(string(hwmgmtv1alpha1.ConfigUpdatePending)))
@@ -2094,8 +2093,8 @@ var _ = Describe("Helpers", func() {
 
 		buildClientWithNodes := func(nodes ...client.Object) client.Client {
 			return fake.NewClientBuilder().WithScheme(scheme).WithObjects(nodes...).
-				WithIndex(&pluginsv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", func(obj client.Object) []string {
-					return []string{obj.(*pluginsv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
+				WithIndex(&hwmgmtv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", func(obj client.Object) []string {
+					return []string{obj.(*hwmgmtv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
 				}).Build()
 		}
 
@@ -2103,7 +2102,7 @@ var _ = Describe("Helpers", func() {
 			ctx = context.Background()
 			logger = slog.Default()
 			scheme = runtime.NewScheme()
-			Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
+			Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 		})
 
 		It("should return true when a node has a different profile than the NAR group", func() {
@@ -2111,10 +2110,10 @@ var _ = Describe("Helpers", func() {
 			node.Spec.NodeAllocationRequest = testNARName
 			testClient = buildClientWithNodes(node)
 
-			nar := &pluginsv1alpha1.NodeAllocationRequest{
+			nar := &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: testNamespace},
-				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-					NodeGroup: []pluginsv1alpha1.NodeGroup{
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+					NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", HwProfile: "profile-v2"}},
 					},
 				},
@@ -2130,10 +2129,10 @@ var _ = Describe("Helpers", func() {
 			node.Spec.NodeAllocationRequest = testNARName
 			testClient = buildClientWithNodes(node)
 
-			nar := &pluginsv1alpha1.NodeAllocationRequest{
+			nar := &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: testNamespace},
-				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-					NodeGroup: []pluginsv1alpha1.NodeGroup{
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+					NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", HwProfile: "profile-v2"}},
 					},
 				},
@@ -2149,10 +2148,10 @@ var _ = Describe("Helpers", func() {
 			node.Spec.NodeAllocationRequest = testNARName
 			testClient = buildClientWithNodes(node)
 
-			nar := &pluginsv1alpha1.NodeAllocationRequest{
+			nar := &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: testNamespace},
-				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-					NodeGroup: []pluginsv1alpha1.NodeGroup{
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+					NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", HwProfile: ""}},
 					},
 				},
@@ -2166,10 +2165,10 @@ var _ = Describe("Helpers", func() {
 		It("should return false when there are no child nodes", func() {
 			testClient = buildClientWithNodes()
 
-			nar := &pluginsv1alpha1.NodeAllocationRequest{
+			nar := &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: testNamespace},
-				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-					NodeGroup: []pluginsv1alpha1.NodeGroup{
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+					NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", HwProfile: "profile-v2"}},
 					},
 				},
@@ -2230,7 +2229,7 @@ var _ = Describe("Helpers", func() {
 			// hwPending: no condition
 			noCond := createAllocatedNodeWithGroup("noCond", testNamespace, "bmh-noCond", testNamespace, "g1", newProfile)
 
-			nodes := []*pluginsv1alpha1.AllocatedNode{done1, stale, ip1, fail1, noCond, pend1, invalidInput1}
+			nodes := []*hwmgmtv1alpha1.AllocatedNode{done1, stale, ip1, fail1, noCond, pend1, invalidInput1}
 			nc := classifyNodes(ctx, logger, mockOps, nodes, newProfile)
 			Expect(nc.DoneNodes).To(HaveLen(1))
 			Expect(nc.DoneNodes[0].Name).To(Equal("done1"))
@@ -2269,7 +2268,7 @@ var _ = Describe("Helpers", func() {
 			mockOps.EXPECT().IsNodeReady(gomock.Any(), "worker-abandoned1").Return(true, nil)
 			mockOps.EXPECT().IsNodeReady(gomock.Any(), "worker-r1").Return(true, nil)
 
-			nodes := []*pluginsv1alpha1.AllocatedNode{notReadyNode, abandonedNode, readyNode}
+			nodes := []*hwmgmtv1alpha1.AllocatedNode{notReadyNode, abandonedNode, readyNode}
 			nc := classifyNodes(ctx, logger, mockOps, nodes, newProfile)
 			Expect(nc.PriorityNodes).To(HaveLen(2))
 			Expect(nc.PriorityNodes[0].Name).To(Equal("nr1"))
@@ -2304,10 +2303,10 @@ var _ = Describe("Helpers", func() {
 			configured      = string(hwmgmtv1alpha1.Configured)
 		)
 
-		createNAR := func(groups []pluginsv1alpha1.NodeGroup) *pluginsv1alpha1.NodeAllocationRequest {
-			return &pluginsv1alpha1.NodeAllocationRequest{
+		createNAR := func(groups []hwmgmtv1alpha1.NodeGroup) *hwmgmtv1alpha1.NodeAllocationRequest {
+			return &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-nar", Namespace: testNamespace},
-				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
 					NodeGroup: groups,
 				},
 			}
@@ -2331,8 +2330,8 @@ var _ = Describe("Helpers", func() {
 			n1.Spec.GroupName = testGroupMaster
 			n1.Spec.HwProfile = newProfile
 
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{Items: []pluginsv1alpha1.AllocatedNode{*n1}}
-			nar := createNAR([]pluginsv1alpha1.NodeGroup{
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{Items: []hwmgmtv1alpha1.AllocatedNode{*n1}}
+			nar := createNAR([]hwmgmtv1alpha1.NodeGroup{
 				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "master", Role: hwmgmtv1alpha1.NodeRoleMaster, HwProfile: newProfile}},
 			})
 			mockOps.EXPECT().GetMaxUnavailable(gomock.Any(), "master", 1).Return(1, nil)
@@ -2352,8 +2351,8 @@ var _ = Describe("Helpers", func() {
 			n2.Spec.GroupName = testGroupMaster
 			n2.Spec.HwProfile = newProfile
 
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{Items: []pluginsv1alpha1.AllocatedNode{*n1, *n2}}
-			nar := createNAR([]pluginsv1alpha1.NodeGroup{
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{Items: []hwmgmtv1alpha1.AllocatedNode{*n1, *n2}}
+			nar := createNAR([]hwmgmtv1alpha1.NodeGroup{
 				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "master", Role: hwmgmtv1alpha1.NodeRoleMaster, HwProfile: newProfile}},
 			})
 
@@ -2392,10 +2391,10 @@ var _ = Describe("Helpers", func() {
 			pend3.Spec.GroupName = testGroupWorker
 			pend3.Spec.HwProfile = newProfile
 
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{
-				Items: []pluginsv1alpha1.AllocatedNode{*ip1, *ip2, *trans1, *fail1, *pend1, *pend2, *pend3},
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{
+				Items: []hwmgmtv1alpha1.AllocatedNode{*ip1, *ip2, *trans1, *fail1, *pend1, *pend2, *pend3},
 			}
-			nar := createNAR([]pluginsv1alpha1.NodeGroup{
+			nar := createNAR([]hwmgmtv1alpha1.NodeGroup{
 				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newProfile}},
 			})
 			// total=7, maxUnavailable=5, unavailable = inProgress(3) + failed(1) = 4, capacity = 1
@@ -2424,9 +2423,9 @@ var _ = Describe("Helpers", func() {
 			w1.Spec.GroupName = testGroupWorker
 			w1.Spec.HwProfile = newProfile
 
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{Items: []pluginsv1alpha1.AllocatedNode{*m1, *w1}}
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{Items: []hwmgmtv1alpha1.AllocatedNode{*m1, *w1}}
 			// Workers listed before masters in spec to test sorting
-			nar := createNAR([]pluginsv1alpha1.NodeGroup{
+			nar := createNAR([]hwmgmtv1alpha1.NodeGroup{
 				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newProfile}},
 				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "master", Role: hwmgmtv1alpha1.NodeRoleMaster, HwProfile: newProfile}},
 			})
@@ -2440,7 +2439,7 @@ var _ = Describe("Helpers", func() {
 		})
 
 		It("should move to worker group when master group is fully done", func() {
-			var items []pluginsv1alpha1.AllocatedNode
+			var items []hwmgmtv1alpha1.AllocatedNode
 			for _, name := range []string{"m1", "m2", "m3"} {
 				n := createNodeWithCondition(name, testNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
 				n.Spec.GroupName = testGroupMaster
@@ -2454,8 +2453,8 @@ var _ = Describe("Helpers", func() {
 				items = append(items, *n)
 			}
 
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{Items: items}
-			nar := createNAR([]pluginsv1alpha1.NodeGroup{
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{Items: items}
+			nar := createNAR([]hwmgmtv1alpha1.NodeGroup{
 				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "master", Role: hwmgmtv1alpha1.NodeRoleMaster, HwProfile: newProfile}},
 				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newProfile}},
 			})
@@ -2474,8 +2473,8 @@ var _ = Describe("Helpers", func() {
 			n1.Spec.GroupName = testGroupWorker
 			n1.Spec.HwProfile = newProfile
 
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{Items: []pluginsv1alpha1.AllocatedNode{*n1}}
-			nar := createNAR([]pluginsv1alpha1.NodeGroup{
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{Items: []hwmgmtv1alpha1.AllocatedNode{*n1}}
+			nar := createNAR([]hwmgmtv1alpha1.NodeGroup{
 				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newProfile}},
 			})
 			mockOps.EXPECT().GetMaxUnavailable(gomock.Any(), "worker", 1).Return(0, fmt.Errorf("failed to parse maxUnavailable for MCP"))
@@ -2495,8 +2494,8 @@ var _ = Describe("Helpers", func() {
 			pend1.Spec.GroupName = testGroupWorker
 			pend1.Spec.HwProfile = newProfile
 
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{Items: []pluginsv1alpha1.AllocatedNode{*ip1, *pend1}}
-			nar := createNAR([]pluginsv1alpha1.NodeGroup{
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{Items: []hwmgmtv1alpha1.AllocatedNode{*ip1, *pend1}}
+			nar := createNAR([]hwmgmtv1alpha1.NodeGroup{
 				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newProfile}},
 			})
 			// maxUnavailable=1, in-progress=1, capacity=0
@@ -2532,8 +2531,8 @@ var _ = Describe("Helpers", func() {
 			pend2.Spec.GroupName = testGroupWorker
 			pend2.Spec.HwProfile = newProfile
 
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{Items: []pluginsv1alpha1.AllocatedNode{*ab1, *pend1, *pend2}}
-			nar := createNAR([]pluginsv1alpha1.NodeGroup{
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{Items: []hwmgmtv1alpha1.AllocatedNode{*ab1, *pend1, *pend2}}
+			nar := createNAR([]hwmgmtv1alpha1.NodeGroup{
 				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newProfile}},
 			})
 			// maxUnavailable=2, unavailable=0, capacity=2
@@ -2569,8 +2568,8 @@ var _ = Describe("Helpers", func() {
 			ready2.Spec.HwProfile = newProfile
 			ready2.Status.Hostname = "worker-r2"
 
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{Items: []pluginsv1alpha1.AllocatedNode{*notReady, *ready1, *ready2}}
-			nar := createNAR([]pluginsv1alpha1.NodeGroup{
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{Items: []hwmgmtv1alpha1.AllocatedNode{*notReady, *ready1, *ready2}}
+			nar := createNAR([]hwmgmtv1alpha1.NodeGroup{
 				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newProfile}},
 			})
 
@@ -2619,7 +2618,7 @@ var _ = Describe("Helpers", func() {
 
 			scheme = runtime.NewScheme()
 			Expect(metal3v1alpha1.AddToScheme(scheme)).To(Succeed())
-			Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
+			Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 			Expect(corev1.AddToScheme(scheme)).To(Succeed())
 		})
 
@@ -2637,7 +2636,7 @@ var _ = Describe("Helpers", func() {
 
 			testClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(node, bmh).
-				WithStatusSubresource(&pluginsv1alpha1.AllocatedNode{}, &metal3v1alpha1.BareMetalHost{}).
+				WithStatusSubresource(&hwmgmtv1alpha1.AllocatedNode{}, &metal3v1alpha1.BareMetalHost{}).
 				Build()
 
 			result, err := abandonNodeUpdate(ctx, testClient, testClient, logger, newProfile, node, mockOps)
@@ -2645,7 +2644,7 @@ var _ = Describe("Helpers", func() {
 			Expect(result).To(Equal(hwmgrutils.RequeueWithMediumInterval()))
 
 			// Verify node was NOT abandoned
-			updatedNode := &pluginsv1alpha1.AllocatedNode{}
+			updatedNode := &hwmgmtv1alpha1.AllocatedNode{}
 			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: testNamespace}, updatedNode)).To(Succeed())
 			Expect(updatedNode.Annotations).ToNot(HaveKey(UpdateAbandonedAnnotation))
 		})
@@ -2662,14 +2661,14 @@ var _ = Describe("Helpers", func() {
 
 			testClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(node, bmh).
-				WithStatusSubresource(&pluginsv1alpha1.AllocatedNode{}, &metal3v1alpha1.BareMetalHost{}).
+				WithStatusSubresource(&hwmgmtv1alpha1.AllocatedNode{}, &metal3v1alpha1.BareMetalHost{}).
 				Build()
 
 			result, err := abandonNodeUpdate(ctx, testClient, testClient, logger, newProfile, node, mockOps)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(hwmgrutils.RequeueWithMediumInterval()))
 
-			updatedNode := &pluginsv1alpha1.AllocatedNode{}
+			updatedNode := &hwmgmtv1alpha1.AllocatedNode{}
 			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: testNamespace}, updatedNode)).To(Succeed())
 			Expect(updatedNode.Annotations).ToNot(HaveKey(UpdateAbandonedAnnotation))
 		})
@@ -2689,7 +2688,7 @@ var _ = Describe("Helpers", func() {
 
 			testClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(node, bmh).
-				WithStatusSubresource(&pluginsv1alpha1.AllocatedNode{}, &metal3v1alpha1.BareMetalHost{}).
+				WithStatusSubresource(&hwmgmtv1alpha1.AllocatedNode{}, &metal3v1alpha1.BareMetalHost{}).
 				Build()
 
 			mockOps.EXPECT().UncordonNode(gomock.Any(), hostname).Return(nil)
@@ -2698,7 +2697,7 @@ var _ = Describe("Helpers", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(hwmgrutils.RequeueImmediately()))
 
-			updatedNode := &pluginsv1alpha1.AllocatedNode{}
+			updatedNode := &hwmgmtv1alpha1.AllocatedNode{}
 			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: testNamespace}, updatedNode)).To(Succeed())
 			Expect(updatedNode.Annotations).To(HaveKey(UpdateAbandonedAnnotation))
 			Expect(updatedNode.Annotations).ToNot(HaveKey(ConfigAnnotation))
@@ -2725,7 +2724,7 @@ var _ = Describe("Helpers", func() {
 
 			testClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(node, bmh).
-				WithStatusSubresource(&pluginsv1alpha1.AllocatedNode{}, &metal3v1alpha1.BareMetalHost{}).
+				WithStatusSubresource(&hwmgmtv1alpha1.AllocatedNode{}, &metal3v1alpha1.BareMetalHost{}).
 				Build()
 
 			mockOps.EXPECT().UncordonNode(gomock.Any(), hostname).Return(nil)
@@ -2734,7 +2733,7 @@ var _ = Describe("Helpers", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(hwmgrutils.RequeueImmediately()))
 
-			updatedNode := &pluginsv1alpha1.AllocatedNode{}
+			updatedNode := &hwmgmtv1alpha1.AllocatedNode{}
 			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: testNamespace}, updatedNode)).To(Succeed())
 			Expect(updatedNode.Annotations).To(HaveKey(UpdateAbandonedAnnotation))
 			Expect(updatedNode.Annotations).ToNot(HaveKey(ConfigAnnotation))
@@ -2774,7 +2773,7 @@ var _ = Describe("Helpers", func() {
 
 			scheme = runtime.NewScheme()
 			Expect(metal3v1alpha1.AddToScheme(scheme)).To(Succeed())
-			Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
+			Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 			Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 			Expect(corev1.AddToScheme(scheme)).To(Succeed())
 		})
@@ -2784,7 +2783,7 @@ var _ = Describe("Helpers", func() {
 		})
 
 		It("should return no requeue when nodesToProcess is empty", func() {
-			nar := &pluginsv1alpha1.NodeAllocationRequest{
+			nar := &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: testNamespace},
 			}
 			testClient = fake.NewClientBuilder().WithScheme(scheme).Build()
@@ -2816,10 +2815,10 @@ var _ = Describe("Helpers", func() {
 				ObjectMeta: metav1.ObjectMeta{Name: newProfile, Namespace: testNamespace},
 				Spec:       hwmgmtv1alpha1.HardwareProfileSpec{},
 			}
-			nar := &pluginsv1alpha1.NodeAllocationRequest{
+			nar := &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: testNamespace},
-				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-					NodeGroup: []pluginsv1alpha1.NodeGroup{
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+					NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newProfile}},
 					},
 				},
@@ -2827,7 +2826,7 @@ var _ = Describe("Helpers", func() {
 
 			testClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(node1, node2, bmh1, bmh2, hwProfile).
-				WithStatusSubresource(&pluginsv1alpha1.AllocatedNode{}, &metal3v1alpha1.BareMetalHost{}).
+				WithStatusSubresource(&hwmgmtv1alpha1.AllocatedNode{}, &metal3v1alpha1.BareMetalHost{}).
 				Build()
 
 			mockOps.EXPECT().SkipDrain().Return(false).AnyTimes()
@@ -2882,10 +2881,10 @@ var _ = Describe("Helpers", func() {
 				},
 			}
 
-			nar := &pluginsv1alpha1.NodeAllocationRequest{
+			nar := &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: testNamespace},
-				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-					NodeGroup: []pluginsv1alpha1.NodeGroup{
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+					NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newProfile}},
 					},
 				},
@@ -2893,7 +2892,7 @@ var _ = Describe("Helpers", func() {
 
 			testClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(node1, bmh1, hfs).
-				WithStatusSubresource(&pluginsv1alpha1.AllocatedNode{}, &metal3v1alpha1.BareMetalHost{}, &metal3v1alpha1.HostFirmwareSettings{}).
+				WithStatusSubresource(&hwmgmtv1alpha1.AllocatedNode{}, &metal3v1alpha1.BareMetalHost{}, &metal3v1alpha1.HostFirmwareSettings{}).
 				Build()
 
 			nodesToProcess := []nodeAction{
@@ -2905,7 +2904,7 @@ var _ = Describe("Helpers", func() {
 			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
 			// Verify config-in-progress annotation was set on the node
-			updatedNode := &pluginsv1alpha1.AllocatedNode{}
+			updatedNode := &hwmgmtv1alpha1.AllocatedNode{}
 			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: testNamespace}, updatedNode)).To(Succeed())
 			Expect(getConfigAnnotation(updatedNode)).To(Equal(UpdateReasonBIOSSettings))
 
@@ -2932,10 +2931,10 @@ var _ = Describe("Helpers", func() {
 			}
 
 			// New profile is requested mid-flight
-			nar := &pluginsv1alpha1.NodeAllocationRequest{
+			nar := &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: testNamespace},
-				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-					NodeGroup: []pluginsv1alpha1.NodeGroup{
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+					NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newProfile}},
 					},
 				},
@@ -2943,7 +2942,7 @@ var _ = Describe("Helpers", func() {
 
 			testClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(node1, bmh1).
-				WithStatusSubresource(&pluginsv1alpha1.AllocatedNode{}, &metal3v1alpha1.BareMetalHost{}).
+				WithStatusSubresource(&hwmgmtv1alpha1.AllocatedNode{}, &metal3v1alpha1.BareMetalHost{}).
 				Build()
 
 			mockOps.EXPECT().UncordonNode(gomock.Any(), workerHostname1).Return(nil)
@@ -2956,7 +2955,7 @@ var _ = Describe("Helpers", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
-			updatedNode := &pluginsv1alpha1.AllocatedNode{}
+			updatedNode := &hwmgmtv1alpha1.AllocatedNode{}
 			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: testNamespace}, updatedNode)).To(Succeed())
 			Expect(updatedNode.Annotations).To(HaveKey(UpdateAbandonedAnnotation))
 		})
@@ -2976,10 +2975,10 @@ var _ = Describe("Helpers", func() {
 			}
 
 			// New profile is requested mid-flight
-			nar := &pluginsv1alpha1.NodeAllocationRequest{
+			nar := &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: testNamespace},
-				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-					NodeGroup: []pluginsv1alpha1.NodeGroup{
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+					NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newProfile}},
 					},
 				},
@@ -2987,7 +2986,7 @@ var _ = Describe("Helpers", func() {
 
 			testClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(node1, bmh1).
-				WithStatusSubresource(&pluginsv1alpha1.AllocatedNode{}, &metal3v1alpha1.BareMetalHost{}).
+				WithStatusSubresource(&hwmgmtv1alpha1.AllocatedNode{}, &metal3v1alpha1.BareMetalHost{}).
 				Build()
 
 			mockOps.EXPECT().UncordonNode(gomock.Any(), workerHostname1).Return(nil)
@@ -3000,7 +2999,7 @@ var _ = Describe("Helpers", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
-			updatedNode := &pluginsv1alpha1.AllocatedNode{}
+			updatedNode := &hwmgmtv1alpha1.AllocatedNode{}
 			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: testNamespace}, updatedNode)).To(Succeed())
 			Expect(updatedNode.Annotations).To(HaveKey(UpdateAbandonedAnnotation))
 			Expect(updatedNode.Annotations).ToNot(HaveKey(ConfigAnnotation))
@@ -3024,10 +3023,10 @@ var _ = Describe("Helpers", func() {
 			}
 
 			// New profile is requested mid-flight
-			nar := &pluginsv1alpha1.NodeAllocationRequest{
+			nar := &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: testNamespace},
-				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-					NodeGroup: []pluginsv1alpha1.NodeGroup{
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+					NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newProfile}},
 					},
 				},
@@ -3035,7 +3034,7 @@ var _ = Describe("Helpers", func() {
 
 			testClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(node1, bmh1).
-				WithStatusSubresource(&pluginsv1alpha1.AllocatedNode{}, &metal3v1alpha1.BareMetalHost{}).
+				WithStatusSubresource(&hwmgmtv1alpha1.AllocatedNode{}, &metal3v1alpha1.BareMetalHost{}).
 				Build()
 
 			mockOps.EXPECT().UncordonNode(gomock.Any(), workerHostname1).Return(nil)
@@ -3048,7 +3047,7 @@ var _ = Describe("Helpers", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
-			updatedNode := &pluginsv1alpha1.AllocatedNode{}
+			updatedNode := &hwmgmtv1alpha1.AllocatedNode{}
 			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: testNamespace}, updatedNode)).To(Succeed())
 			Expect(updatedNode.Annotations).To(HaveKey(UpdateAbandonedAnnotation))
 			Expect(updatedNode.Annotations).ToNot(HaveKey(ConfigAnnotation))
@@ -3071,10 +3070,10 @@ var _ = Describe("Helpers", func() {
 			}
 
 			// New profile is requested mid-flight
-			nar := &pluginsv1alpha1.NodeAllocationRequest{
+			nar := &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: testNamespace},
-				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-					NodeGroup: []pluginsv1alpha1.NodeGroup{
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+					NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newProfile}},
 					},
 				},
@@ -3082,7 +3081,7 @@ var _ = Describe("Helpers", func() {
 
 			testClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(node1, bmh1).
-				WithStatusSubresource(&pluginsv1alpha1.AllocatedNode{}, &metal3v1alpha1.BareMetalHost{}).
+				WithStatusSubresource(&hwmgmtv1alpha1.AllocatedNode{}, &metal3v1alpha1.BareMetalHost{}).
 				Build()
 
 			nodesToProcess := []nodeAction{
@@ -3094,7 +3093,7 @@ var _ = Describe("Helpers", func() {
 			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
 			// Verify node was NOT abandoned
-			updatedNode := &pluginsv1alpha1.AllocatedNode{}
+			updatedNode := &hwmgmtv1alpha1.AllocatedNode{}
 			Expect(testClient.Get(ctx, types.NamespacedName{Name: "n1", Namespace: testNamespace}, updatedNode)).To(Succeed())
 			Expect(updatedNode.Annotations).ToNot(HaveKey(UpdateAbandonedAnnotation))
 		})
@@ -3117,10 +3116,10 @@ var _ = Describe("Helpers", func() {
 			}
 			node2.Annotations = map[string]string{ConfigAnnotation: "bios-update"}
 
-			nar := &pluginsv1alpha1.NodeAllocationRequest{
+			nar := &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{Name: testNARName, Namespace: testNamespace},
-				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
-					NodeGroup: []pluginsv1alpha1.NodeGroup{
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+					NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newProfile}},
 					},
 				},
@@ -3129,7 +3128,7 @@ var _ = Describe("Helpers", func() {
 			// No BMH objects in the client — both nodes will fail on getBMHForNode
 			testClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(node1, node2).
-				WithStatusSubresource(&pluginsv1alpha1.AllocatedNode{}).
+				WithStatusSubresource(&hwmgmtv1alpha1.AllocatedNode{}).
 				Build()
 
 			nodesToProcess := []nodeAction{
@@ -3149,7 +3148,7 @@ var _ = Describe("Helpers", func() {
 			logger     *slog.Logger
 			scheme     *runtime.Scheme
 			testClient client.Client
-			nar        *pluginsv1alpha1.NodeAllocationRequest
+			nar        *hwmgmtv1alpha1.NodeAllocationRequest
 			configured = string(hwmgmtv1alpha1.Configured)
 		)
 		const (
@@ -3160,10 +3159,10 @@ var _ = Describe("Helpers", func() {
 			currentProfile  = "profile-v1"
 		)
 
-		createNAR := func(groups []pluginsv1alpha1.NodeGroup) *pluginsv1alpha1.NodeAllocationRequest {
-			return &pluginsv1alpha1.NodeAllocationRequest{
+		createNAR := func(groups []hwmgmtv1alpha1.NodeGroup) *hwmgmtv1alpha1.NodeAllocationRequest {
+			return &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-nar", Namespace: testNamespace},
-				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
 					NodeGroup: groups,
 				},
 			}
@@ -3173,9 +3172,9 @@ var _ = Describe("Helpers", func() {
 			ctx = context.Background()
 			logger = slog.Default()
 			scheme = runtime.NewScheme()
-			Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
 			Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
-			nar = createNAR([]pluginsv1alpha1.NodeGroup{
+			Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
+			nar = createNAR([]hwmgmtv1alpha1.NodeGroup{
 				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "master", HwProfile: newProfile}},
 				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", HwProfile: newProfile}},
 			})
@@ -3194,16 +3193,16 @@ var _ = Describe("Helpers", func() {
 			w2.Spec.GroupName = testGroupWorker
 			w2.Spec.HwProfile = currentProfile
 
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{Items: []pluginsv1alpha1.AllocatedNode{*m1, *w1, *w2}}
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{Items: []hwmgmtv1alpha1.AllocatedNode{*m1, *w1, *w2}}
 			testClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(m1, w1, w2).
-				WithStatusSubresource(&pluginsv1alpha1.AllocatedNode{}).
+				WithStatusSubresource(&hwmgmtv1alpha1.AllocatedNode{}).
 				Build()
 
 			err := markPendingNodesForUpdate(ctx, testClient, testClient, logger, nodelist, nar)
 			Expect(err).ToNot(HaveOccurred())
 
-			updated := &pluginsv1alpha1.AllocatedNode{}
+			updated := &hwmgmtv1alpha1.AllocatedNode{}
 
 			// master already at target — condition should remain ConfigApplied
 			Expect(testClient.Get(ctx, types.NamespacedName{Name: "m1", Namespace: testNamespace}, updated)).To(Succeed())
@@ -3225,7 +3224,7 @@ var _ = Describe("Helpers", func() {
 		})
 
 		It("should handle groups with different target profiles", func() {
-			nar = createNAR([]pluginsv1alpha1.NodeGroup{
+			nar = createNAR([]hwmgmtv1alpha1.NodeGroup{
 				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "master", HwProfile: newProfile}},
 				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", HwProfile: "profile-v3"}},
 			})
@@ -3237,16 +3236,16 @@ var _ = Describe("Helpers", func() {
 			w1.Spec.GroupName = testGroupWorker
 			w1.Spec.HwProfile = currentProfile
 
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{Items: []pluginsv1alpha1.AllocatedNode{*m1, *w1}}
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{Items: []hwmgmtv1alpha1.AllocatedNode{*m1, *w1}}
 			testClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(m1, w1).
-				WithStatusSubresource(&pluginsv1alpha1.AllocatedNode{}).
+				WithStatusSubresource(&hwmgmtv1alpha1.AllocatedNode{}).
 				Build()
 
 			err := markPendingNodesForUpdate(ctx, testClient, testClient, logger, nodelist, nar)
 			Expect(err).ToNot(HaveOccurred())
 
-			updated := &pluginsv1alpha1.AllocatedNode{}
+			updated := &hwmgmtv1alpha1.AllocatedNode{}
 
 			// master should get profile-v2 with ConfigUpdatePending
 			Expect(testClient.Get(ctx, types.NamespacedName{Name: "m1", Namespace: testNamespace}, updated)).To(Succeed())
@@ -3271,16 +3270,16 @@ var _ = Describe("Helpers", func() {
 			failed.Spec.GroupName = testGroupWorker
 			failed.Spec.HwProfile = currentProfile
 
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{Items: []pluginsv1alpha1.AllocatedNode{*failed}}
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{Items: []hwmgmtv1alpha1.AllocatedNode{*failed}}
 			testClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(failed).
-				WithStatusSubresource(&pluginsv1alpha1.AllocatedNode{}).
+				WithStatusSubresource(&hwmgmtv1alpha1.AllocatedNode{}).
 				Build()
 
 			err := markPendingNodesForUpdate(ctx, testClient, testClient, logger, nodelist, nar)
 			Expect(err).ToNot(HaveOccurred())
 
-			updated := &pluginsv1alpha1.AllocatedNode{}
+			updated := &hwmgmtv1alpha1.AllocatedNode{}
 			Expect(testClient.Get(ctx, types.NamespacedName{Name: "f1", Namespace: testNamespace}, updated)).To(Succeed())
 			Expect(updated.Spec.HwProfile).To(Equal(newProfile))
 			cond := meta.FindStatusCondition(updated.Status.Conditions, configured)
@@ -3297,16 +3296,16 @@ var _ = Describe("Helpers", func() {
 			inProgress.Spec.GroupName = testGroupWorker
 			inProgress.Spec.HwProfile = currentProfile
 
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{Items: []pluginsv1alpha1.AllocatedNode{*inProgress}}
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{Items: []hwmgmtv1alpha1.AllocatedNode{*inProgress}}
 			testClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(inProgress).
-				WithStatusSubresource(&pluginsv1alpha1.AllocatedNode{}).
+				WithStatusSubresource(&hwmgmtv1alpha1.AllocatedNode{}).
 				Build()
 
 			err := markPendingNodesForUpdate(ctx, testClient, testClient, logger, nodelist, nar)
 			Expect(err).ToNot(HaveOccurred())
 
-			updated := &pluginsv1alpha1.AllocatedNode{}
+			updated := &hwmgmtv1alpha1.AllocatedNode{}
 			Expect(testClient.Get(ctx, types.NamespacedName{Name: "ip1", Namespace: testNamespace}, updated)).To(Succeed())
 			// Should remain ConfigUpdate with old profile — not touched
 			Expect(updated.Spec.HwProfile).To(Equal(currentProfile))
@@ -3323,16 +3322,16 @@ var _ = Describe("Helpers", func() {
 			abandoned.Spec.HwProfile = currentProfile
 			abandoned.Annotations = map[string]string{UpdateAbandonedAnnotation: "true"}
 
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{Items: []pluginsv1alpha1.AllocatedNode{*abandoned}}
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{Items: []hwmgmtv1alpha1.AllocatedNode{*abandoned}}
 			testClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(abandoned).
-				WithStatusSubresource(&pluginsv1alpha1.AllocatedNode{}).
+				WithStatusSubresource(&hwmgmtv1alpha1.AllocatedNode{}).
 				Build()
 
 			err := markPendingNodesForUpdate(ctx, testClient, testClient, logger, nodelist, nar)
 			Expect(err).ToNot(HaveOccurred())
 
-			updated := &pluginsv1alpha1.AllocatedNode{}
+			updated := &hwmgmtv1alpha1.AllocatedNode{}
 			Expect(testClient.Get(ctx, types.NamespacedName{Name: "ab1", Namespace: testNamespace}, updated)).To(Succeed())
 			Expect(updated.Spec.HwProfile).To(Equal(newProfile))
 			cond := meta.FindStatusCondition(updated.Status.Conditions, configured)
@@ -3347,7 +3346,7 @@ var _ = Describe("Helpers", func() {
 			logger    *slog.Logger
 			scheme    *runtime.Scheme
 			hubClient client.Client
-			nar       *pluginsv1alpha1.NodeAllocationRequest
+			nar       *hwmgmtv1alpha1.NodeAllocationRequest
 		)
 
 		BeforeEach(func() {
@@ -3355,30 +3354,30 @@ var _ = Describe("Helpers", func() {
 			logger = slog.Default()
 			scheme = runtime.NewScheme()
 			Expect(corev1.AddToScheme(scheme)).To(Succeed())
-			Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
+			Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 			Expect(provisioningv1alpha1.AddToScheme(scheme)).To(Succeed())
 
-			nar = &pluginsv1alpha1.NodeAllocationRequest{
+			nar = &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-nar",
 					Namespace: "default",
 				},
-				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
 					ClusterId: "test-cluster",
 				},
 			}
 		})
 
 		It("should skip when all nodes already have hostnames", func() {
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{
-				Items: []pluginsv1alpha1.AllocatedNode{
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{
+				Items: []hwmgmtv1alpha1.AllocatedNode{
 					{
 						ObjectMeta: metav1.ObjectMeta{Name: "node-1", Namespace: "default"},
-						Status:     pluginsv1alpha1.AllocatedNodeStatus{Hostname: "host-1.example.com"},
+						Status:     hwmgmtv1alpha1.AllocatedNodeStatus{Hostname: "host-1.example.com"},
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{Name: "node-2", Namespace: "default"},
-						Status:     pluginsv1alpha1.AllocatedNodeStatus{Hostname: "host-2.example.com"},
+						Status:     hwmgmtv1alpha1.AllocatedNodeStatus{Hostname: "host-2.example.com"},
 					},
 				},
 			}
@@ -3389,10 +3388,10 @@ var _ = Describe("Helpers", func() {
 		})
 
 		It("should return error when ProvisioningRequest doesn't exist", func() {
-			node := &pluginsv1alpha1.AllocatedNode{
+			node := &hwmgmtv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-1", Namespace: "default"},
 			}
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{Items: []pluginsv1alpha1.AllocatedNode{*node}}
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{Items: []hwmgmtv1alpha1.AllocatedNode{*node}}
 			hubClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(node).WithStatusSubresource(node).Build()
 
@@ -3412,10 +3411,10 @@ var _ = Describe("Helpers", func() {
 					},
 				},
 			}
-			node := &pluginsv1alpha1.AllocatedNode{
+			node := &hwmgmtv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-1", Namespace: "default"},
 			}
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{Items: []pluginsv1alpha1.AllocatedNode{*node}}
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{Items: []hwmgmtv1alpha1.AllocatedNode{*node}}
 			hubClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(pr, node).WithStatusSubresource(node).Build()
 
@@ -3436,14 +3435,14 @@ var _ = Describe("Helpers", func() {
 					},
 				},
 			}
-			node1 := &pluginsv1alpha1.AllocatedNode{
+			node1 := &hwmgmtv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-1", Namespace: "default"},
 			}
-			node2 := &pluginsv1alpha1.AllocatedNode{
+			node2 := &hwmgmtv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-2", Namespace: "default"},
 			}
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{
-				Items: []pluginsv1alpha1.AllocatedNode{*node1, *node2},
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{
+				Items: []hwmgmtv1alpha1.AllocatedNode{*node1, *node2},
 			}
 			hubClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(pr, node1, node2).WithStatusSubresource(node1, node2).Build()
@@ -3456,7 +3455,7 @@ var _ = Describe("Helpers", func() {
 			Expect(nodelist.Items[1].Status.Hostname).To(Equal("worker-2.example.com"))
 
 			// Verify persisted in API
-			updated := &pluginsv1alpha1.AllocatedNode{}
+			updated := &hwmgmtv1alpha1.AllocatedNode{}
 			Expect(hubClient.Get(ctx, client.ObjectKeyFromObject(node1), updated)).To(Succeed())
 			Expect(updated.Status.Hostname).To(Equal("worker-1.example.com"))
 			Expect(hubClient.Get(ctx, client.ObjectKeyFromObject(node2), updated)).To(Succeed())
@@ -3475,15 +3474,15 @@ var _ = Describe("Helpers", func() {
 					},
 				},
 			}
-			node1 := &pluginsv1alpha1.AllocatedNode{
+			node1 := &hwmgmtv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-1", Namespace: "default"},
-				Status:     pluginsv1alpha1.AllocatedNodeStatus{Hostname: "worker-1.example.com"},
+				Status:     hwmgmtv1alpha1.AllocatedNodeStatus{Hostname: "worker-1.example.com"},
 			}
-			node2 := &pluginsv1alpha1.AllocatedNode{
+			node2 := &hwmgmtv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-2", Namespace: "default"},
 			}
-			nodelist := &pluginsv1alpha1.AllocatedNodeList{
-				Items: []pluginsv1alpha1.AllocatedNode{*node1, *node2},
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{
+				Items: []hwmgmtv1alpha1.AllocatedNode{*node1, *node2},
 			}
 			hubClient = fake.NewClientBuilder().WithScheme(scheme).
 				WithObjects(pr, node1, node2).WithStatusSubresource(node1, node2).Build()

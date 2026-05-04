@@ -1,4 +1,4 @@
-apiVersion: plugins.clcm.openshift.io/v1alpha1
+apiVersion: clcm.openshift.io/v1alpha1
 kind: AllocatedNode
 metadata:
   name: metal3-hwplugin-site-sno-du-1-xr8620t-pool-xr8620txserver1

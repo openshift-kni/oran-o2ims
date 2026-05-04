@@ -175,7 +175,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ibgu "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
@@ -2872,14 +2871,14 @@ nodes:
 		Context("when NodeAllocationRequest exists", func() {
 			BeforeEach(func() {
 				// Create a NAR CR with the same name as the PR
-				nar := &pluginsv1alpha1.NodeAllocationRequest{
+				nar := &hwmgmtv1alpha1.NodeAllocationRequest{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      testPRName,
 						Namespace: constants.DefaultNamespace,
 					},
-					Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+					Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
 						ClusterId:           testClusterName,
-						LocationSpec:        pluginsv1alpha1.LocationSpec{Site: "test-site"},
+						LocationSpec:        hwmgmtv1alpha1.LocationSpec{Site: "test-site"},
 						ConfigTransactionId: 12345,
 					},
 				}
@@ -3398,7 +3397,7 @@ plan:
 			cr, clusterTemplate, upgradeDefaults,
 		).WithStatusSubresource(
 			&provisioningv1alpha1.ProvisioningRequest{},
-			&pluginsv1alpha1.NodeAllocationRequest{},
+			&hwmgmtv1alpha1.NodeAllocationRequest{},
 		).Build()
 		reconciler.Client = c
 
@@ -4606,12 +4605,12 @@ plan:
 			Context("when hardware provisioning times out or fails", func() {
 				BeforeEach(func() {
 					// Create a NAR with a timed-out provisioning condition
-					nar := &pluginsv1alpha1.NodeAllocationRequest{
+					nar := &hwmgmtv1alpha1.NodeAllocationRequest{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      deployConfigCR.Name,
 							Namespace: constants.DefaultNamespace,
 						},
-						Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+						Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
 							ClusterId: deployConfigCR.Name,
 						},
 					}

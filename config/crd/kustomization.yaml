@@ -8,8 +8,8 @@ resources:
 
 # Hardware management:
 - bases/clcm.openshift.io_hardwareprofiles.yaml
-- bases/plugins.clcm.openshift.io_nodeallocationrequests.yaml
-- bases/plugins.clcm.openshift.io_allocatednodes.yaml
+- bases/clcm.openshift.io_nodeallocationrequests.yaml
+- bases/clcm.openshift.io_allocatednodes.yaml
 
 # Provisioning:
 - bases/clcm.openshift.io_clustertemplates.yaml

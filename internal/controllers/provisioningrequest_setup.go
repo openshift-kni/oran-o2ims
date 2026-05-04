@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	ibgu "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
@@ -62,13 +62,13 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 				DeleteFunc:  func(e event.DeleteEvent) bool { return true },
 			})).
 		Watches(
-			&pluginsv1alpha1.NodeAllocationRequest{},
+			&hwmgmtv1alpha1.NodeAllocationRequest{},
 			handler.EnqueueRequestsFromMapFunc(r.enqueueProvisioningRequestForNAR),
 			builder.WithPredicates(predicate.Funcs{
 				UpdateFunc: func(e event.UpdateEvent) bool {
 					// Trigger on status condition changes only
-					narOld := e.ObjectOld.(*pluginsv1alpha1.NodeAllocationRequest)
-					narNew := e.ObjectNew.(*pluginsv1alpha1.NodeAllocationRequest)
+					narOld := e.ObjectOld.(*hwmgmtv1alpha1.NodeAllocationRequest)
+					narNew := e.ObjectNew.(*hwmgmtv1alpha1.NodeAllocationRequest)
 					return !equality.Semantic.DeepEqual(narOld.Status.Conditions, narNew.Status.Conditions)
 				},
 				CreateFunc:  func(ce event.CreateEvent) bool { return false },

@@ -79,9 +79,8 @@ This project has not reached GA, so there are no production databases to migrate
 
 ### API Groups and Key CRDs
 
-- `clcm.openshift.io` - ClusterTemplate, ProvisioningRequest, HardwareProfile
+- `clcm.openshift.io` - ClusterTemplate, ProvisioningRequest, HardwareProfile, NodeAllocationRequest, AllocatedNode
 - `ocloud.openshift.io` - Inventory
-- `plugins.clcm.openshift.io` - NodeAllocationRequest, AllocatedNode
 
 ### Design Decisions
 

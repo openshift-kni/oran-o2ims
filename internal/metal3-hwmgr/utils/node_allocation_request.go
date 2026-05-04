@@ -20,7 +20,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
@@ -32,7 +31,7 @@ const (
 var nodeAllocationRequestGVK schema.GroupVersionKind
 
 func InitNodeAllocationRequestUtils(scheme *runtime.Scheme) error {
-	nodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{}
+	nodeAllocationRequest := &hwmgmtv1alpha1.NodeAllocationRequest{}
 	gvks, unversioned, err := scheme.ObjectKinds(nodeAllocationRequest)
 	if err != nil {
 		return fmt.Errorf("failed to query scheme to get GVK for NodeAllocationRequest CR: %w", err)
@@ -46,7 +45,7 @@ func InitNodeAllocationRequestUtils(scheme *runtime.Scheme) error {
 	return nil
 }
 
-func GetNodeAllocationRequest(ctx context.Context, client client.Reader, key client.ObjectKey, nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) error {
+func GetNodeAllocationRequest(ctx context.Context, client client.Reader, key client.ObjectKey, nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) error {
 	if err := client.Get(ctx, key, nodeAllocationRequest); err != nil {
 		return fmt.Errorf("failed to get NodeAllocationRequest: %w", err)
 	}
@@ -59,13 +58,13 @@ func GetNodeAllocationRequest(ctx context.Context, client client.Reader, key cli
 	return nil
 }
 
-func GetNodeAllocationRequestProvisionedCondition(nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) *metav1.Condition {
+func GetNodeAllocationRequestProvisionedCondition(nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) *metav1.Condition {
 	return meta.FindStatusCondition(
 		nodeAllocationRequest.Status.Conditions,
 		string(hwmgmtv1alpha1.Provisioned))
 }
 
-func IsNodeAllocationRequestProvisionedCompleted(nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) bool {
+func IsNodeAllocationRequestProvisionedCompleted(nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) bool {
 	provisionedCondition := GetNodeAllocationRequestProvisionedCondition(nodeAllocationRequest)
 	if provisionedCondition != nil && provisionedCondition.Status == metav1.ConditionTrue {
 		return true
@@ -74,7 +73,7 @@ func IsNodeAllocationRequestProvisionedCompleted(nodeAllocationRequest *pluginsv
 	return false
 }
 
-func IsNodeAllocationRequestProvisionedFailed(nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) bool {
+func IsNodeAllocationRequestProvisionedFailed(nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) bool {
 	provisionedCondition := GetNodeAllocationRequestProvisionedCondition(nodeAllocationRequest)
 	if provisionedCondition != nil && provisionedCondition.Reason == string(hwmgmtv1alpha1.Failed) {
 		return true
@@ -86,11 +85,11 @@ func IsNodeAllocationRequestProvisionedFailed(nodeAllocationRequest *pluginsv1al
 func UpdateNodeAllocationRequestSelectedGroups(
 	ctx context.Context,
 	c client.Client,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) error {
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) error {
 
 	// nolint: wrapcheck
 	err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
-		newNodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{}
+		newNodeAllocationRequest := &hwmgmtv1alpha1.NodeAllocationRequest{}
 		if err := c.Get(ctx, client.ObjectKeyFromObject(nodeAllocationRequest), newNodeAllocationRequest); err != nil {
 			return err
 		}
@@ -111,11 +110,11 @@ func UpdateNodeAllocationRequestSelectedGroups(
 func UpdateNodeAllocationRequestPluginStatus(
 	ctx context.Context,
 	c client.Client,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) error {
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) error {
 
 	// nolint: wrapcheck
 	err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
-		newNodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{}
+		newNodeAllocationRequest := &hwmgmtv1alpha1.NodeAllocationRequest{}
 		if err := c.Get(ctx, client.ObjectKeyFromObject(nodeAllocationRequest), newNodeAllocationRequest); err != nil {
 			return err
 		}
@@ -136,7 +135,7 @@ func UpdateNodeAllocationRequestPluginStatus(
 func UpdateNodeAllocationRequestStatusCondition(
 	ctx context.Context,
 	c client.Client,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
 	conditionType hwmgmtv1alpha1.ConditionType,
 	conditionReason hwmgmtv1alpha1.ConditionReason,
 	conditionStatus metav1.ConditionStatus,
@@ -150,7 +149,7 @@ func UpdateNodeAllocationRequestStatusCondition(
 
 	// nolint: wrapcheck
 	err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
-		newNodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{}
+		newNodeAllocationRequest := &hwmgmtv1alpha1.NodeAllocationRequest{}
 		if err := c.Get(ctx, client.ObjectKeyFromObject(nodeAllocationRequest), newNodeAllocationRequest); err != nil {
 			return err
 		}
@@ -237,11 +236,11 @@ func UpdateNodeAllocationRequestProperties(
 	ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) error {
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) error {
 
 	// nolint: wrapcheck
 	err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
-		newNodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{}
+		newNodeAllocationRequest := &hwmgmtv1alpha1.NodeAllocationRequest{}
 		if err := c.Get(ctx, client.ObjectKeyFromObject(nodeAllocationRequest), newNodeAllocationRequest); err != nil {
 			return err
 		}
@@ -276,11 +275,11 @@ func UpdateNodeAllocationRequestProperties(
 func NodeAllocationRequestAddFinalizer(
 	ctx context.Context,
 	c client.Client,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
 ) error {
 	// nolint: wrapcheck
 	err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
-		newNodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{}
+		newNodeAllocationRequest := &hwmgmtv1alpha1.NodeAllocationRequest{}
 		if err := c.Get(ctx, client.ObjectKeyFromObject(nodeAllocationRequest), newNodeAllocationRequest); err != nil {
 			return err
 		}
@@ -299,11 +298,11 @@ func NodeAllocationRequestAddFinalizer(
 func NodeAllocationRequestRemoveFinalizer(
 	ctx context.Context,
 	c client.Client,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
 ) error {
 	// nolint: wrapcheck
 	err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
-		newNodeAllocationRequest := &pluginsv1alpha1.NodeAllocationRequest{}
+		newNodeAllocationRequest := &hwmgmtv1alpha1.NodeAllocationRequest{}
 		if err := c.Get(ctx, client.ObjectKeyFromObject(nodeAllocationRequest), newNodeAllocationRequest); err != nil {
 			return err
 		}

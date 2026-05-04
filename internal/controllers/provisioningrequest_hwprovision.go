@@ -21,7 +21,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
@@ -31,9 +30,9 @@ import (
 
 // getNAR retrieves the NodeAllocationRequest CR for this ProvisioningRequest.
 // The NAR name matches the ProvisioningRequest name (1:1 relationship).
-func (t *provisioningRequestReconcilerTask) getNAR(ctx context.Context) (*pluginsv1alpha1.NodeAllocationRequest, error) {
+func (t *provisioningRequestReconcilerTask) getNAR(ctx context.Context) (*hwmgmtv1alpha1.NodeAllocationRequest, error) {
 	narNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
-	nar := &pluginsv1alpha1.NodeAllocationRequest{}
+	nar := &hwmgmtv1alpha1.NodeAllocationRequest{}
 	if err := t.client.Get(ctx, types.NamespacedName{Name: t.object.Name, Namespace: narNS}, nar); err != nil {
 		return nil, fmt.Errorf("failed to get NodeAllocationRequest %s/%s: %w", narNS, t.object.Name, err)
 	}
@@ -100,7 +99,7 @@ func (t *provisioningRequestReconcilerTask) syncNARSkipCleanup(ctx context.Conte
 // createOrUpdateNodeAllocationRequest creates a new NodeAllocationRequest resource if it doesn't exist or updates it if the spec has changed.
 func (t *provisioningRequestReconcilerTask) createOrUpdateNodeAllocationRequest(ctx context.Context,
 	clusterNamespace string,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) error {
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) error {
 
 	// Check if the NAR already exists
 	existingNAR, err := t.getNAR(ctx)
@@ -130,7 +129,7 @@ func (t *provisioningRequestReconcilerTask) createOrUpdateNodeAllocationRequest(
 
 func (t *provisioningRequestReconcilerTask) createNodeAllocationRequestResources(ctx context.Context,
 	clusterNamespace string,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) error {
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) error {
 
 	// Create/update the clusterInstance namespace, adding ProvisioningRequest labels to the namespace
 	err := t.createClusterInstanceNamespace(ctx, clusterNamespace)
@@ -154,7 +153,7 @@ func (t *provisioningRequestReconcilerTask) createNodeAllocationRequestResources
 func (t *provisioningRequestReconcilerTask) waitForHardwareData(
 	ctx context.Context,
 	clusterInstance *unstructured.Unstructured,
-	nodeAllocationRequestResponse *pluginsv1alpha1.NodeAllocationRequest) (bool, *bool, bool, error) {
+	nodeAllocationRequestResponse *hwmgmtv1alpha1.NodeAllocationRequest) (bool, *bool, bool, error) {
 
 	var configured *bool
 	provisioned, timedOutOrFailed, err := t.checkNodeAllocationRequestProvisionStatus(ctx, clusterInstance, nodeAllocationRequestResponse)
@@ -178,7 +177,7 @@ func (t *provisioningRequestReconcilerTask) waitForHardwareData(
 
 // updateClusterInstance updates the given ClusterInstance object based on the provisioned nodeAllocationRequest.
 func (t *provisioningRequestReconcilerTask) updateClusterInstance(ctx context.Context,
-	clusterInstance *unstructured.Unstructured, nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) error {
+	clusterInstance *unstructured.Unstructured, nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) error {
 
 	narNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
 	allocatedNodeList, err := listAllocatedNodesForNAR(ctx, t.client, t.object.Name, narNS)
@@ -231,7 +230,7 @@ func (t *provisioningRequestReconcilerTask) updateClusterInstance(ctx context.Co
 // and updates the provisioning request status accordingly.
 func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestStatus(
 	ctx context.Context,
-	nodeAllocationRequestResponse *pluginsv1alpha1.NodeAllocationRequest,
+	nodeAllocationRequestResponse *hwmgmtv1alpha1.NodeAllocationRequest,
 	condition hwmgmtv1alpha1.ConditionType) (bool, bool, error) {
 
 	var status bool
@@ -278,7 +277,7 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestStatus(
 func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestProvisionStatus(
 	ctx context.Context,
 	clusterInstance *unstructured.Unstructured,
-	nodeAllocationRequestResponse *pluginsv1alpha1.NodeAllocationRequest,
+	nodeAllocationRequestResponse *hwmgmtv1alpha1.NodeAllocationRequest,
 ) (bool, bool, error) {
 
 	nodeAllocationRequestID := t.object.Name
@@ -396,7 +395,7 @@ func (t *provisioningRequestReconcilerTask) updateInfrastructureResourceStatuses
 // checkNodeAllocationRequestConfigStatus checks the Configured status of the node allocation request.
 func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestConfigStatus(
 	ctx context.Context,
-	nodeAllocationRequestResponse *pluginsv1alpha1.NodeAllocationRequest,
+	nodeAllocationRequestResponse *hwmgmtv1alpha1.NodeAllocationRequest,
 ) (*bool, bool, error) {
 
 	status, timedOutOrFailed, err := t.checkNodeAllocationRequestStatus(ctx, nodeAllocationRequestResponse, hwmgmtv1alpha1.Configured)
@@ -414,7 +413,7 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestConfigStat
 func (t *provisioningRequestReconcilerTask) applyNodeConfiguration(
 	ctx context.Context,
 	hwNodes map[string][]ctlrutils.NodeInfo,
-	nar *pluginsv1alpha1.NodeAllocationRequest,
+	nar *hwmgmtv1alpha1.NodeAllocationRequest,
 	clusterInstance *unstructured.Unstructured,
 ) error {
 
@@ -598,7 +597,7 @@ func (t *provisioningRequestReconcilerTask) processExistingHardwareCondition(
 //   - error: any error that occurred during status processing
 func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 	ctx context.Context,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest,
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
 	condition hwmgmtv1alpha1.ConditionType,
 ) (bool, bool, error) {
 
@@ -701,7 +700,7 @@ func isConfigTransactionObserved(observedID, expectedGeneration int64) bool {
 func (t *provisioningRequestReconcilerTask) checkExistingNodeAllocationRequest(
 	ctx context.Context,
 	hwMgmtData map[string]any,
-	nodeAllocationRequestId string) (*pluginsv1alpha1.NodeAllocationRequest, error) {
+	nodeAllocationRequestId string) (*hwmgmtv1alpha1.NodeAllocationRequest, error) {
 
 	nar, err := t.getNAR(ctx)
 	if err != nil {
@@ -721,7 +720,7 @@ func (t *provisioningRequestReconcilerTask) checkExistingNodeAllocationRequest(
 
 // buildNodeAllocationRequestSpec builds the NodeAllocationRequest from the pre-merged hwMgmt data and cluster instance
 func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec(
-	clusterInstance *unstructured.Unstructured) (*pluginsv1alpha1.NodeAllocationRequest, error) {
+	clusterInstance *unstructured.Unstructured) (*hwmgmtv1alpha1.NodeAllocationRequest, error) {
 
 	hwMgmtData := t.clusterInput.hwMgmtData
 
@@ -756,7 +755,7 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec(
 
 	// Node group validation (name, role, duplicates) is handled by validateMergedNodeGroups
 	// which runs before this function. Here we only extract values to build the NAR.
-	nodeGroups := []pluginsv1alpha1.NodeGroup{}
+	nodeGroups := []hwmgmtv1alpha1.NodeGroup{}
 	for _, ngRaw := range nodeGroupDataSlice {
 		ngMap, ok := ngRaw.(map[string]any)
 		if !ok {
@@ -818,15 +817,15 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec(
 
 	_, hasSkipCleanup := t.object.Annotations[ctlrutils.SkipCleanupAnnotation]
 
-	nar := &pluginsv1alpha1.NodeAllocationRequest{
+	nar := &hwmgmtv1alpha1.NodeAllocationRequest{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      t.object.Name,
 			Namespace: narNS,
 		},
-		Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+		Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
 			ClusterId:                   clusterId,
 			NodeGroup:                   nodeGroups,
-			LocationSpec:                pluginsv1alpha1.LocationSpec{Site: siteID},
+			LocationSpec:                hwmgmtv1alpha1.LocationSpec{Site: siteID},
 			ConfigTransactionId:         t.object.Generation,
 			HardwareProvisioningTimeout: timeoutStr,
 			SkipCleanup:                 hasSkipCleanup,
@@ -837,7 +836,7 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec(
 }
 
 func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(ctx context.Context,
-	clusterInstance *unstructured.Unstructured) (*pluginsv1alpha1.NodeAllocationRequest, error) {
+	clusterInstance *unstructured.Unstructured) (*hwmgmtv1alpha1.NodeAllocationRequest, error) {
 
 	hwMgmtData := t.clusterInput.hwMgmtData
 

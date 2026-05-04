@@ -17,7 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/utils"
@@ -204,7 +204,7 @@ func getResourceInfoResourcePoolUID(bmh *metal3v1alpha1.BareMetalHost, poolNameT
 	return ""
 }
 
-func getResourceInfoResourceProfileId(node *pluginsv1alpha1.AllocatedNode) string {
+func getResourceInfoResourceProfileId(node *hwmgmtv1alpha1.AllocatedNode) string {
 	if node != nil {
 		return node.Status.HwProfile
 	}
@@ -379,7 +379,7 @@ func includeInInventory(bmh *metal3v1alpha1.BareMetalHost) bool {
 	return false
 }
 
-func getResourceInfo(bmh *metal3v1alpha1.BareMetalHost, node *pluginsv1alpha1.AllocatedNode, hwdata *metal3v1alpha1.HardwareData, poolNameToUID map[string]string) ResourceInfo {
+func getResourceInfo(bmh *metal3v1alpha1.BareMetalHost, node *hwmgmtv1alpha1.AllocatedNode, hwdata *metal3v1alpha1.HardwareData, poolNameToUID map[string]string) ResourceInfo {
 	nics := getResourceInfoNics(bmh, hwdata)
 	storage := getResourceInfoStorage(hwdata)
 

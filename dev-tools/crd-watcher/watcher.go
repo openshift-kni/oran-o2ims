@@ -33,7 +33,7 @@ import (
 	"k8s.io/klog/v2"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	metal3controller "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/controller"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -1227,14 +1227,14 @@ func (w *CRDWatcher) convertToTypedObject(obj runtime.Object, crdType string) (r
 		}
 		return provReq, nil
 	case CRDTypeNodeAllocationRequests:
-		nodeAllocReq := &pluginsv1alpha1.NodeAllocationRequest{}
+		nodeAllocReq := &hwmgmtv1alpha1.NodeAllocationRequest{}
 		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(
 			unstructuredObj.Object, nodeAllocReq); err != nil {
 			return nil, err
 		}
 		return nodeAllocReq, nil
 	case CRDTypeAllocatedNodes:
-		allocNode := &pluginsv1alpha1.AllocatedNode{}
+		allocNode := &hwmgmtv1alpha1.AllocatedNode{}
 		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(
 			unstructuredObj.Object, allocNode); err != nil {
 			return nil, err
@@ -1276,13 +1276,13 @@ func (w *CRDWatcher) getGVRForCRDType(crdType string) (schema.GroupVersionResour
 		}, nil
 	case CRDTypeNodeAllocationRequests:
 		return schema.GroupVersionResource{
-			Group:    "plugins.clcm.openshift.io",
+			Group:    "clcm.openshift.io",
 			Version:  "v1alpha1",
 			Resource: CRDTypeNodeAllocationRequests,
 		}, nil
 	case CRDTypeAllocatedNodes:
 		return schema.GroupVersionResource{
-			Group:    "plugins.clcm.openshift.io",
+			Group:    "clcm.openshift.io",
 			Version:  "v1alpha1",
 			Resource: CRDTypeAllocatedNodes,
 		}, nil

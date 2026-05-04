@@ -32,7 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/utils"
 )
@@ -48,7 +47,7 @@ var _ = Describe("Metal3 NodeAllocationRequest Controller Timeout Handling", fun
 		logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 		scheme := runtime.NewScheme()
-		Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
+		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 
 		c = fake.NewClientBuilder().WithScheme(scheme).Build()
 
@@ -60,18 +59,18 @@ var _ = Describe("Metal3 NodeAllocationRequest Controller Timeout Handling", fun
 	})
 
 	Describe("checkHardwareTimeout", func() {
-		var nar *pluginsv1alpha1.NodeAllocationRequest
+		var nar *hwmgmtv1alpha1.NodeAllocationRequest
 
 		BeforeEach(func() {
-			nar = &pluginsv1alpha1.NodeAllocationRequest{
+			nar = &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-nar",
 					Namespace: "default",
 				},
-				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
 					HardwareProvisioningTimeout: "5m",
 				},
-				Status: pluginsv1alpha1.NodeAllocationRequestStatus{
+				Status: hwmgmtv1alpha1.NodeAllocationRequestStatus{
 					Conditions: []metav1.Condition{},
 				},
 			}
@@ -288,19 +287,19 @@ var _ = Describe("Metal3 NodeAllocationRequest Controller Timeout Handling", fun
 	})
 
 	Describe("Day 2 retry scenarios", func() {
-		var nar *pluginsv1alpha1.NodeAllocationRequest
+		var nar *hwmgmtv1alpha1.NodeAllocationRequest
 
 		BeforeEach(func() {
-			nar = &pluginsv1alpha1.NodeAllocationRequest{
+			nar = &hwmgmtv1alpha1.NodeAllocationRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-nar-day2",
 					Namespace: "default",
 				},
-				Spec: pluginsv1alpha1.NodeAllocationRequestSpec{
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
 					HardwareProvisioningTimeout: "5m",
 					ConfigTransactionId:         2, // Indicates spec change
 				},
-				Status: pluginsv1alpha1.NodeAllocationRequestStatus{
+				Status: hwmgmtv1alpha1.NodeAllocationRequestStatus{
 					Conditions: []metav1.Condition{},
 				},
 			}

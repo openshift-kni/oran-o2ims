@@ -1,4 +1,4 @@
-apiVersion: plugins.clcm.openshift.io/v1alpha1
+apiVersion: clcm.openshift.io/v1alpha1
 kind: NodeAllocationRequest
 metadata:
   name: metal3-b12f3e77848a4002bf40

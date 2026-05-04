@@ -21,7 +21,7 @@ import (
 
 	machineconfigv1 "github.com/openshift/api/machineconfiguration/v1"
 
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 )
 
 var _ = Describe("Node Operations", func() {
@@ -36,7 +36,7 @@ var _ = Describe("Node Operations", func() {
 		logger = slog.Default()
 		scheme = runtime.NewScheme()
 		Expect(corev1.AddToScheme(scheme)).To(Succeed())
-		Expect(pluginsv1alpha1.AddToScheme(scheme)).To(Succeed())
+		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
 		Expect(machineconfigv1.Install(scheme)).To(Succeed())
 	})
 

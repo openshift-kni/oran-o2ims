@@ -149,16 +149,12 @@ fi
 # O-Cloud Manager CRDs - clcm.openshift.io
 gather_resource "clustertemplates.clcm.openshift.io" "clcm/clustertemplates"
 gather_resource "provisioningrequests.clcm.openshift.io" "clcm/provisioningrequests"
-gather_resource "hardwareplugins.clcm.openshift.io" "clcm/hardwareplugins"
 gather_resource "hardwareprofiles.clcm.openshift.io" "clcm/hardwareprofiles"
-gather_resource "hardwaretemplates.clcm.openshift.io" "clcm/hardwaretemplates"
+gather_resource "nodeallocationrequests.clcm.openshift.io" "clcm/nodeallocationrequests"
+gather_resource "allocatednodes.clcm.openshift.io" "clcm/allocatednodes"
 
 # O-Cloud Manager CRDs - ocloud.openshift.io
 gather_resource "inventories.ocloud.openshift.io" "ocloud/inventories"
-
-# O-Cloud Manager CRDs - plugins.clcm.openshift.io
-gather_resource "nodeallocationrequests.plugins.clcm.openshift.io" "plugins/nodeallocationrequests"
-gather_resource "allocatednodes.plugins.clcm.openshift.io" "plugins/allocatednodes"
 
 # Metal3 resources
 gather_resource "baremetalhosts.metal3.io" "metal3/baremetalhosts"

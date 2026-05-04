@@ -26,7 +26,6 @@ import (
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -71,9 +70,9 @@ type bmhBmcInfo struct {
 }
 
 type bmhNodeInfo struct {
-	ResourcePoolID string                       `json:"poolID,omitempty"`
-	BMC            *bmhBmcInfo                  `json:"bmc,omitempty"`
-	Interfaces     []*pluginsv1alpha1.Interface `json:"interfaces,omitempty"`
+	ResourcePoolID string                      `json:"poolID,omitempty"`
+	BMC            *bmhBmcInfo                 `json:"bmc,omitempty"`
+	Interfaces     []*hwmgmtv1alpha1.Interface `json:"interfaces,omitempty"`
 }
 
 func updateBMHMetaWithRetry(
@@ -212,8 +211,8 @@ func GroupBMHsByResourcePool(
 }
 
 func buildInterfacesFromBMH(
-	bmh *metal3v1alpha1.BareMetalHost) ([]*pluginsv1alpha1.Interface, error) {
-	var interfaces []*pluginsv1alpha1.Interface
+	bmh *metal3v1alpha1.BareMetalHost) ([]*hwmgmtv1alpha1.Interface, error) {
+	var interfaces []*hwmgmtv1alpha1.Interface
 
 	if bmh.Status.HardwareDetails == nil {
 		return nil, fmt.Errorf("bareMetalHost.status.hardwareDetails should not be nil")
@@ -243,7 +242,7 @@ func buildInterfacesFromBMH(
 			}
 		}
 
-		interfaces = append(interfaces, &pluginsv1alpha1.Interface{
+		interfaces = append(interfaces, &hwmgmtv1alpha1.Interface{
 			Name:       nic.Name,
 			MACAddress: nic.MAC,
 			Label:      label,
@@ -399,7 +398,7 @@ func processHwProfileWithHandledError(
 	logger *slog.Logger,
 	hwMgrNamespace string,
 	bmh *metal3v1alpha1.BareMetalHost,
-	node *pluginsv1alpha1.AllocatedNode,
+	node *hwmgmtv1alpha1.AllocatedNode,
 	profileName string,
 	postInstall, validateOnly bool,
 ) (bool, error) {
@@ -554,7 +553,7 @@ func annotateNodeConfigInProgress(ctx context.Context,
 	logger *slog.Logger,
 	namespace, nodeName, reason string) error {
 	// Fetch the Node object
-	node := &pluginsv1alpha1.AllocatedNode{}
+	node := &hwmgmtv1alpha1.AllocatedNode{}
 	if err := c.Get(ctx, types.NamespacedName{Name: nodeName, Namespace: namespace}, node); err != nil {
 		return fmt.Errorf("unable to get Node object (%s): %w", nodeName, err)
 	}
@@ -580,7 +579,7 @@ func handleTransitionNodes(ctx context.Context,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	hwMgrNamespace string,
-	nodelist *pluginsv1alpha1.AllocatedNodeList, postInstall bool) (ctrl.Result, error) {
+	nodelist *hwmgmtv1alpha1.AllocatedNodeList, postInstall bool) (ctrl.Result, error) {
 
 	for _, node := range nodelist.Items {
 		res, err := handleTransitionNode(ctx, c, noncachedClient, logger, hwMgrNamespace, &node, postInstall, nil)
@@ -602,7 +601,7 @@ func handleTransitionNode(ctx context.Context,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	hwMgrNamespace string,
-	node *pluginsv1alpha1.AllocatedNode,
+	node *hwmgmtv1alpha1.AllocatedNode,
 	postInstall bool,
 	nodeOps NodeOps,
 ) (ctrl.Result, error) {
@@ -777,7 +776,7 @@ func processBMHUpdateCase(ctx context.Context,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	namespace string,
-	node *pluginsv1alpha1.AllocatedNode, bmh *metal3v1alpha1.BareMetalHost,
+	node *hwmgmtv1alpha1.AllocatedNode, bmh *metal3v1alpha1.BareMetalHost,
 	uc struct {
 		AnnotationKey string
 		Reason        string
@@ -925,7 +924,7 @@ func handleBMHCompletion(ctx context.Context,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	hwMgrNamespace string,
-	nodelist *pluginsv1alpha1.AllocatedNodeList) (bool, error) {
+	nodelist *hwmgmtv1alpha1.AllocatedNodeList) (bool, error) {
 
 	logger.InfoContext(ctx, "Checking for nodes with config in progress")
 
@@ -946,7 +945,7 @@ func handleBMHCompletion(ctx context.Context,
 	// Process each node in parallel for better performance with large clusters (e.g. 3 masters + 50+ workers).
 	for _, node := range nodes {
 		wg.Add(1)
-		go func(node *pluginsv1alpha1.AllocatedNode) {
+		go func(node *hwmgmtv1alpha1.AllocatedNode) {
 			defer wg.Done()
 
 			updating, err := handleSingleNodeCompletion(ctx, c, noncachedClient, logger, hwMgrNamespace, node)
@@ -983,7 +982,7 @@ func handleSingleNodeCompletion(ctx context.Context,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	hwMgrNamespace string,
-	node *pluginsv1alpha1.AllocatedNode) (bool, error) {
+	node *hwmgmtv1alpha1.AllocatedNode) (bool, error) {
 
 	// Get BMH associated with the node
 	bmh, err := getBMHForNode(ctx, noncachedClient, node)
@@ -1050,7 +1049,7 @@ func checkForPendingUpdate(ctx context.Context,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	namespace string,
-	nodeAllocationRequest *pluginsv1alpha1.NodeAllocationRequest) (ctrl.Result, bool, error) {
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (ctrl.Result, bool, error) {
 	// check if there are any pending work
 	nodelist, err := hwmgrutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
 	if err != nil {
@@ -1073,7 +1072,7 @@ func checkForPendingUpdate(ctx context.Context,
 	return ctrl.Result{}, updating, err
 }
 
-func getBMHForNode(ctx context.Context, c client.Reader, node *pluginsv1alpha1.AllocatedNode) (*metal3v1alpha1.BareMetalHost, error) {
+func getBMHForNode(ctx context.Context, c client.Reader, node *hwmgmtv1alpha1.AllocatedNode) (*metal3v1alpha1.BareMetalHost, error) {
 	bmhName := node.Spec.HwMgrNodeId
 	bmhNamespace := node.Spec.HwMgrNodeNs
 	name := types.NamespacedName{Name: bmhName, Namespace: bmhNamespace}

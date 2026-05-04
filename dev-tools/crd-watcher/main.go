@@ -29,7 +29,6 @@ import (
 	"k8s.io/klog/v2"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
@@ -81,8 +80,8 @@ var (
 	// Available CRD types that can be watched
 	availableCRDs = map[string]string{
 		CRDTypeProvisioningRequests:   "clcm.openshift.io/v1alpha1",
-		CRDTypeNodeAllocationRequests: "plugins.clcm.openshift.io/v1alpha1",
-		CRDTypeAllocatedNodes:         "plugins.clcm.openshift.io/v1alpha1",
+		CRDTypeNodeAllocationRequests: "clcm.openshift.io/v1alpha1",
+		CRDTypeAllocatedNodes:         "clcm.openshift.io/v1alpha1",
 		CRDTypeBareMetalHosts:         "metal3.io/v1alpha1",
 		CRDTypeHostFirmwareComponents: "metal3.io/v1alpha1",
 		CRDTypeHostFirmwareSettings:   "metal3.io/v1alpha1",
@@ -322,7 +321,7 @@ func createScheme() (*runtime.Scheme, error) {
 	if err := provisioningv1alpha1.AddToScheme(scheme); err != nil {
 		return nil, fmt.Errorf("failed to add provisioning scheme: %w", err)
 	}
-	if err := pluginsv1alpha1.AddToScheme(scheme); err != nil {
+	if err := hwmgmtv1alpha1.AddToScheme(scheme); err != nil {
 		return nil, fmt.Errorf("failed to add plugins scheme: %w", err)
 	}
 	if err := metal3v1alpha1.AddToScheme(scheme); err != nil {

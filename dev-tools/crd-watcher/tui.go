@@ -26,7 +26,7 @@ import (
 	"k8s.io/klog/v2"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	controller "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/controller"
 )
@@ -828,7 +828,7 @@ func (t *TUIFormatter) getProvisioningRequestDisplayName(obj runtime.Object) str
 }
 
 func (t *TUIFormatter) getNodeAllocationRequestClusterId(obj runtime.Object) string {
-	if nar, ok := obj.(*pluginsv1alpha1.NodeAllocationRequest); ok {
+	if nar, ok := obj.(*hwmgmtv1alpha1.NodeAllocationRequest); ok {
 		if nar.Spec.ClusterId != "" {
 			return nar.Spec.ClusterId
 		}
@@ -1070,7 +1070,7 @@ func (t *TUIFormatter) calculateProvisioningRequestWidths(events []WatchEvent, w
 
 func (t *TUIFormatter) calculateNodeAllocationRequestWidths(events []WatchEvent, widths FieldWidths) FieldWidths {
 	for _, event := range events {
-		nar, ok := event.Object.(*pluginsv1alpha1.NodeAllocationRequest)
+		nar, ok := event.Object.(*hwmgmtv1alpha1.NodeAllocationRequest)
 		if !ok {
 			continue
 		}
@@ -1091,7 +1091,7 @@ func (t *TUIFormatter) calculateNodeAllocationRequestWidths(events []WatchEvent,
 
 func (t *TUIFormatter) calculateAllocatedNodeWidths(events []WatchEvent, widths FieldWidths) FieldWidths {
 	for _, event := range events {
-		an, ok := event.Object.(*pluginsv1alpha1.AllocatedNode)
+		an, ok := event.Object.(*hwmgmtv1alpha1.AllocatedNode)
 		if !ok {
 			continue
 		}
@@ -1608,7 +1608,7 @@ func (t *TUIFormatter) buildProvisioningRequestLine(age string, obj runtime.Obje
 
 //nolint:unparam // age parameter required for interface consistency
 func (t *TUIFormatter) buildNodeAllocationRequestLine(age string, obj runtime.Object, widths FieldWidths, sb *strings.Builder) {
-	nar, ok := obj.(*pluginsv1alpha1.NodeAllocationRequest)
+	nar, ok := obj.(*hwmgmtv1alpha1.NodeAllocationRequest)
 	if !ok {
 		return
 	}
@@ -1632,7 +1632,7 @@ func (t *TUIFormatter) buildNodeAllocationRequestLine(age string, obj runtime.Ob
 
 //nolint:unparam // age parameter required for interface consistency
 func (t *TUIFormatter) buildAllocatedNodeLine(age string, obj runtime.Object, widths FieldWidths, sb *strings.Builder) {
-	an, ok := obj.(*pluginsv1alpha1.AllocatedNode)
+	an, ok := obj.(*hwmgmtv1alpha1.AllocatedNode)
 	if !ok {
 		return
 	}

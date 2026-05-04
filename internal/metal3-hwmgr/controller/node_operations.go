@@ -25,7 +25,7 @@ import (
 
 	machineconfigv1 "github.com/openshift/api/machineconfiguration/v1"
 
-	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	k8sclients "github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 )
 
@@ -255,7 +255,7 @@ func isNodeStatusConditionTrue(conditions []corev1.NodeCondition, conditionType 
 func createSpokeClients(
 	ctx context.Context,
 	hubClient client.Client,
-	nar *pluginsv1alpha1.NodeAllocationRequest,
+	nar *hwmgmtv1alpha1.NodeAllocationRequest,
 ) (client.Client, kubernetes.Interface, error) {
 	clusterName := nar.Spec.ClusterId
 
