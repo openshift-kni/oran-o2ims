@@ -20,7 +20,7 @@ metadata:
         'go.mod'.pathChanged() ||
         'go.sum'.pathChanged() ||
         'hack/***'.pathChanged() ||
-        'hwmgr-plugins/***'.pathChanged() ||
+        'internal/metal3-hwmgr/***'.pathChanged() ||
         'internal/***'.pathChanged() ||
         'main.go'.pathChanged() ||
         'pkg/***'.pathChanged() ||

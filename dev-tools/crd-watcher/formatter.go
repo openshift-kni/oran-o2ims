@@ -28,7 +28,7 @@ import (
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	controller "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/metal3/controller"
+	controller "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/controller"
 )
 
 // CRD type constants

@@ -11,7 +11,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	metal3controller "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/metal3/controller"
+	metal3controller "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/controller"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
 )

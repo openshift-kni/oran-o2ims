@@ -18,7 +18,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/google/uuid"
 	oapimiddleware "github.com/oapi-codegen/nethttp-middleware"
-	metal3controller "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/metal3/controller"
+	metal3controller "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/controller"
 )
 
 type Middleware = func(http.Handler) http.Handler

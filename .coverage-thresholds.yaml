@@ -9,8 +9,8 @@ overall: 51
 # Per-package minimum thresholds
 packages:
   api/provisioning/v1alpha1: 65
-  hwmgr-plugins/controller/utils: 0
-  hwmgr-plugins/metal3/controller: 63
+  internal/metal3-hwmgr/utils: 0
+  internal/metal3-hwmgr/controller: 63
   internal: 16
   internal/cmd/server: 80
   internal/controllers: 60

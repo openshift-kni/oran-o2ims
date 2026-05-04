@@ -25,7 +25,7 @@ import (
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	metal3pluginscontrollers "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/metal3/controller"
+	metal3pluginscontrollers "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/controller"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	provisioningcontrollers "github.com/openshift-kni/oran-o2ims/internal/controllers"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"

@@ -24,7 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	pluginsv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/plugins/v1alpha1"
-	hwmgrutils "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/controller/utils"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/utils"
 )
 
 // AllocatedNodeReconciler reconciles NodeAllocationRequest objects associated with the Metal3 H/W plugin

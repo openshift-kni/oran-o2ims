@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"os"
 
-	metal3plugincmd "github.com/openshift-kni/oran-o2ims/hwmgr-plugins/metal3/cmd"
+	metal3plugincmd "github.com/openshift-kni/oran-o2ims/internal/metal3-hwmgr/cmd"
 	alarmscmd "github.com/openshift-kni/oran-o2ims/internal/service/alarms/cmd"
 	artifactscmd "github.com/openshift-kni/oran-o2ims/internal/service/artifacts/cmd"
 	clustercmd "github.com/openshift-kni/oran-o2ims/internal/service/cluster/cmd"
