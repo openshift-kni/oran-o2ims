@@ -939,11 +939,29 @@ func loadDefaultCABundles(config *tls.Config) error {
 	return nil
 }
 
+// pfsCipherSuiteIDs returns the TLS 1.2 cipher suite IDs from the Go standard library's secure list.
+// These are all ECDHE-based and provide Perfect Forward Secrecy (PFS). TLS 1.3 cipher suites are
+// excluded because they are not configurable via tls.Config.CipherSuites.
+func pfsCipherSuiteIDs() []uint16 {
+	suites := tls.CipherSuites()
+	ids := make([]uint16, 0, len(suites))
+	for _, s := range suites {
+		if slices.Contains(s.SupportedVersions, tls.VersionTLS12) {
+			ids = append(ids, s.ID)
+		}
+	}
+	return ids
+}
+
 // GetDefaultTLSConfig sets the TLS configuration attributes appropriately to enable communication between internal
 // services and accessing the public facing API endpoints.
 func GetDefaultTLSConfig(config *tls.Config) (*tls.Config, error) {
 	if config == nil {
 		config = &tls.Config{MinVersion: tls.VersionTLS12}
+	}
+
+	if config.CipherSuites == nil {
+		config.CipherSuites = pfsCipherSuiteIDs()
 	}
 
 	// Allow developers to override the TLS verification
@@ -989,7 +1007,7 @@ func GetInternalClientTLSConfig(ctx context.Context) (*tls.Config, error) {
 
 // GetClientTLSConfig creates a tls.Config that uses a dynamic loader to handle updates to the certificate and/or key.
 func GetClientTLSConfig(ctx context.Context, certFile, keyFile, caFile string) (*tls.Config, error) {
-	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12, CipherSuites: pfsCipherSuiteIDs()}
 
 	if caFile != "" {
 		err := AddCABundle(tlsConfig, caFile)
@@ -1027,7 +1045,8 @@ func GetServerTLSConfig(ctx context.Context, certFile, keyFile string) (*tls.Con
 	go loader.Run(ctx, 1)
 
 	tlsConfig := &tls.Config{
-		MinVersion: tls.VersionTLS12,
+		MinVersion:   tls.VersionTLS12,
+		CipherSuites: pfsCipherSuiteIDs(),
 		GetCertificate: func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			certBytes, keyBytes := loader.CurrentCertKeyContent()
 			cert, err := tls.X509KeyPair(certBytes, keyBytes)
