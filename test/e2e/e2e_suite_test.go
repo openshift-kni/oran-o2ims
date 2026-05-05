@@ -105,12 +105,6 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	err = ibgu.AddToScheme(testScheme)
 	Expect(err).NotTo(HaveOccurred())
-	err = policiesv1.AddToScheme(testScheme)
-	Expect(err).NotTo(HaveOccurred())
-	err = clusterv1.AddToScheme(testScheme)
-	Expect(err).NotTo(HaveOccurred())
-	err = hwmgmtv1alpha1.AddToScheme(testScheme)
-	Expect(err).NotTo(HaveOccurred())
 	err = hivev1.AddToScheme(testScheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = metal3v1alpha1.AddToScheme(testScheme)
@@ -149,7 +143,7 @@ var _ = BeforeSuite(func() {
 	HwMgrManager, err = ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: testScheme,
 		Metrics: metricsserver.Options{
-			BindAddress: ":8081", // Use different port to avoid conflict
+			BindAddress: "0", // Disable metrics listener in tests
 		},
 	})
 	Expect(err).ToNot(HaveOccurred())

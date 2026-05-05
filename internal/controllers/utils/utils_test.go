@@ -1702,4 +1702,27 @@ var _ = Describe("Server predicate functions", func() {
 			Expect(NeedsOAuthAccess(InventoryDatabaseServerName)).To(BeFalse())
 		})
 	})
+
+	Describe("GetServerArgs", func() {
+		var inventory *inventoryv1alpha1.Inventory
+
+		BeforeEach(func() {
+			inventory = &inventoryv1alpha1.Inventory{}
+		})
+
+		It("returns correct args for hardware manager server", func() {
+			args, err := GetServerArgs(inventory, HardwareManagerServerName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(args).ToNot(BeNil())
+			Expect(args).To(Equal(HardwareManagerServerArgs))
+			args[0] = "mutated"
+			Expect(HardwareManagerServerArgs[0]).ToNot(Equal("mutated"))
+		})
+
+		It("returns nil for unknown server", func() {
+			args, err := GetServerArgs(inventory, "unknown-server")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(args).To(BeNil())
+		})
+	})
 })

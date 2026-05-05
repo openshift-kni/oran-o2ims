@@ -22,6 +22,13 @@ var (
 )
 
 func SetupControllers(mgr ctrl.Manager, namespace string, baseLogger *slog.Logger) error {
+	if mgr == nil {
+		return fmt.Errorf("manager is required")
+	}
+	if baseLogger == nil {
+		return fmt.Errorf("base logger is required")
+	}
+
 	nodeAllocationReconciler = &NodeAllocationRequestReconciler{
 		Client:          mgr.GetClient(),
 		NoncachedClient: mgr.GetAPIReader(),

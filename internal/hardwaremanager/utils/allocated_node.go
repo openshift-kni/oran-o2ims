@@ -111,7 +111,7 @@ func GenerateNodeName(clusterID, bmhNamespace, bmhName string) string {
 	if sanitizedName == "" || len(sanitizedName) > 253 {
 		// If too long, use a hash-based approach for deterministic truncation
 		clusterUUID := uuid.NewSHA1(uuid.Nil, []byte(clusterID))
-		hash := ctlrutils.MakeUUIDFromNames(bmhNamespace, clusterUUID, bmhName)
+		hash := uuid.NewSHA1(clusterUUID, []byte(bmhNamespace+"/"+bmhName))
 		sanitizedName = hash.String()[:10]
 	}
 

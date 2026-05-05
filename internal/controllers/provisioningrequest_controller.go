@@ -206,7 +206,8 @@ func (t *provisioningRequestReconcilerTask) executeProvisioningPhases(ctx contex
 
 	// Phase 2: Hardware provisioning
 	result, err = t.executeHardwareProvisioningPhase(ctx, unstructuredClusterInstance)
-	if err != nil || result.Requeue || result.RequeueAfter > 0 {
+	if err != nil || result.Requeue || result.RequeueAfter > 0 ||
+		t.object.Status.ProvisioningStatus.ProvisioningPhase == provisioningv1alpha1.StateFailed {
 		return nil, result, err
 	}
 
@@ -554,8 +555,7 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 	renderedNodeAllocationRequest, err := t.renderNodeAllocationRequest(ctx, renderedClusterInstance)
 	if err != nil {
 		if ctlrutils.IsInputError(err) {
-			res, err := t.checkClusterDeployConfigState(ctx)
-			return res, false, err
+			return doNotRequeue(), false, nil
 		}
 		t.logger.ErrorContext(ctx, "NodeAllocationRequest build error", slog.String("error", err.Error()))
 		return doNotRequeue(), false, err
