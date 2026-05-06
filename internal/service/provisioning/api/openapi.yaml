@@ -527,8 +527,8 @@ components:
         provisioningPhase:
           type: string
           description: Current state of the provisioning request.
-          enum: [pending, progressing, fulfilled, failed, deleting]
-          example: "progressing"
+          enum: [PENDING, PROGRESSING, FULFILLED, FAILED, DELETING]
+          example: "PROGRESSING"
         nodeClusterProvisioningStatus:
           description: |
             If the ProvisioningRequest includes provisioning of the NodeCluster,

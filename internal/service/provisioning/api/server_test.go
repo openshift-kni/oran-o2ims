@@ -120,7 +120,7 @@ var _ = Describe("ProvisioningServer", func() {
 				server = &api.ProvisioningServer{HubClient: fakeClient}
 
 				status := getNodeClusterStatus(prName)
-				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.PROCESSING))
+				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhasePROCESSING))
 				Expect(status.ResourceName).To(BeEmpty())
 				Expect(status.ResourceId).To(BeEmpty())
 			})
@@ -141,7 +141,7 @@ var _ = Describe("ProvisioningServer", func() {
 				server = &api.ProvisioningServer{HubClient: fakeClient}
 
 				status := getNodeClusterStatus(prName)
-				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.PROCESSING))
+				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhasePROCESSING))
 				Expect(status.ResourceName).To(BeEmpty())
 				Expect(status.ResourceId).To(BeEmpty())
 			})
@@ -168,7 +168,7 @@ var _ = Describe("ProvisioningServer", func() {
 				server = &api.ProvisioningServer{HubClient: fakeClient}
 
 				status := getNodeClusterStatus(prName)
-				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.PROCESSING))
+				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhasePROCESSING))
 				Expect(status.ResourceName).To(Equal("cluster-inprog"))
 				Expect(status.ResourceId).To(BeEmpty())
 			})
@@ -195,7 +195,7 @@ var _ = Describe("ProvisioningServer", func() {
 				server = &api.ProvisioningServer{HubClient: fakeClient}
 
 				status := getNodeClusterStatus(prName)
-				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.FAILED))
+				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhaseFAILED))
 				Expect(status.ResourceName).To(Equal("cluster-cifail"))
 				Expect(status.ResourceId).To(BeEmpty())
 			})
@@ -224,7 +224,7 @@ var _ = Describe("ProvisioningServer", func() {
 				status := getNodeClusterStatus(prName)
 				Expect(status).NotTo(BeZero())
 				Expect(status.ResourceName).To(Equal("cluster-001"))
-				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.PROCESSING))
+				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhasePROCESSING))
 				Expect(status.ResourceId).To(BeEmpty())
 			})
 		})
@@ -259,7 +259,7 @@ var _ = Describe("ProvisioningServer", func() {
 				status := getNodeClusterStatus(prName)
 				Expect(status).NotTo(BeZero())
 				Expect(status.ResourceName).To(Equal("cluster-002"))
-				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.PROCESSING))
+				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhasePROCESSING))
 				Expect(status.ResourceId).To(BeEmpty())
 			})
 		})
@@ -295,7 +295,7 @@ var _ = Describe("ProvisioningServer", func() {
 				status := getNodeClusterStatus(prName)
 				Expect(status).NotTo(BeZero())
 				Expect(status.ResourceName).To(Equal("cluster-003"))
-				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.PROVISIONED))
+				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhasePROVISIONED))
 				Expect(status.ResourceId).To(Equal(clusterId))
 			})
 		})
@@ -330,7 +330,7 @@ var _ = Describe("ProvisioningServer", func() {
 				status := getNodeClusterStatus(prName)
 				Expect(status).NotTo(BeZero())
 				Expect(status.ResourceName).To(Equal("cluster-004"))
-				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.PROVISIONED))
+				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhasePROVISIONED))
 				Expect(status.ResourceId).To(BeEmpty())
 			})
 		})
@@ -365,7 +365,7 @@ var _ = Describe("ProvisioningServer", func() {
 				status := getNodeClusterStatus(prName)
 				Expect(status).NotTo(BeZero())
 				Expect(status.ResourceName).To(Equal("cluster-005"))
-				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.FAILED))
+				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhaseFAILED))
 				Expect(status.ResourceId).To(BeEmpty())
 			})
 		})
@@ -400,7 +400,7 @@ var _ = Describe("ProvisioningServer", func() {
 				status := getNodeClusterStatus(prName)
 				Expect(status).NotTo(BeZero())
 				Expect(status.ResourceName).To(Equal("cluster-006"))
-				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.FAILED))
+				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhaseFAILED))
 				Expect(status.ResourceId).To(BeEmpty())
 			})
 		})
@@ -446,7 +446,7 @@ var _ = Describe("ProvisioningServer", func() {
 				status := getNodeClusterStatus(prName)
 				Expect(status).NotTo(BeZero())
 				Expect(status.ResourceName).To(Equal("cluster-007"))
-				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.PROVISIONED))
+				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhasePROVISIONED))
 				Expect(status.ResourceId).To(Equal(clusterId))
 			})
 		})
@@ -536,7 +536,7 @@ var _ = Describe("ProvisioningServer", func() {
 				Expect(statuses).To(HaveLen(1))
 				Expect(statuses[0].ResourceName).To(Equal("host-a"))
 				Expect(statuses[0].ResourceId).To(Equal("node-a"))
-				Expect(statuses[0].ResourceProvisioningPhase).To(Equal(provisioningapi.PROCESSING))
+				Expect(statuses[0].ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhasePROCESSING))
 			})
 		})
 
@@ -558,9 +558,9 @@ var _ = Describe("ProvisioningServer", func() {
 
 				statuses := getInfraStatuses(prName)
 				Expect(statuses).To(HaveLen(3))
-				Expect(statuses[0].ResourceProvisioningPhase).To(Equal(provisioningapi.PROVISIONED))
-				Expect(statuses[1].ResourceProvisioningPhase).To(Equal(provisioningapi.PROCESSING))
-				Expect(statuses[2].ResourceProvisioningPhase).To(Equal(provisioningapi.FAILED))
+				Expect(statuses[0].ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhasePROVISIONED))
+				Expect(statuses[1].ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhasePROCESSING))
+				Expect(statuses[2].ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhaseFAILED))
 			})
 		})
 

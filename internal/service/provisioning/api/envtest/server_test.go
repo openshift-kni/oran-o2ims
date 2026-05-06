@@ -260,7 +260,7 @@ var _ = Describe("ProvisioningServer", Label("envtest"), func() {
 		},
 		Entry("ClusterDetails is nil → PROCESSING with no resource name",
 			nil, nil, nil,
-			provisioningapi.PROCESSING, "", ""),
+			provisioningapi.ResourceProvisioningPhasePROCESSING, "", ""),
 
 		Entry("ClusterInstanceProcessed absent → PROCESSING with no resource name",
 			&provisioningv1alpha1.ClusterDetails{Name: "cluster-abc"}, nil,
@@ -269,7 +269,7 @@ var _ = Describe("ProvisioningServer", Label("envtest"), func() {
 				Status: metav1.ConditionTrue,
 				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			}},
-			provisioningapi.PROCESSING, "", ""),
+			provisioningapi.ResourceProvisioningPhasePROCESSING, "", ""),
 
 		Entry("ClusterInstanceProcessed False/InProgress → PROCESSING with cluster name",
 			&provisioningv1alpha1.ClusterDetails{Name: "cluster-inprog"}, nil,
@@ -278,7 +278,7 @@ var _ = Describe("ProvisioningServer", Label("envtest"), func() {
 				Status: metav1.ConditionFalse,
 				Reason: string(provisioningv1alpha1.CRconditionReasons.InProgress),
 			}},
-			provisioningapi.PROCESSING, "cluster-inprog", ""),
+			provisioningapi.ResourceProvisioningPhasePROCESSING, "cluster-inprog", ""),
 
 		Entry("ClusterInstanceProcessed False/Failed → FAILED with cluster name",
 			&provisioningv1alpha1.ClusterDetails{Name: "cluster-cifail"}, nil,
@@ -287,7 +287,7 @@ var _ = Describe("ProvisioningServer", Label("envtest"), func() {
 				Status: metav1.ConditionFalse,
 				Reason: string(provisioningv1alpha1.CRconditionReasons.Failed),
 			}},
-			provisioningapi.FAILED, "cluster-cifail", ""),
+			provisioningapi.ResourceProvisioningPhaseFAILED, "cluster-cifail", ""),
 
 		Entry("ClusterInstanceProcessed False/TimedOut → FAILED with cluster name",
 			&provisioningv1alpha1.ClusterDetails{Name: "cluster-citimeout"}, nil,
@@ -296,7 +296,7 @@ var _ = Describe("ProvisioningServer", Label("envtest"), func() {
 				Status: metav1.ConditionFalse,
 				Reason: string(provisioningv1alpha1.CRconditionReasons.TimedOut),
 			}},
-			provisioningapi.FAILED, "cluster-citimeout", ""),
+			provisioningapi.ResourceProvisioningPhaseFAILED, "cluster-citimeout", ""),
 
 		Entry("ClusterInstanceProcessed True, no ClusterProvisioned → PROCESSING",
 			&provisioningv1alpha1.ClusterDetails{Name: "cluster-001"}, nil,
@@ -305,7 +305,7 @@ var _ = Describe("ProvisioningServer", Label("envtest"), func() {
 				Status: metav1.ConditionTrue,
 				Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 			}},
-			provisioningapi.PROCESSING, "cluster-001", ""),
+			provisioningapi.ResourceProvisioningPhasePROCESSING, "cluster-001", ""),
 
 		Entry("ClusterProvisioned False/InProgress → PROCESSING",
 			&provisioningv1alpha1.ClusterDetails{Name: "cluster-002"}, nil,
@@ -313,7 +313,7 @@ var _ = Describe("ProvisioningServer", Label("envtest"), func() {
 				{Type: string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed), Status: metav1.ConditionTrue, Reason: string(provisioningv1alpha1.CRconditionReasons.Completed)},
 				{Type: string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned), Status: metav1.ConditionFalse, Reason: string(provisioningv1alpha1.CRconditionReasons.InProgress)},
 			},
-			provisioningapi.PROCESSING, "cluster-002", ""),
+			provisioningapi.ResourceProvisioningPhasePROCESSING, "cluster-002", ""),
 
 		Entry("ClusterProvisioned True → PROVISIONED with resourceId",
 			&provisioningv1alpha1.ClusterDetails{Name: "cluster-003"},
@@ -322,7 +322,7 @@ var _ = Describe("ProvisioningServer", Label("envtest"), func() {
 				{Type: string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed), Status: metav1.ConditionTrue, Reason: string(provisioningv1alpha1.CRconditionReasons.Completed)},
 				{Type: string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned), Status: metav1.ConditionTrue, Reason: string(provisioningv1alpha1.CRconditionReasons.Completed)},
 			},
-			provisioningapi.PROVISIONED, "cluster-003", "a1478db9-651f-4d30-96d6-8af13481d779"),
+			provisioningapi.ResourceProvisioningPhasePROVISIONED, "cluster-003", "a1478db9-651f-4d30-96d6-8af13481d779"),
 
 		Entry("ClusterProvisioned True but resourceId not yet populated → PROVISIONED empty resourceId",
 			&provisioningv1alpha1.ClusterDetails{Name: "cluster-004"}, nil,
@@ -330,7 +330,7 @@ var _ = Describe("ProvisioningServer", Label("envtest"), func() {
 				{Type: string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed), Status: metav1.ConditionTrue, Reason: string(provisioningv1alpha1.CRconditionReasons.Completed)},
 				{Type: string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned), Status: metav1.ConditionTrue, Reason: string(provisioningv1alpha1.CRconditionReasons.Completed)},
 			},
-			provisioningapi.PROVISIONED, "cluster-004", ""),
+			provisioningapi.ResourceProvisioningPhasePROVISIONED, "cluster-004", ""),
 
 		Entry("ClusterProvisioned False/Failed → FAILED with resourceId",
 			&provisioningv1alpha1.ClusterDetails{Name: "cluster-005"},
@@ -339,7 +339,7 @@ var _ = Describe("ProvisioningServer", Label("envtest"), func() {
 				{Type: string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed), Status: metav1.ConditionTrue, Reason: string(provisioningv1alpha1.CRconditionReasons.Completed)},
 				{Type: string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned), Status: metav1.ConditionFalse, Reason: string(provisioningv1alpha1.CRconditionReasons.Failed)},
 			},
-			provisioningapi.FAILED, "cluster-005", "c3690fd1-873h-6f52-b8cg-0ch35603f991"),
+			provisioningapi.ResourceProvisioningPhaseFAILED, "cluster-005", "c3690fd1-873h-6f52-b8cg-0ch35603f991"),
 
 		Entry("ClusterProvisioned False/TimedOut → FAILED empty resourceId",
 			&provisioningv1alpha1.ClusterDetails{Name: "cluster-006"}, nil,
@@ -347,7 +347,7 @@ var _ = Describe("ProvisioningServer", Label("envtest"), func() {
 				{Type: string(provisioningv1alpha1.PRconditionTypes.ClusterInstanceProcessed), Status: metav1.ConditionTrue, Reason: string(provisioningv1alpha1.CRconditionReasons.Completed)},
 				{Type: string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned), Status: metav1.ConditionFalse, Reason: string(provisioningv1alpha1.CRconditionReasons.TimedOut)},
 			},
-			provisioningapi.FAILED, "cluster-006", ""),
+			provisioningapi.ResourceProvisioningPhaseFAILED, "cluster-006", ""),
 
 		Entry("multiple conditions → picks ClusterProvisioned correctly",
 			&provisioningv1alpha1.ClusterDetails{Name: "cluster-007"},
@@ -358,7 +358,7 @@ var _ = Describe("ProvisioningServer", Label("envtest"), func() {
 				{Type: string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned), Status: metav1.ConditionTrue, Reason: string(provisioningv1alpha1.CRconditionReasons.Completed)},
 				{Type: string(provisioningv1alpha1.PRconditionTypes.ConfigurationApplied), Status: metav1.ConditionFalse, Reason: string(provisioningv1alpha1.CRconditionReasons.InProgress)},
 			},
-			provisioningapi.PROVISIONED, "cluster-007", "b2589ec0-762g-5e41-a7bf-9bg24592e880"),
+			provisioningapi.ResourceProvisioningPhasePROVISIONED, "cluster-007", "b2589ec0-762g-5e41-a7bf-9bg24592e880"),
 	)
 
 	Describe("GetProvisioningRequest returns infrastructureResourceProvisioningStatus", func() {
@@ -401,7 +401,7 @@ var _ = Describe("ProvisioningServer", Label("envtest"), func() {
 				Expect(statuses).To(HaveLen(1))
 				Expect(statuses[0].ResourceName).To(Equal("host-a"))
 				Expect(statuses[0].ResourceId).To(Equal("node-a"))
-				Expect(statuses[0].ResourceProvisioningPhase).To(Equal(provisioningapi.PROCESSING))
+				Expect(statuses[0].ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhasePROCESSING))
 			})
 		})
 
@@ -421,9 +421,9 @@ var _ = Describe("ProvisioningServer", Label("envtest"), func() {
 				code, statuses := getInfraStatuses(prName)
 				Expect(code).To(Equal(http.StatusOK))
 				Expect(statuses).To(HaveLen(3))
-				Expect(statuses[0].ResourceProvisioningPhase).To(Equal(provisioningapi.PROVISIONED))
-				Expect(statuses[1].ResourceProvisioningPhase).To(Equal(provisioningapi.PROCESSING))
-				Expect(statuses[2].ResourceProvisioningPhase).To(Equal(provisioningapi.FAILED))
+				Expect(statuses[0].ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhasePROVISIONED))
+				Expect(statuses[1].ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhasePROCESSING))
+				Expect(statuses[2].ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhaseFAILED))
 			})
 		})
 

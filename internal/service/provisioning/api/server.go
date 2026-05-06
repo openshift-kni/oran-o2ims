@@ -314,10 +314,7 @@ func convertProvisioningRequestCRToApi(id uuid.UUID, provisioningRequest provisi
 		TemplateParameters:    templateParameters,
 	}
 
-	provisioningPhase := api.ProvisioningStatusProvisioningPhase(provisioningRequest.Status.ProvisioningStatus.ProvisioningPhase)
-	if provisioningPhase == "" {
-		provisioningPhase = api.Pending
-	}
+	provisioningPhase := mapProvisioningPhase(provisioningRequest.Status.ProvisioningStatus.ProvisioningPhase)
 
 	status := api.ProvisioningStatus{
 		ProvisioningPhase:                        provisioningPhase,
@@ -334,6 +331,23 @@ func convertProvisioningRequestCRToApi(id uuid.UUID, provisioningRequest provisi
 	}
 
 	return provisioningRequestInfo, nil
+}
+
+// mapProvisioningPhase converts the CRD-level lowercase ProvisioningPhase to
+// the O-RAN spec uppercase enum (table 3.4.6.3.3.1-1).
+func mapProvisioningPhase(phase provisioningv1alpha1.ProvisioningPhase) api.ProvisioningStatusProvisioningPhase {
+	switch phase {
+	case provisioningv1alpha1.StateProgressing:
+		return api.ProvisioningStatusProvisioningPhasePROGRESSING
+	case provisioningv1alpha1.StateFulfilled:
+		return api.ProvisioningStatusProvisioningPhaseFULFILLED
+	case provisioningv1alpha1.StateFailed:
+		return api.ProvisioningStatusProvisioningPhaseFAILED
+	case provisioningv1alpha1.StateDeleting:
+		return api.ProvisioningStatusProvisioningPhaseDELETING
+	default:
+		return api.ProvisioningStatusProvisioningPhasePENDING
+	}
 }
 
 func getClusterName(pr provisioningv1alpha1.ProvisioningRequest) string {
@@ -359,16 +373,16 @@ func getNodeClusterProvisioningStatus(pr provisioningv1alpha1.ProvisioningReques
 
 	if ciCond == nil {
 		return api.ResourceProvisioningStatus{
-			ResourceProvisioningPhase: api.PROCESSING,
+			ResourceProvisioningPhase: api.ResourceProvisioningPhasePROCESSING,
 		}
 	}
 
 	// CI processing failed
 	if ciCond.Status != metav1.ConditionTrue {
-		phase := api.PROCESSING
+		phase := api.ResourceProvisioningPhasePROCESSING
 		if ciCond.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed) ||
 			ciCond.Reason == string(provisioningv1alpha1.CRconditionReasons.TimedOut) {
-			phase = api.FAILED
+			phase = api.ResourceProvisioningPhaseFAILED
 		}
 		return api.ResourceProvisioningStatus{
 			ResourceName:              getClusterName(pr),
@@ -378,15 +392,15 @@ func getNodeClusterProvisioningStatus(pr provisioningv1alpha1.ProvisioningReques
 	}
 
 	// CI applied successfully: determine phase from ClusterProvisioned condition.
-	phase := api.PROCESSING
+	phase := api.ResourceProvisioningPhasePROCESSING
 	if cond := meta.FindStatusCondition(pr.Status.Conditions,
 		string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned)); cond != nil {
 		switch {
 		case cond.Status == metav1.ConditionTrue:
-			phase = api.PROVISIONED
+			phase = api.ResourceProvisioningPhasePROVISIONED
 		case cond.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed) ||
 			cond.Reason == string(provisioningv1alpha1.CRconditionReasons.TimedOut):
-			phase = api.FAILED
+			phase = api.ResourceProvisioningPhaseFAILED
 		}
 	}
 
