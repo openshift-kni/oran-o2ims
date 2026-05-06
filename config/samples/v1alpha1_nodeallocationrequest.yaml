@@ -1,10 +1,10 @@
 apiVersion: clcm.openshift.io/v1alpha1
 kind: NodeAllocationRequest
 metadata:
-  name: site-sno-du-1
+  name: 123e4567-e89b-12d3-a456-426614174000
   namespace: oran-o2ims
 spec:
-  clusterId: site-sno-du-1-123e4567-e89b-12d3-a456-426614174000
+  clusterId: site-sno-du-1
   configTransactionId: 1
   hardwareProvisioningTimeout: 90m
   nodeGroup:

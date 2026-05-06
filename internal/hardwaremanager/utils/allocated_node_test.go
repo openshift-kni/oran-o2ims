@@ -276,8 +276,11 @@ var _ = Describe("AllocatedNode Utilities", func() {
 			})
 
 			It("should handle exactly 253 character inputs gracefully", func() {
-				longInput := strings.Repeat("a", 84)
-				result := GenerateNodeName(longInput, longInput, longInput)
+				// 83 + 1 + 83 + 1 + 85 = 253 (tests the exact boundary, not the hash fallback)
+				clusterID := strings.Repeat("a", 83)
+				bmhNamespace := strings.Repeat("a", 83)
+				bmhName := strings.Repeat("a", 85)
+				result := GenerateNodeName(clusterID, bmhNamespace, bmhName)
 				Expect(len(result)).To(BeNumerically("<=", 253))
 				Expect(result).To(MatchRegexp("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"))
 			})

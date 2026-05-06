@@ -1809,9 +1809,6 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			},
 		}
 
-		operatorNs := &corev1.Namespace{}
-		operatorNs.SetName(constants.DefaultNamespace)
-
 		crs := []client.Object{
 			// Cluster Template Namespace.
 			&corev1.Namespace{
@@ -1994,9 +1991,6 @@ var _ = Describe("addPostProvisioningLabels", func() {
 
 	Context("When the HW template is provided and the expected HW CRs exist", func() {
 		BeforeEach(func() {
-			operatorNs := &corev1.Namespace{}
-			operatorNs.SetName(constants.DefaultNamespace)
-
 			// Create the NodeAllocationRequest.
 			Expect(c.Create(ctx, nodeAllocationRequest)).To(Succeed())
 		})

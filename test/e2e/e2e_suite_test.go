@@ -202,15 +202,15 @@ var _ = BeforeSuite(func() {
 	// Start the main O2IMS manager
 	go func() {
 		defer GinkgoRecover()
-		err = ProvisioningManager.Start(ctx)
-		Expect(err).ToNot(HaveOccurred(), "failed to run main manager")
+		startErr := ProvisioningManager.Start(ctx)
+		Expect(startErr).ToNot(HaveOccurred(), "failed to run main manager")
 	}()
 
 	// Start the hardware manager
 	go func() {
 		defer GinkgoRecover()
-		err = HwMgrManager.Start(ctx)
-		Expect(err).ToNot(HaveOccurred(), "failed to run hardware manager")
+		startErr := HwMgrManager.Start(ctx)
+		Expect(startErr).ToNot(HaveOccurred(), "failed to run hardware manager")
 	}()
 })
 
