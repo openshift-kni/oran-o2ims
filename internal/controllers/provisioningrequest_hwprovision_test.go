@@ -2779,16 +2779,16 @@ var _ = Describe("updateInfrastructureResourceStatuses", func() {
 	})
 
 	createAllocatedNode := func(name string, conditions []metav1.Condition) {
-		node := &pluginsv1alpha1.AllocatedNode{
+		node := &hwmgmtv1alpha1.AllocatedNode{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
 				Namespace: constants.DefaultNamespace,
 			},
-			Spec: pluginsv1alpha1.AllocatedNodeSpec{
+			Spec: hwmgmtv1alpha1.AllocatedNodeSpec{
 				NodeAllocationRequest: crName,
 				GroupName:             "worker",
 			},
-			Status: pluginsv1alpha1.AllocatedNodeStatus{
+			Status: hwmgmtv1alpha1.AllocatedNodeStatus{
 				Conditions: conditions,
 			},
 		}

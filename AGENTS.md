@@ -89,11 +89,12 @@ issues during code review.
 
 - **DD-001: In-memory filtering for AllocatedNode lookups.**
   `listAllocatedNodesForNAR` in the PR controller uses in-memory filtering
-  instead of server-side `MatchingFields` because the fake Kubernetes client
-  in unit tests does not support field selectors. Per-cluster node counts are
-  small (1-11 nodes), so the cost is negligible. The Metal3 NAR controller
-  uses a proper field index (`spec.nodeAllocationRequest`) since it runs with
-  a real manager cache.
+  instead of server-side `MatchingFields` because the e2e tests use a
+  non-caching K8s client that does not support field selectors. This is a
+  known scaling issue — with many clusters the function walks all
+  AllocatedNodes across all clusters. A field indexer exists in the
+  hardware manager controller and should be used here too once the e2e
+  test framework is updated to use a caching client.
 
 - **DD-002: Cluster-scoped ProvisioningRequest watch mappers.**
   Watch mappers that enqueue ProvisioningRequests (e.g.,
