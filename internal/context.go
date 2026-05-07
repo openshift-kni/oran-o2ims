@@ -19,16 +19,6 @@ const (
 	contextLoggerKey
 )
 
-// ToolFromContext returns the tool from the context. It panics if the given context doesn't contain
-// the tool.
-func ToolFromContext(ctx context.Context) *Tool {
-	tool := ctx.Value(contextToolKey).(*Tool)
-	if tool == nil {
-		panic("failed to get tool from context")
-	}
-	return tool
-}
-
 // ToolIntoContext creates a new context that contains the given tool.
 func ToolIntoContext(ctx context.Context, tool *Tool) context.Context {
 	return context.WithValue(ctx, contextToolKey, tool)

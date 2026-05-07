@@ -66,27 +66,9 @@ func (b *ToolBuilder) AddCommand(value func() *cobra.Command) *ToolBuilder {
 	return b
 }
 
-// AddCommands adds a list of sub-commands.
-func (b *ToolBuilder) AddCommands(values ...func() *cobra.Command) *ToolBuilder {
-	b.sub = append(b.sub, values...)
-	return b
-}
-
-// AddArg adds one command line argument.
-func (b *ToolBuilder) AddArg(value string) *ToolBuilder {
-	b.args = append(b.args, value)
-	return b
-}
-
 // AddArgs adds a list of command line arguments.
 func (b *ToolBuilder) AddArgs(values ...string) *ToolBuilder {
 	b.args = append(b.args, values...)
-	return b
-}
-
-// SetArgs sets the list of command line arguments.
-func (b *ToolBuilder) SetArgs(values ...string) *ToolBuilder {
-	b.args = slices.Clone(values)
 	return b
 }
 

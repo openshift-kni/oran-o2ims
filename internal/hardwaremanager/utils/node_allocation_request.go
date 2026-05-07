@@ -58,55 +58,6 @@ func GetNodeAllocationRequest(ctx context.Context, client client.Reader, key cli
 	return nil
 }
 
-func GetNodeAllocationRequestProvisionedCondition(nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) *metav1.Condition {
-	return meta.FindStatusCondition(
-		nodeAllocationRequest.Status.Conditions,
-		string(hwmgmtv1alpha1.Provisioned))
-}
-
-func IsNodeAllocationRequestProvisionedCompleted(nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) bool {
-	provisionedCondition := GetNodeAllocationRequestProvisionedCondition(nodeAllocationRequest)
-	if provisionedCondition != nil && provisionedCondition.Status == metav1.ConditionTrue {
-		return true
-	}
-
-	return false
-}
-
-func IsNodeAllocationRequestProvisionedFailed(nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) bool {
-	provisionedCondition := GetNodeAllocationRequestProvisionedCondition(nodeAllocationRequest)
-	if provisionedCondition != nil && provisionedCondition.Reason == string(hwmgmtv1alpha1.Failed) {
-		return true
-	}
-
-	return false
-}
-
-func UpdateNodeAllocationRequestSelectedGroups(
-	ctx context.Context,
-	c client.Client,
-	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) error {
-
-	// nolint: wrapcheck
-	err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
-		newNodeAllocationRequest := &hwmgmtv1alpha1.NodeAllocationRequest{}
-		if err := c.Get(ctx, client.ObjectKeyFromObject(nodeAllocationRequest), newNodeAllocationRequest); err != nil {
-			return err
-		}
-		newNodeAllocationRequest.Status.SelectedGroups = nodeAllocationRequest.Status.SelectedGroups
-		if err := c.Status().Update(ctx, newNodeAllocationRequest); err != nil {
-			return err
-		}
-		return nil
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to update NodeAllocationRequest selectedGroups: %w", err)
-	}
-
-	return nil
-}
-
 func UpdateNodeAllocationRequestObservedGeneration(
 	ctx context.Context,
 	c client.Client,

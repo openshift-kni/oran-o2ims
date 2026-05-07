@@ -93,13 +93,6 @@ func IsClusterProvisionPresent(cr *provisioningv1alpha1.ProvisioningRequest) boo
 	return condition != nil
 }
 
-// IsClusterProvisionInProgress checks if the cluster provision condition status is in progress.
-func IsClusterProvisionInProgress(cr *provisioningv1alpha1.ProvisioningRequest) bool {
-	condition := meta.FindStatusCondition(cr.Status.Conditions,
-		string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned))
-	return condition != nil && condition.Reason == string(provisioningv1alpha1.CRconditionReasons.InProgress)
-}
-
 // IsClusterProvisionCompleted checks if the cluster provision condition status is completed.
 func IsClusterProvisionCompleted(cr *provisioningv1alpha1.ProvisioningRequest) bool {
 	condition := meta.FindStatusCondition(cr.Status.Conditions,
@@ -156,19 +149,6 @@ func IsSmoRegistrationCompleted(cr *inventoryv1alpha1.Inventory) bool {
 	return condition != nil && condition.Status == metav1.ConditionTrue
 }
 
-// IsClusterUpgradeInProgress checks if the cluster upgrade condition status is in progress
-func IsClusterUpgradeInProgress(cr *provisioningv1alpha1.ProvisioningRequest) bool {
-	condition := meta.FindStatusCondition(cr.Status.Conditions,
-		string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
-	if condition != nil {
-		if condition.Status == metav1.ConditionFalse &&
-			condition.Reason == string(provisioningv1alpha1.CRconditionReasons.InProgress) {
-			return true
-		}
-	}
-	return false
-}
-
 // IsClusterUpgradeCompleted checks if the cluster upgrade is completed
 func IsClusterUpgradeCompleted(cr *provisioningv1alpha1.ProvisioningRequest) bool {
 	condition := meta.FindStatusCondition(cr.Status.Conditions,
@@ -192,35 +172,6 @@ func IsClusterUpgradeInitiated(cr *provisioningv1alpha1.ProvisioningRequest) boo
 func IsClusterZtpDone(cr *provisioningv1alpha1.ProvisioningRequest) bool {
 	if cr.Status.Extensions.ClusterDetails != nil {
 		return cr.Status.Extensions.ClusterDetails.ZtpStatus == ClusterZtpDone
-	}
-	return false
-}
-
-// IsHardwareProvisionTimedOutOrFailed checks if the hardware provision condition status is timedout or failed
-func IsHardwareProvisionTimedOutOrFailed(cr *provisioningv1alpha1.ProvisioningRequest) bool {
-	condition := meta.FindStatusCondition(cr.Status.Conditions,
-		string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned))
-	if condition != nil {
-		if condition.Status == metav1.ConditionFalse &&
-			(condition.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed) ||
-				condition.Reason == string(provisioningv1alpha1.CRconditionReasons.TimedOut)) {
-			return true
-		}
-	}
-	return false
-}
-
-// HasFatalProvisioningFailure checks if the ProvisioningRequest
-// has a fatal provisioning failure that cannot be recovered
-// on its own.
-func HasFatalProvisioningFailure(conditions []metav1.Condition) bool {
-	for _, condType := range provisioningv1alpha1.FatalPRconditionTypes {
-		cond := meta.FindStatusCondition(conditions, string(condType))
-		if cond != nil && cond.Status == metav1.ConditionFalse &&
-			(cond.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed) ||
-				cond.Reason == string(provisioningv1alpha1.CRconditionReasons.TimedOut)) {
-			return true
-		}
 	}
 	return false
 }

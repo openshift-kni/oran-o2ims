@@ -357,17 +357,6 @@ func GetDeploymentVolumeMounts(serverName string, inventory *inventoryv1alpha1.I
 	return mounts
 }
 
-func GetBackendTokenArg(backendToken string) string {
-	// If no backend token has been provided then use the token of the service account
-	// that will eventually execute the server. Note that the file may not exist,
-	// but we can't check it here as that will be a different pod.
-	if backendToken != "" {
-		return fmt.Sprintf("--backend-token=%s", backendToken)
-	}
-
-	return fmt.Sprintf("--backend-token-file=%s", constants.DefaultBackendTokenFile)
-}
-
 // GetIngressDomain will determine the network domain of the default ingress controller
 func GetIngressDomain(ctx context.Context, c client.Client) (string, error) {
 	ingressController := &unstructured.Unstructured{}
@@ -975,18 +964,6 @@ func AddCABundle(config *tls.Config, caBundle string) error {
 	return nil
 }
 
-// GetInternalClientTLSConfig creates a tls.Config that uses a dynamic loader to handle updates to the certificate and/or key.
-func GetInternalClientTLSConfig(ctx context.Context) (*tls.Config, error) {
-	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
-
-	err := AddCABundle(tlsConfig, constants.DefaultServiceCAFile)
-	if err != nil {
-		return nil, err
-	}
-
-	return tlsConfig, nil
-}
-
 // GetClientTLSConfig creates a tls.Config that uses a dynamic loader to handle updates to the certificate and/or key.
 func GetClientTLSConfig(ctx context.Context, certFile, keyFile, caFile string) (*tls.Config, error) {
 	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
@@ -1176,33 +1153,6 @@ func MakeUUIDFromNames(namespace string, cloudID uuid.UUID, names ...string) uui
 	value := fmt.Sprintf("%s/%s", cloudID.String(), strings.Join(names, "/"))
 	namespaceUUID := uuid.MustParse(namespace)
 	return uuid.NewSHA1(namespaceUUID, []byte(value))
-}
-
-// ConvertMapAnyToString converts a map of any to a map of strings.  Values not of type string are
-// ignored.
-func ConvertMapAnyToString(input map[string]any) map[string]string {
-	output := make(map[string]string)
-	for key, value := range input {
-		if _, ok := input[key].(string); ok {
-			output[key] = value.(string)
-		}
-	}
-	return output
-}
-
-// GenerateSearchApiUrl appends graphql path to the backend URL to form the fully qualified search path
-func GenerateSearchApiUrl(backendURL string) (string, error) {
-	u, err := url.Parse(backendURL)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse backend URL %s: %w", backendURL, err)
-	}
-
-	// Split URL address
-	hostArr := strings.Split(u.Host, ".")
-
-	// Generate search API URL
-	searchUri := strings.Join(hostArr, ".")
-	return fmt.Sprintf("%s://%s/searchapi/graphql", u.Scheme, searchUri), nil
 }
 
 // Generates the name for a node's secret from a node map.

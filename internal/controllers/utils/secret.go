@@ -63,36 +63,6 @@ func GetSecretField(secret *corev1.Secret, fieldName string) (string, error) {
 	return string(encoded), nil
 }
 
-// CopyK8sSecret copies a secret from one namespace to another.
-func CopyK8sSecret(ctx context.Context, c client.Client, secretName, sourceNamespace, targetNamespace string) error {
-	// Get the secret from the source namespace
-	secret := &corev1.Secret{}
-	exists, err := DoesK8SResourceExist(
-		ctx, c, secretName, sourceNamespace, secret)
-
-	// If there was an error in trying to get the secret from the source namespace, return it.
-	if err != nil {
-		return fmt.Errorf("error obtaining the secret %s from namespace: %s: %w", secretName, sourceNamespace, err)
-	}
-
-	if !exists {
-		return fmt.Errorf("secret %s does not exist in namespace: %s", secretName, sourceNamespace)
-	}
-
-	// Modify the secret metadata to set the target namespace and remove resourceVersion
-	secret.ObjectMeta.Namespace = targetNamespace
-	secret.ObjectMeta.ResourceVersion = ""
-	// Remove any existing owner references
-	secret.ObjectMeta.OwnerReferences = []metav1.OwnerReference{}
-
-	// Create the secret in the target namespace
-	err = CreateK8sCR(ctx, c, secret, nil, UPDATE)
-	if err != nil {
-		return fmt.Errorf("failed to create secret %s in namespace %s: %w", secret.GetName(), secret.GetNamespace(), err)
-	}
-	return nil
-}
-
 // GetKeyPairFromSecret retrieves a certificate and its associated private key from a Secret.
 func GetKeyPairFromSecret(ctx context.Context, c client.Client, name, namespace string) ([]byte, []byte, error) {
 	secret, err := GetSecret(ctx, c, name, namespace)

@@ -9,7 +9,6 @@ package streaming
 import (
 	"context"
 	"errors"
-	"time"
 )
 
 // Stream represents a stream of items.
@@ -212,33 +211,5 @@ type nullStream[I any] struct {
 
 func (s *nullStream[I]) Next(ctx context.Context) (item I, err error) {
 	err = ErrEnd
-	return
-}
-
-// Delay creates a new stream that returns the same items than the given source, but with an
-// additional delay for each item. This is intended for tests and there is usually no reason
-// to use in production code.
-func Delay[I any](source Stream[I], delay time.Duration) Stream[I] {
-	return &delayStream[I]{
-		source: source,
-		delay:  delay,
-	}
-}
-
-// delayStream is the implementation of streams returned by the Delay function.
-type delayStream[I any] struct {
-	source Stream[I]
-	delay  time.Duration
-}
-
-func (s *delayStream[I]) Next(ctx context.Context) (item I, err error) {
-	item, err = s.source.Next(ctx)
-	if err != nil {
-		return
-	}
-	select {
-	case <-ctx.Done():
-	case <-time.After(s.delay):
-	}
 	return
 }

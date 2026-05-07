@@ -84,16 +84,3 @@ func LogError(ctx context.Context, logger *slog.Logger, msg string, err error, a
 	}
 	logger.ErrorContext(ctx, msg, args...)
 }
-
-// LogOperation logs a specific operation with context
-func LogOperation(ctx context.Context, logger *slog.Logger, operation, msg string, attrs ...slog.Attr) context.Context {
-	ctx = logging.AppendCtx(ctx, slog.String(LogAttrOperation, operation))
-	// Convert slog.Attr to []any for the logger call
-	args := make([]any, 0, len(attrs)*2+2)
-	args = append(args, LogAttrOperation, operation)
-	for _, attr := range attrs {
-		args = append(args, attr.Key, attr.Value)
-	}
-	logger.InfoContext(ctx, msg, args...)
-	return ctx
-}

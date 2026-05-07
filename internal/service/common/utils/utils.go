@@ -198,11 +198,3 @@ func GetColumns[T db.Model](record T, fields []string) []string {
 	}
 	return columns
 }
-
-func GetColumnsAsAny(slice []string) []any {
-	result := make([]any, len(slice))
-	for i, v := range slice {
-		result[i] = v
-	}
-	return result
-}

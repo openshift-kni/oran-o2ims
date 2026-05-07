@@ -344,15 +344,6 @@ func ConvertToUnstructured(ci siteconfig.ClusterInstance) (*unstructured.Unstruc
 	return unstructuredObj, nil
 }
 
-func ConvertFromUnstructured(u *unstructured.Unstructured) (*siteconfig.ClusterInstance, error) {
-	var ci siteconfig.ClusterInstance
-	err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &ci)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert unstructured to ClusterInstance: %w", err)
-	}
-	return &ci, nil
-}
-
 // PrepareClusterInstanceForServerSideApply prepares a ClusterInstance object for Server-Side Apply (SSA)
 // by clearing metadata fields that must not be present in SSA requests and ensuring type information is set.
 // This is necessary when reusing an existing ClusterInstance object retrieved from the cluster.

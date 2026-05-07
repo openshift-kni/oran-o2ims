@@ -21,10 +21,6 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 )
 
-const (
-	bmhNamespaceLabel = "baremetalhost.metal3.io/namespace"
-)
-
 // ConditionDoesNotExistsErr represents an error when a specific condition is missing
 type ConditionDoesNotExistsErr struct {
 	ConditionName string
@@ -249,16 +245,6 @@ func GetStatusMessage(condition hwmgmtv1alpha1.ConditionType) string {
 		return "configuring"
 	}
 	return "provisioning"
-}
-
-// GetBMHNamespace returns the BMH namespace for the given node.
-// Check both node label and Spec.HwMgrNodeNs to ensure compatibility
-func GetBMHNamespace(node *hwmgmtv1alpha1.AllocatedNode) string {
-
-	if ns, ok := node.ObjectMeta.Labels[bmhNamespaceLabel]; ok {
-		return ns
-	}
-	return node.Spec.HwMgrNodeNs
 }
 
 // MapHardwareReasonToProvisioningReason converts hardware management condition reasons

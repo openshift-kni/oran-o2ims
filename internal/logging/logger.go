@@ -83,14 +83,6 @@ func (b *LoggerBuilder) AddFields(values map[string]any) *LoggerBuilder {
 	return b
 }
 
-// SetFields sets the fields tht will be added to all the log messages. See the AddField method for
-// the meanings of values. Note that this replaces any previously configured fields. If you want to
-// preserve them use the AddFields method.
-func (b *LoggerBuilder) SetFields(values map[string]any) *LoggerBuilder {
-	b.fields = maps.Clone(values)
-	return b
-}
-
 // SetLevel sets the log level.
 func (b *LoggerBuilder) SetLevel(value string) *LoggerBuilder {
 	b.level = value
