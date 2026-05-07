@@ -197,19 +197,6 @@ func fetchBMHList(
 	return bmhList, nil
 }
 
-// GroupBMHsByResourcePool groups unallocated BMHs by resource pool name.
-func GroupBMHsByResourcePool(
-	unallocatedBMHs metal3v1alpha1.BareMetalHostList,
-) map[string][]metal3v1alpha1.BareMetalHost {
-	grouped := make(map[string][]metal3v1alpha1.BareMetalHost)
-	for _, bmh := range unallocatedBMHs.Items {
-		if resourcePoolName, exists := bmh.Labels[constants.LabelResourcePoolName]; exists {
-			grouped[resourcePoolName] = append(grouped[resourcePoolName], bmh)
-		}
-	}
-	return grouped
-}
-
 func buildInterfacesFromBMH(
 	bmh *metal3v1alpha1.BareMetalHost) ([]*hwmgmtv1alpha1.Interface, error) {
 	var interfaces []*hwmgmtv1alpha1.Interface

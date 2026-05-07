@@ -22,8 +22,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -239,15 +237,6 @@ func HasDatabase(serverName string) bool {
 		serverName == InventoryAlarmServerName
 }
 
-// RequiresInternalListener determines whether a server expects its API to be accessed by another server.  If this
-// is the case, then in an OAuth configuration we run a second listener for that server which handles authenticating
-// using a Kubernetes service account token rather than an OAuth token.
-func RequiresInternalListener(serverName string) bool {
-	return serverName == InventoryResourceServerName ||
-		serverName == InventoryClusterServerName ||
-		serverName == InventoryAlarmServerName
-}
-
 // IsOAuthEnabled determines if the Inventory CR has OAuth attributes provided.
 func IsOAuthEnabled(inventory *inventoryv1alpha1.Inventory) bool {
 	return inventory.Spec.SmoConfig != nil && inventory.Spec.SmoConfig.OAuthConfig != nil
@@ -384,43 +373,6 @@ func GetIngressDomain(ctx context.Context, c client.Client) (string, error) {
 	}
 
 	return "", fmt.Errorf("default ingress controller does not have expected 'status.domain' attribute")
-}
-
-// GetSearchAPI attempts to find the search-api service using its label selector
-func GetSearchAPI(ctx context.Context, c client.Client) (*corev1.Service, error) {
-	// Build the search criteria
-	selector := labels.NewSelector()
-	monitorSelector, err := labels.NewRequirement(SearchApiLabelKey, selection.Equals, []string{SearchApiLabelValue})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create search-api monitor selector: %w", err)
-	}
-
-	// Do the search
-	services := &corev1.ServiceList{}
-	err = c.List(ctx, services, &client.ListOptions{
-		LabelSelector: selector.Add(*monitorSelector),
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to list services: %w", err)
-	}
-
-	if len(services.Items) == 0 {
-		return nil, fmt.Errorf("failed to list services: no services found")
-	}
-
-	// Should only be 1 result therefore return the first item
-	return &services.Items[0], nil
-}
-
-// GetSearchURL attempts to build the Search API service URL by dynamically looking up the service.
-func GetSearchURL(ctx context.Context, c client.Client) (string, error) {
-	service, err := GetSearchAPI(ctx, c)
-	if err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", service.Name, service.Namespace, service.Spec.Ports[0].Port), nil
 }
 
 // GetServerDatabasePasswordName retrieves name of the environment variable used to store the server's database password

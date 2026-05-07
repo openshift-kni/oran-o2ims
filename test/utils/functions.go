@@ -23,63 +23,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
-
-func RemoveRequiredFieldFromClusterInstanceCm(
-	ctx context.Context, c client.Client, cmName, cmNamespace string) {
-	// Remove a required field from ClusterInstance default configmap
-	ciConfigmap := &corev1.ConfigMap{}
-	Expect(c.Get(ctx, types.NamespacedName{Name: cmName, Namespace: cmNamespace}, ciConfigmap)).To(Succeed())
-
-	ciConfigmap.Data = map[string]string{
-		ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
-    clusterImageSetNameRef: "4.15"
-    pullSecretRef:
-      name: "pull-secret"
-    nodes:
-    - hostName: "node1"
-      role: master
-      bootMode: UEFI
-      nodeNetwork:
-        interfaces:
-        - name: eno1
-          label: boot-interface
-        - name: eth0
-          label: base-interface
-        - name: eth1
-          label: data-interface
-    templateRefs:
-    - name: "ai-cluster-templates-v1"
-      namespace: "siteconfig-operator"
-    `}
-	Expect(c.Update(ctx, ciConfigmap)).To(Succeed())
-}
-
-func RemoveRequiredFieldFromClusterInstanceInput(
-	ctx context.Context, c client.Client, crName string) {
-	// Remove required field hostname
-	currentCR := &provisioningv1alpha1.ProvisioningRequest{}
-	Expect(c.Get(ctx, types.NamespacedName{Name: crName}, currentCR)).To(Succeed())
-
-	clusterTemplateInput := make(map[string]any)
-	err := json.Unmarshal([]byte(TestFullTemplateParameters), &clusterTemplateInput)
-	Expect(err).ToNot(HaveOccurred())
-	node1 := clusterTemplateInput["clusterInstanceParameters"].(map[string]any)["nodes"].([]any)[0]
-	delete(node1.(map[string]any), "hostName")
-	updatedClusterTemplateInput, err := json.Marshal(clusterTemplateInput)
-	Expect(err).ToNot(HaveOccurred())
-
-	currentCR.Spec.TemplateParameters.Raw = updatedClusterTemplateInput
-	Expect(c.Update(ctx, currentCR)).To(Succeed())
-}
 
 func VerifyStatusCondition(actualCond, expectedCon metav1.Condition) {
 	Expect(actualCond.Type).To(Equal(expectedCon.Type))

@@ -11,53 +11,6 @@ import (
 	"fmt"
 )
 
-// GenericError is an error structure containing common fields to be
-// embedded by specific error types defined below
-type GenericError struct {
-	Message string
-	Err     error
-}
-
-func (ge GenericError) Error() string {
-	return ge.Message
-}
-
-func (ge GenericError) Unwrap() error {
-	return ge.Err
-}
-
-// ConfigMapError type
-type ConfigMapError struct {
-	GenericError
-}
-
-func NewConfigMapError(err error, format string, args ...interface{}) error {
-	return ConfigMapError{
-		GenericError: GenericError{fmt.Sprintf(format, args...), err},
-	}
-}
-
-func IsConfigMapError(target error) bool {
-	var e ConfigMapError
-	return errors.As(target, &e)
-}
-
-// TokenError type
-type TokenError struct {
-	GenericError
-}
-
-func NewTokenError(err error, format string, args ...interface{}) error {
-	return TokenError{
-		GenericError: GenericError{fmt.Sprintf(format, args...), err},
-	}
-}
-
-func IsTokenError(target error) bool {
-	var e TokenError
-	return errors.As(target, &e)
-}
-
 // InputError wraps a standard error and provides a custom error type for input-related errors
 type InputError struct {
 	err error

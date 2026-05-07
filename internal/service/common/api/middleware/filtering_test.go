@@ -40,7 +40,7 @@ var _ = Describe("ResponseFilter", func() {
 		req = httptest.NewRequest(http.MethodGet, "/some-endpoint", nil)
 		logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 		var err error
-		adapter, err = NewFilterAdapter(logger)
+		adapter, err = NewFilterAdapterWithSchemas(logger, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		list := []object{{Name: "hello", Value: 1}, {Name: "world", Value: 10}}

@@ -40,11 +40,6 @@ type FilterAdapter struct {
 	schemaValidator   *SchemaValidator
 }
 
-// NewFilterAdapter creates a new filter adapter to be passed to a ResponseFilter
-func NewFilterAdapter(logger *slog.Logger) (*FilterAdapter, error) {
-	return NewFilterAdapterWithSchemas(logger, nil)
-}
-
 // NewFilterAdapterWithSchemas creates a new filter adapter with schema validation
 func NewFilterAdapterWithSchemas(logger *slog.Logger, schemas map[string]*openapi3.Schema) (*FilterAdapter, error) {
 	pathsParser, err := search.NewPathsParser().SetLogger(logger).Build()

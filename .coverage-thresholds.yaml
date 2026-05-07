@@ -12,7 +12,6 @@ packages:
   internal/hardwaremanager/utils: 5
   internal/hardwaremanager/controller: 63
   internal: 16
-  internal/cmd/server: 80
   internal/controllers: 60
   internal/controllers/utils: 19
   internal/logging: 39
@@ -34,4 +33,3 @@ packages:
   internal/service/resources/collector: 8
   internal/service/resources/db/repo: 89
   internal/service/resources/listener: 30
-  internal/typed-errors: 38

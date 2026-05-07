@@ -201,47 +201,6 @@ var _ = Describe("BareMetalHost Manager", func() {
 		})
 	})
 
-	Describe("GroupBMHsByResourcePool", func() {
-		It("should group BMHs by resource pool ID", func() {
-			bmhList := metal3v1alpha1.BareMetalHostList{
-				Items: []metal3v1alpha1.BareMetalHost{
-					*createBMH("bmh1", "test-ns", map[string]string{
-						constants.LabelResourcePoolName: "pool1",
-					}, nil, metal3v1alpha1.StateAvailable),
-					*createBMH("bmh2", "test-ns", map[string]string{
-						constants.LabelResourcePoolName: "pool2",
-					}, nil, metal3v1alpha1.StateAvailable),
-					*createBMH("bmh3", "test-ns", map[string]string{
-						constants.LabelResourcePoolName: "pool1",
-					}, nil, metal3v1alpha1.StateAvailable),
-				},
-			}
-
-			grouped := GroupBMHsByResourcePool(bmhList)
-			Expect(len(grouped)).To(Equal(2))
-			Expect(len(grouped["pool1"])).To(Equal(2))
-			Expect(len(grouped["pool2"])).To(Equal(1))
-			Expect(grouped["pool1"][0].Name).To(Equal("bmh1"))
-			Expect(grouped["pool1"][1].Name).To(Equal("bmh3"))
-			Expect(grouped["pool2"][0].Name).To(Equal("bmh2"))
-		})
-
-		It("should handle BMHs without resource pool label", func() {
-			bmhList := metal3v1alpha1.BareMetalHostList{
-				Items: []metal3v1alpha1.BareMetalHost{
-					*createBMH("bmh1", "test-ns", map[string]string{
-						constants.LabelResourcePoolName: "pool1",
-					}, nil, metal3v1alpha1.StateAvailable),
-					*createBMH("bmh2", "test-ns", nil, nil, metal3v1alpha1.StateAvailable),
-				},
-			}
-
-			grouped := GroupBMHsByResourcePool(bmhList)
-			Expect(len(grouped)).To(Equal(1))
-			Expect(len(grouped["pool1"])).To(Equal(1))
-		})
-	})
-
 	Describe("setBootMACAddressFromLabel", func() {
 		var (
 			fakeClient client.Client

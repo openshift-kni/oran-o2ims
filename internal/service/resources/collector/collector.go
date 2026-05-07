@@ -111,16 +111,6 @@ func (c *Collector) Run(ctx context.Context) error {
 	}
 }
 
-// findDataSource looks up the data source by name and returns it; otherwise nil is returned
-func (c *Collector) findDataSource(name string) DataSource {
-	for _, dataSource := range c.dataSources {
-		if dataSource.Name() == name {
-			return dataSource
-		}
-	}
-	return nil
-}
-
 // init runs the onetime initialization steps for the collector
 func (c *Collector) init(ctx context.Context) error {
 	slog.Info("initializing data collector")
