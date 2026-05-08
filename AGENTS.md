@@ -87,15 +87,6 @@ This project has not reached GA, so there are no production databases to migrate
 The following are accepted design decisions. Do not flag these patterns as
 issues during code review.
 
-- **DD-001: In-memory filtering for AllocatedNode lookups.**
-  `listAllocatedNodesForNAR` in the PR controller uses in-memory filtering
-  instead of server-side `MatchingFields` because the e2e tests use a
-  non-caching K8s client that does not support field selectors. This is a
-  known scaling issue — with many clusters the function walks all
-  AllocatedNodes across all clusters. A field indexer exists in the
-  hardware manager controller and should be used here too once the e2e
-  test framework is updated to use a caching client.
-
 - **DD-002: Cluster-scoped ProvisioningRequest watch mappers.**
   Watch mappers that enqueue ProvisioningRequests (e.g.,
   `enqueueProvisioningRequestForNAR`) intentionally omit the namespace from

@@ -444,7 +444,7 @@ defaultHugepagesSize: "1G"`,
 				_ = K8SClient.Update(testCtx, nar)
 				_ = K8SClient.Delete(testCtx, nar)
 			}
-			anList := listAllocatedNodesForNAR(testCtx, crName)
+			anList := testNonCachingListAllocatedNodesForNAR(testCtx, crName)
 			for i := range anList.Items {
 				_ = K8SClient.Delete(testCtx, &anList.Items[i])
 			}

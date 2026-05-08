@@ -178,8 +178,10 @@ var _ = BeforeSuite(func() {
 	hwmgrcontrollers.OverrideNoncachedClient(K8SClient)
 
 	// Setup the ProvisioningRequest Reconciler on main manager.
+	// Use the manager's cached client so field indexers (e.g., AllocatedNode
+	// spec.nodeAllocationRequest) work correctly during reconciliation.
 	ProvReqTestReconciler := &provisioningcontrollers.ProvisioningRequestReconciler{
-		Client: K8SClient,
+		Client: ProvisioningManager.GetClient(),
 		Logger: logger,
 	}
 	err = ProvReqTestReconciler.SetupWithManager(ProvisioningManager)

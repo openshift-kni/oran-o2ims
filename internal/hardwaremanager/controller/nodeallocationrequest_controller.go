@@ -41,12 +41,7 @@ type NodeAllocationRequestReconciler struct {
 
 func (r *NodeAllocationRequestReconciler) SetupIndexer(ctx context.Context) error {
 	r.Logger.Info("SetupIndexer Start")
-	// Setup AllocatedNode CRD indexer. This field indexer allows us to query a list of AllocatedNode CRs, filtered by the spec.nodeAllocationRequest field.
-	nodeIndexFunc := func(obj client.Object) []string {
-		return []string{obj.(*hwmgmtv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
-	}
-
-	if err := r.Manager.GetFieldIndexer().IndexField(ctx, &hwmgmtv1alpha1.AllocatedNode{}, hwmgrutils.AllocatedNodeSpecNodeAllocationRequestKey, nodeIndexFunc); err != nil {
+	if err := hwmgrutils.RegisterAllocatedNodeFieldIndexer(ctx, r.Manager.GetFieldIndexer()); err != nil {
 		return fmt.Errorf("failed to setup node indexer: %w", err)
 	}
 	return nil

@@ -8,6 +8,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -26,6 +27,7 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -34,6 +36,10 @@ import (
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if err := hwmgrutils.RegisterAllocatedNodeFieldIndexer(context.Background(), mgr.GetFieldIndexer()); err != nil {
+		return fmt.Errorf("failed to register AllocatedNode field indexer: %w", err)
+	}
+
 	//nolint:wrapcheck
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("o2ims-cluster-request").

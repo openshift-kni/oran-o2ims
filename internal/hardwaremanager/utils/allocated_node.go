@@ -32,6 +32,20 @@ const (
 	AllocatedNodeFinalizer                    = "clcm.openshift.io/allocatednode-finalizer"
 )
 
+// RegisterAllocatedNodeFieldIndexer registers a field indexer for
+// spec.nodeAllocationRequest on AllocatedNode CRs. This allows efficient
+// filtering by NAR name via client.MatchingFields.
+func RegisterAllocatedNodeFieldIndexer(ctx context.Context, indexer client.FieldIndexer) error {
+	if err := indexer.IndexField(ctx, &hwmgmtv1alpha1.AllocatedNode{},
+		AllocatedNodeSpecNodeAllocationRequestKey,
+		func(obj client.Object) []string {
+			return []string{obj.(*hwmgmtv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
+		}); err != nil {
+		return fmt.Errorf("failed to register AllocatedNode field indexer: %w", err)
+	}
+	return nil
+}
+
 // GetNode get a node resource for a provided name
 func GetNode(
 	ctx context.Context,

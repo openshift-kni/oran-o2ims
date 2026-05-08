@@ -309,7 +309,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 
 		By("Waiting for all 11 AllocatedNodes to be created")
 		Eventually(func() int {
-			return len(listAllocatedNodesForNAR(testCtx, prName).Items)
+			return len(testNonCachingListAllocatedNodesForNAR(testCtx, prName).Items)
 		}, timeout, interval).Should(Equal(masterCount + workerCount))
 
 		By("Waiting for day0 to complete (NAR Provisioned=True)")
@@ -328,7 +328,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 
 		By("Simulating AllocatedNodeHostMap on PR")
 		Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
-		nodeList := listAllocatedNodesForNAR(testCtx, prName)
+		nodeList := testNonCachingListAllocatedNodesForNAR(testCtx, prName)
 		hostMap := make(map[string]string)
 		masterIdx, workerIdx := 1, 1
 		hostnames := []string{}
@@ -401,7 +401,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			_ = K8SClient.Update(testCtx, narObj)
 			_ = K8SClient.Delete(testCtx, narObj)
 		}
-		anList := listAllocatedNodesForNAR(testCtx, prName)
+		anList := testNonCachingListAllocatedNodesForNAR(testCtx, prName)
 		for i := range anList.Items {
 			_ = K8SClient.Delete(testCtx, &anList.Items[i])
 		}
@@ -475,7 +475,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			By("Polling and advancing BMH state transitions for each node")
 			Eventually(func() bool {
 				allComplete := true
-				nodeList := listAllocatedNodesForNAR(testCtx, prName)
+				nodeList := testNonCachingListAllocatedNodesForNAR(testCtx, prName)
 
 				// Track rolling-update invariants
 				mastersAllDone := true
@@ -594,7 +594,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		It("Should fail when one worker BMH enters error state during update", func() {
 			By("Failing one worker BMH and waiting for NAR to reach Failed")
 			Eventually(func() bool {
-				nodeList := listAllocatedNodesForNAR(testCtx, prName)
+				nodeList := testNonCachingListAllocatedNodesForNAR(testCtx, prName)
 				for i := range nodeList.Items {
 					node := &nodeList.Items[i]
 
@@ -706,7 +706,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			By("Waiting for at least 3 workers in ConfigUpdate with v1 profile")
 			Eventually(func() int {
 				count := 0
-				nodeList := listAllocatedNodesForNAR(testCtx, prName)
+				nodeList := testNonCachingListAllocatedNodesForNAR(testCtx, prName)
 				for i := range nodeList.Items {
 					node := &nodeList.Items[i]
 					if node.Spec.GroupName != worker || node.Spec.HwProfile != v1Profile {
@@ -722,7 +722,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 				"At least 3 workers should be in ConfigUpdate with v1 profile")
 
 			By("Picking one worker and advancing its BMH to Servicing with config-in-progress")
-			nodeList := listAllocatedNodesForNAR(testCtx, prName)
+			nodeList := testNonCachingListAllocatedNodesForNAR(testCtx, prName)
 			for i := range nodeList.Items {
 				node := &nodeList.Items[i]
 				if node.Spec.GroupName != worker || node.Spec.HwProfile != v1Profile {
@@ -790,7 +790,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			// The 1 Servicing worker can't be abandoned (BMH Servicing) -> stays in ConfigUpdate.
 			Eventually(func() int {
 				count := 0
-				nodeList := listAllocatedNodesForNAR(testCtx, prName)
+				nodeList := testNonCachingListAllocatedNodesForNAR(testCtx, prName)
 				for _, node := range nodeList.Items {
 					if node.Spec.GroupName != worker {
 						continue
@@ -832,7 +832,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			}, timeout, interval).Should(BeTrue(), "NAR should reach ConfigApplied")
 
 			By("Verifying all 8 worker nodes converged to v2 profile")
-			nodeList := listAllocatedNodesForNAR(testCtx, prName)
+			nodeList := testNonCachingListAllocatedNodesForNAR(testCtx, prName)
 			for _, node := range nodeList.Items {
 				if node.Spec.GroupName != worker {
 					continue
@@ -855,13 +855,18 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 
 func intPtr(v int) *int { return &v }
 
-func listAllocatedNodesForNAR(ctx context.Context, narName string) *hwmgmtv1alpha1.AllocatedNodeList {
+// testNonCachingListAllocatedNodesForNAR is a test-only helper that lists AllocatedNodes
+// for a NAR using the non-caching K8SClient with in-memory filtering. This is
+// intentionally different from the production testNonCachingListAllocatedNodesForNAR which
+// uses MatchingFields on a cached client — the non-caching client is needed
+// here so test assertions see the latest API server state without cache delay.
+func testNonCachingListAllocatedNodesForNAR(ctx context.Context, narName string) *hwmgmtv1alpha1.AllocatedNodeList {
 	all := &hwmgmtv1alpha1.AllocatedNodeList{}
 	Expect(K8SClient.List(ctx, all, client.InNamespace(constants.DefaultNamespace))).To(Succeed())
 	filtered := &hwmgmtv1alpha1.AllocatedNodeList{}
-	for _, n := range all.Items {
-		if n.Spec.NodeAllocationRequest == narName {
-			filtered.Items = append(filtered.Items, n)
+	for i := range all.Items {
+		if all.Items[i].Spec.NodeAllocationRequest == narName {
+			filtered.Items = append(filtered.Items, all.Items[i])
 		}
 	}
 	return filtered

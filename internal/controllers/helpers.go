@@ -14,6 +14,7 @@ import (
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/utils"
 )
 
 // collectNodeDetails collects BMC and node interfaces details
@@ -91,19 +92,16 @@ func newNodeGroup(group hwmgmtv1alpha1.NodeGroupData, roleCounts map[string]int)
 	return nodeGroup
 }
 
-// listAllocatedNodesForNAR lists AllocatedNodes that belong to the given NodeAllocationRequest.
+// listAllocatedNodesForNAR lists AllocatedNodes that belong to the given NodeAllocationRequest
+// using a field index on spec.nodeAllocationRequest. The client must have the field indexer
+// registered (via RegisterAllocatedNodeFieldIndexer or SetupWithManager).
 func listAllocatedNodesForNAR(ctx context.Context, c client.Client, narName, narNS string) (*hwmgmtv1alpha1.AllocatedNodeList, error) {
-	allNodes := &hwmgmtv1alpha1.AllocatedNodeList{}
-	if err := c.List(ctx, allNodes, client.InNamespace(narNS)); err != nil {
+	nodes := &hwmgmtv1alpha1.AllocatedNodeList{}
+	if err := c.List(ctx, nodes, client.InNamespace(narNS),
+		client.MatchingFields{hwmgrutils.AllocatedNodeSpecNodeAllocationRequestKey: narName}); err != nil {
 		return nil, fmt.Errorf("failed to list AllocatedNodes: %w", err)
 	}
-	filtered := &hwmgmtv1alpha1.AllocatedNodeList{}
-	for i := range allNodes.Items {
-		if allNodes.Items[i].Spec.NodeAllocationRequest == narName {
-			filtered.Items = append(filtered.Items, allNodes.Items[i])
-		}
-	}
-	return filtered, nil
+	return nodes, nil
 }
 
 // getRoleToGroupNameMap creates a mapping of Role to Group Name from NodeAllocationRequest
