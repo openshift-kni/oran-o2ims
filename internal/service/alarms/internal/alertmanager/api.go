@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
@@ -190,11 +191,11 @@ func (c *AMClient) createAlertmanagerClient() (*http.Client, string, error) {
 	// Determine token file path (allow override for testing/local development)
 	tokenPath := constants.DefaultBackendTokenFile
 	if envPath := os.Getenv("ALARMS_SERVER_TOKEN_FILE"); envPath != "" {
-		tokenPath = envPath
+		tokenPath = filepath.Clean(envPath)
 	}
 
 	// Read token from service account token file
-	token, err := os.ReadFile(tokenPath) //nolint:gosec // tokenPath is from a constant, not user input
+	token, err := os.ReadFile(tokenPath)
 	if err != nil {
 		return nil, "", fmt.Errorf("error reading service account token: %w", err)
 	}
@@ -202,12 +203,12 @@ func (c *AMClient) createAlertmanagerClient() (*http.Client, string, error) {
 	// Determine service CA file path (allow override for testing/local development)
 	caPath := constants.DefaultServiceCAFile
 	if envPath := os.Getenv("ALARMS_SERVER_CA_FILE"); envPath != "" {
-		caPath = envPath
+		caPath = filepath.Clean(envPath)
 	}
 
 	// Read service CA certificate
 	// This is automatically mounted by Kubernetes for service-to-service TLS
-	caCrt, err := os.ReadFile(caPath) //nolint:gosec // caPath is from a constant/env var, not user input
+	caCrt, err := os.ReadFile(caPath)
 	if err != nil {
 		return nil, "", fmt.Errorf("error reading service CA certificate: %w", err)
 	}
