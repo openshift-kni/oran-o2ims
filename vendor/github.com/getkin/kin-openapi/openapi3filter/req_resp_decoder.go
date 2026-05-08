@@ -8,12 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/url"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -539,14 +541,14 @@ func (d *urlValuesDecoder) DecodeArray(param string, sm *openapi3.SerializationM
 		}
 		values = strings.Split(values[0], delim)
 	}
-	val, err := d.parseArray(values, sm, schema)
+	val, err := d.parseArray(values, schema)
 	return val, ok, err
 }
 
 // parseArray returns an array that contains items from a raw array.
 // Every item is parsed as a primitive value.
 // The function returns an error when an error happened while parse array's items.
-func (d *urlValuesDecoder) parseArray(raw []string, sm *openapi3.SerializationMethod, schemaRef *openapi3.SchemaRef) ([]any, error) {
+func (d *urlValuesDecoder) parseArray(raw []string, schemaRef *openapi3.SchemaRef) ([]any, error) {
 	var value []any
 
 	for i, v := range raw {
@@ -564,6 +566,12 @@ func (d *urlValuesDecoder) parseArray(raw []string, sm *openapi3.SerializationMe
 			return nil, nil
 		}
 		value = append(value, item)
+	}
+	// If the array has only one element and that element is an empty string, it means no value exists, so return nil.
+	if len(value) == 1 {
+		if str, ok := value[0].(string); ok && str == "" {
+			return nil, nil
+		}
 	}
 	return value, nil
 }
@@ -1051,9 +1059,7 @@ func buildFromSchemas(schemas openapi3.SchemaRefs, params map[string]any, mapKey
 		if err == nil && val != nil {
 
 			if m, ok := val.(map[string]any); ok {
-				for k, v := range m {
-					resultMap[k] = v
-				}
+				maps.Copy(resultMap, m)
 				continue
 			}
 
@@ -1116,13 +1122,13 @@ func parseArray(raw []string, schemaRef *openapi3.SchemaRef) ([]any, error) {
 }
 
 // parsePrimitive returns a value that is created by parsing a source string to a primitive type
-// that is specified by a schema. The function returns nil when the source string is empty.
+// that is specified by a schema. The function returns nil when the source string is empty and the type is not "string".
 // The function panics when a schema has a non-primitive type.
 func parsePrimitive(raw string, schema *openapi3.SchemaRef) (v any, err error) {
-	if raw == "" {
-		return nil, nil
-	}
 	for _, typ := range schema.Value.Type.Slice() {
+		if raw == "" && typ != "string" {
+			return nil, nil
+		}
 		if v, err = parsePrimitiveCase(raw, schema, typ); err == nil {
 			return
 		}
@@ -1211,13 +1217,30 @@ func UnregisterBodyDecoder(contentType string) {
 
 var headerCT = http.CanonicalHeaderKey("Content-Type")
 
-const prefixUnsupportedCT = "unsupported content type"
+const (
+	prefixUnsupportedCT = "unsupported content type"
+	prefixNotMatchingCT = "not matching content types"
+)
 
 func isBinary(schema *openapi3.SchemaRef) bool {
 	if schema == nil || schema.Value == nil {
 		return false
 	}
 	return schema.Value.Type.Is("string") && schema.Value.Format == "binary"
+}
+
+func getEncodingContentType(encFn EncodingFn) string {
+	var enc *openapi3.Encoding
+	if encFn != nil {
+		// encFn is passed to decodeBody only in form body decoders as a subEncFn, so key can be ""
+		// func(string) *openapi3.Encoding { return enc }
+		enc = encFn("")
+	}
+	if enc == nil {
+		return ""
+	}
+
+	return enc.ContentType
 }
 
 // decodeBody returns a decoded body.
@@ -1235,11 +1258,26 @@ func decodeBody(body io.Reader, header http.Header, schema *openapi3.SchemaRef, 
 	}
 
 	mediaType := parseMediaType(contentType)
-	decoder, ok := bodyDecoders[mediaType]
-	if !ok && isBinary(schema) {
-		ok, decoder = true, FileBodyDecoder
+	encodingContentType := getEncodingContentType(encFn)
+	if isBinary(schema) && encodingContentType == "" {
+		value, err := FileBodyDecoder(body, header, schema, encFn)
+		return mediaType, value, err
 	}
 
+	if encodingContentType != "" &&
+		mediaType != encodingContentType {
+		return "", nil, &ParseError{
+			Kind: KindOther,
+			Reason: fmt.Sprintf(
+				"%s: header %q, encoding %q",
+				prefixNotMatchingCT,
+				mediaType,
+				encodingContentType,
+			),
+		}
+	}
+
+	decoder, ok := bodyDecoders[mediaType]
 	if !ok {
 		return "", nil, &ParseError{
 			Kind:   KindUnsupportedFormat,
@@ -1305,7 +1343,13 @@ func UrlencodedBodyDecoder(body io.Reader, header http.Header, schema *openapi3.
 	if !schema.Value.Type.Is("object") {
 		return nil, errors.New("unsupported schema of request body")
 	}
-	for propName, propSchema := range schema.Value.Properties {
+	propNames := make([]string, 0, len(schema.Value.Properties))
+	for name := range schema.Value.Properties {
+		propNames = append(propNames, name)
+	}
+	slices.Sort(propNames)
+	for _, propName := range propNames {
+		propSchema := schema.Value.Properties[propName]
 		propType := propSchema.Value.Type
 		switch {
 		case propType.Is("object"):
@@ -1355,9 +1399,15 @@ func decodeSchemaConstructs(dec *urlValuesDecoder, schemas []*openapi3.SchemaRef
 			return err
 		}
 
-		for name, prop := range schemaRef.Value.Properties {
-			value, _, err := decodeProperty(dec, name, prop, encFn)
-			if err != nil {
+		propNames := make([]string, 0, len(schemaRef.Value.Properties))
+		for name := range schemaRef.Value.Properties {
+			propNames = append(propNames, name)
+		}
+		slices.Sort(propNames)
+		for _, name := range propNames {
+			prop := schemaRef.Value.Properties[name]
+			value, present, err := decodeProperty(dec, name, prop, encFn)
+			if err != nil || !present {
 				continue
 			}
 			if existingValue, exists := obj[name]; exists && !isEqual(existingValue, value) {
@@ -1461,7 +1511,7 @@ func MultipartBodyDecoder(body io.Reader, header http.Header, schema *openapi3.S
 			return nil, fmt.Errorf("part %s: %w", name, err)
 		}
 
-		// Parse primitive types when no content type is explicitely provided, or the content type is set to text/plain
+		// Parse primitive types when no content type is explicitly provided, or the content type is set to text/plain
 		if contentType := partHeader.Get(headerCT); contentType == "" || contentType == "text/plain" {
 			if value, err = parsePrimitive(value.(string), valueSchema); err != nil {
 				if v, ok := err.(*ParseError); ok {
@@ -1477,23 +1527,15 @@ func MultipartBodyDecoder(body io.Reader, header http.Header, schema *openapi3.S
 	allTheProperties := make(map[string]*openapi3.SchemaRef)
 	if len(schema.Value.AllOf) > 0 {
 		for _, sr := range schema.Value.AllOf {
-			for k, v := range sr.Value.Properties {
-				allTheProperties[k] = v
-			}
+			maps.Copy(allTheProperties, sr.Value.Properties)
 			if addProps := sr.Value.AdditionalProperties.Schema; addProps != nil {
-				for k, v := range addProps.Value.Properties {
-					allTheProperties[k] = v
-				}
+				maps.Copy(allTheProperties, addProps.Value.Properties)
 			}
 		}
 	} else {
-		for k, v := range schema.Value.Properties {
-			allTheProperties[k] = v
-		}
+		maps.Copy(allTheProperties, schema.Value.Properties)
 		if addProps := schema.Value.AdditionalProperties.Schema; addProps != nil {
-			for k, v := range addProps.Value.Properties {
-				allTheProperties[k] = v
-			}
+			maps.Copy(allTheProperties, addProps.Value.Properties)
 		}
 	}
 
