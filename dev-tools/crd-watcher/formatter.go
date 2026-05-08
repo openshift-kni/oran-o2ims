@@ -31,6 +31,13 @@ import (
 	controller "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/controller"
 )
 
+// API group and version constants
+const (
+	apiGroupCLCM   = "clcm.openshift.io"
+	apiGroupMetal3 = "metal3.io"
+	apiVersionV1A1 = "v1alpha1"
+)
+
 // CRD type constants
 const (
 	CRDTypeProvisioningRequests   = "provisioningrequests"

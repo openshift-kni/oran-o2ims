@@ -170,7 +170,7 @@ func CompareObjects[T db.Model](a, b T, excluded ...string) DBTag {
 		}
 
 		switch {
-		case field.Type.Kind() != reflect.Ptr:
+		case field.Type.Kind() != reflect.Pointer:
 			// Non-pointer value compare them directly
 			if !reflect.DeepEqual(aFieldValue.Interface(), bFieldValue.Interface()) {
 				tags[fieldName] = tagValue

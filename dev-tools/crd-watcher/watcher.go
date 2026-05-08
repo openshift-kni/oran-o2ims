@@ -77,9 +77,9 @@ func NewCRDWatcher(clientset kubernetes.Interface, restConfig *rest.Config, sche
 	// Add inventory types if inventory module is enabled
 	if config.EnableInventory {
 		inventoryTypes := []string{
-			"inventory-resource-pools",
-			"inventory-resources",
-			"inventory-node-clusters",
+			CRDTypeInventoryResourcePools,
+			CRDTypeInventoryResources,
+			CRDTypeInventoryNodeClusters,
 		}
 		if config.EnableAlarms {
 			inventoryTypes = append(inventoryTypes, CRDTypeInventoryAlarms)
@@ -152,11 +152,11 @@ func (w *CRDWatcher) verifyResourceExists(event WatchEvent) bool {
 	defer cancel()
 
 	switch event.CRDType {
-	case "inventory-resources":
+	case CRDTypeInventoryResources:
 		return w.verifyInventoryResourceExists(ctx, event)
-	case "inventory-resource-pools":
+	case CRDTypeInventoryResourcePools:
 		return w.verifyInventoryResourcePoolExists(ctx, event)
-	case "inventory-node-clusters":
+	case CRDTypeInventoryNodeClusters:
 		return w.verifyInventoryNodeClusterExists(ctx, event)
 	case CRDTypeInventoryAlarms:
 		return true // Alarms are fully replaced on each refresh
@@ -494,7 +494,7 @@ func (w *CRDWatcher) listInventoryResources(ctx context.Context) ([]WatchEvent, 
 			Type:      watch.Added, // For listing, we treat all as "Added"
 			Object:    resource.ToRuntimeObject(),
 			Timestamp: time.Now(),
-			CRDType:   "inventory-resources",
+			CRDType:   CRDTypeInventoryResources,
 		}
 		events = append(events, event)
 	}
@@ -517,7 +517,7 @@ func (w *CRDWatcher) listInventoryResourcePools(ctx context.Context) ([]WatchEve
 			Type:      watch.Added, // For listing, we treat all as "Added"
 			Object:    resourcePool.ToRuntimeObject(),
 			Timestamp: time.Now(),
-			CRDType:   "inventory-resource-pools",
+			CRDType:   CRDTypeInventoryResourcePools,
 		}
 		events = append(events, event)
 	}
@@ -546,7 +546,7 @@ func (w *CRDWatcher) listInventoryNodeClusters(ctx context.Context) ([]WatchEven
 			Type:      watch.Added, // For listing, we treat all as "Added"
 			Object:    nodeCluster.ToRuntimeObject(),
 			Timestamp: time.Now(),
-			CRDType:   "inventory-node-clusters",
+			CRDType:   CRDTypeInventoryNodeClusters,
 		}
 		events = append(events, event)
 	}
@@ -630,7 +630,7 @@ func (w *CRDWatcher) fetchAndDisplayInventoryResourcePools(ctx context.Context) 
 			Type:      watch.Added,
 			Object:    resourcePool.ToRuntimeObject(),
 			Timestamp: time.Now(),
-			CRDType:   "inventory-resource-pools",
+			CRDType:   CRDTypeInventoryResourcePools,
 		}
 		if err := w.formatter.FormatEvent(event); err != nil {
 			klog.Errorf("Error formatting resource pool event: %v", err)
@@ -652,7 +652,7 @@ func (w *CRDWatcher) fetchAndDisplayInventoryResources(ctx context.Context) erro
 			Type:      watch.Added,
 			Object:    resource.ToRuntimeObject(),
 			Timestamp: time.Now(),
-			CRDType:   "inventory-resources",
+			CRDType:   CRDTypeInventoryResources,
 		}
 		if err := w.formatter.FormatEvent(event); err != nil {
 			klog.Errorf("Error formatting resource event: %v", err)
@@ -681,7 +681,7 @@ func (w *CRDWatcher) fetchAndDisplayInventoryNodeClusters(ctx context.Context) e
 			Type:      watch.Added,
 			Object:    nodeCluster.ToRuntimeObject(),
 			Timestamp: time.Now(),
-			CRDType:   "inventory-node-clusters",
+			CRDType:   CRDTypeInventoryNodeClusters,
 		}
 		if err := w.formatter.FormatEvent(event); err != nil {
 			klog.Errorf("Error formatting node cluster event: %v", err)
@@ -1019,7 +1019,7 @@ func (w *CRDWatcher) refreshInventoryResourcePools(ctx context.Context) error {
 			Type:      watch.Added, // Treat refreshed data as "Added" events
 			Object:    resourcePool.ToRuntimeObject(),
 			Timestamp: time.Now(),
-			CRDType:   "inventory-resource-pools",
+			CRDType:   CRDTypeInventoryResourcePools,
 		}
 		if err := w.formatter.FormatEvent(event); err != nil {
 			klog.Errorf("Error formatting refreshed resource pool event: %v", err)
@@ -1043,7 +1043,7 @@ func (w *CRDWatcher) refreshInventoryResources(ctx context.Context) error {
 			Type:      watch.Added, // Treat refreshed data as "Added" events
 			Object:    resource.ToRuntimeObject(),
 			Timestamp: time.Now(),
-			CRDType:   "inventory-resources",
+			CRDType:   CRDTypeInventoryResources,
 		}
 		if err := w.formatter.FormatEvent(event); err != nil {
 			klog.Errorf("Error formatting refreshed resource event: %v", err)
@@ -1072,7 +1072,7 @@ func (w *CRDWatcher) refreshInventoryNodeClusters(ctx context.Context) error {
 			Type:      watch.Added, // Treat refreshed data as "Added" events
 			Object:    nodeCluster.ToRuntimeObject(),
 			Timestamp: time.Now(),
-			CRDType:   "inventory-node-clusters",
+			CRDType:   CRDTypeInventoryNodeClusters,
 		}
 		if err := w.formatter.FormatEvent(event); err != nil {
 			klog.Errorf("Error formatting refreshed node cluster event: %v", err)
@@ -1414,38 +1414,38 @@ func (w *CRDWatcher) getGVRForCRDType(crdType string) (schema.GroupVersionResour
 	switch crdType {
 	case CRDTypeProvisioningRequests:
 		return schema.GroupVersionResource{
-			Group:    "clcm.openshift.io",
-			Version:  "v1alpha1",
+			Group:    apiGroupCLCM,
+			Version:  apiVersionV1A1,
 			Resource: CRDTypeProvisioningRequests,
 		}, nil
 	case CRDTypeNodeAllocationRequests:
 		return schema.GroupVersionResource{
-			Group:    "clcm.openshift.io",
-			Version:  "v1alpha1",
+			Group:    apiGroupCLCM,
+			Version:  apiVersionV1A1,
 			Resource: CRDTypeNodeAllocationRequests,
 		}, nil
 	case CRDTypeAllocatedNodes:
 		return schema.GroupVersionResource{
-			Group:    "clcm.openshift.io",
-			Version:  "v1alpha1",
+			Group:    apiGroupCLCM,
+			Version:  apiVersionV1A1,
 			Resource: CRDTypeAllocatedNodes,
 		}, nil
 	case CRDTypeBareMetalHosts:
 		return schema.GroupVersionResource{
-			Group:    "metal3.io",
-			Version:  "v1alpha1",
+			Group:    apiGroupMetal3,
+			Version:  apiVersionV1A1,
 			Resource: CRDTypeBareMetalHosts,
 		}, nil
 	case CRDTypeHostFirmwareComponents:
 		return schema.GroupVersionResource{
-			Group:    "metal3.io",
-			Version:  "v1alpha1",
+			Group:    apiGroupMetal3,
+			Version:  apiVersionV1A1,
 			Resource: CRDTypeHostFirmwareComponents,
 		}, nil
 	case CRDTypeHostFirmwareSettings:
 		return schema.GroupVersionResource{
-			Group:    "metal3.io",
-			Version:  "v1alpha1",
+			Group:    apiGroupMetal3,
+			Version:  apiVersionV1A1,
 			Resource: CRDTypeHostFirmwareSettings,
 		}, nil
 	default:

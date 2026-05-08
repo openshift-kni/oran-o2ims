@@ -194,7 +194,7 @@ func (c *AMClient) createAlertmanagerClient() (*http.Client, string, error) {
 	}
 
 	// Read token from service account token file
-	token, err := os.ReadFile(tokenPath)
+	token, err := os.ReadFile(tokenPath) //nolint:gosec // tokenPath is from a constant, not user input
 	if err != nil {
 		return nil, "", fmt.Errorf("error reading service account token: %w", err)
 	}
@@ -207,7 +207,7 @@ func (c *AMClient) createAlertmanagerClient() (*http.Client, string, error) {
 
 	// Read service CA certificate
 	// This is automatically mounted by Kubernetes for service-to-service TLS
-	caCrt, err := os.ReadFile(caPath)
+	caCrt, err := os.ReadFile(caPath) //nolint:gosec // caPath is from a constant/env var, not user input
 	if err != nil {
 		return nil, "", fmt.Errorf("error reading service CA certificate: %w", err)
 	}

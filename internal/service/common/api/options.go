@@ -112,7 +112,7 @@ func (o *FieldOptions) findFieldByName(v reflect.Type, depth int, fieldName stri
 			}
 			// Check nested objects
 			switch field.Type.Kind() {
-			case reflect.Ptr, reflect.Slice:
+			case reflect.Pointer, reflect.Slice:
 				ft := field.Type.Elem()
 				if ft.Kind() != reflect.Struct {
 					return fmt.Errorf("field %s cannot exist on a primitive data type", fieldName)
