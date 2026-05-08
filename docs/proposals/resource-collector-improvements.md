@@ -9,7 +9,7 @@ SPDX-License-Identifier: Apache-2.0
 ```yaml
 title: resource-collector-improvements
 authors:
-  - @dpenney
+  - @donpenney
 reviewers:
   - TBD
 approvers:
@@ -144,13 +144,23 @@ as the other four data sources.
 **Key design consideration:** The current `GetResources` function joins data
 across three CRD types (BMH + HardwareData + AllocatedNode) to build a
 complete `ResourceInfo`. With watches, a change to any one of these three
-CRDs needs to trigger a rebuild of the affected resource. The join logic
-needs to handle:
+CRDs needs to trigger a rebuild of the affected resource.
 
-- BMH created → look up HardwareData by name, check AllocatedNode mapping
-- HardwareData updated → find corresponding BMH, rebuild resource
-- AllocatedNode created/deleted → find corresponding BMH, update allocation
-  state
+The three CRDs are linked by naming conventions:
+
+- **BMH ↔ HardwareData**: HardwareData has the same name and namespace as
+  the corresponding BMH (1:1 relationship, created by the Metal3 Bare Metal
+  Operator).
+- **BMH ↔ AllocatedNode**: AllocatedNode references its BMH via
+  `spec.hwMgrNodeId` (BMH name) and `spec.hwMgrNodeNs` (BMH namespace).
+
+The join logic for watch events needs to handle:
+
+- BMH created/updated → look up HardwareData by same name/namespace,
+  look up AllocatedNode by `spec.hwMgrNodeId`/`spec.hwMgrNodeNs`
+- HardwareData updated → find corresponding BMH by same name/namespace
+- AllocatedNode created/deleted → find corresponding BMH via
+  `spec.hwMgrNodeId`/`spec.hwMgrNodeNs`, update allocation state
 
 **Approach options:**
 
@@ -185,7 +195,11 @@ Add TTL-based cleanup for the `data_change_event` outbox table:
 
 - Delete events older than a configurable retention period (default 7 days)
 - Implement as a periodic cleanup in the collector's main loop
-- Ensure the notifier's `event_cursor` tracking is not affected
+- To protect active subscribers, only delete events whose `sequence_id` is
+  older than the minimum `event_cursor` across all active subscriptions.
+  This ensures no subscriber misses events it has not yet processed. If no
+  subscriptions exist, all events older than the retention period can be
+  safely deleted.
 
 ### Phase 3: Additional Improvements (Optional)
 
