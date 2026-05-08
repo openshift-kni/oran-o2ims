@@ -200,6 +200,10 @@ Add TTL-based cleanup for the `data_change_event` outbox table:
   This ensures no subscriber misses events it has not yet processed. If no
   subscriptions exist, all events older than the retention period can be
   safely deleted.
+- To prevent a stuck or orphaned subscription from blocking cleanup
+  indefinitely, subscriptions that have not advanced their cursor beyond a
+  configurable staleness timeout should be excluded from the minimum cursor
+  calculation (or deactivated).
 
 ### Phase 3: Additional Improvements (Optional)
 
@@ -242,7 +246,7 @@ These are lower-priority items that can be addressed independently:
 | Risk | Mitigation |
 |---|---|
 | Watch disconnection loses events | K8s Reflector handles reconnection and re-list automatically |
-| Increased memory from watch caches | Reflector does not cache full objects — it uses a queue |
+| Increased memory from watch caches | The collector's custom `ReflectorStore` uses an operation queue rather than a full object cache (unlike the standard client-go Informer cache). Memory usage is proportional to the queue depth, not the total object count. |
 | Cross-reference lookups add latency | Single Get-by-name is <1ms on the local API server |
 | Stale data if watch lags | Generation ID sweep can be retained as a periodic consistency check |
 
