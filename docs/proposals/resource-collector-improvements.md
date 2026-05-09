@@ -221,9 +221,6 @@ Add TTL-based cleanup for the `data_change_event` outbox table:
 
 These are lower-priority items that can be addressed independently:
 
-- **Configurable poll interval**: If polling is retained as a fallback,
-  expose the interval as an environment variable.
-
 - **API pagination**: The inventory REST API endpoints (e.g.,
   `GET /resourcePools/{poolId}/resources`) currently load all matching
   records from the database and serialize them into a single JSON response.
@@ -260,7 +257,7 @@ These are lower-priority items that can be addressed independently:
 | Watch disconnection loses events | K8s Reflector handles reconnection and re-list automatically |
 | Increased memory from watch caches | The collector's custom `ReflectorStore` uses an operation queue rather than a full object cache (unlike the standard client-go Informer cache). Memory usage is proportional to the queue depth, not the total object count. |
 | Cross-reference lookups add latency | Single Get-by-name is <1ms on the local API server |
-| Stale data if watch lags | Generation ID sweep can be retained as a periodic consistency check |
+| Stale data if watch lags | K8s Reflector automatically re-lists on reconnection, which catches any missed events. If additional protection is needed, an infrequent (e.g., hourly) consistency check could be added as a separate mechanism. |
 
 ## Alternatives Considered
 
