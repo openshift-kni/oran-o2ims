@@ -206,7 +206,8 @@ code, along with the `pollingDelay` timer.
 Add TTL-based cleanup for the `data_change_event` outbox table:
 
 - Delete events older than a configurable retention period (default 7 days)
-- Implement as a periodic cleanup in the collector's main loop
+- Implement as a periodic goroutine (e.g., `time.Ticker`) in the collector,
+  independent of the watch event processing
 - To protect active subscribers, only delete events whose `sequence_id` is
   older than the minimum `event_cursor` across all active subscriptions.
   This ensures no subscriber misses events it has not yet processed. If no
