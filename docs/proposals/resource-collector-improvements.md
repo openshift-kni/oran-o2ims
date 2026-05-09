@@ -146,28 +146,39 @@ across three CRD types (BMH + HardwareData + AllocatedNode) to build a
 complete `ResourceInfo`. With watches, a change to any one of these three
 CRDs needs to trigger a rebuild of the affected resource.
 
-The three CRDs are linked by naming conventions:
+The CRDs are linked as follows:
 
 - **BMH ↔ HardwareData**: HardwareData has the same name and namespace as
   the corresponding BMH (1:1 relationship, created by the Metal3 Bare Metal
-  Operator).
+  Operator). HardwareData is currently not updated after creation (only
+  deleted and recreated on re-inspection), but we should still watch it
+  in case future BMO changes introduce updates.
 - **BMH ↔ AllocatedNode**: AllocatedNode references its BMH via
   `spec.hwMgrNodeId` (BMH name) and `spec.hwMgrNodeNs` (BMH namespace).
+  Additionally, the hardware manager attaches labels to the BMH when it is
+  allocated: `clcm.openshift.io/allocated: "true"` and
+  `clcm.openshift.io/allocated-node: <allocatedNode name>`. These labels
+  can be used for reverse lookups.
 
 The join logic for watch events needs to handle:
 
-- BMH created/updated → look up HardwareData by same name/namespace,
-  look up AllocatedNode by `spec.hwMgrNodeId`/`spec.hwMgrNodeNs`
-- HardwareData updated → find corresponding BMH by same name/namespace
-- AllocatedNode created/deleted → find corresponding BMH via
-  `spec.hwMgrNodeId`/`spec.hwMgrNodeNs`, update allocation state
+- **BMH watch**: On BMH create/update, look up HardwareData by same
+  name/namespace (for hardware details) and check allocation labels for
+  AllocatedNode association. BMH updates are infrequent in practice.
+- **HardwareData watch**: On HardwareData create (or delete/recreate during
+  re-inspection), find the corresponding BMH by same name/namespace and
+  rebuild the resource. Currently rare but future-proofs against BMO changes.
+- **AllocatedNode watch**: On AllocatedNode create/delete, find the
+  corresponding BMH via `spec.hwMgrNodeId`/`spec.hwMgrNodeNs` and update
+  the resource's allocation state. AllocatedNode is only updated during
+  day-2 operations or cluster deprovisioning.
 
 **Approach options:**
 
 1. **Three separate watches with cross-reference**: Watch each CRD
    independently. On any event, look up the related objects and rebuild the
-   full ResourceInfo. Simple to implement but may cause duplicate database
-   writes when multiple related CRDs change simultaneously.
+   full ResourceInfo. Simple to implement and consistent with the existing
+   Reflector pattern.
 
 2. **Single composite watch with debouncing**: Watch all three CRDs, queue
    events keyed by BMH name/namespace, and debounce with a short delay
@@ -176,18 +187,19 @@ The join logic for watch events needs to handle:
 
 3. **BMH-primary watch with lazy enrichment**: Watch only BMH changes.
    On each BMH event, fetch HardwareData and AllocatedNode data on demand.
-   Simplest approach but misses changes to HardwareData or AllocatedNode
-   that don't coincide with BMH changes.
+   Simplest approach but misses changes that don't coincide with BMH changes.
 
 **Recommendation:** Option 1 (three separate watches) is the simplest
-starting point and consistent with the existing Reflector pattern. The
-cross-reference lookups are cheap (single Get by name), and duplicate writes
-are handled by the existing change detection in `PersistObjectWithChangeEvent`.
+starting point. Updates are infrequent in practice (HardwareData is not
+currently updated after creation, AllocatedNode only changes during day-2
+or deprovisioning), and
+duplicate writes are handled by the existing change detection in
+`PersistObjectWithChangeEvent`.
 
 **Impact on polling loop:** Once HardwareDataSource implements
 `WatchableDataSource`, the `execute()` polling loop will have no
-`ResourceDataSource` instances to process. It can be simplified or
-removed, with the `pollingDelay` timer replaced by watch-driven events.
+`ResourceDataSource` instances to process and should be removed as dead
+code, along with the `pollingDelay` timer.
 
 ### Phase 2: Data Change Event Cleanup
 
