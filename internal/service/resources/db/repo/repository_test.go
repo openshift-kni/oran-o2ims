@@ -1129,71 +1129,101 @@ var _ = Describe("Extended ResourcesRepository coverage", func() {
 		})
 	})
 
-	Describe("FindStaleResources", func() {
-		It("should return resources below generation for data source", func() {
-			dsID := uuid.New()
+	Describe("GetResourcesNotIn", func() {
+		It("should return resources not in the given list", func() {
+			resID1 := uuid.New()
+			resID2 := uuid.New()
+			excludedResID := uuid.New()
+
+			rows := pgxmock.NewRows([]string{
+				"resource_id", "description", "resource_type_id", "global_asset_id", "resource_pool_id",
+				"extensions", "groups", "tags", "data_source_id", "generation_id", "external_id", "created_at",
+			}).AddRow(
+				resID1, "r1", uuid.New(), nil, uuid.New(),
+				nil, nil, nil, uuid.New(), 1, "ext-1", nil,
+			).AddRow(
+				resID2, "r2", uuid.New(), nil, uuid.New(),
+				nil, nil, nil, uuid.New(), 1, "ext-2", nil,
+			)
+
+			mock.ExpectQuery(`SELECT .* FROM resource WHERE .* NOT IN`).
+				WithArgs(excludedResID).
+				WillReturnRows(rows)
+
+			result, err := repository.GetResourcesNotIn(ctx, []any{excludedResID})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(HaveLen(2))
+			Expect(result[0].ResourceID).To(Equal(resID1))
+			Expect(result[1].ResourceID).To(Equal(resID2))
+			Expect(mock.ExpectationsWereMet()).To(Succeed())
+		})
+
+		It("should return all resources when keys list is empty", func() {
 			resID := uuid.New()
+
 			rows := pgxmock.NewRows([]string{
 				"resource_id", "description", "resource_type_id", "global_asset_id", "resource_pool_id",
 				"extensions", "groups", "tags", "data_source_id", "generation_id", "external_id", "created_at",
 			}).AddRow(
 				resID, "r1", uuid.New(), nil, uuid.New(),
-				nil, nil, nil, dsID, 0, "ext", nil,
+				nil, nil, nil, uuid.New(), 1, "ext-1", nil,
 			)
 
-			mock.ExpectQuery(`SELECT .* FROM resource WHERE`).
-				WithArgs(dsID, 5).
-				WillReturnRows(rows)
+			mock.ExpectQuery(`SELECT .* FROM resource`).WillReturnRows(rows)
 
-			result, err := repository.FindStaleResources(ctx, dsID, 5)
+			result, err := repository.GetResourcesNotIn(ctx, []any{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(HaveLen(1))
 			Expect(mock.ExpectationsWereMet()).To(Succeed())
 		})
 	})
 
-	Describe("FindStaleResourcePools", func() {
-		It("should return resource pools below generation for data source", func() {
-			dsID := uuid.New()
-			poolID := uuid.New()
-			siteID := uuid.New()
+	Describe("GetResourceTypesNotIn", func() {
+		It("should return resource types not in the given list", func() {
+			rtID1 := uuid.New()
+			rtID2 := uuid.New()
+			excludedRtID := uuid.New()
+
 			rows := pgxmock.NewRows([]string{
-				"resource_pool_id", "name", "description", "o_cloud_site_id",
-				"extensions", "data_source_id", "generation_id", "external_id", "created_at",
+				"resource_type_id", "name", "description", "vendor", "model", "version",
+				"resource_kind", "resource_class", "extensions", "data_source_id", "generation_id", "created_at",
 			}).AddRow(
-				poolID, "p1", "d", siteID,
-				nil, dsID, 0, "ext", nil,
+				rtID1, "rt1", "d1", "v1", "m1", "1",
+				string(models.ResourceKindPhysical), string(models.ResourceClassCompute),
+				nil, uuid.New(), 1, nil,
+			).AddRow(
+				rtID2, "rt2", "d2", "v2", "m2", "1",
+				string(models.ResourceKindPhysical), string(models.ResourceClassCompute),
+				nil, uuid.New(), 1, nil,
 			)
 
-			mock.ExpectQuery(`SELECT .* FROM resource_pool WHERE`).
-				WithArgs(dsID, 3).
+			mock.ExpectQuery(`SELECT .* FROM resource_type WHERE .* NOT IN`).
+				WithArgs(excludedRtID).
 				WillReturnRows(rows)
 
-			result, err := repository.FindStaleResourcePools(ctx, dsID, 3)
+			result, err := repository.GetResourceTypesNotIn(ctx, []any{excludedRtID})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(result).To(HaveLen(1))
+			Expect(result).To(HaveLen(2))
+			Expect(result[0].ResourceTypeID).To(Equal(rtID1))
+			Expect(result[1].ResourceTypeID).To(Equal(rtID2))
 			Expect(mock.ExpectationsWereMet()).To(Succeed())
 		})
-	})
 
-	Describe("FindStaleResourceTypes", func() {
-		It("should return resource types below generation for data source", func() {
-			dsID := uuid.New()
+		It("should return all resource types when keys list is empty", func() {
 			rtID := uuid.New()
+
 			rows := pgxmock.NewRows([]string{
 				"resource_type_id", "name", "description", "vendor", "model", "version",
 				"resource_kind", "resource_class", "extensions", "data_source_id", "generation_id", "created_at",
 			}).AddRow(
 				rtID, "rt1", "d", "v", "m", "1",
 				string(models.ResourceKindPhysical), string(models.ResourceClassCompute),
-				nil, dsID, 0, nil,
+				nil, uuid.New(), 1, nil,
 			)
 
-			mock.ExpectQuery(`SELECT .* FROM resource_type WHERE`).
-				WithArgs(dsID, 2).
-				WillReturnRows(rows)
+			mock.ExpectQuery(`SELECT .* FROM resource_type`).WillReturnRows(rows)
 
-			result, err := repository.FindStaleResourceTypes(ctx, dsID, 2)
+			result, err := repository.GetResourceTypesNotIn(ctx, []any{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(HaveLen(1))
 			Expect(mock.ExpectationsWereMet()).To(Succeed())

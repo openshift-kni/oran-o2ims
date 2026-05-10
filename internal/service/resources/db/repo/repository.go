@@ -91,6 +91,26 @@ func (r *ResourcesRepository) GetResourcePoolsNotIn(ctx context.Context, keys []
 	return svcutils.Search[models.ResourcePool](ctx, r.Db, e)
 }
 
+// GetResourcesNotIn returns the list of Resource records not matching the list of keys provided, or
+// an empty list if none exist; otherwise an error
+func (r *ResourcesRepository) GetResourcesNotIn(ctx context.Context, keys []any) ([]models.Resource, error) {
+	var e bob.Expression
+	if len(keys) > 0 {
+		e = psql.Quote(models.Resource{}.PrimaryKey()).NotIn(psql.Arg(keys...))
+	}
+	return svcutils.Search[models.Resource](ctx, r.Db, e)
+}
+
+// GetResourceTypesNotIn returns the list of ResourceType records not matching the list of keys provided, or
+// an empty list if none exist; otherwise an error
+func (r *ResourcesRepository) GetResourceTypesNotIn(ctx context.Context, keys []any) ([]models.ResourceType, error) {
+	var e bob.Expression
+	if len(keys) > 0 {
+		e = psql.Quote(models.ResourceType{}.PrimaryKey()).NotIn(psql.Arg(keys...))
+	}
+	return svcutils.Search[models.ResourceType](ctx, r.Db, e)
+}
+
 // GetResourcePoolResources retrieves all Resource tuples for a specific ResourcePool returns an empty array if not found
 func (r *ResourcesRepository) GetResourcePoolResources(ctx context.Context, id uuid.UUID) ([]models.Resource, error) {
 	e := psql.Quote("resource_pool_id").EQ(psql.Arg(id))
@@ -110,24 +130,6 @@ func (r *ResourcesRepository) CreateResource(ctx context.Context, resource *mode
 // UpdateResource updates a specific Resource tuple
 func (r *ResourcesRepository) UpdateResource(ctx context.Context, resource *models.Resource) (*models.Resource, error) {
 	return svcutils.Update[models.Resource](ctx, r.Db, resource.ResourceID, *resource)
-}
-
-// FindStaleResources returns any Resource objects that have a generation less than the specific generation
-func (r *ResourcesRepository) FindStaleResources(ctx context.Context, dataSourceID uuid.UUID, generationID int) ([]models.Resource, error) {
-	e := psql.Quote("data_source_id").EQ(psql.Arg(dataSourceID)).And(psql.Quote("generation_id").LT(psql.Arg(generationID)))
-	return svcutils.Search[models.Resource](ctx, r.Db, e)
-}
-
-// FindStaleResourcePools returns any ResourcePool objects that have a generation less than the specific generation
-func (r *ResourcesRepository) FindStaleResourcePools(ctx context.Context, dataSourceID uuid.UUID, generationID int) ([]models.ResourcePool, error) {
-	e := psql.Quote("data_source_id").EQ(psql.Arg(dataSourceID)).And(psql.Quote("generation_id").LT(psql.Arg(generationID)))
-	return svcutils.Search[models.ResourcePool](ctx, r.Db, e)
-}
-
-// FindStaleResourceTypes returns any ResourceType objects that have a generation less than the specific generation
-func (r *ResourcesRepository) FindStaleResourceTypes(ctx context.Context, dataSourceID uuid.UUID, generationID int) ([]models.ResourceType, error) {
-	e := psql.Quote("data_source_id").EQ(psql.Arg(dataSourceID)).And(psql.Quote("generation_id").LT(psql.Arg(generationID)))
-	return svcutils.Search[models.ResourceType](ctx, r.Db, e)
 }
 
 // GetOCloudSitesNotIn returns the list of OCloudSite records not matching the list of keys provided, or

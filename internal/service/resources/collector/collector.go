@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -28,8 +27,6 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/repo"
 )
 
-const pollingDelay = 1 * time.Minute
-
 // asyncEventBufferSize defines the number of buffered entries in the async event channel
 const asyncEventBufferSize = 10
 
@@ -44,16 +41,22 @@ type DataSource interface {
 	IncrGenerationID() int
 }
 
-// ResourceDataSource defines an interface of a data source capable of getting handling Inventory resources.
-type ResourceDataSource interface {
-	DataSource
-	GetResources(ctx context.Context) ([]models.Resource, error)
-	MakeResourceType(resource *models.Resource) (*models.ResourceType, error)
-}
-
 // WatchableDataSource defines an interface of a data source capable of watching for async events.
 type WatchableDataSource interface {
 	Watch(ctx context.Context) error
+}
+
+// ResourceWithType pairs a Resource with its corresponding ResourceType for
+// batch persistence operations.
+type ResourceWithType struct {
+	Resource     models.Resource
+	ResourceType models.ResourceType
+}
+
+// PoolChangeNotifier is implemented by data sources that need to re-evaluate
+// their resources when a ResourcePool is created or updated.
+type PoolChangeNotifier interface {
+	BuildResourcesForPool(ctx context.Context, poolName string) ([]ResourceWithType, error)
 }
 
 // NotificationHandler defines an interface over which notifications are published.
@@ -81,29 +84,23 @@ func NewCollector(pool *pgxpool.Pool, repo *repo.ResourcesRepository, notificati
 	}
 }
 
-// Run executes the collector main loop to gather data from external sources and writing to the database
+// Run executes the collector main loop to process watch events from all data sources
 func (c *Collector) Run(ctx context.Context) error {
 	if err := c.init(ctx); err != nil {
 		return err
 	}
 
-	// Start listening for async events
+	// Start listening for async events from all data sources
 	if err := c.watchForChanges(ctx); err != nil {
 		return fmt.Errorf("failed to start listeners: %w", err)
 	}
 
-	// Run the initial data collection
-	c.execute(ctx)
-
 	for {
 		select {
-		// TODO: Add hook for new data sources from watch events
 		case event := <-c.AsyncChangeEvents:
 			if err := c.handleAsyncEvent(ctx, event); err != nil {
 				slog.Error("failed to handle async change", "event", event, "error", err)
 			}
-		case <-time.After(pollingDelay):
-			c.execute(ctx)
 		case <-ctx.Done():
 			slog.Info("Context terminated; collector exiting")
 			return nil
@@ -168,35 +165,89 @@ func (c *Collector) watchForChanges(ctx context.Context) error {
 	return nil
 }
 
-// execute runs a single iteration of the main loop.  It does not return an error because all errors should be handled
-// gracefully.  If a truly unrecoverable error happens then a panic should be used to restart the process.
-func (c *Collector) execute(ctx context.Context) {
-	slog.Debug("collector loop running", "sources", len(c.dataSources))
+// handleAsyncResourceTypeEvent handles an async event for a ResourceType object.
+func (c *Collector) handleAsyncResourceTypeEvent(ctx context.Context, resourceType models.ResourceType, deleted bool) error {
+	var dataChangeEvent *models2.DataChangeEvent
+	var err error
 
-	for _, d := range c.dataSources {
-		rd, ok := d.(ResourceDataSource)
-		if !ok {
-			continue
+	if deleted {
+		dataChangeEvent, err = svcutils.DeleteObjectWithChangeEvent(
+			ctx, c.pool, resourceType, resourceType.ResourceTypeID, nil, func(object interface{}) any {
+				record, _ := object.(models.ResourceType)
+				return models.ResourceTypeToModel(&record, nil)
+			})
+		if err != nil {
+			return fmt.Errorf("failed to delete resource type '%s': %w", resourceType.ResourceTypeID, err)
 		}
+	} else {
+		alarmDictIDMap, mapErr := c.buildAlarmDictionaryIDMap(ctx)
+		if mapErr != nil {
+			slog.Warn("failed to fetch alarm dictionaries for resource type", "error", mapErr)
+			alarmDictIDMap = make(map[string]*uuid.UUID)
+		}
+		alarmDictID := alarmDictIDMap[resourceType.ResourceTypeID.String()]
 
-		d.IncrGenerationID()
-		slog.Debug("collecting data from data source", "source", d.Name(), "generationID", d.GetGenerationID())
-		if err := c.executeOneDataSource(ctx, rd); err != nil {
-			slog.Warn("failed to collect data from data source", "source", d.Name(), "error", err)
-		} else {
-			slog.Debug("collected data from data source", "source", d.Name())
+		dataChangeEvent, err = svcutils.PersistObjectWithChangeEvent(
+			ctx, c.pool, resourceType, resourceType.ResourceTypeID, nil, func(object interface{}) any {
+				record, _ := object.(models.ResourceType)
+				return models.ResourceTypeToModel(&record, alarmDictID)
+			})
+		if err != nil {
+			return fmt.Errorf("failed to persist resource type '%s': %w", resourceType.ResourceTypeID, err)
 		}
 	}
-	slog.Debug("collector loop complete", "sources", len(c.dataSources))
+
+	if dataChangeEvent != nil {
+		c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+	}
+
+	return nil
 }
 
-func (c *Collector) purgeStaleResources(ctx context.Context, dataSource DataSource) (int, error) {
-	resources, err := c.repository.FindStaleResources(ctx, dataSource.GetID(), dataSource.GetGenerationID())
-	if err != nil {
-		return 0, fmt.Errorf("failed to find stale resources: %w", err)
+// handleAsyncResourceEvent handles an async event for a Resource object.
+func (c *Collector) handleAsyncResourceEvent(ctx context.Context, resource models.Resource, deleted bool) error {
+	var dataChangeEvent *models2.DataChangeEvent
+	var err error
+
+	if deleted {
+		dataChangeEvent, err = svcutils.DeleteObjectWithChangeEvent(
+			ctx, c.pool, resource, resource.ResourceID, &resource.ResourcePoolID, func(object interface{}) any {
+				record, _ := object.(models.Resource)
+				return models.ResourceToModel(&record, nil)
+			})
+		if err != nil {
+			return fmt.Errorf("failed to delete resource '%s': %w", resource.ResourceID, err)
+		}
+	} else {
+		dataChangeEvent, err = svcutils.PersistObjectWithChangeEvent(
+			ctx, c.pool, resource, resource.ResourceID, &resource.ResourcePoolID, func(object interface{}) any {
+				record, _ := object.(models.Resource)
+				return models.ResourceToModel(&record, nil)
+			})
+		if err != nil {
+			return fmt.Errorf("failed to persist resource '%s': %w", resource.ResourceID, err)
+		}
 	}
 
-	count := 0
+	if dataChangeEvent != nil {
+		c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+	}
+
+	return nil
+}
+
+// handleResourceSyncCompletion handles the sync completion for Resource objects
+// by purging resources and resource types not in the key set.
+func (c *Collector) handleResourceSyncCompletion(ctx context.Context, ids []any) error {
+	slog.Debug("Handling end of sync for Resource instances", "count", len(ids))
+
+	// Purge stale resources
+	resources, err := c.repository.GetResourcesNotIn(ctx, ids)
+	if err != nil {
+		return fmt.Errorf("failed to get stale resources: %w", err)
+	}
+
+	resourceCount := 0
 	for _, resource := range resources {
 		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, resource, resource.ResourceID,
 			&resource.ResourcePoolID, func(object interface{}) any {
@@ -204,28 +255,26 @@ func (c *Collector) purgeStaleResources(ctx context.Context, dataSource DataSour
 				return models.ResourceToModel(&r, nil)
 			})
 		if err != nil {
-			return count, fmt.Errorf("failed to delete stale resource: %w", err)
+			return fmt.Errorf("failed to delete stale resource: %w", err)
 		}
 		if dataChangeEvent != nil {
-			count++
 			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+			resourceCount++
 		}
 	}
 
-	if count > 0 {
-		slog.Info("Purged stale resources", "count", count)
+	// Purge stale resource types
+	resourceTypeIDs := make([]any, 0)
+	for _, id := range ids {
+		resourceTypeIDs = append(resourceTypeIDs, id)
 	}
 
-	return count, nil
-}
-
-func (c *Collector) purgeStaleResourceTypes(ctx context.Context, dataSource DataSource) (int, error) {
-	resourceTypes, err := c.repository.FindStaleResourceTypes(ctx, dataSource.GetID(), dataSource.GetGenerationID())
+	resourceTypes, err := c.repository.GetResourceTypesNotIn(ctx, resourceTypeIDs)
 	if err != nil {
-		return 0, fmt.Errorf("failed to find stale resource types: %w", err)
+		return fmt.Errorf("failed to get stale resource types: %w", err)
 	}
 
-	count := 0
+	resourceTypeCount := 0
 	for _, resourceType := range resourceTypes {
 		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, resourceType, resourceType.ResourceTypeID,
 			nil, func(object interface{}) any {
@@ -233,142 +282,19 @@ func (c *Collector) purgeStaleResourceTypes(ctx context.Context, dataSource Data
 				return models.ResourceTypeToModel(&r, nil)
 			})
 		if err != nil {
-			return count, fmt.Errorf("failed to delete stale resource type: %w", err)
+			return fmt.Errorf("failed to delete stale resource type: %w", err)
 		}
 		if dataChangeEvent != nil {
-			count++
 			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+			resourceTypeCount++
 		}
 	}
 
-	if count > 0 {
-		slog.Info("Purged stale resource types", "count", count)
-	}
-
-	return count, nil
-}
-
-// purgeStaleData removes any records that have a generation id older than the generation id of the data source which
-// created it.
-func (c *Collector) purgeStaleData(ctx context.Context, dataSource DataSource) error {
-	slog.Info("Purging stale data", "source", dataSource.Name())
-
-	total := 0
-	count := 0
-
-	count, err := c.purgeStaleResources(ctx, dataSource)
-	if err != nil {
-		return fmt.Errorf("failed to purge stale resources': %w", err)
-	}
-	total += count
-
-	count, err = c.purgeStaleResourceTypes(ctx, dataSource)
-	if err != nil {
-		return fmt.Errorf("failed to purge stale resource types: %w", err)
-	}
-	total += count
-
-	slog.Info("Purged stale data", "source", dataSource.Name(), "count", total)
-
-	return nil
-}
-
-// executeOneDataSource runs a single iteration of the main loop for a specific data source instance.
-// Note: ResourcePools are now collected via CRD-based ResourcePoolDataSource (watch-based).
-func (c *Collector) executeOneDataSource(ctx context.Context, dataSource ResourceDataSource) (err error) {
-	// TODO: Add code to retrieve alarm dictionaries
-
-	// Get the list of resources for this data source
-	_, err = c.collectResources(ctx, dataSource)
-	if err != nil {
-		return fmt.Errorf("failed to collect resources: %w", err)
-	}
-
-	// Persist data source info
-	id := dataSource.GetID()
-	_, err = c.repository.UpdateDataSource(ctx, &models2.DataSource{
-		DataSourceID: &id,
-		Name:         dataSource.Name(),
-		GenerationID: dataSource.GetGenerationID(),
-	})
-	if err != nil {
-		return fmt.Errorf("failed to update data source %q: %w", dataSource.Name(), err)
-	}
-
-	err = c.purgeStaleData(ctx, dataSource)
-	if err != nil {
-		return fmt.Errorf("failed to purge stale data from '%s': %w", dataSource.Name(), err)
+	if resourceCount > 0 || resourceTypeCount > 0 {
+		slog.Info("Deleted stale records", "resources", resourceCount, "resourceTypes", resourceTypeCount)
 	}
 
 	return nil
-}
-
-// collectResources collects Resource objects from the data source, persists them to the database,
-// and signals any change events to the notification processor.
-func (c *Collector) collectResources(ctx context.Context, dataSource ResourceDataSource) ([]models.Resource, error) {
-	slog.Debug("collecting resource and types", "source", dataSource.Name())
-
-	resources, err := dataSource.GetResources(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get resources: %w", err)
-	}
-
-	// Fetch all alarm dictionaries and build a map of resource type ID -> alarm dictionary ID
-	alarmDictIDMap, err := c.buildAlarmDictionaryIDMap(ctx)
-	if err != nil {
-		slog.Warn("failed to fetch alarm dictionaries for notifications", "error", err)
-		// Continue without alarm dictionaries - notifications will have nil alarmDictionaryId
-		alarmDictIDMap = make(map[string]*uuid.UUID)
-	}
-
-	// Loop over the set of resources and create the associated resource types.
-	seen := make(map[uuid.UUID]bool)
-	for _, resource := range resources {
-		resourceType, err := dataSource.MakeResourceType(&resource)
-		if err != nil {
-			return nil, fmt.Errorf("failed to make resource type from '%v': %w", resource, err)
-		}
-
-		if seen[resourceType.ResourceTypeID] {
-			// We have already seen this one so skip
-			continue
-		}
-		seen[resourceType.ResourceTypeID] = true
-
-		// Capture alarm dictionary ID for this resource type (may be nil if not found)
-		alarmDictID := alarmDictIDMap[resourceType.ResourceTypeID.String()]
-
-		dataChangeEvent, err := svcutils.PersistObjectWithChangeEvent(
-			ctx, c.pool, *resourceType, resourceType.ResourceTypeID, nil, func(object interface{}) any {
-				record, _ := object.(models.ResourceType)
-				return models.ResourceTypeToModel(&record, alarmDictID)
-			})
-		if err != nil {
-			return nil, fmt.Errorf("failed to persist resource type': %w", err)
-		}
-
-		if dataChangeEvent != nil {
-			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
-		}
-	}
-
-	// Loop over the set of resources and insert (or update) as needed
-	for _, resource := range resources {
-		dataChangeEvent, err := svcutils.PersistObjectWithChangeEvent(
-			ctx, c.pool, resource, resource.ResourceID, &resource.ResourcePoolID, func(object interface{}) any {
-				record, _ := object.(models.Resource)
-				return models.ResourceToModel(&record, nil)
-			})
-		if err != nil {
-			return nil, fmt.Errorf("failed to persist resource: %w", err)
-		}
-
-		if dataChangeEvent != nil {
-			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
-		}
-	}
-
-	return resources, nil
 }
 
 // buildAlarmDictionaryIDMap fetches all alarm dictionaries and returns a map
@@ -443,6 +369,8 @@ func (c *Collector) handleSyncCompletion(ctx context.Context, objectType db.Mode
 		return c.handleOCloudSiteSyncCompletion(ctx, ids)
 	case models.ResourcePool:
 		return c.handleResourcePoolSyncCompletion(ctx, ids)
+	case models.Resource:
+		return c.handleResourceSyncCompletion(ctx, ids)
 	default:
 		return fmt.Errorf("unsupported sync completion type for '%T'", obj)
 	}
@@ -464,6 +392,10 @@ func (c *Collector) handleAsyncEvent(ctx context.Context, event *async.AsyncChan
 		return c.handleAsyncOCloudSiteEvent(ctx, value, event.EventType == async.Deleted)
 	case models.ResourcePool:
 		return c.handleAsyncResourcePoolEvent(ctx, value, event.EventType == async.Deleted)
+	case models.ResourceType:
+		return c.handleAsyncResourceTypeEvent(ctx, value, event.EventType == async.Deleted)
+	case models.Resource:
+		return c.handleAsyncResourceEvent(ctx, value, event.EventType == async.Deleted)
 	default:
 		return fmt.Errorf("unknown object type '%T'", event.Object)
 	}
@@ -693,6 +625,8 @@ func (c *Collector) handleAsyncResourcePoolEvent(ctx context.Context, pool model
 		if err != nil {
 			return fmt.Errorf("failed to persist ResourcePool '%s': %w", pool.ResourcePoolID, err)
 		}
+
+		c.rebuildResourcesForPool(ctx, pool.Name)
 	}
 
 	if dataChangeEvent != nil {
@@ -700,6 +634,39 @@ func (c *Collector) handleAsyncResourcePoolEvent(ctx context.Context, pool model
 	}
 
 	return nil
+}
+
+// rebuildResourcesForPool asks data sources to re-evaluate resources that
+// reference the given pool. This handles the case where BMH events arrive
+// before the ResourcePool CR exists.
+func (c *Collector) rebuildResourcesForPool(ctx context.Context, poolName string) {
+	for _, ds := range c.dataSources {
+		handler, ok := ds.(PoolChangeNotifier)
+		if !ok {
+			continue
+		}
+
+		results, err := handler.BuildResourcesForPool(ctx, poolName)
+		if err != nil {
+			slog.Error("failed to rebuild resources for pool", "pool", poolName, "error", err)
+			continue
+		}
+
+		for i := range results {
+			if err := c.handleAsyncResourceTypeEvent(ctx, results[i].ResourceType, false); err != nil {
+				slog.Error("failed to persist resource type during pool rebuild",
+					"pool", poolName, "error", err)
+			}
+			if err := c.handleAsyncResourceEvent(ctx, results[i].Resource, false); err != nil {
+				slog.Error("failed to persist resource during pool rebuild",
+					"pool", poolName, "error", err)
+			}
+		}
+
+		if len(results) > 0 {
+			slog.Info("Rebuilt resources for pool", "pool", poolName, "count", len(results))
+		}
+	}
 }
 
 // handleResourcePoolSyncCompletion handles the sync completion for ResourcePool objects.

@@ -142,7 +142,10 @@ func Serve(config *api.ResourceServerConfig) error {
 	}
 
 	// Create data sources
-	hardwareDS := collector.NewHardwareDataSource(hubClient, cloudID, globalCloudID)
+	hardwareDS, err := collector.NewHardwareDataSource(hubClient, cloudID, globalCloudID)
+	if err != nil {
+		return fmt.Errorf("failed to create hardware data source: %w", err)
+	}
 
 	locationDS, err := collector.NewLocationDataSource(cloudID, hubClient)
 	if err != nil {

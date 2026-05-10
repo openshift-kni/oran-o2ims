@@ -7,20 +7,15 @@ SPDX-License-Identifier: Apache-2.0
 package controller
 
 import (
-	"context"
 	"fmt"
-	"log/slog"
 	"regexp"
 	"slices"
 
 	"github.com/google/uuid"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
-	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/utils"
 )
 
 const (
@@ -193,7 +188,7 @@ func getResourceInfoResourceId(bmh *metal3v1alpha1.BareMetalHost) uuid.UUID {
 // getResourceInfoResourcePoolUID returns the Kubernetes UID of the ResourcePool CR.
 // It looks up the pool name from the BMH label and finds the corresponding UID from the map.
 // Returns empty string if the pool name is not found or doesn't exist in the map.
-func getResourceInfoResourcePoolUID(bmh *metal3v1alpha1.BareMetalHost, poolNameToUID map[string]string) string {
+func GetResourceInfoResourcePoolUID(bmh *metal3v1alpha1.BareMetalHost, poolNameToUID map[string]string) string {
 	poolName := bmh.Labels[constants.LabelResourcePoolName]
 	if poolName == "" {
 		return ""
@@ -361,7 +356,7 @@ func IsOCloudManaged(bmh *metal3v1alpha1.BareMetalHost) bool {
 	return hasRequiredLabel || hasResourceSelectorLabels
 }
 
-func includeInInventory(bmh *metal3v1alpha1.BareMetalHost) bool {
+func IncludeInInventory(bmh *metal3v1alpha1.BareMetalHost) bool {
 	if !IsOCloudManaged(bmh) {
 		// Ignore BMH CRs without the required labels
 		return false
@@ -379,7 +374,7 @@ func includeInInventory(bmh *metal3v1alpha1.BareMetalHost) bool {
 	return false
 }
 
-func getResourceInfo(bmh *metal3v1alpha1.BareMetalHost, node *hwmgmtv1alpha1.AllocatedNode, hwdata *metal3v1alpha1.HardwareData, poolNameToUID map[string]string) ResourceInfo {
+func GetResourceInfo(bmh *metal3v1alpha1.BareMetalHost, node *hwmgmtv1alpha1.AllocatedNode, hwdata *metal3v1alpha1.HardwareData, poolNameToUID map[string]string) ResourceInfo {
 	nics := getResourceInfoNics(bmh, hwdata)
 	storage := getResourceInfoStorage(hwdata)
 
@@ -398,7 +393,7 @@ func getResourceInfo(bmh *metal3v1alpha1.BareMetalHost, node *hwmgmtv1alpha1.All
 		PowerState:       getResourceInfoPowerState(bmh),
 		Processors:       getResourceInfoProcessors(hwdata),
 		ResourceId:       getResourceInfoResourceId(bmh),
-		ResourcePoolId:   uuid.MustParse(getResourceInfoResourcePoolUID(bmh, poolNameToUID)),
+		ResourcePoolId:   uuid.MustParse(GetResourceInfoResourcePoolUID(bmh, poolNameToUID)),
 		Tags:             getResourceInfoTags(bmh),
 		UsageState:       getResourceInfoUsageState(bmh),
 		Vendor:           getResourceInfoVendor(hwdata),
@@ -413,68 +408,4 @@ func getResourceInfo(bmh *metal3v1alpha1.BareMetalHost, node *hwmgmtv1alpha1.All
 	}
 
 	return result
-}
-
-func GetResources(ctx context.Context,
-	logger *slog.Logger,
-	c client.Client) ([]ResourceInfo, error) {
-	var resp []ResourceInfo
-
-	nodes, err := hwmgrutils.GetBMHToNodeMap(ctx, logger, c)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query current nodes: %w", err)
-	}
-
-	var bmhList metal3v1alpha1.BareMetalHostList
-	if err := c.List(ctx, &bmhList); err != nil {
-		return nil, fmt.Errorf("failed to list BareMetalHosts: %w", err)
-	}
-
-	var hwdataList metal3v1alpha1.HardwareDataList
-	if err := c.List(ctx, &hwdataList); err != nil {
-		return nil, fmt.Errorf("failed to list HardwareData: %w", err)
-	}
-
-	// Build map of ResourcePool name to UID for lookup
-	var poolList inventoryv1alpha1.ResourcePoolList
-	if err := c.List(ctx, &poolList); err != nil {
-		return nil, fmt.Errorf("failed to list ResourcePools: %w", err)
-	}
-	poolNameToUID := make(map[string]string, len(poolList.Items))
-	for _, pool := range poolList.Items {
-		if !inventoryv1alpha1.IsResourceReady(pool.Status.Conditions) {
-			logger.DebugContext(ctx, "skipping ResourcePool: not Ready",
-				slog.String("pool", pool.Name),
-				slog.String("reason", inventoryv1alpha1.GetReadyReason(pool.Status.Conditions)))
-			continue
-		}
-		poolNameToUID[pool.Name] = string(pool.UID)
-	}
-
-	bmhToHardwareData := make(map[string]metal3v1alpha1.HardwareData)
-	for _, hwdata := range hwdataList.Items {
-		bmhToHardwareData[hwdata.Namespace+"/"+hwdata.Name] = hwdata
-	}
-
-	for _, bmh := range bmhList.Items {
-		if !includeInInventory(&bmh) {
-			logger.DebugContext(ctx, "skipping BMH inventory resource: not included in inventory listing",
-				slog.String("bmh", bmh.Namespace+"/"+bmh.Name),
-				slog.Bool("oCloudManaged", IsOCloudManaged(&bmh)),
-				slog.String("provisioningState", string(bmh.Status.Provisioning.State)))
-			continue
-		}
-		poolUID := getResourceInfoResourcePoolUID(&bmh, poolNameToUID)
-		if poolUID == "" {
-			poolName := bmh.Labels[constants.LabelResourcePoolName]
-			logger.Debug("skipping BMH inventory resource: unresolved resourcePoolId",
-				slog.String("bmh", bmh.Namespace+"/"+bmh.Name),
-				slog.String("poolName", poolName))
-			continue
-		}
-		hwdata := bmhToHardwareData[bmh.Namespace+"/"+bmh.Name]
-		resp = append(resp, getResourceInfo(&bmh, hwmgrutils.GetNodeForBMH(nodes, &bmh), &hwdata, poolNameToUID))
-	}
-
-	return resp, nil
 }

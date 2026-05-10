@@ -22,7 +22,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
@@ -63,51 +62,6 @@ func GetNode(
 		return node, fmt.Errorf("failed to get AllocatedNode for update: %w", err)
 	}
 	return node, nil
-}
-
-// GetNodeList retrieves the node list
-func GetNodeList(ctx context.Context, c client.Client) (*hwmgmtv1alpha1.AllocatedNodeList, error) {
-
-	nodeList := &hwmgmtv1alpha1.AllocatedNodeList{}
-	if err := c.List(ctx, nodeList); err != nil {
-		return nodeList, fmt.Errorf("failed to list AllocatedNodes: %w", err)
-	}
-
-	return nodeList, nil
-}
-
-// GetBMHToNodeMap get a list of nodes, mapped to BMH namespace/name
-func GetBMHToNodeMap(ctx context.Context,
-	logger *slog.Logger,
-	c client.Client) (map[string]hwmgmtv1alpha1.AllocatedNode, error) {
-	nodes := make(map[string]hwmgmtv1alpha1.AllocatedNode)
-
-	nodelist, err := GetNodeList(ctx, c)
-	if err != nil {
-		logger.InfoContext(ctx, "Unable to query node list", slog.String("error", err.Error()))
-		return nodes, fmt.Errorf("failed to query node list: %w", err)
-	}
-
-	for _, node := range nodelist.Items {
-		bmhName := node.Spec.HwMgrNodeId
-		bmhNamespace := node.Spec.HwMgrNodeNs
-
-		if bmhName != "" && bmhNamespace != "" {
-			nodes[bmhNamespace+"/"+bmhName] = node
-		}
-	}
-
-	return nodes, nil
-}
-
-func GetNodeForBMH(nodes map[string]hwmgmtv1alpha1.AllocatedNode, bmh *metal3v1alpha1.BareMetalHost) *hwmgmtv1alpha1.AllocatedNode {
-	bmhName := bmh.Name
-	bmhNamespace := bmh.Namespace
-
-	if node, exists := nodes[bmhNamespace+"/"+bmhName]; exists {
-		return &node
-	}
-	return nil
 }
 
 // GenerateNodeName generates a deterministic AllocatedNode name based on the clusterID,
