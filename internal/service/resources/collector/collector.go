@@ -263,35 +263,8 @@ func (c *Collector) handleResourceSyncCompletion(ctx context.Context, ids []any)
 		}
 	}
 
-	// Purge stale resource types
-	resourceTypeIDs := make([]any, 0)
-	for _, id := range ids {
-		resourceTypeIDs = append(resourceTypeIDs, id)
-	}
-
-	resourceTypes, err := c.repository.GetResourceTypesNotIn(ctx, resourceTypeIDs)
-	if err != nil {
-		return fmt.Errorf("failed to get stale resource types: %w", err)
-	}
-
-	resourceTypeCount := 0
-	for _, resourceType := range resourceTypes {
-		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, resourceType, resourceType.ResourceTypeID,
-			nil, func(object interface{}) any {
-				r, _ := object.(models.ResourceType)
-				return models.ResourceTypeToModel(&r, nil)
-			})
-		if err != nil {
-			return fmt.Errorf("failed to delete stale resource type: %w", err)
-		}
-		if dataChangeEvent != nil {
-			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
-			resourceTypeCount++
-		}
-	}
-
-	if resourceCount > 0 || resourceTypeCount > 0 {
-		slog.Info("Deleted stale records", "resources", resourceCount, "resourceTypes", resourceTypeCount)
+	if resourceCount > 0 {
+		slog.Info("Deleted stale resources", "count", resourceCount)
 	}
 
 	return nil

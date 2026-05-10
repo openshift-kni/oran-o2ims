@@ -101,16 +101,6 @@ func (r *ResourcesRepository) GetResourcesNotIn(ctx context.Context, keys []any)
 	return svcutils.Search[models.Resource](ctx, r.Db, e)
 }
 
-// GetResourceTypesNotIn returns the list of ResourceType records not matching the list of keys provided, or
-// an empty list if none exist; otherwise an error
-func (r *ResourcesRepository) GetResourceTypesNotIn(ctx context.Context, keys []any) ([]models.ResourceType, error) {
-	var e bob.Expression
-	if len(keys) > 0 {
-		e = psql.Quote(models.ResourceType{}.PrimaryKey()).NotIn(psql.Arg(keys...))
-	}
-	return svcutils.Search[models.ResourceType](ctx, r.Db, e)
-}
-
 // GetResourcePoolResources retrieves all Resource tuples for a specific ResourcePool returns an empty array if not found
 func (r *ResourcesRepository) GetResourcePoolResources(ctx context.Context, id uuid.UUID) ([]models.Resource, error) {
 	e := psql.Quote("resource_pool_id").EQ(psql.Arg(id))

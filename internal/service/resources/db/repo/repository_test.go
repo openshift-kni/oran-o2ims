@@ -1178,58 +1178,6 @@ var _ = Describe("Extended ResourcesRepository coverage", func() {
 		})
 	})
 
-	Describe("GetResourceTypesNotIn", func() {
-		It("should return resource types not in the given list", func() {
-			rtID1 := uuid.New()
-			rtID2 := uuid.New()
-			excludedRtID := uuid.New()
-
-			rows := pgxmock.NewRows([]string{
-				"resource_type_id", "name", "description", "vendor", "model", "version",
-				"resource_kind", "resource_class", "extensions", "data_source_id", "generation_id", "created_at",
-			}).AddRow(
-				rtID1, "rt1", "d1", "v1", "m1", "1",
-				string(models.ResourceKindPhysical), string(models.ResourceClassCompute),
-				nil, uuid.New(), 1, nil,
-			).AddRow(
-				rtID2, "rt2", "d2", "v2", "m2", "1",
-				string(models.ResourceKindPhysical), string(models.ResourceClassCompute),
-				nil, uuid.New(), 1, nil,
-			)
-
-			mock.ExpectQuery(`SELECT .* FROM resource_type WHERE .* NOT IN`).
-				WithArgs(excludedRtID).
-				WillReturnRows(rows)
-
-			result, err := repository.GetResourceTypesNotIn(ctx, []any{excludedRtID})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(result).To(HaveLen(2))
-			Expect(result[0].ResourceTypeID).To(Equal(rtID1))
-			Expect(result[1].ResourceTypeID).To(Equal(rtID2))
-			Expect(mock.ExpectationsWereMet()).To(Succeed())
-		})
-
-		It("should return all resource types when keys list is empty", func() {
-			rtID := uuid.New()
-
-			rows := pgxmock.NewRows([]string{
-				"resource_type_id", "name", "description", "vendor", "model", "version",
-				"resource_kind", "resource_class", "extensions", "data_source_id", "generation_id", "created_at",
-			}).AddRow(
-				rtID, "rt1", "d", "v", "m", "1",
-				string(models.ResourceKindPhysical), string(models.ResourceClassCompute),
-				nil, uuid.New(), 1, nil,
-			)
-
-			mock.ExpectQuery(`SELECT .* FROM resource_type`).WillReturnRows(rows)
-
-			result, err := repository.GetResourceTypesNotIn(ctx, []any{})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(result).To(HaveLen(1))
-			Expect(mock.ExpectationsWereMet()).To(Succeed())
-		})
-	})
-
 	Describe("GetAlarmDictionaries", func() {
 		It("should return all alarm dictionaries", func() {
 			adID := uuid.New()

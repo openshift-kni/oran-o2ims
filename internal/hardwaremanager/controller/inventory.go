@@ -374,6 +374,13 @@ func IncludeInInventory(bmh *metal3v1alpha1.BareMetalHost) bool {
 	return false
 }
 
+func parseUUIDOrNil(s string) uuid.UUID {
+	if s == "" {
+		return uuid.Nil
+	}
+	return uuid.MustParse(s)
+}
+
 func GetResourceInfo(bmh *metal3v1alpha1.BareMetalHost, node *hwmgmtv1alpha1.AllocatedNode, hwdata *metal3v1alpha1.HardwareData, poolNameToUID map[string]string) ResourceInfo {
 	nics := getResourceInfoNics(bmh, hwdata)
 	storage := getResourceInfoStorage(hwdata)
@@ -393,7 +400,7 @@ func GetResourceInfo(bmh *metal3v1alpha1.BareMetalHost, node *hwmgmtv1alpha1.All
 		PowerState:       getResourceInfoPowerState(bmh),
 		Processors:       getResourceInfoProcessors(hwdata),
 		ResourceId:       getResourceInfoResourceId(bmh),
-		ResourcePoolId:   uuid.MustParse(GetResourceInfoResourcePoolUID(bmh, poolNameToUID)),
+		ResourcePoolId:   parseUUIDOrNil(GetResourceInfoResourcePoolUID(bmh, poolNameToUID)),
 		Tags:             getResourceInfoTags(bmh),
 		UsageState:       getResourceInfoUsageState(bmh),
 		Vendor:           getResourceInfoVendor(hwdata),
