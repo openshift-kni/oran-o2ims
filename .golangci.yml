@@ -133,7 +133,7 @@ linters:
         - .WrapPrefixf(
     goconst:
       min-occurrences: 5
-      ignore-string-values: 'get|list|watch|create|update|patch|delete|app|name|master|worker|role|macAddress|nodes|interfaces|label|extraAnnotations|extraLabels|nodeNetwork|apiextensions\.k8s\.io|CustomResourceDefinition|default|true'
+      ignore-string-values: '^(get|list|watch|create|update|patch|delete|app|name|namespace|master|worker|role|macAddress|nodes|interfaces|label|extraAnnotations|extraLabels|nodeNetwork|apiextensions\.k8s\.io|CustomResourceDefinition|default|true|agent-install\.openshift\.io/clusterdeployment-namespace)$'
   exclusions:
     generated: lax
     presets:
@@ -145,7 +145,7 @@ linters:
       - linters: [goconst]
         path: _test\.go$
       - linters: [goconst]
-        path: test/
+        path: (^|/)test/
       - linters: [goconst]
         path: internal/service/.*/api/server\.go$
       - linters: [gosec]
