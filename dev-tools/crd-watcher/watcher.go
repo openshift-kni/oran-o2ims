@@ -158,6 +158,8 @@ func (w *CRDWatcher) verifyResourceExists(event WatchEvent) bool {
 		return w.verifyInventoryResourcePoolExists(ctx, event)
 	case "inventory-node-clusters":
 		return w.verifyInventoryNodeClusterExists(ctx, event)
+	case CRDTypeInventoryAlarms:
+		return true // Alarms are fully replaced on each refresh
 	default:
 		// For Kubernetes CRDs, use the dynamic client
 		return w.verifyKubernetesResourceExists(ctx, event)
