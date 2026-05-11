@@ -42,6 +42,7 @@ const (
 	CRDTypeInventoryResources     = "inventory-resources"
 	CRDTypeInventoryResourcePools = "inventory-resource-pools"
 	CRDTypeInventoryNodeClusters  = "inventory-node-clusters"
+	CRDTypeInventoryAlarms        = "inventory-alarms"
 )
 
 // Common string constants

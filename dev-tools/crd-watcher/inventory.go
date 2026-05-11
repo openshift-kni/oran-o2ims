@@ -114,6 +114,22 @@ type NodeCluster struct {
 	Extensions        map[string]interface{} `json:"extensions"`
 }
 
+// AlarmRecord represents an alarm event record from the monitoring API
+type AlarmRecord struct {
+	AlarmEventRecordID string            `json:"alarmEventRecordId"`
+	AlarmRaisedTime    time.Time         `json:"alarmRaisedTime"`
+	AlarmChangedTime   *time.Time        `json:"alarmChangedTime,omitempty"`
+	AlarmClearedTime   *time.Time        `json:"alarmClearedTime,omitempty"`
+	AlarmAcknowledged  bool              `json:"alarmAcknowledged"`
+	PerceivedSeverity  int               `json:"perceivedSeverity"`
+	Extensions         map[string]string `json:"extensions"`
+}
+
+// ToRuntimeObject converts an AlarmRecord to a runtime.Object for use with formatters
+func (a *AlarmRecord) ToRuntimeObject() runtime.Object {
+	return &AlarmObject{Alarm: *a}
+}
+
 // GetSite extracts site information from the resource pool
 func (rp *ResourcePool) GetSite() string {
 	// Try to get site from extensions
@@ -552,6 +568,41 @@ func (c *InventoryClient) GetNodeClusters(ctx context.Context) ([]NodeCluster, e
 	return clusters, nil
 }
 
+// GetAlarms fetches all alarms from the monitoring API
+func (c *InventoryClient) GetAlarms(ctx context.Context) ([]AlarmRecord, error) {
+	klog.V(2).Info("Fetching alarms from monitoring API")
+
+	monitoringBaseURL := strings.Replace(c.baseURL, constants.O2IMSInventoryBaseURL, constants.O2IMSMonitoringBaseURL, 1)
+	url := monitoringBaseURL + "/alarms"
+
+	resp, err := c.retryHTTPRequest(ctx, func() (*http.Response, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+		return c.httpClient.Do(req)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %w", err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			klog.V(2).Infof("Failed to close response body: %v", closeErr)
+		}
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("monitoring API returned status %d", resp.StatusCode)
+	}
+
+	var alarms []AlarmRecord
+	if err := json.NewDecoder(resp.Body).Decode(&alarms); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return alarms, nil
+}
+
 // GetResources fetches all resources from a specific resource pool
 func (c *InventoryClient) GetResources(ctx context.Context, resourcePoolID string) ([]InventoryResource, error) {
 	klog.V(2).Infof("Fetching resources from resource pool: %s", resourcePoolID)
@@ -752,5 +803,35 @@ func (k *NodeClusterObjectKind) GroupVersionKind() schema.GroupVersionKind {
 		Group:   "inventory.o2ims.io",
 		Version: "v1",
 		Kind:    "NodeCluster",
+	}
+}
+
+// AlarmObject is a runtime.Object wrapper for AlarmRecord
+type AlarmObject struct {
+	Alarm AlarmRecord
+}
+
+// DeepCopyObject implements runtime.Object
+func (o *AlarmObject) DeepCopyObject() runtime.Object {
+	return &AlarmObject{Alarm: o.Alarm}
+}
+
+// GetObjectKind implements runtime.Object
+func (o *AlarmObject) GetObjectKind() schema.ObjectKind {
+	return &AlarmObjectKind{}
+}
+
+// AlarmObjectKind implements schema.ObjectKind for alarm records
+type AlarmObjectKind struct{}
+
+// SetGroupVersionKind implements schema.ObjectKind
+func (k *AlarmObjectKind) SetGroupVersionKind(gvk schema.GroupVersionKind) {}
+
+// GroupVersionKind implements schema.ObjectKind
+func (k *AlarmObjectKind) GroupVersionKind() schema.GroupVersionKind {
+	return schema.GroupVersionKind{
+		Group:   "monitoring.o2ims.io",
+		Version: "v1",
+		Kind:    "AlarmEventRecord",
 	}
 }

@@ -354,6 +354,10 @@ func (t *TUIFormatter) getResourceKey(event WatchEvent) string {
 		if nco, ok := event.Object.(*NodeClusterObject); ok && nco != nil {
 			return fmt.Sprintf("%s/%s", event.CRDType, nco.NodeCluster.Name)
 		}
+	case CRDTypeInventoryAlarms:
+		if ao, ok := event.Object.(*AlarmObject); ok && ao != nil {
+			return fmt.Sprintf("%s/%s", event.CRDType, ao.Alarm.AlarmEventRecordID)
+		}
 	}
 
 	// For standard Kubernetes resources, use name and namespace
@@ -441,7 +445,8 @@ func (t *TUIFormatter) cleanupStaleInventoryObjects() {
 		// Only verify inventory objects during inventory refresh
 		if event.CRDType == "inventory-resources" ||
 			event.CRDType == "inventory-resource-pools" ||
-			event.CRDType == "inventory-node-clusters" {
+			event.CRDType == "inventory-node-clusters" ||
+			event.CRDType == CRDTypeInventoryAlarms {
 
 			resourceKey := t.getResourceKey(event)
 			klog.V(3).Infof("Verifying inventory object existence: %s", resourceKey)
@@ -703,6 +708,7 @@ func (t *TUIFormatter) formatCRDHeader(crdType string) string {
 		CRDTypeInventoryResourcePools: "O-RAN Resource Pools",
 		CRDTypeInventoryResources:     "O-RAN Resources",
 		CRDTypeInventoryNodeClusters:  "O-RAN Nodes",
+		CRDTypeInventoryAlarms:        "O-RAN Alarms",
 	}
 
 	// Use the mapped header or fall back to the original crdType
@@ -801,6 +807,17 @@ func (t *TUIFormatter) compareEvents(crdType string, a, b WatchEvent) bool {
 		nameA := t.getInventoryNodeClusterName(a.Object)
 		nameB := t.getInventoryNodeClusterName(b.Object)
 		return nameA < nameB
+	case CRDTypeInventoryAlarms:
+		// Sort by severity (most severe first), then raised time (most recent first)
+		aoA, okA := a.Object.(*AlarmObject)
+		aoB, okB := b.Object.(*AlarmObject)
+		if okA && okB {
+			if aoA.Alarm.PerceivedSeverity != aoB.Alarm.PerceivedSeverity {
+				return aoA.Alarm.PerceivedSeverity < aoB.Alarm.PerceivedSeverity
+			}
+			return aoA.Alarm.AlarmRaisedTime.After(aoB.Alarm.AlarmRaisedTime)
+		}
+		return false
 	default:
 		// Default to sorting by name with nil safety
 		accessor1, _ := meta.Accessor(a.Object)
@@ -903,6 +920,7 @@ func (t *TUIFormatter) getOrderedCRDTypes(grouped map[string][]WatchEvent) []str
 		CRDTypeInventoryResourcePools,
 		CRDTypeInventoryResources,
 		CRDTypeInventoryNodeClusters,
+		CRDTypeInventoryAlarms,
 	}
 
 	var result []string
@@ -1036,6 +1054,13 @@ func (t *TUIFormatter) initializeHeaderWidths(crdType string) FieldWidths {
 		widths.Field1 = safeMax(widths.Field1, len("NODE-NAME"))
 		widths.Field2 = safeMax(widths.Field2, len("NODE-CLUSTER-ID"))
 		widths.Field3 = safeMax(widths.Field3, len("NODE-CLUSTER-TYPE-ID"))
+	case CRDTypeInventoryAlarms:
+		widths.Field1 = safeMax(widths.Field1, len("SEVERITY"))
+		widths.Field2 = safeMax(widths.Field2, len("ALERT"))
+		widths.Field3 = safeMax(widths.Field3, len("CLUSTER"))
+		widths.Field4 = safeMax(widths.Field4, len("STATUS"))
+		widths.Field5 = safeMax(widths.Field5, len("ACK"))
+		widths.Field6 = safeMax(widths.Field6, len("RAISED"))
 	}
 
 	return widths
@@ -1494,6 +1519,8 @@ func (t *TUIFormatter) calculateFieldWidths(crdType string, events []WatchEvent)
 		widths = t.calculateInventoryResourcePoolWidths(events, widths)
 	case CRDTypeInventoryNodeClusters:
 		widths = t.calculateInventoryNodeClusterWidths(events, widths)
+	case CRDTypeInventoryAlarms:
+		widths = t.calculateAlarmWidths(events, widths)
 	}
 
 	// Apply reasonable maximum widths to prevent overly wide columns
@@ -1541,6 +1568,10 @@ func (t *TUIFormatter) buildCRDTableHeader(crdType string, widths FieldWidths, s
 	case CRDTypeInventoryNodeClusters:
 		sb.WriteString(fmt.Sprintf("%s %-*s   %-*s   %-*s\n",
 			sidebarChar, widths.Field1, "NODE-NAME", widths.Field2, "NODE-CLUSTER-ID", widths.Field3, "NODE-CLUSTER-TYPE-ID"))
+	case CRDTypeInventoryAlarms:
+		sb.WriteString(fmt.Sprintf("%s %-*s   %-*s   %-*s   %-*s   %-*s   %-*s\n",
+			sidebarChar, widths.Field1, "SEVERITY", widths.Field2, "ALERT", widths.Field3, "CLUSTER",
+			widths.Field4, "STATUS", widths.Field5, "ACK", widths.Field6, "RAISED"))
 	}
 }
 
@@ -1573,6 +1604,8 @@ func (t *TUIFormatter) buildEventLine(event WatchEvent, widths FieldWidths, sb *
 		t.buildInventoryResourcePoolLine(age, event.Object, widths, sb)
 	case CRDTypeInventoryNodeClusters:
 		t.buildInventoryNodeClusterLine(age, event.Object, widths, sb)
+	case CRDTypeInventoryAlarms:
+		t.buildAlarmLine(event.Object, widths, sb)
 	}
 }
 
@@ -2068,4 +2101,96 @@ func (t *TUIFormatter) resetRefreshTimer() {
 		t.refreshTimer.Stop()
 	}
 	t.startRefreshTimer()
+}
+
+func severityToString(severity int) string {
+	switch severity {
+	case 0:
+		return "CRITICAL"
+	case 1:
+		return "MAJOR"
+	case 2:
+		return "MINOR"
+	case 3:
+		return "WARNING"
+	case 4:
+		return "INDETERM"
+	case 5:
+		return "CLEARED"
+	default:
+		return StringUnknown
+	}
+}
+
+func severityColor(severity int) string {
+	switch severity {
+	case 0:
+		return ansiRed
+	case 1:
+		return ansiYellow
+	case 5:
+		return ansiGreen
+	default:
+		return ""
+	}
+}
+
+func (t *TUIFormatter) calculateAlarmWidths(events []WatchEvent, widths FieldWidths) FieldWidths {
+	for _, event := range events {
+		ao, ok := event.Object.(*AlarmObject)
+		if !ok {
+			continue
+		}
+
+		widths.Field1 = safeMax(widths.Field1, len(severityToString(ao.Alarm.PerceivedSeverity)))
+		widths.Field2 = safeMax(widths.Field2, len(ao.Alarm.Extensions["alertname"]))
+		widths.Field3 = safeMax(widths.Field3, len(ao.Alarm.Extensions["managed_cluster"]))
+
+		status := "Firing"
+		if ao.Alarm.AlarmClearedTime != nil {
+			status = "Cleared"
+		}
+		widths.Field4 = safeMax(widths.Field4, len(status))
+		widths.Field5 = safeMax(widths.Field5, 3) // Y/N
+		widths.Field6 = safeMax(widths.Field6, len(ao.Alarm.AlarmRaisedTime.Format("2006-01-02 15:04:05")))
+	}
+	return widths
+}
+
+func (t *TUIFormatter) buildAlarmLine(obj runtime.Object, widths FieldWidths, sb *strings.Builder) {
+	ao, ok := obj.(*AlarmObject)
+	if !ok {
+		return
+	}
+
+	sidebarChar := t.getSidebarChar()
+	alarm := ao.Alarm
+
+	severity := severityToString(alarm.PerceivedSeverity)
+	color := severityColor(alarm.PerceivedSeverity)
+	resetColor := ""
+	if color != "" {
+		resetColor = ansiReset
+	}
+
+	alertName := alarm.Extensions["alertname"]
+	cluster := alarm.Extensions["managed_cluster"]
+	status := "Firing"
+	if alarm.AlarmClearedTime != nil {
+		status = "Cleared"
+	}
+	ack := StringNo
+	if alarm.AlarmAcknowledged {
+		ack = StringYes
+	}
+	raised := alarm.AlarmRaisedTime.Format("2006-01-02 15:04:05")
+
+	sb.WriteString(fmt.Sprintf("%s %s%-*s%s   %-*s   %-*s   %-*s   %-*s   %-*s\n",
+		sidebarChar,
+		color, widths.Field1, severity, resetColor,
+		widths.Field2, alertName,
+		widths.Field3, cluster,
+		widths.Field4, status,
+		widths.Field5, ack,
+		widths.Field6, raised))
 }
