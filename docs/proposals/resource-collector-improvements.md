@@ -201,6 +201,10 @@ duplicate writes are handled by the existing change detection in
 `ResourceDataSource` instances to process and should be removed as dead
 code, along with the `pollingDelay` timer.
 
+**Documentation updates:** User-facing documentation that references the
+60-second polling interval (e.g., `server-onboarding.md`,
+`inventory-api.md`) must be updated to reflect the watch-based collection.
+
 ### Phase 2: Data Change Event Cleanup
 
 Add TTL-based cleanup for the `data_change_event` outbox table:
