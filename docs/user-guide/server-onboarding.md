@@ -556,13 +556,9 @@ After the collector processes the CRs, verify via the Inventory API.
 
 > **Note**: Data collection timing differs by resource type:
 >
-> | Resource Type | Collection Method | Timing |
-> |---------------|-------------------|--------|
-> | Locations, OCloudSites, ResourcePools | Watch-based | Nearly immediate |
-> | Resources (BareMetalHosts) | Polling-based | Up to 1 minute (default interval) |
->
-> The Resources endpoint data is polled every minute. If a newly labeled BMH
-> does not appear immediately, wait for the next polling cycle.
+> All inventory data (Locations, OCloudSites, ResourcePools, and Resources)
+> is collected via K8s watches and reflected in the API within seconds of
+> the underlying CR change.
 
 First, set up authentication (see
 [Testing API endpoints](environment-setup.md#testing-api-endpoints-on-a-cluster)

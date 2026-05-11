@@ -162,8 +162,8 @@ curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
 ## Resources
 
 Resources represent individual physical servers (BareMetalHosts) within a
-resource pool. Resource data is collected by polling the hardware manager on
-a configurable interval (default: 1 minute).
+resource pool. Resource data is collected via K8s watches on BareMetalHost,
+HardwareData, and AllocatedNode CRs and reflected in the API within seconds.
 
 Resources are accessed as sub-resources of a resource pool.
 
@@ -171,8 +171,7 @@ Resources are accessed as sub-resources of a resource pool.
 > A BMH will only appear in the Resources API if it has a
 > `resources.clcm.openshift.io/resourcePoolName` label and has completed
 > hardware inspection (i.e., it has reached the `available` provisioning
-> state or later). Resource data is polled every minute, so newly labeled
-> or newly inspected BMHs may take up to 1 minute to appear.
+> state or later).
 
 ### List Resources in a Resource Pool
 
