@@ -1146,7 +1146,7 @@ var _ = Describe("Extended ResourcesRepository coverage", func() {
 				nil, nil, nil, uuid.New(), 1, "ext-2", nil,
 			)
 
-			mock.ExpectQuery(`SELECT .* FROM resource WHERE .* NOT IN`).
+			mock.ExpectQuery(`SELECT .* FROM resource WHERE .*resource_id.* NOT IN`).
 				WithArgs(excludedResID).
 				WillReturnRows(rows)
 

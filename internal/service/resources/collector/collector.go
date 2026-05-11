@@ -71,6 +71,7 @@ type Collector struct {
 	repository          *repo.ResourcesRepository
 	dataSources         []DataSource
 	AsyncChangeEvents   chan *async.AsyncChangeEvent
+	alarmDictCache      map[string]*uuid.UUID
 }
 
 // NewCollector creates a new collector instance
@@ -180,12 +181,7 @@ func (c *Collector) handleAsyncResourceTypeEvent(ctx context.Context, resourceTy
 			return fmt.Errorf("failed to delete resource type '%s': %w", resourceType.ResourceTypeID, err)
 		}
 	} else {
-		alarmDictIDMap, mapErr := c.buildAlarmDictionaryIDMap(ctx)
-		if mapErr != nil {
-			slog.Warn("failed to fetch alarm dictionaries for resource type", "error", mapErr)
-			alarmDictIDMap = make(map[string]*uuid.UUID)
-		}
-		alarmDictID := alarmDictIDMap[resourceType.ResourceTypeID.String()]
+		alarmDictID := c.getAlarmDictionaryID(ctx, resourceType.ResourceTypeID)
 
 		dataChangeEvent, err = svcutils.PersistObjectWithChangeEvent(
 			ctx, c.pool, resourceType, resourceType.ResourceTypeID, nil, func(object interface{}) any {
@@ -240,6 +236,7 @@ func (c *Collector) handleAsyncResourceEvent(ctx context.Context, resource model
 // by purging resources and resource types not in the key set.
 func (c *Collector) handleResourceSyncCompletion(ctx context.Context, ids []any) error {
 	slog.Debug("Handling end of sync for Resource instances", "count", len(ids))
+	c.invalidateAlarmDictCache()
 
 	// Purge stale resources
 	resources, err := c.repository.GetResourcesNotIn(ctx, ids)
@@ -270,21 +267,28 @@ func (c *Collector) handleResourceSyncCompletion(ctx context.Context, ids []any)
 	return nil
 }
 
-// buildAlarmDictionaryIDMap fetches all alarm dictionaries and returns a map
-// of resource type ID -> alarm dictionary ID for efficient lookup.
-func (c *Collector) buildAlarmDictionaryIDMap(ctx context.Context) (map[string]*uuid.UUID, error) {
-	alarmDictionaries, err := c.repository.GetAlarmDictionaries(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get alarm dictionaries: %w", err)
+// getAlarmDictionaryID returns the alarm dictionary ID for a given resource
+// type, using a cached map to avoid repeated database queries.
+func (c *Collector) getAlarmDictionaryID(ctx context.Context, resourceTypeID uuid.UUID) *uuid.UUID {
+	if c.alarmDictCache == nil {
+		alarmDictionaries, err := c.repository.GetAlarmDictionaries(ctx)
+		if err != nil {
+			slog.Warn("failed to fetch alarm dictionaries", "error", err)
+			return nil
+		}
+		c.alarmDictCache = make(map[string]*uuid.UUID)
+		for _, dict := range alarmDictionaries {
+			dictID := dict.AlarmDictionaryID
+			c.alarmDictCache[dict.ResourceTypeID.String()] = &dictID
+		}
 	}
+	return c.alarmDictCache[resourceTypeID.String()]
+}
 
-	result := make(map[string]*uuid.UUID)
-	for _, dict := range alarmDictionaries {
-		dictID := dict.AlarmDictionaryID
-		result[dict.ResourceTypeID.String()] = &dictID
-	}
-
-	return result, nil
+// invalidateAlarmDictCache clears the cached alarm dictionary map so it will
+// be refreshed on the next lookup.
+func (c *Collector) invalidateAlarmDictCache() {
+	c.alarmDictCache = nil
 }
 
 // collectResourcePools collects ResourcePool objects from the data source, persists them to the database,
