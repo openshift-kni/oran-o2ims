@@ -2144,7 +2144,11 @@ func (t *TUIFormatter) calculateAlarmWidths(events []WatchEvent, widths FieldWid
 
 		widths.Field1 = safeMax(widths.Field1, len(severityToString(ao.Alarm.PerceivedSeverity)))
 		widths.Field2 = safeMax(widths.Field2, len(ao.Alarm.Extensions["alertname"]))
-		widths.Field3 = safeMax(widths.Field3, len(ao.Alarm.Extensions["managed_cluster"]))
+		cluster := ao.Alarm.Extensions["managed_cluster"]
+		if cluster == "" {
+			cluster = ao.Alarm.Extensions["clusterID"]
+		}
+		widths.Field3 = safeMax(widths.Field3, len(cluster))
 
 		status := "Firing"
 		if ao.Alarm.AlarmClearedTime != nil {
@@ -2175,6 +2179,9 @@ func (t *TUIFormatter) buildAlarmLine(obj runtime.Object, widths FieldWidths, sb
 
 	alertName := alarm.Extensions["alertname"]
 	cluster := alarm.Extensions["managed_cluster"]
+	if cluster == "" {
+		cluster = alarm.Extensions["clusterID"]
+	}
 	status := "Firing"
 	if alarm.AlarmClearedTime != nil {
 		status = "Cleared"

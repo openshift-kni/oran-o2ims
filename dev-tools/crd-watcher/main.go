@@ -67,7 +67,11 @@ type Config struct {
 	// Output formatting configuration
 	UseASCII bool // Use ASCII characters instead of Unicode for table formatting
 	// Alarms display
-	EnableAlarms bool // Enable fetching and displaying O-RAN alarms (requires --enable-inventory)
+	EnableAlarms         bool     // Enable fetching and displaying O-RAN alarms (requires --enable-inventory)
+	AlarmExcludeNames    []string // Alert names to exclude from display
+	AlarmMaxSeverity     int      // Only show alarms at or below this severity (0=CRITICAL..5=CLEARED)
+	AlarmCluster         string   // Only show alarms for this cluster
+	AlarmExcludeClusters []string // Clusters to exclude from alarm display
 }
 
 var (
@@ -142,6 +146,10 @@ func addFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&config.InventoryRefreshInterval, "inventory-refresh-interval", 120, "Inventory data refresh interval in seconds (0 to disable periodic refresh)")
 	flags.BoolVar(&config.UseASCII, "ascii", false, "Use ASCII characters instead of Unicode for table formatting")
 	flags.BoolVar(&config.EnableAlarms, "alarms", false, "Enable alarm display (requires --enable-inventory)")
+	flags.StringSliceVar(&config.AlarmExcludeNames, "alarm-exclude-name", nil, "Exclude alarms with this alert name (can be specified multiple times)")
+	flags.IntVar(&config.AlarmMaxSeverity, "alarm-max-severity", 5, "Only show alarms at or below this severity (0=CRITICAL, 1=MAJOR, 2=MINOR, 3=WARNING, 4=INDETERMINATE, 5=CLEARED)")
+	flags.StringVar(&config.AlarmCluster, "alarm-cluster", "", "Only show alarms for this managed cluster")
+	flags.StringSliceVar(&config.AlarmExcludeClusters, "alarm-exclude-cluster", nil, "Exclude alarms from this managed cluster (can be specified multiple times)")
 
 	// Inventory module flags
 	flags.BoolVar(&config.EnableInventory, "enable-inventory", false, "Enable inventory module to fetch resources from O2IMS API")

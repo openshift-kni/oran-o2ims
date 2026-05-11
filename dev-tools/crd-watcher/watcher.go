@@ -561,8 +561,10 @@ func (w *CRDWatcher) listInventoryAlarms(ctx context.Context) ([]WatchEvent, err
 		return nil, fmt.Errorf("failed to get alarms: %w", err)
 	}
 
+	filtered := w.filterAlarms(alarms)
+
 	var events []WatchEvent
-	for _, alarm := range alarms {
+	for _, alarm := range filtered {
 		event := WatchEvent{
 			Type:      watch.Added,
 			Object:    alarm.ToRuntimeObject(),
@@ -572,8 +574,47 @@ func (w *CRDWatcher) listInventoryAlarms(ctx context.Context) ([]WatchEvent, err
 		events = append(events, event)
 	}
 
-	klog.V(1).Infof("Collected %d alarm events", len(events))
+	klog.V(1).Infof("Collected %d alarm events (filtered from %d total)", len(events), len(alarms))
 	return events, nil
+}
+
+func (w *CRDWatcher) filterAlarms(alarms []AlarmRecord) []AlarmRecord {
+	if len(w.config.AlarmExcludeNames) == 0 && w.config.AlarmMaxSeverity >= 5 &&
+		w.config.AlarmCluster == "" && len(w.config.AlarmExcludeClusters) == 0 {
+		return alarms
+	}
+
+	excludeNames := make(map[string]bool, len(w.config.AlarmExcludeNames))
+	for _, name := range w.config.AlarmExcludeNames {
+		excludeNames[name] = true
+	}
+
+	excludeClusters := make(map[string]bool, len(w.config.AlarmExcludeClusters))
+	for _, cluster := range w.config.AlarmExcludeClusters {
+		excludeClusters[cluster] = true
+	}
+
+	var result []AlarmRecord
+	for _, alarm := range alarms {
+		if excludeNames[alarm.Extensions["alertname"]] {
+			continue
+		}
+		if alarm.PerceivedSeverity > w.config.AlarmMaxSeverity {
+			continue
+		}
+		cluster := alarm.Extensions["managed_cluster"]
+		if cluster == "" {
+			cluster = alarm.Extensions["clusterID"]
+		}
+		if w.config.AlarmCluster != "" && cluster != w.config.AlarmCluster {
+			continue
+		}
+		if excludeClusters[cluster] {
+			continue
+		}
+		result = append(result, alarm)
+	}
+	return result
 }
 
 func (w *CRDWatcher) fetchAndDisplayInventoryResourcePools(ctx context.Context) error {
@@ -656,7 +697,8 @@ func (w *CRDWatcher) fetchAndDisplayAlarms(ctx context.Context) error {
 		return fmt.Errorf("failed to get alarms: %w", err)
 	}
 
-	for _, alarm := range alarms {
+	filtered := w.filterAlarms(alarms)
+	for _, alarm := range filtered {
 		event := WatchEvent{
 			Type:      watch.Added,
 			Object:    alarm.ToRuntimeObject(),
@@ -668,7 +710,7 @@ func (w *CRDWatcher) fetchAndDisplayAlarms(ctx context.Context) error {
 		}
 	}
 
-	klog.V(1).Infof("Displayed %d alarms", len(alarms))
+	klog.V(1).Infof("Displayed %d alarms (filtered from %d total)", len(filtered), len(alarms))
 	return nil
 }
 
@@ -1046,7 +1088,8 @@ func (w *CRDWatcher) refreshAlarms(ctx context.Context) error {
 		return fmt.Errorf("failed to get alarms: %w", err)
 	}
 
-	for _, alarm := range alarms {
+	filtered := w.filterAlarms(alarms)
+	for _, alarm := range filtered {
 		event := WatchEvent{
 			Type:      watch.Added,
 			Object:    alarm.ToRuntimeObject(),
@@ -1058,7 +1101,7 @@ func (w *CRDWatcher) refreshAlarms(ctx context.Context) error {
 		}
 	}
 
-	klog.V(2).Infof("Refreshed %d alarms", len(alarms))
+	klog.V(2).Infof("Refreshed %d alarms (filtered from %d total)", len(filtered), len(alarms))
 	return nil
 }
 
