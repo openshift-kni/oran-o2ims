@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package middleware
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -85,7 +86,7 @@ func OpenAPIValidation(swagger *openapi3.T) Middleware {
 		Options: openapi3filter.Options{
 			AuthenticationFunc: openapi3filter.NoopAuthenticationFunc, // No auth needed even when we have something in spec
 		},
-		ErrorHandler: getOranErrHandler(),
+		ErrorHandlerWithOpts: getOranErrHandler(),
 	})
 }
 
@@ -116,15 +117,27 @@ func ProblemDetails(w http.ResponseWriter, body string, code int) {
 }
 
 // getOranErrHandler override default validation error to allow for O-RAN specific error
-func getOranErrHandler() func(w http.ResponseWriter, message string, statusCode int) {
-	return func(w http.ResponseWriter, message string, statusCode int) {
-		ProblemDetails(w, message, statusCode)
+func getOranErrHandler() oapimiddleware.ErrorHandlerWithOpts {
+	return func(_ context.Context, err error, w http.ResponseWriter, r *http.Request, opts oapimiddleware.ErrorHandlerOpts) {
+		slog.Warn("OpenAPI validation failed",
+			"error", err.Error(),
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", opts.StatusCode,
+		)
+		ProblemDetails(w, err.Error(), opts.StatusCode)
 	}
 }
 
 // GetOranReqErrFunc override default validation errors to allow for O-RAN specific struct
 func GetOranReqErrFunc() func(w http.ResponseWriter, r *http.Request, err error) {
 	return func(w http.ResponseWriter, r *http.Request, err error) {
+		slog.Warn("OpenAPI request validation failed",
+			"error", err.Error(),
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", http.StatusBadRequest,
+		)
 		ProblemDetails(w, err.Error(), http.StatusBadRequest)
 	}
 }
