@@ -51,8 +51,6 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		// Resource pool label values on MNO BMHs (see testutils.MnoBMHs).
 		mnoBMHResourcePoolDellR740   = "dell-r740-pool"
 		mnoBMHResourcePoolDellXR8620 = "dell-xr8620t-pool"
-
-		annotationTrue = "true"
 	)
 
 	var (
@@ -509,6 +507,10 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 					}
 
 					allComplete = false
+
+					if !isInProgress {
+						continue
+					}
 					bmhKey := types.NamespacedName{
 						Name:      node.Spec.HwMgrNodeId,
 						Namespace: node.Spec.HwMgrNodeNs,
@@ -518,12 +520,54 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 						continue
 					}
 
-					hasBiosAnnotation := bmh.Annotations[hwmgrcontrollers.BiosUpdateNeededAnnotation] == annotationTrue
-					hasFirmwareAnnotation := bmh.Annotations[hwmgrcontrollers.FirmwareUpdateNeededAnnotation] == annotationTrue
-					// For nodes that require BIOS or firmware updates, simulate the BMO BIOS and firmware updates.
-					if (hasBiosAnnotation || hasFirmwareAnnotation) &&
-						bmh.Status.OperationalStatus != metal3v1alpha1.OperationalStatusServicing {
-						completeBMHDay2(testCtx, node, bmh)
+					// State machine: simulate the BMO day2 BIOS/firmware update lifecycle
+					// for a single BMH. Each iteration advances one step per node. The
+					// outer Eventually loop re-polls until all nodes reach ConfigApplied.
+					//
+					// Simulate the BMO BIOS/firmware update behavior:
+					//   1. Detect that HFS/HFC spec changes by setting ChangeDetected=True on the status conditions
+					//   2. After BMH is annotated with reboot annotation, BMH transitions to Servicing and removes the annotation
+					//   3. Update the HFS/HFC status to match the new profile values
+					//   4. Transition BMH back to OK
+					//
+					// The checks below are ordered from latest to earliest state so that
+					// a node already past an earlier step is not re-processed.
+					hasConfigAnnotation := node.Annotations[hwmgrcontrollers.ConfigAnnotation] != ""
+					_, hasReboot := bmh.Annotations[hwmgrcontrollers.BmhRebootAnnotation]
+					isServicing := bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusServicing
+
+					// Complete the update by updating HFS/HFC status to match the new profile
+					// values and transition BMH back to OK.
+					if hasConfigAnnotation && isServicing {
+						completeBMHServicing(testCtx, node, bmh)
+						continue
+					}
+
+					// Waiting for controller:
+					// - isServicing && !hasConfigAnnotation: BMH entered Servicing,
+					//   waiting for controller to add config-in-progress annotation.
+					// - !isServicing && hasConfigAnnotation: BMH transitioned back to OK,
+					//   waiting for controller to validate completion and remove config-in-progress.
+					if isServicing || hasConfigAnnotation {
+						continue
+					}
+
+					// The controller has added the reboot annotation after validating
+					// HFS/HFC changes. Simulate BMO processing the reboot by transitioning BMH
+					// to Servicing and removing the reboot annotation.
+					if !isServicing && !hasConfigAnnotation && hasReboot {
+						patchBMHStatus(testCtx, bmhKey, func(bmh *metal3v1alpha1.BareMetalHost) {
+							bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusServicing
+						})
+						removeBMHRebootAnnotation(testCtx, bmhKey)
+						continue
+					}
+
+					// Simulate metal3 detecting that HFS/HFC specs have changed by
+					// setting ChangeDetected=True on their status conditions. This triggers
+					// the controller to validate and add the reboot annotation.
+					if !isServicing && !hasConfigAnnotation && !isHFSChangeDetected(testCtx, bmhKey) {
+						simulateHFSAndHFCChangeDetected(testCtx, bmhKey)
 					}
 				}
 
@@ -592,46 +636,43 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		})
 
 		It("Should fail when one worker BMH enters error state during update", func() {
-			By("Failing one worker BMH and waiting for NAR to reach Failed")
+			By("Finding the first in-progress worker")
+			var failNode *hwmgmtv1alpha1.AllocatedNode
 			Eventually(func() bool {
 				nodeList := testNonCachingListAllocatedNodesForNAR(testCtx, prName)
 				for i := range nodeList.Items {
 					node := &nodeList.Items[i]
-
 					if node.Spec.GroupName == master {
 						continue
 					}
-
-					// Return true if one of the workers has reached the Failed state
 					cond := meta.FindStatusCondition(node.Status.Conditions, string(hwmgmtv1alpha1.Configured))
-					if cond != nil && (cond.Reason == string(hwmgmtv1alpha1.ConfigApplied) ||
-						cond.Reason == string(hwmgmtv1alpha1.Failed)) {
+					isInProgress := cond != nil && cond.Status == metav1.ConditionFalse &&
+						cond.Reason == string(hwmgmtv1alpha1.ConfigUpdate)
+					if isInProgress {
+						failNode = node
 						return true
 					}
-
-					bmhKey := types.NamespacedName{
-						Name:      node.Spec.HwMgrNodeId,
-						Namespace: node.Spec.HwMgrNodeNs,
-					}
-					bmh := &metal3v1alpha1.BareMetalHost{}
-					if err := K8SClient.Get(testCtx, bmhKey, bmh); err != nil {
-						continue
-					}
-
-					hasBiosAnnotation := bmh.Annotations[hwmgrcontrollers.BiosUpdateNeededAnnotation] == annotationTrue
-					hasFirmwareAnnotation := bmh.Annotations[hwmgrcontrollers.FirmwareUpdateNeededAnnotation] == annotationTrue
-					if !(hasBiosAnnotation || hasFirmwareAnnotation) ||
-						bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusServicing {
-						continue
-					}
-
-					// Fail the first worker with update annotations ready to be failed
-					failBMHDay2(testCtx, node, bmh)
-					break
 				}
-
 				return false
-			}, timeout*5, interval).Should(BeTrue(), "One worker BMH should have been failed")
+			}, timeout, interval).Should(BeTrue(), "Should find an in-progress worker to fail")
+
+			By("Failing the worker BMH")
+			bmhKey := types.NamespacedName{
+				Name:      failNode.Spec.HwMgrNodeId,
+				Namespace: failNode.Spec.HwMgrNodeNs,
+			}
+			bmh := &metal3v1alpha1.BareMetalHost{}
+			Expect(K8SClient.Get(testCtx, bmhKey, bmh)).To(Succeed())
+			failBMHDay2(testCtx, failNode, bmh)
+
+			By("Waiting for the worker node to reach Failed")
+			Eventually(func() bool {
+				n := &hwmgmtv1alpha1.AllocatedNode{}
+				Expect(K8SClient.Get(testCtx, types.NamespacedName{
+					Name: failNode.Name, Namespace: failNode.Namespace}, n)).To(Succeed())
+				cond := meta.FindStatusCondition(n.Status.Conditions, string(hwmgmtv1alpha1.Configured))
+				return cond != nil && cond.Reason == string(hwmgmtv1alpha1.Failed)
+			}, timeout, interval).Should(BeTrue(), "Worker node should reach Failed")
 
 			By("Waiting for NAR to reach Configured=False/Failed")
 			Eventually(func() bool {
@@ -642,7 +683,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			}, timeout, interval).Should(BeTrue(), "NAR should reach Configured=False/Failed")
 		})
 
-		It("Should PR reach HardwareConfigured=Failed after callback", func() {
+		It("Should PR reach HardwareConfigured=Failed", func() {
 			Eventually(func() bool {
 				Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
 				cond := meta.FindStatusCondition(pr.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured))
@@ -737,31 +778,17 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			}
 			Expect(servicingNodeKey.Name).ToNot(BeEmpty(), "Should find a worker in ConfigUpdate")
 
-			// Simulate metal3 detecting HFS/HFC spec changes by setting
-			// ChangeDetected=True / UpdatesRequired=True on the status conditions.
-			// No actual BIOS or firmware values are changed — only the conditions are
-			// toggled so the controller proceeds to set the reboot annotation and
-			// advance the node through the Servicing path.
-			hfs := &metal3v1alpha1.HostFirmwareSettings{}
-			Expect(K8SClient.Get(testCtx, servicingBMHKey, hfs)).To(Succeed())
-			schemaName := hfs.Status.FirmwareSchema.Name
-			hfs.Status = testutils.UpdateHostFirmwareSettingsStatus(
-				schemaName, hfs.Namespace, hfs.Status.Settings,
-				metav1.ConditionTrue, metav1.ConditionTrue, hfs.Generation)
-			Expect(K8SClient.Status().Update(testCtx, hfs)).To(Succeed())
+			// Simulate metal3 detecting HFS/HFC spec changes
+			simulateHFSAndHFCChangeDetected(testCtx, servicingBMHKey)
 
-			hfc := &metal3v1alpha1.HostFirmwareComponents{}
-			Expect(K8SClient.Get(testCtx, servicingBMHKey, hfc)).To(Succeed())
-			hfc.Status = testutils.UpdateHostFirmwareComponentsStatus(
-				hfc.Name, hfc.Namespace, hfc.Status.Components,
-				metav1.ConditionTrue, metav1.ConditionTrue, hfc.Generation)
-			Expect(K8SClient.Status().Update(testCtx, hfc)).To(Succeed())
+			// Wait for the controller to add the reboot annotation on the BMH
+			waitForBMHRebootAnnotation(testCtx, servicingBMHKey)
 
-			// Transition BMH to Servicing (simulates metal3 processing the reboot annotation)
-			bmh := &metal3v1alpha1.BareMetalHost{}
-			Expect(K8SClient.Get(testCtx, servicingBMHKey, bmh)).To(Succeed())
-			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusServicing
-			Expect(K8SClient.Status().Update(testCtx, bmh)).To(Succeed())
+			// Transition BMH to Servicing and remove the reboot annotation (simulates metal3 processing the reboot annotation)
+			patchBMHStatus(testCtx, servicingBMHKey, func(bmh *metal3v1alpha1.BareMetalHost) {
+				bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusServicing
+			})
+			removeBMHRebootAnnotation(testCtx, servicingBMHKey)
 
 			// Wait for controller to set config-in-progress annotation on the AllocatedNode
 			Eventually(func() bool {
@@ -816,12 +843,11 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			Expect(cond.Reason).To(Equal(string(hwmgmtv1alpha1.ConfigUpdate)), "Servicing worker should still be in ConfigUpdate")
 
 			By("Transitioning the Servicing BMH to OK to allow deferred abandon")
-			bmh := &metal3v1alpha1.BareMetalHost{}
-			Expect(K8SClient.Get(testCtx, servicingBMHKey, bmh)).To(Succeed())
-			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusOK
-			bmh.Status.ErrorMessage = ""
-			bmh.Status.ErrorType = ""
-			Expect(K8SClient.Status().Update(testCtx, bmh)).To(Succeed())
+			patchBMHStatus(testCtx, servicingBMHKey, func(bmh *metal3v1alpha1.BareMetalHost) {
+				bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusOK
+				bmh.Status.ErrorMessage = ""
+				bmh.Status.ErrorType = ""
+			})
 
 			By("Waiting for NAR to reach ConfigApplied after all workers converge")
 			Eventually(func() bool {
@@ -925,32 +951,27 @@ func setupSpokeClientMock(ctx context.Context, hostnames []string) func() {
 }
 
 // failBMHDay2 simulates a BMH entering an error state during a day2 hardware configuration update.
-// It transitions the BMH through Servicing and then to Error with an expired transient error timestamp,
-// so the controller immediately treats it as a non-transient failure and marks the AllocatedNode as Failed.
+// It simulates metal3 detecting HFS/HFC changes, waits for the controller to add the reboot
+// annotation, transitions the BMH through Servicing and then to Error with an expired transient
+// error timestamp, so the controller immediately treats it as a non-transient failure and marks
+// the AllocatedNode as Failed.
 func failBMHDay2(ctx context.Context, node *hwmgmtv1alpha1.AllocatedNode, bmh *metal3v1alpha1.BareMetalHost) {
 	bmhKey := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	nodeKey := types.NamespacedName{Name: node.Name, Namespace: node.Namespace}
 
 	// Step 1: Simulate metal3 detecting HFS/HFC spec changes
-	hfs := &metal3v1alpha1.HostFirmwareSettings{}
-	Expect(K8SClient.Get(ctx, bmhKey, hfs)).To(Succeed())
-	schemaName := hfs.Status.FirmwareSchema.Name
-	hfs.Status = testutils.UpdateHostFirmwareSettingsStatus(
-		schemaName, hfs.Namespace, hfs.Status.Settings, metav1.ConditionTrue, metav1.ConditionTrue, hfs.Generation)
-	Expect(K8SClient.Status().Update(ctx, hfs)).To(Succeed())
+	simulateHFSAndHFCChangeDetected(ctx, bmhKey)
 
-	hfc := &metal3v1alpha1.HostFirmwareComponents{}
-	Expect(K8SClient.Get(ctx, bmhKey, hfc)).To(Succeed())
-	hfc.Status = testutils.UpdateHostFirmwareComponentsStatus(
-		hfc.Name, hfc.Namespace, hfc.Status.Components, metav1.ConditionTrue, metav1.ConditionTrue, hfc.Generation)
-	Expect(K8SClient.Status().Update(ctx, hfc)).To(Succeed())
+	// Step 2: Wait for the controller to validate the changes and add the reboot annotation on the BMH
+	waitForBMHRebootAnnotation(ctx, bmhKey)
 
-	// Step 2: Transition BMH to Servicing (simulates metal3 processing the reboot annotation)
-	Expect(K8SClient.Get(ctx, bmhKey, bmh)).To(Succeed())
-	bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusServicing
-	Expect(K8SClient.Status().Update(ctx, bmh)).To(Succeed())
+	// Step 3: Transition BMH to Servicing and remove the reboot annotation (simulates metal3 processing the reboot annotation)
+	patchBMHStatus(ctx, bmhKey, func(bmh *metal3v1alpha1.BareMetalHost) {
+		bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusServicing
+	})
+	removeBMHRebootAnnotation(ctx, bmhKey)
 
-	// Step 3: Wait for metal3 hwmgr to set config-in-progress annotation on AllocatedNode
+	// Step 4: Wait for controller to set config-in-progress annotation on AllocatedNode
 	Eventually(func() bool {
 		n := &hwmgmtv1alpha1.AllocatedNode{}
 		Expect(K8SClient.Get(ctx, nodeKey, n)).To(Succeed())
@@ -958,62 +979,37 @@ func failBMHDay2(ctx context.Context, node *hwmgmtv1alpha1.AllocatedNode, bmh *m
 	}, time.Minute*3, time.Second*2).Should(BeTrue(),
 		"AllocatedNode %s should have config annotation", node.Name)
 
-	// Step 4: Transition BMH to Error with an expired transient error timestamp.
+	// Step 5: Transition BMH to Error with an expired transient error timestamp.
 	// Pre-setting a timestamp older than ErrorRetryWindow (5min) ensures the controller
 	// treats this as a non-transient failure and immediately marks the node as Failed.
 	Expect(K8SClient.Get(ctx, bmhKey, bmh)).To(Succeed())
+	patch := client.MergeFrom(bmh.DeepCopy())
 	if bmh.Annotations == nil {
 		bmh.Annotations = make(map[string]string)
 	}
 	bmh.Annotations[hwmgrcontrollers.BmhErrorTimestampAnnotation] = time.Now().Add(-10 * time.Minute).Format(time.RFC3339)
-	Expect(K8SClient.Update(ctx, bmh)).To(Succeed())
+	Expect(K8SClient.Patch(ctx, bmh, patch)).To(Succeed())
 
-	Expect(K8SClient.Get(ctx, bmhKey, bmh)).To(Succeed())
-	bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusError
-	bmh.Status.ErrorMessage = "Firmware update failed"
-	bmh.Status.ErrorType = metal3v1alpha1.ServicingError
-	Expect(K8SClient.Status().Update(ctx, bmh)).To(Succeed())
+	patchBMHStatus(ctx, bmhKey, func(bmh *metal3v1alpha1.BareMetalHost) {
+		bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusError
+		bmh.Status.ErrorMessage = "Firmware update failed"
+		bmh.Status.ErrorType = metal3v1alpha1.ServicingError
+	})
 }
 
-// completeBMHDay2 simulates the metal3 BMO BIOS and firmware updates for a day2.
-// hardware configuration update on a single BMH:
-//  1. Simulate metal3 detecting HFS/HFC spec changes (set conditions)
-//  2. Transition BMH to Servicing state (simulates reboot)
-//  3. Wait for controller to set config-in-progress annotation
-//  4. Update HFS/HFC status to match v2 profile values (simulates BIOS and firmware update completion)
-//  5. Transition BMH to OK state (triggers handleNodeInProgressUpdate completion)
-func completeBMHDay2(ctx context.Context, node *hwmgmtv1alpha1.AllocatedNode, bmh *metal3v1alpha1.BareMetalHost) {
+// completeBMHServicing simulates BMO completing a BIOS/firmware update on a BMH
+// that is currently in Servicing state:
+//  1. Update HFS/HFC status to match new profile values (simulates update completion)
+//  2. Transition BMH to OK state (triggers handleNodeInProgressUpdate completion)
+func completeBMHServicing(ctx context.Context, node *hwmgmtv1alpha1.AllocatedNode, bmh *metal3v1alpha1.BareMetalHost) {
 	bmhKey := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	nodeKey := types.NamespacedName{Name: node.Name, Namespace: node.Namespace}
 
-	// Step 1: Simulate metal3 detecting HFS and HFC spec changes
+	// Step 1.a: Update HFS status to match updated BIOS attributes (simulates BIOS update completion)
 	hfs := &metal3v1alpha1.HostFirmwareSettings{}
 	Expect(K8SClient.Get(ctx, bmhKey, hfs)).To(Succeed())
 	schemaName := hfs.Status.FirmwareSchema.Name
-	hfs.Status = testutils.UpdateHostFirmwareSettingsStatus(
-		schemaName, hfs.Namespace, hfs.Status.Settings, metav1.ConditionTrue, metav1.ConditionTrue, hfs.Generation)
-	Expect(K8SClient.Status().Update(ctx, hfs)).To(Succeed())
-	hfc := &metal3v1alpha1.HostFirmwareComponents{}
-	Expect(K8SClient.Get(ctx, bmhKey, hfc)).To(Succeed())
-	hfc.Status = testutils.UpdateHostFirmwareComponentsStatus(
-		hfc.Name, hfc.Namespace, hfc.Status.Components, metav1.ConditionTrue, metav1.ConditionTrue, hfc.Generation)
-	Expect(K8SClient.Status().Update(ctx, hfc)).To(Succeed())
-
-	// Step 2: Transition BMH to Servicing (simulates metal3 processing the reboot annotation)
-	Expect(K8SClient.Get(ctx, bmhKey, bmh)).To(Succeed())
-	bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusServicing
-	Expect(K8SClient.Status().Update(ctx, bmh)).To(Succeed())
-
-	// Step 3: Wait for metal3 hwmgr to set config-in-progress annotation on AllocatedNode
-	Eventually(func() bool {
-		n := &hwmgmtv1alpha1.AllocatedNode{}
-		Expect(K8SClient.Get(ctx, nodeKey, n)).To(Succeed())
-		return n.Annotations[hwmgrcontrollers.ConfigAnnotation] != ""
-	}, time.Minute*3, time.Second*2).Should(BeTrue(),
-		"AllocatedNode %s should have config annotation", node.Name)
-
-	// Step 4.a: Update HFS status to match updated BIOS attributes (simulates BIOS update completion)
-	Expect(K8SClient.Get(ctx, bmhKey, hfs)).To(Succeed())
+	hfsPatch := client.MergeFrom(hfs.DeepCopy())
 	updatedSettings := make(map[string]string)
 	for k, v := range hfs.Spec.Settings {
 		updatedSettings[k] = v.String()
@@ -1021,9 +1017,9 @@ func completeBMHDay2(ctx context.Context, node *hwmgmtv1alpha1.AllocatedNode, bm
 	hfs.Status.Settings = updatedSettings
 	hfs.Status = testutils.UpdateHostFirmwareSettingsStatus(
 		schemaName, hfs.Namespace, hfs.Status.Settings, metav1.ConditionTrue, metav1.ConditionFalse, hfs.Generation)
-	Expect(K8SClient.Status().Update(ctx, hfs)).To(Succeed())
+	Expect(K8SClient.Status().Patch(ctx, hfs, hfsPatch)).To(Succeed())
 
-	// Step 4.b: Update HFC status components with v2 firmware versions (simulates firmware update completion)
+	// Step 1.b: Update HFC status components with new firmware versions (simulates firmware update completion)
 	Expect(K8SClient.Get(ctx, nodeKey, node)).To(Succeed())
 	hwProfile := &hwmgmtv1alpha1.HardwareProfile{}
 	Expect(K8SClient.Get(ctx, types.NamespacedName{
@@ -1048,16 +1044,80 @@ func completeBMHDay2(ctx context.Context, node *hwmgmtv1alpha1.AllocatedNode, bm
 			})
 		}
 	}
+	hfc := &metal3v1alpha1.HostFirmwareComponents{}
 	Expect(K8SClient.Get(ctx, bmhKey, hfc)).To(Succeed())
+	hfcPatch := client.MergeFrom(hfc.DeepCopy())
 	hfc.Status.Components = newComponents
 	hfc.Status = testutils.UpdateHostFirmwareComponentsStatus(
 		hfc.Name, hfc.Namespace, hfc.Status.Components, metav1.ConditionTrue, metav1.ConditionFalse, hfc.Generation)
-	Expect(K8SClient.Status().Update(ctx, hfc)).To(Succeed())
+	Expect(K8SClient.Status().Patch(ctx, hfc, hfcPatch)).To(Succeed())
 
-	// Step 5: Transition BMH back to OK state (triggers handleNodeInProgressUpdate completion)
+	// Step 2: Transition BMH back to OK state (triggers handleNodeInProgressUpdate completion)
+	patchBMHStatus(ctx, bmhKey, func(bmh *metal3v1alpha1.BareMetalHost) {
+		bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusOK
+		bmh.Status.ErrorMessage = ""
+		bmh.Status.ErrorType = ""
+	})
+}
+
+// simulateHFSAndHFCChangeDetected simulates metal3 detecting HFS/HFC spec changes by setting
+// ChangeDetected=True and UpdatesRequired=True on the status conditions of the HFS and HFC resources.
+func simulateHFSAndHFCChangeDetected(ctx context.Context, bmhKey types.NamespacedName) {
+	hfs := &metal3v1alpha1.HostFirmwareSettings{}
+	Expect(K8SClient.Get(ctx, bmhKey, hfs)).To(Succeed())
+	schemaName := hfs.Status.FirmwareSchema.Name
+	hfsPatch := client.MergeFrom(hfs.DeepCopy())
+	hfs.Status = testutils.UpdateHostFirmwareSettingsStatus(
+		schemaName, hfs.Namespace, hfs.Status.Settings, metav1.ConditionTrue, metav1.ConditionTrue, hfs.Generation)
+	Expect(K8SClient.Status().Patch(ctx, hfs, hfsPatch)).To(Succeed())
+
+	hfc := &metal3v1alpha1.HostFirmwareComponents{}
+	Expect(K8SClient.Get(ctx, bmhKey, hfc)).To(Succeed())
+	hfcPatch := client.MergeFrom(hfc.DeepCopy())
+	hfc.Status = testutils.UpdateHostFirmwareComponentsStatus(
+		hfc.Name, hfc.Namespace, hfc.Status.Components, metav1.ConditionTrue, metav1.ConditionTrue, hfc.Generation)
+	Expect(K8SClient.Status().Patch(ctx, hfc, hfcPatch)).To(Succeed())
+}
+
+// isHFSChangeDetected checks whether the HFS FirmwareSettingsChangeDetected
+// condition is True, indicating that simulateHFSAndHFCChangeDetected has
+// already been called for this BMH.
+func isHFSChangeDetected(ctx context.Context, bmhKey types.NamespacedName) bool {
+	hfs := &metal3v1alpha1.HostFirmwareSettings{}
+	Expect(K8SClient.Get(ctx, bmhKey, hfs)).To(Succeed())
+	cond := meta.FindStatusCondition(hfs.Status.Conditions, string(metal3v1alpha1.FirmwareSettingsChangeDetected))
+	return cond != nil && cond.Status == metav1.ConditionTrue
+}
+
+// waitForBMHRebootAnnotation polls until the controller adds the reboot.metal3.io
+// annotation on the BMH, indicating it has validated HFS/HFC changes and is ready
+// for BMO to process the reboot.
+func waitForBMHRebootAnnotation(ctx context.Context, bmhKey types.NamespacedName) {
+	Eventually(func() bool {
+		bmh := &metal3v1alpha1.BareMetalHost{}
+		Expect(K8SClient.Get(ctx, bmhKey, bmh)).To(Succeed())
+		_, exists := bmh.Annotations[hwmgrcontrollers.BmhRebootAnnotation]
+		return exists
+	}, time.Minute*3, time.Second*3).Should(BeTrue(),
+		"BMH %s should have reboot annotation", bmhKey.Name)
+}
+
+// removeBMHRebootAnnotation removes the reboot.metal3.io annotation from the BMH
+// using a merge-patch, matching real BMO behavior after processing a reboot.
+func removeBMHRebootAnnotation(ctx context.Context, bmhKey types.NamespacedName) {
+	bmh := &metal3v1alpha1.BareMetalHost{}
 	Expect(K8SClient.Get(ctx, bmhKey, bmh)).To(Succeed())
-	bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusOK
-	bmh.Status.ErrorMessage = ""
-	bmh.Status.ErrorType = ""
-	Expect(K8SClient.Status().Update(ctx, bmh)).To(Succeed())
+	patch := client.MergeFrom(bmh.DeepCopy())
+	delete(bmh.Annotations, hwmgrcontrollers.BmhRebootAnnotation)
+	Expect(K8SClient.Patch(ctx, bmh, patch)).To(Succeed())
+}
+
+// patchBMHStatus fetches the latest BMH, applies the given mutation to its status,
+// and sends a merge-patch.
+func patchBMHStatus(ctx context.Context, bmhKey types.NamespacedName, mutateFn func(*metal3v1alpha1.BareMetalHost)) {
+	bmh := &metal3v1alpha1.BareMetalHost{}
+	Expect(K8SClient.Get(ctx, bmhKey, bmh)).To(Succeed())
+	patch := client.MergeFrom(bmh.DeepCopy())
+	mutateFn(bmh)
+	Expect(K8SClient.Status().Patch(ctx, bmh, patch)).To(Succeed())
 }
