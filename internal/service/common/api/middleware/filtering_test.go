@@ -333,4 +333,17 @@ var _ = Describe("ResponseFilter", func() {
 			Expect(result[0].Name).To(Equal("hello"))
 		})
 	})
+
+	It("should not reflect the raw query string in query parse error responses", func() {
+		maliciousQuery := "key=%zz&secret=sensitive-data"
+		req.URL.RawQuery = maliciousQuery
+		handler.ServeHTTP(recorder, req)
+
+		Expect(recorder.Code).To(Equal(http.StatusBadRequest))
+		body := recorder.Body.String()
+		Expect(body).NotTo(ContainSubstring(maliciousQuery))
+		Expect(body).NotTo(ContainSubstring("sensitive-data"))
+		Expect(body).NotTo(ContainSubstring("%zz"))
+		Expect(body).To(ContainSubstring("failed to parse query parameters"))
+	})
 })

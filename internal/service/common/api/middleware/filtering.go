@@ -233,7 +233,7 @@ func ResponseFilter(adapter *FilterAdapter) Middleware {
 				slog.Error("failed to parse query", "RawQuery", r.URL.RawQuery, "err", err)
 				_ = adapter.Error(
 					w,
-					fmt.Sprintf("failed to parse query: %s; error: %s", r.URL.RawQuery, err.Error()),
+					"failed to parse query parameters",
 					http.StatusBadRequest,
 				)
 				return
