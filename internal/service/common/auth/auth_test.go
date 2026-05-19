@@ -7,8 +7,10 @@ SPDX-License-Identifier: Apache-2.0
 package auth
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -63,6 +65,8 @@ var _ = Describe("Authenticator", func() {
 	var oauthAuthenticator, k8sAuthenticator NoopAuthenticator
 	var recorder *httptest.ResponseRecorder
 	var handler http.Handler
+	var logBuffer bytes.Buffer
+	var origLogger *slog.Logger
 
 	BeforeEach(func() {
 		oauthAuthenticator = NoopAuthenticator{
@@ -87,10 +91,22 @@ var _ = Describe("Authenticator", func() {
 			Ok:    true,
 			Error: nil,
 		}
-		req = http.Request{Header: http.Header{}}
+		req = http.Request{
+			Header: http.Header{},
+			Method: http.MethodGet,
+			URL:    &url.URL{Path: "/api/test"},
+		}
 		next = &NoopHandler{}
 		recorder = httptest.NewRecorder()
 		handler = Authenticator(&oauthAuthenticator, &k8sAuthenticator)(next)
+
+		logBuffer.Reset()
+		origLogger = slog.Default()
+		slog.SetDefault(slog.New(slog.NewJSONHandler(&logBuffer, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	})
+
+	AfterEach(func() {
+		slog.SetDefault(origLogger)
 	})
 
 	It("Authorizes the request using OAuth behind proxy", func() {
@@ -138,6 +154,13 @@ var _ = Describe("Authenticator", func() {
 		Expect(recorder.Code).To(Equal(http.StatusUnauthorized))
 		Expect(recorder.Body.String()).To(ContainSubstring("some error"))
 		Expect(recorder.Body.String()).To(ContainSubstring("failed to authenticate request"))
+
+		logOutput := logBuffer.String()
+		Expect(logOutput).To(ContainSubstring("authentication failed"))
+		Expect(logOutput).To(ContainSubstring(`"level":"WARN"`))
+		Expect(logOutput).To(ContainSubstring(`"method":"GET"`))
+		Expect(logOutput).To(ContainSubstring(`"/api/test"`))
+		Expect(logOutput).To(ContainSubstring("some error"))
 	})
 
 	It("Rejects the request when the handler returns false", func() {
@@ -148,6 +171,12 @@ var _ = Describe("Authenticator", func() {
 		Expect(next.(*NoopHandler).called).To(BeFalse())
 		Expect(recorder.Code).To(Equal(http.StatusUnauthorized))
 		Expect(recorder.Body.String()).To(ContainSubstring("unable to authenticate request"))
+
+		logOutput := logBuffer.String()
+		Expect(logOutput).To(ContainSubstring("authentication rejected"))
+		Expect(logOutput).To(ContainSubstring(`"level":"WARN"`))
+		Expect(logOutput).To(ContainSubstring(`"method":"GET"`))
+		Expect(logOutput).To(ContainSubstring(`"/api/test"`))
 	})
 })
 
