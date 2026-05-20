@@ -36,11 +36,13 @@ func Authenticator(oauthHandler, kubernetesHandler authenticator.Request) middle
 
 			response, ok, err := handler.AuthenticateRequest(req)
 			if err != nil {
+				slog.Warn("authentication failed", "error", err, "method", req.Method, "path", req.URL.Path)
 				middleware.ProblemDetails(w, fmt.Sprintf("failed to authenticate request: %v", err), http.StatusUnauthorized)
 				return
 			}
 
 			if !ok {
+				slog.Warn("authentication rejected", "method", req.Method, "path", req.URL.Path)
 				middleware.ProblemDetails(w, "unable to authenticate request", http.StatusUnauthorized)
 				return
 			}
