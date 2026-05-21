@@ -8,8 +8,10 @@ package utils
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -1673,5 +1675,29 @@ var _ = Describe("Server predicate functions", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(args).To(BeNil())
 		})
+	})
+})
+
+var _ = Describe("TLS cipher suite configuration", func() {
+	isECDHE := func(suite uint16) bool {
+		name := tls.CipherSuiteName(suite)
+		return strings.HasPrefix(name, "TLS_ECDHE_")
+	}
+
+	It("should include only PFS (ECDHE-based) cipher suites in the shared list", func() {
+		Expect(pfsCipherSuites).NotTo(BeEmpty())
+		for _, suite := range pfsCipherSuites {
+			Expect(isECDHE(suite)).To(BeTrue(),
+				"cipher suite %s is not ECDHE-based", tls.CipherSuiteName(suite))
+		}
+	})
+
+	It("should set PFS cipher suites on GetClientTLSConfig", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		cfg, err := GetClientTLSConfig(ctx, "", "", "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.CipherSuites).To(Equal(pfsCipherSuites))
 	})
 })
