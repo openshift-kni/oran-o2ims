@@ -10,12 +10,14 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
 
+	commonapi "github.com/openshift-kni/oran-o2ims/api/common"
 	commonmodels "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/api"
@@ -39,6 +41,25 @@ func (m *mockSubscriptionEventHandler) SubscriptionEvent(_ context.Context, _ *n
 
 func (m *mockSubscriptionEventHandler) GetClientFactory() notifier.ClientProvider {
 	return nil
+}
+
+type mockClientProvider struct {
+	client *http.Client
+}
+
+func (m *mockClientProvider) NewClient(_ context.Context, _ commonapi.AuthType) (*http.Client, error) {
+	return m.client, nil
+}
+
+type mockSubscriptionEventHandlerWithProvider struct {
+	provider notifier.ClientProvider
+}
+
+func (m *mockSubscriptionEventHandlerWithProvider) SubscriptionEvent(_ context.Context, _ *notifier.SubscriptionEvent) {
+}
+
+func (m *mockSubscriptionEventHandlerWithProvider) GetClientFactory() notifier.ClientProvider {
+	return m.provider
 }
 
 var _ = Describe("ResourceServer", func() {
@@ -248,6 +269,66 @@ var _ = Describe("ResourceServer", func() {
 	//
 	// Subscription endpoints
 	//
+	Describe("CreateSubscription", func() {
+		When("validation fails due to invalid callback URL", func() {
+			It("returns 400 without reflecting the callback or filter in AdditionalAttributes", func() {
+				callbackURL := "http://malicious.example.com/callback?secret=token123"
+				filterValue := "sensitive-filter-value"
+				resp, err := server.CreateSubscription(ctx, apiGenerated.CreateSubscriptionRequestObject{
+					Body: &apiGenerated.Subscription{
+						Callback: callbackURL,
+						Filter:   &filterValue,
+					},
+				})
+
+				// verify
+				Expect(err).NotTo(HaveOccurred())
+				problemResp := resp.(apiGenerated.CreateSubscription400ApplicationProblemPlusJSONResponse)
+				Expect(problemResp.Status).To(Equal(http.StatusBadRequest))
+				Expect(problemResp.AdditionalAttributes).NotTo(BeNil())
+				attrs := *problemResp.AdditionalAttributes
+				Expect(attrs).NotTo(HaveKey("callback"))
+				Expect(attrs).NotTo(HaveKey("filter"))
+				Expect(problemResp.Detail).NotTo(ContainSubstring(callbackURL))
+			})
+		})
+
+		When("repository returns unique_callback error", func() {
+			It("returns 400 without reflecting the callback in AdditionalAttributes", func() {
+				ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					w.WriteHeader(http.StatusNoContent)
+				}))
+				defer ts.Close()
+
+				serverWithProvider := &api.ResourceServer{
+					Repo: mockRepo,
+					SubscriptionEventHandler: &mockSubscriptionEventHandlerWithProvider{
+						provider: &mockClientProvider{client: ts.Client()},
+					},
+				}
+
+				mockRepo.EXPECT().
+					CreateSubscription(ctx, gomock.Any()).
+					Return(nil, fmt.Errorf("unique_callback constraint violation"))
+
+				resp, err := serverWithProvider.CreateSubscription(ctx, apiGenerated.CreateSubscriptionRequestObject{
+					Body: &apiGenerated.Subscription{
+						Callback: ts.URL + "/callback",
+					},
+				})
+
+				// verify
+				Expect(err).NotTo(HaveOccurred())
+				problemResp := resp.(apiGenerated.CreateSubscription400ApplicationProblemPlusJSONResponse)
+				Expect(problemResp.Status).To(Equal(http.StatusBadRequest))
+				Expect(problemResp.Detail).To(Equal("callback value must be unique"))
+				Expect(problemResp.AdditionalAttributes).NotTo(BeNil())
+				attrs := *problemResp.AdditionalAttributes
+				Expect(attrs).NotTo(HaveKey("callback"))
+			})
+		})
+	})
+
 	Describe("GetSubscription", func() {
 		When("subscription is found", func() {
 			It("returns 200 response with subscription", func() {
