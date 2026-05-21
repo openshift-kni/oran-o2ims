@@ -9,14 +9,14 @@ entries:
     # Channel entries for 'stable' channel
   - entries:
       - name: o-cloud-manager.v4.22.0
-        skipRange: '>=4.21.0 <4.23.0'
+        skipRange: '>=4.21.3 <4.22.0'
     name: stable
     package: o-cloud-manager
     schema: olm.channel
     # Channel entries for '4.22' channel
   - entries:
       - name: o-cloud-manager.v4.22.0
-        skipRange: '>=4.21.0 <4.23.0'
+        skipRange: '>=4.21.3 <4.22.0'
     name: "4.22"
     package: o-cloud-manager
     schema: olm.channel
