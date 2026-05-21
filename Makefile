@@ -30,7 +30,7 @@ CHANNEL ?= alpha
 BASHATE_VERSION ?= 2.1.1
 
 # CONTROLLER_GEN_VERSION defines the controller-gen version to download from go modules.
-CONTROLLER_GEN_VERSION ?= v0.18.0
+CONTROLLER_GEN_VERSION ?= v0.20.1
 
 # GOLANGCI_LINT_VERSION defines the golangci-lint version to download from GitHub releases.
 GOLANGCI_LINT_VERSION ?= v2.12.2
@@ -127,9 +127,9 @@ endif
 # Image URL to use all building/pushing image targets
 IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
 
-# ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.35.0
-ENVTEST_VERSION = release-0.22
+# ENVTEST_K8S_VERSION and ENVTEST_VERSION are derived from go.mod to stay in sync with dependencies.
+ENVTEST_K8S_VERSION ?= $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -F'[v.]' '{printf "1.%d", $$3}')
+ENVTEST_VERSION ?= $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller-runtime | awk -F'[v.]' '{printf "release-%d.%d", $$2, $$3}')
 
 # OCLOUD_MANAGER_NAMESPACE refers to the namespace of the O-Cloud Manager
 OCLOUD_MANAGER_NAMESPACE ?= oran-o2ims
