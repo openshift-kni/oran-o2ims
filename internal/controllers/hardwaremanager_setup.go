@@ -20,6 +20,12 @@ import (
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
+// API group constants used in RBAC PolicyRules across this package.
+const (
+	apiGroupCLCM   = "clcm.openshift.io"
+	apiGroupMetal3 = "metal3.io"
+)
+
 // setupHardwareManager creates the Kubernetes resources necessary to start the hardware manager.
 func (t *reconcilerTask) setupHardwareManager(ctx context.Context, defaultResult ctrl.Result) (nextReconcile ctrl.Result, err error) {
 
@@ -95,7 +101,7 @@ func (t *reconcilerTask) createHardwareManagerClusterRole(ctx context.Context) e
 			},
 			{
 				APIGroups: []string{
-					"clcm.openshift.io",
+					apiGroupCLCM,
 				},
 				Resources: []string{
 					"hardwareprofiles",
@@ -111,7 +117,7 @@ func (t *reconcilerTask) createHardwareManagerClusterRole(ctx context.Context) e
 			},
 			{
 				APIGroups: []string{
-					"clcm.openshift.io",
+					apiGroupCLCM,
 				},
 				Resources: []string{
 					"hardwareprofiles/status",
@@ -125,7 +131,7 @@ func (t *reconcilerTask) createHardwareManagerClusterRole(ctx context.Context) e
 			// ProvisioningRequest read access for node hostname mapping during Day2 updates
 			{
 				APIGroups: []string{
-					"clcm.openshift.io",
+					apiGroupCLCM,
 				},
 				Resources: []string{
 					"provisioningrequests",
@@ -138,7 +144,7 @@ func (t *reconcilerTask) createHardwareManagerClusterRole(ctx context.Context) e
 			},
 			{
 				APIGroups: []string{
-					"clcm.openshift.io",
+					apiGroupCLCM,
 				},
 				Resources: []string{
 					"nodeallocationrequests",
@@ -156,7 +162,7 @@ func (t *reconcilerTask) createHardwareManagerClusterRole(ctx context.Context) e
 			},
 			{
 				APIGroups: []string{
-					"clcm.openshift.io",
+					apiGroupCLCM,
 				},
 				Resources: []string{
 					"nodeallocationrequests/status",
@@ -170,7 +176,7 @@ func (t *reconcilerTask) createHardwareManagerClusterRole(ctx context.Context) e
 			},
 			{
 				APIGroups: []string{
-					"clcm.openshift.io",
+					apiGroupCLCM,
 				},
 				Resources: []string{
 					"nodeallocationrequests/finalizers",
@@ -213,7 +219,7 @@ func (t *reconcilerTask) createHardwareManagerClusterRole(ctx context.Context) e
 			// Metal3
 			{
 				APIGroups: []string{
-					"metal3.io",
+					apiGroupMetal3,
 				},
 				Resources: []string{
 					"baremetalhosts",
@@ -229,7 +235,7 @@ func (t *reconcilerTask) createHardwareManagerClusterRole(ctx context.Context) e
 			},
 			{
 				APIGroups: []string{
-					"metal3.io",
+					apiGroupMetal3,
 				},
 				Resources: []string{
 					"hostfirmwaresettings",
@@ -247,7 +253,7 @@ func (t *reconcilerTask) createHardwareManagerClusterRole(ctx context.Context) e
 			},
 			{
 				APIGroups: []string{
-					"metal3.io",
+					apiGroupMetal3,
 				},
 				Resources: []string{
 					"dataimages",
@@ -260,7 +266,7 @@ func (t *reconcilerTask) createHardwareManagerClusterRole(ctx context.Context) e
 			},
 			{
 				APIGroups: []string{
-					"metal3.io",
+					apiGroupMetal3,
 				},
 				Resources: []string{
 					"firmwareschemas",

@@ -459,9 +459,9 @@ func (t *TUIFormatter) cleanupStaleInventoryObjects() {
 
 	for _, event := range t.events {
 		// Only verify inventory objects during inventory refresh
-		if event.CRDType == "inventory-resources" ||
-			event.CRDType == "inventory-resource-pools" ||
-			event.CRDType == "inventory-node-clusters" ||
+		if event.CRDType == CRDTypeInventoryResources ||
+			event.CRDType == CRDTypeInventoryResourcePools ||
+			event.CRDType == CRDTypeInventoryNodeClusters ||
 			event.CRDType == CRDTypeInventoryAlarms {
 
 			resourceKey := t.getResourceKey(event)

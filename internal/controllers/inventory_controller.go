@@ -970,7 +970,7 @@ func (t *reconcilerTask) createArtifactsServerClusterRole(ctx context.Context) e
 			// We need to read ClusterTemplates and ConfigMaps.
 			{
 				APIGroups: []string{
-					"clcm.openshift.io",
+					apiGroupCLCM,
 				},
 				Resources: []string{
 					"clustertemplates",
@@ -1120,7 +1120,7 @@ func (t *reconcilerTask) createResourceServerClusterRole(ctx context.Context) er
 			// hardware inventory from BMHs, HardwareData, and AllocatedNodes.
 			{
 				APIGroups: []string{
-					"metal3.io",
+					apiGroupMetal3,
 				},
 				Resources: []string{
 					"baremetalhosts",
@@ -1134,7 +1134,7 @@ func (t *reconcilerTask) createResourceServerClusterRole(ctx context.Context) er
 			},
 			{
 				APIGroups: []string{
-					"clcm.openshift.io",
+					apiGroupCLCM,
 				},
 				Resources: []string{
 					"allocatednodes",
@@ -1236,7 +1236,7 @@ func (t *reconcilerTask) createProvisioningServerClusterRole(ctx context.Context
 		Rules: []rbacv1.PolicyRule{
 			{
 				APIGroups: []string{
-					"clcm.openshift.io",
+					apiGroupCLCM,
 				},
 				Resources: []string{
 					"provisioningrequests",

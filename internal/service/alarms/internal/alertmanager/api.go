@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
@@ -190,7 +191,7 @@ func (c *AMClient) createAlertmanagerClient() (*http.Client, string, error) {
 	// Determine token file path (allow override for testing/local development)
 	tokenPath := constants.DefaultBackendTokenFile
 	if envPath := os.Getenv("ALARMS_SERVER_TOKEN_FILE"); envPath != "" {
-		tokenPath = envPath
+		tokenPath = filepath.Clean(envPath)
 	}
 
 	// Read token from service account token file
@@ -202,7 +203,7 @@ func (c *AMClient) createAlertmanagerClient() (*http.Client, string, error) {
 	// Determine service CA file path (allow override for testing/local development)
 	caPath := constants.DefaultServiceCAFile
 	if envPath := os.Getenv("ALARMS_SERVER_CA_FILE"); envPath != "" {
-		caPath = envPath
+		caPath = filepath.Clean(envPath)
 	}
 
 	// Read service CA certificate

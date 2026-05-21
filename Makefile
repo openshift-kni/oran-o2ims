@@ -33,7 +33,7 @@ BASHATE_VERSION ?= 2.1.1
 CONTROLLER_GEN_VERSION ?= v0.18.0
 
 # GOLANGCI_LINT_VERSION defines the golangci-lint version to download from GitHub releases.
-GOLANGCI_LINT_VERSION ?= v2.4.0
+GOLANGCI_LINT_VERSION ?= v2.12.2
 
 # KUSTOMIZE_VERSION defines the kustomize version to download from go modules.
 KUSTOMIZE_VERSION ?= v5@v5.7.1
@@ -128,8 +128,8 @@ endif
 IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
 
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.32.0
-ENVTEST_VERSION = release-0.21
+ENVTEST_K8S_VERSION = 1.35.0
+ENVTEST_VERSION = release-0.22
 
 # OCLOUD_MANAGER_NAMESPACE refers to the namespace of the O-Cloud Manager
 OCLOUD_MANAGER_NAMESPACE ?= oran-o2ims
