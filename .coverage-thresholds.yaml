@@ -23,6 +23,7 @@ packages:
   internal/service/artifacts/api: 10
   internal/service/cluster/api: 11
   internal/service/cluster/collector: 5
+  internal/service/common/cache: 90
   internal/service/common/api: 74
   internal/service/common/api/middleware: 31
   internal/service/common/async: 48

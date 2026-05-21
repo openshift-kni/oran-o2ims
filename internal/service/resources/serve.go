@@ -181,6 +181,7 @@ func Serve(config *api.ResourceServerConfig) error {
 		},
 		SubscriptionEventHandler: resourceNotifier,
 	}
+	server.InitAlarmDictCache()
 
 	serverStrictHandler := generated.NewStrictHandlerWithOptions(&server, nil,
 		generated.StrictHTTPServerOptions{
@@ -273,7 +274,7 @@ func Serve(config *api.ResourceServerConfig) error {
 	// Start PostgreSQL listener for resource type changes
 	go func() {
 		slog.Info("Starting PostgreSQL listener for resource type changes")
-		listener.ListenForResourcePgChannels(ctx, pool, repository)
+		listener.ListenForResourcePgChannels(ctx, pool, repository, server.InvalidateAlarmDictCache)
 		slog.Info("PostgreSQL listener stopped")
 	}()
 

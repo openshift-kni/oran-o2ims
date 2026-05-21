@@ -27,8 +27,10 @@ type ResourceTypeChangeNotification struct {
 	ChangeType     string    `json:"change_type"` // "created", "updated", or "deleted"
 }
 
-// ListenForResourcePgChannels registers the channels with their handlers and starts listening
-func ListenForResourcePgChannels(ctx context.Context, pool *pgxpool.Pool, repository *repo.ResourcesRepository) {
+// ListenForResourcePgChannels registers the channels with their handlers and starts listening.
+// The onResourceTypeChanged callback is invoked whenever a resource_type_changed notification
+// is received or the periodic catch-up sync runs, allowing callers to invalidate caches.
+func ListenForResourcePgChannels(ctx context.Context, pool *pgxpool.Pool, repository *repo.ResourcesRepository, onResourceTypeChanged func()) {
 	slog.Info("Starting PostgreSQL listener for resource server")
 
 	// Sync existing ResourceTypes on startup to handle any that were created before listener started
@@ -46,11 +48,19 @@ func ListenForResourcePgChannels(ctx context.Context, pool *pgxpool.Pool, reposi
 		"resource_type_changed",
 		// Function called after a notification is received
 		func(ctx context.Context, pgNotification *pgconn.Notification) error {
-			return processResourceTypeChangeNotification(ctx, repository, pgNotification)
+			err := processResourceTypeChangeNotification(ctx, repository, pgNotification)
+			if err == nil && onResourceTypeChanged != nil {
+				onResourceTypeChanged()
+			}
+			return err
 		},
 		// Catch-up function runs periodically to handle missed notifications or failures
 		func(ctx context.Context) error {
-			return syncExistingResourceTypes(ctx, repository)
+			err := syncExistingResourceTypes(ctx, repository)
+			if err == nil && onResourceTypeChanged != nil {
+				onResourceTypeChanged()
+			}
+			return err
 		},
 		// Catch-up interval - sync every 15 minutes as backup
 		15*time.Minute,

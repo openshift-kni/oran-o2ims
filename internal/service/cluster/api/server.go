@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -23,6 +24,7 @@ import (
 	svcclusterutils "github.com/openshift-kni/oran-o2ims/internal/service/cluster/utils"
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/cache"
 	models2 "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
@@ -40,11 +42,57 @@ type ClusterServerConfig struct {
 	ExternalAddress string
 }
 
+// AlarmDictData holds pre-built alarm dictionary API models with lookup
+// indexes for serving from memory.
+type AlarmDictData struct {
+	All      []generated.AlarmDictionary
+	ByID     map[uuid.UUID]*generated.AlarmDictionary
+	ByTypeID map[uuid.UUID]*generated.AlarmDictionary
+}
+
 // ClusterServer defines the instance attributes for an instance of a cluster server
 type ClusterServer struct {
 	Config                   *ClusterServerConfig
 	Repo                     repo.RepositoryInterface
 	SubscriptionEventHandler notifier.SubscriptionEventHandler
+	AlarmDicts               *cache.Entry[AlarmDictData]
+}
+
+// InitAlarmDictCache initializes the alarm dictionary cache with TTL-based
+// expiration. The cluster server has no PG NOTIFY listener, so the cache
+// relies on TTL for freshness.
+func (r *ClusterServer) InitAlarmDictCache() {
+	r.AlarmDicts = cache.NewEntry("cluster-alarm-dictionaries", 5*time.Minute, func(ctx context.Context) (AlarmDictData, error) {
+		records, err := r.Repo.GetAlarmDictionaries(ctx)
+		if err != nil {
+			return AlarmDictData{}, fmt.Errorf("failed to get alarm dictionaries: %w", err)
+		}
+
+		thanosDefinitions, err := r.Repo.GetThanosAlarmDefinitions(ctx)
+		if err != nil {
+			return AlarmDictData{}, fmt.Errorf("failed to get thanos alarm definitions: %w", err)
+		}
+
+		data := AlarmDictData{
+			All:      make([]generated.AlarmDictionary, len(records)),
+			ByID:     make(map[uuid.UUID]*generated.AlarmDictionary, len(records)),
+			ByTypeID: make(map[uuid.UUID]*generated.AlarmDictionary, len(records)),
+		}
+
+		for i, record := range records {
+			definitions, err := r.Repo.GetAlarmDefinitionsByAlarmDictionaryID(ctx, record.AlarmDictionaryID)
+			if err != nil {
+				return AlarmDictData{}, fmt.Errorf("failed to get alarm definitions for dictionary %s: %w", record.AlarmDictionaryID, err)
+			}
+
+			definitions = append(definitions, thanosDefinitions...)
+			data.All[i] = models.AlarmDictionaryToModel(&record, definitions)
+			data.ByID[record.AlarmDictionaryID] = &data.All[i]
+			data.ByTypeID[record.NodeClusterTypeID] = &data.All[i]
+		}
+
+		return data, nil
+	})
 }
 
 // GetClusterResourceTypes receives the API request to this endpoint, executes the request, and responds appropriately
@@ -193,7 +241,7 @@ func (r *ClusterServer) GetNodeClusterType(ctx context.Context, request api.GetN
 
 // GetNodeClusterTypeAlarmDictionary receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetNodeClusterTypeAlarmDictionary(ctx context.Context, request api.GetNodeClusterTypeAlarmDictionaryRequestObject) (api.GetNodeClusterTypeAlarmDictionaryResponseObject, error) {
-	records, err := r.Repo.GetNodeClusterTypeAlarmDictionary(ctx, request.NodeClusterTypeId)
+	data, err := r.AlarmDicts.Get(ctx)
 	if err != nil {
 		return api.GetNodeClusterTypeAlarmDictionary500ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
@@ -204,7 +252,8 @@ func (r *ClusterServer) GetNodeClusterTypeAlarmDictionary(ctx context.Context, r
 		}, nil
 	}
 
-	if len(records) == 0 {
+	dict, found := data.ByTypeID[request.NodeClusterTypeId]
+	if !found {
 		return api.GetNodeClusterTypeAlarmDictionary404ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"NodeClusterTypeId": request.NodeClusterTypeId.String(),
@@ -214,23 +263,7 @@ func (r *ClusterServer) GetNodeClusterTypeAlarmDictionary(ctx context.Context, r
 		}, nil
 	}
 
-	// Safe to assume there is a single record since node_cluster_type_id is unique in the db
-	dictionary := records[0]
-
-	// Get alarm definitions
-	definitions, err := r.Repo.GetAlarmDefinitionsByAlarmDictionaryID(ctx, dictionary.AlarmDictionaryID)
-	if err != nil {
-		return api.GetNodeClusterTypeAlarmDictionary500ApplicationProblemPlusJSONResponse{
-			AdditionalAttributes: &map[string]string{
-				"NodeClusterTypeId": request.NodeClusterTypeId.String(),
-			},
-			Detail: err.Error(),
-			Status: http.StatusInternalServerError,
-		}, nil
-	}
-
-	object := models.AlarmDictionaryToModel(&dictionary, definitions)
-	return api.GetNodeClusterTypeAlarmDictionary200JSONResponse(object), nil
+	return api.GetNodeClusterTypeAlarmDictionary200JSONResponse(*dict), nil
 }
 
 // GetNodeClusters receives the API request to this endpoint, executes the request, and responds appropriately
@@ -502,46 +535,33 @@ func (r *ClusterServer) DeleteSubscription(ctx context.Context, request api.Dele
 }
 
 // GetAlarmDictionaries receives the API request to this endpoint, executes the request, and responds appropriately
-func (r *ClusterServer) GetAlarmDictionaries(ctx context.Context, request api.GetAlarmDictionariesRequestObject) (api.GetAlarmDictionariesResponseObject, error) {
-	records, err := r.Repo.GetAlarmDictionaries(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get alarm dictionaries: %w", err)
-	}
-
-	// Get Thanos alarm definitions (stored globally with NULL alarm_dictionary_id)
-	thanosDefinitions, err := r.Repo.GetThanosAlarmDefinitions(ctx)
+func (r *ClusterServer) GetAlarmDictionaries(ctx context.Context, _ api.GetAlarmDictionariesRequestObject) (api.GetAlarmDictionariesResponseObject, error) {
+	data, err := r.AlarmDicts.Get(ctx)
 	if err != nil {
 		return api.GetAlarmDictionaries500ApplicationProblemPlusJSONResponse{
-			Detail: fmt.Sprintf("failed to get thanos alarm definitions: %s", err.Error()),
+			Detail: err.Error(),
 			Status: http.StatusInternalServerError,
 		}, nil
 	}
 
-	objects := make([]generated.AlarmDictionary, len(records))
-	for i, record := range records {
-		definitions, err := r.Repo.GetAlarmDefinitionsByAlarmDictionaryID(ctx, record.AlarmDictionaryID)
-		if err != nil {
-			return api.GetAlarmDictionaries500ApplicationProblemPlusJSONResponse{
-				AdditionalAttributes: &map[string]string{
-					"alarmDictionaryId": record.AlarmDictionaryID.String(),
-				},
-				Detail: err.Error(),
-				Status: http.StatusInternalServerError,
-			}, nil
-		}
-
-		// Append Thanos alarm definitions to each dictionary
-		definitions = append(definitions, thanosDefinitions...)
-		objects[i] = models.AlarmDictionaryToModel(&record, definitions)
-	}
-
-	return api.GetAlarmDictionaries200JSONResponse(objects), nil
+	return api.GetAlarmDictionaries200JSONResponse(data.All), nil
 }
 
 // GetAlarmDictionary receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetAlarmDictionary(ctx context.Context, request api.GetAlarmDictionaryRequestObject) (api.GetAlarmDictionaryResponseObject, error) {
-	record, err := r.Repo.GetAlarmDictionary(ctx, request.AlarmDictionaryId)
-	if errors.Is(err, svcutils.ErrNotFound) {
+	data, err := r.AlarmDicts.Get(ctx)
+	if err != nil {
+		return api.GetAlarmDictionary500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"alarmDictionaryId": request.AlarmDictionaryId.String(),
+			},
+			Detail: err.Error(),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	dict, found := data.ByID[request.AlarmDictionaryId]
+	if !found {
 		return api.GetAlarmDictionary404ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"alarmDictionaryId": request.AlarmDictionaryId.String(),
@@ -550,42 +570,6 @@ func (r *ClusterServer) GetAlarmDictionary(ctx context.Context, request api.GetA
 			Status: http.StatusNotFound,
 		}, nil
 	}
-	if err != nil {
-		return api.GetAlarmDictionary500ApplicationProblemPlusJSONResponse{
-			AdditionalAttributes: &map[string]string{
-				"alarmDictionaryId": request.AlarmDictionaryId.String(),
-			},
-			Detail: err.Error(),
-			Status: http.StatusInternalServerError,
-		}, nil
-	}
 
-	definitions, err := r.Repo.GetAlarmDefinitionsByAlarmDictionaryID(ctx, record.AlarmDictionaryID)
-	if err != nil {
-		return api.GetAlarmDictionary500ApplicationProblemPlusJSONResponse{
-			AdditionalAttributes: &map[string]string{
-				"alarmDictionaryId": request.AlarmDictionaryId.String(),
-			},
-			Detail: err.Error(),
-			Status: http.StatusInternalServerError,
-		}, nil
-	}
-
-	// Get Thanos alarm definitions (stored globally with NULL alarm_dictionary_id)
-	thanosDefinitions, err := r.Repo.GetThanosAlarmDefinitions(ctx)
-	if err != nil {
-		return api.GetAlarmDictionary500ApplicationProblemPlusJSONResponse{
-			AdditionalAttributes: &map[string]string{
-				"alarmDictionaryId": request.AlarmDictionaryId.String(),
-			},
-			Detail: fmt.Sprintf("failed to get thanos alarm definitions: %s", err.Error()),
-			Status: http.StatusInternalServerError,
-		}, nil
-	}
-
-	// Append Thanos alarm definitions to the dictionary
-	definitions = append(definitions, thanosDefinitions...)
-	object := models.AlarmDictionaryToModel(record, definitions)
-
-	return api.GetAlarmDictionary200JSONResponse(object), nil
+	return api.GetAlarmDictionary200JSONResponse(*dict), nil
 }

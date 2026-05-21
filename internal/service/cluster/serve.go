@@ -139,6 +139,7 @@ func Serve(config *api.ClusterServerConfig) error {
 		Repo:                     repository,
 		SubscriptionEventHandler: clusterNotifier,
 	}
+	server.InitAlarmDictCache()
 
 	serverStrictHandler := generated.NewStrictHandlerWithOptions(&server, nil,
 		generated.StrictHTTPServerOptions{

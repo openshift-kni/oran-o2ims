@@ -57,6 +57,7 @@ var _ = Describe("ResourceServer", func() {
 			Repo:                     mockRepo,
 			SubscriptionEventHandler: &mockSubscriptionEventHandler{},
 		}
+		server.InitAlarmDictCache()
 		ctx = context.Background()
 		testUUID = uuid.New()
 	})
@@ -1007,8 +1008,8 @@ var _ = Describe("ResourceServer", func() {
 		When("alarm dictionary is found", func() {
 			It("returns 200 response with alarm dictionary", func() {
 				mockRepo.EXPECT().
-					GetAlarmDictionary(ctx, testUUID).
-					Return(&models.AlarmDictionary{AlarmDictionaryID: testUUID}, nil)
+					GetAlarmDictionaries(ctx).
+					Return([]models.AlarmDictionary{{AlarmDictionaryID: testUUID, ResourceTypeID: uuid.New()}}, nil)
 				mockRepo.EXPECT().
 					GetAlarmDefinitionsByAlarmDictionaryID(ctx, testUUID).
 					Return([]models.AlarmDefinition{}, nil)
@@ -1026,8 +1027,8 @@ var _ = Describe("ResourceServer", func() {
 		When("alarm dictionary not found", func() {
 			It("returns 404 response", func() {
 				mockRepo.EXPECT().
-					GetAlarmDictionary(ctx, testUUID).
-					Return(nil, svcutils.ErrNotFound)
+					GetAlarmDictionaries(ctx).
+					Return([]models.AlarmDictionary{}, nil)
 
 				resp, err := server.GetAlarmDictionary(ctx, apiGenerated.GetAlarmDictionaryRequestObject{
 					AlarmDictionaryId: testUUID,
@@ -1043,7 +1044,7 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					GetAlarmDictionary(ctx, testUUID).
+					GetAlarmDictionaries(ctx).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetAlarmDictionary(ctx, apiGenerated.GetAlarmDictionaryRequestObject{
@@ -1118,12 +1119,112 @@ var _ = Describe("ResourceServer", func() {
 		})
 	})
 
+	Describe("Alarm dictionary cache behavior", func() {
+		It("serves subsequent requests from cache without additional DB queries", func() {
+			dictID := uuid.New()
+			rtID := uuid.New()
+			mockRepo.EXPECT().
+				GetAlarmDictionaries(ctx).
+				Return([]models.AlarmDictionary{{AlarmDictionaryID: dictID, ResourceTypeID: rtID}}, nil).
+				Times(1)
+			mockRepo.EXPECT().
+				GetAlarmDefinitionsByAlarmDictionaryID(ctx, dictID).
+				Return([]models.AlarmDefinition{}, nil).
+				Times(1)
+
+			resp1, err := server.GetAlarmDictionaries(ctx, apiGenerated.GetAlarmDictionariesRequestObject{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp1.(apiGenerated.GetAlarmDictionaries200JSONResponse)).To(HaveLen(1))
+
+			resp2, err := server.GetAlarmDictionaries(ctx, apiGenerated.GetAlarmDictionariesRequestObject{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp2.(apiGenerated.GetAlarmDictionaries200JSONResponse)).To(HaveLen(1))
+		})
+
+		It("repopulates cache after invalidation", func() {
+			dictID1 := uuid.New()
+			rtID1 := uuid.New()
+			dictID2 := uuid.New()
+			rtID2 := uuid.New()
+
+			gomock.InOrder(
+				mockRepo.EXPECT().
+					GetAlarmDictionaries(ctx).
+					Return([]models.AlarmDictionary{{AlarmDictionaryID: dictID1, ResourceTypeID: rtID1}}, nil),
+				mockRepo.EXPECT().
+					GetAlarmDefinitionsByAlarmDictionaryID(ctx, dictID1).
+					Return([]models.AlarmDefinition{}, nil),
+				mockRepo.EXPECT().
+					GetAlarmDictionaries(ctx).
+					Return([]models.AlarmDictionary{
+						{AlarmDictionaryID: dictID1, ResourceTypeID: rtID1},
+						{AlarmDictionaryID: dictID2, ResourceTypeID: rtID2},
+					}, nil),
+				mockRepo.EXPECT().
+					GetAlarmDefinitionsByAlarmDictionaryID(ctx, dictID1).
+					Return([]models.AlarmDefinition{}, nil),
+				mockRepo.EXPECT().
+					GetAlarmDefinitionsByAlarmDictionaryID(ctx, dictID2).
+					Return([]models.AlarmDefinition{}, nil),
+			)
+
+			resp1, err := server.GetAlarmDictionaries(ctx, apiGenerated.GetAlarmDictionariesRequestObject{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp1.(apiGenerated.GetAlarmDictionaries200JSONResponse)).To(HaveLen(1))
+
+			server.InvalidateAlarmDictCache()
+
+			resp2, err := server.GetAlarmDictionaries(ctx, apiGenerated.GetAlarmDictionariesRequestObject{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp2.(apiGenerated.GetAlarmDictionaries200JSONResponse)).To(HaveLen(2))
+		})
+
+		It("supports lookup by dictionary ID and resource type ID", func() {
+			dictID := uuid.New()
+			rtID := uuid.New()
+			mockRepo.EXPECT().
+				GetAlarmDictionaries(ctx).
+				Return([]models.AlarmDictionary{{AlarmDictionaryID: dictID, ResourceTypeID: rtID}}, nil)
+			mockRepo.EXPECT().
+				GetAlarmDefinitionsByAlarmDictionaryID(ctx, dictID).
+				Return([]models.AlarmDefinition{}, nil)
+
+			byID, err := server.GetAlarmDictionary(ctx, apiGenerated.GetAlarmDictionaryRequestObject{
+				AlarmDictionaryId: dictID,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(byID).To(BeAssignableToTypeOf(apiGenerated.GetAlarmDictionary200JSONResponse{}))
+
+			byRT, err := server.GetResourceTypeAlarmDictionary(ctx, apiGenerated.GetResourceTypeAlarmDictionaryRequestObject{
+				ResourceTypeId: rtID,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(byRT).To(BeAssignableToTypeOf(apiGenerated.GetResourceTypeAlarmDictionary200JSONResponse{}))
+		})
+	})
+
+	Describe("Alarm dictionary cache mid-loader failure", func() {
+		It("returns 500 when alarm definitions query fails during cache load", func() {
+			dictID := uuid.New()
+			mockRepo.EXPECT().
+				GetAlarmDictionaries(ctx).
+				Return([]models.AlarmDictionary{{AlarmDictionaryID: dictID, ResourceTypeID: uuid.New()}}, nil)
+			mockRepo.EXPECT().
+				GetAlarmDefinitionsByAlarmDictionaryID(ctx, dictID).
+				Return(nil, fmt.Errorf("definitions query failed"))
+
+			resp, err := server.GetAlarmDictionaries(ctx, apiGenerated.GetAlarmDictionariesRequestObject{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetAlarmDictionaries500ApplicationProblemPlusJSONResponse{}))
+		})
+	})
+
 	Describe("GetResourceTypeAlarmDictionary", func() {
 		When("alarm dictionary is found for resource type", func() {
 			It("returns 200 response with alarm dictionary", func() {
 				dictID := uuid.New()
 				mockRepo.EXPECT().
-					GetResourceTypeAlarmDictionary(ctx, testUUID).
+					GetAlarmDictionaries(ctx).
 					Return([]models.AlarmDictionary{{AlarmDictionaryID: dictID, ResourceTypeID: testUUID}}, nil)
 				mockRepo.EXPECT().
 					GetAlarmDefinitionsByAlarmDictionaryID(ctx, dictID).
@@ -1142,7 +1243,7 @@ var _ = Describe("ResourceServer", func() {
 		When("no alarm dictionary exists for resource type", func() {
 			It("returns 404 response", func() {
 				mockRepo.EXPECT().
-					GetResourceTypeAlarmDictionary(ctx, testUUID).
+					GetAlarmDictionaries(ctx).
 					Return([]models.AlarmDictionary{}, nil)
 
 				resp, err := server.GetResourceTypeAlarmDictionary(ctx, apiGenerated.GetResourceTypeAlarmDictionaryRequestObject{
@@ -1159,7 +1260,7 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					GetResourceTypeAlarmDictionary(ctx, testUUID).
+					GetAlarmDictionaries(ctx).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetResourceTypeAlarmDictionary(ctx, apiGenerated.GetResourceTypeAlarmDictionaryRequestObject{
