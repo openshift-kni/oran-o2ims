@@ -10,6 +10,10 @@ updates:
    schedule:
     interval: "daily"
    open-pull-requests-limit: 5
+   ignore:
+    # k8s.io v0.36+ requires Go 1.26; stay on v0.35.x until Go is upgraded
+    - dependency-name: "k8s.io/*"
+      versions: [">= 0.36.0"]
    groups:
     k8s:
      patterns: ["k8s.io/*", "sigs.k8s.io/*"]
