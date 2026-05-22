@@ -33,18 +33,10 @@ func From(table any) dialect.FromChain[*dialect.SelectQuery] {
 	return dialect.From[*dialect.SelectQuery](table)
 }
 
-func FromFunction(funcs ...*dialect.Function) dialect.FromChain[*dialect.SelectQuery] {
-	var table any
-
-	if len(funcs) == 1 {
-		table = funcs[0]
-	}
-
-	if len(funcs) > 1 {
-		table = dialect.Functions(funcs)
-	}
-
-	return dialect.From[*dialect.SelectQuery](table)
+// FromFunction returns an expression for sm.From when the source is one or more
+// table functions (ROWS FROM when multiple).
+func FromFunction(funcs ...*dialect.Function) bob.Expression {
+	return dialect.TableFunctions(funcs...)
 }
 
 func InnerJoin(e any) dialect.JoinChain[*dialect.SelectQuery] {
@@ -63,7 +55,7 @@ func FullJoin(e any) dialect.JoinChain[*dialect.SelectQuery] {
 	return dialect.FullJoin[*dialect.SelectQuery](e)
 }
 
-func CrossJoin(e any) dialect.CrossJoinChain[*dialect.SelectQuery] {
+func CrossJoin(e any) dialect.JoinChain[*dialect.SelectQuery] {
 	return dialect.CrossJoin[*dialect.SelectQuery](e)
 }
 
@@ -83,6 +75,22 @@ func GroupBy(e any) bob.Mod[*dialect.SelectQuery] {
 
 func GroupByDistinct(distinct bool) bob.Mod[*dialect.SelectQuery] {
 	return mods.GroupByDistinct[*dialect.SelectQuery](distinct)
+}
+
+func Grouping(groups ...any) clause.Grouping {
+	return clause.Grouping{Groups: groups}
+}
+
+func Rollup(groups ...any) clause.GroupingSet {
+	return clause.GroupingSet{Type: "ROLLUP", Groups: groups}
+}
+
+func Cube(groups ...any) clause.GroupingSet {
+	return clause.GroupingSet{Type: "CUBE", Groups: groups}
+}
+
+func GroupingSets(groups ...any) clause.GroupingSet {
+	return clause.GroupingSet{Type: "GROUPING SETS", Groups: groups}
 }
 
 func Window(name string, winMods ...bob.Mod[*clause.Window]) bob.Mod[*dialect.SelectQuery] {

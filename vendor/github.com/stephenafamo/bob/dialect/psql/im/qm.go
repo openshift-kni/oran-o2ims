@@ -38,13 +38,13 @@ func IntoAs(name any, alias string, columns ...string) bob.Mod[*dialect.InsertQu
 
 func OverridingSystem() bob.Mod[*dialect.InsertQuery] {
 	return bob.ModFunc[*dialect.InsertQuery](func(i *dialect.InsertQuery) {
-		i.Overriding = "SYSTEM"
+		i.Overriding = dialect.OverridingSystem
 	})
 }
 
 func OverridingUser() bob.Mod[*dialect.InsertQuery] {
 	return bob.ModFunc[*dialect.InsertQuery](func(i *dialect.InsertQuery) {
-		i.Overriding = "USER"
+		i.Overriding = dialect.OverridingUser
 	})
 }
 
@@ -65,26 +65,14 @@ func Query(q bob.Query) bob.Mod[*dialect.InsertQuery] {
 
 // The column to target. Will auto add brackets
 func OnConflict(columns ...any) mods.Conflict[*dialect.InsertQuery] {
-	return mods.Conflict[*dialect.InsertQuery](func() clause.ConflictClause {
-		return clause.ConflictClause{
-			Target: clause.ConflictTarget{
-				Columns: columns,
-			},
-		}
-	})
+	return mods.ConflictColumns[*dialect.InsertQuery](columns...)
 }
 
 func OnConflictOnConstraint(constraint string) mods.Conflict[*dialect.InsertQuery] {
-	return mods.Conflict[*dialect.InsertQuery](func() clause.ConflictClause {
-		return clause.ConflictClause{
-			Target: clause.ConflictTarget{
-				Constraint: constraint,
-			},
-		}
-	})
+	return mods.ConflictOnConstraint[*dialect.InsertQuery](constraint)
 }
 
-func Returning(clauses ...any) bob.Mod[*dialect.InsertQuery] {
+func Returning(clauses ...any) mods.Returning[*dialect.InsertQuery] {
 	return mods.Returning[*dialect.InsertQuery](clauses)
 }
 
@@ -102,22 +90,35 @@ func SetCol(from string) mods.Set[*clause.ConflictClause] {
 	return mods.Set[*clause.ConflictClause]{from}
 }
 
+// SetCols creates a multi-column setter: (columns...) = ROW(...) | (values...) | (subquery)
+func SetCols(columns ...string) dialect.SetCols[*clause.ConflictClause] {
+	return dialect.NewSetCols[*clause.ConflictClause](columns...)
+}
+
+// Excluded references a column from the EXCLUDED pseudo-table in ON CONFLICT DO UPDATE.
+//
+//	SQL: EXCLUDED."col"
+//	Go: im.Excluded("col")
+func Excluded(column string) dialect.Expression {
+	return dialect.NewExpression(
+		expr.Join{
+			Exprs: []bob.Expression{expr.Raw("EXCLUDED."), expr.Quote(column)},
+			Sep:   expr.NoSep,
+		},
+	)
+}
+
 func SetExcluded(cols ...string) bob.Mod[*clause.ConflictClause] {
-	exprs := make([]any, 0, len(cols))
+	exprs := make([]bob.Expression, 0, len(cols))
 	for _, col := range cols {
 		if col == "" {
 			continue
 		}
-		exprs = append(exprs,
-			expr.Join{Exprs: []bob.Expression{
-				expr.Quote(col), expr.Raw("= EXCLUDED."), expr.Quote(col),
-			}},
-		)
+
+		exprs = append(exprs, expr.OP("=", expr.Quote(col), Excluded(col)))
 	}
 
-	return bob.ModFunc[*clause.ConflictClause](func(c *clause.ConflictClause) {
-		c.Set.Set = append(c.Set.Set, exprs...)
-	})
+	return Set(exprs...)
 }
 
 func Where(e bob.Expression) bob.Mod[*clause.ConflictClause] {

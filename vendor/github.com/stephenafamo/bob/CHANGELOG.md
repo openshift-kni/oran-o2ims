@@ -5,6 +5,88 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.44.0] - 2026-05-21
+
+### Added
+
+- Added PostgreSQL `MERGE` statement SQL parser used for sql-to-code generation (thanks @atzedus)
+- Added `R.Loaded` to generated models, a nested struct with one `bool` per relationship that records whether each relationship has been loaded. This disambiguates "not loaded yet" from "loaded, but no related rows" for both to-one and to-many relations. Maintained automatically by `Load*`, `Preload`, `ThenLoad`, factory builds, and to-one `Attach`/`Insert` ops. The `Loaded` alias can be changed in the bob config. (thanks @jacobmolby)
+- Added `As(alias)` method to `bob.BaseQuery`, allowing queries (e.g. `mysql.Select(...)`) to be aliased directly when used as subqueries in a column list. (thanks @jacobmolby)
+- Added columns API: generated column structures now provide `Name() string` method. (thanks @atzedus)
+- Added `expr.ColumnsExpr` accessor methods: `Parent() []string`, `AggFunc() [2]string`, `AliasPrefix() string`, and `AliasDisabled() bool`. `WithParent(...)` now filters empty parts, and default rendering for plain unqualified columns no longer emits redundant self-aliases (e.g. `"name"` instead of `"name" AS "name"`). (thanks @atzedus)
+- Added `bob.ParensOmitter` interface with `ShouldOmitParens() bool` to let expressions opt out of automatic parenthesis wrapping in expression builders. (thanks @atzedus)
+- Added PostgreSQL `RETURNING WITH (OLD AS ..., NEW AS ...)` support for `INSERT`, `UPDATE`, `DELETE`, and `MERGE` query builders, including fluent modifiers: `im/um/dm/mm.Returning(...).WithOldAs(...).WithNewAs(...)`. (thanks @atzedus)
+  - Note: `bobgen-psql` sql-to-code parsing for this syntax is currently blocked by upstream PostgreSQL parser dependency support.
+- Added PostgreSQL `TABLESAMPLE ... REPEATABLE ...` support via fluent modifiers on `sm.From(...)` and join chains. (thanks @atzedus)
+- Added PostgreSQL `JOIN ... USING (...) AS alias` support via `UsingAs(alias, cols...)` on psql join chains. (thanks @atzedus)
+- Added PostgreSQL GROUP BY grouping-element helpers: `sm.Grouping(...)`, `sm.Rollup(...)`, `sm.Cube(...)`, and `sm.GroupingSets(...)`. (thanks @atzedus)
+- Added PostgreSQL `im.ConflictTarget(...)` helper for composing `ON CONFLICT` target items with optional `.Collate(...)` and `.OpClass(...)` modifiers. (thanks @atzedus)
+- Added PostgreSQL UPDATE/MERGE tuple-assignment helper `um.SetCols(columns...)` with `.ToExprs(...)`, `.ToRow(...)`, and `.ToQuery(...)` support. (thanks @atzedus)
+- Added PostgreSQL UPDATE/DELETE `um.WhereCurrentOf(cursor)` modifier to render `WHERE CURRENT OF <cursor>`. (thanks @atzedus)
+- Added `expr.NoSep` sentinel to join expressions without any separator. The existing `expr.Join` default (space) is unchanged. (thanks @atzedus)
+- Added `im.Excluded(column)` helper (PostgreSQL and SQLite) for `ON CONFLICT DO UPDATE` assignments — renders as `EXCLUDED."col"` with no extra space, reused internally by `im.SetExcluded(...)` and available for direct use in `im.SetCol(...).To(...)`. (thanks @atzedus)
+- Added PostgreSQL `psql.TableFunctions(funcs)` and `sm.FromFunction` / `um.FromFunction` / `dm.UsingFunction` helpers that return `bob.Expression` for table-function `from_item` sources (`ROWS FROM (...)` when multiple functions are given). (thanks @atzedus)
+- Added PostgreSQL `um.From(table, joins...)` and `dm.Using(table, joins...)` variadic join arguments so each appended `from_item` can include inline `INNER JOIN`, `LEFT JOIN`, `CROSS JOIN`, etc. (`JoinChain` builders). (thanks @atzedus)
+- Added `bobgen-psql` support for multiple `UPDATE ... FROM` / `DELETE ... USING` sources: sql-to-code emits `AppendTableRef(...)` per parsed `from_item` and resolves column sources from every item. (thanks @atzedus)
+
+### Changed
+
+- **BREAKING:** Renamed the generated `ThenLoadCount` variable to `SelectThenLoadCount` for naming consistency with `SelectThenLoad`/`InsertThenLoad`/`UpdateThenLoad`. Update call sites from `models.ThenLoadCount.X.Y` to `models.SelectThenLoadCount.X.Y`. (thanks @jacobmolby)
+- **BREAKING:** `mm.SetCol()` now returns `mods.Set[*mm.UpdateAction]` instead of a custom `SetChain` type. `.ToExpr(val)` is replaced by `.To(val)`, and `.ToDefault()` is replaced by `.To(psql.Raw("DEFAULT"))`. `.To()` and `.ToArg()` work as before. (thanks @atzedus)
+- **BREAKING:** `mm.Recursive()` has been removed. PostgreSQL does not support `WITH RECURSIVE` in MERGE statements. (thanks @atzedus)
+- **BREAKING:** Generated `*Columns` accessor fields now return a dialect-specific wrapper type (e.g., `userColumn`) instead of plain `dialect.Expression`. The wrapper still implements `dialect.Expression` and avoids extra auto-parentheses in expression builders. Use `.Expression` only when you explicitly need the embedded expression value. (thanks @atzedus)
+- **BREAKING:** PostgreSQL `UPDATE ... FROM` and `DELETE ... USING` additional sources now live in `UpdateQuery.FromItems` / `DeleteQuery.UsingItems` instead of the embedded `clause.TableRef` on the query struct. Each `um.From(...)` or `dm.Using(...)` appends one comma-separated `from_item` (last call no longer wins). Use `um.Table(...)` / `dm.From(...)` for the update/delete target table. (thanks @atzedus)
+- **BREAKING:** PostgreSQL `sm.FromFunction` and `um.FromFunction` no longer return `FromChain` or apply `FROM`/`USING` by themselves. They return `bob.Expression` and must be passed to `sm.From(...)` / `um.From(...)` / `dm.Using(...)` — e.g. `sm.From(sm.FromFunction(psql.F("generate_series", 1, 3)()))` instead of `sm.FromFunction(...)`. Aliasing and other table modifiers belong on `sm.From(...)` / `um.From(...)`. (thanks @atzedus)
+- **BREAKING:** PostgreSQL `sm.From` / `FromChain` for `SelectQuery` now set the `FROM` source via `AppendTableRef` (replace semantics) instead of `SetTable` / `SetTableAlias` on a `fromable` interface. (thanks @atzedus)
+- **BREAKING:** PostgreSQL `um` / `dm` join helpers (`InnerJoin`, `LeftJoin`, `CrossJoin`, etc.) return `JoinChain[*UpdateQuery]` / `JoinChain[*DeleteQuery]`. Use them in `um.From(table, joins...)` / `dm.Using(table, joins...)`, or as standalone mods after `um.From` / `dm.Using` — `AppendJoin` then attaches to the last `FromItems` / `UsingItems` entry. (thanks @atzedus)
+- **BREAKING:** PostgreSQL psql join chain modifiers `.Natural()`, `.On()`, `.OnEQ()`, `.Using()`, and `.UsingAs()` now return `JoinChain` for fluent chaining instead of `bob.Mod`. (thanks @atzedus)
+
+### Fixed
+
+- Fix PostgreSQL `sm.From` replacing a previous `FROM` without clearing a stale table alias when the new source has no alias. (thanks @atzedus)
+- Fix PostgreSQL `sm.With(...).SearchBreadth(...)` rendering `SEARCH DEPTH` instead of `SEARCH BREADTH` in CTE queries. (thanks @atzedus)
+- Avoid unnecessary imports in generated random factory code when a type has no random expression. (thanks @jay-babu)
+- Fix missing base type imports (e.g. `github.com/google/uuid`) in generated models when using `type_system: "database/sql"` and `uuid_pkg: google`, which could cause compile errors in generated many-to-many relation helpers. (thanks @atzedus)
+- Reuse parents when creating children in factory (thanks @abdusco)
+
+## [v0.43.0] - 2026-04-29
+
+### Added
+
+- Added PostgreSQL `MERGE` statement support with full syntax including:
+  - `MERGE INTO ... USING ... ON ...` with table aliases and `ONLY` modifier
+  - `WHEN MATCHED`, `WHEN NOT MATCHED`, `WHEN NOT MATCHED BY SOURCE` clauses
+  - `UPDATE`, `INSERT`, `DELETE`, `DO NOTHING` actions
+  - Support for `AND condition` in WHEN clauses
+  - `OVERRIDING SYSTEM VALUE` and `OVERRIDING USER VALUE` for INSERT actions
+  - `RETURNING` clause support (PostgreSQL 17+) (thanks @atzedus)
+  - Note: the SQL parser used for sql-to-code generation does not yet support `MERGE` statements
+- Added `psql.SetVersion`, `psql.GetVersion`, and `psql.VersionAtLeast` functions for context-based PostgreSQL version management (thanks @atzedus)
+- Added `Table.Merge()` method for ORM-style MERGE operations with automatic `RETURNING *` for PostgreSQL 17+ (thanks @atzedus)
+- Added `mm` package with modifiers for building MERGE queries (`mm.Into`, `mm.Using`, `mm.WhenMatched`, `mm.WhenNotMatched`, `mm.WhenNotMatchedBySource`, etc.) (thanks @atzedus)
+- Added `enum_format` configuration option to control enum value identifier formatting. Options: `"title_case"` (default, e.g., `InProgress`) or `"screaming_snake_case"` (e.g., `IN_PROGRESS`).
+- Added `Unqualified()` method to generated column structures that returns columns without table alias/prefix. (thanks @atzedus)
+- Added `PreloadCount` and `ThenLoadCount` to generate code for preloading and then loading counts for relationships. (thanks @jacobmolby)
+- MySQL support for insert queries executing loaders (e.g., `InsertThenLoad`, `InsertThenLoadCount`). (thanks @jacobmolby)
+- Added overwritable hooks that are run before the exec or scanning test of generated queries. This allows seeding data before the test runs.
+- Added `bob.Each` function to iterate over query results (range-over-func). (thanks @toqueteos)
+- Added support for the `VALUES` statement in MySQL, PostgreSQL, and SQLite. (thanks @manhrev)
+- Added MariaDB compatibility check in gen/bobgen-mysql (thanks @dumdev25)
+- Added `ALL`, `SOME`, `ANY` expressions for MySQL and PostgreSQL dialects. Added `EXISTS` expression for all dialects. (thanks @manhrev)
+- Added a customizable MySQL and PostgreSQL driver image setting for `bobgen-sql`. (thanks @manhrev)
+- Added support for Materialized Views in PostgreSQL code generation. (thanks @PudottaPommin)
+
+### Fixed
+
+- Fix `pgx` driver `Commit()` returning `nil` instead of `pgx.ErrTxClosed` when the transaction is already closed (e.g., rolled back by context expiry). This prevented silent data loss by correctly propagating the error to the caller. (thanks @wucm667)
+- Fix factory `FromExisting` methods causing stack overflow when models have bidirectional relationships populated (thanks @wucm667)
+- Fix self-referencing relationship back-references so generated preload/load helpers no longer create cyclic parent links. (thanks @atzedus)
+- Fix collisions for preloader alias generation. Replaced `RandInt` with `NextUniqueInt` (thanks @atzedus)
+- Fix an issue where the random function of aliased custom types were not being used in generated query tests.
+- Properly recognize placeholders in LIMIT and OFFSET when generating queries for PostgreSQL.
+- Throw an error on an empty SET clause during SQL generation rather than sending invalid syntax to database. (thanks @Xaeroxe)
+- Fix MySQL `Insert().One()`/`All()`/`Cursor()` using `SELECT *` instead of explicit model columns when re-fetching inserted rows, consistent with PostgreSQL/SQLite `RETURNING`. (thanks @tak848)
+
 ## [v0.42.0] - 2025-11-25
 
 ### Fixed

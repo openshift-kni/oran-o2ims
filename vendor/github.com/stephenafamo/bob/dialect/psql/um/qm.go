@@ -49,22 +49,19 @@ func SetCol(from string) mods.Set[*dialect.UpdateQuery] {
 	return mods.Set[*dialect.UpdateQuery]([]string{from})
 }
 
-func From(table any) dialect.FromChain[*dialect.UpdateQuery] {
-	return dialect.From[*dialect.UpdateQuery](table)
+// SetCols creates a multi-column setter: (columns...) = ROW(...) | (values...) | (subquery)
+func SetCols(columns ...string) dialect.SetCols[*dialect.UpdateQuery] {
+	return dialect.NewSetCols[*dialect.UpdateQuery](columns...)
 }
 
-func FromFunction(funcs ...*dialect.Function) dialect.FromChain[*dialect.UpdateQuery] {
-	var table any
+func From(table any, joins ...dialect.JoinChain[*dialect.UpdateQuery]) dialect.FromChain[*dialect.UpdateQuery] {
+	return dialect.From[*dialect.UpdateQuery](table, joins...)
+}
 
-	if len(funcs) == 1 {
-		table = funcs[0]
-	}
-
-	if len(funcs) > 1 {
-		table = dialect.Functions(funcs)
-	}
-
-	return dialect.From[*dialect.UpdateQuery](table)
+// FromFunction returns an expression for um.From when the source is one or more
+// table functions (ROWS FROM when multiple).
+func FromFunction(funcs ...*dialect.Function) bob.Expression {
+	return dialect.TableFunctions(funcs...)
 }
 
 func InnerJoin(e any) dialect.JoinChain[*dialect.UpdateQuery] {
@@ -83,7 +80,7 @@ func FullJoin(e any) dialect.JoinChain[*dialect.UpdateQuery] {
 	return dialect.FullJoin[*dialect.UpdateQuery](e)
 }
 
-func CrossJoin(e any) dialect.CrossJoinChain[*dialect.UpdateQuery] {
+func CrossJoin(e any) dialect.JoinChain[*dialect.UpdateQuery] {
 	return dialect.CrossJoin[*dialect.UpdateQuery](e)
 }
 
@@ -91,6 +88,10 @@ func Where(e bob.Expression) mods.Where[*dialect.UpdateQuery] {
 	return mods.Where[*dialect.UpdateQuery]{E: e}
 }
 
-func Returning(clauses ...any) bob.Mod[*dialect.UpdateQuery] {
+func WhereCurrentOf(cursor string) mods.WhereCurrentOf[*dialect.UpdateQuery] {
+	return mods.WhereCurrentOf[*dialect.UpdateQuery]{Cursor: cursor}
+}
+
+func Returning(clauses ...any) mods.Returning[*dialect.UpdateQuery] {
 	return mods.Returning[*dialect.UpdateQuery](clauses)
 }
