@@ -63,6 +63,14 @@ func (w Where[Q]) Apply(q Q) {
 	q.AppendWhere(w.E)
 }
 
+type WhereCurrentOf[Q interface{ SetCurrentOf(string) }] struct {
+	Cursor string
+}
+
+func (w WhereCurrentOf[Q]) Apply(q Q) {
+	q.SetCurrentOf(w.Cursor)
+}
+
 type GroupBy[Q interface{ AppendGroup(any) }] struct {
 	E any
 }
@@ -159,6 +167,52 @@ type Returning[Q interface{ AppendReturning(vals ...any) }] []any
 
 func (s Returning[Q]) Apply(q Q) {
 	q.AppendReturning(s...)
+}
+
+func (s Returning[Q]) WithOldAs(alias string) returningWithAliases[Q] {
+	return returningWithAliases[Q]{
+		clauses:  append([]any(nil), s...),
+		oldAlias: alias,
+	}
+}
+
+func (s Returning[Q]) WithNewAs(alias string) returningWithAliases[Q] {
+	return returningWithAliases[Q]{
+		clauses:  append([]any(nil), s...),
+		newAlias: alias,
+	}
+}
+
+type returningWithAliases[Q interface{ AppendReturning(vals ...any) }] struct {
+	clauses  []any
+	oldAlias string
+	newAlias string
+}
+
+func (s returningWithAliases[Q]) Apply(q Q) {
+	q.AppendReturning(s.clauses...)
+
+	if s.oldAlias != "" {
+		if setter, ok := any(q).(interface{ SetOldAlias(string) }); ok {
+			setter.SetOldAlias(s.oldAlias)
+		}
+	}
+
+	if s.newAlias != "" {
+		if setter, ok := any(q).(interface{ SetNewAlias(string) }); ok {
+			setter.SetNewAlias(s.newAlias)
+		}
+	}
+}
+
+func (s returningWithAliases[Q]) WithOldAs(alias string) returningWithAliases[Q] {
+	s.oldAlias = alias
+	return s
+}
+
+func (s returningWithAliases[Q]) WithNewAs(alias string) returningWithAliases[Q] {
+	s.newAlias = alias
+	return s
 }
 
 type Set[Q interface{ AppendSet(clauses ...any) }] []string

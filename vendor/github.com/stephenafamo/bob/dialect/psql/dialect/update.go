@@ -8,20 +8,35 @@ import (
 	clause "github.com/stephenafamo/bob/clause"
 )
 
-// Trying to represent the select query structure as documented in
+// UpdateQuery tries to represent the UPDATE query structure as documented in
 // https://www.postgresql.org/docs/current/sql-update.html
 type UpdateQuery struct {
 	clause.With
 	Only  bool
 	Table clause.TableRef
 	clause.Set
-	clause.TableRef
+	FromItems []clause.TableRef
+	clause.WhereCurrentOf
 	clause.Where
 	clause.Returning
 
 	bob.Load
 	bob.EmbeddedHook
 	bob.ContextualModdable[*UpdateQuery]
+}
+
+func (u *UpdateQuery) AppendTableRef(from clause.TableRef) {
+	u.FromItems = append(u.FromItems, from)
+}
+
+// AppendJoin satisfies Joinable for JoinChain[*UpdateQuery].
+// When FromItems is non-empty, the join is appended to the last FROM item (e.g. after um.From).
+// Otherwise it is ignored; prefer um.From(table, joins...) for joins on a new from_item.
+func (u *UpdateQuery) AppendJoin(j clause.Join) {
+	if len(u.FromItems) == 0 {
+		return
+	}
+	u.FromItems[len(u.FromItems)-1].AppendJoin(j)
 }
 
 func (u UpdateQuery) WriteSQL(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
@@ -57,15 +72,16 @@ func (u UpdateQuery) WriteSQL(ctx context.Context, w io.StringWriter, d bob.Dial
 	}
 	args = append(args, setArgs...)
 
-	fromArgs, err := bob.ExpressIf(ctx, w, d, start+len(args), u.TableRef,
-		u.TableRef.Expression != nil, "\nFROM ", "")
-	if err != nil {
-		return nil, err
-	}
-	args = append(args, fromArgs...)
+	if len(u.FromItems) > 0 {
+		w.WriteString("\nFROM ")
 
-	whereArgs, err := bob.ExpressIf(ctx, w, d, start+len(args), u.Where,
-		len(u.Where.Conditions) > 0, "\n", "")
+		args, err = writeFromItemList(ctx, w, d, start+len(args), args, u.FromItems)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	whereArgs, err := clause.WriteWhereAndCurrentOf(ctx, w, d, start+len(args), u.Where, u.WhereCurrentOf)
 	if err != nil {
 		return nil, err
 	}

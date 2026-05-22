@@ -522,7 +522,7 @@ github.com/spf13/cobra
 # github.com/spf13/pflag v1.0.10
 ## explicit; go 1.12
 github.com/spf13/pflag
-# github.com/stephenafamo/bob v0.42.0
+# github.com/stephenafamo/bob v0.44.0
 ## explicit; go 1.24.0
 github.com/stephenafamo/bob
 github.com/stephenafamo/bob/clause
@@ -530,6 +530,7 @@ github.com/stephenafamo/bob/dialect/psql
 github.com/stephenafamo/bob/dialect/psql/dialect
 github.com/stephenafamo/bob/dialect/psql/dm
 github.com/stephenafamo/bob/dialect/psql/im
+github.com/stephenafamo/bob/dialect/psql/mm
 github.com/stephenafamo/bob/dialect/psql/sm
 github.com/stephenafamo/bob/dialect/psql/um
 github.com/stephenafamo/bob/expr
