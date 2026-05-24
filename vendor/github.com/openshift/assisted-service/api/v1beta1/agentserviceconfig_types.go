@@ -147,6 +147,12 @@ type Ingress struct {
 	ClassName *string `json:"className,omitempty"`
 }
 
+// Annotations
+const (
+	PVCPrefixAnnotation     = "unsupported.agent-install.openshift.io/assisted-service-pvc-prefix"
+	SecretsPrefixAnnotation = "unsupported.agent-install.openshift.io/assisted-service-secrets-prefix"
+)
+
 // ConditionType related to our reconcile loop in addition to all the reasons
 // why ConditionStatus could be true or false.
 const (
@@ -228,6 +234,8 @@ const (
 	ReasonKonnectivityAgentFailure string = "KonnectivityAgentFailure"
 	// ReasonOSImageCACertRefFailure when there has been a failure resolving the OS image CA using OSImageCACertRef.
 	ReasonOSImageCACertRefFailure string = "OSImageCACertRefFailure"
+	// ReasonOSImagesShouldBeEmptyFailure when OSImages are not empty but image service is disabled.
+	ReasonOSImagesShouldBeEmptyFailure string = "OSImagesShouldBeEmptyFailure"
 	// ReasonMonitoringFailure indicates there was a failure monitoring operand status
 	ReasonMonitoringFailure string = "MonitoringFailure"
 	// ReasonKubernetesIngressMissing indicates the user has not provided the required configuration for kubernetes ingress
@@ -241,11 +249,14 @@ const (
 	IPXEHTTPRouteDisabled string = "disabled"
 	// ReasonOSImageAdditionalParamsRefFailure when there has been a failure resolving the OS image additional params secret using OSImageAdditionalParamsRef.
 	ReasonOSImageAdditionalParamsRefFailure string = "ReasonOSImageAdditionalParamsRefFailure"
+	// ReasonImmutableAnnotationFailure when there has been a failure validating immutable annotations.
+	ReasonImmutableAnnotationFailure string = "ImmutableAnnotationFailure"
 )
 
 // AgentServiceConfigStatus defines the observed state of AgentServiceConfig
 type AgentServiceConfigStatus struct {
 	Conditions []conditionsv1.Condition `json:"conditions,omitempty"`
+	ImmutableAnnotations map[string]string `json:"immutableAnnotations,omitempty"`
 }
 
 // +kubebuilder:object:root=true
