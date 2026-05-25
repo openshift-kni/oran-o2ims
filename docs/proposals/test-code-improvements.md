@@ -53,14 +53,15 @@ an example cluster name, which is a real lab node.
 (e.g., "test-node" or "test-worker") and update the documentation
 example to use a generic name.
 
-### 3. Non-Functional Test Code
+### 3. Misleading Test Comment
 
-`test/e2e/bmh_test.go` (381 lines, 6 test cases) is marked with a
+`test/e2e/bmh_test.go` (381 lines, 6 test cases) has a misleading
 TODO comment: "These tests do not test any actual functionality, leave
-them here for now for revisiting." These tests consume CI time but
-don't assert on meaningful behavior.
+them here for now for revisiting." Despite the comment, the tests do
+validate meaningful behavior — bootMACAddress workflow scenarios and
+BMH state verification for allocation readiness.
 
-**Fix:** Either implement meaningful assertions or remove the tests.
+**Fix:** Remove the misleading TODO comment.
 
 ### 4. Stale Test Names
 
@@ -144,7 +145,7 @@ don't exercise the same cache behavior as production.
    example name
 3. Fix "after callback" test name
 4. Fix self-referential comment in testNonCachingListAllocatedNodesForNAR
-5. Remove or implement `test/e2e/bmh_test.go`
+5. Remove misleading TODO comment from `test/e2e/bmh_test.go`
 
 ### Phase 2: Consistency (Low-Medium Risk)
 
