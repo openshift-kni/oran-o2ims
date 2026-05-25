@@ -15,44 +15,11 @@ feature, which parses test structure without executing tests.
 
 ## Contents
 
-- [BareMetalHost bootMACAddress workflows [bmh-bootmac]](#baremetalhost-bootmacaddress-workflows-bmh-bootmac)
-  - [With empty bootMACAddress](#with-empty-bootmacaddress)
-  - [With bootMACAddress set but no boot-interface label](#with-bootmacaddress-set-but-no-boot-interface-label)
 - [MNO Day2 Hardware Configuration test [mno-day2-hw-updates]](#mno-day2-hardware-configuration-test-mno-day2-hw-updates)
   - [Performs day2 hardware configuration update successfully](#performs-day2-hardware-configuration-update-successfully)
   - [Handles day2 hardware configuration update with BMH error](#handles-day2-hardware-configuration-update-with-bmh-error)
   - [Handles mid-flight profile change by abandoning stale updates](#handles-mid-flight-profile-change-by-abandoning-stale-updates)
 - [SNO End-to-end ProvisioningRequestReconcile with hardware manager [sno-provisioning]](#sno-end-to-end-provisioningrequestreconcile-with-hardware-manager-sno-provisioning)
-
-## BareMetalHost bootMACAddress workflows [bmh-bootmac]
-
-File: `test/e2e/bmh_test.go`
-
-### With empty bootMACAddress
-
-1. Creates BMH without bootMACAddress with interface labels
-   - Creating BMC secret and BMH with empty bootMACAddress and boot-interface label
-   - Verifying BMH was created with empty bootMACAddress
-1. Simulates hardware inspection populating NIC details
-   - Setting BMH status with hardware details and Available state
-   - Verifying hardware details were set
-   - Verifying bootMACAddress is still empty before allocation
-1. Verifies BMH is ready for allocation
-   - Verifying BMH has all required fields and is ready for allocation
-   - Verifying boot-interface label maps to correct NIC in hardware details
-
-### With bootMACAddress set but no boot-interface label
-
-1. Creates BMH with bootMACAddress but without boot-interface label
-   - Creating BMC secret and BMH with bootMACAddress set but no boot-interface label
-   - Verifying BMH was created with bootMACAddress set
-1. Simulates hardware inspection populating NIC details
-   - Setting BMH status with hardware details and Available state
-   - Verifying hardware details were set
-   - Verifying bootMACAddress remains unchanged after inspection
-1. Verifies BMH is ready for allocation without boot-interface label
-   - Verifying BMH has bootMACAddress set and is ready for allocation
-   - Verifying boot interface in hardware details matches bootMACAddress
 
 ## MNO Day2 Hardware Configuration test [mno-day2-hw-updates]
 
