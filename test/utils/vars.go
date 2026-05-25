@@ -467,7 +467,7 @@ var (
 		var bmhs []BMHData
 		for i := 1; i <= masterCount; i++ {
 			bmhs = append(bmhs, BMHData{
-				Name:           fmt.Sprintf("cnfdf%d", i),
+				Name:           fmt.Sprintf("test-master%d", i),
 				Namespace:      "dell-r740-pool",
 				MacAddress:     fmt.Sprintf("aa:bb:cc:11:00:%02x", i),
 				BmcAddress:     fmt.Sprintf("redfish://192.168.1.%d/redfish/v1/Systems/1", 100+i),
@@ -478,7 +478,7 @@ var (
 		}
 		for i := 1; i <= workerCount; i++ {
 			bmhs = append(bmhs, BMHData{
-				Name:           fmt.Sprintf("cnfdg%d", i),
+				Name:           fmt.Sprintf("test-worker%d", i),
 				Namespace:      "dell-xr8620t-pool",
 				MacAddress:     fmt.Sprintf("aa:bb:cc:22:00:%02x", i),
 				BmcAddress:     fmt.Sprintf("redfish://192.168.2.%d/redfish/v1/Systems/1", 100+i),

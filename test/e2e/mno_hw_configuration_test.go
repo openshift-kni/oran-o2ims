@@ -868,7 +868,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			}
 		})
 
-		It("Should PR reach HardwareConfigured=True after callback", func() {
+		It("Should PR reach HardwareConfigured=True", func() {
 			Eventually(func() bool {
 				Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
 				cond := meta.FindStatusCondition(pr.Status.Conditions,
@@ -883,9 +883,10 @@ func intPtr(v int) *int { return &v }
 
 // testNonCachingListAllocatedNodesForNAR is a test-only helper that lists AllocatedNodes
 // for a NAR using the non-caching K8SClient with in-memory filtering. This is
-// intentionally different from the production testNonCachingListAllocatedNodesForNAR which
-// uses MatchingFields on a cached client — the non-caching client is needed
-// here so test assertions see the latest API server state without cache delay.
+// intentionally different from the production listAllocatedNodesForNAR in
+// internal/controllers/helpers.go which uses MatchingFields on a cached client
+// — the non-caching client is needed here so test assertions see the latest
+// API server state without cache delay.
 func testNonCachingListAllocatedNodesForNAR(ctx context.Context, narName string) *hwmgmtv1alpha1.AllocatedNodeList {
 	all := &hwmgmtv1alpha1.AllocatedNodeList{}
 	Expect(K8SClient.List(ctx, all, client.InNamespace(constants.DefaultNamespace))).To(Succeed())
