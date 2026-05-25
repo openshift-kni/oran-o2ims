@@ -22,7 +22,6 @@ import (
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 )
 
-// TODO: These tests do not test any actual functionality, leave them here for now for revisiting.
 // Test empty bootMACAddress workflow where bootMAC is populated from interface labels
 var _ = Describe("BareMetalHost with empty bootMACAddress", Ordered, func() {
 	const timeout = time.Second * 90

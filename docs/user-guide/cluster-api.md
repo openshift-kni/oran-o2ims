@@ -43,7 +43,7 @@ Example response:
   {
     "nodeClusterId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "nodeClusterTypeId": "d1eabf91-f0e6-5170-97dc-797d35146dad",
-    "name": "cnfdg16",
+    "name": "my-sno-cluster",
     "description": "SNO RAN DU cluster",
     "extensions": {
       "clusterID": "c5e3f8a2-1b4d-4e6f-8a9b-0c1d2e3f4a5b",
@@ -67,7 +67,7 @@ curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
 ```bash
 # Find clusters by name
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureCluster/v1/nodeClusters?filter=(eq,name,cnfdg16)" | jq
+  "https://${API_URI}/o2ims-infrastructureCluster/v1/nodeClusters?filter=(eq,name,my-sno-cluster)" | jq
 
 # Exclude the local hub cluster
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
