@@ -87,7 +87,7 @@ func NewFilterAdapterWithSchemas(logger *slog.Logger, schemas map[string]*openap
 func (a *FilterAdapter) ParseFilter(query string) (*search.Selector, error) {
 	selector, err := a.selectorParser.Parse(query)
 	if err != nil {
-		return nil, fmt.Errorf("invalid filter syntax in '%s': %w", query, err)
+		return nil, fmt.Errorf("invalid filter syntax: %w", err)
 	}
 
 	// Validate field names against schema if validator is available

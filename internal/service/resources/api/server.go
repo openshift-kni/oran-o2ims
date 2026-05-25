@@ -290,7 +290,8 @@ func (r *ResourceServer) GetSubscriptions(ctx context.Context, request api.GetSu
 // validateSubscription validates a subscription before accepting the request
 func (r *ResourceServer) validateSubscription(ctx context.Context, request api.CreateSubscriptionRequestObject) error {
 	if err := commonapi.ValidateCallbackURL(ctx, r.SubscriptionEventHandler.GetClientFactory(), request.Body.Callback); err != nil {
-		return fmt.Errorf("invalid callback url: %w", err)
+		slog.Error("callback URL validation failed", "error", err)
+		return fmt.Errorf("callback URL validation failed")
 	}
 
 	// TODO: add validation of filter and move to common if filter syntax is the same for all servers

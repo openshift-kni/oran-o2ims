@@ -346,4 +346,16 @@ var _ = Describe("ResponseFilter", func() {
 		Expect(body).NotTo(ContainSubstring("%zz"))
 		Expect(body).To(ContainSubstring("failed to parse query parameters"))
 	})
+
+	It("should not reflect the raw filter value in filter parse error responses", func() {
+		maliciousFilter := "(invalid_op,name,<script>alert(1)</script>)"
+		req.URL.RawQuery = "filter=" + maliciousFilter
+		handler.ServeHTTP(recorder, req)
+
+		Expect(recorder.Code).To(Equal(http.StatusBadRequest))
+		body := recorder.Body.String()
+		Expect(body).NotTo(ContainSubstring("<script>"))
+		Expect(body).NotTo(ContainSubstring("alert(1)"))
+		Expect(body).To(ContainSubstring("invalid filter syntax"))
+	})
 })

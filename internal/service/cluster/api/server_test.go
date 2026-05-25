@@ -10,16 +10,38 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
 
+	commonapi "github.com/openshift-kni/oran-o2ims/api/common"
 	apigenerated "github.com/openshift-kni/oran-o2ims/internal/service/cluster/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/repo/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 )
+
+type mockClientProvider struct {
+	client *http.Client
+}
+
+func (m *mockClientProvider) NewClient(_ context.Context, _ commonapi.AuthType) (*http.Client, error) {
+	return m.client, nil
+}
+
+type mockSubscriptionEventHandler struct {
+	provider notifier.ClientProvider
+}
+
+func (m *mockSubscriptionEventHandler) SubscriptionEvent(_ context.Context, _ *notifier.SubscriptionEvent) {
+}
+
+func (m *mockSubscriptionEventHandler) GetClientFactory() notifier.ClientProvider {
+	return m.provider
+}
 
 var _ = Describe("Cluster Server", func() {
 	var (
@@ -292,6 +314,87 @@ var _ = Describe("Cluster Server", func() {
 				Expect(err).To(BeNil())
 				Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetAlarmDictionary200JSONResponse{}))
 				Expect(resp.(apigenerated.GetAlarmDictionary200JSONResponse).AlarmDefinition).To(HaveLen(2))
+			})
+		})
+	})
+
+	Describe("CreateSubscription", func() {
+		When("validation fails due to invalid callback URL scheme", func() {
+			It("returns 400 without reflecting the callback or filter in AdditionalAttributes", func() {
+				server.SubscriptionEventHandler = &mockSubscriptionEventHandler{}
+
+				callbackURL := "http://malicious.example.com/callback?secret=token123"
+				filterValue := "sensitive-filter-value"
+				resp, err := server.CreateSubscription(ctx, apigenerated.CreateSubscriptionRequestObject{
+					Body: &apigenerated.Subscription{
+						Callback: callbackURL,
+						Filter:   &filterValue,
+					},
+				})
+
+				Expect(err).NotTo(HaveOccurred())
+				problemResp := resp.(apigenerated.CreateSubscription400ApplicationProblemPlusJSONResponse)
+				Expect(problemResp.Status).To(Equal(http.StatusBadRequest))
+				Expect(problemResp.AdditionalAttributes).NotTo(BeNil())
+				attrs := *problemResp.AdditionalAttributes
+				Expect(attrs).NotTo(HaveKey("callback"))
+				Expect(attrs).NotTo(HaveKey("filter"))
+				Expect(problemResp.Detail).NotTo(ContainSubstring(callbackURL))
+			})
+		})
+
+		When("validation fails due to unreachable callback URL", func() {
+			It("returns 400 without reflecting the callback URL in Detail", func() {
+				callbackURL := "https://192.0.2.1/callback?secret=token123"
+				shortTimeoutClient := &http.Client{Timeout: 1}
+
+				server.SubscriptionEventHandler = &mockSubscriptionEventHandler{
+					provider: &mockClientProvider{client: shortTimeoutClient},
+				}
+
+				resp, err := server.CreateSubscription(ctx, apigenerated.CreateSubscriptionRequestObject{
+					Body: &apigenerated.Subscription{
+						Callback: callbackURL,
+					},
+				})
+
+				Expect(err).NotTo(HaveOccurred())
+				problemResp := resp.(apigenerated.CreateSubscription400ApplicationProblemPlusJSONResponse)
+				Expect(problemResp.Status).To(Equal(http.StatusBadRequest))
+				Expect(problemResp.Detail).NotTo(ContainSubstring(callbackURL))
+				Expect(problemResp.Detail).NotTo(ContainSubstring("192.0.2.1"))
+				Expect(problemResp.Detail).NotTo(ContainSubstring("secret=token123"))
+			})
+		})
+
+		When("repository returns unique_callback error", func() {
+			It("returns 400 without reflecting the callback in AdditionalAttributes", func() {
+				ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					w.WriteHeader(http.StatusNoContent)
+				}))
+				defer ts.Close()
+
+				server.SubscriptionEventHandler = &mockSubscriptionEventHandler{
+					provider: &mockClientProvider{client: ts.Client()},
+				}
+
+				mockRepo.EXPECT().
+					CreateSubscription(ctx, gomock.Any()).
+					Return(nil, fmt.Errorf("unique_callback constraint violation"))
+
+				resp, err := server.CreateSubscription(ctx, apigenerated.CreateSubscriptionRequestObject{
+					Body: &apigenerated.Subscription{
+						Callback: ts.URL + "/callback",
+					},
+				})
+
+				Expect(err).NotTo(HaveOccurred())
+				problemResp := resp.(apigenerated.CreateSubscription400ApplicationProblemPlusJSONResponse)
+				Expect(problemResp.Status).To(Equal(http.StatusBadRequest))
+				Expect(problemResp.Detail).To(Equal("callback value must be unique"))
+				Expect(problemResp.AdditionalAttributes).NotTo(BeNil())
+				attrs := *problemResp.AdditionalAttributes
+				Expect(attrs).NotTo(HaveKey("callback"))
 			})
 		})
 	})

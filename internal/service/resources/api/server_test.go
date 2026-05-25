@@ -271,7 +271,7 @@ var _ = Describe("ResourceServer", func() {
 	// Subscription endpoints
 	//
 	Describe("CreateSubscription", func() {
-		When("validation fails due to invalid callback URL", func() {
+		When("validation fails due to invalid callback URL scheme", func() {
 			It("returns 400 without reflecting the callback or filter in AdditionalAttributes", func() {
 				callbackURL := "http://malicious.example.com/callback?secret=token123"
 				filterValue := "sensitive-filter-value"
@@ -282,7 +282,6 @@ var _ = Describe("ResourceServer", func() {
 					},
 				})
 
-				// verify
 				Expect(err).NotTo(HaveOccurred())
 				problemResp := resp.(apiGenerated.CreateSubscription400ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusBadRequest))
@@ -291,6 +290,33 @@ var _ = Describe("ResourceServer", func() {
 				Expect(attrs).NotTo(HaveKey("callback"))
 				Expect(attrs).NotTo(HaveKey("filter"))
 				Expect(problemResp.Detail).NotTo(ContainSubstring(callbackURL))
+			})
+		})
+
+		When("validation fails due to unreachable callback URL", func() {
+			It("returns 400 without reflecting the callback URL in Detail", func() {
+				callbackURL := "https://192.0.2.1/callback?secret=token123"
+				shortTimeoutClient := &http.Client{Timeout: 1}
+
+				serverWithProvider := &api.ResourceServer{
+					Repo: mockRepo,
+					SubscriptionEventHandler: &mockSubscriptionEventHandlerWithProvider{
+						provider: &mockClientProvider{client: shortTimeoutClient},
+					},
+				}
+
+				resp, err := serverWithProvider.CreateSubscription(ctx, apiGenerated.CreateSubscriptionRequestObject{
+					Body: &apiGenerated.Subscription{
+						Callback: callbackURL,
+					},
+				})
+
+				Expect(err).NotTo(HaveOccurred())
+				problemResp := resp.(apiGenerated.CreateSubscription400ApplicationProblemPlusJSONResponse)
+				Expect(problemResp.Status).To(Equal(http.StatusBadRequest))
+				Expect(problemResp.Detail).NotTo(ContainSubstring(callbackURL))
+				Expect(problemResp.Detail).NotTo(ContainSubstring("192.0.2.1"))
+				Expect(problemResp.Detail).NotTo(ContainSubstring("secret=token123"))
 			})
 		})
 
@@ -318,7 +344,6 @@ var _ = Describe("ResourceServer", func() {
 					},
 				})
 
-				// verify
 				Expect(err).NotTo(HaveOccurred())
 				problemResp := resp.(apiGenerated.CreateSubscription400ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusBadRequest))
