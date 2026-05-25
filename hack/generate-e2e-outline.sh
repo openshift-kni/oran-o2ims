@@ -25,7 +25,7 @@ process_outline() {
     local file="$1"
     local relpath="${file#"${REPO_ROOT}/"}"
 
-    ${GINKGO} outline --format json "${file}" 2>/dev/null | jq -r --arg file "${relpath}" '
+    ${GINKGO} outline --format json "${file}" | jq -r --arg file "${relpath}" '
         # Recursive function to process nodes
         def process_nodes(depth):
             .[] |
