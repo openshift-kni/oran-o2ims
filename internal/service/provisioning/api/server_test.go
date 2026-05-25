@@ -867,7 +867,7 @@ var _ = Describe("ProvisioningServer", func() {
 			Expect(ok).To(BeTrue())
 
 			expectedLocation := fmt.Sprintf("%s/provisioningRequests/%s", constants.O2IMSProvisioningBaseURL, testUUID)
-			Expect(created.Headers.Location).To(Equal(expectedLocation))
+			Expect(*created.Headers.Location).To(Equal(expectedLocation))
 		})
 	})
 
@@ -922,7 +922,7 @@ var _ = Describe("ProvisioningServer", func() {
 			Expect(ok).To(BeTrue())
 
 			expectedLocation := fmt.Sprintf("%s/provisioningRequests/%s", constants.O2IMSProvisioningBaseURL, testUUID)
-			Expect(deleted.Headers.Location).To(Equal(expectedLocation))
+			Expect(*deleted.Headers.Location).To(Equal(expectedLocation))
 		})
 	})
 })

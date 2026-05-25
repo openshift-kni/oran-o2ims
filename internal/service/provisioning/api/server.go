@@ -181,7 +181,7 @@ func (r *ProvisioningServer) CreateProvisioningRequest(ctx context.Context, requ
 	return api.CreateProvisioningRequest201JSONResponse{
 		Body: provisioningRequestInfo,
 		Headers: api.CreateProvisioningRequest201ResponseHeaders{
-			Location: location,
+			Location: &location,
 		},
 	}, nil
 }
@@ -282,7 +282,7 @@ func (r *ProvisioningServer) DeleteProvisioningRequest(ctx context.Context, requ
 	location := fmt.Sprintf("%s/provisioningRequests/%s", constants.O2IMSProvisioningBaseURL, request.ProvisioningRequestId)
 	return api.DeleteProvisioningRequest202Response{
 		Headers: api.DeleteProvisioningRequest202ResponseHeaders{
-			Location: location,
+			Location: &location,
 		},
 	}, nil
 }
