@@ -305,6 +305,7 @@ defaultHugepagesSize: "1G"`,
 		allocatedNode = &hwmgmtv1alpha1.AllocatedNode{}
 		nar = &hwmgmtv1alpha1.NodeAllocationRequest{}
 
+		By("Creating namespaces, ConfigMaps, and ClusterImageSet")
 		for _, cr := range mainCRs {
 			crCopy := cr.DeepCopyObject().(client.Object)
 			err := K8SClient.Create(testCtx, crCopy)
@@ -313,6 +314,7 @@ defaultHugepagesSize: "1G"`,
 			}
 		}
 
+		By("Creating ClusterTemplates")
 		for _, cr := range ctCRs {
 			crCopy := cr.DeepCopyObject().(client.Object)
 			err := K8SClient.Create(testCtx, crCopy)
@@ -321,12 +323,13 @@ defaultHugepagesSize: "1G"`,
 			}
 		}
 
+		By("Creating BMH pool namespace, HardwareProfile, and 4 BMHs with HardwareData")
 		for _, cr := range hwTemplateCRs {
 			err := K8SClient.Create(context.Background(), cr)
 			Expect(err).ToNot(HaveOccurred())
 		}
 
-		// Update BMH status to make them Available for controller selection
+		By("Updating BMH status with hardware details and setting Available state")
 		for _, bmhData := range testutils.TestBMHs {
 			bmh := &metal3v1alpha1.BareMetalHost{}
 			Expect(K8SClient.Get(context.Background(), types.NamespacedName{
@@ -389,6 +392,7 @@ defaultHugepagesSize: "1G"`,
 			Expect(K8SClient.Status().Update(context.Background(), bmh)).To(Succeed())
 		}
 
+		By("Waiting for ClusterTemplate reconciliation")
 		Eventually(func() bool {
 			newct := &provisioningv1alpha1.ClusterTemplate{}
 			Expect(K8SClient.Get(context.Background(), client.ObjectKeyFromObject(ctComplete), newct)).To(Succeed())
@@ -485,7 +489,7 @@ defaultHugepagesSize: "1G"`,
 
 	It("Verify status conditions if ClusterInstance rendering fails", func() {
 		crName = "cluster-1"
-		// Make sure the needed ClusterTemplate exists.
+		By("Creating ProvisioningRequest with incomplete ClusterTemplate")
 		oranCT := &provisioningv1alpha1.ClusterTemplate{}
 		err := K8SClient.Get(testCtx, client.ObjectKeyFromObject(ctIncomplete), oranCT)
 		Expect(err).ToNot(HaveOccurred())
@@ -499,6 +503,7 @@ defaultHugepagesSize: "1G"`,
 		err = K8SClient.Create(testCtx, copyProvRequestCR)
 		Expect(err).ToNot(HaveOccurred())
 
+		By("Waiting for validation and render failure conditions")
 		Eventually(func() bool {
 			err := K8SClient.Get(testCtx, client.ObjectKeyFromObject(ProvRequestCR), reconciledPR)
 			Expect(err).ToNot(HaveOccurred())
@@ -506,7 +511,6 @@ defaultHugepagesSize: "1G"`,
 		}, time.Minute*3, time.Second*3).Should(BeTrue())
 
 		conditions := reconciledPR.Status.Conditions
-		// Verify the ProvisioningRequest's status conditions.
 		Expect(len(conditions)).To(Equal(2))
 		testutils.VerifyStatusCondition(conditions[0], metav1.Condition{
 			Type:   string(provisioningv1alpha1.PRconditionTypes.Validated),
@@ -527,7 +531,7 @@ defaultHugepagesSize: "1G"`,
 
 	It("Starts hardware provisioning", func() {
 		crName = "cluster-2"
-		// Make sure the needed ClusterTemplate exists.
+		By("Creating ProvisioningRequest with complete ClusterTemplate")
 		oranCT := &provisioningv1alpha1.ClusterTemplate{}
 		err := K8SClient.Get(testCtx, client.ObjectKeyFromObject(ctComplete), oranCT)
 		Expect(err).ToNot(HaveOccurred())
@@ -544,7 +548,7 @@ defaultHugepagesSize: "1G"`,
 		err = K8SClient.Create(testCtx, copyProvRequestCR)
 		Expect(err).ToNot(HaveOccurred())
 
-		// Wait for hardware provisioning to start.
+		By("Waiting for hardware provisioning to start")
 		reconciledPR := &provisioningv1alpha1.ProvisioningRequest{}
 		Eventually(func() bool {
 			err := K8SClient.Get(testCtx, client.ObjectKeyFromObject(ProvRequestCR), reconciledPR)
@@ -596,7 +600,7 @@ defaultHugepagesSize: "1G"`,
 	})
 
 	It("Creates NodeAllocationRequest and AllocatedNode", func() {
-		// Wait for NodeAllocationRequest to be created.
+		By("Waiting for NodeAllocationRequest to be created")
 		Eventually(func() bool {
 			// Check if the NodeAllocationRequest has been created
 			err := K8SClient.Get(testCtx, types.NamespacedName{
@@ -616,7 +620,7 @@ defaultHugepagesSize: "1G"`,
 		Expect(singleNodeGroup.Size).To(Equal(1))
 		Expect(singleNodeGroup.NodeGroupData.HwProfile).To(Equal(testutils.TestHwProfileName))
 
-		// Wait for hardware manager controllers to automatically create AllocatedNode resources.
+		By("Waiting for AllocatedNode to be created by hardware manager")
 		allocatedNodes := &hwmgmtv1alpha1.AllocatedNodeList{}
 		Eventually(func() bool {
 			err := K8SClient.List(testCtx, allocatedNodes, client.InNamespace(constants.DefaultNamespace))
@@ -629,7 +633,7 @@ defaultHugepagesSize: "1G"`,
 	})
 
 	It("Updates the BMHs with the right labels", func() {
-		// Test that the allocatedNode is bmh-2, even though bmh-4 also matches the selection criteria.
+		By("Verifying bmh-2 was selected over bmh-4 despite identical criteria")
 		Expect(allocatedNode.Spec.HwMgrNodeId).To(Equal("bmh-2"))
 
 		// Get the BMH.
@@ -645,8 +649,7 @@ defaultHugepagesSize: "1G"`,
 		// Verify the AllocatedNode references the correct NodeAllocationRequest
 		Expect(allocatedNode.Spec.NodeAllocationRequest).To(Equal(crName))
 
-		// Verify that bmh-1, bmh-3 and bmh-4 (non-selected BMHs) do NOT have allocation labels, even though
-		// bmh-4 also matches the selection criteria (identical to bmh-2).
+		By("Verifying non-selected BMHs do not have allocation labels")
 		nonSelectedBMHs := []string{"bmh-1", "bmh-3", "bmh-4"}
 		for _, bmhName := range nonSelectedBMHs {
 			nonSelectedBMH := &metal3v1alpha1.BareMetalHost{}
@@ -664,7 +667,7 @@ defaultHugepagesSize: "1G"`,
 	})
 
 	It("NodeAllocationRequest and AllocatedNode complete", func() {
-		// Get the BMH.
+		By("Verifying FirmwareUpdateNeeded annotation on selected BMH")
 		bmh := &metal3v1alpha1.BareMetalHost{}
 		err := K8SClient.Get(testCtx, types.NamespacedName{
 			Name: allocatedNode.Spec.HwMgrNodeId, Namespace: allocatedNode.Spec.HwMgrNodeNs}, bmh)
@@ -673,19 +676,19 @@ defaultHugepagesSize: "1G"`,
 		// Check that the BMH has the FirmwareUpdateNeededAnnotation set.
 		Expect(bmh.Annotations[hwmgrcontrollers.FirmwareUpdateNeededAnnotation]).To(Equal("true"))
 
-		// Update the BMH status to Preparing.
+		By("Transitioning BMH to Preparing state")
 		bmh.Status.Provisioning.State = metal3v1alpha1.StatePreparing
 		bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusOK
 		Expect(K8SClient.Status().Update(testCtx, bmh)).To(Succeed())
 
-		// Check that the AllocatedNode has the config-in-progress annotation.
+		By("Waiting for config-in-progress annotation on AllocatedNode")
 		Eventually(func() bool {
 			err := K8SClient.Get(testCtx, types.NamespacedName{Name: allocatedNode.Name, Namespace: constants.DefaultNamespace}, allocatedNode)
 			Expect(err).ToNot(HaveOccurred())
 			return allocatedNode.Annotations[hwmgrcontrollers.ConfigAnnotation] != ""
 		}, time.Minute*3, time.Second*3).Should(BeTrue())
 
-		// Check if the HostFirmwareComponents already exists.
+		By("Updating HostFirmwareComponents status to match HardwareProfile")
 		hfc := &metal3v1alpha1.HostFirmwareComponents{}
 		err = K8SClient.Get(testCtx, types.NamespacedName{
 			Name: allocatedNode.Spec.HwMgrNodeId, Namespace: allocatedNode.Spec.HwMgrNodeNs}, hfc)
@@ -720,7 +723,7 @@ defaultHugepagesSize: "1G"`,
 		// Update the status of the HostFirmwareComponents
 		Expect(K8SClient.Status().Update(testCtx, hfc)).To(Succeed())
 
-		// Create PreprovisioningImage to satisfy the network data clearing logic.
+		By("Creating PreprovisioningImage and transitioning BMH to Available")
 		ppi := &metal3v1alpha1.PreprovisioningImage{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      allocatedNode.Spec.HwMgrNodeId,
@@ -747,7 +750,7 @@ defaultHugepagesSize: "1G"`,
 		delete(bmh.Annotations, hwmgrcontrollers.FirmwareUpdateNeededAnnotation)
 		Expect(K8SClient.Update(testCtx, bmh)).To(Succeed())
 
-		// Make sure the NodeAllocationRequest and AllocatedNode are completed.
+		By("Waiting for NAR and AllocatedNode to reach Provisioned=True")
 		Eventually(func() bool {
 			err := K8SClient.Get(testCtx, client.ObjectKeyFromObject(nar), nar)
 			Expect(err).ToNot(HaveOccurred())
@@ -765,7 +768,7 @@ defaultHugepagesSize: "1G"`,
 	})
 
 	It("Completes hardware provisioning", func() {
-		// The ProvisioningRequest should complete hardware provisioning.
+		By("Waiting for HardwareProvisioned condition to become True")
 		Eventually(func() bool {
 			err := K8SClient.Get(testCtx, client.ObjectKeyFromObject(ProvRequestCR), reconciledPR)
 			Expect(err).ToNot(HaveOccurred())
@@ -798,8 +801,7 @@ defaultHugepagesSize: "1G"`,
 	})
 
 	It("Skips re-rendering the ClusterInstance when configuration changes occur during active provisioning", func() {
-		// Wait for ProvisioningRequest to move to cluster installation phase.
-		// This should update the ProvisioningDetails from hardware provisioning to cluster installation.
+		By("Waiting for PR to move past hardware provisioning to cluster installation")
 		Eventually(func() bool {
 			err := K8SClient.Get(testCtx, client.ObjectKeyFromObject(ProvRequestCR), reconciledPR)
 			Expect(err).ToNot(HaveOccurred())
@@ -807,14 +809,12 @@ defaultHugepagesSize: "1G"`,
 			return !strings.Contains(reconciledPR.Status.ProvisioningStatus.ProvisioningDetails, "Hardware provisioning")
 		}, time.Minute*3, time.Second*5).Should(BeTrue())
 
-		// Update the ProvisioningRequest to use a ClusterTemplate pointing to a ConfigMap that would attempt to
-		// trigger re-rendering the ClusterInstance.
+		By("Changing template version to trigger re-render attempt")
 		Expect(K8SClient.Get(testCtx, client.ObjectKeyFromObject(ProvRequestCR), reconciledPR)).To(Succeed())
 		reconciledPR.Spec.TemplateVersion = tVersion1
 		Expect(K8SClient.Update(testCtx, reconciledPR)).To(Succeed())
 
-		// With the HardwareProvisioned condition set to True, the ClusterInstance should be created.
-		// We now expect to skip re-rendering the ClusterInstance and mitigate a possible dry-run failure.
+		By("Verifying ClusterInstance is not re-rendered during active provisioning")
 		Eventually(func() bool {
 			Expect(K8SClient.Get(testCtx, client.ObjectKeyFromObject(ProvRequestCR), reconciledPR)).To(Succeed())
 
