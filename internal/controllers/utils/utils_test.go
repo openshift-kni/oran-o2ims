@@ -8,8 +8,18 @@ package utils
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
+	"math/big"
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -1673,5 +1683,85 @@ var _ = Describe("Server predicate functions", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(args).To(BeNil())
 		})
+	})
+})
+
+var _ = Describe("TLS cipher suite configuration", func() {
+	It("should derive PFS cipher suites from tls.CipherSuites()", func() {
+		Expect(pfsCipherSuites).NotTo(BeEmpty())
+		for _, suite := range pfsCipherSuites {
+			name := tls.CipherSuiteName(suite)
+			Expect(strings.HasPrefix(name, "TLS_ECDHE_")).To(BeTrue(),
+				"cipher suite %s is not ECDHE-based", name)
+		}
+	})
+
+	It("should include all ECDHE suites from tls.CipherSuites()", func() {
+		var expected []uint16
+		for _, s := range tls.CipherSuites() {
+			if strings.HasPrefix(s.Name, "TLS_ECDHE_") {
+				expected = append(expected, s.ID)
+			}
+		}
+		Expect(pfsCipherSuites).To(Equal(expected))
+	})
+
+	It("should set PFS cipher suites on GetClientTLSConfig", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		cfg, err := GetClientTLSConfig(ctx, "", "", "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.CipherSuites).To(Equal(pfsCipherSuites))
+	})
+
+	It("should set PFS cipher suites on GetDefaultTLSConfig", func() {
+		config := &tls.Config{MinVersion: tls.VersionTLS12}
+		// GetDefaultTLSConfig sets cipher suites in-place before attempting CA
+		// loading, which may fail in test environments without mounted CA files.
+		_, _ = GetDefaultTLSConfig(config)
+		Expect(config.CipherSuites).To(Equal(pfsCipherSuites))
+	})
+
+	It("should not override caller-provided cipher suites on GetDefaultTLSConfig", func() {
+		custom := []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256}
+		config := &tls.Config{
+			MinVersion:   tls.VersionTLS12,
+			CipherSuites: custom,
+		}
+		_, _ = GetDefaultTLSConfig(config)
+		Expect(config.CipherSuites).To(Equal(custom))
+	})
+
+	It("should set PFS cipher suites on GetServerTLSConfig", func() {
+		dir := GinkgoT().TempDir()
+		certFile := filepath.Join(dir, "tls.crt")
+		keyFile := filepath.Join(dir, "tls.key")
+
+		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		Expect(err).NotTo(HaveOccurred())
+
+		template := &x509.Certificate{SerialNumber: big.NewInt(1)}
+		certDER, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+		Expect(err).NotTo(HaveOccurred())
+
+		certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+		keyDER, err := x509.MarshalECPrivateKey(key)
+		Expect(err).NotTo(HaveOccurred())
+		keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+
+		Expect(os.WriteFile(certFile, certPEM, 0o600)).To(Succeed())
+		Expect(os.WriteFile(keyFile, keyPEM, 0o600)).To(Succeed())
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		cfg, err := GetServerTLSConfig(ctx, certFile, keyFile)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.CipherSuites).To(Equal(pfsCipherSuites))
+	})
+
+	It("should expose PFS cipher suites via PFSCipherSuites()", func() {
+		Expect(PFSCipherSuites()).To(Equal(pfsCipherSuites))
 	})
 })

@@ -55,7 +55,27 @@ const (
 
 var (
 	oranUtilsLog = ctrl.Log.WithName("oranUtilsLog")
+
+	// pfsCipherSuites contains the TLS 1.2 cipher suites that provide Perfect Forward Secrecy
+	// (PFS) via ECDHE key exchange. Derived from tls.CipherSuites() so the list adapts
+	// automatically as Go adds or removes suites across versions.
+	// TLS 1.3 suites always use PFS and are not configurable in Go.
+	pfsCipherSuites []uint16
 )
+
+func init() {
+	for _, s := range tls.CipherSuites() {
+		if strings.HasPrefix(s.Name, "TLS_ECDHE_") {
+			pfsCipherSuites = append(pfsCipherSuites, s.ID)
+		}
+	}
+}
+
+// PFSCipherSuites returns the PFS-only TLS 1.2 cipher suite list for callers
+// that build their own tls.Config without going through GetDefaultTLSConfig.
+func PFSCipherSuites() []uint16 {
+	return pfsCipherSuites
+}
 
 func UpdateK8sCRStatus(ctx context.Context, c client.Client, object client.Object) error {
 	cr, ok := object.(*provisioningv1alpha1.ProvisioningRequest)
@@ -887,6 +907,10 @@ func GetDefaultTLSConfig(config *tls.Config) (*tls.Config, error) {
 		config = &tls.Config{MinVersion: tls.VersionTLS12}
 	}
 
+	if len(config.CipherSuites) == 0 {
+		config.CipherSuites = pfsCipherSuites
+	}
+
 	// Allow developers to override the TLS verification
 	config.InsecureSkipVerify = GetTLSSkipVerify()
 	if !config.InsecureSkipVerify {
@@ -918,7 +942,7 @@ func AddCABundle(config *tls.Config, caBundle string) error {
 
 // GetClientTLSConfig creates a tls.Config that uses a dynamic loader to handle updates to the certificate and/or key.
 func GetClientTLSConfig(ctx context.Context, certFile, keyFile, caFile string) (*tls.Config, error) {
-	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12, CipherSuites: pfsCipherSuites}
 
 	if caFile != "" {
 		err := AddCABundle(tlsConfig, caFile)
@@ -956,7 +980,8 @@ func GetServerTLSConfig(ctx context.Context, certFile, keyFile string) (*tls.Con
 	go loader.Run(ctx, 1)
 
 	tlsConfig := &tls.Config{
-		MinVersion: tls.VersionTLS12,
+		MinVersion:   tls.VersionTLS12,
+		CipherSuites: pfsCipherSuites,
 		GetCertificate: func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			certBytes, keyBytes := loader.CurrentCertKeyContent()
 			cert, err := tls.X509KeyPair(certBytes, keyBytes)

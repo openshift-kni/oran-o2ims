@@ -223,8 +223,9 @@ func (c *AMClient) createAlertmanagerClient() (*http.Client, string, error) {
 	httpClient := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
-				RootCAs:    rootCAs,
-				MinVersion: tls.VersionTLS12,
+				RootCAs:      rootCAs,
+				MinVersion:   tls.VersionTLS12,
+				CipherSuites: ctlrutils.PFSCipherSuites(),
 			},
 		},
 	}
