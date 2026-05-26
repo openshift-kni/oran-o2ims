@@ -56,18 +56,26 @@ const (
 var (
 	oranUtilsLog = ctrl.Log.WithName("oranUtilsLog")
 
-	// pfsCipherSuites is the explicit list of TLS 1.2 cipher suites that
-	// provide Perfect Forward Secrecy (PFS) via ECDHE key exchange.
+	// pfsCipherSuites contains the TLS 1.2 cipher suites that provide Perfect Forward Secrecy
+	// (PFS) via ECDHE key exchange. Derived from tls.CipherSuites() so the list adapts
+	// automatically as Go adds or removes suites across versions.
 	// TLS 1.3 suites always use PFS and are not configurable in Go.
-	pfsCipherSuites = []uint16{
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-	}
+	pfsCipherSuites []uint16
 )
+
+func init() {
+	for _, s := range tls.CipherSuites() {
+		if strings.HasPrefix(s.Name, "TLS_ECDHE_") {
+			pfsCipherSuites = append(pfsCipherSuites, s.ID)
+		}
+	}
+}
+
+// PFSCipherSuites returns the PFS-only TLS 1.2 cipher suite list for callers
+// that build their own tls.Config without going through GetDefaultTLSConfig.
+func PFSCipherSuites() []uint16 {
+	return pfsCipherSuites
+}
 
 func UpdateK8sCRStatus(ctx context.Context, c client.Client, object client.Object) error {
 	cr, ok := object.(*provisioningv1alpha1.ProvisioningRequest)
@@ -899,6 +907,10 @@ func GetDefaultTLSConfig(config *tls.Config) (*tls.Config, error) {
 		config = &tls.Config{MinVersion: tls.VersionTLS12}
 	}
 
+	if len(config.CipherSuites) == 0 {
+		config.CipherSuites = pfsCipherSuites
+	}
+
 	// Allow developers to override the TLS verification
 	config.InsecureSkipVerify = GetTLSSkipVerify()
 	if !config.InsecureSkipVerify {
@@ -985,7 +997,7 @@ func GetServerTLSConfig(ctx context.Context, certFile, keyFile string) (*tls.Con
 
 // GetDefaultBackendTransport returns an HTTP transport with the proper TLS defaults set.
 func GetDefaultBackendTransport() (http.RoundTripper, error) {
-	tlsConfig, err := GetDefaultTLSConfig(&tls.Config{MinVersion: tls.VersionTLS12, CipherSuites: pfsCipherSuites})
+	tlsConfig, err := GetDefaultTLSConfig(&tls.Config{MinVersion: tls.VersionTLS12})
 	if err != nil {
 		return nil, err
 	}
