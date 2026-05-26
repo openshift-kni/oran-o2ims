@@ -28,7 +28,15 @@ const (
 	fields        = "fields"
 	excludeFields = "exclude_fields"
 	filter        = "filter"
+
+	parserErrorPrefix = "invalid filter syntax:"
 )
+
+// isParserError distinguishes selector parser errors (which embed raw user tokens and
+// must not be reflected) from schema validation errors (which contain only safe identifiers).
+func isParserError(err error) bool {
+	return strings.HasPrefix(err.Error(), parserErrorPrefix)
+}
 
 // FilterAdapter is an abstraction that wraps the search projector/selector functionality so that
 // these objects can be created once at server initialization time and re-used in the ResponseFilter
@@ -245,7 +253,11 @@ func ResponseFilter(adapter *FilterAdapter) Middleware {
 					result, err := adapter.ParseFilter(value)
 					if err != nil {
 						slog.Error("failed to parse filter", "value", value, "err", err)
-						_ = adapter.Error(w, err.Error(), http.StatusBadRequest)
+						msg := err.Error()
+						if isParserError(err) {
+							msg = "invalid filter syntax"
+						}
+						_ = adapter.Error(w, msg, http.StatusBadRequest)
 						return
 					}
 					selector.Terms = append(selector.Terms, result.Terms...)

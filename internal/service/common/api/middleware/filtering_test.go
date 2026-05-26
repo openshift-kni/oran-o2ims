@@ -348,7 +348,7 @@ var _ = Describe("ResponseFilter", func() {
 	})
 
 	It("should not reflect the raw filter value in filter parse error responses", func() {
-		maliciousFilter := "(invalid_op,name,<script>alert(1)</script>)"
+		maliciousFilter := "(eq,name,value)<script>alert(1)</script>"
 		req.URL.RawQuery = "filter=" + maliciousFilter
 		handler.ServeHTTP(recorder, req)
 
