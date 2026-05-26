@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"strings"
 
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
@@ -17,6 +19,30 @@ import (
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
 )
+
+var containerID string
+
+func init() {
+	containerID, _ = os.Hostname()
+}
+
+func clientIP(req *http.Request) string {
+	if xff := req.Header.Get("x-forwarded-for"); xff != "" {
+		return strings.TrimSpace(strings.SplitN(xff, ",", 2)[0])
+	}
+	return req.RemoteAddr
+}
+
+func authScheme(req *http.Request) string {
+	auth := req.Header.Get("Authorization")
+	if i := strings.IndexByte(auth, ' '); i > 0 {
+		return auth[:i]
+	}
+	if auth != "" {
+		return "<malformed>"
+	}
+	return ""
+}
 
 // Authenticator defines an authentication handler that is capable of authenticating a user from an incoming
 // JWT bearer token.  The purpose of this step is to confirm the identity of the user making the request.  This
@@ -36,13 +62,15 @@ func Authenticator(oauthHandler, kubernetesHandler authenticator.Request) middle
 
 			response, ok, err := handler.AuthenticateRequest(req)
 			if err != nil {
-				slog.Warn("authentication failed", "error", err, "method", req.Method, "path", req.URL.Path)
+				slog.Warn("authentication failed", "error", err, "method", req.Method, "path", req.URL.Path,
+					"client_ip", clientIP(req), "container_id", containerID, "payload_context", authScheme(req))
 				middleware.ProblemDetails(w, fmt.Sprintf("failed to authenticate request: %v", err), http.StatusUnauthorized)
 				return
 			}
 
 			if !ok {
-				slog.Warn("authentication rejected", "method", req.Method, "path", req.URL.Path)
+				slog.Warn("authentication rejected", "method", req.Method, "path", req.URL.Path,
+					"client_ip", clientIP(req), "container_id", containerID, "payload_context", authScheme(req))
 				middleware.ProblemDetails(w, "unable to authenticate request", http.StatusUnauthorized)
 				return
 			}
@@ -98,14 +126,16 @@ func Authorizer(kubernetesAuthorizer authorizer.Authorizer) middleware.Middlewar
 			decision, reason, err := kubernetesAuthorizer.Authorize(req.Context(), attributes)
 			if err != nil {
 				msg := fmt.Sprintf("Authorization for user '%s' failed", attributes.User.GetName())
-				slog.Error(msg, "user", user, "verb", attributes.Verb, "path", attributes.Path, "error", err)
+				slog.Error(msg, "user", user, "verb", attributes.Verb, "path", attributes.Path, "error", err,
+					"client_ip", clientIP(req), "container_id", containerID, "payload_context", authScheme(req))
 				middleware.ProblemDetails(w, msg, http.StatusInternalServerError)
 				return
 			}
 
 			if decision != authorizer.DecisionAllow {
 				msg := fmt.Sprintf("Authorization not allowed for user '%s'", attributes.User.GetName())
-				slog.Debug(msg, "user", user, "verb", attributes.Verb, "path", attributes.Path, "decision", decision, "reason", reason)
+				slog.Debug(msg, "user", user, "verb", attributes.Verb, "path", attributes.Path, "decision", decision, "reason", reason,
+					"client_ip", clientIP(req), "container_id", containerID, "payload_context", authScheme(req))
 				middleware.ProblemDetails(w, msg, http.StatusForbidden)
 				return
 			}
