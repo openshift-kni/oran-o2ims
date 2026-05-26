@@ -28,7 +28,15 @@ const (
 	fields        = "fields"
 	excludeFields = "exclude_fields"
 	filter        = "filter"
+
+	parserErrorPrefix = "invalid filter syntax:"
 )
+
+// isParserError distinguishes selector parser errors (which embed raw user tokens and
+// must not be reflected) from schema validation errors (which contain only safe identifiers).
+func isParserError(err error) bool {
+	return strings.HasPrefix(err.Error(), parserErrorPrefix)
+}
 
 // FilterAdapter is an abstraction that wraps the search projector/selector functionality so that
 // these objects can be created once at server initialization time and re-used in the ResponseFilter
@@ -87,7 +95,7 @@ func NewFilterAdapterWithSchemas(logger *slog.Logger, schemas map[string]*openap
 func (a *FilterAdapter) ParseFilter(query string) (*search.Selector, error) {
 	selector, err := a.selectorParser.Parse(query)
 	if err != nil {
-		return nil, fmt.Errorf("invalid filter syntax in '%s': %w", query, err)
+		return nil, fmt.Errorf("invalid filter syntax: %w", err)
 	}
 
 	// Validate field names against schema if validator is available
@@ -233,7 +241,7 @@ func ResponseFilter(adapter *FilterAdapter) Middleware {
 				slog.Error("failed to parse query", "RawQuery", r.URL.RawQuery, "err", err)
 				_ = adapter.Error(
 					w,
-					fmt.Sprintf("failed to parse query: %s; error: %s", r.URL.RawQuery, err.Error()),
+					"failed to parse query parameters",
 					http.StatusBadRequest,
 				)
 				return
@@ -245,7 +253,11 @@ func ResponseFilter(adapter *FilterAdapter) Middleware {
 					result, err := adapter.ParseFilter(value)
 					if err != nil {
 						slog.Error("failed to parse filter", "value", value, "err", err)
-						_ = adapter.Error(w, err.Error(), http.StatusBadRequest)
+						msg := err.Error()
+						if isParserError(err) {
+							msg = "invalid filter syntax"
+						}
+						_ = adapter.Error(w, msg, http.StatusBadRequest)
 						return
 					}
 					selector.Terms = append(selector.Terms, result.Terms...)

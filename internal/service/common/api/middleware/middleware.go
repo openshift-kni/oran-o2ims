@@ -138,7 +138,13 @@ func GetOranReqErrFunc() func(w http.ResponseWriter, r *http.Request, err error)
 			"path", r.URL.Path,
 			"status", http.StatusBadRequest,
 		)
-		ProblemDetails(w, err.Error(), http.StatusBadRequest)
+		msg := err.Error()
+		if strings.HasPrefix(msg, "Invalid format for parameter ") {
+			if idx := strings.Index(msg, ":"); idx != -1 {
+				msg = msg[:idx]
+			}
+		}
+		ProblemDetails(w, msg, http.StatusBadRequest)
 	}
 }
 

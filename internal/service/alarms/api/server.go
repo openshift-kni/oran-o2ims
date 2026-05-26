@@ -131,11 +131,9 @@ func (a *AlarmsServer) CreateSubscription(ctx context.Context, request api.Creat
 
 	// Validate the subscription
 	if err := commonapi.ValidateCallbackURL(ctx, a.SubscriptionEventHandler.GetClientFactory(), request.Body.Callback); err != nil {
+		slog.Error("callback URL validation failed", "error", err)
 		return api.CreateSubscription400ApplicationProblemPlusJSONResponse{
-			AdditionalAttributes: &map[string]string{
-				"callback": request.Body.Callback,
-			},
-			Detail: err.Error(),
+			Detail: "callback URL validation failed",
 			Status: http.StatusBadRequest,
 		}, nil
 	}
@@ -146,9 +144,6 @@ func (a *AlarmsServer) CreateSubscription(ctx context.Context, request api.Creat
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation && pgErr.ConstraintName == "unique_callback" {
 			// 409 is a more common choice for a duplicate entry, but the conformance tests expect a 400
 			return api.CreateSubscription400ApplicationProblemPlusJSONResponse(common.ProblemDetails{
-				AdditionalAttributes: &map[string]string{
-					"callback": request.Body.Callback,
-				},
 				Detail: "callback value must be unique",
 				Status: http.StatusBadRequest,
 			}), nil

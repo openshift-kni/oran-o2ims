@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -77,6 +78,39 @@ var _ = Describe("Validation error logging", func() {
 			Expect(logEntry).To(HaveKeyWithValue("method", "GET"))
 			Expect(logEntry).To(HaveKeyWithValue("path", "/o2ims-infrastructureInventory/v1/deploymentManagers"))
 			Expect(logEntry).To(HaveKeyWithValue("status", BeNumerically("==", http.StatusBadRequest)))
+		})
+
+		It("should strip raw input from InvalidParamFormatError messages in the response", func() {
+			handler := GetOranReqErrFunc()
+			recorder := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, "/o2ims-infrastructureInventory/v1/subscriptions/bad-value", nil)
+
+			maliciousInput := "<script>alert(1)</script>"
+			//nolint:revive // Capitalized to match oapi-codegen's InvalidParamFormatError.Error() output
+			err := fmt.Errorf("Invalid format for parameter subscriptionId: error unmarshaling '%s' text as *uuid.UUID: invalid UUID length: 25", maliciousInput)
+			handler(recorder, req, err)
+
+			Expect(recorder.Code).To(Equal(http.StatusBadRequest))
+			body := recorder.Body.String()
+			Expect(body).NotTo(ContainSubstring(maliciousInput))
+			Expect(body).To(ContainSubstring("Invalid format for parameter subscriptionId"))
+			Expect(body).NotTo(ContainSubstring("error unmarshaling"))
+
+			var logEntry map[string]any
+			Expect(json.Unmarshal(buf.Bytes(), &logEntry)).To(Succeed())
+			Expect(logEntry).To(HaveKeyWithValue("error", ContainSubstring(maliciousInput)))
+		})
+
+		It("should pass through non-InvalidParamFormatError messages unchanged", func() {
+			handler := GetOranReqErrFunc()
+			recorder := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/o2ims-infrastructureInventory/v1/subscriptions", nil)
+
+			handler(recorder, req, errors.New("request body has an error: value is required"))
+
+			Expect(recorder.Code).To(Equal(http.StatusBadRequest))
+			body := recorder.Body.String()
+			Expect(body).To(ContainSubstring("request body has an error: value is required"))
 		})
 	})
 })

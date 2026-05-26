@@ -290,7 +290,8 @@ func (r *ResourceServer) GetSubscriptions(ctx context.Context, request api.GetSu
 // validateSubscription validates a subscription before accepting the request
 func (r *ResourceServer) validateSubscription(ctx context.Context, request api.CreateSubscriptionRequestObject) error {
 	if err := commonapi.ValidateCallbackURL(ctx, r.SubscriptionEventHandler.GetClientFactory(), request.Body.Callback); err != nil {
-		return fmt.Errorf("invalid callback url: %w", err)
+		slog.Error("callback URL validation failed", "error", err)
+		return fmt.Errorf("callback URL validation failed")
 	}
 
 	// TODO: add validation of filter and move to common if filter syntax is the same for all servers
@@ -306,15 +307,9 @@ func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.Cre
 
 	// Validate the subscription
 	if err := r.validateSubscription(ctx, request); err != nil {
-		filter := "<null>"
-		if request.Body.Filter != nil {
-			filter = *request.Body.Filter
-		}
 		return api.CreateSubscription400ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"consumerSubscriptionId": consumerSubscriptionId,
-				"callback":               request.Body.Callback,
-				"filter":                 filter,
 			},
 			Detail: err.Error(),
 			Status: http.StatusBadRequest,
@@ -334,7 +329,6 @@ func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.Cre
 			return api.CreateSubscription400ApplicationProblemPlusJSONResponse{
 				AdditionalAttributes: &map[string]string{
 					"consumerSubscriptionId": consumerSubscriptionId,
-					"callback":               request.Body.Callback,
 				},
 				Detail: "callback value must be unique",
 				Status: http.StatusBadRequest,
