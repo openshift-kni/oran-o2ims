@@ -14,6 +14,18 @@ updates:
     # k8s.io v0.36+ requires Go 1.26; stay on v0.35.x until Go is upgraded
     - dependency-name: "k8s.io/*"
       versions: [">= 0.36.0"]
+    # These versions pull in controller-runtime v0.23 which has a breaking
+    # change in NewWebhookManagedBy (now generic with 2 args). Vendored deps
+    # (assisted-service, siteconfig, multicluster-observability-operator)
+    # still use the old API, so we can't upgrade until they all update.
+    - dependency-name: "open-cluster-management.io/api"
+      versions: [">= 1.3.0"]
+    - dependency-name: "open-cluster-management.io/governance-policy-propagator"
+      versions: [">= 0.19.0"]
+    - dependency-name: "github.com/metal3-io/baremetal-operator/apis"
+      versions: [">= 0.13.0"]
+    - dependency-name: "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring"
+      versions: [">= 0.91.0"]
    groups:
     k8s:
      patterns: ["k8s.io/*", "sigs.k8s.io/*"]
