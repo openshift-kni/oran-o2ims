@@ -25,7 +25,7 @@ updates:
     - dependency-name: "github.com/metal3-io/baremetal-operator/apis"
       versions: [">= 0.13.0"]
     - dependency-name: "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring"
-      versions: [">= 0.91.0"]
+      versions: [">= 0.90.0"]
    groups:
     k8s:
      patterns: ["k8s.io/*", "sigs.k8s.io/*"]
