@@ -33,7 +33,7 @@ var _ = Describe("AlarmsRepository", func() {
 	BeforeEach(func() {
 		var err error
 		mock, err = pgxmock.NewPool()
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 
 		repo = &alarmsrepo.AlarmsRepository{
 			Db: mock,
@@ -61,11 +61,11 @@ var _ = Describe("AlarmsRepository", func() {
 					)
 
 				config, err := repo.CreateServiceConfiguration(ctx, 30)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(config.RetentionPeriod).To(Equal(30))
 
 				// Verify all expectations were met
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
 			})
 		})
 		When("one configuration exists", func() {
@@ -78,9 +78,9 @@ var _ = Describe("AlarmsRepository", func() {
 					)
 
 				config, err := repo.CreateServiceConfiguration(ctx, 30)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(config.RetentionPeriod).To(Equal(45)) // should return existing value, not input value
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
 			})
 		})
 
@@ -103,9 +103,9 @@ var _ = Describe("AlarmsRepository", func() {
 					WillReturnResult(pgxmock.NewResult("DELETE", 2))
 
 				config, err := repo.CreateServiceConfiguration(ctx, 30)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(config.RetentionPeriod).To(Equal(45)) // should keep first config's value
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
 			})
 		})
 
@@ -130,7 +130,7 @@ var _ = Describe("AlarmsRepository", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to delete additional service configurations"))
 				Expect(config).To(BeNil())
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
 			})
 		})
 
@@ -142,7 +142,7 @@ var _ = Describe("AlarmsRepository", func() {
 				config, err := repo.CreateServiceConfiguration(ctx, 30)
 				Expect(err).To(HaveOccurred())
 				Expect(config).To(BeNil())
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
 			})
 		})
 	})
@@ -163,11 +163,11 @@ var _ = Describe("AlarmsRepository", func() {
 					)
 
 				records, err := repo.GetAlarmEventRecords(ctx)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(records).To(HaveLen(2))
 				Expect(records[0].AlarmEventRecordID).To(Equal(id1))
 				Expect(records[1].AlarmEventRecordID).To(Equal(id2))
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
 			})
 		})
 	})
@@ -193,10 +193,10 @@ var _ = Describe("AlarmsRepository", func() {
 					)
 
 				result, err := repo.PatchAlarmEventRecordACK(ctx, id, record)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result.AlarmAcknowledged).To(BeTrue())
 				Expect(result.AlarmAcknowledgedTime).To(Equal(&now))
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
 			})
 		})
 	})
@@ -216,9 +216,9 @@ var _ = Describe("AlarmsRepository", func() {
 					)
 
 				records, err := repo.GetAlarmEventRecord(ctx, id1)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(records.AlarmEventRecordID).To(Equal(id1))
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
 			})
 		})
 	})
@@ -239,11 +239,11 @@ var _ = Describe("AlarmsRepository", func() {
 					)
 
 				subscription, err := repo.GetAlarmSubscription(ctx, id)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(subscription.SubscriptionID).To(Equal(id))
 				Expect(subscription.ConsumerSubscriptionID).To(Equal(&conId))
 				Expect(subscription.Callback).To(Equal(callback))
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
 			})
 		})
 
@@ -257,7 +257,7 @@ var _ = Describe("AlarmsRepository", func() {
 				subscription, err := repo.GetAlarmSubscription(ctx, id)
 				Expect(err).To(HaveOccurred())
 				Expect(subscription).To(BeNil())
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
 			})
 		})
 	})
@@ -298,8 +298,8 @@ var _ = Describe("AlarmsRepository", func() {
 				err := repo.WithTransaction(ctx, func(tx pgx.Tx) error {
 					return repo.UpsertAlarmEventCaaSRecord(ctx, tx, records, int64(0))
 				})
-				Expect(err).NotTo(HaveOccurred())
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
 			})
 		})
 
@@ -353,8 +353,8 @@ var _ = Describe("AlarmsRepository", func() {
 				err := repo.WithTransaction(ctx, func(tx pgx.Tx) error {
 					return repo.UpsertAlarmEventCaaSRecord(ctx, tx, records, int64(0))
 				})
-				Expect(err).NotTo(HaveOccurred())
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
 			})
 		})
 
@@ -374,8 +374,8 @@ var _ = Describe("AlarmsRepository", func() {
 				err := repo.WithTransaction(ctx, func(tx pgx.Tx) error {
 					return repo.UpsertAlarmEventCaaSRecord(ctx, tx, []models.AlarmEventRecord{}, int64(0))
 				})
-				Expect(err).NotTo(HaveOccurred())
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
 
 			})
 		})
@@ -394,8 +394,8 @@ var _ = Describe("AlarmsRepository", func() {
 					WillReturnRows(pgxmock.NewRows([]string{"subscription_id"}).AddRow(subscription.SubscriptionID))
 
 				err := repo.UpdateSubscriptionEventCursor(ctx, subscription)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
 			})
 		})
 
@@ -412,7 +412,7 @@ var _ = Describe("AlarmsRepository", func() {
 
 				err := repo.UpdateSubscriptionEventCursor(ctx, subscription)
 				Expect(err).To(HaveOccurred())
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
 			})
 		})
 	})
@@ -441,8 +441,8 @@ var _ = Describe("AlarmsRepository", func() {
 				err := repo.WithTransaction(ctx, func(tx pgx.Tx) error {
 					return repo.ResolveStaleAlarmEventCaaSRecord(ctx, tx, int64(2))
 				})
-				Expect(err).NotTo(HaveOccurred())
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
 			})
 		})
 	})
@@ -463,11 +463,11 @@ var _ = Describe("AlarmsRepository", func() {
 					)
 
 				records, err := repo.GetServiceConfigurations(ctx)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(records).To(HaveLen(1))
 				Expect(records[0].ID).To(Equal(id1))
 				Expect(records[0].RetentionPeriod).To(Equal(s.RetentionPeriod))
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
 			})
 		})
 	})
@@ -488,10 +488,10 @@ var _ = Describe("AlarmsRepository", func() {
 					)
 
 				record, err := repo.UpdateServiceConfiguration(ctx, s.ID, &s)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(record.ID).To(Equal(s.ID))
 				Expect(record.RetentionPeriod).To(Equal(s.RetentionPeriod))
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
 			})
 		})
 	})
@@ -512,11 +512,11 @@ var _ = Describe("AlarmsRepository", func() {
 					)
 
 				records, err := repo.GetAlarmSubscriptions(ctx)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(records).To(HaveLen(2))
 				Expect(records[0].SubscriptionID).To(Equal(id1))
 				Expect(records[1].SubscriptionID).To(Equal(id2))
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
 			})
 		})
 	})
@@ -531,9 +531,9 @@ var _ = Describe("AlarmsRepository", func() {
 					WillReturnResult(pgxmock.NewResult("DELETE", 1))
 
 				count, err := repo.DeleteAlarmSubscription(ctx, id)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(count).To(Equal(int64(1)))
-				Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
 			})
 		})
 	})
@@ -557,9 +557,9 @@ var _ = Describe("AlarmsRepository", func() {
 					AddRow(time.Now(), uuid.New(), &id, &f, "http://test.com/callback", int64(10), time.Now()))
 
 			result, err := repo.CreateAlarmSubscription(ctx, subscription)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result.ConsumerSubscriptionID).To(Equal(subscription.ConsumerSubscriptionID))
-			Expect(mock.ExpectationsWereMet()).NotTo(HaveOccurred())
+			Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
 		})
 	})
 })

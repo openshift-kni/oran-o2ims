@@ -98,12 +98,12 @@ var _ = Describe("Alarms Sync", func() {
 
 			for _, rule := range rules {
 				err := hubClient.Create(ctx, rule)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 			}
 
 			// Call getIronicPrometheusRules and verify only hardware alerts are returned
 			result, err := getIronicPrometheusRules(ctx, hubClient)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(HaveLen(1))
 			Expect(result[0].Alert).To(Equal("IronicHardwareTemperatureHigh"))
 		})
@@ -144,11 +144,11 @@ var _ = Describe("Alarms Sync", func() {
 
 			for _, rule := range rules {
 				err := hubClient.Create(ctx, rule)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 			}
 
 			result, err := getIronicPrometheusRules(ctx, hubClient)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(HaveLen(0))
 		})
 
@@ -209,12 +209,12 @@ var _ = Describe("Alarms Sync", func() {
 
 			for _, rule := range rules {
 				err := hubClient.Create(ctx, rule)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 			}
 
 			// Only the alert from group with BOTH labels should be included
 			result, err := getIronicPrometheusRules(ctx, hubClient)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(HaveLen(1))
 			Expect(result[0].Alert).To(Equal("ValidHardwareAlert"))
 		})
@@ -337,8 +337,8 @@ var _ = Describe("Alarms Sync", func() {
 
 			additionalFields := *result[0].AlarmAdditionalFields
 			Expect(additionalFields["Expr"]).To(Equal("up == 0"))
-			Expect(additionalFields).NotTo(HaveKey("For"))
-			Expect(additionalFields).NotTo(HaveKey("KeepFiringFor"))
+			Expect(additionalFields).ToNot(HaveKey("For"))
+			Expect(additionalFields).ToNot(HaveKey("KeepFiringFor"))
 		})
 	})
 })

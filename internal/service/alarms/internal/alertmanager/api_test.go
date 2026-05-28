@@ -70,7 +70,7 @@ var _ = Describe("Alertmanager API Client", func() {
 		tempDir := GinkgoT().TempDir()
 		tempTokenFile = tempDir + "/token"
 		err := os.WriteFile(tempTokenFile, []byte("fake-token"), 0o600)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 
 		// Extract server certificate for use in our fake CA file
 		certPEM := pem.EncodeToMemory(&pem.Block{
@@ -81,7 +81,7 @@ var _ = Describe("Alertmanager API Client", func() {
 		// Create temporary CA file with the test server's certificate
 		tempCAFile := tempDir + "/ca.crt"
 		err = os.WriteFile(tempCAFile, certPEM, 0o600)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 
 		// Extract server hostname from test server URL without the scheme
 		serverHost := mockAMServer.URL[8:] // Skip "https://"
@@ -160,7 +160,7 @@ var _ = Describe("Alertmanager API Client", func() {
 			err := amClient.SyncAlerts(ctx)
 
 			// Then
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should handle empty alerts gracefully", func() {
@@ -168,7 +168,7 @@ var _ = Describe("Alertmanager API Client", func() {
 			err := amClient.SyncAlerts(ctx)
 
 			// Assert
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should handle API errors appropriately", func() {
@@ -245,7 +245,7 @@ var _ = Describe("Alertmanager API Client", func() {
 				err = fmt.Errorf("timed out waiting for scheduler to return")
 			}
 
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 })

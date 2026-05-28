@@ -114,7 +114,7 @@ var _ = Describe("HardwareDataSource", func() {
 			Expect(ds.GetID()).To(Equal(id))
 			Expect(ds.GetGenerationID()).To(Equal(3))
 			Expect(ds.Name()).To(Equal("HardwareDataSource"))
-			Expect(ds.AsyncChangeEvents).NotTo(BeNil())
+			Expect(ds.AsyncChangeEvents).ToNot(BeNil())
 		})
 
 		It("updates generation via SetGenerationID and IncrGenerationID", func() {
@@ -206,7 +206,7 @@ var _ = Describe("HardwareDataSource", func() {
 				},
 			}
 			rt, err := ds.MakeResourceType(res)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(rt.Name).To(Equal("Acme/Box"))
 			Expect(rt.Vendor).To(Equal("Acme"))
 			Expect(rt.Model).To(Equal("Box"))
@@ -242,8 +242,8 @@ var _ = Describe("HardwareDataSource", func() {
 			ds.hubClient = fakeClient
 
 			key, err := ds.HandleAsyncEvent(ctx, bmh, async.Updated)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(key).NotTo(Equal(uuid.Nil))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(key).ToNot(Equal(uuid.Nil))
 
 			Expect(eventCh).To(HaveLen(2))
 			rtEvent := <-eventCh
@@ -262,8 +262,8 @@ var _ = Describe("HardwareDataSource", func() {
 			bmh := newTestBMH("bmh-del", "test-pool", metal3v1alpha1.StateRegistering)
 
 			key, err := ds.HandleAsyncEvent(ctx, bmh, async.Updated)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(key).NotTo(Equal(uuid.Nil))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(key).ToNot(Equal(uuid.Nil))
 
 			Expect(eventCh).To(HaveLen(1))
 			event := <-eventCh
@@ -274,8 +274,8 @@ var _ = Describe("HardwareDataSource", func() {
 			bmh := newTestBMH("bmh-gone", "test-pool", metal3v1alpha1.StateAvailable)
 
 			key, err := ds.HandleAsyncEvent(ctx, bmh, async.Deleted)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(key).NotTo(Equal(uuid.Nil))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(key).ToNot(Equal(uuid.Nil))
 
 			Expect(eventCh).To(HaveLen(1))
 			event := <-eventCh
@@ -292,8 +292,8 @@ var _ = Describe("HardwareDataSource", func() {
 			ds.hubClient = fakeClient
 
 			key, err := ds.HandleAsyncEvent(ctx, hwdata, async.Updated)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(key).NotTo(Equal(uuid.Nil))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(key).ToNot(Equal(uuid.Nil))
 			Expect(eventCh).To(HaveLen(2))
 		})
 
@@ -301,7 +301,7 @@ var _ = Describe("HardwareDataSource", func() {
 			hwdata := newTestHardwareData("no-bmh")
 
 			key, err := ds.HandleAsyncEvent(ctx, hwdata, async.Updated)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(key).To(Equal(uuid.Nil))
 			Expect(eventCh).To(BeEmpty())
 		})
@@ -326,8 +326,8 @@ var _ = Describe("HardwareDataSource", func() {
 			ds.hubClient = fakeClient
 
 			key, err := ds.HandleAsyncEvent(ctx, node, async.Updated)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(key).NotTo(Equal(uuid.Nil))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(key).ToNot(Equal(uuid.Nil))
 			Expect(eventCh).To(HaveLen(2))
 		})
 
@@ -344,7 +344,7 @@ var _ = Describe("HardwareDataSource", func() {
 			}
 
 			key, err := ds.HandleAsyncEvent(ctx, node, async.Updated)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(key).To(Equal(uuid.Nil))
 			Expect(eventCh).To(BeEmpty())
 		})
@@ -370,7 +370,7 @@ var _ = Describe("HardwareDataSource", func() {
 		It("sends SyncComplete event for BMH objectType", func() {
 			keys := []uuid.UUID{uuid.New(), uuid.New()}
 			err := ds.HandleSyncComplete(ctx, &metal3v1alpha1.BareMetalHost{}, keys)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			Expect(eventCh).To(HaveLen(1))
 			event := <-eventCh
@@ -382,13 +382,13 @@ var _ = Describe("HardwareDataSource", func() {
 
 		It("does not send event for HardwareData objectType", func() {
 			err := ds.HandleSyncComplete(ctx, &metal3v1alpha1.HardwareData{}, nil)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(eventCh).To(BeEmpty())
 		})
 
 		It("does not send event for AllocatedNode objectType", func() {
 			err := ds.HandleSyncComplete(ctx, &hwmgmtv1alpha1.AllocatedNode{}, nil)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(eventCh).To(BeEmpty())
 		})
 	})
@@ -411,7 +411,7 @@ var _ = Describe("HardwareDataSource", func() {
 			ds.hubClient = fakeClient
 
 			results, err := ds.BuildResourcesForPool(ctx, "my-pool")
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(results).To(HaveLen(1))
 			Expect(results[0].Resource.Extensions[vendorExtension]).To(Equal("Dell"))
 			Expect(results[0].ResourceType.Vendor).To(Equal("Dell"))
@@ -424,7 +424,7 @@ var _ = Describe("HardwareDataSource", func() {
 			ds.hubClient = fakeClient
 
 			results, err := ds.BuildResourcesForPool(ctx, "empty-pool")
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(results).To(BeEmpty())
 		})
 
@@ -437,7 +437,7 @@ var _ = Describe("HardwareDataSource", func() {
 			ds.hubClient = fakeClient
 
 			results, err := ds.BuildResourcesForPool(ctx, "my-pool")
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(results).To(BeEmpty())
 		})
 	})

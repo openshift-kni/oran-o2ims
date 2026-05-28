@@ -82,13 +82,13 @@ var _ = Describe("Alarms Collector", func() {
 
 			for _, cluster := range managedClusters {
 				err := r.hubClient.Create(ctx, cluster)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 			}
 		})
 
 		It("returns a cluster with the correct version", func() {
 			cluster, err := r.getManagedCluster(ctx, version4167)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			Expect(cluster.Labels[ctlrutils.OpenshiftVersionLabelName]).To(Equal(version4167))
 			Expect(cluster.Labels).ToNot(HaveKey(ctlrutils.LocalClusterLabelName))
@@ -129,7 +129,7 @@ var _ = Describe("Alarms Collector", func() {
 			}
 
 			err := r.hubClient.Create(ctx, managedCluster)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			temp = getClientForCluster
 			getClientForCluster = func(ctx context.Context, hubClient client.Client, clusterName string) (client.Client, error) {
@@ -210,7 +210,7 @@ var _ = Describe("Alarms Collector", func() {
 
 				for _, rule := range rules {
 					err := withWatch.Create(ctx, rule)
-					Expect(err).NotTo(HaveOccurred())
+					Expect(err).ToNot(HaveOccurred())
 				}
 
 				return withWatch, nil
@@ -223,7 +223,7 @@ var _ = Describe("Alarms Collector", func() {
 
 		It("returns prometheus rules associated with a cluster", func() {
 			rules, err := r.processManagedCluster(ctx, version4167)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			Expect(rules).To(HaveLen(2))
 		})
@@ -307,12 +307,12 @@ var _ = Describe("Alarms Collector", func() {
 
 			for _, rule := range rules {
 				err := r.hubClient.Create(ctx, rule)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 			}
 
 			// Call getRules and verify only non-hardware alerts are returned
 			result, err := r.getRules(ctx, r.hubClient)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(HaveLen(1))
 			Expect(result[0].Alert).To(Equal("ClusterMemoryHigh"))
 		})
@@ -356,11 +356,11 @@ var _ = Describe("Alarms Collector", func() {
 
 			for _, rule := range rules {
 				err := r.hubClient.Create(ctx, rule)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 			}
 
 			result, err := r.getRules(ctx, r.hubClient)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(HaveLen(2))
 		})
 
@@ -411,12 +411,12 @@ var _ = Describe("Alarms Collector", func() {
 
 			for _, rule := range rules {
 				err := r.hubClient.Create(ctx, rule)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 			}
 
 			// Both alerts should be included since neither group has BOTH labels
 			result, err := r.getRules(ctx, r.hubClient)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(HaveLen(2))
 		})
 	})
@@ -473,7 +473,7 @@ var _ = Describe("Alarms Collector", func() {
 			for _, rule := range result {
 				Expect(rule.Alert).To(Equal("ViolatedPolicyReport"))
 				severity := rule.Labels["severity"]
-				Expect(severity).NotTo(ContainSubstring("{{"))
+				Expect(severity).ToNot(ContainSubstring("{{"))
 				severities[severity] = true
 			}
 

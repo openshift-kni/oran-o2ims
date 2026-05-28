@@ -58,11 +58,11 @@ var _ = Describe("ReflectorStore", func() {
 	Describe("NewReflectorStore", func() {
 		It("should create a new ReflectorStore with correct initial state", func() {
 			newStore := NewReflectorStore(objectType)
-			Expect(newStore).NotTo(BeNil())
+			Expect(newStore).ToNot(BeNil())
 			Expect(newStore.ObjectType).To(Equal(objectType))
 			Expect(newStore.HasSynced()).To(BeFalse())
 			Expect(newStore.queue).To(HaveLen(0))
-			Expect(newStore.ready).NotTo(BeNil())
+			Expect(newStore.ready).ToNot(BeNil())
 		})
 	})
 
@@ -73,7 +73,7 @@ var _ = Describe("ReflectorStore", func() {
 
 		It("should return true after Replace is called", func() {
 			err := store.Replace([]interface{}{}, "version1")
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(store.HasSynced()).To(BeTrue())
 		})
 	})
@@ -82,13 +82,13 @@ var _ = Describe("ReflectorStore", func() {
 		It("should successfully add an object", func() {
 			obj := &testObject{Name: "test1"}
 			err := store.Add(obj)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should enqueue an Updated operation", func() {
 			obj := &testObject{Name: "test1"}
 			err := store.Add(obj)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			store.mutex.Lock()
 			Expect(store.queue).To(HaveLen(1))
@@ -103,13 +103,13 @@ var _ = Describe("ReflectorStore", func() {
 		It("should successfully update an object", func() {
 			obj := &testObject{Name: "test1"}
 			err := store.Update(obj)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should enqueue an Updated operation", func() {
 			obj := &testObject{Name: "test1"}
 			err := store.Update(obj)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			store.mutex.Lock()
 			Expect(store.queue).To(HaveLen(1))
@@ -124,13 +124,13 @@ var _ = Describe("ReflectorStore", func() {
 		It("should successfully delete an object", func() {
 			obj := &testObject{Name: "test1"}
 			err := store.Delete(obj)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should enqueue a Deleted operation", func() {
 			obj := &testObject{Name: "test1"}
 			err := store.Delete(obj)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			store.mutex.Lock()
 			Expect(store.queue).To(HaveLen(1))
@@ -144,7 +144,7 @@ var _ = Describe("ReflectorStore", func() {
 	Describe("Replace", func() {
 		It("should successfully replace with empty list", func() {
 			err := store.Replace([]interface{}{}, "version1")
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should successfully replace with objects", func() {
@@ -153,7 +153,7 @@ var _ = Describe("ReflectorStore", func() {
 				&testObject{Name: "obj2"},
 			}
 			err := store.Replace(objects, "version1")
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should enqueue a SyncComplete operation and set hasSynced", func() {
@@ -162,7 +162,7 @@ var _ = Describe("ReflectorStore", func() {
 				&testObject{Name: "obj2"},
 			}
 			err := store.Replace(objects, "version1")
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			store.mutex.Lock()
 			Expect(store.queue).To(HaveLen(1))
@@ -176,7 +176,7 @@ var _ = Describe("ReflectorStore", func() {
 	Describe("Resync", func() {
 		It("should return nil without error", func() {
 			err := store.Resync()
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 
@@ -196,7 +196,7 @@ var _ = Describe("ReflectorStore", func() {
 
 				// Add an object
 				err := store.Add(obj)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				// Give some time for processing
 				time.Sleep(100 * time.Millisecond)
@@ -217,7 +217,7 @@ var _ = Describe("ReflectorStore", func() {
 
 				// Update an object
 				err := store.Update(obj)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				// Give some time for processing
 				time.Sleep(100 * time.Millisecond)
@@ -237,7 +237,7 @@ var _ = Describe("ReflectorStore", func() {
 
 				// Add an object
 				err := store.Add(obj)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				// Give some time for processing
 				time.Sleep(100 * time.Millisecond)
@@ -260,7 +260,7 @@ var _ = Describe("ReflectorStore", func() {
 
 				// Delete an object
 				err := store.Delete(obj)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				// Give some time for processing
 				time.Sleep(100 * time.Millisecond)
@@ -300,7 +300,7 @@ var _ = Describe("ReflectorStore", func() {
 
 				// Replace objects
 				err := store.Replace(objects, "version1")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				// Give some time for processing
 				time.Sleep(100 * time.Millisecond)
@@ -337,7 +337,7 @@ var _ = Describe("ReflectorStore", func() {
 
 				// Replace objects
 				err := store.Replace(objects, "version1")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				// Give some time for processing
 				time.Sleep(100 * time.Millisecond)
@@ -374,7 +374,7 @@ var _ = Describe("ReflectorStore", func() {
 
 				// Replace objects
 				err := store.Replace(objects, "version1")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				// Give some time for processing
 				time.Sleep(100 * time.Millisecond)
@@ -400,7 +400,7 @@ var _ = Describe("ReflectorStore", func() {
 
 				// Replace objects
 				err := store.Replace(objects, "version1")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				// Give some time for processing
 				time.Sleep(100 * time.Millisecond)
@@ -452,13 +452,13 @@ var _ = Describe("ReflectorStore", func() {
 
 				// Add multiple operations
 				err := store.Add(obj1)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				err = store.Delete(obj2)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				err = store.Update(obj3)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				// Give some time for processing
 				time.Sleep(100 * time.Millisecond)

@@ -96,8 +96,8 @@ var _ = Describe("SchemaUtils", func() {
 
 			Expect(schemas).To(HaveLen(1))
 			Expect(schemas).To(HaveKey("ValidSchema"))
-			Expect(schemas).NotTo(HaveKey("NilRef"))
-			Expect(schemas).NotTo(HaveKey("EmptyRef"))
+			Expect(schemas).ToNot(HaveKey("NilRef"))
+			Expect(schemas).ToNot(HaveKey("EmptyRef"))
 		})
 	})
 
@@ -122,16 +122,16 @@ var _ = Describe("SchemaUtils", func() {
 
 			adapter, err := NewFilterAdapterFromSwagger(logger, swagger)
 
-			Expect(err).NotTo(HaveOccurred())
-			Expect(adapter).NotTo(BeNil())
-			Expect(adapter.schemaValidator).NotTo(BeNil())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(adapter).ToNot(BeNil())
+			Expect(adapter.schemaValidator).ToNot(BeNil())
 		})
 
 		It("should work with nil swagger (no schema validation)", func() {
 			adapter, err := NewFilterAdapterFromSwagger(logger, nil)
 
-			Expect(err).NotTo(HaveOccurred())
-			Expect(adapter).NotTo(BeNil())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(adapter).ToNot(BeNil())
 			Expect(adapter.schemaValidator).To(BeNil())
 		})
 	})

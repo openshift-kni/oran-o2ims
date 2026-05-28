@@ -686,11 +686,11 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 				}
 			}
 
-			Expect(biosUpdate).NotTo(BeNil())
+			Expect(biosUpdate).ToNot(BeNil())
 			Expect(biosUpdate.Component).To(Equal("bios"))
 			Expect(biosUpdate.URL).To(Equal("https://example.com/bios.bin"))
 
-			Expect(bmcUpdate).NotTo(BeNil())
+			Expect(bmcUpdate).ToNot(BeNil())
 			Expect(bmcUpdate.Component).To(Equal("bmc"))
 			Expect(bmcUpdate.URL).To(Equal("https://example.com/bmc.bin"))
 		})
@@ -841,7 +841,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 
 			hfc, err := createHostFirmwareComponents(ctx, fakeClient, bmh, spec)
 			Expect(err).To(BeNil())
-			Expect(hfc).NotTo(BeNil())
+			Expect(hfc).ToNot(BeNil())
 			Expect(hfc.Name).To(Equal("test-bmh"))
 			Expect(hfc.Namespace).To(Equal("test-namespace"))
 			Expect(hfc.Spec.Updates).To(HaveLen(1))
@@ -861,7 +861,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 
 			hfc, err := createHostFirmwareComponents(ctx, fakeClient, bmh, spec)
 			Expect(err).To(BeNil())
-			Expect(hfc).NotTo(BeNil())
+			Expect(hfc).ToNot(BeNil())
 			Expect(hfc.Spec.Updates).To(BeEmpty())
 		})
 	})
@@ -926,7 +926,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 
 			retrievedHFC, err := getHostFirmwareComponents(ctx, fakeClient, "test-bmh", "test-namespace")
 			Expect(err).To(BeNil())
-			Expect(retrievedHFC).NotTo(BeNil())
+			Expect(retrievedHFC).ToNot(BeNil())
 			Expect(retrievedHFC.Name).To(Equal("test-bmh"))
 			Expect(retrievedHFC.Namespace).To(Equal("test-namespace"))
 		})
@@ -1157,7 +1157,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			}
 
 			err := validateHFCHasRequiredComponents(status, spec)
-			Expect(err).NotTo(BeNil())
+			Expect(err).ToNot(BeNil())
 			Expect(err.Error()).To(ContainSubstring("BIOS firmware update requested but BIOS component not found"))
 		})
 
@@ -1176,7 +1176,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			}
 
 			err := validateHFCHasRequiredComponents(status, spec)
-			Expect(err).NotTo(BeNil())
+			Expect(err).ToNot(BeNil())
 			Expect(err.Error()).To(ContainSubstring("BMC firmware update requested but BMC component not found"))
 		})
 
@@ -1194,7 +1194,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			}
 
 			err := validateHFCHasRequiredComponents(status, spec)
-			Expect(err).NotTo(BeNil())
+			Expect(err).ToNot(BeNil())
 			Expect(err.Error()).To(ContainSubstring("NIC firmware update requested but no NIC components found"))
 		})
 
@@ -1215,7 +1215,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			}
 
 			err := validateHFCHasRequiredComponents(status, spec)
-			Expect(err).NotTo(BeNil())
+			Expect(err).ToNot(BeNil())
 			Expect(err.Error()).To(ContainSubstring("NIC firmware update requested for 3 NICs but only 1 NIC components found"))
 		})
 
@@ -1287,7 +1287,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			}
 
 			err := validateHFCHasRequiredComponents(status, spec)
-			Expect(err).NotTo(BeNil())
+			Expect(err).ToNot(BeNil())
 			// Should fail on first missing component (BIOS)
 			Expect(err.Error()).To(ContainSubstring("BIOS firmware update requested but BIOS component not found"))
 		})

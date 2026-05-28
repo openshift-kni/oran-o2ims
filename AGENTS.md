@@ -93,6 +93,11 @@ issues during code review.
   `NamespacedName`. `ProvisioningRequest` is cluster-scoped (`scope: Cluster`
   in the CRD) and has no namespace.
 
+## Test Conventions
+
+- Use `.ToNot()` for negated Gomega assertions, not `.NotTo()` or
+  `.ShouldNot()`. The codebase is standardized on `.ToNot()`.
+
 ## Contributing Requirements
 
 - All commits must be signed off with DCO: `git commit -s`

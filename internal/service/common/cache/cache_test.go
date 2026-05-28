@@ -36,7 +36,7 @@ var _ = ginkgo.Describe("Entry", func() {
 		})
 
 		result, err := entry.Get(ctx)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(result).To(Equal("hello"))
 		Expect(callCount).To(Equal(1))
 	})
@@ -52,7 +52,7 @@ var _ = ginkgo.Describe("Entry", func() {
 		_, _ = entry.Get(ctx)
 		result, err := entry.Get(ctx)
 
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(result).To(Equal("hello"))
 		Expect(callCount).To(Equal(1))
 	})
@@ -126,7 +126,7 @@ var _ = ginkgo.Describe("Entry", func() {
 		Expect(err).To(HaveOccurred())
 
 		result, err := entry.Get(ctx)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(result).To(Equal("recovered"))
 	})
 
@@ -140,7 +140,7 @@ var _ = ginkgo.Describe("Entry", func() {
 		})
 
 		result, err := entry.Get(ctx)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(result.Count).To(Equal(2))
 		Expect(result.Items).To(Equal([]string{"a", "b"}))
 	})

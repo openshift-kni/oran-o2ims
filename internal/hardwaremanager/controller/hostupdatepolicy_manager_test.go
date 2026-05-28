@@ -87,13 +87,13 @@ var _ = Describe("HostUpdatePolicy Manager", func() {
 		Context("when HostUpdatePolicy does not exist", func() {
 			It("should create a new HostUpdatePolicy with firmware updates only", func() {
 				err := createOrUpdateHostUpdatePolicy(ctx, fakeClient, logger, bmh, true, false)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				// Verify the policy was created
 				policy := &metal3v1alpha1.HostUpdatePolicy{}
 				key := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 				err = fakeClient.Get(ctx, key, policy)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(policy.Name).To(Equal(bmh.Name))
 				Expect(policy.Namespace).To(Equal(bmh.Namespace))
 				Expect(policy.Spec.FirmwareUpdates).To(Equal(metal3v1alpha1.HostUpdatePolicyOnReboot))
@@ -102,13 +102,13 @@ var _ = Describe("HostUpdatePolicy Manager", func() {
 
 			It("should create a new HostUpdatePolicy with BIOS updates only", func() {
 				err := createOrUpdateHostUpdatePolicy(ctx, fakeClient, logger, bmh, false, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				// Verify the policy was created
 				policy := &metal3v1alpha1.HostUpdatePolicy{}
 				key := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 				err = fakeClient.Get(ctx, key, policy)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(policy.Name).To(Equal(bmh.Name))
 				Expect(policy.Namespace).To(Equal(bmh.Namespace))
 				Expect(policy.Spec.FirmwareUpdates).To(BeEmpty())
@@ -117,13 +117,13 @@ var _ = Describe("HostUpdatePolicy Manager", func() {
 
 			It("should create a new HostUpdatePolicy with both firmware and BIOS updates", func() {
 				err := createOrUpdateHostUpdatePolicy(ctx, fakeClient, logger, bmh, true, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				// Verify the policy was created
 				policy := &metal3v1alpha1.HostUpdatePolicy{}
 				key := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 				err = fakeClient.Get(ctx, key, policy)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(policy.Name).To(Equal(bmh.Name))
 				Expect(policy.Namespace).To(Equal(bmh.Namespace))
 				Expect(policy.Spec.FirmwareUpdates).To(Equal(metal3v1alpha1.HostUpdatePolicyOnReboot))
@@ -132,13 +132,13 @@ var _ = Describe("HostUpdatePolicy Manager", func() {
 
 			It("should create a new HostUpdatePolicy with empty spec when no updates required", func() {
 				err := createOrUpdateHostUpdatePolicy(ctx, fakeClient, logger, bmh, false, false)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				// Verify the policy was created
 				policy := &metal3v1alpha1.HostUpdatePolicy{}
 				key := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 				err = fakeClient.Get(ctx, key, policy)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(policy.Name).To(Equal(bmh.Name))
 				Expect(policy.Namespace).To(Equal(bmh.Namespace))
 				Expect(policy.Spec.FirmwareUpdates).To(BeEmpty())
@@ -165,26 +165,26 @@ var _ = Describe("HostUpdatePolicy Manager", func() {
 
 			It("should update the policy when firmware updates requirement changes", func() {
 				err := createOrUpdateHostUpdatePolicy(ctx, fakeClient, logger, bmh, false, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				// Verify the policy was updated
 				policy := &metal3v1alpha1.HostUpdatePolicy{}
 				key := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 				err = fakeClient.Get(ctx, key, policy)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(policy.Spec.FirmwareUpdates).To(BeEmpty())
 				Expect(policy.Spec.FirmwareSettings).To(Equal(metal3v1alpha1.HostUpdatePolicyOnReboot))
 			})
 
 			It("should update the policy when BIOS updates requirement is added", func() {
 				err := createOrUpdateHostUpdatePolicy(ctx, fakeClient, logger, bmh, true, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				// Verify the policy was updated
 				policy := &metal3v1alpha1.HostUpdatePolicy{}
 				key := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 				err = fakeClient.Get(ctx, key, policy)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(policy.Spec.FirmwareUpdates).To(Equal(metal3v1alpha1.HostUpdatePolicyOnReboot))
 				Expect(policy.Spec.FirmwareSettings).To(Equal(metal3v1alpha1.HostUpdatePolicyOnReboot))
 			})
@@ -192,26 +192,26 @@ var _ = Describe("HostUpdatePolicy Manager", func() {
 			It("should not update the policy when spec is already correct", func() {
 				// Policy already has firmware updates = "onReboot", call with same requirements
 				err := createOrUpdateHostUpdatePolicy(ctx, fakeClient, logger, bmh, true, false)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				// Verify the policy was not changed
 				policy := &metal3v1alpha1.HostUpdatePolicy{}
 				key := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 				err = fakeClient.Get(ctx, key, policy)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(policy.Spec.FirmwareUpdates).To(Equal(metal3v1alpha1.HostUpdatePolicyOnReboot))
 				Expect(policy.Spec.FirmwareSettings).To(BeEmpty())
 			})
 
 			It("should clear both settings when no updates are required", func() {
 				err := createOrUpdateHostUpdatePolicy(ctx, fakeClient, logger, bmh, false, false)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				// Verify the policy was updated to have empty spec
 				policy := &metal3v1alpha1.HostUpdatePolicy{}
 				key := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 				err = fakeClient.Get(ctx, key, policy)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(policy.Spec.FirmwareUpdates).To(BeEmpty())
 				Expect(policy.Spec.FirmwareSettings).To(BeEmpty())
 			})
@@ -239,13 +239,13 @@ var _ = Describe("HostUpdatePolicy Manager", func() {
 				}
 
 				err := createOrUpdateHostUpdatePolicy(ctx, fakeClient, logger, differentBmh, true, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				// Verify the policy was created with correct name and namespace
 				policy := &metal3v1alpha1.HostUpdatePolicy{}
 				key := types.NamespacedName{Name: differentBmh.Name, Namespace: differentBmh.Namespace}
 				err = fakeClient.Get(ctx, key, policy)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(policy.Name).To(Equal(differentBmh.Name))
 				Expect(policy.Namespace).To(Equal(differentBmh.Namespace))
 				Expect(policy.Spec.FirmwareUpdates).To(Equal(metal3v1alpha1.HostUpdatePolicyOnReboot))
@@ -261,13 +261,13 @@ var _ = Describe("HostUpdatePolicy Manager", func() {
 				}
 
 				err := createOrUpdateHostUpdatePolicy(ctx, fakeClient, logger, specialBmh, false, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				// Verify the policy was created with the special name
 				policy := &metal3v1alpha1.HostUpdatePolicy{}
 				key := types.NamespacedName{Name: specialBmh.Name, Namespace: specialBmh.Namespace}
 				err = fakeClient.Get(ctx, key, policy)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(policy.Name).To(Equal(specialBmh.Name))
 				Expect(policy.Spec.FirmwareSettings).To(Equal(metal3v1alpha1.HostUpdatePolicyOnReboot))
 			})
@@ -276,34 +276,34 @@ var _ = Describe("HostUpdatePolicy Manager", func() {
 		Context("spec validation", func() {
 			It("should set correct values for firmware updates", func() {
 				err := createOrUpdateHostUpdatePolicy(ctx, fakeClient, logger, bmh, true, false)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				policy := &metal3v1alpha1.HostUpdatePolicy{}
 				key := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 				err = fakeClient.Get(ctx, key, policy)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				// Verify that the firmware updates field is set to exactly HostUpdatePolicyOnReboot
 				Expect(policy.Spec.FirmwareUpdates).To(Equal(metal3v1alpha1.HostUpdatePolicyOnReboot))
 				Expect(string(policy.Spec.FirmwareUpdates)).To(Equal("onReboot"))
-				Expect(string(policy.Spec.FirmwareUpdates)).NotTo(Equal("OnReboot"))
-				Expect(string(policy.Spec.FirmwareUpdates)).NotTo(Equal("onreboot"))
+				Expect(string(policy.Spec.FirmwareUpdates)).ToNot(Equal("OnReboot"))
+				Expect(string(policy.Spec.FirmwareUpdates)).ToNot(Equal("onreboot"))
 			})
 
 			It("should set correct values for BIOS updates", func() {
 				err := createOrUpdateHostUpdatePolicy(ctx, fakeClient, logger, bmh, false, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				policy := &metal3v1alpha1.HostUpdatePolicy{}
 				key := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 				err = fakeClient.Get(ctx, key, policy)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				// Verify that the firmware settings field is set to exactly HostUpdatePolicyOnReboot
 				Expect(policy.Spec.FirmwareSettings).To(Equal(metal3v1alpha1.HostUpdatePolicyOnReboot))
 				Expect(string(policy.Spec.FirmwareSettings)).To(Equal("onReboot"))
-				Expect(string(policy.Spec.FirmwareSettings)).NotTo(Equal("OnReboot"))
-				Expect(string(policy.Spec.FirmwareSettings)).NotTo(Equal("onreboot"))
+				Expect(string(policy.Spec.FirmwareSettings)).ToNot(Equal("OnReboot"))
+				Expect(string(policy.Spec.FirmwareSettings)).ToNot(Equal("onreboot"))
 			})
 		})
 	})

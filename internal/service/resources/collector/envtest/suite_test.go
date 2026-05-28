@@ -150,7 +150,7 @@ func ptrTo(s string) *string {
 func deleteAndWait(obj client.Object) {
 	err := k8sClient.Delete(ctx, obj)
 	if err != nil && !apierrors.IsNotFound(err) {
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 	}
 	// Wait until the CR is actually gone from the API server
 	Eventually(func() bool {

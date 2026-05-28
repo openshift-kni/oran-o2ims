@@ -97,7 +97,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetAllVersions(ctx, apiGenerated.GetAllVersionsRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetAllVersions200JSONResponse{}))
 			})
 		})
@@ -110,7 +110,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetMinorVersions(ctx, apiGenerated.GetMinorVersionsRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetMinorVersions200JSONResponse{}))
 			})
 		})
@@ -123,7 +123,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetCloudInfo(ctx, apiGenerated.GetCloudInfoRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetCloudInfo200JSONResponse{}))
 			})
 		})
@@ -138,7 +138,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetCloudInfo400ApplicationProblemPlusJSONResponse{}))
 			})
 		})
@@ -159,7 +159,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetDeploymentManager200JSONResponse{}))
 			})
 		})
@@ -175,7 +175,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetDeploymentManager404ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusNotFound))
 			})
@@ -192,7 +192,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetDeploymentManager500ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusInternalServerError))
 			})
@@ -212,7 +212,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetDeploymentManagers(ctx, apiGenerated.GetDeploymentManagersRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetDeploymentManagers200JSONResponse{}))
 				deploymentManagers := resp.(apiGenerated.GetDeploymentManagers200JSONResponse)
 				Expect(deploymentManagers).To(HaveLen(2))
@@ -230,7 +230,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetDeploymentManagers(ctx, apiGenerated.GetDeploymentManagersRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetDeploymentManagers200JSONResponse{}))
 				Expect(resp.(apiGenerated.GetDeploymentManagers200JSONResponse)).To(HaveLen(0))
 			})
@@ -245,7 +245,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetDeploymentManagers(ctx, apiGenerated.GetDeploymentManagersRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetDeploymentManagers500ApplicationProblemPlusJSONResponse{}))
 			})
 		})
@@ -261,7 +261,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetDeploymentManagers400ApplicationProblemPlusJSONResponse{}))
 			})
 		})
@@ -282,14 +282,14 @@ var _ = Describe("ResourceServer", func() {
 					},
 				})
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.CreateSubscription400ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusBadRequest))
-				Expect(problemResp.AdditionalAttributes).NotTo(BeNil())
+				Expect(problemResp.AdditionalAttributes).ToNot(BeNil())
 				attrs := *problemResp.AdditionalAttributes
-				Expect(attrs).NotTo(HaveKey("callback"))
-				Expect(attrs).NotTo(HaveKey("filter"))
-				Expect(problemResp.Detail).NotTo(ContainSubstring(callbackURL))
+				Expect(attrs).ToNot(HaveKey("callback"))
+				Expect(attrs).ToNot(HaveKey("filter"))
+				Expect(problemResp.Detail).ToNot(ContainSubstring(callbackURL))
 			})
 		})
 
@@ -311,12 +311,12 @@ var _ = Describe("ResourceServer", func() {
 					},
 				})
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.CreateSubscription400ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusBadRequest))
-				Expect(problemResp.Detail).NotTo(ContainSubstring(callbackURL))
-				Expect(problemResp.Detail).NotTo(ContainSubstring("192.0.2.1"))
-				Expect(problemResp.Detail).NotTo(ContainSubstring("secret=token123"))
+				Expect(problemResp.Detail).ToNot(ContainSubstring(callbackURL))
+				Expect(problemResp.Detail).ToNot(ContainSubstring("192.0.2.1"))
+				Expect(problemResp.Detail).ToNot(ContainSubstring("secret=token123"))
 			})
 		})
 
@@ -344,13 +344,13 @@ var _ = Describe("ResourceServer", func() {
 					},
 				})
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.CreateSubscription400ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusBadRequest))
 				Expect(problemResp.Detail).To(Equal("callback value must be unique"))
-				Expect(problemResp.AdditionalAttributes).NotTo(BeNil())
+				Expect(problemResp.AdditionalAttributes).ToNot(BeNil())
 				attrs := *problemResp.AdditionalAttributes
-				Expect(attrs).NotTo(HaveKey("callback"))
+				Expect(attrs).ToNot(HaveKey("callback"))
 			})
 		})
 	})
@@ -367,7 +367,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetSubscription200JSONResponse{}))
 			})
 		})
@@ -383,7 +383,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetSubscription404ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusNotFound))
 			})
@@ -400,7 +400,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetSubscription500ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusInternalServerError))
 			})
@@ -422,7 +422,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetSubscriptions(ctx, apiGenerated.GetSubscriptionsRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetSubscriptions200JSONResponse{}))
 				subscriptions := resp.(apiGenerated.GetSubscriptions200JSONResponse)
 				Expect(subscriptions).To(HaveLen(2))
@@ -440,7 +440,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetSubscriptions(ctx, apiGenerated.GetSubscriptionsRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetSubscriptions200JSONResponse{}))
 				Expect(resp.(apiGenerated.GetSubscriptions200JSONResponse)).To(HaveLen(0))
 			})
@@ -455,7 +455,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetSubscriptions(ctx, apiGenerated.GetSubscriptionsRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetSubscriptions500ApplicationProblemPlusJSONResponse{}))
 			})
 		})
@@ -471,7 +471,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetSubscriptions400ApplicationProblemPlusJSONResponse{}))
 			})
 		})
@@ -489,7 +489,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.DeleteSubscription200Response{}))
 			})
 		})
@@ -505,7 +505,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.DeleteSubscription404ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusNotFound))
 			})
@@ -522,7 +522,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.DeleteSubscription500ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusInternalServerError))
 			})
@@ -544,7 +544,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetResourcePool200JSONResponse{}))
 			})
 		})
@@ -560,7 +560,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetResourcePool404ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusNotFound))
 			})
@@ -577,7 +577,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetResourcePool500ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusInternalServerError))
 			})
@@ -597,7 +597,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetResourcePools(ctx, apiGenerated.GetResourcePoolsRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetResourcePools200JSONResponse{}))
 				resourcePools := resp.(apiGenerated.GetResourcePools200JSONResponse)
 				Expect(resourcePools).To(HaveLen(2))
@@ -615,7 +615,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetResourcePools(ctx, apiGenerated.GetResourcePoolsRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetResourcePools200JSONResponse{}))
 				Expect(resp.(apiGenerated.GetResourcePools200JSONResponse)).To(HaveLen(0))
 			})
@@ -630,7 +630,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetResourcePools(ctx, apiGenerated.GetResourcePoolsRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetResourcePools500ApplicationProblemPlusJSONResponse{}))
 			})
 		})
@@ -646,7 +646,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetResourcePools400ApplicationProblemPlusJSONResponse{}))
 			})
 		})
@@ -678,7 +678,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetResource200JSONResponse{}))
 			})
 		})
@@ -695,7 +695,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetResource404ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusNotFound))
 				Expect(*problemResp.AdditionalAttributes).To(HaveKeyWithValue("resourcePoolId", poolID.String()))
@@ -717,7 +717,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetResource404ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusNotFound))
 			})
@@ -735,7 +735,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetResource500ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusInternalServerError))
 			})
@@ -756,7 +756,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetResource500ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusInternalServerError))
 			})
@@ -789,7 +789,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetResources200JSONResponse{}))
 				resources := resp.(apiGenerated.GetResources200JSONResponse)
 				Expect(resources).To(HaveLen(2))
@@ -809,7 +809,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetResources404ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusNotFound))
 			})
@@ -829,7 +829,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetResources500ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusInternalServerError))
 			})
@@ -847,7 +847,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetResources400ApplicationProblemPlusJSONResponse{}))
 			})
 		})
@@ -865,7 +865,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetInternalResourceById200JSONResponse{}))
 			})
 		})
@@ -881,7 +881,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetInternalResourceById404ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusNotFound))
 			})
@@ -898,7 +898,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetInternalResourceById500ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusInternalServerError))
 			})
@@ -923,7 +923,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetResourceType200JSONResponse{}))
 			})
 		})
@@ -943,7 +943,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetResourceType200JSONResponse{}))
 				resourceType := resp.(apiGenerated.GetResourceType200JSONResponse)
 				Expect(resourceType.AlarmDictionaryId).To(Equal(&dictID))
@@ -961,7 +961,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetResourceType404ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusNotFound))
 			})
@@ -978,7 +978,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetResourceType500ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusInternalServerError))
 			})
@@ -1001,7 +1001,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetResourceTypes(ctx, apiGenerated.GetResourceTypesRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetResourceTypes200JSONResponse{}))
 				resourceTypes := resp.(apiGenerated.GetResourceTypes200JSONResponse)
 				Expect(resourceTypes).To(HaveLen(2))
@@ -1028,7 +1028,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetResourceTypes(ctx, apiGenerated.GetResourceTypesRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetResourceTypes200JSONResponse{}))
 				resourceTypes := resp.(apiGenerated.GetResourceTypes200JSONResponse)
 				Expect(resourceTypes).To(HaveLen(1))
@@ -1050,7 +1050,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetResourceTypes(ctx, apiGenerated.GetResourceTypesRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetResourceTypes200JSONResponse{}))
 				Expect(resp.(apiGenerated.GetResourceTypes200JSONResponse)).To(HaveLen(0))
 			})
@@ -1065,7 +1065,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetResourceTypes(ctx, apiGenerated.GetResourceTypesRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetResourceTypes500ApplicationProblemPlusJSONResponse{}))
 			})
 		})
@@ -1084,7 +1084,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetResourceTypes(ctx, apiGenerated.GetResourceTypesRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetResourceTypes500ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusInternalServerError))
 			})
@@ -1101,7 +1101,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetResourceTypes400ApplicationProblemPlusJSONResponse{}))
 			})
 		})
@@ -1125,7 +1125,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetAlarmDictionary200JSONResponse{}))
 			})
 		})
@@ -1141,7 +1141,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetAlarmDictionary404ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusNotFound))
 			})
@@ -1158,7 +1158,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetAlarmDictionary500ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusInternalServerError))
 			})
@@ -1186,7 +1186,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetAlarmDictionaries(ctx, apiGenerated.GetAlarmDictionariesRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetAlarmDictionaries200JSONResponse{}))
 				alarmDictionaries := resp.(apiGenerated.GetAlarmDictionaries200JSONResponse)
 				Expect(alarmDictionaries).To(HaveLen(2))
@@ -1204,7 +1204,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetAlarmDictionaries(ctx, apiGenerated.GetAlarmDictionariesRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetAlarmDictionaries200JSONResponse{}))
 				Expect(resp.(apiGenerated.GetAlarmDictionaries200JSONResponse)).To(HaveLen(0))
 			})
@@ -1219,7 +1219,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetAlarmDictionaries(ctx, apiGenerated.GetAlarmDictionariesRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetAlarmDictionaries500ApplicationProblemPlusJSONResponse{}))
 			})
 		})
@@ -1239,11 +1239,11 @@ var _ = Describe("ResourceServer", func() {
 				Times(1)
 
 			resp1, err := server.GetAlarmDictionaries(ctx, apiGenerated.GetAlarmDictionariesRequestObject{})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(resp1.(apiGenerated.GetAlarmDictionaries200JSONResponse)).To(HaveLen(1))
 
 			resp2, err := server.GetAlarmDictionaries(ctx, apiGenerated.GetAlarmDictionariesRequestObject{})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(resp2.(apiGenerated.GetAlarmDictionaries200JSONResponse)).To(HaveLen(1))
 		})
 
@@ -1275,13 +1275,13 @@ var _ = Describe("ResourceServer", func() {
 			)
 
 			resp1, err := server.GetAlarmDictionaries(ctx, apiGenerated.GetAlarmDictionariesRequestObject{})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(resp1.(apiGenerated.GetAlarmDictionaries200JSONResponse)).To(HaveLen(1))
 
 			server.InvalidateAlarmDictCache()
 
 			resp2, err := server.GetAlarmDictionaries(ctx, apiGenerated.GetAlarmDictionariesRequestObject{})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(resp2.(apiGenerated.GetAlarmDictionaries200JSONResponse)).To(HaveLen(2))
 		})
 
@@ -1298,13 +1298,13 @@ var _ = Describe("ResourceServer", func() {
 			byID, err := server.GetAlarmDictionary(ctx, apiGenerated.GetAlarmDictionaryRequestObject{
 				AlarmDictionaryId: dictID,
 			})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(byID).To(BeAssignableToTypeOf(apiGenerated.GetAlarmDictionary200JSONResponse{}))
 
 			byRT, err := server.GetResourceTypeAlarmDictionary(ctx, apiGenerated.GetResourceTypeAlarmDictionaryRequestObject{
 				ResourceTypeId: rtID,
 			})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(byRT).To(BeAssignableToTypeOf(apiGenerated.GetResourceTypeAlarmDictionary200JSONResponse{}))
 		})
 	})
@@ -1320,7 +1320,7 @@ var _ = Describe("ResourceServer", func() {
 				Return(nil, fmt.Errorf("definitions query failed"))
 
 			resp, err := server.GetAlarmDictionaries(ctx, apiGenerated.GetAlarmDictionariesRequestObject{})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetAlarmDictionaries500ApplicationProblemPlusJSONResponse{}))
 		})
 	})
@@ -1341,7 +1341,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetResourceTypeAlarmDictionary200JSONResponse{}))
 			})
 		})
@@ -1357,7 +1357,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetResourceTypeAlarmDictionary404ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusNotFound))
 			})
@@ -1374,7 +1374,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetResourceTypeAlarmDictionary500ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusInternalServerError))
 			})
@@ -1405,7 +1405,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetLocation200JSONResponse{}))
 			})
 		})
@@ -1421,7 +1421,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetLocation404ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusNotFound))
 			})
@@ -1438,7 +1438,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetLocation500ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusInternalServerError))
 			})
@@ -1458,7 +1458,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetLocation500ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusInternalServerError))
 			})
@@ -1487,7 +1487,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetLocations(ctx, apiGenerated.GetLocationsRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetLocations200JSONResponse{}))
 				locations := resp.(apiGenerated.GetLocations200JSONResponse)
 				Expect(locations).To(HaveLen(2))
@@ -1508,7 +1508,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetLocations(ctx, apiGenerated.GetLocationsRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetLocations200JSONResponse{}))
 				Expect(resp.(apiGenerated.GetLocations200JSONResponse)).To(HaveLen(0))
 			})
@@ -1523,7 +1523,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetLocations(ctx, apiGenerated.GetLocationsRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetLocations500ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusInternalServerError))
 			})
@@ -1543,10 +1543,10 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetLocations(ctx, apiGenerated.GetLocationsRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetLocations500ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusInternalServerError))
-				Expect(problemResp.Detail).NotTo(BeEmpty())
+				Expect(problemResp.Detail).ToNot(BeEmpty())
 			})
 		})
 	})
@@ -1569,7 +1569,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetOCloudSite200JSONResponse{}))
 			})
 		})
@@ -1585,7 +1585,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetOCloudSite404ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusNotFound))
 			})
@@ -1602,7 +1602,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetOCloudSite500ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusInternalServerError))
 			})
@@ -1622,7 +1622,7 @@ var _ = Describe("ResourceServer", func() {
 				})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetOCloudSite500ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusInternalServerError))
 			})
@@ -1651,7 +1651,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetOCloudSites(ctx, apiGenerated.GetOCloudSitesRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetOCloudSites200JSONResponse{}))
 				sites := resp.(apiGenerated.GetOCloudSites200JSONResponse)
 				Expect(sites).To(HaveLen(2))
@@ -1672,7 +1672,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetOCloudSites(ctx, apiGenerated.GetOCloudSitesRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetOCloudSites200JSONResponse{}))
 				Expect(resp.(apiGenerated.GetOCloudSites200JSONResponse)).To(HaveLen(0))
 			})
@@ -1687,7 +1687,7 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetOCloudSites(ctx, apiGenerated.GetOCloudSitesRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetOCloudSites500ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusInternalServerError))
 			})
@@ -1708,10 +1708,10 @@ var _ = Describe("ResourceServer", func() {
 				resp, err := server.GetOCloudSites(ctx, apiGenerated.GetOCloudSitesRequestObject{})
 
 				// verify
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apiGenerated.GetOCloudSites500ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusInternalServerError))
-				Expect(problemResp.Detail).NotTo(BeEmpty())
+				Expect(problemResp.Detail).ToNot(BeEmpty())
 			})
 		})
 	})

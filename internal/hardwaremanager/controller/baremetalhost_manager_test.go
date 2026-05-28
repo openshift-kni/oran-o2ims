@@ -216,13 +216,13 @@ var _ = Describe("BareMetalHost Manager", func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
 			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, bmh)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify bootMACAddress was set
 			var updatedBMH metal3v1alpha1.BareMetalHost
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err = fakeClient.Get(ctx, name, &updatedBMH)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedBMH.Spec.BootMACAddress).To(Equal(testBootMAC))
 		})
 
@@ -235,13 +235,13 @@ var _ = Describe("BareMetalHost Manager", func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
 			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, bmh)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify bootMACAddress was set to eth1's MAC
 			var updatedBMH metal3v1alpha1.BareMetalHost
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err = fakeClient.Get(ctx, name, &updatedBMH)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedBMH.Spec.BootMACAddress).To(Equal("00:11:22:33:44:56"))
 		})
 
@@ -261,13 +261,13 @@ var _ = Describe("BareMetalHost Manager", func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
 			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, bmh)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify bootMACAddress was set using case-insensitive matching
 			var updatedBMH metal3v1alpha1.BareMetalHost
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err = fakeClient.Get(ctx, name, &updatedBMH)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedBMH.Spec.BootMACAddress).To(Equal("00:11:22:33:44:aa"))
 		})
 
@@ -281,13 +281,13 @@ var _ = Describe("BareMetalHost Manager", func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
 			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, bmh)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify bootMACAddress was not changed
 			var updatedBMH metal3v1alpha1.BareMetalHost
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err = fakeClient.Get(ctx, name, &updatedBMH)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedBMH.Spec.BootMACAddress).To(Equal(testBootMAC))
 		})
 
@@ -300,13 +300,13 @@ var _ = Describe("BareMetalHost Manager", func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
 			err := setBootMACAddressFromLabel(ctx, fakeClient, logger, bmh)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify bootMACAddress was not changed
 			var updatedBMH metal3v1alpha1.BareMetalHost
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err = fakeClient.Get(ctx, name, &updatedBMH)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedBMH.Spec.BootMACAddress).To(Equal(testBootMAC))
 		})
 
@@ -375,7 +375,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 			bmh.Spec.BootMACAddress = testBootMAC
 
 			interfaces, err := buildInterfacesFromBMH(bmh)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(len(interfaces)).To(Equal(2))
 
 			// Find boot interface
@@ -386,7 +386,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 					break
 				}
 			}
-			Expect(bootInterface).NotTo(BeNil())
+			Expect(bootInterface).ToNot(BeNil())
 			Expect(bootInterface.Label).To(Equal(constants.BootInterfaceLabel))
 			Expect(bootInterface.Name).To(Equal("eth0"))
 		})
@@ -397,7 +397,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 			}, nil, metal3v1alpha1.StateAvailable)
 
 			interfaces, err := buildInterfacesFromBMH(bmh)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(len(interfaces)).To(Equal(2))
 
 			// Find labeled interface
@@ -408,7 +408,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 					break
 				}
 			}
-			Expect(labeledInterface).NotTo(BeNil())
+			Expect(labeledInterface).ToNot(BeNil())
 			Expect(labeledInterface.Label).To(Equal("mgmt"))
 		})
 
@@ -452,24 +452,24 @@ var _ = Describe("BareMetalHost Manager", func() {
 		It("should add label successfully", func() {
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err := updateBMHMetaWithRetry(ctx, fakeClient, logger, name, MetaTypeLabel, "test-key", "test-value", OpAdd)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify label was added
 			var updatedBMH metal3v1alpha1.BareMetalHost
 			err = fakeClient.Get(ctx, name, &updatedBMH)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedBMH.Labels["test-key"]).To(Equal("test-value"))
 		})
 
 		It("should add annotation successfully", func() {
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err := updateBMHMetaWithRetry(ctx, fakeClient, logger, name, MetaTypeAnnotation, "test-key", "test-value", OpAdd)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify annotation was added
 			var updatedBMH metal3v1alpha1.BareMetalHost
 			err = fakeClient.Get(ctx, name, &updatedBMH)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedBMH.Annotations["test-key"]).To(Equal("test-value"))
 		})
 
@@ -480,12 +480,12 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err := updateBMHMetaWithRetry(ctx, fakeClient, logger, name, MetaTypeLabel, "test-key", "", OpRemove)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify label was removed
 			var updatedBMH metal3v1alpha1.BareMetalHost
 			err = fakeClient.Get(ctx, name, &updatedBMH)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			_, exists := updatedBMH.Labels["test-key"]
 			Expect(exists).To(BeFalse())
 		})
@@ -507,7 +507,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 		It("should skip remove operation when map is nil", func() {
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err := updateBMHMetaWithRetry(ctx, fakeClient, logger, name, MetaTypeLabel, "test-key", "", OpRemove)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should skip remove operation when key doesn't exist", func() {
@@ -516,7 +516,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err := updateBMHMetaWithRetry(ctx, fakeClient, logger, name, MetaTypeLabel, "test-key", "", OpRemove)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 
@@ -533,13 +533,13 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 		It("should mark BMH as allocated", func() {
 			err := markBMHAllocated(ctx, fakeClient, logger, bmh)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify BMH was marked as allocated
 			var updatedBMH metal3v1alpha1.BareMetalHost
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err = fakeClient.Get(ctx, name, &updatedBMH)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedBMH.Labels[BmhAllocatedLabel]).To(Equal(ValueTrue))
 		})
 
@@ -548,7 +548,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
 			err := markBMHAllocated(ctx, fakeClient, logger, bmh)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 
@@ -565,13 +565,13 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 		It("should add host management annotation", func() {
 			err := allowHostManagement(ctx, fakeClient, logger, bmh)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify annotation was added
 			var updatedBMH metal3v1alpha1.BareMetalHost
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err = fakeClient.Get(ctx, name, &updatedBMH)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			_, exists := updatedBMH.Annotations[BmhHostMgmtAnnotation]
 			Expect(exists).To(BeTrue())
 		})
@@ -581,7 +581,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
 			err := allowHostManagement(ctx, fakeClient, logger, bmh)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 
@@ -600,7 +600,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 		It("should return BMH for node successfully", func() {
 			retrievedBMH, err := getBMHForNode(ctx, fakeClient, node)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(retrievedBMH.Name).To(Equal("test-bmh"))
 			Expect(retrievedBMH.Namespace).To(Equal("test-ns"))
 		})
@@ -664,7 +664,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 		It("should fetch only unallocated BMHs", func() {
 			bmhList, err := fetchBMHList(ctx, fakeClient, logger, nodeGroup)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(len(bmhList.Items)).To(Equal(1))
 			Expect(bmhList.Items[0].Name).To(Equal("bmh2"))
 		})
@@ -710,7 +710,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh1, bmh2, bmh3, hwData1, hwData2, hwData3).Build()
 
 			bmhList, err := fetchBMHList(ctx, fakeClient, logger, nodeGroup)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(len(bmhList.Items)).To(Equal(1)) // Only bmh2 should match (bmh1 is allocated, bmh3 is pool2)
 		})
 	})
@@ -746,13 +746,13 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 		It("should deallocate BMH successfully", func() {
 			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh, false)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify BMH was deallocated correctly
 			var updatedBMH metal3v1alpha1.BareMetalHost
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err = fakeClient.Get(ctx, name, &updatedBMH)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Check that allocation labels were removed
 			_, hasOwnedBy := updatedBMH.Labels[SiteConfigOwnedByLabel]
@@ -781,12 +781,12 @@ var _ = Describe("BareMetalHost Manager", func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
 			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh, false)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			var updatedBMH metal3v1alpha1.BareMetalHost
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err = fakeClient.Get(ctx, name, &updatedBMH)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedBMH.Spec.PreprovisioningNetworkDataName).To(Equal("original-network-data"))
 			_, hasAnnotation := updatedBMH.Annotations[OrigNetworkDataAnnotation]
 			Expect(hasAnnotation).To(BeFalse())
@@ -799,12 +799,12 @@ var _ = Describe("BareMetalHost Manager", func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
 			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh, false)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			var updatedBMH metal3v1alpha1.BareMetalHost
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err = fakeClient.Get(ctx, name, &updatedBMH)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedBMH.Spec.PreprovisioningNetworkDataName).To(BeEmpty())
 		})
 
@@ -813,12 +813,12 @@ var _ = Describe("BareMetalHost Manager", func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
 			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh, false)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			var updatedBMH metal3v1alpha1.BareMetalHost
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err = fakeClient.Get(ctx, name, &updatedBMH)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedBMH.Spec.PreprovisioningNetworkDataName).To(Equal("some-network-data"))
 		})
 
@@ -836,12 +836,12 @@ var _ = Describe("BareMetalHost Manager", func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh, secret).Build()
 
 			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh, false)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			var updatedBMH metal3v1alpha1.BareMetalHost
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err = fakeClient.Get(ctx, name, &updatedBMH)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedBMH.Spec.PreprovisioningNetworkDataName).To(Equal(expectedSecretName))
 		})
 
@@ -851,12 +851,12 @@ var _ = Describe("BareMetalHost Manager", func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
 			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh, false)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			var updatedBMH metal3v1alpha1.BareMetalHost
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err = fakeClient.Get(ctx, name, &updatedBMH)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedBMH.Spec.PreprovisioningNetworkDataName).To(BeEmpty())
 		})
 
@@ -865,12 +865,12 @@ var _ = Describe("BareMetalHost Manager", func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
 			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh, false)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			var updatedBMH metal3v1alpha1.BareMetalHost
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err = fakeClient.Get(ctx, name, &updatedBMH)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedBMH.Spec.AutomatedCleaningMode).To(Equal(metal3v1alpha1.CleaningModeMetadata))
 		})
 
@@ -880,12 +880,12 @@ var _ = Describe("BareMetalHost Manager", func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
 			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh, false)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			var updatedBMH metal3v1alpha1.BareMetalHost
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err = fakeClient.Get(ctx, name, &updatedBMH)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedBMH.Spec.AutomatedCleaningMode).To(Equal(metal3v1alpha1.CleaningModeMetadata))
 			Expect(updatedBMH.Spec.Online).To(BeFalse())
 			Expect(updatedBMH.Annotations[IBIWarningAnnotation]).To(Equal(IBIWarningMessage))
@@ -896,12 +896,12 @@ var _ = Describe("BareMetalHost Manager", func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
 			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh, false)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			var updatedBMH metal3v1alpha1.BareMetalHost
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err = fakeClient.Get(ctx, name, &updatedBMH)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			_, hasIBIWarning := updatedBMH.Annotations[IBIWarningAnnotation]
 			Expect(hasIBIWarning).To(BeFalse())
 		})
@@ -912,17 +912,17 @@ var _ = Describe("BareMetalHost Manager", func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
 			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh, true)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			var updatedBMH metal3v1alpha1.BareMetalHost
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err = fakeClient.Get(ctx, name, &updatedBMH)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedBMH.Spec.AutomatedCleaningMode).To(BeEmpty())
 			Expect(updatedBMH.Spec.Online).To(BeTrue())
 			// Ensure deploy/image/networkdata were NOT cleared/reset when skipCleanup is true
-			Expect(updatedBMH.Spec.CustomDeploy).NotTo(BeNil())
-			Expect(updatedBMH.Spec.Image).NotTo(BeNil())
+			Expect(updatedBMH.Spec.CustomDeploy).ToNot(BeNil())
+			Expect(updatedBMH.Spec.Image).ToNot(BeNil())
 			Expect(updatedBMH.Spec.PreprovisioningNetworkDataName).To(Equal("old-network-data"))
 		})
 
@@ -933,12 +933,12 @@ var _ = Describe("BareMetalHost Manager", func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
 
 			err := finalizeBMHDeallocation(ctx, fakeClient, logger, bmh, true)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			var updatedBMH metal3v1alpha1.BareMetalHost
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err = fakeClient.Get(ctx, name, &updatedBMH)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			// skipCleanup=true should skip cleaning, power-off, and IBI warning
 			Expect(updatedBMH.Spec.AutomatedCleaningMode).To(BeEmpty())
 			Expect(updatedBMH.Spec.Online).To(BeTrue())
@@ -972,12 +972,12 @@ var _ = Describe("BareMetalHost Manager", func() {
 		It("should remove InfraEnv label from PreprovisioningImage", func() {
 			name := types.NamespacedName{Name: image.Name, Namespace: image.Namespace}
 			err := removeInfraEnvLabelFromPreprovisioningImage(ctx, fakeClient, logger, name)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify label was removed
 			var updatedImage metal3v1alpha1.PreprovisioningImage
 			err = fakeClient.Get(ctx, name, &updatedImage)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			_, exists := updatedImage.Labels[BmhInfraEnvLabel]
 			Expect(exists).To(BeFalse())
 			// Other labels should remain
@@ -993,13 +993,13 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 			name := types.NamespacedName{Name: image.Name, Namespace: image.Namespace}
 			err := removeInfraEnvLabelFromPreprovisioningImage(ctx, fakeClient, logger, name)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify finalizer was removed
 			var updatedImage metal3v1alpha1.PreprovisioningImage
 			err = fakeClient.Get(ctx, name, &updatedImage)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(updatedImage.Finalizers).NotTo(ContainElement(PreprovisioningImageDeprovisionFinalizer))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedImage.Finalizers).ToNot(ContainElement(PreprovisioningImageDeprovisionFinalizer))
 			// Other finalizers should remain
 			Expect(updatedImage.Finalizers).To(ContainElement("other-finalizer"))
 		})
@@ -1010,12 +1010,12 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 			name := types.NamespacedName{Name: image.Name, Namespace: image.Namespace}
 			err := removeInfraEnvLabelFromPreprovisioningImage(ctx, fakeClient, logger, name)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify other finalizers are untouched
 			var updatedImage metal3v1alpha1.PreprovisioningImage
 			err = fakeClient.Get(ctx, name, &updatedImage)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedImage.Finalizers).To(ContainElement("other-finalizer"))
 		})
 	})
@@ -1033,12 +1033,12 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 		It("should annotate node with config in progress", func() {
 			err := annotateNodeConfigInProgress(ctx, fakeClient, logger, "test-ns", "test-node", UpdateReasonBIOSSettings)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify annotation was added
 			var updatedNode hwmgmtv1alpha1.AllocatedNode
 			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-node", Namespace: "test-ns"}, &updatedNode)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedNode.Annotations[ConfigAnnotation]).To(Equal(UpdateReasonBIOSSettings))
 		})
 
@@ -1047,12 +1047,12 @@ var _ = Describe("BareMetalHost Manager", func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(node).Build()
 
 			err := annotateNodeConfigInProgress(ctx, fakeClient, logger, "test-ns", "test-node", UpdateReasonFirmware)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify both annotations exist
 			var updatedNode hwmgmtv1alpha1.AllocatedNode
 			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-node", Namespace: "test-ns"}, &updatedNode)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedNode.Annotations[ConfigAnnotation]).To(Equal(UpdateReasonFirmware))
 			Expect(updatedNode.Annotations["existing"]).To(Equal("value"))
 		})
@@ -1071,13 +1071,13 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 		It("should add reboot annotation to BMH", func() {
 			err := addRebootAnnotation(ctx, fakeClient, logger, bmh)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify annotation was added
 			var updatedBMH metal3v1alpha1.BareMetalHost
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err = fakeClient.Get(ctx, name, &updatedBMH)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			_, exists := updatedBMH.Annotations[BmhRebootAnnotation]
 			Expect(exists).To(BeTrue())
 		})
@@ -1111,19 +1111,19 @@ var _ = Describe("BareMetalHost Manager", func() {
 		It("should remove InfraEnv label from both BMH and PreprovisioningImage", func() {
 			name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 			err := removeInfraEnvLabel(ctx, fakeClient, logger, name)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify label was removed from BMH
 			var updatedBMH metal3v1alpha1.BareMetalHost
 			err = fakeClient.Get(ctx, name, &updatedBMH)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			_, exists := updatedBMH.Labels[BmhInfraEnvLabel]
 			Expect(exists).To(BeFalse())
 
 			// Verify label was removed from PreprovisioningImage
 			var updatedImage metal3v1alpha1.PreprovisioningImage
 			err = fakeClient.Get(ctx, name, &updatedImage)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			_, exists = updatedImage.Labels[BmhInfraEnvLabel]
 			Expect(exists).To(BeFalse())
 		})
@@ -1207,7 +1207,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 				node.Annotations = nil
 				setConfigAnnotation(node, "test-reason")
 
-				Expect(node.Annotations).NotTo(BeNil())
+				Expect(node.Annotations).ToNot(BeNil())
 				Expect(node.Annotations[ConfigAnnotation]).To(Equal("test-reason"))
 			})
 
@@ -1253,7 +1253,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 		Describe("removeConfigAnnotation", func() {
 			It("should handle nil annotations map gracefully", func() {
 				node.Annotations = nil
-				Expect(func() { removeConfigAnnotation(node) }).NotTo(Panic())
+				Expect(func() { removeConfigAnnotation(node) }).ToNot(Panic())
 			})
 
 			It("should remove config annotation when it exists", func() {
@@ -1270,7 +1270,7 @@ var _ = Describe("BareMetalHost Manager", func() {
 
 			It("should handle non-existent config annotation gracefully", func() {
 				node.Annotations = map[string]string{"other": "value"}
-				Expect(func() { removeConfigAnnotation(node) }).NotTo(Panic())
+				Expect(func() { removeConfigAnnotation(node) }).ToNot(Panic())
 				Expect(node.Annotations["other"]).To(Equal("value"))
 			})
 		})

@@ -1161,7 +1161,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 		ct1 := &provisioningv1alpha1.ClusterTemplate{}
 		err = c.Get(ctx, client.ObjectKeyFromObject(ct), ct1)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(ct1.Spec.TemplateID).NotTo(Equal(""))
+		Expect(ct1.Spec.TemplateID).ToNot(Equal(""))
 	})
 	It("should validate templateID if is not empty, bad UUID", func() {
 		// Create a valid cluster template
@@ -1961,11 +1961,11 @@ var _ = Describe("validateClusterImageSetMatchesRelease", func() {
 		// Initialize scheme with required types
 		scheme = runtime.NewScheme()
 		err := corev1.AddToScheme(scheme)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		err = provisioningv1alpha1.AddToScheme(scheme)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		err = hivev1.AddToScheme(scheme)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 
 		c = fake.NewClientBuilder().WithScheme(scheme).Build()
 

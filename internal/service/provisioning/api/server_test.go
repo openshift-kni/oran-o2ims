@@ -72,7 +72,7 @@ var _ = Describe("ProvisioningServer", func() {
 			provisioningDetails string,
 		) *provisioningv1alpha1.ProvisioningRequest {
 			templateParamsBytes, err := json.Marshal(map[string]interface{}{"key": "value"})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			pr := &provisioningv1alpha1.ProvisioningRequest{
 				ObjectMeta: metav1.ObjectMeta{
@@ -97,12 +97,12 @@ var _ = Describe("ProvisioningServer", func() {
 
 		getNodeClusterStatus := func(prName string) provisioningapi.ResourceProvisioningStatus {
 			reqUUID, err := uuid.Parse(prName)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			resp, err := server.GetProvisioningRequest(ctx, provisioningapi.GetProvisioningRequestRequestObject{
 				ProvisioningRequestId: reqUUID,
 			})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			result := resp.(provisioningapi.GetProvisioningRequest200JSONResponse)
 			return result.Status.NodeClusterProvisioningStatus
 		}
@@ -222,7 +222,7 @@ var _ = Describe("ProvisioningServer", func() {
 				server = &api.ProvisioningServer{HubClient: fakeClient}
 
 				status := getNodeClusterStatus(prName)
-				Expect(status).NotTo(BeZero())
+				Expect(status).ToNot(BeZero())
 				Expect(status.ResourceName).To(Equal("cluster-001"))
 				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhasePROCESSING))
 				Expect(status.ResourceId).To(BeEmpty())
@@ -257,7 +257,7 @@ var _ = Describe("ProvisioningServer", func() {
 				server = &api.ProvisioningServer{HubClient: fakeClient}
 
 				status := getNodeClusterStatus(prName)
-				Expect(status).NotTo(BeZero())
+				Expect(status).ToNot(BeZero())
 				Expect(status.ResourceName).To(Equal("cluster-002"))
 				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhasePROCESSING))
 				Expect(status.ResourceId).To(BeEmpty())
@@ -293,7 +293,7 @@ var _ = Describe("ProvisioningServer", func() {
 				server = &api.ProvisioningServer{HubClient: fakeClient}
 
 				status := getNodeClusterStatus(prName)
-				Expect(status).NotTo(BeZero())
+				Expect(status).ToNot(BeZero())
 				Expect(status.ResourceName).To(Equal("cluster-003"))
 				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhasePROVISIONED))
 				Expect(status.ResourceId).To(Equal(clusterId))
@@ -328,7 +328,7 @@ var _ = Describe("ProvisioningServer", func() {
 				server = &api.ProvisioningServer{HubClient: fakeClient}
 
 				status := getNodeClusterStatus(prName)
-				Expect(status).NotTo(BeZero())
+				Expect(status).ToNot(BeZero())
 				Expect(status.ResourceName).To(Equal("cluster-004"))
 				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhasePROVISIONED))
 				Expect(status.ResourceId).To(BeEmpty())
@@ -363,7 +363,7 @@ var _ = Describe("ProvisioningServer", func() {
 				server = &api.ProvisioningServer{HubClient: fakeClient}
 
 				status := getNodeClusterStatus(prName)
-				Expect(status).NotTo(BeZero())
+				Expect(status).ToNot(BeZero())
 				Expect(status.ResourceName).To(Equal("cluster-005"))
 				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhaseFAILED))
 				Expect(status.ResourceId).To(BeEmpty())
@@ -398,7 +398,7 @@ var _ = Describe("ProvisioningServer", func() {
 				server = &api.ProvisioningServer{HubClient: fakeClient}
 
 				status := getNodeClusterStatus(prName)
-				Expect(status).NotTo(BeZero())
+				Expect(status).ToNot(BeZero())
 				Expect(status.ResourceName).To(Equal("cluster-006"))
 				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhaseFAILED))
 				Expect(status.ResourceId).To(BeEmpty())
@@ -444,7 +444,7 @@ var _ = Describe("ProvisioningServer", func() {
 				server = &api.ProvisioningServer{HubClient: fakeClient}
 
 				status := getNodeClusterStatus(prName)
-				Expect(status).NotTo(BeZero())
+				Expect(status).ToNot(BeZero())
 				Expect(status.ResourceName).To(Equal("cluster-007"))
 				Expect(status.ResourceProvisioningPhase).To(Equal(provisioningapi.ResourceProvisioningPhasePROVISIONED))
 				Expect(status.ResourceId).To(Equal(clusterId))
@@ -470,7 +470,7 @@ var _ = Describe("ProvisioningServer", func() {
 			statuses []provisioningv1alpha1.InfrastructureResourceStatus,
 		) *provisioningv1alpha1.ProvisioningRequest {
 			templateParamsBytes, err := json.Marshal(map[string]interface{}{"key": "value"})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			pr := &provisioningv1alpha1.ProvisioningRequest{
 				ObjectMeta: metav1.ObjectMeta{
@@ -491,12 +491,12 @@ var _ = Describe("ProvisioningServer", func() {
 
 		getInfraStatuses := func(prName string) []provisioningapi.ResourceProvisioningStatus {
 			reqUUID, err := uuid.Parse(prName)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			resp, err := server.GetProvisioningRequest(ctx, provisioningapi.GetProvisioningRequestRequestObject{
 				ProvisioningRequestId: reqUUID,
 			})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			result := resp.(provisioningapi.GetProvisioningRequest200JSONResponse)
 			return result.Status.InfrastructureResourceProvisioningStatus
 		}
@@ -605,7 +605,7 @@ var _ = Describe("ProvisioningServer", func() {
 					"baseDomain":  "example.com",
 				}
 				templateParamsBytes, err := json.Marshal(initialTemplateParams)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				prUID := uuid.New().String()
 				initialPR := &provisioningv1alpha1.ProvisioningRequest{
@@ -655,13 +655,13 @@ var _ = Describe("ProvisioningServer", func() {
 
 				// First update should succeed
 				resp, err := server.UpdateProvisioningRequest(ctx, updateRequest1)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(provisioningapi.UpdateProvisioningRequest200JSONResponse{}))
 
 				// Verify the update was applied
 				updatedPR := &provisioningv1alpha1.ProvisioningRequest{}
 				err = fakeClient.Get(ctx, types.NamespacedName{Name: testUUID.String()}, updatedPR)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(updatedPR.Spec.Name).To(Equal("test-updated-1"))
 				Expect(updatedPR.Spec.Description).To(Equal("updated description 1"))
 			})
@@ -673,7 +673,7 @@ var _ = Describe("ProvisioningServer", func() {
 					"baseDomain":  "example.com",
 				}
 				templateParamsBytes, err := json.Marshal(initialTemplateParams)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				prUID := uuid.New().String()
 				initialPR := &provisioningv1alpha1.ProvisioningRequest{
@@ -721,7 +721,7 @@ var _ = Describe("ProvisioningServer", func() {
 				}
 
 				resp1, err := server.UpdateProvisioningRequest(ctx, updateRequest1)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp1).To(BeAssignableToTypeOf(provisioningapi.UpdateProvisioningRequest200JSONResponse{}))
 
 				updatedTemplateParams2 := map[string]interface{}{
@@ -742,13 +742,13 @@ var _ = Describe("ProvisioningServer", func() {
 				}
 
 				resp2, err := server.UpdateProvisioningRequest(ctx, updateRequest2)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp2).To(BeAssignableToTypeOf(provisioningapi.UpdateProvisioningRequest200JSONResponse{}))
 
 				// Verify final state
 				finalPR := &provisioningv1alpha1.ProvisioningRequest{}
 				err = fakeClient.Get(ctx, types.NamespacedName{Name: testUUID.String()}, finalPR)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(finalPR.Spec.Name).To(Equal("test-seq-2"))
 				Expect(finalPR.Spec.Description).To(Equal("sequential update 2"))
 			})
@@ -780,7 +780,7 @@ var _ = Describe("ProvisioningServer", func() {
 				}
 
 				resp, err := server.UpdateProvisioningRequest(ctx, updateRequest)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(provisioningapi.UpdateProvisioningRequest422ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(422))
 			})
@@ -811,7 +811,7 @@ var _ = Describe("ProvisioningServer", func() {
 				}
 
 				resp, err := server.UpdateProvisioningRequest(ctx, updateRequest)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(provisioningapi.UpdateProvisioningRequest404ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(404))
 			})
@@ -861,7 +861,7 @@ var _ = Describe("ProvisioningServer", func() {
 			}
 
 			resp, err := server.CreateProvisioningRequest(ctx, createRequest)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			created, ok := resp.(provisioningapi.CreateProvisioningRequest201JSONResponse)
 			Expect(ok).To(BeTrue())
@@ -885,7 +885,7 @@ var _ = Describe("ProvisioningServer", func() {
 		It("should populate the Location header with the resource URI", func() {
 			templateParams := map[string]interface{}{"key": "value"}
 			templateParamsBytes, err := json.Marshal(templateParams)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			prUID := uuid.New().String()
 			initialPR := &provisioningv1alpha1.ProvisioningRequest{
@@ -916,7 +916,7 @@ var _ = Describe("ProvisioningServer", func() {
 			}
 
 			resp, err := server.DeleteProvisioningRequest(ctx, deleteRequest)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			deleted, ok := resp.(provisioningapi.DeleteProvisioningRequest202Response)
 			Expect(ok).To(BeTrue())

@@ -172,19 +172,19 @@ var _ = Describe("AllocatedNode Utilities", func() {
 			It("should generate different names for different BMH names", func() {
 				result1 := GenerateNodeName(clusterID, bmhNamespace, "master-0")
 				result2 := GenerateNodeName(clusterID, bmhNamespace, "master-1")
-				Expect(result1).NotTo(Equal(result2))
+				Expect(result1).ToNot(Equal(result2))
 			})
 
 			It("should generate different names for different namespaces", func() {
 				result1 := GenerateNodeName(clusterID, "namespace1", bmhName)
 				result2 := GenerateNodeName(clusterID, "namespace2", bmhName)
-				Expect(result1).NotTo(Equal(result2))
+				Expect(result1).ToNot(Equal(result2))
 			})
 
 			It("should generate different names for different cluster IDs", func() {
 				result1 := GenerateNodeName("cluster1", bmhNamespace, bmhName)
 				result2 := GenerateNodeName("cluster2", bmhNamespace, bmhName)
-				Expect(result1).NotTo(Equal(result2))
+				Expect(result1).ToNot(Equal(result2))
 			})
 		})
 
@@ -227,14 +227,14 @@ var _ = Describe("AllocatedNode Utilities", func() {
 				longName2 := strings.Repeat("b", 300)
 				result1 := GenerateNodeName(longName1, "namespace", "bmh")
 				result2 := GenerateNodeName(longName2, "namespace", "bmh")
-				Expect(result1).NotTo(Equal(result2))
+				Expect(result1).ToNot(Equal(result2))
 			})
 		})
 
 		Context("when inputs result in empty sanitized name", func() {
 			It("should use hash-based fallback for empty sanitized names", func() {
 				result := GenerateNodeName("###", "!!!", "%%%")
-				Expect(result).NotTo(BeEmpty())
+				Expect(result).ToNot(BeEmpty())
 				Expect(len(result)).To(BeNumerically("<=", 253))
 				Expect(result).To(MatchRegexp("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"))
 			})
@@ -249,7 +249,7 @@ var _ = Describe("AllocatedNode Utilities", func() {
 		Context("when testing edge cases", func() {
 			It("should handle empty strings", func() {
 				result := GenerateNodeName("", "", "")
-				Expect(result).NotTo(BeEmpty())
+				Expect(result).ToNot(BeEmpty())
 				Expect(result).To(MatchRegexp("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"))
 			})
 
@@ -260,7 +260,7 @@ var _ = Describe("AllocatedNode Utilities", func() {
 
 			It("should handle names with only hyphens", func() {
 				result := GenerateNodeName("---", "---", "---")
-				Expect(result).NotTo(BeEmpty())
+				Expect(result).ToNot(BeEmpty())
 				Expect(result).To(MatchRegexp("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"))
 			})
 		})

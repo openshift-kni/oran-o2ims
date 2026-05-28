@@ -131,7 +131,7 @@ var _ = Describe("Inventory Controller", func() {
 
 			// Set up necessary env variables
 			err := os.Setenv(constants.PostgresImageName, "postgres:test")
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Update the testcase objects to include the Namespace.
 			objs = append(objs, ns, ingress, search, cv)

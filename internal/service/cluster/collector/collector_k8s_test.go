@@ -62,8 +62,8 @@ var _ = Describe("K8S Collector", func() {
 
 		It("extracts kubernetes version to extensions", func() {
 			result, err := dataSource.convertManagedClusterToNodeCluster(cluster)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Extensions).NotTo(BeNil())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.Extensions).ToNot(BeNil())
 
 			extensions := *result.Extensions
 			Expect(extensions).To(HaveKey("kubernetesVersion"))
@@ -72,8 +72,8 @@ var _ = Describe("K8S Collector", func() {
 
 		It("extracts capacity resources to extensions", func() {
 			result, err := dataSource.convertManagedClusterToNodeCluster(cluster)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Extensions).NotTo(BeNil())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.Extensions).ToNot(BeNil())
 
 			extensions := *result.Extensions
 			Expect(extensions).To(HaveKey("capacity"))
@@ -90,8 +90,8 @@ var _ = Describe("K8S Collector", func() {
 
 		It("extracts allocatable resources to extensions", func() {
 			result, err := dataSource.convertManagedClusterToNodeCluster(cluster)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Extensions).NotTo(BeNil())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.Extensions).ToNot(BeNil())
 
 			extensions := *result.Extensions
 			Expect(extensions).To(HaveKey("allocatable"))
@@ -109,39 +109,39 @@ var _ = Describe("K8S Collector", func() {
 			cluster.Status.Version.Kubernetes = ""
 
 			result, err := dataSource.convertManagedClusterToNodeCluster(cluster)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Extensions).NotTo(BeNil())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.Extensions).ToNot(BeNil())
 
 			extensions := *result.Extensions
-			Expect(extensions).NotTo(HaveKey("kubernetesVersion"))
+			Expect(extensions).ToNot(HaveKey("kubernetesVersion"))
 		})
 
 		It("handles missing capacity gracefully", func() {
 			cluster.Status.Capacity = nil
 
 			result, err := dataSource.convertManagedClusterToNodeCluster(cluster)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Extensions).NotTo(BeNil())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.Extensions).ToNot(BeNil())
 
 			extensions := *result.Extensions
-			Expect(extensions).NotTo(HaveKey("capacity"))
+			Expect(extensions).ToNot(HaveKey("capacity"))
 		})
 
 		It("handles missing allocatable gracefully", func() {
 			cluster.Status.Allocatable = nil
 
 			result, err := dataSource.convertManagedClusterToNodeCluster(cluster)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Extensions).NotTo(BeNil())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.Extensions).ToNot(BeNil())
 
 			extensions := *result.Extensions
-			Expect(extensions).NotTo(HaveKey("allocatable"))
+			Expect(extensions).ToNot(HaveKey("allocatable"))
 		})
 
 		It("preserves existing extensions from labels", func() {
 			result, err := dataSource.convertManagedClusterToNodeCluster(cluster)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Extensions).NotTo(BeNil())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.Extensions).ToNot(BeNil())
 
 			extensions := *result.Extensions
 			// Check that label-based extensions are still present

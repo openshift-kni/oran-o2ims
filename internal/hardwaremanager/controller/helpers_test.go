@@ -157,7 +157,7 @@ var _ = Describe("Helpers", func() {
 				setConfigAnnotation(testNode, "test-reason")
 
 				annotations := testNode.GetAnnotations()
-				Expect(annotations).NotTo(BeNil())
+				Expect(annotations).ToNot(BeNil())
 				Expect(annotations[ConfigAnnotation]).To(Equal("test-reason"))
 			})
 
@@ -212,7 +212,7 @@ var _ = Describe("Helpers", func() {
 				removeConfigAnnotation(testNode)
 
 				annotations := testNode.GetAnnotations()
-				Expect(annotations).NotTo(HaveKey(ConfigAnnotation))
+				Expect(annotations).ToNot(HaveKey(ConfigAnnotation))
 				Expect(annotations["other"]).To(Equal("value"))
 			})
 		})
@@ -250,14 +250,14 @@ var _ = Describe("Helpers", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				// Verify annotation was removed from in-memory object
-				Expect(allocNode.Annotations).NotTo(HaveKey(ConfigAnnotation))
+				Expect(allocNode.Annotations).ToNot(HaveKey(ConfigAnnotation))
 				Expect(allocNode.Annotations["other"]).To(Equal("value"))
 
 				// Verify the change was persisted
 				updatedNode := &hwmgmtv1alpha1.AllocatedNode{}
 				err = testClient.Get(ctx, types.NamespacedName{Name: "test-node", Namespace: "test-namespace"}, updatedNode)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(updatedNode.Annotations).NotTo(HaveKey(ConfigAnnotation))
+				Expect(updatedNode.Annotations).ToNot(HaveKey(ConfigAnnotation))
 				Expect(updatedNode.Annotations["other"]).To(Equal("value"))
 			})
 
@@ -345,7 +345,7 @@ var _ = Describe("Helpers", func() {
 		It("should create a new AllocatedNode successfully", func() {
 			_, err := createNode(ctx, fakeClient, logger, testNamespace, nodeAllocationRequest,
 				"test-node", "test-node-id", "test-node-ns", "test-group", "test-profile")
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify node was created
 			createdNode := &hwmgmtv1alpha1.AllocatedNode{}
@@ -353,7 +353,7 @@ var _ = Describe("Helpers", func() {
 				Name:      "test-node",
 				Namespace: testNamespace,
 			}, createdNode)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(createdNode.Spec.GroupName).To(Equal("test-group"))
 			Expect(createdNode.Spec.HwProfile).To(Equal("test-profile"))
 			Expect(createdNode.Spec.HwMgrNodeId).To(Equal("test-node-id"))
@@ -372,7 +372,7 @@ var _ = Describe("Helpers", func() {
 
 			_, err := createNode(ctx, fakeClient, logger, testNamespace, nodeAllocationRequest,
 				"existing-node", "test-node-id", "test-node-ns", "test-group", "test-profile")
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify original node wasn't modified
 			retrievedNode := &hwmgmtv1alpha1.AllocatedNode{}
@@ -380,7 +380,7 @@ var _ = Describe("Helpers", func() {
 				Name:      "existing-node",
 				Namespace: testNamespace,
 			}, retrievedNode)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			// Original spec should be empty since we didn't set it
 			Expect(retrievedNode.Spec.GroupName).To(Equal(""))
 		})
@@ -642,13 +642,13 @@ var _ = Describe("Helpers", func() {
 
 		It("should succeed when enough resources are available", func() {
 			err := processNewNodeAllocationRequest(ctx, fakeClient, logger, nodeAllocationRequest)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should skip groups with size 0", func() {
 			nodeAllocationRequest.Spec.NodeGroup[0].Size = 0
 			err := processNewNodeAllocationRequest(ctx, fakeClient, logger, nodeAllocationRequest)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should return error when not enough resources are available", func() {
@@ -771,21 +771,21 @@ var _ = Describe("Helpers", func() {
 
 		It("should return true when all groups are fully allocated", func() {
 			result, err := isNodeAllocationRequestFullyAllocated(ctx, fakeNoncached, logger, testNamespace, nodeAllocationRequest)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(BeTrue())
 		})
 
 		It("should return false when a group is not fully allocated", func() {
 			nodeAllocationRequest.Spec.NodeGroup[0].Size = 3
 			result, err := isNodeAllocationRequestFullyAllocated(ctx, fakeNoncached, logger, testNamespace, nodeAllocationRequest)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(BeFalse())
 		})
 
 		It("should return true even when NodeNames in status is empty (counts CRs, not status)", func() {
 			nodeAllocationRequest.Status.Properties.NodeNames = nil
 			result, err := isNodeAllocationRequestFullyAllocated(ctx, fakeNoncached, logger, testNamespace, nodeAllocationRequest)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(BeTrue())
 		})
 
@@ -807,7 +807,7 @@ var _ = Describe("Helpers", func() {
 			fakeNoncached = fakeClient
 
 			result, err := isNodeAllocationRequestFullyAllocated(ctx, fakeNoncached, logger, testNamespace, nodeAllocationRequest)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(BeFalse())
 		})
 	})
@@ -924,7 +924,7 @@ var _ = Describe("Helpers", func() {
 		Describe("validateFirmwareVersions", func() {
 			It("should return true when firmware versions match", func() {
 				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
 
@@ -935,7 +935,7 @@ var _ = Describe("Helpers", func() {
 				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
 
 				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
 
@@ -945,7 +945,7 @@ var _ = Describe("Helpers", func() {
 				Expect(testClient.Update(ctx, testHFC)).To(Succeed())
 
 				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
 
@@ -954,7 +954,7 @@ var _ = Describe("Helpers", func() {
 				Expect(testClient.Delete(ctx, testHFC)).To(Succeed())
 
 				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
 
@@ -968,7 +968,7 @@ var _ = Describe("Helpers", func() {
 		Describe("validateAppliedBiosSettings", func() {
 			It("should return true when BIOS settings match", func() {
 				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
 
@@ -978,7 +978,7 @@ var _ = Describe("Helpers", func() {
 				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
 
 				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
 
@@ -988,7 +988,7 @@ var _ = Describe("Helpers", func() {
 				Expect(testClient.Update(ctx, testHFS)).To(Succeed())
 
 				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
 
@@ -998,7 +998,7 @@ var _ = Describe("Helpers", func() {
 				Expect(testClient.Update(ctx, testHFS)).To(Succeed())
 
 				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
 
@@ -1007,13 +1007,13 @@ var _ = Describe("Helpers", func() {
 				Expect(testClient.Delete(ctx, testHFS)).To(Succeed())
 
 				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
 
 			It("should return true when NIC firmware versions match", func() {
 				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
 
@@ -1023,7 +1023,7 @@ var _ = Describe("Helpers", func() {
 				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
 
 				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
 
@@ -1033,7 +1033,7 @@ var _ = Describe("Helpers", func() {
 				Expect(testClient.Update(ctx, testHFC)).To(Succeed())
 
 				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
 
@@ -1043,7 +1043,7 @@ var _ = Describe("Helpers", func() {
 				Expect(testClient.Update(ctx, testHFC)).To(Succeed())
 
 				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
 
@@ -1052,7 +1052,7 @@ var _ = Describe("Helpers", func() {
 				Expect(testClient.Delete(ctx, testHFC)).To(Succeed())
 
 				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
 
@@ -1067,7 +1067,7 @@ var _ = Describe("Helpers", func() {
 				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
 
 				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
 		})
@@ -1075,7 +1075,7 @@ var _ = Describe("Helpers", func() {
 		Describe("validateNodeConfiguration", func() {
 			It("should return true when both firmware and BIOS validation pass", func() {
 				valid, err := validateNodeConfiguration(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
 
@@ -1085,7 +1085,7 @@ var _ = Describe("Helpers", func() {
 				Expect(testClient.Update(ctx, testHFC)).To(Succeed())
 
 				valid, err := validateNodeConfiguration(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
 
@@ -1095,7 +1095,7 @@ var _ = Describe("Helpers", func() {
 				Expect(testClient.Update(ctx, testHFS)).To(Succeed())
 
 				valid, err := validateNodeConfiguration(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
 
@@ -1107,7 +1107,7 @@ var _ = Describe("Helpers", func() {
 				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
 
 				valid, err := validateNodeConfiguration(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
 
@@ -1462,14 +1462,14 @@ var _ = Describe("Helpers", func() {
 				Expect(testClient.Get(ctx, nodeKey, updatedNode)).To(Succeed())
 
 				// The annotation should be removed
-				Expect(updatedNode.Annotations).NotTo(HaveKey(ConfigAnnotation))
+				Expect(updatedNode.Annotations).ToNot(HaveKey(ConfigAnnotation))
 
 				// Verify requeue result (should not requeue on terminal error)
 				Expect(result.Requeue).To(BeFalse())
 
 				// Verify node condition was updated to Failed
 				cond := meta.FindStatusCondition(updatedNode.Status.Conditions, string(hwmgmtv1alpha1.Configured))
-				Expect(cond).NotTo(BeNil())
+				Expect(cond).ToNot(BeNil())
 				Expect(cond.Reason).To(Equal(string(hwmgmtv1alpha1.Failed)))
 				Expect(cond.Message).To(Equal(BmhServicingErr))
 			})
@@ -1501,7 +1501,7 @@ var _ = Describe("Helpers", func() {
 
 				// Verify node condition message was updated to NodeWaitingBMHComplete
 				cond := meta.FindStatusCondition(updatedNode.Status.Conditions, string(hwmgmtv1alpha1.Configured))
-				Expect(cond).NotTo(BeNil())
+				Expect(cond).ToNot(BeNil())
 				Expect(cond.Reason).To(Equal(string(hwmgmtv1alpha1.ConfigUpdate)))
 				Expect(cond.Message).To(Equal(string(hwmgmtv1alpha1.NodeWaitingBMHComplete)))
 			})
@@ -1525,12 +1525,12 @@ var _ = Describe("Helpers", func() {
 				updatedNode := &hwmgmtv1alpha1.AllocatedNode{}
 				nodeKey := types.NamespacedName{Name: testNode.Name, Namespace: testNode.Namespace}
 				Expect(testClient.Get(ctx, nodeKey, updatedNode)).To(Succeed())
-				Expect(updatedNode.Annotations).NotTo(HaveKey(ConfigAnnotation))
+				Expect(updatedNode.Annotations).ToNot(HaveKey(ConfigAnnotation))
 
 				Expect(updatedNode.Status.HwProfile).To(Equal("test-hw-profile"))
 				// Verify node condition was updated to ConfigApplied
 				cond := meta.FindStatusCondition(updatedNode.Status.Conditions, string(hwmgmtv1alpha1.Configured))
-				Expect(cond).NotTo(BeNil())
+				Expect(cond).ToNot(BeNil())
 				Expect(cond.Reason).To(Equal(string(hwmgmtv1alpha1.ConfigApplied)))
 				Expect(cond.Message).To(Equal(string(hwmgmtv1alpha1.ConfigSuccess)))
 			})
@@ -1561,7 +1561,7 @@ var _ = Describe("Helpers", func() {
 
 				// Verify node condition message was updated to NodeWaitingReady
 				cond := meta.FindStatusCondition(updatedNode.Status.Conditions, string(hwmgmtv1alpha1.Configured))
-				Expect(cond).NotTo(BeNil())
+				Expect(cond).ToNot(BeNil())
 				Expect(cond.Reason).To(Equal(string(hwmgmtv1alpha1.ConfigUpdate)))
 				Expect(cond.Message).To(Equal(string(hwmgmtv1alpha1.NodeWaitingReady)))
 			})
