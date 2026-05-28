@@ -39,10 +39,16 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+const (
+	mnoTimeout     = time.Minute * 2
+	mnoLongTimeout = time.Minute * 3
+	mnoInterval    = time.Second * 3
+)
+
 var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day2-hw-updates"), func() {
 	const (
-		timeout     = time.Minute * 2
-		interval    = time.Second * 3
+		timeout     = mnoTimeout
+		interval    = mnoInterval
 		master      = "master"
 		worker      = "worker"
 		masterCount = 3
@@ -830,7 +836,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 					}
 				}
 				return count
-			}, 3*time.Minute, interval).Should(Equal(7),
+			}, mnoLongTimeout, interval).Should(Equal(7),
 				"7 workers should converge to v2 ConfigApplied while Servicing worker defers")
 
 			By("Verifying the Servicing worker is still in ConfigUpdate with v1 profile (deferred abandon)")
@@ -977,7 +983,7 @@ func failBMHDay2(ctx context.Context, node *hwmgmtv1alpha1.AllocatedNode, bmh *m
 		n := &hwmgmtv1alpha1.AllocatedNode{}
 		Expect(K8SClient.Get(ctx, nodeKey, n)).To(Succeed())
 		return n.Annotations[hwmgrcontrollers.ConfigAnnotation] != ""
-	}, time.Minute*3, time.Second*2).Should(BeTrue(),
+	}, mnoLongTimeout, mnoInterval).Should(BeTrue(),
 		"AllocatedNode %s should have config annotation", node.Name)
 
 	// Step 5: Transition BMH to Error with an expired transient error timestamp.
@@ -1099,7 +1105,7 @@ func waitForBMHRebootAnnotation(ctx context.Context, bmhKey types.NamespacedName
 		Expect(K8SClient.Get(ctx, bmhKey, bmh)).To(Succeed())
 		_, exists := bmh.Annotations[hwmgrcontrollers.BmhRebootAnnotation]
 		return exists
-	}, time.Minute*3, time.Second*3).Should(BeTrue(),
+	}, mnoLongTimeout, mnoInterval).Should(BeTrue(),
 		"BMH %s should have reboot annotation", bmhKey.Name)
 }
 
