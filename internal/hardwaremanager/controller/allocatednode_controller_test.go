@@ -271,7 +271,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 
 				result, err := reconciler.Reconcile(ctx, req)
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(Equal(hwmgrutils.DoNotRequeue()))
 			})
 		})
@@ -280,7 +280,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 			It("should add finalizer if not present and not requeue", func() {
 				result, err := reconciler.Reconcile(ctx, req)
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(Equal(hwmgrutils.DoNotRequeue()))
 
 				// Verify finalizer was added
@@ -296,7 +296,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 
 				result, err := reconciler.Reconcile(ctx, req)
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(Equal(hwmgrutils.DoNotRequeue()))
 
 				// Verify finalizer is still present
@@ -341,7 +341,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 
 				result, err := reconciler.Reconcile(ctx, req)
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(Equal(hwmgrutils.DoNotRequeue()))
 			})
 
@@ -352,7 +352,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				result, err := reconciler.Reconcile(ctx, req)
 
 				// Should complete successfully even if BMH is not found
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(Equal(hwmgrutils.DoNotRequeue()))
 			})
 		})
@@ -378,7 +378,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 
 				result, err := reconciler.Reconcile(ctx, req)
 
-				Expect(err).NotTo(HaveOccurred()) // Controller should handle the error gracefully
+				Expect(err).ToNot(HaveOccurred()) // Controller should handle the error gracefully
 				Expect(result).To(Equal(hwmgrutils.RequeueWithShortInterval()))
 			})
 
@@ -398,7 +398,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 
 				result, err := reconciler.Reconcile(ctx, req)
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(Equal(hwmgrutils.RequeueWithShortInterval()))
 			})
 
@@ -534,7 +534,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 
 				result, err := reconciler.Reconcile(ctx, req)
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(Equal(hwmgrutils.DoNotRequeue()))
 			})
 		})
@@ -586,13 +586,13 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				// First call should initiate deallocation and return completed=false
 				completed, err := reconciler.handleAllocatedNodeDeletion(ctx, allocatedNode)
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(completed).To(BeFalse()) // First call is not complete, deallocation in progress
 
 				// Second call should detect deallocation is done and return completed=true
 				completed, err = reconciler.handleAllocatedNodeDeletion(ctx, allocatedNode)
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(completed).To(BeTrue()) // Second call completes the process
 
 				// Verify BMH was deallocated (check that allocated label is removed)
@@ -614,7 +614,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				completed, err := reconciler.handleAllocatedNodeDeletion(ctx, allocatedNode)
 
 				// Should complete successfully without error when BMH is not found
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(completed).To(BeTrue()) // Returns true to indicate we should proceed with finalizer removal
 			})
 		})
@@ -628,7 +628,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				completed, err := reconciler.handleAllocatedNodeDeletion(ctx, allocatedNode)
 
 				// Should complete successfully without error when BMH is not found
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(completed).To(BeTrue())
 			})
 		})
@@ -717,7 +717,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 			It("should return BMH successfully", func() {
 				retrievedBMH, err := getBMHForNode(ctx, fakeClient, allocatedNode)
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(retrievedBMH.Name).To(Equal(bmh.Name))
 				Expect(retrievedBMH.Namespace).To(Equal(bmh.Namespace))
 			})
@@ -776,7 +776,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 			It("should deallocate BMH completely", func() {
 				err := deallocateBMH(ctx, fakeClient, logger, bmh, false)
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				// Verify BMH was deallocated
 				var updatedBMH metal3v1alpha1.BareMetalHost
@@ -842,7 +842,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 			// to capture and verify log output
 			result, err := reconciler.Reconcile(ctx, req)
 
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(hwmgrutils.DoNotRequeue()))
 			// Note: Log verification would require a custom logger implementation
 		})
@@ -856,7 +856,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 
 			// The controller should handle context cancellation appropriately
 			// The exact behavior depends on how the underlying utilities handle context
-			Expect(result).NotTo(BeNil())
+			Expect(result).ToNot(BeNil())
 			Expect(err).To(BeNil()) // Assuming the controller handles cancellation gracefully
 			// Note: Error expectations would depend on implementation specifics
 		})
@@ -876,7 +876,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 		It("should handle resource version conflicts during updates", func() {
 			// First reconciliation should add finalizer
 			result, err := reconciler.Reconcile(ctx, req)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(hwmgrutils.DoNotRequeue()))
 
 			// Get the updated resource version
@@ -885,7 +885,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 
 			// Simulate a second reconciliation with the same request (same resource version)
 			result, err = reconciler.Reconcile(ctx, req)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(hwmgrutils.DoNotRequeue()))
 		})
 	})

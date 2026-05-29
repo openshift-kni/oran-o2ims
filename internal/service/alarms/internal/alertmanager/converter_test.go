@@ -87,9 +87,9 @@ var _ = Describe("Alertmanager Functions", func() {
 			Expect(record.AlarmRaisedTime).To(Equal(now))
 
 			// Check cluster ID and alarm definition ID
-			Expect(record.ObjectID).NotTo(BeNil())
+			Expect(record.ObjectID).ToNot(BeNil())
 			Expect(*record.ObjectID).To(Equal(clusterUUID))
-			Expect(record.AlarmDefinitionID).NotTo(BeNil())
+			Expect(record.AlarmDefinitionID).ToNot(BeNil())
 			Expect(*record.AlarmDefinitionID).To(Equal(alarmDefUUID))
 		})
 
@@ -139,7 +139,7 @@ var _ = Describe("Alertmanager Functions", func() {
 
 			Expect(record.AlarmStatus).To(Equal("resolved"))
 			Expect(record.PerceivedSeverity).To(Equal(api.CLEARED))
-			Expect(record.AlarmClearedTime).NotTo(BeNil())
+			Expect(record.AlarmClearedTime).ToNot(BeNil())
 			Expect(*record.AlarmClearedTime).To(Equal(endTime))
 		})
 
@@ -275,9 +275,9 @@ var _ = Describe("Alertmanager Functions", func() {
 			Expect(records).To(HaveLen(1))
 			record := records[0]
 
-			Expect(record.ObjectID).NotTo(BeNil())
+			Expect(record.ObjectID).ToNot(BeNil())
 			Expect(*record.ObjectID).To(Equal(clusterUUID))
-			Expect(record.AlarmDefinitionID).NotTo(BeNil())
+			Expect(record.AlarmDefinitionID).ToNot(BeNil())
 			Expect(*record.AlarmDefinitionID).To(Equal(alarmDefUUID))
 			Expect(record.PerceivedSeverity).To(Equal(api.MAJOR)) // important maps to MAJOR
 		})

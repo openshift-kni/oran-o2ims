@@ -86,31 +86,31 @@ var _ = BeforeSuite(func() {
 	// Set the scheme.
 	testScheme := runtime.NewScheme()
 	err := provisioningv1alpha1.AddToScheme(testScheme)
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).ToNot(HaveOccurred())
 	err = hwmgmtv1alpha1.AddToScheme(testScheme)
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).ToNot(HaveOccurred())
 	err = corev1.AddToScheme(testScheme)
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).ToNot(HaveOccurred())
 	err = siteconfig.AddToScheme(testScheme)
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).ToNot(HaveOccurred())
 	err = policiesv1.AddToScheme(testScheme)
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).ToNot(HaveOccurred())
 	err = clusterv1.AddToScheme(testScheme)
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).ToNot(HaveOccurred())
 	err = assistedservicev1beta1.AddToScheme(testScheme)
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).ToNot(HaveOccurred())
 	err = apiextensionsv1.AddToScheme(testScheme)
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).ToNot(HaveOccurred())
 	err = admissionregistrationv1.AddToScheme(testScheme)
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).ToNot(HaveOccurred())
 	err = ibgu.AddToScheme(testScheme)
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).ToNot(HaveOccurred())
 	err = hivev1.AddToScheme(testScheme)
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).ToNot(HaveOccurred())
 	err = metal3v1alpha1.AddToScheme(testScheme)
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).ToNot(HaveOccurred())
 	err = observabilityv1beta1.AddToScheme(testScheme)
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).ToNot(HaveOccurred())
 
 	// Get the needed external CRDs. Their details are under test/utils/vars.go - ExternalCrdsData.
 	// Update that with any other CRDs that the provisioning controller depends on.
@@ -137,7 +137,7 @@ var _ = BeforeSuite(func() {
 		Scheme: testScheme,
 	})
 	Expect(err).ToNot(HaveOccurred())
-	Expect(ProvisioningManager).NotTo(BeNil())
+	Expect(ProvisioningManager).ToNot(BeNil())
 
 	// Get a separate manager for hardware manager controllers (simulates separate pod deployment).
 	HwMgrManager, err = ctrl.NewManager(cfg, ctrl.Options{
@@ -147,12 +147,12 @@ var _ = BeforeSuite(func() {
 		},
 	})
 	Expect(err).ToNot(HaveOccurred())
-	Expect(HwMgrManager).NotTo(BeNil())
+	Expect(HwMgrManager).ToNot(BeNil())
 
 	// Get the client.
 	K8SClient, err = client.New(cfg, client.Options{Scheme: testScheme})
-	Expect(err).NotTo(HaveOccurred())
-	Expect(K8SClient).NotTo(BeNil())
+	Expect(err).ToNot(HaveOccurred())
+	Expect(K8SClient).ToNot(BeNil())
 
 	// Setup the ClusterTemplate Reconciler.
 	ClusterTemplateTestReconciler = &provisioningcontrollers.ClusterTemplateReconciler{
@@ -220,5 +220,5 @@ var _ = AfterSuite(func() {
 	By("tearing down the test environment")
 	cancel()
 	err := testEnv.Stop()
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).ToNot(HaveOccurred())
 })

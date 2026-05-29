@@ -332,14 +332,14 @@ var _ = Describe("Cluster Server", func() {
 					},
 				})
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apigenerated.CreateSubscription400ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusBadRequest))
-				Expect(problemResp.AdditionalAttributes).NotTo(BeNil())
+				Expect(problemResp.AdditionalAttributes).ToNot(BeNil())
 				attrs := *problemResp.AdditionalAttributes
-				Expect(attrs).NotTo(HaveKey("callback"))
-				Expect(attrs).NotTo(HaveKey("filter"))
-				Expect(problemResp.Detail).NotTo(ContainSubstring(callbackURL))
+				Expect(attrs).ToNot(HaveKey("callback"))
+				Expect(attrs).ToNot(HaveKey("filter"))
+				Expect(problemResp.Detail).ToNot(ContainSubstring(callbackURL))
 			})
 		})
 
@@ -358,12 +358,12 @@ var _ = Describe("Cluster Server", func() {
 					},
 				})
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apigenerated.CreateSubscription400ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusBadRequest))
-				Expect(problemResp.Detail).NotTo(ContainSubstring(callbackURL))
-				Expect(problemResp.Detail).NotTo(ContainSubstring("192.0.2.1"))
-				Expect(problemResp.Detail).NotTo(ContainSubstring("secret=token123"))
+				Expect(problemResp.Detail).ToNot(ContainSubstring(callbackURL))
+				Expect(problemResp.Detail).ToNot(ContainSubstring("192.0.2.1"))
+				Expect(problemResp.Detail).ToNot(ContainSubstring("secret=token123"))
 			})
 		})
 
@@ -388,13 +388,13 @@ var _ = Describe("Cluster Server", func() {
 					},
 				})
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(apigenerated.CreateSubscription400ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusBadRequest))
 				Expect(problemResp.Detail).To(Equal("callback value must be unique"))
-				Expect(problemResp.AdditionalAttributes).NotTo(BeNil())
+				Expect(problemResp.AdditionalAttributes).ToNot(BeNil())
 				attrs := *problemResp.AdditionalAttributes
-				Expect(attrs).NotTo(HaveKey("callback"))
+				Expect(attrs).ToNot(HaveKey("callback"))
 			})
 		})
 	})

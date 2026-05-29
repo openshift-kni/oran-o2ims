@@ -103,7 +103,7 @@ var _ = Describe("Hierarchy Helpers", func() {
 	Describe("convertCoordinateToGeoJSON", func() {
 		It("returns nil for nil coordinate", func() {
 			m, err := convertCoordinateToGeoJSON(nil)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(m).To(BeNil())
 		})
 
@@ -112,7 +112,7 @@ var _ = Describe("Hierarchy Helpers", func() {
 				Latitude:  "38.8951",
 				Longitude: "-77.0364",
 			})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(m["type"]).To(Equal("Point"))
 			Expect(m["coordinates"]).To(Equal([]float64{-77.0364, 38.8951}))
 		})
@@ -124,7 +124,7 @@ var _ = Describe("Hierarchy Helpers", func() {
 				Longitude: "0",
 				Altitude:  &alt,
 			})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(m["coordinates"]).To(Equal([]float64{0, 0, 100.5}))
 		})
 

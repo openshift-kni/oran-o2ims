@@ -35,7 +35,7 @@ var _ = Describe("ProvisioningServer", Label("envtest"), func() {
 	// with the given name and template parameters
 	buildPR := func(name string) *provisioningv1alpha1.ProvisioningRequest {
 		templateParamsBytes, err := json.Marshal(map[string]interface{}{"key": "value"})
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 
 		return &provisioningv1alpha1.ProvisioningRequest{
 			ObjectMeta: metav1.ObjectMeta{
@@ -96,15 +96,15 @@ var _ = Describe("ProvisioningServer", Label("envtest"), func() {
 			bodyReader = strings.NewReader(jsonBody)
 		}
 		req, err := http.NewRequestWithContext(ctx, method, baseURL+path, bodyReader)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		if jsonBody != "" {
 			req.Header.Set("Content-Type", "application/json")
 		}
 		resp, err := httpClient.Do(req)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		defer resp.Body.Close()
 		body, err := io.ReadAll(resp.Body)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		return resp, body
 	}
 
@@ -115,10 +115,10 @@ var _ = Describe("ProvisioningServer", Label("envtest"), func() {
 
 			var versions commonapi.APIVersions
 			Expect(json.Unmarshal(body, &versions)).To(Succeed())
-			Expect(versions.ApiVersions).NotTo(BeNil())
+			Expect(versions.ApiVersions).ToNot(BeNil())
 			Expect(*versions.ApiVersions).To(HaveLen(1))
 			Expect(*(*versions.ApiVersions)[0].Version).To(Equal("1.2.0"))
-			Expect(versions.UriPrefix).NotTo(BeNil())
+			Expect(versions.UriPrefix).ToNot(BeNil())
 		})
 	})
 
@@ -129,10 +129,10 @@ var _ = Describe("ProvisioningServer", Label("envtest"), func() {
 
 			var versions commonapi.APIVersions
 			Expect(json.Unmarshal(body, &versions)).To(Succeed())
-			Expect(versions.ApiVersions).NotTo(BeNil())
+			Expect(versions.ApiVersions).ToNot(BeNil())
 			Expect(*versions.ApiVersions).To(HaveLen(1))
 			Expect(*(*versions.ApiVersions)[0].Version).To(Equal("1.2.0"))
-			Expect(versions.UriPrefix).NotTo(BeNil())
+			Expect(versions.UriPrefix).ToNot(BeNil())
 		})
 	})
 
@@ -192,7 +192,7 @@ var _ = Describe("ProvisioningServer", Label("envtest"), func() {
 					TemplateParameters:    map[string]interface{}{"key": "value"},
 				}
 				b, err := json.Marshal(createBody)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 
 				resp, _ := httpDo(http.MethodPost, provisioningBase+"/provisioningRequests", string(b))
 				Expect(resp.StatusCode).To(Equal(http.StatusCreated))
@@ -440,7 +440,7 @@ var _ = Describe("ProvisioningServer", Label("envtest"), func() {
 				TemplateParameters:    templateParams,
 			}
 			b, err := json.Marshal(body)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			return string(b)
 		}
 
@@ -515,7 +515,7 @@ var _ = Describe("ProvisioningServer", Label("envtest"), func() {
 				TemplateParameters:    map[string]interface{}{"key": "value"},
 			}
 			b, err := json.Marshal(body)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			resp, _ := httpDo(http.MethodPost,
 				provisioningBase+"/provisioningRequests", string(b))

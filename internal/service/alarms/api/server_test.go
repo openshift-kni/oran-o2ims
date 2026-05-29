@@ -74,7 +74,7 @@ var _ = Describe("AlarmsServer", func() {
 					AlarmEventRecordId: testUUID,
 				})
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(alarmapi.GetAlarm404ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusNotFound))
 			})
@@ -90,7 +90,7 @@ var _ = Describe("AlarmsServer", func() {
 					AlarmEventRecordId: testUUID,
 				})
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(alarmapi.GetAlarm200JSONResponse{}))
 			})
 		})
@@ -121,7 +121,7 @@ var _ = Describe("AlarmsServer", func() {
 					},
 				})
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(alarmapi.CreateSubscription409ApplicationProblemPlusJSONResponse{}))
 			})
 		})
@@ -138,11 +138,11 @@ var _ = Describe("AlarmsServer", func() {
 					},
 				})
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(alarmapi.CreateSubscription400ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusBadRequest))
 				Expect(problemResp.AdditionalAttributes).To(BeNil())
-				Expect(problemResp.Detail).NotTo(ContainSubstring(callbackURL))
+				Expect(problemResp.Detail).ToNot(ContainSubstring(callbackURL))
 			})
 		})
 
@@ -162,12 +162,12 @@ var _ = Describe("AlarmsServer", func() {
 					},
 				})
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(alarmapi.CreateSubscription400ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusBadRequest))
-				Expect(problemResp.Detail).NotTo(ContainSubstring(callbackURL))
-				Expect(problemResp.Detail).NotTo(ContainSubstring("192.0.2.1"))
-				Expect(problemResp.Detail).NotTo(ContainSubstring("secret=token123"))
+				Expect(problemResp.Detail).ToNot(ContainSubstring(callbackURL))
+				Expect(problemResp.Detail).ToNot(ContainSubstring("192.0.2.1"))
+				Expect(problemResp.Detail).ToNot(ContainSubstring("secret=token123"))
 			})
 		})
 
@@ -193,7 +193,7 @@ var _ = Describe("AlarmsServer", func() {
 					},
 				})
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				problemResp := resp.(alarmapi.CreateSubscription400ApplicationProblemPlusJSONResponse)
 				Expect(problemResp.Status).To(Equal(http.StatusBadRequest))
 				Expect(problemResp.Detail).To(Equal("callback value must be unique"))

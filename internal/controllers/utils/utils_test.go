@@ -1688,7 +1688,7 @@ var _ = Describe("Server predicate functions", func() {
 
 var _ = Describe("TLS cipher suite configuration", func() {
 	It("should derive PFS cipher suites from tls.CipherSuites()", func() {
-		Expect(pfsCipherSuites).NotTo(BeEmpty())
+		Expect(pfsCipherSuites).ToNot(BeEmpty())
 		for _, suite := range pfsCipherSuites {
 			name := tls.CipherSuiteName(suite)
 			Expect(strings.HasPrefix(name, "TLS_ECDHE_")).To(BeTrue(),
@@ -1711,7 +1711,7 @@ var _ = Describe("TLS cipher suite configuration", func() {
 		defer cancel()
 
 		cfg, err := GetClientTLSConfig(ctx, "", "", "")
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(cfg.CipherSuites).To(Equal(pfsCipherSuites))
 	})
 
@@ -1739,15 +1739,15 @@ var _ = Describe("TLS cipher suite configuration", func() {
 		keyFile := filepath.Join(dir, "tls.key")
 
 		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 
 		template := &x509.Certificate{SerialNumber: big.NewInt(1)}
 		certDER, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 
 		certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
 		keyDER, err := x509.MarshalECPrivateKey(key)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 
 		Expect(os.WriteFile(certFile, certPEM, 0o600)).To(Succeed())
@@ -1757,7 +1757,7 @@ var _ = Describe("TLS cipher suite configuration", func() {
 		defer cancel()
 
 		cfg, err := GetServerTLSConfig(ctx, certFile, keyFile)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(cfg.CipherSuites).To(Equal(pfsCipherSuites))
 	})
 

@@ -72,7 +72,7 @@ route:
 			},
 		}
 		err := c.Create(ctx, secret)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	AfterEach(func() {
@@ -83,11 +83,11 @@ route:
 	Describe("Setup", func() {
 		It("verifies that the alertmanager.yaml key is populated", func() {
 			err := alertmanager.Setup(ctx)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			secret := &corev1.Secret{}
 			err = c.Get(ctx, client.ObjectKey{Namespace: alertmanager.ACMObsAMNamespace, Name: alertmanager.ACMObsAMSecretName}, secret)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Expected configuration for comparison.
 			mergedconfig := `
@@ -127,10 +127,10 @@ route:
       receiver: "null"
 `
 			var config map[string]interface{}
-			Expect(yaml.Unmarshal(secret.Data[alertmanager.ACMObsAMSecretKey], &config)).NotTo(HaveOccurred())
+			Expect(yaml.Unmarshal(secret.Data[alertmanager.ACMObsAMSecretKey], &config)).ToNot(HaveOccurred())
 
 			var expectedConf map[string]interface{}
-			Expect(yaml.Unmarshal([]byte(mergedconfig), &expectedConf)).NotTo(HaveOccurred())
+			Expect(yaml.Unmarshal([]byte(mergedconfig), &expectedConf)).ToNot(HaveOccurred())
 
 			Expect(config).To(Equal(expectedConf))
 		})
@@ -139,11 +139,11 @@ route:
 			// Retrieve the secret and remove the alertmanager.yaml key.
 			secret := &corev1.Secret{}
 			err := c.Get(ctx, client.ObjectKey{Namespace: alertmanager.ACMObsAMNamespace, Name: alertmanager.ACMObsAMSecretName}, secret)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			secret.Data = map[string][]byte{} // remove the key
 			err = c.Update(ctx, secret)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			err = alertmanager.Setup(ctx)
 			Expect(err).To(HaveOccurred())
@@ -152,17 +152,17 @@ route:
 		It("does not duplicate oran configuration when run multiple times", func() {
 			// Run Setup twice.
 			err := alertmanager.Setup(ctx)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			err = alertmanager.Setup(ctx)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			secret := &corev1.Secret{}
 			err = c.Get(ctx, client.ObjectKey{Namespace: alertmanager.ACMObsAMNamespace, Name: alertmanager.ACMObsAMSecretName}, secret)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			var config map[string]interface{}
-			Expect(yaml.Unmarshal(secret.Data[alertmanager.ACMObsAMSecretKey], &config)).NotTo(HaveOccurred())
+			Expect(yaml.Unmarshal(secret.Data[alertmanager.ACMObsAMSecretKey], &config)).ToNot(HaveOccurred())
 
 			receivers, ok := config["receivers"].([]interface{})
 			Expect(ok).To(BeTrue())
@@ -181,7 +181,7 @@ route:
 			// Update the secret with an extra receiver and route.
 			secret := &corev1.Secret{}
 			err := c.Get(ctx, client.ObjectKey{Namespace: alertmanager.ACMObsAMNamespace, Name: alertmanager.ACMObsAMSecretName}, secret)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			extraConfig := `
 global:
@@ -202,17 +202,17 @@ route:
 `
 			secret.Data[alertmanager.ACMObsAMSecretKey] = []byte(extraConfig)
 			err = c.Update(ctx, secret)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			err = alertmanager.Setup(ctx)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			updatedSecret := &corev1.Secret{}
 			err = c.Get(ctx, client.ObjectKey{Namespace: alertmanager.ACMObsAMNamespace, Name: alertmanager.ACMObsAMSecretName}, updatedSecret)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			var config map[string]interface{}
-			Expect(yaml.Unmarshal(updatedSecret.Data[alertmanager.ACMObsAMSecretKey], &config)).NotTo(HaveOccurred())
+			Expect(yaml.Unmarshal(updatedSecret.Data[alertmanager.ACMObsAMSecretKey], &config)).ToNot(HaveOccurred())
 
 			// Ensure the extra_receiver remains present.
 			receivers, ok := config["receivers"].([]interface{})
@@ -275,7 +275,7 @@ route:
 				},
 			}
 			err := conflictClient.Create(ctx, secret)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Override GetHubClient to return our conflict-simulating client
 			alertmanager.GetHubClient = func() (client.WithWatch, error) {
@@ -284,7 +284,7 @@ route:
 
 			// Run Setup - should succeed despite the initial conflict
 			err = alertmanager.Setup(ctx)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify that update was attempted more than once (retry occurred)
 			Expect(updateAttempts).To(BeNumerically(">", 1), "Setup should have retried after conflict")
@@ -292,10 +292,10 @@ route:
 			// Verify the final configuration is correct
 			finalSecret := &corev1.Secret{}
 			err = conflictClient.Get(ctx, client.ObjectKey{Namespace: alertmanager.ACMObsAMNamespace, Name: alertmanager.ACMObsAMSecretName}, finalSecret)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			var config map[string]interface{}
-			Expect(yaml.Unmarshal(finalSecret.Data[alertmanager.ACMObsAMSecretKey], &config)).NotTo(HaveOccurred())
+			Expect(yaml.Unmarshal(finalSecret.Data[alertmanager.ACMObsAMSecretKey], &config)).ToNot(HaveOccurred())
 
 			// Verify oran receiver was added
 			receivers, ok := config["receivers"].([]interface{})

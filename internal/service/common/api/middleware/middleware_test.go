@@ -92,9 +92,9 @@ var _ = Describe("Validation error logging", func() {
 
 			Expect(recorder.Code).To(Equal(http.StatusBadRequest))
 			body := recorder.Body.String()
-			Expect(body).NotTo(ContainSubstring(maliciousInput))
+			Expect(body).ToNot(ContainSubstring(maliciousInput))
 			Expect(body).To(ContainSubstring("Invalid format for parameter subscriptionId"))
-			Expect(body).NotTo(ContainSubstring("error unmarshaling"))
+			Expect(body).ToNot(ContainSubstring("error unmarshaling"))
 
 			var logEntry map[string]any
 			Expect(json.Unmarshal(buf.Bytes(), &logEntry)).To(Succeed())

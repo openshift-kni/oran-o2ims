@@ -29,12 +29,12 @@ var _ = Describe("processResourceTypeChangeNotification", func() {
 			ChangeType:     "deleted",
 		}
 		payload, err := json.Marshal(notification)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 
 		err = processResourceTypeChangeNotification(ctx, nil, &pgconn.Notification{
 			Payload: string(payload),
 		})
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	It("returns error for invalid JSON payload", func() {
@@ -51,11 +51,11 @@ var _ = Describe("processResourceTypeChangeNotification", func() {
 			ChangeType:     "unknown-type",
 		}
 		payload, err := json.Marshal(notification)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 
 		err = processResourceTypeChangeNotification(ctx, nil, &pgconn.Notification{
 			Payload: string(payload),
 		})
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 	})
 })

@@ -78,7 +78,7 @@ var _ = Describe("Resource Selection", func() {
 			}
 
 			opts, err := ResourceSelectionPrimaryFilter(ctx, nil, logger, nodeGroupData)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			matchingLabels, ok := opts[1].(client.MatchingLabels)
 			Expect(ok).To(BeTrue())
@@ -95,7 +95,7 @@ var _ = Describe("Resource Selection", func() {
 			}
 
 			opts, err := ResourceSelectionPrimaryFilter(ctx, nil, logger, nodeGroupData)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			matchingLabels, ok := opts[1].(client.MatchingLabels)
 			Expect(ok).To(BeTrue())
@@ -111,7 +111,7 @@ var _ = Describe("Resource Selection", func() {
 			}
 
 			opts, err := ResourceSelectionPrimaryFilter(ctx, nil, logger, nodeGroupData)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Check that the label selector excludes allocated BMHs
 			labelSelector, ok := opts[0].(client.MatchingLabelsSelector)
@@ -153,7 +153,7 @@ var _ = Describe("Resource Selection", func() {
 			}
 
 			result, err := ResourceSelectionSecondaryFilter(ctx, fakeClient, logger, nodeGroupData, bmhList)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(len(result.Items)).To(Equal(0)) // No hardware data available, so no BMHs pass
 		})
 
@@ -192,7 +192,7 @@ var _ = Describe("Resource Selection", func() {
 			}
 
 			result, err := ResourceSelectionSecondaryFilter(ctx, fakeClient, logger, nodeGroupData, bmhList)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(len(result.Items)).To(Equal(1))
 			Expect(result.Items[0].Name).To(Equal("bmh1"))
 		})
@@ -212,7 +212,7 @@ var _ = Describe("Resource Selection", func() {
 			}
 
 			result, err := ResourceSelectionSecondaryFilter(ctx, fakeClient, logger, nodeGroupData, bmhList)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(len(result.Items)).To(Equal(0))
 		})
 	})
@@ -222,7 +222,7 @@ var _ = Describe("Resource Selection", func() {
 			hwData := createHardwareData("test", "test-ns", &metal3v1alpha1.HardwareDetails{})
 
 			result, err := ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, "zone", "east", hwData)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(BeTrue())
 		})
 
@@ -232,11 +232,11 @@ var _ = Describe("Resource Selection", func() {
 			})
 
 			result, err := ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldCPUArch, "x86_64", hwData)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(BeTrue())
 
 			result, err = ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldCPUArch, "arm64", hwData)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(BeFalse())
 		})
 
@@ -246,11 +246,11 @@ var _ = Describe("Resource Selection", func() {
 			})
 
 			result, err := ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldCPUModel, "Intel Xeon", hwData)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(BeTrue())
 
 			result, err = ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldCPUModel, "AMD EPYC", hwData)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(BeFalse())
 		})
 
@@ -260,15 +260,15 @@ var _ = Describe("Resource Selection", func() {
 			})
 
 			result, err := ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldNumThreads, "8", hwData)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(BeTrue())
 
 			result, err = ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldNumThreads+";gt", "4", hwData)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(BeTrue())
 
 			result, err = ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldNumThreads+";lt", "4", hwData)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(BeFalse())
 		})
 
@@ -278,11 +278,11 @@ var _ = Describe("Resource Selection", func() {
 			})
 
 			result, err := ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldRAM, "16384", hwData)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(BeTrue())
 
 			result, err = ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldRAM+";gte", "8192", hwData)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(BeTrue())
 		})
 
@@ -294,11 +294,11 @@ var _ = Describe("Resource Selection", func() {
 			})
 
 			result, err := ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldManufacturer, "Dell Inc.", hwData)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(BeTrue())
 
 			result, err = ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldManufacturer, "HP", hwData)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(BeFalse())
 		})
 
@@ -310,7 +310,7 @@ var _ = Describe("Resource Selection", func() {
 			})
 
 			result, err := ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldProductName, "PowerEdge R640", hwData)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(BeTrue())
 		})
 
@@ -435,11 +435,11 @@ var _ = Describe("Resource Selection", func() {
 				defer func() {
 					if r := recover(); r != nil {
 						// This is expected behavior when hardware details is nil
-						Expect(r).NotTo(BeNil())
+						Expect(r).ToNot(BeNil())
 					}
 				}()
 				_, err := ResourceSelectionSecondaryFilterHardwareData(ctx, nil, logger, HardwareDataPrefix+FieldCPUArch, "x86_64", hwData)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 			}()
 		})
 	})
@@ -484,89 +484,89 @@ var _ = Describe("Resource Selection", func() {
 		Describe("checkIntWithQualifiers", func() {
 			It("should match exact values by default", func() {
 				result, err := checkIntWithQualifiers([]string{}, "8", 8)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkIntWithQualifiers([]string{}, "8", 4)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeFalse())
 			})
 
 			It("should handle greater than comparisons", func() {
 				result, err := checkIntWithQualifiers([]string{"gt"}, "4", 8)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkIntWithQualifiers([]string{">"}, "4", 8)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkIntWithQualifiers([]string{"gt"}, "8", 8)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeFalse())
 			})
 
 			It("should handle greater than or equal comparisons", func() {
 				result, err := checkIntWithQualifiers([]string{"gte"}, "8", 8)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkIntWithQualifiers([]string{">="}, "8", 16)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkIntWithQualifiers([]string{"gte"}, "16", 8)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeFalse())
 			})
 
 			It("should handle less than comparisons", func() {
 				result, err := checkIntWithQualifiers([]string{"lt"}, "16", 8)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkIntWithQualifiers([]string{"<"}, "16", 8)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkIntWithQualifiers([]string{"lt"}, "8", 8)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeFalse())
 			})
 
 			It("should handle less than or equal comparisons", func() {
 				result, err := checkIntWithQualifiers([]string{"lte"}, "8", 8)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkIntWithQualifiers([]string{"<="}, "16", 8)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkIntWithQualifiers([]string{"lte"}, "4", 8)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeFalse())
 			})
 
 			It("should handle equality and inequality", func() {
 				result, err := checkIntWithQualifiers([]string{"eq"}, "8", 8)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkIntWithQualifiers([]string{"=="}, "8", 8)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkIntWithQualifiers([]string{"neq"}, "8", 4)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkIntWithQualifiers([]string{"!="}, "8", 4)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkIntWithQualifiers([]string{"neq"}, "8", 8)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeFalse())
 			})
 
@@ -604,55 +604,55 @@ var _ = Describe("Resource Selection", func() {
 
 			It("should filter by model", func() {
 				result, err := checkNicsWithQualifiers([]string{"model=Intel E1000"}, "present", nics, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkNicsWithQualifiers([]string{"model!=Intel E1000"}, "present", nics, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue()) // Should match other NICs
 
 				result, err = checkNicsWithQualifiers([]string{"model=NonExistent"}, "present", nics, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeFalse())
 			})
 
 			It("should filter by speed", func() {
 				result, err := checkNicsWithQualifiers([]string{"speedGbps==10"}, "present", nics, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkNicsWithQualifiers([]string{"speedGbps>5"}, "present", nics, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkNicsWithQualifiers([]string{"speedGbps>20"}, "present", nics, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeFalse())
 			})
 
 			It("should filter by count", func() {
 				result, err := checkNicsWithQualifiers([]string{"count==3"}, "present", nics, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkNicsWithQualifiers([]string{"count>=2"}, "present", nics, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkNicsWithQualifiers([]string{"count>5"}, "present", nics, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeFalse())
 			})
 
 			It("should combine multiple criteria", func() {
 				// Should match Intel NICs with speed >= 10
 				result, err := checkNicsWithQualifiers([]string{"model~Intel", "speedGbps>=10"}, "present", nics, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				// Should count NICs with speed >= 10 and check if count >= 2
 				result, err = checkNicsWithQualifiers([]string{"speedGbps>=10", "count>=2"}, "present", nics, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 			})
 
@@ -725,49 +725,49 @@ var _ = Describe("Resource Selection", func() {
 
 			It("should filter by storage type", func() {
 				result, err := checkStorageWithQualifiers([]string{"type=HDD"}, "present", storage, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkStorageWithQualifiers([]string{"type=SSD"}, "present", storage, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkStorageWithQualifiers([]string{"type=NVME"}, "present", storage, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeFalse())
 			})
 
 			It("should filter by size", func() {
 				result, err := checkStorageWithQualifiers([]string{"sizeBytes>600000000000"}, "present", storage, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkStorageWithQualifiers([]string{"sizeBytes<400000000000"}, "present", storage, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeFalse())
 			})
 
 			It("should filter by vendor", func() {
 				result, err := checkStorageWithQualifiers([]string{"vendor=Seagate"}, "present", storage, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkStorageWithQualifiers([]string{"vendor~Sam"}, "present", storage, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkStorageWithQualifiers([]string{"vendor=Intel"}, "present", storage, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeFalse())
 			})
 
 			It("should filter by model", func() {
 				result, err := checkStorageWithQualifiers([]string{"model=ST1000"}, "present", storage, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkStorageWithQualifiers([]string{"model~EVO"}, "present", storage, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 			})
 
@@ -775,41 +775,41 @@ var _ = Describe("Resource Selection", func() {
 				storage[0].AlternateNames = []string{"disk1", "primary-disk"}
 
 				result, err := checkStorageWithQualifiers([]string{"name=sda"}, "present", storage, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkStorageWithQualifiers([]string{"name=disk1"}, "present", storage, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkStorageWithQualifiers([]string{"name=nonexistent"}, "present", storage, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeFalse())
 			})
 
 			It("should filter by count", func() {
 				result, err := checkStorageWithQualifiers([]string{"count==2"}, "present", storage, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkStorageWithQualifiers([]string{"count>=1"}, "present", storage, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkStorageWithQualifiers([]string{"count>5"}, "present", storage, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeFalse())
 			})
 
 			It("should combine multiple criteria", func() {
 				// Should count SSD devices and verify count >= 1
 				result, err := checkStorageWithQualifiers([]string{"type=SSD", "count>=1"}, "present", storage, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				// Should match devices with size > 600GB and vendor Seagate
 				result, err = checkStorageWithQualifiers([]string{"sizeBytes>600000000000", "vendor=Seagate"}, "present", storage, true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 			})
 
@@ -881,7 +881,7 @@ var _ = Describe("Resource Selection", func() {
 				qualifiers := []string{"model=Intel", "speedGbps>10"}
 
 				result, err := qualifierSetFromQualifiers(qualifiers)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(len(result)).To(Equal(2))
 				Expect(result["model"].Op).To(Equal("="))
 				Expect(result["model"].Value).To(Equal("Intel"))
@@ -893,7 +893,7 @@ var _ = Describe("Resource Selection", func() {
 				qualifiers := []string{"size>=1000", "name!=sda", "vendor~Samsung"}
 
 				result, err := qualifierSetFromQualifiers(qualifiers)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result["size"].Op).To(Equal(">="))
 				Expect(result["size"].Value).To(Equal("1000"))
 				Expect(result["name"].Op).To(Equal("!="))
@@ -916,29 +916,29 @@ var _ = Describe("Resource Selection", func() {
 		Describe("checkStringWithOpQualifier", func() {
 			It("should handle equality operators", func() {
 				result, err := checkStringWithOpQualifier("=", "test", "test", true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkStringWithOpQualifier("!=", "test", "other", true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkStringWithOpQualifier("!=", "test", "test", true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeFalse())
 			})
 
 			It("should handle substring operators", func() {
 				result, err := checkStringWithOpQualifier("~", "tel", "Intel", true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkStringWithOpQualifier("!~", "AMD", "Intel", true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkStringWithOpQualifier("!~", "tel", "Intel", true)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeFalse())
 			})
 
@@ -954,27 +954,27 @@ var _ = Describe("Resource Selection", func() {
 		Describe("checkIntWithOpQualifier", func() {
 			It("should handle all comparison operators", func() {
 				result, err := checkIntWithOpQualifier("==", "8", 8)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkIntWithOpQualifier("!=", "8", 4)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkIntWithOpQualifier(">", "4", 8)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkIntWithOpQualifier(">=", "8", 8)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkIntWithOpQualifier("<", "16", 8)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 
 				result, err = checkIntWithOpQualifier("<=", "8", 8)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeTrue())
 			})
 

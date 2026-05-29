@@ -2011,7 +2011,7 @@ plan:
 
 				existingCI, canSkip := task.canSkipClusterInstanceRendering(ctx)
 				Expect(canSkip).To(BeTrue())
-				Expect(existingCI).NotTo(BeNil())
+				Expect(existingCI).ToNot(BeNil())
 				Expect(existingCI.Name).To(Equal(clusterName))
 			})
 		})
@@ -2176,8 +2176,8 @@ plan:
 				Expect(c.Create(ctx, ci)).To(Succeed())
 
 				retrievedCI, err := task.getExistingClusterInstance(ctx)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(retrievedCI).NotTo(BeNil())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(retrievedCI).ToNot(BeNil())
 				Expect(retrievedCI.Name).To(Equal(clusterInstanceName))
 				Expect(retrievedCI.Spec.ClusterName).To(Equal(clusterInstanceName))
 			})
@@ -2287,8 +2287,8 @@ plan:
 			ci, err := task.handleRenderClusterInstance(ctx)
 
 			// Verify
-			Expect(err).NotTo(HaveOccurred())
-			Expect(ci).NotTo(BeNil())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ci).ToNot(BeNil())
 			Expect(ci.Name).To(Equal(clusterName))
 			Expect(ci.Spec.ClusterName).To(Equal(clusterName))
 		})

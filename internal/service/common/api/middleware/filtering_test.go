@@ -41,11 +41,11 @@ var _ = Describe("ResponseFilter", func() {
 		logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 		var err error
 		adapter, err = NewFilterAdapterWithSchemas(logger, nil)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 
 		list := []object{{Name: "hello", Value: 1}, {Name: "world", Value: 10}}
 		body, err := json.Marshal(list)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 
 		next = func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -61,7 +61,7 @@ var _ = Describe("ResponseFilter", func() {
 		Expect(recorder.Code).To(Equal(http.StatusOK))
 		var list []object
 		err := json.Unmarshal(recorder.Body.Bytes(), &list)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(list).To(HaveLen(1))
 		Expect(list[0].Name).To(Equal("hello"))
 		Expect(list[0].Value).To(Equal(1))
@@ -70,7 +70,7 @@ var _ = Describe("ResponseFilter", func() {
 	It("should not process the filter if an error is returned", func() {
 		list := []object{{Name: "hello", Value: 1}, {Name: "world", Value: 10}}
 		body, err := json.Marshal(list)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		next = func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = w.Write(body)
@@ -82,14 +82,14 @@ var _ = Describe("ResponseFilter", func() {
 
 		Expect(recorder.Code).To(Equal(http.StatusBadRequest))
 		err = json.Unmarshal(recorder.Body.Bytes(), &list)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(list).To(HaveLen(2))
 	})
 
 	It("should not process the filter on a get request", func() {
 		record := object{Name: "hello", Value: 1}
 		body, err := json.Marshal(record)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		next = func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write(body)
@@ -101,7 +101,7 @@ var _ = Describe("ResponseFilter", func() {
 
 		Expect(recorder.Code).To(Equal(http.StatusOK))
 		err = json.Unmarshal(recorder.Body.Bytes(), &record)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(record.Name).To(Equal("hello"))
 	})
 
@@ -111,7 +111,7 @@ var _ = Describe("ResponseFilter", func() {
 		Expect(recorder.Code).To(Equal(http.StatusOK))
 		var list []object
 		err := json.Unmarshal(recorder.Body.Bytes(), &list)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(list).To(HaveLen(2))
 	})
 
@@ -122,7 +122,7 @@ var _ = Describe("ResponseFilter", func() {
 		Expect(recorder.Code).To(Equal(http.StatusOK))
 		var list []object
 		err := json.Unmarshal(recorder.Body.Bytes(), &list)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(list).To(HaveLen(0))
 	})
 
@@ -150,7 +150,7 @@ var _ = Describe("ResponseFilter", func() {
 		Expect(recorder.Code).To(Equal(http.StatusOK))
 		var result []object
 		err := json.Unmarshal(recorder.Body.Bytes(), &result)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(result).To(HaveLen(0))
 	})
 
@@ -182,7 +182,7 @@ var _ = Describe("ResponseFilter", func() {
 			{Name: "world", Value: 10, OptionalField: nil},
 		}
 		body, err := json.Marshal(list)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 
 		next = func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -197,10 +197,10 @@ var _ = Describe("ResponseFilter", func() {
 		Expect(recorder.Code).To(Equal(http.StatusOK))
 		var result []object
 		err = json.Unmarshal(recorder.Body.Bytes(), &result)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(result).To(HaveLen(1))
 		Expect(result[0].Name).To(Equal("hello"))
-		Expect(result[0].OptionalField).NotTo(BeNil())
+		Expect(result[0].OptionalField).ToNot(BeNil())
 		Expect(*result[0].OptionalField).To(Equal("optional_value"))
 	})
 
@@ -211,7 +211,7 @@ var _ = Describe("ResponseFilter", func() {
 			{Name: "world", Value: 10, OptionalField: nil},
 		}
 		body, err := json.Marshal(list)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 
 		next = func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -226,7 +226,7 @@ var _ = Describe("ResponseFilter", func() {
 		Expect(recorder.Code).To(Equal(http.StatusOK))
 		var result []object
 		err = json.Unmarshal(recorder.Body.Bytes(), &result)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(result).To(HaveLen(0)) // No objects should match since the field is nil
 	})
 
@@ -255,13 +255,13 @@ var _ = Describe("ResponseFilter", func() {
 			logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 			var err error
 			schemaAdapter, err = NewFilterAdapterWithSchemas(logger, schemas)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should return bad request for truly invalid field names with schema validation", func() {
 			list := []object{{Name: "hello", Value: 1}, {Name: "world", Value: 10}}
 			body, err := json.Marshal(list)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			next := func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -277,7 +277,7 @@ var _ = Describe("ResponseFilter", func() {
 			// Verify the error message is user-friendly
 			var errorResponse map[string]interface{}
 			err = json.Unmarshal(recorder.Body.Bytes(), &errorResponse)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(errorResponse["detail"]).To(ContainSubstring("invalid field name 'invalidField'"))
 			Expect(errorResponse["detail"]).To(ContainSubstring("does not exist in the API schema"))
 		})
@@ -285,7 +285,7 @@ var _ = Describe("ResponseFilter", func() {
 		It("should return descriptive error for typos in field names", func() {
 			list := []object{{Name: "hello", Value: 1}, {Name: "world", Value: 10}}
 			body, err := json.Marshal(list)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			next := func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -302,7 +302,7 @@ var _ = Describe("ResponseFilter", func() {
 			// Verify the error message specifically mentions the typo
 			var errorResponse map[string]interface{}
 			err = json.Unmarshal(recorder.Body.Bytes(), &errorResponse)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(errorResponse["detail"]).To(ContainSubstring("invalid field name 'filte2r'"))
 			Expect(errorResponse["detail"]).To(ContainSubstring("does not exist in the API schema"))
 		})
@@ -314,7 +314,7 @@ var _ = Describe("ResponseFilter", func() {
 				{Name: "world", Value: 10, OptionalField: nil},
 			}
 			body, err := json.Marshal(list)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			next := func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -328,7 +328,7 @@ var _ = Describe("ResponseFilter", func() {
 			Expect(recorder.Code).To(Equal(http.StatusOK))
 			var result []object
 			err = json.Unmarshal(recorder.Body.Bytes(), &result)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(HaveLen(1))
 			Expect(result[0].Name).To(Equal("hello"))
 		})
@@ -341,9 +341,9 @@ var _ = Describe("ResponseFilter", func() {
 
 		Expect(recorder.Code).To(Equal(http.StatusBadRequest))
 		body := recorder.Body.String()
-		Expect(body).NotTo(ContainSubstring(maliciousQuery))
-		Expect(body).NotTo(ContainSubstring("sensitive-data"))
-		Expect(body).NotTo(ContainSubstring("%zz"))
+		Expect(body).ToNot(ContainSubstring(maliciousQuery))
+		Expect(body).ToNot(ContainSubstring("sensitive-data"))
+		Expect(body).ToNot(ContainSubstring("%zz"))
 		Expect(body).To(ContainSubstring("failed to parse query parameters"))
 	})
 
@@ -354,8 +354,8 @@ var _ = Describe("ResponseFilter", func() {
 
 		Expect(recorder.Code).To(Equal(http.StatusBadRequest))
 		body := recorder.Body.String()
-		Expect(body).NotTo(ContainSubstring("<script>"))
-		Expect(body).NotTo(ContainSubstring("alert(1)"))
+		Expect(body).ToNot(ContainSubstring("<script>"))
+		Expect(body).ToNot(ContainSubstring("alert(1)"))
 		Expect(body).To(ContainSubstring("invalid filter syntax"))
 	})
 })

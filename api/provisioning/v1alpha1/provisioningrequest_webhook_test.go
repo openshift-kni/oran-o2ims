@@ -104,13 +104,13 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 			It("should allow the change when the ProvisioningRequest is fulfilled", func() {
 				newPr.Status.ProvisioningStatus.ProvisioningPhase = StateFulfilled
 				_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should allow the change when the ProvisioningRequest is failed", func() {
 				newPr.Status.ProvisioningStatus.ProvisioningPhase = StateFailed
 				_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 			})
 		})
 
@@ -437,7 +437,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 			}`)
 
 					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
-					Expect(err).NotTo(HaveOccurred())
+					Expect(err).ToNot(HaveOccurred())
 				})
 
 				It("should allow extraLabels changes after completion", func() {
@@ -468,7 +468,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 			}`)
 
 					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
-					Expect(err).NotTo(HaveOccurred())
+					Expect(err).ToNot(HaveOccurred())
 				})
 
 				It("should allow node scaling (adding nodes) after completion", func() {
@@ -502,7 +502,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 			}`)
 
 					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
-					Expect(err).NotTo(HaveOccurred())
+					Expect(err).ToNot(HaveOccurred())
 				})
 
 				It("should allow node scaling (removing nodes) after completion", func() {
@@ -552,7 +552,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 			}`)
 
 					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
-					Expect(err).NotTo(HaveOccurred())
+					Expect(err).ToNot(HaveOccurred())
 				})
 
 				It("should reject immutable field changes after completion", func() {
@@ -621,7 +621,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 			}`)
 
 					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
-					Expect(err).NotTo(HaveOccurred())
+					Expect(err).ToNot(HaveOccurred())
 				})
 			})
 
@@ -652,7 +652,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 			}`)
 
 					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
-					Expect(err).NotTo(HaveOccurred())
+					Expect(err).ToNot(HaveOccurred())
 				})
 
 				It("should allow all changes when condition is Failed", func() {
@@ -681,7 +681,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 			}`)
 
 					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
-					Expect(err).NotTo(HaveOccurred())
+					Expect(err).ToNot(HaveOccurred())
 				})
 			})
 		})
@@ -790,7 +790,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				newPr.Annotations = map[string]string{"new-annotation": "new-value"}
 
 				_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should reject spec changes when hardware provisioning has failed", func() {
@@ -863,7 +863,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				}
 
 				_, err := validator.ValidateCreate(ctx, pr)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 			})
 		})
 
@@ -963,7 +963,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				}
 
 				_, err := validator.ValidateCreate(ctx, pr)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should skip hwProfile validation when PR has no hwMgmtParameters at all", func() {
@@ -985,7 +985,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				}
 
 				_, err := validator.ValidateCreate(ctx, pr)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should skip validation when hwMgmtParameters has no nodeGroupData", func() {
@@ -1010,7 +1010,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				}
 
 				_, err := validator.ValidateCreate(ctx, pr)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should reject when hwMgmtParameters is not an object", func() {
@@ -1059,7 +1059,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				}
 
 				_, err := validator.ValidateCreate(ctx, pr)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should skip validation when nodeGroupData entry has no hwProfile", func() {
@@ -1086,7 +1086,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				}
 
 				_, err := validator.ValidateCreate(ctx, pr)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should skip validation when PR has no hwMgmtParameters", func() {
@@ -1108,7 +1108,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				}
 
 				_, err := validator.ValidateCreate(ctx, pr)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 			})
 		})
 	})
@@ -1210,7 +1210,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 
 			// Should not fail — hwMgmtParameters properties are stripped before schema validation
 			err := pr.ValidateTemplateInputMatchesSchema(ct)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 
@@ -1227,7 +1227,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 			Expect(fakeClient.Create(ctx, pr)).To(Succeed())
 
 			warnings, err := validator.ValidateDelete(ctx, pr)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(warnings).To(HaveLen(1))
 			Expect(warnings[0]).To(ContainSubstring("several minutes"))
 		})

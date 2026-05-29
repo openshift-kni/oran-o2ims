@@ -52,13 +52,13 @@ var _ = Describe("Utils", func() {
 			result1 := GetTrackingUUID(testLocationKey)
 			result2 := GetTrackingUUID(testLocationKey)
 			Expect(result1).To(Equal(result2)) // deterministic
-			Expect(result1).NotTo(Equal(uuid.Nil))
+			Expect(result1).ToNot(Equal(uuid.Nil))
 		})
 
 		It("returns different UUIDs for different string keys", func() {
 			result1 := GetTrackingUUID(testLocationKey)
 			result2 := GetTrackingUUID("LOC-002")
-			Expect(result1).NotTo(Equal(result2))
+			Expect(result1).ToNot(Equal(result2))
 		})
 
 		It("returns UUID using SHA1 namespace for string keys", func() {
@@ -70,7 +70,7 @@ var _ = Describe("Utils", func() {
 
 		It("handles empty string key", func() {
 			result := GetTrackingUUID("")
-			Expect(result).NotTo(Equal(uuid.Nil))
+			Expect(result).ToNot(Equal(uuid.Nil))
 			// Empty string should still produce a deterministic UUID
 			Expect(result).To(Equal(GetTrackingUUID("")))
 		})
@@ -80,10 +80,10 @@ var _ = Describe("Utils", func() {
 			result1 := GetTrackingUUID(42)
 			result2 := GetTrackingUUID(42)
 			Expect(result1).To(Equal(result2))
-			Expect(result1).NotTo(Equal(uuid.Nil))
+			Expect(result1).ToNot(Equal(uuid.Nil))
 
 			// Different integers produce different UUIDs
-			Expect(GetTrackingUUID(42)).NotTo(Equal(GetTrackingUUID(43)))
+			Expect(GetTrackingUUID(42)).ToNot(Equal(GetTrackingUUID(43)))
 		})
 	})
 

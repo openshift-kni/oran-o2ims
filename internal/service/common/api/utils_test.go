@@ -45,7 +45,7 @@ var _ = Describe("ValidateCallbackURL", func() {
 		It("should not return an error", func() {
 			stub := &stubClientProvider{client: client}
 			err := api.ValidateCallbackURL(ctx, stub, callback)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 
@@ -104,7 +104,7 @@ var _ = Describe("CheckCallbackReachabilityGET", func() {
 
 	It("should succeed when the server returns 204", func() {
 		err := api.CheckCallbackReachabilityGET(ctx, client, callback)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	It("should fail when the server returns a status other than 204", func() {

@@ -26,7 +26,7 @@ var _ = Describe("NotificationTransformer", func() {
 		sub := &notifier.SubscriptionInfo{ConsumerSubscriptionID: nil}
 		n := &notifier.Notification{Payload: generated.InventoryChangeNotification{}}
 		out, err := t.Transform(sub, n)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(out).To(BeIdenticalTo(n))
 	})
 
@@ -50,11 +50,11 @@ var _ = Describe("NotificationTransformer", func() {
 		n := &notifier.Notification{Payload: payload}
 
 		out, err := t.Transform(sub, n)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(out).NotTo(BeIdenticalTo(n))
+		Expect(err).ToNot(HaveOccurred())
+		Expect(out).ToNot(BeIdenticalTo(n))
 		typed, ok := out.Payload.(generated.InventoryChangeNotification)
 		Expect(ok).To(BeTrue())
-		Expect(typed.ConsumerSubscriptionId).NotTo(BeNil())
+		Expect(typed.ConsumerSubscriptionId).ToNot(BeNil())
 		Expect(*typed.ConsumerSubscriptionId).To(Equal(consID))
 		Expect(typed.NotificationId).To(Equal(nid))
 	})
