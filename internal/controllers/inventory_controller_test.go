@@ -51,6 +51,7 @@ import (
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/test/fakeclient"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -138,7 +139,7 @@ var _ = Describe("Inventory Controller", func() {
 			objs = append(objs, pods...)
 
 			// Get the fake client.
-			fakeClient := getFakeClientFromObjects(objs...)
+			fakeClient := fakeclient.GetFakeClientFromObjects(scheme, objs...)
 
 			// Initialize the O-Cloud Manager reconciler.
 			r := &Reconciler{

@@ -23,6 +23,7 @@ import (
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	"github.com/openshift-kni/oran-o2ims/test/fakeclient"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 )
 
@@ -331,7 +332,7 @@ var _ = Describe("ClusterIsReadyForPolicyConfig", func() {
 			},
 		}
 
-		fakeClient = getFakeClientFromObjects(crs...)
+		fakeClient = fakeclient.GetFakeClientFromObjects(suitescheme, crs...)
 	})
 
 	It("returns false and no error if the cluster doesn't exist", func() {
@@ -365,8 +366,7 @@ var _ = Describe("ClusterIsReadyForPolicyConfig", func() {
 			metav1.ConditionTrue,
 			"Managed cluster joined",
 		)
-		err = CreateK8sCR(context.TODO(), fakeClient, managedCluster1, nil, UPDATE)
-		Expect(err).ToNot(HaveOccurred())
+		Expect(fakeClient.Status().Update(ctx, managedCluster1)).To(Succeed())
 
 		isReadyForConfig, err := ClusterIsReadyForPolicyConfig(ctx, fakeClient, clusterName)
 		Expect(err).ToNot(HaveOccurred())
@@ -374,7 +374,6 @@ var _ = Describe("ClusterIsReadyForPolicyConfig", func() {
 	})
 
 	It("returns true if cluster is available, hubAccepted and has joined", func() {
-		// Update the managedCluster cluster-1 to be available, joined and accepted.
 		managedCluster1 := &clusterv1.ManagedCluster{}
 		managedClusterExists, err := DoesK8SResourceExist(
 			ctx, fakeClient, clusterName, "", managedCluster1)
@@ -398,8 +397,7 @@ var _ = Describe("ClusterIsReadyForPolicyConfig", func() {
 			metav1.ConditionTrue,
 			"Managed cluster joined",
 		)
-		err = CreateK8sCR(context.TODO(), fakeClient, managedCluster1, nil, UPDATE)
-		Expect(err).ToNot(HaveOccurred())
+		Expect(fakeClient.Status().Update(ctx, managedCluster1)).To(Succeed())
 
 		isReadyForConfig, err := ClusterIsReadyForPolicyConfig(ctx, fakeClient, clusterName)
 		Expect(err).ToNot(HaveOccurred())
@@ -492,7 +490,7 @@ var _ = Describe("ValidateDefaultConfigmapSchema", func() {
 	)
 
 	BeforeEach(func() {
-		fakeClient = getFakeClientFromObjects()
+		fakeClient = fakeclient.GetFakeClientFromObjects(suitescheme)
 	})
 
 	It("returns an error when the ClusterInstance CRD does not exist", func() {

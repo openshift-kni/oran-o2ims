@@ -97,6 +97,7 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/test/fakeclient"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	"gopkg.in/yaml.v3"
@@ -150,7 +151,7 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 			},
 		}
 
-		c = getFakeClientFromObjects([]client.Object{ct, clusterInstanceCRD}...)
+		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{ct, clusterInstanceCRD}...)
 		reconciler = &ClusterTemplateReconciler{
 			Client: c,
 			Logger: logger,
@@ -323,7 +324,7 @@ var _ = Describe("enqueueClusterTemplatesForConfigmap", func() {
 		for _, ct := range cts {
 			objs = append(objs, ct)
 		}
-		c = getFakeClientFromObjects(objs...)
+		c = fakeclient.GetFakeClientFromObjects(scheme, objs...)
 
 		r = &ClusterTemplateReconciler{
 			Client: c,
@@ -579,7 +580,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		clusterInstanceCRD, err := ctlrutils.BuildTestClusterInstanceCRD(ctlrutils.TestClusterInstanceSpecOk)
 		Expect(err).ToNot(HaveOccurred())
 
-		c = getFakeClientFromObjects([]client.Object{ct, clusterInstanceCRD}...)
+		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{ct, clusterInstanceCRD}...)
 
 		t = &clusterTemplateReconcilerTask{
 			client: c,
@@ -751,7 +752,7 @@ var _ = Describe("validateConfigmapReference", func() {
 		ctx = context.Background()
 		clusterInstanceCRD, err := ctlrutils.BuildTestClusterInstanceCRD(ctlrutils.TestClusterInstanceSpecOk)
 		Expect(err).ToNot(HaveOccurred())
-		c = getFakeClientFromObjects([]client.Object{clusterInstanceCRD}...)
+		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{clusterInstanceCRD}...)
 	})
 
 	It("should validate a valid configmap", func() {
@@ -1004,7 +1005,7 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		c = getFakeClientFromObjects()
+		c = fakeclient.GetFakeClientFromObjects(scheme)
 	})
 
 	It("should validate a cluster template name", func() {
@@ -1130,7 +1131,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		c = getFakeClientFromObjects()
+		c = fakeclient.GetFakeClientFromObjects(scheme)
 	})
 
 	It("Generate templateID", func() {
@@ -1698,7 +1699,7 @@ var _ = Describe("validateUpgradeDefaultsConfigmap", func() {
 			},
 		}
 
-		c = getFakeClientFromObjects([]client.Object{ct}...)
+		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{ct}...)
 
 		t = &clusterTemplateReconcilerTask{
 			client: c,

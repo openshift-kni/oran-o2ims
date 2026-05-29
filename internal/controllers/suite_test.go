@@ -84,8 +84,6 @@ cluster template validation through complete cluster deployment and configuratio
 package controllers
 
 import (
-	"context"
-	"fmt"
 	"log/slog"
 	"os"
 	"testing"
@@ -100,16 +98,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	bmhv1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
@@ -117,7 +110,6 @@ import (
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -126,99 +118,6 @@ import (
 func TestControllers(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Controllers")
-}
-
-// SSACompatibleClient wraps a fake client and converts Server-Side Apply operations
-// to traditional create/update operations, providing compatibility for testing.
-type SSACompatibleClient struct {
-	client.WithWatch
-}
-
-// Patch intercepts Server-Side Apply operations and converts them to create/update
-func (c *SSACompatibleClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
-	// Check if this is a Server-Side Apply operation
-	if patch.Type() == types.ApplyPatchType {
-		return c.handleServerSideApply(ctx, obj, opts...)
-	}
-
-	// For non-SSA patches, delegate to the underlying client
-	if err := c.WithWatch.Patch(ctx, obj, patch, opts...); err != nil {
-		return fmt.Errorf("failed to apply patch: %w", err)
-	}
-	return nil
-}
-
-// handleServerSideApply converts SSA operations to create/update operations
-func (c *SSACompatibleClient) handleServerSideApply(ctx context.Context, obj client.Object, opts ...client.PatchOption) error {
-	// Check for dry-run option by inspecting patch options
-	isDryRun := false
-	for _, opt := range opts {
-		// Check if this is a dry-run option by examining the string representation
-		optStr := fmt.Sprintf("%T", opt)
-		if optStr == "client.dryRunAll" {
-			isDryRun = true
-			break
-		}
-	}
-
-	// For dry-run, just validate without actually creating/updating
-	if isDryRun {
-		return nil
-	}
-
-	// Check if the object already exists
-	existing := obj.DeepCopyObject().(client.Object)
-	err := c.WithWatch.Get(ctx, client.ObjectKeyFromObject(obj), existing)
-
-	switch {
-	case errors.IsNotFound(err):
-		// Create the object
-		if createErr := c.WithWatch.Create(ctx, obj); createErr != nil {
-			return fmt.Errorf("failed to create object: %w", createErr)
-		}
-		return nil
-	case err != nil:
-		return fmt.Errorf("failed to check existing object: %w", err)
-	default:
-		// Update the existing object
-		obj.SetResourceVersion(existing.GetResourceVersion())
-		if updateErr := c.WithWatch.Update(ctx, obj); updateErr != nil {
-			return fmt.Errorf("failed to update object: %w", updateErr)
-		}
-		return nil
-	}
-}
-
-func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
-	// Create the Inventory CRD object for CRD ownership of cluster-scoped resources
-	inventoryCRD := &apiextensionsv1.CustomResourceDefinition{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: ctlrutils.InventoryCRDName,
-		},
-	}
-
-	fakeClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithObjects(objs...).
-		WithObjects(inventoryCRD).
-		WithStatusSubresource(&inventoryv1alpha1.Inventory{}).
-		WithStatusSubresource(&provisioningv1alpha1.ClusterTemplate{}).
-		WithStatusSubresource(&provisioningv1alpha1.ProvisioningRequest{}).
-		WithStatusSubresource(&siteconfig.ClusterInstance{}).
-		WithStatusSubresource(&clusterv1.ManagedCluster{}).
-		WithStatusSubresource(&hwmgmtv1alpha1.NodeAllocationRequest{}).
-		WithStatusSubresource(&hwmgmtv1alpha1.AllocatedNode{}).
-		WithStatusSubresource(&openshiftv1.ClusterVersion{}).
-		WithStatusSubresource(&openshiftoperatorv1.IngressController{}).
-		WithStatusSubresource(&policiesv1.Policy{}).
-		WithStatusSubresource(&clusterv1.ManagedCluster{}).
-		WithIndex(&hwmgmtv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", func(obj client.Object) []string {
-			return []string{obj.(*hwmgmtv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
-		}).
-		Build()
-
-	// Wrap the fake client with SSA compatibility for testing
-	return &SSACompatibleClient{WithWatch: fakeClient}
 }
 
 // Logger used for tests:

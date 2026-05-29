@@ -64,6 +64,7 @@ import (
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/test/fakeclient"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 )
 
@@ -147,7 +148,7 @@ var _ = Describe("handleRenderClusterInstance", func() {
 		// Use helper function to get ConfigMap with ClusterInstance defaults
 		cm := getClusterInstanceDefaultsConfigMap(ciDefaultsCm, ctNamespace)
 
-		c = getFakeClientFromObjects([]client.Object{cr, ct, cm}...)
+		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{cr, ct, cm}...)
 		reconciler = &ProvisioningRequestReconciler{
 			Client: c,
 			Logger: logger,
@@ -319,7 +320,7 @@ var _ = Describe("handleClusterInstallation", func() {
 		// Use helper function to get ConfigMap with ClusterInstance defaults
 		cm := getClusterInstanceDefaultsConfigMap(ciDefaultsCm, ctNamespace)
 
-		c = getFakeClientFromObjects([]client.Object{cr, ct, cm}...)
+		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{cr, ct, cm}...)
 		reconciler = &ProvisioningRequestReconciler{
 			Client: c,
 			Logger: logger,

@@ -27,6 +27,7 @@ import (
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	"github.com/openshift-kni/oran-o2ims/test/fakeclient"
 	openshiftv1 "github.com/openshift/api/operator/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -44,21 +45,13 @@ import (
 // Scheme used for the tests:
 var suitescheme = clientgoscheme.Scheme
 
+func init() {
+	suitescheme.AddKnownTypes(openshiftv1.SchemeGroupVersion, &openshiftv1.IngressController{})
+}
+
 func TestInventoryControllerUtils(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Controller Utils Suite")
-}
-
-//nolint:unparam
-func getFakeClientFromObjects(objs ...client.Object) client.WithWatch {
-	suitescheme.AddKnownTypes(openshiftv1.SchemeGroupVersion, &openshiftv1.IngressController{})
-
-	return fake.NewClientBuilder().
-		WithScheme(suitescheme).
-		WithObjects(objs...).
-		WithStatusSubresource(&inventoryv1alpha1.Inventory{}).
-		WithStatusSubresource(&openshiftv1.IngressController{}).
-		Build()
 }
 
 var _ = Describe("ExtensionUtils", func() {
@@ -128,7 +121,7 @@ var _ = Describe("DoesK8SResourceExist", func() {
 	}
 
 	// Get a fake client.
-	fakeClient := getFakeClientFromObjects(objs...)
+	fakeClient := fakeclient.GetFakeClientFromObjects(suitescheme, objs...)
 
 	It("If deployment does not exist, it will be created", func() {
 		Inventory := &inventoryv1alpha1.Inventory{
@@ -254,7 +247,7 @@ var _ = Describe("GetIngressDomain", func() {
 
 	It("If ingress controller does not exist, return error", func() {
 		objs := []client.Object{}
-		fakeClient := getFakeClientFromObjects(objs...)
+		fakeClient := fakeclient.GetFakeClientFromObjects(suitescheme, objs...)
 		domain, err := GetIngressDomain(context.TODO(), fakeClient)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("ingress controller object not found"))
@@ -270,7 +263,7 @@ var _ = Describe("GetIngressDomain", func() {
 				Domain: "apps.example.com"}}
 
 		objs := []client.Object{ingress}
-		fakeClient := getFakeClientFromObjects(objs...)
+		fakeClient := fakeclient.GetFakeClientFromObjects(suitescheme, objs...)
 		domain, err := GetIngressDomain(context.TODO(), fakeClient)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(domain).To(Equal("apps.example.com"))
@@ -852,7 +845,7 @@ var _ = Describe("GetDefaultsFromConfigMap", func() {
 			},
 		}
 		// Get a fake client.
-		c = getFakeClientFromObjects(objs...)
+		c = fakeclient.GetFakeClientFromObjects(suitescheme, objs...)
 		clusterInstanceConfigMap = &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      configMapName,
