@@ -642,6 +642,10 @@ test-crd-watcher:
 	@echo "Run crd-watcher unit tests"
 	cd dev-tools/crd-watcher && go test -v $(ginkgo_flags)
 
+.PHONY: e2e-outline
+e2e-outline: ## Generate e2e test inventory document from Ginkgo outlines
+	hack/generate-e2e-outline.sh
+
 .PHONY: test-coverage-check
 test-coverage-check: ## Check code coverage against per-package thresholds
 	@echo "Merging coverage profiles"
@@ -680,7 +684,7 @@ deps-update: mock-gen golangci-lint-download
 # TODO: add back `test-e2e` to ci-job
 # NOTE: `bundle-check` should be the last job in the list for `ci-job`
 .PHONY: ci-job
-ci-job: deps-update go-generate generate fmt vet lint test test-e2e test-envtest test-crd-watcher test-coverage-check bundle-check
+ci-job: deps-update go-generate generate fmt vet lint test test-e2e test-envtest test-crd-watcher test-coverage-check e2e-outline bundle-check
 
 .PHONY: clean
 clean:
