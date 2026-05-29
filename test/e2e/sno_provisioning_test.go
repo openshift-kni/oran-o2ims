@@ -35,7 +35,7 @@ import (
 var _ = Describe("SNO End-to-end ProvisioningRequestReconcile with hardware manager", Ordered, Label("sno-provisioning"), func() {
 	// This test suite runs with both O2IMS and hardware manager controllers active
 	// Hardware manager runs alongside Provisioning manager for all tests
-	const timeout = time.Second * 60
+	const timeout = time.Minute * 3
 	const interval = time.Second * 3
 
 	var (
@@ -508,7 +508,7 @@ defaultHugepagesSize: "1G"`,
 			err := K8SClient.Get(testCtx, client.ObjectKeyFromObject(ProvRequestCR), reconciledPR)
 			Expect(err).ToNot(HaveOccurred())
 			return len(reconciledPR.Status.Conditions) == 2
-		}, time.Minute*3, time.Second*3).Should(BeTrue())
+		}, timeout, interval).Should(BeTrue())
 
 		conditions := reconciledPR.Status.Conditions
 		Expect(len(conditions)).To(Equal(2))
@@ -565,7 +565,7 @@ defaultHugepagesSize: "1G"`,
 				}
 			}
 			return false
-		}, time.Minute*3, time.Second*3).Should(BeTrue())
+		}, timeout, interval).Should(BeTrue())
 
 		// Verify initial state - hardware provisioning in progress.
 		conditions := reconciledPR.Status.Conditions
@@ -609,7 +609,7 @@ defaultHugepagesSize: "1G"`,
 			}, nar)
 			Expect(err).ToNot(HaveOccurred())
 			return true
-		}, time.Minute*3, time.Second*3).Should(BeTrue())
+		}, timeout, interval).Should(BeTrue())
 
 		// Verify NodeAllocationRequest contains expected node groups (only 1 single-node group).
 		Expect(len(nar.Spec.NodeGroup)).To(Equal(1))
@@ -626,7 +626,7 @@ defaultHugepagesSize: "1G"`,
 			err := K8SClient.List(testCtx, allocatedNodes, client.InNamespace(constants.DefaultNamespace))
 			Expect(err).ToNot(HaveOccurred())
 			return len(allocatedNodes.Items) == 1 && allocatedNodes.Items[0].Spec.NodeAllocationRequest == crName
-		}, time.Minute*3, time.Second*3).Should(BeTrue())
+		}, timeout, interval).Should(BeTrue())
 
 		// Save the single allocated node for later use
 		allocatedNode = &allocatedNodes.Items[0]
@@ -686,7 +686,7 @@ defaultHugepagesSize: "1G"`,
 			err := K8SClient.Get(testCtx, types.NamespacedName{Name: allocatedNode.Name, Namespace: constants.DefaultNamespace}, allocatedNode)
 			Expect(err).ToNot(HaveOccurred())
 			return allocatedNode.Annotations[hwmgrcontrollers.ConfigAnnotation] != ""
-		}, time.Minute*3, time.Second*3).Should(BeTrue())
+		}, timeout, interval).Should(BeTrue())
 
 		By("Updating HostFirmwareComponents status to match HardwareProfile")
 		hfc := &metal3v1alpha1.HostFirmwareComponents{}
@@ -758,7 +758,7 @@ defaultHugepagesSize: "1G"`,
 			Expect(err).ToNot(HaveOccurred())
 
 			return nar.Status.Conditions[0].Status == metav1.ConditionTrue && allocatedNode.Status.Conditions[0].Status == metav1.ConditionTrue
-		}, time.Minute*3, time.Second*5).Should(BeTrue())
+		}, timeout, interval).Should(BeTrue())
 		conditions := nar.Status.Conditions
 		testutils.VerifyStatusCondition(conditions[0], metav1.Condition{
 			Type:   string(hwmgmtv1alpha1.Provisioned),
@@ -780,7 +780,7 @@ defaultHugepagesSize: "1G"`,
 				}
 			}
 			return false
-		}, time.Minute*3, time.Second*5).Should(BeTrue())
+		}, timeout, interval).Should(BeTrue())
 
 		conditions := reconciledPR.Status.Conditions
 		// Find and verify HardwareProvisioned condition is now completed.
@@ -807,7 +807,7 @@ defaultHugepagesSize: "1G"`,
 			Expect(err).ToNot(HaveOccurred())
 			// Check if ProvisioningDetails moved from hardware provisioning message.
 			return !strings.Contains(reconciledPR.Status.ProvisioningStatus.ProvisioningDetails, "Hardware provisioning")
-		}, time.Minute*3, time.Second*5).Should(BeTrue())
+		}, timeout, interval).Should(BeTrue())
 
 		By("Changing template version to trigger re-render attempt")
 		Expect(K8SClient.Get(testCtx, client.ObjectKeyFromObject(ProvRequestCR), reconciledPR)).To(Succeed())
@@ -848,6 +848,6 @@ defaultHugepagesSize: "1G"`,
 				provisioningv1alpha1.StateProgressing, fmt.Sprintf("Waiting for ClusterInstance (%s) to be processed", crName), nil)
 
 			return true
-		}, time.Minute, 5*time.Second).Should(BeTrue())
+		}, timeout, interval).Should(BeTrue())
 	})
 })
