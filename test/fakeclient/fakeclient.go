@@ -100,17 +100,12 @@ func (c *SSACompatibleClient) Patch(ctx context.Context, obj client.Object, patc
 }
 
 func (c *SSACompatibleClient) handleServerSideApply(ctx context.Context, obj client.Object, opts ...client.PatchOption) error {
-	isDryRun := false
-	for _, opt := range opts {
-		optStr := fmt.Sprintf("%T", opt)
-		if optStr == "client.dryRunAll" {
-			isDryRun = true
-			break
+	patchOpts := &client.PatchOptions{}
+	patchOpts.ApplyOptions(opts)
+	for _, v := range patchOpts.DryRun {
+		if v == metav1.DryRunAll {
+			return nil
 		}
-	}
-
-	if isDryRun {
-		return nil
 	}
 
 	existing := obj.DeepCopyObject().(client.Object)
