@@ -10,10 +10,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -92,10 +94,12 @@ var _ = Describe("Authenticator", func() {
 			Error: nil,
 		}
 		req = http.Request{
-			Header: http.Header{},
-			Method: http.MethodGet,
-			URL:    &url.URL{Path: "/api/test"},
+			Header:     http.Header{},
+			Method:     http.MethodGet,
+			URL:        &url.URL{Path: "/api/test"},
+			RemoteAddr: "10.0.0.1:54321",
 		}
+		req.Header.Set("Authorization", "Bearer some-token")
 		next = &NoopHandler{}
 		recorder = httptest.NewRecorder()
 		handler = Authenticator(&oauthAuthenticator, &k8sAuthenticator)(next)
@@ -161,6 +165,12 @@ var _ = Describe("Authenticator", func() {
 		Expect(logOutput).To(ContainSubstring(`"method":"GET"`))
 		Expect(logOutput).To(ContainSubstring(`"/api/test"`))
 		Expect(logOutput).To(ContainSubstring("some error"))
+
+		hostname, err := os.Hostname()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(logOutput).To(ContainSubstring(`"client_ip":"10.0.0.1:54321"`))
+		Expect(logOutput).To(ContainSubstring(fmt.Sprintf(`"container_id":"%s"`, hostname)))
+		Expect(logOutput).To(ContainSubstring(`"payload_context":"Bearer"`))
 	})
 
 	It("Rejects the request when the handler returns false", func() {
@@ -177,6 +187,43 @@ var _ = Describe("Authenticator", func() {
 		Expect(logOutput).To(ContainSubstring(`"level":"WARN"`))
 		Expect(logOutput).To(ContainSubstring(`"method":"GET"`))
 		Expect(logOutput).To(ContainSubstring(`"/api/test"`))
+
+		hostname, err := os.Hostname()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(logOutput).To(ContainSubstring(`"client_ip":"10.0.0.1:54321"`))
+		Expect(logOutput).To(ContainSubstring(fmt.Sprintf(`"container_id":"%s"`, hostname)))
+		Expect(logOutput).To(ContainSubstring(`"payload_context":"Bearer"`))
+	})
+
+	It("Logs client_ip from X-Forwarded-For when present", func() {
+		k8sAuthenticator.Ok = false
+		req.Header.Set("x-forwarded-for", "203.0.113.50, 10.0.0.1")
+		handler = Authenticator(nil, &k8sAuthenticator)(next)
+		handler.ServeHTTP(recorder, &req)
+		Expect(recorder.Code).To(Equal(http.StatusUnauthorized))
+
+		logOutput := logBuffer.String()
+		Expect(logOutput).To(ContainSubstring(`"client_ip":"203.0.113.50"`))
+	})
+
+	It("Logs Authorization header scheme without exposing the token", func() {
+		k8sAuthenticator.Error = errors.New("bad token")
+		req.Header.Set("Authorization", "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.secret")
+		handler.ServeHTTP(recorder, &req)
+
+		logOutput := logBuffer.String()
+		Expect(logOutput).To(ContainSubstring(`"payload_context":"Bearer"`))
+		Expect(logOutput).NotTo(ContainSubstring("eyJhbGci"))
+	})
+
+	It("Does not leak token when Authorization header has no scheme prefix", func() {
+		k8sAuthenticator.Error = errors.New("bad token")
+		req.Header.Set("Authorization", "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.raw-token")
+		handler.ServeHTTP(recorder, &req)
+
+		logOutput := logBuffer.String()
+		Expect(logOutput).To(ContainSubstring(`"payload_context":"<malformed>"`))
+		Expect(logOutput).NotTo(ContainSubstring("eyJhbGci"))
 	})
 })
 
@@ -186,6 +233,8 @@ var _ = Describe("Authorizer", func() {
 	var k8sAuthorizer NoopAuthorizer
 	var recorder *httptest.ResponseRecorder
 	var handler http.Handler
+	var logBuffer bytes.Buffer
+	var origLogger *slog.Logger
 
 	BeforeEach(func() {
 		k8sAuthorizer = NoopAuthorizer{
@@ -193,11 +242,20 @@ var _ = Describe("Authorizer", func() {
 			Reason:   "foo",
 			Error:    nil,
 		}
-		req = &http.Request{Header: http.Header{}, Method: http.MethodGet, URL: &url.URL{Path: "/some/path"}}
+		req = &http.Request{Header: http.Header{}, Method: http.MethodGet, URL: &url.URL{Path: "/some/path"}, RemoteAddr: "10.0.0.2:9999"}
+		req.Header.Set("Authorization", "Bearer test-token")
 		req = req.WithContext(request.WithUser(req.Context(), &user.DefaultInfo{Name: "test"}))
 		next = &NoopHandler{}
 		recorder = httptest.NewRecorder()
 		handler = Authorizer(&k8sAuthorizer)(next)
+
+		logBuffer.Reset()
+		origLogger = slog.Default()
+		slog.SetDefault(slog.New(slog.NewJSONHandler(&logBuffer, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	})
+
+	AfterEach(func() {
+		slog.SetDefault(origLogger)
 	})
 
 	It("Authorizes the request", func() {
@@ -222,14 +280,28 @@ var _ = Describe("Authorizer", func() {
 		Expect(recorder.Code).To(Equal(http.StatusInternalServerError))
 		Expect(recorder.Body.String()).To(ContainSubstring("Authorization for user 'test' failed"))
 		Expect(next.(*NoopHandler).called).To(BeFalse())
+
+		hostname, err := os.Hostname()
+		Expect(err).ToNot(HaveOccurred())
+		logOutput := logBuffer.String()
+		Expect(logOutput).To(ContainSubstring(`"client_ip":"10.0.0.2:9999"`))
+		Expect(logOutput).To(ContainSubstring(fmt.Sprintf(`"container_id":"%s"`, hostname)))
+		Expect(logOutput).To(ContainSubstring(`"payload_context":"Bearer"`))
 	})
 
-	It("Rejects the request if handler returns an error", func() {
+	It("Rejects the request if authorization is denied", func() {
 		k8sAuthorizer.Decision = authorizer.DecisionNoOpinion
 		handler.ServeHTTP(recorder, req)
 		Expect(k8sAuthorizer.called).To(BeTrue())
 		Expect(recorder.Code).To(Equal(http.StatusForbidden))
 		Expect(recorder.Body.String()).To(ContainSubstring("Authorization not allowed for user 'test'"))
 		Expect(next.(*NoopHandler).called).To(BeFalse())
+
+		hostname, err := os.Hostname()
+		Expect(err).ToNot(HaveOccurred())
+		logOutput := logBuffer.String()
+		Expect(logOutput).To(ContainSubstring(`"client_ip":"10.0.0.2:9999"`))
+		Expect(logOutput).To(ContainSubstring(fmt.Sprintf(`"container_id":"%s"`, hostname)))
+		Expect(logOutput).To(ContainSubstring(`"payload_context":"Bearer"`))
 	})
 })
