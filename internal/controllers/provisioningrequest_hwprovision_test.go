@@ -168,7 +168,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{cr}...)
+		c = fakeclient.GetFakeClientFromObjects([]client.Object{cr}...)
 		reconciler = &ProvisioningRequestReconciler{
 			Client: c,
 			Logger: logger,
@@ -359,7 +359,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 			},
 		}
 
-		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{cr}...)
+		c = fakeclient.GetFakeClientFromObjects([]client.Object{cr}...)
 		reconciler = &ProvisioningRequestReconciler{
 			Client: c,
 			Logger: logger,
@@ -622,7 +622,7 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 			},
 		}
 
-		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{cr}...)
+		c = fakeclient.GetFakeClientFromObjects([]client.Object{cr}...)
 		reconciler = &ProvisioningRequestReconciler{
 			Client: c,
 			Logger: logger,
@@ -803,7 +803,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{cr}...)
+		c = fakeclient.GetFakeClientFromObjects([]client.Object{cr}...)
 		reconciler = &ProvisioningRequestReconciler{
 			Client: c,
 			Logger: logger,
@@ -1087,7 +1087,7 @@ var _ = Describe("updateAllocatedNodeHostMap", func() {
 			},
 		}
 
-		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{cr}...)
+		c = fakeclient.GetFakeClientFromObjects([]client.Object{cr}...)
 		reconciler = &ProvisioningRequestReconciler{
 			Client: c,
 			Logger: logger,
@@ -1219,7 +1219,7 @@ var _ = Describe("waitForHardwareData", func() {
 			},
 		}
 
-		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{cr, ct}...)
+		c = fakeclient.GetFakeClientFromObjects([]client.Object{cr, ct}...)
 		reconciler = &ProvisioningRequestReconciler{
 			Client: c,
 			Logger: logger,
@@ -1322,7 +1322,7 @@ var _ = Describe("checkExistingNodeAllocationRequest", func() {
 			},
 		}
 
-		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{cr}...)
+		c = fakeclient.GetFakeClientFromObjects([]client.Object{cr}...)
 		reconciler = &ProvisioningRequestReconciler{
 			Client: c,
 			Logger: logger,
@@ -1553,7 +1553,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 			},
 		}
 
-		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{cr, ct}...)
+		c = fakeclient.GetFakeClientFromObjects([]client.Object{cr, ct}...)
 		reconciler = &ProvisioningRequestReconciler{
 			Client: c,
 			Logger: logger,
@@ -1905,7 +1905,7 @@ var _ = Describe("ProvisioningRequest Status Update After Hardware Failure", fun
 			},
 		}
 
-		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{cr, template}...)
+		c = fakeclient.GetFakeClientFromObjects([]client.Object{cr, template}...)
 		reconciler = &ProvisioningRequestReconciler{
 			Client: c,
 			Logger: logger,
@@ -2114,7 +2114,7 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			},
 		}
 
-		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{pr}...)
+		c = fakeclient.GetFakeClientFromObjects([]client.Object{pr}...)
 		reconciler = &ProvisioningRequestReconciler{
 			Client: c,
 			Logger: logger,
@@ -2762,7 +2762,7 @@ var _ = Describe("updateInfrastructureResourceStatuses", func() {
 			},
 		}
 
-		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{cr}...)
+		c = fakeclient.GetFakeClientFromObjects([]client.Object{cr}...)
 		task = &provisioningRequestReconcilerTask{
 			logger: logger,
 			client: c,

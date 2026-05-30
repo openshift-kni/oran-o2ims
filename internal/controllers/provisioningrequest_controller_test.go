@@ -5802,7 +5802,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 	}
 
 	It("should use defaults only when no hwMgmtParameters in PR", func() {
-		c = fakeclient.GetFakeClientFromObjects(scheme, createHwProfiles()...)
+		c = fakeclient.GetFakeClientFromObjects(createHwProfiles()...)
 		task = buildTask(c, `{"nodeClusterName": "test"}`)
 
 		err := task.validateAndMergeHwMgmtInput(ctx, ct)
@@ -5817,7 +5817,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 	})
 
 	It("should merge hwMgmtParameters over defaults", func() {
-		c = fakeclient.GetFakeClientFromObjects(scheme, createHwProfiles()...)
+		c = fakeclient.GetFakeClientFromObjects(createHwProfiles()...)
 		task = buildTask(c, `{
 			"nodeClusterName": "test",
 			"hwMgmtParameters": {
@@ -5847,7 +5847,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 				{Name: "controller", Role: "master", HwProfile: "profile-64G"},
 			},
 		}
-		c = fakeclient.GetFakeClientFromObjects(scheme, createHwProfiles()...)
+		c = fakeclient.GetFakeClientFromObjects(createHwProfiles()...)
 		task = buildTask(c, `{
 			"nodeClusterName": "test",
 			"hwMgmtParameters": {
@@ -5874,7 +5874,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 				{Name: "controller", Role: "master", ResourcePoolId: "pool-1"},
 			},
 		}
-		c = fakeclient.GetFakeClientFromObjects(scheme)
+		c = fakeclient.GetFakeClientFromObjects()
 		task = buildTask(c, `{"nodeClusterName": "test"}`)
 
 		err := task.validateAndMergeHwMgmtInput(ctx, ct)
@@ -5883,7 +5883,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 	})
 
 	It("should override timeout from defaults with PR parameter", func() {
-		c = fakeclient.GetFakeClientFromObjects(scheme, createHwProfiles()...)
+		c = fakeclient.GetFakeClientFromObjects(createHwProfiles()...)
 		task = buildTask(c, `{
 			"nodeClusterName": "test",
 			"hwMgmtParameters": {
@@ -5902,7 +5902,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 				{Name: "controller", Role: "master", ResourcePoolId: "pool-1"},
 			},
 		}
-		c = fakeclient.GetFakeClientFromObjects(scheme, createHwProfiles()...)
+		c = fakeclient.GetFakeClientFromObjects(createHwProfiles()...)
 		task = buildTask(c, `{"nodeClusterName": "test"}`)
 
 		err := task.validateAndMergeHwMgmtInput(ctx, ct)
@@ -5917,7 +5917,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 				{Name: "controller", Role: "master", ResourcePoolId: "pool-1"},
 			},
 		}
-		c = fakeclient.GetFakeClientFromObjects(scheme)
+		c = fakeclient.GetFakeClientFromObjects()
 		task = buildTask(c, `{"nodeClusterName": "test"}`)
 
 		err := task.validateAndMergeHwMgmtInput(ctx, ct)
@@ -5926,7 +5926,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 	})
 
 	It("should return error for negative timeout in PR override", func() {
-		c = fakeclient.GetFakeClientFromObjects(scheme, createHwProfiles()...)
+		c = fakeclient.GetFakeClientFromObjects(createHwProfiles()...)
 		task = buildTask(c, `{
 			"nodeClusterName": "test",
 			"hwMgmtParameters": {
@@ -5945,7 +5945,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 				ObjectMeta: metav1.ObjectMeta{Name: "profile-spr-single-processor-64G", Namespace: utils.InventoryNamespace},
 			},
 		)
-		c = fakeclient.GetFakeClientFromObjects(scheme, hwProfiles...)
+		c = fakeclient.GetFakeClientFromObjects(hwProfiles...)
 		task = buildTask(c, `{
 			"nodeClusterName": "test",
 			"hwMgmtParameters": {
@@ -5973,7 +5973,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 				ObjectMeta: metav1.ObjectMeta{Name: "profile-spr-single-processor-64G", Namespace: utils.InventoryNamespace},
 			},
 		)
-		c = fakeclient.GetFakeClientFromObjects(scheme, hwProfiles...)
+		c = fakeclient.GetFakeClientFromObjects(hwProfiles...)
 		task = buildTask(c, `{
 			"nodeClusterName": "test",
 			"hwMgmtParameters": {

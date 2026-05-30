@@ -151,7 +151,7 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 			},
 		}
 
-		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{ct, clusterInstanceCRD}...)
+		c = fakeclient.GetFakeClientFromObjects([]client.Object{ct, clusterInstanceCRD}...)
 		reconciler = &ClusterTemplateReconciler{
 			Client: c,
 			Logger: logger,
@@ -324,7 +324,7 @@ var _ = Describe("enqueueClusterTemplatesForConfigmap", func() {
 		for _, ct := range cts {
 			objs = append(objs, ct)
 		}
-		c = fakeclient.GetFakeClientFromObjects(scheme, objs...)
+		c = fakeclient.GetFakeClientFromObjects(objs...)
 
 		r = &ClusterTemplateReconciler{
 			Client: c,
@@ -580,7 +580,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		clusterInstanceCRD, err := ctlrutils.BuildTestClusterInstanceCRD(ctlrutils.TestClusterInstanceSpecOk)
 		Expect(err).ToNot(HaveOccurred())
 
-		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{ct, clusterInstanceCRD}...)
+		c = fakeclient.GetFakeClientFromObjects([]client.Object{ct, clusterInstanceCRD}...)
 
 		t = &clusterTemplateReconcilerTask{
 			client: c,
@@ -752,7 +752,7 @@ var _ = Describe("validateConfigmapReference", func() {
 		ctx = context.Background()
 		clusterInstanceCRD, err := ctlrutils.BuildTestClusterInstanceCRD(ctlrutils.TestClusterInstanceSpecOk)
 		Expect(err).ToNot(HaveOccurred())
-		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{clusterInstanceCRD}...)
+		c = fakeclient.GetFakeClientFromObjects([]client.Object{clusterInstanceCRD}...)
 	})
 
 	It("should validate a valid configmap", func() {
@@ -1005,7 +1005,7 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		c = fakeclient.GetFakeClientFromObjects(scheme)
+		c = fakeclient.GetFakeClientFromObjects()
 	})
 
 	It("should validate a cluster template name", func() {
@@ -1131,7 +1131,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		c = fakeclient.GetFakeClientFromObjects(scheme)
+		c = fakeclient.GetFakeClientFromObjects()
 	})
 
 	It("Generate templateID", func() {
@@ -1699,7 +1699,7 @@ var _ = Describe("validateUpgradeDefaultsConfigmap", func() {
 			},
 		}
 
-		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{ct}...)
+		c = fakeclient.GetFakeClientFromObjects([]client.Object{ct}...)
 
 		t = &clusterTemplateReconcilerTask{
 			client: c,

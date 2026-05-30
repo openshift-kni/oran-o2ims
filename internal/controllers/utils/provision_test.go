@@ -314,9 +314,6 @@ var _ = Describe("ClusterIsReadyForPolicyConfig", func() {
 		clusterName = "cluster-1"
 	)
 
-	suitescheme.AddKnownTypes(clusterv1.SchemeGroupVersion, &clusterv1.ManagedCluster{})
-	suitescheme.AddKnownTypes(clusterv1.SchemeGroupVersion, &clusterv1.ManagedClusterList{})
-
 	BeforeEach(func() {
 		// Define the needed resources.
 		crs := []client.Object{
@@ -332,7 +329,7 @@ var _ = Describe("ClusterIsReadyForPolicyConfig", func() {
 			},
 		}
 
-		fakeClient = fakeclient.GetFakeClientFromObjects(suitescheme, crs...)
+		fakeClient = fakeclient.GetFakeClientFromObjects(crs...)
 	})
 
 	It("returns false and no error if the cluster doesn't exist", func() {
@@ -490,7 +487,7 @@ var _ = Describe("ValidateDefaultConfigmapSchema", func() {
 	)
 
 	BeforeEach(func() {
-		fakeClient = fakeclient.GetFakeClientFromObjects(suitescheme)
+		fakeClient = fakeclient.GetFakeClientFromObjects()
 	})
 
 	It("returns an error when the ClusterInstance CRD does not exist", func() {

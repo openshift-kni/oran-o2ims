@@ -312,7 +312,7 @@ defaultHugepagesSize: "1G"`,
 			},
 		}
 
-		c = fakeclient.GetFakeClientFromObjects(scheme, crs...)
+		c = fakeclient.GetFakeClientFromObjects(crs...)
 
 		// Reconcile the ClusterTemplate.
 		CTReconciler = &ClusterTemplateReconciler{
@@ -1635,7 +1635,7 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 			},
 		}
 
-		c = fakeclient.GetFakeClientFromObjects(scheme, crs...)
+		c = fakeclient.GetFakeClientFromObjects(crs...)
 		// Reconcile the ClusterTemplate.
 		CTReconciler = &ClusterTemplateReconciler{
 			Client: c,
@@ -1876,7 +1876,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			},
 		}
 
-		c = fakeclient.GetFakeClientFromObjects(scheme, crs...)
+		c = fakeclient.GetFakeClientFromObjects(crs...)
 
 		// Populate the NodeAllocationRequest without creating it.
 		nodeAllocationRequest = &hwmgmtv1alpha1.NodeAllocationRequest{

@@ -139,7 +139,7 @@ var _ = Describe("Inventory Controller", func() {
 			objs = append(objs, pods...)
 
 			// Get the fake client.
-			fakeClient := fakeclient.GetFakeClientFromObjects(scheme, objs...)
+			fakeClient := fakeclient.GetFakeClientFromObjects(objs...)
 
 			// Initialize the O-Cloud Manager reconciler.
 			r := &Reconciler{

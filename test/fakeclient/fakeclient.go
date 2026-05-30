@@ -13,72 +13,92 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
+	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	openshiftv1 "github.com/openshift/api/config/v1"
 	openshiftoperatorv1 "github.com/openshift/api/operator/v1"
+	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
+	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 )
 
 const inventoryCRDName = "inventories.ocloud.openshift.io"
 
-// GetFakeClientFromObjects creates a fake Kubernetes client with comprehensive
-// test infrastructure: status subresources for all custom resource types known
-// to the scheme, the Inventory CRD for owner reference testing, a field indexer
-// for AllocatedNode lookups (if the type is in the scheme), and an
-// SSA-compatible wrapper.
-func GetFakeClientFromObjects(scheme *runtime.Scheme, objs ...client.Object) client.WithWatch {
-	builder := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithObjects(objs...)
+// Scheme is the shared scheme for all unit tests that use GetFakeClientFromObjects.
+// All custom resource types are registered here so callers don't need to manage
+// scheme setup individually.
+var Scheme = clientgoscheme.Scheme
 
+func init() {
+	Scheme.AddKnownTypes(inventoryv1alpha1.GroupVersion,
+		&inventoryv1alpha1.Inventory{}, &inventoryv1alpha1.InventoryList{})
+	Scheme.AddKnownTypes(provisioningv1alpha1.GroupVersion,
+		&provisioningv1alpha1.ClusterTemplate{}, &provisioningv1alpha1.ClusterTemplateList{},
+		&provisioningv1alpha1.ProvisioningRequest{}, &provisioningv1alpha1.ProvisioningRequestList{})
+	Scheme.AddKnownTypes(siteconfig.GroupVersion,
+		&siteconfig.ClusterInstance{}, &siteconfig.ClusterInstanceList{})
+	Scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion,
+		&hwmgmtv1alpha1.HardwareProfile{}, &hwmgmtv1alpha1.HardwareProfileList{},
+		&hwmgmtv1alpha1.NodeAllocationRequest{},
+		&hwmgmtv1alpha1.AllocatedNode{}, &hwmgmtv1alpha1.AllocatedNodeList{})
+	Scheme.AddKnownTypes(policiesv1.SchemeGroupVersion,
+		&policiesv1.Policy{}, &policiesv1.PolicyList{})
+	Scheme.AddKnownTypes(clusterv1.SchemeGroupVersion,
+		&clusterv1.ManagedCluster{}, &clusterv1.ManagedClusterList{})
+	Scheme.AddKnownTypes(openshiftv1.SchemeGroupVersion, &openshiftv1.ClusterVersion{})
+	Scheme.AddKnownTypes(openshiftoperatorv1.SchemeGroupVersion, &openshiftoperatorv1.IngressController{})
+	Scheme.AddKnownTypes(apiextensionsv1.SchemeGroupVersion, &apiextensionsv1.CustomResourceDefinition{})
+	Scheme.AddKnownTypes(assistedservicev1beta1.GroupVersion,
+		&assistedservicev1beta1.Agent{}, &assistedservicev1beta1.AgentList{})
+	Scheme.AddKnownTypes(ibguv1alpha1.SchemeGroupVersion, &ibguv1alpha1.ImageBasedGroupUpgrade{})
+	utilruntime.Must(metal3v1alpha1.AddToScheme(Scheme))
+	utilruntime.Must(hivev1.AddToScheme(Scheme))
+}
+
+// GetFakeClientFromObjects creates a fake Kubernetes client with comprehensive
+// test infrastructure: status subresources for all custom resource types, the
+// Inventory CRD for owner reference testing, a field indexer for AllocatedNode
+// lookups, and an SSA-compatible wrapper.
+func GetFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 	inventoryCRD := &apiextensionsv1.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: inventoryCRDName,
 		},
 	}
-	if isTypeRegistered(scheme, inventoryCRD) {
-		builder.WithObjects(inventoryCRD)
-	}
 
-	statusSubresources := []client.Object{
-		&inventoryv1alpha1.Inventory{},
-		&provisioningv1alpha1.ClusterTemplate{},
-		&provisioningv1alpha1.ProvisioningRequest{},
-		&siteconfig.ClusterInstance{},
-		&clusterv1.ManagedCluster{},
-		&hwmgmtv1alpha1.NodeAllocationRequest{},
-		&hwmgmtv1alpha1.AllocatedNode{},
-		&openshiftv1.ClusterVersion{},
-		&openshiftoperatorv1.IngressController{},
-		&policiesv1.Policy{},
-	}
-	for _, obj := range statusSubresources {
-		if isTypeRegistered(scheme, obj) {
-			builder.WithStatusSubresource(obj)
-		}
-	}
-
-	if isTypeRegistered(scheme, &hwmgmtv1alpha1.AllocatedNode{}) {
-		builder.WithIndex(&hwmgmtv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", func(obj client.Object) []string {
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(Scheme).
+		WithObjects(objs...).
+		WithObjects(inventoryCRD).
+		WithStatusSubresource(
+			&inventoryv1alpha1.Inventory{},
+			&provisioningv1alpha1.ClusterTemplate{},
+			&provisioningv1alpha1.ProvisioningRequest{},
+			&siteconfig.ClusterInstance{},
+			&clusterv1.ManagedCluster{},
+			&hwmgmtv1alpha1.NodeAllocationRequest{},
+			&hwmgmtv1alpha1.AllocatedNode{},
+			&openshiftv1.ClusterVersion{},
+			&openshiftoperatorv1.IngressController{},
+			&policiesv1.Policy{},
+		).
+		WithIndex(&hwmgmtv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest", func(obj client.Object) []string {
 			return []string{obj.(*hwmgmtv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
-		})
-	}
+		}).
+		Build()
 
-	return &SSACompatibleClient{WithWatch: builder.Build()}
-}
-
-func isTypeRegistered(scheme *runtime.Scheme, obj runtime.Object) bool {
-	_, _, err := scheme.ObjectKinds(obj)
-	return err == nil
+	return &SSACompatibleClient{WithWatch: fakeClient}
 }
 
 // SSACompatibleClient wraps a fake client and converts Server-Side Apply operations

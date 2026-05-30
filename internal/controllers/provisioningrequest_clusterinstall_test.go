@@ -148,7 +148,7 @@ var _ = Describe("handleRenderClusterInstance", func() {
 		// Use helper function to get ConfigMap with ClusterInstance defaults
 		cm := getClusterInstanceDefaultsConfigMap(ciDefaultsCm, ctNamespace)
 
-		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{cr, ct, cm}...)
+		c = fakeclient.GetFakeClientFromObjects([]client.Object{cr, ct, cm}...)
 		reconciler = &ProvisioningRequestReconciler{
 			Client: c,
 			Logger: logger,
@@ -320,7 +320,7 @@ var _ = Describe("handleClusterInstallation", func() {
 		// Use helper function to get ConfigMap with ClusterInstance defaults
 		cm := getClusterInstanceDefaultsConfigMap(ciDefaultsCm, ctNamespace)
 
-		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{cr, ct, cm}...)
+		c = fakeclient.GetFakeClientFromObjects([]client.Object{cr, ct, cm}...)
 		reconciler = &ProvisioningRequestReconciler{
 			Client: c,
 			Logger: logger,

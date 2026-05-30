@@ -80,7 +80,7 @@ var _ = Describe("createPolicyTemplateConfigMap", func() {
 			},
 		}
 
-		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{cr}...)
+		c = fakeclient.GetFakeClientFromObjects([]client.Object{cr}...)
 		reconciler = &ProvisioningRequestReconciler{
 			Client: c,
 			Logger: logger,
@@ -209,7 +209,7 @@ var _ = Describe("createClusterInstanceBMCSecrets", func() {
 			},
 		}
 
-		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{cr}...)
+		c = fakeclient.GetFakeClientFromObjects([]client.Object{cr}...)
 		reconciler = &ProvisioningRequestReconciler{
 			Client: c,
 			Logger: logger,
@@ -353,7 +353,7 @@ var _ = Describe("createOrUpdateClusterResources", func() {
 			},
 			Data: map[string][]byte{},
 		}
-		c = fakeclient.GetFakeClientFromObjects(scheme, []client.Object{cr, pull_secret}...)
+		c = fakeclient.GetFakeClientFromObjects([]client.Object{cr, pull_secret}...)
 		reconciler = &ProvisioningRequestReconciler{
 			Client: c,
 			Logger: logger,
