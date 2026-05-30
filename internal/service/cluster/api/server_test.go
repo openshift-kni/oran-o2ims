@@ -74,7 +74,7 @@ var _ = Describe("Cluster Server", func() {
 					NodeClusterTypeId: testUUID,
 				})
 
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetNodeClusterTypeAlarmDictionary500ApplicationProblemPlusJSONResponse{}))
 				Expect(resp.(apigenerated.GetNodeClusterTypeAlarmDictionary500ApplicationProblemPlusJSONResponse).Status).To(Equal(http.StatusInternalServerError))
 			})
@@ -93,7 +93,7 @@ var _ = Describe("Cluster Server", func() {
 					NodeClusterTypeId: testUUID,
 				})
 
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetNodeClusterTypeAlarmDictionary404ApplicationProblemPlusJSONResponse{}))
 				Expect(resp.(apigenerated.GetNodeClusterTypeAlarmDictionary404ApplicationProblemPlusJSONResponse).Status).To(Equal(http.StatusNotFound))
 			})
@@ -116,7 +116,7 @@ var _ = Describe("Cluster Server", func() {
 					NodeClusterTypeId: testUUID,
 				})
 
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetNodeClusterTypeAlarmDictionary200JSONResponse{}))
 				Expect(resp.(apigenerated.GetNodeClusterTypeAlarmDictionary200JSONResponse).AlarmDictionaryId).To(Equal(dictID))
 			})
@@ -138,7 +138,7 @@ var _ = Describe("Cluster Server", func() {
 
 			resp, err := server.GetAlarmDictionaries(ctx, apigenerated.GetAlarmDictionariesRequestObject{})
 
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetAlarmDictionaries500ApplicationProblemPlusJSONResponse{}))
 		})
 	})
@@ -152,7 +152,7 @@ var _ = Describe("Cluster Server", func() {
 
 				resp, err := server.GetAlarmDictionaries(ctx, apigenerated.GetAlarmDictionariesRequestObject{})
 
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetAlarmDictionaries500ApplicationProblemPlusJSONResponse{}))
 				Expect(resp.(apigenerated.GetAlarmDictionaries500ApplicationProblemPlusJSONResponse).Status).To(Equal(http.StatusInternalServerError))
 			})
@@ -168,7 +168,7 @@ var _ = Describe("Cluster Server", func() {
 
 				resp, err := server.GetAlarmDictionaries(ctx, apigenerated.GetAlarmDictionariesRequestObject{})
 
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetAlarmDictionaries200JSONResponse{}))
 				Expect(resp.(apigenerated.GetAlarmDictionaries200JSONResponse)).To(HaveLen(0))
 			})
@@ -200,7 +200,7 @@ var _ = Describe("Cluster Server", func() {
 
 				resp, err := server.GetAlarmDictionaries(ctx, apigenerated.GetAlarmDictionariesRequestObject{})
 
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetAlarmDictionaries200JSONResponse{}))
 				Expect(resp.(apigenerated.GetAlarmDictionaries200JSONResponse)).To(HaveLen(1))
 				Expect(resp.(apigenerated.GetAlarmDictionaries200JSONResponse)[0].AlarmDictionaryId).To(Equal(testUUID))
@@ -220,7 +220,7 @@ var _ = Describe("Cluster Server", func() {
 
 				resp, err := server.GetAlarmDictionaries(ctx, apigenerated.GetAlarmDictionariesRequestObject{})
 
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetAlarmDictionaries500ApplicationProblemPlusJSONResponse{}))
 				Expect(resp.(apigenerated.GetAlarmDictionaries500ApplicationProblemPlusJSONResponse).Detail).To(ContainSubstring("thanos"))
 			})
@@ -238,7 +238,7 @@ var _ = Describe("Cluster Server", func() {
 					AlarmDictionaryId: testUUID,
 				})
 
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetAlarmDictionary500ApplicationProblemPlusJSONResponse{}))
 				Expect(resp.(apigenerated.GetAlarmDictionary500ApplicationProblemPlusJSONResponse).Status).To(Equal(http.StatusInternalServerError))
 			})
@@ -257,7 +257,7 @@ var _ = Describe("Cluster Server", func() {
 					AlarmDictionaryId: testUUID,
 				})
 
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetAlarmDictionary404ApplicationProblemPlusJSONResponse{}))
 				Expect(resp.(apigenerated.GetAlarmDictionary404ApplicationProblemPlusJSONResponse).Status).To(Equal(http.StatusNotFound))
 			})
@@ -281,7 +281,7 @@ var _ = Describe("Cluster Server", func() {
 					AlarmDictionaryId: testUUID,
 				})
 
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetAlarmDictionary200JSONResponse{}))
 				Expect(resp.(apigenerated.GetAlarmDictionary200JSONResponse).AlarmDictionaryId).To(Equal(testUUID))
 				Expect(resp.(apigenerated.GetAlarmDictionary200JSONResponse).AlarmDefinition).To(HaveLen(1))
@@ -311,7 +311,7 @@ var _ = Describe("Cluster Server", func() {
 					AlarmDictionaryId: testUUID,
 				})
 
-				Expect(err).To(BeNil())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetAlarmDictionary200JSONResponse{}))
 				Expect(resp.(apigenerated.GetAlarmDictionary200JSONResponse).AlarmDefinition).To(HaveLen(2))
 			})
