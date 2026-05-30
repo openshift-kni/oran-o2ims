@@ -152,7 +152,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 		It("should return nil for empty firmware specs", func() {
 			spec := hwmgmtv1alpha1.HardwareProfileSpec{}
 			err := validateFirmwareUpdateSpec(spec)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should return error when BIOS version is set but URL is empty", func() {
@@ -215,7 +215,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 				},
 			}
 			err := validateFirmwareUpdateSpec(spec)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should return error when NIC version is set but URL is empty", func() {
@@ -260,7 +260,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 				},
 			}
 			err := validateFirmwareUpdateSpec(spec)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should skip NIC validation when version is empty", func() {
@@ -273,7 +273,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 				},
 			}
 			err := validateFirmwareUpdateSpec(spec)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should validate mixed firmware specs with BIOS, BMC, and NIC", func() {
@@ -294,7 +294,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 				},
 			}
 			err := validateFirmwareUpdateSpec(spec)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 
@@ -499,7 +499,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			Expect(fakeClient.Create(ctx, hfc)).To(Succeed())
 
 			changeDetected, err := isHostFirmwareComponentsChangeDetectedAndValid(ctx, fakeClient, bmh)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(changeDetected).To(BeFalse())
 		})
 
@@ -521,7 +521,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			Expect(fakeClient.Create(ctx, hfc)).To(Succeed())
 
 			changeDetected, err := isHostFirmwareComponentsChangeDetectedAndValid(ctx, fakeClient, bmh)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(changeDetected).To(BeFalse())
 		})
 
@@ -543,7 +543,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			Expect(fakeClient.Create(ctx, hfc)).To(Succeed())
 
 			changeDetected, err := isHostFirmwareComponentsChangeDetectedAndValid(ctx, fakeClient, bmh)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(changeDetected).To(BeFalse())
 		})
 
@@ -565,7 +565,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			Expect(fakeClient.Create(ctx, hfc)).To(Succeed())
 
 			changeDetected, err := isHostFirmwareComponentsChangeDetectedAndValid(ctx, fakeClient, bmh)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(changeDetected).To(BeTrue())
 		})
 	})
@@ -840,7 +840,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			}
 
 			hfc, err := createHostFirmwareComponents(ctx, fakeClient, bmh, spec)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(hfc).ToNot(BeNil())
 			Expect(hfc.Name).To(Equal("test-bmh"))
 			Expect(hfc.Namespace).To(Equal("test-namespace"))
@@ -851,7 +851,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			// Verify it was created in the cluster
 			createdHFC := &metal3v1alpha1.HostFirmwareComponents{}
 			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-namespace"}, createdHFC)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(createdHFC.Spec.Updates).To(HaveLen(1))
 		})
 
@@ -860,7 +860,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			spec := hwmgmtv1alpha1.HardwareProfileSpec{}
 
 			hfc, err := createHostFirmwareComponents(ctx, fakeClient, bmh, spec)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(hfc).ToNot(BeNil())
 			Expect(hfc.Spec.Updates).To(BeEmpty())
 		})
@@ -890,12 +890,12 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 				Name:      "test-bmh",
 				Namespace: "test-namespace",
 			}, newUpdates)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify the update
 			updatedHFC := &metal3v1alpha1.HostFirmwareComponents{}
 			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-namespace"}, updatedHFC)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedHFC.Spec.Updates).To(HaveLen(2))
 		})
 
@@ -925,7 +925,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			Expect(fakeClient.Create(ctx, hfc)).To(Succeed())
 
 			retrievedHFC, err := getHostFirmwareComponents(ctx, fakeClient, "test-bmh", "test-namespace")
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(retrievedHFC).ToNot(BeNil())
 			Expect(retrievedHFC.Name).To(Equal("test-bmh"))
 			Expect(retrievedHFC.Namespace).To(Equal("test-namespace"))
@@ -981,7 +981,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			// validateOnly=true: reports update required but does not create HFC
 			validateOnly := true
 			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(required).To(BeTrue())
 			hfc := &metal3v1alpha1.HostFirmwareComponents{}
 			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-namespace"}, hfc)
@@ -991,10 +991,10 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			// validateOnly=false: creates HFC
 			validateOnly = false
 			required, err = IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(required).To(BeTrue())
 			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-namespace"}, hfc)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should return false when no update is needed", func() {
@@ -1019,13 +1019,13 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			// validateOnly=true: reports no update required
 			validateOnly := true
 			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(required).To(BeFalse())
 
 			// validateOnly=false: reports no update required
 			validateOnly = false
 			required, err = IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(required).To(BeFalse())
 		})
 
@@ -1051,7 +1051,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			// validateOnly=true: reports update required but does not modify HFC
 			validateOnly := true
 			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(required).To(BeTrue())
 			unchangedHFC := &metal3v1alpha1.HostFirmwareComponents{}
 			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-namespace"}, unchangedHFC)).To(Succeed())
@@ -1060,7 +1060,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			// validateOnly=false: updates HFC with new firmware URL
 			validateOnly = false
 			required, err = IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(required).To(BeTrue())
 			updatedHFC := &metal3v1alpha1.HostFirmwareComponents{}
 			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-namespace"}, updatedHFC)).To(Succeed())
@@ -1099,7 +1099,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			// validateOnly=true: reports update required but does not modify HFC
 			validateOnly := true
 			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(required).To(BeTrue())
 			unchangedHFC := &metal3v1alpha1.HostFirmwareComponents{}
 			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-namespace"}, unchangedHFC)).To(Succeed())
@@ -1108,13 +1108,13 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			// validateOnly=false: updates HFC with updates
 			validateOnly = false
 			required, err = IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(required).To(BeTrue())
 
 			// Verify HFC was updated with both firmware URLs
 			updatedHFC := &metal3v1alpha1.HostFirmwareComponents{}
 			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-namespace"}, updatedHFC)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedHFC.Spec.Updates).To(HaveLen(2))
 
 			// Check that both components are included
@@ -1139,7 +1139,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			spec := hwmgmtv1alpha1.HardwareProfileSpec{}
 
 			err := validateHFCHasRequiredComponents(status, spec)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should return error when BIOS firmware required but not available", func() {
@@ -1157,7 +1157,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			}
 
 			err := validateHFCHasRequiredComponents(status, spec)
-			Expect(err).ToNot(BeNil())
+			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("BIOS firmware update requested but BIOS component not found"))
 		})
 
@@ -1176,7 +1176,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			}
 
 			err := validateHFCHasRequiredComponents(status, spec)
-			Expect(err).ToNot(BeNil())
+			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("BMC firmware update requested but BMC component not found"))
 		})
 
@@ -1194,7 +1194,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			}
 
 			err := validateHFCHasRequiredComponents(status, spec)
-			Expect(err).ToNot(BeNil())
+			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("NIC firmware update requested but no NIC components found"))
 		})
 
@@ -1215,7 +1215,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			}
 
 			err := validateHFCHasRequiredComponents(status, spec)
-			Expect(err).ToNot(BeNil())
+			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("NIC firmware update requested for 3 NICs but only 1 NIC components found"))
 		})
 
@@ -1244,7 +1244,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			}
 
 			err := validateHFCHasRequiredComponents(status, spec)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should skip empty NIC firmware specs when counting required NICs", func() {
@@ -1265,7 +1265,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			}
 
 			err := validateHFCHasRequiredComponents(status, spec)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should return error when multiple components are missing", func() {
@@ -1287,7 +1287,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			}
 
 			err := validateHFCHasRequiredComponents(status, spec)
-			Expect(err).ToNot(BeNil())
+			Expect(err).To(HaveOccurred())
 			// Should fail on first missing component (BIOS)
 			Expect(err.Error()).To(ContainSubstring("BIOS firmware update requested but BIOS component not found"))
 		})
