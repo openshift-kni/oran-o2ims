@@ -13,6 +13,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -37,10 +38,12 @@ const inventoryCRDName = "inventories.ocloud.openshift.io"
 
 // Scheme is the shared scheme for all unit tests that use GetFakeClientFromObjects.
 // All custom resource types are registered here so callers don't need to manage
-// scheme setup individually.
-var Scheme = clientgoscheme.Scheme
+// scheme setup individually. Uses a dedicated scheme rather than the global
+// clientgoscheme.Scheme to avoid leaking type registrations across test suites.
+var Scheme = runtime.NewScheme()
 
 func init() {
+	utilruntime.Must(clientgoscheme.AddToScheme(Scheme))
 	Scheme.AddKnownTypes(inventoryv1alpha1.GroupVersion,
 		&inventoryv1alpha1.Inventory{}, &inventoryv1alpha1.InventoryList{})
 	Scheme.AddKnownTypes(provisioningv1alpha1.GroupVersion,
