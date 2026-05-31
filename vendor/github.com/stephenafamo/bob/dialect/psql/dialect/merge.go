@@ -7,6 +7,7 @@ import (
 
 	"github.com/stephenafamo/bob"
 	"github.com/stephenafamo/bob/clause"
+	"github.com/stephenafamo/bob/internal"
 )
 
 // MergeWhenType represents the type of WHEN clause in MERGE statement
@@ -113,19 +114,10 @@ func (u MergeUsing) WriteSQL(ctx context.Context, w io.StringWriter, d bob.Diale
 		w.WriteString("ONLY ")
 	}
 
-	// Write source (table or subquery)
-	_, isQuery := u.Source.(bob.Query)
-	if isQuery {
-		w.WriteString("(")
-	}
-
+	// Write source (table or subquery). Subqueries are parenthesized by BaseQuery.WriteSQL.
 	sourceArgs, err := bob.Express(ctx, w, d, start, u.Source)
 	if err != nil {
 		return nil, err
-	}
-
-	if isQuery {
-		w.WriteString(")")
 	}
 
 	if u.Alias != "" {
@@ -200,18 +192,16 @@ func (a MergeAction) WriteSQL(ctx context.Context, w io.StringWriter, d bob.Dial
 }
 
 func (a MergeAction) writeInsert(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+	var args []any
+
 	w.WriteString("INSERT")
 
-	if len(a.Columns) > 0 {
-		w.WriteString(" (")
-		for i, col := range a.Columns {
-			if i > 0 {
-				w.WriteString(", ")
-			}
-			d.WriteQuoted(w, col)
-		}
-		w.WriteString(")")
+	colArgs, err := bob.ExpressSlice(ctx, w, d, start, internal.QuoteIdentifiers(a.Columns), " (", ", ", ")")
+	if err != nil {
+		return nil, err
 	}
+	args = append(args, colArgs...)
+	start += len(colArgs)
 
 	if a.Overriding != "" {
 		w.WriteString(" OVERRIDING ")
@@ -219,18 +209,17 @@ func (a MergeAction) writeInsert(ctx context.Context, w io.StringWriter, d bob.D
 		w.WriteString(" VALUE")
 	}
 
+	valArgs, err := bob.ExpressSlice(ctx, w, d, start, a.Values, " VALUES (", ", ", ")")
+	if err != nil {
+		return nil, err
+	}
 	if len(a.Values) > 0 {
-		w.WriteString(" VALUES (")
-		args, err := bob.ExpressSlice(ctx, w, d, start, a.Values, "", ", ", "")
-		if err != nil {
-			return nil, err
-		}
-		w.WriteString(")")
-		return args, nil
+		return append(args, valArgs...), nil
 	}
 
 	w.WriteString(" DEFAULT VALUES")
-	return nil, nil
+
+	return args, nil
 }
 
 func (a MergeAction) writeUpdate(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {

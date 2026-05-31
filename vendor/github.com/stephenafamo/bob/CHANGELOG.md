@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.45.0] - 2026-05-28
+
+### Added
+
+- Added `Schema()` method to dialect `View` types (PostgreSQL, SQLite). (thanks @atzedus)
+- Added `ColumnsExpr()` method on `psql.View` for parity with MySQL and SQLite views. (thanks @atzedus)
+- Added `um.SetExpr` / `im.SetExpr` / `mm.SetExpr` for SET (and PostgreSQL/SQLite `im.SetExpr` for `ON CONFLICT DO UPDATE SET`) when the assignment LHS is a qualified or arbitrary expression — pass `dialect.Quote(...)` or another `bob.Expression`. `SetCol` / `UpdateCol` remain for a single column name (quoted automatically). (thanks @atzedus)
+
+### Changed
+
+- **BREAKING:** `psql.F` / `mysql.F` / `sqlite.F` and `dialect.NewFunction` now take `name any` (was `string`). The name is rendered with `bob.Express`; use a string for a literal function name or `dialect.Quote("schema", "fn")` for qualified names. (thanks @atzedus)
+- **BREAKING:** `mods.Set` is now a struct with a `Col any` field instead of a `[]string` alias. `um.SetCol` / `im.SetCol` / `mm.SetCol` (and MySQL `im.UpdateCol`) take a `string` column name and quote it automatically; use `SetExpr` for qualified or arbitrary LHS expressions. `SetCol(...).To(...)` / `SetExpr(...).To(...)` implement `bob.Expression` and can be passed to `um.Set` / `im.Set` / `mm.Set` to group several assignments in one mod (they still work as standalone query mods). (thanks @atzedus)
+- Godoc on `sm.With`, `sm.Window`, `wm.BasedOn` (PostgreSQL, MySQL, SQLite) notes that CTE/window names are quoted as SQL identifiers. (thanks @atzedus)
+- **BREAKING:** PostgreSQL `sm.ForUpdate`, `sm.ForNoKeyUpdate`, `sm.ForShare`, and `sm.ForKeyShare` now take `tables ...any` instead of `tables ...string`. Pass `psql.Quote(...)` (or another `Expression`) for each locked relation ([#693](https://github.com/stephenafamo/bob/issues/693)). (thanks @atzedus)
+- **BREAKING:** MySQL `sm.ForUpdate` and `sm.ForShare` now take `tables ...any` with the same semantics as PostgreSQL (`mysql.Quote(...)` when needed). (thanks @atzedus)
+- **BREAKING:** `clause.Lock.Tables` is now `[]any` instead of `[]string` (used by `FOR UPDATE` / `FOR SHARE` rendering). (thanks @atzedus)
+- **BREAKING:** `View` / `Table` `Name()` now returns the bare table (or view) name as `string`. In v0.44.0, `Name()` returned a dialect `Expression` (qualified table reference for SQL). That role moved to new methods:
+  - `NameExpr()` — what `Name()` did in v0.44.0 (on PostgreSQL and SQLite, respects `UseSchema` when schema was generated empty)
+  - `NameAsExpr()` — what `NameAs()` did in v0.44.0 (name plus table alias)
+    Update manual call sites, codegen templates, and generated models: `Users.Name()` in SQL builders → `Users.NameExpr()`, `Users.NameAs()` → `Users.NameAsExpr()`; use `Users.Name()` when you need the unqualified name string. On PostgreSQL and SQLite, `Schema()` still returns the schema when set.
+- Codegen templates and `orm.Preload` now use `NameExpr()` / `NameAsExpr()` instead of `Name()` / `NameAs()`. (thanks @atzedus)
+
+### Fixed
+
+- Fixed SQL identifier quoting in shared clause builders (CTE names/columns, window names, `ON CONFLICT ON CONSTRAINT`, `WHERE CURRENT OF`, partition/index lists, SQLite `INDEXED BY`) and PostgreSQL `MERGE`/`SetCols` column lists, table-function column definitions, and MySQL optimizer-hint table lists. Simple identifier parameters are quoted automatically; pass `dialect.Quote(...)` for qualified names in `any` slots (`From`, `OnConflict`, `FOR UPDATE OF`, etc.). (thanks @atzedus)
+- Fixed PostgreSQL `sm.From` clearing joins already on the `FROM` from_item (e.g. `sm.CrossJoin` before `sm.From`) because `SelectQuery.AppendTableRef` replaced the entire embedded `FROM` table ref. Existing joins are merged into the new primary table ref. (thanks @atzedus)
+- Fixed `FOR UPDATE` / `FOR SHARE` `OF` table lists: pass `psql.Quote(...)` / `mysql.Quote(...)` so names with spaces or qualification render correctly ([#693](https://github.com/stephenafamo/bob/issues/693)). (thanks @atzedus)
+- Fixed MySQL `sm.From(...).UseIndex` / `ForceIndex` / `IgnoreIndex` (and `*ForJoin` / `*ForOrderBy` / `*ForGroupBy` variants) not appearing in generated SQL because `FromChain.Apply` did not copy `IndexHints` onto the query. (thanks @atzedus)
+- Fixed generated models using the wrong column qualifier when a table was constructed with a non-empty schema. Codegen previously passed `table.Key` into `build*Columns` and `pkEQ` / `pkIN`, but dialect `View` / `Table` types use `schema.table` as `Alias()` whenever `schema` is set at construction. That mismatch produced SQL such as `` `users`.`id` `` in `WHERE` while `FROM` used `` `myapp`.`users` AS `myapp.users` `` (columns and primary-key expressions did not match the table alias from `NameAsExpr()`). Templates now use a `tableColumnAlias` helper: `schema.name` when `schema` is set, otherwise `table.Key`. (thanks @atzedus)
+- Fix issue with overwriting unique constraints for tables beloging to other schemas. (thanks @MD-Mushfiqur123)
+
 ## [v0.44.0] - 2026-05-21
 
 ### Added
