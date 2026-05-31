@@ -97,6 +97,9 @@ issues during code review.
 
 - Use `.ToNot()` for negated Gomega assertions, not `.NotTo()` or
   `.ShouldNot()`. The codebase is standardized on `.ToNot()`.
+- Use `Expect(err).ToNot(HaveOccurred())` for asserting no error, not
+  `Expect(err).To(BeNil())`. `HaveOccurred()` produces better failure
+  messages (prints the error vs just "expected nil").
 
 ## Contributing Requirements
 

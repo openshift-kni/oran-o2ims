@@ -63,7 +63,7 @@ var _ = Describe("Alertmanager API Client", func() {
 
 			w.Header().Set("Content-Type", "application/json")
 			err := json.NewEncoder(w).Encode(testAPIAlerts)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 		}))
 
 		// Create temporary token file for testing

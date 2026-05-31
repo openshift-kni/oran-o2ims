@@ -857,7 +857,7 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 			// The controller should handle context cancellation appropriately
 			// The exact behavior depends on how the underlying utilities handle context
 			Expect(result).ToNot(BeNil())
-			Expect(err).To(BeNil()) // Assuming the controller handles cancellation gracefully
+			Expect(err).ToNot(HaveOccurred()) // Assuming the controller handles cancellation gracefully
 			// Note: Error expectations would depend on implementation specifics
 		})
 	})
