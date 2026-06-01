@@ -78,13 +78,13 @@ func Serve(config *api.AlarmsServerConfig) error {
 	// Recovery defer to print panic strace
 	defer func() {
 		if r := recover(); r != nil {
-			slog.Error("something went wrong", "stacktrace", string(debug.Stack()))
+			slog.ErrorContext(ctx, "something went wrong", "stacktrace", string(debug.Stack()))
 		}
 	}()
 
 	go func() {
 		sig := <-shutdown
-		slog.Info("Shutdown signal received", "signal", sig)
+		slog.InfoContext(ctx, "Shutdown signal received", "signal", sig)
 		cancel()
 	}()
 
@@ -111,9 +111,9 @@ func Serve(config *api.AlarmsServerConfig) error {
 		// Wait for either close completion or timeout
 		select {
 		case <-closeComplete:
-			slog.Info("Closed DB connection")
+			slog.InfoContext(ctx, "Closed DB connection")
 		case <-time.After(5 * time.Second):
-			slog.Warn("DB connection close timed out")
+			slog.WarnContext(ctx, "DB connection close timed out")
 		}
 	}()
 	alarmRepository := &repo.AlarmsRepository{
@@ -162,9 +162,9 @@ func Serve(config *api.AlarmsServerConfig) error {
 	alarmServer.Wg.Add(1)
 	go func() {
 		defer alarmServer.Wg.Done()
-		slog.Info("Starting alarms subs notifier")
+		slog.InfoContext(ctx, "Starting alarms subs notifier")
 		if err := newNotifier.Run(ctx); err != nil {
-			slog.Error("notifier error", "error", err)
+			slog.ErrorContext(ctx, "notifier error", "error", err)
 		}
 	}()
 
@@ -173,7 +173,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 	go func() {
 		defer alarmServer.Wg.Done()
 		listener.ListenForAlarmsPgChannels(ctx, pool, newNotifier, globalCloudID)
-		slog.Info("Done listening to alarms pg channels")
+		slog.InfoContext(ctx, "Done listening to alarms pg channels")
 	}()
 
 	// Configure server and start alarms cleanup cronjob
@@ -260,7 +260,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 	}
 	// Init server
 	go func() {
-		slog.Info(fmt.Sprintf("Listening on %s", srv.Addr))
+		slog.InfoContext(ctx, fmt.Sprintf("Listening on %s", srv.Addr))
 		// Cert/Key files aren't needed here since they've been added to the tls.Config above.
 		if err := srv.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErrors <- err
@@ -272,7 +272,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 	case err := <-serverErrors:
 		return fmt.Errorf("error starting server: %w", err)
 	case <-ctx.Done():
-		slog.Info("Shutting down server")
+		slog.InfoContext(ctx, "Shutting down server")
 		if err := gracefulShutdownWithTasks(srv, &alarmServer); err != nil {
 			return fmt.Errorf("error shutting down server: %w", err)
 		}
@@ -311,7 +311,7 @@ func ConfigAlarmServerCleanup(ctx context.Context, alarmServer *api.AlarmsServer
 	if err != nil {
 		return fmt.Errorf("failed to create alarm service configuration: %w", err)
 	}
-	slog.Info("Alarm Service configuration created/found", "retentionPeriod", serviceConfig.RetentionPeriod, "extensions", serviceConfig.Extensions)
+	slog.InfoContext(ctx, "Alarm Service configuration created/found", "retentionPeriod", serviceConfig.RetentionPeriod, "extensions", serviceConfig.Extensions)
 
 	// Init ServiceConfig and start cronjob
 	alarmServer.ServiceConfig, err = serviceconfig.LoadEnvConfig()
@@ -328,7 +328,7 @@ func ConfigAlarmServerCleanup(ctx context.Context, alarmServer *api.AlarmsServer
 	if err := alarmServer.ServiceConfig.EnsureCleanupCronJob(ctx, serviceConfig); err != nil {
 		return fmt.Errorf("failed to start alarms cleanup cron job: %w", err)
 	}
-	slog.Info("Successfully created initial set of cronjob and resources")
+	slog.InfoContext(ctx, "Successfully created initial set of cronjob and resources")
 
 	return nil
 }
@@ -343,7 +343,7 @@ func startAlertmanager(ctx context.Context, alarmServer *api.AlarmsServer) error
 
 	// Run the first sync - running it outside also makes sure connectivity is good before server starts listening
 	c := alertmanager.NewAlertmanagerClient(hubclient, alarmServer.AlarmsRepository, alarmServer.Infrastructure)
-	slog.Info("Running initial alert sync")
+	slog.InfoContext(ctx, "Running initial alert sync")
 	if err := c.SyncAlerts(ctx); err != nil {
 		return fmt.Errorf("failed to run initial alert sync: %w", err)
 	}
@@ -354,7 +354,7 @@ func startAlertmanager(ctx context.Context, alarmServer *api.AlarmsServer) error
 		defer alarmServer.Wg.Done()
 		if err := c.RunAlertSyncScheduler(ctx, 1*time.Hour); err != nil {
 			if !errors.Is(err, context.Canceled) {
-				slog.Error("failed to run alert sync scheduler", "error", err)
+				slog.ErrorContext(ctx, "failed to run alert sync scheduler", "error", err)
 			}
 		}
 	}()
@@ -364,6 +364,6 @@ func startAlertmanager(ctx context.Context, alarmServer *api.AlarmsServer) error
 		return fmt.Errorf("error configuring alert manager: %w", err)
 	}
 
-	slog.Info("Successfully did the first sync and configured alertmanager")
+	slog.InfoContext(ctx, "Successfully did the first sync and configured alertmanager")
 	return nil
 }

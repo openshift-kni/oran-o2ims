@@ -63,7 +63,7 @@ func Serve(config *api.ProvisioningServerConfig) error {
 
 	go func() {
 		sig := <-shutdown
-		slog.Info("Shutdown signal received", "signal", sig)
+		slog.InfoContext(ctx, "Shutdown signal received", "signal", sig)
 		cancel()
 	}()
 
@@ -153,7 +153,7 @@ func Serve(config *api.ProvisioningServerConfig) error {
 	serverErrors := make(chan error, 1)
 	// Start server
 	go func() {
-		slog.Info(fmt.Sprintf("Listening on %s", srv.Addr))
+		slog.InfoContext(ctx, fmt.Sprintf("Listening on %s", srv.Addr))
 		// Cert/Key files aren't needed here since they've been added to the tls.Config above.
 		if err := srv.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErrors <- err
@@ -165,7 +165,7 @@ func Serve(config *api.ProvisioningServerConfig) error {
 	case err := <-serverErrors:
 		return fmt.Errorf("error starting server: %w", err)
 	case <-ctx.Done():
-		slog.Info("Shutting down server")
+		slog.InfoContext(ctx, "Shutting down server")
 		if err := common.GracefulShutdown(srv); err != nil {
 			return fmt.Errorf("error shutting down server: %w", err)
 		}

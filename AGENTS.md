@@ -93,6 +93,13 @@ issues during code review.
   `NamespacedName`. `ProvisioningRequest` is cluster-scoped (`scope: Cluster`
   in the CRD) and has no namespace.
 
+## Logging Conventions
+
+- Use context-aware slog calls (`slog.InfoContext(ctx, ...)`,
+  `slog.ErrorContext(ctx, ...)`, etc.) whenever a `ctx` variable is in
+  scope. The `sloglint` linter enforces this. Use `logging.AppendCtx()`
+  to add structured attributes to the context at entry points.
+
 ## Test Conventions
 
 - Use `.ToNot()` for negated Gomega assertions, not `.NotTo()` or

@@ -66,7 +66,7 @@ func (c *Entry[T]) Get(ctx context.Context) (T, error) {
 		c.expiresAt = time.Now().Add(c.maxAge)
 	}
 
-	slog.Info("Cache populated", "cache", c.name)
+	slog.InfoContext(ctx, "Cache populated", "cache", c.name)
 	return c.data, nil
 }
 

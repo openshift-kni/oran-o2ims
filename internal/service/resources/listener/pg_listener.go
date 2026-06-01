@@ -31,12 +31,12 @@ type ResourceTypeChangeNotification struct {
 // The onResourceTypeChanged callback is invoked whenever a resource_type_changed notification
 // is received or the periodic catch-up sync runs, allowing callers to invalidate caches.
 func ListenForResourcePgChannels(ctx context.Context, pool *pgxpool.Pool, repository *repo.ResourcesRepository, onResourceTypeChanged func()) {
-	slog.Info("Starting PostgreSQL listener for resource server")
+	slog.InfoContext(ctx, "Starting PostgreSQL listener for resource server")
 
 	// Sync existing ResourceTypes on startup to handle any that were created before listener started
 	// This prevents race condition where collector creates ResourceTypes before listener is ready
 	if err := syncExistingResourceTypes(ctx, repository); err != nil {
-		slog.Error("Failed to sync existing resource types on startup", "error", err)
+		slog.ErrorContext(ctx, "Failed to sync existing resource types on startup", "error", err)
 	}
 
 	// Initialize the generic listener manager
@@ -71,13 +71,13 @@ func ListenForResourcePgChannels(ctx context.Context, pool *pgxpool.Pool, reposi
 
 	// Block until the context is canceled
 	<-ctx.Done()
-	slog.Info("PostgreSQL listener for resource server shutting down")
+	slog.InfoContext(ctx, "PostgreSQL listener for resource server shutting down")
 	lm.Wait()
 }
 
 // processResourceTypeChangeNotification handles resource_type_changed notifications
 func processResourceTypeChangeNotification(ctx context.Context, repository *repo.ResourcesRepository, pgNotification *pgconn.Notification) error {
-	slog.Debug("Received resource_type_changed notification")
+	slog.DebugContext(ctx, "Received resource_type_changed notification")
 
 	// Parse the notification payload
 	var notification ResourceTypeChangeNotification
@@ -85,7 +85,7 @@ func processResourceTypeChangeNotification(ctx context.Context, repository *repo
 		return fmt.Errorf("failed to unmarshal resource_type_changed notification: %w", err)
 	}
 
-	slog.Info("Processing resource type change",
+	slog.InfoContext(ctx, "Processing resource type change",
 		"resource_type_id", notification.ResourceTypeID,
 		"change_type", notification.ChangeType)
 
@@ -93,14 +93,14 @@ func processResourceTypeChangeNotification(ctx context.Context, repository *repo
 	switch notification.ChangeType {
 	case "deleted":
 		// CASCADE delete in the database schema handles alarm dictionary cleanup
-		slog.Info("Resource type deleted, alarm dictionary will be cascade deleted",
+		slog.InfoContext(ctx, "Resource type deleted, alarm dictionary will be cascade deleted",
 			"resource_type_id", notification.ResourceTypeID)
 		return nil
 
 	case "created", "updated":
 		// Sync alarm dictionary for this resource type
 		if err := syncAlarmDictionaryForResourceType(ctx, repository, notification.ResourceTypeID); err != nil {
-			slog.Error("Failed to sync alarm dictionary for resource type",
+			slog.ErrorContext(ctx, "Failed to sync alarm dictionary for resource type",
 				"resource_type_id", notification.ResourceTypeID,
 				"error", err)
 			return fmt.Errorf("failed to sync alarm dictionary: %w", err)
@@ -108,7 +108,7 @@ func processResourceTypeChangeNotification(ctx context.Context, repository *repo
 		return nil
 
 	default:
-		slog.Warn("Unknown resource type change type", "change_type", notification.ChangeType)
+		slog.WarnContext(ctx, "Unknown resource type change type", "change_type", notification.ChangeType)
 		return nil
 	}
 }
@@ -116,24 +116,24 @@ func processResourceTypeChangeNotification(ctx context.Context, repository *repo
 // syncExistingResourceTypes syncs alarm dictionaries for all existing resource types
 // Called on startup and periodically (every 15min) to handle missed notifications or failures
 func syncExistingResourceTypes(ctx context.Context, repository *repo.ResourcesRepository) error {
-	slog.Debug("Syncing alarm dictionaries for existing resource types")
+	slog.DebugContext(ctx, "Syncing alarm dictionaries for existing resource types")
 
 	resourceTypes, err := repository.GetResourceTypes(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get resource types: %w", err)
 	}
 
-	slog.Debug("Found existing resource types", "count", len(resourceTypes))
+	slog.DebugContext(ctx, "Found existing resource types", "count", len(resourceTypes))
 
 	for _, rt := range resourceTypes {
 		if err := syncAlarmDictionaryForResourceType(ctx, repository, rt.ResourceTypeID); err != nil {
-			slog.Error("Failed to sync alarm dictionary for existing resource type",
+			slog.ErrorContext(ctx, "Failed to sync alarm dictionary for existing resource type",
 				"resource_type_id", rt.ResourceTypeID,
 				"error", err)
 			// Continue with other resource types even if one fails
 		}
 	}
 
-	slog.Debug("Completed sync of existing resource types", "count", len(resourceTypes))
+	slog.DebugContext(ctx, "Completed sync of existing resource types", "count", len(resourceTypes))
 	return nil
 }

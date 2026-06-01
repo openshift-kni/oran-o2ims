@@ -90,7 +90,7 @@ func (d *LocationDataSource) Watch(ctx context.Context) error {
 	stopCh := make(chan struct{})
 	go func() {
 		<-ctx.Done()
-		slog.Info("context canceled; stopping location reflector")
+		slog.InfoContext(ctx, "context canceled; stopping location reflector")
 		close(stopCh)
 	}()
 
@@ -118,11 +118,11 @@ func (d *LocationDataSource) Watch(ctx context.Context) error {
 	// Start the Reflector
 	store := async.NewReflectorStore(&inventoryv1alpha1.Location{})
 	reflector := cache.NewNamedReflector(locationReflectorName, &lister, &inventoryv1alpha1.Location{}, store, time.Duration(0))
-	slog.Info("starting location reflector")
+	slog.InfoContext(ctx, "starting location reflector")
 	go reflector.Run(stopCh)
 
 	// Start monitoring the store to process incoming events
-	slog.Info("starting to receive from location reflector store")
+	slog.InfoContext(ctx, "starting to receive from location reflector store")
 	go store.Receive(ctx, d)
 
 	return nil
@@ -130,13 +130,13 @@ func (d *LocationDataSource) Watch(ctx context.Context) error {
 
 // HandleAsyncEvent handles an add/update/delete event received from the Reflector.
 func (d *LocationDataSource) HandleAsyncEvent(ctx context.Context, obj interface{}, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.Debug("handleAsyncEvent received for location", "type", eventType, "object", fmt.Sprintf("%T", obj))
+	slog.DebugContext(ctx, "handleAsyncEvent received for location", "type", eventType, "object", fmt.Sprintf("%T", obj))
 
 	switch value := obj.(type) {
 	case *inventoryv1alpha1.Location:
 		return d.handleLocationWatchEvent(ctx, value, eventType)
 	default:
-		slog.Warn("Unknown object type in LocationDataSource", "type", fmt.Sprintf("%T", obj))
+		slog.WarnContext(ctx, "Unknown object type in LocationDataSource", "type", fmt.Sprintf("%T", obj))
 		return uuid.Nil, fmt.Errorf("unknown type: %T", obj)
 	}
 }
@@ -148,13 +148,13 @@ func (d *LocationDataSource) HandleSyncComplete(ctx context.Context, objectType 
 	case *inventoryv1alpha1.Location:
 		object = models.Location{}
 	default:
-		slog.Warn("Unknown object type in HandleSyncComplete", "type", fmt.Sprintf("%T", objectType))
+		slog.WarnContext(ctx, "Unknown object type in HandleSyncComplete", "type", fmt.Sprintf("%T", objectType))
 		return nil
 	}
 
 	select {
 	case <-ctx.Done():
-		slog.Info("context cancelled while writing location sync complete event; aborting")
+		slog.InfoContext(ctx, "context cancelled while writing location sync complete event; aborting")
 		return fmt.Errorf("context cancelled; aborting")
 	case d.AsyncChangeEvents <- &async.AsyncChangeEvent{
 		DataSourceID: d.dataSourceID,
@@ -167,12 +167,12 @@ func (d *LocationDataSource) HandleSyncComplete(ctx context.Context, objectType 
 
 // handleLocationWatchEvent handles an async event received for a Location CR
 func (d *LocationDataSource) handleLocationWatchEvent(ctx context.Context, location *inventoryv1alpha1.Location, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.Debug("handleLocationWatchEvent received", "name", location.Name, "type", eventType)
+	slog.DebugContext(ctx, "handleLocationWatchEvent received", "name", location.Name, "type", eventType)
 
 	// If CR is not ready (e.g., validation failed, parent missing), treat as deletion
 	// from API perspective. This ensures stale data is removed when CRs become invalid.
 	if eventType != async.Deleted && !inventoryv1alpha1.IsResourceReady(location.Status.Conditions) {
-		slog.Debug("Location not ready, treating as deletion",
+		slog.DebugContext(ctx, "Location not ready, treating as deletion",
 			"name", location.Name,
 			"reason", inventoryv1alpha1.GetReadyReason(location.Status.Conditions))
 		eventType = async.Deleted
@@ -185,7 +185,7 @@ func (d *LocationDataSource) handleLocationWatchEvent(ctx context.Context, locat
 
 	select {
 	case <-ctx.Done():
-		slog.Info("context cancelled while writing to async event channel; aborting")
+		slog.InfoContext(ctx, "context cancelled while writing to async event channel; aborting")
 		return uuid.Nil, fmt.Errorf("context cancelled; aborting")
 	case d.AsyncChangeEvents <- &async.AsyncChangeEvent{
 		DataSourceID: d.dataSourceID,

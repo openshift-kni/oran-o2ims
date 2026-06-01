@@ -74,7 +74,7 @@ func Serve(config *api.ClusterServerConfig) error {
 
 	go func() {
 		sig := <-shutdown
-		slog.Info("Shutdown signal received", "signal", sig)
+		slog.InfoContext(ctx, "Shutdown signal received", "signal", sig)
 		cancel()
 	}()
 
@@ -89,7 +89,7 @@ func Serve(config *api.ClusterServerConfig) error {
 		return fmt.Errorf("failed to connected to DB: %w", err)
 	}
 	defer func() {
-		slog.Info("Closing DB connection")
+		slog.InfoContext(ctx, "Closing DB connection")
 		pool.Close()
 	}()
 
@@ -214,7 +214,7 @@ func Serve(config *api.ClusterServerConfig) error {
 	// Start resource notifier
 	notifierErrors := make(chan error, 1)
 	go func() {
-		slog.Info("Starting cluster notifier")
+		slog.InfoContext(ctx, "Starting cluster notifier")
 		if err := clusterNotifier.Run(ctx); err != nil {
 			notifierErrors <- err
 		}
@@ -223,7 +223,7 @@ func Serve(config *api.ClusterServerConfig) error {
 	// Start resource collector
 	collectorErrors := make(chan error, 1)
 	go func() {
-		slog.Info("Starting cluster collector")
+		slog.InfoContext(ctx, "Starting cluster collector")
 		if err := clusterCollector.Run(ctx); err != nil {
 			collectorErrors <- err
 		}
@@ -232,7 +232,7 @@ func Serve(config *api.ClusterServerConfig) error {
 	// Start server
 	serverErrors := make(chan error, 1)
 	go func() {
-		slog.Info(fmt.Sprintf("Listening on %s", srv.Addr))
+		slog.InfoContext(ctx, fmt.Sprintf("Listening on %s", srv.Addr))
 		// Cert/Key files aren't needed here since they've been added to the tls.Config above.
 		if err := srv.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErrors <- err
@@ -243,9 +243,9 @@ func Serve(config *api.ClusterServerConfig) error {
 		// Cancel the context in case it wasn't already canceled
 		cancel()
 		// Shutdown the http server
-		slog.Info("Shutting down server")
+		slog.InfoContext(ctx, "Shutting down server")
 		if err := common.GracefulShutdown(srv); err != nil {
-			slog.Error("error shutting down server", "error", err)
+			slog.ErrorContext(ctx, "error shutting down server", "error", err)
 		}
 	}()
 
@@ -258,7 +258,7 @@ func Serve(config *api.ClusterServerConfig) error {
 	case err := <-notifierErrors:
 		return fmt.Errorf("error starting notifier: %w", err)
 	case <-ctx.Done():
-		slog.Info("Process shutting down")
+		slog.InfoContext(ctx, "Process shutting down")
 	}
 
 	return nil

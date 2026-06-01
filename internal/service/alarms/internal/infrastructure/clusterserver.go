@@ -96,7 +96,7 @@ func (r *ClusterServer) Setup() error {
 
 // FetchAll fetches all necessary data from the cluster server
 func (r *ClusterServer) FetchAll(ctx context.Context) error {
-	slog.Info("Getting all objects from the cluster server")
+	slog.InfoContext(ctx, "Getting all objects from the cluster server")
 
 	// List node clusters
 	nodeClusters, err := r.getNodeClusters(ctx)
@@ -123,7 +123,7 @@ func (r *ClusterServer) FetchAll(ctx context.Context) error {
 	r.nodeClusterTypeIDToAlarmDictionaryID = r.buildNodeClusterTypeIDToAlarmDictionaryID(nodeClusterTypes)
 	r.alarmDictionaryIDToAlarmDefinitions = r.buildAlarmDictionaryIDToAlarmDefinitions(alarmDictionaries)
 
-	slog.Info("Successfully synced ClusterServer objects")
+	slog.InfoContext(ctx, "Successfully synced ClusterServer objects")
 	return nil
 }
 
@@ -135,7 +135,7 @@ func (r *ClusterServer) GetObjectTypeID(ctx context.Context, nodeClusterID uuid.
 
 	nodeClusterTypeID, ok := r.nodeClusterIDToNodeClusterTypeID[nodeClusterID]
 	if !ok {
-		slog.Info("Node cluster ID not found in cache", "nodeClusterID", nodeClusterID)
+		slog.InfoContext(ctx, "Node cluster ID not found in cache", "nodeClusterID", nodeClusterID)
 
 		// Try to fetch it from the server
 		nodeCluster, err := r.getNodeCluster(ctx, nodeClusterID)
@@ -145,7 +145,7 @@ func (r *ClusterServer) GetObjectTypeID(ctx context.Context, nodeClusterID uuid.
 
 		nodeClusterTypeID = nodeCluster.NodeClusterTypeId
 		r.nodeClusterIDToNodeClusterTypeID[nodeClusterID] = nodeClusterTypeID
-		slog.Info("Mapping node cluster ID to node cluster type ID", "nodeClusterID", nodeClusterID, "nodeClusterTypeID", nodeClusterTypeID)
+		slog.InfoContext(ctx, "Mapping node cluster ID to node cluster type ID", "nodeClusterID", nodeClusterID, "nodeClusterTypeID", nodeClusterTypeID)
 	}
 
 	return nodeClusterTypeID, nil
@@ -159,7 +159,7 @@ func (r *ClusterServer) GetAlarmDefinitionID(ctx context.Context, nodeClusterTyp
 
 	alarmDictionaryID, ok := r.nodeClusterTypeIDToAlarmDictionaryID[nodeClusterTypeID]
 	if !ok {
-		slog.Info("Node Cluster Type ID not found in cache", "nodeClusterTypeID", nodeClusterTypeID)
+		slog.InfoContext(ctx, "Node Cluster Type ID not found in cache", "nodeClusterTypeID", nodeClusterTypeID)
 
 		// Try to fetch it from the server
 		nodeClusterType, err := r.getNodeClusterType(ctx, nodeClusterTypeID)
@@ -173,13 +173,13 @@ func (r *ClusterServer) GetAlarmDefinitionID(ctx context.Context, nodeClusterTyp
 		}
 
 		r.nodeClusterTypeIDToAlarmDictionaryID[nodeClusterTypeID] = alarmDictionaryID
-		slog.Info("Mapping node cluster type ID to alarm dictionary ID", "nodeClusterTypeID", nodeClusterTypeID, "alarmDictionaryID", alarmDictionaryID)
+		slog.InfoContext(ctx, "Mapping node cluster type ID to alarm dictionary ID", "nodeClusterTypeID", nodeClusterTypeID, "alarmDictionaryID", alarmDictionaryID)
 	}
 
 	definitionsResynced := false
 	alarmDefinitions, ok := r.alarmDictionaryIDToAlarmDefinitions[alarmDictionaryID]
 	if !ok {
-		slog.Info("Alarm dictionary ID not found in cache", "alarmDictionaryID", alarmDictionaryID)
+		slog.InfoContext(ctx, "Alarm dictionary ID not found in cache", "alarmDictionaryID", alarmDictionaryID)
 
 		// Try to fetch it from the server
 		alarmDictionary, err := r.getAlarmDictionary(ctx, alarmDictionaryID)
@@ -190,7 +190,7 @@ func (r *ClusterServer) GetAlarmDefinitionID(ctx context.Context, nodeClusterTyp
 		definitionsResynced = true
 		alarmDefinitions = getAlarmDefinitionsFromAlarmDictionary(alarmDictionary)
 		r.alarmDictionaryIDToAlarmDefinitions[alarmDictionaryID] = alarmDefinitions
-		slog.Info("Mapping alarm dictionary ID to alarm definitions", "alarmDictionaryID", alarmDictionaryID)
+		slog.InfoContext(ctx, "Mapping alarm dictionary ID to alarm definitions", "alarmDictionaryID", alarmDictionaryID)
 	}
 
 	uniqueAlarmDefinitionIdentifier := AlarmDefinitionUniqueIdentifier{
@@ -202,7 +202,7 @@ func (r *ClusterServer) GetAlarmDefinitionID(ctx context.Context, nodeClusterTyp
 	if !ok {
 		if !definitionsResynced {
 			// Resync definitions and try again. It is possible that cache is not up to date
-			slog.Debug("Resynced alarm definitions", "alarmDictionaryID", alarmDictionaryID, "uniqueAlarmDefinitionIdentifier", uniqueAlarmDefinitionIdentifier)
+			slog.DebugContext(ctx, "Resynced alarm definitions", "alarmDictionaryID", alarmDictionaryID, "uniqueAlarmDefinitionIdentifier", uniqueAlarmDefinitionIdentifier)
 
 			alarmDictionary, err := r.getAlarmDictionary(ctx, alarmDictionaryID)
 			if err != nil {
@@ -211,7 +211,7 @@ func (r *ClusterServer) GetAlarmDefinitionID(ctx context.Context, nodeClusterTyp
 
 			alarmDefinitions = getAlarmDefinitionsFromAlarmDictionary(alarmDictionary)
 			r.alarmDictionaryIDToAlarmDefinitions[alarmDictionaryID] = alarmDefinitions
-			slog.Info("Mapping alarm dictionary ID to alarm definitions", "alarmDictionaryID", alarmDictionaryID)
+			slog.InfoContext(ctx, "Mapping alarm dictionary ID to alarm definitions", "alarmDictionaryID", alarmDictionaryID)
 
 			alarmDefinitionID, ok = alarmDefinitions[uniqueAlarmDefinitionIdentifier]
 			if ok {
@@ -227,7 +227,7 @@ func (r *ClusterServer) GetAlarmDefinitionID(ctx context.Context, nodeClusterTyp
 
 // Sync starts the sync process for the cluster server objects
 func (r *ClusterServer) Sync(ctx context.Context) {
-	slog.Info("Starting sync process for cluster server objects")
+	slog.InfoContext(ctx, "Starting sync process for cluster server objects")
 
 	// First fetch of all objects.
 	// When doing a clean deployment cluster server may not be ready which results incomplete data during startup Alerts sync
@@ -235,7 +235,7 @@ func (r *ClusterServer) Sync(ctx context.Context) {
 	// This is edge case and even if the Cluster server cant come up within retry time, we can still continue
 	// But once it does come up, user may get unwanted "CHANGED" alerts
 	if err := r.FetchAllWithRetry(ctx, 3); err != nil {
-		slog.Error("Failed to run initial sync for cluster server objects", "error", err)
+		slog.ErrorContext(ctx, "Failed to run initial sync for cluster server objects", "error", err)
 	}
 
 	go func() {
@@ -245,12 +245,12 @@ func (r *ClusterServer) Sync(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				slog.Info("Stopping sync process for cluster server objects")
+				slog.InfoContext(ctx, "Stopping sync process for cluster server objects")
 				return
 			case <-ticker.C:
-				slog.Info("Syncing ClusterServer objects")
+				slog.InfoContext(ctx, "Syncing ClusterServer objects")
 				if err := r.FetchAll(ctx); err != nil {
-					slog.Error("Failed to sync cluster server objects", "error", err)
+					slog.ErrorContext(ctx, "Failed to sync cluster server objects", "error", err)
 				}
 			}
 		}
@@ -276,7 +276,7 @@ func (r *ClusterServer) FetchAllWithRetry(ctx context.Context, maxRetries int) e
 		}
 
 		// Wait before retrying with exponential backoff
-		slog.Warn("Fetch operation failed", "attempt", attempt+1, "maxRetries", maxRetries, "error", err)
+		slog.WarnContext(ctx, "Fetch operation failed", "attempt", attempt+1, "maxRetries", maxRetries, "error", err)
 		select {
 		case <-time.After(backoff):
 			backoff *= 2
@@ -303,7 +303,7 @@ func (r *ClusterServer) getNodeClusters(ctx context.Context) ([]NodeCluster, err
 		return nil, fmt.Errorf("status code different from 200 OK: %s", resp.Status())
 	}
 
-	slog.Info("Got node clusters", "count", len(*resp.JSON200))
+	slog.InfoContext(ctx, "Got node clusters", "count", len(*resp.JSON200))
 	return *resp.JSON200, nil
 }
 
@@ -322,7 +322,7 @@ func (r *ClusterServer) getNodeCluster(ctx context.Context, nodeClusterID uuid.U
 		return NodeCluster{}, fmt.Errorf("status code different from 200 OK: %s", resp.Status())
 	}
 
-	slog.Info("Got node cluster", "nodeClusterID", nodeClusterID)
+	slog.InfoContext(ctx, "Got node cluster", "nodeClusterID", nodeClusterID)
 	return *resp.JSON200, nil
 }
 
@@ -341,7 +341,7 @@ func (r *ClusterServer) getNodeClusterTypes(ctx context.Context) ([]NodeClusterT
 		return nil, fmt.Errorf("status code different from 200 OK: %s", resp.Status())
 	}
 
-	slog.Info("Got node cluster types", "count", len(*resp.JSON200))
+	slog.InfoContext(ctx, "Got node cluster types", "count", len(*resp.JSON200))
 	return *resp.JSON200, nil
 }
 
@@ -360,7 +360,7 @@ func (r *ClusterServer) getNodeClusterType(ctx context.Context, nodeClusterTypeI
 		return NodeClusterType{}, fmt.Errorf("status code different from 200 OK: %s", resp.Status())
 	}
 
-	slog.Info("Got node cluster type", "nodeClusterTypeID", nodeClusterTypeID)
+	slog.InfoContext(ctx, "Got node cluster type", "nodeClusterTypeID", nodeClusterTypeID)
 	return *resp.JSON200, nil
 }
 
@@ -379,7 +379,7 @@ func (r *ClusterServer) getAlarmDictionaries(ctx context.Context) ([]AlarmDictio
 		return nil, fmt.Errorf("status code different from 200 OK: %s", resp.Status())
 	}
 
-	slog.Info("Got alarm dictionaries", "count", len(*resp.JSON200))
+	slog.InfoContext(ctx, "Got alarm dictionaries", "count", len(*resp.JSON200))
 	return *resp.JSON200, nil
 }
 
@@ -398,7 +398,7 @@ func (r *ClusterServer) getAlarmDictionary(ctx context.Context, alarmDictionaryI
 		return AlarmDictionary{}, fmt.Errorf("status code different from 200 OK: %s", resp.Status())
 	}
 
-	slog.Info("Got alarm dictionary", "alarmDictionaryID", alarmDictionaryID)
+	slog.InfoContext(ctx, "Got alarm dictionary", "alarmDictionaryID", alarmDictionaryID)
 	return *resp.JSON200, nil
 }
 

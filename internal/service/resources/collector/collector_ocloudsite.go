@@ -89,7 +89,7 @@ func (d *OCloudSiteDataSource) Watch(ctx context.Context) error {
 	stopCh := make(chan struct{})
 	go func() {
 		<-ctx.Done()
-		slog.Info("context canceled; stopping ocloudsite reflector")
+		slog.InfoContext(ctx, "context canceled; stopping ocloudsite reflector")
 		close(stopCh)
 	}()
 
@@ -117,11 +117,11 @@ func (d *OCloudSiteDataSource) Watch(ctx context.Context) error {
 	// Start the Reflector
 	store := async.NewReflectorStore(&inventoryv1alpha1.OCloudSite{})
 	reflector := cache.NewNamedReflector(oCloudSiteReflectorName, &lister, &inventoryv1alpha1.OCloudSite{}, store, time.Duration(0))
-	slog.Info("starting ocloudsite reflector")
+	slog.InfoContext(ctx, "starting ocloudsite reflector")
 	go reflector.Run(stopCh)
 
 	// Start monitoring the store to process incoming events
-	slog.Info("starting to receive from ocloudsite reflector store")
+	slog.InfoContext(ctx, "starting to receive from ocloudsite reflector store")
 	go store.Receive(ctx, d)
 
 	return nil
@@ -129,13 +129,13 @@ func (d *OCloudSiteDataSource) Watch(ctx context.Context) error {
 
 // HandleAsyncEvent handles an add/update/delete event received from the Reflector.
 func (d *OCloudSiteDataSource) HandleAsyncEvent(ctx context.Context, obj interface{}, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.Debug("handleAsyncEvent received for ocloudsite", "type", eventType, "object", fmt.Sprintf("%T", obj))
+	slog.DebugContext(ctx, "handleAsyncEvent received for ocloudsite", "type", eventType, "object", fmt.Sprintf("%T", obj))
 
 	switch value := obj.(type) {
 	case *inventoryv1alpha1.OCloudSite:
 		return d.handleOCloudSiteWatchEvent(ctx, value, eventType)
 	default:
-		slog.Warn("Unknown object type in OCloudSiteDataSource", "type", fmt.Sprintf("%T", obj))
+		slog.WarnContext(ctx, "Unknown object type in OCloudSiteDataSource", "type", fmt.Sprintf("%T", obj))
 		return uuid.Nil, fmt.Errorf("unknown type: %T", obj)
 	}
 }
@@ -147,13 +147,13 @@ func (d *OCloudSiteDataSource) HandleSyncComplete(ctx context.Context, objectTyp
 	case *inventoryv1alpha1.OCloudSite:
 		object = models.OCloudSite{}
 	default:
-		slog.Warn("Unknown object type in HandleSyncComplete", "type", fmt.Sprintf("%T", objectType))
+		slog.WarnContext(ctx, "Unknown object type in HandleSyncComplete", "type", fmt.Sprintf("%T", objectType))
 		return nil
 	}
 
 	select {
 	case <-ctx.Done():
-		slog.Info("context cancelled while writing ocloudsite sync complete event; aborting")
+		slog.InfoContext(ctx, "context cancelled while writing ocloudsite sync complete event; aborting")
 		return fmt.Errorf("context cancelled; aborting")
 	case d.AsyncChangeEvents <- &async.AsyncChangeEvent{
 		DataSourceID: d.dataSourceID,
@@ -166,12 +166,12 @@ func (d *OCloudSiteDataSource) HandleSyncComplete(ctx context.Context, objectTyp
 
 // handleOCloudSiteWatchEvent handles an async event received for an OCloudSite CR
 func (d *OCloudSiteDataSource) handleOCloudSiteWatchEvent(ctx context.Context, site *inventoryv1alpha1.OCloudSite, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.Debug("handleOCloudSiteWatchEvent received", "name", site.Name, "type", eventType)
+	slog.DebugContext(ctx, "handleOCloudSiteWatchEvent received", "name", site.Name, "type", eventType)
 
 	// If CR is not ready (e.g., validation failed, parent missing), treat as deletion
 	// from API perspective. This ensures stale data is removed when CRs become invalid.
 	if eventType != async.Deleted && !inventoryv1alpha1.IsResourceReady(site.Status.Conditions) {
-		slog.Debug("OCloudSite not ready, treating as deletion",
+		slog.DebugContext(ctx, "OCloudSite not ready, treating as deletion",
 			"name", site.Name,
 			"reason", inventoryv1alpha1.GetReadyReason(site.Status.Conditions))
 		eventType = async.Deleted
@@ -184,7 +184,7 @@ func (d *OCloudSiteDataSource) handleOCloudSiteWatchEvent(ctx context.Context, s
 
 	select {
 	case <-ctx.Done():
-		slog.Info("context cancelled while writing to async event channel; aborting")
+		slog.InfoContext(ctx, "context cancelled while writing to async event channel; aborting")
 		return uuid.Nil, fmt.Errorf("context cancelled; aborting")
 	case d.AsyncChangeEvents <- &async.AsyncChangeEvent{
 		DataSourceID: d.dataSourceID,

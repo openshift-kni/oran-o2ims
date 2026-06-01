@@ -201,7 +201,7 @@ func updateHighWatermark(ctx context.Context, tx pgx.Tx, dataChangeEvents []comm
 		return fmt.Errorf("failed to execute queryUpdateHighWater: %w", err)
 	}
 
-	slog.Debug("high-watermark", "from", highWatermark, "to", updateHighWatermark.LastEventID)
+	slog.DebugContext(ctx, "high-watermark", "from", highWatermark, "to", updateHighWatermark.LastEventID)
 
 	return nil
 }

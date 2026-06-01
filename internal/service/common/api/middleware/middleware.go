@@ -54,7 +54,7 @@ func LogDuration() Middleware {
 				ResponseWriter: w,
 			}
 			next.ServeHTTP(&d, r)
-			slog.Debug("Request completed", "method", r.Method, "url", r.RequestURI, "status", d.statusCode, "duration", time.Since(startTime).String())
+			slog.DebugContext(r.Context(), "Request completed", "method", r.Method, "url", r.RequestURI, "status", d.statusCode, "duration", time.Since(startTime).String())
 		})
 	}
 }
@@ -119,7 +119,7 @@ func ProblemDetails(w http.ResponseWriter, body string, code int) {
 // getOranErrHandler override default validation error to allow for O-RAN specific error
 func getOranErrHandler() oapimiddleware.ErrorHandlerWithOpts {
 	return func(_ context.Context, err error, w http.ResponseWriter, r *http.Request, opts oapimiddleware.ErrorHandlerOpts) {
-		slog.Warn("OpenAPI validation failed",
+		slog.WarnContext(r.Context(), "OpenAPI validation failed",
 			"error", err.Error(),
 			"method", r.Method,
 			"path", r.URL.Path,
@@ -132,7 +132,7 @@ func getOranErrHandler() oapimiddleware.ErrorHandlerWithOpts {
 // GetOranReqErrFunc override default validation errors to allow for O-RAN specific struct
 func GetOranReqErrFunc() func(w http.ResponseWriter, r *http.Request, err error) {
 	return func(w http.ResponseWriter, r *http.Request, err error) {
-		slog.Warn("OpenAPI request validation failed",
+		slog.WarnContext(r.Context(), "OpenAPI request validation failed",
 			"error", err.Error(),
 			"method", r.Method,
 			"path", r.URL.Path,

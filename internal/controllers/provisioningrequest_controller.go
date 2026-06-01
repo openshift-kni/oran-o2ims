@@ -1069,7 +1069,7 @@ func (r *ProvisioningRequestReconciler) handleFinalizer(
 
 		// Deletion has completed. Remove provisioningRequestFinalizer. Once all finalizers have been
 		// removed, the object will be deleted.
-		r.Logger.Info("Dependents have been deleted. Removing provisioningRequest finalizer", "name", provisioningRequest.Name)
+		r.Logger.InfoContext(ctx, "Dependents have been deleted. Removing provisioningRequest finalizer", "name", provisioningRequest.Name)
 		patch := client.MergeFrom(provisioningRequest.DeepCopy())
 		if controllerutil.RemoveFinalizer(provisioningRequest, provisioningv1alpha1.ProvisioningRequestFinalizer) {
 			if err := r.Patch(ctx, provisioningRequest, patch); err != nil {
@@ -1205,13 +1205,13 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 		// Deleting cluster namespace will delete all resources within it, including
 		// ClusterInstance and ImageBasedGroupUpgrade.
 		if ns.DeletionTimestamp.IsZero() {
-			r.Logger.Info(fmt.Sprintf("Deleting Cluster Namespace (%s)", ns.Name))
+			r.Logger.InfoContext(ctx, fmt.Sprintf("Deleting Cluster Namespace (%s)", ns.Name))
 			copiedNamespace := ns
 			if err := r.Client.Delete(ctx, &copiedNamespace); client.IgnoreNotFound(err) != nil {
 				return false, fmt.Errorf("failed to delete namespace: %w", err)
 			}
 		}
-		r.Logger.Info(fmt.Sprintf("Waiting for Cluster Namespace (%s) to be deleted", ns.Name))
+		r.Logger.InfoContext(ctx, fmt.Sprintf("Waiting for Cluster Namespace (%s) to be deleted", ns.Name))
 		deleteCompleted = false
 	}
 
