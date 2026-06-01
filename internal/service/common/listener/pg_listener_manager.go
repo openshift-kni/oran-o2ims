@@ -80,10 +80,10 @@ func (lm *Manager) listenChannel(ctx context.Context, channel string, handler No
 			// Wait before retrying to avoid busy-looping.
 			select {
 			case <-ctx.Done():
-				slog.Info("Listener is shutting down", "channel", channel)
+				slog.InfoContext(ctx, "Listener is shutting down", "channel", channel)
 				return
 			case <-time.After(time.Minute):
-				slog.Error("failed to listen to pg channel, retrying", "channel", channel, "error", err)
+				slog.ErrorContext(ctx, "failed to listen to pg channel, retrying", "channel", channel, "error", err)
 			}
 		}
 	}
@@ -101,16 +101,16 @@ func (lm *Manager) listenAndProcess(ctx context.Context, channel string, handler
 		return fmt.Errorf("failed to set up listener on %s: %w", channel, err)
 	}
 
-	slog.Info("Listening for notifications", "channel", channel)
+	slog.InfoContext(ctx, "Listening for notifications", "channel", channel)
 	for {
 		notification, err := conn.Conn().WaitForNotification(ctx)
 		if err != nil {
 			return fmt.Errorf("failed waiting for notification on %s: %w", channel, err)
 		}
-		slog.Debug("Received notification from PG", "channel", channel, "payload", notification.Payload)
+		slog.DebugContext(ctx, "Received notification from PG", "channel", channel, "payload", notification.Payload)
 		// Process the notification payload using the registered handler.
 		if err := handler(ctx, notification); err != nil {
-			slog.Error("Failed to process notification", "channel", channel, "error", err)
+			slog.ErrorContext(ctx, "Failed to process notification", "channel", channel, "error", err)
 		}
 	}
 }
@@ -126,7 +126,7 @@ func (lm *Manager) startChannelCatchUp(ctx context.Context, channel string, inte
 			return
 		case <-ticker.C:
 			if err := catchUp(ctx); err != nil {
-				slog.Error("Catch-up processing failed", "channel", channel, "error", err)
+				slog.ErrorContext(ctx, "Catch-up processing failed", "channel", channel, "error", err)
 			}
 		}
 	}

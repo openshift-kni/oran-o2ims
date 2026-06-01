@@ -165,7 +165,7 @@ func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object) err
 
 	if err := c.Get(ctx, key, existing); err != nil {
 		if errors.IsNotFound(err) { // Create if not found, otherwise return error
-			slog.Info("Creating a new resource", "gvk", obj.GetObjectKind().GroupVersionKind().String(),
+			slog.InfoContext(ctx, "Creating a new resource", "gvk", obj.GetObjectKind().GroupVersionKind().String(),
 				"namespace", obj.GetNamespace(), "name", obj.GetName())
 			return c.Create(ctx, obj) //nolint:wrapcheck
 		}
@@ -174,7 +174,7 @@ func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object) err
 
 	// Update existing object
 	obj.SetResourceVersion(existing.GetResourceVersion())
-	slog.Info("Updating an existing resource", "gvk", obj.GetObjectKind().GroupVersionKind().String(),
+	slog.InfoContext(ctx, "Updating an existing resource", "gvk", obj.GetObjectKind().GroupVersionKind().String(),
 		"namespace", obj.GetNamespace(), "name", obj.GetName())
 	return c.Update(ctx, obj) //nolint:wrapcheck
 }

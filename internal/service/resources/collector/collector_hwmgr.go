@@ -129,7 +129,7 @@ func (d *HardwareDataSource) Watch(ctx context.Context) error {
 	stopCh := make(chan struct{})
 	go func() {
 		<-ctx.Done()
-		slog.Info("context canceled; stopping hardware data source reflectors")
+		slog.InfoContext(ctx, "context canceled; stopping hardware data source reflectors")
 		close(stopCh)
 	}()
 
@@ -162,7 +162,7 @@ func (d *HardwareDataSource) watchBMH(ctx context.Context, stopCh <-chan struct{
 
 	store := async.NewReflectorStore(&metal3v1alpha1.BareMetalHost{})
 	reflector := cache.NewNamedReflector(bmhReflectorName, &lister, &metal3v1alpha1.BareMetalHost{}, store, time.Duration(0))
-	slog.Info("starting BMH reflector")
+	slog.InfoContext(ctx, "starting BMH reflector")
 	go reflector.Run(stopCh)
 	go store.Receive(ctx, d)
 }
@@ -189,7 +189,7 @@ func (d *HardwareDataSource) watchHardwareData(ctx context.Context, stopCh <-cha
 
 	store := async.NewReflectorStore(&metal3v1alpha1.HardwareData{})
 	reflector := cache.NewNamedReflector(hwdataReflectorName, &lister, &metal3v1alpha1.HardwareData{}, store, time.Duration(0))
-	slog.Info("starting HardwareData reflector")
+	slog.InfoContext(ctx, "starting HardwareData reflector")
 	go reflector.Run(stopCh)
 	go store.Receive(ctx, d)
 }
@@ -216,7 +216,7 @@ func (d *HardwareDataSource) watchAllocatedNodes(ctx context.Context, stopCh <-c
 
 	store := async.NewReflectorStore(&hwmgmtv1alpha1.AllocatedNode{})
 	reflector := cache.NewNamedReflector(allocatednodeReflectorName, &lister, &hwmgmtv1alpha1.AllocatedNode{}, store, time.Duration(0))
-	slog.Info("starting AllocatedNode reflector")
+	slog.InfoContext(ctx, "starting AllocatedNode reflector")
 	go reflector.Run(stopCh)
 	go store.Receive(ctx, d)
 }
@@ -231,7 +231,7 @@ func (d *HardwareDataSource) HandleAsyncEvent(ctx context.Context, obj interface
 	case *hwmgmtv1alpha1.AllocatedNode:
 		return d.handleAllocatedNodeEvent(ctx, value, eventType)
 	default:
-		slog.Warn("Unknown object type in HardwareDataSource", "type", fmt.Sprintf("%T", obj))
+		slog.WarnContext(ctx, "Unknown object type in HardwareDataSource", "type", fmt.Sprintf("%T", obj))
 		return uuid.Nil, fmt.Errorf("unknown type: %T", obj)
 	}
 }
@@ -243,7 +243,7 @@ func (d *HardwareDataSource) HandleAsyncEvent(ctx context.Context, obj interface
 func (d *HardwareDataSource) HandleSyncComplete(ctx context.Context, objectType runtime.Object, keys []uuid.UUID) error {
 	switch objectType.(type) {
 	case *metal3v1alpha1.BareMetalHost:
-		slog.Info("BMH sync complete", "resourceCount", len(keys))
+		slog.InfoContext(ctx, "BMH sync complete", "resourceCount", len(keys))
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("context cancelled; aborting")
@@ -255,13 +255,13 @@ func (d *HardwareDataSource) HandleSyncComplete(ctx context.Context, objectType 
 			return nil
 		}
 	case *metal3v1alpha1.HardwareData:
-		slog.Info("HardwareData sync complete")
+		slog.InfoContext(ctx, "HardwareData sync complete")
 		return nil
 	case *hwmgmtv1alpha1.AllocatedNode:
-		slog.Info("AllocatedNode sync complete")
+		slog.InfoContext(ctx, "AllocatedNode sync complete")
 		return nil
 	default:
-		slog.Warn("Unknown object type in HandleSyncComplete", "type", fmt.Sprintf("%T", objectType))
+		slog.WarnContext(ctx, "Unknown object type in HandleSyncComplete", "type", fmt.Sprintf("%T", objectType))
 		return nil
 	}
 }
@@ -269,7 +269,7 @@ func (d *HardwareDataSource) HandleSyncComplete(ctx context.Context, objectType 
 // handleBMHEvent handles a BMH watch event by building the full resource
 // from BMH + HardwareData + AllocatedNode and sending events to the collector.
 func (d *HardwareDataSource) handleBMHEvent(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.Debug("handleBMHEvent", "bmh", bmh.Namespace+"/"+bmh.Name, "type", eventType)
+	slog.DebugContext(ctx, "handleBMHEvent", "bmh", bmh.Namespace+"/"+bmh.Name, "type", eventType)
 
 	resourceID := uuid.MustParse(string(bmh.UID))
 
@@ -278,7 +278,7 @@ func (d *HardwareDataSource) handleBMHEvent(ctx context.Context, bmh *metal3v1al
 	}
 
 	if !hwmgrcontroller.IncludeInInventory(bmh) {
-		slog.Debug("BMH not included in inventory, treating as deletion",
+		slog.DebugContext(ctx, "BMH not included in inventory, treating as deletion",
 			"bmh", bmh.Namespace+"/"+bmh.Name)
 		return d.sendDeleteEvent(ctx, resourceID)
 	}
@@ -289,12 +289,12 @@ func (d *HardwareDataSource) handleBMHEvent(ctx context.Context, bmh *metal3v1al
 // handleHardwareDataEvent handles a HardwareData watch event by looking up
 // the corresponding BMH and rebuilding the resource.
 func (d *HardwareDataSource) handleHardwareDataEvent(ctx context.Context, hwdata *metal3v1alpha1.HardwareData, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.Debug("handleHardwareDataEvent", "hwdata", hwdata.Namespace+"/"+hwdata.Name, "type", eventType)
+	slog.DebugContext(ctx, "handleHardwareDataEvent", "hwdata", hwdata.Namespace+"/"+hwdata.Name, "type", eventType)
 
 	var bmh metal3v1alpha1.BareMetalHost
 	if err := d.hubClient.Get(ctx, types.NamespacedName{Name: hwdata.Name, Namespace: hwdata.Namespace}, &bmh); err != nil {
 		if errors.IsNotFound(err) {
-			slog.Debug("BMH not found for HardwareData, skipping", "hwdata", hwdata.Namespace+"/"+hwdata.Name)
+			slog.DebugContext(ctx, "BMH not found for HardwareData, skipping", "hwdata", hwdata.Namespace+"/"+hwdata.Name)
 			return uuid.Nil, nil
 		}
 		return uuid.Nil, fmt.Errorf("failed to get BMH for HardwareData %s/%s: %w", hwdata.Namespace, hwdata.Name, err)
@@ -310,19 +310,19 @@ func (d *HardwareDataSource) handleHardwareDataEvent(ctx context.Context, hwdata
 // handleAllocatedNodeEvent handles an AllocatedNode watch event by looking up
 // the corresponding BMH and rebuilding the resource.
 func (d *HardwareDataSource) handleAllocatedNodeEvent(ctx context.Context, node *hwmgmtv1alpha1.AllocatedNode, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.Debug("handleAllocatedNodeEvent", "node", node.Namespace+"/"+node.Name, "type", eventType)
+	slog.DebugContext(ctx, "handleAllocatedNodeEvent", "node", node.Namespace+"/"+node.Name, "type", eventType)
 
 	bmhName := node.Spec.HwMgrNodeId
 	bmhNamespace := node.Spec.HwMgrNodeNs
 	if bmhName == "" || bmhNamespace == "" {
-		slog.Debug("AllocatedNode missing BMH reference, skipping", "node", node.Namespace+"/"+node.Name)
+		slog.DebugContext(ctx, "AllocatedNode missing BMH reference, skipping", "node", node.Namespace+"/"+node.Name)
 		return uuid.Nil, nil
 	}
 
 	var bmh metal3v1alpha1.BareMetalHost
 	if err := d.hubClient.Get(ctx, types.NamespacedName{Name: bmhName, Namespace: bmhNamespace}, &bmh); err != nil {
 		if errors.IsNotFound(err) {
-			slog.Debug("BMH not found for AllocatedNode, skipping", "bmh", bmhNamespace+"/"+bmhName)
+			slog.DebugContext(ctx, "BMH not found for AllocatedNode, skipping", "bmh", bmhNamespace+"/"+bmhName)
 			return uuid.Nil, nil
 		}
 		return uuid.Nil, fmt.Errorf("failed to get BMH for AllocatedNode %s/%s: %w", node.Namespace, node.Name, err)
@@ -362,7 +362,7 @@ func (d *HardwareDataSource) buildAndSendResource(ctx context.Context, bmh *meta
 	poolUID := hwmgrcontroller.GetResourceInfoResourcePoolUID(bmh, poolNameToUID)
 	if poolUID == "" {
 		poolName := bmh.Labels[constants.LabelResourcePoolName]
-		slog.Warn("skipping BMH: unresolved resourcePoolId (will retry on pool creation)",
+		slog.WarnContext(ctx, "skipping BMH: unresolved resourcePoolId (will retry on pool creation)",
 			"bmh", bmh.Namespace+"/"+bmh.Name, "poolName", poolName)
 		return uuid.Nil, nil
 	}
@@ -427,7 +427,7 @@ func (d *HardwareDataSource) findAllocatedNodeForBMH(ctx context.Context, bmh *m
 	var node hwmgmtv1alpha1.AllocatedNode
 	if err := d.hubClient.Get(ctx, types.NamespacedName{Name: nodeName, Namespace: bmh.Namespace}, &node); err != nil {
 		if !errors.IsNotFound(err) {
-			slog.Warn("failed to get AllocatedNode for BMH",
+			slog.WarnContext(ctx, "failed to get AllocatedNode for BMH",
 				"bmh", bmh.Namespace+"/"+bmh.Name, "node", nodeName, "error", err)
 		}
 		return nil
@@ -483,7 +483,7 @@ func (d *HardwareDataSource) BuildResourcesForPool(ctx context.Context, poolName
 		var hwdata metal3v1alpha1.HardwareData
 		if err := d.hubClient.Get(ctx, types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}, &hwdata); err != nil {
 			if !errors.IsNotFound(err) {
-				slog.Warn("failed to get HardwareData during pool rebuild",
+				slog.WarnContext(ctx, "failed to get HardwareData during pool rebuild",
 					"bmh", bmh.Namespace+"/"+bmh.Name, "error", err)
 			}
 			hwdata = metal3v1alpha1.HardwareData{}
@@ -494,7 +494,7 @@ func (d *HardwareDataSource) BuildResourcesForPool(ctx context.Context, poolName
 		resource := d.convertResource(&resourceInfo)
 		resourceType, err := d.MakeResourceType(resource)
 		if err != nil {
-			slog.Warn("failed to make resource type during pool rebuild",
+			slog.WarnContext(ctx, "failed to make resource type during pool rebuild",
 				"bmh", bmh.Namespace+"/"+bmh.Name, "error", err)
 			continue
 		}

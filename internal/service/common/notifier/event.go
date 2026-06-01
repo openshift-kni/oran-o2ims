@@ -42,7 +42,7 @@ func sendNotification(ctx context.Context, client *http.Client, url string, even
 	}
 	defer func(Body io.ReadCloser) {
 		if err := Body.Close(); err != nil {
-			slog.Error("failed to close response body", "error", err)
+			slog.ErrorContext(ctx, "failed to close response body", "error", err)
 		}
 	}(response.Body)
 
@@ -58,7 +58,7 @@ func sendNotification(ctx context.Context, client *http.Client, url string, even
 // to the worker that this current event is complete
 func processEvent(ctx context.Context, logger *slog.Logger, client *http.Client,
 	completionChannel chan *SubscriptionJobComplete, event Notification, subscriptionID uuid.UUID, url string) {
-	logger.Info("processing data change event",
+	logger.InfoContext(ctx, "processing data change event",
 		"notificationID", event.NotificationID, "sequenceID", event.SequenceID)
 
 	_ = callUrl(ctx, logger, client, url, event)
@@ -82,36 +82,36 @@ func callUrl(ctx context.Context, logger *slog.Logger, client *http.Client, url 
 
 		if nonRetryErr := isRetryableError(err); nonRetryErr != nil {
 			msg := "error sending notification; non retryable error"
-			logger.Error(msg, "error", nonRetryErr,
+			logger.ErrorContext(ctx, msg, "error", nonRetryErr,
 				"notificationID", event.NotificationID, "sequenceID", event.SequenceID)
 			return fmt.Errorf("%s: %w", msg, err)
 		}
 
-		logger.Warn("failed to send notification", "error", err,
+		logger.WarnContext(ctx, "failed to send notification", "error", err,
 			"notificationID", event.NotificationID, "sequenceID", event.SequenceID, "delay", delay.String(), "attemptsRemaining", maxRetries-attempt-1)
 
 		if attempt < maxRetries-1 { // Skip delay for final attempt since no further retries will occur
 			select {
 			case <-ctx.Done():
-				logger.Warn("context canceled while sending notification",
+				logger.WarnContext(ctx, "context canceled while sending notification",
 					"notificationID", event.NotificationID, "sequenceID", event.SequenceID)
 				break
 			case <-time.After(delay):
 				delay *= 2
-				logger.Debug("retrying notification",
+				logger.DebugContext(ctx, "retrying notification",
 					"notificationID", event.NotificationID, "sequenceID", event.SequenceID)
 			}
 		}
 	}
 
 	if err != nil {
-		logger.Error("error sending notification; retries exceeded", "error", err,
+		logger.ErrorContext(ctx, "error sending notification; retries exceeded", "error", err,
 			"notificationID", event.NotificationID, "sequenceID", event.SequenceID)
 		// TODO: If we were able to send this one then we are not likely to be able to send any
 		//  of the others so perhaps we should purge our queue, or enter a longer backoff period.
 		return fmt.Errorf("error sending notification; retries exceeded: %w", err)
 	} else {
-		logger.Info("notification sent",
+		logger.InfoContext(ctx, "notification sent",
 			"notificationID", event.NotificationID, "sequenceID", event.SequenceID)
 	}
 

@@ -88,7 +88,7 @@ func (d *AlarmsDataSource) IncrGenerationID() int {
 
 // makeAlarmDictionaryIDToAlarmDefinitions fetches monitoring rules for each node cluster type and builds a map of alarm dictionary ID to alarm definitions
 func (d *AlarmsDataSource) makeAlarmDictionaryIDToAlarmDefinitions(ctx context.Context, nodeClusterTypes []models.NodeClusterType) (map[uuid.UUID][]models.AlarmDefinition, error) {
-	slog.Info("making alarm dictionary ID to alarm definitions map", "nodeClusterTypes count", len(nodeClusterTypes))
+	slog.InfoContext(ctx, "making alarm dictionary ID to alarm definitions map", "nodeClusterTypes count", len(nodeClusterTypes))
 
 	// Fetch prometheus rules from managed clusters and hub
 	nodeClusterTypeIDToMonitoringRules := d.makeNodeClusterTypeIDToMonitoringRules(ctx, nodeClusterTypes)
@@ -127,7 +127,7 @@ func nodeClusterTypesWithAlarmDictionaryID(nodeClusterTypes []models.NodeCluster
 
 // makeNodeClusterTypeIDToMonitoringRules fetches monitoring rules for each node cluster type
 func (d *AlarmsDataSource) makeNodeClusterTypeIDToMonitoringRules(ctx context.Context, nodeClusterTypes []models.NodeClusterType) map[uuid.UUID][]monitoringv1.Rule {
-	slog.Info("making node cluster type ID to monitoring rules map", "nodeClusterTypes count", len(nodeClusterTypes))
+	slog.InfoContext(ctx, "making node cluster type ID to monitoring rules map", "nodeClusterTypes count", len(nodeClusterTypes))
 
 	nodeClusterTypeIDToMonitoringRules := make(map[uuid.UUID][]monitoringv1.Rule)
 
@@ -180,12 +180,12 @@ func (d *AlarmsDataSource) makeNodeClusterTypeIDToMonitoringRules(ctx context.Co
 	// Collect results
 	for res := range resultChannel {
 		if res.err != nil {
-			slog.Error("error fetching rules for node cluster type", "NodeClusterType ID", res.nodeClusterTypeID, "error", res.err)
+			slog.ErrorContext(ctx, "error fetching rules for node cluster type", "NodeClusterType ID", res.nodeClusterTypeID, "error", res.err)
 			continue
 		}
 
 		nodeClusterTypeIDToMonitoringRules[res.nodeClusterTypeID] = res.rules
-		slog.Info("loaded rules for node cluster type", "NodeClusterType ID", res.nodeClusterTypeID, "rules count", len(res.rules))
+		slog.InfoContext(ctx, "loaded rules for node cluster type", "NodeClusterType ID", res.nodeClusterTypeID, "rules count", len(res.rules))
 	}
 
 	return nodeClusterTypeIDToMonitoringRules
@@ -198,7 +198,7 @@ func (d *AlarmsDataSource) processHub(ctx context.Context) ([]monitoringv1.Rule,
 		return nil, err
 	}
 
-	slog.Debug("fetched rules for Hub cluster", "rules count", len(rules))
+	slog.DebugContext(ctx, "fetched rules for Hub cluster", "rules count", len(rules))
 	return rules, nil
 }
 
@@ -222,7 +222,7 @@ func (d *AlarmsDataSource) processManagedCluster(ctx context.Context, version st
 		return nil, err
 	}
 
-	slog.Debug("fetched rules for managed cluster", "cluster", cluster.Name, "version", version, "rules count", len(rules))
+	slog.DebugContext(ctx, "fetched rules for managed cluster", "cluster", cluster.Name, "version", version, "rules count", len(rules))
 	return rules, nil
 }
 
@@ -482,7 +482,7 @@ type Rule struct {
 
 // collectThanosRules collects Thanos rules from the config maps
 func (d *AlarmsDataSource) collectThanosRules(ctx context.Context) ([]monitoringv1.Rule, error) {
-	slog.Info("Collecting Thanos rules")
+	slog.InfoContext(ctx, "Collecting Thanos rules")
 	var rules []monitoringv1.Rule
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, clients.SingleRequestTimeout)
@@ -497,7 +497,7 @@ func (d *AlarmsDataSource) collectThanosRules(ctx context.Context) ([]monitoring
 		}, configMap)
 		if err != nil {
 			if errors.IsNotFound(err) {
-				slog.Warn("Config map not found", "configMap", configMapName)
+				slog.WarnContext(ctx, "Config map not found", "configMap", configMapName)
 				continue
 			}
 
@@ -513,7 +513,7 @@ func (d *AlarmsDataSource) collectThanosRules(ctx context.Context) ([]monitoring
 			var spec RuleSpec
 			err = yaml.Unmarshal([]byte(rulSpec), &spec)
 			if err != nil {
-				slog.Error("failed to unmarshal thanos prometheus rules spec", "configMap", configMapName, "error", err)
+				slog.ErrorContext(ctx, "failed to unmarshal thanos prometheus rules spec", "configMap", configMapName, "error", err)
 				continue
 			}
 
@@ -533,11 +533,11 @@ func (d *AlarmsDataSource) collectThanosRules(ctx context.Context) ([]monitoring
 				}
 			}
 		} else {
-			slog.Warn("No data found in thanos config map", "configMap", configMapName)
+			slog.WarnContext(ctx, "No data found in thanos config map", "configMap", configMapName)
 		}
 	}
 
-	slog.Debug("Collected thanos rules", "rules count", len(rules))
+	slog.DebugContext(ctx, "Collected thanos rules", "rules count", len(rules))
 
 	// Expand rules with templated severity into multiple static rules
 	expandedRules := d.expandTemplatedSeverity(rules)

@@ -29,7 +29,7 @@ func ConvertAmToAlarmEventRecordModels(ctx context.Context, alerts *[]api.Alert,
 		if alert.StartsAt != nil && !alert.StartsAt.IsZero() {
 			record.AlarmRaisedTime = *alert.StartsAt
 		} else {
-			slog.Error("Alert StartsAt is required, skipping.", "alert", alert)
+			slog.ErrorContext(ctx, "Alert StartsAt is required, skipping.", "alert", alert)
 			continue
 		}
 
@@ -48,7 +48,7 @@ func ConvertAmToAlarmEventRecordModels(ctx context.Context, alerts *[]api.Alert,
 				record.PerceivedSeverity = ps
 			}
 		} else {
-			slog.Error("Alert Status is required, skipping.", "alert", alert)
+			slog.ErrorContext(ctx, "Alert Status is required, skipping.", "alert", alert)
 			continue
 		}
 
@@ -56,7 +56,7 @@ func ConvertAmToAlarmEventRecordModels(ctx context.Context, alerts *[]api.Alert,
 		if alert.Fingerprint != nil {
 			record.Fingerprint = *alert.Fingerprint
 		} else {
-			slog.Error("Alert Fingerprint is required, skipping.", "alert", alert)
+			slog.ErrorContext(ctx, "Alert Fingerprint is required, skipping.", "alert", alert)
 			continue
 		}
 
@@ -90,7 +90,7 @@ func ConvertAmToAlarmEventRecordModels(ctx context.Context, alerts *[]api.Alert,
 		if record.ObjectID != nil {
 			objectTypeID, err := infrastructureClient.GetObjectTypeID(ctx, *record.ObjectID)
 			if err != nil {
-				slog.Warn("Could not get object type ID", "objectID", record.ObjectID, "err", err.Error())
+				slog.WarnContext(ctx, "Could not get object type ID", "objectID", record.ObjectID, "err", err.Error())
 			} else {
 				record.ObjectTypeID = &objectTypeID
 			}
@@ -102,7 +102,7 @@ func ConvertAmToAlarmEventRecordModels(ctx context.Context, alerts *[]api.Alert,
 			_, severity := getPerceivedSeverity(labels)
 			alarmDefinitionID, err := infrastructureClient.GetAlarmDefinitionID(ctx, *record.ObjectTypeID, getAlertName(labels), severity)
 			if err != nil {
-				slog.Warn("Could not get alarm definition ID", "objectTypeID", *record.ObjectTypeID, "name", getAlertName(labels), "severity", severity, "err", err.Error())
+				slog.WarnContext(ctx, "Could not get alarm definition ID", "objectTypeID", *record.ObjectTypeID, "name", getAlertName(labels), "severity", severity, "err", err.Error())
 			} else {
 				record.AlarmDefinitionID = &alarmDefinitionID
 			}
@@ -112,7 +112,7 @@ func ConvertAmToAlarmEventRecordModels(ctx context.Context, alerts *[]api.Alert,
 		records = append(records, record)
 	}
 
-	slog.Info("Converted alerts", "records", len(records))
+	slog.InfoContext(ctx, "Converted alerts", "records", len(records))
 	return records
 }
 

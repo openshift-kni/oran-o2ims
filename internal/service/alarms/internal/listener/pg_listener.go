@@ -61,7 +61,7 @@ func processOutboxNotification(ctx context.Context, pool *pgxpool.Pool, n *notif
 	}
 
 	if len(dataChangeEvents) > 0 && caller == "backup" {
-		slog.Warn("outbox is expected to empty but found at least one data change event when running a backup loop")
+		slog.WarnContext(ctx, "outbox is expected to empty but found at least one data change event when running a backup loop")
 	}
 
 	// Finally construct notifications from data change events
@@ -81,6 +81,6 @@ func processOutboxNotification(ctx context.Context, pool *pgxpool.Pool, n *notif
 		n.Notify(ctx, &notification)
 	}
 
-	slog.Info("Successfully processed outbox notifications", "caller", caller)
+	slog.InfoContext(ctx, "Successfully processed outbox notifications", "caller", caller)
 	return nil
 }

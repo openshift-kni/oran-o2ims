@@ -71,19 +71,19 @@ func (c *AMClient) RunAlertSyncScheduler(ctx context.Context, interval time.Dura
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	slog.Info("Alert sync scheduler started", "interval", interval.String())
+	slog.InfoContext(ctx, "Alert sync scheduler started", "interval", interval.String())
 
 	// Continue syncing at regular intervals until context is canceled
 	for {
 		select {
 		case <-ticker.C:
-			slog.Info("Running scheduled alert sync")
+			slog.InfoContext(ctx, "Running scheduled alert sync")
 			if err := c.SyncAlerts(ctx); err != nil {
-				slog.Error("failed to sync alerts", "error", err)
+				slog.ErrorContext(ctx, "failed to sync alerts", "error", err)
 				// Continue running even if a sync fails
 			}
 		case <-ctx.Done():
-			slog.Info("Alert sync scheduler shutting down")
+			slog.InfoContext(ctx, "Alert sync scheduler shutting down")
 			return nil
 		}
 	}
@@ -105,7 +105,7 @@ func (c *AMClient) SyncAlerts(ctx context.Context) error {
 		}
 	}
 
-	slog.Info("Alertmanager synced successfully")
+	slog.InfoContext(ctx, "Alertmanager synced successfully")
 	return nil
 }
 
@@ -160,7 +160,7 @@ func (c *AMClient) getAlerts(ctx context.Context) ([]APIAlert, error) {
 	}
 	defer func(Body io.ReadCloser) {
 		if err := Body.Close(); err != nil {
-			slog.Error("failed to close response body during AM get call", "error", err.Error())
+			slog.ErrorContext(ctx, "failed to close response body during AM get call", "error", err.Error())
 		}
 	}(resp.Body)
 
@@ -181,7 +181,7 @@ func (c *AMClient) getAlerts(ctx context.Context) ([]APIAlert, error) {
 		return nil, fmt.Errorf("error parsing response: %w, body: %s", err, string(body))
 	}
 
-	slog.Info("Got alerts with AM API", "alerts", len(alerts))
+	slog.InfoContext(ctx, "Got alerts with AM API", "alerts", len(alerts))
 	return alerts, nil
 }
 
