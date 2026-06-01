@@ -179,6 +179,7 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/test/fakeclient"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -5801,7 +5802,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 	}
 
 	It("should use defaults only when no hwMgmtParameters in PR", func() {
-		c = getFakeClientFromObjects(createHwProfiles()...)
+		c = fakeclient.GetFakeClientFromObjects(createHwProfiles()...)
 		task = buildTask(c, `{"nodeClusterName": "test"}`)
 
 		err := task.validateAndMergeHwMgmtInput(ctx, ct)
@@ -5816,7 +5817,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 	})
 
 	It("should merge hwMgmtParameters over defaults", func() {
-		c = getFakeClientFromObjects(createHwProfiles()...)
+		c = fakeclient.GetFakeClientFromObjects(createHwProfiles()...)
 		task = buildTask(c, `{
 			"nodeClusterName": "test",
 			"hwMgmtParameters": {
@@ -5846,7 +5847,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 				{Name: "controller", Role: "master", HwProfile: "profile-64G"},
 			},
 		}
-		c = getFakeClientFromObjects(createHwProfiles()...)
+		c = fakeclient.GetFakeClientFromObjects(createHwProfiles()...)
 		task = buildTask(c, `{
 			"nodeClusterName": "test",
 			"hwMgmtParameters": {
@@ -5873,7 +5874,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 				{Name: "controller", Role: "master", ResourcePoolId: "pool-1"},
 			},
 		}
-		c = getFakeClientFromObjects()
+		c = fakeclient.GetFakeClientFromObjects()
 		task = buildTask(c, `{"nodeClusterName": "test"}`)
 
 		err := task.validateAndMergeHwMgmtInput(ctx, ct)
@@ -5882,7 +5883,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 	})
 
 	It("should override timeout from defaults with PR parameter", func() {
-		c = getFakeClientFromObjects(createHwProfiles()...)
+		c = fakeclient.GetFakeClientFromObjects(createHwProfiles()...)
 		task = buildTask(c, `{
 			"nodeClusterName": "test",
 			"hwMgmtParameters": {
@@ -5901,7 +5902,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 				{Name: "controller", Role: "master", ResourcePoolId: "pool-1"},
 			},
 		}
-		c = getFakeClientFromObjects(createHwProfiles()...)
+		c = fakeclient.GetFakeClientFromObjects(createHwProfiles()...)
 		task = buildTask(c, `{"nodeClusterName": "test"}`)
 
 		err := task.validateAndMergeHwMgmtInput(ctx, ct)
@@ -5916,7 +5917,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 				{Name: "controller", Role: "master", ResourcePoolId: "pool-1"},
 			},
 		}
-		c = getFakeClientFromObjects()
+		c = fakeclient.GetFakeClientFromObjects()
 		task = buildTask(c, `{"nodeClusterName": "test"}`)
 
 		err := task.validateAndMergeHwMgmtInput(ctx, ct)
@@ -5925,7 +5926,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 	})
 
 	It("should return error for negative timeout in PR override", func() {
-		c = getFakeClientFromObjects(createHwProfiles()...)
+		c = fakeclient.GetFakeClientFromObjects(createHwProfiles()...)
 		task = buildTask(c, `{
 			"nodeClusterName": "test",
 			"hwMgmtParameters": {
@@ -5944,7 +5945,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 				ObjectMeta: metav1.ObjectMeta{Name: "profile-spr-single-processor-64G", Namespace: utils.InventoryNamespace},
 			},
 		)
-		c = getFakeClientFromObjects(hwProfiles...)
+		c = fakeclient.GetFakeClientFromObjects(hwProfiles...)
 		task = buildTask(c, `{
 			"nodeClusterName": "test",
 			"hwMgmtParameters": {
@@ -5972,7 +5973,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 				ObjectMeta: metav1.ObjectMeta{Name: "profile-spr-single-processor-64G", Namespace: utils.InventoryNamespace},
 			},
 		)
-		c = getFakeClientFromObjects(hwProfiles...)
+		c = fakeclient.GetFakeClientFromObjects(hwProfiles...)
 		task = buildTask(c, `{
 			"nodeClusterName": "test",
 			"hwMgmtParameters": {

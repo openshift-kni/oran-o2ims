@@ -81,6 +81,7 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/test/fakeclient"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
@@ -311,7 +312,7 @@ defaultHugepagesSize: "1G"`,
 			},
 		}
 
-		c = getFakeClientFromObjects(crs...)
+		c = fakeclient.GetFakeClientFromObjects(crs...)
 
 		// Reconcile the ClusterTemplate.
 		CTReconciler = &ClusterTemplateReconciler{
@@ -1634,7 +1635,7 @@ var _ = Describe("hasPolicyConfigurationTimedOut", func() {
 			},
 		}
 
-		c = getFakeClientFromObjects(crs...)
+		c = fakeclient.GetFakeClientFromObjects(crs...)
 		// Reconcile the ClusterTemplate.
 		CTReconciler = &ClusterTemplateReconciler{
 			Client: c,
@@ -1875,7 +1876,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			},
 		}
 
-		c = getFakeClientFromObjects(crs...)
+		c = fakeclient.GetFakeClientFromObjects(crs...)
 
 		// Populate the NodeAllocationRequest without creating it.
 		nodeAllocationRequest = &hwmgmtv1alpha1.NodeAllocationRequest{
