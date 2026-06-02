@@ -27,7 +27,7 @@ metadata:
     support: Red Hat
   labels:
     operatorframework.io/arch.amd64: supported
-  name: oran-o2ims.v4.22.0
+  name: oran-o2ims.v5.0.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
