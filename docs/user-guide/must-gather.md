@@ -34,6 +34,7 @@ matches the O-Cloud Manager release branch deployed on your hub cluster:
 | O-Cloud Manager release | Must-gather image tag |
 |---|---|
 | release-4.21 | `4.21` or `4.21.0` |
+| release-4.22 | `4.22` or `4.22.0` |
 | main (5.0) | `5.0`, `5.0.0`, or `latest` |
 
 To determine the installed ACM version for the ACM must-gather image:
