@@ -19,7 +19,7 @@
 
 dependencies:
   - module: github.com/openshift-kni/cluster-group-upgrades-operator
-    branch: release-5.0
+    branch: main
     repo: openshift-kni/cluster-group-upgrades-operator
 
   - module: github.com/openshift/api
