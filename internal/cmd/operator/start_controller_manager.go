@@ -11,9 +11,11 @@ import (
 	"crypto/tls"
 	"flag"
 	"log/slog"
+	"strings"
 
 	openshiftv1 "github.com/openshift/api/config/v1"
 	openshiftoperatorv1 "github.com/openshift/api/operator/v1"
+	tlspkg "github.com/openshift/controller-runtime-common/pkg/tls"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
@@ -186,6 +188,29 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return err //nolint:wrapcheck
 	}
 
+	// Create a signal-aware, cancellable context. ctrl.SetupSignalHandler() ensures
+	// SIGINT/SIGTERM cancel the context; WithCancel allows the TLS watcher to
+	// programmatically trigger graceful shutdown on profile changes.
+	ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
+	defer cancel()
+
+	// Fetch the cluster TLS security profile to configure MinVersion/CipherSuites.
+	// This uses a direct client since the manager cache isn't started yet.
+	directClient, err := client.New(ctrl.GetConfigOrDie(), client.Options{Scheme: scheme})
+	if err != nil {
+		logger.ErrorContext(ctx, "Unable to create direct client for TLS profile fetch",
+			slog.String("error", err.Error()))
+		return exit.Error(1)
+	}
+	tlsProfile, err := ctlrutils.FetchAPIServerTLSProfile(ctx, directClient)
+	if err != nil {
+		logger.WarnContext(ctx, "Unable to fetch cluster TLS profile, using Intermediate default",
+			slog.String("error", err.Error()))
+		tlsProfile = *openshiftv1.TLSProfiles[openshiftv1.TLSProfileIntermediateType]
+	}
+	logger.InfoContext(ctx, "Cluster TLS profile loaded",
+		slog.String("minVersion", string(tlsProfile.MinTLSVersion)))
+
 	// Set the TLS options.
 	// If the enable-http2 flag is false (the default), http/2 will be disabled due to its vulnerabilities.
 	// More specifically, disabling http/2 will prevent from being vulnerable to the HTTP/2 Stream
@@ -199,6 +224,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			c.NextProtos = []string{"http/1.1"}
 		})
 	}
+	tlsOpts = append(tlsOpts, ctlrutils.NewTLSConfiguratorFromProfile(tlsProfile))
 
 	operatorNamespace := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
 
@@ -261,11 +287,31 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
+	// Wire the TLS security profile watcher — triggers operator restart on profile change.
+	profileWatcher := &tlspkg.SecurityProfileWatcher{
+		Client:                mgr.GetClient(),
+		InitialTLSProfileSpec: tlsProfile,
+		OnProfileChange: func(watchCtx context.Context, oldSpec, newSpec openshiftv1.TLSProfileSpec) {
+			logger.InfoContext(watchCtx, "Cluster TLS profile changed, initiating graceful shutdown",
+				slog.String("oldMinVersion", string(oldSpec.MinTLSVersion)),
+				slog.String("newMinVersion", string(newSpec.MinTLSVersion)))
+			cancel()
+		},
+	}
+	if err := profileWatcher.SetupWithManager(mgr); err != nil {
+		logger.ErrorContext(ctx, "Unable to set up TLS security profile watcher",
+			slog.String("error", err.Error()))
+		return exit.Error(1)
+	}
+
 	// Start the O-Cloud Manager controller.
 	if err = (&controllers.Reconciler{
-		Client: mgr.GetClient(),
-		Logger: logger.With(slog.String("controller", "O-Cloud Manager")),
-		Image:  c.image,
+		Client:         mgr.GetClient(),
+		Logger:         logger.With(slog.String("controller", "O-Cloud Manager")),
+		Image:          c.image,
+		TLSProfileHash: ctlrutils.TLSProfileHash(tlsProfile),
+		TLSMinVersion:  string(tlsProfile.MinTLSVersion),
+		TLSCiphers:     strings.Join(tlsProfile.Ciphers, ","),
 	}).SetupWithManager(mgr); err != nil {
 		logger.ErrorContext(
 			ctx,
@@ -341,9 +387,6 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 
 	serverErrors := make(chan error, 1)
 
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
 	// Start the Provisioning Request controller.
 	if err = (&controllers.ProvisioningRequestReconciler{
 		Client: mgr.GetClient(),
@@ -393,12 +436,11 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			"Starting manager",
 			slog.String("image", c.image),
 		)
-		if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+		if err := mgr.Start(ctx); err != nil {
 			logger.ErrorContext(ctx, "Problem running manager", slog.Any("error", err))
 			serverErrors <- err
 			return
 		}
-		// The manager has terminated normally. Cancel the context to allow the API server to shutdown
 		cancel()
 	}()
 
