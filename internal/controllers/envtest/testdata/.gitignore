@@ -1,3 +1,4 @@
-# Downloaded at test time from upstream metal3-io/baremetal-operator
-# See suite_test.go downloadBMHCRD()
+# Downloaded at test time from upstream repositories.
+# See suite_test.go downloadBMHCRD() and downloadAPIServerCRD()
 metal3.io_baremetalhosts.yaml
+0000_10_config-operator_01_apiservers-Default.crd.yaml

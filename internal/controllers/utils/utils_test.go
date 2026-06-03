@@ -19,7 +19,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -1666,54 +1665,58 @@ var _ = Describe("Server predicate functions", func() {
 	})
 })
 
-var _ = Describe("TLS cipher suite configuration", func() {
-	It("should derive PFS cipher suites from tls.CipherSuites()", func() {
-		Expect(pfsCipherSuites).ToNot(BeEmpty())
-		for _, suite := range pfsCipherSuites {
-			name := tls.CipherSuiteName(suite)
-			Expect(strings.HasPrefix(name, "TLS_ECDHE_")).To(BeTrue(),
-				"cipher suite %s is not ECDHE-based", name)
-		}
+var _ = Describe("TLS profile-based configuration", func() {
+	const (
+		testMinVersion = "VersionTLS12"
+		testCipher1    = "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+		testCipher2    = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+	)
+
+	BeforeEach(func() {
+		os.Setenv(TLSProfileMinVersionEnvName, testMinVersion)
+		os.Setenv(TLSProfileCiphersEnvName, testCipher1+","+testCipher2)
+		os.Setenv("INSECURE_SKIP_VERIFY", "true")
+		DeferCleanup(func() {
+			os.Unsetenv(TLSProfileMinVersionEnvName)
+			os.Unsetenv(TLSProfileCiphersEnvName)
+			os.Unsetenv("INSECURE_SKIP_VERIFY")
+		})
 	})
 
-	It("should include all ECDHE suites from tls.CipherSuites()", func() {
-		var expected []uint16
-		for _, s := range tls.CipherSuites() {
-			if strings.HasPrefix(s.Name, "TLS_ECDHE_") {
-				expected = append(expected, s.ID)
-			}
-		}
-		Expect(pfsCipherSuites).To(Equal(expected))
-	})
+	expectedCiphers := []uint16{
+		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	}
 
-	It("should set PFS cipher suites on GetClientTLSConfig", func() {
+	It("should apply profile cipher suites on GetClientTLSConfig", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
 		cfg, err := GetClientTLSConfig(ctx, "", "", "")
 		Expect(err).ToNot(HaveOccurred())
-		Expect(cfg.CipherSuites).To(Equal(pfsCipherSuites))
+		Expect(cfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
+		Expect(cfg.CipherSuites).To(Equal(expectedCiphers))
 	})
 
-	It("should set PFS cipher suites on GetDefaultTLSConfig", func() {
-		config := &tls.Config{MinVersion: tls.VersionTLS12}
-		// GetDefaultTLSConfig sets cipher suites in-place before attempting CA
-		// loading, which may fail in test environments without mounted CA files.
-		_, _ = GetDefaultTLSConfig(config)
-		Expect(config.CipherSuites).To(Equal(pfsCipherSuites))
+	It("should apply profile cipher suites on GetDefaultTLSConfig", func() {
+		cfg, err := GetDefaultTLSConfig(nil)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
+		Expect(cfg.CipherSuites).To(Equal(expectedCiphers))
 	})
 
-	It("should not override caller-provided cipher suites on GetDefaultTLSConfig", func() {
-		custom := []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256}
-		config := &tls.Config{
-			MinVersion:   tls.VersionTLS12,
-			CipherSuites: custom,
+	It("should override caller-provided cipher suites with profile on GetDefaultTLSConfig", func() {
+		custom := &tls.Config{
+			MinVersion:   tls.VersionTLS10,                           //nolint:gosec
+			CipherSuites: []uint16{tls.TLS_RSA_WITH_AES_128_CBC_SHA}, //nolint:gosec
 		}
-		_, _ = GetDefaultTLSConfig(config)
-		Expect(config.CipherSuites).To(Equal(custom))
+		cfg, err := GetDefaultTLSConfig(custom)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
+		Expect(cfg.CipherSuites).To(Equal(expectedCiphers))
 	})
 
-	It("should set PFS cipher suites on GetServerTLSConfig", func() {
+	It("should apply profile cipher suites on GetServerTLSConfig", func() {
 		dir := GinkgoT().TempDir()
 		certFile := filepath.Join(dir, "tls.crt")
 		keyFile := filepath.Join(dir, "tls.key")
@@ -1738,11 +1741,18 @@ var _ = Describe("TLS cipher suite configuration", func() {
 
 		cfg, err := GetServerTLSConfig(ctx, certFile, keyFile)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(cfg.CipherSuites).To(Equal(pfsCipherSuites))
+		Expect(cfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
+		Expect(cfg.CipherSuites).To(Equal(expectedCiphers))
 	})
 
-	It("should expose PFS cipher suites via PFSCipherSuites()", func() {
-		Expect(PFSCipherSuites()).To(Equal(pfsCipherSuites))
+	It("should fall back to Intermediate profile when env vars are not set", func() {
+		os.Unsetenv(TLSProfileMinVersionEnvName)
+		os.Unsetenv(TLSProfileCiphersEnvName)
+
+		cfg, err := GetDefaultTLSConfig(nil)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
+		Expect(cfg.CipherSuites).ToNot(BeEmpty())
 	})
 })
 

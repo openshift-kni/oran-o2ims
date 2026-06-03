@@ -90,11 +90,13 @@ var _ = Describe("Alertmanager API Client", func() {
 		os.Setenv("ALARMS_SERVER_TOKEN_FILE", tempTokenFile)
 		os.Setenv("ALARMS_SERVER_CA_FILE", tempCAFile)
 		os.Setenv("ALARMS_SERVER_AM_HOST", serverHost)
+		os.Setenv("INSECURE_SKIP_VERIFY", "true")
 
 		DeferCleanup(func() {
 			os.Unsetenv("ALARMS_SERVER_TOKEN_FILE")
 			os.Unsetenv("ALARMS_SERVER_CA_FILE")
 			os.Unsetenv("ALARMS_SERVER_AM_HOST")
+			os.Unsetenv("INSECURE_SKIP_VERIFY")
 		})
 
 		// Set up minimal fake k8s client (only needed for infrastructure)
