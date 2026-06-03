@@ -5,7 +5,6 @@ package alertmanager
 
 import (
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
@@ -219,14 +218,16 @@ func (c *AMClient) createAlertmanagerClient() (*http.Client, string, error) {
 		return nil, "", fmt.Errorf("failed to append CA certificate")
 	}
 
-	// Create HTTP client with the CA certificate
+	// Create HTTP client with the CA certificate and cluster TLS profile
+	tlsConfig, err := ctlrutils.GetDefaultTLSConfig(nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to create TLS config: %w", err)
+	}
+	tlsConfig.RootCAs = rootCAs
+
 	httpClient := &http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				RootCAs:      rootCAs,
-				MinVersion:   tls.VersionTLS12,
-				CipherSuites: ctlrutils.PFSCipherSuites(),
-			},
+			TLSClientConfig: tlsConfig,
 		},
 	}
 
