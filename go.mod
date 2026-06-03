@@ -27,6 +27,7 @@ require (
 	github.com/openshift-kni/cluster-group-upgrades-operator v0.0.0-20260521142641-57d77ffe2627
 	github.com/openshift/api v0.0.0-20260513085653-694421e64aee
 	github.com/openshift/assisted-service/api v0.0.0
+	github.com/openshift/controller-runtime-common v0.0.0-20260213175913-767fef058eca
 	github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87
 	github.com/openshift/hive/apis v0.0.0-20251117181851-acea5e9196a2
 	github.com/pashagolub/pgxmock/v4 v4.9.0
@@ -51,7 +52,7 @@ require (
 	k8s.io/client-go v0.35.5
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kubectl v0.35.5
-	k8s.io/utils v0.0.0-20260108192941-914a6e750570
+	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
 	open-cluster-management.io/api v1.2.0
 	open-cluster-management.io/governance-policy-propagator v0.18.0
 	sigs.k8s.io/controller-runtime v0.22.5
@@ -134,6 +135,7 @@ require (
 	github.com/oklog/ulid/v2 v2.1.1 // indirect
 	github.com/openshift-kni/lifecycle-agent v0.0.0-20250227204303-42df68297836 // indirect
 	github.com/openshift/assisted-service/models v0.0.0 // indirect
+	github.com/openshift/library-go v0.0.0-20260213153706-03f1709971c5 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/pquerna/cachecontrol v0.2.0 // indirect
