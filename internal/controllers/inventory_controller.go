@@ -58,6 +58,7 @@ import (
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;delete;list;watch;update
 //+kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
+//+kubebuilder:rbac:groups="config.openshift.io",resources=apiservers,verbs=get;list;watch
 //+kubebuilder:rbac:groups="config.openshift.io",resources=clusterversions,verbs=get;list;watch
 //+kubebuilder:rbac:urls="/internal/v1/caas-alerts/alertmanager",verbs=create
 //+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/nodeClusterTypes",verbs=get;list
@@ -90,19 +91,25 @@ import (
 // Reconciler reconciles a Inventory object
 type Reconciler struct {
 	client.Client
-	Logger    *slog.Logger
-	Image     string
-	setupOnce sync.Once
+	Logger         *slog.Logger
+	Image          string
+	TLSProfileHash string
+	TLSMinVersion  string
+	TLSCiphers     string
+	setupOnce      sync.Once
 }
 
 // reconcilerTask contains the information and logic needed to perform a single reconciliation
 // task. This reduces the need to pass things like the current state of the object as function
 // parameters.
 type reconcilerTask struct {
-	logger *slog.Logger
-	image  string
-	client client.Client
-	object *inventoryv1alpha1.Inventory
+	logger         *slog.Logger
+	image          string
+	tlsProfileHash string
+	tlsMinVersion  string
+	tlsCiphers     string
+	client         client.Client
+	object         *inventoryv1alpha1.Inventory
 }
 
 const registerOnRestartAnnotation = "ocloud.openshift.io/register-on-restart"
@@ -172,10 +179,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (resul
 
 	// Create and run the task:
 	task := &reconcilerTask{
-		logger: r.Logger,
-		client: r.Client,
-		image:  r.Image,
-		object: object,
+		logger:         r.Logger,
+		client:         r.Client,
+		image:          r.Image,
+		tlsProfileHash: r.TLSProfileHash,
+		tlsMinVersion:  r.TLSMinVersion,
+		tlsCiphers:     r.TLSCiphers,
+		object:         object,
 	}
 	result, err = task.run(ctx)
 	return
@@ -885,6 +895,18 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (c
 		},
 	}...)
 
+	// TLS profile env vars (operator-resolved, avoids server pods needing API access)
+	envVars = append(envVars, []corev1.EnvVar{
+		{
+			Name:  ctlrutils.TLSProfileMinVersionEnvName,
+			Value: t.tlsMinVersion,
+		},
+		{
+			Name:  ctlrutils.TLSProfileCiphersEnvName,
+			Value: t.tlsCiphers,
+		},
+	}...)
+
 	// Server specific env var
 	if serverName == ctlrutils.InventoryAlarmServerName {
 		postgresImage := os.Getenv(constants.PostgresImageName)
@@ -909,6 +931,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (c
 			ObjectMeta: metav1.ObjectMeta{
 				Annotations: map[string]string{
 					"kubectl.kubernetes.io/default-container": constants.ServerContainerName,
+					"ocloud.openshift.io/tls-profile-hash":    t.tlsProfileHash,
 				},
 				Labels: map[string]string{
 					"app": serverName,
