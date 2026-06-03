@@ -23,7 +23,6 @@ import (
 
 	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/util/net"
-	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
@@ -51,29 +50,7 @@ const (
 	requiredString   = "required"
 )
 
-var (
-	oranUtilsLog = ctrl.Log.WithName("oranUtilsLog")
-
-	// pfsCipherSuites contains the TLS 1.2 cipher suites that provide Perfect Forward Secrecy
-	// (PFS) via ECDHE key exchange. Derived from tls.CipherSuites() so the list adapts
-	// automatically as Go adds or removes suites across versions.
-	// TLS 1.3 suites always use PFS and are not configurable in Go.
-	pfsCipherSuites []uint16
-)
-
-func init() {
-	for _, s := range tls.CipherSuites() {
-		if strings.HasPrefix(s.Name, "TLS_ECDHE_") {
-			pfsCipherSuites = append(pfsCipherSuites, s.ID)
-		}
-	}
-}
-
-// PFSCipherSuites returns the PFS-only TLS 1.2 cipher suite list for callers
-// that build their own tls.Config without going through GetDefaultTLSConfig.
-func PFSCipherSuites() []uint16 {
-	return pfsCipherSuites
-}
+var oranUtilsLog = ctrl.Log.WithName("oranUtilsLog")
 
 func UpdateK8sCRStatus(ctx context.Context, c client.Client, object client.Object) error {
 	cr, ok := object.(*provisioningv1alpha1.ProvisioningRequest)
@@ -903,28 +880,11 @@ func loadDefaultCABundles(config *tls.Config) error {
 }
 
 // GetDefaultTLSConfig sets the TLS configuration attributes appropriately to enable communication between internal
-// services and accessing the public facing API endpoints.
+// services and accessing the public facing API endpoints. TLS version and cipher suites are inherited from the
+// cluster TLS security profile (via operator-injected environment variables).
 func GetDefaultTLSConfig(config *tls.Config) (*tls.Config, error) {
-	if config == nil {
-		config = &tls.Config{MinVersion: tls.VersionTLS12}
-	}
-
-	if len(config.CipherSuites) == 0 {
-		config.CipherSuites = pfsCipherSuites
-	}
-
-	// Allow developers to override the TLS verification
-	config.InsecureSkipVerify = GetTLSSkipVerify()
-	if !config.InsecureSkipVerify {
-		// TLS verification is enabled therefore we need to load the CA bundles that are injected into our filesystem
-		// automatically; which happens since we are defined as using a service-account
-		err := loadDefaultCABundles(config)
-		if err != nil {
-			return nil, fmt.Errorf("error loading default CABundles: %w", err)
-		}
-	}
-
-	return config, nil
+	profile := newTLSProfileFromEnv()
+	return NewOutboundTLSConfig(profile, config)
 }
 
 // AddCABundle to an existing TLS configuration
@@ -942,59 +902,20 @@ func AddCABundle(config *tls.Config, caBundle string) error {
 	return nil
 }
 
-// GetClientTLSConfig creates a tls.Config that uses a dynamic loader to handle updates to the certificate and/or key.
+// GetClientTLSConfig creates a tls.Config for outbound mTLS connections with dynamic cert/key rotation.
+// TLS version and cipher suites are inherited from the cluster TLS security profile
+// (via operator-injected environment variables).
 func GetClientTLSConfig(ctx context.Context, certFile, keyFile, caFile string) (*tls.Config, error) {
-	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12, CipherSuites: pfsCipherSuites}
-
-	if caFile != "" {
-		err := AddCABundle(tlsConfig, caFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to add ca bundle: %w", err)
-		}
-	}
-
-	if certFile != "" {
-		loader, err := dynamiccertificates.NewDynamicServingContentFromFiles("tls-client", certFile, keyFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to setup certificate loader: %w", err)
-		}
-		go loader.Run(ctx, 1)
-
-		tlsConfig.GetClientCertificate = func(_ *tls.CertificateRequestInfo) (*tls.Certificate, error) {
-			cert, key := loader.CurrentCertKeyContent()
-			result, err := tls.X509KeyPair(cert, key)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create client certificate: %w", err)
-			}
-			return &result, nil
-		}
-	}
-
-	return tlsConfig, nil
+	profile := newTLSProfileFromEnv()
+	return NewOutboundMTLSConfig(ctx, profile, certFile, keyFile, caFile)
 }
 
-// GetServerTLSConfig creates a tls.Config that uses a dynamic loader to handle updates to the certificate and/or key.
+// GetServerTLSConfig creates a tls.Config for accepting incoming connections with dynamic cert/key rotation.
+// TLS version and cipher suites are inherited from the cluster TLS security profile
+// (via operator-injected environment variables).
 func GetServerTLSConfig(ctx context.Context, certFile, keyFile string) (*tls.Config, error) {
-	loader, err := dynamiccertificates.NewDynamicServingContentFromFiles("tls-server", certFile, keyFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to setup certificate loader: %w", err)
-	}
-	go loader.Run(ctx, 1)
-
-	tlsConfig := &tls.Config{
-		MinVersion:   tls.VersionTLS12,
-		CipherSuites: pfsCipherSuites,
-		GetCertificate: func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
-			certBytes, keyBytes := loader.CurrentCertKeyContent()
-			cert, err := tls.X509KeyPair(certBytes, keyBytes)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create server certificate: %w", err)
-			}
-			return &cert, nil
-		},
-	}
-
-	return tlsConfig, nil
+	profile := newTLSProfileFromEnv()
+	return NewInboundTLSConfig(ctx, profile, certFile, keyFile)
 }
 
 // GetDefaultBackendTransport returns an HTTP transport with the proper TLS defaults set.
