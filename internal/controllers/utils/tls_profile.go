@@ -90,6 +90,11 @@ func NewOutboundMTLSConfig(ctx context.Context, profile configv1.TLSProfileSpec,
 		}
 	}
 
+	isCertWithoutKey := certFile != "" && keyFile == ""
+	isKeyWithoutCert := keyFile != "" && certFile == ""
+	if isCertWithoutKey || isKeyWithoutCert {
+		return nil, fmt.Errorf("certFile and keyFile must both be provided or both be empty for mTLS (got certFile=%q, keyFile=%q)", certFile, keyFile)
+	}
 	if certFile != "" {
 		getCert, err := startCertLoader(ctx, "tls-client", certFile, keyFile)
 		if err != nil {
@@ -104,18 +109,12 @@ func NewOutboundMTLSConfig(ctx context.Context, profile configv1.TLSProfileSpec,
 	return tlsConfig, nil
 }
 
-// NewOutboundTLSConfig creates a tls.Config for general outbound connections
-// where we only verify the remote server (system CA bundles) without presenting a client certificate.
+// NewOutboundTLSConfig creates a tls.Config for general outbound connections applying only the
+// TLS profile (MinVersion, CipherSuites). It does not load CA bundles or check INSECURE_SKIP_VERIFY;
+// those cluster-runtime concerns are handled by the GetDefaultTLSConfig wrapper in utils.go.
 func NewOutboundTLSConfig(profile configv1.TLSProfileSpec, config *tls.Config) (*tls.Config, error) {
 	if config == nil {
 		config = &tls.Config{} //nolint:gosec
-	}
-
-	config.InsecureSkipVerify = GetTLSSkipVerify()
-	if !config.InsecureSkipVerify {
-		if err := loadDefaultCABundles(config); err != nil {
-			return nil, fmt.Errorf("error loading default CABundles: %w", err)
-		}
 	}
 
 	NewTLSConfiguratorFromProfile(profile)(config)
@@ -141,14 +140,21 @@ func newTLSProfileFromEnv() configv1.TLSProfileSpec {
 		return *configv1.TLSProfiles[configv1.TLSProfileIntermediateType]
 	}
 
+	if !isValidTLSVersion(minVersion) {
+		slog.Warn("Unrecognized TLS_PROFILE_MIN_VERSION value, falling back to Intermediate profile",
+			slog.String("value", minVersion))
+		return *configv1.TLSProfiles[configv1.TLSProfileIntermediateType]
+	}
+
 	// Get "," separated ciphers
 	var ciphers []string
-	if ciphersStr != "" {
+	switch {
+	case ciphersStr != "":
 		ciphers = strings.Split(ciphersStr, ",")
-	} else if minVersion == string(configv1.VersionTLS13) {
+	case minVersion == string(configv1.VersionTLS13):
 		slog.Warn("TLS profile ciphers env var is empty, TLS 1.3 ciphers will be managed by Go internally",
 			slog.String("minVersion", minVersion))
-	} else {
+	default:
 		slog.Warn("TLS profile ciphers env var is empty for non-TLS1.3 profile, falling back to Intermediate ciphers",
 			slog.String("minVersion", minVersion))
 		return *configv1.TLSProfiles[configv1.TLSProfileIntermediateType]
@@ -163,4 +169,15 @@ func newTLSProfileFromEnv() configv1.TLSProfileSpec {
 		MinTLSVersion: configv1.TLSProtocolVersion(minVersion),
 		Ciphers:       ciphers,
 	}
+}
+
+var validTLSVersions = map[string]bool{
+	string(configv1.VersionTLS10): true,
+	string(configv1.VersionTLS11): true,
+	string(configv1.VersionTLS12): true,
+	string(configv1.VersionTLS13): true,
+}
+
+func isValidTLSVersion(v string) bool {
+	return validTLSVersions[v]
 }

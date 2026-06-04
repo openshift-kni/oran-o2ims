@@ -1699,7 +1699,7 @@ var _ = Describe("TLS profile-based configuration", func() {
 	})
 
 	It("should apply profile cipher suites on GetDefaultTLSConfig", func() {
-		cfg, err := GetDefaultTLSConfig(nil)
+		cfg, err := GetDefaultTLSConfig(nil, true)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
 		Expect(cfg.CipherSuites).To(Equal(expectedCiphers))
@@ -1710,7 +1710,7 @@ var _ = Describe("TLS profile-based configuration", func() {
 			MinVersion:   tls.VersionTLS10,                           //nolint:gosec
 			CipherSuites: []uint16{tls.TLS_RSA_WITH_AES_128_CBC_SHA}, //nolint:gosec
 		}
-		cfg, err := GetDefaultTLSConfig(custom)
+		cfg, err := GetDefaultTLSConfig(custom, true)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
 		Expect(cfg.CipherSuites).To(Equal(expectedCiphers))
@@ -1749,7 +1749,7 @@ var _ = Describe("TLS profile-based configuration", func() {
 		os.Unsetenv(TLSProfileMinVersionEnvName)
 		os.Unsetenv(TLSProfileCiphersEnvName)
 
-		cfg, err := GetDefaultTLSConfig(nil)
+		cfg, err := GetDefaultTLSConfig(nil, true)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
 		Expect(cfg.CipherSuites).ToNot(BeEmpty())

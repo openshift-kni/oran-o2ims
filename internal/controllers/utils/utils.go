@@ -882,9 +882,24 @@ func loadDefaultCABundles(config *tls.Config) error {
 // GetDefaultTLSConfig sets the TLS configuration attributes appropriately to enable communication between internal
 // services and accessing the public facing API endpoints. TLS version and cipher suites are inherited from the
 // cluster TLS security profile (via operator-injected environment variables).
-func GetDefaultTLSConfig(config *tls.Config) (*tls.Config, error) {
+// InsecureSkipVerify is always read from the INSECURE_SKIP_VERIFY env var regardless of loadCAs.
+// When loadCAs is true and verification is enabled, default in-cluster CA bundles are loaded.
+// Pass loadCAs=false when the caller provides its own trust anchors (e.g., a pinned service CA).
+func GetDefaultTLSConfig(config *tls.Config, loadCAs bool) (*tls.Config, error) {
 	profile := newTLSProfileFromEnv()
-	return NewOutboundTLSConfig(profile, config)
+	tlsConfig, err := NewOutboundTLSConfig(profile, config)
+	if err != nil {
+		return nil, err
+	}
+
+	tlsConfig.InsecureSkipVerify = GetTLSSkipVerify()
+	if loadCAs && !tlsConfig.InsecureSkipVerify {
+		if err := loadDefaultCABundles(tlsConfig); err != nil {
+			return nil, fmt.Errorf("error loading default CABundles: %w", err)
+		}
+	}
+
+	return tlsConfig, nil
 }
 
 // AddCABundle to an existing TLS configuration
@@ -920,7 +935,7 @@ func GetServerTLSConfig(ctx context.Context, certFile, keyFile string) (*tls.Con
 
 // GetDefaultBackendTransport returns an HTTP transport with the proper TLS defaults set.
 func GetDefaultBackendTransport() (http.RoundTripper, error) {
-	tlsConfig, err := GetDefaultTLSConfig(&tls.Config{MinVersion: tls.VersionTLS12})
+	tlsConfig, err := GetDefaultTLSConfig(nil, true)
 	if err != nil {
 		return nil, err
 	}

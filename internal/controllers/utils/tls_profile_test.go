@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package utils
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -27,7 +28,7 @@ import (
 // generateSelfSignedCert creates a self-signed cert/key pair written to disk, returning the file paths.
 func generateSelfSignedCert(dir, suffix string) (certPath, keyPath string) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	ExpectWithOffset(1, err).ToNot(HaveOccurred())
 
 	template := &x509.Certificate{
 		SerialNumber: big.NewInt(time.Now().UnixNano()),
@@ -35,11 +36,11 @@ func generateSelfSignedCert(dir, suffix string) (certPath, keyPath string) {
 		NotAfter:     time.Now().Add(24 * time.Hour),
 	}
 	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	ExpectWithOffset(1, err).ToNot(HaveOccurred())
 
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
 	keyDER, err := x509.MarshalECPrivateKey(key)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	ExpectWithOffset(1, err).ToNot(HaveOccurred())
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 
 	certPath = filepath.Join(dir, "tls-"+suffix+".crt")
@@ -60,7 +61,7 @@ var _ = Describe("TLS Profile", func() {
 			configurator(cfg)
 
 			Expect(cfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
-			Expect(cfg.CipherSuites).NotTo(BeEmpty())
+			Expect(cfg.CipherSuites).ToNot(BeEmpty())
 		})
 
 		It("should configure Modern profile with TLS 1.3 and no explicit cipher suites", func() {
@@ -83,7 +84,7 @@ var _ = Describe("TLS Profile", func() {
 			configurator(cfg)
 
 			Expect(cfg.MinVersion).To(Equal(uint16(tls.VersionTLS10)))
-			Expect(cfg.CipherSuites).NotTo(BeEmpty())
+			Expect(cfg.CipherSuites).ToNot(BeEmpty())
 		})
 
 		It("should handle custom profile with specific ciphers", func() {
@@ -126,7 +127,7 @@ var _ = Describe("TLS Profile", func() {
 				},
 			}
 			configurator := NewTLSConfiguratorFromProfile(profile)
-			Expect(configurator).NotTo(BeNil())
+			Expect(configurator).ToNot(BeNil())
 
 			cfg := &tls.Config{}
 			configurator(cfg)
@@ -138,25 +139,27 @@ var _ = Describe("TLS Profile", func() {
 	})
 
 	Describe("NewOutboundTLSConfig", func() {
-		BeforeEach(func() {
-			os.Setenv("INSECURE_SKIP_VERIFY", "true")
-			DeferCleanup(func() { os.Unsetenv("INSECURE_SKIP_VERIFY") })
-		})
-
 		It("should create a config with profile settings", func() {
 			profile := *configv1.TLSProfiles[configv1.TLSProfileIntermediateType]
 			cfg, err := NewOutboundTLSConfig(profile, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(cfg).NotTo(BeNil())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cfg).ToNot(BeNil())
 			Expect(cfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
 		})
 
 		It("should apply Modern profile MinVersion", func() {
 			profile := *configv1.TLSProfiles[configv1.TLSProfileModernType]
 			cfg, err := NewOutboundTLSConfig(profile, nil)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(cfg.MinVersion).To(Equal(uint16(tls.VersionTLS13)))
-			Expect(cfg.InsecureSkipVerify).To(BeTrue())
+		})
+
+		It("should not set InsecureSkipVerify or RootCAs", func() {
+			profile := *configv1.TLSProfiles[configv1.TLSProfileIntermediateType]
+			cfg, err := NewOutboundTLSConfig(profile, nil)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cfg.InsecureSkipVerify).To(BeFalse())
+			Expect(cfg.RootCAs).To(BeNil())
 		})
 	})
 
@@ -169,7 +172,7 @@ var _ = Describe("TLS Profile", func() {
 		It("should fall back to Intermediate when env vars are not set", func() {
 			profile := newTLSProfileFromEnv()
 			Expect(profile.MinTLSVersion).To(Equal(configv1.VersionTLS12))
-			Expect(profile.Ciphers).NotTo(BeEmpty())
+			Expect(profile.Ciphers).ToNot(BeEmpty())
 		})
 
 		It("should parse min version and ciphers from env vars", func() {
@@ -192,6 +195,15 @@ var _ = Describe("TLS Profile", func() {
 			Expect(profile.MinTLSVersion).To(Equal(configv1.VersionTLS13))
 			Expect(profile.Ciphers).To(BeEmpty())
 		})
+
+		It("should fall back to Intermediate when min version is unrecognized", func() {
+			os.Setenv(TLSProfileMinVersionEnvName, "TLS1.2") // invalid format
+			os.Setenv(TLSProfileCiphersEnvName, "ECDHE-RSA-AES128-GCM-SHA256")
+
+			profile := newTLSProfileFromEnv()
+			Expect(profile.MinTLSVersion).To(Equal(configv1.VersionTLS12))
+			Expect(profile.Ciphers).ToNot(BeEmpty())
+		})
 	})
 
 	Describe("TLSProfileHash", func() {
@@ -206,7 +218,7 @@ var _ = Describe("TLS Profile", func() {
 		It("should produce different hashes for different MinTLSVersion", func() {
 			intermediate := *configv1.TLSProfiles[configv1.TLSProfileIntermediateType]
 			modern := *configv1.TLSProfiles[configv1.TLSProfileModernType]
-			Expect(TLSProfileHash(intermediate)).NotTo(Equal(TLSProfileHash(modern)))
+			Expect(TLSProfileHash(intermediate)).ToNot(Equal(TLSProfileHash(modern)))
 		})
 
 		It("should produce different hashes for different cipher lists", func() {
@@ -218,7 +230,57 @@ var _ = Describe("TLS Profile", func() {
 				MinTLSVersion: configv1.VersionTLS12,
 				Ciphers:       []string{"TLS_AES_256_GCM_SHA384"},
 			}
-			Expect(TLSProfileHash(a)).NotTo(Equal(TLSProfileHash(b)))
+			Expect(TLSProfileHash(a)).ToNot(Equal(TLSProfileHash(b)))
+		})
+	})
+
+	Describe("NewOutboundMTLSConfig", func() {
+		var (
+			ctx    context.Context
+			cancel context.CancelFunc
+			tmpDir string
+		)
+
+		BeforeEach(func() {
+			ctx, cancel = context.WithCancel(context.Background())
+			tmpDir = GinkgoT().TempDir()
+		})
+
+		AfterEach(func() {
+			cancel()
+		})
+
+		It("should reject certFile without keyFile", func() {
+			profile := *configv1.TLSProfiles[configv1.TLSProfileIntermediateType]
+			_, err := NewOutboundMTLSConfig(ctx, profile, "/some/cert.pem", "", "")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("certFile and keyFile must both be provided or both be empty"))
+		})
+
+		It("should reject keyFile without certFile", func() {
+			profile := *configv1.TLSProfiles[configv1.TLSProfileIntermediateType]
+			_, err := NewOutboundMTLSConfig(ctx, profile, "", "/some/key.pem", "")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("certFile and keyFile must both be provided or both be empty"))
+		})
+
+		It("should succeed when both certFile and keyFile are provided", func() {
+			profile := *configv1.TLSProfiles[configv1.TLSProfileIntermediateType]
+			certFile, keyFile := generateSelfSignedCert(tmpDir, "mtls")
+
+			cfg, err := NewOutboundMTLSConfig(ctx, profile, certFile, keyFile, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cfg.GetClientCertificate).ToNot(BeNil())
+			Expect(cfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
+		})
+
+		It("should succeed when neither certFile nor keyFile are provided", func() {
+			profile := *configv1.TLSProfiles[configv1.TLSProfileIntermediateType]
+
+			cfg, err := NewOutboundMTLSConfig(ctx, profile, "", "", "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cfg.GetClientCertificate).To(BeNil())
+			Expect(cfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
 		})
 	})
 
@@ -242,11 +304,11 @@ var _ = Describe("TLS Profile", func() {
 			certFile, keyFile := generateSelfSignedCert(tmpDir, "loader")
 
 			getCert, err := startCertLoader(ctx, "test-server", certFile, keyFile)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			cert, err := getCert()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(cert).NotTo(BeNil())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cert).ToNot(BeNil())
 			Expect(cert.Certificate).To(HaveLen(1))
 		})
 
@@ -254,10 +316,10 @@ var _ = Describe("TLS Profile", func() {
 			certFile, keyFile := generateSelfSignedCert(tmpDir, "rotate")
 
 			getCert, err := startCertLoader(ctx, "test-rotate", certFile, keyFile)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 
 			originalCert, err := getCert()
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			originalRaw := originalCert.Certificate[0]
 
 			// Overwrite files with a new cert (different serial number)
@@ -268,7 +330,7 @@ var _ = Describe("TLS Profile", func() {
 				if err != nil {
 					return false
 				}
-				return !bytesEqual(newCert.Certificate[0], originalRaw)
+				return !bytes.Equal(newCert.Certificate[0], originalRaw)
 			}, 5*time.Second, 200*time.Millisecond).Should(BeTrue())
 		})
 
@@ -282,12 +344,12 @@ var _ = Describe("TLS Profile", func() {
 			profile := *configv1.TLSProfiles[configv1.TLSProfileIntermediateType]
 
 			cfg, err := NewInboundTLSConfig(ctx, profile, certFile, keyFile)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(cfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
-			Expect(cfg.GetCertificate).NotTo(BeNil())
+			Expect(cfg.GetCertificate).ToNot(BeNil())
 
 			cert, err := cfg.GetCertificate(nil)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(cert.Certificate).To(HaveLen(1))
 		})
 	})
@@ -296,7 +358,7 @@ var _ = Describe("TLS Profile", func() {
 // generateSelfSignedCertToFiles overwrites existing cert/key files with a freshly generated pair.
 func generateSelfSignedCertToFiles(certPath, keyPath string) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	ExpectWithOffset(1, err).ToNot(HaveOccurred())
 
 	template := &x509.Certificate{
 		SerialNumber: big.NewInt(time.Now().UnixNano()),
@@ -304,25 +366,13 @@ func generateSelfSignedCertToFiles(certPath, keyPath string) {
 		NotAfter:     time.Now().Add(24 * time.Hour),
 	}
 	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	ExpectWithOffset(1, err).ToNot(HaveOccurred())
 
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
 	keyDER, err := x509.MarshalECPrivateKey(key)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	ExpectWithOffset(1, err).ToNot(HaveOccurred())
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 
 	ExpectWithOffset(1, os.WriteFile(certPath, certPEM, 0o600)).To(Succeed())
 	ExpectWithOffset(1, os.WriteFile(keyPath, keyPEM, 0o600)).To(Succeed())
-}
-
-func bytesEqual(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
