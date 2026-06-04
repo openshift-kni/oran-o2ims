@@ -1,6 +1,6 @@
 {
-  "task_key": "CNF-22897-review-analyze",
-  "summary": "Analyze PR review feedback for CNF-22897",
-  "description": "Analyze the PR review comments in `.forge/review-comments.md` and produce a structured implementation plan.\n\nFollow the implement-review skill instructions exactly:\n1. Read `.forge/review-comments.md`\n2. Explore the codebase with git log, git diff, and file reads\n3. Write `.forge/review-plan.md` with actionable items\n4. Write `.forge/review-objections.md` only if any comments are contested\n\nDo NOT make any code changes. Analysis only.\n\nTicket: CNF-22897\n",
+  "task_key": "CNF-22897-review-fix",
+  "summary": "Implement PR review plan for CNF-22897",
+  "description": "Implement the code changes described in `.forge/review-plan.md`, then ensure the project builds cleanly.\n\n## Instructions\n\n1. Read `.forge/review-plan.md`. If it says `# No actionable items`, exit without changes.\n\n2. Implement each item \u2014 minimal, targeted edits only.\n\n3. After making changes, run the project's standard post-change steps (codegen, lint, build). Check `README.md`, `CONTRIBUTING.md`, `Makefile`, or `CLAUDE.md` for the correct commands. A typical sequence:\n   - Regenerate any auto-generated files if source templates changed\n   - Run the linter/formatter on changed files\n   - Verify the build compiles\n\n4. Commit everything (implementation + any generated or formatted files) in a single commit:\n   `git commit -m \"[CNF-22897] review: address PR feedback\"`\n\n5. Do NOT push \u2014 the orchestrator handles that.\n\nTicket: CNF-22897\n",
   "previous_task_keys": []
 }
