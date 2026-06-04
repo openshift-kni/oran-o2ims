@@ -199,13 +199,13 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	directClient, err := client.New(ctrl.GetConfigOrDie(), client.Options{Scheme: scheme})
 	if err != nil {
 		logger.ErrorContext(ctx, "Unable to create direct client for TLS profile fetch",
-			slog.String("error", err.Error()))
+			slog.Any("error", err))
 		return exit.Error(1)
 	}
 	tlsProfile, err := ctlrutils.FetchAPIServerTLSProfile(ctx, directClient)
 	if err != nil {
-		logger.WarnContext(ctx, "Unable to fetch cluster TLS profile, using Intermediate default",
-			slog.String("error", err.Error()))
+		logger.ErrorContext(ctx, "Unable to fetch cluster TLS profile, using Intermediate default",
+			slog.Any("error", err))
 		tlsProfile = *openshiftv1.TLSProfiles[openshiftv1.TLSProfileIntermediateType]
 	}
 	logger.InfoContext(ctx, "Cluster TLS profile loaded",
@@ -224,6 +224,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			c.NextProtos = []string{"http/1.1"}
 		})
 	}
+	// Profile configurator is appended last so http/2 disabling (NextProtos) is not overridden.
 	tlsOpts = append(tlsOpts, ctlrutils.NewTLSConfiguratorFromProfile(tlsProfile))
 
 	operatorNamespace := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
@@ -300,7 +301,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	}
 	if err := profileWatcher.SetupWithManager(mgr); err != nil {
 		logger.ErrorContext(ctx, "Unable to set up TLS security profile watcher",
-			slog.String("error", err.Error()))
+			slog.Any("error", err))
 		return exit.Error(1)
 	}
 

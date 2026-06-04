@@ -218,8 +218,9 @@ func (c *AMClient) createAlertmanagerClient() (*http.Client, string, error) {
 		return nil, "", fmt.Errorf("failed to append CA certificate")
 	}
 
-	// Create HTTP client with the CA certificate and cluster TLS profile
-	tlsConfig, err := ctlrutils.GetDefaultTLSConfig(nil)
+	// Create HTTP client with the CA certificate and cluster TLS profile.
+	// Pass loadCAs=false since we pin the service CA explicitly.
+	tlsConfig, err := ctlrutils.GetDefaultTLSConfig(nil, false)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to create TLS config: %w", err)
 	}
