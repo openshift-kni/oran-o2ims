@@ -373,6 +373,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	}
 
 	go func() {
+		logger.InfoContext(ctx, "Hello, World!")
 		logger.InfoContext(
 			ctx,
 			"Starting manager",
