@@ -1630,7 +1630,7 @@ var _ = Describe("Helpers", func() {
 			}
 
 			// createPRWithHostMap creates a ProvisioningRequest and sets up its status with the
-			// node-to-hostname mapping after the client is built (status is a subresource).
+			// node-to-hostname mapping and ClusterDetails after the client is built (status is a subresource).
 			// The PR name must match the NAR name (1:1 mapping).
 			createPRWithHostMap := func(c client.Client, nodeHostMap map[string]string) {
 				pr := &provisioningv1alpha1.ProvisioningRequest{
@@ -1638,6 +1638,9 @@ var _ = Describe("Helpers", func() {
 				}
 				Expect(c.Create(ctx, pr)).To(Succeed())
 				pr.Status.Extensions.AllocatedNodeHostMap = nodeHostMap
+				pr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
+					Name: "test-cluster",
+				}
 				Expect(c.Status().Update(ctx, pr)).To(Succeed())
 			}
 
@@ -1773,6 +1776,49 @@ var _ = Describe("Helpers", func() {
 					Expect(updatedNode.Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
 					Expect(updatedNode.Status.Conditions[0].Reason).To(Equal(string(hwmgmtv1alpha1.ConfigUpdate)))
 					Expect(updatedNode.Status.Conditions[0].Message).To(Equal(string(hwmgmtv1alpha1.NodeUpdateRequested)))
+				})
+
+				It("should use cluster name from PR, not ClusterId from NAR, for spoke client", func() {
+					// Set NAR ClusterId to a value that differs from the PR's ClusterDetails.Name
+					nar.Spec.ClusterId = "node-cluster-name"
+
+					bmh := createBMH("node1", metal3v1alpha1.OperationalStatusOK)
+					testClient = buildClientWithIndex(scheme,
+						createNode("node1", "test-nar", "master", currentHwProfileName, currentHwProfileName, nil, nil),
+						bmh, nar, newHwProfile)
+					createPRWithHostMap(testClient, map[string]string{"node1": "node1"})
+
+					// Capture the cluster name passed to the spoke client constructors
+					var capturedClientClusterName, capturedClientsetClusterName string
+					newClientForClusterFunc = func(_ context.Context, _ client.Client, clusterName string) (client.Client, error) {
+						capturedClientClusterName = clusterName
+						spokeScheme := runtime.NewScheme()
+						Expect(corev1.AddToScheme(spokeScheme)).To(Succeed())
+						Expect(machineconfigv1.Install(spokeScheme)).To(Succeed())
+						return fake.NewClientBuilder().WithScheme(spokeScheme).WithObjects(
+							&corev1.Node{
+								ObjectMeta: metav1.ObjectMeta{Name: "node1"},
+								Status: corev1.NodeStatus{
+									Conditions: []corev1.NodeCondition{
+										{Type: corev1.NodeReady, Status: corev1.ConditionTrue},
+									},
+								},
+							},
+						).Build(), nil
+					}
+					newClientsetForClusterFunc = func(_ context.Context, _ client.Client, clusterName string) (kubernetes.Interface, error) {
+						capturedClientsetClusterName = clusterName
+						return kubefake.NewSimpleClientset(
+							&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1"}},
+						), nil
+					}
+
+					_, _, err := handleNodeAllocationRequestConfiguring(ctx, testClient, testClient, logger, testNamespace, nar)
+					Expect(err).ToNot(HaveOccurred())
+
+					// Must use the PR's ClusterDetails.Name ("test-cluster"), not the NAR's ClusterId ("node-cluster-name")
+					Expect(capturedClientClusterName).To(Equal("test-cluster"))
+					Expect(capturedClientsetClusterName).To(Equal("test-cluster"))
 				})
 			})
 
@@ -3492,6 +3538,74 @@ var _ = Describe("Helpers", func() {
 			// node-1 already had hostname, node-2 should be populated
 			Expect(nodelist.Items[0].Status.Hostname).To(Equal("worker-1.example.com"))
 			Expect(nodelist.Items[1].Status.Hostname).To(Equal("worker-2.example.com"))
+		})
+	})
+
+	Describe("getClusterNameFromPR", func() {
+		var (
+			ctx       context.Context
+			scheme    *runtime.Scheme
+			hubClient client.Client
+		)
+
+		BeforeEach(func() {
+			ctx = context.Background()
+			scheme = runtime.NewScheme()
+			Expect(provisioningv1alpha1.AddToScheme(scheme)).To(Succeed())
+		})
+
+		It("should return error when ProvisioningRequest does not exist", func() {
+			hubClient = fake.NewClientBuilder().WithScheme(scheme).Build()
+
+			_, err := getClusterNameFromPR(ctx, hubClient, "missing-nar")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to get ProvisioningRequest missing-nar"))
+		})
+
+		It("should return error when ClusterDetails is nil", func() {
+			pr := &provisioningv1alpha1.ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-nar"},
+			}
+			hubClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(pr).Build()
+
+			_, err := getClusterNameFromPR(ctx, hubClient, "test-nar")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("has no ClusterDetails"))
+		})
+
+		It("should return error when ClusterDetails.Name is empty", func() {
+			pr := &provisioningv1alpha1.ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-nar"},
+				Status: provisioningv1alpha1.ProvisioningRequestStatus{
+					Extensions: provisioningv1alpha1.Extensions{
+						ClusterDetails: &provisioningv1alpha1.ClusterDetails{Name: ""},
+					},
+				},
+			}
+			hubClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(pr).Build()
+
+			_, err := getClusterNameFromPR(ctx, hubClient, "test-nar")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("has no cluster name in ClusterDetails"))
+		})
+
+		It("should return cluster name from ClusterDetails", func() {
+			pr := &provisioningv1alpha1.ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-nar"},
+				Status: provisioningv1alpha1.ProvisioningRequestStatus{
+					Extensions: provisioningv1alpha1.Extensions{
+						ClusterDetails: &provisioningv1alpha1.ClusterDetails{
+							Name: "actual-cluster-name",
+						},
+					},
+				},
+			}
+			hubClient = fake.NewClientBuilder().WithScheme(scheme).
+				WithObjects(pr).WithStatusSubresource(pr).Build()
+
+			clusterName, err := getClusterNameFromPR(ctx, hubClient, "test-nar")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(clusterName).To(Equal("actual-cluster-name"))
 		})
 	})
 })
