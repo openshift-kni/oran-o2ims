@@ -26,6 +26,7 @@ import (
 	machineconfigv1 "github.com/openshift/api/machineconfiguration/v1"
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	k8sclients "github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 )
 
@@ -257,7 +258,10 @@ func createSpokeClients(
 	hubClient client.Client,
 	nar *hwmgmtv1alpha1.NodeAllocationRequest,
 ) (client.Client, kubernetes.Interface, error) {
-	clusterName := nar.Spec.ClusterId
+	clusterName, err := getClusterNameFromPR(ctx, hubClient, nar.Name)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to resolve cluster name for NAR %s: %w", nar.Name, err)
+	}
 
 	spokeClient, err := newClientForClusterFunc(ctx, hubClient, clusterName)
 	if err != nil {
@@ -270,4 +274,25 @@ func createSpokeClients(
 	}
 
 	return spokeClient, clientset, nil
+}
+
+// getClusterNameFromPR looks up the ProvisioningRequest (1:1 with the NAR by name)
+// and returns the actual cluster name from ClusterDetails. The cluster name is the
+// namespace where the kubeconfig secret is stored, which may differ from
+// nar.Spec.ClusterId.
+func getClusterNameFromPR(ctx context.Context, hubClient client.Client, narName string) (string, error) {
+	pr := &provisioningv1alpha1.ProvisioningRequest{}
+	if err := hubClient.Get(ctx, client.ObjectKey{Name: narName}, pr); err != nil {
+		return "", fmt.Errorf("failed to get ProvisioningRequest %s: %w", narName, err)
+	}
+
+	if pr.Status.Extensions.ClusterDetails == nil {
+		return "", fmt.Errorf("provisioningRequest %s has no ClusterDetails in status", narName)
+	}
+
+	if pr.Status.Extensions.ClusterDetails.Name == "" {
+		return "", fmt.Errorf("provisioningRequest %s has no cluster name in ClusterDetails", narName)
+	}
+
+	return pr.Status.Extensions.ClusterDetails.Name, nil
 }
