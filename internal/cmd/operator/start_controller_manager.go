@@ -376,6 +376,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		logger.InfoContext(
 			ctx,
 			"Starting manager",
+			slog.String("greeting", "Hello, World!"),
 			slog.String("image", c.image),
 		)
 		if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
