@@ -1,0 +1,6 @@
+{
+  "task_key": "CNF-22897-review-analyze",
+  "summary": "Analyze PR review feedback for CNF-22897",
+  "description": "Analyze the PR review comments in `.forge/review-comments.md` and produce a structured implementation plan.\n\nFollow the implement-review skill instructions exactly:\n1. Read `.forge/review-comments.md`\n2. Explore the codebase with git log, git diff, and file reads\n3. Write `.forge/review-plan.md` with actionable items\n4. Write `.forge/review-objections.md` only if any comments are contested\n\nDo NOT make any code changes. Analysis only.\n\nTicket: CNF-22897\n",
+  "previous_task_keys": []
+}
