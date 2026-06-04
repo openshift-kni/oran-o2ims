@@ -44,6 +44,16 @@ Find the controller manager pod and view logs:
 oc logs -n oran-o2ims -l app=o-cloud-manager --tail=100
 ```
 
+When the controller manager starts successfully, you should see the startup logs:
+
+```json
+{"time":"2025-01-15T10:23:45Z","level":"INFO","msg":"Hello, World!"}
+{"time":"2025-01-15T10:23:45Z","level":"INFO","msg":"Starting manager","image":"quay.io/openshift-kni/oran-o2ims:latest"}
+```
+
+If these startup messages are missing or the pod is crash-looping, check the pod status
+and events for configuration or resource issues.
+
 The controller manager and hardware manager logs are the most common to check.
 Other server logs may be useful depending on the issue:
 

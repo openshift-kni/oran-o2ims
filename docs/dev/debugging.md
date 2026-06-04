@@ -16,27 +16,40 @@ disabled which would otherwise cause debugging with a debugger to be more diffic
    make IMAGE_TAG_BASE=quay.io/${USER}/oran-o2ims VERSION=latest DEBUG=yes build docker-build docker-push install deploy
    ```
 
-2. Find the controller manager pod name and forward a port so the debugger can attach to it. This command will remain
-   active until it is terminated with ctrl+c therefore you will need to execute it in a dedicated window (or move it
-   to the background).
+2. Find the controller manager pod name and verify it's running:
 
    ```console
    POD=$(oc get pods -n oran-o2ims -l app=o-cloud-manager -o jsonpath='{.items[0].metadata.name}')
+   oc logs -n oran-o2ims pods/${POD} --tail=5
+   ```
+
+   You should see the startup logs confirming the manager is running:
+
+   ```json
+   {"time":"2025-01-15T10:23:45Z","level":"INFO","msg":"Hello, World!"}
+   {"time":"2025-01-15T10:23:45Z","level":"INFO","msg":"Starting manager","image":"..."}
+   ```
+
+3. Forward a port so the debugger can attach to it. This command will remain active until
+   it is terminated with ctrl+c therefore you will need to execute it in a dedicated window
+   (or move it to the background).
+
+   ```console
    oc port-forward -n oran-o2ims pods/${POD} 40000:40000
    ```
 
-3. Execute a shell into the Pod to be debugged.
+4. Execute a shell into the Pod to be debugged.
 
    ```console
    oc rsh -n oran-o2ims pods/${POD}
    ```
 
-4. Attach the DLV debugger to the process. This is usually PID 1, but this may vary based on the deployment. Use the
+5. Attach the DLV debugger to the process. This is usually PID 1, but this may vary based on the deployment. Use the
    same port number that was specified earlier in the `port-forward` command.
 
    ```console
    dlv attach --continue --accept-multiclient --api-version 2 --headless --listen :40000 --log 1
    ```
 
-5. Use your IDE's debug capabilities to attach to `localhost:40000` to start your debug session. This will vary based
+6. Use your IDE's debug capabilities to attach to `localhost:40000` to start your debug session. This will vary based
    on which IDE is being used.
