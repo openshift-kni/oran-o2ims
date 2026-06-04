@@ -99,6 +99,88 @@ The fix adds a log statement without any test coverage. The project guidelines r
 - Add test coverage for the startup logging behavior
 - Consider whether "Hello, World!" is a genuine requirement or example placeholder
 
+## CNF-22896: Add test coverage and documentation for 'Hello, World!' startup log
+
+**Status:** Completed
+
+**Changes Made:**
+- Created `internal/cmd/operator/start_controller_manager_test.go` with comprehensive test coverage
+- Created `docs/startup-logging-requirement.md` documenting the requirement, rationale, and implementation
+- Tests verify both the "Hello, World!" and "Starting manager" logs are emitted in correct order
+
+**Key Context:**
+- Two test functions added:
+  1. `TestStartupLogging` - verifies both log messages with correct content
+  2. `TestStartupLogOrder` - explicitly verifies ordering requirement
+- Tests use the project's logging builder pattern for consistency
+- Documentation explains the rationale, tradeoffs, and maintenance notes
+- All code follows project standards (formatting, DCO sign-off, test patterns)
+
+**Validation Performed:**
+- ✅ Tests build and pass: `go test ./internal/cmd/operator/`
+- ✅ Code formatted with gofmt
+- ✅ Passes vet: `go vet ./internal/cmd/operator/`
+- ✅ Committed with DCO sign-off
+
+**For Next Task:**
+- Implementation and documentation are complete
+- Tests provide coverage for the startup logging requirement
+- Documentation explains the context and purpose
+
+## CNF-22894-docs: Update stale documentation
+
+**Status:** Completed
+
+**Changes Made:**
+- Updated `docs/troubleshooting.md` to document expected controller manager startup logs
+- Updated `docs/dev/debugging.md` to show how to verify the controller manager is running before debugging
+
+**Key Context:**
+
+This task updated documentation that became stale due to code changes on the branch. The branch added:
+1. A "Hello, World!" startup log in the controller manager (`internal/cmd/operator/start_controller_manager.go`)
+2. Comprehensive test coverage for startup logging
+3. A new documentation file (`docs/startup-logging-requirement.md`) explaining the requirement
+
+**Analysis Process:**
+
+1. **Identified code changes** by comparing this branch to main:
+   - New startup log: `logger.InfoContext(ctx, "Hello, World!")`
+   - New test file: `start_controller_manager_test.go`
+   - New doc: `docs/startup-logging-requirement.md`
+
+2. **Discovered documentation files** by searching all markdown files in the repository (excluding vendor)
+
+3. **Searched for references** to key identifiers:
+   - `ControllerManagerCommand`, `start_controller_manager`, `operator startup` - no existing docs referenced these
+   - Found that troubleshooting and debugging guides reference checking controller manager logs but don't describe what to expect
+
+4. **Updated stale documentation**:
+   - **docs/troubleshooting.md** - Added section showing expected startup logs when checking controller manager logs, helps users verify the controller manager started correctly
+   - **docs/dev/debugging.md** - Added verification step to check startup logs before attaching debugger, ensuring the pod is running correctly before attempting to debug
+
+**Rationale:**
+
+The troubleshooting and debugging guides both instruct users to check controller manager logs, but previously didn't describe what successful startup looks like. With the new startup logging requirement:
+
+- **Troubleshooting context**: Users checking logs for operational issues should know what normal startup looks like to distinguish startup problems from runtime issues
+- **Debugging context**: Developers need to verify the manager is running before attaching a debugger; showing the expected startup logs provides this confirmation
+
+**Files Not Updated:**
+
+Several documentation files were evaluated but determined not to need updates:
+
+- **Logging documentation** (`docs/dev/logging/*.md`) - Focuses on controller reconciliation patterns, not operator startup; separation is appropriate
+- **User guides** - References to `oc logs` were for monitoring specific services (alarms-server, hardware-manager) or real-time provisioning monitoring, not troubleshooting startup
+- **README.md, CONTRIBUTING.md, AGENTS.md** - No references to controller manager startup sequence
+
+**For Next Task:**
+
+All documentation updates are complete. The startup logging requirement is now properly documented in:
+1. `docs/startup-logging-requirement.md` - Comprehensive requirement documentation
+2. `docs/troubleshooting.md` - User-facing troubleshooting guidance
+3. `docs/dev/debugging.md` - Developer debugging workflow
+
 ## CNF-22894-qualreview: Qualitative bug review — root cause and test coverage (Final Review)
 
 **Status:** Completed
