@@ -18,6 +18,7 @@ import (
 
 	"github.com/openshift-kni/oran-o2ims/internal/cmd/server"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms"
 	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
@@ -29,10 +30,11 @@ var alarmsServe = &cobra.Command{
 	Use:   "serve",
 	Short: "Start alarms server",
 	Run: func(cmd *cobra.Command, args []string) {
-		// Configure structured logging for this service
-		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		// Configure structured logging for this service with context support
+		baseHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 			Level: slog.LevelInfo,
-		}))
+		})
+		logger := slog.New(logging.NewContextHandler(baseHandler, slog.LevelInfo))
 		slog.SetDefault(logger)
 		klog.SetSlogLogger(logger)
 

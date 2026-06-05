@@ -15,6 +15,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/openshift-kni/oran-o2ims/internal/cmd/server"
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/api"
 	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
@@ -28,10 +29,11 @@ var clusterServer = &cobra.Command{
 	Use:   "serve",
 	Short: "Start cluster server",
 	Run: func(cmd *cobra.Command, args []string) {
-		// Configure structured logging for this service
-		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		// Configure structured logging for this service with context support
+		baseHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 			Level: slog.LevelInfo,
-		}))
+		})
+		logger := slog.New(logging.NewContextHandler(baseHandler, slog.LevelInfo))
 		slog.SetDefault(logger)
 		klog.SetSlogLogger(logger)
 

@@ -89,11 +89,8 @@ func Serve(config *api.ArtifactsServerConfig) error {
 		},
 	)
 
-	// Create a new logger to be passed where a logger is needed.
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		AddSource: true,
-		Level:     slog.LevelDebug, // TODO: set with server args
-	}))
+	// Use the default logger (configured with context support in cmd/serve.go)
+	logger := slog.Default()
 
 	// Create a response filter filterAdapter that can support the 'filter' and '*fields' query parameters.
 	filterAdapter, err := middleware.NewFilterAdapterFromSwagger(logger, swagger)

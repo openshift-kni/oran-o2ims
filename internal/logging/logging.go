@@ -57,6 +57,11 @@ func (h LoggingContextHandler) WithGroup(name string) slog.Handler {
 	return LoggingContextHandler{handler: h.handler.WithGroup(name), level: h.level}
 }
 
+// NewContextHandler wraps a base slog.Handler with context attribute extraction.
+func NewContextHandler(base slog.Handler, level slog.Level) *LoggingContextHandler {
+	return &LoggingContextHandler{handler: base, level: level}
+}
+
 // AppendCtx adds an slog attribute to the provided context so that it will be
 // included in any Record created with such context
 func AppendCtx(ctx context.Context, attr slog.Attr) context.Context {
