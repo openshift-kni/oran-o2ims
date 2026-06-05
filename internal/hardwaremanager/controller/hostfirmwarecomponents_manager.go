@@ -22,6 +22,7 @@ import (
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 )
 
@@ -85,6 +86,7 @@ func convertToFirmwareUpdates(spec hwmgmtv1alpha1.HardwareProfileSpec) []metal3v
 func isHostFirmwareComponentsChangeDetectedAndValid(ctx context.Context,
 	c client.Client,
 	bmh *metal3v1alpha1.BareMetalHost) (bool, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
 	// Extract logger from context
 	logger := slog.Default()
 	if ctxLogger, ok := ctx.Value(any("logger")).(*slog.Logger); ok && ctxLogger != nil {
@@ -108,7 +110,6 @@ func isHostFirmwareComponentsChangeDetectedAndValid(ctx context.Context,
 	observed := changeDetectedCond.ObservedGeneration == hfc.Generation
 
 	logger.DebugContext(ctx, "Evaluating HostFirmwareComponents change",
-		slog.String("bmh", bmh.Name),
 		slog.String("hfc", hfc.Name),
 		slog.Int64("hfcGeneration", hfc.Generation),
 		slog.String("changeDetectedStatus", string(changeDetectedCond.Status)),

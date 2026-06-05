@@ -114,7 +114,7 @@ func (r *NodeAllocationRequestReconciler) Reconcile(ctx context.Context, req ctr
 
 	// Add object-specific context and hardware-specific context
 	ctx = ctlrutils.AddObjectContext(ctx, nodeAllocationRequest)
-	ctx = logging.AppendCtx(ctx, slog.String("ClusterID", nodeAllocationRequest.Spec.ClusterId))
+	ctx = logging.AppendCtx(ctx, slog.String("clusterId", nodeAllocationRequest.Spec.ClusterId))
 	ctx = logging.AppendCtx(ctx, slog.String("startingResourceVersion", nodeAllocationRequest.ResourceVersion))
 
 	r.Logger.InfoContext(ctx, "Fetched NodeAllocationRequest successfully")
