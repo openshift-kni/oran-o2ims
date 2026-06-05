@@ -134,10 +134,10 @@ spec:
                       default values for ACM policies
                     type: string
                   upgradeDefaults:
-                    description: |-
-                      UpgradeDefaults defines a reference to a configmap with
-                      default values for upgrade information
-                    type: string
+                    description: UpgradeDefaults defines the default values for upgrade
+                      parameters
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                 required:
                 - clusterInstanceDefaults
                 - policyTemplateDefaults
