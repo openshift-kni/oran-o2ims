@@ -8,6 +8,7 @@ package v1alpha1
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -664,6 +665,27 @@ func TestExtractSubSchema(t *testing.T) {
 				t.Errorf("ExtractSubSchema() = %v, want %v", gotSubSchema, tt.wantSubSchema)
 			}
 		})
+	}
+}
+
+func TestIsErrSubSchemaNotFound(t *testing.T) {
+	if !IsErrSubSchemaNotFound(ErrSubSchemaNotFound) {
+		t.Error("expected true for ErrSubSchemaNotFound")
+	}
+	if !IsErrSubSchemaNotFound(fmt.Errorf("wrapped: %w", ErrSubSchemaNotFound)) {
+		t.Error("expected true for wrapped ErrSubSchemaNotFound")
+	}
+	if !IsErrSubSchemaNotFound(fmt.Errorf("wrapped: %w", fmt.Errorf("wrapped: %w", ErrSubSchemaNotFound))) {
+		t.Error("expected true for wrapped wrapped ErrSubSchemaNotFound")
+	}
+	if IsErrSubSchemaNotFound(fmt.Errorf("some other error")) {
+		t.Error("expected false for unrelated error")
+	}
+	if IsErrSubSchemaNotFound(errors.New(ErrSubSchemaNotFound.Error())) {
+		t.Error("expected false for not an ErrSubSchemaNotFound error")
+	}
+	if IsErrSubSchemaNotFound(nil) {
+		t.Error("expected false for nil")
 	}
 }
 

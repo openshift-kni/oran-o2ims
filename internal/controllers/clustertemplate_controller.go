@@ -8,6 +8,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"slices"
@@ -266,11 +267,8 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 
 	// Validation for upgrade defaults
 	if t.object.Spec.TemplateDefaults.UpgradeDefaults.Size() > 0 {
-		err = t.validateUpgradeDefaults(ctx, t.client)
+		err = t.validateUpgradeDefaults()
 		if err != nil {
-			if !ctlrutils.IsInputError(err) {
-				return false, fmt.Errorf("failed to validate upgrade defaults: %w", err)
-			}
 			validationErrs = append(validationErrs, err.Error())
 		}
 	}
@@ -343,31 +341,28 @@ func (t *clusterTemplateReconcilerTask) validateHwMgmtDefaults(ctx context.Conte
 	return validationErrs, nil
 }
 
-func (t *clusterTemplateReconcilerTask) validateUpgradeDefaults(
-	ctx context.Context, c client.Client,
-) error {
-
-	ibgu, err := ctlrutils.GetIBGUFromUpgradeDefaults(
-		t.object.Spec.TemplateDefaults.UpgradeDefaults.Raw,
-		"name", "name", t.object.Namespace)
-	if err != nil {
-		return fmt.Errorf("failed to get IBGU from upgradeDefaults: %w", err)
+func (t *clusterTemplateReconcilerTask) validateUpgradeDefaults() error {
+	var upgradeData map[string]json.RawMessage
+	if err := json.Unmarshal(t.object.Spec.TemplateDefaults.UpgradeDefaults.Raw, &upgradeData); err != nil {
+		return fmt.Errorf("upgradeDefaults is not a map: %w", err)
 	}
 
-	if t.object.Spec.Release != ibgu.Spec.IBUSpec.SeedImageRef.Version {
+	ibguData, ok := upgradeData[ctlrutils.UpgradeDefaultsIBGUKey]
+	if !ok {
+		return nil
+	}
+
+	ibgu, err := ctlrutils.GetIBGUFromUpgradeData(ibguData, "name", "name", t.object.Namespace)
+	if err != nil {
+		return ctlrutils.NewInputError("failed to get IBGU from upgradeDefaults: %s", err.Error())
+	}
+
+	if ibgu.Spec.IBUSpec.SeedImageRef.Version != "" && t.object.Spec.Release != ibgu.Spec.IBUSpec.SeedImageRef.Version {
 		return ctlrutils.NewInputError(
 			"The ClusterTemplate spec.release (%s) does not match the seedImageRef version (%s) from the upgrade defaults",
 			t.object.Spec.Release, ibgu.Spec.IBUSpec.SeedImageRef.Version)
 	}
 
-	// Verify IBGU CR with dry-run
-	err = c.Create(ctx, ibgu, client.DryRunAll)
-	if err != nil {
-		if !errors.IsInvalid(err) && !errors.IsBadRequest(err) {
-			return fmt.Errorf("failed to create IBGU: %w", err)
-		}
-		return ctlrutils.NewInputError("%s", err.Error())
-	}
 	return nil
 }
 
@@ -506,12 +501,11 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 		expectedType := param[1]
 		aSubschema, err := provisioningv1alpha1.ExtractSubSchema(object.Spec.TemplateParameterSchema.Raw, expectedName)
 		if err != nil {
-			if strings.HasPrefix(err.Error(), fmt.Sprintf("subSchema '%s' does not exist:", expectedName)) {
+			if provisioningv1alpha1.IsErrSubSchemaNotFound(err) {
 				missingParameter = append(missingParameter, expectedName)
 				continue
-			} else {
-				return fmt.Errorf("error extracting subschema at key %s: %w", expectedName, err)
 			}
+			return fmt.Errorf("error extracting subschema at key %s: %w", expectedName, err)
 		}
 		if aType, ok := aSubschema[typeString]; ok {
 			if aType != expectedType {
@@ -559,6 +553,51 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 		provisioningv1alpha1.SchemaDefinesHwMgmtParameters(object)
 	if err := validateClusterInstanceParamsSchema(hasHwMgmt, clusterInstanceParamsSchema); err != nil {
 		return ctlrutils.NewInputError("Error validating the clusterInstanceParameters schema: %s", err.Error())
+	}
+
+	hasUpgradeDefaults := object.Spec.TemplateDefaults.UpgradeDefaults.Size() > 0
+	if err := validateUpgradeParametersSchema(object.Spec.TemplateParameterSchema.Raw, hasUpgradeDefaults); err != nil {
+		return ctlrutils.NewInputError("Error validating the %s schema: %s", ctlrutils.TemplateParamUpgrade, err.Error())
+	}
+
+	return nil
+}
+
+// validateUpgradeParametersSchema validates the upgradeParameters sub-schema structure.
+// When the sub-schema is present it must define imageBasedGroupUpgrade as an object.
+// When upgradeDefaults is set the sub-schema is required.
+func validateUpgradeParametersSchema(schemaRaw []byte, hasUpgradeDefaults bool) error {
+	upgradeSchema, err := provisioningv1alpha1.ExtractSubSchema(schemaRaw, ctlrutils.TemplateParamUpgrade)
+	if err != nil {
+		if !provisioningv1alpha1.IsErrSubSchemaNotFound(err) {
+			return fmt.Errorf("failed to extract %q schema: %w", ctlrutils.TemplateParamUpgrade, err)
+		}
+		if hasUpgradeDefaults {
+			return fmt.Errorf("templateParameterSchema must define %q when upgradeDefaults is set", ctlrutils.TemplateParamUpgrade)
+		}
+		return nil
+	}
+
+	ibguKeyPath := ctlrutils.TemplateParamUpgrade + "." + ctlrutils.UpgradeDefaultsIBGUKey
+
+	if t, _ := upgradeSchema["type"].(string); t != "object" {
+		return fmt.Errorf("%q must have type \"object\"", ctlrutils.TemplateParamUpgrade)
+	}
+	props, ok := upgradeSchema["properties"].(map[string]any)
+	if !ok {
+		return fmt.Errorf("%q schema must have a properties section", ctlrutils.TemplateParamUpgrade)
+	}
+	ibguProp, ok := props[ctlrutils.UpgradeDefaultsIBGUKey]
+	if !ok {
+		return fmt.Errorf("%q schema must define the %q property",
+			ctlrutils.TemplateParamUpgrade, ctlrutils.UpgradeDefaultsIBGUKey)
+	}
+	ibguPropMap, ok := ibguProp.(map[string]any)
+	if !ok {
+		return fmt.Errorf("%q must be an object schema", ibguKeyPath)
+	}
+	if t, _ := ibguPropMap["type"].(string); t != "object" {
+		return fmt.Errorf("%q must have type \"object\"", ibguKeyPath)
 	}
 	return nil
 }

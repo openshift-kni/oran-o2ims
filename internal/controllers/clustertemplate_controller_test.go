@@ -1671,8 +1671,6 @@ var _ = Describe("validateSchemaWithoutHwMgmt", func() {
 
 var _ = Describe("validateUpgradeDefaults", func() {
 	var (
-		c        client.Client
-		ctx      context.Context
 		t        *clusterTemplateReconcilerTask
 		tName    = "cluster-template-test"
 		tVersion = "v1.0.0"
@@ -1683,8 +1681,6 @@ var _ = Describe("validateUpgradeDefaults", func() {
 	}
 
 	BeforeEach(func() {
-		ctx = context.Background()
-
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      GetClusterTemplateRefName(tName, tVersion),
@@ -1700,54 +1696,65 @@ var _ = Describe("validateUpgradeDefaults", func() {
 			},
 		}
 
-		c = fakeclient.GetFakeClientFromObjects([]client.Object{ct}...)
-
 		t = &clusterTemplateReconcilerTask{
-			client: c,
 			logger: logger,
 			object: ct,
 		}
 	})
 
 	It("should validate valid upgrade defaults successfully", func() {
-		err := t.validateUpgradeDefaults(ctx, c)
+		err := t.validateUpgradeDefaults()
 		Expect(err).ToNot(HaveOccurred())
 	})
 
-	It("should return error when upgrade defaults data is invalid JSON", func() {
+	It("should return error when upgrade defaults data is not a map", func() {
+		t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`[]`),
+		}
+		err := t.validateUpgradeDefaults()
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("upgradeDefaults is not a map"))
+	})
+
+	It("should return error when upgrade defaults is malformed JSON", func() {
 		t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
 			Raw: []byte(`{invalid json`),
 		}
-		err := t.validateUpgradeDefaults(ctx, c)
+		err := t.validateUpgradeDefaults()
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("failed to get IBGU from upgradeDefaults"))
 	})
 
-	It("should return error when imageBasedGroupUpgrade key is missing", func() {
+	It("should pass when imageBasedGroupUpgrade key is missing", func() {
 		t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
 			Raw: []byte(`{"wrongKey":{}}`),
 		}
-		err := t.validateUpgradeDefaults(ctx, c)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("failed to get IBGU from upgradeDefaults"))
-		Expect(err.Error()).To(ContainSubstring("imageBasedGroupUpgrade"))
+		err := t.validateUpgradeDefaults()
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should pass when upgradeDefaults is an empty object", func() {
+		t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`{}`),
+		}
+		err := t.validateUpgradeDefaults()
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	It("should return error when release version does not match seedImageRef version", func() {
 		t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
 			Raw: []byte(`{"imageBasedGroupUpgrade":{"ibuSpec":{"seedImageRef":{"image":"quay.io/ocp","version":"4.18.0"}},"plan":[{"actions":["Prep"]},{"actions":["Upgrade"]}]}}`),
 		}
-		err := t.validateUpgradeDefaults(ctx, c)
+		err := t.validateUpgradeDefaults()
 		Expect(err).To(HaveOccurred())
 		Expect(ctlrutils.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("The ClusterTemplate spec.release (4.17.0) does not match the seedImageRef version (4.18.0) from the upgrade defaults"))
 	})
 
-	It("should successfully validate when IBGU spec is valid for dry-run", func() {
+	It("should pass when seedImageRef version is empty", func() {
 		t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-			Raw: []byte(`{"imageBasedGroupUpgrade":{"ibuSpec":{"seedImageRef":{"image":"quay.io/ocp","version":"4.17.0"},"stage":"Idle"},"plan":[{"actions":["Prep"]},{"actions":["Upgrade"]}]}}`),
+			Raw: []byte(`{"imageBasedGroupUpgrade":{"ibuSpec":{"seedImageRef":{"image":"quay.io/ocp"}},"plan":[{"actions":["Prep"]}]}}`),
 		}
-		err := t.validateUpgradeDefaults(ctx, c)
+		err := t.validateUpgradeDefaults()
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -1757,11 +1764,60 @@ var _ = Describe("validateUpgradeDefaults", func() {
 		})
 
 		It("should return error when seedImageRef version is not empty", func() {
-			err := t.validateUpgradeDefaults(ctx, c)
+			err := t.validateUpgradeDefaults()
 			Expect(err).To(HaveOccurred())
 			Expect(ctlrutils.IsInputError(err)).To(BeTrue())
 			Expect(err.Error()).To(ContainSubstring("The ClusterTemplate spec.release () does not match the seedImageRef version (4.17.0) from the upgrade defaults"))
 		})
+	})
+})
+
+var _ = Describe("validateUpgradeParametersSchema", func() {
+	It("should pass when upgradeParameters is not in schema and no upgradeDefaults", func() {
+		schema := []byte(`{"type":"object","properties":{"otherParam":{"type":"string"}}}`)
+		err := validateUpgradeParametersSchema(schema, false)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should return error when upgradeParameters is not in schema but upgradeDefaults is set", func() {
+		schema := []byte(`{"type":"object","properties":{"otherParam":{"type":"string"}}}`)
+		err := validateUpgradeParametersSchema(schema, true)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal(`templateParameterSchema must define "upgradeParameters" when upgradeDefaults is set`))
+	})
+
+	It("should return error when upgradeParameters is not type object", func() {
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"string"}}}`)
+		err := validateUpgradeParametersSchema(schema, false)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal(`"upgradeParameters" must have type "object"`))
+	})
+
+	It("should pass when upgradeParameters has imageBasedGroupUpgrade of type object", func() {
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"imageBasedGroupUpgrade":{"type":"object"}}}}}`)
+		err := validateUpgradeParametersSchema(schema, false)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should return error when upgradeParameters is missing imageBasedGroupUpgrade", func() {
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"otherKey":{"type":"string"}}}}}`)
+		err := validateUpgradeParametersSchema(schema, false)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal(`"upgradeParameters" schema must define the "imageBasedGroupUpgrade" property`))
+	})
+
+	It("should return error when imageBasedGroupUpgrade is not type object", func() {
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"imageBasedGroupUpgrade":{"type":"string"}}}}}`)
+		err := validateUpgradeParametersSchema(schema, false)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal(`"upgradeParameters.imageBasedGroupUpgrade" must have type "object"`))
+	})
+
+	It("should return error when upgradeParameters has no properties section", func() {
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object"}}}`)
+		err := validateUpgradeParametersSchema(schema, false)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal(`"upgradeParameters" schema must have a properties section`))
 	})
 })
 

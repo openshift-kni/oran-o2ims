@@ -162,6 +162,7 @@ const (
 	TemplateParamClusterInstance = "clusterInstanceParameters"
 	TemplateParamPolicyConfig    = "policyTemplateParameters"
 	TemplateParamHwMgmt          = "hwMgmtParameters"
+	TemplateParamUpgrade         = "upgradeParameters"
 )
 
 // ClusterInstance template constants
