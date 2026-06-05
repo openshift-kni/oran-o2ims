@@ -26,8 +26,6 @@ import (
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
-
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
 
 	commonapi "github.com/openshift-kni/oran-o2ims/api/common"
@@ -1037,36 +1035,28 @@ func GetClusterID(ctx context.Context, c client.Client, name string) (string, er
 	}
 }
 
-func GetIBGUFromUpgradeDefaultsConfigmap(
-	ctx context.Context,
-	c client.Client,
-	cmName string,
-	cmNamespace string,
-	cmKey string,
+func GetIBGUFromUpgradeDefaults(
+	upgradeDefaultsRaw []byte,
 	clusterName string,
 	ibguName string,
 	ibguNamespace string,
 ) (*ibguv1alpha1.ImageBasedGroupUpgrade, error) {
 
-	existingConfigmap, err := GetConfigmap(ctx, c, cmName, cmNamespace)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get ConfigmapReference: %w", err)
+	var upgradeDefaults map[string]json.RawMessage
+	if err := json.Unmarshal(upgradeDefaultsRaw, &upgradeDefaults); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal upgradeDefaults: %w", err)
 	}
-	defaults, err := GetConfigMapField(existingConfigmap, UpgradeDefaultsConfigmapKey)
 
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Configmap Field: %w", err)
-	}
-	out, err := k8syaml.ToJSON([]byte(defaults))
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert confimap data to JSON: %w", err)
+	ibguData, ok := upgradeDefaults[UpgradeDefaultsIBGUKey]
+	if !ok {
+		return nil, fmt.Errorf("key %q not found in upgradeDefaults", UpgradeDefaultsIBGUKey)
 	}
 
 	ibguSpec := &ibguv1alpha1.ImageBasedGroupUpgradeSpec{}
-	err = json.Unmarshal(out, &ibguSpec)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert confimap data to IBGU spec: %w", err)
+	if err := json.Unmarshal(ibguData, ibguSpec); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal IBGU spec from upgradeDefaults: %w", err)
 	}
+
 	ibguSpec.ClusterLabelSelectors = []metav1.LabelSelector{
 		{
 			MatchLabels: map[string]string{

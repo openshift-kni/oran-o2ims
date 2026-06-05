@@ -103,9 +103,8 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(ctx context.Context, c
 		}
 
 		// Create IBGU if it doesn't exist
-		ibgu, err = ctlrutils.GetIBGUFromUpgradeDefaultsConfigmap(
-			ctx, t.client, clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults,
-			clusterTemplate.Namespace, ctlrutils.UpgradeDefaultsConfigmapKey,
+		ibgu, err = ctlrutils.GetIBGUFromUpgradeDefaults(
+			clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw,
 			clusterName, t.object.Name, clusterName)
 		if err != nil {
 			return nextReconcile, proceed, fmt.Errorf("failed to generate IBGU for cluster: %w", err)

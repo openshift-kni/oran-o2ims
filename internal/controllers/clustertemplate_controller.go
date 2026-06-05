@@ -264,16 +264,12 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 		validationErrs = append(validationErrs, err.Error())
 	}
 
-	// Validation for upgrade defaults confimap
-	if t.object.Spec.TemplateDefaults.UpgradeDefaults != "" {
-		err = t.validateUpgradeDefaultsConfigmap(
-			ctx, t.client, t.object.Spec.TemplateDefaults.UpgradeDefaults,
-			t.object.Namespace,
-		)
+	// Validation for upgrade defaults
+	if t.object.Spec.TemplateDefaults.UpgradeDefaults.Size() > 0 {
+		err = t.validateUpgradeDefaults(ctx, t.client)
 		if err != nil {
 			if !ctlrutils.IsInputError(err) {
-				return false, fmt.Errorf("failed to validate the ConfigMap %s for upgrade defaults: %w",
-					t.object.Spec.TemplateDefaults.UpgradeDefaults, err)
+				return false, fmt.Errorf("failed to validate upgrade defaults: %w", err)
 			}
 			validationErrs = append(validationErrs, err.Error())
 		}
@@ -347,47 +343,30 @@ func (t *clusterTemplateReconcilerTask) validateHwMgmtDefaults(ctx context.Conte
 	return validationErrs, nil
 }
 
-func (t *clusterTemplateReconcilerTask) validateUpgradeDefaultsConfigmap(
-	ctx context.Context, c client.Client, name, namespace string,
+func (t *clusterTemplateReconcilerTask) validateUpgradeDefaults(
+	ctx context.Context, c client.Client,
 ) error {
 
-	ibgu, err := ctlrutils.GetIBGUFromUpgradeDefaultsConfigmap(ctx, c, name, namespace, ctlrutils.UpgradeDefaultsConfigmapKey, "name", "name", namespace)
+	ibgu, err := ctlrutils.GetIBGUFromUpgradeDefaults(
+		t.object.Spec.TemplateDefaults.UpgradeDefaults.Raw,
+		"name", "name", t.object.Namespace)
 	if err != nil {
-		return fmt.Errorf("failed to get IBGU from upgrade defaults configmap: %w", err)
+		return fmt.Errorf("failed to get IBGU from upgradeDefaults: %w", err)
 	}
 
 	if t.object.Spec.Release != ibgu.Spec.IBUSpec.SeedImageRef.Version {
 		return ctlrutils.NewInputError(
-			"The ClusterTemplate spec.release (%s) does not match the seedImageRef version (%s) from the upgrade configmap",
+			"The ClusterTemplate spec.release (%s) does not match the seedImageRef version (%s) from the upgrade defaults",
 			t.object.Spec.Release, ibgu.Spec.IBUSpec.SeedImageRef.Version)
 	}
 
 	// Verify IBGU CR with dry-run
-	opts := []client.CreateOption{}
-	opts = append(opts, client.DryRunAll)
-	err = c.Create(ctx, ibgu, opts...)
+	err = c.Create(ctx, ibgu, client.DryRunAll)
 	if err != nil {
 		if !errors.IsInvalid(err) && !errors.IsBadRequest(err) {
 			return fmt.Errorf("failed to create IBGU: %w", err)
 		}
 		return ctlrutils.NewInputError("%s", err.Error())
-	}
-	existingConfigmap, err := ctlrutils.GetConfigmap(ctx, c, name, namespace)
-	if err != nil {
-		return fmt.Errorf("failed to get ConfigmapReference: %w", err)
-	}
-	// Check if the configmap is set to mutable
-	if existingConfigmap.Immutable != nil && !*existingConfigmap.Immutable {
-		return ctlrutils.NewInputError("It is not allowed to set Immutable to false in the ConfigMap %s", name)
-	} else if existingConfigmap.Immutable == nil {
-		// Patch the validated ConfigMap to make it immutable if not already set
-		immutable := true
-		newConfigmap := existingConfigmap.DeepCopy()
-		newConfigmap.Immutable = &immutable
-
-		if err := ctlrutils.CreateK8sCR(ctx, c, newConfigmap, nil, ctlrutils.PATCH); err != nil {
-			return fmt.Errorf("failed to patch ConfigMap as immutable: %w", err)
-		}
 	}
 	return nil
 }
@@ -775,8 +754,7 @@ func (r *ClusterTemplateReconciler) enqueueClusterTemplatesForConfigmap(ctx cont
 	for _, clusterTemplate := range clusterTemplates.Items {
 		if clusterTemplate.Namespace == obj.GetNamespace() {
 			if clusterTemplate.Spec.TemplateDefaults.ClusterInstanceDefaults == obj.GetName() ||
-				clusterTemplate.Spec.TemplateDefaults.PolicyTemplateDefaults == obj.GetName() ||
-				clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults == obj.GetName() {
+				clusterTemplate.Spec.TemplateDefaults.PolicyTemplateDefaults == obj.GetName() {
 				// The configmap is referenced in this cluster template , enqueue it
 				requests = append(requests, reconcile.Request{
 					NamespacedName: types.NamespacedName{
