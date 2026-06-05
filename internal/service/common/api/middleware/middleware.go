@@ -53,7 +53,7 @@ func LogDuration() Middleware {
 			startTime := time.Now()
 			ctx := r.Context()
 			ctx = logging.AppendCtx(ctx, slog.String("method", r.Method))
-			ctx = logging.AppendCtx(ctx, slog.String("url", r.RequestURI))
+			ctx = logging.AppendCtx(ctx, slog.String("url", r.URL.Path))
 			r = r.WithContext(ctx)
 
 			d := durationLogger{
