@@ -188,11 +188,8 @@ func Serve(config *api.AlarmsServerConfig) error {
 		},
 	)
 
-	// Create a response filter filterAdapter that can support the 'filter' and '*fields' query parameters
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		AddSource: true,
-		Level:     slog.LevelDebug,
-	}))
+	// Use the default logger (configured with context support in cmd/serve.go)
+	logger := slog.Default()
 	filterAdapter, err := middleware.NewFilterAdapterFromSwagger(logger, swagger)
 	if err != nil {
 		return fmt.Errorf("error creating filter filterAdapter: %w", err)

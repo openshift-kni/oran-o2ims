@@ -158,6 +158,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 
 	// Get the dependencies from the context:
 	logger := internal.LoggerFromContext(ctx)
+	slog.SetDefault(logger)
 
 	// Configure klog to use our structured logger for vendor modules:
 	klog.SetSlogLogger(logger)
