@@ -53,7 +53,7 @@ INDIVIDUAL TEST CASES:
 
 Core Reconciliation:
 - IsUpgradeRequested: Version comparison and upgrade decision logic
-- GetIBGUFromUpgradeDefaults: IBGU creation from inline upgrade defaults
+- GetIBGUFromUpgradeData: IBGU creation from inline upgrade defaults
 - Policy Labels and Selectors: Policy filtering and management
 - checkProvisioningConditionsForFailures: Resource readiness validation
 - handleProvisioningRequestDeletion: Cleanup of provisioned resources
@@ -350,11 +350,12 @@ var _ = Describe("ProvisioningRequestReconciler Unit Tests", func() {
 		})
 	})
 
-	Describe("GetIBGUFromUpgradeDefaults", func() {
-		Context("when inline data is valid", func() {
+	Describe("GetIBGUFromUpgradeData", func() {
+		Context("when IBGU spec data is valid", func() {
 			It("should create IBGU successfully", func() {
-				ibguCR, err := utils.GetIBGUFromUpgradeDefaults(
-					upgradeDefaultsRaw.Raw, clusterName, "test-pr", clusterName)
+				ibguSpecRaw := []byte(`{"ibuSpec":{"seedImageRef":{"image":"image","version":"4.17.0"},"oadpContent":[{"name":"test","namespace":"test"}]},"plan":[{"actions":["Prep"]},{"actions":["Upgrade"]}]}`)
+				ibguCR, err := utils.GetIBGUFromUpgradeData(
+					ibguSpecRaw, clusterName, "test-pr", clusterName)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ibguCR).ToNot(BeNil())
 				Expect(ibguCR.Name).To(Equal("test-pr"))
@@ -363,21 +364,12 @@ var _ = Describe("ProvisioningRequestReconciler Unit Tests", func() {
 			})
 		})
 
-		Context("when inline data is invalid JSON", func() {
+		Context("when IBGU spec data is invalid JSON", func() {
 			It("should return error", func() {
-				_, err := utils.GetIBGUFromUpgradeDefaults(
+				_, err := utils.GetIBGUFromUpgradeData(
 					[]byte(`{invalid`), clusterName, "test-pr", clusterName)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to unmarshal upgradeDefaults"))
-			})
-		})
-
-		Context("when imageBasedGroupUpgrade key is missing", func() {
-			It("should return error", func() {
-				_, err := utils.GetIBGUFromUpgradeDefaults(
-					[]byte(`{"wrongKey":{}}`), clusterName, "test-pr", clusterName)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("imageBasedGroupUpgrade"))
+				Expect(err.Error()).To(ContainSubstring("failed to unmarshal IBGU spec"))
 			})
 		})
 	})
@@ -3307,6 +3299,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					UpgradeDefaults: integrationUpgradeDefaults,
 				},
+				TemplateParameterSchema: testUpgradeSchema,
 			},
 			Status: provisioningv1alpha1.ClusterTemplateStatus{
 				Conditions: []metav1.Condition{
@@ -3368,16 +3361,35 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 			})
 
 			Context("when IBGU doesn't exist", func() {
+				It("should set PreconditionChecksFailed condition when upgrade defaults is not empty but missing imageBasedGroupUpgrade key", func() {
+					clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+						Raw: []byte(`{"wrongKey":{}}`),
+					}
+					Expect(c.Update(ctx, clusterTemplate)).To(Succeed())
+
+					_, _, err := task.handleUpgrade(ctx, clusterName)
+					Expect(err).ToNot(HaveOccurred())
+
+					upgradeCond := meta.FindStatusCondition(task.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
+					Expect(upgradeCond).ToNot(BeNil())
+					Expect(upgradeCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed)))
+				})
+
 				It("should create IBGU and set status to InProgress", func() {
+					task.object.Spec.TemplateParameters = runtime.RawExtension{
+						Raw: []byte(`{"upgradeParameters":{"imageBasedGroupUpgrade":{"ibuSpec":{"seedImageRef":{"version":"4.17.0","image":"override-image"}}}}}`),
+					}
+
 					result, proceed, err := task.handleUpgrade(ctx, clusterName)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(proceed).To(BeFalse())
-					Expect(result.RequeueAfter).To(Equal(requeueWithMediumInterval().RequeueAfter)) // Should requeue to check IBGU progress
+					Expect(result.RequeueAfter).To(Equal(requeueWithMediumInterval().RequeueAfter))
 
-					// Check IBGU was created
+					// Verify IBGU was created with merged values
 					createdIBGU := &ibgu.ImageBasedGroupUpgrade{}
 					Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: clusterName}, createdIBGU)).To(Succeed())
 					Expect(createdIBGU.Spec.IBUSpec.SeedImageRef.Version).To(Equal("4.17.0"))
+					Expect(createdIBGU.Spec.IBUSpec.SeedImageRef.Image).To(Equal("override-image"))
 
 					// Check ProvisioningRequest status
 					upgradeCond := meta.FindStatusCondition(task.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
@@ -3524,35 +3536,6 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 				})
 			})
 
-			Context("when upgrade defaults is missing imageBasedGroupUpgrade key", func() {
-				BeforeEach(func() {
-					clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-						Raw: []byte(`{"wrongKey":{}}`),
-					}
-					Expect(c.Update(ctx, clusterTemplate)).To(Succeed())
-				})
-
-				It("should return error", func() {
-					_, _, err := task.handleUpgrade(ctx, clusterName)
-					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("failed to generate IBGU for cluster"))
-				})
-			})
-
-			Context("when upgrade defaults has malformed IBGU spec", func() {
-				BeforeEach(func() {
-					clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-						Raw: []byte(`{"imageBasedGroupUpgrade":"not-an-object"}`),
-					}
-					Expect(c.Update(ctx, clusterTemplate)).To(Succeed())
-				})
-
-				It("should return error", func() {
-					_, _, err := task.handleUpgrade(ctx, clusterName)
-					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("failed to generate IBGU for cluster"))
-				})
-			})
 		})
 
 		Describe("IBGU Status Helper Functions", func() {

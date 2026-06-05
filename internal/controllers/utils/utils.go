@@ -1035,26 +1035,16 @@ func GetClusterID(ctx context.Context, c client.Client, name string) (string, er
 	}
 }
 
-func GetIBGUFromUpgradeDefaults(
-	upgradeDefaultsRaw []byte,
+func GetIBGUFromUpgradeData(
+	ibguData []byte,
 	clusterName string,
 	ibguName string,
 	ibguNamespace string,
 ) (*ibguv1alpha1.ImageBasedGroupUpgrade, error) {
 
-	var upgradeDefaults map[string]json.RawMessage
-	if err := json.Unmarshal(upgradeDefaultsRaw, &upgradeDefaults); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal upgradeDefaults: %w", err)
-	}
-
-	ibguData, ok := upgradeDefaults[UpgradeDefaultsIBGUKey]
-	if !ok {
-		return nil, fmt.Errorf("key %q not found in upgradeDefaults", UpgradeDefaultsIBGUKey)
-	}
-
 	ibguSpec := &ibguv1alpha1.ImageBasedGroupUpgradeSpec{}
 	if err := json.Unmarshal(ibguData, ibguSpec); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal IBGU spec from upgradeDefaults: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal IBGU spec, unexpected data structure: %w", err)
 	}
 
 	ibguSpec.ClusterLabelSelectors = []metav1.LabelSelector{
