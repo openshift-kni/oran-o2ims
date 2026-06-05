@@ -176,7 +176,7 @@ func (r *ProvisioningServer) CreateProvisioningRequest(ctx context.Context, requ
 		return nil, err
 	}
 
-	slog.Info("Created ProvisioningRequest", "provisioningRequestId", request.Body.ProvisioningRequestId.String())
+	slog.InfoContext(ctx, "Created ProvisioningRequest", "provisioningRequestId", request.Body.ProvisioningRequestId.String())
 	location := fmt.Sprintf("%s/provisioningRequests/%s", constants.O2IMSProvisioningBaseURL, request.Body.ProvisioningRequestId)
 	return api.CreateProvisioningRequest201JSONResponse{
 		Body: provisioningRequestInfo,
@@ -255,7 +255,7 @@ func (r *ProvisioningServer) UpdateProvisioningRequest(ctx context.Context, requ
 		return nil, err
 	}
 
-	slog.Info("Updated ProvisioningRequest", "provisioningRequestId", request.ProvisioningRequestId.String())
+	slog.InfoContext(ctx, "Updated ProvisioningRequest", "provisioningRequestId", request.ProvisioningRequestId.String())
 	return api.UpdateProvisioningRequest200JSONResponse(provisioningRequestInfo), nil
 }
 
@@ -278,7 +278,7 @@ func (r *ProvisioningServer) DeleteProvisioningRequest(ctx context.Context, requ
 		}
 		return nil, fmt.Errorf("failed to delete ProvisioningRequest (%s): %w", request.ProvisioningRequestId.String(), err)
 	}
-	slog.Info("The deletion request for ProvisioningRequest has been sent successfully", "provisioningRequestId", request.ProvisioningRequestId.String())
+	slog.InfoContext(ctx, "The deletion request for ProvisioningRequest has been sent successfully", "provisioningRequestId", request.ProvisioningRequestId.String())
 	location := fmt.Sprintf("%s/provisioningRequests/%s", constants.O2IMSProvisioningBaseURL, request.ProvisioningRequestId)
 	return api.DeleteProvisioningRequest202Response{
 		Headers: api.DeleteProvisioningRequest202ResponseHeaders{

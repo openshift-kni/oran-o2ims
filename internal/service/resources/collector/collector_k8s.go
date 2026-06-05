@@ -206,7 +206,7 @@ func (d *K8SDataSource) convertManagedClusterToDeploymentManager(ctx context.Con
 	err := d.getKubeconfig(ctx, cluster.Name, extensions)
 	if err != nil {
 		// TODO: turn this back into an error once we fix getting the Kubeconfig for the local-cluster
-		slog.Warn("failed to get deployment manager extensions", "cluster", cluster.Name, "error", err)
+		slog.WarnContext(ctx, "failed to get deployment manager extensions", "cluster", cluster.Name, "error", err)
 	}
 
 	// Generate a unique UUID scoped to a different namespace so that it does not collide with the NodeCluster which
@@ -232,19 +232,19 @@ func (d *K8SDataSource) convertManagedClusterToDeploymentManager(ctx context.Con
 
 // handleClusterWatchEvent handles an async event received from the managed cluster watcher
 func (d *K8SDataSource) handleClusterWatchEvent(ctx context.Context, cluster *v1.ManagedCluster, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.Debug("handleWatchEvent received for managed cluster", "agent", cluster.Name, "type", eventType)
+	slog.DebugContext(ctx, "handleWatchEvent received for managed cluster", "agent", cluster.Name, "type", eventType)
 
 	if eventType != async.Deleted {
 		condition := meta.FindStatusCondition(cluster.Status.Conditions, "ManagedClusterConditionAvailable")
 		if condition == nil || condition.Status == metav1.ConditionFalse {
 			// This cluster is not yet available, so filter it out.
-			slog.Debug("Managed cluster is not available; skipping", "cluster", cluster.Name, "condition", condition)
+			slog.DebugContext(ctx, "Managed cluster is not available; skipping", "cluster", cluster.Name, "condition", condition)
 			return uuid.Nil, nil
 		}
 
 		if _, found := cluster.Labels[ctlrutils.ClusterTemplateArtifactsLabel]; !found {
 			// The provisioning request which is managing the installation of this cluster is not yet fulfilled
-			slog.Debug("Cluster provisioning request is not yet fulfilled; skipping", "cluster", cluster.Name)
+			slog.DebugContext(ctx, "Cluster provisioning request is not yet fulfilled; skipping", "cluster", cluster.Name)
 			return uuid.Nil, nil
 		}
 	}
@@ -256,7 +256,7 @@ func (d *K8SDataSource) handleClusterWatchEvent(ctx context.Context, cluster *v1
 
 	select {
 	case <-ctx.Done():
-		slog.Info("context cancelled while writing to async event channel; aborting")
+		slog.InfoContext(ctx, "context cancelled while writing to async event channel; aborting")
 		return uuid.Nil, fmt.Errorf("context cancelled; aborting")
 	case d.AsyncChangeEvents <- &async.AsyncChangeEvent{
 		DataSourceID: d.dataSourceID,
@@ -268,13 +268,13 @@ func (d *K8SDataSource) handleClusterWatchEvent(ctx context.Context, cluster *v1
 
 // HandleAsyncEvent handles an add/update/delete to an object received by from the Reflector.
 func (d *K8SDataSource) HandleAsyncEvent(ctx context.Context, obj interface{}, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.Debug("handleWatchEvent received for store adapter", "type", eventType, "object", fmt.Sprintf("%T", obj))
+	slog.DebugContext(ctx, "handleWatchEvent received for store adapter", "type", eventType, "object", fmt.Sprintf("%T", obj))
 	switch value := obj.(type) {
 	case *v1.ManagedCluster:
 		return d.handleClusterWatchEvent(ctx, value, eventType)
 	default:
 		// We are only watching for specific event types so this should happen.
-		slog.Warn("Unknown object type", "type", fmt.Sprintf("%T", obj))
+		slog.WarnContext(ctx, "Unknown object type", "type", fmt.Sprintf("%T", obj))
 		return uuid.Nil, fmt.Errorf("unknown type: %T", obj)
 	}
 }
@@ -287,13 +287,13 @@ func (d *K8SDataSource) HandleSyncComplete(ctx context.Context, objectType runti
 		object = models.DeploymentManager{}
 	default:
 		// This should never happen since we watch for specific types
-		slog.Warn("Unknown object type", "type", fmt.Sprintf("%T", objectType))
+		slog.WarnContext(ctx, "Unknown object type", "type", fmt.Sprintf("%T", objectType))
 		return nil
 	}
 
 	select {
 	case <-ctx.Done():
-		slog.Info("context cancelled while writing to async event channel; aborting")
+		slog.InfoContext(ctx, "context cancelled while writing to async event channel; aborting")
 		return fmt.Errorf("context cancelled; aborting")
 	case d.AsyncChangeEvents <- &async.AsyncChangeEvent{
 		DataSourceID: d.dataSourceID,
@@ -313,7 +313,7 @@ func (d *K8SDataSource) Watch(ctx context.Context) error {
 	stopCh := make(chan struct{})
 	go func() {
 		<-ctx.Done()
-		slog.Info("context canceled; stopping reflectors")
+		slog.InfoContext(ctx, "context canceled; stopping reflectors")
 		close(stopCh)
 	}()
 
@@ -340,11 +340,11 @@ func (d *K8SDataSource) Watch(ctx context.Context) error {
 
 	store := async.NewReflectorStore(&v1.ManagedCluster{})
 	reflector := cache.NewNamedReflector(clusterReflectorName, &lister, &v1.ManagedCluster{}, store, time.Duration(0))
-	slog.Info("starting cluster reflector")
+	slog.InfoContext(ctx, "starting cluster reflector")
 	go reflector.Run(stopCh)
 
 	// Start monitoring the store to process incoming events
-	slog.Info("starting to receive from cluster reflector store")
+	slog.InfoContext(ctx, "starting to receive from cluster reflector store")
 	go store.Receive(ctx, d)
 
 	return nil

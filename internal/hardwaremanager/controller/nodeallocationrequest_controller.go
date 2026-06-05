@@ -40,7 +40,7 @@ type NodeAllocationRequestReconciler struct {
 }
 
 func (r *NodeAllocationRequestReconciler) SetupIndexer(ctx context.Context) error {
-	r.Logger.Info("SetupIndexer Start")
+	r.Logger.InfoContext(ctx, "SetupIndexer Start")
 	if err := hwmgrutils.RegisterAllocatedNodeFieldIndexer(ctx, r.Manager.GetFieldIndexer()); err != nil {
 		return fmt.Errorf("failed to setup node indexer: %w", err)
 	}

@@ -78,7 +78,7 @@ func Setup(ctx context.Context) error {
 		return fmt.Errorf("failed to update secret %s/%s: %w", ACMObsAMNamespace, ACMObsAMSecretName, err)
 	}
 
-	slog.Info("Successfully merged with existing alertmanager")
+	slog.InfoContext(ctx, "Successfully merged with existing alertmanager")
 	return nil
 }
 

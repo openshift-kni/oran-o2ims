@@ -92,7 +92,7 @@ func (r *ResourceServer) Setup() error {
 
 // FetchAll fetches all necessary data from the resource server
 func (r *ResourceServer) FetchAll(ctx context.Context) error {
-	slog.Info("Getting all objects from the resource server")
+	slog.InfoContext(ctx, "Getting all objects from the resource server")
 
 	// Fetch all resource types
 	resourceTypes, err := r.getResourceTypes(ctx)
@@ -106,24 +106,24 @@ func (r *ResourceServer) FetchAll(ctx context.Context) error {
 		// Fetch the real alarm dictionary for this resource type
 		resp, err := r.client.GetResourceTypeAlarmDictionaryWithResponse(ctx, resourceType.ResourceTypeId)
 		if err != nil {
-			slog.Warn("Failed to get alarm dictionary for resource type", "resourceTypeID", resourceType.ResourceTypeId, "error", err)
+			slog.WarnContext(ctx, "Failed to get alarm dictionary for resource type", "resourceTypeID", resourceType.ResourceTypeId, "error", err)
 			continue
 		}
 
 		if resp.StatusCode() != http.StatusOK {
-			slog.Warn("Unexpected status code getting alarm dictionary", "resourceTypeID", resourceType.ResourceTypeId, "statusCode", resp.StatusCode())
+			slog.WarnContext(ctx, "Unexpected status code getting alarm dictionary", "resourceTypeID", resourceType.ResourceTypeId, "statusCode", resp.StatusCode())
 			continue
 		}
 
 		if resp.JSON200 == nil {
-			slog.Debug("No alarm dictionary available for resource type", "resourceTypeID", resourceType.ResourceTypeId)
+			slog.DebugContext(ctx, "No alarm dictionary available for resource type", "resourceTypeID", resourceType.ResourceTypeId)
 			continue
 		}
 
 		// Build alarm definitions from the real alarm dictionary
 		alarmDefinitions := buildAlarmDefinitionsFromDictionary(*resp.JSON200)
 		newResourceTypeIDToAlarmDefinitions[resourceType.ResourceTypeId] = alarmDefinitions
-		slog.Info("Mapping resource type ID to alarm definitions", "resourceTypeID", resourceType.ResourceTypeId, "alarmDictionaryID", resp.JSON200.AlarmDictionaryId, "definitionCount", len(alarmDefinitions))
+		slog.InfoContext(ctx, "Mapping resource type ID to alarm definitions", "resourceTypeID", resourceType.ResourceTypeId, "alarmDictionaryID", resp.JSON200.AlarmDictionaryId, "definitionCount", len(alarmDefinitions))
 	}
 
 	// Atomically update the maps while holding lock
@@ -133,7 +133,7 @@ func (r *ResourceServer) FetchAll(ctx context.Context) error {
 	r.resourceIDToResourceTypeID = make(map[uuid.UUID]uuid.UUID)
 	r.Unlock()
 
-	slog.Info("Successfully synced ResourceServer objects")
+	slog.InfoContext(ctx, "Successfully synced ResourceServer objects")
 	return nil
 }
 
@@ -149,7 +149,7 @@ func (r *ResourceServer) GetObjectTypeID(ctx context.Context, resourceID uuid.UU
 	}
 
 	// Not in cache, fetch from resource server
-	slog.Info("Resource ID not found in cache, fetching from resource server", "resourceID", resourceID)
+	slog.InfoContext(ctx, "Resource ID not found in cache, fetching from resource server", "resourceID", resourceID)
 	resource, err := r.getResource(ctx, resourceID)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("failed to get resource: %w", err)
@@ -157,7 +157,7 @@ func (r *ResourceServer) GetObjectTypeID(ctx context.Context, resourceID uuid.UU
 
 	// Cache the mapping
 	r.resourceIDToResourceTypeID[resourceID] = resource.ResourceTypeId
-	slog.Info("Mapping resource ID to resource type ID", "resourceID", resourceID, "resourceTypeID", resource.ResourceTypeId)
+	slog.InfoContext(ctx, "Mapping resource ID to resource type ID", "resourceID", resourceID, "resourceTypeID", resource.ResourceTypeId)
 
 	return resource.ResourceTypeId, nil
 }
@@ -170,7 +170,7 @@ func (r *ResourceServer) GetAlarmDefinitionID(ctx context.Context, resourceTypeI
 
 	alarmDefinitions, ok := r.resourceTypeIDToAlarmDefinitions[resourceTypeID]
 	if !ok {
-		slog.Info("Resource type ID not found in cache, fetching from resource server", "resourceTypeID", resourceTypeID)
+		slog.InfoContext(ctx, "Resource type ID not found in cache, fetching from resource server", "resourceTypeID", resourceTypeID)
 
 		// Try to fetch the alarm dictionary from the server
 		resp, err := r.client.GetResourceTypeAlarmDictionaryWithResponse(ctx, resourceTypeID)
@@ -191,7 +191,7 @@ func (r *ResourceServer) GetAlarmDefinitionID(ctx context.Context, resourceTypeI
 
 		// Cache the alarm definitions
 		r.resourceTypeIDToAlarmDefinitions[resourceTypeID] = alarmDefinitions
-		slog.Info("Mapping resource type ID to alarm definitions", "resourceTypeID", resourceTypeID, "alarmDictionaryID", resp.JSON200.AlarmDictionaryId, "definitionCount", len(alarmDefinitions))
+		slog.InfoContext(ctx, "Mapping resource type ID to alarm definitions", "resourceTypeID", resourceTypeID, "alarmDictionaryID", resp.JSON200.AlarmDictionaryId, "definitionCount", len(alarmDefinitions))
 	}
 
 	uniqueIdentifier := AlarmDefinitionUniqueIdentifier{
@@ -201,7 +201,7 @@ func (r *ResourceServer) GetAlarmDefinitionID(ctx context.Context, resourceTypeI
 
 	alarmDefinitionID, ok := alarmDefinitions[uniqueIdentifier]
 	if !ok {
-		slog.Info("Alarm definition not found in cache", "name", name, "severity", severity, "resourceTypeID", resourceTypeID)
+		slog.InfoContext(ctx, "Alarm definition not found in cache", "name", name, "severity", severity, "resourceTypeID", resourceTypeID)
 		return uuid.Nil, fmt.Errorf("alarm definition not found: name=%s, severity=%s", name, severity)
 	}
 
@@ -216,7 +216,7 @@ func (r *ResourceServer) FetchAllWithRetry(ctx context.Context, retries int) err
 		if err == nil {
 			return nil
 		}
-		slog.Error("Failed to fetch all objects from resource server, retrying", "attempt", i+1, "error", err)
+		slog.ErrorContext(ctx, "Failed to fetch all objects from resource server, retrying", "attempt", i+1, "error", err)
 		time.Sleep(5 * time.Second)
 	}
 	return fmt.Errorf("failed to fetch all objects after %d retries: %w", retries, err)
@@ -224,7 +224,7 @@ func (r *ResourceServer) FetchAllWithRetry(ctx context.Context, retries int) err
 
 // Sync starts a background process to populate and keep up-to-date a local cache with data from the resource server
 func (r *ResourceServer) Sync(ctx context.Context) {
-	slog.Info("Starting sync process for resource server objects")
+	slog.InfoContext(ctx, "Starting sync process for resource server objects")
 
 	// First fetch of all objects.
 	// When doing a clean deployment resource server may not be ready which results incomplete data during startup Alerts sync
@@ -232,7 +232,7 @@ func (r *ResourceServer) Sync(ctx context.Context) {
 	// This is edge case and even if the Resource server cant come up within retry time, we can still continue
 	// But once it does come up, user may get unwanted "CHANGED" alerts
 	if err := r.FetchAllWithRetry(ctx, 3); err != nil {
-		slog.Error("Failed to run initial sync for resource server objects", "error", err)
+		slog.ErrorContext(ctx, "Failed to run initial sync for resource server objects", "error", err)
 	}
 
 	go func() {
@@ -242,12 +242,12 @@ func (r *ResourceServer) Sync(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				slog.Info("Stopping sync process for resource server objects")
+				slog.InfoContext(ctx, "Stopping sync process for resource server objects")
 				return
 			case <-ticker.C:
-				slog.Info("Syncing resource server objects")
+				slog.InfoContext(ctx, "Syncing resource server objects")
 				if err := r.FetchAll(ctx); err != nil {
-					slog.Error("Failed to sync resource server objects", "error", err)
+					slog.ErrorContext(ctx, "Failed to sync resource server objects", "error", err)
 				}
 			}
 		}
@@ -272,7 +272,7 @@ func (r *ResourceServer) getResourceTypes(ctx context.Context) ([]generated.Reso
 		return nil, fmt.Errorf("empty response from resource server")
 	}
 
-	slog.Info("Got resource types", "count", len(*resp.JSON200))
+	slog.InfoContext(ctx, "Got resource types", "count", len(*resp.JSON200))
 	return *resp.JSON200, nil
 }
 
@@ -294,7 +294,7 @@ func (r *ResourceServer) getResource(ctx context.Context, resourceID uuid.UUID) 
 		return nil, fmt.Errorf("empty response from resource server")
 	}
 
-	slog.Info("Got resource", "resourceID", resourceID)
+	slog.InfoContext(ctx, "Got resource", "resourceID", resourceID)
 	return resp.JSON200, nil
 }
 

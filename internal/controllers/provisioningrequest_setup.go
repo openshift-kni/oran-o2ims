@@ -190,8 +190,8 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 // reconciliation requests for the corresponding ProvisioningRequest.
 // Since NAR name = PR name (1:1 relationship), the mapping is direct.
 func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForNAR(
-	_ context.Context, obj client.Object) []reconcile.Request {
-	r.Logger.Info(
+	ctx context.Context, obj client.Object) []reconcile.Request {
+	r.Logger.InfoContext(ctx,
 		"[enqueueProvisioningRequestForNAR] NAR status changed, triggering PR reconciliation",
 		"name", obj.GetName())
 	return []reconcile.Request{
@@ -218,7 +218,7 @@ func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForClusterTemp
 		clusterTemplateRefName := GetClusterTemplateRefName(
 			provisioningRequest.Spec.TemplateName, provisioningRequest.Spec.TemplateVersion)
 		if clusterTemplateRefName == obj.GetName() {
-			r.Logger.Info(
+			r.Logger.InfoContext(ctx,
 				"[enqueueProvisioningRequestForClusterTemplate] Add new reconcile request for ProvisioningRequest ",
 				"name", provisioningRequest.Name)
 			requests = append(requests, reconcile.Request{
@@ -250,14 +250,14 @@ func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForManagedClus
 			// Return as this ManagedCluster is not deployed/managed by ClusterInstance.
 			return nil
 		}
-		r.Logger.Error("[enqueueProvisioningRequestForManagedCluster] Error getting ClusterInstance. ", "Error: ", err)
+		r.Logger.ErrorContext(ctx, "[enqueueProvisioningRequestForManagedCluster] Error getting ClusterInstance. ", "Error: ", err)
 		return nil
 	}
 
 	// Get the ProvisioningRequest name.
 	crName, nameExists := clusterInstance.GetLabels()[provisioningv1alpha1.ProvisioningRequestNameLabel]
 	if nameExists {
-		r.Logger.Info(
+		r.Logger.InfoContext(ctx,
 			"[enqueueProvisioningRequestForManagedCluster] Add new reconcile request for ProvisioningRequest",
 			"name", crName)
 		requests = append(requests, reconcile.Request{
@@ -300,13 +300,13 @@ func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForPolicy(
 				// The provisioning request could have been deleted
 				return nil
 			}
-			r.Logger.Error("[enqueueProvisioningRequestForPolicy] Error getting ProvisioningRequest. ", "Error: ", err)
+			r.Logger.ErrorContext(ctx, "[enqueueProvisioningRequestForPolicy] Error getting ProvisioningRequest. ", "Error: ", err)
 			return nil
 		}
 
 		clusterTemplates := &provisioningv1alpha1.ClusterTemplateList{}
 		if err := r.List(ctx, clusterTemplates); err != nil {
-			r.Logger.Error("[enqueueProvisioningRequestForPolicy] Error listing ClusterTemplates. ", "Error: ", err)
+			r.Logger.ErrorContext(ctx, "[enqueueProvisioningRequestForPolicy] Error listing ClusterTemplates. ", "Error: ", err)
 			return nil
 		}
 
@@ -323,7 +323,7 @@ func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForPolicy(
 
 		_, parentPolicyNs := ctlrutils.GetParentPolicyNameAndNamespace(obj.GetName())
 		if ctlrutils.IsParentPolicyInZtpClusterTemplateNs(parentPolicyNs, ctRefNamespace) {
-			r.Logger.Info(
+			r.Logger.InfoContext(ctx,
 				"[enqueueProvisioningRequestForPolicy] Add new reconcile request for ProvisioningRequest ",
 				"name", provisioningRequest, "policyName", obj.GetName())
 			requests = append(requests, reconcile.Request{

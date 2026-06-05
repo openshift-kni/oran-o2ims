@@ -120,6 +120,8 @@ linters:
               - must not contain line breaks
           severity: warning
           disabled: false
+    sloglint:
+      context: scope
     wrapcheck:
       ignore-sigs:
         - .Errorf(

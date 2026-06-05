@@ -432,7 +432,7 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 	if len(agents.Items) == 0 {
 		// No Agents found — this is expected for IBI-provisioned clusters which
 		// do not use assisted-service. Skip Agent labeling and return.
-		t.logger.Info(fmt.Sprintf(
+		t.logger.InfoContext(ctx, fmt.Sprintf(
 			"No Agents found in the %s namespace, skipping Agent labeling (expected for IBI clusters)",
 			mcl.Name))
 		return nil

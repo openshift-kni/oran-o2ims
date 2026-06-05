@@ -64,13 +64,13 @@ func (ar *AlarmsRepository) CreateServiceConfiguration(ctx context.Context, defa
 
 	// Return record if it already exists
 	if len(records) == 1 {
-		slog.Debug("Service configuration already exists")
+		slog.DebugContext(ctx, "Service configuration already exists")
 		return &records[0], nil
 	}
 
 	// If there are more than one record, pick the first one and delete the rest
 	if len(records) > 1 {
-		slog.Debug("Multiple service configurations found, deleting all but the first")
+		slog.DebugContext(ctx, "Multiple service configurations found, deleting all but the first")
 
 		ids := make([]any, 0, len(records)-1)
 		for i := 1; i < len(records); i++ {
@@ -85,7 +85,7 @@ func (ar *AlarmsRepository) CreateServiceConfiguration(ctx context.Context, defa
 		return &records[0], nil
 	}
 
-	slog.Debug("Creating new service configuration")
+	slog.DebugContext(ctx, "Creating new service configuration")
 
 	// Create a new record
 	record := models.ServiceConfiguration{
@@ -128,7 +128,7 @@ func (ar *AlarmsRepository) GetAlarmSubscription(ctx context.Context, id uuid.UU
 // UpsertAlarmEventCaaSRecord insert and updating an AlarmEventRecord.
 func (ar *AlarmsRepository) UpsertAlarmEventCaaSRecord(ctx context.Context, tx pgx.Tx, records []models.AlarmEventRecord, generationID int64) error {
 	if len(records) == 0 {
-		slog.Warn("No records for events upsert")
+		slog.WarnContext(ctx, "No records for events upsert")
 		return nil
 	}
 
@@ -228,7 +228,7 @@ func (ar *AlarmsRepository) ResolveStaleAlarmEventCaaSRecord(ctx context.Context
 	}
 
 	if len(records) > 0 {
-		slog.Info("Successfully resolved stale CaaS (alertmanager) alarmeventrecords", "records", len(records))
+		slog.InfoContext(ctx, "Successfully resolved stale CaaS (alertmanager) alarmeventrecords", "records", len(records))
 	}
 	return nil
 }

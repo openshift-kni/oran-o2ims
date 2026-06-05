@@ -74,7 +74,7 @@ func Serve(config *api.ResourceServerConfig) error {
 
 	go func() {
 		sig := <-shutdown
-		slog.Info("Shutdown signal received", "signal", sig)
+		slog.InfoContext(ctx, "Shutdown signal received", "signal", sig)
 		cancel()
 	}()
 
@@ -89,7 +89,7 @@ func Serve(config *api.ResourceServerConfig) error {
 		return fmt.Errorf("failed to connected to DB: %w", err)
 	}
 	defer func() {
-		slog.Info("Closing DB connection")
+		slog.InfoContext(ctx, "Closing DB connection")
 		pool.Close()
 	}()
 
@@ -253,7 +253,7 @@ func Serve(config *api.ResourceServerConfig) error {
 	// Start resource notifier
 	notifierErrors := make(chan error, 1)
 	go func() {
-		slog.Info("Starting resource notifier")
+		slog.InfoContext(ctx, "Starting resource notifier")
 		if err := resourceNotifier.Run(ctx); err != nil {
 			notifierErrors <- err
 		}
@@ -262,7 +262,7 @@ func Serve(config *api.ResourceServerConfig) error {
 	// Start resource collector
 	collectorErrors := make(chan error, 1)
 	go func() {
-		slog.Info("Starting resource collector")
+		slog.InfoContext(ctx, "Starting resource collector")
 		if err := resourceCollector.Run(ctx); err != nil {
 			collectorErrors <- err
 		}
@@ -270,15 +270,15 @@ func Serve(config *api.ResourceServerConfig) error {
 
 	// Start PostgreSQL listener for resource type changes
 	go func() {
-		slog.Info("Starting PostgreSQL listener for resource type changes")
+		slog.InfoContext(ctx, "Starting PostgreSQL listener for resource type changes")
 		listener.ListenForResourcePgChannels(ctx, pool, repository, server.InvalidateAlarmDictCache)
-		slog.Info("PostgreSQL listener stopped")
+		slog.InfoContext(ctx, "PostgreSQL listener stopped")
 	}()
 
 	// Start server
 	serverErrors := make(chan error, 1)
 	go func() {
-		slog.Info(fmt.Sprintf("Listening on %s", srv.Addr))
+		slog.InfoContext(ctx, fmt.Sprintf("Listening on %s", srv.Addr))
 		// Cert/Key files aren't needed here since they've been added to the tls.Config above.
 		if err := srv.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErrors <- err
@@ -289,9 +289,9 @@ func Serve(config *api.ResourceServerConfig) error {
 		// Cancel the context in case it wasn't already canceled
 		cancel()
 		// Shutdown the http server
-		slog.Info("Shutting down server")
+		slog.InfoContext(ctx, "Shutting down server")
 		if err := common.GracefulShutdown(srv); err != nil {
-			slog.Error("error shutting down server", "error", err)
+			slog.ErrorContext(ctx, "error shutting down server", "error", err)
 		}
 	}()
 
@@ -304,7 +304,7 @@ func Serve(config *api.ResourceServerConfig) error {
 	case err := <-notifierErrors:
 		return fmt.Errorf("error starting notifier: %w", err)
 	case <-ctx.Done():
-		slog.Info("Process shutting down")
+		slog.InfoContext(ctx, "Process shutting down")
 	}
 
 	return nil

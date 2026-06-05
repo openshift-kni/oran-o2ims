@@ -59,7 +59,7 @@ func PersistObject[T db.Model, K PrimaryKeyType](ctx context.Context, tx pgx.Tx,
 			return nil, nil, fmt.Errorf("failed to create object '%s/%v': %w", object.TableName(), key, err)
 		}
 
-		slog.Debug("object inserted", "table", object.TableName(), "key", key, "record", after)
+		slog.DebugContext(ctx, "object inserted", "table", object.TableName(), "key", key, "record", after)
 		return nil, after, nil
 	}
 
@@ -75,7 +75,7 @@ func PersistObject[T db.Model, K PrimaryKeyType](ctx context.Context, tx pgx.Tx,
 	if len(tags) == 0 {
 		// This shouldn't happen since the generation id always changes
 		after = before
-		slog.Warn("no change detected on persisted object", "table", object.TableName(), "key", key)
+		slog.WarnContext(ctx, "no change detected on persisted object", "table", object.TableName(), "key", key)
 		return before, after, nil
 	}
 
@@ -84,7 +84,7 @@ func PersistObject[T db.Model, K PrimaryKeyType](ctx context.Context, tx pgx.Tx,
 		return nil, nil, fmt.Errorf("failed to update object '%s/%v': %w", object.TableName(), key, err)
 	}
 
-	slog.Debug("object updated",
+	slog.DebugContext(ctx, "object updated",
 		"table", object.TableName(), "key", key, "before", before, "after", after, "columns", tags.Fields())
 
 	return before, after, nil

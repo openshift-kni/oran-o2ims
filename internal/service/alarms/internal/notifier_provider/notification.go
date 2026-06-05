@@ -48,7 +48,7 @@ func (n *NotificationStorageProvider) GetNotifications(ctx context.Context) ([]n
 	for _, record := range records {
 		notification, err := models.DataChangeEventToNotification(&record, n.globalCloudID)
 		if err != nil {
-			slog.Warn("failed to convert alarm event to notification", "err", err)
+			slog.WarnContext(ctx, "failed to convert alarm event to notification", "err", err)
 			continue
 		}
 		if notification != nil {
@@ -57,7 +57,7 @@ func (n *NotificationStorageProvider) GetNotifications(ctx context.Context) ([]n
 	}
 
 	if len(notifications) == 0 {
-		slog.Info("No notifications")
+		slog.InfoContext(ctx, "No notifications")
 	}
 
 	return notifications, nil

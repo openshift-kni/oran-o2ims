@@ -131,7 +131,7 @@ func (a *AlarmsServer) CreateSubscription(ctx context.Context, request api.Creat
 
 	// Validate the subscription
 	if err := commonapi.ValidateCallbackURL(ctx, a.SubscriptionEventHandler.GetClientFactory(), request.Body.Callback); err != nil {
-		slog.Error("callback URL validation failed", "error", err)
+		slog.ErrorContext(ctx, "callback URL validation failed", "error", err)
 		return api.CreateSubscription400ApplicationProblemPlusJSONResponse{
 			Detail: "callback URL validation failed",
 			Status: http.StatusBadRequest,
@@ -157,7 +157,7 @@ func (a *AlarmsServer) CreateSubscription(ctx context.Context, request api.Creat
 		Removed:      false,
 		Subscription: models.ConvertAlertSubToNotificationSub(record),
 	})
-	slog.Info("Successfully created Alarm Subscription", "record", record)
+	slog.InfoContext(ctx, "Successfully created Alarm Subscription", "record", record)
 	return api.CreateSubscription201JSONResponse(models.ConvertSubscriptionModelToApi(*record)), nil
 }
 
@@ -190,7 +190,7 @@ func (a *AlarmsServer) DeleteSubscription(ctx context.Context, request api.Delet
 		Removed:      true,
 		Subscription: models.ConvertAlertSubToNotificationSub(&models.AlarmSubscription{SubscriptionID: request.AlarmSubscriptionId}),
 	})
-	slog.Info("Successfully deleted Alarm Subscription", "alarmSubscriptionId", request.AlarmSubscriptionId.String())
+	slog.InfoContext(ctx, "Successfully deleted Alarm Subscription", "alarmSubscriptionId", request.AlarmSubscriptionId.String())
 	return api.DeleteSubscription200Response{}, nil
 }
 
@@ -366,7 +366,7 @@ func (a *AlarmsServer) PatchAlarm(ctx context.Context, request api.PatchAlarmReq
 		return nil, fmt.Errorf("failed to patch Alarm Event Record: %w", err)
 	}
 
-	slog.Debug("Alarm acknowledged/cleared", "alarmEventRecordId", updated.AlarmEventRecordID, "alarmAcknowledged", updated.AlarmAcknowledged, "alarmAcknowledgedTime", updated.AlarmAcknowledgedTime,
+	slog.DebugContext(ctx, "Alarm acknowledged/cleared", "alarmEventRecordId", updated.AlarmEventRecordID, "alarmAcknowledged", updated.AlarmAcknowledged, "alarmAcknowledgedTime", updated.AlarmAcknowledgedTime,
 		"alarmClearedTime", updated.AlarmClearedTime, "perceivedSeverity", updated.PerceivedSeverity, "alarmChangedTime", updated.AlarmChangedTime)
 
 	return api.PatchAlarm200JSONResponse{AlarmAcknowledged: request.Body.AlarmAcknowledged, PerceivedSeverity: request.Body.PerceivedSeverity}, nil
@@ -434,7 +434,7 @@ func (a *AlarmsServer) PatchAlarmServiceConfiguration(ctx context.Context, reque
 		return nil, fmt.Errorf("failed to start cleanup cronjob during AlarmServiceConfiguration patch: %w", err)
 	}
 
-	slog.Debug("Alarm Service Configuration patched", "retentionPeriod", patched.RetentionPeriod, "extensions", patched.Extensions)
+	slog.DebugContext(ctx, "Alarm Service Configuration patched", "retentionPeriod", patched.RetentionPeriod, "extensions", patched.Extensions)
 	return api.PatchAlarmServiceConfiguration200JSONResponse(models.ConvertServiceConfigurationToAPI(*patched)), nil
 }
 
@@ -477,7 +477,7 @@ func (a *AlarmsServer) UpdateAlarmServiceConfiguration(ctx context.Context, requ
 		return nil, fmt.Errorf("failed to start cleanup cronjob during AlarmServiceConfiguration update: %w", err)
 	}
 
-	slog.Debug("Alarm Service Configuration updated", "retentionPeriod", updated.RetentionPeriod, "extensions", updated.Extensions)
+	slog.DebugContext(ctx, "Alarm Service Configuration updated", "retentionPeriod", updated.RetentionPeriod, "extensions", updated.Extensions)
 	return api.UpdateAlarmServiceConfiguration200JSONResponse(models.ConvertServiceConfigurationToAPI(*updated)), nil
 
 }
@@ -489,12 +489,12 @@ func (a *AlarmsServer) AmNotification(ctx context.Context, request api.AmNotific
 
 	if err := alertmanager.HandleAlerts(ctx, a.Infrastructure.ClusterServer, a.Infrastructure.ResourceServer, a.AlarmsRepository, &request.Body.Alerts, alertmanager.Webhook); err != nil {
 		msg := "failed to handle alerts"
-		slog.Error(msg, "error", err)
+		slog.ErrorContext(ctx, msg, "error", err)
 		return nil, fmt.Errorf("%s: %w", msg, err)
 	}
 
 	// Subscriber notification sent async
-	slog.Info("Successfully handled all alertmanager alerts")
+	slog.InfoContext(ctx, "Successfully handled all alertmanager alerts")
 	return api.AmNotification200Response{}, nil
 }
 

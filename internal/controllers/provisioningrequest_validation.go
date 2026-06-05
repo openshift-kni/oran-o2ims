@@ -278,7 +278,7 @@ func (t *provisioningRequestReconcilerTask) validateAndMergeHwMgmtInput(
 		t.timeouts.hardwareProvisioning = timeout
 	}
 
-	t.logger.Info(
+	t.logger.InfoContext(ctx,
 		fmt.Sprintf("Merged hwMgmt default data with hwMgmtParameters for ProvisioningRequest"),
 		slog.String("name", t.object.Name),
 	)
@@ -441,7 +441,7 @@ func (t *provisioningRequestReconcilerTask) getMergedClusterInputData(
 		return nil, ctlrutils.NewInputError("failed to merge data for %s: %s", templateParam, err.Error())
 	}
 
-	t.logger.Info(
+	t.logger.InfoContext(ctx,
 		fmt.Sprintf("Merged the %s default data with the clusterTemplateInput data for ProvisioningRequest", templateParam),
 		slog.String("name", t.object.Name),
 	)

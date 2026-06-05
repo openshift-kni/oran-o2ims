@@ -89,7 +89,7 @@ func (d *ResourcePoolDataSource) Watch(ctx context.Context) error {
 	stopCh := make(chan struct{})
 	go func() {
 		<-ctx.Done()
-		slog.Info("context canceled; stopping resourcepool reflector")
+		slog.InfoContext(ctx, "context canceled; stopping resourcepool reflector")
 		close(stopCh)
 	}()
 
@@ -117,11 +117,11 @@ func (d *ResourcePoolDataSource) Watch(ctx context.Context) error {
 	// Start the Reflector
 	store := async.NewReflectorStore(&inventoryv1alpha1.ResourcePool{})
 	reflector := cache.NewNamedReflector(resourcePoolReflectorName, &lister, &inventoryv1alpha1.ResourcePool{}, store, time.Duration(0))
-	slog.Info("starting resourcepool reflector")
+	slog.InfoContext(ctx, "starting resourcepool reflector")
 	go reflector.Run(stopCh)
 
 	// Start monitoring the store to process incoming events
-	slog.Info("starting to receive from resourcepool reflector store")
+	slog.InfoContext(ctx, "starting to receive from resourcepool reflector store")
 	go store.Receive(ctx, d)
 
 	return nil
@@ -129,13 +129,13 @@ func (d *ResourcePoolDataSource) Watch(ctx context.Context) error {
 
 // HandleAsyncEvent handles an add/update/delete event received from the Reflector.
 func (d *ResourcePoolDataSource) HandleAsyncEvent(ctx context.Context, obj interface{}, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.Debug("handleAsyncEvent received for resourcepool", "type", eventType, "object", fmt.Sprintf("%T", obj))
+	slog.DebugContext(ctx, "handleAsyncEvent received for resourcepool", "type", eventType, "object", fmt.Sprintf("%T", obj))
 
 	switch value := obj.(type) {
 	case *inventoryv1alpha1.ResourcePool:
 		return d.handleResourcePoolWatchEvent(ctx, value, eventType)
 	default:
-		slog.Warn("Unknown object type in ResourcePoolDataSource", "type", fmt.Sprintf("%T", obj))
+		slog.WarnContext(ctx, "Unknown object type in ResourcePoolDataSource", "type", fmt.Sprintf("%T", obj))
 		return uuid.Nil, fmt.Errorf("unknown type: %T", obj)
 	}
 }
@@ -147,13 +147,13 @@ func (d *ResourcePoolDataSource) HandleSyncComplete(ctx context.Context, objectT
 	case *inventoryv1alpha1.ResourcePool:
 		object = models.ResourcePool{}
 	default:
-		slog.Warn("Unknown object type in HandleSyncComplete", "type", fmt.Sprintf("%T", objectType))
+		slog.WarnContext(ctx, "Unknown object type in HandleSyncComplete", "type", fmt.Sprintf("%T", objectType))
 		return nil
 	}
 
 	select {
 	case <-ctx.Done():
-		slog.Info("context cancelled while writing resourcepool sync complete event; aborting")
+		slog.InfoContext(ctx, "context cancelled while writing resourcepool sync complete event; aborting")
 		return fmt.Errorf("context cancelled; aborting")
 	case d.AsyncChangeEvents <- &async.AsyncChangeEvent{
 		DataSourceID: d.dataSourceID,
@@ -166,12 +166,12 @@ func (d *ResourcePoolDataSource) HandleSyncComplete(ctx context.Context, objectT
 
 // handleResourcePoolWatchEvent handles an async event received for a ResourcePool CR
 func (d *ResourcePoolDataSource) handleResourcePoolWatchEvent(ctx context.Context, pool *inventoryv1alpha1.ResourcePool, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.Debug("handleResourcePoolWatchEvent received", "name", pool.Name, "type", eventType)
+	slog.DebugContext(ctx, "handleResourcePoolWatchEvent received", "name", pool.Name, "type", eventType)
 
 	// If CR is not ready (e.g., validation failed, parent missing), treat as deletion
 	// from API perspective. This ensures stale data is removed when CRs become invalid.
 	if eventType != async.Deleted && !inventoryv1alpha1.IsResourceReady(pool.Status.Conditions) {
-		slog.Debug("ResourcePool not ready, treating as deletion",
+		slog.DebugContext(ctx, "ResourcePool not ready, treating as deletion",
 			"name", pool.Name,
 			"reason", inventoryv1alpha1.GetReadyReason(pool.Status.Conditions))
 		eventType = async.Deleted
@@ -185,7 +185,7 @@ func (d *ResourcePoolDataSource) handleResourcePoolWatchEvent(ctx context.Contex
 
 	select {
 	case <-ctx.Done():
-		slog.Info("context cancelled while writing to async event channel; aborting")
+		slog.InfoContext(ctx, "context cancelled while writing to async event channel; aborting")
 		return uuid.Nil, fmt.Errorf("context cancelled; aborting")
 	case d.AsyncChangeEvents <- &async.AsyncChangeEvent{
 		DataSourceID: d.dataSourceID,
