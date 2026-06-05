@@ -54,8 +54,6 @@ var _ = Describe("Validation error logging", func() {
 			Expect(logEntry).To(HaveKeyWithValue("level", "WARN"))
 			Expect(logEntry).To(HaveKeyWithValue("msg", "OpenAPI validation failed"))
 			Expect(logEntry).To(HaveKeyWithValue("error", "request body has an error"))
-			Expect(logEntry).To(HaveKeyWithValue("method", "POST"))
-			Expect(logEntry).To(HaveKeyWithValue("path", "/o2ims-infrastructureInventory/v1/resourcePools"))
 			Expect(logEntry).To(HaveKeyWithValue("status", BeNumerically("==", http.StatusBadRequest)))
 		})
 	})
@@ -75,8 +73,6 @@ var _ = Describe("Validation error logging", func() {
 			Expect(logEntry).To(HaveKeyWithValue("level", "WARN"))
 			Expect(logEntry).To(HaveKeyWithValue("msg", "OpenAPI request validation failed"))
 			Expect(logEntry).To(HaveKeyWithValue("error", "parameter 'filter' has invalid value"))
-			Expect(logEntry).To(HaveKeyWithValue("method", "GET"))
-			Expect(logEntry).To(HaveKeyWithValue("path", "/o2ims-infrastructureInventory/v1/deploymentManagers"))
 			Expect(logEntry).To(HaveKeyWithValue("status", BeNumerically("==", http.StatusBadRequest)))
 		})
 

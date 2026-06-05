@@ -20,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	oapimiddleware "github.com/oapi-codegen/nethttp-middleware"
 	hwmgrcontroller "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/controller"
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 )
 
 type Middleware = func(http.Handler) http.Handler
@@ -50,11 +51,16 @@ func LogDuration() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			startTime := time.Now()
+			ctx := r.Context()
+			ctx = logging.AppendCtx(ctx, slog.String("method", r.Method))
+			ctx = logging.AppendCtx(ctx, slog.String("url", r.RequestURI))
+			r = r.WithContext(ctx)
+
 			d := durationLogger{
 				ResponseWriter: w,
 			}
 			next.ServeHTTP(&d, r)
-			slog.DebugContext(r.Context(), "Request completed", "method", r.Method, "url", r.RequestURI, "status", d.statusCode, "duration", time.Since(startTime).String())
+			slog.DebugContext(r.Context(), "Request completed", "status", d.statusCode, "duration", time.Since(startTime).String())
 		})
 	}
 }
@@ -121,8 +127,6 @@ func getOranErrHandler() oapimiddleware.ErrorHandlerWithOpts {
 	return func(_ context.Context, err error, w http.ResponseWriter, r *http.Request, opts oapimiddleware.ErrorHandlerOpts) {
 		slog.WarnContext(r.Context(), "OpenAPI validation failed",
 			"error", err.Error(),
-			"method", r.Method,
-			"path", r.URL.Path,
 			"status", opts.StatusCode,
 		)
 		ProblemDetails(w, err.Error(), opts.StatusCode)
@@ -134,8 +138,6 @@ func GetOranReqErrFunc() func(w http.ResponseWriter, r *http.Request, err error)
 	return func(w http.ResponseWriter, r *http.Request, err error) {
 		slog.WarnContext(r.Context(), "OpenAPI request validation failed",
 			"error", err.Error(),
-			"method", r.Method,
-			"path", r.URL.Path,
 			"status", http.StatusBadRequest,
 		)
 		msg := err.Error()

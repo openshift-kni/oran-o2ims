@@ -151,7 +151,7 @@ var _ = Describe("ResourceServer", func() {
 		When("deployment manager is found", func() {
 			It("returns 200 response with deployment manager", func() {
 				mockRepo.EXPECT().
-					GetDeploymentManager(ctx, testUUID).
+					GetDeploymentManager(gomock.Any(), testUUID).
 					Return(&models.DeploymentManager{DeploymentManagerID: testUUID, Name: "test-dm"}, nil)
 
 				resp, err := server.GetDeploymentManager(ctx, apiGenerated.GetDeploymentManagerRequestObject{
@@ -167,7 +167,7 @@ var _ = Describe("ResourceServer", func() {
 		When("deployment manager not found", func() {
 			It("returns 404 response", func() {
 				mockRepo.EXPECT().
-					GetDeploymentManager(ctx, testUUID).
+					GetDeploymentManager(gomock.Any(), testUUID).
 					Return(nil, svcutils.ErrNotFound)
 
 				resp, err := server.GetDeploymentManager(ctx, apiGenerated.GetDeploymentManagerRequestObject{
@@ -184,7 +184,7 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					GetDeploymentManager(ctx, testUUID).
+					GetDeploymentManager(gomock.Any(), testUUID).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetDeploymentManager(ctx, apiGenerated.GetDeploymentManagerRequestObject{
@@ -203,7 +203,7 @@ var _ = Describe("ResourceServer", func() {
 		When("deployment managers are found", func() {
 			It("returns 200 response with list", func() {
 				mockRepo.EXPECT().
-					GetDeploymentManagers(ctx).
+					GetDeploymentManagers(gomock.Any()).
 					Return([]models.DeploymentManager{
 						{DeploymentManagerID: testUUID, Name: "dm-1"},
 						{DeploymentManagerID: uuid.New(), Name: "dm-2"},
@@ -224,7 +224,7 @@ var _ = Describe("ResourceServer", func() {
 		When("no deployment managers exist", func() {
 			It("returns 200 response with empty list", func() {
 				mockRepo.EXPECT().
-					GetDeploymentManagers(ctx).
+					GetDeploymentManagers(gomock.Any()).
 					Return([]models.DeploymentManager{}, nil)
 
 				resp, err := server.GetDeploymentManagers(ctx, apiGenerated.GetDeploymentManagersRequestObject{})
@@ -239,7 +239,7 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					GetDeploymentManagers(ctx).
+					GetDeploymentManagers(gomock.Any()).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetDeploymentManagers(ctx, apiGenerated.GetDeploymentManagersRequestObject{})
@@ -335,7 +335,7 @@ var _ = Describe("ResourceServer", func() {
 				}
 
 				mockRepo.EXPECT().
-					CreateSubscription(ctx, gomock.Any()).
+					CreateSubscription(gomock.Any(), gomock.Any()).
 					Return(nil, fmt.Errorf("unique_callback constraint violation"))
 
 				resp, err := serverWithProvider.CreateSubscription(ctx, apiGenerated.CreateSubscriptionRequestObject{
@@ -359,7 +359,7 @@ var _ = Describe("ResourceServer", func() {
 		When("subscription is found", func() {
 			It("returns 200 response with subscription", func() {
 				mockRepo.EXPECT().
-					GetSubscription(ctx, testUUID).
+					GetSubscription(gomock.Any(), testUUID).
 					Return(&commonmodels.Subscription{SubscriptionID: &testUUID, Callback: "https://example.com/callback"}, nil)
 
 				resp, err := server.GetSubscription(ctx, apiGenerated.GetSubscriptionRequestObject{
@@ -375,7 +375,7 @@ var _ = Describe("ResourceServer", func() {
 		When("subscription not found", func() {
 			It("returns 404 response", func() {
 				mockRepo.EXPECT().
-					GetSubscription(ctx, testUUID).
+					GetSubscription(gomock.Any(), testUUID).
 					Return(nil, svcutils.ErrNotFound)
 
 				resp, err := server.GetSubscription(ctx, apiGenerated.GetSubscriptionRequestObject{
@@ -392,7 +392,7 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					GetSubscription(ctx, testUUID).
+					GetSubscription(gomock.Any(), testUUID).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetSubscription(ctx, apiGenerated.GetSubscriptionRequestObject{
@@ -413,7 +413,7 @@ var _ = Describe("ResourceServer", func() {
 				subID1 := uuid.New()
 				subID2 := uuid.New()
 				mockRepo.EXPECT().
-					GetSubscriptions(ctx).
+					GetSubscriptions(gomock.Any()).
 					Return([]commonmodels.Subscription{
 						{SubscriptionID: &subID1, Callback: "https://example.com/callback1"},
 						{SubscriptionID: &subID2, Callback: "https://example.com/callback2"},
@@ -434,7 +434,7 @@ var _ = Describe("ResourceServer", func() {
 		When("no subscriptions exist", func() {
 			It("returns 200 response with empty list", func() {
 				mockRepo.EXPECT().
-					GetSubscriptions(ctx).
+					GetSubscriptions(gomock.Any()).
 					Return([]commonmodels.Subscription{}, nil)
 
 				resp, err := server.GetSubscriptions(ctx, apiGenerated.GetSubscriptionsRequestObject{})
@@ -449,7 +449,7 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					GetSubscriptions(ctx).
+					GetSubscriptions(gomock.Any()).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetSubscriptions(ctx, apiGenerated.GetSubscriptionsRequestObject{})
@@ -481,7 +481,7 @@ var _ = Describe("ResourceServer", func() {
 		When("subscription exists and is deleted", func() {
 			It("returns 200 response", func() {
 				mockRepo.EXPECT().
-					DeleteSubscription(ctx, testUUID).
+					DeleteSubscription(gomock.Any(), testUUID).
 					Return(int64(1), nil)
 
 				resp, err := server.DeleteSubscription(ctx, apiGenerated.DeleteSubscriptionRequestObject{
@@ -497,7 +497,7 @@ var _ = Describe("ResourceServer", func() {
 		When("subscription not found", func() {
 			It("returns 404 response", func() {
 				mockRepo.EXPECT().
-					DeleteSubscription(ctx, testUUID).
+					DeleteSubscription(gomock.Any(), testUUID).
 					Return(int64(0), nil)
 
 				resp, err := server.DeleteSubscription(ctx, apiGenerated.DeleteSubscriptionRequestObject{
@@ -514,7 +514,7 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					DeleteSubscription(ctx, testUUID).
+					DeleteSubscription(gomock.Any(), testUUID).
 					Return(int64(0), fmt.Errorf("db error"))
 
 				resp, err := server.DeleteSubscription(ctx, apiGenerated.DeleteSubscriptionRequestObject{
@@ -536,7 +536,7 @@ var _ = Describe("ResourceServer", func() {
 		When("resource pool is found", func() {
 			It("returns 200 response with resource pool", func() {
 				mockRepo.EXPECT().
-					GetResourcePool(ctx, testUUID).
+					GetResourcePool(gomock.Any(), testUUID).
 					Return(&models.ResourcePool{ResourcePoolID: testUUID, Name: "test-pool"}, nil)
 
 				resp, err := server.GetResourcePool(ctx, apiGenerated.GetResourcePoolRequestObject{
@@ -552,7 +552,7 @@ var _ = Describe("ResourceServer", func() {
 		When("resource pool not found", func() {
 			It("returns 404 response", func() {
 				mockRepo.EXPECT().
-					GetResourcePool(ctx, testUUID).
+					GetResourcePool(gomock.Any(), testUUID).
 					Return(nil, svcutils.ErrNotFound)
 
 				resp, err := server.GetResourcePool(ctx, apiGenerated.GetResourcePoolRequestObject{
@@ -569,7 +569,7 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					GetResourcePool(ctx, testUUID).
+					GetResourcePool(gomock.Any(), testUUID).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetResourcePool(ctx, apiGenerated.GetResourcePoolRequestObject{
@@ -588,7 +588,7 @@ var _ = Describe("ResourceServer", func() {
 		When("resource pools are found", func() {
 			It("returns 200 response with list", func() {
 				mockRepo.EXPECT().
-					GetResourcePools(ctx).
+					GetResourcePools(gomock.Any()).
 					Return([]models.ResourcePool{
 						{ResourcePoolID: testUUID, Name: "pool-1"},
 						{ResourcePoolID: uuid.New(), Name: "pool-2"},
@@ -609,7 +609,7 @@ var _ = Describe("ResourceServer", func() {
 		When("no resource pools exist", func() {
 			It("returns 200 response with empty list", func() {
 				mockRepo.EXPECT().
-					GetResourcePools(ctx).
+					GetResourcePools(gomock.Any()).
 					Return([]models.ResourcePool{}, nil)
 
 				resp, err := server.GetResourcePools(ctx, apiGenerated.GetResourcePoolsRequestObject{})
@@ -624,7 +624,7 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					GetResourcePools(ctx).
+					GetResourcePools(gomock.Any()).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetResourcePools(ctx, apiGenerated.GetResourcePoolsRequestObject{})
@@ -666,10 +666,10 @@ var _ = Describe("ResourceServer", func() {
 		When("resource is found", func() {
 			It("returns 200 response with resource", func() {
 				mockRepo.EXPECT().
-					ResourcePoolExists(ctx, poolID).
+					ResourcePoolExists(gomock.Any(), poolID).
 					Return(true, nil)
 				mockRepo.EXPECT().
-					GetResource(ctx, resourceID).
+					GetResource(gomock.Any(), resourceID).
 					Return(&models.Resource{ResourceID: resourceID, ResourcePoolID: poolID}, nil)
 
 				resp, err := server.GetResource(ctx, apiGenerated.GetResourceRequestObject{
@@ -686,7 +686,7 @@ var _ = Describe("ResourceServer", func() {
 		When("resource pool does not exist", func() {
 			It("returns 404 response", func() {
 				mockRepo.EXPECT().
-					ResourcePoolExists(ctx, poolID).
+					ResourcePoolExists(gomock.Any(), poolID).
 					Return(false, nil)
 
 				resp, err := server.GetResource(ctx, apiGenerated.GetResourceRequestObject{
@@ -705,10 +705,10 @@ var _ = Describe("ResourceServer", func() {
 		When("resource not found", func() {
 			It("returns 404 response", func() {
 				mockRepo.EXPECT().
-					ResourcePoolExists(ctx, poolID).
+					ResourcePoolExists(gomock.Any(), poolID).
 					Return(true, nil)
 				mockRepo.EXPECT().
-					GetResource(ctx, resourceID).
+					GetResource(gomock.Any(), resourceID).
 					Return(nil, svcutils.ErrNotFound)
 
 				resp, err := server.GetResource(ctx, apiGenerated.GetResourceRequestObject{
@@ -726,7 +726,7 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error checking pool", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					ResourcePoolExists(ctx, poolID).
+					ResourcePoolExists(gomock.Any(), poolID).
 					Return(false, fmt.Errorf("db error"))
 
 				resp, err := server.GetResource(ctx, apiGenerated.GetResourceRequestObject{
@@ -744,10 +744,10 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error getting resource", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					ResourcePoolExists(ctx, poolID).
+					ResourcePoolExists(gomock.Any(), poolID).
 					Return(true, nil)
 				mockRepo.EXPECT().
-					GetResource(ctx, resourceID).
+					GetResource(gomock.Any(), resourceID).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetResource(ctx, apiGenerated.GetResourceRequestObject{
@@ -775,10 +775,10 @@ var _ = Describe("ResourceServer", func() {
 				resourceID1 := uuid.New()
 				resourceID2 := uuid.New()
 				mockRepo.EXPECT().
-					ResourcePoolExists(ctx, poolID).
+					ResourcePoolExists(gomock.Any(), poolID).
 					Return(true, nil)
 				mockRepo.EXPECT().
-					GetResourcePoolResources(ctx, poolID).
+					GetResourcePoolResources(gomock.Any(), poolID).
 					Return([]models.Resource{
 						{ResourceID: resourceID1, ResourcePoolID: poolID},
 						{ResourceID: resourceID2, ResourcePoolID: poolID},
@@ -801,7 +801,7 @@ var _ = Describe("ResourceServer", func() {
 		When("resource pool does not exist", func() {
 			It("returns 404 response", func() {
 				mockRepo.EXPECT().
-					ResourcePoolExists(ctx, poolID).
+					ResourcePoolExists(gomock.Any(), poolID).
 					Return(false, nil)
 
 				resp, err := server.GetResources(ctx, apiGenerated.GetResourcesRequestObject{
@@ -818,10 +818,10 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					ResourcePoolExists(ctx, poolID).
+					ResourcePoolExists(gomock.Any(), poolID).
 					Return(true, nil)
 				mockRepo.EXPECT().
-					GetResourcePoolResources(ctx, poolID).
+					GetResourcePoolResources(gomock.Any(), poolID).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetResources(ctx, apiGenerated.GetResourcesRequestObject{
@@ -857,7 +857,7 @@ var _ = Describe("ResourceServer", func() {
 		When("resource is found", func() {
 			It("returns 200 response with resource", func() {
 				mockRepo.EXPECT().
-					GetResource(ctx, testUUID).
+					GetResource(gomock.Any(), testUUID).
 					Return(&models.Resource{ResourceID: testUUID}, nil)
 
 				resp, err := server.GetInternalResourceById(ctx, apiGenerated.GetInternalResourceByIdRequestObject{
@@ -873,7 +873,7 @@ var _ = Describe("ResourceServer", func() {
 		When("resource not found", func() {
 			It("returns 404 response", func() {
 				mockRepo.EXPECT().
-					GetResource(ctx, testUUID).
+					GetResource(gomock.Any(), testUUID).
 					Return(nil, svcutils.ErrNotFound)
 
 				resp, err := server.GetInternalResourceById(ctx, apiGenerated.GetInternalResourceByIdRequestObject{
@@ -890,7 +890,7 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					GetResource(ctx, testUUID).
+					GetResource(gomock.Any(), testUUID).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetInternalResourceById(ctx, apiGenerated.GetInternalResourceByIdRequestObject{
@@ -912,10 +912,10 @@ var _ = Describe("ResourceServer", func() {
 		When("resource type is found without alarm dictionary", func() {
 			It("returns 200 response with resource type", func() {
 				mockRepo.EXPECT().
-					GetResourceType(ctx, testUUID).
+					GetResourceType(gomock.Any(), testUUID).
 					Return(&models.ResourceType{ResourceTypeID: testUUID, Name: "test-type"}, nil)
 				mockRepo.EXPECT().
-					GetResourceTypeAlarmDictionary(ctx, testUUID).
+					GetResourceTypeAlarmDictionary(gomock.Any(), testUUID).
 					Return([]models.AlarmDictionary{}, nil)
 
 				resp, err := server.GetResourceType(ctx, apiGenerated.GetResourceTypeRequestObject{
@@ -932,10 +932,10 @@ var _ = Describe("ResourceServer", func() {
 			It("returns 200 response with resource type and dictionary ID", func() {
 				dictID := uuid.New()
 				mockRepo.EXPECT().
-					GetResourceType(ctx, testUUID).
+					GetResourceType(gomock.Any(), testUUID).
 					Return(&models.ResourceType{ResourceTypeID: testUUID, Name: "test-type"}, nil)
 				mockRepo.EXPECT().
-					GetResourceTypeAlarmDictionary(ctx, testUUID).
+					GetResourceTypeAlarmDictionary(gomock.Any(), testUUID).
 					Return([]models.AlarmDictionary{{AlarmDictionaryID: dictID, ResourceTypeID: testUUID}}, nil)
 
 				resp, err := server.GetResourceType(ctx, apiGenerated.GetResourceTypeRequestObject{
@@ -953,7 +953,7 @@ var _ = Describe("ResourceServer", func() {
 		When("resource type not found", func() {
 			It("returns 404 response", func() {
 				mockRepo.EXPECT().
-					GetResourceType(ctx, testUUID).
+					GetResourceType(gomock.Any(), testUUID).
 					Return(nil, svcutils.ErrNotFound)
 
 				resp, err := server.GetResourceType(ctx, apiGenerated.GetResourceTypeRequestObject{
@@ -970,7 +970,7 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					GetResourceType(ctx, testUUID).
+					GetResourceType(gomock.Any(), testUUID).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetResourceType(ctx, apiGenerated.GetResourceTypeRequestObject{
@@ -989,13 +989,13 @@ var _ = Describe("ResourceServer", func() {
 		When("resource types are found without alarm dictionaries", func() {
 			It("returns 200 response with list", func() {
 				mockRepo.EXPECT().
-					GetResourceTypes(ctx).
+					GetResourceTypes(gomock.Any()).
 					Return([]models.ResourceType{
 						{ResourceTypeID: testUUID, Name: "type-1"},
 						{ResourceTypeID: uuid.New(), Name: "type-2"},
 					}, nil)
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return([]models.AlarmDictionary{}, nil)
 
 				resp, err := server.GetResourceTypes(ctx, apiGenerated.GetResourceTypesRequestObject{})
@@ -1015,12 +1015,12 @@ var _ = Describe("ResourceServer", func() {
 				typeID := uuid.New()
 				dictID := uuid.New()
 				mockRepo.EXPECT().
-					GetResourceTypes(ctx).
+					GetResourceTypes(gomock.Any()).
 					Return([]models.ResourceType{
 						{ResourceTypeID: typeID, Name: "type-1"},
 					}, nil)
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return([]models.AlarmDictionary{
 						{AlarmDictionaryID: dictID, ResourceTypeID: typeID},
 					}, nil)
@@ -1041,10 +1041,10 @@ var _ = Describe("ResourceServer", func() {
 		When("no resource types exist", func() {
 			It("returns 200 response with empty list", func() {
 				mockRepo.EXPECT().
-					GetResourceTypes(ctx).
+					GetResourceTypes(gomock.Any()).
 					Return([]models.ResourceType{}, nil)
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return([]models.AlarmDictionary{}, nil)
 
 				resp, err := server.GetResourceTypes(ctx, apiGenerated.GetResourceTypesRequestObject{})
@@ -1059,7 +1059,7 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error getting resource types", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					GetResourceTypes(ctx).
+					GetResourceTypes(gomock.Any()).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetResourceTypes(ctx, apiGenerated.GetResourceTypesRequestObject{})
@@ -1073,12 +1073,12 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error getting alarm dictionaries", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					GetResourceTypes(ctx).
+					GetResourceTypes(gomock.Any()).
 					Return([]models.ResourceType{
 						{ResourceTypeID: testUUID, Name: "type-1"},
 					}, nil)
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetResourceTypes(ctx, apiGenerated.GetResourceTypesRequestObject{})
@@ -1114,10 +1114,10 @@ var _ = Describe("ResourceServer", func() {
 		When("alarm dictionary is found", func() {
 			It("returns 200 response with alarm dictionary", func() {
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return([]models.AlarmDictionary{{AlarmDictionaryID: testUUID, ResourceTypeID: uuid.New()}}, nil)
 				mockRepo.EXPECT().
-					GetAlarmDefinitionsByAlarmDictionaryID(ctx, testUUID).
+					GetAlarmDefinitionsByAlarmDictionaryID(gomock.Any(), testUUID).
 					Return([]models.AlarmDefinition{}, nil)
 
 				resp, err := server.GetAlarmDictionary(ctx, apiGenerated.GetAlarmDictionaryRequestObject{
@@ -1133,7 +1133,7 @@ var _ = Describe("ResourceServer", func() {
 		When("alarm dictionary not found", func() {
 			It("returns 404 response", func() {
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return([]models.AlarmDictionary{}, nil)
 
 				resp, err := server.GetAlarmDictionary(ctx, apiGenerated.GetAlarmDictionaryRequestObject{
@@ -1150,7 +1150,7 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetAlarmDictionary(ctx, apiGenerated.GetAlarmDictionaryRequestObject{
@@ -1171,16 +1171,16 @@ var _ = Describe("ResourceServer", func() {
 				dictID1 := uuid.New()
 				dictID2 := uuid.New()
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return([]models.AlarmDictionary{
 						{AlarmDictionaryID: dictID1},
 						{AlarmDictionaryID: dictID2},
 					}, nil)
 				mockRepo.EXPECT().
-					GetAlarmDefinitionsByAlarmDictionaryID(ctx, dictID1).
+					GetAlarmDefinitionsByAlarmDictionaryID(gomock.Any(), dictID1).
 					Return([]models.AlarmDefinition{}, nil)
 				mockRepo.EXPECT().
-					GetAlarmDefinitionsByAlarmDictionaryID(ctx, dictID2).
+					GetAlarmDefinitionsByAlarmDictionaryID(gomock.Any(), dictID2).
 					Return([]models.AlarmDefinition{}, nil)
 
 				resp, err := server.GetAlarmDictionaries(ctx, apiGenerated.GetAlarmDictionariesRequestObject{})
@@ -1198,7 +1198,7 @@ var _ = Describe("ResourceServer", func() {
 		When("no alarm dictionaries exist", func() {
 			It("returns 200 response with empty list", func() {
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return([]models.AlarmDictionary{}, nil)
 
 				resp, err := server.GetAlarmDictionaries(ctx, apiGenerated.GetAlarmDictionariesRequestObject{})
@@ -1213,7 +1213,7 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetAlarmDictionaries(ctx, apiGenerated.GetAlarmDictionariesRequestObject{})
@@ -1230,11 +1230,11 @@ var _ = Describe("ResourceServer", func() {
 			dictID := uuid.New()
 			rtID := uuid.New()
 			mockRepo.EXPECT().
-				GetAlarmDictionaries(ctx).
+				GetAlarmDictionaries(gomock.Any()).
 				Return([]models.AlarmDictionary{{AlarmDictionaryID: dictID, ResourceTypeID: rtID}}, nil).
 				Times(1)
 			mockRepo.EXPECT().
-				GetAlarmDefinitionsByAlarmDictionaryID(ctx, dictID).
+				GetAlarmDefinitionsByAlarmDictionaryID(gomock.Any(), dictID).
 				Return([]models.AlarmDefinition{}, nil).
 				Times(1)
 
@@ -1255,22 +1255,22 @@ var _ = Describe("ResourceServer", func() {
 
 			gomock.InOrder(
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return([]models.AlarmDictionary{{AlarmDictionaryID: dictID1, ResourceTypeID: rtID1}}, nil),
 				mockRepo.EXPECT().
-					GetAlarmDefinitionsByAlarmDictionaryID(ctx, dictID1).
+					GetAlarmDefinitionsByAlarmDictionaryID(gomock.Any(), dictID1).
 					Return([]models.AlarmDefinition{}, nil),
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return([]models.AlarmDictionary{
 						{AlarmDictionaryID: dictID1, ResourceTypeID: rtID1},
 						{AlarmDictionaryID: dictID2, ResourceTypeID: rtID2},
 					}, nil),
 				mockRepo.EXPECT().
-					GetAlarmDefinitionsByAlarmDictionaryID(ctx, dictID1).
+					GetAlarmDefinitionsByAlarmDictionaryID(gomock.Any(), dictID1).
 					Return([]models.AlarmDefinition{}, nil),
 				mockRepo.EXPECT().
-					GetAlarmDefinitionsByAlarmDictionaryID(ctx, dictID2).
+					GetAlarmDefinitionsByAlarmDictionaryID(gomock.Any(), dictID2).
 					Return([]models.AlarmDefinition{}, nil),
 			)
 
@@ -1289,10 +1289,10 @@ var _ = Describe("ResourceServer", func() {
 			dictID := uuid.New()
 			rtID := uuid.New()
 			mockRepo.EXPECT().
-				GetAlarmDictionaries(ctx).
+				GetAlarmDictionaries(gomock.Any()).
 				Return([]models.AlarmDictionary{{AlarmDictionaryID: dictID, ResourceTypeID: rtID}}, nil)
 			mockRepo.EXPECT().
-				GetAlarmDefinitionsByAlarmDictionaryID(ctx, dictID).
+				GetAlarmDefinitionsByAlarmDictionaryID(gomock.Any(), dictID).
 				Return([]models.AlarmDefinition{}, nil)
 
 			byID, err := server.GetAlarmDictionary(ctx, apiGenerated.GetAlarmDictionaryRequestObject{
@@ -1313,10 +1313,10 @@ var _ = Describe("ResourceServer", func() {
 		It("returns 500 when alarm definitions query fails during cache load", func() {
 			dictID := uuid.New()
 			mockRepo.EXPECT().
-				GetAlarmDictionaries(ctx).
+				GetAlarmDictionaries(gomock.Any()).
 				Return([]models.AlarmDictionary{{AlarmDictionaryID: dictID, ResourceTypeID: uuid.New()}}, nil)
 			mockRepo.EXPECT().
-				GetAlarmDefinitionsByAlarmDictionaryID(ctx, dictID).
+				GetAlarmDefinitionsByAlarmDictionaryID(gomock.Any(), dictID).
 				Return(nil, fmt.Errorf("definitions query failed"))
 
 			resp, err := server.GetAlarmDictionaries(ctx, apiGenerated.GetAlarmDictionariesRequestObject{})
@@ -1330,10 +1330,10 @@ var _ = Describe("ResourceServer", func() {
 			It("returns 200 response with alarm dictionary", func() {
 				dictID := uuid.New()
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return([]models.AlarmDictionary{{AlarmDictionaryID: dictID, ResourceTypeID: testUUID}}, nil)
 				mockRepo.EXPECT().
-					GetAlarmDefinitionsByAlarmDictionaryID(ctx, dictID).
+					GetAlarmDefinitionsByAlarmDictionaryID(gomock.Any(), dictID).
 					Return([]models.AlarmDefinition{}, nil)
 
 				resp, err := server.GetResourceTypeAlarmDictionary(ctx, apiGenerated.GetResourceTypeAlarmDictionaryRequestObject{
@@ -1349,7 +1349,7 @@ var _ = Describe("ResourceServer", func() {
 		When("no alarm dictionary exists for resource type", func() {
 			It("returns 404 response", func() {
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return([]models.AlarmDictionary{}, nil)
 
 				resp, err := server.GetResourceTypeAlarmDictionary(ctx, apiGenerated.GetResourceTypeAlarmDictionaryRequestObject{
@@ -1366,7 +1366,7 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetResourceTypeAlarmDictionary(ctx, apiGenerated.GetResourceTypeAlarmDictionaryRequestObject{
@@ -1394,10 +1394,10 @@ var _ = Describe("ResourceServer", func() {
 		When("location is found", func() {
 			It("returns 200 response with location", func() {
 				mockRepo.EXPECT().
-					GetLocation(ctx, globalLocationID).
+					GetLocation(gomock.Any(), globalLocationID).
 					Return(&models.Location{GlobalLocationID: globalLocationID, Name: "Test Location"}, nil)
 				mockRepo.EXPECT().
-					GetOCloudSiteIDsForLocation(ctx, globalLocationID).
+					GetOCloudSiteIDsForLocation(gomock.Any(), globalLocationID).
 					Return([]uuid.UUID{uuid.New()}, nil)
 
 				resp, err := server.GetLocation(ctx, apiGenerated.GetLocationRequestObject{
@@ -1413,7 +1413,7 @@ var _ = Describe("ResourceServer", func() {
 		When("location not found", func() {
 			It("returns 404 response", func() {
 				mockRepo.EXPECT().
-					GetLocation(ctx, globalLocationID).
+					GetLocation(gomock.Any(), globalLocationID).
 					Return(nil, svcutils.ErrNotFound)
 
 				resp, err := server.GetLocation(ctx, apiGenerated.GetLocationRequestObject{
@@ -1430,7 +1430,7 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error getting location", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					GetLocation(ctx, globalLocationID).
+					GetLocation(gomock.Any(), globalLocationID).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetLocation(ctx, apiGenerated.GetLocationRequestObject{
@@ -1447,10 +1447,10 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error getting site IDs", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					GetLocation(ctx, globalLocationID).
+					GetLocation(gomock.Any(), globalLocationID).
 					Return(&models.Location{GlobalLocationID: globalLocationID, Name: "Test Location"}, nil)
 				mockRepo.EXPECT().
-					GetOCloudSiteIDsForLocation(ctx, globalLocationID).
+					GetOCloudSiteIDsForLocation(gomock.Any(), globalLocationID).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetLocation(ctx, apiGenerated.GetLocationRequestObject{
@@ -1472,13 +1472,13 @@ var _ = Describe("ResourceServer", func() {
 				loc2 := "LOC-002"
 				siteID := uuid.New()
 				mockRepo.EXPECT().
-					GetLocations(ctx).
+					GetLocations(gomock.Any()).
 					Return([]models.Location{
 						{GlobalLocationID: loc1, Name: "Location 1"},
 						{GlobalLocationID: loc2, Name: "Location 2"},
 					}, nil)
 				mockRepo.EXPECT().
-					GetAllOCloudSiteIDsByLocation(ctx).
+					GetAllOCloudSiteIDsByLocation(gomock.Any()).
 					Return(map[string][]uuid.UUID{
 						loc1: {siteID},
 						// loc2 has no sites
@@ -1499,10 +1499,10 @@ var _ = Describe("ResourceServer", func() {
 		When("no locations exist", func() {
 			It("returns 200 response with empty list", func() {
 				mockRepo.EXPECT().
-					GetLocations(ctx).
+					GetLocations(gomock.Any()).
 					Return([]models.Location{}, nil)
 				mockRepo.EXPECT().
-					GetAllOCloudSiteIDsByLocation(ctx).
+					GetAllOCloudSiteIDsByLocation(gomock.Any()).
 					Return(map[string][]uuid.UUID{}, nil)
 
 				resp, err := server.GetLocations(ctx, apiGenerated.GetLocationsRequestObject{})
@@ -1517,7 +1517,7 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error on GetLocations", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					GetLocations(ctx).
+					GetLocations(gomock.Any()).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetLocations(ctx, apiGenerated.GetLocationsRequestObject{})
@@ -1532,12 +1532,12 @@ var _ = Describe("ResourceServer", func() {
 		When("GetAllOCloudSiteIDsByLocation fails", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					GetLocations(ctx).
+					GetLocations(gomock.Any()).
 					Return([]models.Location{
 						{GlobalLocationID: testLocationID, Name: "Location 1"},
 					}, nil)
 				mockRepo.EXPECT().
-					GetAllOCloudSiteIDsByLocation(ctx).
+					GetAllOCloudSiteIDsByLocation(gomock.Any()).
 					Return(nil, fmt.Errorf("connection timeout"))
 
 				resp, err := server.GetLocations(ctx, apiGenerated.GetLocationsRequestObject{})
@@ -1558,10 +1558,10 @@ var _ = Describe("ResourceServer", func() {
 		When("O-Cloud site is found", func() {
 			It("returns 200 response with site", func() {
 				mockRepo.EXPECT().
-					GetOCloudSite(ctx, testUUID).
+					GetOCloudSite(gomock.Any(), testUUID).
 					Return(&models.OCloudSite{OCloudSiteID: testUUID, Name: "test-site"}, nil)
 				mockRepo.EXPECT().
-					GetResourcePoolIDsForSite(ctx, testUUID).
+					GetResourcePoolIDsForSite(gomock.Any(), testUUID).
 					Return([]uuid.UUID{uuid.New()}, nil)
 
 				resp, err := server.GetOCloudSite(ctx, apiGenerated.GetOCloudSiteRequestObject{
@@ -1577,7 +1577,7 @@ var _ = Describe("ResourceServer", func() {
 		When("O-Cloud site not found", func() {
 			It("returns 404 response", func() {
 				mockRepo.EXPECT().
-					GetOCloudSite(ctx, testUUID).
+					GetOCloudSite(gomock.Any(), testUUID).
 					Return(nil, svcutils.ErrNotFound)
 
 				resp, err := server.GetOCloudSite(ctx, apiGenerated.GetOCloudSiteRequestObject{
@@ -1594,7 +1594,7 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error getting site", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					GetOCloudSite(ctx, testUUID).
+					GetOCloudSite(gomock.Any(), testUUID).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetOCloudSite(ctx, apiGenerated.GetOCloudSiteRequestObject{
@@ -1611,10 +1611,10 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error getting pool IDs", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					GetOCloudSite(ctx, testUUID).
+					GetOCloudSite(gomock.Any(), testUUID).
 					Return(&models.OCloudSite{OCloudSiteID: testUUID, Name: "test-site"}, nil)
 				mockRepo.EXPECT().
-					GetResourcePoolIDsForSite(ctx, testUUID).
+					GetResourcePoolIDsForSite(gomock.Any(), testUUID).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetOCloudSite(ctx, apiGenerated.GetOCloudSiteRequestObject{
@@ -1636,13 +1636,13 @@ var _ = Describe("ResourceServer", func() {
 				siteID2 := uuid.New()
 				poolID := uuid.New()
 				mockRepo.EXPECT().
-					GetOCloudSites(ctx).
+					GetOCloudSites(gomock.Any()).
 					Return([]models.OCloudSite{
 						{OCloudSiteID: siteID1, Name: "site-1"},
 						{OCloudSiteID: siteID2, Name: "site-2"},
 					}, nil)
 				mockRepo.EXPECT().
-					GetAllResourcePoolIDsBySite(ctx).
+					GetAllResourcePoolIDsBySite(gomock.Any()).
 					Return(map[uuid.UUID][]uuid.UUID{
 						siteID1: {poolID},
 						// siteID2 has no pools
@@ -1663,10 +1663,10 @@ var _ = Describe("ResourceServer", func() {
 		When("no O-Cloud sites exist", func() {
 			It("returns 200 response with empty list", func() {
 				mockRepo.EXPECT().
-					GetOCloudSites(ctx).
+					GetOCloudSites(gomock.Any()).
 					Return([]models.OCloudSite{}, nil)
 				mockRepo.EXPECT().
-					GetAllResourcePoolIDsBySite(ctx).
+					GetAllResourcePoolIDsBySite(gomock.Any()).
 					Return(map[uuid.UUID][]uuid.UUID{}, nil)
 
 				resp, err := server.GetOCloudSites(ctx, apiGenerated.GetOCloudSitesRequestObject{})
@@ -1681,7 +1681,7 @@ var _ = Describe("ResourceServer", func() {
 		When("repository returns error on GetOCloudSites", func() {
 			It("returns 500 response", func() {
 				mockRepo.EXPECT().
-					GetOCloudSites(ctx).
+					GetOCloudSites(gomock.Any()).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetOCloudSites(ctx, apiGenerated.GetOCloudSitesRequestObject{})
@@ -1697,12 +1697,12 @@ var _ = Describe("ResourceServer", func() {
 			It("returns 500 response", func() {
 				siteID := uuid.New()
 				mockRepo.EXPECT().
-					GetOCloudSites(ctx).
+					GetOCloudSites(gomock.Any()).
 					Return([]models.OCloudSite{
 						{OCloudSiteID: siteID, Name: "site-1"},
 					}, nil)
 				mockRepo.EXPECT().
-					GetAllResourcePoolIDsBySite(ctx).
+					GetAllResourcePoolIDsBySite(gomock.Any()).
 					Return(nil, fmt.Errorf("query timeout"))
 
 				resp, err := server.GetOCloudSites(ctx, apiGenerated.GetOCloudSitesRequestObject{})

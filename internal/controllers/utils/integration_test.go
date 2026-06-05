@@ -95,7 +95,6 @@ func TestControllerLoggingIntegration(t *testing.T) {
 	expectedContext := map[string]interface{}{
 		// From LogReconcileStart
 		LogAttrResource:  "ClusterTemplate",
-		"name":           "my-cluster-template",
 		LogAttrNamespace: "test-namespace",
 		LogAttrAction:    "reconcile_start",
 
