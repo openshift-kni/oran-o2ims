@@ -12,6 +12,7 @@ import (
 	"os"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	"github.com/spf13/cobra"
 )
 
@@ -32,10 +33,11 @@ func GetProvisioningRootCmd() *cobra.Command {
 }
 
 func configureProvisioningLogger() {
-	l := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+	baseHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level:     slog.LevelDebug,
 		AddSource: true,
-	}))
+	})
+	l := slog.New(logging.NewContextHandler(baseHandler, slog.LevelDebug))
 	slog.SetDefault(l)
 	slog.Info("Provisioning server global logger configured")
 }

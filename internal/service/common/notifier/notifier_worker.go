@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 
@@ -68,12 +67,8 @@ func NewSubscriptionWorker(ctx context.Context, clientProvider ClientProvider, s
 		return nil, fmt.Errorf("failed to setup client: %w", err)
 	}
 
-	// Set up a custom logger to include the subscription info so it doesn't need to be repeated
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		AddSource: true,
-		Level:     slog.LevelDebug, // TODO: set log level from server args
-	}))
-	logger = logger.With("subscription", subscription.SubscriptionID)
+	// Use the default logger with subscription context pre-attached
+	logger := slog.Default().With("subscription", subscription.SubscriptionID)
 
 	workerCtx, cancel := context.WithCancel(ctx)
 	return &SubscriptionWorker{
