@@ -31,3 +31,6 @@ coverage/
 # AI agents
 CLAUDE.local.md
 .claude/settings.local.json
+
+# Forge SDLC
+.forge/
