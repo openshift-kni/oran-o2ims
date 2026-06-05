@@ -129,19 +129,20 @@ func (r *AllocatedNodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // CleanupForDeletedNode
 func (r *AllocatedNodeReconciler) handleAllocatedNodeDeletion(ctx context.Context, allocatednode *hwmgmtv1alpha1.AllocatedNode) (bool, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("node", allocatednode.Name))
 
-	r.Logger.InfoContext(ctx, "handleAllocatedNodeDeletion", slog.String("node", allocatednode.Name))
+	r.Logger.InfoContext(ctx, "handleAllocatedNodeDeletion")
 	bmh, err := getBMHForNode(ctx, r.NoncachedClient, allocatednode)
 	if err != nil {
 		// If BMH is not found (e.g., manually deleted), allow the AllocatedNode deletion to proceed
 		if errors.IsNotFound(err) {
 			r.Logger.InfoContext(ctx, "BMH not found, assuming manually deleted — proceeding with AllocatedNode deletion",
-				slog.String("node", allocatednode.Name),
 				slog.String("bmh", allocatednode.Spec.HwMgrNodeId))
 			return true, nil
 		}
 		return true, fmt.Errorf("failed to get BMH for node %s: %w", allocatednode.Name, err)
 	}
+	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
 
 	skipCleanup := allocatednode.Spec.SkipCleanup
 
@@ -155,7 +156,7 @@ func (r *AllocatedNodeReconciler) handleAllocatedNodeDeletion(ctx context.Contex
 	if !skipCleanup && isNodeProvisioningInProgress(allocatednode) {
 		// Wait for BMH to transition to Available before powering off
 		if bmh.Status.Provisioning.State != metal3v1alpha1.StateAvailable {
-			r.Logger.InfoContext(ctx, "BMH not yet Available — waiting before powering off", slog.String("bmh", bmh.Name))
+			r.Logger.InfoContext(ctx, "BMH not yet Available — waiting before powering off")
 			return false, nil
 		}
 	}
