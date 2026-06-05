@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
@@ -168,6 +169,8 @@ func (c *Collector) watchForChanges(ctx context.Context) error {
 
 // handleAsyncResourceTypeEvent handles an async event for a ResourceType object.
 func (c *Collector) handleAsyncResourceTypeEvent(ctx context.Context, resourceType models.ResourceType, deleted bool) error {
+	ctx = logging.AppendCtx(ctx, slog.String("resourceTypeID", resourceType.ResourceTypeID.String()))
+	ctx = logging.AppendCtx(ctx, slog.Bool("deleted", deleted))
 	var dataChangeEvent *models2.DataChangeEvent
 	var err error
 
@@ -202,6 +205,9 @@ func (c *Collector) handleAsyncResourceTypeEvent(ctx context.Context, resourceTy
 
 // handleAsyncResourceEvent handles an async event for a Resource object.
 func (c *Collector) handleAsyncResourceEvent(ctx context.Context, resource models.Resource, deleted bool) error {
+	ctx = logging.AppendCtx(ctx, slog.String("resourceID", resource.ResourceID.String()))
+	ctx = logging.AppendCtx(ctx, slog.String("resourcePoolID", resource.ResourcePoolID.String()))
+	ctx = logging.AppendCtx(ctx, slog.Bool("deleted", deleted))
 	var dataChangeEvent *models2.DataChangeEvent
 	var err error
 
@@ -380,6 +386,8 @@ func (c *Collector) handleAsyncEvent(ctx context.Context, event *async.AsyncChan
 
 // handleAsyncDeploymentManagerEvent handles an async event received for a ClusterResource object.
 func (c *Collector) handleAsyncDeploymentManagerEvent(ctx context.Context, deploymentManager models.DeploymentManager, deleted bool) error {
+	ctx = logging.AppendCtx(ctx, slog.String("deploymentManagerID", deploymentManager.DeploymentManagerID.String()))
+	ctx = logging.AppendCtx(ctx, slog.Bool("deleted", deleted))
 	var dataChangeEvent *models2.DataChangeEvent
 	var err error
 	if deleted {
@@ -439,6 +447,8 @@ func (c *Collector) oCloudSiteAPIForChangeEvent(ctx context.Context, record *mod
 
 // handleAsyncLocationEvent handles an async event received for a Location object.
 func (c *Collector) handleAsyncLocationEvent(ctx context.Context, location models.Location, deleted bool) error {
+	ctx = logging.AppendCtx(ctx, slog.String("locationID", location.GlobalLocationID))
+	ctx = logging.AppendCtx(ctx, slog.Bool("deleted", deleted))
 	var dataChangeEvent *models2.DataChangeEvent
 	var err error
 	converter := func(object interface{}) any {
@@ -469,6 +479,8 @@ func (c *Collector) handleAsyncLocationEvent(ctx context.Context, location model
 
 // handleAsyncOCloudSiteEvent handles an async event received for an OCloudSite object.
 func (c *Collector) handleAsyncOCloudSiteEvent(ctx context.Context, site models.OCloudSite, deleted bool) error {
+	ctx = logging.AppendCtx(ctx, slog.String("oCloudSiteID", site.OCloudSiteID.String()))
+	ctx = logging.AppendCtx(ctx, slog.Bool("deleted", deleted))
 	var dataChangeEvent *models2.DataChangeEvent
 	var err error
 
@@ -583,6 +595,8 @@ func (c *Collector) handleOCloudSiteSyncCompletion(ctx context.Context, ids []an
 
 // handleAsyncResourcePoolEvent handles an async event received for a ResourcePool object.
 func (c *Collector) handleAsyncResourcePoolEvent(ctx context.Context, pool models.ResourcePool, deleted bool) error {
+	ctx = logging.AppendCtx(ctx, slog.String("resourcePoolID", pool.ResourcePoolID.String()))
+	ctx = logging.AppendCtx(ctx, slog.Bool("deleted", deleted))
 	var dataChangeEvent *models2.DataChangeEvent
 	var err error
 	converter := func(object interface{}) any {

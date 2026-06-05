@@ -67,7 +67,7 @@ var _ = Describe("Cluster Server", func() {
 		When("cache loading fails", func() {
 			It("returns internal server error", func() {
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetNodeClusterTypeAlarmDictionary(ctx, apigenerated.GetNodeClusterTypeAlarmDictionaryRequestObject{
@@ -83,10 +83,10 @@ var _ = Describe("Cluster Server", func() {
 		When("node cluster type not found in cache", func() {
 			It("returns 404 not found response", func() {
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return([]models.AlarmDictionary{}, nil)
 				mockRepo.EXPECT().
-					GetThanosAlarmDefinitions(ctx).
+					GetThanosAlarmDefinitions(gomock.Any()).
 					Return([]models.AlarmDefinition{}, nil)
 
 				resp, err := server.GetNodeClusterTypeAlarmDictionary(ctx, apigenerated.GetNodeClusterTypeAlarmDictionaryRequestObject{
@@ -103,13 +103,13 @@ var _ = Describe("Cluster Server", func() {
 			It("returns 200 OK", func() {
 				dictID := uuid.New()
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return([]models.AlarmDictionary{{AlarmDictionaryID: dictID, NodeClusterTypeID: testUUID}}, nil)
 				mockRepo.EXPECT().
-					GetThanosAlarmDefinitions(ctx).
+					GetThanosAlarmDefinitions(gomock.Any()).
 					Return([]models.AlarmDefinition{}, nil)
 				mockRepo.EXPECT().
-					GetAlarmDefinitionsByAlarmDictionaryID(ctx, dictID).
+					GetAlarmDefinitionsByAlarmDictionaryID(gomock.Any(), dictID).
 					Return([]models.AlarmDefinition{}, nil)
 
 				resp, err := server.GetNodeClusterTypeAlarmDictionary(ctx, apigenerated.GetNodeClusterTypeAlarmDictionaryRequestObject{
@@ -127,13 +127,13 @@ var _ = Describe("Cluster Server", func() {
 		It("returns 500 when alarm definitions query fails during cache load", func() {
 			dictID := uuid.New()
 			mockRepo.EXPECT().
-				GetAlarmDictionaries(ctx).
+				GetAlarmDictionaries(gomock.Any()).
 				Return([]models.AlarmDictionary{{AlarmDictionaryID: dictID}}, nil)
 			mockRepo.EXPECT().
-				GetThanosAlarmDefinitions(ctx).
+				GetThanosAlarmDefinitions(gomock.Any()).
 				Return([]models.AlarmDefinition{}, nil)
 			mockRepo.EXPECT().
-				GetAlarmDefinitionsByAlarmDictionaryID(ctx, dictID).
+				GetAlarmDefinitionsByAlarmDictionaryID(gomock.Any(), dictID).
 				Return(nil, fmt.Errorf("definitions query failed"))
 
 			resp, err := server.GetAlarmDictionaries(ctx, apigenerated.GetAlarmDictionariesRequestObject{})
@@ -147,7 +147,7 @@ var _ = Describe("Cluster Server", func() {
 		When("cache loading fails", func() {
 			It("returns internal server error", func() {
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetAlarmDictionaries(ctx, apigenerated.GetAlarmDictionariesRequestObject{})
@@ -160,10 +160,10 @@ var _ = Describe("Cluster Server", func() {
 		When("repository does not have alarm dictionaries", func() {
 			It("returns 200 OK empty list", func() {
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return([]models.AlarmDictionary{}, nil)
 				mockRepo.EXPECT().
-					GetThanosAlarmDefinitions(ctx).
+					GetThanosAlarmDefinitions(gomock.Any()).
 					Return([]models.AlarmDefinition{}, nil)
 
 				resp, err := server.GetAlarmDictionaries(ctx, apigenerated.GetAlarmDictionariesRequestObject{})
@@ -179,7 +179,7 @@ var _ = Describe("Cluster Server", func() {
 
 			It("returns 200 OK", func() {
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return([]models.AlarmDictionary{
 						{
 							AlarmDictionaryID: testUUID,
@@ -187,11 +187,11 @@ var _ = Describe("Cluster Server", func() {
 					}, nil)
 
 				mockRepo.EXPECT().
-					GetThanosAlarmDefinitions(ctx).
+					GetThanosAlarmDefinitions(gomock.Any()).
 					Return([]models.AlarmDefinition{}, nil)
 
 				mockRepo.EXPECT().
-					GetAlarmDefinitionsByAlarmDictionaryID(ctx, testUUID).
+					GetAlarmDefinitionsByAlarmDictionaryID(gomock.Any(), testUUID).
 					Return([]models.AlarmDefinition{
 						{
 							AlarmDefinitionID: alarmDefinitionUUID,
@@ -212,10 +212,10 @@ var _ = Describe("Cluster Server", func() {
 		When("GetThanosAlarmDefinitions returns error", func() {
 			It("returns 500 internal server error", func() {
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return([]models.AlarmDictionary{}, nil)
 				mockRepo.EXPECT().
-					GetThanosAlarmDefinitions(ctx).
+					GetThanosAlarmDefinitions(gomock.Any()).
 					Return(nil, fmt.Errorf("thanos db error"))
 
 				resp, err := server.GetAlarmDictionaries(ctx, apigenerated.GetAlarmDictionariesRequestObject{})
@@ -231,7 +231,7 @@ var _ = Describe("Cluster Server", func() {
 		When("cache loading fails", func() {
 			It("returns internal server error", func() {
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetAlarmDictionary(ctx, apigenerated.GetAlarmDictionaryRequestObject{
@@ -247,10 +247,10 @@ var _ = Describe("Cluster Server", func() {
 		When("alarm dictionary not found in cache", func() {
 			It("returns 404 not found response", func() {
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return([]models.AlarmDictionary{}, nil)
 				mockRepo.EXPECT().
-					GetThanosAlarmDefinitions(ctx).
+					GetThanosAlarmDefinitions(gomock.Any()).
 					Return([]models.AlarmDefinition{}, nil)
 
 				resp, err := server.GetAlarmDictionary(ctx, apigenerated.GetAlarmDictionaryRequestObject{
@@ -268,13 +268,13 @@ var _ = Describe("Cluster Server", func() {
 
 			It("returns 200 OK", func() {
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return([]models.AlarmDictionary{{AlarmDictionaryID: testUUID}}, nil)
 				mockRepo.EXPECT().
-					GetThanosAlarmDefinitions(ctx).
+					GetThanosAlarmDefinitions(gomock.Any()).
 					Return([]models.AlarmDefinition{}, nil)
 				mockRepo.EXPECT().
-					GetAlarmDefinitionsByAlarmDictionaryID(ctx, testUUID).
+					GetAlarmDefinitionsByAlarmDictionaryID(gomock.Any(), testUUID).
 					Return([]models.AlarmDefinition{{AlarmDefinitionID: alarmDefinitionUUID}}, nil)
 
 				resp, err := server.GetAlarmDictionary(ctx, apigenerated.GetAlarmDictionaryRequestObject{
@@ -294,15 +294,15 @@ var _ = Describe("Cluster Server", func() {
 				thanosDefUUID := uuid.New()
 
 				mockRepo.EXPECT().
-					GetAlarmDictionaries(ctx).
+					GetAlarmDictionaries(gomock.Any()).
 					Return([]models.AlarmDictionary{{AlarmDictionaryID: testUUID}}, nil)
 				mockRepo.EXPECT().
-					GetThanosAlarmDefinitions(ctx).
+					GetThanosAlarmDefinitions(gomock.Any()).
 					Return([]models.AlarmDefinition{
 						{AlarmDefinitionID: thanosDefUUID, AlarmName: "ViolatedPolicyReport"},
 					}, nil)
 				mockRepo.EXPECT().
-					GetAlarmDefinitionsByAlarmDictionaryID(ctx, testUUID).
+					GetAlarmDefinitionsByAlarmDictionaryID(gomock.Any(), testUUID).
 					Return([]models.AlarmDefinition{
 						{AlarmDefinitionID: dictDefUUID},
 					}, nil)
@@ -379,7 +379,7 @@ var _ = Describe("Cluster Server", func() {
 				}
 
 				mockRepo.EXPECT().
-					CreateSubscription(ctx, gomock.Any()).
+					CreateSubscription(gomock.Any(), gomock.Any()).
 					Return(nil, fmt.Errorf("unique_callback constraint violation"))
 
 				resp, err := server.CreateSubscription(ctx, apigenerated.CreateSubscriptionRequestObject{
