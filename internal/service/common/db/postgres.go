@@ -161,15 +161,13 @@ var customLogger = tracelog.LoggerFunc(func(ctx context.Context, level tracelog.
 
 func convertLogLevel(level tracelog.LogLevel) slog.Level {
 	switch level {
-	case tracelog.LogLevelTrace, tracelog.LogLevelDebug:
+	case tracelog.LogLevelTrace, tracelog.LogLevelDebug, tracelog.LogLevelInfo:
 		return slog.LevelDebug
-	case tracelog.LogLevelInfo:
-		return slog.LevelInfo
 	case tracelog.LogLevelWarn:
 		return slog.LevelWarn
 	case tracelog.LogLevelError:
 		return slog.LevelError
 	default:
-		return slog.LevelInfo
+		return slog.LevelDebug
 	}
 }
