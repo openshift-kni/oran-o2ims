@@ -151,7 +151,6 @@ func isFirmwareSettingsChangeDetectedAndValid(ctx context.Context,
 	observed := changeDetectedCond.ObservedGeneration == hfs.Generation
 
 	logger.DebugContext(ctx, "Evaluating BIOS/FirmwareSettings change",
-		slog.String("bmh", bmh.Name),
 		slog.String("hfs", hfs.Name),
 		slog.Int64("hfsGeneration", hfs.Generation),
 		slog.String("changeDetectedStatus", string(changeDetectedCond.Status)),
