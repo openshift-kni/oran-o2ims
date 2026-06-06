@@ -1656,7 +1656,6 @@ func validateFirmwareVersions(
 	namespace string,
 	hwProfileName string,
 ) (bool, error) {
-	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
 
 	// 1) Fetch HardwareProfile
 	prof := &hwmgmtv1alpha1.HardwareProfile{}
@@ -1744,7 +1743,6 @@ func validateAppliedBiosSettings(
 	namespace string,
 	hwProfileName string,
 ) (bool, error) {
-	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
 
 	// 1) Fetch HardwareProfile
 	prof := &hwmgmtv1alpha1.HardwareProfile{}
@@ -1860,7 +1858,6 @@ func validateNodeConfiguration(
 	namespace string,
 	hwProfileName string,
 ) (bool, error) {
-	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
 	// Validate firmware versions
 	firmwareValid, err := validateFirmwareVersions(ctx, c, noncachedClient, logger, bmh, namespace, hwProfileName)
 	if err != nil {

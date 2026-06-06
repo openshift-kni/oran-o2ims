@@ -84,7 +84,6 @@ func updateBMHMetaWithRetry(
 	metaType string, // "label" or "annotation"
 	key, value, operation string,
 ) error {
-	ctx = logging.AppendCtx(ctx, slog.String("bmh", name.Name))
 	// nolint: wrapcheck
 	return retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
 		// Fetch the latest version of the BMH
@@ -413,8 +412,6 @@ func processHwProfile(ctx context.Context,
 	namespace string,
 	bmh *metal3v1alpha1.BareMetalHost, profileName string,
 	postInstall, validateOnly bool) (bool, error) {
-	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
-
 	logger.DebugContext(ctx, "Processing hardware profile for BMH",
 		slog.String("hwProfile", profileName),
 		slog.Bool("postInstall", postInstall),
@@ -507,7 +504,6 @@ func processHwProfile(ctx context.Context,
 }
 
 func checkBMHStatus(ctx context.Context, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost, state metal3v1alpha1.ProvisioningState) bool {
-	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
 	// Check if the BMH is in  desired state
 	if bmh.Status.Provisioning.State == state {
 		logger.InfoContext(ctx, "BMH is now in desired state", slog.String("state", string(state)))
@@ -620,7 +616,6 @@ func handleTransitionNode(ctx context.Context,
 }
 
 func addRebootAnnotation(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
-	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
 	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	logger.DebugContext(ctx, "Adding reboot annotation to BMH",
 		slog.String("annotation", BmhRebootAnnotation))
@@ -635,7 +630,6 @@ func addRebootAnnotation(ctx context.Context, c client.Client, logger *slog.Logg
 // firmware updates and adds the reboot annotation to the BMH to trigger node
 // reboot when required.
 func evaluateCRForReboot(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
-	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
 	// Check if both annotations are present
 	hasBiosAnnotation := bmh.Annotations[BiosUpdateNeededAnnotation] != ""
 	hasFirmwareAnnotation := bmh.Annotations[FirmwareUpdateNeededAnnotation] != ""
@@ -741,8 +735,6 @@ func processBMHUpdateCase(ctx context.Context,
 	}, postInstall bool,
 	nodeOps NodeOps,
 ) (ctrl.Result, error) {
-	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
-
 	if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusError {
 		tolerate, err := tolerateAndAnnotateTransientBMHError(ctx, c, logger, bmh)
 		if err != nil || tolerate {
@@ -1180,7 +1172,6 @@ func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.
 // on the BMH so it can be restored during deprovisioning. IBI provisioning overwrites this
 // field with a secret that gets deleted when the cluster is deprovisioned.
 func saveOrigNetworkData(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
-	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
 	// Skip if the annotation already exists (re-entrant safety)
 	if _, exists := bmh.Annotations[OrigNetworkDataAnnotation]; exists {
 		return nil
@@ -1198,7 +1189,6 @@ func saveOrigNetworkData(ctx context.Context, c client.Client, logger *slog.Logg
 
 // deallocateBMH deallocates a BareMetalHost that is no longer associated with a cluster deployment.
 func deallocateBMH(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost, skipCleanup bool) error {
-	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
 	name := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 
 	// Remove InfraEnvLabel: ensure the assisted-service is no longer managing PreprovisioningImage
@@ -1215,7 +1205,6 @@ func deallocateBMH(ctx context.Context, c client.Client, logger *slog.Logger, bm
 
 // markBMHAllocated sets the "allocated" label to "true" on a BareMetalHost.
 func markBMHAllocated(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
-	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
 	// Check if the BMH is already allocated to avoid unnecessary patching
 	if isBMHAllocated(bmh) {
 		logger.InfoContext(ctx, "BMH is already allocated, skipping update")
@@ -1227,7 +1216,6 @@ func markBMHAllocated(ctx context.Context, c client.Client, logger *slog.Logger,
 
 // allowHostManagement sets bmac.agent-install.openshift.io/allow-provisioned-host-management annotation on a BareMetalHost.
 func allowHostManagement(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
-	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
 	if val, exists := bmh.Annotations[BmhHostMgmtAnnotation]; exists && val == "" {
 		return nil
 	}
@@ -1242,7 +1230,6 @@ func isBMHDeallocated(bmh *metal3v1alpha1.BareMetalHost) bool {
 // clearBMHAnnotation clears both BmhDeallocationDoneAnnotation and BmhErrorTimestampAnnotation from a BareMetalHost in a single API call
 func clearBMHAnnotation(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
 	name := types.NamespacedName{Namespace: bmh.Namespace, Name: bmh.Name}
-	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
 
 	// nolint: wrapcheck
 	return retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
@@ -1308,7 +1295,6 @@ func patchBMHOnline(ctx context.Context, c client.Client, bmh *metal3v1alpha1.Ba
 }
 
 func markBMHTransitenError(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
-	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
 	if bmh.Annotations == nil {
 		bmh.Annotations = make(map[string]string)
 	}
@@ -1359,7 +1345,6 @@ func tolerateAndAnnotateTransientBMHError(
 	logger *slog.Logger,
 	bmh *metal3v1alpha1.BareMetalHost,
 ) (bool, error) {
-	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
 	tolerate, err := isTransientBMHError(bmh)
 	if err != nil {
 		message := "error checking transient BMH error"
@@ -1385,7 +1370,6 @@ func tolerateAndAnnotateTransientBMHError(
 
 // clearBMHUpdateAnnotations removes BIOS and firmware update annotations from a BareMetalHost
 func clearBMHUpdateAnnotations(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
-	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
 	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	var errs []error
 
