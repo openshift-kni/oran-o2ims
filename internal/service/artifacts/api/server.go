@@ -10,12 +10,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/google/uuid"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -107,6 +109,7 @@ func (r *ArtifactsServer) GetManagedInfrastructureTemplates(
 // (GET /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates/{managedInfrastructureTemplateId})
 func (r *ArtifactsServer) GetManagedInfrastructureTemplate(
 	ctx context.Context, request api.GetManagedInfrastructureTemplateRequestObject) (api.GetManagedInfrastructureTemplateResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("managedInfrastructureTemplateId", request.ManagedInfrastructureTemplateId))
 
 	clusterTemplatesItems, err := getClusterTemplateById(ctx, r.HubClient, request.ManagedInfrastructureTemplateId)
 	if err != nil {
@@ -137,6 +140,7 @@ func (r *ArtifactsServer) GetManagedInfrastructureTemplate(
 func (r *ArtifactsServer) GetManagedInfrastructureTemplateDefaults(
 	ctx context.Context,
 	request api.GetManagedInfrastructureTemplateDefaultsRequestObject) (api.GetManagedInfrastructureTemplateDefaultsResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("managedInfrastructureTemplateId", request.ManagedInfrastructureTemplateId))
 
 	clusterTemplatesItems, err := getClusterTemplateById(ctx, r.HubClient, request.ManagedInfrastructureTemplateId)
 	if err != nil {

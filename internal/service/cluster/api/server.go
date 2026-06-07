@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	api "github.com/openshift-kni/oran-o2ims/internal/service/cluster/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/repo"
@@ -120,6 +121,8 @@ func (r *ClusterServer) GetClusterResourceTypes(ctx context.Context, request api
 
 // GetClusterResourceType receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetClusterResourceType(ctx context.Context, request api.GetClusterResourceTypeRequestObject) (api.GetClusterResourceTypeResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("clusterResourceTypeId", request.ClusterResourceTypeId.String()))
+
 	record, err := r.Repo.GetClusterResourceType(ctx, request.ClusterResourceTypeId)
 	if errors.Is(err, svcutils.ErrNotFound) {
 		return api.GetClusterResourceType404ApplicationProblemPlusJSONResponse{
@@ -168,6 +171,8 @@ func (r *ClusterServer) GetClusterResources(ctx context.Context, request api.Get
 
 // GetClusterResource receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetClusterResource(ctx context.Context, request api.GetClusterResourceRequestObject) (api.GetClusterResourceResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("clusterResourceId", request.ClusterResourceId.String()))
+
 	record, err := r.Repo.GetClusterResource(ctx, request.ClusterResourceId)
 	if errors.Is(err, svcutils.ErrNotFound) {
 		return api.GetClusterResource404ApplicationProblemPlusJSONResponse{
@@ -216,6 +221,8 @@ func (r *ClusterServer) GetNodeClusterTypes(ctx context.Context, request api.Get
 
 // GetNodeClusterType receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetNodeClusterType(ctx context.Context, request api.GetNodeClusterTypeRequestObject) (api.GetNodeClusterTypeResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("nodeClusterTypeId", request.NodeClusterTypeId.String()))
+
 	record, err := r.Repo.GetNodeClusterType(ctx, request.NodeClusterTypeId)
 	if errors.Is(err, svcutils.ErrNotFound) {
 		return api.GetNodeClusterType404ApplicationProblemPlusJSONResponse{
@@ -241,6 +248,8 @@ func (r *ClusterServer) GetNodeClusterType(ctx context.Context, request api.GetN
 
 // GetNodeClusterTypeAlarmDictionary receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetNodeClusterTypeAlarmDictionary(ctx context.Context, request api.GetNodeClusterTypeAlarmDictionaryRequestObject) (api.GetNodeClusterTypeAlarmDictionaryResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("nodeClusterTypeId", request.NodeClusterTypeId.String()))
+
 	data, err := r.AlarmDicts.Get(ctx)
 	if err != nil {
 		return api.GetNodeClusterTypeAlarmDictionary500ApplicationProblemPlusJSONResponse{
@@ -304,6 +313,8 @@ func (r *ClusterServer) GetNodeClusters(ctx context.Context, request api.GetNode
 
 // GetNodeCluster receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetNodeCluster(ctx context.Context, request api.GetNodeClusterRequestObject) (api.GetNodeClusterResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("nodeClusterId", request.NodeClusterId.String()))
+
 	record, err := r.Repo.GetNodeCluster(ctx, request.NodeClusterId)
 	if errors.Is(err, svcutils.ErrNotFound) {
 		return api.GetNodeCluster404ApplicationProblemPlusJSONResponse{
@@ -414,6 +425,10 @@ func (r *ClusterServer) validateSubscription(ctx context.Context, request api.Cr
 
 // CreateSubscription receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) CreateSubscription(ctx context.Context, request api.CreateSubscriptionRequestObject) (api.CreateSubscriptionResponseObject, error) {
+	if request.Body.ConsumerSubscriptionId != nil {
+		ctx = logging.AppendCtx(ctx, slog.String("consumerSubscriptionId", request.Body.ConsumerSubscriptionId.String()))
+	}
+
 	consumerSubscriptionId := "<null>"
 	if request.Body.ConsumerSubscriptionId != nil {
 		consumerSubscriptionId = request.Body.ConsumerSubscriptionId.String()
@@ -471,6 +486,8 @@ func (r *ClusterServer) CreateSubscription(ctx context.Context, request api.Crea
 
 // GetSubscription receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetSubscription(ctx context.Context, request api.GetSubscriptionRequestObject) (api.GetSubscriptionResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("subscriptionId", request.SubscriptionId.String()))
+
 	record, err := r.Repo.GetSubscription(ctx, request.SubscriptionId)
 	if errors.Is(err, svcutils.ErrNotFound) {
 		return api.GetSubscription404ApplicationProblemPlusJSONResponse{
@@ -496,6 +513,8 @@ func (r *ClusterServer) GetSubscription(ctx context.Context, request api.GetSubs
 
 // DeleteSubscription receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) DeleteSubscription(ctx context.Context, request api.DeleteSubscriptionRequestObject) (api.DeleteSubscriptionResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("subscriptionId", request.SubscriptionId.String()))
+
 	count, err := r.Repo.DeleteSubscription(ctx, request.SubscriptionId)
 	if err != nil {
 		return api.DeleteSubscription500ApplicationProblemPlusJSONResponse{
@@ -543,6 +562,8 @@ func (r *ClusterServer) GetAlarmDictionaries(ctx context.Context, _ api.GetAlarm
 
 // GetAlarmDictionary receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetAlarmDictionary(ctx context.Context, request api.GetAlarmDictionaryRequestObject) (api.GetAlarmDictionaryResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("alarmDictionaryId", request.AlarmDictionaryId.String()))
+
 	data, err := r.AlarmDicts.Get(ctx)
 	if err != nil {
 		return api.GetAlarmDictionary500ApplicationProblemPlusJSONResponse{

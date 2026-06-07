@@ -402,7 +402,6 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 			hwmgmtv1alpha1.Configured, hwmgmtv1alpha1.ConditionReason(reason), status, message); updateErr != nil {
 
 			r.Logger.ErrorContext(ctx, "Failed to update aggregated NodeAllocationRequest status",
-				slog.String("NodeAllocationRequest", nodeAllocationRequest.Name),
 				slog.String("error", updateErr.Error()))
 
 			if err == nil {

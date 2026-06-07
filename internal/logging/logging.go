@@ -63,18 +63,25 @@ func NewContextHandler(base slog.Handler, level slog.Level) *LoggingContextHandl
 }
 
 // AppendCtx adds an slog attribute to the provided context so that it will be
-// included in any Record created with such context
+// included in any Record created with such context. If an attribute with the
+// same key already exists, it is replaced rather than duplicated.
 func AppendCtx(ctx context.Context, attr slog.Attr) context.Context {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
 	if v, ok := ctx.Value(slogFields).([]slog.Attr); ok {
-		v = append(v, attr)
-		return context.WithValue(ctx, slogFields, v)
+		newV := make([]slog.Attr, len(v))
+		copy(newV, v)
+		for i, existing := range newV {
+			if existing.Key == attr.Key {
+				newV[i] = attr
+				return context.WithValue(ctx, slogFields, newV)
+			}
+		}
+		newV = append(newV, attr)
+		return context.WithValue(ctx, slogFields, newV)
 	}
 
-	v := []slog.Attr{}
-	v = append(v, attr)
-	return context.WithValue(ctx, slogFields, v)
+	return context.WithValue(ctx, slogFields, []slog.Attr{attr})
 }

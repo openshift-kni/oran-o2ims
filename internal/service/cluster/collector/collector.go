@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/repo"
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
@@ -501,6 +502,8 @@ func (c *Collector) deleteRelatedClusterResources(ctx context.Context, nodeClust
 
 // handleAsyncNodeClusterEvent handles an async handleWatchEvent received for a NodeCluster object.
 func (c *Collector) handleAsyncNodeClusterEvent(ctx context.Context, dataSource ClusterDataSource, nodeCluster models.NodeCluster, deleted bool) error {
+	ctx = logging.AppendCtx(ctx, slog.String("nodeClusterID", nodeCluster.NodeClusterID.String()))
+	ctx = logging.AppendCtx(ctx, slog.Bool("deleted", deleted))
 	if deleted {
 		// Handle the NodeCluster deletion, but first delete all subtending ClusterResources
 		if err := c.deleteRelatedClusterResources(ctx, nodeCluster); err != nil {
@@ -540,6 +543,8 @@ func (c *Collector) handleAsyncNodeClusterEvent(ctx context.Context, dataSource 
 
 // handleAsyncClusterResourceEvent handles an async handleWatchEvent received for a ClusterResource object.
 func (c *Collector) handleAsyncClusterResourceEvent(ctx context.Context, dataSource ClusterDataSource, clusterResource models.ClusterResource, deleted bool) error {
+	ctx = logging.AppendCtx(ctx, slog.String("clusterResourceID", clusterResource.ClusterResourceID.String()))
+	ctx = logging.AppendCtx(ctx, slog.Bool("deleted", deleted))
 	if deleted {
 		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(
 			ctx, c.pool, clusterResource, clusterResource.ClusterResourceID, nil, func(object interface{}) any {
