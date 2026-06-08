@@ -326,7 +326,7 @@ func IsFirmwareUpdateRequired(ctx context.Context,
 		if _, err := createHostFirmwareComponents(ctx, c, bmh, spec); err != nil {
 			return false, fmt.Errorf("failed to create HostFirmwareComponents: %w", err)
 		}
-		logger.InfoContext(ctx, "Successfully created HostFirmwareComponents", slog.String("HFC", bmh.Name))
+		logger.InfoContext(ctx, "Successfully created HostFirmwareComponents")
 		return true, nil
 	}
 
