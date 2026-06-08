@@ -84,6 +84,7 @@ func updateBMHMetaWithRetry(
 	metaType string, // "label" or "annotation"
 	key, value, operation string,
 ) error {
+	ctx = logging.AppendCtx(ctx, slog.String("bmh", name.Name))
 	// nolint: wrapcheck
 	return retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
 		// Fetch the latest version of the BMH
