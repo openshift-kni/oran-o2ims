@@ -868,7 +868,7 @@ func handleBMHCompletion(ctx context.Context,
 	namespace string,
 	nodelist *hwmgmtv1alpha1.AllocatedNodeList) (bool, error) {
 
-	logger.InfoContext(ctx, "Checking for nodes with config in progress")
+	logger.DebugContext(ctx, "Checking for nodes with config in progress")
 
 	// Find all nodes that are in InProgress state or have no condition
 	nodes := findNodesInProgress(nodelist)
@@ -876,7 +876,7 @@ func handleBMHCompletion(ctx context.Context,
 		return false, nil // no node is in config progress
 	}
 
-	logger.InfoContext(ctx, "Handling nodes for completion", slog.Int("count", len(nodes)))
+	logger.DebugContext(ctx, "Handling nodes for completion", slog.Int("count", len(nodes)))
 	var (
 		wg          sync.WaitGroup
 		mu          sync.Mutex
