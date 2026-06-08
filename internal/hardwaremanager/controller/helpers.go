@@ -1702,7 +1702,7 @@ func validateFirmwareVersions(
 			return false, nil
 		}
 		if have != want {
-			logger.InfoContext(ctx, "Firmware version mismatch",
+			logger.DebugContext(ctx, "Firmware version mismatch",
 				slog.String("component", k),
 				slog.String("current", have),
 				slog.String("expected", want))
@@ -1863,7 +1863,7 @@ func validateNodeConfiguration(
 		return false, err
 	}
 	if !firmwareValid {
-		logger.InfoContext(ctx, "Firmware versions not yet updated, continuing to poll")
+		logger.DebugContext(ctx, "Firmware versions not yet updated, continuing to poll")
 		return false, nil
 	}
 
