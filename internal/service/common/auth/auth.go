@@ -110,6 +110,10 @@ func Authorizer(kubernetesAuthorizer authorizer.Authorizer) middleware.Middlewar
 				return
 			}
 
+			slog.DebugContext(req.Context(), "authorization allowed",
+				slog.String("user", user.GetName()), slog.Any("groups", user.GetGroups()),
+				slog.String("verb", attributes.Verb), slog.String("path", attributes.Path))
+
 			// Proceed to the next layer of handler
 			next.ServeHTTP(w, req)
 		})
