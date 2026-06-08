@@ -656,7 +656,6 @@ func handleNodeInProgressUpdate(ctx context.Context,
 	node *hwmgmtv1alpha1.AllocatedNode,
 	nodeOps NodeOps,
 ) (ctrl.Result, error) {
-	ctx = logging.AppendCtx(ctx, slog.String("node", node.Name))
 	bmh, err := getBMHForNode(ctx, noncachedClient, node)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get BMH for AllocatedNode %s: %w", node.Name, err)
@@ -792,7 +791,6 @@ func abandonNodeUpdate(
 	node *hwmgmtv1alpha1.AllocatedNode,
 	nodeOps NodeOps,
 ) (ctrl.Result, error) {
-	ctx = logging.AppendCtx(ctx, slog.String("node", node.Name))
 	bmh, err := getBMHForNode(ctx, noncachedClient, node)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get BMH for abandoned node %s: %w", node.Name, err)
@@ -851,7 +849,6 @@ func initiateNodeUpdate(ctx context.Context,
 	newHwProfile string,
 	nodeOps NodeOps,
 ) (ctrl.Result, error) {
-	ctx = logging.AppendCtx(ctx, slog.String("node", node.Name))
 
 	// Clear the abandoned annotation if this node was previously abandoned due to a
 	// mid-flight profile change. The node is now being re-processed with the new profile.
