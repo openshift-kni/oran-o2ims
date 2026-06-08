@@ -21,6 +21,7 @@ Key Test Areas:
 package controller
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"time"
@@ -79,7 +80,7 @@ var _ = Describe("NodeAllocationRequest Controller Timeout Handling", func() {
 		Context("when HardwareProvisioningTimeout is specified", func() {
 			It("should use the specified timeout value", func() {
 				nar.Spec.HardwareProvisioningTimeout = "10m"
-				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(nar)
+				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(context.Background(), nar)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(timeoutExceeded).To(BeFalse())
 				Expect(conditionType).To(Equal(hwmgmtv1alpha1.ConditionType("")))
@@ -89,7 +90,7 @@ var _ = Describe("NodeAllocationRequest Controller Timeout Handling", func() {
 		Context("when HardwareProvisioningTimeout is empty", func() {
 			It("should use default timeout", func() {
 				nar.Spec.HardwareProvisioningTimeout = ""
-				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(nar)
+				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(context.Background(), nar)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(timeoutExceeded).To(BeFalse())
 				Expect(conditionType).To(Equal(hwmgmtv1alpha1.ConditionType("")))
@@ -99,7 +100,7 @@ var _ = Describe("NodeAllocationRequest Controller Timeout Handling", func() {
 		Context("when HardwareProvisioningTimeout is invalid", func() {
 			It("should return error for invalid duration", func() {
 				nar.Spec.HardwareProvisioningTimeout = "invalid"
-				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(nar)
+				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(context.Background(), nar)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("invalid hardware provisioning timeout"))
 				Expect(timeoutExceeded).To(BeFalse())
@@ -108,7 +109,7 @@ var _ = Describe("NodeAllocationRequest Controller Timeout Handling", func() {
 
 			It("should return error for zero timeout", func() {
 				nar.Spec.HardwareProvisioningTimeout = "0s"
-				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(nar)
+				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(context.Background(), nar)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("hardware provisioning timeout must be > 0"))
 				Expect(timeoutExceeded).To(BeFalse())
@@ -131,7 +132,7 @@ var _ = Describe("NodeAllocationRequest Controller Timeout Handling", func() {
 			})
 
 			It("should detect provisioning timeout", func() {
-				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(nar)
+				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(context.Background(), nar)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(timeoutExceeded).To(BeTrue())
 				Expect(conditionType).To(Equal(hwmgmtv1alpha1.Provisioned))
@@ -153,7 +154,7 @@ var _ = Describe("NodeAllocationRequest Controller Timeout Handling", func() {
 			})
 
 			It("should not detect timeout", func() {
-				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(nar)
+				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(context.Background(), nar)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(timeoutExceeded).To(BeFalse())
 				Expect(conditionType).To(Equal(hwmgmtv1alpha1.ConditionType("")))
@@ -182,7 +183,7 @@ var _ = Describe("NodeAllocationRequest Controller Timeout Handling", func() {
 			})
 
 			It("should detect configuration timeout", func() {
-				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(nar)
+				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(context.Background(), nar)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(timeoutExceeded).To(BeTrue())
 				Expect(conditionType).To(Equal(hwmgmtv1alpha1.Configured))
@@ -211,7 +212,7 @@ var _ = Describe("NodeAllocationRequest Controller Timeout Handling", func() {
 			})
 
 			It("should not detect timeout", func() {
-				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(nar)
+				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(context.Background(), nar)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(timeoutExceeded).To(BeFalse())
 				Expect(conditionType).To(Equal(hwmgmtv1alpha1.ConditionType("")))
@@ -235,7 +236,7 @@ var _ = Describe("NodeAllocationRequest Controller Timeout Handling", func() {
 			})
 
 			It("should not detect any timeout", func() {
-				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(nar)
+				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(context.Background(), nar)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(timeoutExceeded).To(BeFalse())
 				Expect(conditionType).To(Equal(hwmgmtv1alpha1.ConditionType("")))
@@ -253,7 +254,7 @@ var _ = Describe("NodeAllocationRequest Controller Timeout Handling", func() {
 			})
 
 			It("should not detect timeout without start time", func() {
-				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(nar)
+				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(context.Background(), nar)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(timeoutExceeded).To(BeFalse())
 				Expect(conditionType).To(Equal(hwmgmtv1alpha1.ConditionType("")))
@@ -278,7 +279,7 @@ var _ = Describe("NodeAllocationRequest Controller Timeout Handling", func() {
 			})
 
 			It("should not detect timeout without start time", func() {
-				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(nar)
+				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(context.Background(), nar)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(timeoutExceeded).To(BeFalse())
 				Expect(conditionType).To(Equal(hwmgmtv1alpha1.ConditionType("")))
@@ -332,7 +333,7 @@ var _ = Describe("NodeAllocationRequest Controller Timeout Handling", func() {
 			It("should allow retry when spec changes", func() {
 				// The hardware manager controller should detect the spec change and skip timeout checking
 				// This allows retry even when the previous configuration failed/timed out
-				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(nar)
+				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(context.Background(), nar)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(timeoutExceeded).To(BeFalse())
 				Expect(conditionType).To(Equal(hwmgmtv1alpha1.ConditionType("")))
@@ -366,7 +367,7 @@ var _ = Describe("NodeAllocationRequest Controller Timeout Handling", func() {
 			It("should allow retry when spec changes", func() {
 				// Similar to failed case, should allow retry with spec change
 				// Timeout check should be skipped when spec changes
-				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(nar)
+				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(context.Background(), nar)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(timeoutExceeded).To(BeFalse())
 				Expect(conditionType).To(Equal(hwmgmtv1alpha1.ConditionType("")))
