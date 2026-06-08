@@ -47,6 +47,10 @@ tags:
   description: |
     Information about cluster subscriptions.
 
+# Scope enforcement: OAuth scopes are not verified directly from the token's
+# scope claim. The OAuth server translates scopes into group memberships
+# (via the groups claim), and the Authorizer maps those groups to Kubernetes
+# RBAC permissions via SubjectAccessReview. See DD-003 in AGENTS.md.
 security:
 - oauth2:
   - role:o2ims-admin

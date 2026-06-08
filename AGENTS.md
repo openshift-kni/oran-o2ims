@@ -93,6 +93,19 @@ issues during code review.
   `NamespacedName`. `ProvisioningRequest` is cluster-scoped (`scope: Cluster`
   in the CRD) and has no namespace.
 
+- **DD-003: OAuth scope verification via groups-to-RBAC mapping.**
+  The O-RAN O2 IMS specification requires token scope verification. This
+  project does not verify the OAuth `scope` claim directly. Instead, the
+  OAuth server translates granted scopes into group memberships, which
+  appear in the token's `groups` claim. The OIDC authenticator
+  (`auth_oauth.go`) extracts these groups, and the `Authorizer`
+  (`auth.go`) maps them to Kubernetes RBAC permissions via
+  `SubjectAccessReview`. This provides functionally equivalent
+  authorization: a token can only access resources permitted by the
+  groups derived from its scopes. The `Authorizer` logs the user's
+  groups at DEBUG level on every successful authorization to make this
+  chain observable for compliance auditing.
+
 ## Logging Conventions
 
 - Use context-aware slog calls (`slog.InfoContext(ctx, ...)`,
