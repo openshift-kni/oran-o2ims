@@ -9,6 +9,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -488,8 +489,8 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 			if bmh == nil {
 				t.logger.WarnContext(ctx,
 					"BareMetalHost not found for AllocatedNode",
-					"allocatedNodeId", node.Name,
-					"hostname", hostName,
+					slog.String("allocatedNodeId", node.Name),
+					slog.String("hostname", hostName),
 				)
 				continue
 			}
@@ -506,8 +507,8 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 		if !foundNode {
 			t.logger.WarnContext(
 				ctx,
-				"The corresponding clcm.openshift.io Node not found for the %s/%s Agent",
-				agent.Name, agent.Namespace,
+				fmt.Sprintf("The corresponding clcm.openshift.io Node not found for the %s/%s Agent",
+					agent.Name, agent.Namespace),
 			)
 		}
 	}

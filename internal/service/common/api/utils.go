@@ -63,7 +63,7 @@ func CheckCallbackReachabilityGET(ctx context.Context, client *http.Client, call
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-			slog.WarnContext(ctx, "failed to close response body", "error", err)
+			slog.WarnContext(ctx, "failed to close response body", slog.Any("error", err))
 		}
 	}(resp.Body)
 
@@ -71,7 +71,7 @@ func CheckCallbackReachabilityGET(ctx context.Context, client *http.Client, call
 		return fmt.Errorf("unexpected status code: got %d, expected %d", resp.StatusCode, http.StatusNoContent)
 	}
 
-	slog.InfoContext(ctx, "Reachability check passed", "status", resp.StatusCode)
+	slog.InfoContext(ctx, "Reachability check passed", slog.Int("status", resp.StatusCode))
 	return nil
 }
 

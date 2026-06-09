@@ -9,6 +9,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/coreos/go-semver/semver"
@@ -55,7 +56,7 @@ func (t *provisioningRequestReconcilerTask) IsUpgradeRequested(
 	openshiftVersion, ok := managedCluster.GetLabels()["openshiftVersion"]
 	if !ok {
 		t.logger.InfoContext(ctx, "openshiftVersion label not found in ManagedCluster, requeueing",
-			"managedCluster", managedClusterName)
+			slog.String("managedCluster", managedClusterName))
 		return false, ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
@@ -68,14 +69,14 @@ func (t *provisioningRequestReconcilerTask) IsUpgradeRequested(
 	switch cmp {
 	case 1:
 		t.logger.InfoContext(ctx, "Upgrade requested: template version is higher than ManagedCluster version",
-			"templateVersion", templateReleaseVersion.String(), "managedClusterVersion", managedClusterVersion.String())
+			slog.String("templateVersion", templateReleaseVersion.String()), slog.String("managedClusterVersion", managedClusterVersion.String()))
 		return true, ctrl.Result{}, nil
 	case -1:
 		t.logger.InfoContext(ctx, "Template version is lower than ManagedCluster version, no upgrade requested",
-			"templateVersion", templateReleaseVersion.String(), "managedClusterVersion", managedClusterVersion.String())
+			slog.String("templateVersion", templateReleaseVersion.String()), slog.String("managedClusterVersion", managedClusterVersion.String()))
 	case 0:
 		t.logger.InfoContext(ctx, "Template version equals ManagedCluster version, no upgrade requested",
-			"version", templateReleaseVersion.String())
+			slog.String("version", templateReleaseVersion.String()))
 	}
 	return false, ctrl.Result{}, nil
 }

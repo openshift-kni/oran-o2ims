@@ -63,7 +63,7 @@ func Serve(config *api.ProvisioningServerConfig) error {
 
 	go func() {
 		sig := <-shutdown
-		slog.InfoContext(ctx, "Shutdown signal received", "signal", sig)
+		slog.InfoContext(ctx, "Shutdown signal received", slog.Any("signal", sig))
 		cancel()
 	}()
 

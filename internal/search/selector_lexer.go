@@ -419,7 +419,7 @@ func (l *selectorLexer) readRune() rune {
 	if err != nil {
 		l.logger.Error(
 			"Unexpected error while reading rune",
-			"error", err,
+			slog.Any("error", err),
 		)
 		return 0
 	}
@@ -431,7 +431,7 @@ func (l *selectorLexer) unreadRune() {
 	if err != nil {
 		l.logger.Error(
 			"Unexpected error while unreading rune",
-			"error", err,
+			slog.Any("error", err),
 		)
 	}
 }

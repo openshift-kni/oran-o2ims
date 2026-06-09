@@ -522,8 +522,8 @@ func (t *provisioningRequestReconcilerTask) updateAllocatedNodeHostMap(ctx conte
 	}
 
 	t.logger.InfoContext(ctx, "Updating AllocatedNodeHostMap status",
-		"allocatedNodeID", allocatedNodeID,
-		"hostName", hostName)
+		slog.String("allocatedNodeID", allocatedNodeID),
+		slog.String("hostName", hostName))
 
 	t.object.Status.Extensions.AllocatedNodeHostMap[allocatedNodeID] = hostName
 

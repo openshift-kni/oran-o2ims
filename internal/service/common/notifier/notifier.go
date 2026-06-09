@@ -118,16 +118,16 @@ func (n *Notifier) Run(ctx context.Context) error {
 		select {
 		case e := <-n.subscriptionJobCompleteChannel:
 			if err := n.handleSubscriptionJobCompleteEvent(ctx, e); err != nil {
-				slog.ErrorContext(ctx, "failed to handle subscription job complete event", "error", err)
+				slog.ErrorContext(ctx, "failed to handle subscription job complete event", slog.Any("error", err))
 			}
 		case e := <-n.notificationChannel:
 			if err := n.handleNotification(ctx, e); err != nil {
 				slog.ErrorContext(ctx, "failed to handle notification",
-					"NotificationID", e.NotificationID, "sequenceID", e.SequenceID, "error", err)
+					slog.String("NotificationID", e.NotificationID.String()), slog.Int("sequenceID", e.SequenceID), slog.Any("error", err))
 			}
 		case e := <-n.subscriptionChannel:
 			if err := n.handleSubscriptionEvent(ctx, e); err != nil {
-				slog.ErrorContext(ctx, "failed to handle subscription event", "error", err)
+				slog.ErrorContext(ctx, "failed to handle subscription event", slog.Any("error", err))
 			}
 		case <-ctx.Done():
 			n.shutdownWorkers()
@@ -177,7 +177,7 @@ func (n *Notifier) loadEvents(ctx context.Context) error {
 		}
 	}
 
-	slog.InfoContext(ctx, "loaded events", "count", len(notifications))
+	slog.InfoContext(ctx, "loaded events", slog.Int("count", len(notifications)))
 	return nil
 }
 
@@ -200,7 +200,7 @@ func (n *Notifier) loadSubscriptions(ctx context.Context) error {
 		go n.workers[subscriptionID].Run()
 	}
 
-	slog.InfoContext(ctx, "subscriptions loaded", "count", len(n.workers))
+	slog.InfoContext(ctx, "subscriptions loaded", slog.Int("count", len(n.workers)))
 
 	return nil
 }
@@ -216,14 +216,14 @@ func (n *Notifier) Notify(ctx context.Context, event *Notification) {
 
 // handleNotification handles an incoming notification
 func (n *Notifier) handleNotification(ctx context.Context, event *Notification) error {
-	slog.InfoContext(ctx, "handling notification", "NotificationID", event.NotificationID, "sequenceID", event.SequenceID)
+	slog.InfoContext(ctx, "handling notification", slog.String("NotificationID", event.NotificationID.String()), slog.Int("sequenceID", event.SequenceID))
 
 	count := 0
 	for _, worker := range n.workers {
 		if n.subscriptionProvider.Matches(worker.subscription, event) {
 			clone, err := n.subscriptionProvider.Transform(worker.subscription, event)
 			if err != nil {
-				slog.ErrorContext(ctx, "failed to transform notification", "subscription", worker.subscription.SubscriptionID, "error", err)
+				slog.ErrorContext(ctx, "failed to transform notification", slog.String("subscription", worker.subscription.SubscriptionID.String()), slog.Any("error", err))
 				continue
 			}
 			worker.NewNotification(clone)
@@ -234,7 +234,7 @@ func (n *Notifier) handleNotification(ctx context.Context, event *Notification) 
 	if count == 0 {
 		// No subscriptions matched just delete the event
 		slog.DebugContext(ctx, "no matching subscriptions; deleting event",
-			"NotificationID", event.NotificationID, "sequenceID", event.SequenceID)
+			slog.String("NotificationID", event.NotificationID.String()), slog.Int("sequenceID", event.SequenceID))
 		if err := n.notificationProvider.DeleteNotification(ctx, event.NotificationID); err != nil {
 			return fmt.Errorf("failed to delete notification: %w", err)
 		}
@@ -242,8 +242,8 @@ func (n *Notifier) handleNotification(ctx context.Context, event *Notification) 
 	}
 
 	slog.InfoContext(ctx, "notification dispatched",
-		"NotificationID", event.NotificationID, "sequenceID", event.SequenceID,
-		"subscribers", count)
+		slog.String("NotificationID", event.NotificationID.String()), slog.Int("sequenceID", event.SequenceID),
+		slog.Int("subscribers", count))
 
 	return nil
 }
@@ -286,7 +286,7 @@ func (n *Notifier) releaseNotifications(ctx context.Context, events []*Notificat
 	for _, event := range events {
 		err := n.releaseNotification(ctx, event.NotificationID, event.SequenceID)
 		if err != nil {
-			slog.ErrorContext(ctx, "failed to release event", "error", err)
+			slog.ErrorContext(ctx, "failed to release event", slog.Any("error", err))
 		}
 	}
 }
@@ -294,13 +294,13 @@ func (n *Notifier) releaseNotifications(ctx context.Context, events []*Notificat
 // handleSubscriptionEvent handles an incoming subscription change event
 func (n *Notifier) handleSubscriptionEvent(ctx context.Context, event *SubscriptionEvent) error {
 	subscriptionID := event.Subscription.SubscriptionID
-	slog.InfoContext(ctx, "Handling subscription event", "removed", event.Removed, "subscription", event.Subscription)
+	slog.InfoContext(ctx, "Handling subscription event", slog.Bool("removed", event.Removed), slog.Any("subscription", event.Subscription))
 
 	if event.Removed {
 		// The subscription has been removed.  Cleanup any associated data.
 		worker, found := n.workers[subscriptionID]
 		if !found {
-			slog.DebugContext(ctx, "subscription worker not found", "subscriptionID", subscriptionID)
+			slog.DebugContext(ctx, "subscription worker not found", slog.String("subscriptionID", subscriptionID.String()))
 			return nil
 		}
 
@@ -319,14 +319,14 @@ func (n *Notifier) handleSubscriptionEvent(ctx context.Context, event *Subscript
 		go worker.Run()
 	}
 
-	slog.InfoContext(ctx, "subscription event handled", "workers", len(n.workers))
+	slog.InfoContext(ctx, "subscription event handled", slog.Int("workers", len(n.workers)))
 	return nil
 }
 
 // handleSubscriptionJobCompleteEvent handles a job completion event, removes the subscriber from the event job,
 func (n *Notifier) handleSubscriptionJobCompleteEvent(ctx context.Context, event *SubscriptionJobComplete) error {
 	slog.DebugContext(ctx, "handling subscription job complete event",
-		"NotificationID", event.notificationID, "subscriptionID", event.subscriptionID)
+		slog.String("NotificationID", event.notificationID.String()), slog.String("subscriptionID", event.subscriptionID.String()))
 
 	// Lookup the subscription worker for this event
 	if worker, found := n.workers[event.subscriptionID]; found {
@@ -338,7 +338,7 @@ func (n *Notifier) handleSubscriptionJobCompleteEvent(ctx context.Context, event
 		}
 	} else {
 		// Likely has been deleted and this is a race condition.
-		slog.DebugContext(ctx, "subscription worker not found", "subscriptionID", event.subscriptionID)
+		slog.DebugContext(ctx, "subscription worker not found", slog.String("subscriptionID", event.subscriptionID.String()))
 	}
 
 	return n.releaseNotification(ctx, event.notificationID, event.sequenceID)

@@ -67,8 +67,8 @@ func (p *PathsParser) Parse(paths ...string) (result []Path, err error) {
 		if fault != nil {
 			p.logger.Error(
 				"Failed to parse",
-				"text", paths,
-				"error", err,
+				slog.Any("text", paths),
+				slog.Any("error", err),
 			)
 			err = fault.(error)
 		}

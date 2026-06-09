@@ -110,7 +110,7 @@ func (c *ReflectorStore) enqueue(operation operation) {
 	}
 	if count >= c.hwm+10 {
 		// We don't need a log every single time the high watermark is surpassed by 1, so log it when it surpasses by 10
-		slog.Debug("New reflector store queue high watermark", "new", count, "old", c.hwm)
+		slog.Debug("New reflector store queue high watermark", slog.Int("new", count), slog.Int("old", c.hwm))
 		c.hwm = count
 	}
 }
@@ -129,14 +129,14 @@ func (c *ReflectorStore) handleOperations(ctx context.Context, handler AsyncEven
 		case Updated, Deleted:
 			_, err := handler.HandleAsyncEvent(ctx, o.objects[0], o.eventType)
 			if err != nil {
-				slog.WarnContext(ctx, "Failed to handle event", "event", o.eventType, "error", err)
+				slog.WarnContext(ctx, "Failed to handle event", slog.Any("event", o.eventType), slog.Any("error", err))
 			}
 		case SyncComplete:
 			keys := make([]uuid.UUID, 0)
 			for _, obj := range o.objects {
 				key, err := handler.HandleAsyncEvent(ctx, obj, Updated)
 				if err != nil {
-					slog.WarnContext(ctx, "Failed to handle event", "error", err)
+					slog.WarnContext(ctx, "Failed to handle event", slog.Any("error", err))
 					continue
 				}
 				if key != uuid.Nil {
@@ -146,7 +146,7 @@ func (c *ReflectorStore) handleOperations(ctx context.Context, handler AsyncEven
 			}
 			err := handler.HandleSyncComplete(ctx, c.ObjectType, keys)
 			if err != nil {
-				slog.WarnContext(ctx, "Failed to handle sync completion", "error", err)
+				slog.WarnContext(ctx, "Failed to handle sync completion", slog.Any("error", err))
 			}
 		}
 	}
@@ -232,8 +232,8 @@ func (c *ReflectorStore) GetByKey(_ string) (item interface{}, exists bool, err 
 
 // Replace indicates that the underlying Reflector needed to re-list all data from the API server.
 func (c *ReflectorStore) Replace(items []interface{}, resourceVersion string) error {
-	slog.Info("Replace called", "type", fmt.Sprintf("%T", c.ObjectType),
-		"items", len(items), "resourceVersion", resourceVersion)
+	slog.Info("Replace called", slog.String("type", fmt.Sprintf("%T", c.ObjectType)),
+		slog.Int("items", len(items)), slog.String("resourceVersion", resourceVersion))
 	c.enqueue(operation{
 		eventType: SyncComplete,
 		objects:   items,

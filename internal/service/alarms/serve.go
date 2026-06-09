@@ -78,13 +78,13 @@ func Serve(config *api.AlarmsServerConfig) error {
 	// Recovery defer to print panic strace
 	defer func() {
 		if r := recover(); r != nil {
-			slog.ErrorContext(ctx, "something went wrong", "stacktrace", string(debug.Stack()))
+			slog.ErrorContext(ctx, "something went wrong", slog.String("stacktrace", string(debug.Stack())))
 		}
 	}()
 
 	go func() {
 		sig := <-shutdown
-		slog.InfoContext(ctx, "Shutdown signal received", "signal", sig)
+		slog.InfoContext(ctx, "Shutdown signal received", slog.Any("signal", sig))
 		cancel()
 	}()
 
@@ -164,7 +164,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 		defer alarmServer.Wg.Done()
 		slog.InfoContext(ctx, "Starting alarms subs notifier")
 		if err := newNotifier.Run(ctx); err != nil {
-			slog.ErrorContext(ctx, "notifier error", "error", err)
+			slog.ErrorContext(ctx, "notifier error", slog.Any("error", err))
 		}
 	}()
 
@@ -308,7 +308,7 @@ func ConfigAlarmServerCleanup(ctx context.Context, alarmServer *api.AlarmsServer
 	if err != nil {
 		return fmt.Errorf("failed to create alarm service configuration: %w", err)
 	}
-	slog.InfoContext(ctx, "Alarm Service configuration created/found", "retentionPeriod", serviceConfig.RetentionPeriod, "extensions", serviceConfig.Extensions)
+	slog.InfoContext(ctx, "Alarm Service configuration created/found", slog.Int("retentionPeriod", serviceConfig.RetentionPeriod), slog.Any("extensions", serviceConfig.Extensions))
 
 	// Init ServiceConfig and start cronjob
 	alarmServer.ServiceConfig, err = serviceconfig.LoadEnvConfig()
@@ -351,7 +351,7 @@ func startAlertmanager(ctx context.Context, alarmServer *api.AlarmsServer) error
 		defer alarmServer.Wg.Done()
 		if err := c.RunAlertSyncScheduler(ctx, 1*time.Hour); err != nil {
 			if !errors.Is(err, context.Canceled) {
-				slog.ErrorContext(ctx, "failed to run alert sync scheduler", "error", err)
+				slog.ErrorContext(ctx, "failed to run alert sync scheduler", slog.Any("error", err))
 			}
 		}
 	}()
