@@ -211,8 +211,8 @@ func (b *LoggerBuilder) Build() (result *slog.Logger, err error) {
 	}
 
 	// Create the handler:
-	replacers := make([]func([]string, slog.Attr) slog.Attr, 0, 2)
-	replacers = append(replacers, replaceTime)
+	replacers := make([]func([]string, slog.Attr) slog.Attr, 0, 3)
+	replacers = append(replacers, replaceTime, replaceDuration)
 	if b.redact {
 		replacers = append(replacers, replaceRedacted)
 	} else {
@@ -311,6 +311,13 @@ func replaceTime(groups []string, a slog.Attr) slog.Attr {
 	if a.Value.Kind() == slog.KindTime {
 		value := a.Value.Time().UTC()
 		a = slog.String(a.Key, value.Format(time.RFC3339))
+	}
+	return a
+}
+
+func replaceDuration(_ []string, a slog.Attr) slog.Attr {
+	if a.Value.Kind() == slog.KindDuration {
+		a = slog.String(a.Key, a.Value.Duration().String())
 	}
 	return a
 }

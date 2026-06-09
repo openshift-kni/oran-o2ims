@@ -8,8 +8,10 @@ package logging
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -651,6 +653,46 @@ var _ = Describe("Logger", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(msg.MyField).To(Equal("***"))
 		Expect(msg.YourField).To(Equal("***"))
+	})
+
+	It("Writes duration as human-readable string", func() {
+		buffer := &bytes.Buffer{}
+		logger, err := NewLogger().
+			SetWriter(io.MultiWriter(buffer, GinkgoWriter)).
+			Build()
+		Expect(err).ToNot(HaveOccurred())
+
+		logger.Info("timeout check",
+			slog.Duration("timeout", 2*time.Hour),
+			slog.Duration("elapsed", 506*time.Millisecond+423*time.Microsecond+654*time.Nanosecond),
+		)
+
+		var msg struct {
+			Timeout string `json:"timeout"`
+			Elapsed string `json:"elapsed"`
+		}
+		err = json.Unmarshal(buffer.Bytes(), &msg)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(msg.Timeout).To(Equal("2h0m0s"))
+		Expect(msg.Elapsed).To(Equal("506.423654ms"))
+	})
+
+	It("Writes context-injected duration as human-readable string", func() {
+		buffer := &bytes.Buffer{}
+		logger, err := NewLogger().
+			SetWriter(io.MultiWriter(buffer, GinkgoWriter)).
+			Build()
+		Expect(err).ToNot(HaveOccurred())
+
+		ctx := AppendCtx(context.Background(), slog.Duration("timeout", 90*time.Minute))
+		logger.InfoContext(ctx, "context duration check")
+
+		var msg struct {
+			Timeout string `json:"timeout"`
+		}
+		err = json.Unmarshal(buffer.Bytes(), &msg)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(msg.Timeout).To(Equal("1h30m0s"))
 	})
 
 	It("Logger with group redacts sensitive fields like parent", func() {
