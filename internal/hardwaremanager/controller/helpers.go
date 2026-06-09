@@ -31,6 +31,7 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 )
 
 const ConfigAnnotation = "clcm.openshift.io/config-in-progress"
@@ -52,13 +53,13 @@ func syncSkipCleanupToAllocatedNodes(
 	for i := range nodelist.Items {
 		node := &nodelist.Items[i]
 		if node.Spec.SkipCleanup != nodeAllocationRequest.Spec.SkipCleanup {
+			nodeCtx := logging.AppendCtx(ctx, slog.String("node", node.Name))
 			patch := client.MergeFrom(node.DeepCopy())
 			node.Spec.SkipCleanup = nodeAllocationRequest.Spec.SkipCleanup
 			if err := c.Patch(ctx, node, patch); err != nil {
 				return fmt.Errorf("failed to patch SkipCleanup on AllocatedNode %s: %w", node.Name, err)
 			}
-			logger.InfoContext(ctx, "Synced skipCleanup to AllocatedNode",
-				slog.String("node", node.Name),
+			logger.InfoContext(nodeCtx, "Synced skipCleanup to AllocatedNode",
 				slog.Bool("skipCleanup", nodeAllocationRequest.Spec.SkipCleanup))
 		}
 	}
@@ -111,12 +112,14 @@ func enableBMOManagementForIBINodes(
 
 	for i := range nodelist.Items {
 		node := &nodelist.Items[i]
-		bmh, err := getBMHForNode(ctx, noncachedClient, node)
+		nodeCtx := logging.AppendCtx(ctx, slog.String("node", node.Name))
+		bmh, err := getBMHForNode(nodeCtx, noncachedClient, node)
 		if err != nil {
-			logger.ErrorContext(ctx, "Failed to get BMH for node, skipping IBI management setup",
-				slog.String("node", node.Name), slog.String("error", err.Error()))
+			logger.ErrorContext(nodeCtx, "Failed to get BMH for node, skipping IBI management setup",
+				slog.String("error", err.Error()))
 			continue
 		}
+		nodeCtx = logging.AppendCtx(nodeCtx, slog.String("bmh", bmh.Name))
 
 		if !bmh.Spec.ExternallyProvisioned {
 			continue
@@ -134,22 +137,20 @@ func enableBMOManagementForIBINodes(
 		// The IBI operator creates a DataImage during installation but never deletes it.
 		// If left around, BMO will spuriously re-mount the virtual media after firmware
 		// updates, which causes stuck finalizers during deprovisioning.
-		if err := deleteDataImageIfExists(ctx, c, logger, bmh.Name, bmh.Namespace); err != nil {
+		if err := deleteDataImageIfExists(nodeCtx, c, logger, bmh.Name, bmh.Namespace); err != nil {
 			return fmt.Errorf("failed to delete DataImage for BMH %s: %w", bmh.Name, err)
 		}
 
 		if !bmh.Spec.Online {
-			logger.InfoContext(ctx, "Setting BMH online=true for IBI post-provisioning",
-				slog.String("bmh", bmh.Name))
-			if err := patchBMHOnline(ctx, c, bmh, true); err != nil {
+			logger.InfoContext(nodeCtx, "Setting BMH online=true for IBI post-provisioning")
+			if err := patchBMHOnline(nodeCtx, c, bmh, true); err != nil {
 				return fmt.Errorf("failed to set online=true on BMH %s: %w", bmh.Name, err)
 			}
 		}
 
 		if hasDetached {
-			logger.InfoContext(ctx, "Removing detached annotation for IBI post-provisioning",
-				slog.String("bmh", bmh.Name))
-			if err := updateBMHMetaWithRetry(ctx, c, logger, bmhName, MetaTypeAnnotation,
+			logger.InfoContext(nodeCtx, "Removing detached annotation for IBI post-provisioning")
+			if err := updateBMHMetaWithRetry(nodeCtx, c, logger, bmhName, MetaTypeAnnotation,
 				metal3v1alpha1.DetachedAnnotation, "", OpRemove); err != nil {
 				return fmt.Errorf("failed to remove detached annotation from BMH %s: %w", bmh.Name, err)
 			}
@@ -659,10 +660,11 @@ func handleNodeInProgressUpdate(ctx context.Context,
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get BMH for AllocatedNode %s: %w", node.Name, err)
 	}
+	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
 
 	// Check if the update is complete by examining the BMH operational status.
 	if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusOK {
-		logger.InfoContext(ctx, "BMH update complete", slog.String("BMH", bmh.Name))
+		logger.InfoContext(ctx, "BMH update complete")
 
 		// Validate node configuration (firmware versions and BIOS settings)
 		configValid, err := validateNodeConfiguration(ctx, c, noncachedClient, logger, bmh, namespace, node.Spec.HwProfile)
@@ -675,7 +677,7 @@ func handleNodeInProgressUpdate(ctx context.Context,
 
 		if _, hasAnnotation := bmh.Annotations[BmhErrorTimestampAnnotation]; hasAnnotation {
 			if err := clearTransientBMHErrorAnnotation(ctx, c, logger, bmh); err != nil {
-				logger.WarnContext(ctx, "failed to clean up transient error annotation", slog.String("BMH", bmh.Name), slog.String("error", err.Error()))
+				logger.WarnContext(ctx, "failed to clean up transient error annotation", slog.String("error", err.Error()))
 				return ctrl.Result{}, err
 			}
 		}
@@ -686,7 +688,7 @@ func handleNodeInProgressUpdate(ctx context.Context,
 		ready, err := nodeOps.IsNodeReady(ctx, hostname)
 		if err != nil {
 			logger.ErrorContext(ctx, "Failed to check node readiness",
-				slog.String("allocatedNode", node.Name), slog.String("error", err.Error()))
+				slog.String("error", err.Error()))
 			return hwmgrutils.RequeueWithMediumInterval(), nil
 		}
 		if !ready {
@@ -697,7 +699,7 @@ func handleNodeInProgressUpdate(ctx context.Context,
 			}
 			return hwmgrutils.RequeueWithMediumInterval(), nil
 		}
-		logger.InfoContext(ctx, "Node is ready on managed cluster", slog.String("allocatedNode", node.Name))
+		logger.InfoContext(ctx, "Node is ready on managed cluster")
 
 		if err := nodeOps.UncordonNode(ctx, node.Status.Hostname); err != nil {
 			return ctrl.Result{}, fmt.Errorf(
@@ -707,14 +709,12 @@ func handleNodeInProgressUpdate(ctx context.Context,
 
 		if err := hwmgrutils.SetNodeConfigApplied(ctx, c, noncachedClient, logger, node, node.Spec.HwProfile); err != nil {
 			logger.ErrorContext(ctx, "Failed to set node config applied",
-				slog.String("node", node.Name),
 				slog.String("error", err.Error()))
 			return ctrl.Result{}, fmt.Errorf("failed to mark node config applied %s: %w", node.Name, err)
 		}
 
 		if err := clearConfigAnnotationWithPatch(ctx, c, node); err != nil {
 			logger.ErrorContext(ctx, "Failed to clear config annotation",
-				slog.String("node", node.Name),
 				slog.String("error", err.Error()))
 			return ctrl.Result{}, err
 		}
@@ -729,7 +729,7 @@ func handleNodeInProgressUpdate(ctx context.Context,
 			return hwmgrutils.RequeueWithMediumInterval(), err
 		}
 
-		logger.InfoContext(ctx, "BMH update failed", slog.String("BMH", bmh.Name))
+		logger.InfoContext(ctx, "BMH update failed")
 
 		if err := nodeOps.UncordonNode(ctx, node.Status.Hostname); err != nil {
 			return ctrl.Result{}, fmt.Errorf(
@@ -745,7 +745,6 @@ func handleNodeInProgressUpdate(ctx context.Context,
 		// Clear BMH update annotations to ensure clean state for retry
 		if err := clearBMHUpdateAnnotations(ctx, c, logger, bmh); err != nil {
 			logger.WarnContext(ctx, "Failed to clear BMH update annotations after error",
-				slog.String("BMH", bmh.Name),
 				slog.String("error", err.Error()))
 			return ctrl.Result{}, fmt.Errorf("failed to clear BMH update annotations %s:%w", bmh.Name, err)
 		}
@@ -753,7 +752,6 @@ func handleNodeInProgressUpdate(ctx context.Context,
 		// Clear BMH error annotation to allow future retry attempts
 		if err := clearTransientBMHErrorAnnotation(ctx, c, logger, bmh); err != nil {
 			logger.WarnContext(ctx, "failed to clear BMH error annotation for future retries",
-				slog.String("BMH", bmh.Name),
 				slog.String("error", err.Error()))
 			return ctrl.Result{}, fmt.Errorf("failed to clear BMH error annotation %s:%w", bmh.Name, err)
 		}
@@ -761,12 +759,12 @@ func handleNodeInProgressUpdate(ctx context.Context,
 		if err := hwmgrutils.SetNodeConditionStatus(ctx, c, noncachedClient, node,
 			string(hwmgmtv1alpha1.Configured), metav1.ConditionFalse,
 			string(hwmgmtv1alpha1.Failed), BmhServicingErr); err != nil {
-			logger.ErrorContext(ctx, "failed to update AllocatedNode status", slog.String("node", node.Name), slog.String("error", err.Error()))
+			logger.ErrorContext(ctx, "failed to update AllocatedNode status", slog.String("error", err.Error()))
 			return ctrl.Result{}, fmt.Errorf("failed to update AllocatedNode status %s:%w", node.Name, err)
 		}
 
 		// Successfully handled BMH error state: updated node status and cleared annotations
-		logger.InfoContext(ctx, "Successfully handled BMH error state", slog.String("BMH", bmh.Name))
+		logger.InfoContext(ctx, "Successfully handled BMH error state")
 		return ctrl.Result{}, fmt.Errorf("bmh %s/%s is in error state, node status updated to Failed", bmh.Namespace, bmh.Name)
 	}
 
@@ -775,7 +773,7 @@ func handleNodeInProgressUpdate(ctx context.Context,
 		node.Spec.HwProfile, string(hwmgmtv1alpha1.NodeWaitingBMHComplete)); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update node condition for waiting BMH: %w", err)
 	}
-	logger.InfoContext(ctx, "BMH config in progress", slog.String("bmh", bmh.Name))
+	logger.InfoContext(ctx, "BMH config in progress")
 	return hwmgrutils.RequeueWithMediumInterval(), nil
 }
 
@@ -797,6 +795,7 @@ func abandonNodeUpdate(
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get BMH for abandoned node %s: %w", node.Name, err)
 	}
+	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
 
 	// Don't interrupt if BMH is actively servicing or preparing — the hardware
 	// operation is underway and must exit the state on its own (complete, fail,
@@ -804,17 +803,14 @@ func abandonNodeUpdate(
 	if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusServicing ||
 		bmh.Status.Provisioning.State == metal3v1alpha1.StatePreparing {
 		logger.InfoContext(ctx, "Desired hardware profile changed but metal3 is actively processing the current update, cannot abandon yet, waiting for completion",
-			slog.String("node", node.Name),
 			slog.String("currentProfile", node.Spec.HwProfile),
 			slog.String("desiredProfile", newHwProfile),
-			slog.String("bmh", bmh.Name),
 			slog.String("bmhOperationalStatus", string(bmh.Status.OperationalStatus)),
 			slog.String("bmhProvisioningState", string(bmh.Status.Provisioning.State)))
 		return hwmgrutils.RequeueWithMediumInterval(), nil
 	}
 
 	logger.InfoContext(ctx, "Desired profile changed during in-progress update, abandoning current update",
-		slog.String("node", node.Name),
 		slog.String("currentProfile", node.Spec.HwProfile),
 		slog.String("desiredProfile", newHwProfile))
 
@@ -864,6 +860,7 @@ func initiateNodeUpdate(ctx context.Context,
 	if err != nil {
 		return hwmgrutils.RequeueWithShortInterval(), fmt.Errorf("failed to get BMH for AllocatedNode %s: %w", node.Name, err)
 	}
+	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
 	logger.InfoContext(ctx, "Issuing profile update to AllocatedNode",
 		slog.String("hwMgrNodeId", node.Spec.HwMgrNodeId),
 		slog.String("curHwProfile", node.Spec.HwProfile),
@@ -877,7 +874,7 @@ func initiateNodeUpdate(ctx context.Context,
 		return ctrl.Result{}, fmt.Errorf("failed to evaluate HW profile for node (%s): %w", node.Name, err)
 	}
 	if !updateNeeded {
-		logger.InfoContext(ctx, "No HW changes needed, marking node config applied", slog.String("node", node.Name))
+		logger.InfoContext(ctx, "No HW changes needed, marking node config applied")
 		if err := hwmgrutils.SetNodeConfigApplied(ctx, c, noncachedClient, logger, node, newHwProfile); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to mark node config applied: %w", err)
 		}
@@ -887,7 +884,7 @@ func initiateNodeUpdate(ctx context.Context,
 
 	// Step 2: Cordon and drain before applying HW changes if drain is not skipped.
 	if !nodeOps.SkipDrain() {
-		logger.InfoContext(ctx, "Proceeding with node drain", slog.String("node", node.Name), slog.String("hostname", node.Status.Hostname))
+		logger.InfoContext(ctx, "Proceeding with node drain", slog.String("hostname", node.Status.Hostname))
 		// Update the condition message to indicate draining is in progress.
 		if err := hwmgrutils.SetNodeConfigUpdatePending(ctx, c, noncachedClient, logger, node, newHwProfile,
 			string(hwmgmtv1alpha1.NodeDraining)); err != nil {
@@ -895,7 +892,6 @@ func initiateNodeUpdate(ctx context.Context,
 		}
 		if err := nodeOps.DrainNode(ctx, node.Status.Hostname); err != nil {
 			logger.ErrorContext(ctx, "Drain failed, will retry",
-				slog.String("node", node.Name),
 				slog.String("hostname", node.Status.Hostname),
 				slog.String("error", err.Error()))
 			return hwmgrutils.RequeueWithMediumInterval(), nil
@@ -903,7 +899,7 @@ func initiateNodeUpdate(ctx context.Context,
 	}
 
 	// Step 3: Apply HW profile changes (create/update HFS/HFC/HUP, annotate BMH).
-	logger.InfoContext(ctx, "Applying HW profile", slog.String("node", node.Name), slog.String("hwProfile", newHwProfile))
+	logger.InfoContext(ctx, "Applying HW profile", slog.String("hwProfile", newHwProfile))
 	validateOnly = false
 	updateRequired, err := processHwProfileWithHandledError(ctx, c, noncachedClient, logger, namespace,
 		bmh, node, newHwProfile, true, validateOnly)
@@ -1152,6 +1148,7 @@ func executeNodeUpdates(
 		go func(nodeToProcess nodeAction) {
 			defer wg.Done()
 
+			nodeCtx := logging.AppendCtx(ctx, slog.String("node", nodeToProcess.node.Name))
 			var res ctrl.Result
 			var err error
 
@@ -1162,22 +1159,22 @@ func executeNodeUpdates(
 			// update so the node can be re-processed with the new profile.
 			switch nodeToProcess.actionType {
 			case actionInitiate:
-				res, err = initiateNodeUpdate(ctx, c, noncachedClient, logger,
+				res, err = initiateNodeUpdate(nodeCtx, c, noncachedClient, logger,
 					namespace, nodeToProcess.node, newHwProfile, nodeOps)
 			case actionTransition:
 				if nodeToProcess.node.Spec.HwProfile != newHwProfile {
-					res, err = abandonNodeUpdate(ctx, c, noncachedClient, logger,
+					res, err = abandonNodeUpdate(nodeCtx, c, noncachedClient, logger,
 						newHwProfile, nodeToProcess.node, nodeOps)
 				} else {
-					res, err = handleTransitionNode(ctx, c, noncachedClient, logger,
+					res, err = handleTransitionNode(nodeCtx, c, noncachedClient, logger,
 						namespace, nodeToProcess.node, true, nodeOps)
 				}
 			case actionInProgressUpdate:
 				if nodeToProcess.node.Spec.HwProfile != newHwProfile {
-					res, err = abandonNodeUpdate(ctx, c, noncachedClient, logger,
+					res, err = abandonNodeUpdate(nodeCtx, c, noncachedClient, logger,
 						newHwProfile, nodeToProcess.node, nodeOps)
 				} else {
-					res, err = handleNodeInProgressUpdate(ctx, c, noncachedClient, logger,
+					res, err = handleNodeInProgressUpdate(nodeCtx, c, noncachedClient, logger,
 						namespace, nodeToProcess.node, nodeOps)
 				}
 			}
@@ -1186,8 +1183,7 @@ func executeNodeUpdates(
 			defer mu.Unlock()
 
 			if err != nil {
-				logger.ErrorContext(ctx, "Node processing error",
-					slog.String("node", nodeToProcess.node.Name),
+				logger.ErrorContext(nodeCtx, "Node processing error",
 					slog.String("error", err.Error()))
 				errs = append(errs, fmt.Errorf("node %s, error: %w", nodeToProcess.node.Name, err))
 			}
@@ -1591,8 +1587,9 @@ func processNodeAllocationRequestAllocation(
 			go func(bmh *metal3v1alpha1.BareMetalHost) {
 				defer wg.Done()
 
+				bmhCtx := logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
 				nodeName, err := allocateBMHToNodeAllocationRequest(
-					ctx, c, noncachedClient, logger, namespace,
+					bmhCtx, c, noncachedClient, logger, namespace,
 					bmh, nodeAllocationRequest, nodeGroup,
 				)
 
@@ -1603,8 +1600,7 @@ func processNodeAllocationRequestAllocation(
 					allocatedNames = append(allocatedNames, nodeName)
 				}
 				if err != nil {
-					logger.ErrorContext(ctx, "Failed to allocate BMH to NodeAllocationRequest",
-						slog.String("bmh", bmh.Name),
+					logger.ErrorContext(bmhCtx, "Failed to allocate BMH to NodeAllocationRequest",
 						slog.String("error", err.Error()))
 					errs = append(errs, fmt.Errorf("bmh %s, error: %w", bmh.Name, err))
 				}
@@ -1684,8 +1680,7 @@ func validateFirmwareVersions(
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			// Profile expects versions but HFC absent -> not valid yet
-			logger.InfoContext(ctx, "HostFirmwareComponents not found while versions are specified; not valid yet",
-				slog.String("bmh", bmh.Name))
+			logger.InfoContext(ctx, "HostFirmwareComponents not found while versions are specified; not valid yet")
 			return false, nil
 		}
 		return false, fmt.Errorf("get HostFirmwareComponents %s/%s: %w", bmh.Namespace, bmh.Name, err)
@@ -1703,25 +1698,22 @@ func validateFirmwareVersions(
 		have, ok := actual[k]
 		if !ok {
 			logger.InfoContext(ctx, "Firmware component missing in HFC",
-				slog.String("component", k),
-				slog.String("bmh", bmh.Name))
+				slog.String("component", k))
 			return false, nil
 		}
 		if have != want {
 			logger.InfoContext(ctx, "Firmware version mismatch",
 				slog.String("component", k),
 				slog.String("current", have),
-				slog.String("expected", want),
-				slog.String("bmh", bmh.Name))
+				slog.String("expected", want))
 			return false, nil
 		}
 		logger.DebugContext(ctx, "Firmware version matches",
 			slog.String("component", k),
-			slog.String("version", have),
-			slog.String("bmh", bmh.Name))
+			slog.String("version", have))
 	}
 
-	logger.InfoContext(ctx, "All required firmware versions match", slog.String("bmh", bmh.Name))
+	logger.InfoContext(ctx, "All required firmware versions match")
 	return true, nil
 }
 
@@ -1767,8 +1759,7 @@ func validateAppliedBiosSettings(
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			// Profile expects BIOS settings but HFS absent -> not valid yet
-			logger.InfoContext(ctx, "HostFirmwareSettings not found while BIOS settings are specified; not valid yet",
-				slog.String("bmh", bmh.Name))
+			logger.InfoContext(ctx, "HostFirmwareSettings not found while BIOS settings are specified; not valid yet")
 			return false, nil
 		}
 		return false, fmt.Errorf("get HostFirmwareSettings %s/%s: %w", bmh.Namespace, bmh.Name, err)
@@ -1779,8 +1770,7 @@ func validateAppliedBiosSettings(
 		actualValue, exists := hfs.Status.Settings[key]
 		if !exists {
 			logger.InfoContext(ctx, "BIOS setting missing in HFS status",
-				slog.String("setting", key),
-				slog.String("bmh", bmh.Name))
+				slog.String("setting", key))
 			return false, nil
 		}
 
@@ -1789,18 +1779,16 @@ func validateAppliedBiosSettings(
 			logger.InfoContext(ctx, "BIOS setting value mismatch",
 				slog.String("setting", key),
 				slog.String("current", actualValue),
-				slog.String("expected", expectedValue.String()),
-				slog.String("bmh", bmh.Name))
+				slog.String("expected", expectedValue.String()))
 			return false, nil
 		}
 
 		logger.DebugContext(ctx, "BIOS setting matches",
 			slog.String("setting", key),
-			slog.String("value", actualValue),
-			slog.String("bmh", bmh.Name))
+			slog.String("value", actualValue))
 	}
 
-	logger.InfoContext(ctx, "All required BIOS settings match", slog.String("bmh", bmh.Name))
+	logger.InfoContext(ctx, "All required BIOS settings match")
 
 	// 5) Validate NIC firmware if specified
 	if len(prof.Spec.NicFirmware) > 0 {
@@ -1809,8 +1797,7 @@ func validateAppliedBiosSettings(
 		if err != nil {
 			if k8serrors.IsNotFound(err) {
 				// Profile expects NIC firmware but HFC absent -> not valid yet
-				logger.InfoContext(ctx, "HostFirmwareComponents not found while NIC firmware is specified; not valid yet",
-					slog.String("bmh", bmh.Name))
+				logger.InfoContext(ctx, "HostFirmwareComponents not found while NIC firmware is specified; not valid yet")
 				return false, nil
 			}
 			return false, fmt.Errorf("get HostFirmwareComponents %s/%s: %w", bmh.Namespace, bmh.Name, err)
@@ -1835,18 +1822,16 @@ func validateAppliedBiosSettings(
 				logger.InfoContext(ctx, "NIC firmware version not found in any nic: component",
 					slog.Int("nicIndex", i),
 					slog.String("expected", nic.Version),
-					slog.String("normalizedExpected", normalizedExpected),
-					slog.String("bmh", bmh.Name))
+					slog.String("normalizedExpected", normalizedExpected))
 				return false, nil
 			}
 
 			logger.DebugContext(ctx, "NIC firmware version matches",
 				slog.Int("nicIndex", i),
-				slog.String("version", nic.Version),
-				slog.String("bmh", bmh.Name))
+				slog.String("version", nic.Version))
 		}
 
-		logger.InfoContext(ctx, "All required NIC firmware versions match", slog.String("bmh", bmh.Name))
+		logger.InfoContext(ctx, "All required NIC firmware versions match")
 	}
 
 	return true, nil
@@ -1874,13 +1859,11 @@ func validateNodeConfiguration(
 	firmwareValid, err := validateFirmwareVersions(ctx, c, noncachedClient, logger, bmh, namespace, hwProfileName)
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to validate firmware versions",
-			slog.String("BMH", bmh.Name),
 			slog.String("error", err.Error()))
 		return false, err
 	}
 	if !firmwareValid {
-		logger.InfoContext(ctx, "Firmware versions not yet updated, continuing to poll",
-			slog.String("BMH", bmh.Name))
+		logger.InfoContext(ctx, "Firmware versions not yet updated, continuing to poll")
 		return false, nil
 	}
 
@@ -1888,17 +1871,15 @@ func validateNodeConfiguration(
 	biosValid, err := validateAppliedBiosSettings(ctx, c, noncachedClient, logger, bmh, namespace, hwProfileName)
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to validate BIOS settings",
-			slog.String("BMH", bmh.Name),
 			slog.String("error", err.Error()))
 		return false, err
 	}
 	if !biosValid {
-		logger.InfoContext(ctx, "BIOS settings not yet updated, continuing to poll",
-			slog.String("BMH", bmh.Name))
+		logger.InfoContext(ctx, "BIOS settings not yet updated, continuing to poll")
 		return false, nil
 	}
 
-	logger.InfoContext(ctx, "Firmware versions and BIOS settings validated successfully", slog.String("BMH", bmh.Name))
+	logger.InfoContext(ctx, "Firmware versions and BIOS settings validated successfully")
 	return true, nil
 }
 
@@ -1921,23 +1902,24 @@ func clearBMHUpdateAnnotationsForNAR(
 
 	var errs []error
 	for _, node := range nodeList.Items {
+		nodeCtx := logging.AppendCtx(ctx, slog.String("node", node.Name))
 		// Get BMH for this node
-		bmh, err := getBMHForNode(ctx, c, &node)
+		bmh, err := getBMHForNode(nodeCtx, c, &node)
 		if err != nil {
-			logger.ErrorContext(ctx, "Failed to get BMH for annotation clear",
-				slog.String("allocatedNode", node.Name), slog.String("error", err.Error()))
+			logger.ErrorContext(nodeCtx, "Failed to get BMH for annotation clear",
+				slog.String("error", err.Error()))
 			errs = append(errs, fmt.Errorf("failed to get BMH for AllocatedNode %s: %w", node.Name, err))
 			continue
 		}
+		nodeCtx = logging.AppendCtx(nodeCtx, slog.String("bmh", bmh.Name))
 
 		// Clear update annotations from BMH
-		if err := clearBMHUpdateAnnotations(ctx, c, logger, bmh); err != nil {
-			logger.ErrorContext(ctx, "Failed to clear BMH update annotations",
-				slog.String("bmh", bmh.Name), slog.String("error", err.Error()))
+		if err := clearBMHUpdateAnnotations(nodeCtx, c, logger, bmh); err != nil {
+			logger.ErrorContext(nodeCtx, "Failed to clear BMH update annotations",
+				slog.String("error", err.Error()))
 			errs = append(errs, fmt.Errorf("failed to clear BMH update annotations for BMH %s: %w", bmh.Name, err))
 		} else {
-			logger.InfoContext(ctx, "Cleared BMH update annotations",
-				slog.String("bmh", bmh.Name))
+			logger.InfoContext(nodeCtx, "Cleared BMH update annotations")
 		}
 	}
 
