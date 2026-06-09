@@ -28,7 +28,7 @@ import (
 // deployPostgresServer deploys the actual Postgres database server instance.  Prior to invoking this method the other
 // required resources must have already been created (i.e., configmaps, secrets, service accounts, etc...).
 func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName string) error {
-	t.logger.DebugContext(ctx, "[deploy postgres server]", "Name", serverName)
+	t.logger.DebugContext(ctx, "[deploy postgres server]", slog.String("Name", serverName))
 
 	// Default server volumes.
 	deploymentVolumes := ctlrutils.GetDeploymentVolumes(serverName, t.object)
@@ -105,7 +105,7 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 		},
 	}
 
-	t.logger.DebugContext(ctx, "[deployPostgresServer] Create PVC", "Name", pvcName)
+	t.logger.DebugContext(ctx, "[deployPostgresServer] Create PVC", slog.String("Name", pvcName))
 	if err := ctlrutils.CreateK8sCR(ctx, t.client, pvc, t.object, ""); err != nil {
 		return fmt.Errorf("failed to create PVC: %w", err)
 	}
@@ -194,7 +194,7 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 		Spec:       deploymentSpec,
 	}
 
-	t.logger.DebugContext(ctx, "[deployDatabase] Create/Update/Patch Server", "Name", serverName)
+	t.logger.DebugContext(ctx, "[deployDatabase] Create/Update/Patch Server", slog.String("Name", serverName))
 	if err := ctlrutils.CreateK8sCR(ctx, t.client, newDeployment, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to deploy database: %w", err)
 	}

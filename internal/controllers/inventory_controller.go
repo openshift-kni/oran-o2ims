@@ -785,7 +785,7 @@ func (t *reconcilerTask) checkForPodReadyStatus(ctx context.Context) (ctrl.Resul
 	for _, pod := range list.Items {
 		name, ok := pod.Labels["app"]
 		if !ok {
-			t.logger.WarnContext(ctx, "Pod without an 'app' label in our namespace", "name", pod.Name)
+			t.logger.WarnContext(ctx, "Pod without an 'app' label in our namespace", slog.String("name", pod.Name))
 			continue
 		}
 		if !slices.Contains(servers, name) {
@@ -793,7 +793,7 @@ func (t *reconcilerTask) checkForPodReadyStatus(ctx context.Context) (ctrl.Resul
 		}
 		for _, condition := range pod.Status.Conditions {
 			if condition.Type == corev1.PodReady && condition.Status != corev1.ConditionTrue {
-				t.logger.WarnContext(ctx, "Pod is not yet ready", "name", pod.Name, "reason", condition.Reason, "message", condition.Message)
+				t.logger.WarnContext(ctx, "Pod is not yet ready", slog.String("name", pod.Name), slog.String("reason", condition.Reason), slog.String("message", condition.Message))
 				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 			}
 		}
@@ -1557,7 +1557,7 @@ func (t *reconcilerTask) createServerClusterRoleBinding(ctx context.Context, ser
 }
 
 func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (ctlrutils.InventoryConditionReason, error) {
-	t.logger.DebugContext(ctx, "[deploy server]", "Name", serverName)
+	t.logger.DebugContext(ctx, "[deploy server]", slog.String("Name", serverName))
 
 	// Server variables.
 	deploymentVolumes := ctlrutils.GetDeploymentVolumes(serverName, t.object)
@@ -1749,7 +1749,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (c
 		Spec:       deploymentSpec,
 	}
 
-	t.logger.DebugContext(ctx, "[deployManagerServer] Create/Update/Patch Server", "Name", serverName)
+	t.logger.DebugContext(ctx, "[deployManagerServer] Create/Update/Patch Server", slog.String("Name", serverName))
 	if err := ctlrutils.CreateK8sCR(ctx, t.client, newDeployment, t.object, ctlrutils.UPDATE); err != nil {
 		return "", fmt.Errorf("failed to deploy ManagerServer: %w", err)
 	}
@@ -1771,7 +1771,7 @@ func (t *reconcilerTask) createServiceAccount(ctx context.Context, resourceName 
 		ObjectMeta: serviceAccountMeta,
 	}
 
-	t.logger.DebugContext(ctx, "[createServiceAccount] Create/Update/Patch ServiceAccount: ", "name", resourceName)
+	t.logger.DebugContext(ctx, "[createServiceAccount] Create/Update/Patch ServiceAccount: ", slog.String("name", resourceName))
 	if err := ctlrutils.CreateK8sCR(ctx, t.client, newServiceAccount, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create ServiceAccount for deployment: %w", err)
 	}
@@ -1811,7 +1811,7 @@ func (t *reconcilerTask) createService(ctx context.Context, resourceName string,
 		Spec:       serviceSpec,
 	}
 
-	t.logger.DebugContext(ctx, "[createService] Create/Update/Patch Service: ", "name", resourceName)
+	t.logger.DebugContext(ctx, "[createService] Create/Update/Patch Service: ", slog.String("name", resourceName))
 	if err := ctlrutils.CreateK8sCR(ctx, t.client, newService, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Service for deployment: %w", err)
 	}
@@ -1935,7 +1935,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 		Spec:       ingressSpec,
 	}
 
-	t.logger.DebugContext(ctx, "[createIngress] Create/Update/Patch Ingress: ", "name", ctlrutils.IngressPortName)
+	t.logger.DebugContext(ctx, "[createIngress] Create/Update/Patch Ingress: ", slog.String("name", ctlrutils.IngressPortName))
 	if err := ctlrutils.CreateK8sCR(ctx, t.client, newIngress, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Ingress for deployment: %w", err)
 	}

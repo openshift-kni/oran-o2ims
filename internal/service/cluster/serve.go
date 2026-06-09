@@ -74,7 +74,7 @@ func Serve(config *api.ClusterServerConfig) error {
 
 	go func() {
 		sig := <-shutdown
-		slog.InfoContext(ctx, "Shutdown signal received", "signal", sig)
+		slog.InfoContext(ctx, "Shutdown signal received", slog.Any("signal", sig))
 		cancel()
 	}()
 
@@ -242,7 +242,7 @@ func Serve(config *api.ClusterServerConfig) error {
 		// Shutdown the http server
 		slog.InfoContext(ctx, "Shutting down server")
 		if err := common.GracefulShutdown(srv); err != nil {
-			slog.ErrorContext(ctx, "error shutting down server", "error", err)
+			slog.ErrorContext(ctx, "error shutting down server", slog.Any("error", err))
 		}
 	}()
 

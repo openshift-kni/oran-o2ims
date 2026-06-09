@@ -71,8 +71,8 @@ func (p *SelectorParser) Parse(text string) (selector *Selector, err error) {
 		if fault != nil {
 			p.logger.Error(
 				"Failed to parse",
-				"text", text,
-				"error", err,
+				slog.String("text", text),
+				slog.Any("error", err),
 			)
 			err = fault.(error)
 		}

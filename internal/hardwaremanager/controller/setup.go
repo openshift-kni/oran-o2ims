@@ -33,7 +33,7 @@ func SetupControllers(mgr ctrl.Manager, namespace string, baseLogger *slog.Logge
 		Client:          mgr.GetClient(),
 		NoncachedClient: mgr.GetAPIReader(),
 		Scheme:          mgr.GetScheme(),
-		Logger:          baseLogger.With("controller", "hwmgr_nodeallocationrequest_controller"),
+		Logger:          baseLogger.With(slog.String("controller", "hwmgr_nodeallocationrequest_controller")),
 		Namespace:       namespace,
 		Manager:         mgr,
 	}
@@ -46,7 +46,7 @@ func SetupControllers(mgr ctrl.Manager, namespace string, baseLogger *slog.Logge
 		Client:          mgr.GetClient(),
 		NoncachedClient: mgr.GetAPIReader(),
 		Scheme:          mgr.GetScheme(),
-		Logger:          baseLogger.With("controller", "hwmgr_allocatednode_controller"),
+		Logger:          baseLogger.With(slog.String("controller", "hwmgr_allocatednode_controller")),
 		Namespace:       namespace,
 		Manager:         mgr,
 	}
@@ -59,7 +59,7 @@ func SetupControllers(mgr ctrl.Manager, namespace string, baseLogger *slog.Logge
 		Client:          mgr.GetClient(),
 		NoncachedClient: mgr.GetAPIReader(),
 		Scheme:          mgr.GetScheme(),
-		Logger:          baseLogger.With("controller", "hwmgr_hostfirmwarecomponents_controller"),
+		Logger:          baseLogger.With(slog.String("controller", "hwmgr_hostfirmwarecomponents_controller")),
 		Namespace:       namespace,
 		Manager:         mgr,
 	}

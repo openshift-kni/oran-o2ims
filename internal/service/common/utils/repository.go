@@ -233,7 +233,7 @@ func Exists[T db.Model, K PrimaryKeyType](ctx context.Context, db DBQuery, key K
 		return false, fmt.Errorf("failed to build query: %w", err)
 	}
 
-	slog.DebugContext(ctx, "executing query", "sql", sql, "args", args)
+	slog.DebugContext(ctx, "executing query", slog.String("sql", sql), slog.Any("args", args))
 
 	var result bool
 	err = db.QueryRow(ctx, sql, args...).Scan(&result)
@@ -259,7 +259,7 @@ func ExecuteCollectExactlyOneRow[T db.Model](ctx context.Context, db DBQuery, sq
 	record, err = pgx.CollectExactlyOneRow(rows, pgx.RowToStructByNameLax[T])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			slog.DebugContext(ctx, "no record found", "table", record.TableName())
+			slog.DebugContext(ctx, "no record found", slog.String("table", record.TableName()))
 			return nil, ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to execute query: %w", err)

@@ -416,7 +416,7 @@ func (r *ClusterServer) GetSubscriptions(ctx context.Context, request api.GetSub
 // validateSubscription validates a subscription before accepting the request
 func (r *ClusterServer) validateSubscription(ctx context.Context, request api.CreateSubscriptionRequestObject) error {
 	if err := commonapi.ValidateCallbackURL(ctx, r.SubscriptionEventHandler.GetClientFactory(), request.Body.Callback); err != nil {
-		slog.ErrorContext(ctx, "callback URL validation failed", "error", err)
+		slog.ErrorContext(ctx, "callback URL validation failed", slog.Any("error", err))
 		return fmt.Errorf("callback URL validation failed")
 	}
 	// TODO: add validation of filter and move to common if filter syntax is the same for all servers
@@ -463,7 +463,7 @@ func (r *ClusterServer) CreateSubscription(ctx context.Context, request api.Crea
 				Status: http.StatusBadRequest,
 			}, nil
 		}
-		slog.ErrorContext(ctx, "error writing database record", "target", record, "error", err.Error())
+		slog.ErrorContext(ctx, "error writing database record", slog.Any("target", record), slog.String("error", err.Error()))
 		return api.CreateSubscription500ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"consumerSubscriptionId": consumerSubscriptionId,
