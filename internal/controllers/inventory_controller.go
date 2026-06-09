@@ -1557,7 +1557,7 @@ func (t *reconcilerTask) createServerClusterRoleBinding(ctx context.Context, ser
 }
 
 func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (ctlrutils.InventoryConditionReason, error) {
-	t.logger.DebugContext(ctx, "[deploy server]", slog.String("Name", serverName))
+	t.logger.DebugContext(ctx, "[deploy server]", slog.String("name", serverName))
 
 	// Server variables.
 	deploymentVolumes := ctlrutils.GetDeploymentVolumes(serverName, t.object)
@@ -1749,7 +1749,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (c
 		Spec:       deploymentSpec,
 	}
 
-	t.logger.DebugContext(ctx, "[deployManagerServer] Create/Update/Patch Server", slog.String("Name", serverName))
+	t.logger.DebugContext(ctx, "[deployManagerServer] Create/Update/Patch Server", slog.String("name", serverName))
 	if err := ctlrutils.CreateK8sCR(ctx, t.client, newDeployment, t.object, ctlrutils.UPDATE); err != nil {
 		return "", fmt.Errorf("failed to deploy ManagerServer: %w", err)
 	}
