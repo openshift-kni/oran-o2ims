@@ -106,24 +106,24 @@ func (r *ResourceServer) FetchAll(ctx context.Context) error {
 		// Fetch the real alarm dictionary for this resource type
 		resp, err := r.client.GetResourceTypeAlarmDictionaryWithResponse(ctx, resourceType.ResourceTypeId)
 		if err != nil {
-			slog.WarnContext(ctx, "Failed to get alarm dictionary for resource type", "resourceTypeID", resourceType.ResourceTypeId, "error", err)
+			slog.WarnContext(ctx, "Failed to get alarm dictionary for resource type", slog.String("resourceTypeID", resourceType.ResourceTypeId.String()), slog.Any("error", err))
 			continue
 		}
 
 		if resp.StatusCode() != http.StatusOK {
-			slog.WarnContext(ctx, "Unexpected status code getting alarm dictionary", "resourceTypeID", resourceType.ResourceTypeId, "statusCode", resp.StatusCode())
+			slog.WarnContext(ctx, "Unexpected status code getting alarm dictionary", slog.String("resourceTypeID", resourceType.ResourceTypeId.String()), slog.Int("statusCode", resp.StatusCode()))
 			continue
 		}
 
 		if resp.JSON200 == nil {
-			slog.DebugContext(ctx, "No alarm dictionary available for resource type", "resourceTypeID", resourceType.ResourceTypeId)
+			slog.DebugContext(ctx, "No alarm dictionary available for resource type", slog.String("resourceTypeID", resourceType.ResourceTypeId.String()))
 			continue
 		}
 
 		// Build alarm definitions from the real alarm dictionary
 		alarmDefinitions := buildAlarmDefinitionsFromDictionary(*resp.JSON200)
 		newResourceTypeIDToAlarmDefinitions[resourceType.ResourceTypeId] = alarmDefinitions
-		slog.InfoContext(ctx, "Mapping resource type ID to alarm definitions", "resourceTypeID", resourceType.ResourceTypeId, "alarmDictionaryID", resp.JSON200.AlarmDictionaryId, "definitionCount", len(alarmDefinitions))
+		slog.InfoContext(ctx, "Mapping resource type ID to alarm definitions", slog.String("resourceTypeID", resourceType.ResourceTypeId.String()), slog.String("alarmDictionaryID", resp.JSON200.AlarmDictionaryId.String()), slog.Int("definitionCount", len(alarmDefinitions)))
 	}
 
 	// Atomically update the maps while holding lock
@@ -149,7 +149,7 @@ func (r *ResourceServer) GetObjectTypeID(ctx context.Context, resourceID uuid.UU
 	}
 
 	// Not in cache, fetch from resource server
-	slog.InfoContext(ctx, "Resource ID not found in cache, fetching from resource server", "resourceID", resourceID)
+	slog.InfoContext(ctx, "Resource ID not found in cache, fetching from resource server", slog.String("resourceID", resourceID.String()))
 	resource, err := r.getResource(ctx, resourceID)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("failed to get resource: %w", err)
@@ -157,7 +157,7 @@ func (r *ResourceServer) GetObjectTypeID(ctx context.Context, resourceID uuid.UU
 
 	// Cache the mapping
 	r.resourceIDToResourceTypeID[resourceID] = resource.ResourceTypeId
-	slog.InfoContext(ctx, "Mapping resource ID to resource type ID", "resourceID", resourceID, "resourceTypeID", resource.ResourceTypeId)
+	slog.InfoContext(ctx, "Mapping resource ID to resource type ID", slog.String("resourceID", resourceID.String()), slog.String("resourceTypeID", resource.ResourceTypeId.String()))
 
 	return resource.ResourceTypeId, nil
 }
@@ -170,7 +170,7 @@ func (r *ResourceServer) GetAlarmDefinitionID(ctx context.Context, resourceTypeI
 
 	alarmDefinitions, ok := r.resourceTypeIDToAlarmDefinitions[resourceTypeID]
 	if !ok {
-		slog.InfoContext(ctx, "Resource type ID not found in cache, fetching from resource server", "resourceTypeID", resourceTypeID)
+		slog.InfoContext(ctx, "Resource type ID not found in cache, fetching from resource server", slog.String("resourceTypeID", resourceTypeID.String()))
 
 		// Try to fetch the alarm dictionary from the server
 		resp, err := r.client.GetResourceTypeAlarmDictionaryWithResponse(ctx, resourceTypeID)
@@ -191,7 +191,7 @@ func (r *ResourceServer) GetAlarmDefinitionID(ctx context.Context, resourceTypeI
 
 		// Cache the alarm definitions
 		r.resourceTypeIDToAlarmDefinitions[resourceTypeID] = alarmDefinitions
-		slog.InfoContext(ctx, "Mapping resource type ID to alarm definitions", "resourceTypeID", resourceTypeID, "alarmDictionaryID", resp.JSON200.AlarmDictionaryId, "definitionCount", len(alarmDefinitions))
+		slog.InfoContext(ctx, "Mapping resource type ID to alarm definitions", slog.String("resourceTypeID", resourceTypeID.String()), slog.String("alarmDictionaryID", resp.JSON200.AlarmDictionaryId.String()), slog.Int("definitionCount", len(alarmDefinitions)))
 	}
 
 	uniqueIdentifier := AlarmDefinitionUniqueIdentifier{
@@ -201,7 +201,7 @@ func (r *ResourceServer) GetAlarmDefinitionID(ctx context.Context, resourceTypeI
 
 	alarmDefinitionID, ok := alarmDefinitions[uniqueIdentifier]
 	if !ok {
-		slog.InfoContext(ctx, "Alarm definition not found in cache", "name", name, "severity", severity, "resourceTypeID", resourceTypeID)
+		slog.InfoContext(ctx, "Alarm definition not found in cache", slog.String("name", name), slog.String("severity", severity), slog.String("resourceTypeID", resourceTypeID.String()))
 		return uuid.Nil, fmt.Errorf("alarm definition not found: name=%s, severity=%s", name, severity)
 	}
 
@@ -216,7 +216,7 @@ func (r *ResourceServer) FetchAllWithRetry(ctx context.Context, retries int) err
 		if err == nil {
 			return nil
 		}
-		slog.ErrorContext(ctx, "Failed to fetch all objects from resource server, retrying", "attempt", i+1, "error", err)
+		slog.ErrorContext(ctx, "Failed to fetch all objects from resource server, retrying", slog.Int("attempt", i+1), slog.Any("error", err))
 		time.Sleep(5 * time.Second)
 	}
 	return fmt.Errorf("failed to fetch all objects after %d retries: %w", retries, err)
@@ -232,7 +232,7 @@ func (r *ResourceServer) Sync(ctx context.Context) {
 	// This is edge case and even if the Resource server cant come up within retry time, we can still continue
 	// But once it does come up, user may get unwanted "CHANGED" alerts
 	if err := r.FetchAllWithRetry(ctx, 3); err != nil {
-		slog.ErrorContext(ctx, "Failed to run initial sync for resource server objects", "error", err)
+		slog.ErrorContext(ctx, "Failed to run initial sync for resource server objects", slog.Any("error", err))
 	}
 
 	go func() {
@@ -247,7 +247,7 @@ func (r *ResourceServer) Sync(ctx context.Context) {
 			case <-ticker.C:
 				slog.InfoContext(ctx, "Syncing resource server objects")
 				if err := r.FetchAll(ctx); err != nil {
-					slog.ErrorContext(ctx, "Failed to sync resource server objects", "error", err)
+					slog.ErrorContext(ctx, "Failed to sync resource server objects", slog.Any("error", err))
 				}
 			}
 		}
@@ -272,7 +272,7 @@ func (r *ResourceServer) getResourceTypes(ctx context.Context) ([]generated.Reso
 		return nil, fmt.Errorf("empty response from resource server")
 	}
 
-	slog.InfoContext(ctx, "Got resource types", "count", len(*resp.JSON200))
+	slog.InfoContext(ctx, "Got resource types", slog.Int("count", len(*resp.JSON200)))
 	return *resp.JSON200, nil
 }
 
@@ -294,7 +294,7 @@ func (r *ResourceServer) getResource(ctx context.Context, resourceID uuid.UUID) 
 		return nil, fmt.Errorf("empty response from resource server")
 	}
 
-	slog.InfoContext(ctx, "Got resource", "resourceID", resourceID)
+	slog.InfoContext(ctx, "Got resource", slog.String("resourceID", resourceID.String()))
 	return resp.JSON200, nil
 }
 
@@ -303,14 +303,14 @@ func buildAlarmDefinitionsFromDictionary(dictionary AlarmDictionary) AlarmDefini
 	alarmDefinitions := make(AlarmDefinition)
 	for _, definition := range dictionary.AlarmDefinition {
 		if definition.AlarmAdditionalFields == nil {
-			slog.Error("Alarm definition has no additional fields", "alarmDefinitionID", definition.AlarmDefinitionId)
+			slog.Error("Alarm definition has no additional fields", slog.String("alarmDefinitionID", definition.AlarmDefinitionId.String()))
 			continue
 		}
 
 		severity, ok := (*definition.AlarmAdditionalFields)[ctlrutils.AlarmDefinitionSeverityField].(string)
 		if !ok {
 			// It should have one, even if it is empty
-			slog.Error("Alarm definition has no severity", "alarmDefinitionID", definition.AlarmDefinitionId)
+			slog.Error("Alarm definition has no severity", slog.String("alarmDefinitionID", definition.AlarmDefinitionId.String()))
 			continue
 		}
 

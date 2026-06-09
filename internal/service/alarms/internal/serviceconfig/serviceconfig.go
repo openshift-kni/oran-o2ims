@@ -103,7 +103,7 @@ func (c *Config) EnsureCleanupCronJob(ctx context.Context, sc *models.ServiceCon
 	}
 
 	slog.InfoContext(ctx, "Successfully ensured cleanup cronjob and associated resources",
-		"cronjob", cronJob.Name, "configmap", configMap.Name)
+		slog.String("cronjob", cronJob.Name), slog.String("configmap", configMap.Name))
 	return nil
 }
 
@@ -126,7 +126,7 @@ func (c *Config) generateConfigMapWithSql(ctx context.Context, sc *models.Servic
 
 // getCleanUpPgSQL returns sql string to do alarms events cleanup based on service config
 func getCleanUpPgSQL(ctx context.Context, sc *models.ServiceConfiguration) (string, error) {
-	slog.InfoContext(ctx, "Using service config to generating sql", "serviceConfig", sc)
+	slog.InfoContext(ctx, "Using service config to generating sql", slog.Any("serviceConfig", sc))
 
 	// This should be checked earlier as well but double-checking here since sql is sensitive to it
 	// A "0" basically means delete everything before now()
