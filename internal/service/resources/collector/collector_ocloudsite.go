@@ -129,13 +129,13 @@ func (d *OCloudSiteDataSource) Watch(ctx context.Context) error {
 
 // HandleAsyncEvent handles an add/update/delete event received from the Reflector.
 func (d *OCloudSiteDataSource) HandleAsyncEvent(ctx context.Context, obj interface{}, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.DebugContext(ctx, "handleAsyncEvent received for ocloudsite", "type", eventType, "object", fmt.Sprintf("%T", obj))
+	slog.DebugContext(ctx, "handleAsyncEvent received for ocloudsite", slog.Any("type", eventType), slog.String("object", fmt.Sprintf("%T", obj)))
 
 	switch value := obj.(type) {
 	case *inventoryv1alpha1.OCloudSite:
 		return d.handleOCloudSiteWatchEvent(ctx, value, eventType)
 	default:
-		slog.WarnContext(ctx, "Unknown object type in OCloudSiteDataSource", "type", fmt.Sprintf("%T", obj))
+		slog.WarnContext(ctx, "Unknown object type in OCloudSiteDataSource", slog.String("type", fmt.Sprintf("%T", obj)))
 		return uuid.Nil, fmt.Errorf("unknown type: %T", obj)
 	}
 }
@@ -147,7 +147,7 @@ func (d *OCloudSiteDataSource) HandleSyncComplete(ctx context.Context, objectTyp
 	case *inventoryv1alpha1.OCloudSite:
 		object = models.OCloudSite{}
 	default:
-		slog.WarnContext(ctx, "Unknown object type in HandleSyncComplete", "type", fmt.Sprintf("%T", objectType))
+		slog.WarnContext(ctx, "Unknown object type in HandleSyncComplete", slog.String("type", fmt.Sprintf("%T", objectType)))
 		return nil
 	}
 
@@ -166,14 +166,14 @@ func (d *OCloudSiteDataSource) HandleSyncComplete(ctx context.Context, objectTyp
 
 // handleOCloudSiteWatchEvent handles an async event received for an OCloudSite CR
 func (d *OCloudSiteDataSource) handleOCloudSiteWatchEvent(ctx context.Context, site *inventoryv1alpha1.OCloudSite, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.DebugContext(ctx, "handleOCloudSiteWatchEvent received", "name", site.Name, "type", eventType)
+	slog.DebugContext(ctx, "handleOCloudSiteWatchEvent received", slog.Any("name", site.Name), slog.Any("type", eventType))
 
 	// If CR is not ready (e.g., validation failed, parent missing), treat as deletion
 	// from API perspective. This ensures stale data is removed when CRs become invalid.
 	if eventType != async.Deleted && !inventoryv1alpha1.IsResourceReady(site.Status.Conditions) {
 		slog.DebugContext(ctx, "OCloudSite not ready, treating as deletion",
-			"name", site.Name,
-			"reason", inventoryv1alpha1.GetReadyReason(site.Status.Conditions))
+			slog.String("name", site.Name),
+			slog.String("reason", inventoryv1alpha1.GetReadyReason(site.Status.Conditions)))
 		eventType = async.Deleted
 	}
 

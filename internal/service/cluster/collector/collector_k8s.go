@@ -360,20 +360,20 @@ func isLocalCluster(cluster *v1.ManagedCluster) bool {
 		if err == nil {
 			return localCluster
 		}
-		slog.Warn("failed to parse local-cluster label as boolean", "cluster", cluster.Name, "value", value, "error", err)
+		slog.Warn("failed to parse local-cluster label as boolean", slog.Any("cluster", cluster.Name), slog.Any("value", value), slog.Any("error", err))
 	}
 	return false
 }
 
 // handleClusterWatchEvent handles an async event received from the managed cluster watcher
 func (d *K8SDataSource) handleClusterWatchEvent(ctx context.Context, cluster *v1.ManagedCluster, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.DebugContext(ctx, "handleWatchEvent received for managed cluster", "agent", cluster.Name, "type", eventType)
+	slog.DebugContext(ctx, "handleWatchEvent received for managed cluster", slog.Any("agent", cluster.Name), slog.Any("type", eventType))
 
 	if eventType != async.Deleted {
 		condition := meta.FindStatusCondition(cluster.Status.Conditions, "ManagedClusterConditionAvailable")
 		if condition == nil || condition.Status == metav1.ConditionFalse {
 			// This cluster is not yet available, so filter it out.
-			slog.DebugContext(ctx, "Managed cluster is not available; skipping", "cluster", cluster.Name, "condition", condition)
+			slog.DebugContext(ctx, "Managed cluster is not available; skipping", slog.Any("cluster", cluster.Name), slog.Any("condition", condition))
 			return uuid.Nil, nil
 		}
 
@@ -382,7 +382,7 @@ func (d *K8SDataSource) handleClusterWatchEvent(ctx context.Context, cluster *v1
 			// provisioning request has completed, but the local-cluster will never have this, so we continue without it.
 			if _, found := cluster.Labels[ctlrutils.ClusterTemplateArtifactsLabel]; !found {
 				// The provisioning request which is managing the installation of this cluster is not yet fulfilled
-				slog.DebugContext(ctx, "Cluster provisioning request is not yet fulfilled; skipping", "cluster", cluster.Name)
+				slog.DebugContext(ctx, "Cluster provisioning request is not yet fulfilled; skipping", slog.Any("cluster", cluster.Name))
 				return uuid.Nil, nil
 			}
 		}
@@ -407,19 +407,19 @@ func (d *K8SDataSource) handleClusterWatchEvent(ctx context.Context, cluster *v1
 
 // handleAgentWatchEvent handles an async event received from the agent watcher
 func (d *K8SDataSource) handleAgentWatchEvent(ctx context.Context, agent *v1beta1.Agent, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.DebugContext(ctx, "handleWatchEvent received for agent", "agent", agent.Name, "type", eventType)
+	slog.DebugContext(ctx, "handleWatchEvent received for agent", slog.Any("agent", agent.Name), slog.Any("type", eventType))
 
 	if eventType != async.Deleted {
 		condition := conditionsv1.FindStatusCondition(agent.Status.Conditions, "Installed")
 		if condition == nil || condition.Status == corev1.ConditionFalse {
 			// This cluster is not yet available, so filter it out.
-			slog.DebugContext(ctx, "Agent installation is not yet completed; skipping", "agent", agent.Name, "condition", condition)
+			slog.DebugContext(ctx, "Agent installation is not yet completed; skipping", slog.Any("agent", agent.Name), slog.Any("condition", condition))
 			return uuid.Nil, nil
 		}
 
 		if _, found := agent.Labels[ctlrutils.ClusterTemplateArtifactsLabel]; !found {
 			// The provisioning request which is managing the installation of this agent is not yet fulfilled
-			slog.DebugContext(ctx, "Cluster provisioning request is not yet fulfilled; skipping", "agent", agent.Name)
+			slog.DebugContext(ctx, "Cluster provisioning request is not yet fulfilled; skipping", slog.Any("agent", agent.Name))
 			return uuid.Nil, nil
 		}
 	}
@@ -443,7 +443,7 @@ func (d *K8SDataSource) handleAgentWatchEvent(ctx context.Context, agent *v1beta
 
 // HandleAsyncEvent handles an add/update/delete to an object received by from the Reflector.
 func (d *K8SDataSource) HandleAsyncEvent(ctx context.Context, obj interface{}, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.DebugContext(ctx, "handleWatchEvent received for store adapter", "type", eventType, "object", fmt.Sprintf("%T", obj))
+	slog.DebugContext(ctx, "handleWatchEvent received for store adapter", slog.Any("type", eventType), slog.String("object", fmt.Sprintf("%T", obj)))
 	switch value := obj.(type) {
 	case *v1.ManagedCluster:
 		return d.handleClusterWatchEvent(ctx, value, eventType)
@@ -451,7 +451,7 @@ func (d *K8SDataSource) HandleAsyncEvent(ctx context.Context, obj interface{}, e
 		return d.handleAgentWatchEvent(ctx, value, eventType)
 	default:
 		// We are only watching for specific event types so this should happen.
-		slog.WarnContext(ctx, "Unknown object type", "type", fmt.Sprintf("%T", obj))
+		slog.WarnContext(ctx, "Unknown object type", slog.String("type", fmt.Sprintf("%T", obj)))
 		return uuid.Nil, fmt.Errorf("unknown type: %T", obj)
 	}
 }
@@ -466,7 +466,7 @@ func (d *K8SDataSource) HandleSyncComplete(ctx context.Context, objectType runti
 		object = models.ClusterResource{}
 	default:
 		// This should never happen since we watch for specific types
-		slog.WarnContext(ctx, "Unknown object type", "type", fmt.Sprintf("%T", objectType))
+		slog.WarnContext(ctx, "Unknown object type", slog.String("type", fmt.Sprintf("%T", objectType)))
 		return nil
 	}
 
