@@ -112,9 +112,13 @@ func (t *provisioningRequestReconcilerTask) createOrUpdateNodeAllocationRequest(
 	}
 
 	// NAR exists — compare spec and update if changed.
-	// Carry over fields managed by the hardware manager to avoid false-positive change detection.
+	// Carry over fields not driven by the rendered NAR to avoid false-positive change detection.
 	nodeAllocationRequest.Spec.ClusterProvisioned = existingNAR.Spec.ClusterProvisioned
+	renderedConfigTransactionId := nodeAllocationRequest.Spec.ConfigTransactionId
+	nodeAllocationRequest.Spec.ConfigTransactionId = existingNAR.Spec.ConfigTransactionId
 	if !equality.Semantic.DeepEqual(existingNAR.Spec, nodeAllocationRequest.Spec) {
+		// Real NAR-relevant fields changed, restore the actual new ConfigTransactionId
+		nodeAllocationRequest.Spec.ConfigTransactionId = renderedConfigTransactionId
 		patch := client.MergeFrom(existingNAR.DeepCopy())
 		existingNAR.Spec = nodeAllocationRequest.Spec
 		if err := t.client.Patch(ctx, existingNAR, patch); err != nil {
