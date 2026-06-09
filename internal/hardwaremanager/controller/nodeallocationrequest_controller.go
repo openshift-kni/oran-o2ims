@@ -172,7 +172,7 @@ func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 	result := hwmgrutils.DoNotRequeue()
 
 	// Check for hardware timeout at the top level
-	if timeoutExceeded, conditionType, err := r.checkHardwareTimeout(nodeAllocationRequest); err != nil {
+	if timeoutExceeded, conditionType, err := r.checkHardwareTimeout(ctx, nodeAllocationRequest); err != nil {
 		r.Logger.ErrorContext(ctx, "Failed to check hardware timeout",
 			slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
 			slog.String("error", err.Error()))
@@ -513,7 +513,7 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestProcessing(
 // It times out Day 0 (Provisioned) and Day 2 (Configured) operations using HardwareOperationStartTime.
 // The active operation is determined from the conditions.
 func (r *NodeAllocationRequestReconciler) checkHardwareTimeout(
-	nar *hwmgmtv1alpha1.NodeAllocationRequest,
+	ctx context.Context, nar *hwmgmtv1alpha1.NodeAllocationRequest,
 ) (bool, hwmgmtv1alpha1.ConditionType, error) {
 
 	// 1) Resolve timeout
@@ -547,16 +547,14 @@ func (r *NodeAllocationRequestReconciler) checkHardwareTimeout(
 	if inProgress(prov) {
 		if nar.Status.HardwareOperationStartTime == nil || nar.Status.HardwareOperationStartTime.Time.IsZero() {
 			// Inconsistent state: provisioning says in-progress but no start time.
-			r.Logger.WarnContext(context.Background(), "Provisioning in progress but no start time set",
-				slog.String("nar", nar.Name),
+			r.Logger.WarnContext(ctx, "Provisioning in progress but no start time set",
 				slog.String("provisionedStatus", string(prov.Status)),
 				slog.String("provisionedReason", prov.Reason))
 			return false, hwmgmtv1alpha1.ConditionType(""), nil
 		}
 		deadline := nar.Status.HardwareOperationStartTime.Time.Add(timeout)
 		elapsed := now.Sub(nar.Status.HardwareOperationStartTime.Time)
-		r.Logger.InfoContext(context.Background(), "Checking provisioning timeout",
-			slog.String("nar", nar.Name),
+		r.Logger.InfoContext(ctx, "Checking provisioning timeout",
 			slog.Time("now", now),
 			slog.Time("startTime", nar.Status.HardwareOperationStartTime.Time),
 			slog.Time("deadline", deadline),
@@ -577,8 +575,7 @@ func (r *NodeAllocationRequestReconciler) checkHardwareTimeout(
 		if nar.Spec.ConfigTransactionId != 0 &&
 			(nar.Status.ObservedConfigTransactionId == 0 ||
 				nar.Status.ObservedConfigTransactionId != nar.Spec.ConfigTransactionId) {
-			r.Logger.InfoContext(context.Background(), "Configuration spec change detected, skipping timeout check for retry",
-				slog.String("nar", nar.Name),
+			r.Logger.InfoContext(ctx, "Configuration spec change detected, skipping timeout check for retry",
 				slog.Int64("specConfigTransactionId", nar.Spec.ConfigTransactionId),
 				slog.Int64("observedConfigTransactionId", nar.Status.ObservedConfigTransactionId))
 			return false, hwmgmtv1alpha1.ConditionType(""), nil
@@ -586,16 +583,14 @@ func (r *NodeAllocationRequestReconciler) checkHardwareTimeout(
 
 		if nar.Status.HardwareOperationStartTime == nil || nar.Status.HardwareOperationStartTime.Time.IsZero() {
 			// Inconsistent state: configuring says in-progress but no start time.
-			r.Logger.WarnContext(context.Background(), "Configuration in progress but no start time set",
-				slog.String("nar", nar.Name),
+			r.Logger.WarnContext(ctx, "Configuration in progress but no start time set",
 				slog.String("configuredStatus", string(cfg.Status)),
 				slog.String("configuredReason", cfg.Reason))
 			return false, hwmgmtv1alpha1.ConditionType(""), nil
 		}
 		deadline := nar.Status.HardwareOperationStartTime.Time.Add(timeout)
 		elapsed := now.Sub(nar.Status.HardwareOperationStartTime.Time)
-		r.Logger.InfoContext(context.Background(), "Checking configuration timeout",
-			slog.String("nar", nar.Name),
+		r.Logger.InfoContext(ctx, "Checking configuration timeout",
 			slog.Time("now", now),
 			slog.Time("startTime", nar.Status.HardwareOperationStartTime.Time),
 			slog.Time("deadline", deadline),
