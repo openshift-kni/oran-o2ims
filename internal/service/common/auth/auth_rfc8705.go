@@ -57,7 +57,7 @@ func getClientCertificate(req *http.Request) ([]byte, bool, error) {
 		certString = req.Header.Get(sslClientDERHeaderKey)
 		if certString == "" {
 			// This is unexpected
-			slog.ErrorContext(req.Context(), "No client certificate found, but verification passed", slog.Any("header", sslClientDERHeaderKey))
+			slog.ErrorContext(req.Context(), "No client certificate found, but verification passed", slog.String("header", sslClientDERHeaderKey))
 			return nil, false, nil
 		}
 
