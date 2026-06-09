@@ -88,7 +88,7 @@ func (d *AlarmsDataSource) IncrGenerationID() int {
 
 // makeAlarmDictionaryIDToAlarmDefinitions fetches monitoring rules for each node cluster type and builds a map of alarm dictionary ID to alarm definitions
 func (d *AlarmsDataSource) makeAlarmDictionaryIDToAlarmDefinitions(ctx context.Context, nodeClusterTypes []models.NodeClusterType) (map[uuid.UUID][]models.AlarmDefinition, error) {
-	slog.InfoContext(ctx, "making alarm dictionary ID to alarm definitions map", "nodeClusterTypes count", len(nodeClusterTypes))
+	slog.InfoContext(ctx, "making alarm dictionary ID to alarm definitions map", slog.Int("nodeClusterTypes count", len(nodeClusterTypes)))
 
 	// Fetch prometheus rules from managed clusters and hub
 	nodeClusterTypeIDToMonitoringRules := d.makeNodeClusterTypeIDToMonitoringRules(ctx, nodeClusterTypes)
@@ -106,7 +106,7 @@ func nodeClusterTypesWithAlarmDictionaryID(nodeClusterTypes []models.NodeCluster
 	var filteredNodeClusterTypes []models.NodeClusterType
 	for _, nodeClusterType := range nodeClusterTypes {
 		if nodeClusterType.Extensions == nil {
-			slog.Error("no extensions found for node cluster type", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID)
+			slog.Error("no extensions found for node cluster type", slog.Any("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID))
 			continue
 		}
 
@@ -114,7 +114,7 @@ func nodeClusterTypesWithAlarmDictionaryID(nodeClusterTypes []models.NodeCluster
 		if alarmDictionaryIDString != nil {
 			id, err := uuid.Parse(alarmDictionaryIDString.(string))
 			if err != nil {
-				slog.Error("error parsing alarm dictionary ID", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID, "error", err)
+				slog.Error("error parsing alarm dictionary ID", slog.Any("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID), slog.Any("error", err))
 				continue
 			}
 			(*nodeClusterType.Extensions)[ctlrutils.ClusterAlarmDictionaryIDExtension] = id
@@ -127,7 +127,7 @@ func nodeClusterTypesWithAlarmDictionaryID(nodeClusterTypes []models.NodeCluster
 
 // makeNodeClusterTypeIDToMonitoringRules fetches monitoring rules for each node cluster type
 func (d *AlarmsDataSource) makeNodeClusterTypeIDToMonitoringRules(ctx context.Context, nodeClusterTypes []models.NodeClusterType) map[uuid.UUID][]monitoringv1.Rule {
-	slog.InfoContext(ctx, "making node cluster type ID to monitoring rules map", "nodeClusterTypes count", len(nodeClusterTypes))
+	slog.InfoContext(ctx, "making node cluster type ID to monitoring rules map", slog.Int("nodeClusterTypes count", len(nodeClusterTypes)))
 
 	nodeClusterTypeIDToMonitoringRules := make(map[uuid.UUID][]monitoringv1.Rule)
 
@@ -180,12 +180,12 @@ func (d *AlarmsDataSource) makeNodeClusterTypeIDToMonitoringRules(ctx context.Co
 	// Collect results
 	for res := range resultChannel {
 		if res.err != nil {
-			slog.ErrorContext(ctx, "error fetching rules for node cluster type", "nodeClusterTypeID", res.nodeClusterTypeID, "error", res.err)
+			slog.ErrorContext(ctx, "error fetching rules for node cluster type", slog.Any("nodeClusterTypeID", res.nodeClusterTypeID), slog.Any("error", res.err))
 			continue
 		}
 
 		nodeClusterTypeIDToMonitoringRules[res.nodeClusterTypeID] = res.rules
-		slog.InfoContext(ctx, "loaded rules for node cluster type", "nodeClusterTypeID", res.nodeClusterTypeID, "rules count", len(res.rules))
+		slog.InfoContext(ctx, "loaded rules for node cluster type", slog.Any("nodeClusterTypeID", res.nodeClusterTypeID), slog.Int("rules count", len(res.rules)))
 	}
 
 	return nodeClusterTypeIDToMonitoringRules
@@ -198,7 +198,7 @@ func (d *AlarmsDataSource) processHub(ctx context.Context) ([]monitoringv1.Rule,
 		return nil, err
 	}
 
-	slog.DebugContext(ctx, "fetched rules for Hub cluster", "rules count", len(rules))
+	slog.DebugContext(ctx, "fetched rules for Hub cluster", slog.Int("rules count", len(rules)))
 	return rules, nil
 }
 
@@ -222,7 +222,7 @@ func (d *AlarmsDataSource) processManagedCluster(ctx context.Context, version st
 		return nil, err
 	}
 
-	slog.DebugContext(ctx, "fetched rules for managed cluster", "cluster", cluster.Name, "version", version, "rules count", len(rules))
+	slog.DebugContext(ctx, "fetched rules for managed cluster", slog.Any("cluster", cluster.Name), slog.Any("version", version), slog.Int("rules count", len(rules)))
 	return rules, nil
 }
 
@@ -286,12 +286,12 @@ func (d *AlarmsDataSource) getRules(ctx context.Context, cl crclient.Client) ([]
 
 // buildAlarmDictionaryIDToAlarmDefinitionsMap builds a map of alarm dictionary ID to alarm definitions
 func (d *AlarmsDataSource) buildAlarmDictionaryIDToAlarmDefinitions(nodeClusterTypes []models.NodeClusterType, nodeClusterTypeIDToMonitoringRules map[uuid.UUID][]monitoringv1.Rule) map[uuid.UUID][]models.AlarmDefinition {
-	slog.Info("building alarm dictionary ID to alarm definitions map", "nodeClusterTypes count", len(nodeClusterTypes))
+	slog.Info("building alarm dictionary ID to alarm definitions map", slog.Int("nodeClusterTypes count", len(nodeClusterTypes)))
 
 	alarmDictionaryIDToAlarmDefinitions := make(map[uuid.UUID][]models.AlarmDefinition)
 	for _, nodeClusterType := range nodeClusterTypes {
 		if _, ok := nodeClusterTypeIDToMonitoringRules[nodeClusterType.NodeClusterTypeID]; !ok {
-			slog.Warn("no monitoring rules found for node cluster type", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID)
+			slog.Warn("no monitoring rules found for node cluster type", slog.Any("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID))
 			continue
 		}
 
@@ -299,18 +299,18 @@ func (d *AlarmsDataSource) buildAlarmDictionaryIDToAlarmDefinitions(nodeClusterT
 		extensions, err := getVendorExtensions(nodeClusterType)
 		if err != nil {
 			// Should never happen
-			slog.Error("error getting vendor extensions", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID, "error", err)
+			slog.Error("error getting vendor extensions", slog.Any("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID), slog.Any("error", err))
 			continue
 		}
 
 		// Only process node cluster types with an alarm dictionary ID
 		alarmDictionaryID, ok := (*nodeClusterType.Extensions)[ctlrutils.ClusterAlarmDictionaryIDExtension].(uuid.UUID)
 		if !ok || alarmDictionaryID == uuid.Nil {
-			slog.Error("no alarm dictionary ID found for node cluster type", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID)
+			slog.Error("no alarm dictionary ID found for node cluster type", slog.Any("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID))
 			continue
 		}
 
-		slog.Debug("filtering rules for node cluster type", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID)
+		slog.Debug("filtering rules for node cluster type", slog.Any("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID))
 		// Remove conflicting rules before creating alarm definitions
 		filteredRules := d.getFilteredRules(nodeClusterTypeIDToMonitoringRules[nodeClusterType.NodeClusterTypeID])
 
@@ -348,7 +348,7 @@ func (d *AlarmsDataSource) getFilteredRules(monitoringRules []monitoringv1.Rule)
 	for _, rule := range monitoringRules {
 		severity, ok := rule.Labels["severity"]
 		if !ok {
-			slog.Warn("rule missing severity label", "alert", rule.Alert)
+			slog.Warn("rule missing severity label", slog.Any("alert", rule.Alert))
 		}
 
 		key := uniqueAlarm{
@@ -360,7 +360,7 @@ func (d *AlarmsDataSource) getFilteredRules(monitoringRules []monitoringv1.Rule)
 			exist[key] = true
 			filteredRules = append(filteredRules, rule)
 		} else {
-			slog.Warn("Duplicate rules found", "rule", rule)
+			slog.Warn("Duplicate rules found", slog.Any("rule", rule))
 		}
 	}
 	return filteredRules
@@ -408,13 +408,13 @@ func (d *AlarmsDataSource) createAlarmDefinitions(rules []monitoringv1.Rule, ala
 		records = append(records, record)
 	}
 
-	slog.Info("AlarmDefinitions from prometheus rules prepared", "count", len(records), "alarmDictionaryID", alarmDictionaryID)
+	slog.Info("AlarmDefinitions from prometheus rules prepared", slog.Int("count", len(records)), slog.Any("alarmDictionaryID", alarmDictionaryID))
 	return records
 }
 
 // makeAlarmDictionaries creates alarm dictionaries from node cluster types
 func (d *AlarmsDataSource) makeAlarmDictionaries(nodeClusterTypes []models.NodeClusterType) []models.AlarmDictionary {
-	slog.Info("making alarm dictionaries", "nodeClusterTypes count", len(nodeClusterTypes))
+	slog.Info("making alarm dictionaries", slog.Int("nodeClusterTypes count", len(nodeClusterTypes)))
 
 	var alarmDictionaries []models.AlarmDictionary
 	for _, nodeClusterType := range nodeClusterTypes {
@@ -422,13 +422,13 @@ func (d *AlarmsDataSource) makeAlarmDictionaries(nodeClusterTypes []models.NodeC
 		extensions, err := getVendorExtensions(nodeClusterType)
 		if err != nil {
 			// Should never happen
-			slog.Error("error getting vendor extensions", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID, "error", err)
+			slog.Error("error getting vendor extensions", slog.Any("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID), slog.Any("error", err))
 			continue
 		}
 
 		alarmDictionaryID, ok := (*nodeClusterType.Extensions)[ctlrutils.ClusterAlarmDictionaryIDExtension].(uuid.UUID)
 		if !ok || alarmDictionaryID == uuid.Nil {
-			slog.Error("no alarm dictionary ID found for node cluster type", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID)
+			slog.Error("no alarm dictionary ID found for node cluster type", slog.Any("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID))
 			continue
 		}
 
@@ -497,7 +497,7 @@ func (d *AlarmsDataSource) collectThanosRules(ctx context.Context) ([]monitoring
 		}, configMap)
 		if err != nil {
 			if errors.IsNotFound(err) {
-				slog.WarnContext(ctx, "Config map not found", "configMap", configMapName)
+				slog.WarnContext(ctx, "Config map not found", slog.Any("configMap", configMapName))
 				continue
 			}
 
@@ -513,7 +513,7 @@ func (d *AlarmsDataSource) collectThanosRules(ctx context.Context) ([]monitoring
 			var spec RuleSpec
 			err = yaml.Unmarshal([]byte(rulSpec), &spec)
 			if err != nil {
-				slog.ErrorContext(ctx, "failed to unmarshal thanos prometheus rules spec", "configMap", configMapName, "error", err)
+				slog.ErrorContext(ctx, "failed to unmarshal thanos prometheus rules spec", slog.Any("configMap", configMapName), slog.Any("error", err))
 				continue
 			}
 
@@ -533,11 +533,11 @@ func (d *AlarmsDataSource) collectThanosRules(ctx context.Context) ([]monitoring
 				}
 			}
 		} else {
-			slog.WarnContext(ctx, "No data found in thanos config map", "configMap", configMapName)
+			slog.WarnContext(ctx, "No data found in thanos config map", slog.Any("configMap", configMapName))
 		}
 	}
 
-	slog.DebugContext(ctx, "Collected thanos rules", "rules count", len(rules))
+	slog.DebugContext(ctx, "Collected thanos rules", slog.Int("rules count", len(rules)))
 
 	// Expand rules with templated severity into multiple static rules
 	expandedRules := d.expandTemplatedSeverity(rules)
@@ -569,7 +569,7 @@ func (d *AlarmsDataSource) expandTemplatedSeverity(rules []monitoringv1.Rule) []
 			continue
 		}
 
-		slog.Info("Expanding templated severity rule", "alert", rule.Alert, "severity", severity)
+		slog.Info("Expanding templated severity rule", slog.Any("alert", rule.Alert), slog.Any("severity", severity))
 
 		// Create one rule for each static severity value
 		for _, staticSeverity := range severities {
@@ -597,11 +597,11 @@ func (d *AlarmsDataSource) expandTemplatedSeverity(rules []monitoringv1.Rule) []
 			}
 
 			expandedRules = append(expandedRules, expandedRule)
-			slog.Debug("Created expanded rule", "alert", expandedRule.Alert, "severity", staticSeverity)
+			slog.Debug("Created expanded rule", slog.Any("alert", expandedRule.Alert), slog.Any("severity", staticSeverity))
 		}
 	}
 
-	slog.Info("Severity expansion complete", "original count", len(rules), "expanded count", len(expandedRules))
+	slog.Info("Severity expansion complete", slog.Int("original count", len(rules)), slog.Int("expanded count", len(expandedRules)))
 	return expandedRules
 }
 
@@ -612,7 +612,7 @@ func IsTemplated(s string) bool {
 
 // makeThanosAlarmDefinitions creates alarm definitions from thanos rules
 func (d *AlarmsDataSource) makeThanosAlarmDefinitions(rules []monitoringv1.Rule) ([]models.AlarmDefinition, error) {
-	slog.Debug("Making Thanos alarm definitions", "rules count", len(rules))
+	slog.Debug("Making Thanos alarm definitions", slog.Int("rules count", len(rules)))
 
 	filteredRules := d.getFilteredRules(rules)
 
