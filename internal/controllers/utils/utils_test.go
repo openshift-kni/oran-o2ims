@@ -24,6 +24,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	commonapi "github.com/openshift-kni/oran-o2ims/api/common"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
@@ -1743,4 +1744,40 @@ var _ = Describe("TLS cipher suite configuration", func() {
 	It("should expose PFS cipher suites via PFSCipherSuites()", func() {
 		Expect(PFSCipherSuites()).To(Equal(pfsCipherSuites))
 	})
+})
+
+var _ = Describe("DetermineAuthType", func() {
+	DescribeTable("returns the correct auth type based on callback URL hostname",
+		func(callback string, expected commonapi.AuthType) {
+			Expect(DetermineAuthType(callback)).To(Equal(expected))
+		},
+		Entry("cluster-local service URL", "https://svc.ns.svc.cluster.local/callback", commonapi.ServiceAccount),
+		Entry("bare cluster-local domain", "https://svc.cluster.local/path", commonapi.ServiceAccount),
+		Entry("cluster-local with port", "https://svc.ns.svc.cluster.local:8080/cb", commonapi.ServiceAccount),
+		Entry("external SMO URL", "https://smo.example.com/callback", commonapi.OAuth),
+		Entry("spoofed path containing cluster-local", "https://attacker.com/svc.cluster.local", commonapi.OAuth),
+		Entry("spoofed subdomain of cluster-local", "https://svc.cluster.local.attacker.com/cb", commonapi.OAuth),
+		Entry("spoofed query parameter", "https://evil.com?q=svc.cluster.local", commonapi.OAuth),
+		Entry("spoofed fragment", "https://evil.com#svc.cluster.local", commonapi.OAuth),
+		Entry("spoofed userinfo", "https://svc.cluster.local@attacker.com/cb", commonapi.OAuth),
+		Entry("unparseable URL", "://not-a-url", commonapi.OAuth),
+		Entry("empty string", "", commonapi.OAuth),
+	)
+})
+
+var _ = Describe("IsClusterLocalHostname", func() {
+	DescribeTable("identifies cluster-local hostnames",
+		func(hostname string, expected bool) {
+			Expect(IsClusterLocalHostname(hostname)).To(Equal(expected))
+		},
+		Entry("full service hostname", "my-svc.my-ns.svc.cluster.local", true),
+		Entry("bare cluster-local domain", "svc.cluster.local", true),
+		Entry("not cluster-local", "example.com", false),
+		Entry("suffix spoofing", "svc.cluster.local.attacker.com", false),
+		Entry("partial match", "cluster.local", false),
+		Entry("empty string", "", false),
+		Entry("uppercase hostname", "MY-SVC.MY-NS.SVC.CLUSTER.LOCAL", true),
+		Entry("trailing dot FQDN", "my-svc.my-ns.svc.cluster.local.", true),
+		Entry("uppercase with trailing dot", "MY-SVC.MY-NS.SVC.CLUSTER.LOCAL.", true),
+	)
 })
