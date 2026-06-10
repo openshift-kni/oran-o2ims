@@ -17,7 +17,38 @@ spec:
             resourceselector.clcm.openshift.io/server-type: XR8620t
     clusterInstanceDefaults: clusterinstance-defaults-v1
     policyTemplateDefaults: policytemplate-defaults-v1
-    upgradeDefaults: upgrade-defaults-v1
+    upgradeDefaults:
+      imageBasedGroupUpgrade:
+        ibuSpec:
+          seedImageRef:
+            image: "quay.io/seed-repo/seed-image:4.Y.Z+1"
+            version: "4.Y.Z+1"
+          oadpContent:
+            - name: sno-ran-du-ibu-platform-backup-v4-Y-Z+1-1
+              namespace: openshift-adp
+          autoRollbackOnFailure:
+            initMonitorTimeoutSeconds: 1800
+        plan:
+          - actions: ["Prep"]
+            rolloutStrategy:
+              maxConcurrency: 1
+              timeout: 15
+          - actions: ["AbortOnFailure"]
+            rolloutStrategy:
+              maxConcurrency: 1
+              timeout: 5
+          - actions: ["Upgrade"]
+            rolloutStrategy:
+              maxConcurrency: 1
+              timeout: 60
+          - actions: ["AbortOnFailure"]
+            rolloutStrategy:
+              maxConcurrency: 1
+              timeout: 5
+          - actions: ["FinalizeUpgrade"]
+            rolloutStrategy:
+              maxConcurrency: 1
+              timeout: 5
   templateParameterSchema:
     properties:
       nodeClusterName:
@@ -73,6 +104,83 @@ spec:
             type: string
           install-plan-approval:
             type: string
+        type: object
+      upgradeParameters:
+        description: >
+          upgradeParameters allows overriding upgrade defaults defined in
+          templateDefaults.upgradeDefaults.
+        properties:
+          imageBasedGroupUpgrade:
+            type: object
+            properties:
+              ibuSpec:
+                description: ImageBasedUpgradeSpec defines the desired state of ImageBasedUpgrade
+                properties:
+                  autoRollbackOnFailure:
+                    description: |-
+                      AutoRollbackOnFailure defines automatic rollback settings if the upgrade fails or if the upgrade does not
+                      complete within the specified time limit.
+                    properties:
+                      initMonitorTimeoutSeconds:
+                        description: |-
+                          InitMonitorTimeoutSeconds defines the time frame in seconds. If not defined or set to 0, the default value of
+                          1800 seconds (30 minutes) is used.
+                        minimum: 0
+                        type: integer
+                    type: object
+                  oadpContent:
+                    description: OADPContent defines the list of ConfigMap resources
+                      that contain the OADP Backup and Restore CRs.
+                    items:
+                      description: ConfigMapRef defines a reference to a config map
+                      properties:
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                      type: object
+                    type: array
+                  seedImageRef:
+                    description: SeedImageRef defines the seed image and OCP version
+                      for the upgrade
+                    properties:
+                      image:
+                        description: Image defines the full pull-spec of the seed
+                          container image to use.
+                        minLength: 1
+                        type: string
+                      pullSecretRef:
+                        description: PullSecretRef defines the reference to a secret
+                          with credentials to pull container images.
+                        properties:
+                          name:
+                            type: string
+                        type: object
+                      version:
+                        description: Version defines the target platform version.
+                          The value must match the version of the seed image.
+                        type: string
+                    type: object
+                type: object
+              plan:
+                items:
+                  properties:
+                    actions:
+                      items:
+                        type: string
+                      maxItems: 4
+                      type: array
+                    rolloutStrategy:
+                      description: RolloutStrategy defines how to rollout ibu
+                      properties:
+                        maxConcurrency:
+                          type: integer
+                        timeout:
+                          type: integer
+                      type: object
+                  type: object
+                maxItems: 6
+                type: array
         type: object
       clusterInstanceParameters:
         description: clusterInstanceParameters defines the available parameters for cluster installation
