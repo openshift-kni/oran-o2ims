@@ -50,14 +50,14 @@ func (s *SubscriptionStorageProvider) GetSubscriptions(ctx context.Context) ([]n
 		subscriptions = append(subscriptions, *models.ConvertAlertSubToNotificationSub(&record))
 	}
 
-	slog.InfoContext(ctx, "Found subscriptions to notify", "count", len(subscriptions))
+	slog.InfoContext(ctx, "Found subscriptions to notify", slog.Int("count", len(subscriptions)))
 	return subscriptions, nil
 }
 
 func (s *SubscriptionStorageProvider) Matches(subscription *notifier.SubscriptionInfo, notification *notifier.Notification) bool {
 	payload, ok := notification.Payload.(generated.AlarmEventNotification)
 	if !ok {
-		slog.Warn("notification payload is not of type generated.AlarmEventNotification", "type", fmt.Sprintf("%T", notification.Payload))
+		slog.Warn("notification payload is not of type generated.AlarmEventNotification", slog.String("type", fmt.Sprintf("%T", notification.Payload)))
 		return false
 	}
 	if subscription.Filter == nil {
@@ -75,7 +75,7 @@ func (s *SubscriptionStorageProvider) UpdateSubscription(ctx context.Context, su
 		return fmt.Errorf("update subscription failed for %s: %w", subscription.SubscriptionID, err)
 	}
 
-	slog.InfoContext(ctx, "Subscription cursor updated", "to", subscription.EventCursor)
+	slog.InfoContext(ctx, "Subscription cursor updated", slog.Int("to", subscription.EventCursor))
 	return nil
 }
 

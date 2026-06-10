@@ -228,7 +228,7 @@ func (ar *AlarmsRepository) ResolveStaleAlarmEventCaaSRecord(ctx context.Context
 	}
 
 	if len(records) > 0 {
-		slog.InfoContext(ctx, "Successfully resolved stale CaaS (alertmanager) alarmeventrecords", "records", len(records))
+		slog.InfoContext(ctx, "Successfully resolved stale CaaS (alertmanager) alarmeventrecords", slog.Int("records", len(records)))
 	}
 	return nil
 }

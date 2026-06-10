@@ -29,7 +29,7 @@ func ConvertAmToAlarmEventRecordModels(ctx context.Context, alerts *[]api.Alert,
 		if alert.StartsAt != nil && !alert.StartsAt.IsZero() {
 			record.AlarmRaisedTime = *alert.StartsAt
 		} else {
-			slog.ErrorContext(ctx, "Alert StartsAt is required, skipping.", "alert", alert)
+			slog.ErrorContext(ctx, "Alert StartsAt is required, skipping.", slog.Any("alert", alert))
 			continue
 		}
 
@@ -48,7 +48,7 @@ func ConvertAmToAlarmEventRecordModels(ctx context.Context, alerts *[]api.Alert,
 				record.PerceivedSeverity = ps
 			}
 		} else {
-			slog.ErrorContext(ctx, "Alert Status is required, skipping.", "alert", alert)
+			slog.ErrorContext(ctx, "Alert Status is required, skipping.", slog.Any("alert", alert))
 			continue
 		}
 
@@ -56,7 +56,7 @@ func ConvertAmToAlarmEventRecordModels(ctx context.Context, alerts *[]api.Alert,
 		if alert.Fingerprint != nil {
 			record.Fingerprint = *alert.Fingerprint
 		} else {
-			slog.ErrorContext(ctx, "Alert Fingerprint is required, skipping.", "alert", alert)
+			slog.ErrorContext(ctx, "Alert Fingerprint is required, skipping.", slog.Any("alert", alert))
 			continue
 		}
 
@@ -90,7 +90,7 @@ func ConvertAmToAlarmEventRecordModels(ctx context.Context, alerts *[]api.Alert,
 		if record.ObjectID != nil {
 			objectTypeID, err := infrastructureClient.GetObjectTypeID(ctx, *record.ObjectID)
 			if err != nil {
-				slog.WarnContext(ctx, "Could not get object type ID", "objectID", record.ObjectID, "err", err.Error())
+				slog.WarnContext(ctx, "Could not get object type ID", slog.Any("objectID", record.ObjectID), slog.String("err", err.Error()))
 			} else {
 				record.ObjectTypeID = &objectTypeID
 			}
@@ -102,7 +102,7 @@ func ConvertAmToAlarmEventRecordModels(ctx context.Context, alerts *[]api.Alert,
 			_, severity := getPerceivedSeverity(labels)
 			alarmDefinitionID, err := infrastructureClient.GetAlarmDefinitionID(ctx, *record.ObjectTypeID, getAlertName(labels), severity)
 			if err != nil {
-				slog.WarnContext(ctx, "Could not get alarm definition ID", "objectTypeID", *record.ObjectTypeID, "name", getAlertName(labels), "severity", severity, "err", err.Error())
+				slog.WarnContext(ctx, "Could not get alarm definition ID", slog.Any("objectTypeID", *record.ObjectTypeID), slog.String("name", getAlertName(labels)), slog.String("severity", severity), slog.String("err", err.Error()))
 			} else {
 				record.AlarmDefinitionID = &alarmDefinitionID
 			}
@@ -112,7 +112,7 @@ func ConvertAmToAlarmEventRecordModels(ctx context.Context, alerts *[]api.Alert,
 		records = append(records, record)
 	}
 
-	slog.InfoContext(ctx, "Converted alerts", "records", len(records))
+	slog.InfoContext(ctx, "Converted alerts", slog.Int("records", len(records)))
 	return records
 }
 
@@ -123,14 +123,14 @@ func getClusterID(labels map[string]string) *uuid.UUID {
 		// Fall back to clusterID (Thanos/ACM alerts like ViolatedPolicyReport)
 		val, ok = labels["clusterID"]
 		if !ok {
-			slog.Warn("Could not find managed_cluster or clusterID", "labels", labels)
+			slog.Warn("Could not find managed_cluster or clusterID", slog.Any("labels", labels))
 			return nil
 		}
 	}
 
 	id, err := uuid.Parse(val)
 	if err != nil {
-		slog.Warn("Could not convert cluster ID string to uuid", "labels", labels, "err", err.Error())
+		slog.Warn("Could not convert cluster ID string to uuid", slog.Any("labels", labels), slog.String("err", err.Error()))
 		return nil
 	}
 
@@ -148,13 +148,13 @@ func isHardwareAlert(labels map[string]string) bool {
 func getResourceID(labels map[string]string) *uuid.UUID {
 	val, ok := labels["instance_uuid"]
 	if !ok {
-		slog.Warn("Could not find instance_uuid for hardware alert", "labels", labels)
+		slog.Warn("Could not find instance_uuid for hardware alert", slog.Any("labels", labels))
 		return nil
 	}
 
 	id, err := uuid.Parse(val)
 	if err != nil {
-		slog.Warn("Could not convert instance_uuid string to uuid", "labels", labels, "err", err.Error())
+		slog.Warn("Could not convert instance_uuid string to uuid", slog.Any("labels", labels), slog.String("err", err.Error()))
 		return nil
 	}
 
@@ -166,7 +166,7 @@ func getAlertName(labels map[string]string) string {
 	val, ok := labels["alertname"]
 	if !ok {
 		// this may never execute but keeping a check just in case
-		slog.Warn("Could not find alertname", "labels", labels)
+		slog.Warn("Could not find alertname", slog.Any("labels", labels))
 		return "Unknown"
 	}
 
@@ -177,7 +177,7 @@ func getAlertName(labels map[string]string) string {
 func getPerceivedSeverity(labels map[string]string) (api.PerceivedSeverity, string) {
 	severity, ok := labels["severity"]
 	if !ok {
-		slog.Warn("Could not find severity label", "labels", labels)
+		slog.Warn("Could not find severity label", slog.Any("labels", labels))
 		return api.INDETERMINATE, ""
 	}
 
@@ -197,7 +197,7 @@ func severityToPerceivedSeverity(input string) api.PerceivedSeverity {
 	case "warning", "info", "moderate": // "moderate" is used by ACM/PolicyReport (ViolatedPolicyReport)
 		return api.WARNING
 	default:
-		slog.Debug("Unknown severity mapped to INDETERMINATE", "severity", input)
+		slog.Debug("Unknown severity mapped to INDETERMINATE", slog.String("severity", input))
 		return api.INDETERMINATE
 	}
 }
@@ -290,6 +290,6 @@ func ConvertAPIAlertsToWebhook(apiAlerts *[]APIAlert) []api.Alert {
 		webhookAlerts = append(webhookAlerts, webhookAlert)
 	}
 
-	slog.Info("Converted from API to Webhook", "alerts", len(webhookAlerts))
+	slog.Info("Converted from API to Webhook", slog.Int("alerts", len(webhookAlerts)))
 	return webhookAlerts
 }
