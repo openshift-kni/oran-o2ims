@@ -1,3 +1,3 @@
 #!/bin/bash
 
-echo "Goodbye, World!"
+echo "Goodbye, Friends!"
