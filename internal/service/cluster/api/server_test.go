@@ -21,6 +21,7 @@ import (
 	apigenerated "github.com/openshift-kni/oran-o2ims/internal/service/cluster/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/repo/generated"
+	svcapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 )
 
@@ -56,7 +57,8 @@ var _ = Describe("Cluster Server", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		mockRepo = generated.NewMockRepositoryInterface(ctrl)
 		server = &ClusterServer{
-			Repo: mockRepo,
+			Config: &ClusterServerConfig{},
+			Repo:   mockRepo,
 		}
 		server.InitAlarmDictCache()
 		ctx = context.Background()
@@ -345,6 +347,7 @@ var _ = Describe("Cluster Server", func() {
 
 		When("validation fails due to unreachable callback URL", func() {
 			It("returns 400 without reflecting the callback URL in Detail", func() {
+				server.Config.SmoURL = "https://192.0.2.1"
 				callbackURL := "https://192.0.2.1/callback?secret=token123"
 				shortTimeoutClient := &http.Client{Timeout: 1}
 
@@ -373,6 +376,13 @@ var _ = Describe("Cluster Server", func() {
 					w.WriteHeader(http.StatusNoContent)
 				}))
 				defer ts.Close()
+
+				server.Config.SmoURL = ts.URL
+				savedResolver := svcapi.DefaultResolver
+				svcapi.DefaultResolver = &svcapi.TestResolver{Addrs: map[string][]string{
+					"127.0.0.1": {"203.0.113.1"},
+				}}
+				DeferCleanup(func() { svcapi.DefaultResolver = savedResolver })
 
 				server.SubscriptionEventHandler = &mockSubscriptionEventHandler{
 					provider: &mockClientProvider{client: ts.Client()},

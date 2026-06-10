@@ -296,7 +296,7 @@ func (r *ResourceServer) GetSubscriptions(ctx context.Context, request api.GetSu
 
 // validateSubscription validates a subscription before accepting the request
 func (r *ResourceServer) validateSubscription(ctx context.Context, request api.CreateSubscriptionRequestObject) error {
-	if err := commonapi.ValidateCallbackURL(ctx, r.SubscriptionEventHandler.GetClientFactory(), request.Body.Callback); err != nil {
+	if err := commonapi.ValidateCallbackURL(ctx, r.SubscriptionEventHandler.GetClientFactory(), request.Body.Callback, r.Config.SmoURL); err != nil {
 		slog.ErrorContext(ctx, "callback URL validation failed", slog.Any("error", err))
 		return fmt.Errorf("callback URL validation failed")
 	}

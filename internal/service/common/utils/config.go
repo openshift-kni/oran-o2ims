@@ -54,10 +54,13 @@ type CommonServerConfig struct {
 	OAuth OAuthConfig
 	// TLS defines the attributes used to start mTLS sessions to the SMO/OAuth servers
 	TLS TLSConfig
+	// SmoURL is the base URL of the SMO instance used to restrict callback URLs
+	SmoURL string
 }
 
 const (
 	ListenerFlagName                = "api-listener-address"
+	SmoURLFlagName                  = "smo-url"
 	OAuthIssuerURLFlagName          = "oauth-issuer-url"     // nolint: gosec
 	OAuthTokenEndpointFlagName      = "oauth-token-endpoint" // nolint: gosec
 	OAuthScopesFlagName             = "oauth-scopes"
@@ -79,6 +82,12 @@ func SetCommonServerFlags(cmd *cobra.Command, config *CommonServerConfig) error 
 		ListenerFlagName,
 		fmt.Sprintf("%s:%d", constants.Localhost, constants.DefaultContainerPort),
 		"API listener address",
+	)
+	flags.StringVar(
+		&config.SmoURL,
+		SmoURLFlagName,
+		"",
+		"SMO base URL used to restrict callback URLs to the SMO host",
 	)
 	flags.StringVar(
 		&config.OAuth.TokenEndpoint,

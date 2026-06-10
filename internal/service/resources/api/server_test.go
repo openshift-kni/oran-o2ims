@@ -18,14 +18,14 @@ import (
 	"go.uber.org/mock/gomock"
 
 	commonapi "github.com/openshift-kni/oran-o2ims/api/common"
+	svcapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	commonmodels "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/api"
 	apiGenerated "github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/repo/generated"
-
-	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
 const (
@@ -75,6 +75,7 @@ var _ = Describe("ResourceServer", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		mockRepo = generated.NewMockResourcesRepositoryInterface(ctrl)
 		server = &api.ResourceServer{
+			Config:                   &api.ResourceServerConfig{},
 			Repo:                     mockRepo,
 			SubscriptionEventHandler: &mockSubscriptionEventHandler{},
 		}
@@ -299,11 +300,13 @@ var _ = Describe("ResourceServer", func() {
 				shortTimeoutClient := &http.Client{Timeout: 1}
 
 				serverWithProvider := &api.ResourceServer{
-					Repo: mockRepo,
+					Config: &api.ResourceServerConfig{},
+					Repo:   mockRepo,
 					SubscriptionEventHandler: &mockSubscriptionEventHandlerWithProvider{
 						provider: &mockClientProvider{client: shortTimeoutClient},
 					},
 				}
+				serverWithProvider.Config.SmoURL = "https://192.0.2.1"
 
 				resp, err := serverWithProvider.CreateSubscription(ctx, apiGenerated.CreateSubscriptionRequestObject{
 					Body: &apiGenerated.Subscription{
@@ -327,12 +330,20 @@ var _ = Describe("ResourceServer", func() {
 				}))
 				defer ts.Close()
 
+				savedResolver := svcapi.DefaultResolver
+				svcapi.DefaultResolver = &svcapi.TestResolver{Addrs: map[string][]string{
+					"127.0.0.1": {"203.0.113.1"},
+				}}
+				DeferCleanup(func() { svcapi.DefaultResolver = savedResolver })
+
 				serverWithProvider := &api.ResourceServer{
-					Repo: mockRepo,
+					Config: &api.ResourceServerConfig{},
+					Repo:   mockRepo,
 					SubscriptionEventHandler: &mockSubscriptionEventHandlerWithProvider{
 						provider: &mockClientProvider{client: ts.Client()},
 					},
 				}
+				serverWithProvider.Config.SmoURL = ts.URL
 
 				mockRepo.EXPECT().
 					CreateSubscription(gomock.Any(), gomock.Any()).
