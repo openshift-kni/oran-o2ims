@@ -129,13 +129,13 @@ func (d *ResourcePoolDataSource) Watch(ctx context.Context) error {
 
 // HandleAsyncEvent handles an add/update/delete event received from the Reflector.
 func (d *ResourcePoolDataSource) HandleAsyncEvent(ctx context.Context, obj interface{}, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.DebugContext(ctx, "handleAsyncEvent received for resourcepool", "type", eventType, "object", fmt.Sprintf("%T", obj))
+	slog.DebugContext(ctx, "handleAsyncEvent received for resourcepool", slog.Any("type", eventType), slog.String("object", fmt.Sprintf("%T", obj)))
 
 	switch value := obj.(type) {
 	case *inventoryv1alpha1.ResourcePool:
 		return d.handleResourcePoolWatchEvent(ctx, value, eventType)
 	default:
-		slog.WarnContext(ctx, "Unknown object type in ResourcePoolDataSource", "type", fmt.Sprintf("%T", obj))
+		slog.WarnContext(ctx, "Unknown object type in ResourcePoolDataSource", slog.String("type", fmt.Sprintf("%T", obj)))
 		return uuid.Nil, fmt.Errorf("unknown type: %T", obj)
 	}
 }
@@ -147,7 +147,7 @@ func (d *ResourcePoolDataSource) HandleSyncComplete(ctx context.Context, objectT
 	case *inventoryv1alpha1.ResourcePool:
 		object = models.ResourcePool{}
 	default:
-		slog.WarnContext(ctx, "Unknown object type in HandleSyncComplete", "type", fmt.Sprintf("%T", objectType))
+		slog.WarnContext(ctx, "Unknown object type in HandleSyncComplete", slog.String("type", fmt.Sprintf("%T", objectType)))
 		return nil
 	}
 
@@ -166,14 +166,14 @@ func (d *ResourcePoolDataSource) HandleSyncComplete(ctx context.Context, objectT
 
 // handleResourcePoolWatchEvent handles an async event received for a ResourcePool CR
 func (d *ResourcePoolDataSource) handleResourcePoolWatchEvent(ctx context.Context, pool *inventoryv1alpha1.ResourcePool, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.DebugContext(ctx, "handleResourcePoolWatchEvent received", "name", pool.Name, "type", eventType)
+	slog.DebugContext(ctx, "handleResourcePoolWatchEvent received", slog.Any("name", pool.Name), slog.Any("type", eventType))
 
 	// If CR is not ready (e.g., validation failed, parent missing), treat as deletion
 	// from API perspective. This ensures stale data is removed when CRs become invalid.
 	if eventType != async.Deleted && !inventoryv1alpha1.IsResourceReady(pool.Status.Conditions) {
 		slog.DebugContext(ctx, "ResourcePool not ready, treating as deletion",
-			"name", pool.Name,
-			"reason", inventoryv1alpha1.GetReadyReason(pool.Status.Conditions))
+			slog.String("name", pool.Name),
+			slog.String("reason", inventoryv1alpha1.GetReadyReason(pool.Status.Conditions)))
 		eventType = async.Deleted
 	}
 
