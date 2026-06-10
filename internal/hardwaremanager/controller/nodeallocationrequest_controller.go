@@ -338,9 +338,9 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 	// skipCleanup or clusterProvisioned was updated), acknowledge the spec change and skip.
 	if !hwProfileChanged && !configInProgress {
 		r.Logger.InfoContext(ctx, "No HW profile changes detected, acknowledging spec change")
-		if err := hwmgrutils.UpdateNodeAllocationRequestObservedGeneration(ctx, r.Client, nodeAllocationRequest); err != nil {
+		if err := hwmgrutils.UpdateNodeAllocationRequestObservedStatus(ctx, r.Client, nodeAllocationRequest); err != nil {
 			return hwmgrutils.RequeueWithShortInterval(),
-				fmt.Errorf("failed to update observedGeneration: %w", err)
+				fmt.Errorf("failed to acknowledge spec change: %w", err)
 		}
 		return hwmgrutils.DoNotRequeue(), nil
 	}

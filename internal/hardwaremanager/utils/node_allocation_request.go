@@ -83,6 +83,34 @@ func UpdateNodeAllocationRequestObservedGeneration(
 	return nil
 }
 
+// UpdateNodeAllocationRequestObservedStatus acknowledges all spec changes by updating
+// both ObservedGeneration and ObservedConfigTransactionId in a single status update.
+func UpdateNodeAllocationRequestObservedStatus(
+	ctx context.Context,
+	c client.Client,
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) error {
+
+	// nolint: wrapcheck
+	err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
+		newNodeAllocationRequest := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		if err := c.Get(ctx, client.ObjectKeyFromObject(nodeAllocationRequest), newNodeAllocationRequest); err != nil {
+			return err
+		}
+		newNodeAllocationRequest.Status.ObservedGeneration = newNodeAllocationRequest.ObjectMeta.Generation
+		newNodeAllocationRequest.Status.ObservedConfigTransactionId = newNodeAllocationRequest.Spec.ConfigTransactionId
+		if err := c.Status().Update(ctx, newNodeAllocationRequest); err != nil {
+			return err
+		}
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to update NodeAllocationRequest observed generation and transaction id: %w", err)
+	}
+
+	return nil
+}
+
 func UpdateNodeAllocationRequestStatusCondition(
 	ctx context.Context,
 	c client.Client,

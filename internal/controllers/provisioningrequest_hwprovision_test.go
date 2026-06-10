@@ -674,7 +674,7 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 		Expect(createdNAR.Spec.ClusterId).To(Equal(crName))
 	})
 
-	It("updates existing NodeAllocationRequest when spec changes", func() {
+	It("updates existing NodeAllocationRequest when hardware-relevant fields change", func() {
 		// Create existing NAR CR
 		existingNAR := &hwmgmtv1alpha1.NodeAllocationRequest{
 			ObjectMeta: metav1.ObjectMeta{
@@ -682,8 +682,9 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 				Namespace: constants.DefaultNamespace,
 			},
 			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
-				ClusterId:    crName,
-				LocationSpec: hwmgmtv1alpha1.LocationSpec{Site: "test-site"},
+				ClusterId:           crName,
+				LocationSpec:        hwmgmtv1alpha1.LocationSpec{Site: "test-site"},
+				ConfigTransactionId: 2,
 				NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 					{
 						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
@@ -698,15 +699,19 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 		}
 		Expect(c.Create(ctx, existingNAR)).To(Succeed())
 
-		// New NAR with changed size
+		// Bump PR generation
+		cr.Generation = 4
+
+		// New NAR with changed size and new ConfigTransactionId
 		nodeAllocationRequest := &hwmgmtv1alpha1.NodeAllocationRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      cr.Name,
 				Namespace: constants.DefaultNamespace,
 			},
 			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
-				ClusterId:    crName,
-				LocationSpec: hwmgmtv1alpha1.LocationSpec{Site: "test-site"},
+				ClusterId:           crName,
+				LocationSpec:        hwmgmtv1alpha1.LocationSpec{Site: "test-site"},
+				ConfigTransactionId: 4,
 				NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 					{
 						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
@@ -722,6 +727,12 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 
 		err := task.createOrUpdateNodeAllocationRequest(ctx, ctNamespace, nodeAllocationRequest)
 		Expect(err).ToNot(HaveOccurred())
+
+		// Verify the NAR was updated with new ConfigTransactionId
+		updatedNAR := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: constants.DefaultNamespace}, updatedNAR)).To(Succeed())
+		Expect(updatedNAR.Spec.ConfigTransactionId).To(Equal(int64(4)))
+		Expect(updatedNAR.Spec.NodeGroup[0].Size).To(Equal(2))
 	})
 
 	It("updates configuring timer when NAR spec changes", func() {
@@ -778,6 +789,67 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 		Expect(c.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: constants.DefaultNamespace}, updatedNAR)).To(Succeed())
 		Expect(updatedNAR.Spec.NodeGroup[0].NodeGroupData.HwProfile).To(Equal("profile-spr-single-processor-128G"))
 	})
+
+	It("does not update NAR when only ConfigTransactionId differs", func() {
+		// Existing NAR with ConfigTransactionId from a previous PR generation
+		existingNAR := &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      cr.Name,
+				Namespace: constants.DefaultNamespace,
+			},
+			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+				ClusterId:           crName,
+				LocationSpec:        hwmgmtv1alpha1.LocationSpec{Site: "test-site"},
+				ConfigTransactionId: 2,
+				NodeGroup: []hwmgmtv1alpha1.NodeGroup{
+					{
+						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
+							Name:      "controller",
+							Role:      "master",
+							HwProfile: "profile-spr-single-processor-64G",
+						},
+						Size: 1,
+					},
+				},
+			},
+		}
+		Expect(c.Create(ctx, existingNAR)).To(Succeed())
+
+		// Bump PR generation to simulate a non-hardware spec change
+		cr.Generation = 4
+
+		// New NAR rendered with higher ConfigTransactionId but same hardware fields
+		nodeAllocationRequest := &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      cr.Name,
+				Namespace: constants.DefaultNamespace,
+			},
+			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+				ClusterId:           crName,
+				LocationSpec:        hwmgmtv1alpha1.LocationSpec{Site: "test-site"},
+				ConfigTransactionId: 4, // Different due to PR generation bump
+				NodeGroup: []hwmgmtv1alpha1.NodeGroup{
+					{
+						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
+							Name:      "controller",
+							Role:      "master",
+							HwProfile: "profile-spr-single-processor-64G",
+						},
+						Size: 1,
+					},
+				},
+			},
+		}
+
+		err := task.createOrUpdateNodeAllocationRequest(ctx, ctNamespace, nodeAllocationRequest)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Verify the NAR was NOT updated — ConfigTransactionId should remain at 2
+		updatedNAR := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: constants.DefaultNamespace}, updatedNAR)).To(Succeed())
+		Expect(updatedNAR.Spec.ConfigTransactionId).To(Equal(int64(2)))
+	})
+
 })
 
 var _ = Describe("buildNodeAllocationRequest", func() {
