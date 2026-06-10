@@ -238,7 +238,7 @@ func ResponseFilter(adapter *FilterAdapter) Middleware {
 			var err error
 			query, err := url.ParseQuery(r.URL.RawQuery)
 			if err != nil {
-				slog.ErrorContext(r.Context(), "failed to parse query", "RawQuery", r.URL.RawQuery, "err", err)
+				slog.ErrorContext(r.Context(), "failed to parse query", slog.String("RawQuery", r.URL.RawQuery), slog.Any("err", err))
 				_ = adapter.Error(
 					w,
 					"failed to parse query parameters",
@@ -252,7 +252,7 @@ func ResponseFilter(adapter *FilterAdapter) Middleware {
 				for _, value := range values {
 					result, err := adapter.ParseFilter(value)
 					if err != nil {
-						slog.ErrorContext(r.Context(), "failed to parse filter", "value", value, "err", err)
+						slog.ErrorContext(r.Context(), "failed to parse filter", slog.String("value", value), slog.Any("err", err))
 						msg := err.Error()
 						if isParserError(err) {
 							msg = "invalid filter syntax"

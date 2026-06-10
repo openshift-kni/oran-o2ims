@@ -32,7 +32,7 @@ const (
 
 // syncAlarmDictionaryForResourceType syncs the alarm dictionary for a specific resource type
 func syncAlarmDictionaryForResourceType(ctx context.Context, repository *repo.ResourcesRepository, resourceTypeID uuid.UUID) error {
-	slog.InfoContext(ctx, "Syncing alarm dictionary for resource type", "resource_type_id", resourceTypeID)
+	slog.InfoContext(ctx, "Syncing alarm dictionary for resource type", slog.Any("resource_type_id", resourceTypeID))
 
 	// Get the resource type
 	resourceType, err := repository.GetResourceType(ctx, resourceTypeID)
@@ -40,7 +40,7 @@ func syncAlarmDictionaryForResourceType(ctx context.Context, repository *repo.Re
 		if errors.Is(err, svcutils.ErrNotFound) {
 			// Resource type was deleted, alarm dictionary will be cascade deleted
 			slog.InfoContext(ctx, "Resource type not found, skipping alarm dictionary sync",
-				"resource_type_id", resourceTypeID)
+				slog.Any("resource_type_id", resourceTypeID))
 			return nil
 		}
 		return fmt.Errorf("failed to get resource type: %w", err)
@@ -77,8 +77,8 @@ func syncAlarmDictionaryForResourceType(ctx context.Context, repository *repo.Re
 			return fmt.Errorf("failed to upsert alarm definitions: %w", err)
 		}
 
-		slog.InfoContext(ctx, "Successfully synced alarm dictionary", "resource_type_id",
-			resourceTypeID, "alarm_dict_id", result.AlarmDictionaryID, "definitions_count", len(alarmDefs))
+		slog.InfoContext(ctx, "Successfully synced alarm dictionary", slog.Any("resource_type_id",
+			resourceTypeID), slog.Any("alarm_dict_id", result.AlarmDictionaryID), slog.Int("definitions_count", len(alarmDefs)))
 		return nil
 	}); err != nil {
 		return fmt.Errorf("transaction failed: %w", err)
@@ -114,7 +114,7 @@ func getIronicPrometheusRules(ctx context.Context, cl client.Client) ([]monitori
 		}
 	}
 
-	slog.InfoContext(ctx, "Fetched hardware monitoring Prometheus rules", "count", len(rules))
+	slog.InfoContext(ctx, "Fetched hardware monitoring Prometheus rules", slog.Int("count", len(rules)))
 	return rules, nil
 }
 

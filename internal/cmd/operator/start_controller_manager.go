@@ -250,7 +250,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	// Start the O-Cloud Manager controller.
 	if err = (&controllers.Reconciler{
 		Client: mgr.GetClient(),
-		Logger: logger.With("controller", "O-Cloud Manager"),
+		Logger: logger.With(slog.String("controller", "O-Cloud Manager")),
 		Image:  c.image,
 	}).SetupWithManager(mgr); err != nil {
 		logger.ErrorContext(
@@ -272,7 +272,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	// Start the Cluster Template controller.
 	if err = (&controllers.ClusterTemplateReconciler{
 		Client: mgr.GetClient(),
-		Logger: logger.With("controller", "ClusterTemplate"),
+		Logger: logger.With(slog.String("controller", "ClusterTemplate")),
 	}).SetupWithManager(mgr); err != nil {
 		logger.ErrorContext(
 			ctx,
@@ -286,7 +286,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	// Start the Location controller.
 	if err = (&controllers.LocationReconciler{
 		Client: mgr.GetClient(),
-		Logger: logger.With("controller", "Location"),
+		Logger: logger.With(slog.String("controller", "Location")),
 	}).SetupWithManager(mgr); err != nil {
 		logger.ErrorContext(
 			ctx,
@@ -300,7 +300,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	// Start the OCloudSite controller.
 	if err = (&controllers.OCloudSiteReconciler{
 		Client: mgr.GetClient(),
-		Logger: logger.With("controller", "OCloudSite"),
+		Logger: logger.With(slog.String("controller", "OCloudSite")),
 	}).SetupWithManager(mgr); err != nil {
 		logger.ErrorContext(
 			ctx,
@@ -314,7 +314,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	// Start the ResourcePool controller.
 	if err = (&controllers.ResourcePoolReconciler{
 		Client: mgr.GetClient(),
-		Logger: logger.With("controller", "ResourcePool"),
+		Logger: logger.With(slog.String("controller", "ResourcePool")),
 	}).SetupWithManager(mgr); err != nil {
 		logger.ErrorContext(
 			ctx,
@@ -333,7 +333,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	// Start the Provisioning Request controller.
 	if err = (&controllers.ProvisioningRequestReconciler{
 		Client: mgr.GetClient(),
-		Logger: logger.With("controller", "ProvisioningRequest"),
+		Logger: logger.With(slog.String("controller", "ProvisioningRequest")),
 	}).SetupWithManager(mgr); err != nil {
 		logger.ErrorContext(
 			ctx,

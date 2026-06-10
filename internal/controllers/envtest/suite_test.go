@@ -144,10 +144,10 @@ var _ = BeforeSuite(func() {
 
 	// Download BMH CRD from upstream (matching go.mod version)
 	if version, err := downloadBMHCRD(); err != nil {
-		logger.Warn("Failed to download BMH CRD from upstream", "error", err)
+		logger.Warn("Failed to download BMH CRD from upstream", slog.Any("error", err))
 		Fail(fmt.Sprintf("Failed to download BMH CRD: %v", err))
 	} else {
-		logger.Info("Downloaded BMH CRD from upstream", "version", version)
+		logger.Info("Downloaded BMH CRD from upstream", slog.String("version", version))
 	}
 
 	scheme := runtime.NewScheme()
@@ -186,21 +186,21 @@ var _ = BeforeSuite(func() {
 	// Register the Location controller
 	err = (&controllers.LocationReconciler{
 		Client: mgr.GetClient(),
-		Logger: logger.With("controller", "Location"),
+		Logger: logger.With(slog.String("controller", "Location")),
 	}).SetupWithManager(mgr)
 	Expect(err).ToNot(HaveOccurred())
 
 	// Register the OCloudSite controller
 	err = (&controllers.OCloudSiteReconciler{
 		Client: mgr.GetClient(),
-		Logger: logger.With("controller", "OCloudSite"),
+		Logger: logger.With(slog.String("controller", "OCloudSite")),
 	}).SetupWithManager(mgr)
 	Expect(err).ToNot(HaveOccurred())
 
 	// Register the ResourcePool controller
 	err = (&controllers.ResourcePoolReconciler{
 		Client: mgr.GetClient(),
-		Logger: logger.With("controller", "ResourcePool"),
+		Logger: logger.With(slog.String("controller", "ResourcePool")),
 	}).SetupWithManager(mgr)
 	Expect(err).ToNot(HaveOccurred())
 

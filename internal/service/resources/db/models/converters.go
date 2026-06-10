@@ -174,7 +174,7 @@ func getEventType(before, after map[string]interface{}) int {
 	case before != nil:
 		return 2
 	default:
-		slog.Warn("unsupported event type", "before", before, "after", after)
+		slog.Warn("unsupported event type", slog.Any("before", before), slog.Any("after", after))
 		return -1
 	}
 }

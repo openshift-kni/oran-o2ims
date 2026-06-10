@@ -587,7 +587,7 @@ var _ = Describe("Logger", func() {
 		// Write a message:
 		logger.Info(
 			"my message",
-			"!my-field", "my-value",
+			slog.String("!my-field", "my-value"),
 		)
 
 		// Check that the field has been redacted:
@@ -613,7 +613,7 @@ var _ = Describe("Logger", func() {
 		// Write a message:
 		logger.Info(
 			"my message",
-			"!my-field", "my-value",
+			slog.String("!my-field", "my-value"),
 		)
 
 		// Check that the field has been redacted:
@@ -634,12 +634,12 @@ var _ = Describe("Logger", func() {
 			SetWriter(io.MultiWriter(buffer, GinkgoWriter)).
 			Build()
 		Expect(err).ToNot(HaveOccurred())
-		logger = logger.With("!my-field", "my-value")
+		logger = logger.With(slog.String("!my-field", "my-value"))
 
 		// Write a message:
 		logger.Info(
 			"your message",
-			"!your-field", "your-value",
+			slog.String("!your-field", "your-value"),
 		)
 
 		// Check that the field has been redacted:
@@ -707,7 +707,7 @@ var _ = Describe("Logger", func() {
 		// Write a message:
 		logger.Info(
 			"my message",
-			"!my-field", "my-value",
+			slog.String("!my-field", "my-value"),
 		)
 
 		// Check that the field has been redacted:

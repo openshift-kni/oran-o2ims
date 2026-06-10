@@ -1069,7 +1069,7 @@ func (r *ProvisioningRequestReconciler) handleFinalizer(
 
 		// Deletion has completed. Remove provisioningRequestFinalizer. Once all finalizers have been
 		// removed, the object will be deleted.
-		r.Logger.InfoContext(ctx, "Dependents have been deleted. Removing provisioningRequest finalizer", "name", provisioningRequest.Name)
+		r.Logger.InfoContext(ctx, "Dependents have been deleted. Removing provisioningRequest finalizer", slog.String("name", provisioningRequest.Name))
 		patch := client.MergeFrom(provisioningRequest.DeepCopy())
 		if controllerutil.RemoveFinalizer(provisioningRequest, provisioningv1alpha1.ProvisioningRequestFinalizer) {
 			if err := r.Patch(ctx, provisioningRequest, patch); err != nil {

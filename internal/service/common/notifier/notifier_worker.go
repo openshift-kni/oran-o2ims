@@ -68,7 +68,7 @@ func NewSubscriptionWorker(ctx context.Context, clientProvider ClientProvider, s
 	}
 
 	// Use the default logger with subscription context pre-attached
-	logger := slog.Default().With("subscription", subscription.SubscriptionID)
+	logger := slog.Default().With(slog.String("subscription", subscription.SubscriptionID.String()))
 
 	workerCtx, cancel := context.WithCancel(ctx)
 	return &SubscriptionWorker{
@@ -88,7 +88,7 @@ func (w *SubscriptionWorker) NewNotification(notification *Notification) {
 	w.workMutex.Lock()
 	defer w.workMutex.Unlock()
 	w.workQueue = append(w.workQueue, notification)
-	w.logger.Debug("Notification enqueued to work queue", "size", len(w.workQueue))
+	w.logger.Debug("Notification enqueued to work queue", slog.Int("size", len(w.workQueue)))
 	if len(w.workQueue) == 1 {
 		// If this is the first entry in the queue, then kick the worker to process its queue; otherwise, let it finish
 		// processing the queue before kicking it again.
@@ -109,7 +109,7 @@ func (w *SubscriptionWorker) Shutdown() {
 
 // Run executes that main loop for the worker handling events as they arrive.
 func (w *SubscriptionWorker) Run() {
-	w.logger.Info("Subscription worker started", "callback", w.subscription.Callback)
+	w.logger.Info("Subscription worker started", slog.String("callback", w.subscription.Callback))
 
 	for {
 		select {
@@ -149,7 +149,7 @@ func (w *SubscriptionWorker) handleCurrentEventCompletion(e *SubscriptionJobComp
 		w.logger.Debug("No more events to process")
 		return
 	}
-	w.logger.Debug("Dequeued notification from work queue", "size", len(w.workQueue))
+	w.logger.Debug("Dequeued notification from work queue", slog.Int("size", len(w.workQueue)))
 
 	w.processNextEvent(w.ctx, w.workQueue[0])
 }

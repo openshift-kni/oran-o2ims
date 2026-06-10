@@ -147,7 +147,7 @@ func (t *Tool) Run(ctx context.Context) error {
 	t.logger.InfoContext(
 		ctx,
 		"Command",
-		"args", t.args,
+		slog.Any("args", t.args),
 	)
 	t.cmd.SetArgs(t.args[1:])
 	err = t.cmd.ExecuteContext(ctx)

@@ -36,13 +36,13 @@ func Authenticator(oauthHandler, kubernetesHandler authenticator.Request) middle
 
 			response, ok, err := handler.AuthenticateRequest(req)
 			if err != nil {
-				slog.WarnContext(req.Context(), "authentication failed", "error", err, "method", req.Method, "path", req.URL.Path)
+				slog.WarnContext(req.Context(), "authentication failed", slog.Any("error", err), slog.String("method", req.Method), slog.String("path", req.URL.Path))
 				middleware.ProblemDetails(w, fmt.Sprintf("failed to authenticate request: %v", err), http.StatusUnauthorized)
 				return
 			}
 
 			if !ok {
-				slog.WarnContext(req.Context(), "authentication rejected", "method", req.Method, "path", req.URL.Path)
+				slog.WarnContext(req.Context(), "authentication rejected", slog.String("method", req.Method), slog.String("path", req.URL.Path))
 				middleware.ProblemDetails(w, "unable to authenticate request", http.StatusUnauthorized)
 				return
 			}
@@ -98,14 +98,14 @@ func Authorizer(kubernetesAuthorizer authorizer.Authorizer) middleware.Middlewar
 			decision, reason, err := kubernetesAuthorizer.Authorize(req.Context(), attributes)
 			if err != nil {
 				msg := fmt.Sprintf("Authorization for user '%s' failed", attributes.User.GetName())
-				slog.ErrorContext(req.Context(), msg, "user", user, "verb", attributes.Verb, "path", attributes.Path, "error", err)
+				slog.ErrorContext(req.Context(), msg, slog.Any("user", user), slog.String("verb", attributes.Verb), slog.String("path", attributes.Path), slog.Any("error", err))
 				middleware.ProblemDetails(w, msg, http.StatusInternalServerError)
 				return
 			}
 
 			if decision != authorizer.DecisionAllow {
 				msg := fmt.Sprintf("Authorization not allowed for user '%s'", attributes.User.GetName())
-				slog.DebugContext(req.Context(), msg, "user", user, "verb", attributes.Verb, "path", attributes.Path, "decision", decision, "reason", reason)
+				slog.DebugContext(req.Context(), msg, slog.Any("user", user), slog.String("verb", attributes.Verb), slog.String("path", attributes.Path), slog.Any("decision", decision), slog.String("reason", reason))
 				middleware.ProblemDetails(w, msg, http.StatusForbidden)
 				return
 			}
