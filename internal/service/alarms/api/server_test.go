@@ -23,6 +23,7 @@ import (
 	alarmapi "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo/generated"
+	svcapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
@@ -58,7 +59,7 @@ var _ = Describe("AlarmsServer", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		mockRepo = generated.NewMockAlarmRepositoryInterface(ctrl)
-		server = &api.AlarmsServer{AlarmsRepository: mockRepo}
+		server = &api.AlarmsServer{Config: &api.AlarmsServerConfig{}, AlarmsRepository: mockRepo}
 		ctx = context.Background()
 		testUUID = uuid.New()
 	})
@@ -149,6 +150,7 @@ var _ = Describe("AlarmsServer", func() {
 		When("validation fails due to unreachable callback URL", func() {
 			It("returns 400 without reflecting the callback URL in Detail", func() {
 				server.GlobalCloudID = uuid.New()
+				server.Config.SmoURL = "https://192.0.2.1"
 				callbackURL := "https://192.0.2.1/callback?secret=token123"
 				shortTimeoutClient := &http.Client{Timeout: 1}
 
@@ -178,6 +180,13 @@ var _ = Describe("AlarmsServer", func() {
 					w.WriteHeader(http.StatusNoContent)
 				}))
 				defer ts.Close()
+
+				server.Config.SmoURL = ts.URL
+				savedResolver := svcapi.DefaultResolver
+				svcapi.DefaultResolver = &svcapi.TestResolver{Addrs: map[string][]string{
+					"127.0.0.1": {"203.0.113.1"},
+				}}
+				DeferCleanup(func() { svcapi.DefaultResolver = savedResolver })
 
 				server.SubscriptionEventHandler = &mockSubscriptionEventHandler{
 					provider: &mockClientProvider{client: ts.Client()},

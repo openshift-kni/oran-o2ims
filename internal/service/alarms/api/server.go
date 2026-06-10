@@ -46,6 +46,8 @@ type AlarmsServerConfig struct {
 }
 
 type AlarmsServer struct {
+	// Config is the alarms server configuration
+	Config *AlarmsServerConfig
 	// GlobalCloudID is the global O-Cloud identifier. Create subscription requests are blocked if the global O-Cloud identifier is not set
 	GlobalCloudID uuid.UUID
 	// AlarmsRepository is the repository for the alarms
@@ -135,7 +137,7 @@ func (a *AlarmsServer) CreateSubscription(ctx context.Context, request api.Creat
 	}
 
 	// Validate the subscription
-	if err := commonapi.ValidateCallbackURL(ctx, a.SubscriptionEventHandler.GetClientFactory(), request.Body.Callback); err != nil {
+	if err := commonapi.ValidateCallbackURL(ctx, a.SubscriptionEventHandler.GetClientFactory(), request.Body.Callback, a.Config.SmoURL); err != nil {
 		slog.ErrorContext(ctx, "callback URL validation failed", slog.Any("error", err))
 		return api.CreateSubscription400ApplicationProblemPlusJSONResponse{
 			Detail: "callback URL validation failed",
