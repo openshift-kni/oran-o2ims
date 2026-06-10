@@ -42,6 +42,7 @@ import (
 	openshiftoperatorv1 "github.com/openshift/api/operator/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -293,6 +294,71 @@ var _ = Describe("Inventory Controller", func() {
 					},
 					provisioningDeployment)
 				Expect(err).ToNot(HaveOccurred())
+			},
+		),
+		Entry(
+			"NetworkPolicy scopes: API servers allow ingress-controller, database does not",
+			[]client.Object{
+				&inventoryv1alpha1.Inventory{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "oran-o2ims-sample-1",
+						Namespace:         constants.DefaultNamespace,
+						CreationTimestamp: metav1.Now(),
+					},
+					Spec: inventoryv1alpha1.InventorySpec{
+						Image: &ServerTestImage,
+					},
+				},
+			},
+			reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: ctlrutils.InventoryNamespace,
+					Name:      "oran-o2ims-sample-1",
+				},
+			},
+			func(result ctrl.Result, reconciler *Reconciler) {
+				Expect(result).To(Equal(ctrl.Result{RequeueAfter: 5 * time.Minute}))
+
+				hasIngressControllerRule := func(np *networkingv1.NetworkPolicy) bool {
+					for _, rule := range np.Spec.Ingress {
+						for _, peer := range rule.From {
+							if peer.NamespaceSelector != nil {
+								if peer.NamespaceSelector.MatchLabels["network.openshift.io/policy-group"] == "ingress" {
+									return true
+								}
+							}
+						}
+					}
+					return false
+				}
+
+				// API servers should allow ingress-controller traffic.
+				for _, serverName := range []string{
+					ctlrutils.InventoryResourceServerName,
+					ctlrutils.InventoryClusterServerName,
+					ctlrutils.InventoryAlarmServerName,
+					ctlrutils.InventoryArtifactsServerName,
+					ctlrutils.InventoryProvisioningServerName,
+				} {
+					np := &networkingv1.NetworkPolicy{}
+					err := reconciler.Client.Get(context.TODO(), types.NamespacedName{
+						Name:      serverName,
+						Namespace: ctlrutils.InventoryNamespace,
+					}, np)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(hasIngressControllerRule(np)).To(BeTrue(),
+						"expected ingress-controller rule on %s NetworkPolicy", serverName)
+				}
+
+				// Database should NOT allow ingress-controller traffic.
+				dbNP := &networkingv1.NetworkPolicy{}
+				err := reconciler.Client.Get(context.TODO(), types.NamespacedName{
+					Name:      ctlrutils.InventoryDatabaseServerName,
+					Namespace: ctlrutils.InventoryNamespace,
+				}, dbNP)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(hasIngressControllerRule(dbNP)).To(BeFalse(),
+					"database NetworkPolicy should not allow ingress-controller traffic")
 			},
 		),
 	)
