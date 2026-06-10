@@ -1,0 +1,136 @@
+---
+name: Check Verified Commits
+
+on:  # yamllint disable-line rule:truthy
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  check-verified-commits:
+    name: Verify Commit Signatures
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check commit verification status
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const labelName = 'unverified-commits';
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const prNumber = context.payload.pull_request.number;
+            const prAuthor = context.payload.pull_request.user.login;
+
+            // Ensure the label exists
+            try {
+              await github.rest.issues.getLabel({ owner, repo, name: labelName });
+            } catch (e) {
+              if (e.status === 404) {
+                await github.rest.issues.createLabel({
+                  owner, repo,
+                  name: labelName,
+                  color: 'E8A317',
+                  description: 'PR contains commits without cryptographic signature verification',
+                });
+              } else {
+                throw e;
+              }
+            }
+
+            // Fetch all commits in the PR
+            const commits = await github.paginate(
+              github.rest.pulls.listCommits,
+              { owner, repo, pull_number: prNumber, per_page: 100 }
+            );
+
+            const unverified = commits.filter(c => !c.commit.verification.verified);
+
+            if (unverified.length === 0) {
+              // All commits verified — remove label and stale comment if present
+              try {
+                await github.rest.issues.removeLabel({
+                  owner, repo,
+                  issue_number: prNumber,
+                  name: labelName,
+                });
+              } catch (e) {
+                if (e.status !== 404) throw e;
+              }
+
+              const marker = '<!-- check-verified-commits -->';
+              const allComments = await github.paginate(
+                github.rest.issues.listComments,
+                { owner, repo, issue_number: prNumber, per_page: 100 }
+              );
+              const stale = allComments.find(c =>
+                c.user.type === 'Bot' && c.body.includes(marker)
+              );
+              if (stale) {
+                await github.rest.issues.deleteComment({
+                  owner, repo,
+                  comment_id: stale.id,
+                });
+              }
+
+              core.info(`All ${commits.length} commits are verified.`);
+              return;
+            }
+
+            // Add label
+            await github.rest.issues.addLabels({
+              owner, repo,
+              issue_number: prNumber,
+              labels: [labelName],
+            });
+
+            // Build comment
+            const commitList = unverified.map(c => {
+              const sha = c.sha.substring(0, 12);
+              const msg = c.commit.message.split('\n')[0];
+              const reason = c.commit.verification.reason || 'unknown';
+              return `- \`${sha}\` ${msg} _(${reason})_`;
+            }).join('\n');
+
+            const marker = '<!-- check-verified-commits -->';
+            const body = [
+              marker,
+              `@${prAuthor} This PR contains ${unverified.length} commit(s) ` +
+              `without cryptographic signature verification:\n`,
+              commitList,
+              `\nAll commits must be cryptographically signed (GPG or SSH) to ` +
+              `produce a **Verified** badge on GitHub. See ` +
+              `[Managing commit signature verification]` +
+              `(https://docs.github.com/en/authentication/managing-commit-signature-verification) ` +
+              `for setup instructions.`,
+            ].join('\n');
+
+            // Update existing comment or create a new one
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number: prNumber, per_page: 100 }
+            );
+            const existing = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes(marker)
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner, repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner, repo,
+                issue_number: prNumber,
+                body,
+              });
+            }
+
+            core.setFailed(
+              `${unverified.length} of ${commits.length} commits are not verified.`
+            );
