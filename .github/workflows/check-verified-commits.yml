@@ -2,6 +2,9 @@
 name: Check Verified Commits
 
 on:  # yamllint disable-line rule:truthy
+  # pull_request_target is required for write access to labels/comments on fork PRs.
+  # SECURITY: This workflow only reads commit metadata via the GitHub API and
+  # never checks out or executes code from the PR branch.
   pull_request_target:
     types: [opened, synchronize, reopened]
 
@@ -19,6 +22,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const marker = '<!-- check-verified-commits -->';
             const labelName = 'unverified-commits';
             const owner = context.repo.owner;
             const repo = context.repo.repo;
@@ -61,7 +65,6 @@ jobs:
                 if (e.status !== 404) throw e;
               }
 
-              const marker = '<!-- check-verified-commits -->';
               const allComments = await github.paginate(
                 github.rest.issues.listComments,
                 { owner, repo, issue_number: prNumber, per_page: 100 }
@@ -95,7 +98,6 @@ jobs:
               return `- \`${sha}\` ${msg} _(${reason})_`;
             }).join('\n');
 
-            const marker = '<!-- check-verified-commits -->';
             const body = [
               marker,
               `@${prAuthor} This PR contains ${unverified.length} commit(s) ` +
