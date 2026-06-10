@@ -28,6 +28,12 @@ func (t *reconcilerTask) setupHardwareManager(ctx context.Context, defaultResult
 		return
 	}
 
+	if err = t.createNetworkPolicy(ctx, ctlrutils.HardwareManagerServerName, constants.DefaultServicePort, ExternalIngress); err != nil {
+		t.logger.ErrorContext(ctx, "Failed to create NetworkPolicy for hardware manager server.",
+			slog.String("error", err.Error()))
+		return
+	}
+
 	errorReason, err := t.deployServer(ctx, ctlrutils.HardwareManagerServerName)
 	if err != nil {
 		t.logger.ErrorContext(ctx, "Failed to deploy the hardware manager server.",
