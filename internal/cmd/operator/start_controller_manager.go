@@ -231,7 +231,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		logger.ErrorContext(
 			ctx,
 			"Unable to start manager",
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		return exit.Error(1)
 	}
@@ -242,7 +242,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		logger.ErrorContext(
 			ctx,
 			"Failed to create default inventory CR",
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		return exit.Error(1)
 	}
@@ -257,7 +257,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			ctx,
 			"Unable to create controller",
 			slog.String("controller", "O-Cloud Manager"),
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		return exit.Error(1)
 	}
@@ -278,7 +278,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			ctx,
 			"Unable to create controller",
 			slog.String("controller", "ClusterTemplate"),
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		return exit.Error(1)
 	}
@@ -292,7 +292,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			ctx,
 			"Unable to create controller",
 			slog.String("controller", "Location"),
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		return exit.Error(1)
 	}
@@ -306,7 +306,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			ctx,
 			"Unable to create controller",
 			slog.String("controller", "OCloudSite"),
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		return exit.Error(1)
 	}
@@ -320,7 +320,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			ctx,
 			"Unable to create controller",
 			slog.String("controller", "ResourcePool"),
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		return exit.Error(1)
 	}
@@ -339,7 +339,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			ctx,
 			"Unable to create controller",
 			slog.String("controller", "ProvisioningRequest"),
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		return exit.Error(1)
 	}
@@ -350,7 +350,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 				ctx,
 				"Unable to create webhook",
 				slog.String("webhook", "ProvisioningRequest"),
-				slog.String("error", err.Error()),
+				slog.Any("error", err),
 			)
 			return exit.Error(1)
 		}
@@ -360,7 +360,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		logger.ErrorContext(
 			ctx,
 			"Unable to set up health check",
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		return exit.Error(1)
 	}
@@ -368,7 +368,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		logger.ErrorContext(
 			ctx,
 			"Unable to set up ready check",
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		return exit.Error(1)
 	}
@@ -380,7 +380,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			slog.String("image", c.image),
 		)
 		if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-			logger.ErrorContext(ctx, "Problem running manager", slog.String("error", err.Error()))
+			logger.ErrorContext(ctx, "Problem running manager", slog.Any("error", err))
 			serverErrors <- err
 			return
 		}
@@ -391,7 +391,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	select {
 	case err = <-serverErrors:
 		// Server failed to start
-		logger.ErrorContext(ctx, "Problem running internal server", slog.String("error", err.Error()))
+		logger.ErrorContext(ctx, "Problem running internal server", slog.Any("error", err))
 		return exit.Error(1)
 	case <-ctx.Done():
 		return exit.Error(0)

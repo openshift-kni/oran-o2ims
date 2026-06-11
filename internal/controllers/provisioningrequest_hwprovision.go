@@ -143,7 +143,7 @@ func (t *provisioningRequestReconcilerTask) createNodeAllocationRequestResources
 
 	// Create the NodeAllocationRequest CR
 	if err := t.client.Create(ctx, nodeAllocationRequest); err != nil {
-		t.logger.ErrorContext(ctx, "Failed to create the NodeAllocationRequest", slog.String("error", err.Error()))
+		t.logger.ErrorContext(ctx, "Failed to create the NodeAllocationRequest", slog.Any("error", err))
 		return fmt.Errorf("failed to create NodeAllocationRequest %s: %w", t.object.Name, err)
 	}
 
@@ -166,7 +166,7 @@ func (t *provisioningRequestReconcilerTask) waitForHardwareData(
 	// regardless of whether provisioning is complete, in-progress, or failed.
 	if updateErr := t.updateInfrastructureResourceStatuses(ctx); updateErr != nil {
 		t.logger.WarnContext(ctx, "Failed to update infrastructure resource statuses",
-			slog.String("error", updateErr.Error()))
+			slog.Any("error", updateErr))
 	}
 
 	if err != nil {
@@ -270,7 +270,7 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestStatus(
 			ctx,
 			"Failed to update the NodeAllocationRequest status for ProvisioningRequest",
 			slog.String("name", t.object.Name),
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 	}
 

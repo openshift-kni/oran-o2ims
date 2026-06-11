@@ -131,7 +131,7 @@ func GetChildNodes(
 	if err := ctlrutils.RetryOnConflictOrRetriableOrNotFound(retry.DefaultRetry, func() error {
 		return c.List(ctx, nodelist, opts...)
 	}); err != nil {
-		logger.InfoContext(ctx, "Unable to query node list", slog.String("error", err.Error()))
+		logger.InfoContext(ctx, "Unable to query node list", slog.Any("error", err))
 		return nil, fmt.Errorf("failed to query node list: %w", err)
 	}
 
@@ -203,7 +203,7 @@ func SetNodeFailedStatus(
 		logger.ErrorContext(ctx, "Failed to update node status with failure",
 			slog.String("node", node.Name),
 			slog.String("conditionType", conditionType),
-			slog.String("error", err.Error()))
+			slog.Any("error", err))
 		return fmt.Errorf("failed to set node failed status: %w", err)
 	}
 

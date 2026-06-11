@@ -126,7 +126,7 @@ func ProblemDetails(w http.ResponseWriter, body string, code int) {
 func getOranErrHandler() oapimiddleware.ErrorHandlerWithOpts {
 	return func(_ context.Context, err error, w http.ResponseWriter, r *http.Request, opts oapimiddleware.ErrorHandlerOpts) {
 		slog.WarnContext(r.Context(), "OpenAPI validation failed",
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 			slog.Int("status", opts.StatusCode),
 		)
 		ProblemDetails(w, err.Error(), opts.StatusCode)
@@ -137,7 +137,7 @@ func getOranErrHandler() oapimiddleware.ErrorHandlerWithOpts {
 func GetOranReqErrFunc() func(w http.ResponseWriter, r *http.Request, err error) {
 	return func(w http.ResponseWriter, r *http.Request, err error) {
 		slog.WarnContext(r.Context(), "OpenAPI request validation failed",
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 			slog.Int("status", http.StatusBadRequest),
 		)
 		msg := err.Error()

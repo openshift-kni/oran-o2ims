@@ -146,7 +146,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (resul
 		if err != nil {
 			r.Logger.ErrorContext(ctx, "Reconciliation failed",
 				slog.Duration("duration", duration),
-				slog.String("error", err.Error()))
+				slog.Any("error", err))
 		} else {
 			r.Logger.InfoContext(ctx, "Reconciliation completed",
 				slog.Duration("duration", duration),
@@ -196,7 +196,7 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to deploy Service for Resource server.",
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		return
 	}
@@ -207,7 +207,7 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to deploy the Resource server.",
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		if errorReason == "" {
 			nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
@@ -228,7 +228,7 @@ func (t *reconcilerTask) setupClusterServerConfig(ctx context.Context, defaultRe
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to deploy Service for cluster server.",
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		return
 	}
@@ -239,7 +239,7 @@ func (t *reconcilerTask) setupClusterServerConfig(ctx context.Context, defaultRe
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to deploy the cluster server.",
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		if errorReason == "" {
 			nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
@@ -260,7 +260,7 @@ func (t *reconcilerTask) setupArtifactsServerConfig(ctx context.Context, default
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to deploy Service for the Artifacts server.",
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		return
 	}
@@ -271,7 +271,7 @@ func (t *reconcilerTask) setupArtifactsServerConfig(ctx context.Context, default
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to deploy the Artifacts server.",
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		if errorReason == "" {
 			nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
@@ -292,7 +292,7 @@ func (t *reconcilerTask) setupAlarmServerConfig(ctx context.Context, defaultResu
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to deploy Service for alarm server.",
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		return
 	}
@@ -303,7 +303,7 @@ func (t *reconcilerTask) setupAlarmServerConfig(ctx context.Context, defaultResu
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to deploy the alarm server.",
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		if errorReason == "" {
 			nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
@@ -323,7 +323,7 @@ func (t *reconcilerTask) setupProvisioningServerConfig(ctx context.Context, defa
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to deploy Service for the provisioning server.",
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		return
 	}
@@ -334,7 +334,7 @@ func (t *reconcilerTask) setupProvisioningServerConfig(ctx context.Context, defa
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to deploy the provisioning server.",
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		if errorReason == "" {
 			nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
@@ -464,7 +464,7 @@ func (t *reconcilerTask) setupSmo(ctx context.Context) (err error) {
 		if err != nil {
 			t.logger.ErrorContext(
 				ctx, "Failed to register with SMO.",
-				slog.String("error", err.Error()),
+				slog.Any("error", err),
 			)
 
 			meta.SetStatusCondition(
@@ -514,7 +514,7 @@ func (t *reconcilerTask) storeIngressDomain(ctx context.Context) error {
 			t.logger.ErrorContext(
 				ctx,
 				"Failed to get ingress domain.",
-				slog.String("error", err.Error()))
+				slog.Any("error", err))
 			return fmt.Errorf("failed to get ingress domain: %s", err.Error())
 		}
 		ingressHost = constants.DefaultAppName + "." + ingressHost
@@ -534,7 +534,7 @@ func (t *reconcilerTask) storeClusterID(ctx context.Context) error {
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to get cluster id.",
-			slog.String("error", err.Error()))
+			slog.Any("error", err))
 		return fmt.Errorf("failed to get cluster id: %s", err.Error())
 	}
 

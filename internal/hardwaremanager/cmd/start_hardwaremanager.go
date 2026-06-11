@@ -141,7 +141,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	}
 
 	if err := hwmgrutils.InitNodeAllocationRequestUtils(scheme); err != nil {
-		logger.ErrorContext(ctx, "failed InitNodeAllocationRequestUtils", slog.String("error", err.Error()))
+		logger.ErrorContext(ctx, "failed InitNodeAllocationRequestUtils", slog.Any("error", err))
 		return exit.Error(1)
 	}
 
@@ -159,7 +159,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		LeaderElectionID:       "a3c1dd20.openshift.io",
 	})
 	if err != nil {
-		logger.ErrorContext(ctx, "Unable to start manager", slog.String("error", err.Error()))
+		logger.ErrorContext(ctx, "Unable to start manager", slog.Any("error", err))
 		return exit.Error(1)
 	}
 
@@ -167,23 +167,23 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	err = hwmgrctrl.SetupControllers(mgr, namespace, logger)
 	if err != nil {
 		logger.ErrorContext(ctx, "Unable to create hardware manager controller",
-			slog.String("error", err.Error()))
+			slog.Any("error", err))
 		return exit.Error(1)
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		logger.ErrorContext(ctx, "Unable to set up health check", slog.String("error", err.Error()))
+		logger.ErrorContext(ctx, "Unable to set up health check", slog.Any("error", err))
 		return exit.Error(1)
 	}
 
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		logger.ErrorContext(ctx, "Unable to set up ready check", slog.String("error", err.Error()))
+		logger.ErrorContext(ctx, "Unable to set up ready check", slog.Any("error", err))
 		return exit.Error(1)
 	}
 
 	logger.Info("Starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		logger.ErrorContext(ctx, "Problem running manager", slog.String("error", err.Error()))
+		logger.ErrorContext(ctx, "Problem running manager", slog.Any("error", err))
 		return exit.Error(1)
 	}
 
