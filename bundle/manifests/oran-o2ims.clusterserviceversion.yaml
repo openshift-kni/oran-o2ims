@@ -1659,19 +1659,6 @@ spec:
           - list
           - watch
         - apiGroups:
-          - rbac.authorization.k8s.io
-          resources:
-          - clusterrolebindings
-          - clusterroles
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
           - siteconfig.open-cluster-management.io
           resources:
           - clusterinstances

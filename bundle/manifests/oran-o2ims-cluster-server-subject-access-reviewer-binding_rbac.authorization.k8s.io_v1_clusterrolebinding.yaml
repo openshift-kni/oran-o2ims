@@ -1,0 +1,13 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  creationTimestamp: null
+  name: oran-o2ims-cluster-server-subject-access-reviewer-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: oran-o2ims-subject-access-reviewer
+subjects:
+- kind: ServiceAccount
+  name: oran-o2ims-cluster-server
+  namespace: oran-o2ims
