@@ -344,6 +344,7 @@ func (d *AlarmsDataSource) getFilteredRules(monitoringRules []monitoringv1.Rule)
 
 	var filteredRules []monitoringv1.Rule
 	exist := make(map[uniqueAlarm]bool)
+	var duplicateNames []string
 
 	for _, rule := range monitoringRules {
 		severity, ok := rule.Labels["severity"]
@@ -360,9 +361,14 @@ func (d *AlarmsDataSource) getFilteredRules(monitoringRules []monitoringv1.Rule)
 			exist[key] = true
 			filteredRules = append(filteredRules, rule)
 		} else {
-			slog.Warn("Duplicate rules found", slog.Any("rule", rule))
+			duplicateNames = append(duplicateNames, rule.Alert)
 		}
 	}
+
+	if len(duplicateNames) > 0 {
+		slog.Debug("Filtered duplicate rules", slog.Int("count", len(duplicateNames)), slog.Any("alerts", duplicateNames))
+	}
+
 	return filteredRules
 }
 
