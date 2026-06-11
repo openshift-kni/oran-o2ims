@@ -5,8 +5,22 @@ resources:
 # runtime. Be sure to update RoleBinding and ClusterRoleBinding
 # subjects if changing service account names.
 - service_account.yaml
+- service_accounts_services.yaml
 - role.yaml
 - role_binding.yaml
+# Service-specific ClusterRoles
+- clusterrole_alarms_server.yaml
+- role_alarms_server.yaml
+- rolebinding_alarms_server.yaml
+- clusterrole_alertmanager.yaml
+- clusterrole_artifacts_server.yaml
+- clusterrole_cluster_server.yaml
+- clusterrole_hardwaremanager_server.yaml
+- clusterrole_provisioning_server.yaml
+- clusterrole_resource_server.yaml
+- clusterrole_subject_access_reviewer.yaml
+# Service ClusterRoleBindings
+- clusterrolebindings_services.yaml
 - leader_election_role.yaml
 - leader_election_role_binding.yaml
 - metrics_service.yaml

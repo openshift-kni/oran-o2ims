@@ -1,0 +1,17 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: oran-o2ims-provisioning-server
+rules:
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - provisioningrequests
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - delete

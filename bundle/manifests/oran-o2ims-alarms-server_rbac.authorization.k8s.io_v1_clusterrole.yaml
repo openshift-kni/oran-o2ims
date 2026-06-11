@@ -1,0 +1,95 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: oran-o2ims-alarms-server
+rules:
+- apiGroups:
+  - cluster.open-cluster-management.io
+  resources:
+  - managedclusters
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resourceNames:
+  - alertmanager-config
+  resources:
+  - secrets
+  verbs:
+  - update
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - prometheusrules
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - cronjobs
+  verbs:
+  - get
+  - list
+  - watch
+- nonResourceURLs:
+  - /o2ims-infrastructureCluster/v1/nodeClusterTypes
+  - /o2ims-infrastructureCluster/v1/nodeClusters
+  - /o2ims-infrastructureCluster/v1/alarmDictionaries
+  verbs:
+  - get
+  - list
+- nonResourceURLs:
+  - /o2ims-infrastructureCluster/v1/nodeClusterTypes/*
+  - /o2ims-infrastructureCluster/v1/nodeClusters/*
+  - /o2ims-infrastructureCluster/v1/alarmDictionaries/*
+  verbs:
+  - get
+- nonResourceURLs:
+  - /o2ims-infrastructureInventory/v1/resourceTypes
+  verbs:
+  - get
+  - list
+- nonResourceURLs:
+  - /o2ims-infrastructureInventory/v1/resourceTypes/*
+  verbs:
+  - get
+- nonResourceURLs:
+  - /o2ims-infrastructureInventory/v1/internal/resources/*
+  verbs:
+  - get

@@ -1,0 +1,143 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hardwaremanager-server
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  - secrets
+  - configmaps
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - hardwareprofiles
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - hardwareprofiles/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - provisioningrequests
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - nodeallocationrequests
+  - allocatednodes
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+  - delete
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - nodeallocationrequests/status
+  - allocatednodes/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - nodeallocationrequests/finalizers
+  - allocatednodes/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+  - update
+- apiGroups:
+  - metal3.io
+  resources:
+  - baremetalhosts
+  - preprovisioningimages
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+  - patch
+- apiGroups:
+  - metal3.io
+  resources:
+  - hostfirmwaresettings
+  - hostfirmwarecomponents
+  - hostupdatepolicies
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+- apiGroups:
+  - metal3.io
+  resources:
+  - dataimages
+  verbs:
+  - get
+  - list
+  - delete
+- apiGroups:
+  - metal3.io
+  resources:
+  - firmwareschemas
+  - hardwaredata
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ocloud.openshift.io
+  resources:
+  - resourcepools
+  verbs:
+  - get
+  - list
+  - watch
