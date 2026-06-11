@@ -99,6 +99,10 @@ issues during code review.
   `slog.ErrorContext(ctx, ...)`, etc.) whenever a `ctx` variable is in
   scope. The `sloglint` linter enforces this. Use `logging.AppendCtx()`
   to add structured attributes to the context at entry points.
+- Use typed slog attribute constructors (`slog.String("key", value)`,
+  `slog.Int(...)`, `slog.Any(...)`, etc.) instead of untyped
+  alternating key-value pairs (`"key", value`). The `sloglint`
+  `attr-only` rule enforces this at lint time.
 
 ## Test Conventions
 
