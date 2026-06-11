@@ -50,7 +50,7 @@ func (r *ResourcePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		if err != nil {
 			r.Logger.ErrorContext(ctx, "Reconciliation failed",
 				slog.Duration("duration", duration),
-				slog.String("error", err.Error()))
+				slog.Any("error", err))
 		} else {
 			r.Logger.InfoContext(ctx, "Reconciliation completed",
 				slog.Duration("duration", duration),
@@ -213,7 +213,7 @@ func (r *ResourcePoolReconciler) enqueueResourcePoolsForOCloudSite(ctx context.C
 		},
 	); err != nil {
 		r.Logger.ErrorContext(ctx, "Failed to list ResourcePools for OCloudSite watch",
-			slog.String("error", err.Error()))
+			slog.Any("error", err))
 		return nil
 	}
 

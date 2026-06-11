@@ -116,6 +116,9 @@ issues during code review.
   `slog.Int(...)`, `slog.Any(...)`, etc.) instead of untyped
   alternating key-value pairs (`"key", value`). The `sloglint`
   `attr-only` rule enforces this at lint time.
+- Log errors with `slog.Any("error", err)`, not
+  `slog.String("error", err.Error())`. This preserves the error type
+  for structured logging handlers and avoids eager `.Error()` calls.
 
 ## Test Conventions
 

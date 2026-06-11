@@ -50,7 +50,7 @@ func (r *OCloudSiteReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		if err != nil {
 			r.Logger.ErrorContext(ctx, "Reconciliation failed",
 				slog.Duration("duration", duration),
-				slog.String("error", err.Error()))
+				slog.Any("error", err))
 		} else {
 			r.Logger.InfoContext(ctx, "Reconciliation completed",
 				slog.Duration("duration", duration),
@@ -203,7 +203,7 @@ func (r *OCloudSiteReconciler) enqueueOCloudSitesForLocation(ctx context.Context
 		},
 	); err != nil {
 		r.Logger.ErrorContext(ctx, "Failed to list OCloudSites for Location watch",
-			slog.String("error", err.Error()))
+			slog.Any("error", err))
 		return nil
 	}
 
