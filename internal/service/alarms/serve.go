@@ -138,6 +138,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 	// Init server
 	// Create the handler
 	alarmServer := api.AlarmsServer{
+		Config:           config,
 		GlobalCloudID:    globalCloudID,
 		AlarmsRepository: alarmRepository,
 		Infrastructure:   infrastructureClients,
