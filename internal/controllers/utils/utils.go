@@ -1148,13 +1148,22 @@ func GenerateSecretName(nodeMap map[string]interface{}, provisioningRequest stri
 }
 
 func DetermineAuthType(callback string) commonapi.AuthType {
-	// At this time, only the OAuth and ServiceAccount authTypes are supported
-	// Set authType to OAuth
-	authType := commonapi.OAuth
-	if strings.Contains(callback, constants.ClusterLocalDomain) {
-		authType = commonapi.ServiceAccount
+	u, err := url.Parse(callback)
+	if err != nil {
+		return commonapi.OAuth
 	}
-	return authType
+	hostname := u.Hostname()
+	if IsClusterLocalHostname(hostname) {
+		return commonapi.ServiceAccount
+	}
+	return commonapi.OAuth
+}
+
+// IsClusterLocalHostname returns true if the hostname is a cluster-local service hostname.
+func IsClusterLocalHostname(hostname string) bool {
+	h := strings.TrimSuffix(strings.ToLower(hostname), ".")
+	return h == constants.ClusterLocalDomain ||
+		strings.HasSuffix(h, "."+constants.ClusterLocalDomain)
 }
 
 func IsValidURL(u string) bool {
