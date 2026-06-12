@@ -69,7 +69,7 @@ The tests are organized into the following test suites:
     - Tests network interface configuration validation
     - Tests schema structure integrity and required field presence
 
-11. validateUpgradeDefaultsConfigmap Tests:
+11. validateUpgradeDefaults Tests:
     - Tests validation of upgrade defaults ConfigMap for Image-Based GPU (IBGU) upgrades
     - Tests YAML parsing and IBGU spec validation
     - Tests release version matching between ClusterTemplate and seedImageRef
@@ -1669,279 +1669,155 @@ var _ = Describe("validateSchemaWithoutHwMgmt", func() {
 	})
 })
 
-var _ = Describe("validateUpgradeDefaultsConfigmap", func() {
+var _ = Describe("validateUpgradeDefaults", func() {
 	var (
-		c             client.Client
-		ctx           context.Context
-		t             *clusterTemplateReconcilerTask
-		namespace     = "default"
-		configmapName = "upgrade-defaults"
-		tName         = "cluster-template-test"
-		tVersion      = "v1.0.0"
+		t        *clusterTemplateReconcilerTask
+		tName    = "cluster-template-test"
+		tVersion = "v1.0.0"
 	)
 
-	BeforeEach(func() {
-		ctx = context.Background()
+	validUpgradeDefaults := runtime.RawExtension{
+		Raw: []byte(`{"imageBasedGroupUpgrade":{"ibuSpec":{"seedImageRef":{"image":"quay.io/openshift-release-dev/ocp-release","version":"4.17.0"},"oadpContent":[{"name":"oadp-backup","namespace":"openshift-adp"}]},"plan":[{"actions":["Prep"]},{"actions":["Upgrade"]}]}}`),
+	}
 
-		// Create a cluster template with a release version
+	BeforeEach(func() {
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      GetClusterTemplateRefName(tName, tVersion),
-				Namespace: namespace,
+				Namespace: "default",
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Name:    tName,
 				Version: tVersion,
-				Release: "4.17.0", // This should match the seedImageRef version in tests
+				Release: "4.17.0",
 				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
-					UpgradeDefaults: configmapName,
+					UpgradeDefaults: validUpgradeDefaults,
 				},
 			},
 		}
 
-		c = fakeclient.GetFakeClientFromObjects([]client.Object{ct}...)
-
 		t = &clusterTemplateReconcilerTask{
-			client: c,
 			logger: logger,
 			object: ct,
 		}
 	})
 
-	It("should validate a valid upgrade defaults configmap successfully", func() {
-		// Create a valid upgrade defaults ConfigMap
-		cm := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      configmapName,
-				Namespace: namespace,
-			},
-			Data: map[string]string{
-				ctlrutils.UpgradeDefaultsConfigmapKey: `
-ibuSpec:
-  seedImageRef:
-    image: "quay.io/openshift-release-dev/ocp-release"
-    version: "4.17.0"
-  oadpContent:
-  - name: "oadp-backup"
-    namespace: "openshift-adp"
-plan:
-- actions: ["Prep"]
-- actions: ["Upgrade"]`,
-			},
-		}
-		Expect(c.Create(ctx, cm)).To(Succeed())
-
-		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
+	It("should validate valid upgrade defaults successfully", func() {
+		err := t.validateUpgradeDefaults()
 		Expect(err).ToNot(HaveOccurred())
-
-		// Verify that the configmap was patched to be immutable
-		updatedCM := &corev1.ConfigMap{}
-		Expect(c.Get(ctx, client.ObjectKey{Name: configmapName, Namespace: namespace}, updatedCM)).To(Succeed())
-		Expect(updatedCM.Immutable).ToNot(BeNil())
-		Expect(*updatedCM.Immutable).To(BeTrue())
 	})
 
-	It("should return error when configmap does not exist", func() {
-		// No ConfigMap created
-		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("failed to get IBGU from upgrade defaults configmap"))
-		Expect(err.Error()).To(ContainSubstring("not found"))
-	})
-
-	It("should return error when configmap has invalid YAML data", func() {
-		// Create a ConfigMap with invalid YAML
-		cm := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      configmapName,
-				Namespace: namespace,
-			},
-			Data: map[string]string{
-				ctlrutils.UpgradeDefaultsConfigmapKey: "invalid: yaml: [data",
-			},
+	It("should return error when upgrade defaults data is not a map", func() {
+		t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`[]`),
 		}
-		Expect(c.Create(ctx, cm)).To(Succeed())
-
-		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
+		err := t.validateUpgradeDefaults()
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("failed to get IBGU from upgrade defaults configmap"))
+		Expect(err.Error()).To(ContainSubstring("upgradeDefaults is not a map"))
+	})
+
+	It("should return error when upgrade defaults is malformed JSON", func() {
+		t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`{invalid json`),
+		}
+		err := t.validateUpgradeDefaults()
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("should pass when imageBasedGroupUpgrade key is missing", func() {
+		t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`{"wrongKey":{}}`),
+		}
+		err := t.validateUpgradeDefaults()
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should pass when upgradeDefaults is an empty object", func() {
+		t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`{}`),
+		}
+		err := t.validateUpgradeDefaults()
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	It("should return error when release version does not match seedImageRef version", func() {
-		// Create a valid ConfigMap but with different version
-		cm := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      configmapName,
-				Namespace: namespace,
-			},
-			Data: map[string]string{
-				ctlrutils.UpgradeDefaultsConfigmapKey: `
-ibuSpec:
-  seedImageRef:
-    image: "quay.io/openshift-release-dev/ocp-release"
-    version: "4.18.0"
-  oadpContent:
-  - name: "oadp-backup"
-    namespace: "openshift-adp"
-plan:
-- actions: ["Prep"]
-- actions: ["Upgrade"]`,
-			},
+		t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`{"imageBasedGroupUpgrade":{"ibuSpec":{"seedImageRef":{"image":"quay.io/ocp","version":"4.18.0"}},"plan":[{"actions":["Prep"]},{"actions":["Upgrade"]}]}}`),
 		}
-		Expect(c.Create(ctx, cm)).To(Succeed())
-
-		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
+		err := t.validateUpgradeDefaults()
 		Expect(err).To(HaveOccurred())
 		Expect(ctlrutils.IsInputError(err)).To(BeTrue())
-		Expect(err.Error()).To(ContainSubstring("The ClusterTemplate spec.release (4.17.0) does not match the seedImageRef version (4.18.0) from the upgrade configmap"))
+		Expect(err.Error()).To(ContainSubstring("The ClusterTemplate spec.release (4.17.0) does not match the seedImageRef version (4.18.0) from the upgrade defaults"))
 	})
 
-	It("should successfully validate when IBGU spec is valid for dry-run", func() {
-		// Create a ConfigMap with a valid IBGU spec
-		// Note: The fake client doesn't perform the same validation as real K8s API server,
-		// so we test the successful path where dry-run validation passes
-		cm := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      configmapName,
-				Namespace: namespace,
-			},
-			Data: map[string]string{
-				ctlrutils.UpgradeDefaultsConfigmapKey: `
-ibuSpec:
-  seedImageRef:
-    image: "quay.io/openshift-release-dev/ocp-release"
-    version: "4.17.0"
-  stage: "Idle"
-plan:
-- actions: ["Prep"]
-- actions: ["Upgrade"]`,
-			},
+	It("should pass when seedImageRef version is empty", func() {
+		t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`{"imageBasedGroupUpgrade":{"ibuSpec":{"seedImageRef":{"image":"quay.io/ocp"}},"plan":[{"actions":["Prep"]}]}}`),
 		}
-		Expect(c.Create(ctx, cm)).To(Succeed())
-
-		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
+		err := t.validateUpgradeDefaults()
 		Expect(err).ToNot(HaveOccurred())
-	})
-
-	It("should return validation error when configmap is set to mutable", func() {
-		// Create a mutable ConfigMap
-		mutable := false
-		cm := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      configmapName,
-				Namespace: namespace,
-			},
-			Data: map[string]string{
-				ctlrutils.UpgradeDefaultsConfigmapKey: `
-ibuSpec:
-  seedImageRef:
-    image: "quay.io/openshift-release-dev/ocp-release"
-    version: "4.17.0"
-  oadpContent:
-  - name: "oadp-backup"
-    namespace: "openshift-adp"
-plan:
-- actions: ["Prep"]
-- actions: ["Upgrade"]`,
-			},
-			Immutable: &mutable,
-		}
-		Expect(c.Create(ctx, cm)).To(Succeed())
-
-		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
-		Expect(err).To(HaveOccurred())
-		Expect(ctlrutils.IsInputError(err)).To(BeTrue())
-		Expect(err.Error()).To(Equal(fmt.Sprintf(
-			"It is not allowed to set Immutable to false in the ConfigMap %s", configmapName)))
-	})
-
-	It("should succeed when configmap is already immutable", func() {
-		// Create an already immutable ConfigMap
-		immutable := true
-		cm := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      configmapName,
-				Namespace: namespace,
-			},
-			Data: map[string]string{
-				ctlrutils.UpgradeDefaultsConfigmapKey: `
-ibuSpec:
-  seedImageRef:
-    image: "quay.io/openshift-release-dev/ocp-release"
-    version: "4.17.0"
-  oadpContent:
-  - name: "oadp-backup"
-    namespace: "openshift-adp"
-plan:
-- actions: ["Prep"]
-- actions: ["Upgrade"]`,
-			},
-			Immutable: &immutable,
-		}
-		Expect(c.Create(ctx, cm)).To(Succeed())
-
-		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
-		Expect(err).ToNot(HaveOccurred())
-
-		// Verify that the configmap remains immutable
-		updatedCM := &corev1.ConfigMap{}
-		Expect(c.Get(ctx, client.ObjectKey{Name: configmapName, Namespace: namespace}, updatedCM)).To(Succeed())
-		Expect(updatedCM.Immutable).ToNot(BeNil())
-		Expect(*updatedCM.Immutable).To(BeTrue())
-	})
-
-	It("should handle missing configmap key", func() {
-		// Create a ConfigMap without the expected key
-		cm := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      configmapName,
-				Namespace: namespace,
-			},
-			Data: map[string]string{
-				"wrong-key": "some-data",
-			},
-		}
-		Expect(c.Create(ctx, cm)).To(Succeed())
-
-		err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("failed to get IBGU from upgrade defaults configmap"))
 	})
 
 	Context("when cluster template has no release version", func() {
 		BeforeEach(func() {
-			// Update the cluster template to have no release version
 			t.object.Spec.Release = ""
 		})
 
 		It("should return error when seedImageRef version is not empty", func() {
-			// Create a valid ConfigMap
-			cm := &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      configmapName,
-					Namespace: namespace,
-				},
-				Data: map[string]string{
-					ctlrutils.UpgradeDefaultsConfigmapKey: `
-ibuSpec:
-  seedImageRef:
-    image: "quay.io/openshift-release-dev/ocp-release"
-    version: "4.17.0"
-  oadpContent:
-  - name: "oadp-backup"
-    namespace: "openshift-adp"
-plan:
-- actions: ["Prep"]
-- actions: ["Upgrade"]`,
-				},
-			}
-			Expect(c.Create(ctx, cm)).To(Succeed())
-
-			err := t.validateUpgradeDefaultsConfigmap(ctx, c, configmapName, namespace)
+			err := t.validateUpgradeDefaults()
 			Expect(err).To(HaveOccurred())
 			Expect(ctlrutils.IsInputError(err)).To(BeTrue())
-			Expect(err.Error()).To(ContainSubstring("The ClusterTemplate spec.release () does not match the seedImageRef version (4.17.0) from the upgrade configmap"))
+			Expect(err.Error()).To(ContainSubstring("The ClusterTemplate spec.release () does not match the seedImageRef version (4.17.0) from the upgrade defaults"))
 		})
+	})
+})
+
+var _ = Describe("validateUpgradeParametersSchema", func() {
+	It("should pass when upgradeParameters is not in schema and no upgradeDefaults", func() {
+		schema := []byte(`{"type":"object","properties":{"otherParam":{"type":"string"}}}`)
+		err := validateUpgradeParametersSchema(schema, false)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should return error when upgradeParameters is not in schema but upgradeDefaults is set", func() {
+		schema := []byte(`{"type":"object","properties":{"otherParam":{"type":"string"}}}`)
+		err := validateUpgradeParametersSchema(schema, true)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal(`templateParameterSchema must define "upgradeParameters" when upgradeDefaults is set`))
+	})
+
+	It("should return error when upgradeParameters is not type object", func() {
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"string"}}}`)
+		err := validateUpgradeParametersSchema(schema, false)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal(`"upgradeParameters" must have type "object"`))
+	})
+
+	It("should pass when upgradeParameters has imageBasedGroupUpgrade of type object", func() {
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"imageBasedGroupUpgrade":{"type":"object"}}}}}`)
+		err := validateUpgradeParametersSchema(schema, false)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should return error when upgradeParameters is missing imageBasedGroupUpgrade", func() {
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"otherKey":{"type":"string"}}}}}`)
+		err := validateUpgradeParametersSchema(schema, false)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal(`"upgradeParameters" schema must define the "imageBasedGroupUpgrade" property`))
+	})
+
+	It("should return error when imageBasedGroupUpgrade is not type object", func() {
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"imageBasedGroupUpgrade":{"type":"string"}}}}}`)
+		err := validateUpgradeParametersSchema(schema, false)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal(`"upgradeParameters.imageBasedGroupUpgrade" must have type "object"`))
+	})
+
+	It("should return error when upgradeParameters has no properties section", func() {
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object"}}}`)
+		err := validateUpgradeParametersSchema(schema, false)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal(`"upgradeParameters" schema must have a properties section`))
 	})
 })
 

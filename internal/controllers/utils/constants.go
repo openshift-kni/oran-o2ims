@@ -162,6 +162,7 @@ const (
 	TemplateParamClusterInstance = "clusterInstanceParameters"
 	TemplateParamPolicyConfig    = "policyTemplateParameters"
 	TemplateParamHwMgmt          = "hwMgmtParameters"
+	TemplateParamUpgrade         = "upgradeParameters"
 )
 
 // ClusterInstance template constants
@@ -252,7 +253,7 @@ const ClusterVersionName = "version"
 
 // Upgrade constants
 const (
-	UpgradeDefaultsConfigmapKey = "ibgu"
+	UpgradeDefaultsIBGUKey = "imageBasedGroupUpgrade"
 )
 
 // CRDs needed to be suppressed in ClusterInstance for upgrade

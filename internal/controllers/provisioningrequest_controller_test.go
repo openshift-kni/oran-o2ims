@@ -53,7 +53,7 @@ INDIVIDUAL TEST CASES:
 
 Core Reconciliation:
 - IsUpgradeRequested: Version comparison and upgrade decision logic
-- GetIBGUFromUpgradeDefaultsConfigmap: IBGU creation from ConfigMap data
+- GetIBGUFromUpgradeData: IBGU creation from inline upgrade defaults
 - Policy Labels and Selectors: Policy filtering and management
 - checkProvisioningConditionsForFailures: Resource readiness validation
 - handleProvisioningRequestDeletion: Cleanup of provisioned resources
@@ -204,9 +204,12 @@ var _ = Describe("ProvisioningRequestReconciler Unit Tests", func() {
 		task            *provisioningRequestReconcilerTask
 		cr              *provisioningv1alpha1.ProvisioningRequest
 		clusterTemplate *provisioningv1alpha1.ClusterTemplate
-		upgradeDefaults *corev1.ConfigMap
 		clusterName     = "test-cluster"
 	)
+
+	upgradeDefaultsRaw := runtime.RawExtension{
+		Raw: []byte(`{"imageBasedGroupUpgrade":{"ibuSpec":{"seedImageRef":{"image":"image","version":"4.17.0"},"oadpContent":[{"name":"test","namespace":"test"}]},"plan":[{"actions":["Prep"]},{"actions":["Upgrade"]},{"actions":["FinalizeUpgrade"]},{"actions":["PostUpgrade"]},{"actions":["Finalize"]}]}}`),
+	}
 
 	BeforeEach(func() {
 		c = fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&provisioningv1alpha1.ProvisioningRequest{}).Build()
@@ -239,7 +242,7 @@ var _ = Describe("ProvisioningRequestReconciler Unit Tests", func() {
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Release: "4.17.0",
 				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
-					UpgradeDefaults: "upgrade-defaults",
+					UpgradeDefaults: upgradeDefaultsRaw,
 				},
 			},
 			Status: provisioningv1alpha1.ClusterTemplateStatus{
@@ -253,34 +256,9 @@ var _ = Describe("ProvisioningRequestReconciler Unit Tests", func() {
 			},
 		}
 
-		upgradeDefaults = &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "upgrade-defaults",
-				Namespace: "test-ns",
-			},
-			Data: map[string]string{
-				utils.UpgradeDefaultsConfigmapKey: `
-ibuSpec:
-  seedImageRef:
-    image: "image"
-    version: "4.17.0"
-  oadpContent:
-  - name: "test"
-    namespace: "test"
-plan:
-- actions: ["Prep"]
-- actions: ["Upgrade"]
-- actions: ["FinalizeUpgrade"]
-- actions: ["PostUpgrade"]
-- actions: ["Finalize"]
-`,
-			},
-		}
-
 		// Create objects in fake client
 		Expect(c.Create(ctx, cr)).To(Succeed())
 		Expect(c.Create(ctx, clusterTemplate)).To(Succeed())
-		Expect(c.Create(ctx, upgradeDefaults)).To(Succeed())
 
 		// Create task
 		task = &provisioningRequestReconcilerTask{
@@ -372,12 +350,12 @@ plan:
 		})
 	})
 
-	Describe("GetIBGUFromUpgradeDefaultsConfigmap", func() {
-		Context("when configmap exists with valid data", func() {
+	Describe("GetIBGUFromUpgradeData", func() {
+		Context("when IBGU spec data is valid", func() {
 			It("should create IBGU successfully", func() {
-				ibguCR, err := utils.GetIBGUFromUpgradeDefaultsConfigmap(
-					ctx, c, "upgrade-defaults", "test-ns", utils.UpgradeDefaultsConfigmapKey,
-					clusterName, "test-pr", clusterName)
+				ibguSpecRaw := []byte(`{"ibuSpec":{"seedImageRef":{"image":"image","version":"4.17.0"},"oadpContent":[{"name":"test","namespace":"test"}]},"plan":[{"actions":["Prep"]},{"actions":["Upgrade"]}]}`)
+				ibguCR, err := utils.GetIBGUFromUpgradeData(
+					ibguSpecRaw, clusterName, "test-pr", clusterName)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ibguCR).ToNot(BeNil())
 				Expect(ibguCR.Name).To(Equal("test-pr"))
@@ -386,30 +364,12 @@ plan:
 			})
 		})
 
-		Context("when configmap does not exist", func() {
+		Context("when IBGU spec data is invalid JSON", func() {
 			It("should return error", func() {
-				_, err := utils.GetIBGUFromUpgradeDefaultsConfigmap(
-					ctx, c, "non-existent", "test-ns", utils.UpgradeDefaultsConfigmapKey,
-					clusterName, "test-pr", clusterName)
+				_, err := utils.GetIBGUFromUpgradeData(
+					[]byte(`{invalid`), clusterName, "test-pr", clusterName)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("not found"))
-			})
-		})
-
-		Context("when configmap has invalid data", func() {
-			BeforeEach(func() {
-				invalidConfigMap := upgradeDefaults.DeepCopy()
-				invalidConfigMap.Name = "invalid-config"
-				invalidConfigMap.ResourceVersion = "" // Clear for Create
-				invalidConfigMap.Data[utils.UpgradeDefaultsConfigmapKey] = "invalid: yaml: data"
-				Expect(c.Create(ctx, invalidConfigMap)).To(Succeed())
-			})
-
-			It("should return error", func() {
-				_, err := utils.GetIBGUFromUpgradeDefaultsConfigmap(
-					ctx, c, "invalid-config", "test-ns", utils.UpgradeDefaultsConfigmapKey,
-					clusterName, "test-pr", clusterName)
-				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to unmarshal IBGU spec"))
 			})
 		})
 	})
@@ -2908,7 +2868,6 @@ var _ = Describe("ProvisioningRequestReconciler Policy Tests", func() {
 		reconciler      *ProvisioningRequestReconciler
 		cr              *provisioningv1alpha1.ProvisioningRequest
 		clusterTemplate *provisioningv1alpha1.ClusterTemplate
-		upgradeDefaults *corev1.ConfigMap
 		policyDefaults  *corev1.ConfigMap
 		policy          *policiesv1.Policy
 		managedCluster  *clusterv1.ManagedCluster
@@ -2944,7 +2903,9 @@ var _ = Describe("ProvisioningRequestReconciler Policy Tests", func() {
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Release: "4.17.0",
 				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
-					UpgradeDefaults:        "upgrade-defaults",
+					UpgradeDefaults: runtime.RawExtension{
+						Raw: []byte(`{"imageBasedGroupUpgrade":{"ibuSpec":{"seedImageRef":{"image":"image","version":"4.17.0"},"oadpContent":[{"name":"test","namespace":"test"}]},"plan":[{"actions":["Prep"]},{"actions":["Upgrade"]},{"actions":["FinalizeUpgrade"]}]}}`),
+					},
 					PolicyTemplateDefaults: "policy-defaults",
 				},
 			},
@@ -2956,28 +2917,6 @@ var _ = Describe("ProvisioningRequestReconciler Policy Tests", func() {
 						Reason: "Completed",
 					},
 				},
-			},
-		}
-
-		upgradeDefaults = &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "upgrade-defaults",
-				Namespace: "test-ns",
-			},
-			Data: map[string]string{
-				utils.UpgradeDefaultsConfigmapKey: `
-ibuSpec:
-  seedImageRef:
-    image: "image"
-    version: "4.17.0"
-  oadpContent:
-  - name: "test"
-    namespace: "test"
-plan:
-- actions: ["Prep"]
-- actions: ["Upgrade"]
-- actions: ["FinalizeUpgrade"]
-`,
 			},
 		}
 
@@ -3037,7 +2976,7 @@ source-crs:
 
 		// Create fake client with all objects
 		c = fake.NewClientBuilder().WithScheme(scheme).WithObjects(
-			cr, clusterTemplate, upgradeDefaults, policyDefaults, managedCluster, policy,
+			cr, clusterTemplate, policyDefaults, managedCluster, policy,
 		).WithStatusSubresource(&provisioningv1alpha1.ProvisioningRequest{}, &policiesv1.Policy{}).Build()
 		reconciler.Client = c
 
@@ -3315,9 +3254,12 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 		task            *provisioningRequestReconcilerTask
 		cr              *provisioningv1alpha1.ProvisioningRequest
 		clusterTemplate *provisioningv1alpha1.ClusterTemplate
-		upgradeDefaults *corev1.ConfigMap
 		clusterName     = "integration-cluster"
 	)
+
+	integrationUpgradeDefaults := runtime.RawExtension{
+		Raw: []byte(`{"imageBasedGroupUpgrade":{"ibuSpec":{"seedImageRef":{"image":"image","version":"4.17.0"},"oadpContent":[{"name":"test","namespace":"test"}]},"plan":[{"actions":["Prep"]},{"actions":["Upgrade"]},{"actions":["FinalizeUpgrade"]},{"actions":["PostUpgrade"]},{"actions":["Finalize"]}]}}`),
+	}
 
 	BeforeEach(func() {
 		ctx = context.Background()
@@ -3355,8 +3297,9 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Release: "4.17.0",
 				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
-					UpgradeDefaults: "upgrade-defaults",
+					UpgradeDefaults: integrationUpgradeDefaults,
 				},
+				TemplateParameterSchema: testUpgradeSchema,
 			},
 			Status: provisioningv1alpha1.ClusterTemplateStatus{
 				Conditions: []metav1.Condition{
@@ -3369,33 +3312,9 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 			},
 		}
 
-		upgradeDefaults = &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "upgrade-defaults",
-				Namespace: "test-ns",
-			},
-			Data: map[string]string{
-				utils.UpgradeDefaultsConfigmapKey: `
-ibuSpec:
-  seedImageRef:
-    image: "image"
-    version: "4.17.0"
-  oadpContent:
-  - name: "test"
-    namespace: "test"
-plan:
-- actions: ["Prep"]
-- actions: ["Upgrade"]
-- actions: ["FinalizeUpgrade"]
-- actions: ["PostUpgrade"]
-- actions: ["Finalize"]
-`,
-			},
-		}
-
 		// Create fake client with all objects
 		c = fake.NewClientBuilder().WithScheme(scheme).WithObjects(
-			cr, clusterTemplate, upgradeDefaults,
+			cr, clusterTemplate,
 		).WithStatusSubresource(
 			&provisioningv1alpha1.ProvisioningRequest{},
 			&hwmgmtv1alpha1.NodeAllocationRequest{},
@@ -3432,7 +3351,7 @@ plan:
 
 				// Recreate fake client with updated objects
 				c = fake.NewClientBuilder().WithScheme(scheme).WithObjects(
-					testPR, clusterTemplate, upgradeDefaults, clusterNamespace,
+					testPR, clusterTemplate, clusterNamespace,
 				).WithStatusSubresource(&provisioningv1alpha1.ProvisioningRequest{}).Build()
 				reconciler.Client = c
 				task.client = c
@@ -3442,16 +3361,35 @@ plan:
 			})
 
 			Context("when IBGU doesn't exist", func() {
+				It("should set PreconditionChecksFailed condition when upgrade defaults is not empty but missing imageBasedGroupUpgrade key", func() {
+					clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+						Raw: []byte(`{"wrongKey":{}}`),
+					}
+					Expect(c.Update(ctx, clusterTemplate)).To(Succeed())
+
+					_, _, err := task.handleUpgrade(ctx, clusterName)
+					Expect(err).ToNot(HaveOccurred())
+
+					upgradeCond := meta.FindStatusCondition(task.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
+					Expect(upgradeCond).ToNot(BeNil())
+					Expect(upgradeCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed)))
+				})
+
 				It("should create IBGU and set status to InProgress", func() {
+					task.object.Spec.TemplateParameters = runtime.RawExtension{
+						Raw: []byte(`{"upgradeParameters":{"imageBasedGroupUpgrade":{"ibuSpec":{"seedImageRef":{"version":"4.17.0","image":"override-image"}}}}}`),
+					}
+
 					result, proceed, err := task.handleUpgrade(ctx, clusterName)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(proceed).To(BeFalse())
-					Expect(result.RequeueAfter).To(Equal(requeueWithMediumInterval().RequeueAfter)) // Should requeue to check IBGU progress
+					Expect(result.RequeueAfter).To(Equal(requeueWithMediumInterval().RequeueAfter))
 
-					// Check IBGU was created
+					// Verify IBGU was created with merged values
 					createdIBGU := &ibgu.ImageBasedGroupUpgrade{}
 					Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: clusterName}, createdIBGU)).To(Succeed())
 					Expect(createdIBGU.Spec.IBUSpec.SeedImageRef.Version).To(Equal("4.17.0"))
+					Expect(createdIBGU.Spec.IBUSpec.SeedImageRef.Image).To(Equal("override-image"))
 
 					// Check ProvisioningRequest status
 					upgradeCond := meta.FindStatusCondition(task.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
@@ -3598,32 +3536,6 @@ plan:
 				})
 			})
 
-			Context("when upgrade defaults ConfigMap is missing", func() {
-				BeforeEach(func() {
-					clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = "non-existent"
-					Expect(c.Update(ctx, clusterTemplate)).To(Succeed())
-				})
-
-				It("should return error", func() {
-					_, _, err := task.handleUpgrade(ctx, clusterName)
-					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("failed to generate IBGU for cluster"))
-				})
-			})
-
-			Context("when IBGU creation fails", func() {
-				BeforeEach(func() {
-					// Create invalid ConfigMap data to cause IBGU creation failure
-					upgradeDefaults.Data[utils.UpgradeDefaultsConfigmapKey] = "invalid: yaml: data"
-					Expect(c.Update(ctx, upgradeDefaults)).To(Succeed())
-				})
-
-				It("should return error", func() {
-					_, _, err := task.handleUpgrade(ctx, clusterName)
-					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("failed to generate IBGU for cluster"))
-				})
-			})
 		})
 
 		Describe("IBGU Status Helper Functions", func() {

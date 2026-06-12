@@ -9,6 +9,7 @@ package v1alpha1
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -43,6 +44,15 @@ var (
 	}
 )
 
+// ErrSubSchemaNotFound is returned by ExtractSubSchema when the requested key
+// does not exist in the schema's properties.
+var ErrSubSchemaNotFound = errors.New("sub-schema not found")
+
+// IsErrSubSchemaNotFound returns true if the error is or wraps ErrSubSchemaNotFound.
+func IsErrSubSchemaNotFound(err error) bool {
+	return errors.Is(err, ErrSubSchemaNotFound)
+}
+
 func ExtractSubSchema(mainSchema []byte, subSchemaKey string) (subSchema map[string]any, err error) {
 	jsonObject := make(map[string]any)
 	if len(mainSchema) == 0 {
@@ -62,7 +72,7 @@ func ExtractSubSchema(mainSchema []byte, subSchemaKey string) (subSchema map[str
 
 	subSchemaValue, ok := properties[subSchemaKey]
 	if !ok {
-		return subSchema, fmt.Errorf("subSchema '%s' does not exist: %w", subSchemaKey, err)
+		return subSchema, fmt.Errorf("subSchema '%s' does not exist: %w", subSchemaKey, ErrSubSchemaNotFound)
 	}
 
 	subSchema, ok = subSchemaValue.(map[string]any)
