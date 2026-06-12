@@ -186,6 +186,8 @@ var _ = Describe("Authorizer", func() {
 	var k8sAuthorizer NoopAuthorizer
 	var recorder *httptest.ResponseRecorder
 	var handler http.Handler
+	var logBuffer bytes.Buffer
+	var origLogger *slog.Logger
 
 	BeforeEach(func() {
 		k8sAuthorizer = NoopAuthorizer{
@@ -194,16 +196,40 @@ var _ = Describe("Authorizer", func() {
 			Error:    nil,
 		}
 		req = &http.Request{Header: http.Header{}, Method: http.MethodGet, URL: &url.URL{Path: "/some/path"}}
-		req = req.WithContext(request.WithUser(req.Context(), &user.DefaultInfo{Name: "test"}))
+		req = req.WithContext(request.WithUser(req.Context(), &user.DefaultInfo{
+			Name:   "test",
+			Groups: []string{"o2ims-admin", "o2ims-reader"},
+		}))
 		next = &NoopHandler{}
 		recorder = httptest.NewRecorder()
 		handler = Authorizer(&k8sAuthorizer)(next)
+
+		logBuffer.Reset()
+		origLogger = slog.Default()
+		slog.SetDefault(slog.New(slog.NewJSONHandler(&logBuffer, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	})
+
+	AfterEach(func() {
+		slog.SetDefault(origLogger)
 	})
 
 	It("Authorizes the request", func() {
 		handler.ServeHTTP(recorder, req)
 		Expect(k8sAuthorizer.called).To(BeTrue())
 		Expect(next.(*NoopHandler).called).To(BeTrue())
+	})
+
+	It("Logs groups on successful authorization", func() {
+		handler.ServeHTTP(recorder, req)
+		Expect(recorder.Code).To(Equal(http.StatusOK))
+
+		logOutput := logBuffer.String()
+		Expect(logOutput).To(ContainSubstring("authorization allowed"))
+		Expect(logOutput).To(ContainSubstring(`"level":"DEBUG"`))
+		Expect(logOutput).To(ContainSubstring("test"))
+		Expect(logOutput).To(ContainSubstring("o2ims-admin"))
+		Expect(logOutput).To(ContainSubstring("o2ims-reader"))
+		Expect(logOutput).To(ContainSubstring("/some/path"))
 	})
 
 	It("Fails the request if User not in context", func() {
