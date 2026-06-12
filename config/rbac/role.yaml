@@ -8,7 +8,6 @@ rules:
   - /internal/v1/caas-alerts/alertmanager
   verbs:
   - create
-  - post
 - nonResourceURLs:
   - /o2ims-infrastructureCluster/v1/alarmDictionaries
   - /o2ims-infrastructureCluster/v1/nodeClusterTypes
