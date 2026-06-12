@@ -26,13 +26,10 @@ function cleanSubscription {
 
     oc delete ns "${NAMESPACE}"
 
-    oc get clusterrole.rbac.authorization.k8s.io --no-headers -o custom-columns=NAME:.metadata.name | grep "${NAMESPACE}" \
+    oc get clusterrole.rbac.authorization.k8s.io --no-headers -o custom-columns=NAME:.metadata.name | grep "oran-o2ims" \
         | xargs --no-run-if-empty oc delete clusterrole.rbac.authorization.k8s.io
-    oc get clusterrolebinding.rbac.authorization.k8s.io --no-headers -o custom-columns=NAME:.metadata.name | grep "${NAMESPACE}" \
+    oc get clusterrolebinding.rbac.authorization.k8s.io --no-headers -o custom-columns=NAME:.metadata.name | grep "oran-o2ims" \
         | xargs --no-run-if-empty oc delete clusterrolebinding.rbac.authorization.k8s.io
-
-    oc get rolebindings.rbac.authorization.k8s.io -n kube-system --no-headers -o custom-columns=NAME:.metadata.name | grep "${NAMESPACE}" \
-        | xargs --no-run-if-empty oc delete rolebindings.rbac.authorization.k8s.io -n kube-system
 
     oc delete operators.operators.coreos.com "${PACKAGE}.${NAMESPACE}"
 
