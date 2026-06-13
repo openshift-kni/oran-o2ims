@@ -116,7 +116,7 @@ func enableBMOManagementForIBINodes(
 		bmh, err := getBMHForNode(nodeCtx, noncachedClient, node)
 		if err != nil {
 			logger.ErrorContext(nodeCtx, "Failed to get BMH for node, skipping IBI management setup",
-				slog.String("error", err.Error()))
+				slog.Any("error", err))
 			continue
 		}
 		nodeCtx = logging.AppendCtx(nodeCtx, slog.String("bmh", bmh.Name))
@@ -312,7 +312,7 @@ func deriveNARStatusFromSingleNode(
 	updatedNode, err := hwmgrutils.GetNode(ctx, logger, noncachedClient, node.Namespace, node.Name)
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to fetch updated AllocatedNode",
-			slog.String("name", node.Name), slog.String("error", err.Error()))
+			slog.String("name", node.Name), slog.Any("error", err))
 		return metav1.ConditionFalse, string(hwmgmtv1alpha1.InProgress),
 			fmt.Sprintf("AllocatedNode %s could not be fetched: %v", node.Name, err)
 	}
@@ -362,7 +362,7 @@ func deriveNARStatusFromMultipleNodes(
 		updatedNode, err := hwmgrutils.GetNode(ctx, logger, noncachedClient, node.Namespace, node.Name)
 		if err != nil {
 			logger.ErrorContext(ctx, "Failed to fetch updated AllocatedNode",
-				slog.String("name", node.Name), slog.String("error", err.Error()))
+				slog.String("name", node.Name), slog.Any("error", err))
 			return metav1.ConditionFalse, string(hwmgmtv1alpha1.InProgress),
 				fmt.Sprintf("AllocatedNode %s could not be fetched: %v", node.Name, err)
 		}
@@ -677,7 +677,7 @@ func handleNodeInProgressUpdate(ctx context.Context,
 
 		if _, hasAnnotation := bmh.Annotations[BmhErrorTimestampAnnotation]; hasAnnotation {
 			if err := clearTransientBMHErrorAnnotation(ctx, c, logger, bmh); err != nil {
-				logger.WarnContext(ctx, "failed to clean up transient error annotation", slog.String("error", err.Error()))
+				logger.WarnContext(ctx, "failed to clean up transient error annotation", slog.Any("error", err))
 				return ctrl.Result{}, err
 			}
 		}
@@ -688,7 +688,7 @@ func handleNodeInProgressUpdate(ctx context.Context,
 		ready, err := nodeOps.IsNodeReady(ctx, hostname)
 		if err != nil {
 			logger.ErrorContext(ctx, "Failed to check node readiness",
-				slog.String("error", err.Error()))
+				slog.Any("error", err))
 			return hwmgrutils.RequeueWithMediumInterval(), nil
 		}
 		if !ready {
@@ -709,13 +709,13 @@ func handleNodeInProgressUpdate(ctx context.Context,
 
 		if err := hwmgrutils.SetNodeConfigApplied(ctx, c, noncachedClient, logger, node, node.Spec.HwProfile); err != nil {
 			logger.ErrorContext(ctx, "Failed to set node config applied",
-				slog.String("error", err.Error()))
+				slog.Any("error", err))
 			return ctrl.Result{}, fmt.Errorf("failed to mark node config applied %s: %w", node.Name, err)
 		}
 
 		if err := clearConfigAnnotationWithPatch(ctx, c, node); err != nil {
 			logger.ErrorContext(ctx, "Failed to clear config annotation",
-				slog.String("error", err.Error()))
+				slog.Any("error", err))
 			return ctrl.Result{}, err
 		}
 
@@ -745,21 +745,21 @@ func handleNodeInProgressUpdate(ctx context.Context,
 		// Clear BMH update annotations to ensure clean state for retry
 		if err := clearBMHUpdateAnnotations(ctx, c, logger, bmh); err != nil {
 			logger.WarnContext(ctx, "Failed to clear BMH update annotations after error",
-				slog.String("error", err.Error()))
+				slog.Any("error", err))
 			return ctrl.Result{}, fmt.Errorf("failed to clear BMH update annotations %s:%w", bmh.Name, err)
 		}
 
 		// Clear BMH error annotation to allow future retry attempts
 		if err := clearTransientBMHErrorAnnotation(ctx, c, logger, bmh); err != nil {
 			logger.WarnContext(ctx, "failed to clear BMH error annotation for future retries",
-				slog.String("error", err.Error()))
+				slog.Any("error", err))
 			return ctrl.Result{}, fmt.Errorf("failed to clear BMH error annotation %s:%w", bmh.Name, err)
 		}
 
 		if err := hwmgrutils.SetNodeConditionStatus(ctx, c, noncachedClient, node,
 			string(hwmgmtv1alpha1.Configured), metav1.ConditionFalse,
 			string(hwmgmtv1alpha1.Failed), BmhServicingErr); err != nil {
-			logger.ErrorContext(ctx, "failed to update AllocatedNode status", slog.String("error", err.Error()))
+			logger.ErrorContext(ctx, "failed to update AllocatedNode status", slog.Any("error", err))
 			return ctrl.Result{}, fmt.Errorf("failed to update AllocatedNode status %s:%w", node.Name, err)
 		}
 
@@ -893,7 +893,7 @@ func initiateNodeUpdate(ctx context.Context,
 		if err := nodeOps.DrainNode(ctx, node.Status.Hostname); err != nil {
 			logger.ErrorContext(ctx, "Drain failed, will retry",
 				slog.String("hostname", node.Status.Hostname),
-				slog.String("error", err.Error()))
+				slog.Any("error", err))
 			return hwmgrutils.RequeueWithMediumInterval(), nil
 		}
 	}
@@ -1184,7 +1184,7 @@ func executeNodeUpdates(
 
 			if err != nil {
 				logger.ErrorContext(nodeCtx, "Node processing error",
-					slog.String("error", err.Error()))
+					slog.Any("error", err))
 				errs = append(errs, fmt.Errorf("node %s, error: %w", nodeToProcess.node.Name, err))
 			}
 
@@ -1316,7 +1316,7 @@ func classifyNodes(
 		ready, err := nodeOps.IsNodeReady(ctx, node.Status.Hostname)
 		if err != nil {
 			logger.WarnContext(ctx, "Failed to check node readiness, assuming not ready",
-				slog.String("node", node.Name), slog.String("error", err.Error()))
+				slog.String("node", node.Name), slog.Any("error", err))
 			ready = false
 		}
 		if !ready {
@@ -1601,7 +1601,7 @@ func processNodeAllocationRequestAllocation(
 				}
 				if err != nil {
 					logger.ErrorContext(bmhCtx, "Failed to allocate BMH to NodeAllocationRequest",
-						slog.String("error", err.Error()))
+						slog.Any("error", err))
 					errs = append(errs, fmt.Errorf("bmh %s, error: %w", bmh.Name, err))
 				}
 			}(bmh)
@@ -1859,7 +1859,7 @@ func validateNodeConfiguration(
 	firmwareValid, err := validateFirmwareVersions(ctx, c, noncachedClient, logger, bmh, namespace, hwProfileName)
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to validate firmware versions",
-			slog.String("error", err.Error()))
+			slog.Any("error", err))
 		return false, err
 	}
 	if !firmwareValid {
@@ -1871,7 +1871,7 @@ func validateNodeConfiguration(
 	biosValid, err := validateAppliedBiosSettings(ctx, c, noncachedClient, logger, bmh, namespace, hwProfileName)
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to validate BIOS settings",
-			slog.String("error", err.Error()))
+			slog.Any("error", err))
 		return false, err
 	}
 	if !biosValid {
@@ -1907,7 +1907,7 @@ func clearBMHUpdateAnnotationsForNAR(
 		bmh, err := getBMHForNode(nodeCtx, c, &node)
 		if err != nil {
 			logger.ErrorContext(nodeCtx, "Failed to get BMH for annotation clear",
-				slog.String("error", err.Error()))
+				slog.Any("error", err))
 			errs = append(errs, fmt.Errorf("failed to get BMH for AllocatedNode %s: %w", node.Name, err))
 			continue
 		}
@@ -1916,7 +1916,7 @@ func clearBMHUpdateAnnotationsForNAR(
 		// Clear update annotations from BMH
 		if err := clearBMHUpdateAnnotations(nodeCtx, c, logger, bmh); err != nil {
 			logger.ErrorContext(nodeCtx, "Failed to clear BMH update annotations",
-				slog.String("error", err.Error()))
+				slog.Any("error", err))
 			errs = append(errs, fmt.Errorf("failed to clear BMH update annotations for BMH %s: %w", bmh.Name, err))
 		} else {
 			logger.InfoContext(nodeCtx, "Cleared BMH update annotations")
@@ -1955,12 +1955,12 @@ func clearConfigAnnotationForAllocatedNodes(
 		updatedNode := &hwmgmtv1alpha1.AllocatedNode{}
 		if err := noncachedClient.Get(ctx, types.NamespacedName{Name: node.Name, Namespace: node.Namespace}, updatedNode); err != nil {
 			logger.ErrorContext(ctx, "Failed to fetch AllocatedNode for annotation clear",
-				slog.String("allocatedNode", node.Name), slog.String("error", err.Error()))
+				slog.String("allocatedNode", node.Name), slog.Any("error", err))
 			continue
 		}
 		if err := clearConfigAnnotationWithPatch(ctx, c, updatedNode); err != nil {
 			logger.ErrorContext(ctx, "Failed to clear config-in-progress annotation",
-				slog.String("allocatedNode", updatedNode.Name), slog.String("error", err.Error()))
+				slog.String("allocatedNode", updatedNode.Name), slog.Any("error", err))
 			// continue to other nodes
 		} else {
 			logger.InfoContext(ctx, "Cleared config-in-progress annotation",

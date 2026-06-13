@@ -463,7 +463,7 @@ func (r *ClusterServer) CreateSubscription(ctx context.Context, request api.Crea
 				Status: http.StatusBadRequest,
 			}, nil
 		}
-		slog.ErrorContext(ctx, "error writing database record", slog.Any("target", record), slog.String("error", err.Error()))
+		slog.ErrorContext(ctx, "error writing database record", slog.Any("target", record), slog.Any("error", err))
 		return api.CreateSubscription500ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"consumerSubscriptionId": consumerSubscriptionId,

@@ -60,7 +60,7 @@ func (r *HostFirmwareComponentsReconciler) Reconcile(ctx context.Context, req ct
 		if err != nil {
 			r.Logger.ErrorContext(ctx, "Reconciliation failed",
 				slog.Duration("duration", duration),
-				slog.String("error", err.Error()))
+				slog.Any("error", err))
 		} else {
 			r.Logger.InfoContext(ctx, "Reconciliation completed",
 				slog.Duration("duration", duration),
@@ -149,7 +149,7 @@ func (r *HostFirmwareComponentsReconciler) isHPEOrDell(ctx context.Context, name
 			r.Logger.InfoContext(ctx, "HardwareData not found for validation check")
 		} else {
 			r.Logger.WarnContext(ctx, "Failed to get HardwareData for vendor check",
-				slog.String("error", err.Error()))
+				slog.Any("error", err))
 		}
 		return false
 	}
