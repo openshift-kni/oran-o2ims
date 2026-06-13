@@ -37,7 +37,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
@@ -111,14 +110,10 @@ const registerOnRestartAnnotation = "ocloud.openshift.io/register-on-restart"
 var registerOnRestart = false
 
 // setRegisterOnRestart initializes the `registerOnRestart` value from an annotation.
-func setRegisterOnRestart(ctx context.Context, object *inventoryv1alpha1.Inventory) {
+func setRegisterOnRestart(ctx context.Context, logger *slog.Logger, object *inventoryv1alpha1.Inventory) {
 	if annotation, ok := object.Annotations[registerOnRestartAnnotation]; ok {
 		if value, err := strconv.ParseBool(annotation); err == nil {
 			registerOnRestart = value
-			logger := slog.Default()
-			if ctxLogger := internal.LoggerFromContext(ctx); ctxLogger != nil {
-				logger = ctxLogger
-			}
 			logger.WarnContext(ctx, "SMO registration will be repeated on all subsequent restarts")
 		}
 	}
@@ -173,7 +168,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (resul
 
 	// On the first reconcile, we set the `registerOnRestart` value from an annotation.  This is a one-time operation
 	// since we don't want to repeat the registration on every reconcile loop if it was previously successful.
-	r.setupOnce.Do(func() { setRegisterOnRestart(ctx, object) })
+	r.setupOnce.Do(func() { setRegisterOnRestart(ctx, r.Logger, object) })
 
 	// Create and run the task:
 	task := &reconcilerTask{
