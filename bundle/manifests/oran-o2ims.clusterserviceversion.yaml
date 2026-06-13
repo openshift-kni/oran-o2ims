@@ -1315,11 +1315,188 @@ spec:
     spec:
       clusterPermissions:
       - rules:
+        - apiGroups:
+          - cluster.open-cluster-management.io
+          resources:
+          - managedclusters
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - services
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - namespaces
+          verbs:
+          - get
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          - configmaps
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resourceNames:
+          - alertmanager-config
+          resources:
+          - secrets
+          verbs:
+          - update
+        - apiGroups:
+          - monitoring.coreos.com
+          resources:
+          - prometheusrules
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - apps
+          resources:
+          - deployments
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - batch
+          resources:
+          - cronjobs
+          verbs:
+          - get
+          - list
+          - watch
+        - nonResourceURLs:
+          - /o2ims-infrastructureCluster/v1/nodeClusterTypes
+          - /o2ims-infrastructureCluster/v1/nodeClusters
+          - /o2ims-infrastructureCluster/v1/alarmDictionaries
+          verbs:
+          - get
+          - list
+        - nonResourceURLs:
+          - /o2ims-infrastructureCluster/v1/nodeClusterTypes/*
+          - /o2ims-infrastructureCluster/v1/nodeClusters/*
+          - /o2ims-infrastructureCluster/v1/alarmDictionaries/*
+          verbs:
+          - get
+        - nonResourceURLs:
+          - /o2ims-infrastructureInventory/v1/resourceTypes
+          verbs:
+          - get
+          - list
+        - nonResourceURLs:
+          - /o2ims-infrastructureInventory/v1/resourceTypes/*
+          verbs:
+          - get
+        - nonResourceURLs:
+          - /o2ims-infrastructureInventory/v1/internal/resources/*
+          verbs:
+          - get
+        - apiGroups:
+          - authentication.k8s.io
+          resources:
+          - tokenreviews
+          verbs:
+          - create
+        - apiGroups:
+          - authorization.k8s.io
+          resources:
+          - subjectaccessreviews
+          verbs:
+          - create
+        serviceAccountName: oran-o2ims-alarms-server
+      - rules:
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - clustertemplates
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - authentication.k8s.io
+          resources:
+          - tokenreviews
+          verbs:
+          - create
+        - apiGroups:
+          - authorization.k8s.io
+          resources:
+          - subjectaccessreviews
+          verbs:
+          - create
+        serviceAccountName: oran-o2ims-artifacts-server
+      - rules:
+        - apiGroups:
+          - cluster.open-cluster-management.io
+          resources:
+          - managedclusters
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - agent-install.openshift.io
+          resources:
+          - agents
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          - configmaps
+          verbs:
+          - get
+          - list
+        - apiGroups:
+          - monitoring.coreos.com
+          resources:
+          - prometheusrules
+          verbs:
+          - get
+          - list
+        - apiGroups:
+          - authentication.k8s.io
+          resources:
+          - tokenreviews
+          verbs:
+          - create
+        - apiGroups:
+          - authorization.k8s.io
+          resources:
+          - subjectaccessreviews
+          verbs:
+          - create
+        serviceAccountName: oran-o2ims-cluster-server
+      - rules:
         - nonResourceURLs:
           - /internal/v1/caas-alerts/alertmanager
           verbs:
           - create
-          - post
         - nonResourceURLs:
           - /o2ims-infrastructureCluster/v1/alarmDictionaries
           - /o2ims-infrastructureCluster/v1/nodeClusterTypes
@@ -1659,19 +1836,6 @@ spec:
           - list
           - watch
         - apiGroups:
-          - rbac.authorization.k8s.io
-          resources:
-          - clusterrolebindings
-          - clusterroles
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
           - siteconfig.open-cluster-management.io
           resources:
           - clusterinstances
@@ -1684,6 +1848,248 @@ spec:
           - update
           - watch
         serviceAccountName: oran-o2ims-controller-manager
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - namespaces
+          - secrets
+          - configmaps
+          verbs:
+          - create
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - hardwareprofiles
+          verbs:
+          - create
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - hardwareprofiles/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - provisioningrequests
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - nodeallocationrequests
+          - allocatednodes
+          verbs:
+          - create
+          - get
+          - list
+          - patch
+          - update
+          - watch
+          - delete
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - nodeallocationrequests/status
+          - allocatednodes/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - nodeallocationrequests/finalizers
+          - allocatednodes/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - coordination.k8s.io
+          resources:
+          - leases
+          verbs:
+          - create
+          - get
+          - list
+          - patch
+          - update
+          - watch
+          - delete
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+          - update
+        - apiGroups:
+          - metal3.io
+          resources:
+          - baremetalhosts
+          - preprovisioningimages
+          verbs:
+          - get
+          - list
+          - watch
+          - update
+          - patch
+        - apiGroups:
+          - metal3.io
+          resources:
+          - hostfirmwaresettings
+          - hostfirmwarecomponents
+          - hostupdatepolicies
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+        - apiGroups:
+          - metal3.io
+          resources:
+          - dataimages
+          verbs:
+          - get
+          - list
+          - delete
+        - apiGroups:
+          - metal3.io
+          resources:
+          - firmwareschemas
+          - hardwaredata
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ocloud.openshift.io
+          resources:
+          - resourcepools
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - authentication.k8s.io
+          resources:
+          - tokenreviews
+          verbs:
+          - create
+        - apiGroups:
+          - authorization.k8s.io
+          resources:
+          - subjectaccessreviews
+          verbs:
+          - create
+        serviceAccountName: oran-o2ims-hardwaremanager-server
+      - rules:
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - provisioningrequests
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - delete
+        - apiGroups:
+          - authentication.k8s.io
+          resources:
+          - tokenreviews
+          verbs:
+          - create
+        - apiGroups:
+          - authorization.k8s.io
+          resources:
+          - subjectaccessreviews
+          verbs:
+          - create
+        serviceAccountName: oran-o2ims-provisioning-server
+      - rules:
+        - apiGroups:
+          - cluster.open-cluster-management.io
+          resources:
+          - managedclusters
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - monitoring.coreos.com
+          resources:
+          - prometheusrules
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ocloud.openshift.io
+          resources:
+          - locations
+          - ocloudsites
+          - resourcepools
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - metal3.io
+          resources:
+          - baremetalhosts
+          - hardwaredata
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - allocatednodes
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - authentication.k8s.io
+          resources:
+          - tokenreviews
+          verbs:
+          - create
+        - apiGroups:
+          - authorization.k8s.io
+          resources:
+          - subjectaccessreviews
+          verbs:
+          - create
+        serviceAccountName: oran-o2ims-resource-server
       deployments:
       - label:
           app: o-cloud-manager
@@ -1780,6 +2186,32 @@ spec:
                   defaultMode: 420
                   secretName: controller-manager-metrics-tls
       permissions:
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          - configmaps
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - delete
+        - apiGroups:
+          - batch
+          resources:
+          - cronjobs
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - delete
+          - update
+          - patch
+        serviceAccountName: oran-o2ims-alarms-server
       - rules:
         - apiGroups:
           - ""

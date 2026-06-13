@@ -113,8 +113,15 @@ MUST_GATHER_IMG ?= $(IMAGE_TAG_BASE)-must-gather:$(VERSION)
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
 BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:$(VERSION)
 
-# BUNDLE_GEN_FLAGS are the flags passed to the operator-sdk generate bundle command
-BUNDLE_GEN_FLAGS ?= -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
+# BUNDLE_GEN_FLAGS are the flags passed to the operator-sdk generate bundle command.
+# --extra-service-accounts is derived from config/rbac/service_accounts_services.yaml
+# so that adding a new service SA automatically includes it in the CSV permissions.
+# The name prefix must match config/default/kustomization.yaml's namePrefix.
+KUSTOMIZE_NAME_PREFIX = $(shell grep '^namePrefix:' config/default/kustomization.yaml | awk '{print $$2}')
+EXTRA_SERVICE_ACCOUNTS = $(shell grep '^  name:' config/rbac/service_accounts_services.yaml | \
+	sed 's/  name: /$(KUSTOMIZE_NAME_PREFIX)/' | paste -sd, -)
+BUNDLE_GEN_FLAGS ?= -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS) \
+	--extra-service-accounts=$(EXTRA_SERVICE_ACCOUNTS)
 
 # USE_IMAGE_DIGESTS defines if images are resolved via tags or digests
 # You can enable this value if you would like to use SHA Based Digests
@@ -366,6 +373,17 @@ bundle: operator-sdk manifests kustomize kubectl ## Generate bundle manifests an
 		&& $(KUSTOMIZE) edit set image controller=$(IMG)
 	$(KUSTOMIZE) build config/manifests | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
 	@rm bundle/manifests/oran-o2ims-env-config_v1_configmap.yaml ## Clean up the temporary file for bundle validate
+	@## Remove standalone RBAC manifests for service SAs — permissions are embedded in the CSV
+	@## via --extra-service-accounts so OLM handles namespace substitution correctly.
+	@for sa in $(shell grep '^  name:' config/rbac/service_accounts_services.yaml | sed 's/  name: //'); do \
+		rm -f bundle/manifests/$(KUSTOMIZE_NAME_PREFIX)$${sa}_rbac.authorization.k8s.io_v1_clusterrole.yaml; \
+		rm -f bundle/manifests/$(KUSTOMIZE_NAME_PREFIX)$${sa}_rbac.authorization.k8s.io_v1_clusterrolebinding.yaml; \
+		rm -f bundle/manifests/$(KUSTOMIZE_NAME_PREFIX)$${sa}_rbac.authorization.k8s.io_v1_role.yaml; \
+		rm -f bundle/manifests/$(KUSTOMIZE_NAME_PREFIX)$${sa}_rbac.authorization.k8s.io_v1_rolebinding.yaml; \
+		rm -f bundle/manifests/$(KUSTOMIZE_NAME_PREFIX)$${sa}_v1_serviceaccount.yaml; \
+		rm -f bundle/manifests/$(KUSTOMIZE_NAME_PREFIX)$${sa}-subject-access-reviewer-binding_rbac.authorization.k8s.io_v1_clusterrolebinding.yaml; \
+	done
+	@rm -f bundle/manifests/$(KUSTOMIZE_NAME_PREFIX)subject-access-reviewer_rbac.authorization.k8s.io_v1_clusterrole.yaml
 	$(OPERATOR_SDK) bundle validate ./bundle
 	sed $(SED_FLAGS) -e '/^[[:space:]]*createdAt:/d' bundle/manifests/oran-o2ims.clusterserviceversion.yaml
 
