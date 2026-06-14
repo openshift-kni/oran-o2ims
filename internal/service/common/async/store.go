@@ -30,6 +30,20 @@ const (
 	SyncComplete
 )
 
+// String returns the human-readable name of the event type.
+func (t AsyncEventType) String() string {
+	switch t {
+	case Updated:
+		return "Updated"
+	case Deleted:
+		return "Deleted"
+	case SyncComplete:
+		return "SyncComplete"
+	default:
+		return fmt.Sprintf("AsyncEventType(%d)", int(t))
+	}
+}
+
 // AsyncChangeEvent defines the data received by a data source to signal that an async handleWatchEvent has been received for a
 // given object type.
 type AsyncChangeEvent struct {

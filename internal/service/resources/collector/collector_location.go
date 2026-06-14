@@ -130,7 +130,7 @@ func (d *LocationDataSource) Watch(ctx context.Context) error {
 
 // HandleAsyncEvent handles an add/update/delete event received from the Reflector.
 func (d *LocationDataSource) HandleAsyncEvent(ctx context.Context, obj interface{}, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.DebugContext(ctx, "handleAsyncEvent received for location", slog.Any("type", eventType), slog.String("object", fmt.Sprintf("%T", obj)))
+	slog.DebugContext(ctx, "handleAsyncEvent received for location", slog.String("type", eventType.String()), slog.String("object", fmt.Sprintf("%T", obj)))
 
 	switch value := obj.(type) {
 	case *inventoryv1alpha1.Location:
@@ -167,7 +167,7 @@ func (d *LocationDataSource) HandleSyncComplete(ctx context.Context, objectType 
 
 // handleLocationWatchEvent handles an async event received for a Location CR
 func (d *LocationDataSource) handleLocationWatchEvent(ctx context.Context, location *inventoryv1alpha1.Location, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.DebugContext(ctx, "handleLocationWatchEvent received", slog.String("name", location.Name), slog.Any("type", eventType))
+	slog.DebugContext(ctx, "handleLocationWatchEvent received", slog.String("name", location.Name), slog.String("type", eventType.String()))
 
 	// If CR is not ready (e.g., validation failed, parent missing), treat as deletion
 	// from API perspective. This ensures stale data is removed when CRs become invalid.

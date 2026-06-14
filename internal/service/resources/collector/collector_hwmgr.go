@@ -272,7 +272,7 @@ func (d *HardwareDataSource) HandleSyncComplete(ctx context.Context, objectType 
 func (d *HardwareDataSource) handleBMHEvent(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost, eventType async.AsyncEventType) (uuid.UUID, error) {
 	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
 	ctx = logging.AppendCtx(ctx, slog.String("bmhNamespace", bmh.Namespace))
-	slog.DebugContext(ctx, "handleBMHEvent", slog.Any("type", eventType))
+	slog.DebugContext(ctx, "handleBMHEvent", slog.String("type", eventType.String()))
 
 	resourceID := uuid.MustParse(string(bmh.UID))
 
@@ -293,7 +293,7 @@ func (d *HardwareDataSource) handleBMHEvent(ctx context.Context, bmh *metal3v1al
 func (d *HardwareDataSource) handleHardwareDataEvent(ctx context.Context, hwdata *metal3v1alpha1.HardwareData, eventType async.AsyncEventType) (uuid.UUID, error) {
 	ctx = logging.AppendCtx(ctx, slog.String("bmh", hwdata.Name))
 	ctx = logging.AppendCtx(ctx, slog.String("bmhNamespace", hwdata.Namespace))
-	slog.DebugContext(ctx, "handleHardwareDataEvent", slog.Any("type", eventType))
+	slog.DebugContext(ctx, "handleHardwareDataEvent", slog.String("type", eventType.String()))
 
 	var bmh metal3v1alpha1.BareMetalHost
 	if err := d.hubClient.Get(ctx, types.NamespacedName{Name: hwdata.Name, Namespace: hwdata.Namespace}, &bmh); err != nil {
@@ -315,7 +315,7 @@ func (d *HardwareDataSource) handleHardwareDataEvent(ctx context.Context, hwdata
 // the corresponding BMH and rebuilding the resource.
 func (d *HardwareDataSource) handleAllocatedNodeEvent(ctx context.Context, node *hwmgmtv1alpha1.AllocatedNode, eventType async.AsyncEventType) (uuid.UUID, error) {
 	ctx = logging.AppendCtx(ctx, slog.String("node", node.Name))
-	slog.DebugContext(ctx, "handleAllocatedNodeEvent", slog.Any("type", eventType))
+	slog.DebugContext(ctx, "handleAllocatedNodeEvent", slog.String("type", eventType.String()))
 
 	bmhName := node.Spec.HwMgrNodeId
 	bmhNamespace := node.Spec.HwMgrNodeNs

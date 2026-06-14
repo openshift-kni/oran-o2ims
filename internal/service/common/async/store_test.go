@@ -7,8 +7,10 @@ SPDX-License-Identifier: Apache-2.0
 package async
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -489,5 +491,31 @@ var _ = Describe("ReflectorStore", func() {
 				Expect(err).ToNot(HaveOccurred())
 			}).To(Panic())
 		})
+	})
+})
+
+var _ = Describe("AsyncEventType String", func() {
+	It("renders human-readable event type in JSON log output", func() {
+		buffer := &bytes.Buffer{}
+		logger := slog.New(slog.NewJSONHandler(buffer, nil))
+
+		logger.Info("test", slog.String("type", Updated.String()))
+		Expect(buffer.String()).To(ContainSubstring(`"type":"Updated"`))
+
+		buffer.Reset()
+		logger.Info("test", slog.String("type", Deleted.String()))
+		Expect(buffer.String()).To(ContainSubstring(`"type":"Deleted"`))
+
+		buffer.Reset()
+		logger.Info("test", slog.String("type", SyncComplete.String()))
+		Expect(buffer.String()).To(ContainSubstring(`"type":"SyncComplete"`))
+	})
+
+	It("renders a numeric fallback for unknown values", func() {
+		buffer := &bytes.Buffer{}
+		logger := slog.New(slog.NewJSONHandler(buffer, nil))
+
+		logger.Info("test", slog.String("type", AsyncEventType(99).String()))
+		Expect(buffer.String()).To(ContainSubstring(`"type":"AsyncEventType(99)"`))
 	})
 })
