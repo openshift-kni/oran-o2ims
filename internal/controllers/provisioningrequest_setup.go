@@ -251,7 +251,7 @@ func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForManagedClus
 			// Return as this ManagedCluster is not deployed/managed by ClusterInstance.
 			return nil
 		}
-		r.Logger.ErrorContext(ctx, "[enqueueProvisioningRequestForManagedCluster] Error getting ClusterInstance. ", slog.Any("Error", err))
+		r.Logger.ErrorContext(ctx, "[enqueueProvisioningRequestForManagedCluster] Error getting ClusterInstance", slog.Any("error", err))
 		return nil
 	}
 
@@ -301,13 +301,13 @@ func (r *ProvisioningRequestReconciler) enqueueProvisioningRequestForPolicy(
 				// The provisioning request could have been deleted
 				return nil
 			}
-			r.Logger.ErrorContext(ctx, "[enqueueProvisioningRequestForPolicy] Error getting ProvisioningRequest. ", slog.Any("Error", err))
+			r.Logger.ErrorContext(ctx, "[enqueueProvisioningRequestForPolicy] Error getting ProvisioningRequest", slog.Any("error", err))
 			return nil
 		}
 
 		clusterTemplates := &provisioningv1alpha1.ClusterTemplateList{}
 		if err := r.List(ctx, clusterTemplates); err != nil {
-			r.Logger.ErrorContext(ctx, "[enqueueProvisioningRequestForPolicy] Error listing ClusterTemplates. ", slog.Any("Error", err))
+			r.Logger.ErrorContext(ctx, "[enqueueProvisioningRequestForPolicy] Error listing ClusterTemplates", slog.Any("error", err))
 			return nil
 		}
 
