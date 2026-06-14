@@ -39,15 +39,15 @@ var alarmsServe = &cobra.Command{
 		klog.SetSlogLogger(logger)
 
 		if err := config.LoadFromEnv(); err != nil {
-			slog.Error("failed to load environment variables", slog.Any("err", err))
+			slog.Error("failed to load environment variables", slog.Any("error", err))
 			os.Exit(1)
 		}
 		if err := config.Validate(); err != nil {
-			slog.Error("failed to validate common server configuration", slog.Any("err", err))
+			slog.Error("failed to validate common server configuration", slog.Any("error", err))
 			os.Exit(1)
 		}
 		if err := alarms.Serve(&config); err != nil {
-			slog.Error("failed to start alarms server", slog.Any("err", err))
+			slog.Error("failed to start alarms server", slog.Any("error", err))
 			os.Exit(1)
 		}
 	},
