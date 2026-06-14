@@ -167,7 +167,7 @@ func (d *LocationDataSource) HandleSyncComplete(ctx context.Context, objectType 
 
 // handleLocationWatchEvent handles an async event received for a Location CR
 func (d *LocationDataSource) handleLocationWatchEvent(ctx context.Context, location *inventoryv1alpha1.Location, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.DebugContext(ctx, "handleLocationWatchEvent received", slog.Any("name", location.Name), slog.Any("type", eventType))
+	slog.DebugContext(ctx, "handleLocationWatchEvent received", slog.String("name", location.Name), slog.Any("type", eventType))
 
 	// If CR is not ready (e.g., validation failed, parent missing), treat as deletion
 	// from API perspective. This ensures stale data is removed when CRs become invalid.

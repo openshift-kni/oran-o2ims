@@ -87,7 +87,7 @@ func processResourceTypeChangeNotification(ctx context.Context, repository *repo
 
 	slog.InfoContext(ctx, "Processing resource type change",
 		slog.Any("resource_type_id", notification.ResourceTypeID),
-		slog.Any("change_type", notification.ChangeType))
+		slog.String("change_type", notification.ChangeType))
 
 	// Handle different change types
 	switch notification.ChangeType {
@@ -108,7 +108,7 @@ func processResourceTypeChangeNotification(ctx context.Context, repository *repo
 		return nil
 
 	default:
-		slog.WarnContext(ctx, "Unknown resource type change type", slog.Any("change_type", notification.ChangeType))
+		slog.WarnContext(ctx, "Unknown resource type change type", slog.String("change_type", notification.ChangeType))
 		return nil
 	}
 }

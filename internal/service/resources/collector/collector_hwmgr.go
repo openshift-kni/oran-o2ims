@@ -371,7 +371,7 @@ func (d *HardwareDataSource) buildAndSendResource(ctx context.Context, bmh *meta
 	if poolUID == "" {
 		poolName := bmh.Labels[constants.LabelResourcePoolName]
 		slog.WarnContext(ctx, "skipping BMH: unresolved resourcePoolId (will retry on pool creation)",
-			slog.String("bmh", bmh.Namespace+"/"+bmh.Name), slog.Any("poolName", poolName))
+			slog.String("bmh", bmh.Namespace+"/"+bmh.Name), slog.String("poolName", poolName))
 		return uuid.Nil, nil
 	}
 
@@ -436,7 +436,7 @@ func (d *HardwareDataSource) findAllocatedNodeForBMH(ctx context.Context, bmh *m
 	if err := d.hubClient.Get(ctx, types.NamespacedName{Name: nodeName, Namespace: bmh.Namespace}, &node); err != nil {
 		if !errors.IsNotFound(err) {
 			slog.WarnContext(ctx, "failed to get AllocatedNode for BMH",
-				slog.String("bmh", bmh.Namespace+"/"+bmh.Name), slog.Any("node", nodeName), slog.Any("error", err))
+				slog.String("bmh", bmh.Namespace+"/"+bmh.Name), slog.String("node", nodeName), slog.Any("error", err))
 		}
 		return nil
 	}
