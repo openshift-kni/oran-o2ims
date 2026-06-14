@@ -143,7 +143,7 @@ func (c *ReflectorStore) handleOperations(ctx context.Context, handler AsyncEven
 		case Updated, Deleted:
 			_, err := handler.HandleAsyncEvent(ctx, o.objects[0], o.eventType)
 			if err != nil {
-				slog.WarnContext(ctx, "Failed to handle event", slog.Any("event", o.eventType), slog.Any("error", err))
+				slog.WarnContext(ctx, "Failed to handle event", slog.String("event", o.eventType.String()), slog.Any("error", err))
 			}
 		case SyncComplete:
 			keys := make([]uuid.UUID, 0)
