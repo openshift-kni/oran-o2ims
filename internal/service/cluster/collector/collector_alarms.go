@@ -106,7 +106,7 @@ func nodeClusterTypesWithAlarmDictionaryID(nodeClusterTypes []models.NodeCluster
 	var filteredNodeClusterTypes []models.NodeClusterType
 	for _, nodeClusterType := range nodeClusterTypes {
 		if nodeClusterType.Extensions == nil {
-			slog.Error("no extensions found for node cluster type", slog.Any("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID))
+			slog.Error("no extensions found for node cluster type", slog.String("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID.String()))
 			continue
 		}
 
@@ -114,7 +114,7 @@ func nodeClusterTypesWithAlarmDictionaryID(nodeClusterTypes []models.NodeCluster
 		if alarmDictionaryIDString != nil {
 			id, err := uuid.Parse(alarmDictionaryIDString.(string))
 			if err != nil {
-				slog.Error("error parsing alarm dictionary ID", slog.Any("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID), slog.Any("error", err))
+				slog.Error("error parsing alarm dictionary ID", slog.String("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID.String()), slog.Any("error", err))
 				continue
 			}
 			(*nodeClusterType.Extensions)[ctlrutils.ClusterAlarmDictionaryIDExtension] = id
@@ -180,12 +180,12 @@ func (d *AlarmsDataSource) makeNodeClusterTypeIDToMonitoringRules(ctx context.Co
 	// Collect results
 	for res := range resultChannel {
 		if res.err != nil {
-			slog.ErrorContext(ctx, "error fetching rules for node cluster type", slog.Any("nodeClusterTypeID", res.nodeClusterTypeID), slog.Any("error", res.err))
+			slog.ErrorContext(ctx, "error fetching rules for node cluster type", slog.String("nodeClusterTypeID", res.nodeClusterTypeID.String()), slog.Any("error", res.err))
 			continue
 		}
 
 		nodeClusterTypeIDToMonitoringRules[res.nodeClusterTypeID] = res.rules
-		slog.InfoContext(ctx, "loaded rules for node cluster type", slog.Any("nodeClusterTypeID", res.nodeClusterTypeID), slog.Int("rules count", len(res.rules)))
+		slog.InfoContext(ctx, "loaded rules for node cluster type", slog.String("nodeClusterTypeID", res.nodeClusterTypeID.String()), slog.Int("rules count", len(res.rules)))
 	}
 
 	return nodeClusterTypeIDToMonitoringRules
@@ -291,7 +291,7 @@ func (d *AlarmsDataSource) buildAlarmDictionaryIDToAlarmDefinitions(nodeClusterT
 	alarmDictionaryIDToAlarmDefinitions := make(map[uuid.UUID][]models.AlarmDefinition)
 	for _, nodeClusterType := range nodeClusterTypes {
 		if _, ok := nodeClusterTypeIDToMonitoringRules[nodeClusterType.NodeClusterTypeID]; !ok {
-			slog.Warn("no monitoring rules found for node cluster type", slog.Any("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID))
+			slog.Warn("no monitoring rules found for node cluster type", slog.String("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID.String()))
 			continue
 		}
 
@@ -299,18 +299,18 @@ func (d *AlarmsDataSource) buildAlarmDictionaryIDToAlarmDefinitions(nodeClusterT
 		extensions, err := getVendorExtensions(nodeClusterType)
 		if err != nil {
 			// Should never happen
-			slog.Error("error getting vendor extensions", slog.Any("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID), slog.Any("error", err))
+			slog.Error("error getting vendor extensions", slog.String("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID.String()), slog.Any("error", err))
 			continue
 		}
 
 		// Only process node cluster types with an alarm dictionary ID
 		alarmDictionaryID, ok := (*nodeClusterType.Extensions)[ctlrutils.ClusterAlarmDictionaryIDExtension].(uuid.UUID)
 		if !ok || alarmDictionaryID == uuid.Nil {
-			slog.Error("no alarm dictionary ID found for node cluster type", slog.Any("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID))
+			slog.Error("no alarm dictionary ID found for node cluster type", slog.String("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID.String()))
 			continue
 		}
 
-		slog.Debug("filtering rules for node cluster type", slog.Any("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID))
+		slog.Debug("filtering rules for node cluster type", slog.String("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID.String()))
 		// Remove conflicting rules before creating alarm definitions
 		filteredRules := d.getFilteredRules(nodeClusterTypeIDToMonitoringRules[nodeClusterType.NodeClusterTypeID])
 
@@ -414,7 +414,7 @@ func (d *AlarmsDataSource) createAlarmDefinitions(rules []monitoringv1.Rule, ala
 		records = append(records, record)
 	}
 
-	slog.Info("AlarmDefinitions from prometheus rules prepared", slog.Int("count", len(records)), slog.Any("alarmDictionaryID", alarmDictionaryID))
+	slog.Info("AlarmDefinitions from prometheus rules prepared", slog.Int("count", len(records)), slog.String("alarmDictionaryID", alarmDictionaryID.String()))
 	return records
 }
 
@@ -428,13 +428,13 @@ func (d *AlarmsDataSource) makeAlarmDictionaries(nodeClusterTypes []models.NodeC
 		extensions, err := getVendorExtensions(nodeClusterType)
 		if err != nil {
 			// Should never happen
-			slog.Error("error getting vendor extensions", slog.Any("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID), slog.Any("error", err))
+			slog.Error("error getting vendor extensions", slog.String("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID.String()), slog.Any("error", err))
 			continue
 		}
 
 		alarmDictionaryID, ok := (*nodeClusterType.Extensions)[ctlrutils.ClusterAlarmDictionaryIDExtension].(uuid.UUID)
 		if !ok || alarmDictionaryID == uuid.Nil {
-			slog.Error("no alarm dictionary ID found for node cluster type", slog.Any("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID))
+			slog.Error("no alarm dictionary ID found for node cluster type", slog.String("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID.String()))
 			continue
 		}
 
