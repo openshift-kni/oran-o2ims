@@ -206,7 +206,7 @@ func (d *K8SDataSource) convertManagedClusterToDeploymentManager(ctx context.Con
 	err := d.getKubeconfig(ctx, cluster.Name, extensions)
 	if err != nil {
 		// TODO: turn this back into an error once we fix getting the Kubeconfig for the local-cluster
-		slog.WarnContext(ctx, "failed to get deployment manager extensions", slog.Any("cluster", cluster.Name), slog.Any("error", err))
+		slog.WarnContext(ctx, "failed to get deployment manager extensions", slog.String("cluster", cluster.Name), slog.Any("error", err))
 	}
 
 	// Generate a unique UUID scoped to a different namespace so that it does not collide with the NodeCluster which
@@ -232,19 +232,19 @@ func (d *K8SDataSource) convertManagedClusterToDeploymentManager(ctx context.Con
 
 // handleClusterWatchEvent handles an async event received from the managed cluster watcher
 func (d *K8SDataSource) handleClusterWatchEvent(ctx context.Context, cluster *v1.ManagedCluster, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.DebugContext(ctx, "handleWatchEvent received for managed cluster", slog.Any("agent", cluster.Name), slog.Any("type", eventType))
+	slog.DebugContext(ctx, "handleWatchEvent received for managed cluster", slog.String("agent", cluster.Name), slog.Any("type", eventType))
 
 	if eventType != async.Deleted {
 		condition := meta.FindStatusCondition(cluster.Status.Conditions, "ManagedClusterConditionAvailable")
 		if condition == nil || condition.Status == metav1.ConditionFalse {
 			// This cluster is not yet available, so filter it out.
-			slog.DebugContext(ctx, "Managed cluster is not available; skipping", slog.Any("cluster", cluster.Name), slog.Any("condition", condition))
+			slog.DebugContext(ctx, "Managed cluster is not available; skipping", slog.String("cluster", cluster.Name), slog.Any("condition", condition))
 			return uuid.Nil, nil
 		}
 
 		if _, found := cluster.Labels[ctlrutils.ClusterTemplateArtifactsLabel]; !found {
 			// The provisioning request which is managing the installation of this cluster is not yet fulfilled
-			slog.DebugContext(ctx, "Cluster provisioning request is not yet fulfilled; skipping", slog.Any("cluster", cluster.Name))
+			slog.DebugContext(ctx, "Cluster provisioning request is not yet fulfilled; skipping", slog.String("cluster", cluster.Name))
 			return uuid.Nil, nil
 		}
 	}

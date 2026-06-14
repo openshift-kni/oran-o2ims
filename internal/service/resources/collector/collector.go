@@ -425,7 +425,7 @@ func (c *Collector) locationAPIForChangeEvent(ctx context.Context, record *model
 	siteIDs, err := c.repository.GetOCloudSiteIDsForLocation(ctx, record.GlobalLocationID)
 	if err != nil {
 		slog.ErrorContext(ctx, "failed to load O-Cloud site IDs for location change event",
-			slog.Any("globalLocationId", record.GlobalLocationID),
+			slog.String("globalLocationId", record.GlobalLocationID),
 			slog.Any("error", err))
 		return models.LocationToModel(record, nil)
 	}
@@ -639,7 +639,7 @@ func (c *Collector) rebuildResourcesForPool(ctx context.Context, poolName string
 
 		results, err := handler.BuildResourcesForPool(ctx, poolName)
 		if err != nil {
-			slog.ErrorContext(ctx, "failed to rebuild resources for pool", slog.Any("pool", poolName), slog.Any("error", err))
+			slog.ErrorContext(ctx, "failed to rebuild resources for pool", slog.String("pool", poolName), slog.Any("error", err))
 			continue
 		}
 
@@ -655,7 +655,7 @@ func (c *Collector) rebuildResourcesForPool(ctx context.Context, poolName string
 		}
 
 		if len(results) > 0 {
-			slog.InfoContext(ctx, "Rebuilt resources for pool", slog.Any("pool", poolName), slog.Int("count", len(results)))
+			slog.InfoContext(ctx, "Rebuilt resources for pool", slog.String("pool", poolName), slog.Int("count", len(results)))
 		}
 	}
 }
