@@ -277,6 +277,13 @@ func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
 		return
 	}
 
+	// Database only accepts connections from pods in the same namespace.
+	err = t.createNetworkPolicy(ctx, ctlrutils.InventoryDatabaseServerName, constants.DatabaseServicePort, InternalOnly)
+	if err != nil {
+		t.logger.ErrorContext(ctx, "Failed to create NetworkPolicy for database.", slog.Any("error", err))
+		return
+	}
+
 	// Create the config volume
 	t.logger.DebugContext(ctx, "[createDatabase] creating database config volume")
 	configVolumeName := fmt.Sprintf("%s-config", ctlrutils.InventoryDatabaseServerName)
