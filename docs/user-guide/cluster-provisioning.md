@@ -95,6 +95,9 @@ Pending (Validating and preparing resources)
 1. O-Cloud Manager first validates the ProvisioningRequest CR, including but not limited to:
     - Verify timeout values for hardware provisioning, cluster installation, or configuration as specified in the respective ConfigMaps if provided.
     - Validate the `clusterInstanceParameters` against the subschema defined in the ClusterTemplate. Any fields not present in the subschema but provided in the `clusterInstanceParameters` are disallowed and will cause validation failure.
+    - Validate that `clusterName` is a valid DNS-1123 label and does not conflict with reserved
+      system namespaces (e.g., `kube-*`, `openshift-*`, `default`) or namespaces already
+      in use by another ProvisioningRequest.
     - Validate the merged policy template input data (`policyTemplateParameters` combined with default values in the `policyTemplateDefaults` ConfigMap) against the PolicyTemplate subschema.
 2. Render the ClusterInstance CR with the merged ClusterInstance input (data from `clusterInstanceParameters` combined with the default values in the `clusterInstanceDefaults` ConfigMap) and validate it via client dry-run.
 3. Prepare the neccessary resources for provisioning.

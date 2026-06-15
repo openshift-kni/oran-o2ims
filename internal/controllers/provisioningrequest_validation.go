@@ -18,6 +18,7 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	clustervalidation "github.com/openshift-kni/oran-o2ims/internal/validation"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -44,6 +45,10 @@ func (t *provisioningRequestReconcilerTask) validateProvisioningRequestCR(ctx co
 
 	if err = t.validateClusterInstanceInputMatchesSchema(ctx, clusterTemplate); err != nil {
 		return fmt.Errorf("failed to validate ClusterInstance input: %w", err)
+	}
+
+	if err = t.validateClusterName(ctx); err != nil {
+		return fmt.Errorf("failed to validate clusterName: %w", err)
 	}
 
 	if err = t.validatePolicyTemplateInputMatchesSchema(ctx, clusterTemplate); err != nil {
@@ -129,6 +134,31 @@ func (t *provisioningRequestReconcilerTask) validateClusterInstanceInputMatchesS
 	}
 
 	t.clusterInput.clusterInstanceData = mergedClusterInstanceData
+	return nil
+}
+
+// validateClusterName validates that the merged clusterName value is a valid
+// DNS-1123 label, does not conflict with reserved system namespaces, and is
+// not already in use by another ProvisioningRequest.
+func (t *provisioningRequestReconcilerTask) validateClusterName(ctx context.Context) error {
+	clusterName, ok := t.clusterInput.clusterInstanceData["clusterName"].(string)
+	if !ok || clusterName == "" {
+		return ctlrutils.NewInputError("clusterName is required and must be a non-empty string")
+	}
+
+	if err := clustervalidation.ValidateClusterNameFormat(clusterName); err != nil {
+		return fmt.Errorf("invalid clusterName format: %w", err)
+	}
+
+	if err := clustervalidation.ValidateClusterNameNotReserved(clusterName); err != nil {
+		return fmt.Errorf("reserved clusterName: %w", err)
+	}
+
+	if err := clustervalidation.ValidateClusterNameOwnership(ctx, t.client, clusterName, t.object.Name,
+		provisioningv1alpha1.ProvisioningRequestNameLabel); err != nil {
+		return fmt.Errorf("clusterName ownership check failed: %w", err)
+	}
+
 	return nil
 }
 
