@@ -332,13 +332,43 @@ var _ = Describe("Inventory Controller", func() {
 					return false
 				}
 
-				// API servers should allow ingress-controller traffic.
+				hasSameNamespaceRule := func(np *networkingv1.NetworkPolicy) bool {
+					for _, rule := range np.Spec.Ingress {
+						for _, peer := range rule.From {
+							if peer.PodSelector != nil && peer.NamespaceSelector == nil {
+								if len(peer.PodSelector.MatchLabels) == 0 && len(peer.PodSelector.MatchExpressions) == 0 {
+									return true
+								}
+							}
+						}
+					}
+					return false
+				}
+
+				hasAlertmanagerRule := func(np *networkingv1.NetworkPolicy) bool {
+					for _, rule := range np.Spec.Ingress {
+						for _, peer := range rule.From {
+							if peer.NamespaceSelector != nil && peer.PodSelector != nil {
+								nsMatch := peer.NamespaceSelector.MatchLabels["kubernetes.io/metadata.name"] ==
+									ctlrutils.OpenClusterManagementObservabilityNamespace
+								podMatch := peer.PodSelector.MatchLabels[ctlrutils.AlertmanagerObjectName] == "observability"
+								if nsMatch && podMatch {
+									return true
+								}
+							}
+						}
+					}
+					return false
+				}
+
+				// API servers and hardware manager should allow ingress-controller traffic.
 				for _, serverName := range []string{
 					ctlrutils.InventoryResourceServerName,
 					ctlrutils.InventoryClusterServerName,
 					ctlrutils.InventoryAlarmServerName,
 					ctlrutils.InventoryArtifactsServerName,
 					ctlrutils.InventoryProvisioningServerName,
+					ctlrutils.HardwareManagerServerName,
 				} {
 					np := &networkingv1.NetworkPolicy{}
 					err := reconciler.Client.Get(context.TODO(), types.NamespacedName{
@@ -348,17 +378,31 @@ var _ = Describe("Inventory Controller", func() {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(hasIngressControllerRule(np)).To(BeTrue(),
 						"expected ingress-controller rule on %s NetworkPolicy", serverName)
+					Expect(hasSameNamespaceRule(np)).To(BeTrue(),
+						"expected same-namespace rule on %s NetworkPolicy", serverName)
 				}
 
-				// Database should NOT allow ingress-controller traffic.
-				dbNP := &networkingv1.NetworkPolicy{}
+				// Alarm server should additionally allow alertmanager traffic.
+				alarmNP := &networkingv1.NetworkPolicy{}
 				err := reconciler.Client.Get(context.TODO(), types.NamespacedName{
+					Name:      ctlrutils.InventoryAlarmServerName,
+					Namespace: ctlrutils.InventoryNamespace,
+				}, alarmNP)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(hasAlertmanagerRule(alarmNP)).To(BeTrue(),
+					"expected alertmanager ingress rule on alarm server NetworkPolicy")
+
+				// Database should NOT allow ingress-controller traffic but SHOULD allow same-namespace traffic.
+				dbNP := &networkingv1.NetworkPolicy{}
+				err = reconciler.Client.Get(context.TODO(), types.NamespacedName{
 					Name:      ctlrutils.InventoryDatabaseServerName,
 					Namespace: ctlrutils.InventoryNamespace,
 				}, dbNP)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(hasIngressControllerRule(dbNP)).To(BeFalse(),
 					"database NetworkPolicy should not allow ingress-controller traffic")
+				Expect(hasSameNamespaceRule(dbNP)).To(BeTrue(),
+					"database NetworkPolicy should allow same-namespace traffic")
 			},
 		),
 	)

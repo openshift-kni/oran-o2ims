@@ -198,7 +198,7 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 
 	err = t.createNetworkPolicy(ctx, ctlrutils.InventoryResourceServerName, constants.DefaultServicePort, ExternalIngress)
 	if err != nil {
-		t.logger.ErrorContext(ctx, "Failed to create NetworkPolicy for Resource server.", slog.String("error", err.Error()))
+		t.logger.ErrorContext(ctx, "Failed to create NetworkPolicy for Resource server.", slog.Any("error", err))
 		return
 	}
 
@@ -236,7 +236,7 @@ func (t *reconcilerTask) setupClusterServerConfig(ctx context.Context, defaultRe
 
 	err = t.createNetworkPolicy(ctx, ctlrutils.InventoryClusterServerName, constants.DefaultServicePort, ExternalIngress)
 	if err != nil {
-		t.logger.ErrorContext(ctx, "Failed to create NetworkPolicy for cluster server.", slog.String("error", err.Error()))
+		t.logger.ErrorContext(ctx, "Failed to create NetworkPolicy for cluster server.", slog.Any("error", err))
 		return
 	}
 
@@ -274,7 +274,7 @@ func (t *reconcilerTask) setupArtifactsServerConfig(ctx context.Context, default
 
 	err = t.createNetworkPolicy(ctx, ctlrutils.InventoryArtifactsServerName, constants.DefaultServicePort, ExternalIngress)
 	if err != nil {
-		t.logger.ErrorContext(ctx, "Failed to create NetworkPolicy for Artifacts server.", slog.String("error", err.Error()))
+		t.logger.ErrorContext(ctx, "Failed to create NetworkPolicy for Artifacts server.", slog.Any("error", err))
 		return
 	}
 
@@ -334,7 +334,7 @@ func (t *reconcilerTask) setupAlarmServerConfig(ctx context.Context, defaultResu
 	}
 	err = t.createNetworkPolicy(ctx, ctlrutils.InventoryAlarmServerName, constants.DefaultServicePort, ExternalIngress, alertmanagerIngress)
 	if err != nil {
-		t.logger.ErrorContext(ctx, "Failed to create NetworkPolicy for alarm server.", slog.String("error", err.Error()))
+		t.logger.ErrorContext(ctx, "Failed to create NetworkPolicy for alarm server.", slog.Any("error", err))
 		return
 	}
 
@@ -371,7 +371,7 @@ func (t *reconcilerTask) setupProvisioningServerConfig(ctx context.Context, defa
 
 	err = t.createNetworkPolicy(ctx, ctlrutils.InventoryProvisioningServerName, constants.DefaultServicePort, ExternalIngress)
 	if err != nil {
-		t.logger.ErrorContext(ctx, "Failed to create NetworkPolicy for provisioning server.", slog.String("error", err.Error()))
+		t.logger.ErrorContext(ctx, "Failed to create NetworkPolicy for provisioning server.", slog.Any("error", err))
 		return
 	}
 
