@@ -30,6 +30,20 @@ const (
 	SyncComplete
 )
 
+// String returns the human-readable name of the event type.
+func (t AsyncEventType) String() string {
+	switch t {
+	case Updated:
+		return "Updated"
+	case Deleted:
+		return "Deleted"
+	case SyncComplete:
+		return "SyncComplete"
+	default:
+		return fmt.Sprintf("AsyncEventType(%d)", int(t))
+	}
+}
+
 // AsyncChangeEvent defines the data received by a data source to signal that an async handleWatchEvent has been received for a
 // given object type.
 type AsyncChangeEvent struct {
@@ -129,7 +143,7 @@ func (c *ReflectorStore) handleOperations(ctx context.Context, handler AsyncEven
 		case Updated, Deleted:
 			_, err := handler.HandleAsyncEvent(ctx, o.objects[0], o.eventType)
 			if err != nil {
-				slog.WarnContext(ctx, "Failed to handle event", slog.Any("event", o.eventType), slog.Any("error", err))
+				slog.WarnContext(ctx, "Failed to handle event", slog.String("event", o.eventType.String()), slog.Any("error", err))
 			}
 		case SyncComplete:
 			keys := make([]uuid.UUID, 0)

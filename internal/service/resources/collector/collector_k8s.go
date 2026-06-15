@@ -232,7 +232,7 @@ func (d *K8SDataSource) convertManagedClusterToDeploymentManager(ctx context.Con
 
 // handleClusterWatchEvent handles an async event received from the managed cluster watcher
 func (d *K8SDataSource) handleClusterWatchEvent(ctx context.Context, cluster *v1.ManagedCluster, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.DebugContext(ctx, "handleWatchEvent received for managed cluster", slog.String("agent", cluster.Name), slog.Any("type", eventType))
+	slog.DebugContext(ctx, "handleWatchEvent received for managed cluster", slog.String("agent", cluster.Name), slog.String("type", eventType.String()))
 
 	if eventType != async.Deleted {
 		condition := meta.FindStatusCondition(cluster.Status.Conditions, "ManagedClusterConditionAvailable")
@@ -268,7 +268,7 @@ func (d *K8SDataSource) handleClusterWatchEvent(ctx context.Context, cluster *v1
 
 // HandleAsyncEvent handles an add/update/delete to an object received by from the Reflector.
 func (d *K8SDataSource) HandleAsyncEvent(ctx context.Context, obj interface{}, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.DebugContext(ctx, "handleWatchEvent received for store adapter", slog.Any("type", eventType), slog.String("object", fmt.Sprintf("%T", obj)))
+	slog.DebugContext(ctx, "handleWatchEvent received for store adapter", slog.String("type", eventType.String()), slog.String("object", fmt.Sprintf("%T", obj)))
 	switch value := obj.(type) {
 	case *v1.ManagedCluster:
 		return d.handleClusterWatchEvent(ctx, value, eventType)
