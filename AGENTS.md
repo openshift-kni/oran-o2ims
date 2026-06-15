@@ -111,7 +111,8 @@ issues during code review.
 - Use context-aware slog calls (`slog.InfoContext(ctx, ...)`,
   `slog.ErrorContext(ctx, ...)`, etc.) whenever a `ctx` variable is in
   scope. The `sloglint` linter enforces this. Use `logging.AppendCtx()`
-  to add structured attributes to the context at entry points.
+  to add structured attributes to the context at entry points where
+  a resource is first retrieved — not at every function boundary.
 - Use typed slog attribute constructors (`slog.String("key", value)`,
   `slog.Int(...)`, `slog.Any(...)`, etc.) instead of untyped
   alternating key-value pairs (`"key", value`). The `sloglint`
@@ -120,7 +121,18 @@ issues during code review.
   `slog.String("error", err.Error())`. This preserves the error type
   for structured logging handlers and avoids eager `.Error()` calls.
   Always use `"error"` as the key — not `"err"` or `"Error"`.
+- Use `slog.String` for values with known string types (resource names,
+  hostnames, change types). Use `slog.String("key", uuid.String())`
+  for `uuid.UUID` values — `slog.Any` renders UUIDs as base64-encoded
+  byte arrays. Reserve `slog.Any` for errors, complex structs, maps,
+  and interfaces.
+- Use camelCase for log attribute keys (e.g., `"clusterId"`, not
+  `"ClusterID"` or `"cluster_id"`).
 - Log messages should not end with punctuation or trailing spaces.
+- Choose the appropriate log level: use DEBUG for verbose/polling
+  output that would clutter normal operation, INFO for significant
+  state changes, WARN for recoverable issues, and ERROR for failures
+  that need attention.
 
 ## Test Conventions
 
