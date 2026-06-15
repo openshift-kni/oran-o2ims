@@ -22,7 +22,7 @@ var migrate = &cobra.Command{
 	Long:  `This will run from k8s job before the server starts.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := cluster.StartMigration(); err != nil {
-			slog.Error("failed to do migration", slog.Any("err", err))
+			slog.Error("failed to do migration", slog.Any("error", err))
 			os.Exit(1)
 		}
 	},
