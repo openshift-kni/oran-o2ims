@@ -90,7 +90,7 @@ func ConvertAmToAlarmEventRecordModels(ctx context.Context, alerts *[]api.Alert,
 		if record.ObjectID != nil {
 			objectTypeID, err := infrastructureClient.GetObjectTypeID(ctx, *record.ObjectID)
 			if err != nil {
-				slog.WarnContext(ctx, "Could not get object type ID", slog.Any("objectID", record.ObjectID), slog.String("err", err.Error()))
+				slog.WarnContext(ctx, "Could not get object type ID", slog.String("objectID", record.ObjectID.String()), slog.String("err", err.Error()))
 			} else {
 				record.ObjectTypeID = &objectTypeID
 			}
@@ -102,7 +102,7 @@ func ConvertAmToAlarmEventRecordModels(ctx context.Context, alerts *[]api.Alert,
 			_, severity := getPerceivedSeverity(labels)
 			alarmDefinitionID, err := infrastructureClient.GetAlarmDefinitionID(ctx, *record.ObjectTypeID, getAlertName(labels), severity)
 			if err != nil {
-				slog.WarnContext(ctx, "Could not get alarm definition ID", slog.Any("objectTypeID", *record.ObjectTypeID), slog.String("name", getAlertName(labels)), slog.String("severity", severity), slog.String("err", err.Error()))
+				slog.WarnContext(ctx, "Could not get alarm definition ID", slog.String("objectTypeID", record.ObjectTypeID.String()), slog.String("name", getAlertName(labels)), slog.String("severity", severity), slog.String("err", err.Error()))
 			} else {
 				record.AlarmDefinitionID = &alarmDefinitionID
 			}
