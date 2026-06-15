@@ -166,7 +166,7 @@ func (d *OCloudSiteDataSource) HandleSyncComplete(ctx context.Context, objectTyp
 
 // handleOCloudSiteWatchEvent handles an async event received for an OCloudSite CR
 func (d *OCloudSiteDataSource) handleOCloudSiteWatchEvent(ctx context.Context, site *inventoryv1alpha1.OCloudSite, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.DebugContext(ctx, "handleOCloudSiteWatchEvent received", slog.Any("name", site.Name), slog.Any("type", eventType))
+	slog.DebugContext(ctx, "handleOCloudSiteWatchEvent received", slog.String("name", site.Name), slog.Any("type", eventType))
 
 	// If CR is not ready (e.g., validation failed, parent missing), treat as deletion
 	// from API perspective. This ensures stale data is removed when CRs become invalid.
