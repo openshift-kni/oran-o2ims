@@ -20,6 +20,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+
+	clustervalidation "github.com/openshift-kni/oran-o2ims/internal/validation"
 )
 
 const HardwareConfigInProgress = "Hardware configuring is in progress"
@@ -142,6 +144,20 @@ func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Contex
 	newPrClusterInstanceInput, err := newPr.ValidateClusterInstanceInputMatchesSchema(clusterTemplate)
 	if err != nil {
 		return err
+	}
+
+	// Best-effort clusterName validation on the raw PR input. The controller
+	// performs the authoritative check on the merged value after defaults are
+	// applied; this catches obvious issues at admission time.
+	if inputMap, ok := newPrClusterInstanceInput.(map[string]any); ok {
+		if clusterName, ok := inputMap["clusterName"].(string); ok && clusterName != "" {
+			if err := clustervalidation.ValidateClusterNameFormat(clusterName); err != nil {
+				return fmt.Errorf("clusterInstanceParameters.clusterName: %w", err)
+			}
+			if err := clustervalidation.ValidateClusterNameNotReserved(clusterName); err != nil {
+				return fmt.Errorf("clusterInstanceParameters.clusterName: %w", err)
+			}
+		}
 	}
 
 	if oldPr == nil {

@@ -437,3 +437,159 @@ var _ = Describe("createOrUpdateClusterResources", func() {
 		Expect(errors.IsNotFound(err)).To(BeTrue())
 	})
 })
+
+var _ = Describe("createClusterInstanceNamespace", func() {
+	var (
+		ctx  context.Context
+		c    client.Client
+		task *provisioningRequestReconcilerTask
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+
+		pr := &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-pr",
+			},
+		}
+
+		c = fakeclient.GetFakeClientFromObjects(pr)
+		task = &provisioningRequestReconcilerTask{
+			client: c,
+			object: pr,
+		}
+	})
+
+	It("rejects reserved namespace names", func() {
+		err := task.createClusterInstanceNamespace(ctx, "kube-system")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("reserved namespace"))
+	})
+
+	It("rejects namespace owned by a different PR", func() {
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "other-cluster",
+				Labels: map[string]string{
+					provisioningv1alpha1.ProvisioningRequestNameLabel: "other-pr",
+				},
+			},
+		}
+		Expect(c.Create(ctx, ns)).To(Succeed())
+
+		err := task.createClusterInstanceNamespace(ctx, "other-cluster")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("not owned by"))
+	})
+
+	It("creates namespace for a valid cluster name", func() {
+		err := task.createClusterInstanceNamespace(ctx, "my-new-cluster")
+		Expect(err).ToNot(HaveOccurred())
+
+		ns := &corev1.Namespace{}
+		Expect(c.Get(ctx, types.NamespacedName{Name: "my-new-cluster"}, ns)).To(Succeed())
+		Expect(ns.Labels[provisioningv1alpha1.ProvisioningRequestNameLabel]).To(Equal("test-pr"))
+	})
+
+	It("allows namespace already owned by this PR", func() {
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "my-cluster",
+				Labels: map[string]string{
+					provisioningv1alpha1.ProvisioningRequestNameLabel: "test-pr",
+				},
+			},
+		}
+		Expect(c.Create(ctx, ns)).To(Succeed())
+
+		err := task.createClusterInstanceNamespace(ctx, "my-cluster")
+		Expect(err).ToNot(HaveOccurred())
+	})
+})
+
+var _ = Describe("validateClusterName", func() {
+	var (
+		ctx  context.Context
+		c    client.Client
+		task *provisioningRequestReconcilerTask
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+
+		pr := &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-pr",
+			},
+		}
+
+		c = fakeclient.GetFakeClientFromObjects(pr)
+		task = &provisioningRequestReconcilerTask{
+			client: c,
+			object: pr,
+			clusterInput: &clusterInput{
+				clusterInstanceData: map[string]any{},
+			},
+		}
+	})
+
+	It("rejects missing clusterName", func() {
+		err := task.validateClusterName(ctx)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("clusterName is required"))
+	})
+
+	It("rejects invalid DNS-1123 label", func() {
+		task.clusterInput.clusterInstanceData["clusterName"] = "My_Invalid_Name"
+		err := task.validateClusterName(ctx)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("not a valid DNS-1123 label"))
+	})
+
+	It("rejects reserved namespace", func() {
+		task.clusterInput.clusterInstanceData["clusterName"] = "openshift-monitoring"
+		err := task.validateClusterName(ctx)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("reserved namespace"))
+	})
+
+	It("rejects namespace owned by another PR", func() {
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "taken-cluster",
+				Labels: map[string]string{
+					provisioningv1alpha1.ProvisioningRequestNameLabel: "other-pr",
+				},
+			},
+		}
+		Expect(c.Create(ctx, ns)).To(Succeed())
+
+		task.clusterInput.clusterInstanceData["clusterName"] = "taken-cluster"
+		err := task.validateClusterName(ctx)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("not owned by"))
+	})
+
+	It("accepts a valid cluster name", func() {
+		task.clusterInput.clusterInstanceData["clusterName"] = "my-cluster-01"
+		err := task.validateClusterName(ctx)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("accepts a name when namespace is owned by this PR", func() {
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "my-cluster",
+				Labels: map[string]string{
+					provisioningv1alpha1.ProvisioningRequestNameLabel: "test-pr",
+				},
+			},
+		}
+		Expect(c.Create(ctx, ns)).To(Succeed())
+
+		task.clusterInput.clusterInstanceData["clusterName"] = "my-cluster"
+		err := task.validateClusterName(ctx)
+		Expect(err).ToNot(HaveOccurred())
+	})
+})
