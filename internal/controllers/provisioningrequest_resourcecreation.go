@@ -142,6 +142,9 @@ func (t *provisioningRequestReconcilerTask) createClusterInstanceNamespace(
 	// Validate the clusterName before creating the namespace. The early
 	// validation in validateProvisioningRequestCR performs these same checks;
 	// this guard ensures consistency regardless of the code path taken.
+	if err := clustervalidation.ValidateClusterNameFormat(clusterName); err != nil {
+		return fmt.Errorf("invalid clusterName format: %w", err)
+	}
 	if err := clustervalidation.ValidateClusterNameNotReserved(clusterName); err != nil {
 		return fmt.Errorf("clusterName rejected: %w", err)
 	}

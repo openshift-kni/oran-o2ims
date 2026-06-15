@@ -90,6 +90,31 @@ var _ = Describe("IsReservedNamespace", func() {
 		Expect(reserved).To(BeFalse())
 	})
 
+	It("accepts default-team (not an exact match for default)", func() {
+		reserved, _ := IsReservedNamespace("default-team")
+		Expect(reserved).To(BeFalse())
+	})
+
+	It("accepts openshift-like names that don't start with the prefix", func() {
+		reserved, _ := IsReservedNamespace("my-openshift-cluster")
+		Expect(reserved).To(BeFalse())
+	})
+
+	It("rejects openshift-anything (prefix match)", func() {
+		reserved, _ := IsReservedNamespace("openshift-custom")
+		Expect(reserved).To(BeTrue())
+	})
+
+	It("rejects kube-anything (prefix match)", func() {
+		reserved, _ := IsReservedNamespace("kube-custom")
+		Expect(reserved).To(BeTrue())
+	})
+
+	It("accepts defaulting (not exact match for default)", func() {
+		reserved, _ := IsReservedNamespace("defaulting")
+		Expect(reserved).To(BeFalse())
+	})
+
 	It("accepts a name that contains but doesn't start with reserved prefix", func() {
 		reserved, _ := IsReservedNamespace("cluster-openshift-test")
 		Expect(reserved).To(BeFalse())
