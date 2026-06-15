@@ -20,14 +20,18 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
 
-// ReservedNamespacePrefixes lists namespace name patterns that cannot be
-// used as clusterName values. Entries are matched by exact equality or by
-// prefix (e.g., "default" matches exactly, "openshift-" matches any name
-// starting with "openshift-").
-var ReservedNamespacePrefixes = []string{
+// reservedNamespaceExact lists exact namespace names that cannot be used
+// as clusterName values.
+var reservedNamespaceExact = []string{
 	"default",
-	"kube-",
 	"openshift",
+}
+
+// reservedNamespacePrefixes lists namespace name prefixes that cannot be
+// used as clusterName values. Any name starting with one of these prefixes
+// is rejected.
+var reservedNamespacePrefixes = []string{
+	"kube-",
 	"openshift-",
 	"open-cluster-management",
 	"multicluster-",
@@ -37,9 +41,14 @@ var ReservedNamespacePrefixes = []string{
 // IsReservedNamespace checks if a name matches reserved namespace patterns.
 // Returns true and the matched pattern if reserved, false otherwise.
 func IsReservedNamespace(name string) (bool, string) {
-	for _, p := range ReservedNamespacePrefixes {
-		if name == p || strings.HasPrefix(name, p) {
-			return true, p
+	for _, exact := range reservedNamespaceExact {
+		if name == exact {
+			return true, exact
+		}
+	}
+	for _, prefix := range reservedNamespacePrefixes {
+		if strings.HasPrefix(name, prefix) {
+			return true, prefix
 		}
 	}
 
