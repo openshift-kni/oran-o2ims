@@ -120,7 +120,7 @@ func (t *provisioningRequestReconcilerTask) validateClusterInstanceInputMatchesS
 	if err != nil {
 		return ctlrutils.NewInputError(
 			"the provided %s does not match the schema from ClusterTemplate (%s): %w",
-			ctlrutils.TemplateParamClusterInstance, clusterTemplate.Name, err)
+			constants.TemplateParamClusterInstance, clusterTemplate.Name, err)
 	}
 	clusterInstanceMatchingInputMap := clusterInstanceMatchingInput.(map[string]any)
 
@@ -128,7 +128,7 @@ func (t *provisioningRequestReconcilerTask) validateClusterInstanceInputMatchesS
 	mergedClusterInstanceData, err := t.getMergedClusterInputData(
 		ctx, clusterTemplate.Spec.TemplateDefaults.ClusterInstanceDefaults,
 		clusterInstanceMatchingInputMap,
-		ctlrutils.TemplateParamClusterInstance)
+		constants.TemplateParamClusterInstance)
 	if err != nil {
 		return fmt.Errorf("failed to get merged cluster input data: %w", err)
 	}
@@ -170,17 +170,17 @@ func (t *provisioningRequestReconcilerTask) validatePolicyTemplateInputMatchesSc
 
 	// Get the subschema for PolicyTemplateParameters
 	policyTemplateSubSchema, err := provisioningv1alpha1.ExtractSubSchema(
-		clusterTemplate.Spec.TemplateParameterSchema.Raw, ctlrutils.TemplateParamPolicyConfig)
+		clusterTemplate.Spec.TemplateParameterSchema.Raw, constants.TemplateParamPolicyConfig)
 	if err != nil {
 		return ctlrutils.NewInputError(
-			"failed to extract %s subschema: %s", ctlrutils.TemplateParamPolicyConfig, err.Error())
+			"failed to extract %s subschema: %s", constants.TemplateParamPolicyConfig, err.Error())
 	}
 	// Get the matching input for PolicyTemplateParameters
 	policyTemplateMatchingInput, err := provisioningv1alpha1.ExtractMatchingInput(
-		t.object.Spec.TemplateParameters.Raw, ctlrutils.TemplateParamPolicyConfig)
+		t.object.Spec.TemplateParameters.Raw, constants.TemplateParamPolicyConfig)
 	if err != nil {
 		return ctlrutils.NewInputError(
-			"failed to extract matching input for subschema %s: %w", ctlrutils.TemplateParamPolicyConfig, err)
+			"failed to extract matching input for subschema %s: %w", constants.TemplateParamPolicyConfig, err)
 	}
 	policyTemplateMatchingInputMap := policyTemplateMatchingInput.(map[string]any)
 
@@ -188,7 +188,7 @@ func (t *provisioningRequestReconcilerTask) validatePolicyTemplateInputMatchesSc
 	mergedPolicyTemplateData, err := t.getMergedClusterInputData(
 		ctx, clusterTemplate.Spec.TemplateDefaults.PolicyTemplateDefaults,
 		policyTemplateMatchingInputMap,
-		ctlrutils.TemplateParamPolicyConfig)
+		constants.TemplateParamPolicyConfig)
 	if err != nil {
 		return fmt.Errorf("failed to get merged cluster input data: %w", err)
 	}
@@ -199,7 +199,7 @@ func (t *provisioningRequestReconcilerTask) validatePolicyTemplateInputMatchesSc
 	if err != nil {
 		return ctlrutils.NewInputError(
 			"spec.templateParameters.%s does not match the schema defined in ClusterTemplate (%s) spec.templateParameterSchema.%s: %w",
-			ctlrutils.TemplateParamPolicyConfig, clusterTemplate.Name, ctlrutils.TemplateParamPolicyConfig, err)
+			constants.TemplateParamPolicyConfig, clusterTemplate.Name, constants.TemplateParamPolicyConfig, err)
 	}
 
 	t.clusterInput.policyTemplateData = mergedPolicyTemplateData
@@ -223,32 +223,32 @@ func (t *provisioningRequestReconcilerTask) validateAndMergeHwMgmtInput(
 	// ExtractMatchingInput returns an error both for unmarshal failures and missing keys.
 	// Missing key is expected (no overrides); unmarshal failure is a real input error.
 	hwMgmtParams, extractErr := provisioningv1alpha1.ExtractMatchingInput(
-		t.object.Spec.TemplateParameters.Raw, ctlrutils.TemplateParamHwMgmt)
+		t.object.Spec.TemplateParameters.Raw, constants.TemplateParamHwMgmt)
 	if extractErr != nil && strings.Contains(extractErr.Error(), "failed to unmarshal") {
 		return ctlrutils.NewInputError("failed to extract %s from templateParameters: %s",
-			ctlrutils.TemplateParamHwMgmt, extractErr.Error())
+			constants.TemplateParamHwMgmt, extractErr.Error())
 	}
 	if hwMgmtParams != nil {
 		if !provisioningv1alpha1.SchemaDefinesHwMgmtParameters(clusterTemplate) {
 			return ctlrutils.NewInputError(
 				"templateParameters.%s is not defined in ClusterTemplate %q spec.templateParameterSchema",
-				ctlrutils.TemplateParamHwMgmt, clusterTemplate.Name)
+				constants.TemplateParamHwMgmt, clusterTemplate.Name)
 		}
 
 		// Validate the raw hwMgmtParameters input against the CT's hwMgmt subschema
 		hwMgmtSubSchema, err := provisioningv1alpha1.ExtractSubSchema(
-			clusterTemplate.Spec.TemplateParameterSchema.Raw, ctlrutils.TemplateParamHwMgmt)
+			clusterTemplate.Spec.TemplateParameterSchema.Raw, constants.TemplateParamHwMgmt)
 		if err == nil {
 			if err := provisioningv1alpha1.ValidateJsonAgainstJsonSchema(hwMgmtSubSchema, hwMgmtParams); err != nil {
 				return ctlrutils.NewInputError(
 					"templateParameters.%s does not match the schema defined in ClusterTemplate (%s): %s",
-					ctlrutils.TemplateParamHwMgmt, clusterTemplate.Name, err.Error())
+					constants.TemplateParamHwMgmt, clusterTemplate.Name, err.Error())
 			}
 		}
 
 		hwMgmtParamsMap, ok := hwMgmtParams.(map[string]any)
 		if !ok {
-			return ctlrutils.NewInputError("templateParameters.%s must be an object", ctlrutils.TemplateParamHwMgmt)
+			return ctlrutils.NewInputError("templateParameters.%s must be an object", constants.TemplateParamHwMgmt)
 		}
 
 		// Handle nodeGroupData with name-keyed merge
@@ -256,7 +256,7 @@ func (t *provisioningRequestReconcilerTask) validateAndMergeHwMgmtInput(
 		if srcHasNG {
 			srcSlice, ok := srcNodeGroups.([]any)
 			if !ok {
-				return ctlrutils.NewInputError("templateParameters.%s.nodeGroupData must be an array", ctlrutils.TemplateParamHwMgmt)
+				return ctlrutils.NewInputError("templateParameters.%s.nodeGroupData must be an array", constants.TemplateParamHwMgmt)
 			}
 			dstSlice := []any{}
 			if dstNodeGroups, dstHasNG := mergedData["nodeGroupData"]; dstHasNG {
@@ -436,9 +436,9 @@ func (t *provisioningRequestReconcilerTask) getMergedClusterInputData(
 	var templateDefaultsCmKey string
 
 	switch templateParam {
-	case ctlrutils.TemplateParamClusterInstance:
+	case constants.TemplateParamClusterInstance:
 		templateDefaultsCmKey = ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey
-	case ctlrutils.TemplateParamPolicyConfig:
+	case constants.TemplateParamPolicyConfig:
 		templateDefaultsCmKey = ctlrutils.PolicyTemplateDefaultsConfigmapKey
 	default:
 		return nil, ctlrutils.NewInputError("unsupported template parameter")
@@ -455,7 +455,7 @@ func (t *provisioningRequestReconcilerTask) getMergedClusterInputData(
 		return nil, fmt.Errorf("failed to get template defaults from ConfigMap %s: %w", templateDefaultsCm, err)
 	}
 
-	if templateParam == ctlrutils.TemplateParamClusterInstance {
+	if templateParam == constants.TemplateParamClusterInstance {
 		// Special handling for overrides of ClusterInstance's extraLabels and extraAnnotations.
 		// The clusterTemplateInput will be overridden with the values from defaut configmap
 		// if same labels/annotations exist in both.

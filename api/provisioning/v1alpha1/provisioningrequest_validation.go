@@ -17,18 +17,13 @@ import (
 	"os"
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/r3labs/diff/v3"
 	"github.com/xeipuuv/gojsonschema"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-)
-
-const (
-	TemplateParamClusterInstance = "clusterInstanceParameters"
-	TemplateParamPolicyConfig    = "policyTemplateParameters"
-	TemplateParamHwMgmt          = "hwMgmtParameters"
 )
 
 var (
@@ -180,17 +175,17 @@ func (r *ProvisioningRequest) ValidateTemplateInputMatchesSchema(
 		return fmt.Errorf(
 			"missing keyword 'properties' in the schema from ClusterTemplate (%s)", clusterTemplate.Name)
 	}
-	clusterInstanceSubSchema, ok := schemaProperties.(map[string]any)[TemplateParamClusterInstance]
+	clusterInstanceSubSchema, ok := schemaProperties.(map[string]any)[constants.TemplateParamClusterInstance]
 	if !ok {
 		return fmt.Errorf(
 			"missing required property '%s' in the schema from ClusterTemplate (%s)",
-			TemplateParamClusterInstance, clusterTemplate.Name)
+			constants.TemplateParamClusterInstance, clusterTemplate.Name)
 	}
-	policyTemplateSubSchema, ok := schemaProperties.(map[string]any)[TemplateParamPolicyConfig]
+	policyTemplateSubSchema, ok := schemaProperties.(map[string]any)[constants.TemplateParamPolicyConfig]
 	if !ok {
 		return fmt.Errorf(
 			"missing required property '%s' in the schema from ClusterTemplate (%s)",
-			TemplateParamPolicyConfig, clusterTemplate.Name)
+			constants.TemplateParamPolicyConfig, clusterTemplate.Name)
 	}
 
 	// The ClusterInstance, PolicyTemplate, and HwMgmt parameters have their own specific
@@ -202,7 +197,7 @@ func (r *ProvisioningRequest) ValidateTemplateInputMatchesSchema(
 	// hwMgmtParameters is validated after merging with hwMgmtDefaults from the ClusterTemplate,
 	// so strip its detailed schema here to avoid rejecting partial overrides (e.g. nodeGroupData
 	// entries that omit fields like "role" because they come from the defaults).
-	if hwMgmtSubSchema, ok := schemaProperties.(map[string]any)[TemplateParamHwMgmt]; ok {
+	if hwMgmtSubSchema, ok := schemaProperties.(map[string]any)[constants.TemplateParamHwMgmt]; ok {
 		if hwMgmtMap, ok := hwMgmtSubSchema.(map[string]any); ok {
 			delete(hwMgmtMap, "properties")
 		}
@@ -226,20 +221,20 @@ func (r *ProvisioningRequest) ValidateClusterInstanceInputMatchesSchema(
 
 	// Get the subschema for ClusterInstanceParameters
 	clusterInstanceSubSchema, err := ExtractSubSchema(
-		clusterTemplate.Spec.TemplateParameterSchema.Raw, TemplateParamClusterInstance)
+		clusterTemplate.Spec.TemplateParameterSchema.Raw, constants.TemplateParamClusterInstance)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"failed to extract %s subschema: %s", TemplateParamClusterInstance, err.Error())
+			"failed to extract %s subschema: %s", constants.TemplateParamClusterInstance, err.Error())
 	}
 	// Any unknown fields not defined in the schema will be disallowed
 	DisallowUnknownFieldsInSchema(clusterInstanceSubSchema)
 
 	// Get the matching input for ClusterInstanceParameters
 	clusterInstanceMatchingInput, err := ExtractMatchingInput(
-		r.Spec.TemplateParameters.Raw, TemplateParamClusterInstance)
+		r.Spec.TemplateParameters.Raw, constants.TemplateParamClusterInstance)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"failed to extract matching input for subSchema %s: %w", TemplateParamClusterInstance, err)
+			"failed to extract matching input for subSchema %s: %w", constants.TemplateParamClusterInstance, err)
 	}
 
 	// The schema defined in ClusterTemplate's spec.templateParameterSchema for
@@ -253,7 +248,7 @@ func (r *ProvisioningRequest) ValidateClusterInstanceInputMatchesSchema(
 	if err != nil {
 		return nil, fmt.Errorf(
 			"spec.templateParameters.%s does not match the schema defined in ClusterTemplate (%s) spec.templateParameterSchema.%s: %w",
-			TemplateParamClusterInstance, clusterTemplate.Name, TemplateParamClusterInstance, err)
+			constants.TemplateParamClusterInstance, clusterTemplate.Name, constants.TemplateParamClusterInstance, err)
 	}
 
 	return clusterInstanceMatchingInput, nil
@@ -426,7 +421,7 @@ func SchemaDefinesHwMgmtParameters(clusterTemplate *ClusterTemplate) bool {
 	if !ok {
 		return false
 	}
-	_, defined := properties[TemplateParamHwMgmt]
+	_, defined := properties[constants.TemplateParamHwMgmt]
 	return defined
 }
 
@@ -450,7 +445,7 @@ func (r *ProvisioningRequest) ValidateHwMgmtHwProfiles(
 		return nil
 	}
 
-	hwMgmtParams, ok := params[TemplateParamHwMgmt]
+	hwMgmtParams, ok := params[constants.TemplateParamHwMgmt]
 	if !ok {
 		return nil
 	}
