@@ -90,7 +90,7 @@ func (r *NodeAllocationRequestReconciler) Reconcile(ctx context.Context, req ctr
 	}()
 
 	// Add logging context with the NodeAllocationRequest name
-	ctx = logging.AppendCtx(ctx, slog.String("NodeAllocationRequest", req.Name))
+	ctx = logging.AppendCtx(ctx, slog.String("nodeAllocationRequest", req.Name))
 
 	if !r.indexerEnabled {
 		if err := r.SetupIndexer(ctx); err != nil {
