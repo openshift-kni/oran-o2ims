@@ -14,6 +14,7 @@ packages:
   internal: 16
   internal/controllers: 60
   internal/controllers/utils: 19
+  internal/validation: 80
   internal/logging: 39
   internal/search: 38
   internal/service/alarms/api: 2

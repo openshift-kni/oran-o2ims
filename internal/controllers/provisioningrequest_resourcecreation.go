@@ -16,6 +16,7 @@ import (
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	clustervalidation "github.com/openshift-kni/oran-o2ims/internal/validation"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 )
 
@@ -136,6 +137,20 @@ func (t *provisioningRequestReconcilerTask) createClusterInstanceNamespace(
 
 	if clusterName == "" {
 		return fmt.Errorf("spec.clusterName cannot be empty")
+	}
+
+	// Validate the clusterName before creating the namespace. The early
+	// validation in validateProvisioningRequestCR performs these same checks;
+	// this guard ensures consistency regardless of the code path taken.
+	if err := clustervalidation.ValidateClusterNameFormat(clusterName); err != nil {
+		return fmt.Errorf("invalid clusterName format: %w", err)
+	}
+	if err := clustervalidation.ValidateClusterNameNotReserved(clusterName); err != nil {
+		return fmt.Errorf("clusterName rejected: %w", err)
+	}
+	if err := clustervalidation.ValidateClusterNameOwnership(ctx, t.client, clusterName, t.object.Name,
+		provisioningv1alpha1.ProvisioningRequestNameLabel); err != nil {
+		return fmt.Errorf("clusterName ownership check failed: %w", err)
 	}
 
 	// Create the namespace.
