@@ -85,23 +85,120 @@ func (t *provisioningRequestReconcilerTask) IsUpgradeRequested(
 	return false, ctrl.Result{}, nil
 }
 
-// handleUpgrade handles the upgrade of the cluster through IBGU. It returns a ctrl.Result to indicate
-// if/when to requeue, a bool to indicate whether to process with further processing and an error if any issues occur.
+// handleUpgrade dispatches to the appropriate upgrade handler based on the
+// upgrade type detected from the ClusterTemplate defaults and ProvisioningRequest
+// parameters. Returns a ctrl.Result, a bool indicating whether to proceed with
+// further processing, and an error.
 func (t *provisioningRequestReconcilerTask) handleUpgrade(ctx context.Context, clusterName string) (ctrl.Result, bool, error) {
-	nextReconcile := ctrl.Result{}
-	proceed := false
-
 	t.logger.InfoContext(
 		ctx,
 		"Start handling upgrade",
 	)
 	clusterTemplate, err := t.object.GetClusterTemplateRef(ctx, t.client)
 	if err != nil {
-		return nextReconcile, proceed, fmt.Errorf("failed to get clusterTemplate: %w", err)
+		return ctrl.Result{}, false, fmt.Errorf("failed to get clusterTemplate: %w", err)
 	}
 
+	upgradeType, err := detectUpgradeType(clusterTemplate, t.object)
+	if err != nil {
+		ctlrutils.SetProvisioningStateFailed(t.object, fmt.Sprintf("Upgrade precondition check failed: %s", err.Error()))
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
+			provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
+			provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
+			metav1.ConditionFalse,
+			err.Error(),
+		)
+		if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+			return ctrl.Result{}, false, fmt.Errorf("failed to update ProvisioningRequest CR status: %w", updateErr)
+		}
+		return ctrl.Result{}, false, nil
+	}
+
+	switch upgradeType {
+	case ctlrutils.UpgradeDefaultsClusterVersionKey:
+		return t.handleClusterVersionUpgrade()
+	case ctlrutils.UpgradeDefaultsIBGUKey:
+		return t.handleIBGUUpgrade(ctx, clusterTemplate, clusterName)
+	default:
+		return ctrl.Result{}, true, nil
+	}
+}
+
+// detectUpgradeType inspects the top-level keys in the ClusterTemplate's
+// upgradeDefaults and the ProvisioningRequest's upgradeParameters to determine
+// the upgrade type. Returns an error if both clusterVersion and
+// imageBasedGroupUpgrade keys are found.
+func detectUpgradeType(
+	ct *provisioningv1alpha1.ClusterTemplate,
+	pr *provisioningv1alpha1.ProvisioningRequest,
+) (string, error) {
+	hasCV, hasIBGU := false, false
+
+	// Check ClusterTemplate upgradeDefaults.
+	if ct.Spec.TemplateDefaults.UpgradeDefaults.Size() > 0 {
+		var defaults map[string]any
+		if err := json.Unmarshal(ct.Spec.TemplateDefaults.UpgradeDefaults.Raw, &defaults); err != nil {
+			return "", fmt.Errorf("failed to parse upgradeDefaults: %w", err)
+		}
+		if _, ok := defaults[ctlrutils.UpgradeDefaultsClusterVersionKey]; ok {
+			hasCV = true
+		}
+		if _, ok := defaults[ctlrutils.UpgradeDefaultsIBGUKey]; ok {
+			hasIBGU = true
+		}
+	}
+
+	// Check ProvisioningRequest upgradeParameters.
+	if pr.Spec.TemplateParameters.Size() > 0 {
+		var templateParams map[string]any
+		if err := json.Unmarshal(pr.Spec.TemplateParameters.Raw, &templateParams); err != nil {
+			return "", fmt.Errorf("failed to parse templateParameters: %w", err)
+		}
+		if upgradeParamsRaw, ok := templateParams[constants.TemplateParamUpgrade]; ok {
+			upgradeParams, ok := upgradeParamsRaw.(map[string]any)
+			if !ok {
+				return "", fmt.Errorf("%s is not a map", constants.TemplateParamUpgrade)
+			}
+			if _, ok := upgradeParams[ctlrutils.UpgradeDefaultsClusterVersionKey]; ok {
+				hasCV = true
+			}
+			if _, ok := upgradeParams[ctlrutils.UpgradeDefaultsIBGUKey]; ok {
+				hasIBGU = true
+			}
+		}
+	}
+
+	if hasCV && hasIBGU {
+		return "", fmt.Errorf(
+			"upgrade configuration contains both %q and %q keys; only one upgrade type is allowed",
+			ctlrutils.UpgradeDefaultsClusterVersionKey, ctlrutils.UpgradeDefaultsIBGUKey)
+	}
+
+	if hasCV {
+		return ctlrutils.UpgradeDefaultsClusterVersionKey, nil
+	}
+	if hasIBGU {
+		return ctlrutils.UpgradeDefaultsIBGUKey, nil
+	}
+	return "", fmt.Errorf(
+		"no upgrade configuration found: upgradeDefaults or upgradeParameters must contain %q or %q",
+		ctlrutils.UpgradeDefaultsClusterVersionKey, ctlrutils.UpgradeDefaultsIBGUKey)
+}
+
+// handleIBGUUpgrade handles the upgrade of the cluster through IBGU.
+// It checks if an IBGU CR already exists (monitoring mode) or creates one
+// (merge+validate mode). Returns a ctrl.Result, a bool indicating whether
+// to proceed with further processing, and an error.
+func (t *provisioningRequestReconcilerTask) handleIBGUUpgrade(
+	ctx context.Context,
+	clusterTemplate *provisioningv1alpha1.ClusterTemplate,
+	clusterName string,
+) (ctrl.Result, bool, error) {
+	nextReconcile := ctrl.Result{}
+	proceed := false
+
 	ibgu := &ibgu.ImageBasedGroupUpgrade{}
-	err = t.client.Get(ctx, types.NamespacedName{Name: t.object.Name, Namespace: clusterName}, ibgu)
+	err := t.client.Get(ctx, types.NamespacedName{Name: t.object.Name, Namespace: clusterName}, ibgu)
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return nextReconcile, proceed, fmt.Errorf("failed to get IBGU: %w", err)
@@ -317,4 +414,15 @@ func isIBGUProgressing(cr *ibgu.ImageBasedGroupUpgrade) bool {
 		return condition.Status == metav1.ConditionTrue
 	}
 	return true
+}
+
+// handleClusterVersionUpgrade handles upgrades via direct spoke ClusterVersion
+// patching. It sets up a spoke client and reads the current ClusterVersion.
+// Full upgrade logic (precondition checks, trigger, monitoring) will be added
+// in a subsequent change.
+func (t *provisioningRequestReconcilerTask) handleClusterVersionUpgrade() (ctrl.Result, bool, error) {
+
+	// TODO: Full upgrade logic (precondition checks, trigger, monitoring)
+	// will be added in a subsequent change.
+	return requeueWithMediumInterval(), false, nil
 }

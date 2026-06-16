@@ -243,7 +243,8 @@ const ClusterVersionName = "version"
 
 // Upgrade constants
 const (
-	UpgradeDefaultsIBGUKey = "imageBasedGroupUpgrade"
+	UpgradeDefaultsIBGUKey           = "imageBasedGroupUpgrade"
+	UpgradeDefaultsClusterVersionKey = "clusterVersion"
 )
 
 // CRDs needed to be suppressed in ClusterInstance for upgrade
