@@ -2419,7 +2419,7 @@ nodes:
 
 			// Extract and merge cluster instance parameters
 			clusterInstanceInputParams, err := provisioningv1alpha1.ExtractMatchingInput(
-				cr.Spec.TemplateParameters.Raw, utils.TemplateParamClusterInstance)
+				cr.Spec.TemplateParameters.Raw, constants.TemplateParamClusterInstance)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(clusterInstanceInputParams).ToNot(BeNil())
 
@@ -2432,7 +2432,7 @@ nodes:
 
 			mergedData, err := task.getMergedClusterInputData(
 				ctx, "no-hw-defaults-cm", clusterInstanceInputParams.(map[string]any),
-				utils.TemplateParamClusterInstance)
+				constants.TemplateParamClusterInstance)
 			Expect(err).ToNot(HaveOccurred())
 			task.clusterInput.clusterInstanceData = mergedData
 

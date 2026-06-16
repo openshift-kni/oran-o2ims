@@ -792,23 +792,23 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec(
 	}
 
 	siteIDRaw, err := provisioningv1alpha1.ExtractMatchingInput(
-		t.object.Spec.TemplateParameters.Raw, ctlrutils.TemplateParamOCloudSiteId)
+		t.object.Spec.TemplateParameters.Raw, constants.TemplateParamOCloudSiteId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get %s from templateParameters: %w", ctlrutils.TemplateParamOCloudSiteId, err)
+		return nil, fmt.Errorf("failed to get %s from templateParameters: %w", constants.TemplateParamOCloudSiteId, err)
 	}
 	siteID, ok := siteIDRaw.(string)
 	if !ok {
-		return nil, fmt.Errorf("%s is not a string", ctlrutils.TemplateParamOCloudSiteId)
+		return nil, fmt.Errorf("%s is not a string", constants.TemplateParamOCloudSiteId)
 	}
 
 	clusterIdRaw, err := provisioningv1alpha1.ExtractMatchingInput(
-		t.object.Spec.TemplateParameters.Raw, ctlrutils.TemplateParamNodeClusterName)
+		t.object.Spec.TemplateParameters.Raw, constants.TemplateParamNodeClusterName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get %s from templateParameters: %w", ctlrutils.TemplateParamNodeClusterName, err)
+		return nil, fmt.Errorf("failed to get %s from templateParameters: %w", constants.TemplateParamNodeClusterName, err)
 	}
 	clusterId, ok := clusterIdRaw.(string)
 	if !ok {
-		return nil, fmt.Errorf("%s is not a string", ctlrutils.TemplateParamNodeClusterName)
+		return nil, fmt.Errorf("%s is not a string", constants.TemplateParamNodeClusterName)
 	}
 
 	narNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)

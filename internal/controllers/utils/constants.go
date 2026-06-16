@@ -155,16 +155,6 @@ const (
 	ClusterConfigurationTimeoutConfigKey = "clusterConfigurationTimeout"
 )
 
-// Required template schema parameters
-const (
-	TemplateParamNodeClusterName = "nodeClusterName"
-	TemplateParamOCloudSiteId    = "oCloudSiteId"
-	TemplateParamClusterInstance = "clusterInstanceParameters"
-	TemplateParamPolicyConfig    = "policyTemplateParameters"
-	TemplateParamHwMgmt          = "hwMgmtParameters"
-	TemplateParamUpgrade         = "upgradeParameters"
-)
-
 // ClusterInstance template constants
 const (
 	ClusterInstanceTemplateName                 = "ClusterInstance"

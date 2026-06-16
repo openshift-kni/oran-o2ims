@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	clustervalidation "github.com/openshift-kni/oran-o2ims/internal/validation"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
@@ -265,10 +266,10 @@ func (t *provisioningRequestReconcilerTask) createClusterInstanceBMCSecrets(
 
 	// The BMC credential details are obtained from the ProvisioningRequest.
 	clusterInstanceMatchingInput, err := provisioningv1alpha1.ExtractMatchingInput(
-		t.object.Spec.TemplateParameters.Raw, ctlrutils.TemplateParamClusterInstance)
+		t.object.Spec.TemplateParameters.Raw, constants.TemplateParamClusterInstance)
 	if err != nil {
 		return ctlrutils.NewInputError(
-			"failed to extract matching input for subSchema %s: %w", ctlrutils.TemplateParamClusterInstance, err)
+			"failed to extract matching input for subSchema %s: %w", constants.TemplateParamClusterInstance, err)
 	}
 	clusterInstanceMatchingInputMap := clusterInstanceMatchingInput.(map[string]any)
 
