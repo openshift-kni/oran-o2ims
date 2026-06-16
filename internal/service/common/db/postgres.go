@@ -16,6 +16,8 @@ import (
 	"github.com/jackc/pgx/v5/tracelog"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 )
 
 type PgConfig struct {
@@ -56,9 +58,30 @@ func NewPgxPool(ctx context.Context, cfg PgConfig) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("failed to create connection pool: %w", err)
 	}
 
-	if err := pool.Ping(ctx); err != nil {
+	// Retry the initial connection. This handles the common startup race
+	// where the service pod starts before postgres is accepting connections.
+	// Note: do not use Cap with Factor > 1.0 — the wait library zeros Steps
+	// when Duration exceeds Cap, ending retries prematurely.
+	connectBackoff := wait.Backoff{
+		Duration: 5 * time.Second,
+		Factor:   1.0,
+		Jitter:   0.1,
+		Steps:    40, // ~3.3 minutes total
+	}
+	err = retry.OnError(connectBackoff, func(err error) bool {
+		return ctx.Err() == nil
+	}, func() error {
+		pingCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		if pingErr := pool.Ping(pingCtx); pingErr != nil {
+			slog.WarnContext(ctx, "Database not ready, retrying", slog.Any("error", pingErr))
+			return fmt.Errorf("failed to ping database: %w", pingErr)
+		}
+		return nil
+	})
+	if err != nil {
 		pool.Close()
-		return nil, fmt.Errorf("failed to ping database: %w", err)
+		return nil, fmt.Errorf("failed to connect to database after retries: %w", err)
 	}
 
 	slog.InfoContext(ctx, "Database connection pool established")
