@@ -14,8 +14,10 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -305,5 +307,219 @@ var _ = Describe("prepareIBGU", func() {
 		_, err := task.prepareIBGU(ctx, clusterTemplate, "prepare-cluster")
 		Expect(err).To(HaveOccurred())
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
+	})
+})
+
+var _ = Describe("detectUpgradeType", func() {
+	var (
+		ct *provisioningv1alpha1.ClusterTemplate
+		pr *provisioningv1alpha1.ProvisioningRequest
+	)
+
+	BeforeEach(func() {
+		ct = &provisioningv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-ct"},
+		}
+		pr = &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-pr"},
+			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+				TemplateParameters: runtime.RawExtension{Raw: []byte(`{}`)},
+			},
+		}
+	})
+
+	It("should detect clusterVersion from CT defaults when PR has no upgrade params", func() {
+		ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.22.0"}}}`),
+		}
+		upgradeType, err := detectUpgradeType(ct, pr)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(upgradeType).To(Equal(utils.UpgradeDefaultsClusterVersionKey))
+	})
+
+	It("should detect imageBasedGroupUpgrade from CT defaults when PR has no upgrade params", func() {
+		ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`{"imageBasedGroupUpgrade":{"ibuSpec":{}}}`),
+		}
+		upgradeType, err := detectUpgradeType(ct, pr)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(upgradeType).To(Equal(utils.UpgradeDefaultsIBGUKey))
+	})
+
+	It("should detect clusterVersion from PR params when CT defaults is empty", func() {
+		pr.Spec.TemplateParameters = runtime.RawExtension{
+			Raw: []byte(`{"upgradeParameters":{"clusterVersion":{"desiredUpdate":{"version":"4.22.0"}}}}`),
+		}
+		upgradeType, err := detectUpgradeType(ct, pr)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(upgradeType).To(Equal(utils.UpgradeDefaultsClusterVersionKey))
+	})
+
+	It("should detect imageBasedGroupUpgrade from PR params when CT defaults is empty", func() {
+		pr.Spec.TemplateParameters = runtime.RawExtension{
+			Raw: []byte(`{"upgradeParameters":{"imageBasedGroupUpgrade":{"ibuSpec":{}}}}`),
+		}
+		upgradeType, err := detectUpgradeType(ct, pr)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(upgradeType).To(Equal(utils.UpgradeDefaultsIBGUKey))
+	})
+
+	It("should return error when both types are in CT defaults", func() {
+		ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`{"clusterVersion":{},"imageBasedGroupUpgrade":{}}`),
+		}
+		_, err := detectUpgradeType(ct, pr)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("only one upgrade type is allowed"))
+	})
+
+	It("should return error when both types are in PR params", func() {
+		pr.Spec.TemplateParameters = runtime.RawExtension{
+			Raw: []byte(`{"upgradeParameters":{"clusterVersion":{},"imageBasedGroupUpgrade":{}}}`),
+		}
+		_, err := detectUpgradeType(ct, pr)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("only one upgrade type is allowed"))
+	})
+
+	It("should return error when clusterVersion in CT defaults and imageBasedGroupUpgrade in PR params", func() {
+		ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`{"clusterVersion":{}}`),
+		}
+		pr.Spec.TemplateParameters = runtime.RawExtension{
+			Raw: []byte(`{"upgradeParameters":{"imageBasedGroupUpgrade":{}}}`),
+		}
+		_, err := detectUpgradeType(ct, pr)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("only one upgrade type is allowed"))
+	})
+
+	It("should return error when no upgrade configuration is provided", func() {
+		_, err := detectUpgradeType(ct, pr)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("no upgrade configuration found"))
+	})
+
+	It("should return error when upgradeDefaults is not valid JSON", func() {
+		ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`{invalid`),
+		}
+		_, err := detectUpgradeType(ct, pr)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to parse upgradeDefaults"))
+	})
+
+	It("should return error when templateParameters is not valid JSON", func() {
+		pr.Spec.TemplateParameters = runtime.RawExtension{
+			Raw: []byte(`{invalid`),
+		}
+		_, err := detectUpgradeType(ct, pr)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to parse templateParameters"))
+	})
+
+	It("should return error when upgradeParameters is not a map", func() {
+		pr.Spec.TemplateParameters = runtime.RawExtension{
+			Raw: []byte(`{"upgradeParameters":"not-a-map"}`),
+		}
+		_, err := detectUpgradeType(ct, pr)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("is not a map"))
+	})
+})
+
+var _ = Describe("handleUpgrade", func() {
+	var (
+		ctx         context.Context
+		task        *provisioningRequestReconcilerTask
+		c           client.Client
+		ct          *provisioningv1alpha1.ClusterTemplate
+		pr          *provisioningv1alpha1.ProvisioningRequest
+		clusterName string
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		clusterName = "test-cluster"
+
+		ct = &provisioningv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-template.v1.0.0", Namespace: "test-ns"},
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Release: "4.17.0",
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
+					UpgradeDefaults: runtime.RawExtension{Raw: []byte(`{}`)},
+				},
+				TemplateParameterSchema: testUpgradeSchema,
+			},
+			Status: provisioningv1alpha1.ClusterTemplateStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(provisioningv1alpha1.CTconditionTypes.Validated),
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
+		}
+		pr = &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-pr"},
+			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+				TemplateName:       "test-template",
+				TemplateVersion:    "v1.0.0",
+				TemplateParameters: runtime.RawExtension{Raw: []byte(`{}`)},
+			},
+		}
+	})
+
+	setupClient := func(objs ...client.Object) {
+		c = fake.NewClientBuilder().WithScheme(scheme).
+			WithObjects(objs...).
+			WithStatusSubresource(pr).
+			Build()
+		task = &provisioningRequestReconcilerTask{
+			client: c,
+			object: pr,
+			logger: slog.New(slog.DiscardHandler),
+		}
+	}
+
+	It("should set PreconditionChecksFailed when no recognized upgrade configuration is found", func() {
+		setupClient(ct, pr)
+
+		result, proceed, err := task.handleUpgrade(ctx, clusterName)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(proceed).To(BeFalse())
+		Expect(result.RequeueAfter).To(BeZero())
+
+		upgradeCond := meta.FindStatusCondition(task.object.Status.Conditions,
+			string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
+		Expect(upgradeCond).ToNot(BeNil())
+		Expect(upgradeCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed)))
+		Expect(upgradeCond.Message).To(ContainSubstring("no upgrade configuration found"))
+		Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+			Equal(provisioningv1alpha1.StateFailed))
+	})
+
+	It("should return error when ClusterTemplate is missing", func() {
+		pr.Spec.TemplateName = "non-existent"
+		setupClient(pr)
+
+		_, _, err := task.handleUpgrade(ctx, clusterName)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to get clusterTemplate"))
+	})
+
+	It("should dispatch to handleClusterVersionUpgrade for clusterVersion type", func() {
+		ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.17.0"}}}`),
+		}
+		setupClient(
+			ct, pr,
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: clusterName}},
+		)
+
+		result, proceed, err := task.handleUpgrade(ctx, clusterName)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(proceed).To(BeFalse())
+		Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 	})
 })
