@@ -6,7 +6,6 @@ package notifier
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -337,10 +336,84 @@ var _ = Describe("Notifier integration", func() {
 	})
 })
 
-// Verify the internal suite_test.go bootstrap still works alongside internal tests.
-// The suite_test.go is package notifier_test, these are package notifier — Go allows both.
-var _ = Describe("slog default", func() {
-	It("is available for notifier logging", func() {
-		Expect(slog.Default()).ToNot(BeNil())
+var _ = Describe("Notify", func() {
+	It("sends a notification to the channel", func() {
+		n := NewNotifier(
+			&stubSubscriptionProvider{},
+			&stubNotificationProvider{},
+			&stubClientProvider{client: http.DefaultClient},
+		)
+
+		ctx := context.Background()
+		notif := &Notification{
+			NotificationID: uuid.New(),
+			SequenceID:     1,
+			Payload:        "test",
+		}
+		go n.Notify(ctx, notif)
+		var received *Notification
+		Eventually(n.notificationChannel, 2*time.Second).Should(Receive(&received))
+		Expect(received.NotificationID).To(Equal(notif.NotificationID))
+	})
+
+	It("aborts when context is canceled", func() {
+		n := NewNotifier(
+			&stubSubscriptionProvider{},
+			&stubNotificationProvider{},
+			&stubClientProvider{client: http.DefaultClient},
+		)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		notif := &Notification{NotificationID: uuid.New(), SequenceID: 1, Payload: "test"}
+		done := make(chan struct{})
+		go func() {
+			n.Notify(ctx, notif)
+			close(done)
+		}()
+		Eventually(done, 2*time.Second).Should(BeClosed())
+	})
+})
+
+var _ = Describe("SubscriptionEvent method", func() {
+	It("sends a subscription event to the channel", func() {
+		n := NewNotifier(
+			&stubSubscriptionProvider{},
+			&stubNotificationProvider{},
+			&stubClientProvider{client: http.DefaultClient},
+		)
+
+		ctx := context.Background()
+		event := &SubscriptionEvent{
+			Removed:      false,
+			Subscription: &SubscriptionInfo{SubscriptionID: uuid.New()},
+		}
+		go n.SubscriptionEvent(ctx, event)
+		var received *SubscriptionEvent
+		Eventually(n.subscriptionChannel, 2*time.Second).Should(Receive(&received))
+		Expect(received.Subscription.SubscriptionID).To(Equal(event.Subscription.SubscriptionID))
+	})
+
+	It("aborts when context is canceled", func() {
+		n := NewNotifier(
+			&stubSubscriptionProvider{},
+			&stubNotificationProvider{},
+			&stubClientProvider{client: http.DefaultClient},
+		)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		event := &SubscriptionEvent{
+			Removed:      false,
+			Subscription: &SubscriptionInfo{SubscriptionID: uuid.New()},
+		}
+		done := make(chan struct{})
+		go func() {
+			n.SubscriptionEvent(ctx, event)
+			close(done)
+		}()
+		Eventually(done, 2*time.Second).Should(BeClosed())
 	})
 })
