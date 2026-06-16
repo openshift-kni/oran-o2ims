@@ -69,6 +69,7 @@ var CRconditionReasons = struct {
 	InProgress               ConditionReason
 	Missing                  ConditionReason
 	OutOfDate                ConditionReason
+	Pending                  ConditionReason
 	PreconditionChecksFailed ConditionReason
 	TimedOut                 ConditionReason
 	Unknown                  ConditionReason
@@ -80,6 +81,7 @@ var CRconditionReasons = struct {
 	InProgress:               "InProgress",
 	Missing:                  "Missing",
 	OutOfDate:                "OutOfDate",
+	Pending:                  "Pending",
 	PreconditionChecksFailed: "PreconditionChecksFailed",
 	TimedOut:                 "TimedOut",
 	Unknown:                  "Unknown",

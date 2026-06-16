@@ -51,8 +51,11 @@ import (
 	observabilityv1beta1 "github.com/stolostron/multicluster-observability-operator/operators/multiclusterobservability/api/v1beta1"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	addonv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
+	workv1 "open-cluster-management.io/api/work/v1"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
+	msav1beta1 "open-cluster-management.io/managed-serviceaccount/apis/authentication/v1beta1"
 
 	"github.com/openshift-kni/oran-o2ims/internal"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers"
@@ -154,6 +157,9 @@ func init() {
 	utilruntime.Must(metal3v1alpha1.AddToScheme(scheme))
 	utilruntime.Must(observabilityv1beta1.AddToScheme(scheme))
 	utilruntime.Must(hivev1.AddToScheme(scheme))
+	utilruntime.Must(msav1beta1.AddToScheme(scheme))
+	utilruntime.Must(workv1.Install(scheme))
+	utilruntime.Must(addonv1alpha1.Install(scheme))
 }
 
 // run executes the `start controller-manager` command.

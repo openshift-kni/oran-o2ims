@@ -18,7 +18,10 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils/spokeclient"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
+	configv1 "github.com/openshift/api/config/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -116,11 +119,13 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(ctx context.Context, c
 
 	switch upgradeType {
 	case ctlrutils.UpgradeDefaultsClusterVersionKey:
-		return t.handleClusterVersionUpgrade()
+		return t.handleClusterVersionUpgrade(ctx, clusterTemplate, clusterName)
 	case ctlrutils.UpgradeDefaultsIBGUKey:
 		return t.handleIBGUUpgrade(ctx, clusterTemplate, clusterName)
 	default:
-		return ctrl.Result{}, true, nil
+		t.logger.ErrorContext(ctx, "Unexpected upgrade type from detectUpgradeType",
+			slog.String("upgradeType", upgradeType))
+		return doNotRequeue(), false, nil
 	}
 }
 
@@ -416,11 +421,83 @@ func isIBGUProgressing(cr *ibgu.ImageBasedGroupUpgrade) bool {
 	return true
 }
 
+// upgradeRBACRules defines the RBAC permissions delivered to the spoke cluster
+// for ClusterVersion upgrade operations.
+var upgradeRBACRules = []rbacv1.PolicyRule{
+	{
+		APIGroups: []string{"config.openshift.io"},
+		Resources: []string{"clusterversions"},
+		Verbs:     []string{"get", "list", "watch", "update", "patch"},
+	},
+}
+
+// upgradeSpokeScheme is the scheme used by the spoke client for upgrade operations.
+var upgradeSpokeScheme = spokeclient.NewSpokeScheme(configv1.Install)
+
 // handleClusterVersionUpgrade handles upgrades via direct spoke ClusterVersion
 // patching. It sets up a spoke client and reads the current ClusterVersion.
 // Full upgrade logic (precondition checks, trigger, monitoring) will be added
 // in a subsequent change.
-func (t *provisioningRequestReconcilerTask) handleClusterVersionUpgrade() (ctrl.Result, bool, error) {
+func (t *provisioningRequestReconcilerTask) handleClusterVersionUpgrade(
+	ctx context.Context,
+	clusterTemplate *provisioningv1alpha1.ClusterTemplate,
+	clusterName string,
+) (ctrl.Result, bool, error) {
+
+	managedServiceAccountName := t.object.Name + "-upgrade"
+	manifestWorkName := t.object.Name + "-upgrade-rbac"
+
+	spokeClient, ready, err := spokeclient.EnsureSpokeClient(
+		ctx, t.client, t.logger, clusterName,
+		managedServiceAccountName, manifestWorkName,
+		upgradeRBACRules, upgradeSpokeScheme)
+	if err != nil {
+		if typederrors.IsInputError(err) {
+			ctlrutils.SetProvisioningStateFailed(t.object, err.Error())
+			ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
+				provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
+				provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
+				metav1.ConditionFalse,
+				err.Error(),
+			)
+			if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+				return ctrl.Result{}, false, fmt.Errorf("failed to update ProvisioningRequest CR status: %w", updateErr)
+			}
+			return ctrl.Result{}, false, nil
+		}
+		return ctrl.Result{}, false, fmt.Errorf("failed to setup spoke client: %w", err)
+	}
+	if !ready {
+		ctlrutils.SetProvisioningStateInProgress(t.object, "Preparing upgrade resources")
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
+			provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
+			provisioningv1alpha1.CRconditionReasons.Pending,
+			metav1.ConditionFalse,
+			"Preparing upgrade resources",
+		)
+		if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+			return ctrl.Result{}, false, fmt.Errorf("failed to update ProvisioningRequest CR status: %w", updateErr)
+		}
+		return requeueWithShortInterval(), false, nil
+	}
+
+	cv := &configv1.ClusterVersion{}
+	if err := spokeClient.Get(ctx, types.NamespacedName{Name: ctlrutils.ClusterVersionName}, cv); err != nil {
+		return ctrl.Result{}, false, fmt.Errorf("failed to get spoke ClusterVersion: %w", err)
+	}
+
+	currentVersion := "unknown"
+	for _, h := range cv.Status.History {
+		if h.State == configv1.CompletedUpdate {
+			currentVersion = h.Version
+			break
+		}
+	}
+
+	t.logger.InfoContext(ctx, "Spoke client ready, ClusterVersion read",
+		slog.String("clusterName", clusterName),
+		slog.String("currentVersion", currentVersion),
+		slog.String("targetRelease", clusterTemplate.Spec.Release))
 
 	// TODO: Full upgrade logic (precondition checks, trigger, monitoring)
 	// will be added in a subsequent change.
