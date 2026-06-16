@@ -123,7 +123,7 @@ func (n *Notifier) Run(ctx context.Context) error {
 		case e := <-n.notificationChannel:
 			if err := n.handleNotification(ctx, e); err != nil {
 				slog.ErrorContext(ctx, "failed to handle notification",
-					slog.String("NotificationID", e.NotificationID.String()), slog.Int("sequenceID", e.SequenceID), slog.Any("error", err))
+					slog.String("notificationID", e.NotificationID.String()), slog.Int("sequenceID", e.SequenceID), slog.Any("error", err))
 			}
 		case e := <-n.subscriptionChannel:
 			if err := n.handleSubscriptionEvent(ctx, e); err != nil {
@@ -216,7 +216,7 @@ func (n *Notifier) Notify(ctx context.Context, event *Notification) {
 
 // handleNotification handles an incoming notification
 func (n *Notifier) handleNotification(ctx context.Context, event *Notification) error {
-	slog.InfoContext(ctx, "handling notification", slog.String("NotificationID", event.NotificationID.String()), slog.Int("sequenceID", event.SequenceID))
+	slog.InfoContext(ctx, "handling notification", slog.String("notificationID", event.NotificationID.String()), slog.Int("sequenceID", event.SequenceID))
 
 	count := 0
 	for _, worker := range n.workers {
@@ -234,7 +234,7 @@ func (n *Notifier) handleNotification(ctx context.Context, event *Notification) 
 	if count == 0 {
 		// No subscriptions matched just delete the event
 		slog.DebugContext(ctx, "no matching subscriptions; deleting event",
-			slog.String("NotificationID", event.NotificationID.String()), slog.Int("sequenceID", event.SequenceID))
+			slog.String("notificationID", event.NotificationID.String()), slog.Int("sequenceID", event.SequenceID))
 		if err := n.notificationProvider.DeleteNotification(ctx, event.NotificationID); err != nil {
 			return fmt.Errorf("failed to delete notification: %w", err)
 		}
@@ -242,7 +242,7 @@ func (n *Notifier) handleNotification(ctx context.Context, event *Notification) 
 	}
 
 	slog.InfoContext(ctx, "notification dispatched",
-		slog.String("NotificationID", event.NotificationID.String()), slog.Int("sequenceID", event.SequenceID),
+		slog.String("notificationID", event.NotificationID.String()), slog.Int("sequenceID", event.SequenceID),
 		slog.Int("subscribers", count))
 
 	return nil
@@ -326,7 +326,7 @@ func (n *Notifier) handleSubscriptionEvent(ctx context.Context, event *Subscript
 // handleSubscriptionJobCompleteEvent handles a job completion event, removes the subscriber from the event job,
 func (n *Notifier) handleSubscriptionJobCompleteEvent(ctx context.Context, event *SubscriptionJobComplete) error {
 	slog.DebugContext(ctx, "handling subscription job complete event",
-		slog.String("NotificationID", event.notificationID.String()), slog.String("subscriptionID", event.subscriptionID.String()))
+		slog.String("notificationID", event.notificationID.String()), slog.String("subscriptionID", event.subscriptionID.String()))
 
 	// Lookup the subscription worker for this event
 	if worker, found := n.workers[event.subscriptionID]; found {

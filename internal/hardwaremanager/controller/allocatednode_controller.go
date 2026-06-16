@@ -62,7 +62,7 @@ func (r *AllocatedNodeReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}()
 
 	// Add logging context with the resource name
-	ctx = logging.AppendCtx(ctx, slog.String("ReconcileRequest", req.Name))
+	ctx = logging.AppendCtx(ctx, slog.String("reconcileRequest", req.Name))
 
 	allocatedNode, err := hwmgrutils.GetNode(ctx, r.Logger, r.NoncachedClient, req.Namespace, req.Name)
 	if err != nil {

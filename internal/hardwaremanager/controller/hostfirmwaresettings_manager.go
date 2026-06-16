@@ -45,7 +45,7 @@ func createHostFirmwareSettings(ctx context.Context, c client.Client, logger *sl
 			// Metal3 may have created the HFS concurrently; treat as success.
 			return nil
 		}
-		logger.InfoContext(ctx, "Failed to create HostFirmwareSettings", slog.String("HFS", hfs.Name))
+		logger.InfoContext(ctx, "Failed to create HostFirmwareSettings", slog.String("hfs", hfs.Name))
 		return fmt.Errorf("failed to create HostFirmwareSettings: %w", err)
 	}
 	return nil
@@ -92,7 +92,7 @@ func IsBiosUpdateRequired(ctx context.Context,
 		if err := createHostFirmwareSettings(ctx, c, logger, &hfs); err != nil {
 			return false, fmt.Errorf("failed to create HostFirmwareSettings: %w", err)
 		}
-		logger.InfoContext(ctx, "Successfully created HostFirmwareSettings", slog.String("HFS", hfs.Name))
+		logger.InfoContext(ctx, "Successfully created HostFirmwareSettings", slog.String("hfs", hfs.Name))
 		return true, nil
 	}
 
@@ -106,7 +106,7 @@ func IsBiosUpdateRequired(ctx context.Context,
 
 	// Compare desired settings with current status
 	if !isChangeDetected(ctx, logger, hfs.Spec.Settings, existingHFS.Status.Settings) {
-		logger.InfoContext(ctx, "No changes detected in HostFirmwareSettings", slog.String("HFS", hfs.Name))
+		logger.InfoContext(ctx, "No changes detected in HostFirmwareSettings", slog.String("hfs", hfs.Name))
 		return false, nil
 	}
 
@@ -115,13 +115,13 @@ func IsBiosUpdateRequired(ctx context.Context,
 		return true, nil
 	}
 
-	logger.InfoContext(ctx, "Updating existing HostFirmwareSettings", slog.String("HFS", hfs.Name))
+	logger.InfoContext(ctx, "Updating existing HostFirmwareSettings", slog.String("hfs", hfs.Name))
 	if err := updateHostFirmwareSettings(ctx, c, types.NamespacedName{Name: hfs.Name, Namespace: hfs.Namespace}, hfs); err != nil {
-		logger.InfoContext(ctx, "Failed to update HostFirmwareSettings", slog.String("HFS", hfs.Name))
+		logger.InfoContext(ctx, "Failed to update HostFirmwareSettings", slog.String("hfs", hfs.Name))
 		return false, fmt.Errorf("failed to update HostFirmwareSettings: %w", err)
 	}
 
-	logger.InfoContext(ctx, "Successfully updated HostFirmwareSetting", slog.String("HFS", hfs.Name))
+	logger.InfoContext(ctx, "Successfully updated HostFirmwareSetting", slog.String("hfs", hfs.Name))
 	return true, nil
 }
 
