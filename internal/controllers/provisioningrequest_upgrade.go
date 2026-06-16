@@ -16,6 +16,7 @@ import (
 	"github.com/coreos/go-semver/semver"
 	ibgu "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -276,7 +277,7 @@ func (t *provisioningRequestReconcilerTask) mergeAndValidateUpgradeData(
 	if err := json.Unmarshal(t.object.Spec.TemplateParameters.Raw, &templateParams); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal templateParameters: %w", err)
 	}
-	if upgradeParamsRaw, ok := templateParams[ctlrutils.TemplateParamUpgrade]; ok {
+	if upgradeParamsRaw, ok := templateParams[constants.TemplateParamUpgrade]; ok {
 		upgradeParamsMap, ok = upgradeParamsRaw.(map[string]any)
 		if !ok {
 			return nil, fmt.Errorf("upgradeParameters is not a map")
@@ -296,14 +297,14 @@ func (t *provisioningRequestReconcilerTask) mergeAndValidateUpgradeData(
 
 	// Validate the merged data against the upgradeParameters schema
 	upgradeSchema, err := provisioningv1alpha1.ExtractSubSchema(
-		clusterTemplate.Spec.TemplateParameterSchema.Raw, ctlrutils.TemplateParamUpgrade)
+		clusterTemplate.Spec.TemplateParameterSchema.Raw, constants.TemplateParamUpgrade)
 	if err != nil {
-		return nil, fmt.Errorf("failed to extract %s schema: %w", ctlrutils.TemplateParamUpgrade, err)
+		return nil, fmt.Errorf("failed to extract %s schema: %w", constants.TemplateParamUpgrade, err)
 	}
 	if err := provisioningv1alpha1.ValidateJsonAgainstJsonSchema(upgradeSchema, mergedUpgradeData); err != nil {
 		return nil, fmt.Errorf(
 			"merged upgrade parameters do not match the schema defined in ClusterTemplate (%s) spec.templateParameterSchema.%s: %s",
-			clusterTemplate.Name, ctlrutils.TemplateParamUpgrade, err.Error())
+			clusterTemplate.Name, constants.TemplateParamUpgrade, err.Error())
 	}
 
 	return mergedUpgradeData, nil

@@ -167,7 +167,7 @@ func (r *ArtifactsServer) GetManagedInfrastructureTemplateDefaults(
 		oranct.Namespace,
 		ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
 		oranct.Spec.TemplateParameterSchema.Raw,
-		provisioningv1alpha1.TemplateParamClusterInstance,
+		constants.TemplateParamClusterInstance,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("could not get the clusterInstance default values: %w", err)
@@ -180,7 +180,7 @@ func (r *ArtifactsServer) GetManagedInfrastructureTemplateDefaults(
 		oranct.Namespace,
 		ctlrutils.PolicyTemplateDefaultsConfigmapKey,
 		oranct.Spec.TemplateParameterSchema.Raw,
-		provisioningv1alpha1.TemplateParamPolicyConfig,
+		constants.TemplateParamPolicyConfig,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("could not get the policy configuration default values: %w", err)

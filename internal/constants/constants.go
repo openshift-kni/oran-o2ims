@@ -170,3 +170,13 @@ const (
 	BootInterfaceLabel        = "boot-interface"
 	BootInterfaceLabelFullKey = LabelPrefixInterfaces + BootInterfaceLabel
 )
+
+// Required template schema parameters
+const (
+	TemplateParamNodeClusterName = "nodeClusterName"
+	TemplateParamOCloudSiteId    = "oCloudSiteId"
+	TemplateParamClusterInstance = "clusterInstanceParameters"
+	TemplateParamPolicyConfig    = "policyTemplateParameters"
+	TemplateParamHwMgmt          = "hwMgmtParameters"
+	TemplateParamUpgrade         = "upgradeParameters"
+)
