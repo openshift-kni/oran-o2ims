@@ -53,7 +53,7 @@ func (p *NotificationStorageProvider) GetNotifications(ctx context.Context) ([]n
 func (p *NotificationStorageProvider) DeleteNotification(ctx context.Context, notificationID uuid.UUID) error {
 	// This event has been consumed by all subscriptions
 	slog.DebugContext(ctx, "notification sent to all subscribers; deleting",
-		slog.String("NotificationID", notificationID.String()))
+		slog.String("notificationID", notificationID.String()))
 
 	_, err := p.repository.DeleteDataChangeEvent(ctx, notificationID)
 	if err != nil {
