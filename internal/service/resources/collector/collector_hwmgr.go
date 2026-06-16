@@ -371,7 +371,7 @@ func (d *HardwareDataSource) buildAndSendResource(ctx context.Context, bmh *meta
 	if poolUID == "" {
 		poolName := bmh.Labels[constants.LabelResourcePoolName]
 		slog.WarnContext(ctx, "skipping BMH: unresolved resourcePoolId (will retry on pool creation)",
-			slog.String("bmh", bmh.Namespace+"/"+bmh.Name), slog.String("poolName", poolName))
+			slog.String("poolName", poolName))
 		return uuid.Nil, nil
 	}
 
@@ -436,7 +436,7 @@ func (d *HardwareDataSource) findAllocatedNodeForBMH(ctx context.Context, bmh *m
 	if err := d.hubClient.Get(ctx, types.NamespacedName{Name: nodeName, Namespace: bmh.Namespace}, &node); err != nil {
 		if !errors.IsNotFound(err) {
 			slog.WarnContext(ctx, "failed to get AllocatedNode for BMH",
-				slog.String("bmh", bmh.Namespace+"/"+bmh.Name), slog.String("node", nodeName), slog.Any("error", err))
+				slog.String("node", nodeName), slog.Any("error", err))
 		}
 		return nil
 	}
@@ -479,6 +479,9 @@ func (d *HardwareDataSource) BuildResourcesForPool(ctx context.Context, poolName
 	var results []ResourceWithType
 	for i := range bmhList.Items {
 		bmh := &bmhList.Items[i]
+		bmhCtx := logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
+		bmhCtx = logging.AppendCtx(bmhCtx, slog.String("bmhNamespace", bmh.Namespace))
+
 		if !hwmgrcontroller.IncludeInInventory(bmh) {
 			continue
 		}
@@ -489,21 +492,21 @@ func (d *HardwareDataSource) BuildResourcesForPool(ctx context.Context, poolName
 		}
 
 		var hwdata metal3v1alpha1.HardwareData
-		if err := d.hubClient.Get(ctx, types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}, &hwdata); err != nil {
+		if err := d.hubClient.Get(bmhCtx, types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}, &hwdata); err != nil {
 			if !errors.IsNotFound(err) {
-				slog.WarnContext(ctx, "failed to get HardwareData during pool rebuild",
-					slog.String("bmh", bmh.Namespace+"/"+bmh.Name), slog.Any("error", err))
+				slog.WarnContext(bmhCtx, "failed to get HardwareData during pool rebuild",
+					slog.Any("error", err))
 			}
 			hwdata = metal3v1alpha1.HardwareData{}
 		}
 
-		node := d.findAllocatedNodeForBMH(ctx, bmh)
+		node := d.findAllocatedNodeForBMH(bmhCtx, bmh)
 		resourceInfo := hwmgrcontroller.GetResourceInfo(bmh, node, &hwdata, poolNameToUID)
 		resource := d.convertResource(&resourceInfo)
 		resourceType, err := d.MakeResourceType(resource)
 		if err != nil {
-			slog.WarnContext(ctx, "failed to make resource type during pool rebuild",
-				slog.String("bmh", bmh.Namespace+"/"+bmh.Name), slog.Any("error", err))
+			slog.WarnContext(bmhCtx, "failed to make resource type during pool rebuild",
+				slog.Any("error", err))
 			continue
 		}
 
