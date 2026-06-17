@@ -101,7 +101,7 @@ func TestControllerLoggingIntegration(t *testing.T) {
 		// From AddObjectContext
 		LogAttrResourceVersion: "12345",
 		LogAttrGeneration:      float64(3), // JSON numbers are float64
-		"clusterID":            "test-cluster",
+		"clusterId":            "test-cluster",
 
 		// From LogPhaseStart
 		LogAttrPhase: "validation",
