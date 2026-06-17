@@ -19,7 +19,6 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	"github.com/golang-migrate/migrate/v4/source"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
 // MigrationsTable table created by migration lib to track state of migration
@@ -92,13 +91,9 @@ func (h *MigrationHandler) Verbose() bool {
 
 // NewHandler configure the migration data
 func NewHandler(cfg MigrationConfig) (*MigrationHandler, error) {
-	sslMode := "verify-full"
-	if ctlrutils.GetTLSSkipVerify() {
-		sslMode = "require"
-	}
 	// https://github.com/golang-migrate/migrate/tree/c378583d782e026f472dff657bfd088bf2510038/database/pgx/v5
-	connStr := fmt.Sprintf("pgx5://%s:%s@%s:%s/%s?sslmode=%s&connect_timeout=10",
-		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Database, sslMode)
+	connStr := fmt.Sprintf("pgx5://%s:%s@%s:%s/%s?sslmode=verify-full&connect_timeout=10",
+		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Database)
 	if cfg.MigrationsTable != "" {
 		connStr += fmt.Sprintf("&x-migrations-table=%s", cfg.MigrationsTable)
 	}
