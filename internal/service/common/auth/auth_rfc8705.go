@@ -162,7 +162,12 @@ func (w *withClientVerification) AuthenticateRequest(req *http.Request) (*authen
 		return nil, false, fmt.Errorf("unexpected number of fingerprint values")
 	}
 
-	if tokenFingerprintValues[0] != "" && tokenFingerprintValues[0] != clientFingerprint {
+	if tokenFingerprintValues[0] == "" {
+		slog.ErrorContext(req.Context(), "empty fingerprint value in token binding claim")
+		return nil, false, fmt.Errorf("empty fingerprint value in token binding claim")
+	}
+
+	if tokenFingerprintValues[0] != clientFingerprint {
 		slog.DebugContext(req.Context(), "fingerprint values do not match", slog.String("client", clientFingerprint), slog.String("token", tokenFingerprintValues[0]))
 		return nil, false, fmt.Errorf("client certificate fingerprint mismatch")
 	}
