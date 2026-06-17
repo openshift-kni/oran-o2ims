@@ -18,6 +18,7 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 	clustervalidation "github.com/openshift-kni/oran-o2ims/internal/validation"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,7 +29,7 @@ func (t *provisioningRequestReconcilerTask) validateProvisioningRequestCR(ctx co
 	// Check the referenced cluster template is present and valid
 	clusterTemplate, err := t.object.GetClusterTemplateRef(ctx, t.client)
 	if err != nil {
-		return ctlrutils.NewInputError("failed to get the ClusterTemplate for ProvisioningRequest %s: %w ", t.object.Name, err)
+		return typederrors.NewInputError("failed to get the ClusterTemplate for ProvisioningRequest %s: %w ", t.object.Name, err)
 	}
 	t.ctDetails = &clusterTemplateDetails{
 		namespace: clusterTemplate.Namespace,
@@ -40,7 +41,7 @@ func (t *provisioningRequestReconcilerTask) validateProvisioningRequestCR(ctx co
 	}
 
 	if err = t.object.ValidateTemplateInputMatchesSchema(clusterTemplate); err != nil {
-		return ctlrutils.NewInputError("%s", err.Error())
+		return typederrors.NewInputError("%s", err.Error())
 	}
 
 	if err = t.validateClusterInstanceInputMatchesSchema(ctx, clusterTemplate); err != nil {
@@ -118,7 +119,7 @@ func (t *provisioningRequestReconcilerTask) validateClusterInstanceInputMatchesS
 
 	clusterInstanceMatchingInput, err := t.object.ValidateClusterInstanceInputMatchesSchema(clusterTemplate)
 	if err != nil {
-		return ctlrutils.NewInputError(
+		return typederrors.NewInputError(
 			"the provided %s does not match the schema from ClusterTemplate (%s): %w",
 			constants.TemplateParamClusterInstance, clusterTemplate.Name, err)
 	}
@@ -143,7 +144,7 @@ func (t *provisioningRequestReconcilerTask) validateClusterInstanceInputMatchesS
 func (t *provisioningRequestReconcilerTask) validateClusterName(ctx context.Context) error {
 	clusterName, ok := t.clusterInput.clusterInstanceData["clusterName"].(string)
 	if !ok || clusterName == "" {
-		return ctlrutils.NewInputError("clusterName is required and must be a non-empty string")
+		return typederrors.NewInputError("clusterName is required and must be a non-empty string")
 	}
 
 	if err := clustervalidation.ValidateClusterNameFormat(clusterName); err != nil {
@@ -172,14 +173,14 @@ func (t *provisioningRequestReconcilerTask) validatePolicyTemplateInputMatchesSc
 	policyTemplateSubSchema, err := provisioningv1alpha1.ExtractSubSchema(
 		clusterTemplate.Spec.TemplateParameterSchema.Raw, constants.TemplateParamPolicyConfig)
 	if err != nil {
-		return ctlrutils.NewInputError(
+		return typederrors.NewInputError(
 			"failed to extract %s subschema: %s", constants.TemplateParamPolicyConfig, err.Error())
 	}
 	// Get the matching input for PolicyTemplateParameters
 	policyTemplateMatchingInput, err := provisioningv1alpha1.ExtractMatchingInput(
 		t.object.Spec.TemplateParameters.Raw, constants.TemplateParamPolicyConfig)
 	if err != nil {
-		return ctlrutils.NewInputError(
+		return typederrors.NewInputError(
 			"failed to extract matching input for subschema %s: %w", constants.TemplateParamPolicyConfig, err)
 	}
 	policyTemplateMatchingInputMap := policyTemplateMatchingInput.(map[string]any)
@@ -197,7 +198,7 @@ func (t *provisioningRequestReconcilerTask) validatePolicyTemplateInputMatchesSc
 	err = provisioningv1alpha1.ValidateJsonAgainstJsonSchema(
 		policyTemplateSubSchema, mergedPolicyTemplateData)
 	if err != nil {
-		return ctlrutils.NewInputError(
+		return typederrors.NewInputError(
 			"spec.templateParameters.%s does not match the schema defined in ClusterTemplate (%s) spec.templateParameterSchema.%s: %w",
 			constants.TemplateParamPolicyConfig, clusterTemplate.Name, constants.TemplateParamPolicyConfig, err)
 	}
@@ -225,12 +226,12 @@ func (t *provisioningRequestReconcilerTask) validateAndMergeHwMgmtInput(
 	hwMgmtParams, extractErr := provisioningv1alpha1.ExtractMatchingInput(
 		t.object.Spec.TemplateParameters.Raw, constants.TemplateParamHwMgmt)
 	if extractErr != nil && strings.Contains(extractErr.Error(), "failed to unmarshal") {
-		return ctlrutils.NewInputError("failed to extract %s from templateParameters: %s",
+		return typederrors.NewInputError("failed to extract %s from templateParameters: %s",
 			constants.TemplateParamHwMgmt, extractErr.Error())
 	}
 	if hwMgmtParams != nil {
 		if !provisioningv1alpha1.SchemaDefinesHwMgmtParameters(clusterTemplate) {
-			return ctlrutils.NewInputError(
+			return typederrors.NewInputError(
 				"templateParameters.%s is not defined in ClusterTemplate %q spec.templateParameterSchema",
 				constants.TemplateParamHwMgmt, clusterTemplate.Name)
 		}
@@ -240,7 +241,7 @@ func (t *provisioningRequestReconcilerTask) validateAndMergeHwMgmtInput(
 			clusterTemplate.Spec.TemplateParameterSchema.Raw, constants.TemplateParamHwMgmt)
 		if err == nil {
 			if err := provisioningv1alpha1.ValidateJsonAgainstJsonSchema(hwMgmtSubSchema, hwMgmtParams); err != nil {
-				return ctlrutils.NewInputError(
+				return typederrors.NewInputError(
 					"templateParameters.%s does not match the schema defined in ClusterTemplate (%s): %s",
 					constants.TemplateParamHwMgmt, clusterTemplate.Name, err.Error())
 			}
@@ -248,7 +249,7 @@ func (t *provisioningRequestReconcilerTask) validateAndMergeHwMgmtInput(
 
 		hwMgmtParamsMap, ok := hwMgmtParams.(map[string]any)
 		if !ok {
-			return ctlrutils.NewInputError("templateParameters.%s must be an object", constants.TemplateParamHwMgmt)
+			return typederrors.NewInputError("templateParameters.%s must be an object", constants.TemplateParamHwMgmt)
 		}
 
 		// Handle nodeGroupData with name-keyed merge
@@ -256,18 +257,18 @@ func (t *provisioningRequestReconcilerTask) validateAndMergeHwMgmtInput(
 		if srcHasNG {
 			srcSlice, ok := srcNodeGroups.([]any)
 			if !ok {
-				return ctlrutils.NewInputError("templateParameters.%s.nodeGroupData must be an array", constants.TemplateParamHwMgmt)
+				return typederrors.NewInputError("templateParameters.%s.nodeGroupData must be an array", constants.TemplateParamHwMgmt)
 			}
 			dstSlice := []any{}
 			if dstNodeGroups, dstHasNG := mergedData["nodeGroupData"]; dstHasNG {
 				dstSlice, ok = dstNodeGroups.([]any)
 				if !ok {
-					return ctlrutils.NewInputError("hwMgmtDefaults nodeGroupData must be an array")
+					return typederrors.NewInputError("hwMgmtDefaults nodeGroupData must be an array")
 				}
 			}
 			mergedNG, err := ctlrutils.MergeNodeGroupData(dstSlice, srcSlice)
 			if err != nil {
-				return ctlrutils.NewInputError("failed to merge nodeGroupData: %s", err.Error())
+				return typederrors.NewInputError("failed to merge nodeGroupData: %s", err.Error())
 			}
 			mergedData["nodeGroupData"] = mergedNG
 			// Remove nodeGroupData from params so DeepMergeMaps doesn't overwrite
@@ -277,7 +278,7 @@ func (t *provisioningRequestReconcilerTask) validateAndMergeHwMgmtInput(
 		// Merge remaining scalar fields (e.g., hardwareProvisioningTimeout)
 		if len(hwMgmtParamsMap) > 0 {
 			if err := ctlrutils.DeepMergeMaps(mergedData, hwMgmtParamsMap, false); err != nil {
-				return ctlrutils.NewInputError("failed to merge hwMgmt parameters: %s", err.Error())
+				return typederrors.NewInputError("failed to merge hwMgmt parameters: %s", err.Error())
 			}
 		}
 	}
@@ -298,11 +299,11 @@ func (t *provisioningRequestReconcilerTask) validateAndMergeHwMgmtInput(
 	if timeoutStr, ok := mergedData["hardwareProvisioningTimeout"].(string); ok && timeoutStr != "" {
 		timeout, err := time.ParseDuration(timeoutStr)
 		if err != nil {
-			return ctlrutils.NewInputError(
+			return typederrors.NewInputError(
 				"hardwareProvisioningTimeout %q is not a valid duration: %s", timeoutStr, err.Error())
 		}
 		if timeout <= 0 {
-			return ctlrutils.NewInputError(
+			return typederrors.NewInputError(
 				"hardwareProvisioningTimeout %q must be a positive duration", timeoutStr)
 		}
 		t.timeouts.hardwareProvisioning = timeout
@@ -331,21 +332,21 @@ func validateMergedNodeGroups(mergedData map[string]any) error {
 	for _, ng := range ngSlice {
 		ngMap, ok := ng.(map[string]any)
 		if !ok {
-			return ctlrutils.NewInputError("nodeGroupData element is not a map")
+			return typederrors.NewInputError("nodeGroupData element is not a map")
 		}
 		name, _ := ngMap["name"].(string)
 		if name == "" {
-			return ctlrutils.NewInputError("nodeGroupData element is missing required field 'name'")
+			return typederrors.NewInputError("nodeGroupData element is missing required field 'name'")
 		}
 		role, _ := ngMap["role"].(string)
 		if role == "" {
-			return ctlrutils.NewInputError("no role specified for nodeGroup %q", name)
+			return typederrors.NewInputError("no role specified for nodeGroup %q", name)
 		}
 		if role != "master" && role != "worker" {
-			return ctlrutils.NewInputError("invalid role %q for nodeGroup %q: must be 'master' or 'worker'", role, name)
+			return typederrors.NewInputError("invalid role %q for nodeGroup %q: must be 'master' or 'worker'", role, name)
 		}
 		if prev, exists := seenRoles[role]; exists {
-			return ctlrutils.NewInputError("duplicate role %q in nodeGroupData for groups %q and %q", role, prev, name)
+			return typederrors.NewInputError("duplicate role %q in nodeGroupData for groups %q and %q", role, prev, name)
 		}
 		seenRoles[role] = name
 
@@ -384,7 +385,7 @@ func (t *provisioningRequestReconcilerTask) validateMergedHwProfiles(ctx context
 		hwProfileObj := &hwmgmtv1alpha1.HardwareProfile{}
 		if err := t.client.Get(ctx, client.ObjectKey{Name: hwProfile, Namespace: hwProfileNS}, hwProfileObj); err != nil {
 			if k8serrors.IsNotFound(err) {
-				return ctlrutils.NewInputError("HardwareProfile %q referenced by nodeGroup %q does not exist", hwProfile, name)
+				return typederrors.NewInputError("HardwareProfile %q referenced by nodeGroup %q does not exist", hwProfile, name)
 			}
 			return fmt.Errorf("failed to get HardwareProfile %q for nodeGroup %q: %w", hwProfile, name, err)
 		}
@@ -441,7 +442,7 @@ func (t *provisioningRequestReconcilerTask) getMergedClusterInputData(
 	case constants.TemplateParamPolicyConfig:
 		templateDefaultsCmKey = ctlrutils.PolicyTemplateDefaultsConfigmapKey
 	default:
-		return nil, ctlrutils.NewInputError("unsupported template parameter")
+		return nil, typederrors.NewInputError("unsupported template parameter")
 	}
 
 	// Retrieve the configmap that holds the default data.
@@ -461,14 +462,14 @@ func (t *provisioningRequestReconcilerTask) getMergedClusterInputData(
 		// if same labels/annotations exist in both.
 		if err := t.overrideClusterInstanceLabelsOrAnnotations(
 			clusterTemplateInput, clusterTemplateDefaultsMap); err != nil {
-			return nil, ctlrutils.NewInputError("%s", err.Error())
+			return nil, typederrors.NewInputError("%s", err.Error())
 		}
 	}
 
 	// Get the merged cluster data
 	mergedClusterDataMap, err := mergeClusterTemplateInputWithDefaults(clusterTemplateInput, clusterTemplateDefaultsMap)
 	if err != nil {
-		return nil, ctlrutils.NewInputError("failed to merge data for %s: %s", templateParam, err.Error())
+		return nil, typederrors.NewInputError("failed to merge data for %s: %s", templateParam, err.Error())
 	}
 
 	t.logger.InfoContext(ctx,
