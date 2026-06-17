@@ -19,6 +19,7 @@ import (
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 )
 
 // ConditionDoesNotExistsErr represents an error when a specific condition is missing
@@ -95,7 +96,7 @@ func CopyPullSecret(ctx context.Context, c client.Client, ownerObject client.Obj
 		return fmt.Errorf("failed to check existence of pull secret %q in namespace %q: %w", pullSecretName, sourceNamespace, err)
 	}
 	if !exists {
-		return NewInputError(
+		return typederrors.NewInputError(
 			"pull secret %s expected to exist in the %s namespace, but it is missing",
 			pullSecretName, sourceNamespace)
 	}

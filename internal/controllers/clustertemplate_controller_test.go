@@ -97,6 +97,7 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 	"github.com/openshift-kni/oran-o2ims/test/fakeclient"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
@@ -783,7 +784,7 @@ baseDomain: example.sno.com`,
 			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
 			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
-		Expect(ctlrutils.IsInputError(err)).To(BeTrue())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(Equal(fmt.Sprintf(
 			"failed to get ConfigmapReference: the ConfigMap '%s' is not found in the namespace '%s'", configmapName, namespace)))
 	})
@@ -808,7 +809,7 @@ baDomain: example.sno.com`,
 			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
 			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
-		Expect(ctlrutils.IsInputError(err)).To(BeTrue())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("failed to validate the default ConfigMap: the ConfigMap does not match the ClusterInstance schema"))
 	})
 
@@ -830,7 +831,7 @@ baDomain: example.sno.com`,
 			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
 			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
-		Expect(ctlrutils.IsInputError(err)).To(BeTrue())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(Equal(fmt.Sprintf(
 			"the ConfigMap '%s' does not contain a field named '%s'", configmapName, ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey)))
 	})
@@ -853,7 +854,7 @@ baDomain: example.sno.com`,
 			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
 			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
-		Expect(ctlrutils.IsInputError(err)).To(BeTrue())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("the value of key"))
 	})
 
@@ -881,7 +882,7 @@ nodes:
 			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
 			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
-		Expect(ctlrutils.IsInputError(err)).To(BeTrue())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("'label' is missing for interface"))
 	})
 
@@ -910,7 +911,7 @@ nodes:
 			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
 			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
-		Expect(ctlrutils.IsInputError(err)).To(BeTrue())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("'label' is empty for interface"))
 	})
 
@@ -934,7 +935,7 @@ baseDomain: value`,
 			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
 			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
-		Expect(ctlrutils.IsInputError(err)).To(BeTrue())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("is not a valid duration string"))
 	})
 
@@ -959,7 +960,7 @@ baseDomain: value`,
 			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
 			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
-		Expect(ctlrutils.IsInputError(err)).To(BeTrue())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(Equal(fmt.Sprintf(
 			"It is not allowed to set Immutable to false in the ConfigMap %s", configmapName)))
 	})
@@ -1746,7 +1747,7 @@ var _ = Describe("validateUpgradeDefaults", func() {
 		}
 		err := t.validateUpgradeDefaults()
 		Expect(err).To(HaveOccurred())
-		Expect(ctlrutils.IsInputError(err)).To(BeTrue())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("The ClusterTemplate spec.release (4.17.0) does not match the seedImageRef version (4.18.0) from the upgrade defaults"))
 	})
 
@@ -1766,7 +1767,7 @@ var _ = Describe("validateUpgradeDefaults", func() {
 		It("should return error when seedImageRef version is not empty", func() {
 			err := t.validateUpgradeDefaults()
 			Expect(err).To(HaveOccurred())
-			Expect(ctlrutils.IsInputError(err)).To(BeTrue())
+			Expect(typederrors.IsInputError(err)).To(BeTrue())
 			Expect(err.Error()).To(ContainSubstring("The ClusterTemplate spec.release () does not match the seedImageRef version (4.17.0) from the upgrade defaults"))
 		})
 	})

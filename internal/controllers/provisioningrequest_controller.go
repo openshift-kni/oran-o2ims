@@ -26,6 +26,7 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 	observabilityv1beta1 "github.com/stolostron/multicluster-observability-operator/operators/multiclusterobservability/api/v1beta1"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -500,7 +501,7 @@ func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Co
 	// Validate the ProvisioningRequest
 	err := t.handleValidation(ctx)
 	if err != nil {
-		if ctlrutils.IsInputError(err) {
+		if typederrors.IsInputError(err) {
 			res, err := t.checkClusterDeployConfigState(ctx)
 			return nil, res, err
 		}
@@ -512,7 +513,7 @@ func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Co
 	// Render and validate ClusterInstance
 	renderedClusterInstance, err := t.handleRenderClusterInstance(ctx)
 	if err != nil {
-		if ctlrutils.IsInputError(err) {
+		if typederrors.IsInputError(err) {
 			res, err := t.checkClusterDeployConfigState(ctx)
 			return nil, res, err
 		}
@@ -525,7 +526,7 @@ func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Co
 	err = t.handleClusterResources(ctx, renderedClusterInstance)
 	if err != nil {
 		ctlrutils.LogError(ctx, t.logger, "Cluster resources creation failed", err)
-		if ctlrutils.IsInputError(err) {
+		if typederrors.IsInputError(err) {
 			_, err = t.checkClusterDeployConfigState(ctx)
 			if err != nil {
 				t.logger.WarnContext(ctx, "Cluster deploy config state check failed, will retry", slog.Any("error", err))
@@ -554,7 +555,7 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 	// Build the NodeAllocationRequest
 	renderedNodeAllocationRequest, err := t.renderNodeAllocationRequest(ctx, renderedClusterInstance)
 	if err != nil {
-		if ctlrutils.IsInputError(err) {
+		if typederrors.IsInputError(err) {
 			return doNotRequeue(), false, nil
 		}
 		t.logger.ErrorContext(ctx, "NodeAllocationRequest build error", slog.Any("error", err))

@@ -24,6 +24,7 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -115,7 +116,7 @@ func (t *provisioningRequestReconcilerTask) buildClusterInstance(
 	if err = runtime.DefaultUnstructuredConverter.FromUnstructured(
 		renderedCIUnstructured.Object, renderedCI); err != nil {
 		// Unlikely to happen since dry-run validation has passed
-		return nil, ctlrutils.NewInputError("failed to convert to siteconfig.ClusterInstance type: %w", err)
+		return nil, typederrors.NewInputError("failed to convert to siteconfig.ClusterInstance type: %w", err)
 	}
 
 	return renderedCI, nil
@@ -291,7 +292,7 @@ func (t *provisioningRequestReconcilerTask) checkClusterProvisionStatus(
 func (t *provisioningRequestReconcilerTask) applyClusterInstance(ctx context.Context, clusterInstance client.Object, isDryRun bool) error {
 
 	if clusterInstance == nil {
-		return ctlrutils.NewInputError("clusterInstance cannot be nil")
+		return typederrors.NewInputError("clusterInstance cannot be nil")
 	}
 	unstructuredObj, ok := clusterInstance.(*unstructured.Unstructured)
 	if !ok {
@@ -342,7 +343,7 @@ func (t *provisioningRequestReconcilerTask) applyClusterInstance(ctx context.Con
 			return fmt.Errorf("conflict during server-side apply: %w", err)
 		}
 		if errors.IsInvalid(err) || errors.IsBadRequest(err) {
-			return ctlrutils.NewInputError("invalid ClusterInstance configuration: %w", err)
+			return typederrors.NewInputError("invalid ClusterInstance configuration: %w", err)
 		}
 		return fmt.Errorf("failed to apply ClusterInstance: %w", err)
 	}
