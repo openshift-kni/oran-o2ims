@@ -22,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 )
@@ -98,7 +99,7 @@ func ExtractTimeoutFromConfigMap(cm *corev1.ConfigMap, key string) (time.Duratio
 	if timeoutStr, err := GetConfigMapField(cm, key); err == nil {
 		timeout, err := time.ParseDuration(timeoutStr)
 		if err != nil {
-			return 0, NewInputError("the value of key %s from ConfigMap %s is not a valid duration string: %v", key, cm.GetName(), err)
+			return 0, typederrors.NewInputError("the value of key %s from ConfigMap %s is not a valid duration string: %v", key, cm.GetName(), err)
 		}
 		return timeout, nil
 	}

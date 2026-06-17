@@ -31,6 +31,7 @@ import (
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 	openshiftv1 "github.com/openshift/api/config/v1"
 
 	corev1 "k8s.io/api/core/v1"
@@ -517,7 +518,7 @@ func ExtractTemplateDataFromConfigMap[T any](cm *corev1.ConfigMap, expectedKey s
 	// Parse the YAML data into a map
 	err = yaml.Unmarshal([]byte(defaults), &validData)
 	if err != nil {
-		return validData, NewInputError(
+		return validData, typederrors.NewInputError(
 			"the value of key %s from ConfigMap %s is not in a valid YAML string: %s",
 			expectedKey, cm.GetName(), err.Error(),
 		)
@@ -1056,7 +1057,7 @@ func MakeUUIDFromNames(namespace string, cloudID uuid.UUID, names ...string) uui
 func GenerateSecretName(nodeMap map[string]interface{}, provisioningRequest string) (string, error) {
 	nodeHostnameInterface, nodeHostnameExists := nodeMap["hostName"]
 	if !nodeHostnameExists {
-		return "", NewInputError(
+		return "", typederrors.NewInputError(
 			`\"hostname\" key expected to exist in `+
 				`spec.templateParameters.clusterInstanceParameters `+
 				`of ProvisioningRequest %s, but it's missing`,
