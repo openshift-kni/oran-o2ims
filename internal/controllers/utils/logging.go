@@ -52,7 +52,7 @@ func AddObjectContext(ctx context.Context, obj client.Object) context.Context {
 		// Add any relevant labels or annotations as context
 		if labels := obj.GetLabels(); len(labels) > 0 {
 			if clusterID, exists := labels["cluster-id"]; exists {
-				ctx = logging.AppendCtx(ctx, slog.String("clusterID", clusterID))
+				ctx = logging.AppendCtx(ctx, slog.String("clusterId", clusterID))
 			}
 		}
 	}

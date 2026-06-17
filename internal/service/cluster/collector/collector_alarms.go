@@ -88,7 +88,7 @@ func (d *AlarmsDataSource) IncrGenerationID() int {
 
 // makeAlarmDictionaryIDToAlarmDefinitions fetches monitoring rules for each node cluster type and builds a map of alarm dictionary ID to alarm definitions
 func (d *AlarmsDataSource) makeAlarmDictionaryIDToAlarmDefinitions(ctx context.Context, nodeClusterTypes []models.NodeClusterType) (map[uuid.UUID][]models.AlarmDefinition, error) {
-	slog.InfoContext(ctx, "making alarm dictionary ID to alarm definitions map", slog.Int("nodeClusterTypes count", len(nodeClusterTypes)))
+	slog.InfoContext(ctx, "making alarm dictionary ID to alarm definitions map", slog.Int("nodeClusterTypesCount", len(nodeClusterTypes)))
 
 	// Fetch prometheus rules from managed clusters and hub
 	nodeClusterTypeIDToMonitoringRules := d.makeNodeClusterTypeIDToMonitoringRules(ctx, nodeClusterTypes)
@@ -127,7 +127,7 @@ func nodeClusterTypesWithAlarmDictionaryID(nodeClusterTypes []models.NodeCluster
 
 // makeNodeClusterTypeIDToMonitoringRules fetches monitoring rules for each node cluster type
 func (d *AlarmsDataSource) makeNodeClusterTypeIDToMonitoringRules(ctx context.Context, nodeClusterTypes []models.NodeClusterType) map[uuid.UUID][]monitoringv1.Rule {
-	slog.InfoContext(ctx, "making node cluster type ID to monitoring rules map", slog.Int("nodeClusterTypes count", len(nodeClusterTypes)))
+	slog.InfoContext(ctx, "making node cluster type ID to monitoring rules map", slog.Int("nodeClusterTypesCount", len(nodeClusterTypes)))
 
 	nodeClusterTypeIDToMonitoringRules := make(map[uuid.UUID][]monitoringv1.Rule)
 
@@ -185,7 +185,7 @@ func (d *AlarmsDataSource) makeNodeClusterTypeIDToMonitoringRules(ctx context.Co
 		}
 
 		nodeClusterTypeIDToMonitoringRules[res.nodeClusterTypeID] = res.rules
-		slog.InfoContext(ctx, "loaded rules for node cluster type", slog.String("nodeClusterTypeID", res.nodeClusterTypeID.String()), slog.Int("rules count", len(res.rules)))
+		slog.InfoContext(ctx, "loaded rules for node cluster type", slog.String("nodeClusterTypeID", res.nodeClusterTypeID.String()), slog.Int("rulesCount", len(res.rules)))
 	}
 
 	return nodeClusterTypeIDToMonitoringRules
@@ -198,7 +198,7 @@ func (d *AlarmsDataSource) processHub(ctx context.Context) ([]monitoringv1.Rule,
 		return nil, err
 	}
 
-	slog.DebugContext(ctx, "fetched rules for Hub cluster", slog.Int("rules count", len(rules)))
+	slog.DebugContext(ctx, "fetched rules for Hub cluster", slog.Int("rulesCount", len(rules)))
 	return rules, nil
 }
 
@@ -222,7 +222,7 @@ func (d *AlarmsDataSource) processManagedCluster(ctx context.Context, version st
 		return nil, err
 	}
 
-	slog.DebugContext(ctx, "fetched rules for managed cluster", slog.String("cluster", cluster.Name), slog.String("version", version), slog.Int("rules count", len(rules)))
+	slog.DebugContext(ctx, "fetched rules for managed cluster", slog.String("cluster", cluster.Name), slog.String("version", version), slog.Int("rulesCount", len(rules)))
 	return rules, nil
 }
 
@@ -286,7 +286,7 @@ func (d *AlarmsDataSource) getRules(ctx context.Context, cl crclient.Client) ([]
 
 // buildAlarmDictionaryIDToAlarmDefinitionsMap builds a map of alarm dictionary ID to alarm definitions
 func (d *AlarmsDataSource) buildAlarmDictionaryIDToAlarmDefinitions(nodeClusterTypes []models.NodeClusterType, nodeClusterTypeIDToMonitoringRules map[uuid.UUID][]monitoringv1.Rule) map[uuid.UUID][]models.AlarmDefinition {
-	slog.Info("building alarm dictionary ID to alarm definitions map", slog.Int("nodeClusterTypes count", len(nodeClusterTypes)))
+	slog.Info("building alarm dictionary ID to alarm definitions map", slog.Int("nodeClusterTypesCount", len(nodeClusterTypes)))
 
 	alarmDictionaryIDToAlarmDefinitions := make(map[uuid.UUID][]models.AlarmDefinition)
 	for _, nodeClusterType := range nodeClusterTypes {
@@ -420,7 +420,7 @@ func (d *AlarmsDataSource) createAlarmDefinitions(rules []monitoringv1.Rule, ala
 
 // makeAlarmDictionaries creates alarm dictionaries from node cluster types
 func (d *AlarmsDataSource) makeAlarmDictionaries(nodeClusterTypes []models.NodeClusterType) []models.AlarmDictionary {
-	slog.Info("making alarm dictionaries", slog.Int("nodeClusterTypes count", len(nodeClusterTypes)))
+	slog.Info("making alarm dictionaries", slog.Int("nodeClusterTypesCount", len(nodeClusterTypes)))
 
 	var alarmDictionaries []models.AlarmDictionary
 	for _, nodeClusterType := range nodeClusterTypes {
@@ -543,7 +543,7 @@ func (d *AlarmsDataSource) collectThanosRules(ctx context.Context) ([]monitoring
 		}
 	}
 
-	slog.DebugContext(ctx, "Collected thanos rules", slog.Int("rules count", len(rules)))
+	slog.DebugContext(ctx, "Collected thanos rules", slog.Int("rulesCount", len(rules)))
 
 	// Expand rules with templated severity into multiple static rules
 	expandedRules := d.expandTemplatedSeverity(rules)
@@ -607,7 +607,7 @@ func (d *AlarmsDataSource) expandTemplatedSeverity(rules []monitoringv1.Rule) []
 		}
 	}
 
-	slog.Info("Severity expansion complete", slog.Int("original count", len(rules)), slog.Int("expanded count", len(expandedRules)))
+	slog.Info("Severity expansion complete", slog.Int("originalCount", len(rules)), slog.Int("expandedCount", len(expandedRules)))
 	return expandedRules
 }
 
@@ -618,7 +618,7 @@ func IsTemplated(s string) bool {
 
 // makeThanosAlarmDefinitions creates alarm definitions from thanos rules
 func (d *AlarmsDataSource) makeThanosAlarmDefinitions(rules []monitoringv1.Rule) ([]models.AlarmDefinition, error) {
-	slog.Debug("Making Thanos alarm definitions", slog.Int("rules count", len(rules)))
+	slog.Debug("Making Thanos alarm definitions", slog.Int("rulesCount", len(rules)))
 
 	filteredRules := d.getFilteredRules(rules)
 

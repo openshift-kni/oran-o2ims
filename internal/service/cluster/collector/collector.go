@@ -629,7 +629,7 @@ func (c *Collector) syncThanosAlarmDefinitions(ctx context.Context, ds *AlarmsDa
 		return nil
 	}
 
-	slog.InfoContext(ctx, "Thanos alarm definitions synced", slog.Int("upserted count", len(alarmDefinitionRecords)), slog.Int64("deleted count", count))
+	slog.InfoContext(ctx, "Thanos alarm definitions synced", slog.Int("upsertedCount", len(alarmDefinitionRecords)), slog.Int64("deletedCount", count))
 	return nil
 }
 
@@ -670,7 +670,7 @@ func (c *Collector) syncManagedClusterAlarmDefinitions(ctx context.Context, ds *
 				return nil
 			}
 
-			slog.InfoContext(ctx, "Alarm definitions synced", slog.String("alarmDictionaryID", alarmDictionaryID.String()), slog.Int("upserted count", len(alarmDefinitionRecords)), slog.Int64("deleted count", count))
+			slog.InfoContext(ctx, "Alarm definitions synced", slog.String("alarmDictionaryID", alarmDictionaryID.String()), slog.Int("upsertedCount", len(alarmDefinitionRecords)), slog.Int64("deletedCount", count))
 			return nil
 		})
 	}
