@@ -212,9 +212,6 @@ const (
 
 // Environment variable names
 const (
-	TLSSkipVerifyEnvName      = "INSECURE_SKIP_VERIFY"
-	TLSSkipVerifyDefaultValue = false
-
 	TLSProfileMinVersionEnvName = "TLS_PROFILE_MIN_VERSION"
 	TLSProfileCiphersEnvName    = "TLS_PROFILE_CIPHERS"
 )
