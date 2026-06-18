@@ -297,6 +297,7 @@ KUSTOMIZE ?= $(LOCALBIN)/kustomize
 MOCK_GEN ?= $(LOCALBIN)/mockgen
 OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
 OPM ?= $(LOCALBIN)/opm
+GOVULNCHECK ?= $(LOCALBIN)/govulncheck
 SHELLCHECK ?= $(LOCALBIN)/shellcheck
 YAMLLINT ?= $(LOCALBIN)/yamllint
 YQ ?= $(LOCALBIN)/yq
@@ -598,6 +599,21 @@ yq-sort-and-format: yq ## Sort keys/reformat all yaml files
 		$(YQ) -i '.. |= sort_keys(.)' "$$file"; \
 	done
 	@echo "YAML sorting and formatting completed successfully."
+
+# GOVULNCHECK_VERSION is parsed from the GitHub Actions workflow to maintain a single source of truth.
+GOVULNCHECK_VERSION := $(shell grep 'GOVULNCHECK_VERSION:' $(PROJECT_DIR)/.github/workflows/govulncheck.yml | head -1 | awk '{print $$2}')
+
+.PHONY: govulncheck-download
+govulncheck-download: $(GOVULNCHECK) ## Download govulncheck locally if necessary.
+
+$(GOVULNCHECK): $(LOCALBIN)
+	@echo "Downloading govulncheck $(GOVULNCHECK_VERSION)..."
+	GOBIN=$(LOCALBIN) go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
+	@echo "Govulncheck downloaded successfully."
+
+.PHONY: govulncheck
+govulncheck: govulncheck-download ## Run govulncheck vulnerability scanner against code.
+	$(GOVULNCHECK) ./...
 
 ##@ Binary
 .PHONY: binary

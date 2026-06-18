@@ -1,0 +1,170 @@
+---
+name: Govulncheck Vulnerability Scan
+
+on:  # yamllint disable-line rule:truthy
+  schedule:
+    - cron: '17 8 * * 1'  # Weekly on Monday at 08:17 UTC
+  workflow_dispatch: {}
+
+# Pinned tool version — also read by the Makefile govulncheck target.
+env:
+  GOVULNCHECK_VERSION: v1.3.0
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  govulncheck:
+    name: Scan for vulnerabilities
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Install govulncheck
+        run: go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
+
+      - name: Run govulncheck
+        id: scan
+        run: |
+          govulncheck -format json ./... > govulncheck-results.json 2>&1 || true
+
+      - name: Process results and manage issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const raw = fs.readFileSync('govulncheck-results.json', 'utf8');
+            const label = 'govulncheck';
+
+            // Parse NDJSON output — extract vulnerability findings
+            const vulns = new Map();
+            for (const line of raw.split('\n').filter(l => l.trim())) {
+              try {
+                const entry = JSON.parse(line);
+                if (entry.finding) {
+                  const f = entry.finding;
+                  const id = f.osv;
+                  if (!vulns.has(id)) {
+                    vulns.set(id, {
+                      id,
+                      fixedVersion: f.fixed_version || 'unknown',
+                      modules: new Set(),
+                      traces: [],
+                    });
+                  }
+                  const v = vulns.get(id);
+                  if (f.trace && f.trace.length > 0) {
+                    const mod = f.trace[f.trace.length - 1];
+                    if (mod.module) v.modules.add(`${mod.module}@${mod.version || '?'}`);
+                  }
+                  v.traces.push(f);
+                }
+              } catch (e) { /* skip non-JSON lines */ }
+            }
+
+            // Also extract OSV details for descriptions
+            const osvDetails = new Map();
+            for (const line of raw.split('\n').filter(l => l.trim())) {
+              try {
+                const entry = JSON.parse(line);
+                if (entry.osv && entry.osv.id) {
+                  osvDetails.set(entry.osv.id, {
+                    summary: entry.osv.summary || '',
+                    details: entry.osv.details || '',
+                    aliases: (entry.osv.aliases || []).join(', '),
+                  });
+                }
+              } catch (e) { /* skip */ }
+            }
+
+            // Ensure label exists
+            try {
+              await github.rest.issues.getLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: label,
+              });
+            } catch {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: label,
+                color: 'd93f0b',
+                description: 'Vulnerability detected by govulncheck',
+              });
+            }
+
+            // Get all existing open govulncheck issues
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: label,
+              state: 'open',
+              per_page: 100,
+            });
+
+            const existingByVulnId = new Map();
+            for (const issue of existing) {
+              const match = issue.title.match(/^govulncheck: (GO-\d{4}-\d+)/);
+              if (match) existingByVulnId.set(match[1], issue);
+            }
+
+            // Open new issues for new findings
+            for (const [id, vuln] of vulns) {
+              if (existingByVulnId.has(id)) {
+                existingByVulnId.delete(id);  // Still active, don't close
+                continue;
+              }
+              const osv = osvDetails.get(id) || {};
+              const modules = [...vuln.modules].join(', ');
+              const body = [
+                `## ${osv.summary || id}`,
+                '',
+                `**Vulnerability:** [${id}](https://pkg.go.dev/vuln/${id})`,
+                osv.aliases ? `**CVE:** ${osv.aliases}` : '',
+                `**Affected modules:** ${modules}`,
+                `**Fixed in:** ${vuln.fixedVersion}`,
+                '',
+                osv.details ? `### Details\n\n${osv.details}` : '',
+                '',
+                `_Detected by govulncheck ${process.env.GOVULNCHECK_VERSION} on ${new Date().toISOString().split('T')[0]}_`,
+              ].filter(Boolean).join('\n');
+
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `govulncheck: ${id} — ${modules.split(',')[0] || 'unknown'}`,
+                body,
+                labels: [label],
+              });
+              console.log(`Created issue for ${id}`);
+            }
+
+            // Close issues for resolved vulnerabilities
+            for (const [id, issue] of existingByVulnId) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `This vulnerability is no longer detected by govulncheck ${process.env.GOVULNCHECK_VERSION}. Closing.`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed',
+              });
+              console.log(`Closed issue #${issue.number} for ${id}`);
+            }
+
+            console.log(`Scan complete: ${vulns.size} active vulnerabilities`);
