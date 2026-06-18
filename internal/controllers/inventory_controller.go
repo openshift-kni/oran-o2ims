@@ -60,7 +60,6 @@ import (
 //+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
 //+kubebuilder:rbac:groups="config.openshift.io",resources=apiservers,verbs=get;list;watch
 //+kubebuilder:rbac:groups="config.openshift.io",resources=clusterversions,verbs=get;list;watch
-//+kubebuilder:rbac:urls="/internal/v1/caas-alerts/alertmanager",verbs=create
 //+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/nodeClusterTypes",verbs=get;list
 //+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/nodeClusters",verbs=get;list
 //+kubebuilder:rbac:urls="/o2ims-infrastructureCluster/v1/alarmDictionaries",verbs=get;list

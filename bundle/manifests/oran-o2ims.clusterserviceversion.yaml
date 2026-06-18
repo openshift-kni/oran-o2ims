@@ -1655,10 +1655,6 @@ spec:
         serviceAccountName: oran-o2ims-cluster-server
       - rules:
         - nonResourceURLs:
-          - /internal/v1/caas-alerts/alertmanager
-          verbs:
-          - create
-        - nonResourceURLs:
           - /o2ims-infrastructureCluster/v1/alarmDictionaries
           - /o2ims-infrastructureCluster/v1/nodeClusterTypes
           - /o2ims-infrastructureCluster/v1/nodeClusters
