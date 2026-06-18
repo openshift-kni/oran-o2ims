@@ -130,6 +130,9 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 
 	// Build the deployment's spec.
 	deploymentSpec := appsv1.DeploymentSpec{
+		Strategy: appsv1.DeploymentStrategy{
+			Type: appsv1.RecreateDeploymentStrategyType,
+		},
 		Replicas: k8sptr.To(int32(1)),
 		Selector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
