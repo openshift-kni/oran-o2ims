@@ -1708,6 +1708,14 @@ spec:
           - list
           - watch
         - apiGroups:
+          - addon.open-cluster-management.io
+          resources:
+          - managedclusteraddons
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
           - agent-install.openshift.io
           resources:
           - agents
@@ -1743,6 +1751,16 @@ spec:
           - tokenreviews
           verbs:
           - create
+        - apiGroups:
+          - authentication.open-cluster-management.io
+          resources:
+          - managedserviceaccounts
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - watch
         - apiGroups:
           - authorization.k8s.io
           resources:
@@ -2008,6 +2026,16 @@ spec:
           - list
           - patch
           - update
+          - watch
+        - apiGroups:
+          - work.open-cluster-management.io
+          resources:
+          - manifestworks
+          verbs:
+          - create
+          - delete
+          - get
+          - list
           - watch
         serviceAccountName: oran-o2ims-controller-manager
       - rules:
