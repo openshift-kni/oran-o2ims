@@ -73,11 +73,6 @@ PROJECT_DIR := $(shell dirname $(abspath $(firstword $(MAKEFILE_LIST))))
 # You can use podman or docker as a container engine. Notice that there are some options that might be only valid for one of them.
 ENGINE ?= docker
 
-# Development/Debug passwords for database.  This requires that the operator be deployed in DEBUG=yes mode or for the
-# developer to override these values with the current passwords
-ORAN_O2IMS_ALARMS_PASSWORD ?= debug
-ORAN_O2IMS_RESOURCES_PASSWORD ?= debug
-
 ifeq (${DEBUG}, yes)
 	DOCKER_TARGET = debug
 	GOBUILD_GCFLAGS = all=-N -l
@@ -221,10 +216,6 @@ generate: deps-update controller-gen ## Generate code containing DeepCopy, DeepC
 .PHONY: build
 build: manifests generate fmt vet ## Build manager binary.
 	go build -gcflags "${GOBUILD_GCFLAGS}"
-
-.PHONY: run
-run: manifests generate fmt vet binary ## Run a controller from your host.
-	IMAGE=$(IMAGE_TAG_BASE):$(VERSION) $(LOCALBIN)/$(BINARY_NAME) start controller-manager --enable-webhooks=false
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
@@ -731,31 +722,6 @@ markdownlint: markdownlint-image  ## run the markdown linter
 		--env PULL_BASE_SHA=$(PULL_BASE_SHA) \
 		-v $$(pwd):/workdir:Z \
 		$(IMAGE_NAME)-markdownlint:latest
-
-##@ O-RAN Alarms Server
-
-.PHONY: alarms
-alarms: ##Run full alarms stack
-	IMG=$(IMAGE_TAG_BASE):latest make bundle deploy clean-am-service connect-postgres connect-cluster-server run-alarms-migrate create-am-service run-alarms
-
-create-am-service: ##Creates alarm manager service and endpoint to expose a DNS entry.
-	oc apply -k ./internal/service/alarms/k8s/base --wait=true
-	@echo "Service and Endpoint for alarm manager created."
-
-clean-am-service: ##Deletes alarm manager service and endpoint.
-	-oc delete -k ./internal/service/alarms/k8s/base --wait=true --ignore-not-found=true
-	@echo "Service and Endpoint for alarm manager deleted."
-
-.PHONY: run-alarms
-run-alarms: go-generate binary ##Run alarms server locally
-	@oc exec -n $(OCLOUD_MANAGER_NAMESPACE) $(shell oc get pods -n $(OCLOUD_MANAGER_NAMESPACE) -l app=alarms-server -o=jsonpath='{.items[0].metadata.name}') -- cat /var/run/secrets/kubernetes.io/serviceaccount/token > /tmp/token
-	TOKEN_PATH=/tmp/token RESOURCE_SERVER_URL="https://localhost:8001" INSECURE_SKIP_VERIFY=true POSTGRES_HOSTNAME=localhost ORAN_O2IMS_ALARMS_PASSWORD=$(ORAN_O2IMS_ALARMS_PASSWORD) $(LOCALBIN)/$(BINARY_NAME) alarms-server serve
-
-run-alarms-migrate: binary ##Migrate all the way up
-	DEBUG=yes POSTGRES_HOSTNAME=localhost INSECURE_SKIP_VERIFY=true ORAN_O2IMS_ALARMS_PASSWORD=$(ORAN_O2IMS_ALARMS_PASSWORD) $(LOCALBIN)/$(BINARY_NAME) alarms-server migrate
-
-run-resources-migrate: binary ##Migrate all the way up
-	ORAN_O2IMS_RESOURCES_PASSWORD=$(ORAN_O2IMS_RESOURCES_PASSWORD) $(LOCALBIN)/$(BINARY_NAME) resource-server migrate
 
 ##@ O-RAN Postgres DB
 
