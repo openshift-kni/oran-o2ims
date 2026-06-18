@@ -59,7 +59,7 @@ import (
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
-var ServerTestImage = "controller-manager:test"
+var serverTestImage = "controller-manager:test"
 
 func makePod(namespace, serverName string) *corev1.Pod {
 	return &corev1.Pod{
@@ -146,6 +146,7 @@ var _ = Describe("Inventory Controller", func() {
 			r := &Reconciler{
 				Client: fakeClient,
 				Logger: logger,
+				Image:  serverTestImage,
 			}
 
 			// Reconcile.
@@ -163,9 +164,7 @@ var _ = Describe("Inventory Controller", func() {
 						Namespace:         ctlrutils.InventoryNamespace,
 						CreationTimestamp: metav1.Now(),
 					},
-					Spec: inventoryv1alpha1.InventorySpec{
-						Image: &ServerTestImage,
-					},
+					Spec: inventoryv1alpha1.InventorySpec{},
 				},
 			},
 			reconcile.Request{
@@ -226,9 +225,7 @@ var _ = Describe("Inventory Controller", func() {
 						Namespace:         constants.DefaultNamespace,
 						CreationTimestamp: metav1.Now(),
 					},
-					Spec: inventoryv1alpha1.InventorySpec{
-						Image: &ServerTestImage,
-					},
+					Spec: inventoryv1alpha1.InventorySpec{},
 				},
 			},
 			reconcile.Request{
@@ -305,9 +302,7 @@ var _ = Describe("Inventory Controller", func() {
 						Namespace:         constants.DefaultNamespace,
 						CreationTimestamp: metav1.Now(),
 					},
-					Spec: inventoryv1alpha1.InventorySpec{
-						Image: &ServerTestImage,
-					},
+					Spec: inventoryv1alpha1.InventorySpec{},
 				},
 			},
 			reconcile.Request{

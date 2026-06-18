@@ -62,12 +62,6 @@ spec:
                 description: ClusterServerConfig contains the configuration for the
                   resource server.
                 type: object
-              image:
-                description: |-
-                  Image is the full reference of the container image that contains the binary. This is
-                  optional and the default will be the value passed to the `--image` command line flag of
-                  the controller manager.
-                type: string
               ingress:
                 description: IngressConfig defines configuration attributes related
                   to the Ingress endpoint.
