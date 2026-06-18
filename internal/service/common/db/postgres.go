@@ -10,6 +10,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
+	"net/url"
+	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -28,10 +31,28 @@ type PgConfig struct {
 	Database string
 }
 
+func buildPoolDSN(cfg PgConfig, sslParams url.Values) string {
+	connURL := &url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(cfg.User, cfg.Password),
+		Host:     net.JoinHostPort(cfg.Host, cfg.Port),
+		Path:     cfg.Database,
+		RawQuery: sslParams.Encode(),
+	}
+	return connURL.String()
+}
+
 // NewPgxPool get a concurrency safe pool of connection
 func NewPgxPool(ctx context.Context, cfg PgConfig) (*pgxpool.Pool, error) {
-	poolConfig, err := pgxpool.ParseConfig(fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Database))
+	query := url.Values{}
+	query.Set("sslmode", "verify-full")
+	if _, err := os.Stat(constants.DefaultServiceCAFile); err == nil {
+		query.Set("sslrootcert", constants.DefaultServiceCAFile)
+	} else {
+		slog.WarnContext(ctx, "Service CA file not found, TLS will use system CA store")
+	}
+
+	poolConfig, err := pgxpool.ParseConfig(buildPoolDSN(cfg, query))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
