@@ -19,6 +19,8 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	"github.com/golang-migrate/migrate/v4/source"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 )
 
 // MigrationsTable table created by migration lib to track state of migration
@@ -37,10 +39,30 @@ type MigrationConfig struct {
 
 // StartMigration starts migration for alarms server from a k8s job.
 func StartMigration(pgc PgConfig, source source.Driver) error {
-	// Init
-	h, err := NewHandler(PGtoMigrateConfig(pgc, source))
+	// Retry the initial connection. The migration init container starts
+	// simultaneously with postgres, so it may need to wait for the database
+	// to become ready. Note: do not use Cap with Factor > 1.0 — the wait
+	// library zeros Steps when Duration exceeds Cap, ending retries
+	// prematurely.
+	connectBackoff := wait.Backoff{
+		Duration: 5 * time.Second,
+		Factor:   1.0,
+		Jitter:   0.1,
+		Steps:    40, // ~3.3 minutes total
+	}
+
+	var h *MigrationHandler
+	err := retry.OnError(connectBackoff, func(_ error) bool { return true }, func() error {
+		var handlerErr error
+		h, handlerErr = NewHandler(PGtoMigrateConfig(pgc, source))
+		if handlerErr != nil {
+			slog.Warn("Database not ready for migration, retrying", slog.Any("error", handlerErr))
+			return fmt.Errorf("failed to create migrations handler: %w", handlerErr)
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("failed to create migrations handler: %w", err)
+		return fmt.Errorf("failed to connect to database for migration after retries: %w", err)
 	}
 
 	// Setup signal handling
