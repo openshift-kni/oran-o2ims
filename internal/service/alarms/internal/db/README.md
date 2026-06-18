@@ -12,16 +12,6 @@ SPDX-License-Identifier: Apache-2.0
 - More on migration [here](https://github.com/golang-migrate/migrate/blob/c378583d782e026f472dff657bfd088bf2510038/MIGRATIONS.md)
 - Tutorial [here](https://github.com/golang-migrate/migrate/blob/c378583d782e026f472dff657bfd088bf2510038/database/postgres/TUTORIAL.md)
 
-## Library
-
-Call to run migration all the way up
-
-```shell
-make run-alarms-migrate
-```
-
-This bit will later be integrated into a k8s job before the actual server is deployed.
-
 ## CLI tips
 
 ### Create a new migration file
@@ -51,10 +41,8 @@ And example walk through maybe like this -
 
    At this point even if you rerun the migration code it will be blocked
 
-   ```shell
-   make run-alarms-migrate
-   ...
-   2024/11/05 14:31:07 ERROR failed to do migration err="failed to run migrations: run migrations: Dirty database version 3. Fix and force version."
+   ```text
+   ERROR failed to do migration err="failed to run migrations: run migrations: Dirty database version 3. Fix and force version."
    ```
 
 2. Fix the migration file as needed. In this example a variable was referenced incorrectly.
@@ -64,7 +52,7 @@ And example walk through maybe like this -
    migrate -source=file://internal/service/alarms/internal/db/migrations -database="postgres://alarms:alarms@localhost:5432/alarms?sslmode=disable&x-migrations-table=schema_migrations" force 2
    ```
 
-4. Rerun `make run-alarms-migrate`
+4. Rerun the migration.
 
 ### Full DB cleanup
 
