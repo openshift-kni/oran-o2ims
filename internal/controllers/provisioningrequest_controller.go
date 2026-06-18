@@ -98,6 +98,8 @@ func GetClusterTemplateRefName(name, version string) string {
 //+kubebuilder:rbac:groups=agent-install.openshift.io,resources=agents,verbs=get;list;patch;update;watch
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=managedclusters,verbs=get;list;patch;update;watch
 //+kubebuilder:rbac:groups=observability.open-cluster-management.io,resources=observabilityaddons,verbs=get;list;watch;update
+//+kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch
+//+kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
