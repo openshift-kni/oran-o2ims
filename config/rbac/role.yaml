@@ -4,22 +4,6 @@ kind: ClusterRole
 metadata:
   name: manager-role
 rules:
-- nonResourceURLs:
-  - /o2ims-infrastructureCluster/v1/alarmDictionaries
-  - /o2ims-infrastructureCluster/v1/nodeClusterTypes
-  - /o2ims-infrastructureCluster/v1/nodeClusters
-  - /o2ims-infrastructureInventory/v1/resourceTypes
-  verbs:
-  - get
-  - list
-- nonResourceURLs:
-  - /o2ims-infrastructureCluster/v1/alarmDictionaries/*
-  - /o2ims-infrastructureCluster/v1/nodeClusterTypes/*
-  - /o2ims-infrastructureCluster/v1/nodeClusters/*
-  - /o2ims-infrastructureInventory/v1/internal/resources/*
-  - /o2ims-infrastructureInventory/v1/resourceTypes/*
-  verbs:
-  - get
 - apiGroups:
   - ""
   resources:
