@@ -2348,6 +2348,7 @@ spec:
                   capabilities:
                     drop:
                     - ALL
+                  readOnlyRootFilesystem: true
                 volumeMounts:
                 - mountPath: /tmp/k8s-webhook-server/serving-certs
                   name: cert
@@ -2356,6 +2357,8 @@ spec:
                   name: metrics-tls
               securityContext:
                 runAsNonRoot: true
+                seccompProfile:
+                  type: RuntimeDefault
               serviceAccountName: oran-o2ims-controller-manager
               terminationGracePeriodSeconds: 10
               volumes:
