@@ -934,6 +934,12 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (c
 			Spec: corev1.PodSpec{
 				ServiceAccountName: fmt.Sprintf("%s-%s", constants.DefaultNamespace, serverName),
 				Volumes:            deploymentVolumes,
+				SecurityContext: &corev1.PodSecurityContext{
+					RunAsNonRoot: k8sptr.To(true),
+					SeccompProfile: &corev1.SeccompProfile{
+						Type: corev1.SeccompProfileTypeRuntimeDefault,
+					},
+				},
 				Containers: []corev1.Container{
 					{
 						Name:            constants.ServerContainerName,
@@ -943,6 +949,13 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (c
 						Command:         []string{constants.ManagerExec},
 						Args:            deploymentContainerArgs,
 						Env:             envVars,
+						SecurityContext: &corev1.SecurityContext{
+							AllowPrivilegeEscalation: k8sptr.To(false),
+							ReadOnlyRootFilesystem:   k8sptr.To(true),
+							Capabilities: &corev1.Capabilities{
+								Drop: []corev1.Capability{"ALL"},
+							},
+						},
 						Ports: []corev1.ContainerPort{
 							{
 								Name:          ctlrutils.DefaultServiceTargetPort,
@@ -970,6 +983,13 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (c
 				Command: []string{constants.ManagerExec},
 				Args:    []string{serverName, "migrate"},
 				Env:     envVars,
+				SecurityContext: &corev1.SecurityContext{
+					AllowPrivilegeEscalation: k8sptr.To(false),
+					ReadOnlyRootFilesystem:   k8sptr.To(true),
+					Capabilities: &corev1.Capabilities{
+						Drop: []corev1.Capability{"ALL"},
+					},
+				},
 				Resources: corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("100m"),

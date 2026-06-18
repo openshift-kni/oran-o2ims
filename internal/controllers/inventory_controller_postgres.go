@@ -64,6 +64,23 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 				},
 			},
 		},
+		// Writable emptyDir volumes for readOnlyRootFilesystem support.
+		// The RHEL postgres image writes NSS passwd to $HOME (/var/lib/pgsql),
+		// temp files to /tmp, and socket/PID files to /var/run/postgresql.
+		// The data PVC at /var/lib/pgsql/data is a nested mount that
+		// Kubernetes handles correctly alongside the parent emptyDir.
+		corev1.Volume{
+			Name:         "home",
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+		},
+		corev1.Volume{
+			Name:         "tmp",
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+		},
+		corev1.Volume{
+			Name:         "run",
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+		},
 	)
 
 	deploymentVolumeMounts = append(deploymentVolumeMounts,
@@ -78,6 +95,18 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 		corev1.VolumeMount{
 			Name:      "data",
 			MountPath: "/var/lib/pgsql/data",
+		},
+		corev1.VolumeMount{
+			Name:      "home",
+			MountPath: "/var/lib/pgsql",
+		},
+		corev1.VolumeMount{
+			Name:      "tmp",
+			MountPath: "/tmp",
+		},
+		corev1.VolumeMount{
+			Name:      "run",
+			MountPath: "/var/run/postgresql",
 		})
 
 	// Create PersistentVolumeClaim for data storage
@@ -125,9 +154,6 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 		return fmt.Errorf("missing %s environment variable value", constants.PostgresImageName)
 	}
 
-	// Disable privilege escalation
-	privilegeEscalation := false
-
 	// Build the deployment's spec.
 	deploymentSpec := appsv1.DeploymentSpec{
 		Replicas: k8sptr.To(int32(1)),
@@ -148,6 +174,12 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 			Spec: corev1.PodSpec{
 				ServiceAccountName: serverName,
 				Volumes:            deploymentVolumes,
+				SecurityContext: &corev1.PodSecurityContext{
+					RunAsNonRoot: k8sptr.To(true),
+					SeccompProfile: &corev1.SeccompProfile{
+						Type: corev1.SeccompProfileTypeRuntimeDefault,
+					},
+				},
 				Containers: []corev1.Container{
 					{
 						Name: constants.ServerContainerName,
@@ -161,7 +193,8 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 							},
 						},
 						SecurityContext: &corev1.SecurityContext{
-							AllowPrivilegeEscalation: &privilegeEscalation,
+							AllowPrivilegeEscalation: k8sptr.To(false),
+							ReadOnlyRootFilesystem:   k8sptr.To(true),
 							Capabilities: &corev1.Capabilities{
 								Drop: []corev1.Capability{"ALL"},
 							},
