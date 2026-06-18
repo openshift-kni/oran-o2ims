@@ -18,7 +18,6 @@ import (
 	"reflect"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -837,27 +836,7 @@ func GetDefaultsFromSlices[K comparable, V any](
 	return editable, immutable, nil
 }
 
-// GetTLSSkipVerify returns the current requested value of the TLS Skip Verify setting
-func GetTLSSkipVerify() bool {
-	value, ok := os.LookupEnv(TLSSkipVerifyEnvName)
-	if !ok {
-		return TLSSkipVerifyDefaultValue
-	}
-
-	result, err := strconv.ParseBool(value)
-	if err != nil {
-		oranUtilsLog.Error(err, fmt.Sprintf("Error parsing '%s' variable value '%s'",
-			TLSSkipVerifyEnvName, value))
-		return TLSSkipVerifyDefaultValue
-	}
-
-	return result
-}
-
-// loadDefaultCABundles loads the default service account and ingress CA bundles.  This should only be invoked if TLS
-// verification has not been disabled since the expectation is that it will only need to be disabled when testing as a
-// standalone binary in which case the paths to the bundles won't be present.  Otherwise, we always expect the bundles
-// to be present when running in-cluster.
+// loadDefaultCABundles loads the default service account and ingress CA bundles.
 func loadDefaultCABundles(config *tls.Config) error {
 	config.RootCAs = x509.NewCertPool()
 	if data, err := os.ReadFile(defaultBackendCABundle); err != nil {
@@ -883,8 +862,7 @@ func loadDefaultCABundles(config *tls.Config) error {
 // GetDefaultTLSConfig sets the TLS configuration attributes appropriately to enable communication between internal
 // services and accessing the public facing API endpoints. TLS version and cipher suites are inherited from the
 // cluster TLS security profile (via operator-injected environment variables).
-// InsecureSkipVerify is always read from the INSECURE_SKIP_VERIFY env var regardless of loadCAs.
-// When loadCAs is true and verification is enabled, default in-cluster CA bundles are loaded.
+// When loadCAs is true, default in-cluster CA bundles are loaded.
 // Pass loadCAs=false when the caller provides its own trust anchors (e.g., a pinned service CA).
 func GetDefaultTLSConfig(config *tls.Config, loadCAs bool) (*tls.Config, error) {
 	profile := newTLSProfileFromEnv()
@@ -893,8 +871,7 @@ func GetDefaultTLSConfig(config *tls.Config, loadCAs bool) (*tls.Config, error) 
 		return nil, err
 	}
 
-	tlsConfig.InsecureSkipVerify = GetTLSSkipVerify()
-	if loadCAs && !tlsConfig.InsecureSkipVerify {
+	if loadCAs {
 		if err := loadDefaultCABundles(tlsConfig); err != nil {
 			return nil, fmt.Errorf("error loading default CABundles: %w", err)
 		}
