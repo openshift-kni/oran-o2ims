@@ -234,14 +234,6 @@ spec:
         path: clusterServerConfig
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: |-
-          Image is the full reference of the container image that contains the binary. This is
-          optional and the default will be the value passed to the `--image` command line flag of
-          the controller manager.
-        displayName: Image
-        path: image
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
       - description: IngressConfig defines configuration attributes related to the
           Ingress endpoint.
         displayName: Ingress Configuration

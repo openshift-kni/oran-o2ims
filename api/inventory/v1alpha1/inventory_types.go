@@ -120,12 +120,6 @@ type IngressConfig struct {
 
 // InventorySpec defines the desired state of Inventory
 type InventorySpec struct {
-	// Image is the full reference of the container image that contains the binary. This is
-	// optional and the default will be the value passed to the `--image` command line flag of
-	// the controller manager.
-	//+optional
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Image",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	Image *string `json:"image,omitempty"`
 	// CloudID is the global cloud ID value used to correlate the SMO inventory record with the deployed cloud instance.
 	//+optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cloud ID",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
