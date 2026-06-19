@@ -36,23 +36,45 @@ jobs:
       - name: Run govulncheck
         id: scan
         run: |
-          govulncheck -format json ./... > govulncheck-results.json 2>&1 || true
+          govulncheck -format json ./... > govulncheck-results.json 2>/dev/null || true
+          # Convert multi-line JSON objects to NDJSON for easier parsing
+          python3 -c "
+          import json, sys
+          content = open('govulncheck-results.json').read()
+          decoder = json.JSONDecoder()
+          pos = 0
+          with open('govulncheck-ndjson.json', 'w') as out:
+              while pos < len(content):
+                  s = content[pos:].lstrip()
+                  if not s: break
+                  try:
+                      obj, end = decoder.raw_decode(s)
+                      pos += len(content[pos:]) - len(s) + end
+                      out.write(json.dumps(obj) + '\n')
+                  except json.JSONDecodeError:
+                      break
+          "
 
       - name: Process results and manage issues
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const raw = fs.readFileSync('govulncheck-results.json', 'utf8');
+            const raw = fs.readFileSync('govulncheck-ndjson.json', 'utf8');
             const label = 'govulncheck';
 
-            // Parse NDJSON output — extract vulnerability findings
+            // Parse NDJSON output — extract symbol-level vulnerability findings.
+            // govulncheck JSON includes findings at module, package, and symbol levels.
+            // Only symbol-level findings (trace depth > 1) indicate that our code
+            // actually calls the vulnerable function.
             const vulns = new Map();
             for (const line of raw.split('\n').filter(l => l.trim())) {
               try {
                 const entry = JSON.parse(line);
                 if (entry.finding) {
                   const f = entry.finding;
+                  const traceDepth = (f.trace || []).length;
+                  if (traceDepth <= 1) continue;
                   const id = f.osv;
                   if (!vulns.has(id)) {
                     vulns.set(id, {
@@ -64,7 +86,7 @@ jobs:
                   }
                   const v = vulns.get(id);
                   if (f.trace && f.trace.length > 0) {
-                    const mod = f.trace[f.trace.length - 1];
+                    const mod = f.trace[0];
                     if (mod.module) v.modules.add(`${mod.module}@${mod.version || '?'}`);
                   }
                   v.traces.push(f);
@@ -127,6 +149,19 @@ jobs:
               }
               const osv = osvDetails.get(id) || {};
               const modules = [...vuln.modules].join(', ');
+
+              // Determine fix action based on module type
+              const firstMod = [...vuln.modules][0] || '';
+              let fixAction;
+              if (!firstMod) {
+                fixAction = `See [${id}](https://pkg.go.dev/vuln/${id}) for remediation details.`;
+              } else if (firstMod.startsWith('stdlib@')) {
+                fixAction = `Upgrade Go from ${firstMod.split('@')[1]} to ${vuln.fixedVersion} in \`go.mod\` and rebuild.`;
+              } else {
+                const modName = firstMod.split('@')[0];
+                fixAction = `Update \`${modName}\` to ${vuln.fixedVersion} in \`go.mod\`:\n\`\`\`\ngo get ${modName}@${vuln.fixedVersion} && go mod vendor\n\`\`\``;
+              }
+
               const body = [
                 `## ${osv.summary || id}`,
                 '',
@@ -134,6 +169,14 @@ jobs:
                 osv.aliases ? `**CVE:** ${osv.aliases}` : '',
                 `**Affected modules:** ${modules}`,
                 `**Fixed in:** ${vuln.fixedVersion}`,
+                '',
+                '### Recommended fix',
+                '',
+                fixAction,
+                '',
+                '### Verification',
+                '',
+                'After applying the fix, run `make govulncheck` and confirm the vulnerability no longer appears.',
                 '',
                 osv.details ? `### Details\n\n${osv.details}` : '',
                 '',
