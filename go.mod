@@ -55,8 +55,8 @@ require (
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
 	open-cluster-management.io/api v1.2.0
 	open-cluster-management.io/governance-policy-propagator v0.18.0
-	open-cluster-management.io/managed-serviceaccount v0.9.0
-	sigs.k8s.io/controller-runtime v0.22.5
+	open-cluster-management.io/managed-serviceaccount v0.10.0
+	sigs.k8s.io/controller-runtime v0.23.1
 	sigs.k8s.io/yaml v1.6.0
 )
 
