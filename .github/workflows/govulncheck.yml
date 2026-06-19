@@ -36,7 +36,7 @@ jobs:
       - name: Run govulncheck
         id: scan
         run: |
-          govulncheck -format json ./... > govulncheck-results.json 2>&1 || true
+          govulncheck -format json ./... > govulncheck-results.json 2>/dev/null || true
           # Convert multi-line JSON objects to NDJSON for easier parsing
           python3 -c "
           import json, sys
@@ -153,7 +153,9 @@ jobs:
               // Determine fix action based on module type
               const firstMod = [...vuln.modules][0] || '';
               let fixAction;
-              if (firstMod.startsWith('stdlib@')) {
+              if (!firstMod) {
+                fixAction = `See [${id}](https://pkg.go.dev/vuln/${id}) for remediation details.`;
+              } else if (firstMod.startsWith('stdlib@')) {
                 fixAction = `Upgrade Go from ${firstMod.split('@')[1]} to ${vuln.fixedVersion} in \`go.mod\` and rebuild.`;
               } else {
                 const modName = firstMod.split('@')[0];
