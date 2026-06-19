@@ -18,7 +18,7 @@ import (
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	sharedoauth "github.com/openshift-kni/oran-o2ims/internal/shared/oauth"
 )
 
 // OAuthConfig defines the attributes used to communicate with the OAuth server
@@ -196,15 +196,15 @@ func (c *CommonServerConfig) Validate() error {
 }
 
 // CreateOAuthConfig builds an OAuthClientConfig from the specified parameters
-func (c *CommonServerConfig) CreateOAuthConfig(ctx context.Context) (*ctlrutils.OAuthClientConfig, error) {
-	config := ctlrutils.OAuthClientConfig{}
+func (c *CommonServerConfig) CreateOAuthConfig(ctx context.Context) (*sharedoauth.OAuthClientConfig, error) {
+	config := sharedoauth.OAuthClientConfig{}
 	if c.TLS.CABundleFile != "" {
 		// Load the bundle
 		bytes, err := os.ReadFile(c.TLS.CABundleFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read CA bundle file '%s': %w", c.TLS.CABundleFile, err)
 		}
-		config.TLSConfig = &ctlrutils.TLSConfig{CaBundle: bytes}
+		config.TLSConfig = &sharedoauth.TLSConfig{CaBundle: bytes}
 		slog.DebugContext(ctx, "using CA bundle", slog.String("path", c.TLS.CABundleFile))
 	}
 
@@ -215,7 +215,7 @@ func (c *CommonServerConfig) CreateOAuthConfig(ctx context.Context) (*ctlrutils.
 			return nil, fmt.Errorf("failed to create dynamic client certificate loader: %w", err)
 		}
 		if config.TLSConfig == nil {
-			config.TLSConfig = &ctlrutils.TLSConfig{}
+			config.TLSConfig = &sharedoauth.TLSConfig{}
 		}
 		config.TLSConfig.ClientCert = dynamicClientCert
 		slog.DebugContext(ctx, "using TLS client config", slog.String("cert", c.TLS.ClientCertFile), slog.String("key", c.TLS.ClientKeyFile))
@@ -229,7 +229,7 @@ func (c *CommonServerConfig) CreateOAuthConfig(ctx context.Context) (*ctlrutils.
 		return nil, fmt.Errorf("failed to construct token URL: %w", err)
 	}
 
-	config.OAuthConfig = &ctlrutils.OAuthConfig{
+	config.OAuthConfig = &sharedoauth.OAuthConfig{
 		TokenURL:     tokenURL,
 		ClientID:     c.OAuth.ClientID,
 		ClientSecret: c.OAuth.ClientSecret,

@@ -38,3 +38,4 @@ packages:
   internal/service/resources/db/repo: 89
   internal/service/resources/listener: 30
   internal/controllers/utils/spokeclient: 75
+  internal/shared/tls: 50

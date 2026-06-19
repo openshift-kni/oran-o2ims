@@ -20,6 +20,7 @@ import (
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure"
+	sharedtls "github.com/openshift-kni/oran-o2ims/internal/shared/tls"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -220,7 +221,7 @@ func (c *AMClient) createAlertmanagerClient() (*http.Client, string, error) {
 
 	// Create HTTP client with the CA certificate and cluster TLS profile.
 	// Pass loadCAs=false since we pin the service CA explicitly.
-	tlsConfig, err := ctlrutils.GetDefaultTLSConfig(nil, false)
+	tlsConfig, err := sharedtls.GetDefaultTLSConfig(nil, false)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to create TLS config: %w", err)
 	}

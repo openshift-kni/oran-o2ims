@@ -8,11 +8,8 @@ package utils
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 	"os"
 	"reflect"
@@ -21,7 +18,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"k8s.io/apimachinery/pkg/util/net"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
@@ -834,91 +830,6 @@ func GetDefaultsFromSlices[K comparable, V any](
 		}
 	}
 	return editable, immutable, nil
-}
-
-// loadDefaultCABundles loads the default service account and ingress CA bundles.
-func loadDefaultCABundles(config *tls.Config) error {
-	config.RootCAs = x509.NewCertPool()
-	if data, err := os.ReadFile(defaultBackendCABundle); err != nil {
-		// This should not happen unless the binary is being tested in standalone mode in which case the developer
-		// should have disabled the TLS verification which would prevent this function from being invoked.
-		return fmt.Errorf("failed to read CA bundle '%s': %w", defaultBackendCABundle, err)
-		// This should not happen, but if it does continue anyway
-	} else {
-		// This will enable accessing public facing API endpoints signed by the default ingress controller certificate
-		config.RootCAs.AppendCertsFromPEM(data)
-	}
-
-	if data, err := os.ReadFile(constants.DefaultServiceCAFile); err != nil {
-		return fmt.Errorf("failed to read service CA file '%s': %w", constants.DefaultServiceCAFile, err)
-	} else {
-		// This will enable accessing internal services signed by the service account signer.
-		config.RootCAs.AppendCertsFromPEM(data)
-	}
-
-	return nil
-}
-
-// GetDefaultTLSConfig sets the TLS configuration attributes appropriately to enable communication between internal
-// services and accessing the public facing API endpoints. TLS version and cipher suites are inherited from the
-// cluster TLS security profile (via operator-injected environment variables).
-// When loadCAs is true, default in-cluster CA bundles are loaded.
-// Pass loadCAs=false when the caller provides its own trust anchors (e.g., a pinned service CA).
-func GetDefaultTLSConfig(config *tls.Config, loadCAs bool) (*tls.Config, error) {
-	profile := newTLSProfileFromEnv()
-	tlsConfig, err := NewOutboundTLSConfig(profile, config)
-	if err != nil {
-		return nil, err
-	}
-
-	if loadCAs {
-		if err := loadDefaultCABundles(tlsConfig); err != nil {
-			return nil, fmt.Errorf("error loading default CABundles: %w", err)
-		}
-	}
-
-	return tlsConfig, nil
-}
-
-// AddCABundle to an existing TLS configuration
-func AddCABundle(config *tls.Config, caBundle string) error {
-	data, err := os.ReadFile(caBundle)
-	if err != nil {
-		return fmt.Errorf("failed to read CA bundle '%s': %w", caBundle, err)
-	}
-
-	if config.RootCAs == nil {
-		config.RootCAs = x509.NewCertPool()
-	}
-	config.RootCAs.AppendCertsFromPEM(data)
-
-	return nil
-}
-
-// GetClientTLSConfig creates a tls.Config for outbound mTLS connections with dynamic cert/key rotation.
-// TLS version and cipher suites are inherited from the cluster TLS security profile
-// (via operator-injected environment variables).
-func GetClientTLSConfig(ctx context.Context, certFile, keyFile, caFile string) (*tls.Config, error) {
-	profile := newTLSProfileFromEnv()
-	return NewOutboundMTLSConfig(ctx, profile, certFile, keyFile, caFile)
-}
-
-// GetServerTLSConfig creates a tls.Config for accepting incoming connections with dynamic cert/key rotation.
-// TLS version and cipher suites are inherited from the cluster TLS security profile
-// (via operator-injected environment variables).
-func GetServerTLSConfig(ctx context.Context, certFile, keyFile string) (*tls.Config, error) {
-	profile := newTLSProfileFromEnv()
-	return NewInboundTLSConfig(ctx, profile, certFile, keyFile)
-}
-
-// GetDefaultBackendTransport returns an HTTP transport with the proper TLS defaults set.
-func GetDefaultBackendTransport() (http.RoundTripper, error) {
-	tlsConfig, err := GetDefaultTLSConfig(nil, true)
-	if err != nil {
-		return nil, err
-	}
-
-	return net.SetTransportDefaults(&http.Transport{TLSClientConfig: tlsConfig}), nil
 }
 
 // GetEnvOrDefault returns the value of the named environment variable or the supplied default value if the environment

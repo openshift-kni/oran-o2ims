@@ -133,12 +133,6 @@ const (
 	SearchApiLabelValue = "search-api"
 )
 
-// Default values for backend URL and token:
-const (
-	defaultApiServerURL    = "https://" + constants.KubernetesAPIService
-	defaultBackendCABundle = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" // nolint: gosec // hardcoded path only
-)
-
 // Default timeout values
 const (
 	DefaultHardwareProvisioningTimeout = 90 * time.Minute
@@ -208,12 +202,6 @@ const (
 	OperationTypeCreated = "created"
 	OperationTypeUpdated = "updated"
 	OperationTypeDryRun  = "validated with dry-run"
-)
-
-// Environment variable names
-const (
-	TLSProfileMinVersionEnvName = "TLS_PROFILE_MIN_VERSION"
-	TLSProfileCiphersEnvName    = "TLS_PROFILE_CIPHERS"
 )
 
 // Label specific to ACM child policies.

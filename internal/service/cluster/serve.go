@@ -34,6 +34,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	repo2 "github.com/openshift-kni/oran-o2ims/internal/service/common/repo"
+	sharedtls "github.com/openshift-kni/oran-o2ims/internal/shared/tls"
 )
 
 // Resource server config values
@@ -191,7 +192,7 @@ func Serve(config *api.ClusterServerConfig) error {
 		middleware.TrailingSlashStripper(),
 	)
 
-	serverTLSConfig, err := ctlrutils.GetServerTLSConfig(ctx, config.TLS.CertFile, config.TLS.KeyFile)
+	serverTLSConfig, err := sharedtls.GetServerTLSConfig(ctx, config.TLS.CertFile, config.TLS.KeyFile)
 	if err != nil {
 		return fmt.Errorf("failed to get server TLS config: %w", err)
 	}

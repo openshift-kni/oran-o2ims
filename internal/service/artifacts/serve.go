@@ -18,10 +18,10 @@ import (
 	"time"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/auth"
+	sharedtls "github.com/openshift-kni/oran-o2ims/internal/shared/tls"
 
 	"github.com/getkin/kin-openapi/openapi3"
 
@@ -132,7 +132,7 @@ func Serve(config *api.ArtifactsServerConfig) error {
 		middleware.TrailingSlashStripper(),
 	)
 
-	serverTLSConfig, err := ctlrutils.GetServerTLSConfig(ctx, config.TLS.CertFile, config.TLS.KeyFile)
+	serverTLSConfig, err := sharedtls.GetServerTLSConfig(ctx, config.TLS.CertFile, config.TLS.KeyFile)
 	if err != nil {
 		return fmt.Errorf("failed to get server TLS config: %w", err)
 	}
