@@ -26,6 +26,8 @@ updates:
       versions: [">= 0.13.0"]
     - dependency-name: "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring"
       versions: [">= 0.90.0"]
+    - dependency-name: "open-cluster-management.io/managed-serviceaccount"
+      versions: [">= 0.10.0"]
     # hive/apis is a Go submodule using pseudo-versions, managed via
     # .dep-branches.yaml (as a siteconfig alignWith subdep). Dependabot
     # cannot resolve it and fails the entire dependency graph, blocking
