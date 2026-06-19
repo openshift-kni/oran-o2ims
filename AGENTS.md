@@ -80,7 +80,10 @@ This project has not reached GA, so there are no production databases to migrate
 ### API Groups and Key CRDs
 
 - `clcm.openshift.io` - ClusterTemplate, ProvisioningRequest, HardwareProfile, NodeAllocationRequest, AllocatedNode
-- `ocloud.openshift.io` - Inventory
+- `ocloud.openshift.io` - Inventory, Location, OCloudSite, ResourcePool
+
+When adding a new CRD, also add a corresponding `gather_resource` call in
+`must-gather/gather` so the resource is collected in support archives.
 
 ### Design Decisions
 
