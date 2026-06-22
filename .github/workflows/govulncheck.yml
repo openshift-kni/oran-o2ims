@@ -16,6 +16,7 @@ permissions:
 
 jobs:
   govulncheck:
+    if: github.repository == 'openshift-kni/oran-o2ims'
     name: Scan for vulnerabilities
     runs-on: ubuntu-latest
     steps:
