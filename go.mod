@@ -21,7 +21,7 @@ require (
 	github.com/metal3-io/baremetal-operator/apis v0.12.4
 	github.com/oapi-codegen/nethttp-middleware v1.1.2
 	github.com/oapi-codegen/oapi-codegen/v2 v2.7.1
-	github.com/oapi-codegen/runtime v1.4.1
+	github.com/oapi-codegen/runtime v1.4.2
 	github.com/onsi/ginkgo/v2 v2.31.0
 	github.com/onsi/gomega v1.42.0
 	github.com/openshift-kni/cluster-group-upgrades-operator v0.0.0-20260521142641-57d77ffe2627
