@@ -512,7 +512,8 @@ func updateNodeStatus(ctx context.Context,
 	logger *slog.Logger,
 	namespace string,
 	info bmhNodeInfo, nodename, hwprofile string, updating bool) error {
-	logger.InfoContext(ctx, "Updating AllocatedNode", slog.String("nodename", nodename))
+	ctx = logging.AppendCtx(ctx, slog.String("nodename", nodename))
+	logger.InfoContext(ctx, "Updating AllocatedNode")
 	// nolint:wrapcheck
 	return retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
 		node := &hwmgmtv1alpha1.AllocatedNode{}
@@ -521,11 +522,7 @@ func updateNodeStatus(ctx context.Context,
 			return fmt.Errorf("failed to fetch AllocatedNode: %w", err)
 		}
 
-		logger.InfoContext(ctx, "Retrying update for AllocatedNode", slog.String("nodename", nodename))
-
-		logger.InfoContext(ctx, "Adding info to AllocatedNode",
-			slog.String("nodename", nodename),
-			slog.Any("info", info))
+		logger.InfoContext(ctx, "Adding info to AllocatedNode")
 
 		node.Status.BMC = &hwmgmtv1alpha1.BMC{
 			Address:         info.BMC.Address,
@@ -549,8 +546,13 @@ func updateNodeStatus(ctx context.Context,
 
 		node.Status.HwProfile = hwprofile
 
-		return c.Status().Update(ctx, node)
+		if err := c.Status().Update(ctx, node); err != nil {
+			logger.WarnContext(ctx, "Failed to update AllocatedNode status",
+				slog.Any("error", err))
+			return err
+		}
 
+		return nil
 	})
 }
 
