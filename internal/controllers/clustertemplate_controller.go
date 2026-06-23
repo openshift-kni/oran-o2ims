@@ -851,19 +851,13 @@ func (t *clusterTemplateReconcilerTask) validateClusterImageSetMatchesRelease(ct
 		return fmt.Errorf("failed to get ClusterImageSet %s: %w", clusterImageSetName, err)
 	}
 
-	// Extract the release image from the ClusterImageSet spec
-	releaseImage := clusterImageSet.Spec.ReleaseImage
-	if releaseImage == "" {
-		return fmt.Errorf("releaseImage not found in ClusterImageSet %s spec", clusterImageSetName)
-	}
-
-	// Extract version from the release image URL
-	// Release image URLs typically contain the version, e.g.,
-	// "quay.io/openshift-release-dev/ocp-release:4.17.0-x86_64"
-	imageVersion := extractVersionFromReleaseImage(releaseImage)
+	// Extract the version from the ClusterImageSet. ACM 2.17+ adds a releaseTag
+	// label (e.g., "4.20.4-x86_64") and uses digest references in releaseImage.
+	// Older ACM versions use tagged image references (e.g., ":4.20.4-x86_64").
+	imageVersion := extractVersionFromClusterImageSet(clusterImageSet)
 	if imageVersion == "" {
-		return fmt.Errorf("could not extract version from ClusterImageSet %s release image: %s",
-			clusterImageSetName, releaseImage)
+		return fmt.Errorf("could not extract version from ClusterImageSet %s: no releaseTag label and release image %s has no parseable tag",
+			clusterImageSetName, clusterImageSet.Spec.ReleaseImage)
 	}
 
 	// Compare with the ClusterTemplate release version
@@ -884,28 +878,39 @@ func (t *clusterTemplateReconcilerTask) validateClusterImageSetMatchesRelease(ct
 	return nil
 }
 
-// extractVersionFromReleaseImage extracts the OpenShift version from a release image URL
+// extractVersionFromClusterImageSet extracts the OpenShift version from a ClusterImageSet.
+// It first checks the releaseTag label (added by ACM 2.17+ alongside digest references),
+// then falls back to parsing the version from a tagged release image reference.
+func extractVersionFromClusterImageSet(cis *hivev1.ClusterImageSet) string {
+	if tag, ok := cis.Labels["releaseTag"]; ok && tag != "" {
+		if v := extractVersionFromTag(tag); v != "" {
+			return v
+		}
+	}
+
+	return extractVersionFromReleaseImage(cis.Spec.ReleaseImage)
+}
+
+// extractVersionFromReleaseImage extracts the OpenShift version from a tagged release image URL.
 // Examples:
 //   - "quay.io/openshift-release-dev/ocp-release:4.17.0-x86_64" -> "4.17.0"
-//   - "registry.redhat.io/ubi8/ubi:4.16.1" -> "4.16.1"
+//   - "quay.io/openshift-release-dev/ocp-release@sha256:abc123" -> "" (digest, no tag)
 func extractVersionFromReleaseImage(releaseImage string) string {
-	// Split by ':' to get the tag part
 	parts := strings.Split(releaseImage, ":")
 	if len(parts) < 2 {
 		return ""
 	}
+	return extractVersionFromTag(parts[len(parts)-1])
+}
 
-	tag := parts[len(parts)-1]
-
-	// Look for version pattern (X.Y.Z with optional pre-release) in the tag
-	// This regex matches semantic version patterns, excluding architecture suffixes
-	// Architecture patterns like -x86_64, -aarch64 are NOT part of semver
+// extractVersionFromTag extracts a semantic version (X.Y.Z) from a tag string,
+// ignoring architecture suffixes like -x86_64 or -aarch64.
+func extractVersionFromTag(tag string) string {
 	versionRegex := `(\d+\.\d+\.\d+(?:-(?:rc|alpha|beta)[0-9\.]*)*)`
 	matches := regexp.MustCompile(versionRegex).FindStringSubmatch(tag)
 	if len(matches) > 1 {
 		return matches[1]
 	}
-
 	return ""
 }
 
