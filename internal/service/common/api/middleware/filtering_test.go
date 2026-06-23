@@ -307,6 +307,61 @@ var _ = Describe("ResponseFilter", func() {
 			Expect(errorResponse["detail"]).To(ContainSubstring("does not exist in the API schema"))
 		})
 
+		It("should allow filtering on sub-fields of objects with schema-form additionalProperties", func() {
+			type extObject struct {
+				Name       string            `json:"name"`
+				Extensions map[string]string `json:"extensions"`
+			}
+			list := []extObject{
+				{Name: "hello", Extensions: map[string]string{"cluster": "local-cluster"}},
+				{Name: "world", Extensions: map[string]string{"cluster": "remote-cluster"}},
+			}
+			body, err := json.Marshal(list)
+			Expect(err).ToNot(HaveOccurred())
+
+			schemas := map[string]*openapi3.Schema{
+				"ExtObject": {
+					Type: &openapi3.Types{"object"},
+					Properties: map[string]*openapi3.SchemaRef{
+						"name": {
+							Value: &openapi3.Schema{Type: &openapi3.Types{"string"}},
+						},
+						"extensions": {
+							Value: &openapi3.Schema{
+								Type: &openapi3.Types{"object"},
+								AdditionalProperties: openapi3.AdditionalProperties{
+									Schema: &openapi3.SchemaRef{
+										Value: &openapi3.Schema{Type: &openapi3.Types{"string"}},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+			extAdapter, err := NewFilterAdapterWithSchemas(logger, schemas)
+			Expect(err).ToNot(HaveOccurred())
+
+			next := func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write(body)
+			}
+			handler := ResponseFilter(extAdapter)(http.HandlerFunc(next))
+
+			req.URL.RawQuery = "filter=(eq,extensions/cluster,local-cluster)"
+			handler.ServeHTTP(recorder, req)
+
+			Expect(recorder.Code).To(Equal(http.StatusOK))
+			var result []extObject
+			err = json.Unmarshal(recorder.Body.Bytes(), &result)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(HaveLen(1))
+			Expect(result[0].Name).To(Equal("hello"))
+			Expect(result[0].Extensions["cluster"]).To(Equal("local-cluster"))
+		})
+
 		It("should allow valid optional fields with schema validation", func() {
 			valueWithOptional := "optional_value"
 			list := []object{
