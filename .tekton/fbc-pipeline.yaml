@@ -137,36 +137,10 @@ spec:
       workspaces:
         - name: basic-auth
           workspace: git-auth
-    - name: run-opm-pre-actions
-      params:
-        - name: ociStorage
-          value: $(params.output-image).script
-        - name: ociArtifactExpiresAfter
-          value: $(params.image-expires-after)
-        - name: SCRIPT_RUNNER_IMAGE
-          value: quay.io/konflux-ci/yq:latest
-        # update catalog template
-        - name: SCRIPT
-          value: ./telco5g-konflux/scripts/catalog/konflux-update-catalog-template.sh --set-catalog-template-input-file .konflux/catalog/catalog-template.in.yaml --set-bundle-builds-file .konflux/catalog/bundle.builds.in.yaml
-        - name: HERMETIC
-          value: $(params.hermetic)
-        - name: SOURCE_ARTIFACT
-          value: $(tasks.clone-repository.results.SOURCE_ARTIFACT)
-      runAfter:
-        - clone-repository
-      taskRef:
-        params:
-        - name: name
-          value: run-script-oci-ta
-        - name: bundle
-          value: quay.io/konflux-ci/tekton-catalog/task-run-script-oci-ta:0.1@sha256:0e13a74cc02c945e7119ecd4cc0c9148e7591b50f87e415b212154caad0479c0
-        - name: kind
-          value: task
-        resolver: bundles
     - name: run-opm-command
       params:
         - name: SOURCE_ARTIFACT
-          value: $(tasks.run-opm-pre-actions.results.SCRIPT_ARTIFACT)
+          value: $(tasks.clone-repository.results.SOURCE_ARTIFACT)
         - name: ociStorage
           value: $(params.output-image).opm
         - name: ociArtifactExpiresAfter
@@ -187,7 +161,7 @@ spec:
         - name: FILE_TO_UPDATE_PULLSPEC
           value: ".konflux/catalog/o-cloud-manager/catalog.json"
       runAfter:
-        - run-opm-pre-actions
+        - clone-repository
       taskRef:
         params:
           - name: name
@@ -253,9 +227,6 @@ spec:
           value: $(params.build-args-file)
         - name: SOURCE_ARTIFACT
           value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
-        - name: ADDITIONAL_BASE_IMAGES
-          value:
-            - $(tasks.run-opm-pre-actions.results.SCRIPT_RUNNER_IMAGE_REFERENCE)
         - name: CACHI2_ARTIFACT
           value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
         - name: IMAGE_APPEND_PLATFORM
