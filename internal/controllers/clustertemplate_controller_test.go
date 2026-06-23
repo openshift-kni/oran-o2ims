@@ -1979,7 +1979,7 @@ baseDomain: example.com
 
 		err := task.validateClusterImageSetMatchesRelease(ctx)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("releaseImage not found in ClusterImageSet"))
+		Expect(err.Error()).To(ContainSubstring("could not extract version from ClusterImageSet"))
 	})
 
 	It("should fail when ClusterImageSet releaseImage contains no extractable version", func() {
@@ -2102,6 +2102,12 @@ var _ = Describe("extractVersionFromReleaseImage", func() {
 		}
 	})
 
+	It("should return empty string for digest references", func() {
+		version := extractVersionFromReleaseImage(
+			"quay.io/openshift-release-dev/ocp-release@sha256:5b87a665045cdfe0a1b271024be936a0c46de17b25a112d6a136c5af89d861c4")
+		Expect(version).To(Equal(""))
+	})
+
 	It("should return empty string for invalid release images", func() {
 		testCases := []struct {
 			description  string
@@ -2120,6 +2126,10 @@ var _ = Describe("extractVersionFromReleaseImage", func() {
 				releaseImage: "quay.io/openshift-release-dev/ocp-release:4.17",
 			},
 			{
+				description:  "digest reference",
+				releaseImage: "quay.io/openshift-release-dev/ocp-release@sha256:5b87a665045cdfe0a1b271024be936a0c46de17b25a112d6a136c5af89d861c4",
+			},
+			{
 				description:  "empty string",
 				releaseImage: "",
 			},
@@ -2134,6 +2144,58 @@ var _ = Describe("extractVersionFromReleaseImage", func() {
 			version := extractVersionFromReleaseImage(tc.releaseImage)
 			Expect(version).To(Equal(""))
 		}
+	})
+})
+
+var _ = Describe("extractVersionFromClusterImageSet", func() {
+	It("should extract version from releaseTag label (ACM 2.17+ with digest reference)", func() {
+		cis := &hivev1.ClusterImageSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "img4.20.4-x86-64-appsub",
+				Labels: map[string]string{"releaseTag": "4.20.4-x86_64"},
+			},
+			Spec: hivev1.ClusterImageSetSpec{
+				ReleaseImage: "quay.io/openshift-release-dev/ocp-release@sha256:5b87a665045cdfe0a1b271024be936a0c46de17b25a112d6a136c5af89d861c4",
+			},
+		}
+		Expect(extractVersionFromClusterImageSet(cis)).To(Equal("4.20.4"))
+	})
+
+	It("should fall back to tagged release image when releaseTag label is absent", func() {
+		cis := &hivev1.ClusterImageSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "img4.17.0-x86-64-appsub",
+			},
+			Spec: hivev1.ClusterImageSetSpec{
+				ReleaseImage: "quay.io/openshift-release-dev/ocp-release:4.17.0-x86_64",
+			},
+		}
+		Expect(extractVersionFromClusterImageSet(cis)).To(Equal("4.17.0"))
+	})
+
+	It("should return empty when neither releaseTag nor tagged image is available", func() {
+		cis := &hivev1.ClusterImageSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "img4.20.4-x86-64-appsub",
+			},
+			Spec: hivev1.ClusterImageSetSpec{
+				ReleaseImage: "quay.io/openshift-release-dev/ocp-release@sha256:5b87a665045cdfe0a1b271024be936a0c46de17b25a112d6a136c5af89d861c4",
+			},
+		}
+		Expect(extractVersionFromClusterImageSet(cis)).To(Equal(""))
+	})
+
+	It("should prefer releaseTag label over tagged release image", func() {
+		cis := &hivev1.ClusterImageSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "img4.20.4-x86-64-appsub",
+				Labels: map[string]string{"releaseTag": "4.20.5-x86_64"},
+			},
+			Spec: hivev1.ClusterImageSetSpec{
+				ReleaseImage: "quay.io/openshift-release-dev/ocp-release:4.20.4-x86_64",
+			},
+		}
+		Expect(extractVersionFromClusterImageSet(cis)).To(Equal("4.20.5"))
 	})
 })
 
