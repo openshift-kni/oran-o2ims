@@ -1329,20 +1329,19 @@ components:
             type: string
         capabilities:
           type: object
-          additionalProperties:
-            type: string
+          additionalProperties: {}
           description: |
             Information about the capabilities supported by the Deployment Manager and its set of deployment management
             services based on the resources allocated to the Deployment Manager.
         capacity:
           type: object
-          additionalProperties:
-            type: string
+          additionalProperties: {}
           description: |
             Information about the available, allocated and reserved capacity of O-Cloud Resources allocated to the
             Deployment Manager.
         extensions:
           type: object
+          additionalProperties: {}
           description: |
             List of metadata key-value pairs used to associate meaningful metadata to the related Deployment Manager.
       required:
@@ -1416,8 +1415,9 @@ components:
           example: "http://localhost:8000"
         extensions:
           type: object
+          additionalProperties: {}
           description: |
-            These are unspecified (not standardized) properties (keys) which are tailored by the vendor to extend the 
+            These are unspecified (not standardized) properties (keys) which are tailored by the vendor to extend the
             information provided about the O-Cloud.
           example:
             hub: "hub0"
@@ -1485,6 +1485,7 @@ components:
           example: "COMPUTE"
         extensions:
           type: object
+          additionalProperties: {}
           description: List of metadata key-value pairs used to associate meaningful metadata to the related resource type.
       required:
       - resourceTypeId
@@ -1521,6 +1522,7 @@ components:
           description: Human readable description of the resource pool.
         extensions:
           type: object
+          additionalProperties: {}
           description: List of metadata key-value pairs used to associate meaningful metadata to the related resource pool.
       required:
       - resourcePoolId
@@ -1573,6 +1575,7 @@ components:
             type: string
         extensions:
           type: object
+          additionalProperties: {}
           description: List of metadata key-value pairs used to associate meaningful metadata to the related resource.
       required:
       - resourceId
@@ -1718,6 +1721,7 @@ components:
           example: "1234 Technology Avenue"
         extensions:
           type: object
+          additionalProperties: {}
           description: List of metadata key-value pairs used to associate meaningful metadata to the related location.
       required:
         - globalLocationId
@@ -1758,6 +1762,7 @@ components:
             - "d3b27e14-4589-4d93-ae76-ddca559193ea"
         extensions:
           type: object
+          additionalProperties: {}
           description: List of metadata key-value pairs used to associate meaningful metadata to the related O-Cloud site.
       required:
         - oCloudSiteId
