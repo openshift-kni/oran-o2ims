@@ -9,7 +9,6 @@ package alertmanager
 import (
 	"context"
 	"log/slog"
-	"maps"
 	"time"
 
 	"github.com/google/uuid"
@@ -203,14 +202,16 @@ func severityToPerceivedSeverity(input string) api.PerceivedSeverity {
 }
 
 // getExtensions extract oran extension from alert
-func getExtensions(a api.Alert) map[string]string {
-	result := make(map[string]string)
+func getExtensions(a api.Alert) map[string]interface{} {
+	result := make(map[string]interface{})
 
-	// Bring in labels and annoations
-	maps.Copy(result, getLabels(a))
-	maps.Copy(result, getAnnotations(a))
+	for k, v := range getLabels(a) {
+		result[k] = v
+	}
+	for k, v := range getAnnotations(a) {
+		result[k] = v
+	}
 
-	// Add gen url
 	if a.GeneratorURL != nil {
 		result["generatorURL"] = *a.GeneratorURL
 	}

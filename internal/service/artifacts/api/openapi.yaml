@@ -388,8 +388,7 @@ components:
           example: {"deploymentType": "sno", "networkType": "ran"}
         extensions:
           type: object
-          additionalProperties:
-            type: string
+          additionalProperties: {}
           description: |
             These are unspecified (not standardized) properties (keys) which are tailored by the vendor or
             operator to extend the information provided about the Artifact Resource.
