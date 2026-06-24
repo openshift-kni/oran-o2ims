@@ -83,6 +83,7 @@ var (
 		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", constants.DefaultContainerPort),
 		fmt.Sprintf("--tls-server-cert=%s/%s", constants.TLSServerMountPath, constants.TLSCertField),
 		fmt.Sprintf("--tls-server-key=%s/%s", constants.TLSServerMountPath, constants.TLSKeyField),
+		fmt.Sprintf("--audience=%s", InventoryAlarmServerName),
 	}
 
 	ArtifactsServerArgs = []string{
@@ -91,6 +92,7 @@ var (
 		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", constants.DefaultContainerPort),
 		fmt.Sprintf("--tls-server-cert=%s/%s", constants.TLSServerMountPath, constants.TLSCertField),
 		fmt.Sprintf("--tls-server-key=%s/%s", constants.TLSServerMountPath, constants.TLSKeyField),
+		fmt.Sprintf("--audience=%s", InventoryArtifactsServerName),
 	}
 
 	ResourceServerArgs = []string{
@@ -99,6 +101,7 @@ var (
 		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", constants.DefaultContainerPort),
 		fmt.Sprintf("--tls-server-cert=%s/%s", constants.TLSServerMountPath, constants.TLSCertField),
 		fmt.Sprintf("--tls-server-key=%s/%s", constants.TLSServerMountPath, constants.TLSKeyField),
+		fmt.Sprintf("--audience=%s", InventoryResourceServerName),
 	}
 
 	ClusterServerArgs = []string{
@@ -107,6 +110,7 @@ var (
 		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", constants.DefaultContainerPort),
 		fmt.Sprintf("--tls-server-cert=%s/%s", constants.TLSServerMountPath, constants.TLSCertField),
 		fmt.Sprintf("--tls-server-key=%s/%s", constants.TLSServerMountPath, constants.TLSKeyField),
+		fmt.Sprintf("--audience=%s", InventoryClusterServerName),
 	}
 
 	ProvisioningServerArgs = []string{
@@ -115,6 +119,7 @@ var (
 		fmt.Sprintf("--api-listener-address=0.0.0.0:%d", constants.DefaultContainerPort),
 		fmt.Sprintf("--tls-server-cert=%s/%s", constants.TLSServerMountPath, constants.TLSCertField),
 		fmt.Sprintf("--tls-server-key=%s/%s", constants.TLSServerMountPath, constants.TLSKeyField),
+		fmt.Sprintf("--audience=%s", InventoryProvisioningServerName),
 	}
 
 	HardwareManagerServerArgs = []string{

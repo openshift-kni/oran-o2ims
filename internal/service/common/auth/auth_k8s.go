@@ -28,6 +28,7 @@ import (
 type KubernetesAuthenticatorConfig struct {
 	RESTConfig     *rest.Config
 	ClientCABundle string
+	Audiences      []string
 }
 
 type kubernetesAuthenticator struct {
@@ -47,6 +48,7 @@ func (c *KubernetesAuthenticatorConfig) New() (authenticator.Request, error) {
 		CacheTTL:                 1 * time.Minute,
 		TokenAccessReviewClient:  authenticationV1Client,
 		TokenAccessReviewTimeout: 10 * time.Second,
+		APIAudiences:             authenticator.Audiences(c.Audiences),
 		// wait.Backoff is copied from: https://github.com/kubernetes/apiserver/blob/v0.29.0/pkg/server/options/authentication.go#L43-L50
 		// options.DefaultAuthWebhookRetryBackoff is not used to avoid a dependency on "k8s.io/apiserver/pkg/server/options".
 		WebhookRetryBackoff: &wait.Backoff{
