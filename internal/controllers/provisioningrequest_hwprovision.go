@@ -822,6 +822,9 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec(
 		if err != nil {
 			return nil, fmt.Errorf("invalid hardwareProvisioningTimeout %q: %w", ts, err)
 		}
+		if d <= 0 {
+			return nil, fmt.Errorf("invalid hardwareProvisioningTimeout %q: must be > 0", ts)
+		}
 		hwTimeout = &metav1.Duration{Duration: d}
 	}
 

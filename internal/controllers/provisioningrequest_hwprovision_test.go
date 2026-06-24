@@ -1017,6 +1017,40 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		Expect(nar.Spec.HardwareProvisioningTimeout).To(Equal(&metav1.Duration{Duration: 90 * time.Minute}))
 	})
 
+	It("should return error for non-positive duration in templateParameters", func() {
+		clusterInstance := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "siteconfig.openshift.io/v1alpha1",
+				"kind":       "ClusterInstance",
+				"metadata": map[string]interface{}{
+					"name":      "exampleCluster",
+					"namespace": "default",
+				},
+				"spec": map[string]interface{}{
+					"nodes": []interface{}{
+						map[string]interface{}{
+							"role": "master",
+						},
+					},
+				},
+			},
+		}
+
+		task.clusterInput = &clusterInput{
+			hwMgmtData: map[string]any{
+				"hardwareProvisioningTimeout": "0s",
+				"nodeGroupData": []any{
+					map[string]any{"name": "controller", "role": "master", "hwProfile": "test-profile"},
+				},
+			},
+		}
+
+		nar, err := task.buildNodeAllocationRequestSpec(clusterInstance)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("must be > 0"))
+		Expect(nar).To(BeNil())
+	})
+
 	It("should return error for invalid duration string in templateParameters", func() {
 		clusterInstance := &unstructured.Unstructured{
 			Object: map[string]interface{}{
