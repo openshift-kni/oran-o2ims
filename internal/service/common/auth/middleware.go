@@ -57,6 +57,7 @@ func GetAuthenticator(ctx context.Context, config *svcutils.CommonServerConfig) 
 
 	authenticatorConfig := KubernetesAuthenticatorConfig{
 		RESTConfig: restConfig,
+		Audiences:  []string{config.Audience},
 	}
 	k8sAuthenticator, err := authenticatorConfig.New()
 	if err != nil {
