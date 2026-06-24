@@ -13,13 +13,16 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"time"
+
+	"golang.org/x/oauth2"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -53,14 +56,19 @@ type AMClient struct {
 	k8sClient        client.Client
 	alarmsRepository repo.AlarmRepositoryInterface
 	infrastructure   *infrastructure.Infrastructure
+	tokenSource      oauth2.TokenSource
 }
 
 // NewAlertmanagerClient creates a new AMClient
-func NewAlertmanagerClient(k8sClient client.Client, amrepo repo.AlarmRepositoryInterface, infra *infrastructure.Infrastructure) *AMClient {
+func NewAlertmanagerClient(k8sClient client.Client, amrepo repo.AlarmRepositoryInterface, infra *infrastructure.Infrastructure, clientset kubernetes.Interface) *AMClient {
 	return &AMClient{
 		k8sClient:        k8sClient,
 		alarmsRepository: amrepo,
 		infrastructure:   infra,
+		tokenSource: clients.NewTokenRequestTokenSource(
+			clientset, constants.DefaultNamespace,
+			fmt.Sprintf("%s-%s", constants.DefaultNamespace, ctlrutils.InventoryAlarmServerName),
+			ACMObsAMServiceName),
 	}
 }
 
@@ -184,29 +192,20 @@ func (c *AMClient) getAlerts(ctx context.Context) ([]APIAlert, error) {
 	return alerts, nil
 }
 
-// createAlertmanagerClient creates a new HTTP client with the service account token and service CA certificate.
-// The token comes from the pod's service account and CA cert from the service CA file.
+// createAlertmanagerClient creates a new HTTP client with an audience-scoped token and service CA certificate.
 func (c *AMClient) createAlertmanagerClient() (*http.Client, string, error) {
-	// Determine token file path (allow override for testing/local development)
-	tokenPath := constants.DefaultBackendTokenFile
-	if envPath := os.Getenv("ALARMS_SERVER_TOKEN_FILE"); envPath != "" {
-		tokenPath = filepath.Clean(envPath)
-	}
-
-	// Read token from service account token file
-	token, err := os.ReadFile(tokenPath)
+	token, err := c.tokenSource.Token()
 	if err != nil {
-		return nil, "", fmt.Errorf("error reading service account token: %w", err)
+		return nil, "", fmt.Errorf("failed to get token for alertmanager: %w", err)
 	}
 
 	// Determine service CA file path (allow override for testing/local development)
 	caPath := constants.DefaultServiceCAFile
 	if envPath := os.Getenv("ALARMS_SERVER_CA_FILE"); envPath != "" {
-		caPath = filepath.Clean(envPath)
+		caPath = envPath
 	}
 
 	// Read service CA certificate
-	// This is automatically mounted by Kubernetes for service-to-service TLS
 	caCrt, err := os.ReadFile(caPath)
 	if err != nil {
 		return nil, "", fmt.Errorf("error reading service CA certificate: %w", err)
@@ -232,5 +231,5 @@ func (c *AMClient) createAlertmanagerClient() (*http.Client, string, error) {
 		},
 	}
 
-	return httpClient, string(token), nil
+	return httpClient, token.AccessToken, nil
 }

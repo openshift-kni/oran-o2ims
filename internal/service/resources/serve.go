@@ -20,11 +20,15 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/google/uuid"
 
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/auth"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
 	k8sclient "github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
@@ -129,10 +133,24 @@ func Serve(config *api.ResourceServerConfig) error {
 		return fmt.Errorf("failed to create K8S data source: %w", err)
 	}
 
+	// Create a Kubernetes clientset for audience-scoped token requests
+	restConfig, err := rest.InClusterConfig()
+	if err != nil {
+		return fmt.Errorf("failed to get in-cluster config: %w", err)
+	}
+	clientset, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create kubernetes clientset: %w", err)
+	}
+
 	// Create the notifier with our resource-specific subscription and notification providers.
 	notificationsProvider := repo2.NewNotificationStorageProvider(commonRepository)
 	subscriptionsProvider := repo2.NewSubscriptionStorageProvider(commonRepository, collector.NewNotificationTransformer())
-	clientFactory := notifier.NewClientFactory(oauthConfig, constants.DefaultBackendTokenFile)
+	notifierTokenSource := clients.NewTokenRequestTokenSource(
+		clientset, constants.DefaultNamespace,
+		fmt.Sprintf("%s-%s", constants.DefaultNamespace, ctlrutils.InventoryResourceServerName),
+		ctlrutils.InventoryResourceServerName)
+	clientFactory := notifier.NewClientFactory(oauthConfig, notifierTokenSource)
 	resourceNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider, clientFactory)
 
 	// Create hub client for reading CRs

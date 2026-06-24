@@ -25,12 +25,16 @@ import (
 
 	"github.com/google/uuid"
 
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/collector"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/repo"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	repo2 "github.com/openshift-kni/oran-o2ims/internal/service/common/repo"
@@ -123,10 +127,24 @@ func Serve(config *api.ClusterServerConfig) error {
 		return fmt.Errorf("failed to create Alarms data source: %w", err)
 	}
 
+	// Create a Kubernetes clientset for audience-scoped token requests
+	restConfig, err := rest.InClusterConfig()
+	if err != nil {
+		return fmt.Errorf("failed to get in-cluster config: %w", err)
+	}
+	clientset, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create kubernetes clientset: %w", err)
+	}
+
 	// Create the notifier with our resource-specific subscription and notification providers.
 	notificationsProvider := repo2.NewNotificationStorageProvider(commonRepository)
 	subscriptionsProvider := repo2.NewSubscriptionStorageProvider(commonRepository, collector.NewNotificationTransformer())
-	clientFactory := notifier.NewClientFactory(oauthConfig, constants.DefaultBackendTokenFile)
+	notifierTokenSource := clients.NewTokenRequestTokenSource(
+		clientset, constants.DefaultNamespace,
+		fmt.Sprintf("%s-%s", constants.DefaultNamespace, ctlrutils.InventoryClusterServerName),
+		ctlrutils.InventoryClusterServerName)
+	clientFactory := notifier.NewClientFactory(oauthConfig, notifierTokenSource)
 	clusterNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider, clientFactory)
 
 	// Create the collector
