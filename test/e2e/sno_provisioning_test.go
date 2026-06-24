@@ -232,7 +232,7 @@ defaultHugepagesSize: "1G"`,
 				ClusterInstanceDefaults: ciDefaultsCmIncomplete,
 				PolicyTemplateDefaults:  ptDefaultsCm,
 				HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-					HardwareProvisioningTimeout: "10m",
+					HardwareProvisioningTimeout: &metav1.Duration{Duration: 10 * time.Minute},
 					NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 						{
 							Name:           "single-node",
@@ -263,7 +263,7 @@ defaultHugepagesSize: "1G"`,
 				ClusterInstanceDefaults: ciDefaultsCmComplete,
 				PolicyTemplateDefaults:  ptDefaultsCm,
 				HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-					HardwareProvisioningTimeout: "10m",
+					HardwareProvisioningTimeout: &metav1.Duration{Duration: 10 * time.Minute},
 					NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 						{
 							Name:           "single-node",

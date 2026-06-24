@@ -174,7 +174,7 @@ var _ = Describe("policyManagement", func() {
 						ClusterInstanceDefaults: ciDefaultsCm,
 						PolicyTemplateDefaults:  ptDefaultsCm,
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-							HardwareProvisioningTimeout: "1m",
+							HardwareProvisioningTimeout: &metav1.Duration{Duration: 1 * time.Minute},
 							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 								{Name: "controller", Role: "master", ResourcePoolId: "xyz", HwProfile: "profile-spr-single-processor-64G"},
 								{Name: "worker", Role: "worker", ResourcePoolId: "xyz", HwProfile: "profile-spr-dual-processor-128G"},
@@ -1843,7 +1843,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 						ClusterInstanceDefaults: ciDefaultsCm,
 						PolicyTemplateDefaults:  ptDefaultsCm,
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-							HardwareProvisioningTimeout: "1m",
+							HardwareProvisioningTimeout: &metav1.Duration{Duration: 1 * time.Minute},
 							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 								{Name: "controller", Role: "master", ResourcePoolId: "xyz", HwProfile: "profile-spr-single-processor-64G"},
 								{Name: "worker", Role: "worker", ResourcePoolId: "xyz", HwProfile: "profile-spr-dual-processor-128G"},
@@ -1934,7 +1934,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				namespace: ctNamespace,
 				templates: provisioningv1alpha1.TemplateDefaults{
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-						HardwareProvisioningTimeout: "1m",
+						HardwareProvisioningTimeout: &metav1.Duration{Duration: 1 * time.Minute},
 						NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 							{Name: "controller", Role: "master", ResourcePoolId: "xyz", HwProfile: "profile-spr-single-processor-64G"},
 							{Name: "worker", Role: "worker", ResourcePoolId: "xyz", HwProfile: "profile-spr-dual-processor-128G"},
