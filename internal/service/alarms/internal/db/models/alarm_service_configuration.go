@@ -14,9 +14,9 @@ import (
 
 // ServiceConfiguration represents the alarm_service_configuration table in the database
 type ServiceConfiguration struct {
-	ID              uuid.UUID         `db:"id"`
-	RetentionPeriod int               `db:"retention_period"`
-	Extensions      map[string]string `db:"extensions"`
+	ID              uuid.UUID              `db:"id"`
+	RetentionPeriod int                    `db:"retention_period"`
+	Extensions      map[string]interface{} `db:"extensions"`
 
 	CreatedAt time.Time `db:"created_at"`
 	UpdatedAt time.Time `db:"updated_at"`

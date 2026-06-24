@@ -113,9 +113,9 @@ func (d *K8SDataSource) IncrGenerationID() int {
 	return int(d.generationID.Add(1))
 }
 
-// makeCapacityInfo creates a map of strings of capacity attributes for the cluster
-func (d *K8SDataSource) makeCapacityInfo(cluster *v1.ManagedCluster) map[string]string {
-	results := make(map[string]string)
+// makeCapacityInfo creates a map of capacity attributes for the cluster
+func (d *K8SDataSource) makeCapacityInfo(cluster *v1.ManagedCluster) map[string]interface{} {
+	results := make(map[string]interface{})
 	tags := []string{"cpu", "ephemeral-storage", "hugepages-1Gi", "hugepages-2Mi", "memory", "pods"}
 	for _, tag := range tags {
 		if value, found := cluster.Status.Allocatable[v1.ResourceName(tag)]; found {

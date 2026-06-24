@@ -31,7 +31,7 @@ type AlarmEventRecord struct {
 	AlarmAcknowledgedTime *time.Time                            `db:"alarm_acknowledged_time" json:"alarm_acknowledged_time,omitempty"`
 	AlarmAcknowledged     bool                                  `db:"alarm_acknowledged" json:"alarm_acknowledged"`
 	PerceivedSeverity     generated.PerceivedSeverity           `db:"perceived_severity" json:"perceived_severity"`
-	Extensions            map[string]string                     `db:"extensions" json:"extensions"`
+	Extensions            map[string]interface{}                `db:"extensions" json:"extensions"`
 	ObjectID              *uuid.UUID                            `db:"object_id" json:"object_id,omitempty"`           // nullable since ACM may not provide the cluster ID. please manually track them and let ACM know about this.
 	ObjectTypeID          *uuid.UUID                            `db:"object_type_id" json:"object_type_id,omitempty"` // nullable since ACM may not provide the cluster ID. please manually track them and let ACM know about this.
 	NotificationEventType generated.AlarmSubscriptionInfoFilter `db:"notification_event_type" json:"notification_event_type"`

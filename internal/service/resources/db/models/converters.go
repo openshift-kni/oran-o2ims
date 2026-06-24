@@ -23,8 +23,8 @@ import (
 // DeploymentManagerToModel converts a DB tuple to an API Model
 func DeploymentManagerToModel(record *DeploymentManager, options *commonapi.FieldOptions) generated.DeploymentManager {
 	object := generated.DeploymentManager{
-		Capabilities:        map[string]string{},
-		Capacity:            map[string]string{},
+		Capabilities:        map[string]interface{}{},
+		Capacity:            map[string]interface{}{},
 		DeploymentManagerId: record.DeploymentManagerID,
 		Description:         record.Description,
 		Name:                record.Name,
@@ -46,7 +46,7 @@ func DeploymentManagerToModel(record *DeploymentManager, options *commonapi.Fiel
 		if record.CapacityInfo != nil {
 			object.Capacity = record.CapacityInfo
 		} else {
-			object.Capacity = map[string]string{}
+			object.Capacity = map[string]interface{}{}
 		}
 	}
 
@@ -54,7 +54,7 @@ func DeploymentManagerToModel(record *DeploymentManager, options *commonapi.Fiel
 		if record.Capabilities != nil {
 			object.Capabilities = record.Capabilities
 		} else {
-			object.Capabilities = map[string]string{}
+			object.Capabilities = map[string]interface{}{}
 		}
 	}
 

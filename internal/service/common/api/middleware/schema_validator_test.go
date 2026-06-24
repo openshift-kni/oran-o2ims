@@ -69,7 +69,7 @@ var _ = Describe("SchemaValidator", func() {
 		Expect(validator.ValidateFieldPath([]string{})).To(BeFalse())
 	})
 
-	It("should handle schemas with additionalProperties", func() {
+	It("should handle schemas with additionalProperties boolean form", func() {
 		schemas := map[string]*openapi3.Schema{
 			"FlexibleResource": {
 				Type: &openapi3.Types{"object"},
@@ -88,5 +88,102 @@ var _ = Describe("SchemaValidator", func() {
 		// Should accept any field name when additionalProperties is true
 		Expect(flexValidator.ValidateFieldPath([]string{"id"})).To(BeTrue())
 		Expect(flexValidator.ValidateFieldPath([]string{"anyField"})).To(BeTrue())
+	})
+
+	It("should handle schemas with additionalProperties schema form", func() {
+		schemas := map[string]*openapi3.Schema{
+			"AlarmEventRecord": {
+				Type: &openapi3.Types{"object"},
+				Properties: map[string]*openapi3.SchemaRef{
+					"alarmEventRecordId": {
+						Value: &openapi3.Schema{Type: &openapi3.Types{"string"}},
+					},
+					"extensions": {
+						Value: &openapi3.Schema{
+							Type: &openapi3.Types{"object"},
+							AdditionalProperties: openapi3.AdditionalProperties{
+								Schema: &openapi3.SchemaRef{
+									Value: &openapi3.Schema{Type: &openapi3.Types{"string"}},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		schemaValidator := NewSchemaValidator(schemas)
+
+		Expect(schemaValidator.ValidateFieldPath([]string{"alarmEventRecordId"})).To(BeTrue())
+		Expect(schemaValidator.ValidateFieldPath([]string{"extensions", "cluster"})).To(BeTrue())
+		Expect(schemaValidator.ValidateFieldPath([]string{"extensions", "country"})).To(BeTrue())
+		Expect(schemaValidator.ValidateFieldPath([]string{"extensions", "anySubField"})).To(BeTrue())
+		Expect(schemaValidator.ValidateFieldPath([]string{"nonexistent"})).To(BeFalse())
+	})
+
+	It("should handle multiple schemas with schema-form additionalProperties", func() {
+		schemas := map[string]*openapi3.Schema{
+			"DeploymentManager": {
+				Type: &openapi3.Types{"object"},
+				Properties: map[string]*openapi3.SchemaRef{
+					"deploymentManagerId": {
+						Value: &openapi3.Schema{Type: &openapi3.Types{"string"}},
+					},
+					"capabilities": {
+						Value: &openapi3.Schema{
+							Type: &openapi3.Types{"object"},
+							AdditionalProperties: openapi3.AdditionalProperties{
+								Schema: &openapi3.SchemaRef{
+									Value: &openapi3.Schema{Type: &openapi3.Types{"string"}},
+								},
+							},
+						},
+					},
+					"capacity": {
+						Value: &openapi3.Schema{
+							Type: &openapi3.Types{"object"},
+							AdditionalProperties: openapi3.AdditionalProperties{
+								Schema: &openapi3.SchemaRef{
+									Value: &openapi3.Schema{Type: &openapi3.Types{"string"}},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		schemaValidator := NewSchemaValidator(schemas)
+
+		Expect(schemaValidator.ValidateFieldPath([]string{"capabilities", "someCapability"})).To(BeTrue())
+		Expect(schemaValidator.ValidateFieldPath([]string{"capacity", "someCapacity"})).To(BeTrue())
+		Expect(schemaValidator.ValidateFieldPath([]string{"nonexistent"})).To(BeFalse())
+	})
+
+	It("should still reject unknown top-level fields when nested objects have additionalProperties", func() {
+		schemas := map[string]*openapi3.Schema{
+			"Resource": {
+				Type: &openapi3.Types{"object"},
+				Properties: map[string]*openapi3.SchemaRef{
+					"id": {
+						Value: &openapi3.Schema{Type: &openapi3.Types{"string"}},
+					},
+					"extensions": {
+						Value: &openapi3.Schema{
+							Type: &openapi3.Types{"object"},
+							AdditionalProperties: openapi3.AdditionalProperties{
+								Schema: &openapi3.SchemaRef{
+									Value: &openapi3.Schema{Type: &openapi3.Types{"string"}},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		schemaValidator := NewSchemaValidator(schemas)
+
+		Expect(schemaValidator.ValidateFieldPath([]string{"id"})).To(BeTrue())
+		Expect(schemaValidator.ValidateFieldPath([]string{"extensions", "anything"})).To(BeTrue())
+		Expect(schemaValidator.ValidateFieldPath([]string{"unknownTopLevel"})).To(BeFalse())
+		Expect(schemaValidator.ValidateFieldPath([]string{"unknownTopLevel", "subfield"})).To(BeFalse())
 	})
 })

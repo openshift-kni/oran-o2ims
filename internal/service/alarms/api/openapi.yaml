@@ -752,8 +752,7 @@ components:
           $ref: '#/components/schemas/PerceivedSeverity'
         extensions:
           type: object
-          additionalProperties:
-            type: string
+          additionalProperties: {}
           description: |
             These are unspecified (not standardized) properties (keys) which are tailored by the vendor or
             operator to extend the information provided about the O-Cloud Alarm.
@@ -789,8 +788,7 @@ components:
           example: 30
         extensions:
           type: object
-          additionalProperties:
-            type: string
+          additionalProperties: {}
           description: List of metadata key-value pairs used to associate meaningful metadata to the related alarm service
       required:
       - retentionPeriod
@@ -808,8 +806,7 @@ components:
           example: 30
         extensions:
           type: object
-          additionalProperties:
-            type: string
+          additionalProperties: {}
           description: List of metadata key-value pairs used to associate meaningful metadata to the related alarm service
 
     AlarmSubscriptionInfo:
@@ -1035,8 +1032,7 @@ components:
           $ref: '#/components/schemas/PerceivedSeverity'
         extensions:
           type: object
-          additionalProperties:
-            type: string
+          additionalProperties: {}
           description: |
             These are unspecified (not standardized) properties (keys) which are tailored by the vendor or
             operator to extend the information provided about the O-Cloud Alarm.
