@@ -21,6 +21,9 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/google/uuid"
 
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/api"
@@ -34,6 +37,7 @@ import (
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/auth"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
@@ -120,8 +124,18 @@ func Serve(config *api.AlarmsServerConfig) error {
 		Db: pool,
 	}
 
+	// Create a Kubernetes clientset for audience-scoped token requests
+	restConfig, err := rest.InClusterConfig()
+	if err != nil {
+		return fmt.Errorf("failed to get in-cluster config: %w", err)
+	}
+	clientset, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create kubernetes clientset: %w", err)
+	}
+
 	// Init infrastructure clients
-	infrastructureClients, err := infrastructure.Init(ctx)
+	infrastructureClients, err := infrastructure.Init(ctx, clientset)
 	if err != nil {
 		return fmt.Errorf("error setting up and collecting objects from infrastructure servers: %w", err)
 	}
@@ -150,10 +164,14 @@ func Serve(config *api.AlarmsServerConfig) error {
 		return fmt.Errorf("failed to create oauth client configuration for alarms subscribers: %w", err)
 	}
 
+	notifierTokenSource := clients.NewTokenRequestTokenSource(
+		clientset, constants.DefaultNamespace,
+		fmt.Sprintf("%s-%s", constants.DefaultNamespace, ctlrutils.InventoryAlarmServerName),
+		ctlrutils.InventoryAlarmServerName)
 	newNotifier := notifier.NewNotifier(
 		notifier_provider.NewSubscriptionStorageProvider(alarmRepository),
 		notifier_provider.NewNotificationStorageProvider(alarmRepository, globalCloudID),
-		notifier.NewClientFactory(oauthConfig, constants.DefaultBackendTokenFile),
+		notifier.NewClientFactory(oauthConfig, notifierTokenSource),
 	)
 
 	// Attribute needed when subscription event happens
@@ -252,7 +270,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 
 	// Configure webhook and init DB with CaaS alerts using AM right before the server starts listening
 	// Also start alert sync scheduler
-	if err := startAlertmanager(ctx, &alarmServer); err != nil {
+	if err := startAlertmanager(ctx, &alarmServer, clientset); err != nil {
 		return fmt.Errorf("failed to start alartmanager: %w", err)
 
 	}
@@ -333,14 +351,14 @@ func ConfigAlarmServerCleanup(ctx context.Context, alarmServer *api.AlarmsServer
 
 // Init everything needed to start using ACM's alertmanager
 // Collect the full set of alerts with API, start a background sync and finally open up webhook
-func startAlertmanager(ctx context.Context, alarmServer *api.AlarmsServer) error {
+func startAlertmanager(ctx context.Context, alarmServer *api.AlarmsServer, clientset kubernetes.Interface) error {
 	hubclient, err := k8s.NewClientForHub()
 	if err != nil {
 		return fmt.Errorf("failed to create k8s client: %w", err)
 	}
 
 	// Run the first sync - running it outside also makes sure connectivity is good before server starts listening
-	c := alertmanager.NewAlertmanagerClient(hubclient, alarmServer.AlarmsRepository, alarmServer.Infrastructure)
+	c := alertmanager.NewAlertmanagerClient(hubclient, alarmServer.AlarmsRepository, alarmServer.Infrastructure, clientset)
 	slog.InfoContext(ctx, "Running initial alert sync")
 	if err := c.SyncAlerts(ctx); err != nil {
 		return fmt.Errorf("failed to run initial alert sync: %w", err)

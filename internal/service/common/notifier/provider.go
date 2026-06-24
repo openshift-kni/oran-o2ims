@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"golang.org/x/oauth2"
-	"k8s.io/client-go/transport"
 
 	commonapi "github.com/openshift-kni/oran-o2ims/api/common"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -45,8 +44,8 @@ func BlockCrossHostRedirects(client *http.Client) {
 // ClientFactory is a utility used to abstract building an HTTP client based on the type of callback
 // URL supplied.
 type ClientFactory struct {
-	oauthConfig      *ctlrutils.OAuthClientConfig
-	serviceTokenFile string
+	oauthConfig        *ctlrutils.OAuthClientConfig
+	serviceTokenSource oauth2.TokenSource
 }
 
 // ClientProvider defines the interface which any client factory must implement.  This exists for
@@ -56,10 +55,10 @@ type ClientProvider interface {
 }
 
 // NewClientFactory creates a new factory
-func NewClientFactory(oauthConfig *ctlrutils.OAuthClientConfig, serviceTokenFile string) ClientProvider {
+func NewClientFactory(oauthConfig *ctlrutils.OAuthClientConfig, serviceTokenSource oauth2.TokenSource) ClientProvider {
 	return &ClientFactory{
-		oauthConfig:      oauthConfig,
-		serviceTokenFile: serviceTokenFile,
+		oauthConfig:        oauthConfig,
+		serviceTokenSource: serviceTokenSource,
 	}
 }
 
@@ -75,7 +74,7 @@ func (f *ClientFactory) newClusterClient(ctx context.Context) (*http.Client, err
 		Timeout: 30 * time.Second,
 	}
 	ctx = context.WithValue(ctx, oauth2.HTTPClient, baseClient)
-	client := oauth2.NewClient(ctx, transport.NewCachedFileTokenSource(f.serviceTokenFile))
+	client := oauth2.NewClient(ctx, f.serviceTokenSource)
 	BlockCrossHostRedirects(client)
 	return client, nil
 }

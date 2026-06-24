@@ -14,6 +14,7 @@ import (
 
 	uuid "github.com/google/uuid"
 	gomock "go.uber.org/mock/gomock"
+	kubernetes "k8s.io/client-go/kubernetes"
 )
 
 // MockClient is a mock of Client interface.
@@ -98,17 +99,17 @@ func (mr *MockClientMockRecorder) Name() *gomock.Call {
 }
 
 // Setup mocks base method.
-func (m *MockClient) Setup() error {
+func (m *MockClient) Setup(clientset kubernetes.Interface) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Setup")
+	ret := m.ctrl.Call(m, "Setup", clientset)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Setup indicates an expected call of Setup.
-func (mr *MockClientMockRecorder) Setup() *gomock.Call {
+func (mr *MockClientMockRecorder) Setup(clientset any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Setup", reflect.TypeOf((*MockClient)(nil).Setup))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Setup", reflect.TypeOf((*MockClient)(nil).Setup), clientset)
 }
 
 // Sync mocks base method.
