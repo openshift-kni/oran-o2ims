@@ -56,9 +56,9 @@ type ClusterTemplateSpec struct {
 // HwMgmtDefaults defines the default hardware management parameters.
 // When NodeGroupData is empty, hardware provisioning is skipped.
 type HwMgmtDefaults struct {
-	// HardwareProvisioningTimeout defines the timeout duration string for the hardware provisioning.
+	// HardwareProvisioningTimeout defines the timeout for hardware provisioning.
 	// +optional
-	HardwareProvisioningTimeout string `json:"hardwareProvisioningTimeout,omitempty"`
+	HardwareProvisioningTimeout *metav1.Duration `json:"hardwareProvisioningTimeout,omitempty"`
 	// NodeGroupData defines a collection of node group configurations.
 	// +optional
 	// +listType=map

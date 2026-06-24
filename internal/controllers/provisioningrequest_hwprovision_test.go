@@ -979,7 +979,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		Expect(nar).ToNot(BeNil())
 		Expect(nar.Spec.ConfigTransactionId).To(Equal(int64(1))) // Should match PR generation
 		Expect(nar.Spec.HardwareProvisioningTimeout).ToNot(BeNil())
-		Expect(nar.Spec.HardwareProvisioningTimeout).To(Equal("60m"))
+		Expect(nar.Spec.HardwareProvisioningTimeout).To(Equal(&metav1.Duration{Duration: 60 * time.Minute}))
 	})
 
 	It("should use default timeout when template timeout is empty", func() {
@@ -1014,7 +1014,41 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
 		Expect(nar.Spec.HardwareProvisioningTimeout).ToNot(BeNil())
-		Expect(nar.Spec.HardwareProvisioningTimeout).To(Equal("1h30m0s")) // Default timeout
+		Expect(nar.Spec.HardwareProvisioningTimeout).To(Equal(&metav1.Duration{Duration: 90 * time.Minute}))
+	})
+
+	It("should return error for invalid duration string in templateParameters", func() {
+		clusterInstance := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "siteconfig.openshift.io/v1alpha1",
+				"kind":       "ClusterInstance",
+				"metadata": map[string]interface{}{
+					"name":      "exampleCluster",
+					"namespace": "default",
+				},
+				"spec": map[string]interface{}{
+					"nodes": []interface{}{
+						map[string]interface{}{
+							"role": "master",
+						},
+					},
+				},
+			},
+		}
+
+		task.clusterInput = &clusterInput{
+			hwMgmtData: map[string]any{
+				"hardwareProvisioningTimeout": "not-a-duration",
+				"nodeGroupData": []any{
+					map[string]any{"name": "controller", "role": "master", "hwProfile": "test-profile"},
+				},
+			},
+		}
+
+		nar, err := task.buildNodeAllocationRequestSpec(clusterInstance)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("invalid hardwareProvisioningTimeout"))
+		Expect(nar).To(BeNil())
 	})
 
 	It("returns error when spec.nodes not found", func() {
@@ -1273,7 +1307,7 @@ var _ = Describe("waitForHardwareData", func() {
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-						HardwareProvisioningTimeout: "90m",
+						HardwareProvisioningTimeout: &metav1.Duration{Duration: 90 * time.Minute},
 						NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 							{Name: "controller", Role: "master", HwProfile: "profile-64G"},
 						},
@@ -1546,7 +1580,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-						HardwareProvisioningTimeout: "90m",
+						HardwareProvisioningTimeout: &metav1.Duration{Duration: 90 * time.Minute},
 						NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 							{Name: "controller", Role: "master", HwProfile: "profile-64G"},
 						},
@@ -1637,7 +1671,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 			ctDetails: &clusterTemplateDetails{
 				templates: provisioningv1alpha1.TemplateDefaults{
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-						HardwareProvisioningTimeout: "90m",
+						HardwareProvisioningTimeout: &metav1.Duration{Duration: 90 * time.Minute},
 						NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 							{Name: "controller", Role: "master", HwProfile: "profile-64G"},
 						},
@@ -1924,7 +1958,7 @@ var _ = Describe("ProvisioningRequest Status Update After Hardware Failure", fun
 				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					ClusterInstanceDefaults: "test-cluster-defaults",
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-						HardwareProvisioningTimeout: "90m",
+						HardwareProvisioningTimeout: &metav1.Duration{Duration: 90 * time.Minute},
 						NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 							{Name: "controller", Role: "master", HwProfile: "profile-64G"},
 						},

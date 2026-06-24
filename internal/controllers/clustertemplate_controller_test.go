@@ -90,6 +90,7 @@ import (
 	"fmt"
 	"log/slog"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -141,7 +142,7 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-						HardwareProvisioningTimeout: "90m",
+						HardwareProvisioningTimeout: &metav1.Duration{Duration: 90 * time.Minute},
 						NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 							{Name: "master", Role: "master", HwProfile: "profile-spr-single-processor-64G"},
 							{Name: "worker", Role: "worker", HwProfile: "profile-spr-single-processor-128G"},
@@ -538,7 +539,7 @@ var _ = Describe("validateClusterTemplateCR", func() {
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-						HardwareProvisioningTimeout: "90m",
+						HardwareProvisioningTimeout: &metav1.Duration{Duration: 90 * time.Minute},
 						NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 							{Name: "master", Role: "master", ResourcePoolId: "xyz", HwProfile: "profile-spr-single-processor-64G"},
 							{Name: "worker", Role: "worker", ResourcePoolId: "xyz", HwProfile: "profile-spr-single-processor-128G"},

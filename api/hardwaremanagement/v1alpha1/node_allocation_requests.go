@@ -44,11 +44,11 @@ type NodeAllocationRequestSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	ConfigTransactionId int64 `json:"configTransactionId"`
 
-	// HardwareProvisioningTimeout defines the timeout duration string for the hardware provisioning.
+	// HardwareProvisioningTimeout defines the timeout for hardware provisioning.
 	// If not specified, the default timeout value will be applied.
 	// +optional
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Hardware Provisioning Timeout",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	HardwareProvisioningTimeout string `json:"hardwareProvisioningTimeout,omitempty"`
+	HardwareProvisioningTimeout *metav1.Duration `json:"hardwareProvisioningTimeout,omitempty"`
 
 	// ClusterProvisioned indicates that the cluster using the allocated nodes has been
 	// fully provisioned and is operational. The hardware manager uses this signal to

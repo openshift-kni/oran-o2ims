@@ -1623,7 +1623,7 @@ var _ = Describe("ProvisioningRequestReconciler Unit Tests", func() {
 						ClusterInstanceDefaults: "test-cluster-defaults",
 						PolicyTemplateDefaults:  "test-policy-defaults",
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-							HardwareProvisioningTimeout: "90m",
+							HardwareProvisioningTimeout: &metav1.Duration{Duration: 90 * time.Minute},
 							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 								{Name: "controller", Role: "master", HwProfile: "profile-64G"},
 							},
@@ -4394,7 +4394,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 						ClusterInstanceDefaults: "test-cluster-defaults",
 						PolicyTemplateDefaults:  "test-policy-defaults",
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-							HardwareProvisioningTimeout: "90m",
+							HardwareProvisioningTimeout: &metav1.Duration{Duration: 90 * time.Minute},
 							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 								{Name: "controller", Role: "master", HwProfile: "profile-64G"},
 							},
@@ -4448,7 +4448,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 				ctDetails: &clusterTemplateDetails{
 					templates: provisioningv1alpha1.TemplateDefaults{
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-							HardwareProvisioningTimeout: "90m",
+							HardwareProvisioningTimeout: &metav1.Duration{Duration: 90 * time.Minute},
 							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 								{Name: "controller", Role: "master", HwProfile: "profile-64G"},
 							},
@@ -4901,7 +4901,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 						ClusterInstanceDefaults: "test-cluster-defaults",
 						PolicyTemplateDefaults:  "test-policy-defaults",
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-							HardwareProvisioningTimeout: "90m",
+							HardwareProvisioningTimeout: &metav1.Duration{Duration: 90 * time.Minute},
 							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 								{Name: "controller", Role: "master", HwProfile: "profile-64G"},
 							},
@@ -4957,7 +4957,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 				ctDetails: &clusterTemplateDetails{
 					templates: provisioningv1alpha1.TemplateDefaults{
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-							HardwareProvisioningTimeout: "90m",
+							HardwareProvisioningTimeout: &metav1.Duration{Duration: 90 * time.Minute},
 							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 								{Name: "controller", Role: "master", HwProfile: "profile-64G"},
 							},
@@ -5088,7 +5088,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 				ctDetails: &clusterTemplateDetails{
 					templates: provisioningv1alpha1.TemplateDefaults{
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-							HardwareProvisioningTimeout: "30m",
+							HardwareProvisioningTimeout: &metav1.Duration{Duration: 30 * time.Minute},
 							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 								{Name: "master", Role: "master", HwProfile: "test-profile"},
 							},
@@ -5459,7 +5459,7 @@ clustertemplate-test-policy-v1-cpu-reserved: "0-1"`,
 					Version: "v1.0.0",
 					TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-							HardwareProvisioningTimeout: "30m",
+							HardwareProvisioningTimeout: &metav1.Duration{Duration: 30 * time.Minute},
 							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 								{Name: "master", Role: "master", ResourcePoolId: "test-pool", HwProfile: "test-profile"},
 							},
@@ -5524,7 +5524,7 @@ clustertemplate-test-policy-v1-cpu-reserved: "0-1"`,
 				ctDetails: &clusterTemplateDetails{
 					templates: provisioningv1alpha1.TemplateDefaults{
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-							HardwareProvisioningTimeout: "30m",
+							HardwareProvisioningTimeout: &metav1.Duration{Duration: 30 * time.Minute},
 							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 								{Name: "master", Role: "master", HwProfile: "test-profile"},
 							},
@@ -5645,7 +5645,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
-						HardwareProvisioningTimeout: "30m",
+						HardwareProvisioningTimeout: &metav1.Duration{Duration: 30 * time.Minute},
 						NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 							{Name: "controller", Role: "master", HwProfile: "profile-64G", ResourcePoolId: "pool-1"},
 						},
@@ -5762,9 +5762,9 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 		Expect(ngData[1].(map[string]any)["resourcePoolId"]).To(Equal("pool-3"))
 	})
 
-	It("should return error for invalid timeout in merged data", func() {
+	It("should return error for negative timeout in merged data", func() {
 		ct.Spec.TemplateDefaults.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{
-			HardwareProvisioningTimeout: "60",
+			HardwareProvisioningTimeout: &metav1.Duration{Duration: -1 * time.Minute},
 			NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 				{Name: "controller", Role: "master", ResourcePoolId: "pool-1"},
 			},
@@ -5774,7 +5774,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 
 		err := task.validateAndMergeHwMgmtInput(ctx, ct)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("not a valid duration"))
+		Expect(err.Error()).To(ContainSubstring("must be a positive duration"))
 	})
 
 	It("should override timeout from defaults with PR parameter", func() {
@@ -5807,7 +5807,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 
 	It("should return error for zero timeout in defaults", func() {
 		ct.Spec.TemplateDefaults.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{
-			HardwareProvisioningTimeout: "0s",
+			HardwareProvisioningTimeout: &metav1.Duration{Duration: 0},
 			NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 				{Name: "controller", Role: "master", ResourcePoolId: "pool-1"},
 			},

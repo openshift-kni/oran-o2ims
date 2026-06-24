@@ -437,7 +437,7 @@ spec:
       - displayName: Extensions
         path: extensions
       - description: |-
-          HardwareProvisioningTimeout defines the timeout duration string for the hardware provisioning.
+          HardwareProvisioningTimeout defines the timeout for hardware provisioning.
           If not specified, the default timeout value will be applied.
         displayName: Hardware Provisioning Timeout
         path: hardwareProvisioningTimeout

@@ -198,7 +198,7 @@ func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 		r.Logger.ErrorContext(ctx, "Timeout detected: "+timeoutMessage,
 			slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
 			slog.String("conditionType", string(conditionType)),
-			slog.String("timeoutDuration", nodeAllocationRequest.Spec.HardwareProvisioningTimeout),
+			slog.Any("timeoutDuration", nodeAllocationRequest.Spec.HardwareProvisioningTimeout),
 			slog.String("startTime", startTimeStr))
 
 		if updateErr := hwmgrutils.UpdateNodeAllocationRequestStatusCondition(
@@ -517,18 +517,13 @@ func (r *NodeAllocationRequestReconciler) checkHardwareTimeout(
 ) (bool, hwmgmtv1alpha1.ConditionType, error) {
 
 	// 1) Resolve timeout
-	timeoutStr := nar.Spec.HardwareProvisioningTimeout
-	if timeoutStr == "" {
-		timeoutStr = ctlrutils.DefaultHardwareProvisioningTimeout.String()
-	}
-	timeout, err := time.ParseDuration(timeoutStr)
-	if err != nil {
-		return false, hwmgmtv1alpha1.ConditionType(""),
-			fmt.Errorf("invalid hardware provisioning timeout %q: %w", timeoutStr, err)
+	timeout := ctlrutils.DefaultHardwareProvisioningTimeout
+	if nar.Spec.HardwareProvisioningTimeout != nil {
+		timeout = nar.Spec.HardwareProvisioningTimeout.Duration
 	}
 	if timeout <= 0 {
 		return false, hwmgmtv1alpha1.ConditionType(""),
-			fmt.Errorf("hardware provisioning timeout must be > 0 (got %q)", timeoutStr)
+			fmt.Errorf("hardware provisioning timeout must be > 0 (got %s)", timeout)
 	}
 
 	// 2) Read conditions once

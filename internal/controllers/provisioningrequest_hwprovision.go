@@ -13,6 +13,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -815,9 +816,13 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec(
 	narNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
 
 	// Set HardwareProvisioningTimeout from merged data, or use default
-	timeoutStr := ctlrutils.DefaultHardwareProvisioningTimeout.String()
+	hwTimeout := &metav1.Duration{Duration: ctlrutils.DefaultHardwareProvisioningTimeout}
 	if ts, ok := hwMgmtData["hardwareProvisioningTimeout"].(string); ok && ts != "" {
-		timeoutStr = ts
+		d, err := time.ParseDuration(ts)
+		if err != nil {
+			return nil, fmt.Errorf("invalid hardwareProvisioningTimeout %q: %w", ts, err)
+		}
+		hwTimeout = &metav1.Duration{Duration: d}
 	}
 
 	_, hasSkipCleanup := t.object.Annotations[ctlrutils.SkipCleanupAnnotation]
@@ -832,7 +837,7 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec(
 			NodeGroup:                   nodeGroups,
 			LocationSpec:                hwmgmtv1alpha1.LocationSpec{Site: siteID},
 			ConfigTransactionId:         t.object.Generation,
-			HardwareProvisioningTimeout: timeoutStr,
+			HardwareProvisioningTimeout: hwTimeout,
 			SkipCleanup:                 hasSkipCleanup,
 		},
 	}
