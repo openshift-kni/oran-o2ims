@@ -35,6 +35,9 @@
     "gomod": {
         "enabled": false
     },
+    "ignoreDeps": [
+        "quay.io/openshift-kni/oran-o2ims-operator"
+    ],
     "packageRules": [
         {
             "addLabels": [
