@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -206,7 +207,7 @@ func (c *AMClient) createAlertmanagerClient() (*http.Client, string, error) {
 	}
 
 	// Read service CA certificate
-	caCrt, err := os.ReadFile(caPath)
+	caCrt, err := os.ReadFile(filepath.Clean(caPath))
 	if err != nil {
 		return nil, "", fmt.Errorf("error reading service CA certificate: %w", err)
 	}
