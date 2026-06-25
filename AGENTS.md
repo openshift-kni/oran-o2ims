@@ -109,6 +109,18 @@ issues during code review.
   groups at DEBUG level on every successful authorization to make this
   chain observable for compliance auditing.
 
+- **DD-004: RBAC role definitions must track public API endpoints.**
+  The `reader-role` in `config/rbac/oran_o2ims_user_roles.yaml`
+  enumerates inventory paths explicitly rather than using a wildcard,
+  because the `deploymentManagers` endpoints expose sensitive credentials
+  and are restricted to the `deployer-role`. When adding, removing, or
+  renaming any public API endpoint, update the corresponding ClusterRole
+  definitions in `config/rbac/oran_o2ims_user_roles.yaml` and the
+  role bindings in `config/rbac/oran_o2ims_oauth_role_bindings.yaml`
+  to ensure the new endpoint is covered by the correct role. Also update
+  the `security` annotations in the relevant `openapi.yaml` to reflect
+  which roles grant access.
+
 ## Logging Conventions
 
 - Use context-aware slog calls (`slog.InfoContext(ctx, ...)`,
