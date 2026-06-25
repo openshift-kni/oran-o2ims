@@ -58,6 +58,8 @@ type AMClient struct {
 	alarmsRepository repo.AlarmRepositoryInterface
 	infrastructure   *infrastructure.Infrastructure
 	tokenSource      oauth2.TokenSource
+	AlertmanagerHost string
+	CAFilePath       string
 }
 
 // NewAlertmanagerClient creates a new AMClient
@@ -70,6 +72,11 @@ func NewAlertmanagerClient(k8sClient client.Client, amrepo repo.AlarmRepositoryI
 			clientset, constants.DefaultNamespace,
 			fmt.Sprintf("%s-%s", constants.DefaultNamespace, ctlrutils.InventoryAlarmServerName),
 			ACMObsAMServiceName),
+		AlertmanagerHost: fmt.Sprintf("%s.%s.svc:%d",
+			ACMObsAMServiceName,
+			ctlrutils.OpenClusterManagementObservabilityNamespace,
+			ACMObsAMServicePort),
+		CAFilePath: constants.DefaultServiceCAFile,
 	}
 }
 
@@ -127,19 +134,11 @@ func (c *AMClient) getAlerts(ctx context.Context) ([]APIAlert, error) {
 
 	// Build service URL for alertmanager
 	// Format: alertmanager.open-cluster-management-observability.svc:9095
-	// Allow override for testing
-	alertmanagerHost := os.Getenv("ALARMS_SERVER_AM_HOST")
-	if alertmanagerHost == "" {
-		alertmanagerHost = fmt.Sprintf("%s.%s.svc:%d",
-			ACMObsAMServiceName,
-			ctlrutils.OpenClusterManagementObservabilityNamespace,
-			ACMObsAMServicePort)
-	}
 
 	// Create request
 	u := url.URL{
 		Scheme: "https",
-		Host:   alertmanagerHost,
+		Host:   c.AlertmanagerHost,
 		Path:   "/api/v2/alerts",
 	}
 
@@ -200,14 +199,8 @@ func (c *AMClient) createAlertmanagerClient() (*http.Client, string, error) {
 		return nil, "", fmt.Errorf("failed to get token for alertmanager: %w", err)
 	}
 
-	// Determine service CA file path (allow override for testing/local development)
-	caPath := constants.DefaultServiceCAFile
-	if envPath := os.Getenv("ALARMS_SERVER_CA_FILE"); envPath != "" {
-		caPath = envPath
-	}
-
 	// Read service CA certificate
-	caCrt, err := os.ReadFile(filepath.Clean(caPath))
+	caCrt, err := os.ReadFile(filepath.Clean(c.CAFilePath))
 	if err != nil {
 		return nil, "", fmt.Errorf("error reading service CA certificate: %w", err)
 	}

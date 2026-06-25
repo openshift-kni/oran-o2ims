@@ -97,15 +97,6 @@ var _ = Describe("Alertmanager API Client", func() {
 		// Extract server hostname from test server URL without the scheme
 		serverHost := mockAMServer.URL[8:] // Skip "https://"
 
-		// Set environment variables to point to our temp files and test server
-		os.Setenv("ALARMS_SERVER_CA_FILE", tempCAFile)
-		os.Setenv("ALARMS_SERVER_AM_HOST", serverHost)
-
-		DeferCleanup(func() {
-			os.Unsetenv("ALARMS_SERVER_CA_FILE")
-			os.Unsetenv("ALARMS_SERVER_AM_HOST")
-		})
-
 		// Set up minimal fake k8s client (only needed for infrastructure)
 		scheme := runtime.NewScheme()
 		Expect(corev1.AddToScheme(scheme)).To(Succeed())
@@ -120,6 +111,8 @@ var _ = Describe("Alertmanager API Client", func() {
 		}
 
 		amClient = alertmanager.NewAlertmanagerClient(fakeClient, mockRepo, infra, fakeClientset)
+		amClient.AlertmanagerHost = serverHost
+		amClient.CAFilePath = tempCAFile
 
 		// Set up test alerts
 		testAPIAlerts = []alertmanager.APIAlert{
