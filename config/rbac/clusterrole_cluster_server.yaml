@@ -38,5 +38,7 @@ rules:
   - ""
   resources:
   - serviceaccounts/token
+  resourceNames:
+  - cluster-server
   verbs:
   - create

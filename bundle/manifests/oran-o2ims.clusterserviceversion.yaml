@@ -1533,6 +1533,8 @@ spec:
           - watch
         - apiGroups:
           - ""
+          resourceNames:
+          - oran-o2ims-alarms-server
           resources:
           - serviceaccounts/token
           verbs:
@@ -1640,6 +1642,8 @@ spec:
           - list
         - apiGroups:
           - ""
+          resourceNames:
+          - oran-o2ims-cluster-server
           resources:
           - serviceaccounts/token
           verbs:
@@ -2253,6 +2257,8 @@ spec:
           - watch
         - apiGroups:
           - ""
+          resourceNames:
+          - oran-o2ims-resource-server
           resources:
           - serviceaccounts/token
           verbs:
