@@ -390,22 +390,23 @@ func (c *Collector) handleAsyncDeploymentManagerEvent(ctx context.Context, deplo
 	ctx = logging.AppendCtx(ctx, slog.Bool("deleted", deleted))
 	var dataChangeEvent *models2.DataChangeEvent
 	var err error
+	converter := func(object interface{}) any {
+		record, _ := object.(models.DeploymentManager)
+		model := models.DeploymentManagerToModel(&record, commonapi.NewDefaultFieldOptions())
+		models.RedactDeploymentManagerCredentials(&model)
+		return model
+	}
+
 	if deleted {
 		dataChangeEvent, err = svcutils.DeleteObjectWithChangeEvent(
-			ctx, c.pool, deploymentManager, deploymentManager.DeploymentManagerID, nil, func(object interface{}) any {
-				record, _ := object.(models.DeploymentManager)
-				return models.DeploymentManagerToModel(&record, commonapi.NewDefaultFieldOptions())
-			})
+			ctx, c.pool, deploymentManager, deploymentManager.DeploymentManagerID, nil, converter)
 
 		if err != nil {
 			return fmt.Errorf("failed to delete deployment manager '%s'': %w", deploymentManager.DeploymentManagerID, err)
 		}
 	} else {
 		dataChangeEvent, err = svcutils.PersistObjectWithChangeEvent(
-			ctx, c.pool, deploymentManager, deploymentManager.DeploymentManagerID, nil, func(object interface{}) any {
-				record, _ := object.(models.DeploymentManager)
-				return models.DeploymentManagerToModel(&record, commonapi.NewDefaultFieldOptions())
-			})
+			ctx, c.pool, deploymentManager, deploymentManager.DeploymentManagerID, nil, converter)
 
 		if err != nil {
 			return fmt.Errorf("failed to update deployment manager '%s'': %w", deploymentManager.DeploymentManagerID, err)

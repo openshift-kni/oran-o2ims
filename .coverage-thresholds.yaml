@@ -34,6 +34,7 @@ packages:
   internal/service/common/utils: 12
   internal/service/provisioning/api: 66
   internal/service/resources/api: 87
+  internal/service/resources/db/models: 2
   internal/service/resources/collector: 8
   internal/service/resources/db/repo: 89
   internal/service/resources/listener: 30
