@@ -437,6 +437,22 @@ func (t *provisioningRequestReconcilerTask) applyNodeConfiguration(
 		return fmt.Errorf("spec.nodes not found in cluster instance")
 	}
 
+	// Classify hardware nodes into two groups based on existing AllocatedNodeHostMap:
+	//   - assignedByHost: nodes with an existing host assignment (preserve on re-reconciliation)
+	//   - availableByGroup: nodes available for fresh assignment, ordered by the sorted
+	//     input from collectNodeDetails so initial assignment is deterministic
+	assignedByHost := make(map[string]ctlrutils.NodeInfo)
+	availableByGroup := make(map[string][]ctlrutils.NodeInfo)
+	for groupName, nodeInfos := range hwNodes {
+		for _, ni := range nodeInfos {
+			if hostName, ok := t.object.Status.Extensions.AllocatedNodeHostMap[ni.NodeID]; ok {
+				assignedByHost[groupName+"/"+hostName] = ni
+			} else {
+				availableByGroup[groupName] = append(availableByGroup[groupName], ni)
+			}
+		}
+	}
+
 	for i, n := range nodes {
 		nodeMap, ok := n.(map[string]interface{})
 		if !ok {
@@ -447,8 +463,24 @@ func (t *provisioningRequestReconcilerTask) applyNodeConfiguration(
 		hostName, _, _ := unstructured.NestedString(nodeMap, "hostName")
 		groupName := roleToNodeGroupName[role]
 
-		nodeInfos, exists := hwNodes[groupName]
-		if !exists || len(nodeInfos) == 0 {
+		var nodeInfo ctlrutils.NodeInfo
+		matched := false
+
+		// Resolve nodeInfo: prefer existing assignment, fall back to available nodes
+		if ni, ok := assignedByHost[groupName+"/"+hostName]; ok {
+			nodeInfo = ni
+			matched = true
+		}
+
+		if !matched {
+			if candidates := availableByGroup[groupName]; len(candidates) > 0 {
+				nodeInfo = candidates[0]
+				availableByGroup[groupName] = candidates[1:]
+				matched = true
+			}
+		}
+
+		if !matched {
 			unmatchedNodes[i] = hostName
 			continue
 		}
@@ -457,42 +489,39 @@ func (t *provisioningRequestReconcilerTask) applyNodeConfiguration(
 		updatedNode := maps.Clone(nodeMap)
 
 		// Set BMC info
-		updatedNode["bmcAddress"] = nodeInfos[0].BmcAddress
+		updatedNode["bmcAddress"] = nodeInfo.BmcAddress
 		updatedNode["bmcCredentialsName"] = map[string]interface{}{
-			"name": nodeInfos[0].BmcCredentials,
+			"name": nodeInfo.BmcCredentials,
 		}
 
-		if nodeInfos[0].HwMgrNodeId != "" && nodeInfos[0].HwMgrNodeNs != "" {
+		if nodeInfo.HwMgrNodeId != "" && nodeInfo.HwMgrNodeNs != "" {
 			hostRef, ok := updatedNode["hostRef"].(map[string]interface{})
 			if !ok {
 				hostRef = make(map[string]interface{})
 			}
-			hostRef["name"] = nodeInfos[0].HwMgrNodeId
-			hostRef["namespace"] = nodeInfos[0].HwMgrNodeNs
+			hostRef["name"] = nodeInfo.HwMgrNodeId
+			hostRef["namespace"] = nodeInfo.HwMgrNodeNs
 			updatedNode["hostRef"] = hostRef
 		}
 		// Boot MAC
-		bootMAC, err := ctlrutils.GetBootMacAddress(nodeInfos[0].Interfaces, constants.BootInterfaceLabel)
+		bootMAC, err := ctlrutils.GetBootMacAddress(nodeInfo.Interfaces, constants.BootInterfaceLabel)
 		if err != nil {
 			return fmt.Errorf("failed to get boot MAC for node '%s': %w", hostName, err)
 		}
 		updatedNode["bootMACAddress"] = bootMAC
 
 		// Assign MACs to interfaces
-		if err := ctlrutils.AssignMacAddress(t.clusterInput.clusterInstanceData, nodeInfos[0].Interfaces, updatedNode); err != nil {
+		if err := ctlrutils.AssignMacAddress(t.clusterInput.clusterInstanceData, nodeInfo.Interfaces, updatedNode); err != nil {
 			return fmt.Errorf("failed to assign MACs for node '%s': %w", hostName, err)
 		}
 
 		// Update AllocatedNodeHostMap
-		if err := t.updateAllocatedNodeHostMap(ctx, nodeInfos[0].NodeID, hostName); err != nil {
+		if err := t.updateAllocatedNodeHostMap(ctx, nodeInfo.NodeID, hostName); err != nil {
 			return fmt.Errorf("failed to update status for node '%s': %w", hostName, err)
 		}
 
 		// Update the node only after all mutations succeed
 		nodes[i] = updatedNode
-
-		// Consume the nodeInfo
-		hwNodes[groupName] = nodeInfos[1:]
 	}
 
 	// Final write back to clusterInstance
