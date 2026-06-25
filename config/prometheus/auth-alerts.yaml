@@ -1,0 +1,46 @@
+# PrometheusRule for O2IMS authentication/authorization failure alerts
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    app.kubernetes.io/name: prometheusrule
+    app.kubernetes.io/instance: o2ims-auth-alerts
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/created-by: oran-o2ims
+    app.kubernetes.io/part-of: oran-o2ims
+    app.kubernetes.io/managed-by: kustomize
+  name: o2ims-auth-alerts
+  namespace: system
+spec:
+  groups:
+    - name: o2ims-auth
+      rules:
+        - alert: O2IMSHighAuthFailureRate
+          expr: |
+            sum(rate(o2ims_auth_failures_total[5m])) by (service, type) > 0.1667
+          for: 5m
+          labels:
+            severity: warning
+            namespace: oran-o2ims
+          annotations:
+            summary: "High authentication failure rate on {{ $labels.service }}"
+            description: >-
+              Service {{ $labels.service }} is experiencing more than 10
+              {{ $labels.type }} failures per minute over the last 5 minutes.
+              Current rate: {{ $value | humanize }}/s.
+            runbook_url: https://github.com/openshift-kni/oran-o2ims/blob/main/docs/dev/prometheus-metrics.md#alert-rules-prometheusrule
+        - alert: O2IMSCertificateBindingFailure
+          expr: |
+            increase(o2ims_auth_failures_total{type="certificate_binding"}[10m]) > 0
+          for: 1m
+          labels:
+            severity: critical
+            namespace: oran-o2ims
+          annotations:
+            summary: "Certificate binding failure on {{ $labels.service }}"
+            description: >-
+              Service {{ $labels.service }} rejected a request due to RFC 8705
+              certificate-bound token verification failure
+              (method={{ $labels.method }}, path={{ $labels.path }}).
+              This may indicate a stolen token replay attempt.
+            runbook_url: https://github.com/openshift-kni/oran-o2ims/blob/main/docs/dev/prometheus-metrics.md#alert-rules-prometheusrule

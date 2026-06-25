@@ -1,3 +1,4 @@
 resources:
 - monitor.yaml
 - services-monitor.yaml
+- auth-alerts.yaml
