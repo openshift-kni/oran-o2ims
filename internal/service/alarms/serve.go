@@ -37,7 +37,6 @@ import (
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/auth"
-	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
@@ -164,14 +163,10 @@ func Serve(config *api.AlarmsServerConfig) error {
 		return fmt.Errorf("failed to create oauth client configuration for alarms subscribers: %w", err)
 	}
 
-	notifierTokenSource := clients.NewTokenRequestTokenSource(
-		clientset, constants.DefaultNamespace,
-		fmt.Sprintf("%s-%s", constants.DefaultNamespace, ctlrutils.InventoryAlarmServerName),
-		ctlrutils.InventoryAlarmServerName)
 	newNotifier := notifier.NewNotifier(
 		notifier_provider.NewSubscriptionStorageProvider(alarmRepository),
 		notifier_provider.NewNotificationStorageProvider(alarmRepository, globalCloudID),
-		notifier.NewClientFactory(oauthConfig, notifierTokenSource),
+		notifier.NewClientFactory(oauthConfig, nil),
 	)
 
 	// Attribute needed when subscription event happens
