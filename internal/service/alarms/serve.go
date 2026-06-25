@@ -39,6 +39,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/auth"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/metrics"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 )
 
@@ -55,6 +56,7 @@ const (
 // Serve start alarms server
 func Serve(config *api.AlarmsServerConfig) error {
 	slog.Info("Starting Alarm server")
+	auth.ServiceName = "alarms-server"
 
 	// Get and validate the openapi spec file
 	swagger, err := generated.GetSwagger()
@@ -227,6 +229,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 	}
 
 	baseRouter := http.NewServeMux()
+	metrics.RegisterMetricsHandler(baseRouter)
 	opt := generated.StdHTTPServerOptions{
 		BaseRouter: baseRouter,
 		Middlewares: []generated.MiddlewareFunc{ // Add middlewares here
