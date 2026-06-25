@@ -58,5 +58,7 @@ rules:
   - ""
   resources:
   - serviceaccounts/token
+  resourceNames:
+  - resource-server
   verbs:
   - create
