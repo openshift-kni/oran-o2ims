@@ -54,8 +54,13 @@ All examples in the API documentation use the following variables:
 # API hostname
 export API_URI=$(oc get routes -n oran-o2ims -o jsonpath='{.items[0].spec.host}')
 
-# Authentication token
-export MY_TOKEN=$(oc create token -n oran-o2ims test-client --duration=24h)
+# Authentication token (audiences scope the token to all O2IMS services)
+export MY_TOKEN=$(oc create token -n oran-o2ims test-client --duration=24h \
+  --audience=alarms-server \
+  --audience=resource-server \
+  --audience=cluster-server \
+  --audience=artifacts-server \
+  --audience=provisioning-server)
 ```
 
 ## Interactive API Documentation

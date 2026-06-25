@@ -50,9 +50,14 @@ All commands should return running pods/resources. If any fail, check the [ACM O
 **Quick Setup (Development/Testing):**
 
 ```bash
-# Apply test service account and generate token
+# Apply test service account and generate token (audiences scope to O2IMS services)
 oc apply -f config/testing/client-service-account-rbac.yaml
-export MY_TOKEN=$(oc create token -n oran-o2ims test-client --duration=24h)
+export MY_TOKEN=$(oc create token -n oran-o2ims test-client --duration=24h \
+  --audience=alarms-server \
+  --audience=resource-server \
+  --audience=cluster-server \
+  --audience=artifacts-server \
+  --audience=provisioning-server)
 
 # Get API endpoint
 export API_URI=$(oc get route -n oran-o2ims -o jsonpath='{.items[?(@.spec.path=="/o2ims-infrastructureMonitoring")].spec.host}')

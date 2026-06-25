@@ -383,10 +383,17 @@ As a convenience, a pre-canned Service Account and ClusterRoleBinding is defined
    clusterrolebinding.rbac.authorization.k8s.io/oran-o2ims-test-client-binding created
    ```
 
-And then the following command can be used to acquire a token.
+And then the following command can be used to acquire a token. The `--audience` flags scope the token to
+the O2IMS services so that each service accepts it. Multiple audiences can be specified so that a single
+token works against all API endpoints.
 
    ```console
-   export MY_TOKEN=$(oc create token -n oran-o2ims test-client --duration=24h)
+   export MY_TOKEN=$(oc create token -n oran-o2ims test-client --duration=24h \
+     --audience=alarms-server \
+     --audience=resource-server \
+     --audience=cluster-server \
+     --audience=artifacts-server \
+     --audience=provisioning-server)
    ```
 
 ### Access an API endpoint
