@@ -342,7 +342,7 @@ func (t *provisioningRequestReconcilerTask) applyClusterInstance(ctx context.Con
 			// Returning a conflict error will cause the reconciler to retry the operation.
 			return fmt.Errorf("conflict during server-side apply: %w", err)
 		}
-		if errors.IsInvalid(err) || errors.IsBadRequest(err) {
+		if errors.IsInvalid(err) || errors.IsBadRequest(err) || errors.IsForbidden(err) {
 			return typederrors.NewInputError("invalid ClusterInstance configuration: %w", err)
 		}
 		return fmt.Errorf("failed to apply ClusterInstance: %w", err)

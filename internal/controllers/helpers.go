@@ -9,6 +9,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -21,6 +22,9 @@ import (
 func collectNodeDetails(nodeList *hwmgmtv1alpha1.AllocatedNodeList) (map[string][]ctlrutils.NodeInfo, error) {
 	// hwNodes maps a group name to a slice of NodeInfo
 	hwNodes := make(map[string][]ctlrutils.NodeInfo)
+	sort.Slice(nodeList.Items, func(i, j int) bool {
+		return nodeList.Items[i].Name < nodeList.Items[j].Name
+	})
 	for i := range nodeList.Items {
 		node := &nodeList.Items[i]
 

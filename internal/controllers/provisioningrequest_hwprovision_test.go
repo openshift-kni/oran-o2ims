@@ -1587,6 +1587,19 @@ var _ = Describe("applyNodeConfiguration", func() {
 							},
 						},
 					},
+					map[string]interface{}{
+						"role":     "worker",
+						"hostName": "worker-02",
+						"nodeNetwork": map[string]interface{}{
+							"interfaces": []interface{}{
+								map[string]interface{}{
+									"name":       "eno1",
+									"label":      constants.BootInterfaceLabel,
+									"macAddress": "",
+								},
+							},
+						},
+					},
 				},
 			},
 		}
@@ -1670,6 +1683,20 @@ var _ = Describe("applyNodeConfiguration", func() {
 						},
 					},
 				},
+				{
+					BmcAddress:     "192.168.1.102",
+					BmcCredentials: "worker-02-bmc-secret",
+					NodeID:         "node-worker-02",
+					HwMgrNodeId:    "bmh-worker-02",
+					HwMgrNodeNs:    "hardware-ns",
+					Interfaces: []*hwmgmtv1alpha1.Interface{
+						{
+							Name:       "eno1",
+							MACAddress: "aa:bb:cc:dd:ee:22",
+							Label:      constants.BootInterfaceLabel,
+						},
+					},
+				},
 			},
 		}
 
@@ -1747,13 +1774,26 @@ var _ = Describe("applyNodeConfiguration", func() {
 								},
 							},
 						},
+						map[string]any{
+							"hostName": "worker-02",
+							"role":     "worker",
+							"nodeNetwork": map[string]any{
+								"interfaces": []any{
+									map[string]any{
+										"name":       "eno1",
+										"label":      constants.BootInterfaceLabel,
+										"macAddress": "",
+									},
+								},
+							},
+						},
 					},
 				},
 			},
 		}
 	})
 
-	It("successfully applies node configuration", func() {
+	It("successfully applies node configuration for fresh assignment", func() {
 		err := task.applyNodeConfiguration(ctx, hwNodes, nar, ci)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -1761,7 +1801,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 		nodes, found, err := unstructured.NestedSlice(ci.Object, "spec", "nodes")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(found).To(BeTrue())
-		Expect(nodes).To(HaveLen(2))
+		Expect(nodes).To(HaveLen(3))
 
 		// Check master node
 		masterNode := nodes[0].(map[string]interface{})
@@ -1782,14 +1822,14 @@ var _ = Describe("applyNodeConfiguration", func() {
 		Expect(found).To(BeTrue())
 		Expect(hostRefNs).To(Equal("hardware-ns"))
 
-		// Check worker node
-		workerNode := nodes[1].(map[string]interface{})
-		Expect(workerNode["bmcAddress"]).To(Equal("192.168.1.101"))
-		bmcCreds, found, err = unstructured.NestedString(workerNode, "bmcCredentialsName", "name")
-		Expect(err).ToNot(HaveOccurred())
-		Expect(found).To(BeTrue())
-		Expect(bmcCreds).To(Equal("worker-01-bmc-secret"))
-		Expect(workerNode["bootMACAddress"]).To(Equal("aa:bb:cc:dd:ee:11"))
+		// Check worker nodes — both should get different BMC addresses from the worker group
+		workerNode1 := nodes[1].(map[string]interface{})
+		Expect(workerNode1["bmcAddress"]).To(Equal("192.168.1.101"))
+		Expect(workerNode1["bootMACAddress"]).To(Equal("aa:bb:cc:dd:ee:11"))
+
+		workerNode2 := nodes[2].(map[string]interface{})
+		Expect(workerNode2["bmcAddress"]).To(Equal("192.168.1.102"))
+		Expect(workerNode2["bootMACAddress"]).To(Equal("aa:bb:cc:dd:ee:22"))
 	})
 
 	It("returns error when spec.nodes not found in cluster instance", func() {
@@ -1869,6 +1909,20 @@ var _ = Describe("applyNodeConfiguration", func() {
 						},
 					},
 				},
+				{
+					BmcAddress:     "192.168.1.102",
+					BmcCredentials: "worker-02-bmc-secret",
+					NodeID:         "node-worker-02",
+					HwMgrNodeId:    "", // empty
+					HwMgrNodeNs:    "", // empty
+					Interfaces: []*hwmgmtv1alpha1.Interface{
+						{
+							Name:       "eno1",
+							MACAddress: "aa:bb:cc:dd:ee:22",
+							Label:      constants.BootInterfaceLabel,
+						},
+					},
+				},
 			},
 		}
 
@@ -1879,7 +1933,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 		nodes, found, err := unstructured.NestedSlice(ci.Object, "spec", "nodes")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(found).To(BeTrue())
-		Expect(nodes).To(HaveLen(2))
+		Expect(nodes).To(HaveLen(3))
 
 		masterNode := nodes[0].(map[string]interface{})
 		Expect(masterNode["bmcAddress"]).To(Equal("192.168.1.100"))
@@ -1889,7 +1943,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 		Expect(found).To(BeFalse())
 	})
 
-	It("correctly consumes hardware nodes as they are assigned", func() {
+	It("assigns distinct hardware nodes to multiple nodes of the same role", func() {
 		// Create multiple nodes of the same role to verify consumption
 		ci.Object = map[string]interface{}{
 			"spec": map[string]interface{}{
@@ -1940,14 +1994,10 @@ var _ = Describe("applyNodeConfiguration", func() {
 			},
 		})
 
-		initialControllerCount := len(hwNodes["controller"])
-		Expect(initialControllerCount).To(Equal(2))
+		Expect(hwNodes["controller"]).To(HaveLen(2))
 
 		err := task.applyNodeConfiguration(ctx, hwNodes, nar, ci)
 		Expect(err).ToNot(HaveOccurred())
-
-		// Verify that all controller nodes have been consumed
-		Expect(len(hwNodes["controller"])).To(Equal(0))
 
 		// Verify both nodes were configured with different BMC addresses
 		nodes, found, err := unstructured.NestedSlice(ci.Object, "spec", "nodes")
@@ -1958,10 +2008,89 @@ var _ = Describe("applyNodeConfiguration", func() {
 		masterNode1 := nodes[0].(map[string]interface{})
 		masterNode2 := nodes[1].(map[string]interface{})
 
-		// First node should get first hardware node
+		// Both nodes should get different BMC addresses from the available pool
 		Expect(masterNode1["bmcAddress"]).To(Equal("192.168.1.100"))
-		// Second node should get second hardware node
 		Expect(masterNode2["bmcAddress"]).To(Equal("192.168.1.102"))
+	})
+
+	It("preserves existing AllocatedNodeHostMap assignments on re-reconciliation", func() {
+		// Pre-populate AllocatedNodeHostMap with reverse ordering for workers:
+		// node-worker-02 → worker-01, node-worker-01 → worker-02
+		// This is opposite to what fresh assignment would produce.
+		cr.Status.Extensions.AllocatedNodeHostMap = map[string]string{
+			"node-master-01": "master-01",
+			"node-worker-02": "worker-01",
+			"node-worker-01": "worker-02",
+		}
+
+		err := task.applyNodeConfiguration(ctx, hwNodes, nar, ci)
+		Expect(err).ToNot(HaveOccurred())
+
+		nodes, found, err := unstructured.NestedSlice(ci.Object, "spec", "nodes")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(found).To(BeTrue())
+		Expect(nodes).To(HaveLen(3))
+
+		// master-01 should keep its original mapping
+		masterNode := nodes[0].(map[string]interface{})
+		Expect(masterNode["bmcAddress"]).To(Equal("192.168.1.100"))
+
+		// worker-01 should get node-worker-02's BMC (from existing mapping)
+		worker01 := nodes[1].(map[string]interface{})
+		Expect(worker01["bmcAddress"]).To(Equal("192.168.1.102"))
+		Expect(worker01["bootMACAddress"]).To(Equal("aa:bb:cc:dd:ee:22"))
+
+		// worker-02 should get node-worker-01's BMC (from existing mapping)
+		worker02 := nodes[2].(map[string]interface{})
+		Expect(worker02["bmcAddress"]).To(Equal("192.168.1.101"))
+		Expect(worker02["bootMACAddress"]).To(Equal("aa:bb:cc:dd:ee:11"))
+	})
+
+	It("uses assigned map for existing host and available map for new host", func() {
+		// Replace node-worker-02 with a new node (node-worker-03).
+		// worker-01 has an existing mapping to node-worker-01,
+		// worker-02 should get the new available node.
+		hwNodes["worker"] = []utils.NodeInfo{
+			hwNodes["worker"][0], // keep node-worker-01
+			{
+				BmcAddress:     "192.168.1.103",
+				BmcCredentials: "worker-03-bmc-secret",
+				NodeID:         "node-worker-03",
+				HwMgrNodeId:    "bmh-worker-03",
+				HwMgrNodeNs:    "hardware-ns",
+				Interfaces: []*hwmgmtv1alpha1.Interface{
+					{Name: "eno1", MACAddress: "aa:bb:cc:dd:ee:33", Label: constants.BootInterfaceLabel},
+				},
+			},
+		}
+
+		// master-01 and worker-01 have existing mappings; worker-02's old node was replaced
+		cr.Status.Extensions.AllocatedNodeHostMap = map[string]string{
+			"node-master-01": "master-01",
+			"node-worker-01": "worker-01",
+		}
+
+		err := task.applyNodeConfiguration(ctx, hwNodes, nar, ci)
+		Expect(err).ToNot(HaveOccurred())
+
+		nodes, found, err := unstructured.NestedSlice(ci.Object, "spec", "nodes")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(found).To(BeTrue())
+		Expect(nodes).To(HaveLen(3))
+
+		// master-01 should keep its original mapping
+		masterNode := nodes[0].(map[string]interface{})
+		Expect(masterNode["bmcAddress"]).To(Equal("192.168.1.100"))
+
+		// worker-01 should keep node-worker-01's BMC from the assigned map
+		worker01 := nodes[1].(map[string]interface{})
+		Expect(worker01["bmcAddress"]).To(Equal("192.168.1.101"))
+		Expect(worker01["bootMACAddress"]).To(Equal("aa:bb:cc:dd:ee:11"))
+
+		// worker-02 should get the new node-worker-03 from the available map
+		worker02 := nodes[2].(map[string]interface{})
+		Expect(worker02["bmcAddress"]).To(Equal("192.168.1.103"))
+		Expect(worker02["bootMACAddress"]).To(Equal("aa:bb:cc:dd:ee:33"))
 	})
 })
 
