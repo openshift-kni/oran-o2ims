@@ -565,9 +565,14 @@ First, set up authentication (see
 for details):
 
 ```bash
-# For development testing, use a Service Account token
+# For development testing, use a Service Account token (audiences scope to O2IMS services)
 oc apply -f config/testing/client-service-account-rbac.yaml
-export MY_TOKEN=$(oc create token -n oran-o2ims test-client --duration=24h)
+export MY_TOKEN=$(oc create token -n oran-o2ims test-client --duration=24h \
+  --audience=alarms-server \
+  --audience=resource-server \
+  --audience=cluster-server \
+  --audience=artifacts-server \
+  --audience=provisioning-server)
 
 # Get the API URI from any route (all O2IMS routes share the same host)
 export API_URI=$(oc get routes -n oran-o2ims -o jsonpath='{.items[0].spec.host}')
