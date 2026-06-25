@@ -13,6 +13,13 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 )
 
+var _ = Describe("NewClientFactory", func() {
+	It("should return a ClientProvider", func() {
+		factory := notifier.NewClientFactory(nil, nil)
+		Expect(factory).ToNot(BeNil())
+	})
+})
+
 var _ = Describe("blockCrossHostRedirects", func() {
 	It("should follow same-host redirects", func() {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
