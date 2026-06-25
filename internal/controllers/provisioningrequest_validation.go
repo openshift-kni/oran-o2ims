@@ -399,8 +399,8 @@ func (t *provisioningRequestReconcilerTask) validateMergedHwProfiles(ctx context
 func hwMgmtDefaultsToMap(defaults provisioningv1alpha1.HwMgmtDefaults) map[string]any {
 	result := make(map[string]any)
 
-	if defaults.HardwareProvisioningTimeout != "" {
-		result["hardwareProvisioningTimeout"] = defaults.HardwareProvisioningTimeout
+	if defaults.HardwareProvisioningTimeout != nil {
+		result["hardwareProvisioningTimeout"] = defaults.HardwareProvisioningTimeout.Duration.String()
 	}
 
 	if len(defaults.NodeGroupData) > 0 {

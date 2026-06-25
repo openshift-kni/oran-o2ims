@@ -326,16 +326,11 @@ func (t *clusterTemplateReconcilerTask) validateHwMgmtDefaults(ctx context.Conte
 	}
 
 	// Validate hardwareProvisioningTimeout independently of nodeGroupData
-	if t.object.Spec.TemplateDefaults.HwMgmtDefaults.HardwareProvisioningTimeout != "" {
-		d, err := time.ParseDuration(t.object.Spec.TemplateDefaults.HwMgmtDefaults.HardwareProvisioningTimeout)
-		if err != nil {
-			validationErrs = append(validationErrs,
-				fmt.Sprintf("hardwareProvisioningTimeout %q is not a valid duration: %v",
-					t.object.Spec.TemplateDefaults.HwMgmtDefaults.HardwareProvisioningTimeout, err))
-		} else if d <= 0 {
+	if t.object.Spec.TemplateDefaults.HwMgmtDefaults.HardwareProvisioningTimeout != nil {
+		if t.object.Spec.TemplateDefaults.HwMgmtDefaults.HardwareProvisioningTimeout.Duration <= 0 {
 			validationErrs = append(validationErrs,
 				fmt.Sprintf("hardwareProvisioningTimeout %q must be a positive duration",
-					t.object.Spec.TemplateDefaults.HwMgmtDefaults.HardwareProvisioningTimeout))
+					t.object.Spec.TemplateDefaults.HwMgmtDefaults.HardwareProvisioningTimeout.Duration))
 		}
 	}
 
