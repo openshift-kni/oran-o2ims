@@ -1,0 +1,13 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  labels:
+    role: deployer-role
+  name: oran-o2ims-deployer-role
+rules:
+- nonResourceURLs:
+  - /o2ims-infrastructureInventory/v1/deploymentManagers
+  - /o2ims-infrastructureInventory/v1/deploymentManagers/*
+  verbs:
+  - get
