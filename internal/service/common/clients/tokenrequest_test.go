@@ -127,6 +127,7 @@ var _ = Describe("TokenRequestTokenSource", func() {
 		for _, err := range errs {
 			Expect(err).ToNot(HaveOccurred())
 		}
+		Expect(callCount).To(Equal(1))
 	})
 
 	It("should set ExpirationSeconds in the token request", func() {

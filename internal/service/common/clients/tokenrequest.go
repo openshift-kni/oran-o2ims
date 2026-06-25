@@ -32,8 +32,9 @@ type TokenRequestTokenSource struct {
 	accountName string
 	audience    string
 
-	mu    sync.Mutex
-	token *oauth2.Token
+	mu        sync.Mutex
+	token     *oauth2.Token
+	refreshAt time.Time
 }
 
 // NewTokenRequestTokenSource creates a token source that mints audience-scoped
@@ -52,7 +53,7 @@ func (ts *TokenRequestTokenSource) Token() (*oauth2.Token, error) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 
-	if ts.token != nil && ts.token.Valid() {
+	if ts.token != nil && ts.token.Valid() && time.Now().Before(ts.refreshAt) {
 		return ts.token, nil
 	}
 
@@ -75,15 +76,15 @@ func (ts *TokenRequestTokenSource) Token() (*oauth2.Token, error) {
 	}
 
 	expiry := result.Status.ExpirationTimestamp.Time
-	refreshPoint := time.Until(expiry)
-	refreshPoint = time.Duration(float64(refreshPoint) * refreshFraction)
+	refreshPoint := time.Duration(float64(time.Until(expiry)) * refreshFraction)
 
 	token := &oauth2.Token{
 		AccessToken: result.Status.Token,
 		TokenType:   "Bearer",
-		Expiry:      time.Now().Add(refreshPoint),
+		Expiry:      expiry,
 	}
 
 	ts.token = token
+	ts.refreshAt = time.Now().Add(refreshPoint)
 	return token, nil
 }

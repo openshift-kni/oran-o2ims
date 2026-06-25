@@ -66,6 +66,12 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts/token
+  verbs:
+  - create
 - nonResourceURLs:
   - /o2ims-infrastructureCluster/v1/nodeClusterTypes
   - /o2ims-infrastructureCluster/v1/nodeClusters
