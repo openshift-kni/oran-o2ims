@@ -67,14 +67,16 @@ func (f *ClientFactory) newClusterClient(ctx context.Context) (*http.Client, err
 	if err != nil {
 		return nil, fmt.Errorf("failed to build TLS config: %w", err)
 	}
-	baseClient := &http.Client{
+	client := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
 		},
 		Timeout: 30 * time.Second,
 	}
-	ctx = context.WithValue(ctx, oauth2.HTTPClient, baseClient)
-	client := oauth2.NewClient(ctx, f.serviceTokenSource)
+	if f.serviceTokenSource != nil {
+		ctx = context.WithValue(ctx, oauth2.HTTPClient, client)
+		client = oauth2.NewClient(ctx, f.serviceTokenSource)
+	}
 	BlockCrossHostRedirects(client)
 	return client, nil
 }
