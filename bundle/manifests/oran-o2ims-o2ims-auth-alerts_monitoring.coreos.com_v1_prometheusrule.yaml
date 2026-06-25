@@ -1,0 +1,41 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/created-by: oran-o2ims
+    app.kubernetes.io/instance: o2ims-auth-alerts
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: prometheusrule
+    app.kubernetes.io/part-of: oran-o2ims
+  name: oran-o2ims-o2ims-auth-alerts
+spec:
+  groups:
+  - name: o2ims-auth
+    rules:
+    - alert: O2IMSHighAuthFailureRate
+      annotations:
+        description: 'Service {{ $labels.service }} is experiencing more than 10 {{
+          $labels.type }} failures per minute over the last 5 minutes. Current rate:
+          {{ $value | humanize }}/s.'
+        runbook_url: https://github.com/openshift-kni/oran-o2ims/blob/main/docs/dev/prometheus-metrics.md#alert-rules-prometheusrule
+        summary: High authentication failure rate on {{ $labels.service }}
+      expr: |
+        sum(rate(o2ims_auth_failures_total[5m])) by (service, type) > 0.1667
+      for: 5m
+      labels:
+        namespace: oran-o2ims
+        severity: warning
+    - alert: O2IMSCertificateBindingFailure
+      annotations:
+        description: Service {{ $labels.service }} rejected a request due to RFC 8705
+          certificate-bound token verification failure (method={{ $labels.method }},
+          path={{ $labels.path }}). This may indicate a stolen token replay attempt.
+        runbook_url: https://github.com/openshift-kni/oran-o2ims/blob/main/docs/dev/prometheus-metrics.md#alert-rules-prometheusrule
+        summary: Certificate binding failure on {{ $labels.service }}
+      expr: |
+        increase(o2ims_auth_failures_total{type="certificate_binding"}[10m]) > 0
+      for: 1m
+      labels:
+        namespace: oran-o2ims
+        severity: critical
