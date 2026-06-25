@@ -14,14 +14,19 @@ import (
 	"encoding/pem"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/client-go/util/cert"
+
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/metrics"
 )
 
 var _ = Describe("WithClientVerification", func() {
@@ -65,10 +70,15 @@ var _ = Describe("WithClientVerification", func() {
 			Error: nil,
 		}
 		tokenAuthenticator = WithClientVerification(&noopAuthenticator)
-		request = http.Request{Header: http.Header{
-			sslClientCertKey:  []string{testStdCertificate},
-			sslClientChainKey: []string{testStdCertificate},
-		}}
+		request = http.Request{
+			Method: http.MethodGet,
+			URL:    &url.URL{Path: "/o2ims-infrastructureInventory/v1/resourcePools"},
+			Header: http.Header{
+				sslClientCertKey:  []string{testStdCertificate},
+				sslClientChainKey: []string{testStdCertificate},
+			},
+		}
+		ServiceName = "test-service"
 		Expect(tokenAuthenticator).ToNot(BeNil())
 	})
 
@@ -205,4 +215,50 @@ var _ = Describe("WithClientVerification", func() {
 		Expect(logOutput).To(ContainSubstring(`"clientIp":"10.0.0.99"`))
 	})
 
+	Context("metrics instrumentation", func() {
+		BeforeEach(func() {
+			metrics.AuthFailures.Reset()
+		})
+
+		It("increments certificate_binding counter on missing client certificate", func() {
+			request.Header.Del(sslClientCertKey)
+			_, _, _ = tokenAuthenticator.AuthenticateRequest(&request)
+			Expect(getCounterValue(metrics.AuthFailures, "test-service", "certificate_binding", "GET", "/o2ims-infrastructureInventory/v1/resourcePools")).To(Equal(float64(1)))
+		})
+
+		It("increments certificate_binding counter on fingerprint mismatch", func() {
+			noopAuthenticator.Response.User.GetExtra()[fingerprintKey] = []string{"other"}
+			_, _, _ = tokenAuthenticator.AuthenticateRequest(&request)
+			Expect(getCounterValue(metrics.AuthFailures, "test-service", "certificate_binding", "GET", "/o2ims-infrastructureInventory/v1/resourcePools")).To(Equal(float64(1)))
+		})
+
+		It("increments certificate_binding counter on empty fingerprint", func() {
+			noopAuthenticator.Response.User.GetExtra()[fingerprintKey] = []string{""}
+			_, _, _ = tokenAuthenticator.AuthenticateRequest(&request)
+			Expect(getCounterValue(metrics.AuthFailures, "test-service", "certificate_binding", "GET", "/o2ims-infrastructureInventory/v1/resourcePools")).To(Equal(float64(1)))
+		})
+
+		It("increments certificate_binding counter on multiple fingerprints", func() {
+			noopAuthenticator.Response.User.GetExtra()[fingerprintKey] = []string{"foo", "bar"}
+			_, _, _ = tokenAuthenticator.AuthenticateRequest(&request)
+			Expect(getCounterValue(metrics.AuthFailures, "test-service", "certificate_binding", "GET", "/o2ims-infrastructureInventory/v1/resourcePools")).To(Equal(float64(1)))
+		})
+
+		It("does not increment counter on success", func() {
+			_, _, _ = tokenAuthenticator.AuthenticateRequest(&request)
+			Expect(getCounterValue(metrics.AuthFailures, "test-service", "certificate_binding", "GET", "/o2ims-infrastructureInventory/v1/resourcePools")).To(Equal(float64(0)))
+		})
+	})
 })
+
+func getCounterValue(cv *prometheus.CounterVec, labels ...string) float64 {
+	counter, err := cv.GetMetricWithLabelValues(labels...)
+	if err != nil {
+		return 0
+	}
+	m := &dto.Metric{}
+	if err := counter.Write(m); err != nil {
+		return 0
+	}
+	return m.GetCounter().GetValue()
+}

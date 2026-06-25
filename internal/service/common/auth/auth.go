@@ -22,7 +22,11 @@ import (
 
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/metrics"
 )
+
+// ServiceName identifies this pod for metrics labeling. Set by each service at startup.
+var ServiceName string
 
 var containerID string
 
@@ -119,6 +123,7 @@ func Authenticator(oauthHandler, kubernetesHandler authenticator.Request) middle
 				args := []any{slog.Any("error", err), slog.String("method", req.Method), slog.String("path", req.URL.Path)}
 				args = append(args, tokenClaimsAttrs(req)...)
 				slog.WarnContext(req.Context(), "authentication failed", args...)
+				metrics.AuthFailures.WithLabelValues(ServiceName, "authentication", req.Method, metrics.NormalizePath(req.URL.Path)).Inc()
 				middleware.ProblemDetails(w, fmt.Sprintf("failed to authenticate request: %v", err), http.StatusUnauthorized)
 				return
 			}
@@ -127,6 +132,7 @@ func Authenticator(oauthHandler, kubernetesHandler authenticator.Request) middle
 				args := []any{slog.String("method", req.Method), slog.String("path", req.URL.Path)}
 				args = append(args, tokenClaimsAttrs(req)...)
 				slog.WarnContext(req.Context(), "authentication rejected", args...)
+				metrics.AuthFailures.WithLabelValues(ServiceName, "authentication", req.Method, metrics.NormalizePath(req.URL.Path)).Inc()
 				middleware.ProblemDetails(w, "unable to authenticate request", http.StatusUnauthorized)
 				return
 			}
@@ -200,6 +206,7 @@ func Authorizer(kubernetesAuthorizer authorizer.Authorizer) middleware.Middlewar
 					slog.String("user", user.GetName()), slog.Any("groups", user.GetGroups()),
 					slog.String("verb", attributes.Verb), slog.String("path", attributes.Path),
 					slog.Any("decision", decision), slog.String("reason", reason))
+				metrics.AuthFailures.WithLabelValues(ServiceName, "authorization", req.Method, metrics.NormalizePath(req.URL.Path)).Inc()
 				middleware.ProblemDetails(w, msg, http.StatusForbidden)
 				return
 			}

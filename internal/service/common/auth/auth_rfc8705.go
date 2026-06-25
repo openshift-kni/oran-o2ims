@@ -16,6 +16,8 @@ import (
 	"strings"
 
 	"k8s.io/apiserver/pkg/authentication/authenticator"
+
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/metrics"
 )
 
 // From HAProxy
@@ -147,28 +149,35 @@ func (w *withClientVerification) AuthenticateRequest(req *http.Request) (*authen
 		return response, true, nil
 	}
 
+	normalizedPath := metrics.NormalizePath(req.URL.Path)
+
 	clientFingerprint, present, err := getClientCertificateFingerprint(req)
 	if err != nil {
 		slog.ErrorContext(req.Context(), "error extracting client certificate fingerprint", slog.Any("error", err))
+		metrics.AuthFailures.WithLabelValues(ServiceName, "certificate_binding", req.Method, normalizedPath).Inc()
 		return nil, false, err
 	}
 
 	if !present {
+		metrics.AuthFailures.WithLabelValues(ServiceName, "certificate_binding", req.Method, normalizedPath).Inc()
 		return nil, false, fmt.Errorf("a client certificate is required")
 	}
 
 	if len(tokenFingerprintValues) != 1 {
 		slog.ErrorContext(req.Context(), "unexpected number of fingerprint values", slog.Any("values", tokenFingerprintValues))
+		metrics.AuthFailures.WithLabelValues(ServiceName, "certificate_binding", req.Method, normalizedPath).Inc()
 		return nil, false, fmt.Errorf("unexpected number of fingerprint values")
 	}
 
 	if tokenFingerprintValues[0] == "" {
 		slog.ErrorContext(req.Context(), "empty fingerprint value in token binding claim")
+		metrics.AuthFailures.WithLabelValues(ServiceName, "certificate_binding", req.Method, normalizedPath).Inc()
 		return nil, false, fmt.Errorf("empty fingerprint value in token binding claim")
 	}
 
 	if tokenFingerprintValues[0] != clientFingerprint {
 		slog.DebugContext(req.Context(), "fingerprint values do not match", slog.String("client", clientFingerprint), slog.String("token", tokenFingerprintValues[0]))
+		metrics.AuthFailures.WithLabelValues(ServiceName, "certificate_binding", req.Method, normalizedPath).Inc()
 		return nil, false, fmt.Errorf("client certificate fingerprint mismatch")
 	}
 

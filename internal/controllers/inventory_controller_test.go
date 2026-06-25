@@ -340,6 +340,19 @@ var _ = Describe("Inventory Controller", func() {
 					return false
 				}
 
+				hasMonitoringRule := func(np *networkingv1.NetworkPolicy) bool {
+					for _, rule := range np.Spec.Ingress {
+						for _, peer := range rule.From {
+							if peer.NamespaceSelector != nil && peer.PodSelector == nil {
+								if peer.NamespaceSelector.MatchLabels["network.openshift.io/policy-group"] == "monitoring" {
+									return true
+								}
+							}
+						}
+					}
+					return false
+				}
+
 				hasAlertmanagerRule := func(np *networkingv1.NetworkPolicy) bool {
 					for _, rule := range np.Spec.Ingress {
 						for _, peer := range rule.From {
@@ -356,7 +369,7 @@ var _ = Describe("Inventory Controller", func() {
 					return false
 				}
 
-				// API servers and hardware manager should allow ingress-controller traffic.
+				// API servers and hardware manager should allow ingress-controller and monitoring traffic.
 				for _, serverName := range []string{
 					ctlrutils.InventoryResourceServerName,
 					ctlrutils.InventoryClusterServerName,
@@ -373,6 +386,8 @@ var _ = Describe("Inventory Controller", func() {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(hasIngressControllerRule(np)).To(BeTrue(),
 						"expected ingress-controller rule on %s NetworkPolicy", serverName)
+					Expect(hasMonitoringRule(np)).To(BeTrue(),
+						"expected monitoring rule on %s NetworkPolicy", serverName)
 					Expect(hasSameNamespaceRule(np)).To(BeTrue(),
 						"expected same-namespace rule on %s NetworkPolicy", serverName)
 				}
@@ -387,7 +402,7 @@ var _ = Describe("Inventory Controller", func() {
 				Expect(hasAlertmanagerRule(alarmNP)).To(BeTrue(),
 					"expected alertmanager ingress rule on alarm server NetworkPolicy")
 
-				// Database should NOT allow ingress-controller traffic but SHOULD allow same-namespace traffic.
+				// Database should NOT allow ingress-controller or monitoring traffic but SHOULD allow same-namespace traffic.
 				dbNP := &networkingv1.NetworkPolicy{}
 				err = reconciler.Client.Get(context.TODO(), types.NamespacedName{
 					Name:      ctlrutils.InventoryDatabaseServerName,
@@ -396,6 +411,8 @@ var _ = Describe("Inventory Controller", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(hasIngressControllerRule(dbNP)).To(BeFalse(),
 					"database NetworkPolicy should not allow ingress-controller traffic")
+				Expect(hasMonitoringRule(dbNP)).To(BeFalse(),
+					"database NetworkPolicy should not allow monitoring traffic")
 				Expect(hasSameNamespaceRule(dbNP)).To(BeTrue(),
 					"database NetworkPolicy should allow same-namespace traffic")
 			},

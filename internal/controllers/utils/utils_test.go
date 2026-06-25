@@ -1587,10 +1587,14 @@ var _ = Describe("Server predicate functions", func() {
 			}
 		})
 
-		It("returns false for API servers", func() {
+		It("returns true for API servers", func() {
 			for _, name := range apiServers {
-				Expect(HasMetrics(name)).To(BeFalse(), "expected false for %s", name)
+				Expect(HasMetrics(name)).To(BeTrue(), "expected true for %s", name)
 			}
+		})
+
+		It("returns false for unknown servers", func() {
+			Expect(HasMetrics("unknown-server")).To(BeFalse())
 		})
 	})
 
