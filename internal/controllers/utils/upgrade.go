@@ -1,0 +1,138 @@
+/*
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
+package utils
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+
+	"github.com/coreos/go-semver/semver"
+	configv1 "github.com/openshift/api/config/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+// CV condition types not exported by the configv1 package.
+const (
+	CVConditionInvalid         = configv1.ClusterStatusConditionType("Invalid")
+	CVConditionFailing         = configv1.ClusterStatusConditionType("Failing")
+	CVConditionReleaseAccepted = configv1.ClusterStatusConditionType("ReleaseAccepted")
+)
+
+// TriggerCVUpgrade patches the spoke ClusterVersion's desiredUpdate if it
+// differs from the desired state. Returns true if a patch was applied.
+func TriggerCVUpgrade(ctx context.Context, spokeClient client.Client, logger *slog.Logger,
+	cv *configv1.ClusterVersion, desiredUpdate *configv1.Update,
+) (bool, error) {
+	if cv.Spec.DesiredUpdate != nil && equality.Semantic.DeepEqual(*cv.Spec.DesiredUpdate, *desiredUpdate) {
+		return false, nil
+	}
+
+	patch := client.MergeFrom(cv.DeepCopy())
+	cv.Spec.DesiredUpdate = desiredUpdate
+	if err := spokeClient.Patch(ctx, cv, patch); err != nil {
+		return false, fmt.Errorf("failed to patch ClusterVersion desiredUpdate: %w", err)
+	}
+	logger.InfoContext(ctx, "Upgrade triggered on spoke",
+		slog.String("targetVersion", desiredUpdate.Version))
+	return true, nil
+}
+
+// PatchCVChannelUpstream patches channel and upstream on the spoke ClusterVersion
+// if they differ from the desired values. Returns true if a patch was applied.
+func PatchCVChannelUpstream(ctx context.Context, spokeClient client.Client, logger *slog.Logger,
+	cv *configv1.ClusterVersion, cvSpec *configv1.ClusterVersionSpec,
+) (bool, error) {
+	changed := false
+	patch := client.MergeFrom(cv.DeepCopy())
+	// CVO sets a default channel in cv.spec.channel after installation. If
+	// channel is not provided in the upgrade config, preserve the existing one.
+	if cvSpec.Channel != "" && cv.Spec.Channel != cvSpec.Channel {
+		cv.Spec.Channel = cvSpec.Channel
+		changed = true
+	}
+	// Unlike channel, there is no default upstream in cv.spec.upstream (CVO
+	// uses the default graph internally when upstream is empty). The upgrade
+	// config is the source of truth — if a cluster has a custom upstream set
+	// outside this controller, the upgrade config should explicitly include it.
+	if cv.Spec.Upstream != cvSpec.Upstream {
+		cv.Spec.Upstream = cvSpec.Upstream
+		changed = true
+	}
+
+	if changed {
+		if err := spokeClient.Patch(ctx, cv, patch); err != nil {
+			return false, fmt.Errorf("failed to patch ClusterVersion channel/upstream: %w", err)
+		}
+		logger.InfoContext(ctx, "Patched channel/upstream on spoke ClusterVersion",
+			slog.String("channel", cvSpec.Channel), slog.String("upstream", string(cvSpec.Upstream)))
+	}
+	return changed, nil
+}
+
+// FindCVHistoryEntry searches the ClusterVersion history for a specific version.
+func FindCVHistoryEntry(cv *configv1.ClusterVersion, version string) *configv1.UpdateHistory {
+	for i := range cv.Status.History {
+		if cv.Status.History[i].Version == version {
+			return &cv.Status.History[i]
+		}
+	}
+	return nil
+}
+
+// IsCVUpdateAvailable checks if a version is in the ClusterVersion's available updates.
+func IsCVUpdateAvailable(cv *configv1.ClusterVersion, version string) bool {
+	for i := range cv.Status.AvailableUpdates {
+		if cv.Status.AvailableUpdates[i].Version == version {
+			return true
+		}
+	}
+	return false
+}
+
+// GetCVCondition finds a condition by type in the ClusterVersion status.
+// Returns nil if cv is nil or the condition is not found.
+func GetCVCondition(cv *configv1.ClusterVersion, condType configv1.ClusterStatusConditionType) *configv1.ClusterOperatorStatusCondition {
+	if cv == nil {
+		return nil
+	}
+	for i := range cv.Status.Conditions {
+		if cv.Status.Conditions[i].Type == condType {
+			return &cv.Status.Conditions[i]
+		}
+	}
+	return nil
+}
+
+// GetCurrentCVVersion returns the current completed version from CV history.
+func GetCurrentCVVersion(cv *configv1.ClusterVersion) string {
+	for _, h := range cv.Status.History {
+		if h.State == configv1.CompletedUpdate {
+			return h.Version
+		}
+	}
+	return ""
+}
+
+// IsMinorUpgrade returns true if the target version has a higher minor version
+// than the current version. Returns an error if either version is not valid semver.
+func IsMinorUpgrade(currentVersion, targetVersion string) (bool, error) {
+	if currentVersion == "" || targetVersion == "" {
+		return false, nil
+	}
+
+	current, err := semver.NewVersion(currentVersion)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse current version %q: %w", currentVersion, err)
+	}
+	target, err := semver.NewVersion(targetVersion)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse target version %q: %w", targetVersion, err)
+	}
+	return target.Minor > current.Minor, nil
+}

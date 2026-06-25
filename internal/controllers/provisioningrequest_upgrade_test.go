@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -17,11 +18,17 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils/spokeclient"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
+	configv1 "github.com/openshift/api/config/v1"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	addonv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
+	workv1 "open-cluster-management.io/api/work/v1"
+	msav1beta1 "open-cluster-management.io/managed-serviceaccount/apis/authentication/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -235,6 +242,81 @@ var _ = Describe("mergeAndValidateUpgradeData", func() {
 	})
 })
 
+var _ = Describe("prepareCVSpec", func() {
+	var (
+		task            *provisioningRequestReconcilerTask
+		clusterTemplate *provisioningv1alpha1.ClusterTemplate
+	)
+
+	BeforeEach(func() {
+		pr := &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: "cv-spec-test-pr"},
+			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+				TemplateParameters: runtime.RawExtension{Raw: []byte(`{}`)},
+			},
+		}
+		clusterTemplate = &provisioningv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-template.v1.0.0", Namespace: "test-ns"},
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Release: "4.22.0",
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
+					UpgradeDefaults: runtime.RawExtension{
+						Raw: []byte(`{"clusterVersion":{"desiredUpdate":{}}}`),
+					},
+				},
+				TemplateParameterSchema: runtime.RawExtension{
+					Raw: []byte(`{"properties":{"upgradeParameters":{"type":"object"}}}`),
+				},
+			},
+		}
+		task = &provisioningRequestReconcilerTask{
+			object: pr,
+			logger: slog.New(slog.DiscardHandler),
+		}
+	})
+
+	It("should return cvSpec with version, channel, image, and force from upgrade defaults", func() {
+		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`{"clusterVersion":{"channel":"stable-4.22","upstream":"https://custom.graph","desiredUpdate":{"version":"4.22.0","image":"quay.io/ocp:4.22.0","force":true}}}`),
+		}
+		cvSpec, err := task.prepareCVSpec(clusterTemplate, "4.22.0")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cvSpec.DesiredUpdate).ToNot(BeNil())
+		Expect(cvSpec.DesiredUpdate.Version).To(Equal("4.22.0"))
+		Expect(cvSpec.DesiredUpdate.Image).To(Equal("quay.io/ocp:4.22.0"))
+		Expect(cvSpec.DesiredUpdate.Force).To(BeTrue())
+		Expect(cvSpec.Channel).To(Equal("stable-4.22"))
+		Expect(string(cvSpec.Upstream)).To(Equal("https://custom.graph"))
+	})
+
+	It("should return InputError when clusterVersion key is missing", func() {
+		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`{"imageBasedGroupUpgrade":{}}`),
+		}
+		_, err := task.prepareCVSpec(clusterTemplate, "4.22.0")
+		Expect(err).To(HaveOccurred())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("not found in merged upgrade data"))
+	})
+
+	It("should return InputError when desiredUpdate version mismatches target", func() {
+		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.21.0"}}}`),
+		}
+		_, err := task.prepareCVSpec(clusterTemplate, "4.22.0")
+		Expect(err).To(HaveOccurred())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("does not match the target version"))
+	})
+
+	It("should return InputError when target version is not valid semver", func() {
+		_, err := task.prepareCVSpec(clusterTemplate, "invalid-version")
+		Expect(err).To(HaveOccurred())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("invalid target version"))
+	})
+})
+
 var _ = Describe("prepareIBGU", func() {
 	var (
 		ctx             context.Context
@@ -274,9 +356,10 @@ var _ = Describe("prepareIBGU", func() {
 			pr, clusterTemplate, ns,
 		).WithStatusSubresource(&provisioningv1alpha1.ProvisioningRequest{}).Build()
 		task = &provisioningRequestReconcilerTask{
-			client: c,
-			object: pr,
-			logger: slog.New(slog.DiscardHandler),
+			client:   c,
+			object:   pr,
+			logger:   slog.New(slog.DiscardHandler),
+			timeouts: &timeouts{clusterUpgrade: utils.DefaultClusterUpgradeTimeout},
 		}
 	})
 
@@ -312,7 +395,7 @@ var _ = Describe("prepareIBGU", func() {
 	})
 })
 
-var _ = Describe("detectUpgradeType", func() {
+var _ = Describe("parseUpgradeConfig", func() {
 	var (
 		ct *provisioningv1alpha1.ClusterTemplate
 		pr *provisioningv1alpha1.ProvisioningRequest
@@ -330,115 +413,182 @@ var _ = Describe("detectUpgradeType", func() {
 		}
 	})
 
-	It("should detect clusterVersion from CT defaults when PR has no upgrade params", func() {
-		ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-			Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.22.0"}}}`),
-		}
-		upgradeType, err := detectUpgradeType(ct, pr)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(upgradeType).To(Equal(utils.UpgradeDefaultsClusterVersionKey))
+	Context("upgrade type detection", func() {
+		It("should detect clusterVersion from CT defaults when PR has no upgrade params", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.22.0"}}}`),
+			}
+			upgradeType, _, err := parseUpgradeConfig(ct, pr)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(upgradeType).To(Equal(utils.UpgradeDefaultsClusterVersionKey))
+		})
+
+		It("should detect imageBasedGroupUpgrade from CT defaults when PR has no upgrade params", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: []byte(`{"imageBasedGroupUpgrade":{"ibuSpec":{}}}`),
+			}
+			upgradeType, _, err := parseUpgradeConfig(ct, pr)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(upgradeType).To(Equal(utils.UpgradeDefaultsIBGUKey))
+		})
+
+		It("should detect clusterVersion from PR params when CT defaults is empty", func() {
+			pr.Spec.TemplateParameters = runtime.RawExtension{
+				Raw: []byte(`{"upgradeParameters":{"clusterVersion":{"desiredUpdate":{"version":"4.22.0"}}}}`),
+			}
+			upgradeType, _, err := parseUpgradeConfig(ct, pr)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(upgradeType).To(Equal(utils.UpgradeDefaultsClusterVersionKey))
+		})
+
+		It("should detect imageBasedGroupUpgrade from PR params when CT defaults is empty", func() {
+			pr.Spec.TemplateParameters = runtime.RawExtension{
+				Raw: []byte(`{"upgradeParameters":{"imageBasedGroupUpgrade":{"ibuSpec":{}}}}`),
+			}
+			upgradeType, _, err := parseUpgradeConfig(ct, pr)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(upgradeType).To(Equal(utils.UpgradeDefaultsIBGUKey))
+		})
+
+		It("should return error when both types are in CT defaults", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: []byte(`{"clusterVersion":{},"imageBasedGroupUpgrade":{}}`),
+			}
+			_, _, err := parseUpgradeConfig(ct, pr)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("only one upgrade type is allowed"))
+		})
+
+		It("should return error when both types are in PR params", func() {
+			pr.Spec.TemplateParameters = runtime.RawExtension{
+				Raw: []byte(`{"upgradeParameters":{"clusterVersion":{},"imageBasedGroupUpgrade":{}}}`),
+			}
+			_, _, err := parseUpgradeConfig(ct, pr)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("only one upgrade type is allowed"))
+		})
+
+		It("should return error when clusterVersion in CT defaults and imageBasedGroupUpgrade in PR params", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: []byte(`{"clusterVersion":{}}`),
+			}
+			pr.Spec.TemplateParameters = runtime.RawExtension{
+				Raw: []byte(`{"upgradeParameters":{"imageBasedGroupUpgrade":{}}}`),
+			}
+			_, _, err := parseUpgradeConfig(ct, pr)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("only one upgrade type is allowed"))
+		})
+
+		It("should return clusterVersion when both CT defaults and PR params have clusterVersion", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: []byte(`{"clusterVersion":{"channel":"stable-4.22"}}`),
+			}
+			pr.Spec.TemplateParameters = runtime.RawExtension{
+				Raw: []byte(`{"upgradeParameters":{"clusterVersion":{"desiredUpdate":{"version":"4.22.0"}}}}`),
+			}
+			upgradeType, _, err := parseUpgradeConfig(ct, pr)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(upgradeType).To(Equal(utils.UpgradeDefaultsClusterVersionKey))
+		})
+
+		It("should return error when no upgrade configuration is provided", func() {
+			_, _, err := parseUpgradeConfig(ct, pr)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("no upgrade configuration found"))
+		})
+
+		It("should return error when upgradeDefaults is not valid JSON", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: []byte(`{invalid`),
+			}
+			_, _, err := parseUpgradeConfig(ct, pr)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to parse upgradeDefaults"))
+		})
+
+		It("should return error when templateParameters is not valid JSON", func() {
+			pr.Spec.TemplateParameters = runtime.RawExtension{
+				Raw: []byte(`{invalid`),
+			}
+			_, _, err := parseUpgradeConfig(ct, pr)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to parse templateParameters"))
+		})
+
+		It("should return error when upgradeParameters is not a map", func() {
+			pr.Spec.TemplateParameters = runtime.RawExtension{
+				Raw: []byte(`{"upgradeParameters":"not-a-map"}`),
+			}
+			_, _, err := parseUpgradeConfig(ct, pr)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("is not a map"))
+		})
 	})
 
-	It("should detect imageBasedGroupUpgrade from CT defaults when PR has no upgrade params", func() {
-		ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-			Raw: []byte(`{"imageBasedGroupUpgrade":{"ibuSpec":{}}}`),
-		}
-		upgradeType, err := detectUpgradeType(ct, pr)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(upgradeType).To(Equal(utils.UpgradeDefaultsIBGUKey))
-	})
+	Context("timeout extraction", func() {
+		It("should return default timeout when no timeout is set", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: []byte(`{"clusterVersion":{}}`),
+			}
+			_, timeout, err := parseUpgradeConfig(ct, pr)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(timeout).To(Equal(utils.DefaultClusterUpgradeTimeout))
+		})
 
-	It("should detect clusterVersion from PR params when CT defaults is empty", func() {
-		pr.Spec.TemplateParameters = runtime.RawExtension{
-			Raw: []byte(`{"upgradeParameters":{"clusterVersion":{"desiredUpdate":{"version":"4.22.0"}}}}`),
-		}
-		upgradeType, err := detectUpgradeType(ct, pr)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(upgradeType).To(Equal(utils.UpgradeDefaultsClusterVersionKey))
-	})
+		It("should return custom timeout from PR params", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: []byte(`{"clusterVersion":{}}`),
+			}
+			pr.Spec.TemplateParameters = runtime.RawExtension{
+				Raw: []byte(`{"upgradeParameters":{"clusterUpgradeTimeout":"120m"}}`),
+			}
+			_, timeout, err := parseUpgradeConfig(ct, pr)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(timeout).To(Equal(120 * time.Minute))
+		})
 
-	It("should detect imageBasedGroupUpgrade from PR params when CT defaults is empty", func() {
-		pr.Spec.TemplateParameters = runtime.RawExtension{
-			Raw: []byte(`{"upgradeParameters":{"imageBasedGroupUpgrade":{"ibuSpec":{}}}}`),
-		}
-		upgradeType, err := detectUpgradeType(ct, pr)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(upgradeType).To(Equal(utils.UpgradeDefaultsIBGUKey))
-	})
+		It("should return error for invalid duration in PR params", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: []byte(`{"clusterVersion":{}}`),
+			}
+			pr.Spec.TemplateParameters = runtime.RawExtension{
+				Raw: []byte(`{"upgradeParameters":{"clusterUpgradeTimeout":"invalid"}}`),
+			}
+			_, _, err := parseUpgradeConfig(ct, pr)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid clusterUpgradeTimeout"))
+		})
 
-	It("should return error when both types are in CT defaults", func() {
-		ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-			Raw: []byte(`{"clusterVersion":{},"imageBasedGroupUpgrade":{}}`),
-		}
-		_, err := detectUpgradeType(ct, pr)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("only one upgrade type is allowed"))
-	})
+		It("should fall back to CT defaults when PR has no timeout", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: []byte(`{"clusterVersion":{},"clusterUpgradeTimeout":"90m"}`),
+			}
+			_, timeout, err := parseUpgradeConfig(ct, pr)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(timeout).To(Equal(90 * time.Minute))
+		})
 
-	It("should return error when both types are in PR params", func() {
-		pr.Spec.TemplateParameters = runtime.RawExtension{
-			Raw: []byte(`{"upgradeParameters":{"clusterVersion":{},"imageBasedGroupUpgrade":{}}}`),
-		}
-		_, err := detectUpgradeType(ct, pr)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("only one upgrade type is allowed"))
-	})
+		It("should prefer PR timeout over CT defaults", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: []byte(`{"clusterVersion":{},"clusterUpgradeTimeout":"90m"}`),
+			}
+			pr.Spec.TemplateParameters = runtime.RawExtension{
+				Raw: []byte(`{"upgradeParameters":{"clusterUpgradeTimeout":"120m"}}`),
+			}
+			_, timeout, err := parseUpgradeConfig(ct, pr)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(timeout).To(Equal(120 * time.Minute))
+		})
 
-	It("should return error when clusterVersion in CT defaults and imageBasedGroupUpgrade in PR params", func() {
-		ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-			Raw: []byte(`{"clusterVersion":{}}`),
-		}
-		pr.Spec.TemplateParameters = runtime.RawExtension{
-			Raw: []byte(`{"upgradeParameters":{"imageBasedGroupUpgrade":{}}}`),
-		}
-		_, err := detectUpgradeType(ct, pr)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("only one upgrade type is allowed"))
-	})
-
-	It("should return clusterVersion when both CT defaults and PR params have clusterVersion", func() {
-		ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-			Raw: []byte(`{"clusterVersion":{"channel":"stable-4.22"}}`),
-		}
-		pr.Spec.TemplateParameters = runtime.RawExtension{
-			Raw: []byte(`{"upgradeParameters":{"clusterVersion":{"desiredUpdate":{"version":"4.22.0"}}}}`),
-		}
-		upgradeType, err := detectUpgradeType(ct, pr)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(upgradeType).To(Equal(utils.UpgradeDefaultsClusterVersionKey))
-	})
-
-	It("should return error when no upgrade configuration is provided", func() {
-		_, err := detectUpgradeType(ct, pr)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("no upgrade configuration found"))
-	})
-
-	It("should return error when upgradeDefaults is not valid JSON", func() {
-		ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-			Raw: []byte(`{invalid`),
-		}
-		_, err := detectUpgradeType(ct, pr)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("failed to parse upgradeDefaults"))
-	})
-
-	It("should return error when templateParameters is not valid JSON", func() {
-		pr.Spec.TemplateParameters = runtime.RawExtension{
-			Raw: []byte(`{invalid`),
-		}
-		_, err := detectUpgradeType(ct, pr)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("failed to parse templateParameters"))
-	})
-
-	It("should return error when upgradeParameters is not a map", func() {
-		pr.Spec.TemplateParameters = runtime.RawExtension{
-			Raw: []byte(`{"upgradeParameters":"not-a-map"}`),
-		}
-		_, err := detectUpgradeType(ct, pr)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("is not a map"))
+		It("should return error when CT default timeout is invalid and PR has no timeout", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: []byte(`{"clusterVersion":{},"clusterUpgradeTimeout":"not-a-duration"}`),
+			}
+			_, _, err := parseUpgradeConfig(ct, pr)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid clusterUpgradeTimeout"))
+		})
 	})
 })
 
@@ -496,9 +646,10 @@ var _ = Describe("handleUpgrade", func() {
 			WithStatusSubresource(pr).
 			Build()
 		task = &provisioningRequestReconcilerTask{
-			client: c,
-			object: pr,
-			logger: slog.New(slog.DiscardHandler),
+			client:   c,
+			object:   pr,
+			logger:   slog.New(slog.DiscardHandler),
+			timeouts: &timeouts{clusterUpgrade: utils.DefaultClusterUpgradeTimeout},
 		}
 	}
 
@@ -559,24 +710,154 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 		ct          *provisioningv1alpha1.ClusterTemplate
 	)
 
+	// Reusable CV conditions.
+	var (
+		progressingTrue = configv1.ClusterOperatorStatusCondition{
+			Type: configv1.OperatorProgressing, Status: configv1.ConditionTrue,
+			Message: "Working towards 4.22.0: 485 of 904 done (53% complete)",
+		}
+		upgradeableFalse = configv1.ClusterOperatorStatusCondition{
+			Type: configv1.OperatorUpgradeable, Status: configv1.ConditionFalse,
+			Message: "Cluster should not be upgraded between minor versions for multiple reasons",
+		}
+		failingTrue = configv1.ClusterOperatorStatusCondition{
+			Type: utils.CVConditionFailing, Status: configv1.ConditionTrue,
+			Message: "Unable to update: multiple errors occurred",
+		}
+		invalidTrue = configv1.ClusterOperatorStatusCondition{
+			Type: utils.CVConditionInvalid, Status: configv1.ConditionTrue,
+			Message: "spec.desiredUpdate.version: Invalid value",
+		}
+		releaseAcceptedFalse = configv1.ClusterOperatorStatusCondition{
+			Type: utils.CVConditionReleaseAccepted, Status: configv1.ConditionFalse,
+			Message: "Release verification failed",
+		}
+		retrievedUpdatesTrue = configv1.ClusterOperatorStatusCondition{
+			Type: configv1.RetrievedUpdates, Status: configv1.ConditionTrue,
+		}
+		retrievedUpdatesFalse = configv1.ClusterOperatorStatusCondition{
+			Type: configv1.RetrievedUpdates, Status: configv1.ConditionFalse,
+			Message: "Unable to retrieve available updates",
+		}
+	)
+
+	newBaseCV := func() *configv1.ClusterVersion {
+		return &configv1.ClusterVersion{
+			ObjectMeta: metav1.ObjectMeta{Name: "version", Generation: 1},
+			Status: configv1.ClusterVersionStatus{
+				ObservedGeneration: 1,
+			},
+		}
+	}
+
 	BeforeEach(func() {
 		ctx = context.Background()
 		clusterName = "test-cluster"
-
 		spokeclient.ClearCache()
 
 		ct = &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-template.v1.0.0", Namespace: "test-ns"},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Release: "4.22.0",
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
+					UpgradeDefaults: runtime.RawExtension{
+						Raw: []byte(`{"clusterVersion":{"desiredUpdate":{}}}`),
+					},
+				},
+				TemplateParameterSchema: runtime.RawExtension{
+					Raw: []byte(`{"properties":{"upgradeParameters":{"type":"object"}}}`),
+				},
 			},
 		}
 		pr = &provisioningv1alpha1.ProvisioningRequest{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-pr"},
+			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+				TemplateParameters: runtime.RawExtension{Raw: []byte(`{}`)},
+			},
+			Status: provisioningv1alpha1.ProvisioningRequestStatus{
+				Extensions: provisioningv1alpha1.Extensions{
+					ClusterDetails: &provisioningv1alpha1.ClusterDetails{
+						Name: clusterName,
+					},
+				},
+			},
 		}
 	})
 
-	setupClient := func(objs ...client.Object) {
+	// buildSpokeCV creates a mock spoke client with a ClusterVersion.
+	buildSpokeCV := func(cv *configv1.ClusterVersion) {
+		fakeSpokeClient := fake.NewClientBuilder().WithScheme(scheme).
+			WithObjects(cv).Build()
+		spokeclient.SetTestSpokeClientCreator(func(apiServerURL, token string, caCert []byte, spokeScheme *runtime.Scheme) (client.Client, error) {
+			return fakeSpokeClient, nil
+		})
+	}
+
+	// setupWithSpokeReady creates a hub client with all resources needed for
+	// the spoke client to be ready.
+	setupWithSpokeReady := func(extraObjs ...client.Object) {
+		objs := []client.Object{
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: clusterName}},
+			&addonv1alpha1.ManagedClusterAddOn{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "managed-serviceaccount", Namespace: clusterName,
+				},
+			},
+			&msav1beta1.ManagedServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-pr-upgrade", Namespace: clusterName,
+				},
+				Status: msav1beta1.ManagedServiceAccountStatus{
+					TokenSecretRef: &msav1beta1.SecretRef{Name: "test-pr-upgrade-token"},
+				},
+			},
+			&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-pr-upgrade-token", Namespace: clusterName,
+					ResourceVersion: "100",
+				},
+				Data: map[string][]byte{"token": []byte("t"), "ca.crt": []byte("c")},
+			},
+			&workv1.ManifestWork{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-pr-upgrade-rbac", Namespace: clusterName,
+				},
+				Status: workv1.ManifestWorkStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               workv1.WorkAvailable,
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: metav1.Now(),
+						},
+					},
+				},
+			},
+			&clusterv1.ManagedCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName},
+				Spec: clusterv1.ManagedClusterSpec{
+					ManagedClusterClientConfigs: []clusterv1.ClientConfig{
+						{URL: "https://api.test-cluster.example.com:6443"},
+					},
+				},
+			},
+			pr,
+		}
+		objs = append(objs, extraObjs...)
+
+		c = fake.NewClientBuilder().WithScheme(scheme).
+			WithObjects(objs...).
+			WithStatusSubresource(pr).
+			Build()
+		task = &provisioningRequestReconcilerTask{
+			client:   c,
+			object:   pr,
+			logger:   slog.New(slog.DiscardHandler),
+			timeouts: &timeouts{clusterUpgrade: utils.DefaultClusterUpgradeTimeout},
+		}
+	}
+
+	// setupClientWithoutSpokeReady creates a hub client without spoke resources.
+	setupClientWithoutSpokeReady := func(objs ...client.Object) {
 		allObjs := append([]client.Object{
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: clusterName}},
 			pr,
@@ -586,48 +867,691 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			WithStatusSubresource(pr).
 			Build()
 		task = &provisioningRequestReconcilerTask{
-			client: c,
-			object: pr,
-			logger: slog.New(slog.DiscardHandler),
+			client:   c,
+			object:   pr,
+			logger:   slog.New(slog.DiscardHandler),
+			timeouts: &timeouts{clusterUpgrade: utils.DefaultClusterUpgradeTimeout},
 		}
 	}
 
-	It("should set PreconditionChecksFailed when managed-serviceaccount addon is missing", func() {
-		setupClient()
+	assertSpokeResourcesCleaned := func() {
+		msa := &msav1beta1.ManagedServiceAccount{}
+		err := c.Get(ctx, types.NamespacedName{Name: "test-pr-upgrade", Namespace: clusterName}, msa)
+		Expect(k8serrors.IsNotFound(err)).To(BeTrue())
 
-		result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(proceed).To(BeFalse())
-		Expect(result.RequeueAfter).To(BeZero())
+		mw := &workv1.ManifestWork{}
+		err = c.Get(ctx, types.NamespacedName{Name: "test-pr-upgrade-rbac", Namespace: clusterName}, mw)
+		Expect(k8serrors.IsNotFound(err)).To(BeTrue())
+	}
 
+	assertUpgradeCondition := func(reason string, msgSubstring string) {
 		condition := meta.FindStatusCondition(task.object.Status.Conditions,
 			string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
 		Expect(condition).ToNot(BeNil())
-		Expect(condition.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed)))
-		Expect(condition.Message).To(ContainSubstring("managed-serviceaccount addon is not available"))
+		Expect(condition.Reason).To(Equal(reason))
+		if msgSubstring != "" {
+			Expect(condition.Message).To(ContainSubstring(msgSubstring))
+		}
+	}
 
-		Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
-			Equal(provisioningv1alpha1.StateFailed))
+	// --- Resource Preparation ---
+
+	Context("resource preparation", func() {
+		It("should set PreconditionChecksFailed when managed-serviceaccount addon is missing", func() {
+			setupClientWithoutSpokeReady()
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed),
+				"managed-serviceaccount addon is not available")
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateFailed))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt).To(BeNil())
+		})
+
+		It("should set Pending and requeue when spoke client not ready", func() {
+			setupClientWithoutSpokeReady(
+				&addonv1alpha1.ManagedClusterAddOn{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "managed-serviceaccount", Namespace: clusterName,
+					},
+				},
+			)
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.Pending),
+				"Preparing upgrade resources")
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateProgressing))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt.IsZero()).To(BeFalse())
+		})
+
+		It("should time out when spoke client not ready and timeout exceeded", func() {
+			setupClientWithoutSpokeReady(
+				&addonv1alpha1.ManagedClusterAddOn{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "managed-serviceaccount", Namespace: clusterName,
+					},
+				},
+			)
+
+			pastTime := metav1.NewTime(time.Now().Add(-5 * time.Hour))
+			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt = &pastTime
+
+			result, _, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.TimedOut),
+				"Upgrade timed out")
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateFailed))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt).To(BeNil())
+		})
+
 	})
 
-	It("should set Pending condition and requeue when token is not yet synced", func() {
-		setupClient(
-			&addonv1alpha1.ManagedClusterAddOn{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "managed-serviceaccount", Namespace: clusterName,
+	// --- observedGeneration mismatch protection ---
+
+	Context("observedGeneration mismatch", func() {
+		It("should requeue when observedGeneration does not match generation", func() {
+			cv := newBaseCV()
+			cv.Generation = 5
+			cv.Status.ObservedGeneration = 4
+			buildSpokeCV(cv)
+			setupWithSpokeReady()
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+		})
+
+		It("should time out when observedGeneration mismatch persists beyond timeout", func() {
+			cv := newBaseCV()
+			cv.Generation = 5
+			cv.Status.ObservedGeneration = 4
+			buildSpokeCV(cv)
+			setupWithSpokeReady()
+
+			pastTime := metav1.NewTime(time.Now().Add(-5 * time.Hour))
+			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt = &pastTime
+
+			result, _, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.TimedOut),
+				"Upgrade timed out")
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateFailed))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt).To(BeNil())
+			assertSpokeResourcesCleaned()
+		})
+	})
+
+	// --- Pre-Start (The target version is not available in the ClusterVersion's history) ---
+
+	Context("pre-start", func() {
+		It("should set PreconditionChecksFailed when upgrade data is invalid", func() {
+			cv := newBaseCV()
+			buildSpokeCV(cv)
+
+			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: []byte(`{invalid`),
+			}
+			setupWithSpokeReady()
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed), "")
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateFailed))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt).To(BeNil())
+		})
+
+		It("should set PreconditionChecksFailed when desiredUpdate version mismatches target", func() {
+			cv := newBaseCV()
+			buildSpokeCV(cv)
+
+			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.21.0"}}}`),
+			}
+			setupWithSpokeReady()
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed),
+				"does not match the target version")
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateFailed))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt).To(BeNil())
+		})
+
+		It("should set Pending when Upgradeable=False for minor upgrade", func() {
+			cv := newBaseCV()
+			cv.Status.History = []configv1.UpdateHistory{
+				{Version: "4.21.0", State: configv1.CompletedUpdate},
+			}
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{
+				upgradeableFalse, retrievedUpdatesTrue,
+			}
+			cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.22.0"}}
+			buildSpokeCV(cv)
+
+			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.22.0"}}}`),
+			}
+			setupWithSpokeReady()
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.Pending),
+				"Cluster should not be upgraded")
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateProgressing))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt.IsZero()).To(BeFalse())
+		})
+
+		It("should bypass Upgradeable check when force=true for minor upgrade", func() {
+			cv := newBaseCV()
+			// Current version is 4.21.0, target version is 4.22.0.
+			cv.Status.History = []configv1.UpdateHistory{
+				{Version: "4.21.0", State: configv1.CompletedUpdate},
+			}
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{
+				upgradeableFalse, retrievedUpdatesTrue,
+			}
+			cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.22.0"}}
+			buildSpokeCV(cv)
+
+			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.22.0","force":true}}}`),
+			}
+			setupWithSpokeReady()
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.Pending),
+				"Upgrade to version 4.22.0 triggered. Waiting for upgrade to start")
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateProgressing))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt.IsZero()).To(BeFalse())
+		})
+
+		It("should bypass Upgradeable check for z-stream upgrade", func() {
+			cv := newBaseCV()
+			cv.Status.History = []configv1.UpdateHistory{
+				{Version: "4.22.0", State: configv1.CompletedUpdate},
+			}
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{
+				upgradeableFalse, retrievedUpdatesTrue,
+			}
+			cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.22.3"}}
+			buildSpokeCV(cv)
+
+			ct.Spec.Release = "4.22.3"
+			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.22.3"}}}`),
+			}
+			setupWithSpokeReady()
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.Pending),
+				"Upgrade to version 4.22.3 triggered. Waiting for upgrade to start")
+		})
+
+		It("should set Pending when channel/upstream patched", func() {
+			cv := newBaseCV()
+			cv.Spec.Channel = "stable-4.21"
+			buildSpokeCV(cv)
+
+			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: []byte(`{"clusterVersion":{"channel":"stable-4.22","desiredUpdate":{}}}`),
+			}
+			setupWithSpokeReady()
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.Pending),
+				"Channel/upstream updated")
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateProgressing))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt.IsZero()).To(BeFalse())
+		})
+
+		It("should set Pending when RetrievedUpdates is not True", func() {
+			cv := newBaseCV()
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{retrievedUpdatesFalse}
+			buildSpokeCV(cv)
+			setupWithSpokeReady()
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.Pending),
+				"Unable to retrieve available updates")
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateProgressing))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt.IsZero()).To(BeFalse())
+		})
+
+		It("should set PreconditionChecksFailed when target not in availableUpdates and no image", func() {
+			cv := newBaseCV()
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{retrievedUpdatesTrue}
+			buildSpokeCV(cv)
+			setupWithSpokeReady()
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed),
+				"not available for upgrade")
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateFailed))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt).To(BeNil())
+		})
+
+		It("should set Pending 'triggered' when desiredUpdate changed", func() {
+			cv := newBaseCV()
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{retrievedUpdatesTrue}
+			cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.22.0"}}
+			buildSpokeCV(cv)
+			setupWithSpokeReady()
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.Pending),
+				"Upgrade to version 4.22.0 triggered. Waiting for upgrade to start")
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateProgressing))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt.IsZero()).To(BeFalse())
+		})
+
+		It("should set PreconditionChecksFailed when Invalid=True after trigger", func() {
+			cv := newBaseCV()
+			cv.Spec.DesiredUpdate = &configv1.Update{Version: "4.22.0"}
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{
+				retrievedUpdatesTrue, invalidTrue,
+			}
+			cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.22.0"}}
+			buildSpokeCV(cv)
+			setupWithSpokeReady()
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed),
+				"Invalid value")
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateFailed))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt).To(BeNil())
+		})
+
+		It("should set Pending when ReleaseAccepted=False after trigger", func() {
+			cv := newBaseCV()
+			cv.Spec.DesiredUpdate = &configv1.Update{
+				Version: "4.22.0",
+				Image:   "quay.io/openshift-release/ocp-release:4.22.0",
+			}
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{
+				retrievedUpdatesTrue, releaseAcceptedFalse,
+			}
+			buildSpokeCV(cv)
+
+			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.22.0","image":"quay.io/openshift-release/ocp-release:4.22.0"}}}`),
+			}
+			setupWithSpokeReady()
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.Pending),
+				"Release verification failed")
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateProgressing))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt.IsZero()).To(BeFalse())
+		})
+
+		It("should set Unknown with Failing message when Failing=True after trigger", func() {
+			cv := newBaseCV()
+			cv.Spec.DesiredUpdate = &configv1.Update{Version: "4.22.0"}
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{
+				retrievedUpdatesTrue, failingTrue,
+			}
+			cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.22.0"}}
+			buildSpokeCV(cv)
+			setupWithSpokeReady()
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.Unknown),
+				"multiple errors occurred")
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateProgressing))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt.IsZero()).To(BeFalse())
+		})
+
+		It("should set Unknown 'upgrade not started yet' when no Failing condition after trigger", func() {
+			cv := newBaseCV()
+			cv.Spec.DesiredUpdate = &configv1.Update{Version: "4.22.0"}
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{retrievedUpdatesTrue}
+			cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.22.0"}}
+			buildSpokeCV(cv)
+			setupWithSpokeReady()
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.Unknown),
+				"upgrade not started yet")
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateProgressing))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt.IsZero()).To(BeFalse())
+		})
+
+		It("should time out during pre-start phase", func() {
+			cv := newBaseCV()
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{retrievedUpdatesTrue}
+			cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.22.0"}}
+			buildSpokeCV(cv)
+			setupWithSpokeReady()
+
+			pastTime := metav1.NewTime(time.Now().Add(-5 * time.Hour))
+			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt = &pastTime
+
+			result, _, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.TimedOut),
+				"Upgrade timed out")
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateFailed))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt).To(BeNil())
+			assertSpokeResourcesCleaned()
+		})
+	})
+
+	// --- In-Progress (The target version is available in the ClusterVersion's history, not completed) ---
+
+	Context("in-progress", func() {
+		It("should set InProgress with Progressing message and reset startAt", func() {
+			startedTime := metav1.NewTime(time.Now().Add(-10 * time.Minute))
+			cv := newBaseCV()
+			cv.Status.History = []configv1.UpdateHistory{
+				{Version: "4.22.0", State: configv1.PartialUpdate, StartedTime: startedTime},
+			}
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{progressingTrue}
+			buildSpokeCV(cv)
+			setupWithSpokeReady()
+			now := metav1.Now()
+			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt = &now
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.InProgress),
+				"485 of 904 done")
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateProgressing))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt).ToNot(BeNil())
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt.Time).To(
+				BeTemporally("~", startedTime.Time, time.Second))
+		})
+
+		It("should set Unknown 'CVO stalled' when Progressing=False and no Failing", func() {
+			now := metav1.Now()
+			cv := newBaseCV()
+			cv.Status.History = []configv1.UpdateHistory{
+				{Version: "4.22.0", State: configv1.PartialUpdate, StartedTime: now},
+			}
+			buildSpokeCV(cv)
+			setupWithSpokeReady()
+			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt = &now
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.Unknown),
+				"CVO stalled")
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateProgressing))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt.IsZero()).To(BeFalse())
+		})
+
+		It("should set Unknown with Failing message when Progressing=False and Failing=True", func() {
+			now := metav1.Now()
+			cv := newBaseCV()
+			cv.Status.History = []configv1.UpdateHistory{
+				{Version: "4.22.0", State: configv1.PartialUpdate, StartedTime: now},
+			}
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{failingTrue}
+			buildSpokeCV(cv)
+			setupWithSpokeReady()
+			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt = &now
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.Unknown),
+				"multiple errors occurred")
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateProgressing))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt.IsZero()).To(BeFalse())
+		})
+
+		It("should time out when upgrade exceeds timeout and clear startAt", func() {
+			pastTime := metav1.NewTime(time.Now().Add(-5 * time.Hour))
+			cv := newBaseCV()
+			cv.Status.History = []configv1.UpdateHistory{
+				{Version: "4.22.0", State: configv1.PartialUpdate, StartedTime: pastTime},
+			}
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{progressingTrue}
+			buildSpokeCV(cv)
+			setupWithSpokeReady()
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.TimedOut),
+				"Upgrade timed out")
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateFailed))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt).To(BeNil())
+			assertSpokeResourcesCleaned()
+		})
+	})
+
+	// --- Completed ---
+
+	Context("completed", func() {
+		It("should set Completed, cleanup, proceed=true, and clear startAt", func() {
+			cv := newBaseCV()
+			cv.Status.History = []configv1.UpdateHistory{
+				{Version: "4.22.0", State: configv1.CompletedUpdate},
+			}
+			buildSpokeCV(cv)
+			setupWithSpokeReady()
+			now := metav1.Now()
+			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt = &now
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeTrue())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.Completed),
+				"Upgrade to version 4.22.0 completed")
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt).To(BeNil())
+			assertSpokeResourcesCleaned()
+		})
+	})
+})
+
+var _ = Describe("updateUpgradeStatus", func() {
+	var (
+		ctx  context.Context
+		task *provisioningRequestReconcilerTask
+		c    client.Client
+		pr   *provisioningv1alpha1.ProvisioningRequest
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		pr = &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-pr"},
+			Status: provisioningv1alpha1.ProvisioningRequestStatus{
+				Extensions: provisioningv1alpha1.Extensions{
+					ClusterDetails: &provisioningv1alpha1.ClusterDetails{},
 				},
 			},
-		)
+		}
+		c = fake.NewClientBuilder().WithScheme(scheme).
+			WithObjects(pr).
+			WithStatusSubresource(pr).
+			Build()
+		task = &provisioningRequestReconcilerTask{
+			client:   c,
+			object:   pr,
+			logger:   slog.New(slog.DiscardHandler),
+			timeouts: &timeouts{clusterUpgrade: utils.DefaultClusterUpgradeTimeout},
+		}
+	})
 
-		result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(proceed).To(BeFalse())
-		Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+	Context("terminal success", func() {
+		It("should set ConditionTrue and clear startAt for Completed", func() {
+			now := metav1.Now()
+			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt = &now
 
-		condition := meta.FindStatusCondition(task.object.Status.Conditions,
-			string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
-		Expect(condition).ToNot(BeNil())
-		Expect(condition.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.Pending)))
-		Expect(condition.Message).To(Equal("Preparing upgrade resources"))
+			err := task.updateUpgradeStatus(ctx,
+				provisioningv1alpha1.CRconditionReasons.Completed, "Upgrade completed")
+			Expect(err).ToNot(HaveOccurred())
+
+			condition := meta.FindStatusCondition(task.object.Status.Conditions,
+				string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
+			Expect(condition).ToNot(BeNil())
+			Expect(condition.Status).To(Equal(metav1.ConditionTrue))
+			Expect(condition.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.Completed)))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt).To(BeNil())
+		})
+	})
+
+	Context("terminal failure", func() {
+		It("should set Failed state and clear startAt for PreconditionChecksFailed", func() {
+			now := metav1.Now()
+			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt = &now
+
+			err := task.updateUpgradeStatus(ctx,
+				provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, "addon missing")
+			Expect(err).ToNot(HaveOccurred())
+
+			condition := meta.FindStatusCondition(task.object.Status.Conditions,
+				string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
+			Expect(condition).ToNot(BeNil())
+			Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+			Expect(condition.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed)))
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateFailed))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt).To(BeNil())
+		})
+
+		It("should set Failed state and clear startAt for TimedOut", func() {
+			now := metav1.Now()
+			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt = &now
+
+			err := task.updateUpgradeStatus(ctx,
+				provisioningv1alpha1.CRconditionReasons.TimedOut, "Upgrade timed out")
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateFailed))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt).To(BeNil())
+		})
+	})
+
+	Context("non-terminal", func() {
+		It("should set InProgress state for Pending reason", func() {
+			err := task.updateUpgradeStatus(ctx,
+				provisioningv1alpha1.CRconditionReasons.Pending, "Preparing resources")
+			Expect(err).ToNot(HaveOccurred())
+
+			condition := meta.FindStatusCondition(task.object.Status.Conditions,
+				string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
+			Expect(condition).ToNot(BeNil())
+			Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+			Expect(condition.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.Pending)))
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateProgressing))
+		})
+
+		It("should set InProgress state for InProgress reason", func() {
+			err := task.updateUpgradeStatus(ctx,
+				provisioningv1alpha1.CRconditionReasons.InProgress, "Upgrading")
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateProgressing))
+		})
+
+		It("should set InProgress state for Unknown reason", func() {
+			err := task.updateUpgradeStatus(ctx,
+				provisioningv1alpha1.CRconditionReasons.Unknown, "CVO stalled")
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+				Equal(provisioningv1alpha1.StateProgressing))
+		})
 	})
 })

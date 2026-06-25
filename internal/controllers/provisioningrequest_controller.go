@@ -69,6 +69,7 @@ type timeouts struct {
 	hardwareProvisioning time.Duration
 	clusterProvisioning  time.Duration
 	clusterConfiguration time.Duration
+	clusterUpgrade       time.Duration
 }
 
 // Hardware manager client retry configuration constants
@@ -442,16 +443,27 @@ func (t *provisioningRequestReconcilerTask) handleClusterUpgrades(ctx context.Co
 		return result, nil
 	}
 
-	// An upgrade is requested or upgrade has started but not completed
+	// Enter upgrade handling if upgrade is needed or actively in progress.
 	if shouldUpgrade ||
 		(ctlrutils.IsClusterUpgradeInitiated(t.object) &&
-			!ctlrutils.IsClusterUpgradeCompleted(t.object)) {
+			!ctlrutils.IsClusterUpgradeCompleted(t.object) &&
+			!ctlrutils.IsClusterUpgradeInTerminalFailure(t.object)) {
 		upgradeCtrlResult, proceed, err := t.handleUpgrade(ctx, clusterName)
 		if upgradeCtrlResult.RequeueAfter > 0 || !proceed || err != nil {
 			// Requeue if the upgrade is in progress or an error occurs.
 			// Stop reconciliation if the upgrade has failed.
 			// Proceed if the upgrade is completed.
 			return upgradeCtrlResult, err
+		}
+	}
+
+	// When a previous upgrade ended in terminal failure (PreconditionChecksFailed,
+	// TimedOut, Failed) and the upgrade is no longer needed (e.g., user switched
+	// to a CT whose version matches the cluster), clear the stale failed upgrade
+	// status so the provisioning request can go back to fulfilled state.
+	if !shouldUpgrade && ctlrutils.IsClusterUpgradeInTerminalFailure(t.object) {
+		if err := t.cleanupStaleUpgradeState(ctx, clusterName); err != nil {
+			return requeueWithError(err)
 		}
 	}
 
