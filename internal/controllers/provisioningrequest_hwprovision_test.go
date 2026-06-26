@@ -2486,7 +2486,7 @@ var _ = Describe("processExistingHardwareCondition", func() {
 	})
 
 	Context("when HardwareProvisioned completes successfully", func() {
-		It("updates provisioningStatus with success message", func() {
+		It("preserves completion message in PR condition", func() {
 			hwCondition := &metav1.Condition{
 				Type:    string(hwmgmtv1alpha1.Provisioned),
 				Status:  metav1.ConditionTrue,
@@ -2500,14 +2500,12 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			Expect(reason).To(Equal(string(hwmgmtv1alpha1.Completed)))
 			Expect(timedOutOrFailed).To(BeFalse())
 			Expect(message).To(Equal("Hardware provisioning completed: Created"))
-			// Verify provisioningStatus is updated to progressing
-			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StateProgressing))
-			Expect(task.object.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring("Hardware provisioning completed"))
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(BeEmpty())
 		})
 	})
 
 	Context("when HardwareConfigured completes successfully", func() {
-		It("updates provisioningStatus with success message", func() {
+		It("preserves completion message in PR condition", func() {
 			hwCondition := &metav1.Condition{
 				Type:    string(hwmgmtv1alpha1.Configured),
 				Status:  metav1.ConditionTrue,
@@ -2521,9 +2519,7 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			Expect(reason).To(Equal(string(hwmgmtv1alpha1.Completed)))
 			Expect(timedOutOrFailed).To(BeFalse())
 			Expect(message).To(Equal("Hardware configuring completed: Configuration applied"))
-			// Verify provisioningStatus is updated to progressing
-			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StateProgressing))
-			Expect(task.object.Status.ProvisioningStatus.ProvisioningDetails).To(ContainSubstring("Hardware configuring completed"))
+			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(BeEmpty())
 		})
 	})
 
