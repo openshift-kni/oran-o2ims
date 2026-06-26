@@ -588,18 +588,16 @@ func (t *provisioningRequestReconcilerTask) processExistingHardwareCondition(
 
 	// Ensure a consistent message for the provisioning request, regardless of which hardware manager is used.
 	// The message is augmented with additional NAR context for in-progress, failure, and success states.
-	// - Success: update provisioningStatus to indicate hardware provisioning/configuration is complete
+	// - Success: build a completion message for hardware conditions
 	// - Timeout/Failure: enrich the base failure message with detailed NAR error context
 	// - In-progress: enrich the message with NAR context when available, otherwise provide a generic in-progress message
 	if status == metav1.ConditionTrue {
 		// Hardware provisioning/configuration completed successfully
-		// Update provisioningStatus to reflect completion and allow progression to next phase
 		if strings.TrimSpace(message) != "" {
 			message = fmt.Sprintf("Hardware %s completed: %s", ctlrutils.GetStatusMessage(condition), message)
 		} else {
 			message = fmt.Sprintf("Hardware %s completed", ctlrutils.GetStatusMessage(condition))
 		}
-		ctlrutils.SetProvisioningStateInProgress(t.object, message)
 	} else if status == metav1.ConditionFalse {
 		if reason == string(hwmgmtv1alpha1.Failed) || reason == string(hwmgmtv1alpha1.TimedOut) {
 			timedOutOrFailed = true
