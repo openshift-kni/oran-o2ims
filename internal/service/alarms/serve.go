@@ -166,7 +166,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 	newNotifier := notifier.NewNotifier(
 		notifier_provider.NewSubscriptionStorageProvider(alarmRepository),
 		notifier_provider.NewNotificationStorageProvider(alarmRepository, globalCloudID),
-		notifier.NewClientFactory(oauthConfig, nil),
+		notifier.NewClientFactory(oauthConfig),
 	)
 
 	// Attribute needed when subscription event happens

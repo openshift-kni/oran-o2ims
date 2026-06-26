@@ -13,8 +13,6 @@ import (
 	"net/http"
 	"time"
 
-	"golang.org/x/oauth2"
-
 	commonapi "github.com/openshift-kni/oran-o2ims/api/common"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
@@ -44,8 +42,7 @@ func BlockCrossHostRedirects(client *http.Client) {
 // ClientFactory is a utility used to abstract building an HTTP client based on the type of callback
 // URL supplied.
 type ClientFactory struct {
-	oauthConfig        *ctlrutils.OAuthClientConfig
-	serviceTokenSource oauth2.TokenSource
+	oauthConfig *ctlrutils.OAuthClientConfig
 }
 
 // ClientProvider defines the interface which any client factory must implement.  This exists for
@@ -55,14 +52,13 @@ type ClientProvider interface {
 }
 
 // NewClientFactory creates a new factory
-func NewClientFactory(oauthConfig *ctlrutils.OAuthClientConfig, serviceTokenSource oauth2.TokenSource) ClientProvider {
+func NewClientFactory(oauthConfig *ctlrutils.OAuthClientConfig) ClientProvider {
 	return &ClientFactory{
-		oauthConfig:        oauthConfig,
-		serviceTokenSource: serviceTokenSource,
+		oauthConfig: oauthConfig,
 	}
 }
 
-func (f *ClientFactory) newClusterClient(ctx context.Context) (*http.Client, error) {
+func (f *ClientFactory) newClusterClient() (*http.Client, error) {
 	tlsConfig, err := ctlrutils.GetDefaultTLSConfig(nil, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build TLS config: %w", err)
@@ -72,10 +68,6 @@ func (f *ClientFactory) newClusterClient(ctx context.Context) (*http.Client, err
 			TLSClientConfig: tlsConfig,
 		},
 		Timeout: 30 * time.Second,
-	}
-	if f.serviceTokenSource != nil {
-		ctx = context.WithValue(ctx, oauth2.HTTPClient, client)
-		client = oauth2.NewClient(ctx, f.serviceTokenSource)
 	}
 	BlockCrossHostRedirects(client)
 	return client, nil
@@ -91,12 +83,12 @@ func (f *ClientFactory) newOAuthClient(ctx context.Context) (*http.Client, error
 }
 
 // NewClient creates a new Client based on the auth type. For ServiceAccount auth, a cluster-internal
-// client is created; when serviceTokenSource is non-nil it wraps the client with bearer token
-// authorization, otherwise callbacks are sent without authorization. For OAuth auth, the client is
-// configured with the OAuth credentials for public endpoint callbacks.
+// TLS client is created without bearer token authorization — this path is used for development and
+// testing only. For OAuth auth, the client is configured with the OAuth credentials for public
+// endpoint callbacks.
 func (f *ClientFactory) NewClient(ctx context.Context, authType commonapi.AuthType) (*http.Client, error) {
 	if authType == commonapi.ServiceAccount {
-		return f.newClusterClient(ctx)
+		return f.newClusterClient()
 	}
 	return f.newOAuthClient(ctx)
 }
