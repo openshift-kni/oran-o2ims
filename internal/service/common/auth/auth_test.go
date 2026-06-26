@@ -218,14 +218,18 @@ var _ = Describe("Authenticator", func() {
 
 	It("Logs JWT claims on auth failure with bearer token", func() {
 		req.Header.Set("Authorization",
-			"Bearer "+testJWT(`{"iss":"https://sso.example.com","aud":"o2ims","exp":1700000000}`))
+			"Bearer "+testJWT(`{"iss":"https://sso.example.com","sub":"user-1234","aud":"o2ims","exp":1700000000,"client_id":"smo-client","azp":"smo-client","scope":"openid profile"}`))
 		k8sAuthenticator.Error = errors.New("expired")
 		handler.ServeHTTP(recorder, &req)
 
 		logOutput := logBuffer.String()
 		Expect(logOutput).To(ContainSubstring(`"issuer":"https://sso.example.com"`))
+		Expect(logOutput).To(ContainSubstring(`"subject":"user-1234"`))
 		Expect(logOutput).To(ContainSubstring(`"audience":"o2ims"`))
 		Expect(logOutput).To(ContainSubstring(`"expiration"`))
+		Expect(logOutput).To(ContainSubstring(`"clientId":"smo-client"`))
+		Expect(logOutput).To(ContainSubstring(`"authorizedParty":"smo-client"`))
+		Expect(logOutput).To(ContainSubstring(`"scope":"openid profile"`))
 	})
 
 	It("Logs container and clientIp on auth rejection", func() {
