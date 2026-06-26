@@ -90,10 +90,10 @@ func (f *ClientFactory) newOAuthClient(ctx context.Context) (*http.Client, error
 	return client, nil
 }
 
-// NewClient creates a new Client based on the callback URL provided.  If the callback URL is a local
-// service URL that contains "svc.cluster.local" then a Client will be created that uses the
-// supplied service account token file; otherwise, it is assumed that the URL points to a public
-// endpoint that requires the OAuth credentials.
+// NewClient creates a new Client based on the auth type. For ServiceAccount auth, a cluster-internal
+// client is created; when serviceTokenSource is non-nil it wraps the client with bearer token
+// authorization, otherwise callbacks are sent without authorization. For OAuth auth, the client is
+// configured with the OAuth credentials for public endpoint callbacks.
 func (f *ClientFactory) NewClient(ctx context.Context, authType commonapi.AuthType) (*http.Client, error) {
 	if authType == commonapi.ServiceAccount {
 		return f.newClusterClient(ctx)

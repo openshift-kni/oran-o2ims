@@ -58,12 +58,22 @@ type AMClient struct {
 	alarmsRepository repo.AlarmRepositoryInterface
 	infrastructure   *infrastructure.Infrastructure
 	tokenSource      oauth2.TokenSource
-	AlertmanagerHost string
-	CAFilePath       string
+	alertmanagerHost string
+	caFilePath       string
 }
 
-// NewAlertmanagerClient creates a new AMClient
-func NewAlertmanagerClient(k8sClient client.Client, amrepo repo.AlarmRepositoryInterface, infra *infrastructure.Infrastructure, clientset kubernetes.Interface) *AMClient {
+// NewAlertmanagerClient creates a new AMClient. When alertmanagerHost or caFilePath are empty,
+// production defaults are used.
+func NewAlertmanagerClient(k8sClient client.Client, amrepo repo.AlarmRepositoryInterface, infra *infrastructure.Infrastructure, clientset kubernetes.Interface, alertmanagerHost, caFilePath string) *AMClient {
+	if alertmanagerHost == "" {
+		alertmanagerHost = fmt.Sprintf("%s.%s.svc:%d",
+			ACMObsAMServiceName,
+			ctlrutils.OpenClusterManagementObservabilityNamespace,
+			ACMObsAMServicePort)
+	}
+	if caFilePath == "" {
+		caFilePath = constants.DefaultServiceCAFile
+	}
 	return &AMClient{
 		k8sClient:        k8sClient,
 		alarmsRepository: amrepo,
@@ -72,11 +82,8 @@ func NewAlertmanagerClient(k8sClient client.Client, amrepo repo.AlarmRepositoryI
 			clientset, constants.DefaultNamespace,
 			fmt.Sprintf("%s-%s", constants.DefaultNamespace, ctlrutils.InventoryAlarmServerName),
 			ACMObsAMServiceName),
-		AlertmanagerHost: fmt.Sprintf("%s.%s.svc:%d",
-			ACMObsAMServiceName,
-			ctlrutils.OpenClusterManagementObservabilityNamespace,
-			ACMObsAMServicePort),
-		CAFilePath: constants.DefaultServiceCAFile,
+		alertmanagerHost: alertmanagerHost,
+		caFilePath:       caFilePath,
 	}
 }
 
@@ -138,7 +145,7 @@ func (c *AMClient) getAlerts(ctx context.Context) ([]APIAlert, error) {
 	// Create request
 	u := url.URL{
 		Scheme: "https",
-		Host:   c.AlertmanagerHost,
+		Host:   c.alertmanagerHost,
 		Path:   "/api/v2/alerts",
 	}
 
@@ -200,7 +207,7 @@ func (c *AMClient) createAlertmanagerClient() (*http.Client, string, error) {
 	}
 
 	// Read service CA certificate
-	caCrt, err := os.ReadFile(filepath.Clean(c.CAFilePath))
+	caCrt, err := os.ReadFile(filepath.Clean(c.caFilePath))
 	if err != nil {
 		return nil, "", fmt.Errorf("error reading service CA certificate: %w", err)
 	}

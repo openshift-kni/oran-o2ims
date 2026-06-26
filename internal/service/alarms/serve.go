@@ -353,7 +353,7 @@ func startAlertmanager(ctx context.Context, alarmServer *api.AlarmsServer, clien
 	}
 
 	// Run the first sync - running it outside also makes sure connectivity is good before server starts listening
-	c := alertmanager.NewAlertmanagerClient(hubclient, alarmServer.AlarmsRepository, alarmServer.Infrastructure, clientset)
+	c := alertmanager.NewAlertmanagerClient(hubclient, alarmServer.AlarmsRepository, alarmServer.Infrastructure, clientset, "", "")
 	slog.InfoContext(ctx, "Running initial alert sync")
 	if err := c.SyncAlerts(ctx); err != nil {
 		return fmt.Errorf("failed to run initial alert sync: %w", err)

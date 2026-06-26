@@ -110,9 +110,7 @@ var _ = Describe("Alertmanager API Client", func() {
 			ResourceServer: &infrastructure.ResourceServer{},
 		}
 
-		amClient = alertmanager.NewAlertmanagerClient(fakeClient, mockRepo, infra, fakeClientset)
-		amClient.AlertmanagerHost = serverHost
-		amClient.CAFilePath = tempCAFile
+		amClient = alertmanager.NewAlertmanagerClient(fakeClient, mockRepo, infra, fakeClientset, serverHost, tempCAFile)
 
 		// Set up test alerts
 		testAPIAlerts = []alertmanager.APIAlert{
