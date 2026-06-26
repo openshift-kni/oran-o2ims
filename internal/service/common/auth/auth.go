@@ -43,7 +43,7 @@ func clientIP(req *http.Request) string {
 	return req.RemoteAddr
 }
 
-func tokenClaimsAttrs(req *http.Request) []slog.Attr {
+func tokenClaimsAttrs(req *http.Request) []any {
 	auth := req.Header.Get("Authorization")
 	if !strings.HasPrefix(auth, "Bearer ") {
 		return nil
@@ -59,21 +59,37 @@ func tokenClaimsAttrs(req *http.Request) []slog.Attr {
 	}
 	var claims struct {
 		Issuer   string `json:"iss"`
+		Subject  string `json:"sub"`
 		Audience any    `json:"aud"`
 		Exp      any    `json:"exp"`
+		ClientID string `json:"client_id"`
+		Azp      string `json:"azp"`
+		Scope    string `json:"scope"`
 	}
 	if err := json.Unmarshal(payload, &claims); err != nil {
 		return nil
 	}
-	var attrs []slog.Attr
+	var attrs []any
 	if claims.Issuer != "" {
 		attrs = append(attrs, slog.String("issuer", claims.Issuer))
+	}
+	if claims.Subject != "" {
+		attrs = append(attrs, slog.String("subject", claims.Subject))
 	}
 	if claims.Audience != nil {
 		attrs = append(attrs, slog.Any("audience", claims.Audience))
 	}
 	if claims.Exp != nil {
 		attrs = append(attrs, slog.Any("expiration", claims.Exp))
+	}
+	if claims.ClientID != "" {
+		attrs = append(attrs, slog.String("clientId", claims.ClientID))
+	}
+	if claims.Azp != "" {
+		attrs = append(attrs, slog.String("authorizedParty", claims.Azp))
+	}
+	if claims.Scope != "" {
+		attrs = append(attrs, slog.String("scope", claims.Scope))
 	}
 	return attrs
 }
@@ -100,24 +116,17 @@ func Authenticator(oauthHandler, kubernetesHandler authenticator.Request) middle
 
 			response, ok, err := handler.AuthenticateRequest(req)
 			if err != nil {
-				attrs := []slog.Attr{
-					slog.Any("error", err),
-					slog.String("method", req.Method),
-					slog.String("path", req.URL.Path),
-				}
-				attrs = append(attrs, tokenClaimsAttrs(req)...)
-				slog.LogAttrs(req.Context(), slog.LevelWarn, "authentication failed", attrs...)
+				args := []any{slog.Any("error", err), slog.String("method", req.Method), slog.String("path", req.URL.Path)}
+				args = append(args, tokenClaimsAttrs(req)...)
+				slog.WarnContext(req.Context(), "authentication failed", args...)
 				middleware.ProblemDetails(w, fmt.Sprintf("failed to authenticate request: %v", err), http.StatusUnauthorized)
 				return
 			}
 
 			if !ok {
-				attrs := []slog.Attr{
-					slog.String("method", req.Method),
-					slog.String("path", req.URL.Path),
-				}
-				attrs = append(attrs, tokenClaimsAttrs(req)...)
-				slog.LogAttrs(req.Context(), slog.LevelWarn, "authentication rejected", attrs...)
+				args := []any{slog.String("method", req.Method), slog.String("path", req.URL.Path)}
+				args = append(args, tokenClaimsAttrs(req)...)
+				slog.WarnContext(req.Context(), "authentication rejected", args...)
 				middleware.ProblemDetails(w, "unable to authenticate request", http.StatusUnauthorized)
 				return
 			}
