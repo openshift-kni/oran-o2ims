@@ -20,6 +20,7 @@ import (
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/request"
 
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
 )
 
@@ -77,13 +78,6 @@ func tokenClaimsAttrs(req *http.Request) []slog.Attr {
 	return attrs
 }
 
-func requestContextAttrs(req *http.Request) []slog.Attr {
-	return []slog.Attr{
-		slog.String("container", containerID),
-		slog.String("clientIp", clientIP(req)),
-	}
-}
-
 // Authenticator defines an authentication handler that is capable of authenticating a user from an incoming
 // JWT bearer token.  The purpose of this step is to confirm the identity of the user making the request.  This
 // could include any of username, userid, or group as well as any extra attributes associated with the request
@@ -92,6 +86,10 @@ func requestContextAttrs(req *http.Request) []slog.Attr {
 func Authenticator(oauthHandler, kubernetesHandler authenticator.Request) middleware.Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			ctx := logging.AppendCtx(req.Context(), slog.String("container", containerID))
+			ctx = logging.AppendCtx(ctx, slog.String("clientIp", clientIP(req)))
+			req = req.WithContext(ctx)
+
 			value := req.Header.Get("x-forwarded-for")
 			handler := oauthHandler
 			if handler == nil || value == "" {
@@ -102,10 +100,11 @@ func Authenticator(oauthHandler, kubernetesHandler authenticator.Request) middle
 
 			response, ok, err := handler.AuthenticateRequest(req)
 			if err != nil {
-				attrs := append(requestContextAttrs(req),
+				attrs := []slog.Attr{
 					slog.Any("error", err),
 					slog.String("method", req.Method),
-					slog.String("path", req.URL.Path))
+					slog.String("path", req.URL.Path),
+				}
 				attrs = append(attrs, tokenClaimsAttrs(req)...)
 				slog.LogAttrs(req.Context(), slog.LevelWarn, "authentication failed", attrs...)
 				middleware.ProblemDetails(w, fmt.Sprintf("failed to authenticate request: %v", err), http.StatusUnauthorized)
@@ -113,9 +112,10 @@ func Authenticator(oauthHandler, kubernetesHandler authenticator.Request) middle
 			}
 
 			if !ok {
-				attrs := append(requestContextAttrs(req),
+				attrs := []slog.Attr{
 					slog.String("method", req.Method),
-					slog.String("path", req.URL.Path))
+					slog.String("path", req.URL.Path),
+				}
 				attrs = append(attrs, tokenClaimsAttrs(req)...)
 				slog.LogAttrs(req.Context(), slog.LevelWarn, "authentication rejected", attrs...)
 				middleware.ProblemDetails(w, "unable to authenticate request", http.StatusUnauthorized)
@@ -155,6 +155,10 @@ func convertMethodToVerb(method string) string {
 func Authorizer(kubernetesAuthorizer authorizer.Authorizer) middleware.Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			ctx := logging.AppendCtx(req.Context(), slog.String("container", containerID))
+			ctx = logging.AppendCtx(ctx, slog.String("clientIp", clientIP(req)))
+			req = req.WithContext(ctx)
+
 			// Retrieve the User info from the request context.  It should have been placed there by a successful
 			// invocation of the Authenticator handler.
 			user, ok := request.UserFrom(req.Context())
@@ -173,22 +177,20 @@ func Authorizer(kubernetesAuthorizer authorizer.Authorizer) middleware.Middlewar
 			decision, reason, err := kubernetesAuthorizer.Authorize(req.Context(), attributes)
 			if err != nil {
 				msg := fmt.Sprintf("Authorization for user '%s' failed", attributes.User.GetName())
-				attrs := append(requestContextAttrs(req),
+				slog.ErrorContext(req.Context(), msg,
 					slog.String("user", user.GetName()), slog.Any("groups", user.GetGroups()),
 					slog.String("verb", attributes.Verb), slog.String("path", attributes.Path),
 					slog.Any("error", err))
-				slog.LogAttrs(req.Context(), slog.LevelError, msg, attrs...)
 				middleware.ProblemDetails(w, msg, http.StatusInternalServerError)
 				return
 			}
 
 			if decision != authorizer.DecisionAllow {
 				msg := fmt.Sprintf("Authorization not allowed for user '%s'", attributes.User.GetName())
-				attrs := append(requestContextAttrs(req),
+				slog.DebugContext(req.Context(), msg,
 					slog.String("user", user.GetName()), slog.Any("groups", user.GetGroups()),
 					slog.String("verb", attributes.Verb), slog.String("path", attributes.Path),
 					slog.Any("decision", decision), slog.String("reason", reason))
-				slog.LogAttrs(req.Context(), slog.LevelDebug, msg, attrs...)
 				middleware.ProblemDetails(w, msg, http.StatusForbidden)
 				return
 			}

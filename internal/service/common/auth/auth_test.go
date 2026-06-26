@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
@@ -111,7 +112,8 @@ var _ = Describe("Authenticator", func() {
 
 		logBuffer.Reset()
 		origLogger = slog.Default()
-		slog.SetDefault(slog.New(slog.NewJSONHandler(&logBuffer, &slog.HandlerOptions{Level: slog.LevelDebug})))
+		slog.SetDefault(slog.New(logging.NewContextHandler(
+			slog.NewJSONHandler(&logBuffer, &slog.HandlerOptions{Level: slog.LevelDebug}), slog.LevelDebug)))
 	})
 
 	AfterEach(func() {
@@ -264,7 +266,8 @@ var _ = Describe("Authorizer", func() {
 
 		logBuffer.Reset()
 		origLogger = slog.Default()
-		slog.SetDefault(slog.New(slog.NewJSONHandler(&logBuffer, &slog.HandlerOptions{Level: slog.LevelDebug})))
+		slog.SetDefault(slog.New(logging.NewContextHandler(
+			slog.NewJSONHandler(&logBuffer, &slog.HandlerOptions{Level: slog.LevelDebug}), slog.LevelDebug)))
 	})
 
 	AfterEach(func() {
