@@ -203,7 +203,7 @@ var _ = Describe("Authenticator", func() {
 		handler.ServeHTTP(recorder, &req)
 
 		logOutput := logBuffer.String()
-		Expect(logOutput).To(ContainSubstring(`"clientIp":"172.16.0.5:43210"`))
+		Expect(logOutput).To(ContainSubstring(`"clientIp":"172.16.0.5"`))
 	})
 
 	It("Logs container field on auth failure", func() {
@@ -234,7 +234,7 @@ var _ = Describe("Authenticator", func() {
 		logOutput := logBuffer.String()
 		Expect(logOutput).To(ContainSubstring("authentication rejected"))
 		Expect(logOutput).To(ContainSubstring(`"container"`))
-		Expect(logOutput).To(ContainSubstring(`"clientIp":"10.20.30.40:9999"`))
+		Expect(logOutput).To(ContainSubstring(`"clientIp":"10.20.30.40"`))
 	})
 })
 
@@ -324,7 +324,7 @@ var _ = Describe("Authorizer", func() {
 
 		logOutput := logBuffer.String()
 		Expect(logOutput).To(ContainSubstring(`"container"`))
-		Expect(logOutput).To(ContainSubstring(`"clientIp":"10.0.0.50:8080"`))
+		Expect(logOutput).To(ContainSubstring(`"clientIp":"10.0.0.50"`))
 	})
 
 	It("Logs container and clientIp on authorization denied", func() {
@@ -334,6 +334,6 @@ var _ = Describe("Authorizer", func() {
 
 		logOutput := logBuffer.String()
 		Expect(logOutput).To(ContainSubstring(`"container"`))
-		Expect(logOutput).To(ContainSubstring(`"clientIp":"10.0.0.60:7070"`))
+		Expect(logOutput).To(ContainSubstring(`"clientIp":"10.0.0.60"`))
 	})
 })
