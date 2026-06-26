@@ -186,7 +186,7 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 
 	// Execute the main reconciliation phases
 	renderedClusterInstance, result, err := t.executeProvisioningPhases(ctx)
-	if err != nil || result.Requeue || result.RequeueAfter > 0 {
+	if err != nil || renderedClusterInstance == nil || result.Requeue || result.RequeueAfter > 0 {
 		// Check for overall provisioning timeout before returning error/requeue
 		if timeoutResult := t.checkOverallProvisioningTimeout(ctx); timeoutResult.RequeueAfter > 0 {
 			return timeoutResult, nil
@@ -209,9 +209,8 @@ func (t *provisioningRequestReconcilerTask) executeProvisioningPhases(ctx contex
 	}
 
 	// Phase 2: Hardware provisioning
-	result, err = t.executeHardwareProvisioningPhase(ctx, unstructuredClusterInstance)
-	if err != nil || result.Requeue || result.RequeueAfter > 0 ||
-		t.object.Status.ProvisioningStatus.ProvisioningPhase == provisioningv1alpha1.StateFailed {
+	result, proceed, err := t.executeHardwareProvisioningPhase(ctx, unstructuredClusterInstance)
+	if err != nil || !proceed || result.RequeueAfter > 0 {
 		return nil, result, err
 	}
 
@@ -253,28 +252,30 @@ func (t *provisioningRequestReconcilerTask) executePreProvisioningPhase(ctx cont
 	return renderedClusterInstance, unstructuredClusterInstance, ctrl.Result{}, nil
 }
 
-// executeHardwareProvisioningPhase handles hardware provisioning
+// executeHardwareProvisioningPhase handles hardware provisioning.
+// The returned bool (proceed) indicates whether the caller should continue to the next phase;
+// false means hardware provisioning is still in progress, failed, or timed out.
 func (t *provisioningRequestReconcilerTask) executeHardwareProvisioningPhase(ctx context.Context,
-	unstructuredClusterInstance *unstructured.Unstructured) (ctrl.Result, error) {
+	unstructuredClusterInstance *unstructured.Unstructured) (ctrl.Result, bool, error) {
 
 	if t.isHardwareProvisionSkipped() {
 		t.logger.InfoContext(ctx, "Hardware provisioning skipped")
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, true, nil
 	}
 
 	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "hardware_provisioning")
 	phaseStartTime := time.Now()
 
 	res, proceed, err := t.handleNodeAllocationRequestProvisioning(ctx, unstructuredClusterInstance)
-	if err != nil || (res == doNotRequeue() && !proceed) || res.RequeueAfter > 0 {
+	if err != nil || !proceed || res.RequeueAfter > 0 {
 		if err != nil {
 			ctlrutils.LogError(ctx, t.logger, "Hardware provisioning phase failed", err)
 		}
-		return res, err
+		return res, false, err
 	}
 
 	ctlrutils.LogPhaseComplete(ctx, t.logger, "hardware_provisioning", time.Since(phaseStartTime))
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, true, nil
 }
 
 // executeClusterInstallationPhase handles cluster installation
