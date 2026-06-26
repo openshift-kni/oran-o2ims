@@ -15,7 +15,7 @@ import (
 
 var _ = Describe("NewClientFactory", func() {
 	It("should return a ClientProvider", func() {
-		factory := notifier.NewClientFactory(nil, nil)
+		factory := notifier.NewClientFactory(nil)
 		Expect(factory).ToNot(BeNil())
 	})
 })
