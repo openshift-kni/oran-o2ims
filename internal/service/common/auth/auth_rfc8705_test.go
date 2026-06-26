@@ -18,6 +18,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/client-go/util/cert"
@@ -35,7 +36,8 @@ var _ = Describe("WithClientVerification", func() {
 	BeforeEach(func() {
 		logBuffer.Reset()
 		origLogger = slog.Default()
-		slog.SetDefault(slog.New(slog.NewJSONHandler(&logBuffer, &slog.HandlerOptions{Level: slog.LevelDebug})))
+		slog.SetDefault(slog.New(logging.NewContextHandler(
+			slog.NewJSONHandler(&logBuffer, &slog.HandlerOptions{Level: slog.LevelDebug}), slog.LevelDebug)))
 		pemBytes, _, err := cert.GenerateSelfSignedCertKey("localhost", nil, nil)
 		Expect(err).ToNot(HaveOccurred())
 		var certsBytes []byte
@@ -191,6 +193,9 @@ var _ = Describe("WithClientVerification", func() {
 
 	It("Logs container and clientIp on certificate verification failure", func() {
 		request.RemoteAddr = "10.0.0.99:5555"
+		ctx := logging.AppendCtx(request.Context(), slog.String("container", containerID))
+		ctx = logging.AppendCtx(ctx, slog.String("clientIp", clientIP(&request)))
+		request = *request.WithContext(ctx)
 		noopAuthenticator.Response.User.GetExtra()[fingerprintKey] = []string{"other"}
 		_, _, err := tokenAuthenticator.AuthenticateRequest(&request)
 		Expect(err).To(HaveOccurred())
