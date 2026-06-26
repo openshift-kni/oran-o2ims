@@ -49,6 +49,18 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
+  name: deployer-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: oran-o2ims-deployer-role
+subjects:
+- kind: Group
+  name: o2ims-deployer
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
   name: admin-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io

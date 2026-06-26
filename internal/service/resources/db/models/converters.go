@@ -61,6 +61,15 @@ func DeploymentManagerToModel(record *DeploymentManager, options *commonapi.Fiel
 	return object
 }
 
+// RedactDeploymentManagerCredentials removes sensitive credential data (profileData) from a
+// DeploymentManager API model while preserving non-sensitive extension metadata.
+func RedactDeploymentManagerCredentials(object *generated.DeploymentManager) {
+	if object.Extensions == nil {
+		return
+	}
+	delete(*object.Extensions, "profileData")
+}
+
 // ResourceTypeToModel converts a DB tuple to an API Model.
 func ResourceTypeToModel(record *ResourceType, alarmDictionaryID *uuid.UUID) generated.ResourceType {
 	object := generated.ResourceType{
