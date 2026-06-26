@@ -34,11 +34,3 @@ rules:
   verbs:
   - get
   - list
-- apiGroups:
-  - ""
-  resources:
-  - serviceaccounts/token
-  resourceNames:
-  - cluster-server
-  verbs:
-  - create

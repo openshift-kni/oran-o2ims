@@ -1641,14 +1641,6 @@ spec:
           - get
           - list
         - apiGroups:
-          - ""
-          resourceNames:
-          - oran-o2ims-cluster-server
-          resources:
-          - serviceaccounts/token
-          verbs:
-          - create
-        - apiGroups:
           - authentication.k8s.io
           resources:
           - tokenreviews
@@ -2255,14 +2247,6 @@ spec:
           - get
           - list
           - watch
-        - apiGroups:
-          - ""
-          resourceNames:
-          - oran-o2ims-resource-server
-          resources:
-          - serviceaccounts/token
-          verbs:
-          - create
         - apiGroups:
           - authentication.k8s.io
           resources:
