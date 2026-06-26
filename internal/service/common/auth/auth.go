@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -34,6 +35,9 @@ func clientIP(req *http.Request) string {
 			return strings.TrimSpace(ip)
 		}
 		return strings.TrimSpace(xff)
+	}
+	if host, _, err := net.SplitHostPort(req.RemoteAddr); err == nil {
+		return host
 	}
 	return req.RemoteAddr
 }

@@ -197,7 +197,7 @@ var _ = Describe("WithClientVerification", func() {
 
 		logOutput := logBuffer.String()
 		Expect(logOutput).To(ContainSubstring(`"container"`))
-		Expect(logOutput).To(ContainSubstring(`"clientIp":"10.0.0.99:5555"`))
+		Expect(logOutput).To(ContainSubstring(`"clientIp":"10.0.0.99"`))
 	})
 
 })
