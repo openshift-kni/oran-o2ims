@@ -156,19 +156,22 @@ included in the must-gather directory alongside the `gather` script.
 
 ### Configuration
 
-Redaction is controlled by an environment variable set on the must-gather
-command or via the Inventory CR:
+Redaction is enabled by default. An environment variable can be used to
+disable it when raw logs are needed for internal debugging:
 
 ```bash
-# Enable redaction (default: disabled for backward compatibility)
-REDACT_LOGS=true oc adm must-gather --image=...
+# Default behavior: logs are redacted
+oc adm must-gather --image=...
 
-# Enable specific categories only
+# Disable redaction for internal debugging (not recommended for support cases)
+REDACT_LOGS=false oc adm must-gather --image=...
+
+# Redact specific categories only
 REDACT_CATEGORIES=ip,user,mac oc adm must-gather --image=...
 ```
 
-When `REDACT_LOGS` is not set or is `false`, logs are collected as-is
-(current behavior).
+When `REDACT_LOGS` is explicitly set to `false`, logs are collected
+as-is without redaction.
 
 ### Integration with Must-Gather Script
 
@@ -176,14 +179,16 @@ When `REDACT_LOGS` is not set or is `false`, logs are collected as-is
 # After collecting logs...
 gather_pod_logs "${OCLOUD_NS}" "ocloud-manager"
 
-# Post-process if redaction is enabled
-if [ "${REDACT_LOGS}" = "true" ]; then
+# Post-process: redact sensitive fields (enabled by default)
+if [ "${REDACT_LOGS}" != "false" ]; then
     log "Redacting sensitive fields from collected logs..."
     python3 "${SCRIPT_DIR}/redact-logs.py" \
         --log-dir "${BASE_DIR}/logs" \
         --categories "${REDACT_CATEGORIES:-all}" \
         --salt "$(head -c 32 /dev/urandom | base64)"
     log "Log redaction complete"
+else
+    log "WARNING: Log redaction is disabled. Logs may contain sensitive data."
 fi
 ```
 
@@ -218,8 +223,8 @@ log forwarding pipeline.
 
 ## Open Questions
 
-1. Should redaction be enabled by default in future versions, or always
-   opt-in?
+1. ~~Should redaction be enabled by default?~~ Yes — redaction is
+   default-on, with `REDACT_LOGS=false` to disable for internal debugging.
 2. Are there additional field categories beyond IP, hostname, user, MAC,
    and serial number that customers would consider sensitive?
 3. Should the redaction mapping (salt + pseudonym table) be preserved
