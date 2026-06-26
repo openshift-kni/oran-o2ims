@@ -147,11 +147,9 @@ func (w *withClientVerification) AuthenticateRequest(req *http.Request) (*authen
 		return response, true, nil
 	}
 
-	ctxAttrs := requestContextAttrs(req)
-
 	clientFingerprint, present, err := getClientCertificateFingerprint(req)
 	if err != nil {
-		attrs := append(ctxAttrs, slog.Any("error", err))
+		attrs := append(requestContextAttrs(req), slog.Any("error", err))
 		slog.LogAttrs(req.Context(), slog.LevelError, "error extracting client certificate fingerprint", attrs...)
 		return nil, false, err
 	}
@@ -161,18 +159,18 @@ func (w *withClientVerification) AuthenticateRequest(req *http.Request) (*authen
 	}
 
 	if len(tokenFingerprintValues) != 1 {
-		attrs := append(ctxAttrs, slog.Any("values", tokenFingerprintValues))
+		attrs := append(requestContextAttrs(req), slog.Any("values", tokenFingerprintValues))
 		slog.LogAttrs(req.Context(), slog.LevelError, "unexpected number of fingerprint values", attrs...)
 		return nil, false, fmt.Errorf("unexpected number of fingerprint values")
 	}
 
 	if tokenFingerprintValues[0] == "" {
-		slog.LogAttrs(req.Context(), slog.LevelError, "empty fingerprint value in token binding claim", ctxAttrs...)
+		slog.LogAttrs(req.Context(), slog.LevelError, "empty fingerprint value in token binding claim", requestContextAttrs(req)...)
 		return nil, false, fmt.Errorf("empty fingerprint value in token binding claim")
 	}
 
 	if tokenFingerprintValues[0] != clientFingerprint {
-		attrs := append(ctxAttrs, slog.String("client", clientFingerprint), slog.String("token", tokenFingerprintValues[0]))
+		attrs := append(requestContextAttrs(req), slog.String("client", clientFingerprint), slog.String("token", tokenFingerprintValues[0]))
 		slog.LogAttrs(req.Context(), slog.LevelDebug, "fingerprint values do not match", attrs...)
 		return nil, false, fmt.Errorf("client certificate fingerprint mismatch")
 	}
