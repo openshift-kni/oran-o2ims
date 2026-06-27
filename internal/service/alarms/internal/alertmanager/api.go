@@ -32,6 +32,11 @@ const (
 	ACMObsAMServiceName = "alertmanager"
 	// ACMObsAMServicePort is the HTTPS port for alertmanager service
 	ACMObsAMServicePort = 9095
+	// alertmanagerClientSAName is the least-privilege SA used to call the alertmanager API.
+	// ACM's alertmanager OAuth proxy only supports default-audience SA tokens and requires
+	// a single namespaces:get SAR check, so we use a dedicated SA with minimal RBAC
+	// rather than the alarms-server's broadly-scoped SA.
+	alertmanagerClientSAName = "alertmanager-client"
 )
 
 // APIAlert represents the alert structure returned by the Alertmanager API.
@@ -80,8 +85,8 @@ func NewAlertmanagerClient(k8sClient client.Client, amrepo repo.AlarmRepositoryI
 		infrastructure:   infra,
 		tokenSource: clients.NewTokenRequestTokenSource(
 			clientset, constants.DefaultNamespace,
-			fmt.Sprintf("%s-%s", constants.DefaultNamespace, ctlrutils.InventoryAlarmServerName),
-			ACMObsAMServiceName),
+			fmt.Sprintf("%s-%s", constants.DefaultNamespace, alertmanagerClientSAName),
+			""),
 		alertmanagerHost: alertmanagerHost,
 		caFilePath:       caFilePath,
 	}
