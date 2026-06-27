@@ -60,9 +60,11 @@ func (ts *TokenRequestTokenSource) Token() (*oauth2.Token, error) {
 	expirationSeconds := defaultExpirationSeconds
 	tokenRequest := &authenticationv1.TokenRequest{
 		Spec: authenticationv1.TokenRequestSpec{
-			Audiences:         []string{ts.audience},
 			ExpirationSeconds: &expirationSeconds,
 		},
+	}
+	if ts.audience != "" {
+		tokenRequest.Spec.Audiences = []string{ts.audience}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

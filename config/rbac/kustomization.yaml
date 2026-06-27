@@ -16,6 +16,7 @@ resources:
 - role_alarms_server.yaml
 - rolebinding_alarms_server.yaml
 - clusterrole_alertmanager.yaml
+- clusterrole_alertmanager_client.yaml
 - clusterrole_artifacts_server.yaml
 - clusterrole_cluster_server.yaml
 - clusterrole_hardwaremanager_server.yaml

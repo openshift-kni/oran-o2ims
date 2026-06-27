@@ -1,0 +1,16 @@
+# Minimal ClusterRole for calling alertmanager's OAuth proxy.
+# The proxy requires only namespaces:get to pass its SAR check.
+# This SA is used by the alarms-server to mint least-privilege tokens
+# for alertmanager API calls, avoiding use of the alarms-server's own
+# broadly-scoped SA token.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: alertmanager-client
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - get
