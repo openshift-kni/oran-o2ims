@@ -33,6 +33,7 @@ type KubernetesAuthenticatorConfig struct {
 
 type kubernetesAuthenticator struct {
 	authenticator authenticator.Request
+	audiences     authenticator.Audiences
 }
 
 // New instantiates an authenticator.Request based on the supplied attributes which delegates control to a Kubernetes
@@ -78,11 +79,20 @@ func (c *KubernetesAuthenticatorConfig) New() (authenticator.Request, error) {
 
 	return &kubernetesAuthenticator{
 		authenticator: delegatingAuthenticator,
+		audiences:     authenticator.Audiences(c.Audiences),
 	}, nil
 }
 
-// AuthenticateRequest delegates the authentication request to the Kubernetes authenticator
+// AuthenticateRequest delegates the authentication request to the Kubernetes authenticator.
+// When audiences are configured, they are injected into the request context so that the
+// delegating authenticator includes them in the TokenReview spec and validates them in
+// the response — mirroring what the standard Kubernetes API server does in its
+// WithAuthentication filter.
 func (h *kubernetesAuthenticator) AuthenticateRequest(req *http.Request) (*authenticator.Response, bool, error) {
+	if len(h.audiences) > 0 {
+		ctx := authenticator.WithAudiences(req.Context(), h.audiences)
+		req = req.WithContext(ctx)
+	}
 	return h.authenticator.AuthenticateRequest(req) // nolint: wrapcheck
 }
 

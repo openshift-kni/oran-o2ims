@@ -16,7 +16,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
-	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/client-go/rest"
 )
 
@@ -74,8 +73,6 @@ var _ = Describe("KubernetesAuthenticatorConfig", func() {
 
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.Header.Set("Authorization", "Bearer test-token")
-		ctx := authenticator.WithAudiences(req.Context(), authenticator.Audiences{"test-audience"})
-		req = req.WithContext(ctx)
 
 		resp, ok, err := auth.AuthenticateRequest(req)
 		Expect(err).ToNot(HaveOccurred())
