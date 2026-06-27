@@ -152,4 +152,27 @@ var _ = Describe("TokenRequestTokenSource", func() {
 		Expect(requestedExpiration).ToNot(BeNil())
 		Expect(*requestedExpiration).To(Equal(int64(600)))
 	})
+
+	It("should omit audiences from the token request when audience is empty", func() {
+		var capturedAudiences []string
+		fakeClientset = k8sfake.NewSimpleClientset()
+		fakeClientset.PrependReactor("create", "serviceaccounts/token",
+			func(action k8stesting.Action) (bool, runtime.Object, error) {
+				createAction := action.(k8stesting.CreateAction)
+				tokenReq := createAction.GetObject().(*authenticationv1.TokenRequest)
+				capturedAudiences = tokenReq.Spec.Audiences
+				return true, &authenticationv1.TokenRequest{
+					Status: authenticationv1.TokenRequestStatus{
+						Token:               "token-no-aud",
+						ExpirationTimestamp: metav1.NewTime(time.Now().Add(10 * time.Minute)),
+					},
+				}, nil
+			})
+
+		ts := NewTokenRequestTokenSource(fakeClientset, "test-ns", "test-sa", "")
+		token, err := ts.Token()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(token.AccessToken).To(Equal("token-no-aud"))
+		Expect(capturedAudiences).To(BeNil())
+	})
 })
