@@ -1535,6 +1535,7 @@ spec:
           - ""
           resourceNames:
           - oran-o2ims-alarms-server
+          - oran-o2ims-alertmanager-client
           resources:
           - serviceaccounts/token
           verbs:
@@ -1578,6 +1579,14 @@ spec:
           verbs:
           - create
         serviceAccountName: oran-o2ims-alarms-server
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - namespaces
+          verbs:
+          - get
+        serviceAccountName: oran-o2ims-alertmanager-client
       - rules:
         - apiGroups:
           - clcm.openshift.io
