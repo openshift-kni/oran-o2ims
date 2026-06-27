@@ -209,6 +209,12 @@ func Serve(config *api.AlarmsServerConfig) error {
 		return fmt.Errorf("error creating filter filterAdapter: %w", err)
 	}
 
+	// Extract paths marked with x-skip-audience-validation from the OpenAPI
+	// spec. These endpoints are exempt from audience-scoped token validation
+	// because their callers (e.g., ACM alertmanager) cannot send audience-
+	// scoped tokens. See the overlay for per-endpoint rationale.
+	config.AudienceExemptPaths = auth.GetAudienceExemptPaths(swagger)
+
 	// Create authn/authz middleware
 	authn, err := auth.GetAuthenticator(ctx, &config.CommonServerConfig)
 	if err != nil {
