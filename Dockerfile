@@ -1,6 +1,7 @@
 # Build the manager binary
 FROM registry.hub.docker.com/library/golang:1.25 AS dlvbuilder
-RUN go install github.com/go-delve/delve/cmd/dlv@latest
+# Pin delve to a specific version for reproducible builds
+RUN go install github.com/go-delve/delve/cmd/dlv@v1.27.0
 
 FROM dlvbuilder AS builder
 ARG GOBUILD_GCFLAGS=""
