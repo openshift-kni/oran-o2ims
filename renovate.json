@@ -13,6 +13,18 @@
                 "(?<depName>[\\w\\-\\.\\/]+):?(?<currentValue>[\\w\\-\\.]+)?@(?<currentDigest>sha256:[a-f0-9]+)"
             ],
             "versioningTemplate": "docker"
+        },
+        {
+            "customType": "regex",
+            "datasourceTemplate": "docker",
+            "description": "Pin and update image digests in Tekton pipeline parameters",
+            "managerFilePatterns": [
+                "/^\\.tekton/.*\\.yaml$/"
+            ],
+            "matchStrings": [
+                "(?<depName>[\\w\\-\\.\\/]+):?(?<currentValue>[\\w\\-\\.]+)?@(?<currentDigest>sha256:[a-f0-9]+)"
+            ],
+            "versioningTemplate": "docker"
         }
     ],
     "git-submodules": {
@@ -46,7 +58,8 @@
             "enabled": true,
             "ignoreTests": false,
             "includePaths": [
-                ".konflux/**"
+                ".konflux/**",
+                ".tekton/**"
             ],
             "matchManagers": [
                 "custom.regex"
