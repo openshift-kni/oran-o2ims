@@ -7,16 +7,92 @@ SPDX-License-Identifier: Apache-2.0
 package auth
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"os"
+	"strings"
 
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/request"
 
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
 )
+
+var containerID string
+
+func init() {
+	containerID, _ = os.Hostname()
+}
+
+func clientIP(req *http.Request) string {
+	if xff := req.Header.Get("x-forwarded-for"); xff != "" {
+		if ip, _, ok := strings.Cut(xff, ","); ok {
+			return strings.TrimSpace(ip)
+		}
+		return strings.TrimSpace(xff)
+	}
+	if host, _, err := net.SplitHostPort(req.RemoteAddr); err == nil {
+		return host
+	}
+	return req.RemoteAddr
+}
+
+func tokenClaimsAttrs(req *http.Request) []any {
+	auth := req.Header.Get("Authorization")
+	if !strings.HasPrefix(auth, "Bearer ") {
+		return nil
+	}
+	token := strings.TrimPrefix(auth, "Bearer ")
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return nil
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil
+	}
+	var claims struct {
+		Issuer   string `json:"iss"`
+		Subject  string `json:"sub"`
+		Audience any    `json:"aud"`
+		Exp      any    `json:"exp"`
+		ClientID string `json:"client_id"`
+		Azp      string `json:"azp"`
+		Scope    string `json:"scope"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return nil
+	}
+	var attrs []any
+	if claims.Issuer != "" {
+		attrs = append(attrs, slog.String("issuer", claims.Issuer))
+	}
+	if claims.Subject != "" {
+		attrs = append(attrs, slog.String("subject", claims.Subject))
+	}
+	if claims.Audience != nil {
+		attrs = append(attrs, slog.Any("audience", claims.Audience))
+	}
+	if claims.Exp != nil {
+		attrs = append(attrs, slog.Any("expiration", claims.Exp))
+	}
+	if claims.ClientID != "" {
+		attrs = append(attrs, slog.String("clientId", claims.ClientID))
+	}
+	if claims.Azp != "" {
+		attrs = append(attrs, slog.String("authorizedParty", claims.Azp))
+	}
+	if claims.Scope != "" {
+		attrs = append(attrs, slog.String("scope", claims.Scope))
+	}
+	return attrs
+}
 
 // Authenticator defines an authentication handler that is capable of authenticating a user from an incoming
 // JWT bearer token.  The purpose of this step is to confirm the identity of the user making the request.  This
@@ -26,6 +102,10 @@ import (
 func Authenticator(oauthHandler, kubernetesHandler authenticator.Request) middleware.Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			ctx := logging.AppendCtx(req.Context(), slog.String("container", containerID))
+			ctx = logging.AppendCtx(ctx, slog.String("clientIp", clientIP(req)))
+			req = req.WithContext(ctx)
+
 			value := req.Header.Get("x-forwarded-for")
 			handler := oauthHandler
 			if handler == nil || value == "" {
@@ -36,13 +116,17 @@ func Authenticator(oauthHandler, kubernetesHandler authenticator.Request) middle
 
 			response, ok, err := handler.AuthenticateRequest(req)
 			if err != nil {
-				slog.WarnContext(req.Context(), "authentication failed", slog.Any("error", err), slog.String("method", req.Method), slog.String("path", req.URL.Path))
+				args := []any{slog.Any("error", err), slog.String("method", req.Method), slog.String("path", req.URL.Path)}
+				args = append(args, tokenClaimsAttrs(req)...)
+				slog.WarnContext(req.Context(), "authentication failed", args...)
 				middleware.ProblemDetails(w, fmt.Sprintf("failed to authenticate request: %v", err), http.StatusUnauthorized)
 				return
 			}
 
 			if !ok {
-				slog.WarnContext(req.Context(), "authentication rejected", slog.String("method", req.Method), slog.String("path", req.URL.Path))
+				args := []any{slog.String("method", req.Method), slog.String("path", req.URL.Path)}
+				args = append(args, tokenClaimsAttrs(req)...)
+				slog.WarnContext(req.Context(), "authentication rejected", args...)
 				middleware.ProblemDetails(w, "unable to authenticate request", http.StatusUnauthorized)
 				return
 			}
@@ -80,6 +164,10 @@ func convertMethodToVerb(method string) string {
 func Authorizer(kubernetesAuthorizer authorizer.Authorizer) middleware.Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			ctx := logging.AppendCtx(req.Context(), slog.String("container", containerID))
+			ctx = logging.AppendCtx(ctx, slog.String("clientIp", clientIP(req)))
+			req = req.WithContext(ctx)
+
 			// Retrieve the User info from the request context.  It should have been placed there by a successful
 			// invocation of the Authenticator handler.
 			user, ok := request.UserFrom(req.Context())
