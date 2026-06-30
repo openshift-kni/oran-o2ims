@@ -96,7 +96,7 @@ var _ = Describe("ClusterServer", func() {
 				},
 			}
 			body, err := json.Marshal(nodeClusters)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			mockRepo.EXPECT().GetNodeClusters(gomock.Any(), nil).Return(
 				&http.Response{
@@ -120,7 +120,7 @@ var _ = Describe("ClusterServer", func() {
 				},
 			}
 			body, err = json.Marshal(nodeClusterTypes)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			mockRepo.EXPECT().GetNodeClusterTypes(gomock.Any(), nil).Return(
 				&http.Response{
@@ -170,7 +170,7 @@ var _ = Describe("ClusterServer", func() {
 				},
 			}
 			body, err = json.Marshal(alarmDictionaries)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			mockRepo.EXPECT().GetAlarmDictionaries(gomock.Any(), nil).Return(
 				&http.Response{
@@ -180,7 +180,7 @@ var _ = Describe("ClusterServer", func() {
 				}, nil)
 
 			err = clusterServer.FetchAll(ctx)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			Expect(clusterServer.nodeClusterIDToNodeClusterTypeID).To(HaveLen(2))
 			Expect(clusterServer.nodeClusterTypeIDToAlarmDictionaryID).To(HaveLen(2))
@@ -206,7 +206,7 @@ var _ = Describe("ClusterServer", func() {
 			clusterServer.nodeClusterIDToNodeClusterTypeID[nodeClusterID] = nodeClusterTypeID
 
 			id, err := clusterServer.GetObjectTypeID(context.Background(), nodeClusterID)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(id).To(Equal(nodeClusterTypeID))
 		})
 
@@ -221,7 +221,7 @@ var _ = Describe("ClusterServer", func() {
 				NodeClusterTypeId: nodeClusterTypeID,
 			}
 			body, err := json.Marshal(nodeClusters)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			mockRepo.EXPECT().GetNodeCluster(gomock.Any(), nodeClusterID).Return(
 				&http.Response{
@@ -231,7 +231,7 @@ var _ = Describe("ClusterServer", func() {
 				}, nil)
 
 			id, err := clusterServer.GetObjectTypeID(context.Background(), nodeClusterID)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(id).To(Equal(nodeClusterTypeID))
 			Expect(clusterServer.nodeClusterIDToNodeClusterTypeID[nodeClusterID]).To(Equal(nodeClusterTypeID))
 		})
@@ -270,7 +270,7 @@ var _ = Describe("ClusterServer", func() {
 			clusterServer.alarmDictionaryIDToAlarmDefinitions[alarmDictionaryID][alarmDefinitionIdentifier] = alarmDefinitionID
 
 			id, err := clusterServer.GetAlarmDefinitionID(context.Background(), nodeClusterTypeID, alarmDefinitionIdentifier.Name, alarmDefinitionIdentifier.Severity)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(id).To(Equal(alarmDefinitionID))
 		})
 
@@ -296,7 +296,7 @@ var _ = Describe("ClusterServer", func() {
 				},
 			}
 			body, err := json.Marshal(nodeClusterType)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			mockRepo.EXPECT().GetNodeClusterType(gomock.Any(), nodeClusterTypeID).Return(
 				&http.Response{
@@ -306,7 +306,7 @@ var _ = Describe("ClusterServer", func() {
 				}, nil)
 
 			id, err := clusterServer.GetAlarmDefinitionID(context.Background(), nodeClusterTypeID, alarmDefinitionIdentifier.Name, alarmDefinitionIdentifier.Severity)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(id).To(Equal(alarmDefinitionID))
 		})
 
@@ -356,7 +356,7 @@ var _ = Describe("ClusterServer", func() {
 				},
 			}
 			body, err := json.Marshal(alarmDictionary)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			mockRepo.EXPECT().GetAlarmDictionary(gomock.Any(), alarmDictionaryID).Return(
 				&http.Response{
@@ -366,7 +366,7 @@ var _ = Describe("ClusterServer", func() {
 				}, nil)
 
 			id, err := clusterServer.GetAlarmDefinitionID(context.Background(), nodeClusterTypeID, alarmDefinitionIdentifier.Name, alarmDefinitionIdentifier.Severity)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(id).To(Equal(alarmDefinitionID))
 		})
 
@@ -420,7 +420,7 @@ var _ = Describe("ClusterServer", func() {
 				},
 			}
 			body, err := json.Marshal(alarmDictionary)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			mockRepo.EXPECT().GetAlarmDictionary(gomock.Any(), alarmDictionaryID).Return(
 				&http.Response{
@@ -430,7 +430,7 @@ var _ = Describe("ClusterServer", func() {
 				}, nil)
 
 			id, err := clusterServer.GetAlarmDefinitionID(context.Background(), nodeClusterTypeID, alarmDefinitionIdentifier.Name, alarmDefinitionIdentifier.Severity)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(id).To(Equal(alarmDefinitionID))
 		})
 
@@ -460,7 +460,7 @@ var _ = Describe("ClusterServer", func() {
 				},
 			}
 			body, err := json.Marshal(alarmDictionary)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			mockRepo.EXPECT().GetAlarmDictionary(gomock.Any(), alarmDictionaryID).Return(
 				&http.Response{

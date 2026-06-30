@@ -94,7 +94,7 @@ var _ = Describe("ResourceServer", func() {
 				},
 			}
 			body, err := json.Marshal(resourceTypes)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			mockRepo.EXPECT().GetResourceTypes(gomock.Any(), &generated.GetResourceTypesParams{}).Return(
 				&http.Response{
@@ -124,7 +124,7 @@ var _ = Describe("ResourceServer", func() {
 				},
 			}
 			body1, err := json.Marshal(firstDictionary)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			mockRepo.EXPECT().GetResourceTypeAlarmDictionary(gomock.Any(), firstAssociation.resourceTypeID).Return(
 				&http.Response{
@@ -153,7 +153,7 @@ var _ = Describe("ResourceServer", func() {
 				},
 			}
 			body2, err := json.Marshal(secondDictionary)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			mockRepo.EXPECT().GetResourceTypeAlarmDictionary(gomock.Any(), secondAssociation.resourceTypeID).Return(
 				&http.Response{
@@ -163,7 +163,7 @@ var _ = Describe("ResourceServer", func() {
 				}, nil)
 
 			err = resourceServer.FetchAll(ctx)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Verify the maps are populated correctly
 			Expect(resourceServer.resourceTypeIDToAlarmDefinitions).To(HaveLen(2))
@@ -186,7 +186,7 @@ var _ = Describe("ResourceServer", func() {
 				},
 			}
 			body, err := json.Marshal(resourceTypes)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			mockRepo.EXPECT().GetResourceTypes(gomock.Any(), &generated.GetResourceTypesParams{}).Return(
 				&http.Response{
@@ -204,7 +204,7 @@ var _ = Describe("ResourceServer", func() {
 				}, nil)
 
 			err = resourceServer.FetchAll(ctx)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			// Should not have entry for this resource type
 			Expect(resourceServer.resourceTypeIDToAlarmDefinitions).To(HaveLen(0))
@@ -233,7 +233,7 @@ var _ = Describe("ResourceServer", func() {
 			resourceServer.resourceIDToResourceTypeID[resourceID] = resourceTypeID
 
 			id, err := resourceServer.GetObjectTypeID(context.Background(), resourceID)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(id).To(Equal(resourceTypeID))
 		})
 
@@ -248,7 +248,7 @@ var _ = Describe("ResourceServer", func() {
 				ResourceTypeId: resourceTypeID,
 			}
 			body, err := json.Marshal(resource)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			mockRepo.EXPECT().GetInternalResourceById(gomock.Any(), resourceID).Return(
 				&http.Response{
@@ -258,7 +258,7 @@ var _ = Describe("ResourceServer", func() {
 				}, nil)
 
 			id, err := resourceServer.GetObjectTypeID(context.Background(), resourceID)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(id).To(Equal(resourceTypeID))
 
 			// Verify it was cached
@@ -297,7 +297,7 @@ var _ = Describe("ResourceServer", func() {
 			resourceServer.resourceTypeIDToAlarmDefinitions[resourceTypeID][alarmDefinitionIdentifier] = alarmDefinitionID
 
 			id, err := resourceServer.GetAlarmDefinitionID(context.Background(), resourceTypeID, alarmDefinitionIdentifier.Name, alarmDefinitionIdentifier.Severity)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(id).To(Equal(alarmDefinitionID))
 		})
 
@@ -326,7 +326,7 @@ var _ = Describe("ResourceServer", func() {
 				},
 			}
 			body, err := json.Marshal(dictionary)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			mockRepo.EXPECT().GetResourceTypeAlarmDictionary(gomock.Any(), resourceTypeID).Return(
 				&http.Response{
@@ -336,7 +336,7 @@ var _ = Describe("ResourceServer", func() {
 				}, nil)
 
 			id, err := resourceServer.GetAlarmDefinitionID(context.Background(), resourceTypeID, alarmDefinitionIdentifier.Name, alarmDefinitionIdentifier.Severity)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(id).To(Equal(alarmDefinitionID))
 
 			// Verify it was cached
@@ -379,12 +379,12 @@ var _ = Describe("ResourceServer", func() {
 
 			// Fetch first alarm definition
 			id1, err := resourceServer.GetAlarmDefinitionID(context.Background(), resourceTypeID, alarmDef1Identifier.Name, alarmDef1Identifier.Severity)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(id1).To(Equal(alarmDef1ID))
 
 			// Fetch second alarm definition
 			id2, err := resourceServer.GetAlarmDefinitionID(context.Background(), resourceTypeID, alarmDef2Identifier.Name, alarmDef2Identifier.Severity)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(id2).To(Equal(alarmDef2ID))
 		})
 	})

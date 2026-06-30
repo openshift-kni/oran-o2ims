@@ -30,13 +30,13 @@ var _ = Describe("WithClientVerification", func() {
 
 	BeforeEach(func() {
 		pemBytes, _, err := cert.GenerateSelfSignedCertKey("localhost", nil, nil)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		var certsBytes []byte
 		for block, rest := pem.Decode(pemBytes); block != nil; block, rest = pem.Decode(rest) {
 			certsBytes = append(certsBytes, block.Bytes...)
 		}
 		testCerts, err := x509.ParseCertificates(certsBytes)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		fingerprint := sha256.Sum256(testCerts[0].Raw)
 		testCertificate = base64.StdEncoding.EncodeToString(testCerts[0].Raw)
 		testStdCertificate = ":" + testCertificate + ":"
@@ -65,7 +65,7 @@ var _ = Describe("WithClientVerification", func() {
 
 	It("authorizes a request with RFC9440 compliant headers", func() {
 		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(ok).To(BeTrue())
 		Expect(response.User.GetName()).To(Equal("test"))
 		Expect(request.Header.Get(sslClientCertKey)).To(Equal(""))
@@ -75,7 +75,7 @@ var _ = Describe("WithClientVerification", func() {
 	It("rejects a request with RFC9440 headers without certificate", func() {
 		request.Header.Del(sslClientCertKey)
 		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
-		Expect(err).ToNot(BeNil())
+		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(Equal("a client certificate is required"))
 		Expect(ok).To(BeFalse())
 		Expect(response).To(BeNil())
@@ -85,7 +85,7 @@ var _ = Describe("WithClientVerification", func() {
 		delete(noopAuthenticator.Response.User.GetExtra(), fingerprintKey)
 		tokenAuthenticator = WithClientVerification(&noopAuthenticator)
 		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(ok).To(BeTrue())
 		Expect(response.User.GetName()).To(Equal("test"))
 	})
@@ -103,7 +103,7 @@ var _ = Describe("WithClientVerification", func() {
 		cert[2] = 'B'
 		request.Header.Set(sslClientCertKey, string(cert))
 		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
-		Expect(err).ToNot(BeNil())
+		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("error parsing client certificate"))
 		Expect(ok).To(BeFalse())
 		Expect(response).To(BeNil())
@@ -116,7 +116,7 @@ var _ = Describe("WithClientVerification", func() {
 		request.Header.Set(sslClientVerifiedHeaderKey, "0")
 		request.Header.Set(sslChainDERHeaderKey, "test")
 		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(ok).To(BeTrue())
 		Expect(response.User.GetName()).To(Equal("test"))
 		Expect(request.Header.Get(sslClientDERHeaderKey)).To(Equal(""))
@@ -131,7 +131,7 @@ var _ = Describe("WithClientVerification", func() {
 		request.Header.Set(sslClientVerifiedHeaderKey, "1")
 		request.Header.Set(sslChainDERHeaderKey, "test")
 		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
-		Expect(err).ToNot(BeNil())
+		Expect(err).To(HaveOccurred())
 		Expect(ok).To(BeFalse())
 		Expect(response).To(BeNil())
 	})
@@ -142,7 +142,7 @@ var _ = Describe("WithClientVerification", func() {
 		request.Header.Set(sslClientVerifiedHeaderKey, "0")
 		request.Header.Set(sslChainDERHeaderKey, "test")
 		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
-		Expect(err).ToNot(BeNil())
+		Expect(err).To(HaveOccurred())
 		Expect(ok).To(BeFalse())
 		Expect(response).To(BeNil())
 	})
@@ -150,7 +150,7 @@ var _ = Describe("WithClientVerification", func() {
 	It("reject a request with mismatched fingerprints", func() {
 		noopAuthenticator.Response.User.GetExtra()[fingerprintKey] = []string{"other"}
 		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
-		Expect(err).ToNot(BeNil())
+		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(Equal("client certificate fingerprint mismatch"))
 		Expect(ok).To(BeFalse())
 		Expect(response).To(BeNil())
@@ -161,7 +161,7 @@ var _ = Describe("WithClientVerification", func() {
 	It("reject a request with multiple fingerprints", func() {
 		noopAuthenticator.Response.User.GetExtra()[fingerprintKey] = []string{"foo", "bar"}
 		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
-		Expect(err).ToNot(BeNil())
+		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(Equal("unexpected number of fingerprint values"))
 		Expect(ok).To(BeFalse())
 		Expect(response).To(BeNil())

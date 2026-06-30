@@ -168,7 +168,7 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 			newClusterInstance.Object["spec"].(map[string]any),
 			IgnoredClusterInstanceFields,
 			provisioningv1alpha1.AllowedClusterInstanceFields)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(updatedFields).To(BeEmpty())
 		Expect(scalingNodes).To(BeEmpty())
 	})
@@ -183,7 +183,7 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 			newClusterInstance.Object["spec"].(map[string]any),
 			IgnoredClusterInstanceFields,
 			provisioningv1alpha1.AllowedClusterInstanceFields)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(updatedFields).To(ContainElement("baseDomain"))
 		Expect(scalingNodes).To(BeEmpty())
 	})
@@ -203,7 +203,7 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 			newClusterInstance.Object["spec"].(map[string]any),
 			IgnoredClusterInstanceFields,
 			provisioningv1alpha1.AllowedClusterInstanceFields)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(updatedFields).To(ContainElement("clusterName"))
 		Expect(len(updatedFields)).To(Equal(1))
 		Expect(scalingNodes).To(BeEmpty())
@@ -221,7 +221,7 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 			newClusterInstance.Object["spec"].(map[string]any),
 			IgnoredClusterInstanceFields,
 			provisioningv1alpha1.AllowedClusterInstanceFields)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(updatedFields).To(ContainElement(
 			"nodes.0.nodeNetwork.config.dns-resolver.config.server.0"))
 		Expect(scalingNodes).To(BeEmpty())
@@ -247,7 +247,7 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 			newClusterInstance.Object["spec"].(map[string]any),
 			IgnoredClusterInstanceFields,
 			provisioningv1alpha1.AllowedClusterInstanceFields)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(updatedFields).To(ContainElement(
 			"nodes.0.nodeNetwork.config.dns-resolver.config.server.0"))
 		Expect(len(updatedFields)).To(Equal(1))
@@ -269,7 +269,7 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 			newClusterInstance.Object["spec"].(map[string]any),
 			IgnoredClusterInstanceFields,
 			provisioningv1alpha1.AllowedClusterInstanceFields)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(updatedFields).To(BeEmpty())
 		Expect(scalingNodes).To(BeEmpty())
 	})
@@ -286,7 +286,7 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 			newClusterInstance.Object["spec"].(map[string]any),
 			IgnoredClusterInstanceFields,
 			provisioningv1alpha1.AllowedClusterInstanceFields)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(updatedFields).To(BeEmpty())
 		Expect(scalingNodes).To(ContainElement("nodes.1"))
 	})
@@ -301,7 +301,7 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 			newClusterInstance.Object["spec"].(map[string]any),
 			IgnoredClusterInstanceFields,
 			provisioningv1alpha1.AllowedClusterInstanceFields)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(updatedFields).To(BeEmpty())
 		Expect(scalingNodes).To(ContainElement("nodes.0"))
 	})
