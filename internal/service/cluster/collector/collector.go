@@ -98,12 +98,12 @@ func (c *Collector) Run(ctx context.Context) error {
 		select {
 		case event := <-c.asyncChangeEvents:
 			if err := c.handleAsyncEvent(ctx, event); err != nil {
-				slog.Error("failed to handle async change", "handleWatchEvent", event, "error", err)
+				slog.ErrorContext(ctx, "failed to handle async change", "handleWatchEvent", event, "error", err)
 			}
 		case <-time.After(pollingDelay):
 			c.execute(ctx)
 		case <-ctx.Done():
-			slog.Info("Context terminated; collector exiting")
+			slog.InfoContext(ctx, "Context terminated; collector exiting")
 			return nil
 		}
 	}
@@ -111,7 +111,7 @@ func (c *Collector) Run(ctx context.Context) error {
 
 // init runs the onetime initialization steps for the collector
 func (c *Collector) init(ctx context.Context) error {
-	slog.Info("initializing data collector")
+	slog.InfoContext(ctx, "initializing data collector")
 
 	for _, d := range c.dataSources {
 		err := c.initDataSource(ctx, d)
@@ -140,12 +140,12 @@ func (c *Collector) initDataSource(ctx context.Context, dataSource DataSource) e
 		}
 
 		dataSource.Init(*result.DataSourceID, 0, c.asyncChangeEvents)
-		slog.Info("created new data source", "name", name, "uuid", *result.DataSourceID)
+		slog.InfoContext(ctx, "created new data source", "name", name, "uuid", *result.DataSourceID)
 	case err != nil:
 		return fmt.Errorf("failed to get data source %q: %w", name, err)
 	default:
 		dataSource.Init(*record.DataSourceID, record.GenerationID, c.asyncChangeEvents)
-		slog.Info("restored data source",
+		slog.InfoContext(ctx, "restored data source",
 			"name", name, "uuid", record.DataSourceID, "generation", record.GenerationID)
 	}
 
@@ -161,7 +161,7 @@ func (c *Collector) watchForChanges(ctx context.Context) error {
 		}
 
 		if err := d.(WatchableDataSource).Watch(ctx); err != nil {
-			slog.Error("failed to watch for changes", "source", d.Name(), "error", err)
+			slog.ErrorContext(ctx, "failed to watch for changes", "source", d.Name(), "error", err)
 			return fmt.Errorf("failed to watch for changes: %w", err)
 		}
 	}
@@ -171,7 +171,7 @@ func (c *Collector) watchForChanges(ctx context.Context) error {
 // execute runs a single iteration of the main loop.  It does not return an error because all errors should be handled
 // gracefully.  If a truly unrecoverable error happens then a panic should be used to restart the process.
 func (c *Collector) execute(ctx context.Context) {
-	slog.Debug("collector loop running", "sources", len(c.dataSources))
+	slog.DebugContext(ctx, "collector loop running", "sources", len(c.dataSources))
 	for _, d := range c.dataSources {
 		// Skip K8S data source since it is handled by the reflector
 		if _, ok := d.(*K8SDataSource); ok {
@@ -179,14 +179,14 @@ func (c *Collector) execute(ctx context.Context) {
 		}
 
 		d.IncrGenerationID()
-		slog.Debug("collecting data from data source", "source", d.Name(), "generationID", d.GetGenerationID())
+		slog.DebugContext(ctx, "collecting data from data source", "source", d.Name(), "generationID", d.GetGenerationID())
 		if err := c.executeOneDataSource(ctx, d); err != nil {
-			slog.Warn("failed to collect data from data source", "source", d.Name(), "error", err)
+			slog.WarnContext(ctx, "failed to collect data from data source", "source", d.Name(), "error", err)
 		} else {
-			slog.Debug("collected data from data source", "source", d.Name())
+			slog.DebugContext(ctx, "collected data from data source", "source", d.Name())
 		}
 	}
-	slog.Debug("collector loop complete", "sources", len(c.dataSources))
+	slog.DebugContext(ctx, "collector loop complete", "sources", len(c.dataSources))
 }
 
 // executeOneDataSource runs a single iteration of the main loop for a specific data source instance.
@@ -212,7 +212,7 @@ func (c *Collector) executeOneDataSource(ctx context.Context, dataSource DataSou
 	nodeClusterTypes = nodeClusterTypesWithAlarmDictionaryID(nodeClusterTypes)
 
 	if len(nodeClusterTypes) == 0 {
-		slog.Info("no node cluster types to process")
+		slog.InfoContext(ctx, "no node cluster types to process")
 		return nil
 	}
 
@@ -244,7 +244,7 @@ func (c *Collector) executeOneDataSource(ctx context.Context, dataSource DataSou
 		return fmt.Errorf("failed to purge stale alarm dictionaries: %w", err)
 	}
 
-	slog.Info("Alarm dictionaries synced", "generationID", ds.GetGenerationID())
+	slog.InfoContext(ctx, "Alarm dictionaries synced", "generationID", ds.GetGenerationID())
 	return nil
 }
 
@@ -291,7 +291,7 @@ func (c *Collector) linkClusterResources(ctx context.Context, nodeCluster *model
 	if err != nil {
 		return fmt.Errorf("failed to set node cluster ID: %w", err)
 	}
-	slog.Info("set node cluster id value on cluster resources", "name", nodeCluster.Name, "count", count)
+	slog.InfoContext(ctx, "set node cluster id value on cluster resources", "name", nodeCluster.Name, "count", count)
 	return nil
 }
 
@@ -353,7 +353,7 @@ func (c *Collector) findDataSource(dataSourceID uuid.UUID) DataSource {
 // handleNodeClusterSyncCompletion handles the end of sync for NodeCluster objects.  It deletes any NodeCluster objects
 // not included in the set of keys received during the sync operation.
 func (c *Collector) handleNodeClusterSyncCompletion(ctx context.Context, ids []any) error {
-	slog.Debug("Handling end of sync for NodeCluster instances", "count", len(ids))
+	slog.DebugContext(ctx, "Handling end of sync for NodeCluster instances", "count", len(ids))
 	records, err := c.repository.GetNodeClustersNotIn(ctx, ids)
 	if err != nil {
 		return fmt.Errorf("failed to get stale node clusters: %w", err)
@@ -382,7 +382,7 @@ func (c *Collector) handleNodeClusterSyncCompletion(ctx context.Context, ids []a
 	}
 
 	if count > 0 {
-		slog.Info("Deleted stale node cluster records", "count", count)
+		slog.InfoContext(ctx, "Deleted stale node cluster records", "count", count)
 	}
 
 	return nil
@@ -391,7 +391,7 @@ func (c *Collector) handleNodeClusterSyncCompletion(ctx context.Context, ids []a
 // handleClusterResourceSyncCompletion handles the end of sync for ClusterResource objects.  It deletes any
 // ClusterResource objects not included in the set of keys received during the sync operation.
 func (c *Collector) handleClusterResourceSyncCompletion(ctx context.Context, ids []any) error {
-	slog.Debug("Handling end of sync for ClusterResource instances", "count", len(ids))
+	slog.DebugContext(ctx, "Handling end of sync for ClusterResource instances", "count", len(ids))
 	records, err := c.repository.GetClusterResourcesNotIn(ctx, ids)
 	if err != nil {
 		return fmt.Errorf("failed to get stale cluster resources: %w", err)
@@ -415,7 +415,7 @@ func (c *Collector) handleClusterResourceSyncCompletion(ctx context.Context, ids
 	}
 
 	if count > 0 {
-		slog.Info("Deleted stale cluster resource records", "count", count)
+		slog.InfoContext(ctx, "Deleted stale cluster resource records", "count", count)
 	}
 
 	return nil
@@ -478,7 +478,7 @@ func (c *Collector) deleteRelatedClusterResources(ctx context.Context, nodeClust
 		return fmt.Errorf("failed to get cluster resources for node_cluster_id %s: %w", nodeCluster.NodeClusterID, err)
 	}
 
-	slog.Debug("deleting related cluster resources", "node_cluster_id", nodeCluster.NodeClusterID, "count", len(resources))
+	slog.DebugContext(ctx, "deleting related cluster resources", "node_cluster_id", nodeCluster.NodeClusterID, "count", len(resources))
 
 	for _, resource := range resources {
 		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(
@@ -562,7 +562,7 @@ func (c *Collector) handleAsyncClusterResourceEvent(ctx context.Context, dataSou
 	if errors.Is(err, svcutils.ErrNotFound) {
 		// Agents will finish being installed before the Managed Cluster is completely provisioned, therefore, we have to
 		// link them after the fact, so here we just skip them.
-		slog.Warn("no node cluster found", "name", clusterResource.NodeClusterName, "resource", clusterResource.Name)
+		slog.WarnContext(ctx, "no node cluster found", "name", clusterResource.NodeClusterName, "resource", clusterResource.Name)
 		return nil
 	} else if err != nil {
 		return fmt.Errorf("failed to get node cluster '%s': %w", clusterResource.NodeClusterName, err)
@@ -579,7 +579,7 @@ func (c *Collector) handleAsyncClusterResourceEvent(ctx context.Context, dataSou
 
 // syncThanosAlarmDefinitions fetches Thanos rules and syncs alarm definitions to the database
 func (c *Collector) syncThanosAlarmDefinitions(ctx context.Context, ds *AlarmsDataSource) error {
-	slog.Info("Syncing Thanos alarm definitions")
+	slog.InfoContext(ctx, "Syncing Thanos alarm definitions")
 
 	rules, err := ds.collectThanosRules(ctx)
 	if err != nil {
@@ -587,7 +587,7 @@ func (c *Collector) syncThanosAlarmDefinitions(ctx context.Context, ds *AlarmsDa
 	}
 
 	if len(rules) == 0 {
-		slog.Info("No Thanos rules found in config maps")
+		slog.InfoContext(ctx, "No Thanos rules found in config maps")
 
 		count, err := c.repository.DeleteThanosAlarmDefinitions(ctx)
 		if err != nil {
@@ -595,7 +595,7 @@ func (c *Collector) syncThanosAlarmDefinitions(ctx context.Context, ds *AlarmsDa
 		}
 
 		if count != 0 {
-			slog.Info("Deleted Thanos alarm definitions", "count", count)
+			slog.InfoContext(ctx, "Deleted Thanos alarm definitions", "count", count)
 		}
 
 		return nil
@@ -620,17 +620,17 @@ func (c *Collector) syncThanosAlarmDefinitions(ctx context.Context, ds *AlarmsDa
 
 	count, err := c.repository.DeleteThanosAlarmDefinitionsNotIn(ctx, alarmDefinitionIDs)
 	if err != nil {
-		slog.Error("failed to delete outdated thanos alarm definitions", "error", err)
+		slog.ErrorContext(ctx, "failed to delete outdated thanos alarm definitions", "error", err)
 		return nil
 	}
 
-	slog.Info("Thanos alarm definitions synced", "upserted count", len(alarmDefinitionRecords), "deleted count", count)
+	slog.InfoContext(ctx, "Thanos alarm definitions synced", "upserted count", len(alarmDefinitionRecords), "deleted count", count)
 	return nil
 }
 
 // syncManagedClusterAlarmDefinitions fetches Prometheus rules and syncs alarm definitions to the database
 func (c *Collector) syncManagedClusterAlarmDefinitions(ctx context.Context, ds *AlarmsDataSource, nodeClusterTypes []models.NodeClusterType) error {
-	slog.Info("Syncing managed cluster alarm definitions", "nodeClusterTypes", len(nodeClusterTypes))
+	slog.InfoContext(ctx, "Syncing managed cluster alarm definitions", "nodeClusterTypes", len(nodeClusterTypes))
 
 	// Fetch prometheus rules and build a map of alarm definitions
 	alarmDictionaryIDToAlarmDefinitions, err := ds.makeAlarmDictionaryIDToAlarmDefinitions(ctx, nodeClusterTypes)
@@ -649,7 +649,7 @@ func (c *Collector) syncManagedClusterAlarmDefinitions(ctx context.Context, ds *
 		g.Go(func() error {
 			alarmDefinitionRecords, err := c.repository.UpsertAlarmDefinitions(ctx, alarmDictionaryIDToAlarmDefinitions[alarmDictionaryID])
 			if err != nil {
-				slog.Error("failed to upsert alarm definitions", "alarmDictionaryID", alarmDictionaryID, "error", err)
+				slog.ErrorContext(ctx, "failed to upsert alarm definitions", "alarmDictionaryID", alarmDictionaryID, "error", err)
 				return nil
 			}
 
@@ -661,16 +661,16 @@ func (c *Collector) syncManagedClusterAlarmDefinitions(ctx context.Context, ds *
 
 			count, err := c.repository.DeleteAlarmDefinitionsNotIn(ctx, alarmDefinitionIDs, alarmDictionaryID)
 			if err != nil {
-				slog.Error("failed to delete non-valid alarm definitions", "alarmDictionaryID", alarmDictionaryID, "error", err)
+				slog.ErrorContext(ctx, "failed to delete non-valid alarm definitions", "alarmDictionaryID", alarmDictionaryID, "error", err)
 				return nil
 			}
 
-			slog.Info("Alarm definitions synced", "alarmDictionaryID", alarmDictionaryID, "upserted count", len(alarmDefinitionRecords), "deleted count", count)
+			slog.InfoContext(ctx, "Alarm definitions synced", "alarmDictionaryID", alarmDictionaryID, "upserted count", len(alarmDefinitionRecords), "deleted count", count)
 			return nil
 		})
 	}
 
-	slog.Info("Waiting for all alarm definitions to be processed")
+	slog.InfoContext(ctx, "Waiting for all alarm definitions to be processed")
 
 	_ = g.Wait()
 
@@ -679,7 +679,7 @@ func (c *Collector) syncManagedClusterAlarmDefinitions(ctx context.Context, ds *
 
 // syncAlarmDictionaries syncs alarm dictionaries to the database
 func (c *Collector) syncAlarmDictionaries(ctx context.Context, ds *AlarmsDataSource, nodeClusterTypes []models.NodeClusterType) error {
-	slog.Info("Syncing alarm dictionaries", "nodeClusterTypes", len(nodeClusterTypes))
+	slog.InfoContext(ctx, "Syncing alarm dictionaries", "nodeClusterTypes", len(nodeClusterTypes))
 
 	alarmDictionaries := ds.makeAlarmDictionaries(nodeClusterTypes)
 
@@ -700,7 +700,7 @@ func (c *Collector) syncAlarmDictionaries(ctx context.Context, ds *AlarmsDataSou
 		g.Go(func() error {
 			alarmDefinitions, err := c.repository.GetAlarmDefinitionsByAlarmDictionaryID(ctx, alarmDictionary.AlarmDictionaryID)
 			if err != nil {
-				slog.Error("failed to get alarm definitions", "alarmDictionaryID", alarmDictionary.AlarmDictionaryID, "error", err)
+				slog.ErrorContext(ctx, "failed to get alarm definitions", "alarmDictionaryID", alarmDictionary.AlarmDictionaryID, "error", err)
 				return nil
 			}
 
@@ -714,7 +714,7 @@ func (c *Collector) syncAlarmDictionaries(ctx context.Context, ds *AlarmsDataSou
 					return models.AlarmDictionaryToModel(&record, alarmDefinitions)
 				})
 			if err != nil {
-				slog.Error("failed to persist node cluster type'", "error", err)
+				slog.ErrorContext(ctx, "failed to persist node cluster type'", "error", err)
 				return nil
 			}
 
@@ -728,7 +728,7 @@ func (c *Collector) syncAlarmDictionaries(ctx context.Context, ds *AlarmsDataSou
 		})
 	}
 
-	slog.Info("Waiting for all alarm dictionaries to be processed")
+	slog.InfoContext(ctx, "Waiting for all alarm dictionaries to be processed")
 
 	_ = g.Wait()
 
@@ -741,7 +741,7 @@ func (c *Collector) syncAlarmDictionaries(ctx context.Context, ds *AlarmsDataSou
 }
 
 func (c *Collector) purgeStaleAlarmDictionaries(ctx context.Context, ds *AlarmsDataSource) error {
-	slog.Info("Purging stale alarm dictionaries")
+	slog.InfoContext(ctx, "Purging stale alarm dictionaries")
 
 	// Purge alarm dictionaries that have missed more than 2 generations
 	staleAlarmDictionaries, err := c.repository.FindStaleAlarmDictionaries(ctx, ds.GetID(), ds.GetGenerationID()-1)
@@ -750,7 +750,7 @@ func (c *Collector) purgeStaleAlarmDictionaries(ctx context.Context, ds *AlarmsD
 	}
 
 	if len(staleAlarmDictionaries) == 0 {
-		slog.Info("No stale alarm dictionaries found")
+		slog.InfoContext(ctx, "No stale alarm dictionaries found")
 		return nil
 	}
 
@@ -764,7 +764,7 @@ func (c *Collector) purgeStaleAlarmDictionaries(ctx context.Context, ds *AlarmsD
 		g.Go(func() error {
 			alarmDefinitions, err := c.repository.GetAlarmDefinitionsByAlarmDictionaryID(ctx, alarmDictionary.AlarmDictionaryID)
 			if err != nil {
-				slog.Error("failed to get alarm definitions", "alarmDictionaryID", alarmDictionary.AlarmDictionaryID, "error", err)
+				slog.ErrorContext(ctx, "failed to get alarm definitions", "alarmDictionaryID", alarmDictionary.AlarmDictionaryID, "error", err)
 				return nil
 			}
 
@@ -773,7 +773,7 @@ func (c *Collector) purgeStaleAlarmDictionaries(ctx context.Context, ds *AlarmsD
 				return models.AlarmDictionaryToModel(&record, alarmDefinitions)
 			})
 			if err != nil {
-				slog.Error("failed to delete stale alarm dictionary", "alarmDictionaryID", alarmDictionary.AlarmDictionaryID, "error", err)
+				slog.ErrorContext(ctx, "failed to delete stale alarm dictionary", "alarmDictionaryID", alarmDictionary.AlarmDictionaryID, "error", err)
 				return nil
 			}
 
@@ -781,12 +781,12 @@ func (c *Collector) purgeStaleAlarmDictionaries(ctx context.Context, ds *AlarmsD
 				c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
 			}
 
-			slog.Info("Stale alarm dictionary purged", "alarmDictionaryID", alarmDictionary.AlarmDictionaryID)
+			slog.InfoContext(ctx, "Stale alarm dictionary purged", "alarmDictionaryID", alarmDictionary.AlarmDictionaryID)
 			return nil
 		})
 	}
 
-	slog.Info("Waiting for all stale alarm dictionaries to be processed")
+	slog.InfoContext(ctx, "Waiting for all stale alarm dictionaries to be processed")
 
 	_ = g.Wait()
 
@@ -795,7 +795,7 @@ func (c *Collector) purgeStaleAlarmDictionaries(ctx context.Context, ds *AlarmsD
 
 // handleAsyncAlarmDictionaryAndDefinitionsCreation handles the creation of alarm dictionary and definitions triggered by a new node cluster type
 func (c *Collector) handleAsyncAlarmDictionaryAndDefinitionsCreation(ctx context.Context, nodeClusterType *models.NodeClusterType) {
-	slog.Info("Creating alarm dictionary and definitions", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID)
+	slog.InfoContext(ctx, "Creating alarm dictionary and definitions", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID)
 
 	var alarmsDataSource *AlarmsDataSource
 	for i := range c.dataSources {
@@ -808,23 +808,23 @@ func (c *Collector) handleAsyncAlarmDictionaryAndDefinitionsCreation(ctx context
 	// Create and persist Alarm Dictionary without Alarm Definitions
 	err := c.syncAlarmDictionaries(ctx, alarmsDataSource, []models.NodeClusterType{*nodeClusterType})
 	if err != nil {
-		slog.Error("failed to create alarm dictionary", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID, "error", err)
+		slog.ErrorContext(ctx, "failed to create alarm dictionary", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID, "error", err)
 		return
 	}
 
 	// Collect and persist Alarm Definitions
 	err = c.syncManagedClusterAlarmDefinitions(ctx, alarmsDataSource, []models.NodeClusterType{*nodeClusterType})
 	if err != nil {
-		slog.Error("failed to create alarm definitions", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID, "error", err)
+		slog.ErrorContext(ctx, "failed to create alarm definitions", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID, "error", err)
 		return
 	}
 
 	// Sync Alarm Dictionary to include Alarm Definitions
 	err = c.syncAlarmDictionaries(ctx, alarmsDataSource, []models.NodeClusterType{*nodeClusterType})
 	if err != nil {
-		slog.Error("failed to update alarm dictionary", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID, "error", err)
+		slog.ErrorContext(ctx, "failed to update alarm dictionary", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID, "error", err)
 		return
 	}
 
-	slog.Info("Alarm dictionary and definitions created", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID)
+	slog.InfoContext(ctx, "Alarm dictionary and definitions created", "nodeClusterTypeID", nodeClusterType.NodeClusterTypeID)
 }

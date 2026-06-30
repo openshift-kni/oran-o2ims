@@ -41,7 +41,7 @@ func (s *SubscriptionStorageProvider) GetSubscriptions(ctx context.Context) ([]n
 		return []notifier.SubscriptionInfo{}, fmt.Errorf("failed to get all subscriptions: %w", err)
 	}
 	if len(records) == 0 {
-		slog.Info("No subscriptions to notify")
+		slog.InfoContext(ctx, "No subscriptions to notify")
 		return subscriptions, nil
 	}
 
@@ -50,7 +50,7 @@ func (s *SubscriptionStorageProvider) GetSubscriptions(ctx context.Context) ([]n
 		subscriptions = append(subscriptions, *models.ConvertAlertSubToNotificationSub(&record))
 	}
 
-	slog.Info("Found subscriptions to notify", "count", len(subscriptions))
+	slog.InfoContext(ctx, "Found subscriptions to notify", "count", len(subscriptions))
 	return subscriptions, nil
 }
 
@@ -75,7 +75,7 @@ func (s *SubscriptionStorageProvider) UpdateSubscription(ctx context.Context, su
 		return fmt.Errorf("update subscription failed for %s: %w", subscription.SubscriptionID, err)
 	}
 
-	slog.Info("Subscription cursor updated", "to", subscription.EventCursor)
+	slog.InfoContext(ctx, "Subscription cursor updated", "to", subscription.EventCursor)
 	return nil
 }
 

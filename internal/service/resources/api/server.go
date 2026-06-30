@@ -290,7 +290,7 @@ func (r *ResourceServer) GetSubscriptions(ctx context.Context, request api.GetSu
 // validateSubscription validates a subscription before accepting the request
 func (r *ResourceServer) validateSubscription(ctx context.Context, request api.CreateSubscriptionRequestObject) error {
 	if err := commonapi.ValidateCallbackURL(ctx, r.SubscriptionEventHandler.GetClientFactory(), request.Body.Callback); err != nil {
-		slog.Error("callback URL validation failed", "error", err)
+		slog.ErrorContext(ctx, "callback URL validation failed", "error", err)
 		return fmt.Errorf("callback URL validation failed")
 	}
 
@@ -334,7 +334,7 @@ func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.Cre
 				Status: http.StatusBadRequest,
 			}, nil
 		}
-		slog.Error("error writing database record", "target", record, "error", err.Error())
+		slog.ErrorContext(ctx, "error writing database record", "target", record, "error", err.Error())
 		return api.CreateSubscription500ApplicationProblemPlusJSONResponse{
 			AdditionalAttributes: &map[string]string{
 				"consumerSubscriptionId": consumerSubscriptionId,

@@ -61,7 +61,7 @@ func NewPgxPool(ctx context.Context, cfg PgConfig) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	slog.Info("Database connection pool established")
+	slog.InfoContext(ctx, "Database connection pool established")
 	return pool, nil
 }
 

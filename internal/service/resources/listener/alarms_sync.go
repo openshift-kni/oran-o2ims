@@ -32,14 +32,14 @@ const (
 
 // syncAlarmDictionaryForResourceType syncs the alarm dictionary for a specific resource type
 func syncAlarmDictionaryForResourceType(ctx context.Context, repository *repo.ResourcesRepository, resourceTypeID uuid.UUID) error {
-	slog.Info("Syncing alarm dictionary for resource type", "resource_type_id", resourceTypeID)
+	slog.InfoContext(ctx, "Syncing alarm dictionary for resource type", "resource_type_id", resourceTypeID)
 
 	// Get the resource type
 	resourceType, err := repository.GetResourceType(ctx, resourceTypeID)
 	if err != nil {
 		if errors.Is(err, svcutils.ErrNotFound) {
 			// Resource type was deleted, alarm dictionary will be cascade deleted
-			slog.Info("Resource type not found, skipping alarm dictionary sync",
+			slog.InfoContext(ctx, "Resource type not found, skipping alarm dictionary sync",
 				"resource_type_id", resourceTypeID)
 			return nil
 		}
@@ -77,7 +77,7 @@ func syncAlarmDictionaryForResourceType(ctx context.Context, repository *repo.Re
 			return fmt.Errorf("failed to upsert alarm definitions: %w", err)
 		}
 
-		slog.Info("Successfully synced alarm dictionary", "resource_type_id",
+		slog.InfoContext(ctx, "Successfully synced alarm dictionary", "resource_type_id",
 			resourceTypeID, "alarm_dict_id", result.AlarmDictionaryID, "definitions_count", len(alarmDefs))
 		return nil
 	}); err != nil {
@@ -114,7 +114,7 @@ func getIronicPrometheusRules(ctx context.Context, cl client.Client) ([]monitori
 		}
 	}
 
-	slog.Info("Fetched hardware monitoring Prometheus rules", "count", len(rules))
+	slog.InfoContext(ctx, "Fetched hardware monitoring Prometheus rules", "count", len(rules))
 	return rules, nil
 }
 

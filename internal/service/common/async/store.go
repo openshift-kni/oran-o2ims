@@ -129,14 +129,14 @@ func (c *ReflectorStore) handleOperations(ctx context.Context, handler AsyncEven
 		case Updated, Deleted:
 			_, err := handler.HandleAsyncEvent(ctx, o.objects[0], o.eventType)
 			if err != nil {
-				slog.Warn("Failed to handle event", "event", o.eventType, "error", err)
+				slog.WarnContext(ctx, "Failed to handle event", "event", o.eventType, "error", err)
 			}
 		case SyncComplete:
 			keys := make([]uuid.UUID, 0)
 			for _, obj := range o.objects {
 				key, err := handler.HandleAsyncEvent(ctx, obj, Updated)
 				if err != nil {
-					slog.Warn("Failed to handle event", "error", err)
+					slog.WarnContext(ctx, "Failed to handle event", "error", err)
 					continue
 				}
 				if key != uuid.Nil {
@@ -146,7 +146,7 @@ func (c *ReflectorStore) handleOperations(ctx context.Context, handler AsyncEven
 			}
 			err := handler.HandleSyncComplete(ctx, c.ObjectType, keys)
 			if err != nil {
-				slog.Warn("Failed to handle sync completion", "error", err)
+				slog.WarnContext(ctx, "Failed to handle sync completion", "error", err)
 			}
 		}
 	}
@@ -158,7 +158,7 @@ func (c *ReflectorStore) Receive(ctx context.Context, handler AsyncEventHandler)
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Info("stopping store adapter; context canceled")
+			slog.InfoContext(ctx, "stopping store adapter; context canceled")
 			// Mark as closed before closing the channel to prevent enqueue from sending
 			c.mutex.Lock()
 			c.closed = true
