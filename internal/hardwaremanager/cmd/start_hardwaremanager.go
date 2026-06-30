@@ -125,6 +125,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	ctx := cmd.Context()
 
 	logger := internal.LoggerFromContext(ctx)
+	slog.SetDefault(logger)
 
 	klog.SetSlogLogger(logger)
 	logAdapter := logr.FromSlogHandler(logger.Handler())

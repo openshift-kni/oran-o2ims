@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
 
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/provisioning"
 	"github.com/openshift-kni/oran-o2ims/internal/service/provisioning/api"
@@ -26,10 +27,11 @@ var provisioningServe = &cobra.Command{
 	Use:   "serve",
 	Short: "Start provisioning server",
 	Run: func(cmd *cobra.Command, args []string) {
-		// Configure structured logging for this service
-		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		// Configure structured logging for this service with context support
+		baseHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 			Level: slog.LevelInfo,
-		}))
+		})
+		logger := slog.New(logging.NewContextHandler(baseHandler, slog.LevelInfo))
 		slog.SetDefault(logger)
 		klog.SetSlogLogger(logger)
 
