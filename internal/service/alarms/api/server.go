@@ -20,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
@@ -121,6 +122,10 @@ func (a *AlarmsServer) GetSubscriptions(ctx context.Context, request api.GetSubs
 
 // CreateSubscription handles an API request to create an Alarm Subscription
 func (a *AlarmsServer) CreateSubscription(ctx context.Context, request api.CreateSubscriptionRequestObject) (api.CreateSubscriptionResponseObject, error) {
+	if request.Body.ConsumerSubscriptionId != nil {
+		ctx = logging.AppendCtx(ctx, slog.String("consumerSubscriptionId", request.Body.ConsumerSubscriptionId.String()))
+	}
+
 	// Block API if GlobalCloudID is not set
 	if a.GlobalCloudID == uuid.Nil {
 		return api.CreateSubscription409ApplicationProblemPlusJSONResponse(common.ProblemDetails{
@@ -163,6 +168,8 @@ func (a *AlarmsServer) CreateSubscription(ctx context.Context, request api.Creat
 
 // DeleteSubscription handles an API request to delete an Alarm Subscription
 func (a *AlarmsServer) DeleteSubscription(ctx context.Context, request api.DeleteSubscriptionRequestObject) (api.DeleteSubscriptionResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("alarmSubscriptionId", request.AlarmSubscriptionId.String()))
+
 	count, err := a.AlarmsRepository.DeleteAlarmSubscription(ctx, request.AlarmSubscriptionId)
 	if err != nil {
 		return api.DeleteSubscription500ApplicationProblemPlusJSONResponse(common.ProblemDetails{
@@ -190,12 +197,14 @@ func (a *AlarmsServer) DeleteSubscription(ctx context.Context, request api.Delet
 		Removed:      true,
 		Subscription: models.ConvertAlertSubToNotificationSub(&models.AlarmSubscription{SubscriptionID: request.AlarmSubscriptionId}),
 	})
-	slog.InfoContext(ctx, "Successfully deleted Alarm Subscription", "alarmSubscriptionId", request.AlarmSubscriptionId.String())
+	slog.InfoContext(ctx, "Successfully deleted Alarm Subscription")
 	return api.DeleteSubscription200Response{}, nil
 }
 
 // GetSubscription handles an API request to retrieve an Alarm Subscription
 func (a *AlarmsServer) GetSubscription(ctx context.Context, request api.GetSubscriptionRequestObject) (api.GetSubscriptionResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("alarmSubscriptionId", request.AlarmSubscriptionId.String()))
+
 	record, err := a.AlarmsRepository.GetAlarmSubscription(ctx, request.AlarmSubscriptionId)
 	if errors.Is(err, svcutils.ErrNotFound) {
 		return api.GetSubscription404ApplicationProblemPlusJSONResponse(common.ProblemDetails{
@@ -238,6 +247,8 @@ func (a *AlarmsServer) GetAlarms(ctx context.Context, request api.GetAlarmsReque
 
 // GetAlarm handles an API request to retrieve an Alarm Event Record
 func (a *AlarmsServer) GetAlarm(ctx context.Context, request api.GetAlarmRequestObject) (api.GetAlarmResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("alarmEventRecordId", request.AlarmEventRecordId.String()))
+
 	record, err := a.AlarmsRepository.GetAlarmEventRecord(ctx, request.AlarmEventRecordId)
 	if errors.Is(err, svcutils.ErrNotFound) {
 		// Nothing found
@@ -258,6 +269,8 @@ func (a *AlarmsServer) GetAlarm(ctx context.Context, request api.GetAlarmRequest
 
 // PatchAlarm handles an API request to patch an Alarm Event Record
 func (a *AlarmsServer) PatchAlarm(ctx context.Context, request api.PatchAlarmRequestObject) (api.PatchAlarmResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("alarmEventRecordId", request.AlarmEventRecordId.String()))
+
 	// Fetch the Alarm Event Record to be patched
 	record, err := a.AlarmsRepository.GetAlarmEventRecord(ctx, request.AlarmEventRecordId)
 	if errors.Is(err, svcutils.ErrNotFound) {
@@ -366,7 +379,7 @@ func (a *AlarmsServer) PatchAlarm(ctx context.Context, request api.PatchAlarmReq
 		return nil, fmt.Errorf("failed to patch Alarm Event Record: %w", err)
 	}
 
-	slog.DebugContext(ctx, "Alarm acknowledged/cleared", "alarmEventRecordId", updated.AlarmEventRecordID, "alarmAcknowledged", updated.AlarmAcknowledged, "alarmAcknowledgedTime", updated.AlarmAcknowledgedTime,
+	slog.DebugContext(ctx, "Alarm acknowledged/cleared", "alarmAcknowledged", updated.AlarmAcknowledged, "alarmAcknowledgedTime", updated.AlarmAcknowledgedTime,
 		"alarmClearedTime", updated.AlarmClearedTime, "perceivedSeverity", updated.PerceivedSeverity, "alarmChangedTime", updated.AlarmChangedTime)
 
 	return api.PatchAlarm200JSONResponse{AlarmAcknowledged: request.Body.AlarmAcknowledged, PerceivedSeverity: request.Body.PerceivedSeverity}, nil

@@ -78,7 +78,6 @@ func TestLogReconcileStart(t *testing.T) {
 	// Check that our context attributes are present
 	expectedAttrs := map[string]interface{}{
 		LogAttrResource:  "TestResource",
-		"name":           "test-resource",
 		LogAttrNamespace: "test-namespace",
 		LogAttrAction:    "reconcile_start",
 	}

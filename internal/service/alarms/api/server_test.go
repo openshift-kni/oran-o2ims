@@ -67,7 +67,7 @@ var _ = Describe("AlarmsServer", func() {
 		When("alarm not found", func() {
 			It("returns 404 response", func() {
 				mockRepo.EXPECT().
-					GetAlarmEventRecord(ctx, testUUID).
+					GetAlarmEventRecord(gomock.Any(), testUUID).
 					Return(nil, svcutils.ErrNotFound)
 
 				resp, err := server.GetAlarm(ctx, alarmapi.GetAlarmRequestObject{
@@ -83,7 +83,7 @@ var _ = Describe("AlarmsServer", func() {
 		When("alarm is found", func() {
 			It("returns 200 response with alarm", func() {
 				mockRepo.EXPECT().
-					GetAlarmEventRecord(ctx, testUUID).
+					GetAlarmEventRecord(gomock.Any(), testUUID).
 					Return(&models.AlarmEventRecord{AlarmEventRecordID: testUUID}, nil)
 
 				resp, err := server.GetAlarm(ctx, alarmapi.GetAlarmRequestObject{
@@ -98,7 +98,7 @@ var _ = Describe("AlarmsServer", func() {
 		When("repository is unavailable", func() {
 			It("returns error", func() {
 				mockRepo.EXPECT().
-					GetAlarmEventRecord(ctx, testUUID).
+					GetAlarmEventRecord(gomock.Any(), testUUID).
 					Return(nil, fmt.Errorf("db error"))
 
 				resp, err := server.GetAlarm(ctx, alarmapi.GetAlarmRequestObject{
@@ -184,7 +184,7 @@ var _ = Describe("AlarmsServer", func() {
 				}
 
 				mockRepo.EXPECT().
-					CreateAlarmSubscription(ctx, gomock.Any()).
+					CreateAlarmSubscription(gomock.Any(), gomock.Any()).
 					Return(nil, &pgconn.PgError{Code: "23505", ConstraintName: "unique_callback"})
 
 				resp, err := server.CreateSubscription(ctx, alarmapi.CreateSubscriptionRequestObject{

@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/cache"
@@ -112,6 +113,8 @@ func (r *ResourceServer) GetAlarmDictionaries(ctx context.Context, _ api.GetAlar
 }
 
 func (r *ResourceServer) GetAlarmDictionary(ctx context.Context, request api.GetAlarmDictionaryRequestObject) (api.GetAlarmDictionaryResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("alarmDictionaryId", request.AlarmDictionaryId.String()))
+
 	data, err := r.AlarmDicts.Get(ctx)
 	if err != nil {
 		return api.GetAlarmDictionary500ApplicationProblemPlusJSONResponse{
@@ -138,6 +141,8 @@ func (r *ResourceServer) GetAlarmDictionary(ctx context.Context, request api.Get
 }
 
 func (r *ResourceServer) GetResourceTypeAlarmDictionary(ctx context.Context, request api.GetResourceTypeAlarmDictionaryRequestObject) (api.GetResourceTypeAlarmDictionaryResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("resourceTypeId", request.ResourceTypeId.String()))
+
 	data, err := r.AlarmDicts.Get(ctx)
 	if err != nil {
 		return api.GetResourceTypeAlarmDictionary500ApplicationProblemPlusJSONResponse{
@@ -238,6 +243,8 @@ func (r *ResourceServer) GetDeploymentManagers(ctx context.Context, request api.
 
 // GetDeploymentManager receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetDeploymentManager(ctx context.Context, request api.GetDeploymentManagerRequestObject) (api.GetDeploymentManagerResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("deploymentManagerId", request.DeploymentManagerId.String()))
+
 	record, err := r.Repo.GetDeploymentManager(ctx, request.DeploymentManagerId)
 	if errors.Is(err, svcutils.ErrNotFound) {
 		return api.GetDeploymentManager404ApplicationProblemPlusJSONResponse{
@@ -300,6 +307,10 @@ func (r *ResourceServer) validateSubscription(ctx context.Context, request api.C
 
 // CreateSubscription receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.CreateSubscriptionRequestObject) (api.CreateSubscriptionResponseObject, error) {
+	if request.Body.ConsumerSubscriptionId != nil {
+		ctx = logging.AppendCtx(ctx, slog.String("consumerSubscriptionId", request.Body.ConsumerSubscriptionId.String()))
+	}
+
 	consumerSubscriptionId := "<null>"
 	if request.Body.ConsumerSubscriptionId != nil {
 		consumerSubscriptionId = request.Body.ConsumerSubscriptionId.String()
@@ -357,6 +368,8 @@ func (r *ResourceServer) CreateSubscription(ctx context.Context, request api.Cre
 
 // GetSubscription receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetSubscription(ctx context.Context, request api.GetSubscriptionRequestObject) (api.GetSubscriptionResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("subscriptionId", request.SubscriptionId.String()))
+
 	record, err := r.Repo.GetSubscription(ctx, request.SubscriptionId)
 	if errors.Is(err, svcutils.ErrNotFound) {
 		return api.GetSubscription404ApplicationProblemPlusJSONResponse{
@@ -382,6 +395,8 @@ func (r *ResourceServer) GetSubscription(ctx context.Context, request api.GetSub
 
 // DeleteSubscription receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) DeleteSubscription(ctx context.Context, request api.DeleteSubscriptionRequestObject) (api.DeleteSubscriptionResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("subscriptionId", request.SubscriptionId.String()))
+
 	count, err := r.Repo.DeleteSubscription(ctx, request.SubscriptionId)
 	if err != nil {
 		return api.DeleteSubscription500ApplicationProblemPlusJSONResponse{
@@ -442,6 +457,8 @@ func (r *ResourceServer) GetResourcePools(ctx context.Context, request api.GetRe
 
 // GetResourcePool receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetResourcePool(ctx context.Context, request api.GetResourcePoolRequestObject) (api.GetResourcePoolResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("resourcePoolId", request.ResourcePoolId.String()))
+
 	record, err := r.Repo.GetResourcePool(ctx, request.ResourcePoolId)
 	if errors.Is(err, svcutils.ErrNotFound) {
 		return api.GetResourcePool404ApplicationProblemPlusJSONResponse{
@@ -467,6 +484,8 @@ func (r *ResourceServer) GetResourcePool(ctx context.Context, request api.GetRes
 
 // GetResources receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetResources(ctx context.Context, request api.GetResourcesRequestObject) (api.GetResourcesResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("resourcePoolId", request.ResourcePoolId.String()))
+
 	options := commonapi.NewFieldOptions(request.Params.AllFields, request.Params.Fields, request.Params.ExcludeFields)
 	if err := options.Validate(api.Resource{}); err != nil {
 		return api.GetResources400ApplicationProblemPlusJSONResponse{
@@ -518,6 +537,9 @@ func (r *ResourceServer) GetResources(ctx context.Context, request api.GetResour
 
 // GetResource receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetResource(ctx context.Context, request api.GetResourceRequestObject) (api.GetResourceResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("resourcePoolId", request.ResourcePoolId.String()))
+	ctx = logging.AppendCtx(ctx, slog.String("resourceId", request.ResourceId.String()))
+
 	// First, find the pool
 	if exists, err := r.Repo.ResourcePoolExists(ctx, request.ResourcePoolId); err == nil && !exists {
 		return api.GetResource404ApplicationProblemPlusJSONResponse{
@@ -607,6 +629,8 @@ func (r *ResourceServer) GetResourceTypes(ctx context.Context, request api.GetRe
 
 // GetResourceType receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ResourceServer) GetResourceType(ctx context.Context, request api.GetResourceTypeRequestObject) (api.GetResourceTypeResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("resourceTypeId", request.ResourceTypeId.String()))
+
 	record, err := r.Repo.GetResourceType(ctx, request.ResourceTypeId)
 	if errors.Is(err, svcutils.ErrNotFound) {
 		return api.GetResourceType404ApplicationProblemPlusJSONResponse{
