@@ -17,8 +17,6 @@ import (
 	"unicode/utf16"
 
 	"github.com/go-openapi/jsonpointer"
-	"github.com/mohae/deepcopy"
-	"github.com/woodsbury/decimal128"
 )
 
 const (
@@ -2202,7 +2200,7 @@ func (schema *Schema) visitXOFOperations(settings *schemaValidationSettings, val
 
 			// make a deep copy to protect origin value from being injected default value that defined in mismatched oneOf schema
 			if settings.asreq || settings.asrep {
-				tempValue = deepcopy.Copy(value)
+				tempValue = deepCopyJSONValue(value)
 			}
 
 			if err := v.visitJSON(settings, tempValue); err != nil {
@@ -2265,7 +2263,7 @@ func (schema *Schema) visitXOFOperations(settings *schemaValidationSettings, val
 
 			// make a deep copy to protect origin value from being injected default value that defined in mismatched anyOf schema
 			if settings.asreq || settings.asrep {
-				tempValue = deepcopy.Copy(value)
+				tempValue = deepCopyJSONValue(value)
 			}
 			if err := v.visitJSON(settings, tempValue); err == nil {
 				ok = true
@@ -2553,10 +2551,10 @@ func (schema *Schema) visitJSONNumber(settings *schemaValidationSettings, value 
 	if v := schema.MultipleOf; v != nil {
 		// "A numeric instance is valid only if division by this keyword's
 		//    value results in an integer."
-		numParsed, _ := decimal128.Parse(fmt.Sprintf("%.10f", value))
-		denParsed, _ := decimal128.Parse(fmt.Sprintf("%.10f", *v))
-		_, remainder := numParsed.QuoRem(denParsed)
-		if !remainder.IsZero() {
+		numRat, denRat := &big.Rat{}, &big.Rat{}
+		numRat.SetString(fmt.Sprintf("%.10f", value))
+		denRat.SetString(fmt.Sprintf("%.10f", *v))
+		if !(&big.Rat{}).Quo(numRat, denRat).IsInt() {
 			if settings.failfast {
 				return errSchema
 			}
@@ -3085,9 +3083,9 @@ func (err *SchemaError) Error() string {
 	if len(err.reversePath) > 0 {
 		buf.WriteString(`Error at "`)
 		reversePath := err.reversePath
-		for i := len(reversePath) - 1; i >= 0; i-- {
+		for _, r := range slices.Backward(reversePath) {
 			buf.WriteByte('/')
-			buf.WriteString(reversePath[i])
+			buf.WriteString(r)
 		}
 		buf.WriteString(`": `)
 	}
@@ -3156,6 +3154,25 @@ func RegisterArrayUniqueItemsChecker(fn SliceUniqueItemsChecker) {
 
 func unsupportedFormat(format string) error {
 	return fmt.Errorf("unsupported 'format' value %q", format)
+}
+
+func deepCopyJSONValue(v any) any {
+	switch v := v.(type) {
+	case map[string]any:
+		cp := make(map[string]any, len(v))
+		for k, val := range v {
+			cp[k] = deepCopyJSONValue(val)
+		}
+		return cp
+	case []any:
+		cp := make([]any, len(v))
+		for i, val := range v {
+			cp[i] = deepCopyJSONValue(val)
+		}
+		return cp
+	default:
+		return v // string, float64, bool, nil — all immutable
+	}
 }
 
 // UnmarshalJSON sets Schemas to a copy of data.
