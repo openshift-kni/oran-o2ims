@@ -122,9 +122,9 @@ func (e *SelectorEvaluator) Evaluate(ctx context.Context, selector *Selector,
 		e.logger.DebugContext(
 			ctx,
 			"Evaluated selector",
-			"selector", selector.String(),
-			"object", object,
-			"result", result,
+			slog.String("selector", selector.String()),
+			slog.Any("object", object),
+			slog.Bool("result", result),
 		)
 	}
 	return

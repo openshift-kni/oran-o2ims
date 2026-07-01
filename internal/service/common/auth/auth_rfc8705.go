@@ -57,7 +57,7 @@ func getClientCertificate(req *http.Request) ([]byte, bool, error) {
 		certString = req.Header.Get(sslClientDERHeaderKey)
 		if certString == "" {
 			// This is unexpected
-			slog.ErrorContext(req.Context(), "No client certificate found, but verification passed", "header", sslClientDERHeaderKey)
+			slog.ErrorContext(req.Context(), "No client certificate found, but verification passed", slog.String("header", sslClientDERHeaderKey))
 			return nil, false, nil
 		}
 
@@ -149,7 +149,7 @@ func (w *withClientVerification) AuthenticateRequest(req *http.Request) (*authen
 
 	clientFingerprint, present, err := getClientCertificateFingerprint(req)
 	if err != nil {
-		slog.ErrorContext(req.Context(), "error extracting client certificate fingerprint", "error", err)
+		slog.ErrorContext(req.Context(), "error extracting client certificate fingerprint", slog.Any("error", err))
 		return nil, false, err
 	}
 
@@ -158,12 +158,12 @@ func (w *withClientVerification) AuthenticateRequest(req *http.Request) (*authen
 	}
 
 	if len(tokenFingerprintValues) != 1 {
-		slog.ErrorContext(req.Context(), "unexpected number of fingerprint values", "values", tokenFingerprintValues)
+		slog.ErrorContext(req.Context(), "unexpected number of fingerprint values", slog.Any("values", tokenFingerprintValues))
 		return nil, false, fmt.Errorf("unexpected number of fingerprint values")
 	}
 
 	if tokenFingerprintValues[0] != "" && tokenFingerprintValues[0] != clientFingerprint {
-		slog.DebugContext(req.Context(), "fingerprint values do not match", "client", clientFingerprint, "token", tokenFingerprintValues[0])
+		slog.DebugContext(req.Context(), "fingerprint values do not match", slog.String("client", clientFingerprint), slog.String("token", tokenFingerprintValues[0]))
 		return nil, false, fmt.Errorf("client certificate fingerprint mismatch")
 	}
 

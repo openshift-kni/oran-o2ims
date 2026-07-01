@@ -283,9 +283,9 @@ func ResourceSelectionSecondaryFilter(ctx context.Context,
 		hwdata := &metal3v1alpha1.HardwareData{}
 		if err := c.Get(ctx, types.NamespacedName{Namespace: bmh.Namespace, Name: bmh.Name}, hwdata); err != nil {
 			if client.IgnoreNotFound(err) != nil {
-				logger.ErrorContext(ctx, "Failed to get HardwareData for BMH, skipping", "bmh", bmh.Name, "error", err)
+				logger.ErrorContext(ctx, "Failed to get HardwareData for BMH, skipping", slog.String("bmh", bmh.Name), slog.Any("error", err))
 			} else {
-				logger.ErrorContext(ctx, "HardwareData not found for BMH, skipping hardware criteria evaluation", "bmh", bmh.Name)
+				logger.ErrorContext(ctx, "HardwareData not found for BMH, skipping hardware criteria evaluation", slog.String("bmh", bmh.Name))
 			}
 			continue
 		}

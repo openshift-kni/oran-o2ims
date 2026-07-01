@@ -196,7 +196,7 @@ func (c *CommonServerConfig) CreateOAuthConfig(ctx context.Context) (*ctlrutils.
 			return nil, fmt.Errorf("failed to read CA bundle file '%s': %w", c.TLS.CABundleFile, err)
 		}
 		config.TLSConfig = &ctlrutils.TLSConfig{CaBundle: bytes}
-		slog.DebugContext(ctx, "using CA bundle", "path", c.TLS.CABundleFile)
+		slog.DebugContext(ctx, "using CA bundle", slog.String("path", c.TLS.CABundleFile))
 	}
 
 	if c.TLS.ClientCertFile != "" && c.TLS.ClientKeyFile != "" {
@@ -209,7 +209,7 @@ func (c *CommonServerConfig) CreateOAuthConfig(ctx context.Context) (*ctlrutils.
 			config.TLSConfig = &ctlrutils.TLSConfig{}
 		}
 		config.TLSConfig.ClientCert = dynamicClientCert
-		slog.DebugContext(ctx, "using TLS client config", "cert", c.TLS.ClientCertFile, ",key", c.TLS.ClientKeyFile)
+		slog.DebugContext(ctx, "using TLS client config", slog.String("cert", c.TLS.ClientCertFile), slog.String("key", c.TLS.ClientKeyFile))
 
 		// Run the controller so that it monitors for file changes
 		go dynamicClientCert.Run(ctx, 1)

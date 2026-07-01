@@ -66,7 +66,7 @@ func Serve(config *api.ArtifactsServerConfig) error {
 
 	go func() {
 		sig := <-shutdown
-		slog.InfoContext(ctx, "Shutdown signal received", "signal", sig)
+		slog.InfoContext(ctx, "Shutdown signal received", slog.Any("signal", sig))
 		cancel()
 	}()
 
