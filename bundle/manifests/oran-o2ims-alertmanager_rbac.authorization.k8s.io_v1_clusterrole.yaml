@@ -1,0 +1,10 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: oran-o2ims-alertmanager
+rules:
+- nonResourceURLs:
+  - /internal/v1/caas-alerts/alertmanager
+  verbs:
+  - create

@@ -8,7 +8,6 @@ rules:
   - /internal/v1/caas-alerts/alertmanager
   verbs:
   - create
-  - post
 - nonResourceURLs:
   - /o2ims-infrastructureCluster/v1/alarmDictionaries
   - /o2ims-infrastructureCluster/v1/nodeClusterTypes
@@ -346,19 +345,6 @@ rules:
   - policies
   verbs:
   - list
-  - watch
-- apiGroups:
-  - rbac.authorization.k8s.io
-  resources:
-  - clusterrolebindings
-  - clusterroles
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - siteconfig.open-cluster-management.io
