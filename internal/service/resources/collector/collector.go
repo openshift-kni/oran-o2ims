@@ -141,13 +141,13 @@ func (c *Collector) initDataSource(ctx context.Context, dataSource DataSource) e
 		}
 
 		dataSource.Init(*result.DataSourceID, 0, c.AsyncChangeEvents)
-		slog.InfoContext(ctx, "created new data source", slog.String("name", name), slog.Any("uuid", *result.DataSourceID))
+		slog.InfoContext(ctx, "created new data source", slog.String("name", name), slog.String("uuid", result.DataSourceID.String()))
 	case err != nil:
 		return fmt.Errorf("failed to get data source %q: %w", name, err)
 	default:
 		dataSource.Init(*record.DataSourceID, record.GenerationID, c.AsyncChangeEvents)
 		slog.InfoContext(ctx, "restored data source",
-			slog.String("name", name), slog.Any("uuid", record.DataSourceID), slog.Int("generation", record.GenerationID))
+			slog.String("name", name), slog.String("uuid", record.DataSourceID.String()), slog.Int("generation", record.GenerationID))
 	}
 	return nil
 }
@@ -438,7 +438,7 @@ func (c *Collector) oCloudSiteAPIForChangeEvent(ctx context.Context, record *mod
 	poolIDs, err := c.repository.GetResourcePoolIDsForSite(ctx, record.OCloudSiteID)
 	if err != nil {
 		slog.ErrorContext(ctx, "failed to load resource pool IDs for O-Cloud site change event",
-			slog.Any("oCloudSiteId", record.OCloudSiteID),
+			slog.String("oCloudSiteId", record.OCloudSiteID.String()),
 			slog.Any("error", err))
 		return models.OCloudSiteToModel(record, nil)
 	}
