@@ -79,9 +79,11 @@ type TemplateDefaults struct {
 	// PolicyTemplateDefaults defines a reference to a configmap with
 	// default values for ACM policies
 	PolicyTemplateDefaults string `json:"policyTemplateDefaults"`
-	// UpgradeDefaults defines a reference to a configmap with
-	// default values for upgrade information
-	UpgradeDefaults string `json:"upgradeDefaults,omitempty"`
+	// UpgradeDefaults defines the default values for upgrade parameters
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Type=object
+	// +kubebuilder:pruning:PreserveUnknownFields
+	UpgradeDefaults runtime.RawExtension `json:"upgradeDefaults,omitempty"`
 }
 
 // ClusterTemplateStatus defines the observed state of ClusterTemplate

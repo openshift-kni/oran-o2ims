@@ -62,25 +62,27 @@ var CTconditionReasons = struct {
 
 // The following constants define the different reasons that conditions will be set for ProvisioningRequest
 var CRconditionReasons = struct {
-	NotApplied      ConditionReason
-	ClusterNotReady ConditionReason
-	Completed       ConditionReason
-	Failed          ConditionReason
-	InProgress      ConditionReason
-	Missing         ConditionReason
-	OutOfDate       ConditionReason
-	TimedOut        ConditionReason
-	Unknown         ConditionReason
+	NotApplied               ConditionReason
+	ClusterNotReady          ConditionReason
+	Completed                ConditionReason
+	Failed                   ConditionReason
+	InProgress               ConditionReason
+	Missing                  ConditionReason
+	OutOfDate                ConditionReason
+	PreconditionChecksFailed ConditionReason
+	TimedOut                 ConditionReason
+	Unknown                  ConditionReason
 }{
-	NotApplied:      "NotApplied",
-	ClusterNotReady: "ClusterNotReady",
-	Completed:       "Completed",
-	Failed:          "Failed",
-	InProgress:      "InProgress",
-	Missing:         "Missing",
-	OutOfDate:       "OutOfDate",
-	TimedOut:        "TimedOut",
-	Unknown:         "Unknown",
+	NotApplied:               "NotApplied",
+	ClusterNotReady:          "ClusterNotReady",
+	Completed:                "Completed",
+	Failed:                   "Failed",
+	InProgress:               "InProgress",
+	Missing:                  "Missing",
+	OutOfDate:                "OutOfDate",
+	PreconditionChecksFailed: "PreconditionChecksFailed",
+	TimedOut:                 "TimedOut",
+	Unknown:                  "Unknown",
 }
 
 // FatalPRconditionTypes is a list of ProvisioningRequest conditions
