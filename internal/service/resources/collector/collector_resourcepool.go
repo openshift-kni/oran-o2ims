@@ -129,7 +129,7 @@ func (d *ResourcePoolDataSource) Watch(ctx context.Context) error {
 
 // HandleAsyncEvent handles an add/update/delete event received from the Reflector.
 func (d *ResourcePoolDataSource) HandleAsyncEvent(ctx context.Context, obj interface{}, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.DebugContext(ctx, "handleAsyncEvent received for resourcepool", slog.Any("type", eventType), slog.String("object", fmt.Sprintf("%T", obj)))
+	slog.DebugContext(ctx, "handleAsyncEvent received for resourcepool", slog.String("type", eventType.String()), slog.String("object", fmt.Sprintf("%T", obj)))
 
 	switch value := obj.(type) {
 	case *inventoryv1alpha1.ResourcePool:
@@ -166,7 +166,7 @@ func (d *ResourcePoolDataSource) HandleSyncComplete(ctx context.Context, objectT
 
 // handleResourcePoolWatchEvent handles an async event received for a ResourcePool CR
 func (d *ResourcePoolDataSource) handleResourcePoolWatchEvent(ctx context.Context, pool *inventoryv1alpha1.ResourcePool, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.DebugContext(ctx, "handleResourcePoolWatchEvent received", slog.String("name", pool.Name), slog.Any("type", eventType))
+	slog.DebugContext(ctx, "handleResourcePoolWatchEvent received", slog.String("name", pool.Name), slog.String("type", eventType.String()))
 
 	// If CR is not ready (e.g., validation failed, parent missing), treat as deletion
 	// from API perspective. This ensures stale data is removed when CRs become invalid.
