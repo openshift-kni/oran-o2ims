@@ -23,6 +23,8 @@ resources:
 - clusterrolebindings_services.yaml
 - leader_election_role.yaml
 - leader_election_role_binding.yaml
+- networkpolicy_role.yaml
+- networkpolicy_role_binding.yaml
 - metrics_service.yaml
 - metrics_service_clusterrole.yaml
 # Pre-canned roles to allow binding to users that require specific access to our API endpoints

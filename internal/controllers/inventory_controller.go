@@ -196,6 +196,12 @@ func (t *reconcilerTask) setupResourceServerConfig(ctx context.Context, defaultR
 		return
 	}
 
+	err = t.createNetworkPolicy(ctx, ctlrutils.InventoryResourceServerName, constants.DefaultServicePort, ExternalIngress)
+	if err != nil {
+		t.logger.ErrorContext(ctx, "Failed to create NetworkPolicy for Resource server.", slog.Any("error", err))
+		return
+	}
+
 	// Create the resource-server deployment.
 	errorReason, err := t.deployServer(ctx, ctlrutils.InventoryResourceServerName)
 	if err != nil {
@@ -225,6 +231,12 @@ func (t *reconcilerTask) setupClusterServerConfig(ctx context.Context, defaultRe
 			"Failed to deploy Service for cluster server.",
 			slog.Any("error", err),
 		)
+		return
+	}
+
+	err = t.createNetworkPolicy(ctx, ctlrutils.InventoryClusterServerName, constants.DefaultServicePort, ExternalIngress)
+	if err != nil {
+		t.logger.ErrorContext(ctx, "Failed to create NetworkPolicy for cluster server.", slog.Any("error", err))
 		return
 	}
 
@@ -260,6 +272,12 @@ func (t *reconcilerTask) setupArtifactsServerConfig(ctx context.Context, default
 		return
 	}
 
+	err = t.createNetworkPolicy(ctx, ctlrutils.InventoryArtifactsServerName, constants.DefaultServicePort, ExternalIngress)
+	if err != nil {
+		t.logger.ErrorContext(ctx, "Failed to create NetworkPolicy for Artifacts server.", slog.Any("error", err))
+		return
+	}
+
 	// Create the artifacts-server deployment.
 	errorReason, err := t.deployServer(ctx, ctlrutils.InventoryArtifactsServerName)
 	if err != nil {
@@ -292,6 +310,34 @@ func (t *reconcilerTask) setupAlarmServerConfig(ctx context.Context, defaultResu
 		return
 	}
 
+	// The alarm server additionally accepts webhook POSTs from alertmanager.
+	alertmanagerPort := intstr.FromInt32(constants.DefaultServicePort)
+	alertmanagerProtocol := corev1.ProtocolTCP
+	alertmanagerIngress := networkingv1.NetworkPolicyIngressRule{
+		From: []networkingv1.NetworkPolicyPeer{
+			{
+				NamespaceSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"kubernetes.io/metadata.name": ctlrutils.OpenClusterManagementObservabilityNamespace,
+					},
+				},
+				PodSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						ctlrutils.AlertmanagerObjectName: "observability",
+					},
+				},
+			},
+		},
+		Ports: []networkingv1.NetworkPolicyPort{
+			{Protocol: &alertmanagerProtocol, Port: &alertmanagerPort},
+		},
+	}
+	err = t.createNetworkPolicy(ctx, ctlrutils.InventoryAlarmServerName, constants.DefaultServicePort, ExternalIngress, alertmanagerIngress)
+	if err != nil {
+		t.logger.ErrorContext(ctx, "Failed to create NetworkPolicy for alarm server.", slog.Any("error", err))
+		return
+	}
+
 	// Create the alarm-server deployment.
 	errorReason, err := t.deployServer(ctx, ctlrutils.InventoryAlarmServerName)
 	if err != nil {
@@ -320,6 +366,12 @@ func (t *reconcilerTask) setupProvisioningServerConfig(ctx context.Context, defa
 			"Failed to deploy Service for the provisioning server.",
 			slog.Any("error", err),
 		)
+		return
+	}
+
+	err = t.createNetworkPolicy(ctx, ctlrutils.InventoryProvisioningServerName, constants.DefaultServicePort, ExternalIngress)
+	if err != nil {
+		t.logger.ErrorContext(ctx, "Failed to create NetworkPolicy for provisioning server.", slog.Any("error", err))
 		return
 	}
 
@@ -923,6 +975,83 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (c
 	}
 
 	return "", nil
+}
+
+// NetworkPolicyScope controls whether a NetworkPolicy permits external ingress traffic.
+type NetworkPolicyScope int
+
+const (
+	// InternalOnly restricts ingress to pods in the same namespace.
+	InternalOnly NetworkPolicyScope = iota
+	// ExternalIngress additionally allows traffic from the OpenShift ingress controller.
+	ExternalIngress
+)
+
+func (t *reconcilerTask) createNetworkPolicy(ctx context.Context, serverName string, port int32, scope NetworkPolicyScope, extraIngressRules ...networkingv1.NetworkPolicyIngressRule) error {
+	t.logger.DebugContext(ctx, "[createNetworkPolicy]", slog.String("server", serverName))
+
+	protocol := corev1.ProtocolTCP
+	portVal := intstr.FromInt32(port)
+
+	ingressRules := []networkingv1.NetworkPolicyIngressRule{
+		{
+			// Allow from pods in the same namespace (inter-service communication)
+			From: []networkingv1.NetworkPolicyPeer{
+				{
+					PodSelector: &metav1.LabelSelector{},
+				},
+			},
+			Ports: []networkingv1.NetworkPolicyPort{
+				{Protocol: &protocol, Port: &portVal},
+			},
+		},
+	}
+
+	if scope == ExternalIngress {
+		ingressRules = append([]networkingv1.NetworkPolicyIngressRule{
+			{
+				// Allow from the OpenShift ingress controller (external SMO traffic via Routes)
+				From: []networkingv1.NetworkPolicyPeer{
+					{
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"network.openshift.io/policy-group": "ingress",
+							},
+						},
+					},
+				},
+				Ports: []networkingv1.NetworkPolicyPort{
+					{Protocol: &protocol, Port: &portVal},
+				},
+			},
+		}, ingressRules...)
+	}
+
+	ingressRules = append(ingressRules, extraIngressRules...)
+
+	np := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serverName,
+			Namespace: t.object.Namespace,
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": serverName,
+				},
+			},
+			PolicyTypes: []networkingv1.PolicyType{
+				networkingv1.PolicyTypeIngress,
+			},
+			Ingress: ingressRules,
+		},
+	}
+
+	if err := ctlrutils.CreateK8sCR(ctx, t.client, np, t.object, ctlrutils.UPDATE); err != nil {
+		return fmt.Errorf("failed to create NetworkPolicy for %s: %w", serverName, err)
+	}
+
+	return nil
 }
 
 func (t *reconcilerTask) createServiceAccount(ctx context.Context, resourceName string) error {

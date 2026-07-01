@@ -2244,6 +2244,18 @@ spec:
           verbs:
           - create
           - patch
+        - apiGroups:
+          - networking.k8s.io
+          resources:
+          - networkpolicies
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
         serviceAccountName: oran-o2ims-controller-manager
     strategy: deployment
   installModes:
