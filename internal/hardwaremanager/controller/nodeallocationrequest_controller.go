@@ -432,7 +432,7 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestProcessing(
 	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
 ) (ctrl.Result, error) {
 
-	r.Logger.InfoContext(ctx, "Handling NodeAllocationRequest Processing")
+	r.Logger.DebugContext(ctx, "Handling NodeAllocationRequest Processing")
 
 	// New API: returns (ctrl.Result, full bool, error)
 	res, full, err := checkNodeAllocationRequestProgress(
@@ -462,10 +462,10 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestProcessing(
 
 	if res.Requeue || res.RequeueAfter > 0 {
 		if res.RequeueAfter > 0 {
-			r.Logger.InfoContext(ctx, "Progress detected; requeueing",
+			r.Logger.DebugContext(ctx, "Progress detected; requeueing",
 				slog.Duration("after", res.RequeueAfter))
 		} else {
-			r.Logger.InfoContext(ctx, "Progress detected; requeueing immediately")
+			r.Logger.DebugContext(ctx, "Progress detected; requeueing immediately")
 		}
 
 		if err := hwmgrutils.UpdateNodeAllocationRequestStatusCondition(
@@ -554,7 +554,7 @@ func (r *NodeAllocationRequestReconciler) checkHardwareTimeout(
 		}
 		deadline := nar.Status.HardwareOperationStartTime.Time.Add(timeout)
 		elapsed := now.Sub(nar.Status.HardwareOperationStartTime.Time)
-		r.Logger.InfoContext(ctx, "Checking provisioning timeout",
+		r.Logger.DebugContext(ctx, "Checking provisioning timeout",
 			slog.Time("now", now),
 			slog.Time("startTime", nar.Status.HardwareOperationStartTime.Time),
 			slog.Time("deadline", deadline),
@@ -590,7 +590,7 @@ func (r *NodeAllocationRequestReconciler) checkHardwareTimeout(
 		}
 		deadline := nar.Status.HardwareOperationStartTime.Time.Add(timeout)
 		elapsed := now.Sub(nar.Status.HardwareOperationStartTime.Time)
-		r.Logger.InfoContext(ctx, "Checking configuration timeout",
+		r.Logger.DebugContext(ctx, "Checking configuration timeout",
 			slog.Time("now", now),
 			slog.Time("startTime", nar.Status.HardwareOperationStartTime.Time),
 			slog.Time("deadline", deadline),
