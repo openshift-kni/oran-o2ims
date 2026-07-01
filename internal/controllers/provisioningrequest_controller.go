@@ -122,7 +122,7 @@ func (r *ProvisioningRequestReconciler) Reconcile(
 		if err != nil {
 			r.Logger.ErrorContext(ctx, "Reconciliation failed",
 				slog.Duration("duration", duration),
-				slog.String("error", err.Error()))
+				slog.Any("error", err))
 		} else {
 			r.Logger.InfoContext(ctx, "Reconciliation completed",
 				slog.Duration("duration", duration),
@@ -368,7 +368,7 @@ func (t *provisioningRequestReconcilerTask) checkOverallProvisioningTimeout(ctx 
 				fmt.Sprintf("Overall provisioning timed out after %v", overallTimeout))
 
 			if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
-				t.logger.WarnContext(ctx, "Failed to update status for overall provisioning timeout", slog.String("error", err.Error()))
+				t.logger.WarnContext(ctx, "Failed to update status for overall provisioning timeout", slog.Any("error", err))
 			}
 			return requeueWithMediumInterval()
 		}
@@ -394,7 +394,7 @@ func (t *provisioningRequestReconcilerTask) checkOverallProvisioningTimeout(ctx 
 					fmt.Sprintf("Cluster installation timed out after %v", t.timeouts.clusterProvisioning))
 
 				if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
-					t.logger.WarnContext(ctx, "Failed to update status for cluster installation timeout", slog.String("error", err.Error()))
+					t.logger.WarnContext(ctx, "Failed to update status for cluster installation timeout", slog.Any("error", err))
 				}
 				return requeueWithMediumInterval()
 			}
@@ -416,7 +416,7 @@ func (t *provisioningRequestReconcilerTask) checkOverallProvisioningTimeout(ctx 
 					fmt.Sprintf("Cluster configuration timed out after %v", t.timeouts.clusterConfiguration))
 
 				if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
-					t.logger.WarnContext(ctx, "Failed to update status for cluster configuration timeout", slog.String("error", err.Error()))
+					t.logger.WarnContext(ctx, "Failed to update status for cluster configuration timeout", slog.Any("error", err))
 				}
 				return requeueWithMediumInterval()
 			}
@@ -489,7 +489,7 @@ func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Co
 	if t.object.Status.ObservedGeneration != t.object.Generation {
 		ctlrutils.SetProvisioningStatePending(t.object, ctlrutils.ValidationMessage)
 		if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
-			t.logger.WarnContext(ctx, "Status update failed, will retry", slog.String("error", updateErr.Error()))
+			t.logger.WarnContext(ctx, "Status update failed, will retry", slog.Any("error", updateErr))
 			return nil, requeueWithShortInterval(), fmt.Errorf(
 				"failed to update status for ProvisioningRequest %s: %w",
 				t.object.Name, updateErr,
@@ -505,7 +505,7 @@ func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Co
 			return nil, res, err
 		}
 		// internal error that might recover - requeue to allow recovery
-		t.logger.WarnContext(ctx, "Internal validation error, will retry", slog.String("error", err.Error()))
+		t.logger.WarnContext(ctx, "Internal validation error, will retry", slog.Any("error", err))
 		return nil, requeueWithMediumInterval(), err
 	}
 
@@ -517,7 +517,7 @@ func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Co
 			return nil, res, err
 		}
 		// internal error that might recover - requeue to allow recovery
-		t.logger.WarnContext(ctx, "Internal ClusterInstance rendering error, will retry", slog.String("error", err.Error()))
+		t.logger.WarnContext(ctx, "Internal ClusterInstance rendering error, will retry", slog.Any("error", err))
 		return nil, requeueWithMediumInterval(), err
 	}
 
@@ -528,7 +528,7 @@ func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Co
 		if ctlrutils.IsInputError(err) {
 			_, err = t.checkClusterDeployConfigState(ctx)
 			if err != nil {
-				t.logger.WarnContext(ctx, "Cluster deploy config state check failed, will retry", slog.String("error", err.Error()))
+				t.logger.WarnContext(ctx, "Cluster deploy config state check failed, will retry", slog.Any("error", err))
 				return nil, requeueWithMediumInterval(), err
 			}
 			// Requeue since we are not watching for updates to required resources
@@ -536,7 +536,7 @@ func (t *provisioningRequestReconcilerTask) handlePreProvisioning(ctx context.Co
 			return nil, requeueWithMediumInterval(), nil
 		}
 		// internal error that might recover - requeue to allow recovery
-		t.logger.WarnContext(ctx, "Internal cluster resources error, will retry", slog.String("error", err.Error()))
+		t.logger.WarnContext(ctx, "Internal cluster resources error, will retry", slog.Any("error", err))
 		return nil, requeueWithMediumInterval(), err
 	}
 
@@ -557,13 +557,13 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 		if ctlrutils.IsInputError(err) {
 			return doNotRequeue(), false, nil
 		}
-		t.logger.ErrorContext(ctx, "NodeAllocationRequest build error", slog.String("error", err.Error()))
+		t.logger.ErrorContext(ctx, "NodeAllocationRequest build error", slog.Any("error", err))
 		return doNotRequeue(), false, err
 	}
 
 	// Create/Update the NodeAllocationRequest
 	if err := t.createOrUpdateNodeAllocationRequest(ctx, renderedClusterInstance.GetNamespace(), renderedNodeAllocationRequest); err != nil {
-		t.logger.WarnContext(ctx, "NodeAllocationRequest create/update error, will retry", slog.String("error", err.Error()))
+		t.logger.WarnContext(ctx, "NodeAllocationRequest create/update error, will retry", slog.Any("error", err))
 		return requeueWithMediumInterval(), false, err
 	}
 
@@ -575,7 +575,7 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 
 	nodeAllocationRequestResponse, exists, err := t.getNodeAllocationRequestResponse(ctx)
 	if err != nil {
-		t.logger.WarnContext(ctx, "NodeAllocationRequest response error, will retry", slog.String("error", err.Error()))
+		t.logger.WarnContext(ctx, "NodeAllocationRequest response error, will retry", slog.Any("error", err))
 		return requeueWithMediumInterval(), false, err
 	}
 	if !exists {
@@ -585,7 +585,7 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 	// Wait for the NodeAllocationRequest to be provisioned and update BMC details if necessary
 	provisioned, configured, timedOutOrFailed, err := t.waitForHardwareData(ctx, renderedClusterInstance, nodeAllocationRequestResponse)
 	if err != nil {
-		t.logger.WarnContext(ctx, "Hardware data wait error, will retry", slog.String("error", err.Error()))
+		t.logger.WarnContext(ctx, "Hardware data wait error, will retry", slog.Any("error", err))
 		return requeueWithMediumInterval(), false, err
 	}
 	if timedOutOrFailed {
@@ -688,7 +688,7 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 		if err != nil {
 			// Don't stop on status check errors - timeout monitoring must continue
 			t.logger.WarnContext(ctx, "Failed to check cluster provision status, continuing monitoring",
-				slog.String("error", err.Error()),
+				slog.Any("error", err),
 				slog.String("name", t.object.Name))
 			// Continue with timeout monitoring even if status check fails
 		}
@@ -786,7 +786,7 @@ func (t *provisioningRequestReconcilerTask) checkClusterInstallationTimeout(ctx 
 		// The next reconciliation will detect the timeout again if status update fails
 		if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
 			t.logger.WarnContext(ctx, "Failed to update timeout status, will retry next reconciliation",
-				slog.String("error", updateErr.Error()),
+				slog.Any("error", updateErr),
 				slog.String("name", t.object.Name))
 		}
 
@@ -1053,7 +1053,7 @@ func (r *ProvisioningRequestReconciler) handleFinalizer(
 		if !controllerutil.ContainsFinalizer(provisioningRequest, provisioningv1alpha1.ProvisioningRequestFinalizer) {
 			controllerutil.AddFinalizer(provisioningRequest, provisioningv1alpha1.ProvisioningRequestFinalizer)
 			if err := r.Update(ctx, provisioningRequest); err != nil {
-				r.Logger.WarnContext(ctx, "Failed to add finalizer, will retry", slog.String("error", err.Error()))
+				r.Logger.WarnContext(ctx, "Failed to add finalizer, will retry", slog.Any("error", err))
 				return requeueWithShortInterval(), true, fmt.Errorf("failed to update ProvisioningRequest with finalizer: %w", err)
 			}
 			// Requeue since the finalizer has been added.
@@ -1073,7 +1073,7 @@ func (r *ProvisioningRequestReconciler) handleFinalizer(
 		patch := client.MergeFrom(provisioningRequest.DeepCopy())
 		if controllerutil.RemoveFinalizer(provisioningRequest, provisioningv1alpha1.ProvisioningRequestFinalizer) {
 			if err := r.Patch(ctx, provisioningRequest, patch); err != nil {
-				r.Logger.WarnContext(ctx, "Failed to remove finalizer, will retry", slog.String("error", err.Error()))
+				r.Logger.WarnContext(ctx, "Failed to remove finalizer, will retry", slog.Any("error", err))
 				return requeueWithShortInterval(), true, fmt.Errorf("failed to patch ProvisioningRequest: %w", err)
 			}
 			return doNotRequeue(), true, nil
@@ -1119,7 +1119,7 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 			if err := r.Client.Patch(ctx, managedCluster, patch); err != nil {
 				r.Logger.WarnContext(ctx, "Failed to set hubAcceptsClient=false, will retry",
 					slog.String("managedCluster", clusterName),
-					slog.String("error", err.Error()))
+					slog.Any("error", err))
 				return false, nil
 			}
 		}
@@ -1197,7 +1197,7 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 		if err := r.handleObservabilityAddonCleanup(ctx, ns.Name); err != nil {
 			r.Logger.WarnContext(ctx, "Failed to handle ObservabilityAddon cleanup",
 				slog.String("namespace", ns.Name),
-				slog.String("error", err.Error()))
+				slog.Any("error", err))
 			// Continue with deletion attempt even if cleanup fails
 		}
 
@@ -1259,7 +1259,7 @@ func (r *ProvisioningRequestReconciler) handleObservabilityAddonCleanup(ctx cont
 				r.Logger.WarnContext(ctx, "Failed to update ObservabilityAddon after removing finalizers",
 					slog.String("name", addon.Name),
 					slog.String("namespace", addon.Namespace),
-					slog.String("error", err.Error()))
+					slog.Any("error", err))
 				continue
 			}
 

@@ -24,14 +24,14 @@ func (t *reconcilerTask) setupHardwareManager(ctx context.Context, defaultResult
 
 	if err = t.createService(ctx, ctlrutils.HardwareManagerServerName, constants.DefaultServicePort, ctlrutils.DefaultServiceTargetPort); err != nil {
 		t.logger.ErrorContext(ctx, "Failed to deploy Service for the hardware manager server.",
-			slog.String("error", err.Error()))
+			slog.Any("error", err))
 		return
 	}
 
 	errorReason, err := t.deployServer(ctx, ctlrutils.HardwareManagerServerName)
 	if err != nil {
 		t.logger.ErrorContext(ctx, "Failed to deploy the hardware manager server.",
-			slog.String("error", err.Error()))
+			slog.Any("error", err))
 		if errorReason == "" {
 			nextReconcile = ctrl.Result{RequeueAfter: 60 * time.Second}
 		}

@@ -73,13 +73,12 @@ func LogPhaseComplete(ctx context.Context, logger *slog.Logger, phase string, du
 		slog.Duration(LogAttrDuration, duration))
 }
 
-// LogError provides standardized error logging
+// LogError provides standardized error logging. Uses LogAttrs instead of
+// ErrorContext because the variadic parameter is already []slog.Attr,
+// which avoids converting to []any and the runtime type-detection overhead.
 func LogError(ctx context.Context, logger *slog.Logger, msg string, err error, attrs ...slog.Attr) {
-	// Convert slog.Attr to []any for the logger call
-	args := make([]any, 0, len(attrs)*2+2)
-	args = append(args, LogAttrError, err.Error())
-	for _, attr := range attrs {
-		args = append(args, attr.Key, attr.Value)
-	}
-	logger.ErrorContext(ctx, msg, args...)
+	allAttrs := make([]slog.Attr, 0, len(attrs)+1)
+	allAttrs = append(allAttrs, slog.Any(LogAttrError, err))
+	allAttrs = append(allAttrs, attrs...)
+	logger.LogAttrs(ctx, slog.LevelError, msg, allAttrs...)
 }

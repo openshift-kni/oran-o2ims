@@ -262,7 +262,7 @@ func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to deploy ServiceAccount for the database server.",
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		return
 	}
@@ -272,7 +272,7 @@ func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to deploy Service for database.",
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		return
 	}
@@ -286,7 +286,7 @@ func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to make config configmap for database.",
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		return
 	}
@@ -300,7 +300,7 @@ func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to create startup configmap for database.",
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		return
 	}
@@ -312,7 +312,7 @@ func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to create service passwords for database.",
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 		return
 	}
@@ -322,7 +322,7 @@ func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to deploy the database server.",
-			slog.String("error", err.Error()),
+			slog.Any("error", err),
 		)
 	}
 

@@ -80,7 +80,7 @@ func (r *NodeAllocationRequestReconciler) Reconcile(ctx context.Context, req ctr
 		if err != nil {
 			r.Logger.ErrorContext(ctx, "Reconciliation failed",
 				slog.Duration("duration", duration),
-				slog.String("error", err.Error()))
+				slog.Any("error", err))
 		} else {
 			r.Logger.InfoContext(ctx, "Reconciliation completed",
 				slog.Duration("duration", duration),
@@ -134,7 +134,7 @@ func (r *NodeAllocationRequestReconciler) Reconcile(ctx context.Context, req ctr
 			}
 
 			if finalizerErr := hwmgrutils.NodeAllocationRequestRemoveFinalizer(ctx, r.Client, nodeAllocationRequest); finalizerErr != nil {
-				r.Logger.InfoContext(ctx, "Failed to remove finalizer, requeueing", slog.String("error", finalizerErr.Error()))
+				r.Logger.InfoContext(ctx, "Failed to remove finalizer, requeueing", slog.Any("error", finalizerErr))
 				return hwmgrutils.RequeueWithShortInterval(), nil
 			}
 
@@ -175,7 +175,7 @@ func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 	if timeoutExceeded, conditionType, err := r.checkHardwareTimeout(ctx, nodeAllocationRequest); err != nil {
 		r.Logger.ErrorContext(ctx, "Failed to check hardware timeout",
 			slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
-			slog.String("error", err.Error()))
+			slog.Any("error", err))
 		return hwmgrutils.RequeueWithMediumInterval(), fmt.Errorf("failed to check hardware timeout: %w", err)
 	} else if timeoutExceeded {
 		var timeoutMessage string
@@ -208,7 +208,7 @@ func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 		); updateErr != nil {
 			r.Logger.ErrorContext(ctx, "Failed to update status for timeout",
 				slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
-				slog.String("error", updateErr.Error()))
+				slog.Any("error", updateErr))
 			return hwmgrutils.RequeueWithMediumInterval(),
 				fmt.Errorf("failed to update status for NodeAllocationRequest timeout %s: %w",
 					nodeAllocationRequest.Name, updateErr)
@@ -219,7 +219,7 @@ func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 		if updateErr := hwmgrutils.UpdateNodeAllocationRequestObservedGeneration(ctx, r.Client, nodeAllocationRequest); updateErr != nil {
 			r.Logger.ErrorContext(ctx, "Failed to update ObservedGeneration after timeout",
 				slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
-				slog.String("error", updateErr.Error()))
+				slog.Any("error", updateErr))
 			// Don't return error, timeout condition is already set
 		}
 
@@ -227,7 +227,7 @@ func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 			if err := clearConfigAnnotationForAllocatedNodes(ctx, r.Client, r.NoncachedClient, r.Logger, nodeAllocationRequest); err != nil {
 				r.Logger.ErrorContext(ctx, "Failed to clear config in progress annotations after configuration timeout",
 					slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
-					slog.String("error", err.Error()))
+					slog.Any("error", err))
 				return hwmgrutils.RequeueWithMediumInterval(),
 					fmt.Errorf("failed to clear config in progress annotations after configuration timeout %s: %w",
 						nodeAllocationRequest.Name, err)
@@ -237,7 +237,7 @@ func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 			if err := clearBMHUpdateAnnotationsForNAR(ctx, r.Client, r.Logger, nodeAllocationRequest); err != nil {
 				r.Logger.ErrorContext(ctx, "Failed to clear BMH update annotations after configuration timeout",
 					slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
-					slog.String("error", err.Error()))
+					slog.Any("error", err))
 				return hwmgrutils.RequeueWithMediumInterval(),
 					fmt.Errorf("failed to clear BMH update annotations after configuration timeout %s: %w",
 						nodeAllocationRequest.Name, err)
@@ -279,7 +279,7 @@ func (r *NodeAllocationRequestReconciler) handleNewNodeAllocationRequestCreate(
 	var message string
 
 	if err := processNewNodeAllocationRequest(ctx, r.NoncachedClient, r.Logger, nodeAllocationRequest); err != nil {
-		r.Logger.ErrorContext(ctx, "failed processNewNodeAllocationRequest", slog.String("error", err.Error()))
+		r.Logger.ErrorContext(ctx, "failed processNewNodeAllocationRequest", slog.Any("error", err))
 		conditionReason = hwmgmtv1alpha1.Failed
 		conditionStatus = metav1.ConditionFalse
 		message = "Creation request failed: " + err.Error()
@@ -381,7 +381,7 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 			if updateErr := hwmgrutils.UpdateNodeAllocationRequestObservedGeneration(ctx, r.Client, nodeAllocationRequest); updateErr != nil {
 				r.Logger.ErrorContext(ctx, "Failed to update ObservedGeneration status",
 					slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
-					slog.String("error", updateErr.Error()))
+					slog.Any("error", updateErr))
 				// Return error to trigger requeue
 				return hwmgrutils.RequeueWithShortInterval(),
 					fmt.Errorf("failed to update ObservedGeneration status: %w", updateErr)
@@ -402,7 +402,7 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 			hwmgmtv1alpha1.Configured, hwmgmtv1alpha1.ConditionReason(reason), status, message); updateErr != nil {
 
 			r.Logger.ErrorContext(ctx, "Failed to update aggregated NodeAllocationRequest status",
-				slog.String("error", updateErr.Error()))
+				slog.Any("error", updateErr))
 
 			if err == nil {
 				err = updateErr
@@ -416,7 +416,7 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 			if updateErr := hwmgrutils.UpdateNodeAllocationRequestObservedGeneration(ctx, r.Client, nodeAllocationRequest); updateErr != nil {
 				r.Logger.ErrorContext(ctx, "Failed to update ObservedGeneration status",
 					slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
-					slog.String("error", updateErr.Error()))
+					slog.Any("error", updateErr))
 				// Return error to trigger requeue
 				return hwmgrutils.RequeueWithShortInterval(),
 					fmt.Errorf("failed to update ObservedGeneration status: %w", updateErr)

@@ -160,7 +160,7 @@ func (c *AMClient) getAlerts(ctx context.Context) ([]APIAlert, error) {
 	}
 	defer func(Body io.ReadCloser) {
 		if err := Body.Close(); err != nil {
-			slog.ErrorContext(ctx, "failed to close response body during AM get call", slog.String("error", err.Error()))
+			slog.ErrorContext(ctx, "failed to close response body during AM get call", slog.Any("error", err))
 		}
 	}(resp.Body)
 

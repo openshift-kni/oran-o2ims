@@ -47,7 +47,7 @@ func (r *LocationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 		if err != nil {
 			r.Logger.ErrorContext(ctx, "Reconciliation failed",
 				slog.Duration("duration", duration),
-				slog.String("error", err.Error()))
+				slog.Any("error", err))
 		} else {
 			r.Logger.InfoContext(ctx, "Reconciliation completed",
 				slog.Duration("duration", duration),

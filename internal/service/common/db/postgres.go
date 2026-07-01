@@ -151,7 +151,7 @@ var customLogger = tracelog.LoggerFunc(func(ctx context.Context, level tracelog.
 
 	// Handle errors (this takes precedence over performance warnings)
 	if err, ok := data["err"].(error); ok && err != nil {
-		attrs = append(attrs, slog.String("error", err.Error()))
+		attrs = append(attrs, slog.Any("error", err))
 		slog.LogAttrs(ctx, slog.LevelError, fmt.Sprintf("Database %s failed", msg), attrs...)
 		return
 	}

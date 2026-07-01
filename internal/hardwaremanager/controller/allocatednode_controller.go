@@ -52,7 +52,7 @@ func (r *AllocatedNodeReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		if err != nil {
 			r.Logger.ErrorContext(ctx, "Reconciliation failed",
 				slog.Duration("duration", duration),
-				slog.String("error", err.Error()))
+				slog.Any("error", err))
 		} else {
 			r.Logger.InfoContext(ctx, "Reconciliation completed",
 				slog.Duration("duration", duration),
@@ -94,7 +94,7 @@ func (r *AllocatedNodeReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			}
 
 			if finalizerErr := hwmgrutils.AllocatedNodeRemoveFinalizer(ctx, r.NoncachedClient, r.Client, allocatedNode); finalizerErr != nil {
-				r.Logger.InfoContext(ctx, "Failed to remove finalizer, requeueing", slog.String("error", finalizerErr.Error()))
+				r.Logger.InfoContext(ctx, "Failed to remove finalizer, requeueing", slog.Any("error", finalizerErr))
 				return hwmgrutils.RequeueWithShortInterval(), nil
 			}
 
@@ -108,7 +108,7 @@ func (r *AllocatedNodeReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	if !controllerutil.ContainsFinalizer(allocatedNode, hwmgrutils.AllocatedNodeFinalizer) {
 		if finalizerErr := hwmgrutils.AllocatedNodeAddFinalizer(ctx, r.NoncachedClient, r.Client, allocatedNode); finalizerErr != nil {
-			r.Logger.InfoContext(ctx, "Failed to add node finalizer, requeueing", slog.String("error", finalizerErr.Error()))
+			r.Logger.InfoContext(ctx, "Failed to add node finalizer, requeueing", slog.Any("error", finalizerErr))
 			return hwmgrutils.RequeueWithShortInterval(), nil
 		}
 	}
