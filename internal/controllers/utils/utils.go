@@ -414,6 +414,10 @@ func addArgsForOAuth(inventory *inventoryv1alpha1.Inventory, args []string) []st
 	if inventory.Spec.SmoConfig != nil {
 		smo := inventory.Spec.SmoConfig
 
+		if smo.URL != "" {
+			args = append(args, fmt.Sprintf("--smo-url=%s", smo.URL))
+		}
+
 		if smo.OAuthConfig != nil {
 			args = append(args,
 				fmt.Sprintf("--oauth-scopes=%s", strings.Join(smo.OAuthConfig.Scopes, ",")),
