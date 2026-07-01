@@ -101,7 +101,7 @@ func (c *Collector) Run(ctx context.Context) error {
 		select {
 		case event := <-c.AsyncChangeEvents:
 			if err := c.handleAsyncEvent(ctx, event); err != nil {
-				slog.ErrorContext(ctx, "failed to handle async change", "event", event, "error", err)
+				slog.ErrorContext(ctx, "failed to handle async change", slog.Any("event", event), slog.Any("error", err))
 			}
 		case <-ctx.Done():
 			slog.InfoContext(ctx, "Context terminated; collector exiting")
@@ -141,13 +141,13 @@ func (c *Collector) initDataSource(ctx context.Context, dataSource DataSource) e
 		}
 
 		dataSource.Init(*result.DataSourceID, 0, c.AsyncChangeEvents)
-		slog.InfoContext(ctx, "created new data source", "name", name, "uuid", *result.DataSourceID)
+		slog.InfoContext(ctx, "created new data source", slog.String("name", name), slog.Any("uuid", *result.DataSourceID))
 	case err != nil:
 		return fmt.Errorf("failed to get data source %q: %w", name, err)
 	default:
 		dataSource.Init(*record.DataSourceID, record.GenerationID, c.AsyncChangeEvents)
 		slog.InfoContext(ctx, "restored data source",
-			"name", name, "uuid", record.DataSourceID, "generation", record.GenerationID)
+			slog.String("name", name), slog.Any("uuid", record.DataSourceID), slog.Int("generation", record.GenerationID))
 	}
 	return nil
 }
@@ -241,7 +241,7 @@ func (c *Collector) handleAsyncResourceEvent(ctx context.Context, resource model
 // handleResourceSyncCompletion handles the sync completion for Resource objects
 // by purging resources and resource types not in the key set.
 func (c *Collector) handleResourceSyncCompletion(ctx context.Context, ids []any) error {
-	slog.DebugContext(ctx, "Handling end of sync for Resource instances", "count", len(ids))
+	slog.DebugContext(ctx, "Handling end of sync for Resource instances", slog.Int("count", len(ids)))
 	c.invalidateAlarmDictCache()
 
 	// Purge stale resources
@@ -267,7 +267,7 @@ func (c *Collector) handleResourceSyncCompletion(ctx context.Context, ids []any)
 	}
 
 	if resourceCount > 0 {
-		slog.InfoContext(ctx, "Deleted stale resources", "count", resourceCount)
+		slog.InfoContext(ctx, "Deleted stale resources", slog.Int("count", resourceCount))
 	}
 
 	return nil
@@ -279,7 +279,7 @@ func (c *Collector) getAlarmDictionaryID(ctx context.Context, resourceTypeID uui
 	if c.alarmDictCache == nil {
 		alarmDictionaries, err := c.repository.GetAlarmDictionaries(ctx)
 		if err != nil {
-			slog.WarnContext(ctx, "failed to fetch alarm dictionaries", "error", err)
+			slog.WarnContext(ctx, "failed to fetch alarm dictionaries", slog.Any("error", err))
 			return nil
 		}
 		c.alarmDictCache = make(map[string]*uuid.UUID)
@@ -302,7 +302,7 @@ func (c *Collector) invalidateAlarmDictCache() {
 // handleDeploymentManagerSyncCompletion handles the end of sync for DeploymentManager objects.  It deletes any
 // DeploymentManager objects not included in the set of keys received during the sync operation.
 func (c *Collector) handleDeploymentManagerSyncCompletion(ctx context.Context, ids []any) error {
-	slog.DebugContext(ctx, "Handling end of sync for DeploymentManager instances", "count", len(ids))
+	slog.DebugContext(ctx, "Handling end of sync for DeploymentManager instances", slog.Int("count", len(ids)))
 	records, err := c.repository.GetDeploymentManagersNotIn(ctx, ids)
 	if err != nil {
 		return fmt.Errorf("failed to get stale deployment managers: %w", err)
@@ -326,7 +326,7 @@ func (c *Collector) handleDeploymentManagerSyncCompletion(ctx context.Context, i
 	}
 
 	if count > 0 {
-		slog.InfoContext(ctx, "Deleted stale deployment manager records", "count", count)
+		slog.InfoContext(ctx, "Deleted stale deployment manager records", slog.Int("count", count))
 	}
 
 	return nil
@@ -425,8 +425,8 @@ func (c *Collector) locationAPIForChangeEvent(ctx context.Context, record *model
 	siteIDs, err := c.repository.GetOCloudSiteIDsForLocation(ctx, record.GlobalLocationID)
 	if err != nil {
 		slog.ErrorContext(ctx, "failed to load O-Cloud site IDs for location change event",
-			"globalLocationId", record.GlobalLocationID,
-			"error", err)
+			slog.Any("globalLocationId", record.GlobalLocationID),
+			slog.Any("error", err))
 		return models.LocationToModel(record, nil)
 	}
 	return models.LocationToModel(record, siteIDs)
@@ -438,8 +438,8 @@ func (c *Collector) oCloudSiteAPIForChangeEvent(ctx context.Context, record *mod
 	poolIDs, err := c.repository.GetResourcePoolIDsForSite(ctx, record.OCloudSiteID)
 	if err != nil {
 		slog.ErrorContext(ctx, "failed to load resource pool IDs for O-Cloud site change event",
-			"oCloudSiteId", record.OCloudSiteID,
-			"error", err)
+			slog.Any("oCloudSiteId", record.OCloudSiteID),
+			slog.Any("error", err))
 		return models.OCloudSiteToModel(record, nil)
 	}
 	return models.OCloudSiteToModel(record, poolIDs)
@@ -515,7 +515,7 @@ func (c *Collector) handleAsyncOCloudSiteEvent(ctx context.Context, site models.
 
 // handleLocationSyncCompletion handles the sync completion for Location objects.
 func (c *Collector) handleLocationSyncCompletion(ctx context.Context, keys []uuid.UUID) error {
-	slog.DebugContext(ctx, "Handling end of sync for Location instances", "count", len(keys))
+	slog.DebugContext(ctx, "Handling end of sync for Location instances", slog.Int("count", len(keys)))
 
 	// Create a set of tracking UUIDs for fast lookup
 	keySet := make(map[uuid.UUID]struct{}, len(keys))
@@ -554,7 +554,7 @@ func (c *Collector) handleLocationSyncCompletion(ctx context.Context, keys []uui
 	}
 
 	if count > 0 {
-		slog.InfoContext(ctx, "Deleted stale location records", "count", count)
+		slog.InfoContext(ctx, "Deleted stale location records", slog.Int("count", count))
 	}
 
 	return nil
@@ -562,7 +562,7 @@ func (c *Collector) handleLocationSyncCompletion(ctx context.Context, keys []uui
 
 // handleOCloudSiteSyncCompletion handles the sync completion for OCloudSite objects.
 func (c *Collector) handleOCloudSiteSyncCompletion(ctx context.Context, ids []any) error {
-	slog.DebugContext(ctx, "Handling end of sync for OCloudSite instances", "count", len(ids))
+	slog.DebugContext(ctx, "Handling end of sync for OCloudSite instances", slog.Int("count", len(ids)))
 
 	records, err := c.repository.GetOCloudSitesNotIn(ctx, ids)
 	if err != nil {
@@ -587,7 +587,7 @@ func (c *Collector) handleOCloudSiteSyncCompletion(ctx context.Context, ids []an
 	}
 
 	if count > 0 {
-		slog.InfoContext(ctx, "Deleted stale OCloudSite records", "count", count)
+		slog.InfoContext(ctx, "Deleted stale OCloudSite records", slog.Int("count", count))
 	}
 
 	return nil
@@ -639,30 +639,30 @@ func (c *Collector) rebuildResourcesForPool(ctx context.Context, poolName string
 
 		results, err := handler.BuildResourcesForPool(ctx, poolName)
 		if err != nil {
-			slog.ErrorContext(ctx, "failed to rebuild resources for pool", "pool", poolName, "error", err)
+			slog.ErrorContext(ctx, "failed to rebuild resources for pool", slog.Any("pool", poolName), slog.Any("error", err))
 			continue
 		}
 
 		for i := range results {
 			if err := c.handleAsyncResourceTypeEvent(ctx, results[i].ResourceType, false); err != nil {
 				slog.ErrorContext(ctx, "failed to persist resource type during pool rebuild",
-					"pool", poolName, "error", err)
+					slog.String("pool", poolName), slog.Any("error", err))
 			}
 			if err := c.handleAsyncResourceEvent(ctx, results[i].Resource, false); err != nil {
 				slog.ErrorContext(ctx, "failed to persist resource during pool rebuild",
-					"pool", poolName, "error", err)
+					slog.String("pool", poolName), slog.Any("error", err))
 			}
 		}
 
 		if len(results) > 0 {
-			slog.InfoContext(ctx, "Rebuilt resources for pool", "pool", poolName, "count", len(results))
+			slog.InfoContext(ctx, "Rebuilt resources for pool", slog.Any("pool", poolName), slog.Int("count", len(results)))
 		}
 	}
 }
 
 // handleResourcePoolSyncCompletion handles the sync completion for ResourcePool objects.
 func (c *Collector) handleResourcePoolSyncCompletion(ctx context.Context, ids []any) error {
-	slog.DebugContext(ctx, "Handling end of sync for ResourcePool instances", "count", len(ids))
+	slog.DebugContext(ctx, "Handling end of sync for ResourcePool instances", slog.Int("count", len(ids)))
 
 	records, err := c.repository.GetResourcePoolsNotIn(ctx, ids)
 	if err != nil {
@@ -687,7 +687,7 @@ func (c *Collector) handleResourcePoolSyncCompletion(ctx context.Context, ids []
 	}
 
 	if count > 0 {
-		slog.InfoContext(ctx, "Deleted stale ResourcePool records", "count", count)
+		slog.InfoContext(ctx, "Deleted stale ResourcePool records", slog.Int("count", count))
 	}
 
 	return nil
