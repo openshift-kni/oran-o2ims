@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 )
 
 func createOrUpdateHostUpdatePolicy(ctx context.Context,
@@ -37,8 +38,8 @@ func createOrUpdateHostUpdatePolicy(ctx context.Context,
 		return fmt.Errorf("bmh cannot be nil")
 	}
 
+	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
 	logger.DebugContext(ctx, "Creating or updating HostUpdatePolicy",
-		slog.String("bmh", bmh.Name),
 		slog.Bool("firmwareUpdateRequired", firmwareUpdateRequired),
 		slog.Bool("biosUpdateRequired", biosUpdateRequired))
 
@@ -75,7 +76,6 @@ func createOrUpdateHostUpdatePolicy(ctx context.Context,
 	}
 
 	logger.DebugContext(ctx, "Desired HostUpdatePolicy spec",
-		slog.String("bmh", bmh.Name),
 		slog.String("desiredFirmwareUpdates", string(desiredSpec.FirmwareUpdates)),
 		slog.String("desiredFirmwareSettings", string(desiredSpec.FirmwareSettings)))
 

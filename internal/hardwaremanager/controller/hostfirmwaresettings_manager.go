@@ -22,6 +22,7 @@ import (
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 )
 
@@ -127,6 +128,7 @@ func IsBiosUpdateRequired(ctx context.Context,
 func isFirmwareSettingsChangeDetectedAndValid(ctx context.Context,
 	c client.Client,
 	bmh *metal3v1alpha1.BareMetalHost) (bool, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
 	// Extract logger from context
 	logger := slog.Default()
 	if ctxLogger, ok := ctx.Value(any("logger")).(*slog.Logger); ok && ctxLogger != nil {
@@ -149,7 +151,6 @@ func isFirmwareSettingsChangeDetectedAndValid(ctx context.Context,
 	observed := changeDetectedCond.ObservedGeneration == hfs.Generation
 
 	logger.DebugContext(ctx, "Evaluating BIOS/FirmwareSettings change",
-		slog.String("bmh", bmh.Name),
 		slog.String("hfs", hfs.Name),
 		slog.Int64("hfsGeneration", hfs.Generation),
 		slog.String("changeDetectedStatus", string(changeDetectedCond.Status)),

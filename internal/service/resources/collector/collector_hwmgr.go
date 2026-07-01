@@ -28,6 +28,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	hwmgrcontroller "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/controller"
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
 )
@@ -269,7 +270,9 @@ func (d *HardwareDataSource) HandleSyncComplete(ctx context.Context, objectType 
 // handleBMHEvent handles a BMH watch event by building the full resource
 // from BMH + HardwareData + AllocatedNode and sending events to the collector.
 func (d *HardwareDataSource) handleBMHEvent(ctx context.Context, bmh *metal3v1alpha1.BareMetalHost, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.DebugContext(ctx, "handleBMHEvent", "bmh", bmh.Namespace+"/"+bmh.Name, "type", eventType)
+	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
+	ctx = logging.AppendCtx(ctx, slog.String("bmhNamespace", bmh.Namespace))
+	slog.DebugContext(ctx, "handleBMHEvent", "type", eventType)
 
 	resourceID := uuid.MustParse(string(bmh.UID))
 
@@ -278,8 +281,7 @@ func (d *HardwareDataSource) handleBMHEvent(ctx context.Context, bmh *metal3v1al
 	}
 
 	if !hwmgrcontroller.IncludeInInventory(bmh) {
-		slog.DebugContext(ctx, "BMH not included in inventory, treating as deletion",
-			"bmh", bmh.Namespace+"/"+bmh.Name)
+		slog.DebugContext(ctx, "BMH not included in inventory, treating as deletion")
 		return d.sendDeleteEvent(ctx, resourceID)
 	}
 
@@ -289,12 +291,14 @@ func (d *HardwareDataSource) handleBMHEvent(ctx context.Context, bmh *metal3v1al
 // handleHardwareDataEvent handles a HardwareData watch event by looking up
 // the corresponding BMH and rebuilding the resource.
 func (d *HardwareDataSource) handleHardwareDataEvent(ctx context.Context, hwdata *metal3v1alpha1.HardwareData, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.DebugContext(ctx, "handleHardwareDataEvent", "hwdata", hwdata.Namespace+"/"+hwdata.Name, "type", eventType)
+	ctx = logging.AppendCtx(ctx, slog.String("bmh", hwdata.Name))
+	ctx = logging.AppendCtx(ctx, slog.String("bmhNamespace", hwdata.Namespace))
+	slog.DebugContext(ctx, "handleHardwareDataEvent", "type", eventType)
 
 	var bmh metal3v1alpha1.BareMetalHost
 	if err := d.hubClient.Get(ctx, types.NamespacedName{Name: hwdata.Name, Namespace: hwdata.Namespace}, &bmh); err != nil {
 		if errors.IsNotFound(err) {
-			slog.DebugContext(ctx, "BMH not found for HardwareData, skipping", "hwdata", hwdata.Namespace+"/"+hwdata.Name)
+			slog.DebugContext(ctx, "BMH not found for HardwareData, skipping")
 			return uuid.Nil, nil
 		}
 		return uuid.Nil, fmt.Errorf("failed to get BMH for HardwareData %s/%s: %w", hwdata.Namespace, hwdata.Name, err)
@@ -310,19 +314,23 @@ func (d *HardwareDataSource) handleHardwareDataEvent(ctx context.Context, hwdata
 // handleAllocatedNodeEvent handles an AllocatedNode watch event by looking up
 // the corresponding BMH and rebuilding the resource.
 func (d *HardwareDataSource) handleAllocatedNodeEvent(ctx context.Context, node *hwmgmtv1alpha1.AllocatedNode, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.DebugContext(ctx, "handleAllocatedNodeEvent", "node", node.Namespace+"/"+node.Name, "type", eventType)
+	ctx = logging.AppendCtx(ctx, slog.String("node", node.Name))
+	slog.DebugContext(ctx, "handleAllocatedNodeEvent", "type", eventType)
 
 	bmhName := node.Spec.HwMgrNodeId
 	bmhNamespace := node.Spec.HwMgrNodeNs
 	if bmhName == "" || bmhNamespace == "" {
-		slog.DebugContext(ctx, "AllocatedNode missing BMH reference, skipping", "node", node.Namespace+"/"+node.Name)
+		slog.DebugContext(ctx, "AllocatedNode missing BMH reference, skipping")
 		return uuid.Nil, nil
 	}
+
+	ctx = logging.AppendCtx(ctx, slog.String("bmh", bmhName))
+	ctx = logging.AppendCtx(ctx, slog.String("bmhNamespace", bmhNamespace))
 
 	var bmh metal3v1alpha1.BareMetalHost
 	if err := d.hubClient.Get(ctx, types.NamespacedName{Name: bmhName, Namespace: bmhNamespace}, &bmh); err != nil {
 		if errors.IsNotFound(err) {
-			slog.DebugContext(ctx, "BMH not found for AllocatedNode, skipping", "bmh", bmhNamespace+"/"+bmhName)
+			slog.DebugContext(ctx, "BMH not found for AllocatedNode, skipping")
 			return uuid.Nil, nil
 		}
 		return uuid.Nil, fmt.Errorf("failed to get BMH for AllocatedNode %s/%s: %w", node.Namespace, node.Name, err)
