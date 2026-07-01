@@ -222,7 +222,7 @@ func (d *AlarmsDataSource) processManagedCluster(ctx context.Context, version st
 		return nil, err
 	}
 
-	slog.DebugContext(ctx, "fetched rules for managed cluster", slog.Any("cluster", cluster.Name), slog.Any("version", version), slog.Int("rules count", len(rules)))
+	slog.DebugContext(ctx, "fetched rules for managed cluster", slog.String("cluster", cluster.Name), slog.String("version", version), slog.Int("rules count", len(rules)))
 	return rules, nil
 }
 
@@ -349,7 +349,7 @@ func (d *AlarmsDataSource) getFilteredRules(monitoringRules []monitoringv1.Rule)
 	for _, rule := range monitoringRules {
 		severity, ok := rule.Labels["severity"]
 		if !ok {
-			slog.Warn("rule missing severity label", slog.Any("alert", rule.Alert))
+			slog.Warn("rule missing severity label", slog.String("alert", rule.Alert))
 		}
 
 		key := uniqueAlarm{
@@ -503,7 +503,7 @@ func (d *AlarmsDataSource) collectThanosRules(ctx context.Context) ([]monitoring
 		}, configMap)
 		if err != nil {
 			if errors.IsNotFound(err) {
-				slog.WarnContext(ctx, "Config map not found", slog.Any("configMap", configMapName))
+				slog.WarnContext(ctx, "Config map not found", slog.String("configMap", configMapName))
 				continue
 			}
 
@@ -519,7 +519,7 @@ func (d *AlarmsDataSource) collectThanosRules(ctx context.Context) ([]monitoring
 			var spec RuleSpec
 			err = yaml.Unmarshal([]byte(rulSpec), &spec)
 			if err != nil {
-				slog.ErrorContext(ctx, "failed to unmarshal thanos prometheus rules spec", slog.Any("configMap", configMapName), slog.Any("error", err))
+				slog.ErrorContext(ctx, "failed to unmarshal thanos prometheus rules spec", slog.String("configMap", configMapName), slog.Any("error", err))
 				continue
 			}
 
@@ -539,7 +539,7 @@ func (d *AlarmsDataSource) collectThanosRules(ctx context.Context) ([]monitoring
 				}
 			}
 		} else {
-			slog.WarnContext(ctx, "No data found in thanos config map", slog.Any("configMap", configMapName))
+			slog.WarnContext(ctx, "No data found in thanos config map", slog.String("configMap", configMapName))
 		}
 	}
 
@@ -575,7 +575,7 @@ func (d *AlarmsDataSource) expandTemplatedSeverity(rules []monitoringv1.Rule) []
 			continue
 		}
 
-		slog.Info("Expanding templated severity rule", slog.Any("alert", rule.Alert), slog.Any("severity", severity))
+		slog.Info("Expanding templated severity rule", slog.String("alert", rule.Alert), slog.String("severity", severity))
 
 		// Create one rule for each static severity value
 		for _, staticSeverity := range severities {
@@ -603,7 +603,7 @@ func (d *AlarmsDataSource) expandTemplatedSeverity(rules []monitoringv1.Rule) []
 			}
 
 			expandedRules = append(expandedRules, expandedRule)
-			slog.Debug("Created expanded rule", slog.Any("alert", expandedRule.Alert), slog.Any("severity", staticSeverity))
+			slog.Debug("Created expanded rule", slog.String("alert", expandedRule.Alert), slog.String("severity", staticSeverity))
 		}
 	}
 

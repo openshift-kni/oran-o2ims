@@ -166,7 +166,7 @@ func (d *ResourcePoolDataSource) HandleSyncComplete(ctx context.Context, objectT
 
 // handleResourcePoolWatchEvent handles an async event received for a ResourcePool CR
 func (d *ResourcePoolDataSource) handleResourcePoolWatchEvent(ctx context.Context, pool *inventoryv1alpha1.ResourcePool, eventType async.AsyncEventType) (uuid.UUID, error) {
-	slog.DebugContext(ctx, "handleResourcePoolWatchEvent received", slog.Any("name", pool.Name), slog.Any("type", eventType))
+	slog.DebugContext(ctx, "handleResourcePoolWatchEvent received", slog.String("name", pool.Name), slog.Any("type", eventType))
 
 	// If CR is not ready (e.g., validation failed, parent missing), treat as deletion
 	// from API perspective. This ensures stale data is removed when CRs become invalid.
