@@ -62,6 +62,6 @@ func HandleAlerts(ctx context.Context, clusterServer, resourceServer infrastruct
 		return fmt.Errorf("failed to handle alerts from %s: %w", string(source), err)
 	}
 
-	slog.InfoContext(ctx, "Successfully handled AlarmEventRecords", "source_type", string(source))
+	slog.InfoContext(ctx, "Successfully handled AlarmEventRecords", slog.String("source_type", string(source)))
 	return nil
 }

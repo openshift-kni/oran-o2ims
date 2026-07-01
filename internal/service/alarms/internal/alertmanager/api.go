@@ -71,7 +71,7 @@ func (c *AMClient) RunAlertSyncScheduler(ctx context.Context, interval time.Dura
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	slog.InfoContext(ctx, "Alert sync scheduler started", "interval", interval.String())
+	slog.InfoContext(ctx, "Alert sync scheduler started", slog.String("interval", interval.String()))
 
 	// Continue syncing at regular intervals until context is canceled
 	for {
@@ -79,7 +79,7 @@ func (c *AMClient) RunAlertSyncScheduler(ctx context.Context, interval time.Dura
 		case <-ticker.C:
 			slog.InfoContext(ctx, "Running scheduled alert sync")
 			if err := c.SyncAlerts(ctx); err != nil {
-				slog.ErrorContext(ctx, "failed to sync alerts", "error", err)
+				slog.ErrorContext(ctx, "failed to sync alerts", slog.Any("error", err))
 				// Continue running even if a sync fails
 			}
 		case <-ctx.Done():
@@ -160,7 +160,7 @@ func (c *AMClient) getAlerts(ctx context.Context) ([]APIAlert, error) {
 	}
 	defer func(Body io.ReadCloser) {
 		if err := Body.Close(); err != nil {
-			slog.ErrorContext(ctx, "failed to close response body during AM get call", "error", err.Error())
+			slog.ErrorContext(ctx, "failed to close response body during AM get call", slog.String("error", err.Error()))
 		}
 	}(resp.Body)
 
@@ -181,7 +181,7 @@ func (c *AMClient) getAlerts(ctx context.Context) ([]APIAlert, error) {
 		return nil, fmt.Errorf("error parsing response: %w, body: %s", err, string(body))
 	}
 
-	slog.InfoContext(ctx, "Got alerts with AM API", "alerts", len(alerts))
+	slog.InfoContext(ctx, "Got alerts with AM API", slog.Int("alerts", len(alerts)))
 	return alerts, nil
 }
 

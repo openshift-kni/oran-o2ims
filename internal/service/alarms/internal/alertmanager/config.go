@@ -98,7 +98,7 @@ func MergeWithExisting(existingYAML []byte) (map[string]interface{}, error) {
 	updateReceivers(config)
 	updateRoutes(config)
 
-	slog.Debug("Alertmanager config update complete", "receiver_name", OranReceiverName)
+	slog.Debug("Alertmanager config update complete", slog.String("receiver_name", OranReceiverName))
 	return config, nil
 }
 
