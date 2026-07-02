@@ -3330,7 +3330,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 	})
 
 	Describe("IBU (Image Based Upgrade) Tests", func() {
-		Describe("handleUpgrade", func() {
+		Describe("handleIBGUUpgrade", func() {
 			var clusterNamespace *corev1.Namespace
 
 			BeforeEach(func() {
@@ -3361,26 +3361,12 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 			})
 
 			Context("when IBGU doesn't exist", func() {
-				It("should set PreconditionChecksFailed condition when upgrade defaults is not empty but missing imageBasedGroupUpgrade key", func() {
-					clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-						Raw: []byte(`{"wrongKey":{}}`),
-					}
-					Expect(c.Update(ctx, clusterTemplate)).To(Succeed())
-
-					_, _, err := task.handleUpgrade(ctx, clusterName)
-					Expect(err).ToNot(HaveOccurred())
-
-					upgradeCond := meta.FindStatusCondition(task.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
-					Expect(upgradeCond).ToNot(BeNil())
-					Expect(upgradeCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed)))
-				})
-
 				It("should create IBGU and set status to InProgress", func() {
 					task.object.Spec.TemplateParameters = runtime.RawExtension{
 						Raw: []byte(`{"upgradeParameters":{"imageBasedGroupUpgrade":{"ibuSpec":{"seedImageRef":{"version":"4.17.0","image":"override-image"}}}}}`),
 					}
 
-					result, proceed, err := task.handleUpgrade(ctx, clusterName)
+					result, proceed, err := task.handleIBGUUpgrade(ctx, clusterTemplate, clusterName)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(proceed).To(BeFalse())
 					Expect(result.RequeueAfter).To(Equal(requeueWithMediumInterval().RequeueAfter))
@@ -3421,7 +3407,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 				})
 
 				It("should requeue and set status to InProgress", func() {
-					result, proceed, err := task.handleUpgrade(ctx, clusterName)
+					result, proceed, err := task.handleIBGUUpgrade(ctx, clusterTemplate, clusterName)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(proceed).To(BeFalse())
 					Expect(result.RequeueAfter).To(Equal(requeueWithMediumInterval().RequeueAfter))
@@ -3467,7 +3453,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 				})
 
 				It("should set status to Failed and not proceed", func() {
-					result, proceed, err := task.handleUpgrade(ctx, clusterName)
+					result, proceed, err := task.handleIBGUUpgrade(ctx, clusterTemplate, clusterName)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(proceed).To(BeFalse())
 					Expect(result.RequeueAfter).To(BeZero()) // Failed upgrades don't requeue
@@ -3482,11 +3468,8 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 			})
 
 			Context("when IBGU is completed", func() {
-				var completedIBGU *ibgu.ImageBasedGroupUpgrade
-
 				BeforeEach(func() {
-					// Create IBGU with completed status
-					completedIBGU = &ibgu.ImageBasedGroupUpgrade{
+					completedIBGU := &ibgu.ImageBasedGroupUpgrade{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      clusterName,
 							Namespace: clusterName,
@@ -3504,7 +3487,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 				})
 
 				It("should set status to Completed, delete IBGU, and proceed", func() {
-					result, proceed, err := task.handleUpgrade(ctx, clusterName)
+					result, proceed, err := task.handleIBGUUpgrade(ctx, clusterTemplate, clusterName)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(proceed).To(BeTrue())
 					Expect(result.RequeueAfter).To(BeZero())
