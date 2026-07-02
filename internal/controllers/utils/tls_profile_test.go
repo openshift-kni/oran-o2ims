@@ -108,12 +108,10 @@ var _ = Describe("TLS Profile", func() {
 			configurator := NewTLSConfiguratorFromProfile(profile)
 
 			cfg := &tls.Config{
-				InsecureSkipVerify: true, //nolint:gosec // test-only config to verify profile doesn't override unrelated fields
-				ServerName:         "test.example.com",
+				ServerName: "test.example.com",
 			}
 			configurator(cfg)
 
-			Expect(cfg.InsecureSkipVerify).To(BeTrue())
 			Expect(cfg.ServerName).To(Equal("test.example.com"))
 			Expect(cfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
 		})
@@ -154,11 +152,10 @@ var _ = Describe("TLS Profile", func() {
 			Expect(cfg.MinVersion).To(Equal(uint16(tls.VersionTLS13)))
 		})
 
-		It("should not set InsecureSkipVerify or RootCAs", func() {
+		It("should not set RootCAs", func() {
 			profile := *configv1.TLSProfiles[configv1.TLSProfileIntermediateType]
 			cfg, err := NewOutboundTLSConfig(profile, nil)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(cfg.InsecureSkipVerify).To(BeFalse())
 			Expect(cfg.RootCAs).To(BeNil())
 		})
 	})

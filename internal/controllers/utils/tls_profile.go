@@ -110,8 +110,8 @@ func NewOutboundMTLSConfig(ctx context.Context, profile configv1.TLSProfileSpec,
 }
 
 // NewOutboundTLSConfig creates a tls.Config for general outbound connections applying only the
-// TLS profile (MinVersion, CipherSuites). It does not load CA bundles or check INSECURE_SKIP_VERIFY;
-// those cluster-runtime concerns are handled by the GetDefaultTLSConfig wrapper in utils.go.
+// TLS profile (MinVersion, CipherSuites). It does not load CA bundles; that is handled by the
+// GetDefaultTLSConfig wrapper in utils.go.
 func NewOutboundTLSConfig(profile configv1.TLSProfileSpec, config *tls.Config) (*tls.Config, error) {
 	if config == nil {
 		config = &tls.Config{} //nolint:gosec
