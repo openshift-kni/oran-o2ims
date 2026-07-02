@@ -169,6 +169,11 @@ spec:
                           has started
                         format: date-time
                         type: string
+                      clusterUpgradeStartAt:
+                        description: A timestamp indicating when the cluster upgrade
+                          started.
+                        format: date-time
+                        type: string
                       name:
                         description: Contains the name of the created ClusterInstance.
                         type: string

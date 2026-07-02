@@ -102,7 +102,7 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(ctx context.Context, c
 		return ctrl.Result{}, false, fmt.Errorf("failed to get clusterTemplate: %w", err)
 	}
 
-	upgradeType, err := detectUpgradeType(clusterTemplate, t.object)
+	upgradeType, upgradeTimeout, err := parseUpgradeConfig(clusterTemplate, t.object)
 	if err != nil {
 		ctlrutils.SetProvisioningStateFailed(t.object, fmt.Sprintf("Upgrade precondition check failed: %s", err.Error()))
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
@@ -116,6 +116,7 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(ctx context.Context, c
 		}
 		return ctrl.Result{}, false, nil
 	}
+	t.timeouts.clusterUpgrade = upgradeTimeout
 
 	switch upgradeType {
 	case ctlrutils.UpgradeDefaultsClusterVersionKey:
@@ -123,46 +124,34 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(ctx context.Context, c
 	case ctlrutils.UpgradeDefaultsIBGUKey:
 		return t.handleIBGUUpgrade(ctx, clusterTemplate, clusterName)
 	default:
-		t.logger.ErrorContext(ctx, "Unexpected upgrade type from detectUpgradeType",
+		t.logger.ErrorContext(ctx, "Unexpected upgrade type from parseUpgradeConfig",
 			slog.String("upgradeType", upgradeType))
 		return doNotRequeue(), false, nil
 	}
 }
 
-// detectUpgradeType inspects the top-level keys in the ClusterTemplate's
-// upgradeDefaults and the ProvisioningRequest's upgradeParameters to determine
-// the upgrade type. Returns an error if both clusterVersion and
-// imageBasedGroupUpgrade keys are found.
-func detectUpgradeType(
+// parseUpgradeConfig inspects the ProvisioningRequest's upgradeParameters and
+// the ClusterTemplate's upgradeDefaults to determine the upgrade type and
+// extract the clusterUpgradeTimeout (PR overrides CT). Returns an error if
+// both clusterVersion and imageBasedGroupUpgrade keys are found, or if the
+// timeout value is invalid.
+func parseUpgradeConfig(
 	ct *provisioningv1alpha1.ClusterTemplate,
 	pr *provisioningv1alpha1.ProvisioningRequest,
-) (string, error) {
+) (string, time.Duration, error) {
 	hasCV, hasIBGU := false, false
+	var timeout time.Duration
 
-	// Check ClusterTemplate upgradeDefaults.
-	if ct.Spec.TemplateDefaults.UpgradeDefaults.Size() > 0 {
-		var defaults map[string]any
-		if err := json.Unmarshal(ct.Spec.TemplateDefaults.UpgradeDefaults.Raw, &defaults); err != nil {
-			return "", fmt.Errorf("failed to parse upgradeDefaults: %w", err)
-		}
-		if _, ok := defaults[ctlrutils.UpgradeDefaultsClusterVersionKey]; ok {
-			hasCV = true
-		}
-		if _, ok := defaults[ctlrutils.UpgradeDefaultsIBGUKey]; ok {
-			hasIBGU = true
-		}
-	}
-
-	// Check ProvisioningRequest upgradeParameters.
+	// Check ProvisioningRequest upgradeParameters first.
 	if pr.Spec.TemplateParameters.Size() > 0 {
 		var templateParams map[string]any
 		if err := json.Unmarshal(pr.Spec.TemplateParameters.Raw, &templateParams); err != nil {
-			return "", fmt.Errorf("failed to parse templateParameters: %w", err)
+			return "", 0, fmt.Errorf("failed to parse templateParameters: %w", err)
 		}
 		if upgradeParamsRaw, ok := templateParams[constants.TemplateParamUpgrade]; ok {
 			upgradeParams, ok := upgradeParamsRaw.(map[string]any)
 			if !ok {
-				return "", fmt.Errorf("%s is not a map", constants.TemplateParamUpgrade)
+				return "", 0, fmt.Errorf("%s is not a map", constants.TemplateParamUpgrade)
 			}
 			if _, ok := upgradeParams[ctlrutils.UpgradeDefaultsClusterVersionKey]; ok {
 				hasCV = true
@@ -170,22 +159,56 @@ func detectUpgradeType(
 			if _, ok := upgradeParams[ctlrutils.UpgradeDefaultsIBGUKey]; ok {
 				hasIBGU = true
 			}
+			if ts, ok := upgradeParams[ctlrutils.ClusterUpgradeTimeoutConfigKey].(string); ok {
+				d, err := time.ParseDuration(ts)
+				if err != nil {
+					return "", 0, fmt.Errorf("invalid clusterUpgradeTimeout %q in upgradeParameters: %w", ts, err)
+				}
+				timeout = d
+			}
 		}
 	}
 
+	// Check ClusterTemplate upgradeDefaults.
+	if ct.Spec.TemplateDefaults.UpgradeDefaults.Size() > 0 {
+		var defaults map[string]any
+		if err := json.Unmarshal(ct.Spec.TemplateDefaults.UpgradeDefaults.Raw, &defaults); err != nil {
+			return "", 0, fmt.Errorf("failed to parse upgradeDefaults: %w", err)
+		}
+		if _, ok := defaults[ctlrutils.UpgradeDefaultsClusterVersionKey]; ok {
+			hasCV = true
+		}
+		if _, ok := defaults[ctlrutils.UpgradeDefaultsIBGUKey]; ok {
+			hasIBGU = true
+		}
+		if timeout == 0 {
+			if ts, ok := defaults[ctlrutils.ClusterUpgradeTimeoutConfigKey].(string); ok {
+				d, err := time.ParseDuration(ts)
+				if err != nil {
+					return "", 0, fmt.Errorf("invalid clusterUpgradeTimeout %q in upgradeDefaults: %w", ts, err)
+				}
+				timeout = d
+			}
+		}
+	}
+
+	if timeout == 0 {
+		timeout = ctlrutils.DefaultClusterUpgradeTimeout
+	}
+
 	if hasCV && hasIBGU {
-		return "", fmt.Errorf(
+		return "", 0, fmt.Errorf(
 			"upgrade configuration contains both %q and %q keys; only one upgrade type is allowed",
 			ctlrutils.UpgradeDefaultsClusterVersionKey, ctlrutils.UpgradeDefaultsIBGUKey)
 	}
 
 	if hasCV {
-		return ctlrutils.UpgradeDefaultsClusterVersionKey, nil
+		return ctlrutils.UpgradeDefaultsClusterVersionKey, timeout, nil
 	}
 	if hasIBGU {
-		return ctlrutils.UpgradeDefaultsIBGUKey, nil
+		return ctlrutils.UpgradeDefaultsIBGUKey, timeout, nil
 	}
-	return "", fmt.Errorf(
+	return "", 0, fmt.Errorf(
 		"no upgrade configuration found: upgradeDefaults or upgradeParameters must contain %q or %q",
 		ctlrutils.UpgradeDefaultsClusterVersionKey, ctlrutils.UpgradeDefaultsIBGUKey)
 }
@@ -359,6 +382,53 @@ func (t *provisioningRequestReconcilerTask) prepareIBGU(
 	return ibguCR, nil
 }
 
+// prepareCVSpec merges and validates upgrade data, then parses the
+// clusterVersion spec into typed structs. Returns the ClusterVersionSpec
+// (for channel/upstream) and the cvSpec.DesiredUpdate (with version set to target).
+func (t *provisioningRequestReconcilerTask) prepareCVSpec(
+	clusterTemplate *provisioningv1alpha1.ClusterTemplate,
+	targetVersion string,
+) (*configv1.ClusterVersionSpec, error) {
+	// Merge and validate upgrade data against the schema.
+	mergedUpgradeData, err := t.mergeAndValidateUpgradeData(clusterTemplate)
+	if err != nil {
+		return nil, typederrors.NewInputError("%s", err.Error())
+	}
+
+	// Extract the clusterVersion data from the merged result
+	cvSpecRaw, ok := mergedUpgradeData[ctlrutils.UpgradeDefaultsClusterVersionKey]
+	if !ok {
+		return nil, typederrors.NewInputError("key %q not found in merged upgrade data",
+			ctlrutils.UpgradeDefaultsClusterVersionKey)
+	}
+	cvSpecBytes, err := json.Marshal(cvSpecRaw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal %s spec: %w", ctlrutils.UpgradeDefaultsClusterVersionKey, err)
+	}
+	cvSpec := configv1.ClusterVersionSpec{}
+	if err := json.Unmarshal(cvSpecBytes, &cvSpec); err != nil {
+		return nil, typederrors.NewInputError("invalid clusterVersion spec format: %s", err.Error())
+	}
+
+	// Ensure cvSpec.DesiredUpdate exists with version set to target.
+	if cvSpec.DesiredUpdate == nil {
+		cvSpec.DesiredUpdate = &configv1.Update{}
+	}
+	if cvSpec.DesiredUpdate.Version != "" && cvSpec.DesiredUpdate.Version != targetVersion {
+		return nil, typederrors.NewInputError(
+			"the clusterVersion desiredUpdate version (%s) does not match the target version (%s)",
+			cvSpec.DesiredUpdate.Version, targetVersion)
+	}
+	cvSpec.DesiredUpdate.Version = targetVersion
+
+	// Validate target version is valid semver.
+	if _, err := semver.NewVersion(cvSpec.DesiredUpdate.Version); err != nil {
+		return nil, typederrors.NewInputError("invalid target version %q: %s", cvSpec.DesiredUpdate.Version, err.Error())
+	}
+
+	return &cvSpec, nil
+}
+
 // mergeAndValidateUpgradeData merges upgrade defaults from the ClusterTemplate with
 // upgrade parameters from the ProvisioningRequest, and validates the merged result
 // against the schema defined in the ClusterTemplate's templateParameterSchema.
@@ -434,72 +504,434 @@ var upgradeRBACRules = []rbacv1.PolicyRule{
 // upgradeSpokeScheme is the scheme used by the spoke client for upgrade operations.
 var upgradeSpokeScheme = spokeclient.NewSpokeScheme(configv1.Install)
 
-// handleClusterVersionUpgrade handles upgrades via direct spoke ClusterVersion
-// patching. It sets up a spoke client and reads the current ClusterVersion.
-// Full upgrade logic (precondition checks, trigger, monitoring) will be added
-// in a subsequent change.
+// handleClusterVersionUpgrade manages the lifecycle of a ClusterVersion upgrade
+// on the spoke cluster. It sets up spoke access via ManagedServiceAccount, then
+// drives a state machine based on the spoke CV's history:
+//   - No history entry (pre-start): validates input, checks preconditions,
+//     patches channel/upstream, verifies the update graph, and triggers the upgrade
+//   - History entry, not yet completed (in-progress): monitors Progressing/Failing
+//     conditions
+//   - History entry with Completed: cleans up spoke resources and signals
+//     completion
+//
+// A timeout check runs after the state machine to catch upgrades that exceed the
+// configured clusterUpgradeTimeout.
 func (t *provisioningRequestReconcilerTask) handleClusterVersionUpgrade(
 	ctx context.Context,
 	clusterTemplate *provisioningv1alpha1.ClusterTemplate,
 	clusterName string,
 ) (ctrl.Result, bool, error) {
+	nextReconcile := ctrl.Result{}
+	proceed := false
+	var err error
 
-	managedServiceAccountName := t.object.Name + "-upgrade"
-	manifestWorkName := t.object.Name + "-upgrade-rbac"
+	targetVersion := clusterTemplate.Spec.Release
+	msaName := t.object.Name + "-upgrade"
+	mwName := t.object.Name + "-upgrade-rbac"
 
+	// Record the upgrade start time if not already set.
+	if t.object.Status.Extensions.ClusterDetails == nil {
+		t.object.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{}
+	}
+	if t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt.IsZero() {
+		now := metav1.Now()
+		t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt = &now
+	}
+
+	// Ensure spoke client is ready.
 	spokeClient, ready, err := spokeclient.EnsureSpokeClient(
 		ctx, t.client, t.logger, clusterName,
-		managedServiceAccountName, manifestWorkName,
+		msaName, mwName,
 		upgradeRBACRules, upgradeSpokeScheme)
 	if err != nil {
-		if typederrors.IsInputError(err) {
-			ctlrutils.SetProvisioningStateFailed(t.object, err.Error())
-			ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
-				provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
-				provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
-				metav1.ConditionFalse,
-				err.Error(),
-			)
-			if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
-				return ctrl.Result{}, false, fmt.Errorf("failed to update ProvisioningRequest CR status: %w", updateErr)
-			}
-			return ctrl.Result{}, false, nil
+		if !typederrors.IsInputError(err) {
+			return ctrl.Result{}, false, fmt.Errorf("failed to setup spoke client: %w", err)
 		}
-		return ctrl.Result{}, false, fmt.Errorf("failed to setup spoke client: %w", err)
+		if err := t.updateUpgradeStatus(ctx,
+			provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, err.Error(),
+		); err != nil {
+			return ctrl.Result{}, false, err
+		}
+		return ctrl.Result{}, false, nil
 	}
 	if !ready {
-		ctlrutils.SetProvisioningStateInProgress(t.object, "Preparing upgrade resources")
-		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
-			provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
-			provisioningv1alpha1.CRconditionReasons.Pending,
-			metav1.ConditionFalse,
-			"Preparing upgrade resources",
-		)
-		if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
-			return ctrl.Result{}, false, fmt.Errorf("failed to update ProvisioningRequest CR status: %w", updateErr)
+		if err := t.updateUpgradeStatus(ctx,
+			provisioningv1alpha1.CRconditionReasons.Pending, "Preparing upgrade resources",
+		); err != nil {
+			return ctrl.Result{}, false, fmt.Errorf("failed to update ProvisioningRequest CR status: %w", err)
+		}
+		if timedOut, err := t.isCVUpgradeTimedOut(ctx, clusterName, nil); timedOut || err != nil {
+			return ctrl.Result{}, false, err
 		}
 		return requeueWithShortInterval(), false, nil
 	}
 
+	// Get ClusterVersion from spoke.
 	cv := &configv1.ClusterVersion{}
 	if err := spokeClient.Get(ctx, types.NamespacedName{Name: ctlrutils.ClusterVersionName}, cv); err != nil {
 		return ctrl.Result{}, false, fmt.Errorf("failed to get spoke ClusterVersion: %w", err)
 	}
 
-	currentVersion := "unknown"
-	for _, h := range cv.Status.History {
-		if h.State == configv1.CompletedUpdate {
-			currentVersion = h.Version
-			break
+	// observedGeneration guard — don't act on stale conditions.
+	if cv.Status.ObservedGeneration == cv.Generation {
+		historyEntry := ctlrutils.FindCVHistoryEntry(cv, targetVersion)
+		switch {
+		case historyEntry == nil:
+			nextReconcile, err = t.handleCVUpgradePreStart(ctx, spokeClient, cv, clusterTemplate, targetVersion)
+		case historyEntry.State == configv1.CompletedUpdate:
+			nextReconcile, err = t.handleCVUpgradeCompleted(ctx, clusterName, msaName, mwName, targetVersion)
+			if nextReconcile.RequeueAfter == 0 && err == nil {
+				proceed = true
+			}
+		default:
+			nextReconcile, err = t.handleCVUpgradeInProgress(ctx, cv, targetVersion, historyEntry)
+		}
+	} else {
+		t.logger.InfoContext(ctx, "ClusterVersion observedGeneration does not match generation, requeueing",
+			slog.Int64("observedGeneration", cv.Status.ObservedGeneration),
+			slog.Int64("generation", cv.Generation))
+		nextReconcile = requeueWithShortInterval()
+		err = nil
+	}
+
+	// Timeout check runs AFTER the state machine so that terminal states
+	// (Completed, PreconditionChecksFailed) are set first. isCVUpgradeTimedOut
+	// skips terminal states, avoiding a false timeout when the upgrade just completed.
+	if timedOut, timeoutErr := t.isCVUpgradeTimedOut(ctx, clusterName, cv); timedOut || timeoutErr != nil {
+		return ctrl.Result{}, false, timeoutErr
+	}
+
+	return nextReconcile, proceed, err
+}
+
+// handleCVUpgradeCompleted handles the terminal success state.
+func (t *provisioningRequestReconcilerTask) handleCVUpgradeCompleted(
+	ctx context.Context, clusterName, msaName, mwName, targetVersion string,
+) (ctrl.Result, error) {
+	t.logger.InfoContext(ctx, "Cluster upgrade completed",
+		slog.String("clusterName", clusterName), slog.String("targetVersion", targetVersion))
+
+	if err := spokeclient.CleanupSpokeAccess(ctx, t.client, clusterName, msaName, mwName); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to cleanup spoke access: %w", err)
+	}
+
+	if err := t.updateUpgradeStatus(ctx,
+		provisioningv1alpha1.CRconditionReasons.Completed,
+		fmt.Sprintf("Upgrade to version %s completed", targetVersion),
+	); err != nil {
+		return ctrl.Result{}, err
+	}
+	return doNotRequeue(), nil
+}
+
+// handleCVUpgradeInProgress handles the state where the target version has a
+// history entry that is not yet completed. It resets startAt to the CVO's actual
+// start time and reports the upgrade progressing status based on CV conditions.
+func (t *provisioningRequestReconcilerTask) handleCVUpgradeInProgress(
+	ctx context.Context, cv *configv1.ClusterVersion, targetVersion string,
+	historyEntry *configv1.UpdateHistory,
+) (ctrl.Result, error) {
+	// Reset startAt to CVO's actual start time. The initial startAt was set
+	// when entering the upgrade flow (covering the pre-start/setup phase).
+	// Once CVO creates a history entry, we reset to its StartedTime so the
+	// timeout window reflects the real upgrade duration, not the time spent
+	// on precondition checks or spoke client setup which may take extended
+	// time if the user needs to fix issues (e.g., install addon, fix channel).
+	if !t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt.Equal(&historyEntry.StartedTime) {
+		t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt = &historyEntry.StartedTime
+	}
+
+	var msg string
+	var reason provisioningv1alpha1.ConditionReason
+
+	progressing := ctlrutils.GetCVCondition(cv, configv1.OperatorProgressing)
+	if progressing != nil && progressing.Status == configv1.ConditionTrue {
+		reason = provisioningv1alpha1.CRconditionReasons.InProgress
+		msg = fmt.Sprintf("Upgrading to version %s: %s", targetVersion, progressing.Message)
+	} else {
+		reason = provisioningv1alpha1.CRconditionReasons.Unknown
+		msg = fmt.Sprintf("Upgrading to version %s: CVO stalled", targetVersion)
+		failing := ctlrutils.GetCVCondition(cv, ctlrutils.CVConditionFailing)
+		if failing != nil && failing.Status == configv1.ConditionTrue {
+			msg = fmt.Sprintf("Upgrading to version %s: %s", targetVersion, failing.Message)
+		}
+	}
+	if err := t.updateUpgradeStatus(ctx, reason, msg); err != nil {
+		return ctrl.Result{}, err
+	}
+	return requeueWithMediumInterval(), nil
+}
+
+// handleCVUpgradePreStart handles the case where the target version has no
+// history entry (not yet started). It merges and validates PR/CT parameters,
+// runs precondition checks, patches channel/upstream if needed, verifies the
+// update graph, triggers the upgrade, and monitors post-trigger conditions.
+func (t *provisioningRequestReconcilerTask) handleCVUpgradePreStart(
+	ctx context.Context, spokeClient client.Client, cv *configv1.ClusterVersion,
+	clusterTemplate *provisioningv1alpha1.ClusterTemplate,
+	targetVersion string,
+) (ctrl.Result, error) {
+	// Always merge+validate — catches invalid input including updated PR params.
+	cvSpec, err := t.prepareCVSpec(clusterTemplate, targetVersion)
+	if err != nil {
+		if !typederrors.IsInputError(err) {
+			return ctrl.Result{}, fmt.Errorf("failed to prepare CV upgrade spec: %w", err)
+		}
+		if err := t.updateUpgradeStatus(ctx,
+			provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, err.Error(),
+		); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
+	}
+
+	// Check Upgradeable condition for minor version upgrades but not if force is set.
+	if !cvSpec.DesiredUpdate.Force {
+		currentVersion := ctlrutils.GetCurrentCVVersion(cv)
+		isMinor, err := ctlrutils.IsMinorUpgrade(currentVersion, targetVersion)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to determine upgrade type: %w", err)
+		}
+		if isMinor {
+			upgradeable := ctlrutils.GetCVCondition(cv, configv1.OperatorUpgradeable)
+			if upgradeable != nil && upgradeable.Status == configv1.ConditionFalse {
+				if err := t.updateUpgradeStatus(ctx,
+					provisioningv1alpha1.CRconditionReasons.Pending, upgradeable.Message,
+				); err != nil {
+					return ctrl.Result{}, err
+				}
+				return requeueWithMediumInterval(), nil
+			}
 		}
 	}
 
-	t.logger.InfoContext(ctx, "Spoke client ready, ClusterVersion read",
-		slog.String("clusterName", clusterName),
-		slog.String("currentVersion", currentVersion),
-		slog.String("targetRelease", clusterTemplate.Spec.Release))
+	// Graph preconditions: patch channel/upstream, check RetrievedUpdates,
+	// verify target in availableUpdates.
+	if result, proceed, err := t.checkCVGraphPreconditions(
+		ctx, spokeClient, cv, cvSpec,
+	); result.RequeueAfter > 0 || !proceed || err != nil {
+		return result, err
+	}
 
-	// TODO: Full upgrade logic (precondition checks, trigger, monitoring)
-	// will be added in a subsequent change.
-	return requeueWithMediumInterval(), false, nil
+	// Apply desiredUpdate. Returns whether the spec actually changed.
+	changed, err := ctlrutils.TriggerCVUpgrade(ctx, spokeClient, t.logger, cv, cvSpec.DesiredUpdate)
+	if err != nil {
+		if errors.IsInvalid(err) || errors.IsBadRequest(err) || errors.IsForbidden(err) {
+			if err := t.updateUpgradeStatus(ctx,
+				provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, err.Error(),
+			); err != nil {
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, fmt.Errorf("failed to apply desiredUpdate: %w", err)
+	}
+	if changed {
+		msg := fmt.Sprintf("Upgrade to version %s triggered. Waiting for upgrade to start", targetVersion)
+		if err := t.updateUpgradeStatus(ctx, provisioningv1alpha1.CRconditionReasons.Pending, msg); err != nil {
+			return ctrl.Result{}, err
+		}
+		return requeueWithShortInterval(), nil
+	}
+
+	// Monitor post-trigger CV conditions that may cause the CV upgrade to not start.
+	// Invalid=True — CVO won't retry on invalid input, terminal.
+	invalid := ctlrutils.GetCVCondition(cv, ctlrutils.CVConditionInvalid)
+	if invalid != nil && invalid.Status == configv1.ConditionTrue {
+		if err := t.updateUpgradeStatus(ctx,
+			provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, invalid.Message,
+		); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
+	}
+
+	// ReleaseAccepted=False — CVO retries payload loading failures, non-terminal.
+	releaseAccepted := ctlrutils.GetCVCondition(cv, ctlrutils.CVConditionReleaseAccepted)
+	if releaseAccepted != nil && releaseAccepted.Status != configv1.ConditionTrue {
+		if err := t.updateUpgradeStatus(ctx,
+			provisioningv1alpha1.CRconditionReasons.Pending, releaseAccepted.Message,
+		); err != nil {
+			return ctrl.Result{}, err
+		}
+		return requeueWithMediumInterval(), nil
+	}
+
+	// Unknown reason that caused the CV upgrade to not start.
+	msg := fmt.Sprintf("Upgrading to version %s: upgrade not started yet", targetVersion)
+	failing := ctlrutils.GetCVCondition(cv, ctlrutils.CVConditionFailing)
+	if failing != nil && failing.Status == configv1.ConditionTrue {
+		msg = fmt.Sprintf("Upgrading to version %s: %s", targetVersion, failing.Message)
+	}
+	if err := t.updateUpgradeStatus(ctx,
+		provisioningv1alpha1.CRconditionReasons.Unknown, msg,
+	); err != nil {
+		return ctrl.Result{}, err
+	}
+	return requeueWithMediumInterval(), nil
+}
+
+// checkCVGraphPreconditions patches channel/upstream, checks RetrievedUpdates,
+// and verifies the target version is in availableUpdates. Returns true if all
+// preconditions pass. When false, the ctrl.Result carries the requeue interval.
+func (t *provisioningRequestReconcilerTask) checkCVGraphPreconditions(
+	ctx context.Context, spokeClient client.Client,
+	cv *configv1.ClusterVersion, cvSpec *configv1.ClusterVersionSpec,
+) (ctrl.Result, bool, error) {
+	patched, err := ctlrutils.PatchCVChannelUpstream(ctx, spokeClient, t.logger, cv, cvSpec)
+	if err != nil {
+		if errors.IsInvalid(err) || errors.IsBadRequest(err) || errors.IsForbidden(err) {
+			if err := t.updateUpgradeStatus(ctx,
+				provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, err.Error(),
+			); err != nil {
+				return ctrl.Result{}, false, err
+			}
+			return ctrl.Result{}, false, nil
+		}
+		return ctrl.Result{}, false, fmt.Errorf("failed to apply channel/upstream update: %w", err)
+	}
+	if patched {
+		if err := t.updateUpgradeStatus(ctx,
+			provisioningv1alpha1.CRconditionReasons.Pending,
+			"Channel/upstream updated. Waiting for update to be processed",
+		); err != nil {
+			return ctrl.Result{}, false, err
+		}
+		return requeueWithShortInterval(), false, nil
+	}
+
+	// RetrievedUpdates=False — CVO retries graph/channel fetch failures, non-terminal.
+	retrieved := ctlrutils.GetCVCondition(cv, configv1.RetrievedUpdates)
+	if retrieved != nil && retrieved.Status != configv1.ConditionTrue {
+		if err := t.updateUpgradeStatus(ctx,
+			provisioningv1alpha1.CRconditionReasons.Pending, retrieved.Message,
+		); err != nil {
+			return ctrl.Result{}, false, err
+		}
+		return requeueWithMediumInterval(), false, nil
+	}
+
+	// Verify target version is in availableUpdates (only when image is not set).
+	if cvSpec.DesiredUpdate.Image == "" &&
+		!ctlrutils.IsCVUpdateAvailable(cv, cvSpec.DesiredUpdate.Version) {
+		msg := fmt.Sprintf("Target version %s is not available for upgrade", cvSpec.DesiredUpdate.Version)
+		if err := t.updateUpgradeStatus(ctx,
+			provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, msg,
+		); err != nil {
+			return ctrl.Result{}, false, err
+		}
+		return ctrl.Result{}, false, nil
+	}
+
+	return ctrl.Result{}, true, nil
+}
+
+// updateUpgradeStatus persists the UpgradeCompleted condition and provisioning
+// state based on the given reason:
+//   - Terminal success (Completed): condition=True, clears startAt
+//   - Terminal failure (PreconditionChecksFailed, Failed, TimedOut):
+//     condition=False, provisioningState=Failed, clears startAt
+//   - Non-terminal (Pending, InProgress, Unknown):
+//     condition=False, provisioningState=InProgress
+func (t *provisioningRequestReconcilerTask) updateUpgradeStatus(
+	ctx context.Context,
+	reason provisioningv1alpha1.ConditionReason,
+	message string,
+) error {
+	conditionStatus := metav1.ConditionFalse
+
+	switch reason {
+	case provisioningv1alpha1.CRconditionReasons.Completed:
+		conditionStatus = metav1.ConditionTrue
+		t.clearUpgradeStartTime()
+	case provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
+		provisioningv1alpha1.CRconditionReasons.Failed,
+		provisioningv1alpha1.CRconditionReasons.TimedOut:
+		ctlrutils.SetProvisioningStateFailed(t.object, message)
+		t.clearUpgradeStartTime()
+	default:
+		ctlrutils.SetProvisioningStateInProgress(t.object, message)
+	}
+
+	ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
+		provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
+		reason,
+		conditionStatus,
+		message,
+	)
+	if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+		return fmt.Errorf("failed to update ProvisioningRequest CR status: %w", err)
+	}
+	return nil
+}
+
+// isCVUpgradeTimedOut checks if the upgrade has exceeded its timeout. If not,
+// it returns false. If timed out, it cleans up spoke resources and sets TimedOut.
+// cv may be nil if the spoke client was never ready.
+func (t *provisioningRequestReconcilerTask) isCVUpgradeTimedOut(
+	ctx context.Context, clusterName string, cv *configv1.ClusterVersion,
+) (bool, error) {
+	if ctlrutils.IsClusterUpgradeCompleted(t.object) || ctlrutils.IsClusterUpgradeInTerminalFailure(t.object) {
+		return false, nil
+	}
+
+	if t.object.Status.Extensions.ClusterDetails == nil || t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt == nil {
+		return false, nil
+	}
+
+	if !ctlrutils.TimeoutExceeded(
+		t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt.Time,
+		t.timeouts.clusterUpgrade) {
+		return false, nil
+	}
+
+	t.logger.InfoContext(ctx, "Upgrade timed out", slog.String("clusterName", clusterName))
+	msaName := t.object.Name + "-upgrade"
+	mwName := t.object.Name + "-upgrade-rbac"
+	if err := spokeclient.CleanupSpokeAccess(ctx, t.client, clusterName, msaName, mwName); err != nil {
+		return false, fmt.Errorf("failed to cleanup spoke access: %w", err)
+	}
+
+	msg := "Upgrade timed out"
+	failing := ctlrutils.GetCVCondition(cv, ctlrutils.CVConditionFailing)
+	if failing != nil && failing.Status == configv1.ConditionTrue {
+		msg = fmt.Sprintf("Upgrade timed out: %s", failing.Message)
+	}
+	if err := t.updateUpgradeStatus(ctx,
+		provisioningv1alpha1.CRconditionReasons.TimedOut, msg,
+	); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// cleanupStaleUpgradeState removes stale upgrade state. Cleans up spoke
+// resources if present and removes the UpgradeCompleted condition.
+func (t *provisioningRequestReconcilerTask) cleanupStaleUpgradeState(
+	ctx context.Context, clusterName string,
+) error {
+	t.logger.InfoContext(ctx, "Cleaning up stale upgrade state",
+		slog.String("clusterName", clusterName))
+
+	msaName := t.object.Name + "-upgrade"
+	mwName := t.object.Name + "-upgrade-rbac"
+	if err := spokeclient.CleanupSpokeAccess(ctx, t.client, clusterName, msaName, mwName); err != nil {
+		return fmt.Errorf("failed to cleanup spoke access: %w", err)
+	}
+
+	t.clearUpgradeStartTime()
+	meta.RemoveStatusCondition(&t.object.Status.Conditions,
+		string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
+
+	if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+		return fmt.Errorf("failed to update ProvisioningRequest CR status: %w", err)
+	}
+	return nil
+}
+
+// clearUpgradeStartTime clears the upgrade start timestamp.
+func (t *provisioningRequestReconcilerTask) clearUpgradeStartTime() {
+	if t.object.Status.Extensions.ClusterDetails != nil {
+		t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStartAt = nil
+	}
 }
