@@ -32,7 +32,7 @@ for service_name in "${!services[@]}"; do
     psql -U postgres -c "CREATE DATABASE ${service_name} OWNER ${service_name};" || true
 
     # Grant privileges (safe to run multiple times)
-    psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE ${service_name} TO ${service_name};"
+    psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE ${service_name} TO ${service_name};" || true
 
     echo "Completed setup for service: ${service_name}"
 done
