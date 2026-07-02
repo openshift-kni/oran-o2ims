@@ -13,9 +13,6 @@ import (
 	"net/http"
 	"time"
 
-	"golang.org/x/oauth2"
-	"k8s.io/client-go/transport"
-
 	commonapi "github.com/openshift-kni/oran-o2ims/api/common"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
@@ -45,8 +42,7 @@ func BlockCrossHostRedirects(client *http.Client) {
 // ClientFactory is a utility used to abstract building an HTTP client based on the type of callback
 // URL supplied.
 type ClientFactory struct {
-	oauthConfig      *ctlrutils.OAuthClientConfig
-	serviceTokenFile string
+	oauthConfig *ctlrutils.OAuthClientConfig
 }
 
 // ClientProvider defines the interface which any client factory must implement.  This exists for
@@ -56,26 +52,23 @@ type ClientProvider interface {
 }
 
 // NewClientFactory creates a new factory
-func NewClientFactory(oauthConfig *ctlrutils.OAuthClientConfig, serviceTokenFile string) ClientProvider {
+func NewClientFactory(oauthConfig *ctlrutils.OAuthClientConfig) ClientProvider {
 	return &ClientFactory{
-		oauthConfig:      oauthConfig,
-		serviceTokenFile: serviceTokenFile,
+		oauthConfig: oauthConfig,
 	}
 }
 
-func (f *ClientFactory) newClusterClient(ctx context.Context) (*http.Client, error) {
+func (f *ClientFactory) newClusterClient() (*http.Client, error) {
 	tlsConfig, err := ctlrutils.GetDefaultTLSConfig(nil, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build TLS config: %w", err)
 	}
-	baseClient := &http.Client{
+	client := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
 		},
 		Timeout: 30 * time.Second,
 	}
-	ctx = context.WithValue(ctx, oauth2.HTTPClient, baseClient)
-	client := oauth2.NewClient(ctx, transport.NewCachedFileTokenSource(f.serviceTokenFile))
 	BlockCrossHostRedirects(client)
 	return client, nil
 }
@@ -89,13 +82,13 @@ func (f *ClientFactory) newOAuthClient(ctx context.Context) (*http.Client, error
 	return client, nil
 }
 
-// NewClient creates a new Client based on the callback URL provided.  If the callback URL is a local
-// service URL that contains "svc.cluster.local" then a Client will be created that uses the
-// supplied service account token file; otherwise, it is assumed that the URL points to a public
-// endpoint that requires the OAuth credentials.
+// NewClient creates a new Client based on the auth type. For ServiceAccount auth, a cluster-internal
+// TLS client is created without bearer token authorization — this path is used for development and
+// testing only. For OAuth auth, the client is configured with the OAuth credentials for public
+// endpoint callbacks.
 func (f *ClientFactory) NewClient(ctx context.Context, authType commonapi.AuthType) (*http.Client, error) {
 	if authType == commonapi.ServiceAccount {
-		return f.newClusterClient(ctx)
+		return f.newClusterClient()
 	}
 	return f.newOAuthClient(ctx)
 }

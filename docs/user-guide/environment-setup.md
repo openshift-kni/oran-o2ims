@@ -371,6 +371,11 @@ export MY_TOKEN=$(curl -s --cert /path/to/client.crt --key /path/to/client.key -
 
 ### Acquiring a token using Service Account (development testing only)
 
+> **Note:** mTLS + OAuth (RFC 8705) is the only production-supported authentication flow for the
+> public API. Service account tokens are intended for development and testing environments only. In
+> this configuration, outgoing notification callbacks to cluster-internal subscribers are sent
+> without bearer token authorization.
+
 In a development environment in which OAuth is not being used, the access token must be acquired from a Kubernetes
 Service Account. This Service Account must be assigned appropriate RBAC permissions to access the O2IMS API endpoints.
 As a convenience, a pre-canned Service Account and ClusterRoleBinding is defined
@@ -383,10 +388,17 @@ As a convenience, a pre-canned Service Account and ClusterRoleBinding is defined
    clusterrolebinding.rbac.authorization.k8s.io/oran-o2ims-test-client-binding created
    ```
 
-And then the following command can be used to acquire a token.
+And then the following command can be used to acquire a token. The `--audience` flags scope the token to
+the O2IMS services so that each service accepts it. Multiple audiences can be specified so that a single
+token works against all API endpoints.
 
    ```console
-   export MY_TOKEN=$(oc create token -n oran-o2ims test-client --duration=24h)
+   export MY_TOKEN=$(oc create token -n oran-o2ims test-client --duration=24h \
+     --audience=alarms-server \
+     --audience=resource-server \
+     --audience=cluster-server \
+     --audience=artifacts-server \
+     --audience=provisioning-server)
    ```
 
 ### Access an API endpoint

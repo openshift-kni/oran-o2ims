@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	"k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/client-go/rest"
@@ -19,6 +20,33 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
 	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
+
+const skipAudienceValidationExtension = "x-skip-audience-validation"
+
+// GetAudienceExemptPaths extracts API paths marked with x-skip-audience-validation
+// from the OpenAPI spec. These paths are exempt from audience-scoped token
+// validation while still requiring authentication (TokenReview) and
+// authorization (RBAC). This is used at startup to build the exempt path
+// list — no per-request spec traversal is needed.
+func GetAudienceExemptPaths(spec *openapi3.T) []string {
+	if spec == nil || spec.Paths == nil {
+		return nil
+	}
+	var paths []string
+	for _, path := range spec.Paths.InMatchingOrder() {
+		pathItem := spec.Paths.Find(path)
+		if pathItem == nil {
+			continue
+		}
+		for _, op := range pathItem.Operations() {
+			if v, ok := op.Extensions[skipAudienceValidationExtension].(bool); ok && v {
+				paths = append(paths, path)
+				break
+			}
+		}
+	}
+	return paths
+}
 
 // GetAuthenticator builds authentication middleware to be used to extract user/group identity from incoming requests
 func GetAuthenticator(ctx context.Context, config *svcutils.CommonServerConfig) (middleware.Middleware, error) {
@@ -56,7 +84,11 @@ func GetAuthenticator(ctx context.Context, config *svcutils.CommonServerConfig) 
 	}
 
 	authenticatorConfig := KubernetesAuthenticatorConfig{
-		RESTConfig: restConfig,
+		RESTConfig:          restConfig,
+		AudienceExemptPaths: config.AudienceExemptPaths,
+	}
+	if config.Audience != "" {
+		authenticatorConfig.Audiences = []string{config.Audience}
 	}
 	k8sAuthenticator, err := authenticatorConfig.New()
 	if err != nil {

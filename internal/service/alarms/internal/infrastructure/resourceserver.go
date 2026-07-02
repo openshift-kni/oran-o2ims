@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"k8s.io/client-go/transport"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -27,7 +27,6 @@ import (
 const (
 	ResourceName             = "Resource"
 	resourceServerURLEnvName = "RESOURCE_SERVER_URL"
-	resourceTokenPathEnvName = "TOKEN_PATH"
 )
 
 var _ Client = (*ResourceServer)(nil)
@@ -46,7 +45,7 @@ func (r *ResourceServer) Name() string {
 }
 
 // Setup setups a new client for the resource server
-func (r *ResourceServer) Setup() error {
+func (r *ResourceServer) Setup(clientset kubernetes.Interface) error {
 	slog.Info("Creating ResourceServer client")
 
 	url := ctlrutils.GetServiceURL(ctlrutils.InventoryResourceServerName)
@@ -65,18 +64,11 @@ func (r *ResourceServer) Setup() error {
 
 	hc := http.Client{Transport: tr}
 
-	tokenPath := constants.DefaultBackendTokenFile
-
-	// Use for local development
-	path := os.Getenv(resourceTokenPathEnvName)
-	if path != "" {
-		tokenPath = path
-	}
-
-	// Create a request editor that uses a cached token source capable of re-reading from file to pickup changes
-	// as our token is renewed.
 	editor := clients.AuthorizationEditor{
-		Source: transport.NewCachedFileTokenSource(tokenPath),
+		Source: clients.NewTokenRequestTokenSource(
+			clientset, constants.DefaultNamespace,
+			fmt.Sprintf("%s-%s", constants.DefaultNamespace, ctlrutils.InventoryAlarmServerName),
+			ctlrutils.InventoryResourceServerName),
 	}
 	c, err := generated.NewClientWithResponses(url, generated.WithHTTPClient(&hc), generated.WithRequestEditorFn(editor.Editor))
 	if err != nil {

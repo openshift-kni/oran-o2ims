@@ -28,10 +28,20 @@ import (
 type KubernetesAuthenticatorConfig struct {
 	RESTConfig     *rest.Config
 	ClientCABundle string
+	Audiences      []string
+	// AudienceExemptPaths lists URL paths that bypass audience validation.
+	// Requests to these paths are still authenticated via TokenReview
+	// (identity is verified and RBAC is enforced), but the TokenReview is
+	// sent without audience constraints so that callers using default-
+	// audience SA tokens are accepted. Populated at startup from OpenAPI
+	// endpoints marked with x-skip-audience-validation.
+	AudienceExemptPaths []string
 }
 
 type kubernetesAuthenticator struct {
-	authenticator authenticator.Request
+	authenticator       authenticator.Request
+	audiences           authenticator.Audiences
+	audienceExemptPaths map[string]bool
 }
 
 // New instantiates an authenticator.Request based on the supplied attributes which delegates control to a Kubernetes
@@ -47,6 +57,7 @@ func (c *KubernetesAuthenticatorConfig) New() (authenticator.Request, error) {
 		CacheTTL:                 1 * time.Minute,
 		TokenAccessReviewClient:  authenticationV1Client,
 		TokenAccessReviewTimeout: 10 * time.Second,
+		APIAudiences:             authenticator.Audiences(c.Audiences),
 		// wait.Backoff is copied from: https://github.com/kubernetes/apiserver/blob/v0.29.0/pkg/server/options/authentication.go#L43-L50
 		// options.DefaultAuthWebhookRetryBackoff is not used to avoid a dependency on "k8s.io/apiserver/pkg/server/options".
 		WebhookRetryBackoff: &wait.Backoff{
@@ -74,13 +85,29 @@ func (c *KubernetesAuthenticatorConfig) New() (authenticator.Request, error) {
 		return nil, fmt.Errorf("failed to create Kubernetes delegated authenticator: %w", err)
 	}
 
+	exemptSet := make(map[string]bool, len(c.AudienceExemptPaths))
+	for _, p := range c.AudienceExemptPaths {
+		exemptSet[p] = true
+	}
+
 	return &kubernetesAuthenticator{
-		authenticator: delegatingAuthenticator,
+		authenticator:       delegatingAuthenticator,
+		audiences:           authenticator.Audiences(c.Audiences),
+		audienceExemptPaths: exemptSet,
 	}, nil
 }
 
-// AuthenticateRequest delegates the authentication request to the Kubernetes authenticator
+// AuthenticateRequest delegates the authentication request to the Kubernetes authenticator.
+// When audiences are configured, they are injected into the request context so that the
+// delegating authenticator includes them in the TokenReview spec and validates them in
+// the response — mirroring what the standard Kubernetes API server does in its
+// WithAuthentication filter. Paths in audienceExemptPaths bypass audience validation
+// while still requiring valid authentication and RBAC authorization.
 func (h *kubernetesAuthenticator) AuthenticateRequest(req *http.Request) (*authenticator.Response, bool, error) {
+	if len(h.audiences) > 0 && !h.audienceExemptPaths[req.URL.Path] {
+		ctx := authenticator.WithAudiences(req.Context(), h.audiences)
+		req = req.WithContext(ctx)
+	}
 	return h.authenticator.AuthenticateRequest(req) // nolint: wrapcheck
 }
 
