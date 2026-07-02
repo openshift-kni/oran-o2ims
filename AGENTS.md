@@ -126,8 +126,9 @@ issues during code review.
   for `uuid.UUID` values — `slog.Any` renders UUIDs as base64-encoded
   byte arrays. Reserve `slog.Any` for errors, complex structs, maps,
   and interfaces.
-- Use camelCase for log attribute keys (e.g., `"clusterId"`, not
-  `"ClusterID"` or `"cluster_id"`).
+- Use camelCase for log attribute keys with no spaces (e.g.,
+  `"clusterId"`, not `"ClusterID"`, `"cluster_id"`, or
+  `"cluster id"`).
 - Log messages should not end with punctuation or trailing spaces.
 - Choose the appropriate log level: use DEBUG for verbose/polling
   output that would clutter normal operation, INFO for significant

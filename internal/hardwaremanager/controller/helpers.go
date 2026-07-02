@@ -454,7 +454,7 @@ func createNode(ctx context.Context,
 	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
 	nodename, nodeId, nodeNs, groupname, hwprofile string) (*hwmgmtv1alpha1.AllocatedNode, error) {
 	logger.InfoContext(ctx, "Ensuring AllocatedNode exists",
-		slog.String("nodegroup name", groupname),
+		slog.String("nodegroupName", groupname),
 		slog.String("nodename", nodename),
 		slog.String("nodeId", nodeId))
 
@@ -1415,7 +1415,7 @@ func releaseNodeAllocationRequest(ctx context.Context,
 	clusterID := nodeAllocationRequest.Spec.ClusterId
 
 	logger.InfoContext(ctx, "Processing releaseNodeAllocationRequest request:",
-		slog.String("clusterID", clusterID),
+		slog.String("clusterId", clusterID),
 	)
 
 	// Wait for all child nodes to be deleted
