@@ -653,7 +653,7 @@ ifeq ($(shell uname -s),Linux)
 endif
 	@echo "Run ginkgo envtest tests"
 	@mkdir -p $(COVERAGE_DIR)
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -i --bin-dir $(LOCALBIN) -p path)" ginkgo run -r --label-filter="envtest" --coverprofile=envtest.out --output-dir=$(COVERAGE_DIR) ./internal $(ginkgo_flags)
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" ginkgo run -r --label-filter="envtest" --coverprofile=envtest.out --output-dir=$(COVERAGE_DIR) ./internal $(ginkgo_flags)
 
 .PHONY: test-crd-watcher
 test-crd-watcher:

@@ -8,7 +8,6 @@ package notifier
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"net/http"
@@ -65,7 +64,10 @@ func NewClientFactory(oauthConfig *ctlrutils.OAuthClientConfig, serviceTokenFile
 }
 
 func (f *ClientFactory) newClusterClient(ctx context.Context) (*http.Client, error) {
-	tlsConfig, _ := ctlrutils.GetDefaultTLSConfig(&tls.Config{MinVersion: tls.VersionTLS12})
+	tlsConfig, err := ctlrutils.GetDefaultTLSConfig(nil, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build TLS config: %w", err)
+	}
 	baseClient := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,

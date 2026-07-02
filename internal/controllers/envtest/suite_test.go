@@ -37,6 +37,7 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	configv1 "github.com/openshift/api/config/v1"
 )
 
 const testNamespace = "test-controllers"
@@ -49,77 +50,83 @@ var (
 	logger    *slog.Logger
 )
 
-const bmhCRDURLTemplate = "https://raw.githubusercontent.com/metal3-io/baremetal-operator/%s/config/base/crds/bases/metal3.io_baremetalhosts.yaml"
+const (
+	bmhCRDURLTemplate       = "https://raw.githubusercontent.com/metal3-io/baremetal-operator/%s/config/base/crds/bases/metal3.io_baremetalhosts.yaml"
+	apiServerCRDURLTemplate = "https://raw.githubusercontent.com/openshift/api/%s/config/v1/zz_generated.crd-manifests/0000_10_config-operator_01_apiservers-Default.crd.yaml"
+)
 
-// getBMHVersionFromGoMod extracts the baremetal-operator version from go.mod
-func getBMHVersionFromGoMod() (string, error) {
+// getVersionFromGoMod reads go.mod and returns the first capture group matched by the given regex.
+func getVersionFromGoMod(pattern string) (string, error) {
 	goModPath := filepath.Join("..", "..", "..", "go.mod")
 	data, err := os.ReadFile(goModPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to read go.mod: %w", err)
 	}
 
-	// Match: github.com/metal3-io/baremetal-operator/apis vX.Y.Z
-	re := regexp.MustCompile(`github\.com/metal3-io/baremetal-operator/apis\s+(v[\d.]+)`)
+	re := regexp.MustCompile(pattern)
 	matches := re.FindSubmatch(data)
 	if len(matches) < 2 {
-		return "", fmt.Errorf("could not find baremetal-operator version in go.mod")
+		return "", fmt.Errorf("no match for %q in go.mod", pattern)
 	}
 	return string(matches[1]), nil
 }
 
-// validateCRDContent checks that the downloaded content is a valid Kubernetes CRD YAML
-func validateCRDContent(data []byte) error {
-	content := string(data)
+// downloadCRD fetches a CRD from the given URL, validates it, and writes it to testdata/<filename>.
+func downloadCRD(url, filename string) error {
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(url) //nolint:gosec // URL is constructed from trusted template
+	if err != nil {
+		return fmt.Errorf("failed to download CRD: %w", err)
+	}
+	defer resp.Body.Close()
 
-	// Check it's not an HTML page (GitHub error pages start with <!DOCTYPE or <html)
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status %d from %s", resp.StatusCode, url)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	content := string(data)
 	if strings.HasPrefix(strings.TrimSpace(content), "<") {
 		return fmt.Errorf("received HTML instead of YAML")
 	}
-
-	// Check for expected CRD markers
 	if !strings.Contains(content, "kind: CustomResourceDefinition") {
 		return fmt.Errorf("missing 'kind: CustomResourceDefinition'")
 	}
 
+	if err := os.WriteFile(filepath.Join("testdata", filename), data, 0o600); err != nil {
+		return fmt.Errorf("failed to write %s: %w", filename, err)
+	}
 	return nil
 }
 
 // downloadBMHCRD downloads the BareMetalHost CRD from the upstream repository
 func downloadBMHCRD() (string, error) {
-	version, err := getBMHVersionFromGoMod()
+	version, err := getVersionFromGoMod(`github\.com/metal3-io/baremetal-operator/apis\s+(v[\d.]+)`)
 	if err != nil {
 		return "", fmt.Errorf("failed to get BMH version: %w", err)
 	}
-
 	url := fmt.Sprintf(bmhCRDURLTemplate, version)
-	destPath := filepath.Join("testdata", "metal3.io_baremetalhosts.yaml")
-
-	resp, err := http.Get(url) //nolint:gosec // URL is constructed from trusted template
-	if err != nil {
-		return "", fmt.Errorf("failed to download BMH CRD: %w", err)
+	if err := downloadCRD(url, "metal3.io_baremetalhosts.yaml"); err != nil {
+		return "", err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to download BMH CRD: status %d", resp.StatusCode)
-	}
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read BMH CRD response: %w", err)
-	}
-
-	// Validate the downloaded content is a valid CRD YAML, not an HTML error page
-	if err := validateCRDContent(data); err != nil {
-		return "", fmt.Errorf("downloaded content is not a valid CRD: %w", err)
-	}
-
-	if err := os.WriteFile(destPath, data, 0o600); err != nil {
-		return "", fmt.Errorf("failed to write BMH CRD: %w", err)
-	}
-
 	return version, nil
+}
+
+// downloadAPIServerCRD downloads the APIServer CRD from the upstream repository
+func downloadAPIServerCRD() (string, error) {
+	commitSHA, err := getVersionFromGoMod(`github\.com/openshift/api\s+v\d+\.\d+\.\d+-\d{14}-([0-9a-f]+)`)
+	if err != nil {
+		return "", fmt.Errorf("failed to get openshift/api version: %w", err)
+	}
+	url := fmt.Sprintf(apiServerCRDURLTemplate, commitSHA)
+	if err := downloadCRD(url, "0000_10_config-operator_01_apiservers-Default.crd.yaml"); err != nil {
+		return "", err
+	}
+	return commitSHA, nil
 }
 
 func TestControllersEnvtest(t *testing.T) {
@@ -150,17 +157,26 @@ var _ = BeforeSuite(func() {
 		logger.Info("Downloaded BMH CRD from upstream", slog.String("version", version))
 	}
 
+	// Download APIServer CRD from upstream (matching go.mod pseudo-version)
+	if commitSHA, err := downloadAPIServerCRD(); err != nil {
+		logger.Warn("Failed to download APIServer CRD from upstream", slog.Any("error", err))
+		Fail(fmt.Sprintf("Failed to download APIServer CRD: %v", err))
+	} else {
+		logger.Info("Downloaded APIServer CRD from upstream", slog.String("commit", commitSHA))
+	}
+
 	scheme := runtime.NewScheme()
 	Expect(corev1.AddToScheme(scheme)).To(Succeed())
 	Expect(inventoryv1alpha1.AddToScheme(scheme)).To(Succeed())
 	Expect(bmhv1alpha1.AddToScheme(scheme)).To(Succeed())
 	Expect(provisioningv1alpha1.AddToScheme(scheme)).To(Succeed())
 	Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
+	Expect(configv1.Install(scheme)).To(Succeed())
 
 	testEnv = &k8senvtest.Environment{
 		CRDDirectoryPaths: []string{
 			filepath.Join("..", "..", "..", "config", "crd", "bases"),
-			"testdata", // BMH CRD downloaded at test time
+			"testdata", // External CRDs downloaded at test time
 		},
 		ErrorIfCRDPathMissing: true,
 		Scheme:                scheme,

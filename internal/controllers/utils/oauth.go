@@ -87,7 +87,10 @@ func SetupOAuthClient(ctx context.Context, logger *slog.Logger, config *OAuthCli
 	if logger == nil {
 		logger = slog.Default()
 	}
-	tlsConfig, _ := GetDefaultTLSConfig(&tls.Config{MinVersion: tls.VersionTLS12})
+	tlsConfig, err := GetDefaultTLSConfig(nil, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build TLS config: %w", err)
+	}
 
 	// Adjust the TLS config with the related options passed in
 	if config.TLSConfig != nil {
