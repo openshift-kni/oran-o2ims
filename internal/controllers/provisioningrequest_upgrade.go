@@ -18,6 +18,7 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -109,7 +110,7 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(ctx context.Context, c
 		// Merge, validate, and build the IBGU
 		ibgu, err = t.prepareIBGU(ctx, clusterTemplate, clusterName)
 		if err != nil {
-			if ctlrutils.IsInputError(err) {
+			if typederrors.IsInputError(err) {
 				ctlrutils.LogError(ctx, t.logger, "Upgrade precondition check failed", err)
 				ctlrutils.SetProvisioningStateFailed(t.object, fmt.Sprintf("Upgrade precondition check failed: %s", err.Error()))
 				ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
@@ -220,13 +221,13 @@ func (t *provisioningRequestReconcilerTask) prepareIBGU(
 	// Merge and validate upgrade data against the schema
 	mergedUpgradeData, err := t.mergeAndValidateUpgradeData(clusterTemplate)
 	if err != nil {
-		return nil, ctlrutils.NewInputError("%s", err.Error())
+		return nil, typederrors.NewInputError("%s", err.Error())
 	}
 
 	// Extract the imageBasedGroupUpgrade data from the merged result
 	ibguRaw, ok := mergedUpgradeData[ctlrutils.UpgradeDefaultsIBGUKey]
 	if !ok {
-		return nil, ctlrutils.NewInputError("key %q not found in merged upgrade data", ctlrutils.UpgradeDefaultsIBGUKey)
+		return nil, typederrors.NewInputError("key %q not found in merged upgrade data", ctlrutils.UpgradeDefaultsIBGUKey)
 	}
 	ibguBytes, err := json.Marshal(ibguRaw)
 	if err != nil {
@@ -236,11 +237,11 @@ func (t *provisioningRequestReconcilerTask) prepareIBGU(
 	// Build the IBGU from the extracted spec
 	ibguCR, err := ctlrutils.GetIBGUFromUpgradeData(ibguBytes, clusterName, t.object.Name, clusterName)
 	if err != nil {
-		return nil, ctlrutils.NewInputError("failed to build IBGU from merged upgrade data: %s", err.Error())
+		return nil, typederrors.NewInputError("failed to build IBGU from merged upgrade data: %s", err.Error())
 	}
 
 	if clusterTemplate.Spec.Release != ibguCR.Spec.IBUSpec.SeedImageRef.Version {
-		return nil, ctlrutils.NewInputError(
+		return nil, typederrors.NewInputError(
 			"the imageBasedGroupUpgrade seedImageRef version (%s) does not match the ClusterTemplate spec.release (%s)",
 			ibguCR.Spec.IBUSpec.SeedImageRef.Version, clusterTemplate.Spec.Release)
 	}
@@ -250,7 +251,7 @@ func (t *provisioningRequestReconcilerTask) prepareIBGU(
 		if !errors.IsInvalid(err) && !errors.IsBadRequest(err) {
 			return nil, fmt.Errorf("failed to dry-run create IBGU: %w", err)
 		}
-		return nil, ctlrutils.NewInputError("IBGU dry-run validation failed: %s", err.Error())
+		return nil, typederrors.NewInputError("IBGU dry-run validation failed: %s", err.Error())
 	}
 
 	return ibguCR, nil

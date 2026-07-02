@@ -11,6 +11,7 @@ import (
 	"fmt"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -47,7 +48,7 @@ func GetSecret(ctx context.Context, c client.Client, name, namespace string) (*c
 	}
 
 	if !exists {
-		return nil, NewInputError(
+		return nil, typederrors.NewInputError(
 			"the Secret '%s' is not found in the namespace '%s'", name, namespace)
 	}
 	return secret, nil
@@ -57,7 +58,7 @@ func GetSecret(ctx context.Context, c client.Client, name, namespace string) (*c
 func GetSecretField(secret *corev1.Secret, fieldName string) (string, error) {
 	encoded, ok := secret.Data[fieldName]
 	if !ok {
-		return "", NewInputError("the Secret '%s' does not contain a field named '%s'", secret.Name, fieldName)
+		return "", typederrors.NewInputError("the Secret '%s' does not contain a field named '%s'", secret.Name, fieldName)
 	}
 
 	return string(encoded), nil
@@ -72,12 +73,12 @@ func GetKeyPairFromSecret(ctx context.Context, c client.Client, name, namespace 
 
 	certBytes, ok := secret.Data[constants.TLSCertField]
 	if !ok {
-		return nil, nil, NewInputError("secret '%s' does not contain key 'tls.crt'", name)
+		return nil, nil, typederrors.NewInputError("secret '%s' does not contain key 'tls.crt'", name)
 	}
 
 	keyBytes, ok := secret.Data[constants.TLSKeyField]
 	if !ok {
-		return nil, nil, NewInputError("secret '%s' does not contain key 'tls.key'", name)
+		return nil, nil, typederrors.NewInputError("secret '%s' does not contain key 'tls.key'", name)
 	}
 
 	return certBytes, keyBytes, nil

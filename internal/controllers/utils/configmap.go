@@ -11,6 +11,7 @@ import (
 	"embed"
 	"fmt"
 
+	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -57,7 +58,7 @@ func GetConfigmap(ctx context.Context, c client.Client, name, namespace string) 
 
 	if !cmExists {
 		// Check if the configmap is missing
-		return nil, NewInputError(
+		return nil, typederrors.NewInputError(
 			"the ConfigMap '%s' is not found in the namespace '%s'", name, namespace)
 	}
 	return existingConfigmap, nil
@@ -67,7 +68,7 @@ func GetConfigmap(ctx context.Context, c client.Client, name, namespace string) 
 func GetConfigMapField(cm *corev1.ConfigMap, fieldName string) (string, error) {
 	data, ok := cm.Data[fieldName]
 	if !ok {
-		return data, NewInputError("the ConfigMap '%s' does not contain a field named '%s'", cm.Name, fieldName)
+		return data, typederrors.NewInputError("the ConfigMap '%s' does not contain a field named '%s'", cm.Name, fieldName)
 	}
 
 	return data, nil

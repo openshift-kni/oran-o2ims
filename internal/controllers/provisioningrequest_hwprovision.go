@@ -25,6 +25,7 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -716,7 +717,7 @@ func (t *provisioningRequestReconcilerTask) checkExistingNodeAllocationRequest(
 
 	err = validateNodeGroupsMatchNAR(hwMgmtData, &nar.Spec)
 	if err != nil {
-		return nil, ctlrutils.NewInputError("%w", err)
+		return nil, typederrors.NewInputError("%w", err)
 	}
 
 	return nar, nil
@@ -750,11 +751,11 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec(
 	// Extract nodeGroupData from the pre-merged hwMgmt data
 	nodeGroupDataRaw, ok := hwMgmtData["nodeGroupData"]
 	if !ok {
-		return nil, ctlrutils.NewInputError("nodeGroupData not found in merged hwMgmt data")
+		return nil, typederrors.NewInputError("nodeGroupData not found in merged hwMgmt data")
 	}
 	nodeGroupDataSlice, ok := nodeGroupDataRaw.([]any)
 	if !ok {
-		return nil, ctlrutils.NewInputError("nodeGroupData must be an array")
+		return nil, typederrors.NewInputError("nodeGroupData must be an array")
 	}
 
 	// Node group validation (name, role, duplicates) is handled by validateMergedNodeGroups

@@ -14,7 +14,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -294,7 +294,7 @@ var _ = Describe("prepareIBGU", func() {
 		}
 		_, err := task.prepareIBGU(ctx, clusterTemplate, "prepare-cluster")
 		Expect(err).To(HaveOccurred())
-		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("does not match the ClusterTemplate spec.release"))
 	})
 
@@ -304,6 +304,6 @@ var _ = Describe("prepareIBGU", func() {
 		}
 		_, err := task.prepareIBGU(ctx, clusterTemplate, "prepare-cluster")
 		Expect(err).To(HaveOccurred())
-		Expect(utils.IsInputError(err)).To(BeTrue())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
 	})
 })
