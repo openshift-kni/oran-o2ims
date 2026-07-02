@@ -818,12 +818,6 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (c
 		return "", fmt.Errorf("failed to update ORANO2ISMUsedConfigStatus: %w", err)
 	}
 
-	// Select the container image to use:
-	image := t.image
-	if t.object.Spec.Image != nil {
-		image = *t.object.Spec.Image
-	}
-
 	var envVars []corev1.EnvVar
 	if ctlrutils.HasDatabase(serverName) {
 		envVarName, err := ctlrutils.GetServerDatabasePasswordName(serverName)
@@ -943,7 +937,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (c
 				Containers: []corev1.Container{
 					{
 						Name:            constants.ServerContainerName,
-						Image:           image,
+						Image:           t.image,
 						ImagePullPolicy: corev1.PullPolicy(os.Getenv(constants.ImagePullPolicyEnvName)),
 						VolumeMounts:    deploymentVolumeMounts,
 						Command:         []string{constants.ManagerExec},
@@ -972,7 +966,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (c
 		deploymentSpec.Template.Spec.InitContainers = []corev1.Container{
 			{
 				Name:    constants.MigrationContainerName,
-				Image:   image,
+				Image:   t.image,
 				Command: []string{constants.ManagerExec},
 				Args:    []string{serverName, "migrate"},
 				Env:     envVars,
