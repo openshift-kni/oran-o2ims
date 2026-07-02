@@ -159,6 +159,9 @@ gather_resource "allocatednodes.clcm.openshift.io" "clcm/allocatednodes"
 
 # O-Cloud Manager CRDs - ocloud.openshift.io
 gather_resource "inventories.ocloud.openshift.io" "ocloud/inventories"
+gather_resource "locations.ocloud.openshift.io" "ocloud/locations"
+gather_resource "ocloudsites.ocloud.openshift.io" "ocloud/ocloudsites"
+gather_resource "resourcepools.ocloud.openshift.io" "ocloud/resourcepools"
 
 # Metal3 resources
 gather_resource "baremetalhosts.metal3.io" "metal3/baremetalhosts"
