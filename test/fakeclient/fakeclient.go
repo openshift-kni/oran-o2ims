@@ -16,8 +16,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	addonv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
+	workv1 "open-cluster-management.io/api/work/v1"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
+	msav1beta1 "open-cluster-management.io/managed-serviceaccount/apis/authentication/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -65,6 +68,12 @@ func init() {
 	Scheme.AddKnownTypes(assistedservicev1beta1.GroupVersion,
 		&assistedservicev1beta1.Agent{}, &assistedservicev1beta1.AgentList{})
 	Scheme.AddKnownTypes(ibguv1alpha1.SchemeGroupVersion, &ibguv1alpha1.ImageBasedGroupUpgrade{})
+	Scheme.AddKnownTypes(msav1beta1.SchemeGroupVersion,
+		&msav1beta1.ManagedServiceAccount{}, &msav1beta1.ManagedServiceAccountList{})
+	Scheme.AddKnownTypes(workv1.SchemeGroupVersion,
+		&workv1.ManifestWork{}, &workv1.ManifestWorkList{})
+	Scheme.AddKnownTypes(addonv1alpha1.SchemeGroupVersion,
+		&addonv1alpha1.ManagedClusterAddOn{}, &addonv1alpha1.ManagedClusterAddOnList{})
 	utilruntime.Must(metal3v1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(hivev1.AddToScheme(Scheme))
 }
