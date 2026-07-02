@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/metrics"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
@@ -242,6 +243,39 @@ var _ = Describe("Authenticator", func() {
 		Expect(logOutput).To(ContainSubstring(`"container"`))
 		Expect(logOutput).To(ContainSubstring(`"clientIp":"10.20.30.40"`))
 	})
+
+	Context("metrics instrumentation", func() {
+		BeforeEach(func() {
+			ServiceName = "test-service"
+			metrics.AuthFailures.Reset()
+		})
+
+		It("increments authentication counter on error", func() {
+			k8sAuthenticator.Error = errors.New("token expired")
+			handler.ServeHTTP(recorder, &req)
+			Expect(getCounterValue(metrics.AuthFailures, "test-service", "authentication", "GET", "/api/test")).To(Equal(float64(1)))
+		})
+
+		It("increments authentication counter on rejection", func() {
+			k8sAuthenticator.Ok = false
+			handler.ServeHTTP(recorder, &req)
+			Expect(getCounterValue(metrics.AuthFailures, "test-service", "authentication", "GET", "/api/test")).To(Equal(float64(1)))
+		})
+
+		It("does not increment counter on success", func() {
+			handler.ServeHTTP(recorder, &req)
+			Expect(getCounterValue(metrics.AuthFailures, "test-service", "authentication", "GET", "/api/test")).To(Equal(float64(0)))
+		})
+
+		It("records correct method and path labels", func() {
+			req.Method = http.MethodPost
+			req.URL.Path = "/o2ims-infrastructureInventory/v1/alarmSubscriptions"
+			k8sAuthenticator.Error = errors.New("invalid token")
+			handler = Authenticator(&oauthAuthenticator, &k8sAuthenticator)(next)
+			handler.ServeHTTP(recorder, &req)
+			Expect(getCounterValue(metrics.AuthFailures, "test-service", "authentication", "POST", "/o2ims-infrastructureInventory/v1/alarmSubscriptions")).To(Equal(float64(1)))
+		})
+	})
 })
 
 var _ = Describe("Authorizer", func() {
@@ -342,5 +376,35 @@ var _ = Describe("Authorizer", func() {
 		logOutput := logBuffer.String()
 		Expect(logOutput).To(ContainSubstring(`"container"`))
 		Expect(logOutput).To(ContainSubstring(`"clientIp":"10.0.0.60"`))
+	})
+
+	Context("metrics instrumentation", func() {
+		BeforeEach(func() {
+			ServiceName = "test-service"
+			metrics.AuthFailures.Reset()
+		})
+
+		It("increments authorization counter on denial", func() {
+			k8sAuthorizer.Decision = authorizer.DecisionDeny
+			handler.ServeHTTP(recorder, req)
+			Expect(getCounterValue(metrics.AuthFailures, "test-service", "authorization", "GET", "/some/path")).To(Equal(float64(1)))
+		})
+
+		It("increments authorization counter on no opinion", func() {
+			k8sAuthorizer.Decision = authorizer.DecisionNoOpinion
+			handler.ServeHTTP(recorder, req)
+			Expect(getCounterValue(metrics.AuthFailures, "test-service", "authorization", "GET", "/some/path")).To(Equal(float64(1)))
+		})
+
+		It("does not increment counter on allow", func() {
+			handler.ServeHTTP(recorder, req)
+			Expect(getCounterValue(metrics.AuthFailures, "test-service", "authorization", "GET", "/some/path")).To(Equal(float64(0)))
+		})
+
+		It("does not increment authorization counter on authorizer error", func() {
+			k8sAuthorizer.Error = errors.New("some error")
+			handler.ServeHTTP(recorder, req)
+			Expect(getCounterValue(metrics.AuthFailures, "test-service", "authorization", "GET", "/some/path")).To(Equal(float64(0)))
+		})
 	})
 })

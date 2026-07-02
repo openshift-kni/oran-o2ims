@@ -21,6 +21,7 @@ import (
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/auth"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/metrics"
 
 	"github.com/getkin/kin-openapi/openapi3"
 
@@ -39,6 +40,7 @@ const (
 // Serve start provisioning server
 func Serve(config *api.ProvisioningServerConfig) error {
 	slog.Info("Starting Provisioning server")
+	auth.ServiceName = "provisioning-server"
 
 	// Get and validate the openapi spec file
 	swagger, err := generated.GetSwagger()
@@ -107,6 +109,7 @@ func Serve(config *api.ProvisioningServerConfig) error {
 	}
 
 	baseRouter := http.NewServeMux()
+	metrics.RegisterMetricsHandler(baseRouter)
 	opt := generated.StdHTTPServerOptions{
 		BaseRouter: baseRouter,
 		Middlewares: []generated.MiddlewareFunc{ // Add middlewares here

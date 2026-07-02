@@ -20,6 +20,7 @@ import (
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/auth"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/metrics"
 
 	"github.com/getkin/kin-openapi/openapi3"
 
@@ -49,6 +50,7 @@ const (
 // Serve start alarms server
 func Serve(config *api.ClusterServerConfig) error {
 	slog.Info("Starting cluster server")
+	auth.ServiceName = "cluster-server"
 
 	// Get and validate the openapi spec file
 	swagger, err := generated.GetSwagger()
@@ -169,6 +171,7 @@ func Serve(config *api.ClusterServerConfig) error {
 	}
 
 	baseRouter := http.NewServeMux()
+	metrics.RegisterMetricsHandler(baseRouter)
 	opt := generated.StdHTTPServerOptions{
 		BaseRouter: baseRouter,
 		Middlewares: []generated.MiddlewareFunc{ // Add middlewares here
