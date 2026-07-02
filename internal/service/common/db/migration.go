@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -114,19 +116,28 @@ func (h *MigrationHandler) Verbose() bool {
 // NewHandler configure the migration data
 func NewHandler(cfg MigrationConfig) (*MigrationHandler, error) {
 	// https://github.com/golang-migrate/migrate/tree/c378583d782e026f472dff657bfd088bf2510038/database/pgx/v5
-	connStr := fmt.Sprintf("pgx5://%s:%s@%s:%s/%s?sslmode=verify-full&connect_timeout=10",
-		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Database)
+	query := url.Values{}
+	query.Set("connect_timeout", "10")
 	if cfg.MigrationsTable != "" {
-		connStr += fmt.Sprintf("&x-migrations-table=%s", cfg.MigrationsTable)
+		query.Set("x-migrations-table", cfg.MigrationsTable)
 	}
 
+	query.Set("sslmode", "verify-full")
 	if _, err := os.Stat(constants.DefaultServiceCAFile); err == nil {
-		connStr += fmt.Sprintf("&sslrootcert=%s", constants.DefaultServiceCAFile)
+		query.Set("sslrootcert", constants.DefaultServiceCAFile)
 	} else {
-		slog.Warn("No service CA file found")
+		slog.Warn("Service CA file not found, TLS will use system CA store")
 	}
 
-	m, err := migrate.NewWithSourceInstance("iofs", cfg.Source, connStr)
+	connURL := &url.URL{
+		Scheme:   "pgx5",
+		User:     url.UserPassword(cfg.User, cfg.Password),
+		Host:     net.JoinHostPort(cfg.Host, cfg.Port),
+		Path:     cfg.Database,
+		RawQuery: query.Encode(),
+	}
+
+	m, err := migrate.NewWithSourceInstance("iofs", cfg.Source, connURL.String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create migrate instance: %w", err)
 	}
