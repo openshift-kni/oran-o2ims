@@ -1,7 +1,0 @@
----
-kind: Service
-apiVersion: v1
-metadata:
-  name: alarm-server
-spec:
-  clusterIP: None
