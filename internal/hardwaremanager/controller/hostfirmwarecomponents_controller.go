@@ -70,7 +70,7 @@ func (r *HostFirmwareComponentsReconciler) Reconcile(ctx context.Context, req ct
 	}()
 
 	// Add logging context with the resource name
-	ctx = logging.AppendCtx(ctx, slog.String("ReconcileRequest", req.Name))
+	ctx = logging.AppendCtx(ctx, slog.String("reconcileRequest", req.Name))
 
 	// Fetch the HostFirmwareComponents
 	hfc := &metal3v1alpha1.HostFirmwareComponents{}
