@@ -486,10 +486,10 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 		stringString = "string"
 		objectString = "object"
 	)
-	mandatoryParams := [][]string{{ctlrutils.TemplateParamNodeClusterName, stringString},
-		{ctlrutils.TemplateParamOCloudSiteId, stringString},
-		{ctlrutils.TemplateParamPolicyConfig, objectString},
-		{ctlrutils.TemplateParamClusterInstance, objectString}}
+	mandatoryParams := [][]string{{constants.TemplateParamNodeClusterName, stringString},
+		{constants.TemplateParamOCloudSiteId, stringString},
+		{constants.TemplateParamPolicyConfig, objectString},
+		{constants.TemplateParamClusterInstance, objectString}}
 	if object.Spec.TemplateParameterSchema.Size() == 0 {
 		return ctlrutils.NewInputError("templateParameterSchema is present but empty:")
 	}
@@ -542,11 +542,11 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 		return ctlrutils.NewInputError("%s", validationFailureReason)
 	}
 
-	policyTemplateParamsSchema := subSchemas[ctlrutils.TemplateParamPolicyConfig].(map[string]any)
+	policyTemplateParamsSchema := subSchemas[constants.TemplateParamPolicyConfig].(map[string]any)
 	if err := validatePolicyTemplateParamsSchema(policyTemplateParamsSchema); err != nil {
 		return ctlrutils.NewInputError("Error validating the policyTemplateParameters schema: %s", err.Error())
 	}
-	clusterInstanceParamsSchema := subSchemas[ctlrutils.TemplateParamClusterInstance].(map[string]any)
+	clusterInstanceParamsSchema := subSchemas[constants.TemplateParamClusterInstance].(map[string]any)
 	// Hardware provisioning is active if the CT has hwMgmtDefaults.nodeGroupData OR
 	// if the templateParameterSchema exposes hwMgmtParameters (allowing the PR to supply it).
 	hasHwMgmt := len(object.Spec.TemplateDefaults.HwMgmtDefaults.NodeGroupData) > 0 ||
@@ -557,7 +557,7 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 
 	hasUpgradeDefaults := object.Spec.TemplateDefaults.UpgradeDefaults.Size() > 0
 	if err := validateUpgradeParametersSchema(object.Spec.TemplateParameterSchema.Raw, hasUpgradeDefaults); err != nil {
-		return ctlrutils.NewInputError("Error validating the %s schema: %s", ctlrutils.TemplateParamUpgrade, err.Error())
+		return ctlrutils.NewInputError("Error validating the %s schema: %s", constants.TemplateParamUpgrade, err.Error())
 	}
 
 	return nil
@@ -567,30 +567,30 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 // When the sub-schema is present it must define imageBasedGroupUpgrade as an object.
 // When upgradeDefaults is set the sub-schema is required.
 func validateUpgradeParametersSchema(schemaRaw []byte, hasUpgradeDefaults bool) error {
-	upgradeSchema, err := provisioningv1alpha1.ExtractSubSchema(schemaRaw, ctlrutils.TemplateParamUpgrade)
+	upgradeSchema, err := provisioningv1alpha1.ExtractSubSchema(schemaRaw, constants.TemplateParamUpgrade)
 	if err != nil {
 		if !provisioningv1alpha1.IsErrSubSchemaNotFound(err) {
-			return fmt.Errorf("failed to extract %q schema: %w", ctlrutils.TemplateParamUpgrade, err)
+			return fmt.Errorf("failed to extract %q schema: %w", constants.TemplateParamUpgrade, err)
 		}
 		if hasUpgradeDefaults {
-			return fmt.Errorf("templateParameterSchema must define %q when upgradeDefaults is set", ctlrutils.TemplateParamUpgrade)
+			return fmt.Errorf("templateParameterSchema must define %q when upgradeDefaults is set", constants.TemplateParamUpgrade)
 		}
 		return nil
 	}
 
-	ibguKeyPath := ctlrutils.TemplateParamUpgrade + "." + ctlrutils.UpgradeDefaultsIBGUKey
+	ibguKeyPath := constants.TemplateParamUpgrade + "." + ctlrutils.UpgradeDefaultsIBGUKey
 
 	if t, _ := upgradeSchema["type"].(string); t != "object" {
-		return fmt.Errorf("%q must have type \"object\"", ctlrutils.TemplateParamUpgrade)
+		return fmt.Errorf("%q must have type \"object\"", constants.TemplateParamUpgrade)
 	}
 	props, ok := upgradeSchema["properties"].(map[string]any)
 	if !ok {
-		return fmt.Errorf("%q schema must have a properties section", ctlrutils.TemplateParamUpgrade)
+		return fmt.Errorf("%q schema must have a properties section", constants.TemplateParamUpgrade)
 	}
 	ibguProp, ok := props[ctlrutils.UpgradeDefaultsIBGUKey]
 	if !ok {
 		return fmt.Errorf("%q schema must define the %q property",
-			ctlrutils.TemplateParamUpgrade, ctlrutils.UpgradeDefaultsIBGUKey)
+			constants.TemplateParamUpgrade, ctlrutils.UpgradeDefaultsIBGUKey)
 	}
 	ibguPropMap, ok := ibguProp.(map[string]any)
 	if !ok {
@@ -618,28 +618,28 @@ func validateUpgradeParametersSchema(schemaRaw []byte, hasUpgradeDefaults bool) 
 func validatePolicyTemplateParamsSchema(schema map[string]any) error {
 	propertiesInterface, hasProperties := schema["properties"]
 	if !hasProperties {
-		return fmt.Errorf("unexpected %s structure, no properties present", ctlrutils.TemplateParamPolicyConfig)
+		return fmt.Errorf("unexpected %s structure, no properties present", constants.TemplateParamPolicyConfig)
 	}
 
 	properties, isMap := propertiesInterface.(map[string]any)
 	if !isMap {
-		return fmt.Errorf("unexpected %s properties structure", ctlrutils.TemplateParamPolicyConfig)
+		return fmt.Errorf("unexpected %s properties structure", constants.TemplateParamPolicyConfig)
 	}
 
 	for propertyKey, propertyValue := range properties {
 		propertyValueMap, ok := propertyValue.(map[string]any)
 		if !ok {
-			return fmt.Errorf("unexpected %s structure for the %s property", ctlrutils.TemplateParamPolicyConfig, propertyKey)
+			return fmt.Errorf("unexpected %s structure for the %s property", constants.TemplateParamPolicyConfig, propertyKey)
 		}
 
 		valueTypeInterface, ok := propertyValueMap["type"]
 		if !ok {
-			return fmt.Errorf("unexpected %s structure: expected subproperty \"type\" missing", ctlrutils.TemplateParamPolicyConfig)
+			return fmt.Errorf("unexpected %s structure: expected subproperty \"type\" missing", constants.TemplateParamPolicyConfig)
 		}
 
 		valueType, ok := valueTypeInterface.(string)
 		if !ok {
-			return fmt.Errorf("unexpected %s structure: expected the subproperty \"type\" to be string", ctlrutils.TemplateParamPolicyConfig)
+			return fmt.Errorf("unexpected %s structure: expected the subproperty \"type\" to be string", constants.TemplateParamPolicyConfig)
 		}
 
 		if valueType != "string" {
@@ -667,8 +667,8 @@ func validateSchemaWithoutHwMgmt(schema map[string]any) error {
 		return fmt.Errorf("failed to parse expected clusterInstanceParams subschema for no hwMgmtDefaults: %w", err)
 	}
 
-	if err := checkSchemaContains(schema, expectedSubSchema, ctlrutils.TemplateParamClusterInstance); err != nil {
-		return fmt.Errorf("unexpected %s structure: %w", ctlrutils.TemplateParamClusterInstance, err)
+	if err := checkSchemaContains(schema, expectedSubSchema, constants.TemplateParamClusterInstance); err != nil {
+		return fmt.Errorf("unexpected %s structure: %w", constants.TemplateParamClusterInstance, err)
 	}
 
 	return nil

@@ -12,7 +12,6 @@ import (
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
-	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -346,19 +345,19 @@ const (
 )
 
 var (
-	TestFullTemplateSchema = fmt.Sprintf(TestFullClusterSchemaTemplate, ctlrutils.TemplateParamClusterInstance, TestClusterInstanceSchema,
-		ctlrutils.TemplateParamPolicyConfig, TestPolicyTemplateSchema)
+	TestFullTemplateSchema = fmt.Sprintf(TestFullClusterSchemaTemplate, constants.TemplateParamClusterInstance, TestClusterInstanceSchema,
+		constants.TemplateParamPolicyConfig, TestPolicyTemplateSchema)
 
 	TestFullTemplateParameters = fmt.Sprintf(`{
 		"%s": "exampleCluster",
 		"%s": "local-123",
 		"%s": %s,
 		"%s": %s
-	}`, ctlrutils.TemplateParamNodeClusterName,
-		ctlrutils.TemplateParamOCloudSiteId,
-		ctlrutils.TemplateParamClusterInstance,
+	}`, constants.TemplateParamNodeClusterName,
+		constants.TemplateParamOCloudSiteId,
+		constants.TemplateParamClusterInstance,
 		TestClusterInstanceInput,
-		ctlrutils.TemplateParamPolicyConfig,
+		constants.TemplateParamPolicyConfig,
 		TestPolicyTemplateInput,
 	)
 	ExternalCrdData = []map[string]string{

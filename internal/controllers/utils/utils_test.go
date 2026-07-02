@@ -851,7 +851,7 @@ templateRefs:
 	})
 	It("fails when the ConfigMap is missing", func() {
 		configMapKey = ClusterInstanceTemplateDefaultsConfigmapKey
-		schemaKey = provisioningv1alpha1.TemplateParamClusterInstance
+		schemaKey = constants.TemplateParamClusterInstance
 		result, err := GetDefaultsFromConfigMap(
 			ctx, c, configMapName, configMapNamespace, configMapKey, []byte(schema), schemaKey)
 		Expect(err).To(HaveOccurred())
@@ -860,7 +860,7 @@ templateRefs:
 	})
 	It("fails when it cannot obtain the expected data from the ConfigMap", func() {
 		configMapKey = "other-configmap-key-than-expected"
-		schemaKey = provisioningv1alpha1.TemplateParamClusterInstance
+		schemaKey = constants.TemplateParamClusterInstance
 		// Create the ConfigMap.
 		Expect(c.Create(ctx, clusterInstanceConfigMap)).To(Succeed())
 		result, err := GetDefaultsFromConfigMap(
@@ -883,7 +883,7 @@ templateRefs:
 	})
 	It("return the editable and immutable fields when no errors happen", func() {
 		configMapKey = ClusterInstanceTemplateDefaultsConfigmapKey
-		schemaKey = provisioningv1alpha1.TemplateParamClusterInstance
+		schemaKey = constants.TemplateParamClusterInstance
 		// Create the ConfigMap.
 		Expect(c.Create(ctx, clusterInstanceConfigMap)).To(Succeed())
 		result, err := GetDefaultsFromConfigMap(

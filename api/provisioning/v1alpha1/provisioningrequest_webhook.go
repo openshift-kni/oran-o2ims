@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -193,10 +194,10 @@ func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Contex
 	// updates are disallowed. After cluster installation is completed, only permissible
 	// fields can be updated.
 	oldPrClusterInstanceInput, err := ExtractMatchingInput(
-		oldPr.Spec.TemplateParameters.Raw, TemplateParamClusterInstance)
+		oldPr.Spec.TemplateParameters.Raw, constants.TemplateParamClusterInstance)
 	if err != nil {
 		return fmt.Errorf(
-			"failed to extract matching input for subSchema %s: %w", TemplateParamClusterInstance, err)
+			"failed to extract matching input for subSchema %s: %w", constants.TemplateParamClusterInstance, err)
 	}
 
 	var disallowedFields, scalingNodes []string
