@@ -29,7 +29,7 @@ the failed phase. Common failure conditions:
 
 | Condition | Phase | Common Causes |
 |---|---|---|
-| `ProvisioningRequestValidated` | Validation | Invalid template parameters, missing ConfigMaps |
+| `ProvisioningRequestValidated` | Validation | Invalid template parameters, missing ConfigMaps, reserved or in-use `clusterName` |
 | `NodeAllocationRequestRendered` | NodeAllocationRequest rendering | Invalid hwMgmtDefaults or HardwareProfile CR |
 | `HardwareProvisioned` | BMH allocation | No available BMHs matching resource selector |
 | `HardwareConfigured` | Firmware/BIOS | Firmware URL unreachable, BMC errors |
