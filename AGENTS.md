@@ -119,6 +119,8 @@ issues during code review.
 - Log errors with `slog.Any("error", err)`, not
   `slog.String("error", err.Error())`. This preserves the error type
   for structured logging handlers and avoids eager `.Error()` calls.
+  Always use `"error"` as the key — not `"err"` or `"Error"`.
+- Log messages should not end with punctuation or trailing spaces.
 
 ## Test Conventions
 

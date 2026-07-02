@@ -90,7 +90,7 @@ func ConvertAmToAlarmEventRecordModels(ctx context.Context, alerts *[]api.Alert,
 		if record.ObjectID != nil {
 			objectTypeID, err := infrastructureClient.GetObjectTypeID(ctx, *record.ObjectID)
 			if err != nil {
-				slog.WarnContext(ctx, "Could not get object type ID", slog.String("objectID", record.ObjectID.String()), slog.String("err", err.Error()))
+				slog.WarnContext(ctx, "Could not get object type ID", slog.String("objectID", record.ObjectID.String()), slog.Any("error", err))
 			} else {
 				record.ObjectTypeID = &objectTypeID
 			}
@@ -102,7 +102,7 @@ func ConvertAmToAlarmEventRecordModels(ctx context.Context, alerts *[]api.Alert,
 			_, severity := getPerceivedSeverity(labels)
 			alarmDefinitionID, err := infrastructureClient.GetAlarmDefinitionID(ctx, *record.ObjectTypeID, getAlertName(labels), severity)
 			if err != nil {
-				slog.WarnContext(ctx, "Could not get alarm definition ID", slog.String("objectTypeID", record.ObjectTypeID.String()), slog.String("name", getAlertName(labels)), slog.String("severity", severity), slog.String("err", err.Error()))
+				slog.WarnContext(ctx, "Could not get alarm definition ID", slog.String("objectTypeID", record.ObjectTypeID.String()), slog.String("name", getAlertName(labels)), slog.String("severity", severity), slog.Any("error", err))
 			} else {
 				record.AlarmDefinitionID = &alarmDefinitionID
 			}
@@ -130,7 +130,7 @@ func getClusterID(labels map[string]string) *uuid.UUID {
 
 	id, err := uuid.Parse(val)
 	if err != nil {
-		slog.Warn("Could not convert cluster ID string to uuid", slog.Any("labels", labels), slog.String("err", err.Error()))
+		slog.Warn("Could not convert cluster ID string to uuid", slog.Any("labels", labels), slog.Any("error", err))
 		return nil
 	}
 
@@ -154,7 +154,7 @@ func getResourceID(labels map[string]string) *uuid.UUID {
 
 	id, err := uuid.Parse(val)
 	if err != nil {
-		slog.Warn("Could not convert instance_uuid string to uuid", slog.Any("labels", labels), slog.String("err", err.Error()))
+		slog.Warn("Could not convert instance_uuid string to uuid", slog.Any("labels", labels), slog.Any("error", err))
 		return nil
 	}
 
