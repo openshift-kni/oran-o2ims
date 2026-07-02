@@ -22,6 +22,7 @@ import (
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure/clusterserver/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
+	sharedtls "github.com/openshift-kni/oran-o2ims/internal/shared/tls"
 )
 
 const (
@@ -61,7 +62,7 @@ func (r *ClusterServer) Setup() error {
 	}
 
 	// Set up transport
-	tr, err := ctlrutils.GetDefaultBackendTransport()
+	tr, err := sharedtls.GetDefaultBackendTransport()
 	if err != nil {
 		return fmt.Errorf("failed to create http transport: %w", err)
 	}

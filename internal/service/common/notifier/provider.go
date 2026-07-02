@@ -17,7 +17,8 @@ import (
 	"k8s.io/client-go/transport"
 
 	commonapi "github.com/openshift-kni/oran-o2ims/api/common"
-	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	sharedoauth "github.com/openshift-kni/oran-o2ims/internal/shared/oauth"
+	sharedtls "github.com/openshift-kni/oran-o2ims/internal/shared/tls"
 )
 
 // ErrCrossHostRedirect is returned when an HTTP redirect targets a different host.
@@ -45,7 +46,7 @@ func BlockCrossHostRedirects(client *http.Client) {
 // ClientFactory is a utility used to abstract building an HTTP client based on the type of callback
 // URL supplied.
 type ClientFactory struct {
-	oauthConfig      *ctlrutils.OAuthClientConfig
+	oauthConfig      *sharedoauth.OAuthClientConfig
 	serviceTokenFile string
 }
 
@@ -56,7 +57,7 @@ type ClientProvider interface {
 }
 
 // NewClientFactory creates a new factory
-func NewClientFactory(oauthConfig *ctlrutils.OAuthClientConfig, serviceTokenFile string) ClientProvider {
+func NewClientFactory(oauthConfig *sharedoauth.OAuthClientConfig, serviceTokenFile string) ClientProvider {
 	return &ClientFactory{
 		oauthConfig:      oauthConfig,
 		serviceTokenFile: serviceTokenFile,
@@ -64,7 +65,7 @@ func NewClientFactory(oauthConfig *ctlrutils.OAuthClientConfig, serviceTokenFile
 }
 
 func (f *ClientFactory) newClusterClient(ctx context.Context) (*http.Client, error) {
-	tlsConfig, err := ctlrutils.GetDefaultTLSConfig(nil, true)
+	tlsConfig, err := sharedtls.GetDefaultTLSConfig(nil, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build TLS config: %w", err)
 	}
@@ -81,7 +82,7 @@ func (f *ClientFactory) newClusterClient(ctx context.Context) (*http.Client, err
 }
 
 func (f *ClientFactory) newOAuthClient(ctx context.Context) (*http.Client, error) {
-	client, err := ctlrutils.SetupOAuthClient(ctx, nil, f.oauthConfig)
+	client, err := sharedoauth.SetupOAuthClient(ctx, nil, f.oauthConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup oauth client")
 	}

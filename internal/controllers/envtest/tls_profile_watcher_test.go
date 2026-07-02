@@ -16,7 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	sharedtls "github.com/openshift-kni/oran-o2ims/internal/shared/tls"
 )
 
 var _ = Describe("TLS Profile Watcher Integration", Label("envtest"), func() {
@@ -29,7 +29,7 @@ var _ = Describe("TLS Profile Watcher Integration", Label("envtest"), func() {
 		})
 
 		It("should fetch the default Intermediate profile when no APIServer exists", func() {
-			profile, err := ctlrutils.FetchAPIServerTLSProfile(ctx, k8sClient)
+			profile, err := sharedtls.FetchAPIServerTLSProfile(ctx, k8sClient)
 			if err != nil {
 				errMsg := err.Error()
 				if strings.Contains(errMsg, "no matches for kind") ||
@@ -58,7 +58,7 @@ var _ = Describe("TLS Profile Watcher Integration", Label("envtest"), func() {
 				_ = k8sClient.Delete(ctx, apiServer)
 			}()
 
-			profile, err := ctlrutils.FetchAPIServerTLSProfile(ctx, k8sClient)
+			profile, err := sharedtls.FetchAPIServerTLSProfile(ctx, k8sClient)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(profile.MinTLSVersion).To(Equal(configv1.VersionTLS13))
 		})
@@ -86,7 +86,7 @@ var _ = Describe("TLS Profile Watcher Integration", Label("envtest"), func() {
 				_ = k8sClient.Delete(ctx, apiServer)
 			}()
 
-			profile, err := ctlrutils.FetchAPIServerTLSProfile(ctx, k8sClient)
+			profile, err := sharedtls.FetchAPIServerTLSProfile(ctx, k8sClient)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(profile.MinTLSVersion).To(Equal(configv1.VersionTLS13))
 			Expect(profile.Ciphers).To(Equal([]string{"TLS_AES_128_GCM_SHA256", "TLS_AES_256_GCM_SHA384"}))
@@ -94,7 +94,7 @@ var _ = Describe("TLS Profile Watcher Integration", Label("envtest"), func() {
 
 		It("should produce a valid tls.Config from the fetched profile", func() {
 			profile := *configv1.TLSProfiles[configv1.TLSProfileIntermediateType]
-			configurator := ctlrutils.NewTLSConfiguratorFromProfile(profile)
+			configurator := sharedtls.NewTLSConfiguratorFromProfile(profile)
 
 			cfg := &tls.Config{}
 			configurator(cfg)
@@ -107,8 +107,8 @@ var _ = Describe("TLS Profile Watcher Integration", Label("envtest"), func() {
 			intermediate := *configv1.TLSProfiles[configv1.TLSProfileIntermediateType]
 			modern := *configv1.TLSProfiles[configv1.TLSProfileModernType]
 
-			hashIntermediate := ctlrutils.TLSProfileHash(intermediate)
-			hashModern := ctlrutils.TLSProfileHash(modern)
+			hashIntermediate := sharedtls.TLSProfileHash(intermediate)
+			hashModern := sharedtls.TLSProfileHash(modern)
 
 			Expect(hashIntermediate).ToNot(Equal(hashModern))
 			Expect(hashIntermediate).To(HaveLen(16))
@@ -132,7 +132,7 @@ var _ = Describe("TLS Profile Watcher Integration", Label("envtest"), func() {
 				_ = k8sClient.Delete(ctx, apiServer)
 			}()
 
-			profile1, err := ctlrutils.FetchAPIServerTLSProfile(ctx, k8sClient)
+			profile1, err := sharedtls.FetchAPIServerTLSProfile(ctx, k8sClient)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(profile1.MinTLSVersion).To(Equal(configv1.VersionTLS12))
 
@@ -142,7 +142,7 @@ var _ = Describe("TLS Profile Watcher Integration", Label("envtest"), func() {
 			}
 			Expect(k8sClient.Update(ctx, apiServer)).To(Succeed())
 
-			profile2, err := ctlrutils.FetchAPIServerTLSProfile(ctx, k8sClient)
+			profile2, err := sharedtls.FetchAPIServerTLSProfile(ctx, k8sClient)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(profile2.MinTLSVersion).To(Equal(configv1.VersionTLS13))
 		})

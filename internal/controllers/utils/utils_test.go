@@ -8,16 +8,7 @@ package utils
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/tls"
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
-	"math/big"
-	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -1662,95 +1653,6 @@ var _ = Describe("Server predicate functions", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(args).To(BeNil())
 		})
-	})
-})
-
-var _ = Describe("TLS profile-based configuration", func() {
-	const (
-		testMinVersion = "VersionTLS12"
-		testCipher1    = "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
-		testCipher2    = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
-	)
-
-	BeforeEach(func() {
-		os.Setenv(TLSProfileMinVersionEnvName, testMinVersion)
-		os.Setenv(TLSProfileCiphersEnvName, testCipher1+","+testCipher2)
-		DeferCleanup(func() {
-			os.Unsetenv(TLSProfileMinVersionEnvName)
-			os.Unsetenv(TLSProfileCiphersEnvName)
-		})
-	})
-
-	expectedCiphers := []uint16{
-		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-	}
-
-	It("should apply profile cipher suites on GetClientTLSConfig", func() {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		cfg, err := GetClientTLSConfig(ctx, "", "", "")
-		Expect(err).ToNot(HaveOccurred())
-		Expect(cfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
-		Expect(cfg.CipherSuites).To(Equal(expectedCiphers))
-	})
-
-	It("should apply profile cipher suites on GetDefaultTLSConfig", func() {
-		cfg, err := GetDefaultTLSConfig(nil, false)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(cfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
-		Expect(cfg.CipherSuites).To(Equal(expectedCiphers))
-	})
-
-	It("should override caller-provided cipher suites with profile on GetDefaultTLSConfig", func() {
-		custom := &tls.Config{
-			MinVersion:   tls.VersionTLS10,                           //nolint:gosec
-			CipherSuites: []uint16{tls.TLS_RSA_WITH_AES_128_CBC_SHA}, //nolint:gosec
-		}
-		cfg, err := GetDefaultTLSConfig(custom, false)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(cfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
-		Expect(cfg.CipherSuites).To(Equal(expectedCiphers))
-	})
-
-	It("should apply profile cipher suites on GetServerTLSConfig", func() {
-		dir := GinkgoT().TempDir()
-		certFile := filepath.Join(dir, "tls.crt")
-		keyFile := filepath.Join(dir, "tls.key")
-
-		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-		Expect(err).ToNot(HaveOccurred())
-
-		template := &x509.Certificate{SerialNumber: big.NewInt(1)}
-		certDER, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
-		Expect(err).ToNot(HaveOccurred())
-
-		certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-		keyDER, err := x509.MarshalECPrivateKey(key)
-		Expect(err).ToNot(HaveOccurred())
-		keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
-
-		Expect(os.WriteFile(certFile, certPEM, 0o600)).To(Succeed())
-		Expect(os.WriteFile(keyFile, keyPEM, 0o600)).To(Succeed())
-
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		cfg, err := GetServerTLSConfig(ctx, certFile, keyFile)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(cfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
-		Expect(cfg.CipherSuites).To(Equal(expectedCiphers))
-	})
-
-	It("should fall back to Intermediate profile when env vars are not set", func() {
-		os.Unsetenv(TLSProfileMinVersionEnvName)
-		os.Unsetenv(TLSProfileCiphersEnvName)
-
-		cfg, err := GetDefaultTLSConfig(nil, false)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(cfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
-		Expect(cfg.CipherSuites).ToNot(BeEmpty())
 	})
 })
 

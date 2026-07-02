@@ -20,6 +20,7 @@ import (
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	sharedtls "github.com/openshift-kni/oran-o2ims/internal/shared/tls"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -208,7 +209,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			slog.Any("error", err))
 		return exit.Error(1)
 	}
-	tlsProfile, err := ctlrutils.FetchAPIServerTLSProfile(ctx, directClient)
+	tlsProfile, err := sharedtls.FetchAPIServerTLSProfile(ctx, directClient)
 	if err != nil {
 		logger.ErrorContext(ctx, "Unable to fetch cluster TLS profile, using Intermediate default",
 			slog.Any("error", err))
@@ -231,7 +232,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		})
 	}
 	// Profile configurator is appended last so http/2 disabling (NextProtos) is not overridden.
-	tlsOpts = append(tlsOpts, ctlrutils.NewTLSConfiguratorFromProfile(tlsProfile))
+	tlsOpts = append(tlsOpts, sharedtls.NewTLSConfiguratorFromProfile(tlsProfile))
 
 	operatorNamespace := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
 
@@ -316,7 +317,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		Client:         mgr.GetClient(),
 		Logger:         logger.With(slog.String("controller", "O-Cloud Manager")),
 		Image:          c.image,
-		TLSProfileHash: ctlrutils.TLSProfileHash(tlsProfile),
+		TLSProfileHash: sharedtls.TLSProfileHash(tlsProfile),
 		TLSMinVersion:  string(tlsProfile.MinTLSVersion),
 		TLSCiphers:     strings.Join(tlsProfile.Ciphers, ","),
 	}).SetupWithManager(mgr); err != nil {

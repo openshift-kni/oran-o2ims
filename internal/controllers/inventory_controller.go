@@ -39,6 +39,8 @@ import (
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	sharedoauth "github.com/openshift-kni/oran-o2ims/internal/shared/oauth"
+	sharedtls "github.com/openshift-kni/oran-o2ims/internal/shared/tls"
 )
 
 //+kubebuilder:rbac:groups=agent-install.openshift.io,resources=agents,verbs=get;list;watch
@@ -410,8 +412,8 @@ func (t *reconcilerTask) setupOAuthClient(ctx context.Context) (*http.Client, er
 		}
 	}
 
-	config := ctlrutils.OAuthClientConfig{
-		TLSConfig: &ctlrutils.TLSConfig{CaBundle: []byte(caBundle)},
+	config := sharedoauth.OAuthClientConfig{
+		TLSConfig: &sharedoauth.TLSConfig{CaBundle: []byte(caBundle)},
 	}
 
 	oAuthConfig := t.object.Spec.SmoConfig.OAuthConfig
@@ -431,7 +433,7 @@ func (t *reconcilerTask) setupOAuthClient(ctx context.Context) (*http.Client, er
 			return nil, fmt.Errorf("failed to get client-secret from secret: %s, %w", oAuthConfig.ClientSecretName, err)
 		}
 
-		o := ctlrutils.OAuthConfig{
+		o := sharedoauth.OAuthConfig{
 			ClientID:     clientId,
 			ClientSecret: clientSecret,
 			TokenURL:     fmt.Sprintf("%s%s", oAuthConfig.URL, oAuthConfig.TokenEndpoint),
@@ -447,10 +449,10 @@ func (t *reconcilerTask) setupOAuthClient(ctx context.Context) (*http.Client, er
 			return nil, fmt.Errorf("failed to get certificate and key from secret: %w", err)
 		}
 
-		config.TLSConfig.ClientCert = ctlrutils.NewStaticKeyPairLoader(cert, key)
+		config.TLSConfig.ClientCert = sharedoauth.NewStaticKeyPairLoader(cert, key)
 	}
 
-	httpClient, err := ctlrutils.SetupOAuthClient(ctx, t.logger, &config)
+	httpClient, err := sharedoauth.SetupOAuthClient(ctx, t.logger, &config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup OAuth client: %w", err)
 	}
@@ -882,11 +884,11 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (c
 	// TLS profile env vars (operator-resolved, avoids server pods needing API access)
 	envVars = append(envVars, []corev1.EnvVar{
 		{
-			Name:  ctlrutils.TLSProfileMinVersionEnvName,
+			Name:  sharedtls.TLSProfileMinVersionEnvName,
 			Value: t.tlsMinVersion,
 		},
 		{
-			Name:  ctlrutils.TLSProfileCiphersEnvName,
+			Name:  sharedtls.TLSProfileCiphersEnvName,
 			Value: t.tlsCiphers,
 		},
 	}...)

@@ -4,23 +4,37 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
-package utils
+package tls
 
 import (
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"strings"
 
 	configv1 "github.com/openshift/api/config/v1"
 	tlspkg "github.com/openshift/controller-runtime-common/pkg/tls"
+	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
+
+// Environment variable names for TLS profile configuration injected by the operator.
+const (
+	TLSProfileMinVersionEnvName = "TLS_PROFILE_MIN_VERSION"
+	TLSProfileCiphersEnvName    = "TLS_PROFILE_CIPHERS"
+)
+
+// Default CA bundle path for the service account.
+const defaultBackendCABundle = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" // nolint: gosec // hardcoded path only
 
 // FetchAPIServerTLSProfile retrieves the cluster TLS security profile from the APIServer resource.
 // If no profile is configured, the Intermediate profile is returned as the default.
@@ -110,8 +124,8 @@ func NewOutboundMTLSConfig(ctx context.Context, profile configv1.TLSProfileSpec,
 }
 
 // NewOutboundTLSConfig creates a tls.Config for general outbound connections applying only the
-// TLS profile (MinVersion, CipherSuites). It does not load CA bundles; that is handled by the
-// GetDefaultTLSConfig wrapper in utils.go.
+// TLS profile (MinVersion, CipherSuites). It does not load CA bundles; use GetDefaultTLSConfig
+// for connections that need in-cluster CA trust.
 func NewOutboundTLSConfig(profile configv1.TLSProfileSpec, config *tls.Config) (*tls.Config, error) {
 	if config == nil {
 		config = &tls.Config{} //nolint:gosec
@@ -180,4 +194,84 @@ var validTLSVersions = map[string]bool{
 
 func isValidTLSVersion(v string) bool {
 	return validTLSVersions[v]
+}
+
+// loadDefaultCABundles loads the default service account and ingress CA bundles.
+func loadDefaultCABundles(config *tls.Config) error {
+	config.RootCAs = x509.NewCertPool()
+	if data, err := os.ReadFile(defaultBackendCABundle); err != nil {
+		return fmt.Errorf("failed to read CA bundle '%s': %w", defaultBackendCABundle, err)
+	} else {
+		config.RootCAs.AppendCertsFromPEM(data)
+	}
+
+	if data, err := os.ReadFile(constants.DefaultServiceCAFile); err != nil {
+		return fmt.Errorf("failed to read service CA file '%s': %w", constants.DefaultServiceCAFile, err)
+	} else {
+		config.RootCAs.AppendCertsFromPEM(data)
+	}
+
+	return nil
+}
+
+// GetDefaultTLSConfig sets the TLS configuration attributes appropriately to enable communication between internal
+// services and accessing the public facing API endpoints. TLS version and cipher suites are inherited from the
+// cluster TLS security profile (via operator-injected environment variables).
+// When loadCAs is true, default in-cluster CA bundles are loaded.
+// Pass loadCAs=false when the caller provides its own trust anchors (e.g., a pinned service CA).
+func GetDefaultTLSConfig(config *tls.Config, loadCAs bool) (*tls.Config, error) {
+	profile := newTLSProfileFromEnv()
+	tlsConfig, err := NewOutboundTLSConfig(profile, config)
+	if err != nil {
+		return nil, err
+	}
+
+	if loadCAs {
+		if err := loadDefaultCABundles(tlsConfig); err != nil {
+			return nil, fmt.Errorf("error loading default CABundles: %w", err)
+		}
+	}
+
+	return tlsConfig, nil
+}
+
+// AddCABundle appends a PEM-encoded CA bundle file to the TLS configuration's root CA pool.
+func AddCABundle(config *tls.Config, caBundle string) error {
+	data, err := os.ReadFile(caBundle)
+	if err != nil {
+		return fmt.Errorf("failed to read CA bundle '%s': %w", caBundle, err)
+	}
+
+	if config.RootCAs == nil {
+		config.RootCAs = x509.NewCertPool()
+	}
+	config.RootCAs.AppendCertsFromPEM(data)
+
+	return nil
+}
+
+// GetClientTLSConfig creates a tls.Config for outbound mTLS connections with dynamic cert/key rotation.
+// TLS version and cipher suites are inherited from the cluster TLS security profile
+// (via operator-injected environment variables).
+func GetClientTLSConfig(ctx context.Context, certFile, keyFile, caFile string) (*tls.Config, error) {
+	profile := newTLSProfileFromEnv()
+	return NewOutboundMTLSConfig(ctx, profile, certFile, keyFile, caFile)
+}
+
+// GetServerTLSConfig creates a tls.Config for accepting incoming connections with dynamic cert/key rotation.
+// TLS version and cipher suites are inherited from the cluster TLS security profile
+// (via operator-injected environment variables).
+func GetServerTLSConfig(ctx context.Context, certFile, keyFile string) (*tls.Config, error) {
+	profile := newTLSProfileFromEnv()
+	return NewInboundTLSConfig(ctx, profile, certFile, keyFile)
+}
+
+// GetDefaultBackendTransport returns an HTTP transport with the proper TLS defaults set.
+func GetDefaultBackendTransport() (http.RoundTripper, error) {
+	tlsConfig, err := GetDefaultTLSConfig(nil, true)
+	if err != nil {
+		return nil, err
+	}
+
+	return utilnet.SetTransportDefaults(&http.Transport{TLSClientConfig: tlsConfig}), nil
 }
