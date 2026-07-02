@@ -78,7 +78,11 @@ gather_bmh_preprovisioning_secrets() {
         fi
 
         mkdir -p "${output_dir}/${ns}"
-        oc get secret "${secret_name}" -n "${ns}" -o yaml > "${output_dir}/${ns}/${secret_name}.yaml" 2>/dev/null || true
+        # Collect metadata and data key names only — redact values to
+        # avoid leaking network credentials into support-case archives.
+        oc get secret "${secret_name}" -n "${ns}" -o yaml 2>/dev/null \
+            | sed '/^data:/,/^[^ ]/{/^data:/!{/^[^ ]/!s/:.*$/: REDACTED/}}' \
+            > "${output_dir}/${ns}/${secret_name}.yaml" 2>/dev/null || true
         count=$((count + 1))
     done <<< "${bmhs}"
 
