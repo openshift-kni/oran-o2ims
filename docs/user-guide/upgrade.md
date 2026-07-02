@@ -13,11 +13,10 @@ automatic rollback on failure.
 
 The upgrade is orchestrated through an ImageBasedGroupUpgrade (IBGU) CR, which is
 created automatically by the O-Cloud Manager when a ProvisioningRequest is updated to
-reference a ClusterTemplate with a higher OCP release version. The content of the IBGU
-is defined by the user in the
-[upgrade-defaults](../samples/git-setup/clustertemplates/version_4.Y.Z+1/sno-ran-du/upgrade-defaults-v1.yaml)
-ConfigMap, which is referenced by the ClusterTemplate's `spec.templates.upgradeDefaults`
-field.
+reference a ClusterTemplate with a higher OCP release version. The default IBGU parameters are
+defined inline in the ClusterTemplate's `spec.templateDefaults.upgradeDefaults` field.
+Individual ProvisioningRequests can override specific upgrade parameters via
+`spec.templateParameters.upgradeParameters`.
 
 ## Prerequisites
 
@@ -85,7 +84,7 @@ oc patch provisioningrequests.clcm.openshift.io <name> --type merge \
   -p '{"spec":{"templateName":"sno-ran-du","templateVersion":"v4-Y-Z+1-1"}}'
 ```
 
-**Example ClusterTemplate and upgrade defaults for the new release:**
+### Example ClusterTemplate and upgrade defaults for the new release
 
 ```yaml
 # clustertemplates/version_4.Y.Z+1/sno-ran-du/clusterinstance-defaults-v1.yaml
@@ -107,50 +106,119 @@ spec:
   name: sno-ran-du
   version: v4-Y-Z+1-1
   release: 4.Y.Z+1
-  templates:
-    upgradeDefaults: upgrade-defaults-v1
----
-# clustertemplates/version_4.Y.Z+1/sno-ran-du/upgrade-defaults-v1.yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: upgrade-defaults-v1
-  namespace: sno-ran-du-v4-Y-Z+1
-data:
-  # The upgrade step timeout needs to be 30 minutes longer than the auto rollback timeout
-  # so that the abort/cleanup can be executed as part of ibgu
-  ibgu: |
-    ibuSpec:
-      seedImageRef:
-        image: "quay.io/seed-repo/seed-image:4.Y.Z+1"
-        version: "4.Y.Z+1"
-      oadpContent:
-        - name: sno-ran-du-ibu-platform-backup-v4-Y-Z+1-1
-          namespace: openshift-adp
-      autoRollbackOnFailure:
-        initMonitorTimeoutSeconds: 1800
-    plan:
-      - actions: ["Prep"]
-        rolloutStrategy:
-          maxConcurrency: 1
-          timeout: 15
-      - actions: ["AbortOnFailure"]
-        rolloutStrategy:
-          maxConcurrency: 1
-          timeout: 5
-      - actions: ["Upgrade"]
-        rolloutStrategy:
-          maxConcurrency: 1
-          timeout: 60
-      - actions: ["AbortOnFailure"]
-        rolloutStrategy:
-          maxConcurrency: 1
-          timeout: 5
-      - actions: ["FinalizeUpgrade"]
-        rolloutStrategy:
-          maxConcurrency: 1
-          timeout: 5
+  templateDefaults:
+    clusterInstanceDefaults: clusterinstance-defaults-v1
+    policyTemplateDefaults: policytemplate-defaults-v1
+    # The upgrade step timeout needs to be 30 minutes longer than the auto
+    # rollback timeout so that the abort/cleanup can be executed as part of IBGU.
+    upgradeDefaults:
+      imageBasedGroupUpgrade:
+        ibuSpec:
+          seedImageRef:
+            image: "quay.io/seed-repo/seed-image:4.Y.Z+1"
+            version: "4.Y.Z+1"
+          oadpContent:
+            - name: sno-ran-du-ibu-platform-backup-v4-Y-Z+1-1
+              namespace: openshift-adp
+          autoRollbackOnFailure:
+            initMonitorTimeoutSeconds: 1800
+        plan:
+          - actions: ["Prep"]
+            rolloutStrategy:
+              maxConcurrency: 1
+              timeout: 15
+          - actions: ["AbortOnFailure"]
+            rolloutStrategy:
+              maxConcurrency: 1
+              timeout: 5
+          - actions: ["Upgrade"]
+            rolloutStrategy:
+              maxConcurrency: 1
+              timeout: 60
+          - actions: ["AbortOnFailure"]
+            rolloutStrategy:
+              maxConcurrency: 1
+              timeout: 5
+          - actions: ["FinalizeUpgrade"]
+            rolloutStrategy:
+              maxConcurrency: 1
+              timeout: 5
+  templateParameterSchema:
+    properties:
+      # ... other parameters ...
+      upgradeParameters:
+        description: >
+          upgradeParameters allows overriding upgrade defaults defined in
+          templateDefaults.upgradeDefaults.
+        properties:
+          imageBasedGroupUpgrade:
+            type: object
+            properties:
+              ibuSpec:
+                type: object
+              plan:
+                type: array
+        type: object
+    required:
+      - nodeClusterName
+      - oCloudSiteId
+      - policyTemplateParameters
+      - clusterInstanceParameters
+    type: object
 ```
+
+## Overriding Upgrade Parameters per ProvisioningRequest
+
+ProvisioningRequests can override specific upgrade defaults by providing
+`upgradeParameters` in `spec.templateParameters`. The values are deep-merged on
+top of the ClusterTemplate's `upgradeDefaults`, with ProvisioningRequest values
+taking precedence.
+
+Both `upgradeDefaults` and `upgradeParameters` must conform to the
+`upgradeParameters` sub-schema defined in the ClusterTemplate's
+`templateParameterSchema`.
+
+Note that `plan` is an array and is merged by index position — element 0 of
+the override merges with element 0 of the defaults, element 1 with element 1,
+and so on. If the override array is longer, extra elements are appended.
+
+### Example: Override the seed image and increase the Upgrade timeout
+
+```yaml
+apiVersion: clcm.openshift.io/v1alpha1
+kind: ProvisioningRequest
+metadata:
+  name: cluster-name
+spec:
+  templateName: sno-ran-du
+  templateVersion: v4-Y-Z+1-1
+  templateParameters:
+    nodeClusterName: cluster-name
+    oCloudSiteId: site-1
+    upgradeParameters:
+      imageBasedGroupUpgrade:
+        ibuSpec:
+          seedImageRef:
+            image: "quay.io/seed-repo/seed-image:4.Y.Z+1-v2"
+        plan:
+          - actions: ["Prep"]
+            rolloutStrategy:
+              timeout: 15
+          - actions: ["AbortOnFailure"]
+          - actions: ["Upgrade"]
+            rolloutStrategy:
+              timeout: 90
+    # ... other parameters ...
+```
+
+In this example:
+
+- The seed image is overridden to use a different image tag.
+- The Prep step timeout is set to 15 minutes and the Upgrade step timeout is
+  increased to 90 minutes.
+- Fields not specified in `upgradeParameters` (such as `oadpContent`,
+  `autoRollbackOnFailure`, and remaining plan steps) are inherited from the
+  ClusterTemplate's `upgradeDefaults`.
 
 ## Monitoring Upgrade Progress
 
@@ -166,6 +234,7 @@ oc get provisioningrequests.clcm.openshift.io <name> \
 | False | InProgress | Upgrade is in progress |
 | True | Completed | Upgrade completed successfully |
 | False | Failed | Upgrade failed (see condition message for details) |
+| False | PreconditionChecksFailed | Upgrade preconditions not met (schema validation, version mismatch) |
 
 On successful completion, the ProvisioningRequest status returns to `fulfilled`:
 
