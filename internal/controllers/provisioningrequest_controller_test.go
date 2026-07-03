@@ -3323,9 +3323,10 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 
 		// Create task
 		task = &provisioningRequestReconcilerTask{
-			client: c,
-			object: cr,
-			logger: reconciler.Logger,
+			client:   c,
+			object:   cr,
+			logger:   reconciler.Logger,
+			timeouts: &timeouts{},
 		}
 	})
 
@@ -3830,9 +3831,10 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 				Expect(c.Create(ctx, integrationCR)).To(Succeed())
 
 				integrationTask = &provisioningRequestReconcilerTask{
-					client: c,
-					object: integrationCR,
-					logger: reconciler.Logger,
+					client:   c,
+					object:   integrationCR,
+					logger:   reconciler.Logger,
+					timeouts: &timeouts{},
 				}
 
 				// Set up cluster as ZTP completed with configuration applied

@@ -60,6 +60,9 @@ type ClusterDetails struct {
 
 	// Holds the first timestamp when the configuration was found NonCompliant for the cluster.
 	NonCompliantAt *metav1.Time `json:"nonCompliantAt,omitempty"`
+
+	// A timestamp indicating when the cluster upgrade started.
+	ClusterUpgradeStartAt *metav1.Time `json:"clusterUpgradeStartAt,omitempty"`
 }
 
 // ResourceProvisioningPhase defines the provisioning phase of an individual infrastructure resource.

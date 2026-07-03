@@ -161,6 +161,16 @@ func IsClusterUpgradeCompleted(cr *provisioningv1alpha1.ProvisioningRequest) boo
 	return false
 }
 
+// IsClusterUpgradeInTerminalFailure checks if the upgrade is in a terminal failure.
+func IsClusterUpgradeInTerminalFailure(cr *provisioningv1alpha1.ProvisioningRequest) bool {
+	condition := meta.FindStatusCondition(cr.Status.Conditions,
+		string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
+	return condition != nil &&
+		(condition.Reason == string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed) ||
+			condition.Reason == string(provisioningv1alpha1.CRconditionReasons.TimedOut) ||
+			condition.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed))
+}
+
 // IsClusterUpgradeInitiated checks if the cluster upgrade is initiated
 func IsClusterUpgradeInitiated(cr *provisioningv1alpha1.ProvisioningRequest) bool {
 	condition := meta.FindStatusCondition(cr.Status.Conditions,

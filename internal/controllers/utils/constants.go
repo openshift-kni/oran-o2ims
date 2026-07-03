@@ -144,6 +144,7 @@ const (
 	DefaultHardwareProvisioningTimeout = 90 * time.Minute
 	DefaultClusterInstallationTimeout  = 90 * time.Minute
 	DefaultClusterConfigurationTimeout = 30 * time.Minute
+	DefaultClusterUpgradeTimeout       = 4 * time.Hour
 )
 
 // These are optional keys in the respective ConfigMaps defined in ClusterTemplate
@@ -153,6 +154,7 @@ const (
 	HardwareProvisioningTimeoutConfigKey = "hardwareProvisioningTimeout"
 	ClusterInstallationTimeoutConfigKey  = "clusterInstallationTimeout"
 	ClusterConfigurationTimeoutConfigKey = "clusterConfigurationTimeout"
+	ClusterUpgradeTimeoutConfigKey       = "clusterUpgradeTimeout"
 )
 
 // ClusterInstance template constants
