@@ -66,6 +66,9 @@ func (v *SchemaValidator) validateFieldInSchema(fieldPath []string, schema *open
 		if schema.AdditionalProperties.Has != nil && *schema.AdditionalProperties.Has {
 			return true
 		}
+		if schema.AdditionalProperties.Schema != nil {
+			return true
+		}
 
 		// Check allOf, anyOf, oneOf schemas
 		for _, subSchema := range schema.AllOf {

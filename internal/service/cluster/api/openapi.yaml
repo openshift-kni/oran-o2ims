@@ -1009,8 +1009,9 @@ components:
             Human readable description of the Node Cluster Type.
         extensions:
           type: object
+          additionalProperties: {}
           description: |
-            These are unspecified (not standardized) properties (keys) which are tailored extend the information 
+            These are unspecified (not standardized) properties (keys) which are tailored extend the information
             provided about the Node Cluster Type.
       required:
       - nodeClusterTypeId
@@ -1041,8 +1042,9 @@ components:
             Human readable description of the NodeCluster.
         extensions:
           type: object
+          additionalProperties: {}
           description: |
-            These are unspecified (not standardized) properties (keys) which are tailored extend the information 
+            These are unspecified (not standardized) properties (keys) which are tailored extend the information
             provided about the NodeCluster.
         clusterDistributionDescription:
           type: string
@@ -1101,6 +1103,7 @@ components:
             Human readable description of the Cluster Resource Type.
         extensions:
           type: object
+          additionalProperties: {}
           description: |
             These are unspecified (not standardized) properties (keys) which are tailored extend the information
             provided about the Cluster Resource Type.
@@ -1128,6 +1131,7 @@ components:
             Human readable description of the cluster resource.
         extensions:
           type: object
+          additionalProperties: {}
           description: |
             These are unspecified (not standardized) properties (keys) which are tailored extend the information
             provided about the Cluster Resource.

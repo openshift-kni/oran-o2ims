@@ -239,7 +239,7 @@ func clusterTemplateToManagedInfrastructureTemplate(clusterTemplate provisioning
 
 	// ClusterTemplates have just one condition holding validation information.
 	// Include it as an extension.
-	var clusterTemplateExtensions = make(map[string]string)
+	var clusterTemplateExtensions = make(map[string]interface{})
 	validatedCond := meta.FindStatusCondition(
 		clusterTemplate.Status.Conditions,
 		string(provisioningv1alpha1.CTconditionTypes.Validated))
