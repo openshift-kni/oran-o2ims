@@ -147,6 +147,15 @@ var _ = Describe("WithClientVerification", func() {
 		Expect(response).To(BeNil())
 	})
 
+	It("rejects a request with empty fingerprint value", func() {
+		noopAuthenticator.Response.User.GetExtra()[fingerprintKey] = []string{""}
+		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal("empty fingerprint value in token binding claim"))
+		Expect(ok).To(BeFalse())
+		Expect(response).To(BeNil())
+	})
+
 	It("reject a request with mismatched fingerprints", func() {
 		noopAuthenticator.Response.User.GetExtra()[fingerprintKey] = []string{"other"}
 		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
