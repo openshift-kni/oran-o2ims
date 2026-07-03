@@ -9,7 +9,9 @@ package auth
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -18,11 +20,19 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/request"
 )
+
+func testJWT(payload string) string {
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RS256","typ":"JWT"}`))
+	body := base64.RawURLEncoding.EncodeToString([]byte(payload))
+	sig := base64.RawURLEncoding.EncodeToString([]byte("fakesig"))
+	return fmt.Sprintf("%s.%s.%s", header, body, sig)
+}
 
 type NoopAuthenticator struct {
 	called   bool
@@ -102,7 +112,8 @@ var _ = Describe("Authenticator", func() {
 
 		logBuffer.Reset()
 		origLogger = slog.Default()
-		slog.SetDefault(slog.New(slog.NewJSONHandler(&logBuffer, &slog.HandlerOptions{Level: slog.LevelDebug})))
+		slog.SetDefault(slog.New(logging.NewContextHandler(
+			slog.NewJSONHandler(&logBuffer, &slog.HandlerOptions{Level: slog.LevelDebug}), slog.LevelDebug)))
 	})
 
 	AfterEach(func() {
@@ -178,6 +189,59 @@ var _ = Describe("Authenticator", func() {
 		Expect(logOutput).To(ContainSubstring(`"method":"GET"`))
 		Expect(logOutput).To(ContainSubstring(`"/api/test"`))
 	})
+
+	It("Logs clientIp from x-forwarded-for on auth failure", func() {
+		req.Header.Set("x-forwarded-for", "10.0.0.1, 192.168.1.1")
+		oauthAuthenticator.Error = errors.New("bad token")
+		handler.ServeHTTP(recorder, &req)
+
+		logOutput := logBuffer.String()
+		Expect(logOutput).To(ContainSubstring(`"clientIp":"10.0.0.1"`))
+	})
+
+	It("Logs clientIp from RemoteAddr when no x-forwarded-for on auth failure", func() {
+		req.RemoteAddr = "172.16.0.5:43210"
+		k8sAuthenticator.Error = errors.New("bad token")
+		handler.ServeHTTP(recorder, &req)
+
+		logOutput := logBuffer.String()
+		Expect(logOutput).To(ContainSubstring(`"clientIp":"172.16.0.5"`))
+	})
+
+	It("Logs container field on auth failure", func() {
+		k8sAuthenticator.Error = errors.New("bad token")
+		handler.ServeHTTP(recorder, &req)
+
+		logOutput := logBuffer.String()
+		Expect(logOutput).To(ContainSubstring(`"container"`))
+	})
+
+	It("Logs JWT claims on auth failure with bearer token", func() {
+		req.Header.Set("Authorization",
+			"Bearer "+testJWT(`{"iss":"https://sso.example.com","sub":"user-1234","aud":"o2ims","exp":1700000000,"client_id":"smo-client","azp":"smo-client","scope":"openid profile"}`))
+		k8sAuthenticator.Error = errors.New("expired")
+		handler.ServeHTTP(recorder, &req)
+
+		logOutput := logBuffer.String()
+		Expect(logOutput).To(ContainSubstring(`"issuer":"https://sso.example.com"`))
+		Expect(logOutput).To(ContainSubstring(`"subject":"user-1234"`))
+		Expect(logOutput).To(ContainSubstring(`"audience":"o2ims"`))
+		Expect(logOutput).To(ContainSubstring(`"expiration"`))
+		Expect(logOutput).To(ContainSubstring(`"clientId":"smo-client"`))
+		Expect(logOutput).To(ContainSubstring(`"authorizedParty":"smo-client"`))
+		Expect(logOutput).To(ContainSubstring(`"scope":"openid profile"`))
+	})
+
+	It("Logs container and clientIp on auth rejection", func() {
+		req.RemoteAddr = "10.20.30.40:9999"
+		k8sAuthenticator.Ok = false
+		handler.ServeHTTP(recorder, &req)
+
+		logOutput := logBuffer.String()
+		Expect(logOutput).To(ContainSubstring("authentication rejected"))
+		Expect(logOutput).To(ContainSubstring(`"container"`))
+		Expect(logOutput).To(ContainSubstring(`"clientIp":"10.20.30.40"`))
+	})
 })
 
 var _ = Describe("Authorizer", func() {
@@ -206,7 +270,8 @@ var _ = Describe("Authorizer", func() {
 
 		logBuffer.Reset()
 		origLogger = slog.Default()
-		slog.SetDefault(slog.New(slog.NewJSONHandler(&logBuffer, &slog.HandlerOptions{Level: slog.LevelDebug})))
+		slog.SetDefault(slog.New(logging.NewContextHandler(
+			slog.NewJSONHandler(&logBuffer, &slog.HandlerOptions{Level: slog.LevelDebug}), slog.LevelDebug)))
 	})
 
 	AfterEach(func() {
@@ -257,5 +322,25 @@ var _ = Describe("Authorizer", func() {
 		Expect(recorder.Code).To(Equal(http.StatusForbidden))
 		Expect(recorder.Body.String()).To(ContainSubstring("Authorization not allowed for user 'test'"))
 		Expect(next.(*NoopHandler).called).To(BeFalse())
+	})
+
+	It("Logs container and clientIp on authorization error", func() {
+		req.RemoteAddr = "10.0.0.50:8080"
+		k8sAuthorizer.Error = errors.New("sar failed")
+		handler.ServeHTTP(recorder, req)
+
+		logOutput := logBuffer.String()
+		Expect(logOutput).To(ContainSubstring(`"container"`))
+		Expect(logOutput).To(ContainSubstring(`"clientIp":"10.0.0.50"`))
+	})
+
+	It("Logs container and clientIp on authorization denied", func() {
+		req.RemoteAddr = "10.0.0.60:7070"
+		k8sAuthorizer.Decision = authorizer.DecisionNoOpinion
+		handler.ServeHTTP(recorder, req)
+
+		logOutput := logBuffer.String()
+		Expect(logOutput).To(ContainSubstring(`"container"`))
+		Expect(logOutput).To(ContainSubstring(`"clientIp":"10.0.0.60"`))
 	})
 })
