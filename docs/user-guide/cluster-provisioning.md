@@ -71,7 +71,7 @@ The `status.provisioningStatus` tracks the overall provisioning state.
 > [!NOTE]
 
 > - The `metadata.name` of a ProvisioningRequest CR must be a valid UUID. Any attempt to create a ProvisioningRequest with an invalid `metadata.name` will be rejected by the webhook.
-> - The ProvisioningRequest cannot override extraLabels that are already set in the defaults. If the same key appears in both the ClusterTemplate defaults and the ProvisioningRequest (for example, `extraLabels.ManagedCluster.cluster-version` is `4.18` in the defaults ConfigMap and `4.19` in the ProvisioningRequest),
+> - The `extraLabels` and `extraAnnotations` in `clusterInstanceParameters` cannot override those already set in the `clusterInstanceDefaults` ConfigMap. If the same key appears in both (for example, `extraLabels.ManagedCluster.cluster-version` is `4.18` in the defaults ConfigMap and `4.19` in the ProvisioningRequest),
 > the value from the defaults ConfigMap is used.
 > - Once cluster installation has started (`provisioningPhase` is `progressing` and `provisioningDetails` shows `Cluster installation is in progress`), any updates to the ClusterInstance fields are disallowed and will be rejected by the webhook.
 

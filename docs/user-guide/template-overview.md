@@ -47,6 +47,8 @@ The [CRD](../../config/crd/bases/clcm.openshift.io_clustertemplates.yaml)'s `spe
 
 The ClusterTemplate references defaults stored in Git (for example, installation and policy defaults) and, through its `templateParameterSchema`, specifies the inputs that the SMO can supply in the ProvisioningRequest.
 At provisioning time, the O‑Cloud Manager validates the SMO‑supplied values against the schema and merges them with the template’s defaults to render the concrete artifacts used to install and configure the cluster.
+When both the ProvisioningRequest and the ClusterTemplate defaults provide the same field, the ProvisioningRequest value takes precedence, with one exception: `extraLabels` and `extraAnnotations` provided in the ProvisioningRequest's `clusterInstanceParameters` cannot override those already
+set in the `clusterInstanceDefaults` ConfigMap. Only new `extraLabels` and `extraAnnotations` that do not exist in the defaults can be appended through the ProvisioningRequest.
 
 Complete examples of ClusterTemplate are available under the GitOps sample content:
 [SNO](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1.yaml),
