@@ -69,7 +69,7 @@ var _ = Describe("NodeAllocationRequest Controller Timeout Handling", func() {
 					Namespace: "default",
 				},
 				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
-					HardwareProvisioningTimeout: "5m",
+					HardwareProvisioningTimeout: &metav1.Duration{Duration: 5 * time.Minute},
 				},
 				Status: hwmgmtv1alpha1.NodeAllocationRequestStatus{
 					Conditions: []metav1.Condition{},
@@ -79,7 +79,7 @@ var _ = Describe("NodeAllocationRequest Controller Timeout Handling", func() {
 
 		Context("when HardwareProvisioningTimeout is specified", func() {
 			It("should use the specified timeout value", func() {
-				nar.Spec.HardwareProvisioningTimeout = "10m"
+				nar.Spec.HardwareProvisioningTimeout = &metav1.Duration{Duration: 10 * time.Minute}
 				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(context.Background(), nar)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(timeoutExceeded).To(BeFalse())
@@ -87,9 +87,9 @@ var _ = Describe("NodeAllocationRequest Controller Timeout Handling", func() {
 			})
 		})
 
-		Context("when HardwareProvisioningTimeout is empty", func() {
+		Context("when HardwareProvisioningTimeout is nil", func() {
 			It("should use default timeout", func() {
-				nar.Spec.HardwareProvisioningTimeout = ""
+				nar.Spec.HardwareProvisioningTimeout = nil
 				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(context.Background(), nar)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(timeoutExceeded).To(BeFalse())
@@ -98,17 +98,8 @@ var _ = Describe("NodeAllocationRequest Controller Timeout Handling", func() {
 		})
 
 		Context("when HardwareProvisioningTimeout is invalid", func() {
-			It("should return error for invalid duration", func() {
-				nar.Spec.HardwareProvisioningTimeout = "invalid"
-				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(context.Background(), nar)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("invalid hardware provisioning timeout"))
-				Expect(timeoutExceeded).To(BeFalse())
-				Expect(conditionType).To(Equal(hwmgmtv1alpha1.ConditionType("")))
-			})
-
 			It("should return error for zero timeout", func() {
-				nar.Spec.HardwareProvisioningTimeout = "0s"
+				nar.Spec.HardwareProvisioningTimeout = &metav1.Duration{Duration: 0}
 				timeoutExceeded, conditionType, err := reconciler.checkHardwareTimeout(context.Background(), nar)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("hardware provisioning timeout must be > 0"))
@@ -297,7 +288,7 @@ var _ = Describe("NodeAllocationRequest Controller Timeout Handling", func() {
 					Namespace: "default",
 				},
 				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
-					HardwareProvisioningTimeout: "5m",
+					HardwareProvisioningTimeout: &metav1.Duration{Duration: 5 * time.Minute},
 					ConfigTransactionId:         2, // Indicates spec change
 				},
 				Status: hwmgmtv1alpha1.NodeAllocationRequestStatus{

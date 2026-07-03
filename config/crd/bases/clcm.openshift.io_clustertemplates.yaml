@@ -90,7 +90,7 @@ spec:
                     properties:
                       hardwareProvisioningTimeout:
                         description: HardwareProvisioningTimeout defines the timeout
-                          duration string for the hardware provisioning.
+                          for hardware provisioning.
                         type: string
                       nodeGroupData:
                         description: NodeGroupData defines a collection of node group
