@@ -15,9 +15,9 @@ import (
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/client-go/rest"
 
-	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
 	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
+	sharedtls "github.com/openshift-kni/oran-o2ims/internal/shared/tls"
 )
 
 // GetAuthenticator builds authentication middleware to be used to extract user/group identity from incoming requests
@@ -29,7 +29,7 @@ func GetAuthenticator(ctx context.Context, config *svcutils.CommonServerConfig) 
 	}
 
 	// Create a client TLS config suitable to be used with entities outside the cluster
-	clientTLSConfig, err := ctlrutils.GetClientTLSConfig(ctx, config.TLS.ClientCertFile, config.TLS.ClientKeyFile, config.TLS.CABundleFile)
+	clientTLSConfig, err := sharedtls.GetClientTLSConfig(ctx, config.TLS.ClientCertFile, config.TLS.ClientKeyFile, config.TLS.CABundleFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get client TLS config: %w", err)
 	}

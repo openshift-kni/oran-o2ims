@@ -4,7 +4,7 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
-package utils
+package oauth
 
 import (
 	"context"
@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"time"
 
+	sharedtls "github.com/openshift-kni/oran-o2ims/internal/shared/tls"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
@@ -87,7 +88,7 @@ func SetupOAuthClient(ctx context.Context, logger *slog.Logger, config *OAuthCli
 	if logger == nil {
 		logger = slog.Default()
 	}
-	tlsConfig, err := GetDefaultTLSConfig(nil, true)
+	tlsConfig, err := sharedtls.GetDefaultTLSConfig(nil, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build TLS config: %w", err)
 	}
