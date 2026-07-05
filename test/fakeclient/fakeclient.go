@@ -30,6 +30,7 @@ import (
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	openshiftv1 "github.com/openshift/api/config/v1"
+	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
 	openshiftoperatorv1 "github.com/openshift/api/operator/v1"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
@@ -63,6 +64,8 @@ func init() {
 	Scheme.AddKnownTypes(clusterv1.SchemeGroupVersion,
 		&clusterv1.ManagedCluster{}, &clusterv1.ManagedClusterList{})
 	Scheme.AddKnownTypes(openshiftv1.SchemeGroupVersion, &openshiftv1.ClusterVersion{})
+	Scheme.AddKnownTypes(mcfgv1.SchemeGroupVersion,
+		&mcfgv1.MachineConfigPool{}, &mcfgv1.MachineConfigPoolList{})
 	Scheme.AddKnownTypes(openshiftoperatorv1.SchemeGroupVersion, &openshiftoperatorv1.IngressController{})
 	Scheme.AddKnownTypes(apiextensionsv1.SchemeGroupVersion, &apiextensionsv1.CustomResourceDefinition{})
 	Scheme.AddKnownTypes(assistedservicev1beta1.GroupVersion,
