@@ -314,7 +314,6 @@ func convertProvisioningRequestCRToApi(id uuid.UUID, provisioningRequest provisi
 	if err != nil {
 		return provisioningRequestInfo, fmt.Errorf("failed to unmarshal TemplateParameters into a map: %w", err)
 	}
-	stripBMCCredentials(templateParameters)
 	provisioningRequestInfo.ProvisioningRequestData = api.ProvisioningRequestData{
 		ProvisioningRequestId: id,
 		Name:                  provisioningRequest.Spec.Name,
@@ -341,24 +340,6 @@ func convertProvisioningRequestCRToApi(id uuid.UUID, provisioningRequest provisi
 	}
 
 	return provisioningRequestInfo, nil
-}
-
-// stripBMCCredentials removes bmcCredentialsDetails from node entries in
-// clusterInstanceParameters so credentials are never returned via the API.
-func stripBMCCredentials(templateParameters map[string]interface{}) {
-	ciParams, ok := templateParameters["clusterInstanceParameters"].(map[string]interface{})
-	if !ok {
-		return
-	}
-	nodes, ok := ciParams["nodes"].([]interface{})
-	if !ok {
-		return
-	}
-	for _, node := range nodes {
-		if nodeMap, ok := node.(map[string]interface{}); ok {
-			delete(nodeMap, "bmcCredentialsDetails")
-		}
-	}
 }
 
 // mapProvisioningPhase converts the CRD-level lowercase ProvisioningPhase to
