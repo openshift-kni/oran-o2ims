@@ -57,10 +57,7 @@ The tests are organized into the following test suites:
    - Tests policy template parameter schema structure
    - Tests error message formatting for various validation failures
 
-9. (Removed: validateClusterInstanceParamsSchema and validateSchemaWithoutHwMgmt tests -
-    no longer applicable after no-hw-template removal)
-
-11. validateUpgradeDefaults Tests:
+9. validateUpgradeDefaults Tests:
     - Tests validation of upgrade defaults ConfigMap for Image-Based GPU (IBGU) upgrades
     - Tests YAML parsing and IBGU spec validation
     - Tests release version matching between ClusterTemplate and seedImageRef
