@@ -21,21 +21,15 @@ Test Cases in this file:
 - Validates error when clusterInstance is missing required cluster-version label
 - Confirms successful validation when cluster-version label exists
 
-## createClusterInstanceBMCSecrets Tests
-- Verifies error handling when bmcCredentialsDetails is missing from template parameters
-- Tests creation of BMC secret with correct base64 decoded credentials
-- Validates BMC secret creation using custom bmcCredentialsName when provided
-
 ## createOrUpdateClusterResources Tests
-- Confirms BMC secret creation when hwTemplate is not provided in cluster template
-- Validates that BMC secret is not created when hwTemplate is specified in cluster template
+- Validates that no BMC secrets are created (hardware provisioning manages BMC credentials)
 */
 
 package controllers
 
 import (
 	"context"
-	"encoding/base64"
+
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -184,144 +178,6 @@ var _ = Describe("GetLabelsForPolicies", func() {
 	})
 })
 
-var _ = Describe("createClusterInstanceBMCSecrets", func() {
-	var (
-		ctx         context.Context
-		c           client.Client
-		reconciler  *ProvisioningRequestReconciler
-		task        *provisioningRequestReconcilerTask
-		tName       = "clustertemplate-a"
-		tVersion    = "v1.0.0"
-		ctNamespace = "clustertemplate-a-v4-16"
-		crName      = "cluster-1"
-	)
-
-	BeforeEach(func() {
-		// Define the provisioning request.
-		cr := &provisioningv1alpha1.ProvisioningRequest{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crName,
-			},
-			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
-				TemplateName:       tName,
-				TemplateVersion:    tVersion,
-				TemplateParameters: runtime.RawExtension{},
-			},
-		}
-
-		c = fakeclient.GetFakeClientFromObjects([]client.Object{cr}...)
-		reconciler = &ProvisioningRequestReconciler{
-			Client: c,
-			Logger: logger,
-		}
-		task = &provisioningRequestReconcilerTask{
-			logger:       reconciler.Logger,
-			client:       reconciler.Client,
-			object:       cr,
-			clusterInput: &clusterInput{},
-			ctDetails: &clusterTemplateDetails{
-				namespace: ctNamespace,
-			},
-		}
-	})
-
-	It("It returns error if bmcCredentialsDetails is missing in the input", func() {
-		input := `{
-			"clusterInstanceParameters": {
-				"nodes": [
-					{
-						"bmcAddress": "idrac-virtualmedia+https://203.0.113.5/redfish/v1/Systems/System.Embedded.1",
-						"bootMACAddress": "00:00:00:01:20:30",
-						"hostName": "node1",
-						"nodeNetwork": {
-							"interfaces": [
-								{
-									"macAddress": "00:00:00:01:20:30"
-						  		}
-							]
-						}
-				  	}
-				]
-			}
-		}`
-		task.object.Spec.TemplateParameters = runtime.RawExtension{Raw: []byte(input)}
-		err := task.createClusterInstanceBMCSecrets(ctx, crName)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring(
-			`\"bmcCredentialsDetails\" key expected to exist in spec.templateParameters.clusterInstanceParameters`))
-	})
-
-	It("it creates the BMC secret with correct content", func() {
-		input := `{
-			"clusterInstanceParameters": {
-				"nodes": [
-					{
-						"bmcAddress": "idrac-virtualmedia+https://203.0.113.5/redfish/v1/Systems/System.Embedded.1",
-						"bootMACAddress": "00:00:00:01:20:30",
-						"bmcCredentialsDetails": {
-							"username": "QURNSU4K",
-							"password": "QURNSU4K"
-						},
-						"hostName": "node1",
-						"nodeNetwork": {
-							"interfaces": [
-								{
-									"macAddress": "00:00:00:01:20:30"
-						  		}
-							]
-						}
-				  	}
-				]
-			}
-		}`
-		task.object.Spec.TemplateParameters = runtime.RawExtension{Raw: []byte(input)}
-		err := task.createClusterInstanceBMCSecrets(ctx, crName)
-		Expect(err).ToNot(HaveOccurred())
-
-		bmcSecret := &corev1.Secret{}
-		err = c.Get(context.Background(), types.NamespacedName{Name: "node1-bmc-secret", Namespace: "cluster-1"}, bmcSecret)
-		Expect(err).ToNot(HaveOccurred())
-		decoded, _ := base64.StdEncoding.DecodeString("QURNSU4K")
-		Expect(bmcSecret.Data["username"]).To(Equal(decoded))
-		Expect(bmcSecret.Data["password"]).To(Equal(decoded))
-	})
-
-	It("It creates the BMC secret with provided bmcCredentialsName name", func() {
-		input := `{
-			"clusterInstanceParameters": {
-				"nodes": [
-					{
-						"bmcAddress": "idrac-virtualmedia+https://203.0.113.5/redfish/v1/Systems/System.Embedded.1",
-						"bootMACAddress": "00:00:00:01:20:30",
-						"bmcCredentialsName": {
-							"name": "node1-secret"
-						},
-						"bmcCredentialsDetails": {
-							"username": "QURNSU4K",
-							"password": "QURNSU4K"
-						},
-						"hostName": "node1",
-						"nodeNetwork": {
-							"interfaces": [
-								{
-									"macAddress": "00:00:00:01:20:30"
-						  		}
-							]
-						}
-				  	}
-				]
-			}
-		}`
-		task.object.Spec.TemplateParameters = runtime.RawExtension{Raw: []byte(input)}
-		err := task.createClusterInstanceBMCSecrets(ctx, crName)
-		Expect(err).ToNot(HaveOccurred())
-
-		bmcSecret := &corev1.Secret{}
-		err = c.Get(context.Background(), types.NamespacedName{Name: "node1-secret", Namespace: "cluster-1"}, bmcSecret)
-		Expect(err).ToNot(HaveOccurred())
-	})
-})
-
 var _ = Describe("createOrUpdateClusterResources", func() {
 	var (
 		ctx         context.Context
@@ -370,49 +226,7 @@ var _ = Describe("createOrUpdateClusterResources", func() {
 		}
 	})
 
-	It("It creates BMC secret when hwTemplate is not provided", func() {
-		renderedClusterInstance := &siteconfig.ClusterInstance{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      crName,
-				Namespace: crName,
-			},
-			Spec: siteconfig.ClusterInstanceSpec{
-				PullSecretRef: corev1.LocalObjectReference{Name: "pull-secret"},
-			},
-		}
-
-		input := `{
-			"clusterInstanceParameters": {
-				"nodes": [
-					{
-						"bmcAddress": "idrac-virtualmedia+https://203.0.113.5/redfish/v1/Systems/System.Embedded.1",
-						"bootMACAddress": "00:00:00:01:20:30",
-						"bmcCredentialsDetails": {
-							"username": "QURNSU4K",
-							"password": "QURNSU4K"
-						},
-						"hostName": "node1",
-						"nodeNetwork": {
-							"interfaces": [
-								{
-									"macAddress": "00:00:00:01:20:30"
-						  		}
-							]
-						}
-				  	}
-				]
-			}
-		}`
-		task.object.Spec.TemplateParameters = runtime.RawExtension{Raw: []byte(input)}
-		err := task.createOrUpdateClusterResources(ctx, renderedClusterInstance)
-		Expect(err).To(HaveOccurred())
-
-		bmcSecret := &corev1.Secret{}
-		err = c.Get(context.Background(), types.NamespacedName{Name: "node1-bmc-secret", Namespace: "cluster-1"}, bmcSecret)
-		Expect(err).ToNot(HaveOccurred())
-	})
-
-	It("No BMC secret is created when hwTemplate is provided", func() {
+	It("does not create BMC secrets", func() {
 		renderedClusterInstance := &siteconfig.ClusterInstance{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      crName,
