@@ -89,9 +89,6 @@ the future, providing a shared platform for all file-serving needs.
 - Automatic resolution of `installerImage` from OCP release images (initial
   implementation requires the user to specify the installer image explicitly;
   automatic resolution is a future enhancement).
-- Authenticated ISO serving (initial implementation serves ISOs without
-  authentication for BMC compatibility; token-based access is a future
-  enhancement).
 
 ## Current State
 
@@ -247,7 +244,7 @@ spec:
 ```yaml
 status:
   observedGeneration: 1
-  isoURL: "https://media-server.oran-o2ims.svc.cluster.local/media/v1alpha1/images/sno-4-17-0/installation.iso"
+  isoURL: "https://o2ims.apps.example.com/media/v1alpha1/images/sno-4-17-0/installation.iso?token=eyJhbGciOi..."
   isoSize: 1073741824
   isoChecksum: "sha256:e3b0c44298fc1c149afbf4c8996fb924..."
   buildJobName: "sno-4-17-0-build-x7k2m"
@@ -302,8 +299,8 @@ lightweight HTTP file server that serves ISOs from a persistent volume.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/media/v1alpha1/images/<name>/installation.iso` | Download the ISO for the named IBIImage |
-| `HEAD` | `/media/v1alpha1/images/<name>/installation.iso` | Get ISO metadata (size, checksum) without downloading |
+| `GET` | `/media/v1alpha1/images/<name>/installation.iso?token=<token>` | Download the ISO for the named IBIImage |
+| `HEAD` | `/media/v1alpha1/images/<name>/installation.iso?token=<token>` | Get ISO metadata (size, checksum) without downloading |
 | `GET` | `/media/v1alpha1/health` | Health check |
 
 The `GET` and `HEAD` endpoints return standard HTTP headers:
@@ -312,10 +309,18 @@ The `GET` and `HEAD` endpoints return standard HTTP headers:
 - `Content-Length: <size>`
 - `ETag: "<sha256-checksum>"`
 
-The serving endpoints are **unauthenticated** to allow BMC virtual media
-access. BMCs mount ISOs via HTTP/HTTPS URLs and cannot authenticate with
-Kubernetes ServiceAccount tokens. The media server should be deployed on a
-network accessible to BMCs but not exposed to untrusted networks.
+ISO serving endpoints are authenticated using a **per-ISO token** passed as
+a query parameter. The controller generates a cryptographically random token
+for each IBIImage and stores it in a Secret. The token is included in the
+`status.isoURL` field so that BMCs can access the ISO via virtual media
+without Kubernetes ServiceAccount tokens. Requests without a valid token
+receive a `401 Unauthorized` response.
+
+This approach is necessary because ISOs embed pull secrets and SSH keys in
+their ignition config, making unauthenticated access a credential-leak risk.
+BMCs support HTTP/HTTPS URLs with query parameters, so token-in-URL is
+compatible with virtual media workflows. Tokens are revoked when the
+IBIImage CR is deleted.
 
 #### Storage
 
@@ -430,8 +435,8 @@ spec:
         secret:
           secretName: <pullSecretRef.name>
       - name: config
-        configMap:
-          name: <ibiimage-name>-build-config
+        secret:
+          secretName: <ibiimage-name>-build-config
 ```
 
 #### Installer Image Resolution
@@ -459,11 +464,12 @@ Job uses pod affinity to schedule on the same node as the media server pod.
 
 1. **Validate**: Verify referenced Secrets exist and contain expected keys.
 2. **Check existing Job**: If a build Job already exists, monitor its status.
-3. **Generate config**: Create a ConfigMap containing the
+3. **Generate config**: Create a Secret containing the
    `image-based-installation-config.yaml` built from the IBIImage spec and
-   referenced Secret values.
+   referenced Secret values. A Secret is used instead of a ConfigMap because
+   the config includes the pull secret and SSH key.
 4. **Create Job**: Create the build Job with the installer image, mounting
-   the config ConfigMap, pull secret, and output PVC.
+   the config Secret, pull secret, and output PVC.
 5. **Monitor Job**: Requeue until the Job reaches a terminal state
    (succeeded or failed).
 6. **On success**: Compute the ISO SHA256 checksum, set `isoURL`,
@@ -496,7 +502,7 @@ creation. On deletion:
 
 1. Cancel any active build Job.
 2. Remove the ISO file and its checksum file from the PVC.
-3. Remove the build config ConfigMap.
+3. Remove the build config Secret and the access token Secret.
 4. Remove the finalizer.
 
 A periodic reconciliation (or startup scan) detects orphaned directories on
@@ -516,13 +522,14 @@ The media server integrates with the operator following existing patterns:
   `inventory_controller_postgres.go`, with size configurable via the
   Inventory CRD spec.
 - **Ingress**: Add a path rule for `/media` routing to the media server.
-  This path serves unauthenticated content for BMC access.
+  This path serves token-authenticated content for BMC access.
 - **Service**: Create a Kubernetes Service exposing the media server.
 - **NetworkPolicy**: Allow ingress from the ingress controller and from
   build Job pods.
 - **RBAC**: The controller needs permissions for IBIImage CRs, Secrets
-  (get/list/watch), Jobs (create/get/list/watch/delete), and ConfigMaps
-  (create/get/delete).
+  (create/get/list/watch/delete for build config, access tokens, and
+  referenced pull secret/SSH key Secrets), and Jobs
+  (create/get/list/watch/delete).
 - **Command registration**: Add `mediacmd.GetMediaRootCmd` to `main.go`.
 - **Controller registration**: Register the IBIImage controller in
   `internal/cmd/operator/start_controller_manager.go`.
@@ -538,9 +545,15 @@ Pull secrets are embedded in the ISO's ignition config by
 `openshift-install`.
 
 **ISO serving**: The media server uses TLS (same serving cert pattern as
-other services). Serving endpoints are unauthenticated for BMC
-compatibility. The media server should be deployed on a network accessible
-to BMCs but restricted from untrusted access via NetworkPolicy.
+other services). ISO downloads require a per-ISO token passed as a query
+parameter. Tokens are generated by the controller, stored in a Secret, and
+included in the `status.isoURL`. This prevents unauthorized access to ISOs,
+which embed pull secrets and SSH keys in their ignition config.
+
+**Build config**: The `image-based-installation-config.yaml` is stored as a
+Secret (not a ConfigMap) because it contains pull secret and SSH key values.
+The Secret is mounted into the build Job pod and deleted after the build
+completes.
 
 **Security contexts**: All pods (media server and build Jobs) use the
 standard security context: `runAsNonRoot`, `readOnlyRootFilesystem`,
@@ -553,16 +566,16 @@ them.
 
 ## Future Enhancements
 
-- **Token-based ISO access**: Generate a per-ISO bearer token stored in the
-  IBIImage status alongside the URL. BMCs would pass the token as a query
-  parameter (e.g., `?token=<value>`). Tokens would be revoked on CR
-  deletion.
 - **Firmware image serving**: The media server's PVC and HTTP infrastructure
   can serve firmware images referenced by FirmwareCatalog entries. A future
   controller could download firmware images from external URLs and cache
   them on the PVC under `/data/firmware/`. The HTTP handler already serves
   static files from the PVC, so firmware images would be served without
-  additional code.
+  additional code. Unlike ISOs, firmware images do not contain embedded
+  credentials, so the `/data/firmware/` path could be served without
+  token authentication. The filesystem separation between `/data/images/`
+  and `/data/firmware/` supports applying different access policies per
+  path prefix.
 - **Automatic installer image resolution**: Resolve the `installerImage`
   automatically from the OCP release image for the specified
   `seedVersion`, removing the need for users to look up the installer
@@ -610,15 +623,16 @@ IBIImage (user-managed)
   ├── spec.sshKeyRef ──────────► Secret (ssh-publickey)
   │
   ├── (controller creates)
-  │   ├── ConfigMap             (image-based-installation-config.yaml)
-  │   └── Job                   (build job using installerImage)
-  │       ├── mounts PVC        (shared with media server)
-  │       ├── mounts ConfigMap  (build configuration)
-  │       ├── mounts Secret     (pull secret)
+  │   ├── Secret               (build config with embedded credentials)
+  │   ├── Secret               (access token for ISO download)
+  │   └── Job                  (build job using installerImage)
+  │       ├── mounts PVC       (shared with media server)
+  │       ├── mounts Secret    (build configuration)
+  │       ├── mounts Secret    (pull secret)
   │       └── writes ISO to PVC
   │
   └── status.isoURL ──────────► Media Server HTTP endpoint
-                                  ├── serves ISO from PVC
+                                  ├── serves ISO from PVC (token-authenticated)
                                   └── URL used in ProvisioningRequest
 
 Inventory (operator-managed)
