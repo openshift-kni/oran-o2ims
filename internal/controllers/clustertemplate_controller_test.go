@@ -59,7 +59,6 @@ The tests are organized into the following test suites:
 
 9. (Removed: validateClusterInstanceParamsSchema and validateSchemaWithoutHwMgmt tests -
     no longer applicable after no-hw-template removal)
-    - Tests schema structure integrity and required field presence
 
 11. validateUpgradeDefaults Tests:
     - Tests validation of upgrade defaults ConfigMap for Image-Based GPU (IBGU) upgrades
