@@ -41,7 +41,6 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
-
 )
 
 // ClusterTemplateReconciler reconciles a ClusterTemplate object
@@ -646,7 +645,6 @@ func validatePolicyTemplateParamsSchema(schema map[string]any) error {
 
 	return nil
 }
-
 
 // setStatusConditionValidated updates the Validated status condition of the ClusterTemplate object
 func (t *clusterTemplateReconcilerTask) updateStatusConditionValidated(ctx context.Context, errMsg string) error {

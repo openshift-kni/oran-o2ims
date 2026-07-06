@@ -249,4 +249,3 @@ func checkClusterLabelsForPolicies(
 	}
 	return nil
 }
-
