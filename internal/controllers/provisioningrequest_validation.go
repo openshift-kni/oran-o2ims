@@ -285,6 +285,19 @@ func (t *provisioningRequestReconcilerTask) validateAndMergeHwMgmtInput(
 
 	t.clusterInput.hwMgmtData = mergedData
 
+	// Require nodeGroupData to be present after merge
+	ngRaw, hasNG := mergedData["nodeGroupData"]
+	if !hasNG {
+		return typederrors.NewInputError(
+			"nodeGroupData is required: provide it via hwMgmtDefaults in the ClusterTemplate " +
+				"or hwMgmtParameters in the ProvisioningRequest")
+	}
+	if ngSlice, ok := ngRaw.([]any); ok && len(ngSlice) == 0 {
+		return typederrors.NewInputError(
+			"nodeGroupData must not be empty: provide at least one node group via hwMgmtDefaults " +
+				"or hwMgmtParameters")
+	}
+
 	// Validate merged nodeGroupData constraints (name, role, selectors)
 	if err := validateMergedNodeGroups(mergedData); err != nil {
 		return err
