@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 )
@@ -23,7 +24,7 @@ const resyncInterval = 1 * time.Hour
 // Client is the interface that wraps the basic methods for the infrastructure clients
 type Client interface {
 	Name() string
-	Setup() error
+	Setup(clientset kubernetes.Interface) error
 
 	FetchAll(context.Context) error
 
@@ -49,13 +50,13 @@ type AlarmDefinitionUniqueIdentifier struct {
 }
 
 // Init sets up the infrastructure clients and fetches all the data
-func Init(ctx context.Context) (*Infrastructure, error) {
+func Init(ctx context.Context, clientset kubernetes.Interface) (*Infrastructure, error) {
 	// Initialize both cluster server (for CaaS alerts) and resource server (for hardware alerts)
 	clusterServer := &ClusterServer{}
 	resourceServer := &ResourceServer{}
 
 	for _, server := range []Client{clusterServer, resourceServer} {
-		if err := server.Setup(); err != nil {
+		if err := server.Setup(clientset); err != nil {
 			return nil, fmt.Errorf("failed to setup %s: %w", server.Name(), err)
 		}
 

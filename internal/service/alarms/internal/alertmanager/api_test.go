@@ -21,8 +21,13 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure"
 	"go.uber.org/mock/gomock"
+	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	k8stesting "k8s.io/client-go/testing"
+
+	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -45,7 +50,6 @@ var _ = Describe("Alertmanager API Client", func() {
 		amClient      *alertmanager.AMClient
 		mockAMServer  *httptest.Server
 		testAPIAlerts []alertmanager.APIAlert
-		tempTokenFile string
 	)
 
 	BeforeEach(func() {
@@ -66,11 +70,17 @@ var _ = Describe("Alertmanager API Client", func() {
 			Expect(err).ToNot(HaveOccurred())
 		}))
 
-		// Create temporary token file for testing
-		tempDir := GinkgoT().TempDir()
-		tempTokenFile = tempDir + "/token"
-		err := os.WriteFile(tempTokenFile, []byte("fake-token"), 0o600)
-		Expect(err).ToNot(HaveOccurred())
+		// Create fake kubernetes clientset for token requests
+		fakeClientset := k8sfake.NewSimpleClientset()
+		fakeClientset.PrependReactor("create", "serviceaccounts/token",
+			func(action k8stesting.Action) (bool, runtime.Object, error) {
+				return true, &authenticationv1.TokenRequest{
+					Status: authenticationv1.TokenRequestStatus{
+						Token:               "fake-token",
+						ExpirationTimestamp: metav1.NewTime(time.Now().Add(10 * time.Minute)),
+					},
+				}, nil
+			})
 
 		// Extract server certificate for use in our fake CA file
 		certPEM := pem.EncodeToMemory(&pem.Block{
@@ -79,23 +89,13 @@ var _ = Describe("Alertmanager API Client", func() {
 		})
 
 		// Create temporary CA file with the test server's certificate
+		tempDir := GinkgoT().TempDir()
 		tempCAFile := tempDir + "/ca.crt"
-		err = os.WriteFile(tempCAFile, certPEM, 0o600)
+		err := os.WriteFile(tempCAFile, certPEM, 0o600)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Extract server hostname from test server URL without the scheme
 		serverHost := mockAMServer.URL[8:] // Skip "https://"
-
-		// Set environment variables to point to our temp files and test server
-		os.Setenv("ALARMS_SERVER_TOKEN_FILE", tempTokenFile)
-		os.Setenv("ALARMS_SERVER_CA_FILE", tempCAFile)
-		os.Setenv("ALARMS_SERVER_AM_HOST", serverHost)
-
-		DeferCleanup(func() {
-			os.Unsetenv("ALARMS_SERVER_TOKEN_FILE")
-			os.Unsetenv("ALARMS_SERVER_CA_FILE")
-			os.Unsetenv("ALARMS_SERVER_AM_HOST")
-		})
 
 		// Set up minimal fake k8s client (only needed for infrastructure)
 		scheme := runtime.NewScheme()
@@ -110,7 +110,7 @@ var _ = Describe("Alertmanager API Client", func() {
 			ResourceServer: &infrastructure.ResourceServer{},
 		}
 
-		amClient = alertmanager.NewAlertmanagerClient(fakeClient, mockRepo, infra)
+		amClient = alertmanager.NewAlertmanagerClient(fakeClient, mockRepo, infra, fakeClientset, serverHost, tempCAFile)
 
 		// Set up test alerts
 		testAPIAlerts = []alertmanager.APIAlert{

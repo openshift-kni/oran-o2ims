@@ -56,10 +56,17 @@ type CommonServerConfig struct {
 	TLS TLSConfig
 	// SmoURL is the base URL of the SMO instance used to restrict callback URLs
 	SmoURL string
+	// Audience is the expected audience for incoming inter-service bearer tokens
+	Audience string
+	// AudienceExemptPaths lists URL paths that bypass audience validation while
+	// still requiring authentication and RBAC authorization. Populated at
+	// startup from OpenAPI endpoints marked with x-skip-audience-validation.
+	AudienceExemptPaths []string
 }
 
 const (
 	ListenerFlagName                = "api-listener-address"
+	AudienceFlagName                = "audience"
 	SmoURLFlagName                  = "smo-url"
 	OAuthIssuerURLFlagName          = "oauth-issuer-url"     // nolint: gosec
 	OAuthTokenEndpointFlagName      = "oauth-token-endpoint" // nolint: gosec
@@ -82,6 +89,12 @@ func SetCommonServerFlags(cmd *cobra.Command, config *CommonServerConfig) error 
 		ListenerFlagName,
 		fmt.Sprintf("%s:%d", constants.Localhost, constants.DefaultContainerPort),
 		"API listener address",
+	)
+	flags.StringVar(
+		&config.Audience,
+		AudienceFlagName,
+		"",
+		"Expected audience for incoming inter-service bearer tokens",
 	)
 	flags.StringVar(
 		&config.SmoURL,

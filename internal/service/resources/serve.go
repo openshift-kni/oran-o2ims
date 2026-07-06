@@ -132,7 +132,7 @@ func Serve(config *api.ResourceServerConfig) error {
 	// Create the notifier with our resource-specific subscription and notification providers.
 	notificationsProvider := repo2.NewNotificationStorageProvider(commonRepository)
 	subscriptionsProvider := repo2.NewSubscriptionStorageProvider(commonRepository, collector.NewNotificationTransformer())
-	clientFactory := notifier.NewClientFactory(oauthConfig, constants.DefaultBackendTokenFile)
+	clientFactory := notifier.NewClientFactory(oauthConfig)
 	resourceNotifier := notifier.NewNotifier(subscriptionsProvider, notificationsProvider, clientFactory)
 
 	// Create hub client for reading CRs

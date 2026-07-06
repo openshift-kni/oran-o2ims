@@ -157,6 +157,20 @@ subjects:
   name: resource-server
   namespace: system
 ---
+# Alertmanager-client binding — binds the minimal alertmanager-client SA to its ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: alertmanager-client
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: alertmanager-client
+subjects:
+- kind: ServiceAccount
+  name: alertmanager-client
+  namespace: system
+---
 # Alertmanager binding — allows ACM alertmanager to send alerts to the alarms server
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
