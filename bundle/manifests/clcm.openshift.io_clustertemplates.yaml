@@ -84,9 +84,8 @@ spec:
                       default values for ClusterInstance
                     type: string
                   hwMgmtDefaults:
-                    description: |-
-                      HwMgmtDefaults defines the default hardware management parameters.
-                      When nodeGroupData is empty, hardware provisioning is skipped.
+                    description: HwMgmtDefaults defines the default hardware management
+                      parameters.
                     properties:
                       hardwareProvisioningTimeout:
                         description: HardwareProvisioningTimeout defines the timeout
