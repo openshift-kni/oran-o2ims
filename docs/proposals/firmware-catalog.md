@@ -131,6 +131,11 @@ type FirmwareImage struct {
     // +kubebuilder:validation:MinLength=1
     Version string `json:"version"`
 
+    // Vendor identifies the firmware vendor or manufacturer.
+    // +optional
+    // +kubebuilder:validation:MinLength=1
+    Vendor string `json:"vendor,omitempty"`
+
     // Description is an optional human-readable description of the firmware image.
     // +optional
     Description string `json:"description,omitempty"`
@@ -207,22 +212,27 @@ spec:
     component: bios
     url: https://example.com:8888/firmware/xr8620t/BIOS_JDR1R_WN64_2.3.5.EXE
     version: "2.3.5"
+    vendor: Dell
   - name: dell-xr8620t-bmc-7.10.70.10
     component: bmc
     url: https://example.com:8888/firmware/xr8620t/iDRAC-with-Lifecycle-Controller_Firmware_W4NV9_WN64_7.10.70.10_A00.EXE
     version: "7.10.70.10"
+    vendor: Dell
   - name: broadcom-nic-25.2.3
     component: nic
     url: https://example.com:8888/firmware/nic/broadcom-25.2.3.bin
     version: "25.2.3"
+    vendor: Broadcom
   - name: dell-xr8620t-bios-2.6.3
     component: bios
     url: https://example.com:8888/firmware/xr8620t/BIOS_JDR1R_WN64_2.6.3.EXE
     version: "2.6.3"
+    vendor: Dell
   - name: dell-xr8620t-bmc-7.20.30.50
     component: bmc
     url: https://example.com:8888/firmware/xr8620t/iDRAC-with-Lifecycle-Controller_Firmware_W4NV9_WN64_7.20.30.50_A00.EXE
     version: "7.20.30.50"
+    vendor: Dell
 ```
 
 #### Lifecycle
@@ -230,8 +240,8 @@ spec:
 - The operator creates the singleton `FirmwareCatalog` CR (with an empty `spec.images`
   list) on startup if it does not already exist. It never overwrites user content.
 - Users add new entries or delete unreferenced entries in `spec.images`. Entries are
-  immutable once created — `component`, `url`, and `version` cannot be changed in
-  place. Deletion is blocked if any HardwareProfile references the entry.
+  immutable once created — `component`, `url`, `version`, and `vendor` cannot be
+  changed in place. Deletion is blocked if any HardwareProfile references the entry.
 - A lightweight FirmwareCatalog controller reconciles on spec changes and validates
   each image entry (URL format, component type). Validation results are written to
   `status.imageStatuses`. An overall `Validation` condition is set to `True` when all
@@ -428,7 +438,7 @@ internal `Firmware`/`Nic` types and require no changes.
 | Rule | Enforcement |
 |------|-------------|
 | Image names are unique within the catalog | `+listMapKey=name` on the API type (enforced by the API server) |
-| Catalog entries are immutable (component, url, version cannot change) | CEL validation rule on `FirmwareCatalogSpec` |
+| Catalog entries are immutable (component, url, version, vendor cannot change) | CEL validation rule on `FirmwareCatalogSpec` |
 | Catalog entries cannot be deleted while referenced by a HardwareProfile | Validating webhook on FirmwareCatalog |
 | Referenced firmware entry exists in the catalog | Validating webhook on HardwareProfile (create) |
 | Entry component type matches usage (e.g. `bios` entry used for `biosFirmware`) | Validating webhook on HardwareProfile (create) |
@@ -438,15 +448,16 @@ internal `Firmware`/`Nic` types and require no changes.
 ### Catalog Entry Immutability
 
 Catalog entries are immutable once created. Users may add new entries or delete
-existing entries, but may not modify an entry's `component`, `url`, or `version`
-fields in place. This is enforced by a CEL validation rule on the CRD:
+existing entries, but may not modify an entry's `component`, `url`, `version`,
+or `vendor` fields in place. This is enforced by a CEL validation rule on the CRD:
 
 ```yaml
 // +kubebuilder:validation:XValidation:message="Firmware catalog entries are immutable",
 //   rule="oldSelf.images.all(old, self.images.exists(cur, cur.name == old.name) ?
 //     self.images.filter(cur, cur.name == old.name)[0].component == old.component &&
 //     self.images.filter(cur, cur.name == old.name)[0].url == old.url &&
-//     self.images.filter(cur, cur.name == old.name)[0].version == old.version : true)"
+//     self.images.filter(cur, cur.name == old.name)[0].version == old.version &&
+//     self.images.filter(cur, cur.name == old.name)[0].vendor == old.vendor : true)"
 ```
 
 The `description` field is exempt from this rule and may be updated freely.
@@ -583,11 +594,11 @@ schema change:
 FirmwareCatalog (singleton, user-managed)
   └─ spec.images[]
        ├─ name: dell-xr8620t-bios-2.3.5
-       │    component: bios, url: ..., version: 2.3.5
+       │    component: bios, vendor: Dell, url: ..., version: 2.3.5
        ├─ name: dell-xr8620t-bmc-7.10.70.10
-       │    component: bmc, url: ..., version: 7.10.70.10
+       │    component: bmc, vendor: Dell, url: ..., version: 7.10.70.10
        └─ name: broadcom-nic-25.2.3
-            component: nic, url: ..., version: 25.2.3
+            component: nic, vendor: Broadcom, url: ..., version: 25.2.3
 
 HardwareProfile
   └─ spec
