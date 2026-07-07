@@ -715,11 +715,19 @@ ci-job: deps-update go-generate generate fmt vet lint test test-e2e test-envtest
 clean:
 	-rm $(LOCALBIN)/$(BINARY_NAME)
 
+SCORECARD_VERBOSE ?= false
+SCORECARD_STRICT ?= true
+
 .PHONY: scorecard-test
 scorecard-test: operator-sdk
 	@test -n "$(KUBECONFIG)" || (echo "The environment variable KUBECONFIG must not empty" && false)
 	oc create ns $(OCLOUD_MANAGER_NAMESPACE) --dry-run=client -o yaml | oc apply -f -
+ifeq ($(SCORECARD_VERBOSE),true)
 	$(OPERATOR_SDK) scorecard bundle -o text --kubeconfig "$(KUBECONFIG)" -n $(OCLOUD_MANAGER_NAMESPACE) --pod-security=restricted --wait-time=120s
+else
+	@$(OPERATOR_SDK) scorecard bundle -o json --kubeconfig "$(KUBECONFIG)" -n $(OCLOUD_MANAGER_NAMESPACE) --pod-security=restricted --wait-time=120s | \
+		python3 $(PROJECT_DIR)/hack/scorecard-summary.py $(if $(filter true,$(SCORECARD_STRICT)),--strict)
+endif
 
 # markdownlint rules, following: https://github.com/openshift/enhancements/blob/master/Makefile
 .PHONY: markdownlint-image

@@ -9,3 +9,11 @@ spec:
   # References parent OCloudSite by its metadata.name
   oCloudSiteName: "site-east-1"
   description: "Compute resources for production workloads"
+status:
+  conditions:
+  - type: Ready
+    status: "True"
+    reason: Ready
+    message: "ResourcePool is ready"
+    observedGeneration: 1
+    lastTransitionTime: "2026-07-07T14:23:06Z"
