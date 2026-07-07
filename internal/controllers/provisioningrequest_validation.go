@@ -285,20 +285,7 @@ func (t *provisioningRequestReconcilerTask) validateAndMergeHwMgmtInput(
 
 	t.clusterInput.hwMgmtData = mergedData
 
-	// Require nodeGroupData to be present after merge
-	ngRaw, hasNG := mergedData["nodeGroupData"]
-	if !hasNG {
-		return typederrors.NewInputError(
-			"nodeGroupData is required: provide it via hwMgmtDefaults in the ClusterTemplate " +
-				"or hwMgmtParameters in the ProvisioningRequest")
-	}
-	if ngSlice, ok := ngRaw.([]any); ok && len(ngSlice) == 0 {
-		return typederrors.NewInputError(
-			"nodeGroupData must not be empty: provide at least one node group via hwMgmtDefaults " +
-				"or hwMgmtParameters")
-	}
-
-	// Validate merged nodeGroupData constraints (name, role, selectors)
+	// Validate merged nodeGroupData: presence, non-empty, name/role constraints
 	if err := validateMergedNodeGroups(mergedData); err != nil {
 		return err
 	}
@@ -334,11 +321,18 @@ func (t *provisioningRequestReconcilerTask) validateAndMergeHwMgmtInput(
 func validateMergedNodeGroups(mergedData map[string]any) error {
 	ngRaw, ok := mergedData["nodeGroupData"]
 	if !ok {
-		return nil
+		return typederrors.NewInputError(
+			"nodeGroupData is required: provide it via hwMgmtDefaults in the ClusterTemplate " +
+				"or hwMgmtParameters in the ProvisioningRequest")
 	}
 	ngSlice, ok := ngRaw.([]any)
 	if !ok {
-		return nil
+		return typederrors.NewInputError("nodeGroupData must be an array")
+	}
+	if len(ngSlice) == 0 {
+		return typederrors.NewInputError(
+			"nodeGroupData must not be empty: provide at least one node group via hwMgmtDefaults " +
+				"or hwMgmtParameters")
 	}
 
 	seenRoles := map[string]string{}
