@@ -5660,4 +5660,41 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 		err := task.validateAndMergeHwMgmtInput(ctx, ct)
 		Expect(err).ToNot(HaveOccurred())
 	})
+
+	It("should return error when nodeGroupData is missing from both defaults and parameters", func() {
+		ct.Spec.TemplateDefaults.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{}
+		c = fakeclient.GetFakeClientFromObjects()
+		task = buildTask(c, `{"nodeClusterName": "test"}`)
+
+		err := task.validateAndMergeHwMgmtInput(ctx, ct)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("nodeGroupData is required"))
+	})
+
+	It("should return error when nodeGroupData is empty after merge", func() {
+		ct.Spec.TemplateDefaults.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{}
+		ct.Spec.TemplateParameterSchema = runtime.RawExtension{Raw: []byte(`{
+			"type": "object",
+			"properties": {
+				"nodeClusterName": {"type": "string"},
+				"hwMgmtParameters": {
+					"type": "object",
+					"properties": {
+						"nodeGroupData": {"type": "array"}
+					}
+				}
+			}
+		}`)}
+		c = fakeclient.GetFakeClientFromObjects()
+		task = buildTask(c, `{
+			"nodeClusterName": "test",
+			"hwMgmtParameters": {
+				"nodeGroupData": []
+			}
+		}`)
+
+		err := task.validateAndMergeHwMgmtInput(ctx, ct)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("nodeGroupData must not be empty"))
+	})
 })
