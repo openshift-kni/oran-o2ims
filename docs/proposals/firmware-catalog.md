@@ -9,7 +9,7 @@ reviewers:
 approvers:
   - TBD
 creation-date: 2026-04-21
-last-updated: 2026-04-21
+last-updated: 2026-07-07
 ```
 
 ## Table of Contents
@@ -417,7 +417,7 @@ data from the HardwareProfile. These are the functions that currently read
 | `IsFirmwareUpdateRequired` | `hostfirmwarecomponents_manager.go` | Call `resolveFirmwareFromCatalog`, pass resolved values to `validateFirmwareUpdateSpec`, `isVersionChangeDetected`, etc. |
 | `validateFirmwareVersions` | `helpers.go` | Resolve catalog entries before comparing against `HostFirmwareComponents` status |
 | `validateAppliedBiosSettings` | `helpers.go` | Resolve catalog entries for NIC firmware validation |
-| `processHwProfileWithHandledError` | (caller of the above) | Pass namespace through for catalog lookup |
+| `processHwProfileWithHandledError` | `baremetalhost_manager.go` | Pass namespace through for catalog lookup |
 
 All downstream functions (`validateFirmwareUpdateSpec`, `convertToFirmwareUpdates`,
 `isVersionChangeDetected`, `validateHFCHasRequiredComponents`) continue to accept the
@@ -567,10 +567,11 @@ schema change:
 | `api/hardwaremanagement/v1alpha1/hardwareprofile_types.go` | **Modify** -- change field types from structs to strings, remove `Firmware` and `Nic` types |
 | `api/hardwaremanagement/v1alpha1/zz_generated.deepcopy.go` | **Regenerate** via `make generate` |
 | `config/crd/` | **Regenerate** via `make manifests` |
-| `hwmgr-plugins/metal3/controller/hostfirmwarecomponents_manager.go` | **Modify** -- add `resolveFirmwareFromCatalog`, update callers |
-| `hwmgr-plugins/metal3/controller/helpers.go` | **Modify** -- call resolution before firmware operations |
+| `internal/hardwaremanager/controller/hostfirmwarecomponents_manager.go` | **Modify** -- add `resolveFirmwareFromCatalog`, update callers |
+| `internal/hardwaremanager/controller/helpers.go` | **Modify** -- call resolution before firmware operations |
 | `internal/cmd/operator/start_controller_manager.go` | **Modify** -- register webhooks, ensure singleton FirmwareCatalog on startup |
-| `hwmgr-plugins/metal3/controller/hostfirmwarecomponents_manager_test.go` | **Modify** -- update test fixtures to use catalog + entry names |
+| `internal/hardwaremanager/controller/hostfirmwarecomponents_manager_test.go` | **Modify** -- update test fixtures to use catalog + entry names |
+| `must-gather/gather` | **Modify** -- add `gather_resource` call for FirmwareCatalog CRD |
 | `test/utils/vars.go` | **Modify** -- update test fixtures |
 | `test/e2e/mno_hw_configuration_test.go` | **Modify** -- update test fixtures |
 | `test/e2e/sno_provisioning_test.go` | **Modify** -- update test fixtures |
