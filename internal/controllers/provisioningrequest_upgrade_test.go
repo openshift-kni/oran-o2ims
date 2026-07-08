@@ -307,7 +307,7 @@ var _ = Describe("prepareCVSpec", func() {
 		_, err := task.prepareCVSpec(clusterTemplate, "4.22.0")
 		Expect(err).To(HaveOccurred())
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
-		Expect(err.Error()).To(ContainSubstring("does not match the ClusterTemplate release"))
+		Expect(err.Error()).To(ContainSubstring("does not match the ClusterTemplate spec.release"))
 	})
 
 	It("should return InputError when target version is not valid semver", func() {
@@ -1182,7 +1182,7 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			Expect(result.RequeueAfter).To(BeZero())
 
 			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed),
-				"does not match the ClusterTemplate release")
+				"does not match the ClusterTemplate spec.release")
 			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
 				Equal(provisioningv1alpha1.StateFailed))
 			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.StartedAt).To(BeNil())

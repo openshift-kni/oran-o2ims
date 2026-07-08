@@ -651,7 +651,7 @@ test-e2e: envtest kubectl
 ifeq ($(shell uname -s),Linux)
 	@chmod -R u+w $(LOCALBIN)
 endif
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -i --bin-dir $(LOCALBIN) -p path)" go test ./test/e2e/ -v ginkgo.v
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -i --bin-dir $(LOCALBIN) -p path)" go test ./test/e2e/ -v -timeout 20m ginkgo.v
 
 .PHONY: test-envtest
 test-envtest: envtest

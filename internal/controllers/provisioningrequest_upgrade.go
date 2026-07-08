@@ -428,7 +428,7 @@ func (t *provisioningRequestReconcilerTask) prepareCVSpec(
 	// Verify the user provided upgrade version matches the ClusterTemplate release (the final target).
 	if cvSpec.DesiredUpdate.Version != "" && cvSpec.DesiredUpdate.Version != clusterTemplate.Spec.Release {
 		return nil, typederrors.NewInputError(
-			"the clusterVersion desiredUpdate version (%s) does not match the ClusterTemplate release (%s)",
+			"the clusterVersion desiredUpdate version (%s) does not match the ClusterTemplate spec.release (%s)",
 			cvSpec.DesiredUpdate.Version, clusterTemplate.Spec.Release)
 	}
 	// Set the version to the actual upgrade step target (which may be the intermediate version for EUS).
@@ -1090,13 +1090,15 @@ func (t *provisioningRequestReconcilerTask) isCVUpgradeTimedOut(
 		return false, nil
 	}
 
-	if !ctlrutils.TimeoutExceeded(
-		t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.StartedAt.Time,
-		t.timeouts.clusterUpgrade) {
+	startAt := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.StartedAt.Time
+	if !ctlrutils.TimeoutExceeded(startAt, t.timeouts.clusterUpgrade) {
 		return false, nil
 	}
 
-	t.logger.InfoContext(ctx, "Upgrade timed out", slog.String("clusterName", clusterName))
+	t.logger.InfoContext(ctx, "Upgrade timed out",
+		slog.String("clusterName", clusterName),
+		slog.Time("startAt", startAt),
+		slog.Duration("timeout", t.timeouts.clusterUpgrade))
 	msaName := t.object.Name + "-upgrade"
 	mwName := t.object.Name + "-upgrade-rbac"
 	if err := spokeclient.CleanupSpokeAccess(ctx, t.client, clusterName, msaName, mwName); err != nil {

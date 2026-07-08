@@ -42,6 +42,9 @@ import (
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
+	addonv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
+	workv1 "open-cluster-management.io/api/work/v1"
+	msav1beta1 "open-cluster-management.io/managed-serviceaccount/apis/authentication/v1beta1"
 )
 
 var (
@@ -111,6 +114,12 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred())
 	err = observabilityv1beta1.AddToScheme(testScheme)
 	Expect(err).ToNot(HaveOccurred())
+	err = addonv1alpha1.Install(testScheme)
+	Expect(err).ToNot(HaveOccurred())
+	err = msav1beta1.AddToScheme(testScheme)
+	Expect(err).ToNot(HaveOccurred())
+	err = workv1.Install(testScheme)
+	Expect(err).ToNot(HaveOccurred())
 
 	// Get the needed external CRDs. Their details are under test/utils/vars.go - ExternalCrdsData.
 	// Update that with any other CRDs that the provisioning controller depends on.
@@ -121,6 +130,8 @@ var _ = BeforeSuite(func() {
 		CRDDirectoryPaths: []string{
 			filepath.Join("..", "..", "config", "crd", "bases"),
 			filepath.Join("..", "..", "vendor", "open-cluster-management.io", "api", "cluster", "v1"),
+			filepath.Join("..", "..", "vendor", "open-cluster-management.io", "api", "addon", "v1alpha1"),
+			filepath.Join("..", "..", "vendor", "open-cluster-management.io", "api", "work", "v1"),
 			tmpDir,
 		},
 		ErrorIfCRDPathMissing: true,
