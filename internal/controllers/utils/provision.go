@@ -27,51 +27,6 @@ import (
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 )
 
-// ClusterInstanceParamsSubSchemaForNoHWTemplate is the expected subschema for the
-// ClusterInstanceParams when hardware provisioning is skipped.
-const ClusterInstanceParamsSubSchemaForNoHWTemplate = `
-type: object
-properties:
-  nodes:
-    items:
-      properties:
-        bmcAddress:
-          type: string
-        bmcCredentialsDetails:
-          type: object
-          properties:
-            username:
-              type: string
-            password:
-              type: string
-          required:
-          - username
-          - password
-        bootMACAddress:
-          type: string
-        nodeNetwork:
-          type: object
-          properties:
-            interfaces:
-              type: array
-              items:
-                type: object
-                properties:
-                  macAddress:
-                    type: string
-                required:
-                - macAddress
-          required:
-          - interfaces
-      required:
-      - bmcAddress
-      - bmcCredentialsDetails
-      - bootMACAddress
-      - nodeNetwork
-required:
-- nodes
-`
-
 // ExtractSchemaRequired extracts the required field of a subschema
 func ExtractSchemaRequired(mainSchema []byte) (required []string, err error) {
 	requireListAny, err := provisioningv1alpha1.ExtractMatchingInput(mainSchema, requiredString)

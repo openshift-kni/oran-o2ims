@@ -85,12 +85,8 @@ func (t *provisioningRequestReconcilerTask) buildClusterInstance(
 		return nil, fmt.Errorf("failed to get ClusterInstance (%s): %w", ciName, err)
 	}
 	if ciExists {
-		// Extract node details from the existing ClusterInstance and assign them to the rendered ClusterInstance
-		// when hardware provisioning is enabled.
-		if !t.isHardwareProvisionSkipped() {
-			nodesInfo := extractNodeDetails(existingCIUnstructured)
-			assignNodeDetails(renderedCIUnstructured, nodesInfo)
-		}
+		nodesInfo := extractNodeDetails(existingCIUnstructured)
+		assignNodeDetails(renderedCIUnstructured, nodesInfo)
 	}
 
 	// Handle cluster upgrade transformations before validation
@@ -165,9 +161,6 @@ func (t *provisioningRequestReconcilerTask) buildClusterInstanceUnstructured() (
 				"name": secretName,
 			}
 		}
-
-		// Remove bmcCredentialsDetails from the ClusterInstance spec as it's not part of the ClusterInstance CRD schema
-		delete(nodeMap, "bmcCredentialsDetails")
 
 		if nodeNetwork, ok := nodeMap["nodeNetwork"]; ok {
 			if interfaces, ok := nodeNetwork.(map[string]interface{})["interfaces"]; ok {

@@ -38,7 +38,7 @@ The [CRD](../../config/crd/bases/clcm.openshift.io_clustertemplates.yaml)'s `spe
 - release: OCP release version that will be installed with this template. The Git layout uses a matching directory name `version_4.Y.Z/`; keep the release here and the directory version aligned.
 - description: A description of the ClusterTemplate.
 - templateDefaults: Contains default values for templates.
-  - hwMgmtDefaults: (Optional) Inline hardware management defaults including nodeGroupData and hardwareProvisioningTimeout. When nodeGroupData is empty, hardware provisioning is skipped.
+  - hwMgmtDefaults: Inline hardware management defaults including nodeGroupData and hardwareProvisioningTimeout. Either nodeGroupData must be provided here or the templateParameterSchema must expose hwMgmtParameters so the ProvisioningRequest can supply it.
   - clusterInstanceDefaults: References the ConfigMap containing default values for ClusterInstance.
   - policyTemplateDefaults: References the ConfigMap containing default values for ACM policy templates.
 - templateParameterSchema: Specifies the OpenAPI v3 schema that defines which parameters the SMO must provide and which values are accepted in the ProvisioningRequest.
@@ -135,14 +135,9 @@ definition of `hwMgmtParameters`.
 The template references hardware artifacts that the O‑Cloud hardware manager uses to allocate and prepare bare‑metal nodes.
 
 > [!NOTE]
-> `spec.templateDefaults.hwMgmtDefaults` is optional. When `nodeGroupData` is empty or not provided,
-> hardware provisioning is skipped, and hardware-related parameters for each node
-> (e.g, bmcAddress, bmcCredentialsDetails, bootMACAddress, nodeNetwork.interfaces[*].macAddress)
-> should be specified in the ProvisioningRequest. Alternatively, hardware config can be provided
-> entirely via `hwMgmtParameters` in the ProvisioningRequest when the ClusterTemplate's
-> `templateParameterSchema` defines it. See this
-> [example](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1-no-hwtemplate.yaml)
-> of a ClusterTemplate without `hwMgmtDefaults`.
+> Hardware provisioning is always required. The ClusterTemplate must provide
+> `nodeGroupData` via `hwMgmtDefaults` or expose `hwMgmtParameters` in the
+> `templateParameterSchema` so the ProvisioningRequest can supply it.
 
 #### HardwareProfile
 

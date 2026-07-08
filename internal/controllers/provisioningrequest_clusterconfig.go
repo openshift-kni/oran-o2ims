@@ -17,7 +17,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -439,15 +438,10 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 		return nil
 	}
 
-	// Get AllocatedNodes if hardware provisioning is not skipped.
 	narNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
-	allocatedNodeList := &hwmgmtv1alpha1.AllocatedNodeList{}
-	if !t.isHardwareProvisionSkipped() {
-		var err error
-		allocatedNodeList, err = listAllocatedNodesForNAR(ctx, t.client, t.object.Name, narNS)
-		if err != nil {
-			return fmt.Errorf("failed to list AllocatedNodes for NodeAllocationRequest '%s': %w", t.object.Name, err)
-		}
+	allocatedNodeList, err := listAllocatedNodesForNAR(ctx, t.client, t.object.Name, narNS)
+	if err != nil {
+		return fmt.Errorf("failed to list AllocatedNodes for NodeAllocationRequest '%s': %w", t.object.Name, err)
 	}
 
 	// Go through all the obtained agents and apply the above labels.
@@ -455,11 +449,6 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 		err = t.setLabelValue(ctx, &agent, ctlrutils.ClusterTemplateArtifactsLabel, oranct.Spec.TemplateID)
 		if err != nil {
 			return err
-		}
-
-		if t.isHardwareProvisionSkipped() {
-			// Skip adding hwMgrNodeId label if hardware provisioning is skipped.
-			continue
 		}
 
 		// Get the corresponding clcm.openshift.io and add the needed labels.
