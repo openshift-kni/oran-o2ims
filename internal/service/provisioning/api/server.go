@@ -296,6 +296,15 @@ func (r *ProvisioningServer) DeleteProvisioningRequest(ctx context.Context, requ
 	}, nil
 }
 
+// PatchProvisioningRequest handles an API request to patch a provisioning request.
+// PATCH is not supported for ProvisioningRequest resources per O-RAN O2 IMS specification.
+func (r *ProvisioningServer) PatchProvisioningRequest(_ context.Context, _ api.PatchProvisioningRequestRequestObject) (api.PatchProvisioningRequestResponseObject, error) {
+	return api.PatchProvisioningRequest405ApplicationProblemPlusJSONResponse(common.ProblemDetails{
+		Detail: "PATCH method is not supported for ProvisioningRequest resources",
+		Status: http.StatusMethodNotAllowed,
+	}), nil
+}
+
 // convertProvisioningRequestCRToApi converts a ProvisioningRequest CR to an API model ProvisioningRequestInfo
 func convertProvisioningRequestCRToApi(id uuid.UUID, provisioningRequest provisioningv1alpha1.ProvisioningRequest) (api.ProvisioningRequestInfo, error) {
 	provisioningRequestInfo := api.ProvisioningRequestInfo{}
