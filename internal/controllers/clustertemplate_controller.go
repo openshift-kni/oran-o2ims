@@ -41,7 +41,6 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
-	"gopkg.in/yaml.v3"
 )
 
 // ClusterTemplateReconciler reconciles a ClusterTemplate object
@@ -542,13 +541,14 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 	if err := validatePolicyTemplateParamsSchema(policyTemplateParamsSchema); err != nil {
 		return typederrors.NewInputError("Error validating the policyTemplateParameters schema: %s", err.Error())
 	}
-	clusterInstanceParamsSchema := subSchemas[constants.TemplateParamClusterInstance].(map[string]any)
-	// Hardware provisioning is active if the CT has hwMgmtDefaults.nodeGroupData OR
-	// if the templateParameterSchema exposes hwMgmtParameters (allowing the PR to supply it).
+	// Require hardware provisioning: the CT must have hwMgmtDefaults.nodeGroupData OR
+	// the templateParameterSchema must expose hwMgmtParameters (allowing the PR to supply it).
 	hasHwMgmt := len(object.Spec.TemplateDefaults.HwMgmtDefaults.NodeGroupData) > 0 ||
 		provisioningv1alpha1.SchemaDefinesHwMgmtParameters(object)
-	if err := validateClusterInstanceParamsSchema(hasHwMgmt, clusterInstanceParamsSchema); err != nil {
-		return typederrors.NewInputError("Error validating the clusterInstanceParameters schema: %s", err.Error())
+	if !hasHwMgmt {
+		return typederrors.NewInputError(
+			"ClusterTemplate must define hardware provisioning via hwMgmtDefaults.nodeGroupData " +
+				"or expose hwMgmtParameters in templateParameterSchema")
 	}
 
 	hasUpgradeDefaults := object.Spec.TemplateDefaults.UpgradeDefaults.Size() > 0
@@ -643,68 +643,6 @@ func validatePolicyTemplateParamsSchema(schema map[string]any) error {
 		}
 	}
 
-	return nil
-}
-
-// validateClusterInstanceParamsSchema validates the cluster instance parameters schema.
-func validateClusterInstanceParamsSchema(hasHwMgmt bool, schema map[string]any) error {
-	if !hasHwMgmt {
-		return validateSchemaWithoutHwMgmt(schema)
-	}
-	return nil
-}
-
-// validateSchemaWithoutHwMgmt checks if the schema contains the expected properties
-// when hardware management defaults are not provided.
-func validateSchemaWithoutHwMgmt(schema map[string]any) error {
-	var expectedSubSchema map[string]any
-	err := yaml.Unmarshal([]byte(ctlrutils.ClusterInstanceParamsSubSchemaForNoHWTemplate), &expectedSubSchema)
-	if err != nil {
-		return fmt.Errorf("failed to parse expected clusterInstanceParams subschema for no hwMgmtDefaults: %w", err)
-	}
-
-	if err := checkSchemaContains(schema, expectedSubSchema, constants.TemplateParamClusterInstance); err != nil {
-		return fmt.Errorf("unexpected %s structure: %w", constants.TemplateParamClusterInstance, err)
-	}
-
-	return nil
-}
-
-// checkSchemaContains verifies that the actual schema contains all elements of the expected schema
-func checkSchemaContains(actual, expected map[string]any, currentPath string) error {
-	for key, expectedValue := range expected {
-		actualValue, exists := actual[key]
-		fullKey := currentPath + "." + key
-
-		if !exists {
-			return fmt.Errorf("missing key \"%s\" in field \"%s\"", key, currentPath)
-		}
-
-		switch expectedValue := expectedValue.(type) {
-		case map[string]any:
-			actualValueMap, ok := actualValue.(map[string]any)
-			if !ok {
-				return fmt.Errorf("expected a map for key \"%s\" in field \"%s\"", key, currentPath)
-			}
-			if err := checkSchemaContains(actualValueMap, expectedValue, fullKey); err != nil {
-				return err
-			}
-		case []any:
-			actualValueSlice, ok := actualValue.([]any)
-			if !ok {
-				return fmt.Errorf("expected a list for key \"%s\" in field \"%s\"", key, currentPath)
-			}
-			for _, item := range expectedValue {
-				if !slices.Contains(actualValueSlice, item) {
-					return fmt.Errorf("list in field \"%s\" is missing element: %v", fullKey, item)
-				}
-			}
-		default:
-			if actualValue != expectedValue {
-				return fmt.Errorf("unexpected value for key \"%s\" in field \"%s\", expected: %v, actual: %v", key, currentPath, expectedValue, actualValue)
-			}
-		}
-	}
 	return nil
 }
 

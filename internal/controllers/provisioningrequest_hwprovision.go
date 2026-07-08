@@ -329,11 +329,6 @@ func (t *provisioningRequestReconcilerTask) hasInfrastructureResourceStatuses() 
 // updateInfrastructureResourceStatuses updates the infrastructure resource statuses for the ProvisioningRequest.
 func (t *provisioningRequestReconcilerTask) updateInfrastructureResourceStatuses(ctx context.Context) error {
 
-	// Skip when hardware provisioning is not active (no nodes to track).
-	if t.isHardwareProvisionSkipped() {
-		return nil
-	}
-
 	// Get the AllocatedNodes for the NAR
 	narNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
 	allocatedNodeList, err := listAllocatedNodesForNAR(ctx, t.client, t.object.Name, narNS)

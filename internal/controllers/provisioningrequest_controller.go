@@ -259,11 +259,6 @@ func (t *provisioningRequestReconcilerTask) executePreProvisioningPhase(ctx cont
 func (t *provisioningRequestReconcilerTask) executeHardwareProvisioningPhase(ctx context.Context,
 	unstructuredClusterInstance *unstructured.Unstructured) (ctrl.Result, bool, error) {
 
-	if t.isHardwareProvisionSkipped() {
-		t.logger.InfoContext(ctx, "Hardware provisioning skipped")
-		return ctrl.Result{}, true, nil
-	}
-
 	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "hardware_provisioning")
 	phaseStartTime := time.Now()
 
@@ -483,10 +478,6 @@ func (t *provisioningRequestReconcilerTask) shouldStopReconciliation() bool {
 //
 //nolint:unparam // Kept for API compatibility, always returns empty Result
 func (t *provisioningRequestReconcilerTask) checkHardwareProvisioningTimeout() ctrl.Result {
-	if t.isHardwareProvisionSkipped() {
-		return ctrl.Result{}
-	}
-
 	hwProvisionedCond := meta.FindStatusCondition(t.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned))
 	// Skip only on outcomes: succeeded, failed or timed-out
 	if hwProvisionedCond != nil && (hwProvisionedCond.Status == metav1.ConditionTrue ||
@@ -631,28 +622,26 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 // and policy configuration when applicable, and update the corresponding ProvisioningRequest
 // status conditions
 func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx context.Context) (result ctrl.Result, err error) {
-	if !t.isHardwareProvisionSkipped() {
-		// Check the NodeAllocationRequest status if exists
-		nodeAllocationRequestResponse, exists, err := t.getNodeAllocationRequestResponse(ctx)
+	// Check the NodeAllocationRequest status if exists
+	nodeAllocationRequestResponse, exists, err := t.getNodeAllocationRequestResponse(ctx)
+	if err != nil {
+		return requeueWithError(err)
+	}
+	if !exists {
+		// NAR not found — either not yet created or already deleted.
+		// Skip hardware status checks and proceed to resource preparation status check.
+		t.logger.InfoContext(ctx, "NodeAllocationRequest not found, skipping hardware status checks")
+	} else {
+		hwProvisioned, timedOutOrFailed, err := t.checkNodeAllocationRequestStatus(ctx, nodeAllocationRequestResponse, hwmgmtv1alpha1.Provisioned)
 		if err != nil {
 			return requeueWithError(err)
 		}
-		if !exists {
-			// NAR not found — either not yet created or already deleted.
-			// Skip hardware status checks and proceed to resource preparation status check.
-			t.logger.InfoContext(ctx, "NodeAllocationRequest not found, skipping hardware status checks")
-		} else {
-			hwProvisioned, timedOutOrFailed, err := t.checkNodeAllocationRequestStatus(ctx, nodeAllocationRequestResponse, hwmgmtv1alpha1.Provisioned)
-			if err != nil {
-				return requeueWithError(err)
-			}
-			if timedOutOrFailed {
-				// Continue requeuing to allow overall timeout or spec changes to potentially recover
-				return requeueWithMediumInterval(), nil
-			}
-			if !hwProvisioned {
-				return requeueWithMediumInterval(), nil
-			}
+		if timedOutOrFailed {
+			// Continue requeuing to allow overall timeout or spec changes to potentially recover
+			return requeueWithMediumInterval(), nil
+		}
+		if !hwProvisioned {
+			return requeueWithMediumInterval(), nil
 		}
 	}
 
@@ -753,10 +742,8 @@ func (t *provisioningRequestReconcilerTask) handleFulfilledStateMonitoring(ctx c
 	// Sync skip-cleanup annotation to the NAR for fulfilled PRs.
 	// During provisioning this is handled by createOrUpdateNodeAllocationRequest,
 	// but after fulfillment that path is no longer called.
-	if !t.isHardwareProvisionSkipped() {
-		if err := t.syncNARSkipCleanup(ctx); err != nil {
-			return requeueWithError(fmt.Errorf("failed to sync skipCleanup on NAR: %w", err))
-		}
+	if err := t.syncNARSkipCleanup(ctx); err != nil {
+		return requeueWithError(fmt.Errorf("failed to sync skipCleanup on NAR: %w", err))
 	}
 
 	// Continue monitoring even after fulfillment for spec changes
@@ -1293,26 +1280,12 @@ func (r *ProvisioningRequestReconciler) handleObservabilityAddonCleanup(ctx cont
 	return nil
 }
 
-func (t *provisioningRequestReconcilerTask) isHardwareProvisionSkipped() bool {
-	// Hardware provisioning is skipped when no nodeGroupData exists in either
-	// the CT's hwMgmtDefaults or the PR's hwMgmtParameters (after merge).
-	if t.clusterInput != nil && t.clusterInput.hwMgmtData != nil {
-		if ngData, ok := t.clusterInput.hwMgmtData["nodeGroupData"].([]any); ok && len(ngData) > 0 {
-			return false
-		}
-	}
-	if t.ctDetails != nil && len(t.ctDetails.templates.HwMgmtDefaults.NodeGroupData) > 0 {
-		return false
-	}
-	return true
-}
-
 // finalizeProvisioningIfComplete checks if the provisioning/upgrade process is completed.
 // If so, it sets the provisioning state to "fulfilled" and updates the provisioned
 // resources in the status.
 func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx context.Context) error {
 	if ctlrutils.IsClusterProvisionCompleted(t.object) && ctlrutils.IsClusterConfigCompleted(t.object) &&
-		(t.isHardwareProvisionSkipped() || ctlrutils.IsHardwareConfigCompleted(t.object)) &&
+		ctlrutils.IsHardwareConfigCompleted(t.object) &&
 		(!ctlrutils.IsClusterUpgradeInitiated(t.object) || ctlrutils.IsClusterUpgradeCompleted(t.object)) {
 
 		ctlrutils.SetProvisioningStateFulfilled(t.object)
@@ -1336,13 +1309,11 @@ func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx c
 		// enabling BMO management of IBI-provisioned nodes.
 		// Done after persisting FULFILLED state so a transient failure
 		// does not block fulfillment. Returns error to trigger retry via requeue.
-		if !t.isHardwareProvisionSkipped() {
-			if err := t.setNARClusterProvisioned(ctx); err != nil {
-				return fmt.Errorf("failed to set clusterProvisioned on NAR: %w", err)
-			}
-			if err := t.syncNARSkipCleanup(ctx); err != nil {
-				return fmt.Errorf("failed to sync skipCleanup on NAR: %w", err)
-			}
+		if err := t.setNARClusterProvisioned(ctx); err != nil {
+			return fmt.Errorf("failed to set clusterProvisioned on NAR: %w", err)
+		}
+		if err := t.syncNARSkipCleanup(ctx); err != nil {
+			return fmt.Errorf("failed to sync skipCleanup on NAR: %w", err)
 		}
 	}
 
