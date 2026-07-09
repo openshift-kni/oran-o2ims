@@ -369,9 +369,7 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeDefaults() error {
 		if err := t.validateCVUpgradeDefaults(upgradeData); err != nil {
 			return err
 		}
-	}
-
-	if hasIBGU {
+	} else if hasIBGU {
 		if err := t.validateIBGUUpgradeDefaults(); err != nil {
 			return err
 		}
@@ -487,7 +485,7 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeDefaultsAgainstSchema(
 	props, ok := upgradeSchema["properties"].(map[string]any)
 	if !ok {
 		return typederrors.NewInputError(
-			"%q schema must have a properties section when upgradeDefaults is set",
+			"%q schema must have a properties section",
 			constants.TemplateParamUpgrade)
 	}
 

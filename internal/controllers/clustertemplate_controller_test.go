@@ -1480,7 +1480,7 @@ var _ = Describe("validateUpgradeDefaults", func() {
 	Context("IBGU upgrade defaults", func() {
 		BeforeEach(func() {
 			t.object.Spec.TemplateParameterSchema = runtime.RawExtension{
-				Raw: []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"imageBasedGroupUpgrade":{"type":"object"}}}}}`),
+				Raw: []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"imageBasedGroupUpgrade":{"type":"object","properties":{"ibuSpec":{"type":"object","properties":{"seedImageRef":{"type":"object","properties":{"image":{"type":"string"},"version":{"type":"string"}}},"oadpContent":{"type":"array"}}},"plan":{"type":"array"}}}}}}}`),
 			}
 		})
 
@@ -1525,7 +1525,7 @@ var _ = Describe("validateUpgradeDefaults", func() {
 	Context("ClusterVersion upgrade defaults", func() {
 		BeforeEach(func() {
 			t.object.Spec.TemplateParameterSchema = runtime.RawExtension{
-				Raw: []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"clusterVersion":{"type":"object"}}}}}`),
+				Raw: []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"clusterVersion":{"type":"object","properties":{"desiredUpdate":{"type":"object","properties":{"version":{"type":"string"}}},"clusterUpgradeTimeout":{"type":"string"},"intermediateVersion":{"type":"string"}}}}}}}`),
 			}
 		})
 
