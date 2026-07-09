@@ -1610,7 +1610,7 @@ var _ = Describe("validateUpgradeDefaults", func() {
 			err := t.validateUpgradeDefaults()
 			Expect(err).To(HaveOccurred())
 			Expect(typederrors.IsInputError(err)).To(BeTrue())
-			Expect(err.Error()).To(ContainSubstring("upgradeDefaults do not conform to the upgradeParameters schema"))
+			Expect(err.Error()).To(ContainSubstring("upgradeDefaults does not conform to the upgradeParameters schema"))
 		})
 	})
 
@@ -1625,7 +1625,7 @@ var _ = Describe("validateUpgradeDefaults", func() {
 			err := t.validateUpgradeDefaults()
 			Expect(err).To(HaveOccurred())
 			Expect(typederrors.IsInputError(err)).To(BeTrue())
-			Expect(err.Error()).To(ContainSubstring(`upgradeDefaults contains "clusterVersion" but the upgradeParameters schema does not define it`))
+			Expect(err.Error()).To(ContainSubstring(`upgradeDefaults defines "clusterVersion", but upgradeParameters schema does not include a matching "clusterVersion" definition`))
 		})
 
 		It("should reject when defaults have imageBasedGroupUpgrade but schema has clusterVersion", func() {
@@ -1638,7 +1638,7 @@ var _ = Describe("validateUpgradeDefaults", func() {
 			err := t.validateUpgradeDefaults()
 			Expect(err).To(HaveOccurred())
 			Expect(typederrors.IsInputError(err)).To(BeTrue())
-			Expect(err.Error()).To(ContainSubstring(`upgradeDefaults contains "imageBasedGroupUpgrade" but the upgradeParameters schema does not define it`))
+			Expect(err.Error()).To(ContainSubstring(`upgradeDefaults defines "imageBasedGroupUpgrade", but upgradeParameters schema does not include a matching "imageBasedGroupUpgrade" definition`))
 		})
 	})
 
@@ -1652,7 +1652,7 @@ var _ = Describe("validateUpgradeDefaults", func() {
 			}
 			err := t.validateUpgradeDefaults()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("upgradeDefaults do not conform to the upgradeParameters schema"))
+			Expect(err.Error()).To(ContainSubstring("upgradeDefaults does not conform to the upgradeParameters schema"))
 		})
 	})
 })
@@ -1694,21 +1694,21 @@ var _ = Describe("validateUpgradeParametersSchema", func() {
 		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"clusterVersion":{"type":"object"},"imageBasedGroupUpgrade":{"type":"object"}}}}}`)
 		err := validateUpgradeParametersSchema(schema, false)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("not both"))
+		Expect(err.Error()).To(ContainSubstring("choose exactly one upgrade type"))
 	})
 
 	It("should reject when imageBasedGroupUpgrade is not type object", func() {
 		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"imageBasedGroupUpgrade":{"type":"string"}}}}}`)
 		err := validateUpgradeParametersSchema(schema, false)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring(`"upgradeParameters"."imageBasedGroupUpgrade" must have type "object"`))
+		Expect(err.Error()).To(ContainSubstring(`upgradeParameters.imageBasedGroupUpgrade must have type "object"`))
 	})
 
 	It("should reject when clusterVersion is not type object", func() {
 		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"clusterVersion":{"type":"string"}}}}}`)
 		err := validateUpgradeParametersSchema(schema, false)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring(`"upgradeParameters"."clusterVersion" must have type "object"`))
+		Expect(err.Error()).To(ContainSubstring(`upgradeParameters.clusterVersion must have type "object"`))
 	})
 
 	It("should return error when upgradeParameters has no properties section", func() {
@@ -1728,7 +1728,7 @@ var _ = Describe("validateUpgradeParametersSchema", func() {
 		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"otherKey":{"type":"string"}}}}}`)
 		err := validateUpgradeParametersSchema(schema, true)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("when upgradeDefaults is set"))
+		Expect(err.Error()).To(ContainSubstring("choose exactly one upgrade type"))
 	})
 })
 

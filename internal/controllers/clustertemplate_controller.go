@@ -494,18 +494,18 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeDefaultsAgainstSchema(
 
 	if defaultsHasCV && !schemaHasCV {
 		return typederrors.NewInputError(
-			"upgradeDefaults contains %q but the %s schema does not define it",
-			ctlrutils.UpgradeDefaultsClusterVersionKey, constants.TemplateParamUpgrade)
+			"upgradeDefaults defines %q, but %s schema does not include a matching %q definition",
+			ctlrutils.UpgradeDefaultsClusterVersionKey, constants.TemplateParamUpgrade, ctlrutils.UpgradeDefaultsClusterVersionKey)
 	}
 	if defaultsHasIBGU && !schemaHasIBGU {
 		return typederrors.NewInputError(
-			"upgradeDefaults contains %q but the %s schema does not define it",
-			ctlrutils.UpgradeDefaultsIBGUKey, constants.TemplateParamUpgrade)
+			"upgradeDefaults defines %q, but %s schema does not include a matching %q definition",
+			ctlrutils.UpgradeDefaultsIBGUKey, constants.TemplateParamUpgrade, ctlrutils.UpgradeDefaultsIBGUKey)
 	}
 
 	if err := provisioningv1alpha1.ValidateJsonAgainstJsonSchema(upgradeSchema, upgradeData); err != nil {
 		return typederrors.NewInputError(
-			"upgradeDefaults do not conform to the %s schema: %s",
+			"upgradeDefaults does not conform to the %s schema: %s",
 			constants.TemplateParamUpgrade, err.Error())
 	}
 
@@ -737,15 +737,8 @@ func validateUpgradeParametersSchema(schemaRaw []byte, hasUpgradeDefaults bool) 
 	hasCV := schemaPropertyExists(props, ctlrutils.UpgradeDefaultsClusterVersionKey)
 	hasIBGU := schemaPropertyExists(props, ctlrutils.UpgradeDefaultsIBGUKey)
 
-	if hasCV && hasIBGU {
-		return fmt.Errorf("%q schema must define either %q or %q, not both",
-			constants.TemplateParamUpgrade,
-			ctlrutils.UpgradeDefaultsClusterVersionKey,
-			ctlrutils.UpgradeDefaultsIBGUKey)
-	}
-
-	if hasUpgradeDefaults && !hasCV && !hasIBGU {
-		return fmt.Errorf("%q schema must define either %q or %q when upgradeDefaults is set",
+	if (hasUpgradeDefaults && !hasCV && !hasIBGU) || (hasCV && hasIBGU) {
+		return fmt.Errorf("%q schema must not define both %q and %q; choose exactly one upgrade type",
 			constants.TemplateParamUpgrade,
 			ctlrutils.UpgradeDefaultsClusterVersionKey,
 			ctlrutils.UpgradeDefaultsIBGUKey)
@@ -773,11 +766,11 @@ func validateUpgradeTypeProperty(props map[string]any, key string) error {
 	}
 	propMap, ok := prop.(map[string]any)
 	if !ok {
-		return fmt.Errorf("%q.%q must be an object schema",
+		return fmt.Errorf("%s.%s must be an object schema",
 			constants.TemplateParamUpgrade, key)
 	}
 	if t, _ := propMap["type"].(string); t != "object" {
-		return fmt.Errorf("%q.%q must have type \"object\"",
+		return fmt.Errorf("%s.%s must have type \"object\"",
 			constants.TemplateParamUpgrade, key)
 	}
 	return nil
