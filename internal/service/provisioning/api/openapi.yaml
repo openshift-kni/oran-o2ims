@@ -421,34 +421,6 @@ paths:
             application/problem+json:
               schema:
                 $ref: "../../common/api/openapi.yaml#/components/schemas/ProblemDetails"
-    patch:
-      operationId: patchProvisioningRequest
-      summary: Patch a provisioning request (not supported)
-      security:
-      - oauth2:
-        - role:o2ims-admin
-        - role:o2ims-provisioner
-      description: |
-        This method is not supported. When this method is requested on this
-        resource, the O-Cloud shall return a "405 Method Not Allowed" response
-        as defined in clause 6.4 of ETSI GS NFV-SOL 013.
-      parameters:
-      - $ref: "#/components/parameters/provisioningRequestId"
-      tags:
-      - provisioningRequests
-      requestBody:
-        required: false
-        content:
-          application/merge-patch+json:
-            schema:
-              type: object
-      responses:
-        '405':
-          description: Method not allowed.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "../../common/api/openapi.yaml#/components/schemas/ProblemDetails"
 
 components:
   securitySchemes:
