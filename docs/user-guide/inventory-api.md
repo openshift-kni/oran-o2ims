@@ -16,7 +16,7 @@ For authentication and common query parameters (filtering, field selection),
 see [API Overview](./api-overview.md).
 
 All inventory API endpoints use the base path
-`/o2ims-infrastructureInventory/v1`.
+`/o2ims-infrastructureInventory/v2`.
 
 - [O-Cloud Information](#o-cloud-information)
 - [Locations](#locations)
@@ -37,14 +37,14 @@ and supported API versions.
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2" | jq
 ```
 
 ### Get API Versions
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/api_versions" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/api_versions" | jq
 ```
 
 ## Locations
@@ -60,7 +60,7 @@ nearly immediately after the CR is created.
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/locations" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/locations" | jq
 ```
 
 Example response:
@@ -85,7 +85,7 @@ Example response:
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/locations/{globalLocationId}" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/locations/{globalLocationId}" | jq
 ```
 
 > **Note**: The `globalLocationId` is the Location CR's `metadata.name`
@@ -101,7 +101,7 @@ They are defined via `OCloudSite` CRs (see
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/oCloudSites" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/oCloudSites" | jq
 ```
 
 Example response:
@@ -122,7 +122,7 @@ Example response:
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/oCloudSites/{oCloudSiteId}" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/oCloudSites/{oCloudSiteId}" | jq
 ```
 
 ## Resource Pools
@@ -135,7 +135,7 @@ They are defined via `ResourcePool` CRs (see
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/resourcePools" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/resourcePools" | jq
 ```
 
 Example response:
@@ -156,7 +156,7 @@ Example response:
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId}" | jq
 ```
 
 ## Resources
@@ -177,7 +177,7 @@ Resources are accessed as sub-resources of a resource pool.
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources" | jq
 ```
 
 Example response:
@@ -210,7 +210,7 @@ Example response:
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources/{resourceId}" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources/{resourceId}" | jq
 ```
 
 ## Resource Types
@@ -223,14 +223,14 @@ grouped under the same resource type.
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/resourceTypes" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/resourceTypes" | jq
 ```
 
 ### Get a Specific Resource Type
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/resourceTypes/{resourceTypeId}" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/resourceTypes/{resourceTypeId}" | jq
 ```
 
 ### Get the Alarm Dictionary for a Resource Type
@@ -239,7 +239,7 @@ Each resource type has an associated alarm dictionary:
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/resourceTypes/{resourceTypeId}/alarmDictionary" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/resourceTypes/{resourceTypeId}/alarmDictionary" | jq
 ```
 
 ## Deployment Managers
@@ -252,14 +252,14 @@ manager.
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/deploymentManagers" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/deploymentManagers" | jq
 ```
 
 ### Get a Specific Deployment Manager
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/deploymentManagers/{deploymentManagerId}" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/deploymentManagers/{deploymentManagerId}" | jq
 ```
 
 ### Filter Deployment Managers
@@ -267,11 +267,11 @@ curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
 ```bash
 # Return only names
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/deploymentManagers?fields=name" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/deploymentManagers?fields=name" | jq
 
 # Exclude the local hub cluster
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/deploymentManagers?filter=(neq,name,local-cluster)" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/deploymentManagers?filter=(neq,name,local-cluster)" | jq
 ```
 
 ## Subscriptions
@@ -285,14 +285,14 @@ modified, or deleted.
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/subscriptions" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/subscriptions" | jq
 ```
 
 ### Get a Specific Subscription
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/subscriptions/{subscriptionId}" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/subscriptions/{subscriptionId}" | jq
 ```
 
 ### Create a Subscription
@@ -306,7 +306,7 @@ curl -ks -X POST \
     "filter": "",
     "callback": "https://smo.example.com/v1/o2ims_inventory_observer"
   }' \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/subscriptions" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/subscriptions" | jq
 ```
 
 ### Delete a Subscription
@@ -314,7 +314,7 @@ curl -ks -X POST \
 ```bash
 curl -ks -X DELETE \
   -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/subscriptions/{subscriptionId}" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/subscriptions/{subscriptionId}" | jq
 ```
 
 ## Alarm Dictionaries
@@ -326,12 +326,12 @@ infrastructure resources.
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/alarmDictionaries" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/alarmDictionaries" | jq
 ```
 
 ### Get a Specific Alarm Dictionary
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/alarmDictionaries/{alarmDictionaryId}" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/alarmDictionaries/{alarmDictionaryId}" | jq
 ```
