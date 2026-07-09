@@ -351,8 +351,8 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeDefaults() error {
 		return fmt.Errorf("upgradeDefaults is not a map: %w", err)
 	}
 
-	hasCV := mapContainsAny(upgradeData, ctlrutils.UpgradeDefaultsClusterVersionKey)
-	hasIBGU := mapContainsAny(upgradeData, ctlrutils.UpgradeDefaultsIBGUKey)
+	hasCV := schemaPropertyExists(upgradeData, ctlrutils.UpgradeDefaultsClusterVersionKey)
+	hasIBGU := schemaPropertyExists(upgradeData, ctlrutils.UpgradeDefaultsIBGUKey)
 	if hasCV && hasIBGU {
 		return typederrors.NewInputError(
 			"upgradeDefaults contains both %q and %q keys; only one upgrade type is allowed",
@@ -424,6 +424,11 @@ func (t *clusterTemplateReconcilerTask) validateCVUpgradeDefaults(upgradeData ma
 			return typederrors.NewInputError(
 				"cannot validate intermediateVersion: spec.release %q is not valid semver: %s",
 				t.object.Spec.Release, err.Error())
+		}
+		if intermediateVer.Major != releaseVer.Major {
+			return typederrors.NewInputError(
+				"intermediateVersion major version (%d) must equal spec.release major version (%d)",
+				intermediateVer.Major, releaseVer.Major)
 		}
 		if intermediateVer.Minor+1 != releaseVer.Minor {
 			return typederrors.NewInputError(
@@ -505,11 +510,6 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeTypeConsistency(defaultsH
 	}
 
 	return nil
-}
-
-func mapContainsAny(m map[string]any, key string) bool {
-	_, ok := m[key]
-	return ok
 }
 
 // validateConfigmapReference validates a given configmap reference within the ClusterTemplate

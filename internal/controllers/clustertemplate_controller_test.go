@@ -1579,6 +1579,16 @@ var _ = Describe("validateUpgradeDefaults", func() {
 			Expect(err.Error()).To(ContainSubstring("invalid intermediateVersion"))
 		})
 
+		It("should reject intermediateVersion when major version does not match release major", func() {
+			t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: []byte(`{"clusterVersion":{"intermediateVersion":"3.16.0"}}`),
+			}
+			err := t.validateUpgradeDefaults()
+			Expect(err).To(HaveOccurred())
+			Expect(typederrors.IsInputError(err)).To(BeTrue())
+			Expect(err.Error()).To(ContainSubstring("intermediateVersion major version (3) must equal spec.release major version (4)"))
+		})
+
 		It("should reject intermediateVersion when minor+1 does not match release minor", func() {
 			t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
 				Raw: []byte(`{"clusterVersion":{"intermediateVersion":"4.15.0"}}`),
