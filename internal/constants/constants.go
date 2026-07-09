@@ -20,12 +20,15 @@ const (
 	HardwareManagerInventoryAPIPath = "/hardware-manager/inventory"
 )
 
-// API version suffix
-const APIVersionV1 = "/v1"
+// API version suffixes
+const (
+	APIVersionV1 = "/v1"
+	APIVersionV2 = "/v2"
+)
 
 // Full API base URLs (computed constants)
 var (
-	O2IMSInventoryBaseURL           = O2IMSInventoryAPIPath + APIVersionV1
+	O2IMSInventoryBaseURL           = O2IMSInventoryAPIPath + APIVersionV2
 	O2IMSClusterBaseURL             = O2IMSClusterAPIPath + APIVersionV1
 	O2IMSMonitoringBaseURL          = O2IMSMonitoringAPIPath + APIVersionV1
 	O2IMSArtifactsBaseURL           = O2IMSArtifactsAPIPath + APIVersionV1

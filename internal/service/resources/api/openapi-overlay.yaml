@@ -5,7 +5,7 @@ info:
 actions:
   - target: "$.paths"
     update:
-      /o2ims-infrastructureInventory/v1/internal/resources/{resourceId}:
+      /o2ims-infrastructureInventory/v2/internal/resources/{resourceId}:
         get:
           operationId: getInternalResourceById
           summary: Get a resource by ID
