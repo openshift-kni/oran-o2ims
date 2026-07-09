@@ -399,7 +399,7 @@ func (t *clusterTemplateReconcilerTask) validateCVUpgradeDefaults(upgradeData ma
 		}
 	}
 
-	if timeoutStr, ok := cvMap[ctlrutils.ClusterUpgradeTimeoutConfigKey].(string); ok {
+	if timeoutStr, ok := upgradeData[ctlrutils.ClusterUpgradeTimeoutConfigKey].(string); ok {
 		if _, err := time.ParseDuration(timeoutStr); err != nil {
 			return typederrors.NewInputError(
 				"invalid %s %q in upgradeDefaults: %s",
@@ -407,7 +407,7 @@ func (t *clusterTemplateReconcilerTask) validateCVUpgradeDefaults(upgradeData ma
 		}
 	}
 
-	if intermediateVersionStr, ok := cvMap["intermediateVersion"].(string); ok && intermediateVersionStr != "" {
+	if intermediateVersionStr, ok := upgradeData["intermediateVersion"].(string); ok && intermediateVersionStr != "" {
 		intermediateVer, err := semver.NewVersion(intermediateVersionStr)
 		if err != nil {
 			return typederrors.NewInputError(

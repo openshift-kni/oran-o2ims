@@ -1525,13 +1525,13 @@ var _ = Describe("validateUpgradeDefaults", func() {
 	Context("ClusterVersion upgrade defaults", func() {
 		BeforeEach(func() {
 			t.object.Spec.TemplateParameterSchema = runtime.RawExtension{
-				Raw: []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"clusterVersion":{"type":"object","properties":{"desiredUpdate":{"type":"object","properties":{"version":{"type":"string"}}},"clusterUpgradeTimeout":{"type":"string"},"intermediateVersion":{"type":"string"}}}}}}}`),
+				Raw: []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"clusterVersion":{"type":"object","properties":{"desiredUpdate":{"type":"object","properties":{"version":{"type":"string"}}}}},"clusterUpgradeTimeout":{"type":"string"},"intermediateVersion":{"type":"string"}}}}}`),
 			}
 		})
 
 		It("should validate valid clusterVersion defaults", func() {
 			t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.17.0"},"clusterUpgradeTimeout":"2h30m","intermediateVersion":"4.16.3"}}`),
+				Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.17.0"}},"clusterUpgradeTimeout":"2h30m","intermediateVersion":"4.16.3"}`),
 			}
 			err := t.validateUpgradeDefaults()
 			Expect(err).ToNot(HaveOccurred())
@@ -1565,7 +1565,7 @@ var _ = Describe("validateUpgradeDefaults", func() {
 
 		It("should reject invalid clusterUpgradeTimeout", func() {
 			t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{"clusterUpgradeTimeout":"notaduration"}}`),
+				Raw: []byte(`{"clusterVersion":{},"clusterUpgradeTimeout":"notaduration"}`),
 			}
 			err := t.validateUpgradeDefaults()
 			Expect(err).To(HaveOccurred())
@@ -1575,7 +1575,7 @@ var _ = Describe("validateUpgradeDefaults", func() {
 
 		It("should reject invalid intermediateVersion", func() {
 			t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{"intermediateVersion":"not-semver"}}`),
+				Raw: []byte(`{"clusterVersion":{},"intermediateVersion":"not-semver"}`),
 			}
 			err := t.validateUpgradeDefaults()
 			Expect(err).To(HaveOccurred())
@@ -1585,7 +1585,7 @@ var _ = Describe("validateUpgradeDefaults", func() {
 
 		It("should reject intermediateVersion when major version does not match release major", func() {
 			t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{"intermediateVersion":"3.16.0"}}`),
+				Raw: []byte(`{"clusterVersion":{},"intermediateVersion":"3.16.0"}`),
 			}
 			err := t.validateUpgradeDefaults()
 			Expect(err).To(HaveOccurred())
@@ -1595,7 +1595,7 @@ var _ = Describe("validateUpgradeDefaults", func() {
 
 		It("should reject intermediateVersion when minor+1 does not match release minor", func() {
 			t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{"intermediateVersion":"4.15.0"}}`),
+				Raw: []byte(`{"clusterVersion":{},"intermediateVersion":"4.15.0"}`),
 			}
 			err := t.validateUpgradeDefaults()
 			Expect(err).To(HaveOccurred())
