@@ -1480,7 +1480,7 @@ var _ = Describe("validateUpgradeDefaults", func() {
 	Context("IBGU upgrade defaults", func() {
 		BeforeEach(func() {
 			t.object.Spec.TemplateParameterSchema = runtime.RawExtension{
-				Raw: []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"imageBasedGroupUpgrade":{"type":"object","properties":{"ibuSpec":{"type":"object","properties":{"seedImageRef":{"type":"object","properties":{"image":{"type":"string"},"version":{"type":"string"}}},"oadpContent":{"type":"array"}}},"plan":{"type":"array"}}}}}}}`),
+				Raw: []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"imageBasedGroupUpgrade":{"type":"object","properties":{"ibuSpec":{"type":"object","properties":{"seedImageRef":{"type":"object","properties":{"image":{"type":"string"},"version":{"type":"string"}}},"oadpContent":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"namespace":{"type":"string"}}}}}},"plan":{"type":"array","items":{"type":"object","properties":{"actions":{"type":"array","items":{"type":"string"}}}}}}}}}}}`),
 			}
 		})
 
