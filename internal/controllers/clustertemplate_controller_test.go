@@ -1422,10 +1422,6 @@ var _ = Describe("validateUpgradeDefaults", func() {
 		tVersion = "v1.0.0"
 	)
 
-	validIBGUDefaults := runtime.RawExtension{
-		Raw: []byte(`{"imageBasedGroupUpgrade":{"ibuSpec":{"seedImageRef":{"image":"quay.io/openshift-release-dev/ocp-release","version":"4.17.0"},"oadpContent":[{"name":"oadp-backup","namespace":"openshift-adp"}]},"plan":[{"actions":["Prep"]},{"actions":["Upgrade"]}]}}`),
-	}
-
 	BeforeEach(func() {
 		ct := &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1433,12 +1429,10 @@ var _ = Describe("validateUpgradeDefaults", func() {
 				Namespace: "default",
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
-				Name:    tName,
-				Version: tVersion,
-				Release: "4.17.0",
-				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
-					UpgradeDefaults: validIBGUDefaults,
-				},
+				Name:             tName,
+				Version:          tVersion,
+				Release:          "4.17.0",
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{},
 			},
 		}
 
@@ -1446,11 +1440,6 @@ var _ = Describe("validateUpgradeDefaults", func() {
 			logger: logger,
 			object: ct,
 		}
-	})
-
-	It("should validate valid IBGU upgrade defaults successfully", func() {
-		err := t.validateUpgradeDefaults()
-		Expect(err).ToNot(HaveOccurred())
 	})
 
 	It("should return error when upgrade defaults data is not a map", func() {
@@ -1489,6 +1478,20 @@ var _ = Describe("validateUpgradeDefaults", func() {
 	})
 
 	Context("IBGU upgrade defaults", func() {
+		BeforeEach(func() {
+			t.object.Spec.TemplateParameterSchema = runtime.RawExtension{
+				Raw: []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"imageBasedGroupUpgrade":{"type":"object"}}}}}`),
+			}
+		})
+
+		It("should validate valid IBGU upgrade defaults successfully", func() {
+			t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: []byte(`{"imageBasedGroupUpgrade":{"ibuSpec":{"seedImageRef":{"image":"quay.io/openshift-release-dev/ocp-release","version":"4.17.0"},"oadpContent":[{"name":"oadp-backup","namespace":"openshift-adp"}]},"plan":[{"actions":["Prep"]},{"actions":["Upgrade"]}]}}`),
+			}
+			err := t.validateUpgradeDefaults()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
 		It("should return error when release version does not match seedImageRef version", func() {
 			t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
 				Raw: []byte(`{"imageBasedGroupUpgrade":{"ibuSpec":{"seedImageRef":{"image":"quay.io/ocp","version":"4.18.0"}},"plan":[{"actions":["Prep"]},{"actions":["Upgrade"]}]}}`),
@@ -1509,6 +1512,9 @@ var _ = Describe("validateUpgradeDefaults", func() {
 
 		It("should return error when seedImageRef version is set but release is empty", func() {
 			t.object.Spec.Release = ""
+			t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: []byte(`{"imageBasedGroupUpgrade":{"ibuSpec":{"seedImageRef":{"image":"quay.io/openshift-release-dev/ocp-release","version":"4.17.0"},"oadpContent":[{"name":"oadp-backup","namespace":"openshift-adp"}]},"plan":[{"actions":["Prep"]},{"actions":["Upgrade"]}]}}`),
+			}
 			err := t.validateUpgradeDefaults()
 			Expect(err).To(HaveOccurred())
 			Expect(typederrors.IsInputError(err)).To(BeTrue())
@@ -1517,9 +1523,15 @@ var _ = Describe("validateUpgradeDefaults", func() {
 	})
 
 	Context("ClusterVersion upgrade defaults", func() {
+		BeforeEach(func() {
+			t.object.Spec.TemplateParameterSchema = runtime.RawExtension{
+				Raw: []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"clusterVersion":{"type":"object"}}}}}`),
+			}
+		})
+
 		It("should validate valid clusterVersion defaults", func() {
 			t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.17.0"}}}`),
+				Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.17.0"},"clusterUpgradeTimeout":"2h30m","intermediateVersion":"4.16.3"}}`),
 			}
 			err := t.validateUpgradeDefaults()
 			Expect(err).ToNot(HaveOccurred())
@@ -1561,14 +1573,6 @@ var _ = Describe("validateUpgradeDefaults", func() {
 			Expect(err.Error()).To(ContainSubstring("invalid clusterUpgradeTimeout"))
 		})
 
-		It("should pass with valid clusterUpgradeTimeout", func() {
-			t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{"clusterUpgradeTimeout":"2h30m"}}`),
-			}
-			err := t.validateUpgradeDefaults()
-			Expect(err).ToNot(HaveOccurred())
-		})
-
 		It("should reject invalid intermediateVersion", func() {
 			t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
 				Raw: []byte(`{"clusterVersion":{"intermediateVersion":"not-semver"}}`),
@@ -1596,15 +1600,7 @@ var _ = Describe("validateUpgradeDefaults", func() {
 			err := t.validateUpgradeDefaults()
 			Expect(err).To(HaveOccurred())
 			Expect(typederrors.IsInputError(err)).To(BeTrue())
-			Expect(err.Error()).To(ContainSubstring("intermediateVersion minor version (15) + 1 must equal spec.release minor version (17)"))
-		})
-
-		It("should pass when intermediateVersion minor+1 equals release minor", func() {
-			t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{"intermediateVersion":"4.16.3"}}`),
-			}
-			err := t.validateUpgradeDefaults()
-			Expect(err).ToNot(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("intermediateVersion 4.15.0 must be exactly one minor version below ClusterTemplate's release version 4.17.0"))
 		})
 
 		It("should reject when clusterVersion value is not an object", func() {
@@ -1614,7 +1610,7 @@ var _ = Describe("validateUpgradeDefaults", func() {
 			err := t.validateUpgradeDefaults()
 			Expect(err).To(HaveOccurred())
 			Expect(typederrors.IsInputError(err)).To(BeTrue())
-			Expect(err.Error()).To(ContainSubstring("must be an object"))
+			Expect(err.Error()).To(ContainSubstring("upgradeDefaults do not conform to the upgradeParameters schema"))
 		})
 	})
 
@@ -1643,17 +1639,6 @@ var _ = Describe("validateUpgradeDefaults", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(typederrors.IsInputError(err)).To(BeTrue())
 			Expect(err.Error()).To(ContainSubstring(`upgradeDefaults contains "imageBasedGroupUpgrade" but the upgradeParameters schema does not define it`))
-		})
-
-		It("should pass when defaults and schema both use clusterVersion", func() {
-			t.object.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.17.0"}}}`),
-			}
-			t.object.Spec.TemplateParameterSchema = runtime.RawExtension{
-				Raw: []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"clusterVersion":{"type":"object"}}}}}`),
-			}
-			err := t.validateUpgradeDefaults()
-			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 

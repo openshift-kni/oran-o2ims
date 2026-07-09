@@ -359,6 +359,12 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeDefaults() error {
 			ctlrutils.UpgradeDefaultsClusterVersionKey, ctlrutils.UpgradeDefaultsIBGUKey)
 	}
 
+	if hasCV || hasIBGU {
+		if err := t.validateUpgradeDefaultsAgainstSchema(upgradeData, hasCV, hasIBGU); err != nil {
+			return err
+		}
+	}
+
 	if hasCV {
 		if err := t.validateCVUpgradeDefaults(upgradeData); err != nil {
 			return err
@@ -367,15 +373,6 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeDefaults() error {
 
 	if hasIBGU {
 		if err := t.validateIBGUUpgradeDefaults(); err != nil {
-			return err
-		}
-	}
-
-	if t.object.Spec.TemplateParameterSchema.Size() > 0 {
-		if err := t.validateUpgradeTypeConsistency(hasCV, hasIBGU); err != nil {
-			return err
-		}
-		if err := t.validateUpgradeDefaultsAgainstSchema(upgradeData); err != nil {
 			return err
 		}
 	}
@@ -432,8 +429,8 @@ func (t *clusterTemplateReconcilerTask) validateCVUpgradeDefaults(upgradeData ma
 		}
 		if intermediateVer.Minor+1 != releaseVer.Minor {
 			return typederrors.NewInputError(
-				"intermediateVersion minor version (%d) + 1 must equal spec.release minor version (%d)",
-				intermediateVer.Minor, releaseVer.Minor)
+				"intermediateVersion %s must be exactly one minor version below ClusterTemplate's release version %s",
+				intermediateVer, releaseVer)
 		}
 	}
 
@@ -464,35 +461,34 @@ func (t *clusterTemplateReconcilerTask) validateIBGUUpgradeDefaults() error {
 	return nil
 }
 
-func (t *clusterTemplateReconcilerTask) validateUpgradeDefaultsAgainstSchema(upgradeData map[string]any) error {
-	upgradeSchema, err := provisioningv1alpha1.ExtractSubSchema(
-		t.object.Spec.TemplateParameterSchema.Raw, constants.TemplateParamUpgrade)
-	if err != nil {
-		if provisioningv1alpha1.IsErrSubSchemaNotFound(err) {
-			return nil
-		}
-		return fmt.Errorf("failed to extract %q schema: %w", constants.TemplateParamUpgrade, err)
-	}
-	if err := provisioningv1alpha1.ValidateJsonAgainstJsonSchema(upgradeSchema, upgradeData); err != nil {
-		return typederrors.NewInputError(
-			"upgradeDefaults do not conform to the %s schema: %s",
-			constants.TemplateParamUpgrade, err.Error())
-	}
-	return nil
-}
+// validateUpgradeDefaultsAgainstSchema verifies that the upgradeDefaults upgrade type
+// matches the type defined in the upgradeParameters schema and that defaults conform
+// to that schema.
+func (t *clusterTemplateReconcilerTask) validateUpgradeDefaultsAgainstSchema(
+	upgradeData map[string]any, defaultsHasCV, defaultsHasIBGU bool) error {
 
-func (t *clusterTemplateReconcilerTask) validateUpgradeTypeConsistency(defaultsHasCV, defaultsHasIBGU bool) error {
+	if t.object.Spec.TemplateParameterSchema.Size() == 0 {
+		return typederrors.NewInputError(
+			"templateParameterSchema must define %q when upgradeDefaults is set",
+			constants.TemplateParamUpgrade)
+	}
+
 	upgradeSchema, err := provisioningv1alpha1.ExtractSubSchema(
 		t.object.Spec.TemplateParameterSchema.Raw, constants.TemplateParamUpgrade)
 	if err != nil {
 		if provisioningv1alpha1.IsErrSubSchemaNotFound(err) {
-			return nil
+			return typederrors.NewInputError(
+				"templateParameterSchema must define %q when upgradeDefaults is set",
+				constants.TemplateParamUpgrade)
 		}
 		return fmt.Errorf("failed to extract %q schema: %w", constants.TemplateParamUpgrade, err)
 	}
+
 	props, ok := upgradeSchema["properties"].(map[string]any)
 	if !ok {
-		return nil
+		return typederrors.NewInputError(
+			"%q schema must have a properties section when upgradeDefaults is set",
+			constants.TemplateParamUpgrade)
 	}
 
 	schemaHasCV := schemaPropertyExists(props, ctlrutils.UpgradeDefaultsClusterVersionKey)
@@ -507,6 +503,12 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeTypeConsistency(defaultsH
 		return typederrors.NewInputError(
 			"upgradeDefaults contains %q but the %s schema does not define it",
 			ctlrutils.UpgradeDefaultsIBGUKey, constants.TemplateParamUpgrade)
+	}
+
+	if err := provisioningv1alpha1.ValidateJsonAgainstJsonSchema(upgradeSchema, upgradeData); err != nil {
+		return typederrors.NewInputError(
+			"upgradeDefaults do not conform to the %s schema: %s",
+			constants.TemplateParamUpgrade, err.Error())
 	}
 
 	return nil
@@ -713,8 +715,7 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 // validateUpgradeParametersSchema validates the upgradeParameters sub-schema structure.
 // When present, it must have type "object" with a properties section containing
 // exactly one of "clusterVersion" or "imageBasedGroupUpgrade" (both is rejected).
-// When upgradeDefaults is set, the sub-schema is required and must define the
-// upgrade type property matching the defaults.
+// When upgradeDefaults is set, the sub-schema is required.
 func validateUpgradeParametersSchema(schemaRaw []byte, hasUpgradeDefaults bool) error {
 	upgradeSchema, err := provisioningv1alpha1.ExtractSubSchema(schemaRaw, constants.TemplateParamUpgrade)
 	if err != nil {
