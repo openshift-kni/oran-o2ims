@@ -165,7 +165,7 @@ components:
       properties:
         version:
           type: string
-          example: "1.0.0"
+          example: "2.0.0"
 
     APIVersions:
       description: |
@@ -174,13 +174,13 @@ components:
       properties:
         uriPrefix:
           type: string
-          example: "/o2ims-infrastructureInventory/v1"
+          example: "/o2ims-infrastructureInventory/v2"
         apiVersions:
           type: array
           items:
             $ref: "#/components/schemas/APIVersion"
           example:
-          - version: "1.0.0"
+          - version: "2.0.0"
 
     ProblemDetails:
       type: object

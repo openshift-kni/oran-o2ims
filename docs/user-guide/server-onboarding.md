@@ -578,12 +578,12 @@ Then query the API:
 ```bash
 # Get Resource Pools
 curl -ks --header "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/resourcePools" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/resourcePools" | jq
 
 # Get Resources within a Resource Pool (BareMetalHosts)
 # Replace {resourcePoolId} with the UUID from the resourcePools response
 curl -ks --header "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v1/resourcePools/{resourcePoolId}/resources" | jq
+  "https://${API_URI}/o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources" | jq
 ```
 
 ## Complete Example

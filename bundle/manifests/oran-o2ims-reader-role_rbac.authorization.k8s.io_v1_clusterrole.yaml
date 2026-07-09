@@ -8,18 +8,18 @@ metadata:
 rules:
 - nonResourceURLs:
   - /o2ims-infrastructureInventory/api_versions
-  - /o2ims-infrastructureInventory/v1
-  - /o2ims-infrastructureInventory/v1/api_versions
-  - /o2ims-infrastructureInventory/v1/resourceTypes
-  - /o2ims-infrastructureInventory/v1/resourceTypes/*
-  - /o2ims-infrastructureInventory/v1/resourcePools
-  - /o2ims-infrastructureInventory/v1/resourcePools/*
-  - /o2ims-infrastructureInventory/v1/alarmDictionaries
-  - /o2ims-infrastructureInventory/v1/alarmDictionaries/*
-  - /o2ims-infrastructureInventory/v1/locations
-  - /o2ims-infrastructureInventory/v1/locations/*
-  - /o2ims-infrastructureInventory/v1/oCloudSites
-  - /o2ims-infrastructureInventory/v1/oCloudSites/*
+  - /o2ims-infrastructureInventory/v2
+  - /o2ims-infrastructureInventory/v2/api_versions
+  - /o2ims-infrastructureInventory/v2/resourceTypes
+  - /o2ims-infrastructureInventory/v2/resourceTypes/*
+  - /o2ims-infrastructureInventory/v2/resourcePools
+  - /o2ims-infrastructureInventory/v2/resourcePools/*
+  - /o2ims-infrastructureInventory/v2/alarmDictionaries
+  - /o2ims-infrastructureInventory/v2/alarmDictionaries/*
+  - /o2ims-infrastructureInventory/v2/locations
+  - /o2ims-infrastructureInventory/v2/locations/*
+  - /o2ims-infrastructureInventory/v2/oCloudSites
+  - /o2ims-infrastructureInventory/v2/oCloudSites/*
   - /o2ims-infrastructureMonitoring/*
   - /o2ims-infrastructureMonitoring/api_versions
   - /o2ims-infrastructureCluster/*
@@ -34,14 +34,14 @@ rules:
   - get
 - nonResourceURLs:
   - /o2ims-infrastructureMonitoring/v1/alarmSubscriptions
-  - /o2ims-infrastructureInventory/v1/subscriptions
+  - /o2ims-infrastructureInventory/v2/subscriptions
   - /o2ims-infrastructureCluster/v1/subscriptions
   - /o2ims-infrastructureProvisioning/v1/provisioningRequests
   verbs:
   - get
 - nonResourceURLs:
   - /o2ims-infrastructureMonitoring/v1/alarmSubscriptions/*
-  - /o2ims-infrastructureInventory/v1/subscriptions/*
+  - /o2ims-infrastructureInventory/v2/subscriptions/*
   - /o2ims-infrastructureCluster/v1/subscriptions/*
   - /o2ims-infrastructureProvisioning/v1/provisioningRequests/*
   verbs:

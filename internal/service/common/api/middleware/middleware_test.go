@@ -41,7 +41,7 @@ var _ = Describe("Validation error logging", func() {
 		It("should log a warning with structured fields on validation failure", func() {
 			handler := getOranErrHandler()
 			recorder := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/o2ims-infrastructureInventory/v1/resourcePools", nil)
+			req := httptest.NewRequest(http.MethodPost, "/o2ims-infrastructureInventory/v2/resourcePools", nil)
 
 			handler(context.Background(), errors.New("request body has an error"), recorder, req, oapimiddleware.ErrorHandlerOpts{
 				StatusCode: http.StatusBadRequest,
@@ -62,7 +62,7 @@ var _ = Describe("Validation error logging", func() {
 		It("should log a warning with structured fields on request validation failure", func() {
 			handler := GetOranReqErrFunc()
 			recorder := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodGet, "/o2ims-infrastructureInventory/v1/deploymentManagers", nil)
+			req := httptest.NewRequest(http.MethodGet, "/o2ims-infrastructureInventory/v2/deploymentManagers", nil)
 
 			handler(recorder, req, errors.New("parameter 'filter' has invalid value"))
 
@@ -79,7 +79,7 @@ var _ = Describe("Validation error logging", func() {
 		It("should strip raw input from InvalidParamFormatError messages in the response", func() {
 			handler := GetOranReqErrFunc()
 			recorder := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodGet, "/o2ims-infrastructureInventory/v1/subscriptions/bad-value", nil)
+			req := httptest.NewRequest(http.MethodGet, "/o2ims-infrastructureInventory/v2/subscriptions/bad-value", nil)
 
 			maliciousInput := "<script>alert(1)</script>"
 			//nolint:revive // Capitalized to match oapi-codegen's InvalidParamFormatError.Error() output
@@ -100,7 +100,7 @@ var _ = Describe("Validation error logging", func() {
 		It("should pass through non-InvalidParamFormatError messages unchanged", func() {
 			handler := GetOranReqErrFunc()
 			recorder := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/o2ims-infrastructureInventory/v1/subscriptions", nil)
+			req := httptest.NewRequest(http.MethodPost, "/o2ims-infrastructureInventory/v2/subscriptions", nil)
 
 			handler(recorder, req, errors.New("request body has an error: value is required"))
 
