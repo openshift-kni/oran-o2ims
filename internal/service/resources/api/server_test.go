@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -18,6 +19,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	commonapi "github.com/openshift-kni/oran-o2ims/api/common"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	svcapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	commonmodels "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
@@ -26,6 +28,7 @@ import (
 	apiGenerated "github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/repo/generated"
+	svcresourceutils "github.com/openshift-kni/oran-o2ims/internal/service/resources/utils"
 )
 
 const (
@@ -114,6 +117,34 @@ var _ = Describe("ResourceServer", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(resp).To(BeAssignableToTypeOf(apiGenerated.GetMinorVersions200JSONResponse{}))
 			})
+		})
+	})
+
+	Describe("API version and URL path consistency", func() {
+		It("should have O2IMSInventoryBaseURL major version matching CurrentInventoryVersion", func() {
+			majorVersion := strings.SplitN(svcresourceutils.CurrentInventoryVersion, ".", 2)[0]
+			expectedSuffix := "/v" + majorVersion
+
+			Expect(constants.O2IMSInventoryBaseURL).To(HaveSuffix(expectedSuffix))
+		})
+
+		It("should return a version matching CurrentInventoryVersion from GetAllVersions", func() {
+			resp, err := server.GetAllVersions(ctx, apiGenerated.GetAllVersionsRequestObject{})
+			Expect(err).ToNot(HaveOccurred())
+
+			versionsResp := resp.(apiGenerated.GetAllVersions200JSONResponse)
+			Expect(versionsResp.ApiVersions).ToNot(BeNil())
+			Expect(*versionsResp.ApiVersions).To(HaveLen(1))
+			Expect(*(*versionsResp.ApiVersions)[0].Version).To(Equal(svcresourceutils.CurrentInventoryVersion))
+		})
+
+		It("should return a uriPrefix containing the correct major version from GetAllVersions", func() {
+			resp, err := server.GetAllVersions(ctx, apiGenerated.GetAllVersionsRequestObject{})
+			Expect(err).ToNot(HaveOccurred())
+
+			versionsResp := resp.(apiGenerated.GetAllVersions200JSONResponse)
+			majorVersion := strings.SplitN(svcresourceutils.CurrentInventoryVersion, ".", 2)[0]
+			Expect(*versionsResp.UriPrefix).To(ContainSubstring("/v" + majorVersion))
 		})
 	})
 

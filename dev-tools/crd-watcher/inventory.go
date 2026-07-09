@@ -536,7 +536,7 @@ func (c *InventoryClient) GetResourcePools(ctx context.Context) ([]ResourcePool,
 func (c *InventoryClient) GetNodeClusters(ctx context.Context) ([]NodeCluster, error) {
 	klog.V(2).Info("Fetching node clusters from inventory API")
 
-	// Node clusters use a different API path: /o2ims-infrastructureCluster/v1 instead of /o2ims-infrastructureInventory/v1
+	// Node clusters use a different API path: /o2ims-infrastructureCluster/v1 instead of /o2ims-infrastructureInventory/v2
 	clusterBaseURL := strings.Replace(c.baseURL, constants.O2IMSInventoryBaseURL, constants.O2IMSClusterBaseURL, 1)
 	url := clusterBaseURL + "/nodeClusters"
 

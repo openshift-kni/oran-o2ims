@@ -80,15 +80,15 @@ rules:
   verbs:
   - get
 - nonResourceURLs:
-  - /o2ims-infrastructureInventory/v1/resourceTypes
+  - /o2ims-infrastructureInventory/v2/resourceTypes
   verbs:
   - get
   - list
 - nonResourceURLs:
-  - /o2ims-infrastructureInventory/v1/resourceTypes/*
+  - /o2ims-infrastructureInventory/v2/resourceTypes/*
   verbs:
   - get
 - nonResourceURLs:
-  - /o2ims-infrastructureInventory/v1/internal/resources/*
+  - /o2ims-infrastructureInventory/v2/internal/resources/*
   verbs:
   - get

@@ -398,6 +398,6 @@ environment, in which case it can be replaced with `-k`.
    ```console
    MY_CLUSTER=your.domain.com
    curl --cert /path/to/client.crt --key /path/to/client.key --cacert /path/to/ca-bundle.crt -q \
-     https://o2ims.apps.${MY_CLUSTER}/o2ims-infrastructureInventory/v1/api_version \
+     https://o2ims.apps.${MY_CLUSTER}/o2ims-infrastructureInventory/v2/api_version \
      -H "Authorization: Bearer ${MY_TOKEN}"
    ```
