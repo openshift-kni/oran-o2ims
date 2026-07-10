@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	commonapi "github.com/openshift-kni/oran-o2ims/api/common"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 )
 
@@ -68,8 +68,7 @@ func ValidateCallbackURL(ctx context.Context, c notifier.ClientProvider, callbac
 		return err
 	}
 
-	authType := ctlrutils.DetermineAuthType(callback)
-	client, err := c.NewClient(ctx, authType)
+	client, err := c.NewClient(ctx, commonapi.OAuth)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
@@ -82,8 +81,7 @@ func ValidateCallbackURL(ctx context.Context, c notifier.ClientProvider, callbac
 }
 
 // ValidateCallbackTarget checks that a callback URL targets a safe and permitted host.
-// Cluster-local callbacks (.svc.cluster.local) are always allowed.
-// External callbacks must target the configured SMO host.
+// Callbacks must target the configured SMO host.
 // All callbacks are checked against a blocklist of dangerous IP ranges.
 func ValidateCallbackTarget(ctx context.Context, callbackURL, smoURL string, resolver Resolver) error {
 	u, err := url.Parse(callbackURL)
@@ -100,19 +98,15 @@ func ValidateCallbackTarget(ctx context.Context, callbackURL, smoURL string, res
 		return fmt.Errorf("callback URL has no hostname")
 	}
 
-	isClusterLocal := ctlrutils.IsClusterLocalHostname(hostname)
-
-	if !isClusterLocal {
-		if smoURL == "" {
-			return fmt.Errorf("external callback URLs are not allowed when SMO URL is not configured")
-		}
-		smoU, err := url.Parse(smoURL)
-		if err != nil {
-			return fmt.Errorf("invalid SMO URL: %w", err)
-		}
-		if !strings.EqualFold(hostname, smoU.Hostname()) {
-			return fmt.Errorf("callback host %q does not match SMO host %q", hostname, smoU.Hostname())
-		}
+	if smoURL == "" {
+		return fmt.Errorf("callback URLs are not allowed when SMO URL is not configured")
+	}
+	smoU, err := url.Parse(smoURL)
+	if err != nil {
+		return fmt.Errorf("invalid SMO URL: %w", err)
+	}
+	if !strings.EqualFold(hostname, smoU.Hostname()) {
+		return fmt.Errorf("callback host %q does not match SMO host %q", hostname, smoU.Hostname())
 	}
 
 	addrs, err := resolver.LookupHost(ctx, hostname)

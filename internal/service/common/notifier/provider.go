@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"time"
 
 	commonapi "github.com/openshift-kni/oran-o2ims/api/common"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -58,37 +57,12 @@ func NewClientFactory(oauthConfig *ctlrutils.OAuthClientConfig) ClientProvider {
 	}
 }
 
-func (f *ClientFactory) newClusterClient() (*http.Client, error) {
-	tlsConfig, err := ctlrutils.GetDefaultTLSConfig(nil, true)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build TLS config: %w", err)
-	}
-	client := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: tlsConfig,
-		},
-		Timeout: 30 * time.Second,
-	}
-	BlockCrossHostRedirects(client)
-	return client, nil
-}
-
-func (f *ClientFactory) newOAuthClient(ctx context.Context) (*http.Client, error) {
+// NewClient creates an OAuth-authenticated HTTP client for callback delivery.
+func (f *ClientFactory) NewClient(ctx context.Context, _ commonapi.AuthType) (*http.Client, error) {
 	client, err := ctlrutils.SetupOAuthClient(ctx, nil, f.oauthConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup oauth client")
 	}
 	BlockCrossHostRedirects(client)
 	return client, nil
-}
-
-// NewClient creates a new Client based on the auth type. For ServiceAccount auth, a cluster-internal
-// TLS client is created without bearer token authorization — this path is used for development and
-// testing only. For OAuth auth, the client is configured with the OAuth credentials for public
-// endpoint callbacks.
-func (f *ClientFactory) NewClient(ctx context.Context, authType commonapi.AuthType) (*http.Client, error) {
-	if authType == commonapi.ServiceAccount {
-		return f.newClusterClient()
-	}
-	return f.newOAuthClient(ctx)
 }

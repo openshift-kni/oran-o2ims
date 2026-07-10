@@ -26,7 +26,6 @@ import (
 
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
 
-	commonapi "github.com/openshift-kni/oran-o2ims/api/common"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
@@ -1043,25 +1042,6 @@ func GenerateSecretName(nodeMap map[string]interface{}, provisioningRequest stri
 	}
 	secretName := ExtractBeforeDot(strings.ToLower(nodeHostnameInterface.(string))) + "-bmc-secret"
 	return secretName, nil
-}
-
-func DetermineAuthType(callback string) commonapi.AuthType {
-	u, err := url.Parse(callback)
-	if err != nil {
-		return commonapi.OAuth
-	}
-	hostname := u.Hostname()
-	if IsClusterLocalHostname(hostname) {
-		return commonapi.ServiceAccount
-	}
-	return commonapi.OAuth
-}
-
-// IsClusterLocalHostname returns true if the hostname is a cluster-local service hostname.
-func IsClusterLocalHostname(hostname string) bool {
-	h := strings.TrimSuffix(strings.ToLower(hostname), ".")
-	return h == constants.ClusterLocalDomain ||
-		strings.HasSuffix(h, "."+constants.ClusterLocalDomain)
 }
 
 func IsValidURL(u string) bool {
