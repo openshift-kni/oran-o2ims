@@ -9,7 +9,7 @@ reviewers:
 approvers:
   - TBD
 creation-date: 2026-04-21
-last-updated: 2026-07-07
+last-updated: 2026-07-10
 ```
 
 ## Table of Contents
@@ -34,6 +34,7 @@ last-updated: 2026-07-07
       - [Integration Points](#integration-points)
     - [Validation](#validation)
   - [Impact](#impact)
+    - [Phased Implementation](#phased-implementation)
     - [Breaking Changes](#breaking-changes)
     - [Files to Create or Modify](#files-to-create-or-modify)
   - [CR Relationships](#cr-relationships)
@@ -557,11 +558,25 @@ func (v *firmwareCatalogValidator) ValidateUpdate(
 
 ## Impact
 
+### Phased Implementation
+
+This feature is implemented in two phases to minimize disruption:
+
+- **Phase 1 (non-breaking):** Introduce the `FirmwareCatalog` CRD, its controller,
+  webhooks, and singleton lifecycle. The existing `HardwareProfile` API is unchanged.
+  This phase is purely additive — users can begin populating firmware catalogs while
+  existing HardwareProfiles continue to work with inline firmware fields.
+
+- **Phase 2 (breaking):** Modify the `HardwareProfile` API to reference catalog
+  entries by name instead of embedding inline structs. This phase removes the
+  `Firmware` and `Nic` types from the public API and adds catalog resolution logic
+  to the controllers.
+
 ### Breaking Changes
 
-The `biosFirmware` and `bmcFirmware` fields change from object type to string type.
-The `nicFirmware` field changes from `[]object` to `[]string`. This is a breaking CRD
-schema change:
+Phase 2 changes the `biosFirmware` and `bmcFirmware` fields from object type to
+string type. The `nicFirmware` field changes from `[]object` to `[]string`. This is
+a breaking CRD schema change:
 
 - Existing HardwareProfile CRs must be recreated with the new field format.
 - The `Firmware` and `Nic` struct types are removed from the public API.
@@ -570,23 +585,23 @@ schema change:
 
 ### Files to Create or Modify
 
-| File | Action |
-|------|--------|
-| `api/hardwaremanagement/v1alpha1/firmwarecatalog_types.go` | **Create** -- CRD type definitions |
-| `api/hardwaremanagement/v1alpha1/hardwareprofile_webhook.go` | **Create** -- HardwareProfile validating webhook |
-| `api/hardwaremanagement/v1alpha1/firmwarecatalog_webhook.go` | **Create** -- FirmwareCatalog validating webhook |
-| `api/hardwaremanagement/v1alpha1/hardwareprofile_types.go` | **Modify** -- change field types from structs to strings, remove `Firmware` and `Nic` types |
-| `api/hardwaremanagement/v1alpha1/zz_generated.deepcopy.go` | **Regenerate** via `make generate` |
-| `config/crd/` | **Regenerate** via `make manifests` |
-| `internal/hardwaremanager/controller/hostfirmwarecomponents_manager.go` | **Modify** -- add `resolveFirmwareFromCatalog`, update callers |
-| `internal/hardwaremanager/controller/helpers.go` | **Modify** -- call resolution before firmware operations |
-| `internal/cmd/operator/start_controller_manager.go` | **Modify** -- register webhooks, ensure singleton FirmwareCatalog on startup |
-| `internal/hardwaremanager/controller/hostfirmwarecomponents_manager_test.go` | **Modify** -- update test fixtures to use catalog + entry names |
-| `must-gather/gather` | **Modify** -- add `gather_resource` call for FirmwareCatalog CRD |
-| `test/utils/vars.go` | **Modify** -- update test fixtures |
-| `test/e2e/mno_hw_configuration_test.go` | **Modify** -- update test fixtures |
-| `test/e2e/sno_provisioning_test.go` | **Modify** -- update test fixtures |
-| `docs/user-guide/firmware-update-workflow.md` | **Modify** -- update examples and field descriptions |
+| File | Phase | Action |
+|------|-------|--------|
+| `api/hardwaremanagement/v1alpha1/firmwarecatalog_types.go` | 1 | **Create** -- CRD type definitions |
+| `api/hardwaremanagement/v1alpha1/firmwarecatalog_webhook.go` | 1 | **Create** -- FirmwareCatalog validating webhook |
+| `internal/cmd/operator/start_controller_manager.go` | 1 | **Modify** -- register FirmwareCatalog webhook, ensure singleton on startup |
+| `must-gather/gather` | 1 | **Modify** -- add `gather_resource` call for FirmwareCatalog CRD |
+| `api/hardwaremanagement/v1alpha1/zz_generated.deepcopy.go` | 1 | **Regenerate** via `make generate` |
+| `config/crd/` | 1 | **Regenerate** via `make manifests` |
+| `api/hardwaremanagement/v1alpha1/hardwareprofile_types.go` | 2 | **Modify** -- change field types from structs to strings, remove `Firmware` and `Nic` types |
+| `api/hardwaremanagement/v1alpha1/hardwareprofile_webhook.go` | 2 | **Create** -- HardwareProfile validating webhook |
+| `internal/hardwaremanager/controller/hostfirmwarecomponents_manager.go` | 2 | **Modify** -- add `resolveFirmwareFromCatalog`, update callers |
+| `internal/hardwaremanager/controller/helpers.go` | 2 | **Modify** -- call resolution before firmware operations |
+| `internal/hardwaremanager/controller/hostfirmwarecomponents_manager_test.go` | 2 | **Modify** -- update test fixtures to use catalog + entry names |
+| `test/utils/vars.go` | 2 | **Modify** -- update test fixtures |
+| `test/e2e/mno_hw_configuration_test.go` | 2 | **Modify** -- update test fixtures |
+| `test/e2e/sno_provisioning_test.go` | 2 | **Modify** -- update test fixtures |
+| `docs/user-guide/firmware-update-workflow.md` | 2 | **Modify** -- update examples and field descriptions |
 
 ## CR Relationships
 
