@@ -14,7 +14,9 @@ resources:
 # Service-specific ClusterRoles
 - clusterrole_alarms_server.yaml
 - role_alarms_server.yaml
+- role_alarms_alertmanager.yaml
 - rolebinding_alarms_server.yaml
+- rolebinding_alarms_alertmanager.yaml
 - clusterrole_alertmanager.yaml
 - clusterrole_alertmanager_client.yaml
 - clusterrole_artifacts_server.yaml

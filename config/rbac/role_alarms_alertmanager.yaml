@@ -1,0 +1,15 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: alarms-server-alertmanager
+  namespace: open-cluster-management-observability
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  resourceNames:
+  - alertmanager-config
+  verbs:
+  - get
+  - update

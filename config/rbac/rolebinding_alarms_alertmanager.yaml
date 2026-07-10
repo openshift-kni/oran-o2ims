@@ -1,0 +1,13 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: alarms-server-alertmanager
+  namespace: open-cluster-management-observability
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: alarms-server-alertmanager
+subjects:
+- kind: ServiceAccount
+  name: alarms-server
+  namespace: system
