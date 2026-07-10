@@ -27,20 +27,12 @@ rules:
   - get
 - apiGroups:
   - ""
-  resources:
-  - secrets
-  - configmaps
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - secrets
   resourceNames:
   - alertmanager-config
+  resources:
+  - secrets
   verbs:
+  - get
   - update
 - apiGroups:
   - monitoring.coreos.com
