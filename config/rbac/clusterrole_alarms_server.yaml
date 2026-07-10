@@ -26,6 +26,15 @@ rules:
   verbs:
   - get
 - apiGroups:
+  - ""
+  resourceNames:
+  - alertmanager-config
+  resources:
+  - secrets
+  verbs:
+  - get
+  - update
+- apiGroups:
   - monitoring.coreos.com
   resources:
   - prometheusrules

@@ -1491,6 +1491,15 @@ spec:
           verbs:
           - get
         - apiGroups:
+          - ""
+          resourceNames:
+          - alertmanager-config
+          resources:
+          - secrets
+          verbs:
+          - get
+          - update
+        - apiGroups:
           - monitoring.coreos.com
           resources:
           - prometheusrules
@@ -2383,15 +2392,6 @@ spec:
           - delete
           - update
           - patch
-        - apiGroups:
-          - ""
-          resourceNames:
-          - alertmanager-config
-          resources:
-          - secrets
-          verbs:
-          - get
-          - update
         serviceAccountName: oran-o2ims-alarms-server
       - rules:
         - apiGroups:
