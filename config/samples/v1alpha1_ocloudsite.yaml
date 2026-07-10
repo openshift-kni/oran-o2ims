@@ -9,3 +9,11 @@ spec:
   # References parent Location by its metadata.name
   globalLocationName: "east-datacenter"
   description: "Primary compute site at east data center"
+status:
+  conditions:
+  - type: Ready
+    status: "True"
+    reason: Ready
+    message: "OCloudSite is ready"
+    observedGeneration: 1
+    lastTransitionTime: "2026-07-07T14:23:06Z"

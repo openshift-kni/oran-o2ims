@@ -827,6 +827,18 @@ metadata:
           "spec": {
             "address": "123 Technology Way, Ashburn, VA 20147, USA",
             "description": "Primary east coast data center facility"
+          },
+          "status": {
+            "conditions": [
+              {
+                "lastTransitionTime": "2026-07-07T14:23:06Z",
+                "message": "Location is ready",
+                "observedGeneration": 1,
+                "reason": "Ready",
+                "status": "True",
+                "type": "Ready"
+              }
+            ]
           }
         },
         {
@@ -839,6 +851,18 @@ metadata:
           "spec": {
             "description": "Primary compute site at east data center",
             "globalLocationName": "east-datacenter"
+          },
+          "status": {
+            "conditions": [
+              {
+                "lastTransitionTime": "2026-07-07T14:23:06Z",
+                "message": "OCloudSite is ready",
+                "observedGeneration": 1,
+                "reason": "Ready",
+                "status": "True",
+                "type": "Ready"
+              }
+            ]
           }
         },
         {
@@ -851,6 +875,18 @@ metadata:
           "spec": {
             "description": "Compute resources for production workloads",
             "oCloudSiteName": "site-east-1"
+          },
+          "status": {
+            "conditions": [
+              {
+                "lastTransitionTime": "2026-07-07T14:23:06Z",
+                "message": "ResourcePool is ready",
+                "observedGeneration": 1,
+                "reason": "Ready",
+                "status": "True",
+                "type": "Ready"
+              }
+            ]
           }
         }
       ]
