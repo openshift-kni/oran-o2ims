@@ -312,7 +312,9 @@ func (c *Collector) handleDeploymentManagerSyncCompletion(ctx context.Context, i
 	for _, record := range records {
 		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, record, record.DeploymentManagerID, nil, func(object interface{}) any {
 			r, _ := object.(models.DeploymentManager)
-			return models.DeploymentManagerToModel(&r, commonapi.NewDefaultFieldOptions())
+			model := models.DeploymentManagerToModel(&r, commonapi.NewDefaultFieldOptions())
+			models.RedactDeploymentManagerCredentials(&model)
+			return model
 		})
 
 		if err != nil {
