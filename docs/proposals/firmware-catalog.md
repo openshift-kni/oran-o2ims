@@ -9,7 +9,7 @@ reviewers:
 approvers:
   - TBD
 creation-date: 2026-04-21
-last-updated: 2026-04-21
+last-updated: 2026-07-10
 ```
 
 ## Table of Contents
@@ -34,6 +34,7 @@ last-updated: 2026-04-21
       - [Integration Points](#integration-points)
     - [Validation](#validation)
   - [Impact](#impact)
+    - [Phased Implementation](#phased-implementation)
     - [Breaking Changes](#breaking-changes)
     - [Files to Create or Modify](#files-to-create-or-modify)
   - [CR Relationships](#cr-relationships)
@@ -90,7 +91,7 @@ type HardwareProfileSpec struct {
 }
 ```
 
-The Metal3 hardware plugin controller reads these fields directly and translates them
+The hardware manager controller reads these fields directly and translates them
 into Metal3 `HostFirmwareComponents` updates. Key functions that consume these fields:
 
 - `validateFirmwareUpdateSpec` -- validates URLs and versions
@@ -130,6 +131,11 @@ type FirmwareImage struct {
     // Version is the firmware version string.
     // +kubebuilder:validation:MinLength=1
     Version string `json:"version"`
+
+    // Vendor identifies the firmware vendor or manufacturer.
+    // +optional
+    // +kubebuilder:validation:MinLength=1
+    Vendor string `json:"vendor,omitempty"`
 
     // Description is an optional human-readable description of the firmware image.
     // +optional
@@ -207,22 +213,27 @@ spec:
     component: bios
     url: https://example.com:8888/firmware/xr8620t/BIOS_JDR1R_WN64_2.3.5.EXE
     version: "2.3.5"
+    vendor: Dell
   - name: dell-xr8620t-bmc-7.10.70.10
     component: bmc
     url: https://example.com:8888/firmware/xr8620t/iDRAC-with-Lifecycle-Controller_Firmware_W4NV9_WN64_7.10.70.10_A00.EXE
     version: "7.10.70.10"
+    vendor: Dell
   - name: broadcom-nic-25.2.3
     component: nic
     url: https://example.com:8888/firmware/nic/broadcom-25.2.3.bin
     version: "25.2.3"
+    vendor: Broadcom
   - name: dell-xr8620t-bios-2.6.3
     component: bios
     url: https://example.com:8888/firmware/xr8620t/BIOS_JDR1R_WN64_2.6.3.EXE
     version: "2.6.3"
+    vendor: Dell
   - name: dell-xr8620t-bmc-7.20.30.50
     component: bmc
     url: https://example.com:8888/firmware/xr8620t/iDRAC-with-Lifecycle-Controller_Firmware_W4NV9_WN64_7.20.30.50_A00.EXE
     version: "7.20.30.50"
+    vendor: Dell
 ```
 
 #### Lifecycle
@@ -230,8 +241,8 @@ spec:
 - The operator creates the singleton `FirmwareCatalog` CR (with an empty `spec.images`
   list) on startup if it does not already exist. It never overwrites user content.
 - Users add new entries or delete unreferenced entries in `spec.images`. Entries are
-  immutable once created — `component`, `url`, and `version` cannot be changed in
-  place. Deletion is blocked if any HardwareProfile references the entry.
+  immutable once created — `component`, `url`, `version`, and `vendor` cannot be
+  changed in place. Deletion is blocked if any HardwareProfile references the entry.
 - A lightweight FirmwareCatalog controller reconciles on spec changes and validates
   each image entry (URL format, component type). Validation results are written to
   `status.imageStatuses`. An overall `Validation` condition is set to `True` when all
@@ -417,7 +428,7 @@ data from the HardwareProfile. These are the functions that currently read
 | `IsFirmwareUpdateRequired` | `hostfirmwarecomponents_manager.go` | Call `resolveFirmwareFromCatalog`, pass resolved values to `validateFirmwareUpdateSpec`, `isVersionChangeDetected`, etc. |
 | `validateFirmwareVersions` | `helpers.go` | Resolve catalog entries before comparing against `HostFirmwareComponents` status |
 | `validateAppliedBiosSettings` | `helpers.go` | Resolve catalog entries for NIC firmware validation |
-| `processHwProfileWithHandledError` | (caller of the above) | Pass namespace through for catalog lookup |
+| `processHwProfileWithHandledError` | `baremetalhost_manager.go` | Pass namespace through for catalog lookup |
 
 All downstream functions (`validateFirmwareUpdateSpec`, `convertToFirmwareUpdates`,
 `isVersionChangeDetected`, `validateHFCHasRequiredComponents`) continue to accept the
@@ -428,7 +439,7 @@ internal `Firmware`/`Nic` types and require no changes.
 | Rule | Enforcement |
 |------|-------------|
 | Image names are unique within the catalog | `+listMapKey=name` on the API type (enforced by the API server) |
-| Catalog entries are immutable (component, url, version cannot change) | CEL validation rule on `FirmwareCatalogSpec` |
+| Catalog entries are immutable (component, url, version, vendor cannot change) | CEL validation rule on `FirmwareCatalogSpec` |
 | Catalog entries cannot be deleted while referenced by a HardwareProfile | Validating webhook on FirmwareCatalog |
 | Referenced firmware entry exists in the catalog | Validating webhook on HardwareProfile (create) |
 | Entry component type matches usage (e.g. `bios` entry used for `biosFirmware`) | Validating webhook on HardwareProfile (create) |
@@ -438,15 +449,16 @@ internal `Firmware`/`Nic` types and require no changes.
 ### Catalog Entry Immutability
 
 Catalog entries are immutable once created. Users may add new entries or delete
-existing entries, but may not modify an entry's `component`, `url`, or `version`
-fields in place. This is enforced by a CEL validation rule on the CRD:
+existing entries, but may not modify an entry's `component`, `url`, `version`,
+or `vendor` fields in place. This is enforced by a CEL validation rule on the CRD:
 
 ```yaml
 // +kubebuilder:validation:XValidation:message="Firmware catalog entries are immutable",
 //   rule="oldSelf.images.all(old, self.images.exists(cur, cur.name == old.name) ?
 //     self.images.filter(cur, cur.name == old.name)[0].component == old.component &&
 //     self.images.filter(cur, cur.name == old.name)[0].url == old.url &&
-//     self.images.filter(cur, cur.name == old.name)[0].version == old.version : true)"
+//     self.images.filter(cur, cur.name == old.name)[0].version == old.version &&
+//     self.images.filter(cur, cur.name == old.name)[0].vendor == old.vendor : true)"
 ```
 
 The `description` field is exempt from this rule and may be updated freely.
@@ -546,11 +558,28 @@ func (v *firmwareCatalogValidator) ValidateUpdate(
 
 ## Impact
 
+### Phased Implementation
+
+This feature is implemented in two phases to minimize disruption. Each phase
+is delivered as a single, self-contained pull request containing only the logic
+for that phase (2 PRs in total).
+
+- **Phase 1 (non-breaking) — PR 1:** Introduce the `FirmwareCatalog` CRD, its
+  controller, webhooks, and singleton lifecycle. The existing `HardwareProfile` API
+  is unchanged. This phase is purely additive — users can begin populating firmware
+  catalogs while existing HardwareProfiles continue to work with inline firmware
+  fields.
+
+- **Phase 2 (breaking) — PR 2:** Modify the `HardwareProfile` API to reference
+  catalog entries by name instead of embedding inline structs. This phase removes
+  the `Firmware` and `Nic` types from the public API and adds catalog resolution
+  logic to the controllers.
+
 ### Breaking Changes
 
-The `biosFirmware` and `bmcFirmware` fields change from object type to string type.
-The `nicFirmware` field changes from `[]object` to `[]string`. This is a breaking CRD
-schema change:
+Phase 2 changes the `biosFirmware` and `bmcFirmware` fields from object type to
+string type. The `nicFirmware` field changes from `[]object` to `[]string`. This is
+a breaking CRD schema change:
 
 - Existing HardwareProfile CRs must be recreated with the new field format.
 - The `Firmware` and `Nic` struct types are removed from the public API.
@@ -559,22 +588,23 @@ schema change:
 
 ### Files to Create or Modify
 
-| File | Action |
-|------|--------|
-| `api/hardwaremanagement/v1alpha1/firmwarecatalog_types.go` | **Create** -- CRD type definitions |
-| `api/hardwaremanagement/v1alpha1/hardwareprofile_webhook.go` | **Create** -- HardwareProfile validating webhook |
-| `api/hardwaremanagement/v1alpha1/firmwarecatalog_webhook.go` | **Create** -- FirmwareCatalog validating webhook |
-| `api/hardwaremanagement/v1alpha1/hardwareprofile_types.go` | **Modify** -- change field types from structs to strings, remove `Firmware` and `Nic` types |
-| `api/hardwaremanagement/v1alpha1/zz_generated.deepcopy.go` | **Regenerate** via `make generate` |
-| `config/crd/` | **Regenerate** via `make manifests` |
-| `hwmgr-plugins/metal3/controller/hostfirmwarecomponents_manager.go` | **Modify** -- add `resolveFirmwareFromCatalog`, update callers |
-| `hwmgr-plugins/metal3/controller/helpers.go` | **Modify** -- call resolution before firmware operations |
-| `internal/cmd/operator/start_controller_manager.go` | **Modify** -- register webhooks, ensure singleton FirmwareCatalog on startup |
-| `hwmgr-plugins/metal3/controller/hostfirmwarecomponents_manager_test.go` | **Modify** -- update test fixtures to use catalog + entry names |
-| `test/utils/vars.go` | **Modify** -- update test fixtures |
-| `test/e2e/mno_hw_configuration_test.go` | **Modify** -- update test fixtures |
-| `test/e2e/sno_provisioning_test.go` | **Modify** -- update test fixtures |
-| `docs/user-guide/firmware-update-workflow.md` | **Modify** -- update examples and field descriptions |
+| File | Phase | Action |
+|------|-------|--------|
+| `api/hardwaremanagement/v1alpha1/firmwarecatalog_types.go` | 1 | **Create** -- CRD type definitions |
+| `api/hardwaremanagement/v1alpha1/firmwarecatalog_webhook.go` | 1 | **Create** -- FirmwareCatalog validating webhook |
+| `internal/cmd/operator/start_controller_manager.go` | 1 | **Modify** -- register FirmwareCatalog webhook, ensure singleton on startup |
+| `must-gather/gather` | 1 | **Modify** -- add `gather_resource` call for FirmwareCatalog CRD |
+| `api/hardwaremanagement/v1alpha1/zz_generated.deepcopy.go` | 1 | **Regenerate** via `make generate` |
+| `config/crd/` | 1 | **Regenerate** via `make manifests` |
+| `api/hardwaremanagement/v1alpha1/hardwareprofile_types.go` | 2 | **Modify** -- change field types from structs to strings, remove `Firmware` and `Nic` types |
+| `api/hardwaremanagement/v1alpha1/hardwareprofile_webhook.go` | 2 | **Create** -- HardwareProfile validating webhook |
+| `internal/hardwaremanager/controller/hostfirmwarecomponents_manager.go` | 2 | **Modify** -- add `resolveFirmwareFromCatalog`, update callers |
+| `internal/hardwaremanager/controller/helpers.go` | 2 | **Modify** -- call resolution before firmware operations |
+| `internal/hardwaremanager/controller/hostfirmwarecomponents_manager_test.go` | 2 | **Modify** -- update test fixtures to use catalog + entry names |
+| `test/utils/vars.go` | 2 | **Modify** -- update test fixtures |
+| `test/e2e/mno_hw_configuration_test.go` | 2 | **Modify** -- update test fixtures |
+| `test/e2e/sno_provisioning_test.go` | 2 | **Modify** -- update test fixtures |
+| `docs/user-guide/firmware-update-workflow.md` | 2 | **Modify** -- update examples and field descriptions |
 
 ## CR Relationships
 
@@ -582,11 +612,11 @@ schema change:
 FirmwareCatalog (singleton, user-managed)
   └─ spec.images[]
        ├─ name: dell-xr8620t-bios-2.3.5
-       │    component: bios, url: ..., version: 2.3.5
+       │    component: bios, vendor: Dell, url: ..., version: 2.3.5
        ├─ name: dell-xr8620t-bmc-7.10.70.10
-       │    component: bmc, url: ..., version: 7.10.70.10
+       │    component: bmc, vendor: Dell, url: ..., version: 7.10.70.10
        └─ name: broadcom-nic-25.2.3
-            component: nic, url: ..., version: 25.2.3
+            component: nic, vendor: Broadcom, url: ..., version: 25.2.3
 
 HardwareProfile
   └─ spec
