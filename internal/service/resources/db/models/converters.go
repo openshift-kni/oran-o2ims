@@ -70,6 +70,16 @@ func RedactDeploymentManagerCredentials(object *generated.DeploymentManager) {
 	delete(*object.Extensions, "profileData")
 }
 
+// DeploymentManagerConverter converts a DeploymentManager DB record to a redacted API model
+// suitable for data-change notifications. It is used by both the sync-completion and
+// async-event handlers.
+func DeploymentManagerConverter(object interface{}) any {
+	record, _ := object.(DeploymentManager)
+	model := DeploymentManagerToModel(&record, commonapi.NewDefaultFieldOptions())
+	RedactDeploymentManagerCredentials(&model)
+	return model
+}
+
 // ResourceTypeToModel converts a DB tuple to an API Model.
 func ResourceTypeToModel(record *ResourceType, alarmDictionaryID *uuid.UUID) generated.ResourceType {
 	object := generated.ResourceType{

@@ -11,7 +11,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
 )
@@ -66,7 +65,7 @@ var _ = Describe("RedactDeploymentManagerCredentials", func() {
 	})
 })
 
-var _ = Describe("DeploymentManager sync-completion converter", func() {
+var _ = Describe("DeploymentManagerConverter", func() {
 	It("should redact profileData credentials from the converted model", func() {
 		record := models.DeploymentManager{
 			DeploymentManagerID: uuid.New(),
@@ -88,8 +87,9 @@ var _ = Describe("DeploymentManager sync-completion converter", func() {
 			},
 		}
 
-		model := models.DeploymentManagerToModel(&record, commonapi.NewDefaultFieldOptions())
-		models.RedactDeploymentManagerCredentials(&model)
+		result := models.DeploymentManagerConverter(record)
+		model, ok := result.(generated.DeploymentManager)
+		Expect(ok).To(BeTrue())
 
 		Expect(model.Extensions).ToNot(BeNil())
 		Expect(*model.Extensions).ToNot(HaveKey("profileData"))
