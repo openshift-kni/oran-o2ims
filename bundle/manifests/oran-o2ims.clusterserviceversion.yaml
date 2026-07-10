@@ -1491,23 +1491,6 @@ spec:
           verbs:
           - get
         - apiGroups:
-          - ""
-          resources:
-          - secrets
-          - configmaps
-          verbs:
-          - get
-          - list
-          - watch
-        - apiGroups:
-          - ""
-          resourceNames:
-          - alertmanager-config
-          resources:
-          - secrets
-          verbs:
-          - update
-        - apiGroups:
           - monitoring.coreos.com
           resources:
           - prometheusrules
@@ -1638,10 +1621,18 @@ spec:
           - ""
           resources:
           - secrets
-          - configmaps
           verbs:
           - get
           - list
+        - apiGroups:
+          - ""
+          resourceNames:
+          - thanos-ruler-custom-rules
+          - thanos-ruler-default-rules
+          resources:
+          - configmaps
+          verbs:
+          - get
         - apiGroups:
           - monitoring.coreos.com
           resources:
@@ -2220,7 +2211,6 @@ spec:
           verbs:
           - get
           - list
-          - watch
         - apiGroups:
           - monitoring.coreos.com
           resources:
@@ -2393,6 +2383,15 @@ spec:
           - delete
           - update
           - patch
+        - apiGroups:
+          - ""
+          resourceNames:
+          - alertmanager-config
+          resources:
+          - secrets
+          verbs:
+          - get
+          - update
         serviceAccountName: oran-o2ims-alarms-server
       - rules:
         - apiGroups:
