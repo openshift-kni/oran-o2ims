@@ -23,10 +23,18 @@ rules:
   - ""
   resources:
   - secrets
-  - configmaps
   verbs:
   - get
   - list
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  resourceNames:
+  - thanos-ruler-custom-rules
+  - thanos-ruler-default-rules
+  verbs:
+  - get
 - apiGroups:
   - monitoring.coreos.com
   resources:
