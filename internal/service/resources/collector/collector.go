@@ -18,7 +18,6 @@ import (
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
-	commonapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/async"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 	models2 "github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
@@ -310,10 +309,7 @@ func (c *Collector) handleDeploymentManagerSyncCompletion(ctx context.Context, i
 
 	count := 0
 	for _, record := range records {
-		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, record, record.DeploymentManagerID, nil, func(object interface{}) any {
-			r, _ := object.(models.DeploymentManager)
-			return models.DeploymentManagerToModel(&r, commonapi.NewDefaultFieldOptions())
-		})
+		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, record, record.DeploymentManagerID, nil, models.DeploymentManagerRedactedConverter)
 
 		if err != nil {
 			return fmt.Errorf("failed to delete stale deployment manager: %w", err)
@@ -390,23 +386,17 @@ func (c *Collector) handleAsyncDeploymentManagerEvent(ctx context.Context, deplo
 	ctx = logging.AppendCtx(ctx, slog.Bool("deleted", deleted))
 	var dataChangeEvent *models2.DataChangeEvent
 	var err error
-	converter := func(object interface{}) any {
-		record, _ := object.(models.DeploymentManager)
-		model := models.DeploymentManagerToModel(&record, commonapi.NewDefaultFieldOptions())
-		models.RedactDeploymentManagerCredentials(&model)
-		return model
-	}
 
 	if deleted {
 		dataChangeEvent, err = svcutils.DeleteObjectWithChangeEvent(
-			ctx, c.pool, deploymentManager, deploymentManager.DeploymentManagerID, nil, converter)
+			ctx, c.pool, deploymentManager, deploymentManager.DeploymentManagerID, nil, models.DeploymentManagerRedactedConverter)
 
 		if err != nil {
 			return fmt.Errorf("failed to delete deployment manager '%s'': %w", deploymentManager.DeploymentManagerID, err)
 		}
 	} else {
 		dataChangeEvent, err = svcutils.PersistObjectWithChangeEvent(
-			ctx, c.pool, deploymentManager, deploymentManager.DeploymentManagerID, nil, converter)
+			ctx, c.pool, deploymentManager, deploymentManager.DeploymentManagerID, nil, models.DeploymentManagerRedactedConverter)
 
 		if err != nil {
 			return fmt.Errorf("failed to update deployment manager '%s'': %w", deploymentManager.DeploymentManagerID, err)
