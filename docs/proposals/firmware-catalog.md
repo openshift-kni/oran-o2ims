@@ -90,7 +90,7 @@ type HardwareProfileSpec struct {
 }
 ```
 
-The Metal3 hardware plugin controller reads these fields directly and translates them
+The hardware manager controller reads these fields directly and translates them
 into Metal3 `HostFirmwareComponents` updates. Key functions that consume these fields:
 
 - `validateFirmwareUpdateSpec` -- validates URLs and versions
