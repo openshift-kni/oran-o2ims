@@ -737,8 +737,14 @@ func validateUpgradeParametersSchema(schemaRaw []byte, hasUpgradeDefaults bool) 
 	hasCV := schemaPropertyExists(props, ctlrutils.UpgradeDefaultsClusterVersionKey)
 	hasIBGU := schemaPropertyExists(props, ctlrutils.UpgradeDefaultsIBGUKey)
 
-	if (hasUpgradeDefaults && !hasCV && !hasIBGU) || (hasCV && hasIBGU) {
+	if hasCV && hasIBGU {
 		return fmt.Errorf("%q schema must not define both %q and %q; choose exactly one upgrade type",
+			constants.TemplateParamUpgrade,
+			ctlrutils.UpgradeDefaultsClusterVersionKey,
+			ctlrutils.UpgradeDefaultsIBGUKey)
+	}
+	if hasUpgradeDefaults && !hasCV && !hasIBGU {
+		return fmt.Errorf("%q schema must define either %q or %q when upgradeDefaults is set",
 			constants.TemplateParamUpgrade,
 			ctlrutils.UpgradeDefaultsClusterVersionKey,
 			ctlrutils.UpgradeDefaultsIBGUKey)

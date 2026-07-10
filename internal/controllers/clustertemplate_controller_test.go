@@ -1728,7 +1728,7 @@ var _ = Describe("validateUpgradeParametersSchema", func() {
 		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"otherKey":{"type":"string"}}}}}`)
 		err := validateUpgradeParametersSchema(schema, true)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("choose exactly one upgrade type"))
+		Expect(err.Error()).To(ContainSubstring("must define either"))
 	})
 })
 
