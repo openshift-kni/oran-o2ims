@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	commonapi "github.com/openshift-kni/oran-o2ims/api/common"
 )
 
 // maxRetries defines the number of attempts made on each notification
@@ -60,9 +60,7 @@ type SubscriptionWorker struct {
 // NewSubscriptionWorker creates a new subscription worker object to service a specific subscription
 func NewSubscriptionWorker(ctx context.Context, clientProvider ClientProvider, subscriptionJobCompleteChannel chan *SubscriptionJobComplete,
 	subscription *SubscriptionInfo) (*SubscriptionWorker, error) {
-	// Create a client for this subscription.
-	authType := ctlrutils.DetermineAuthType(subscription.Callback)
-	client, err := clientProvider.NewClient(ctx, authType)
+	client, err := clientProvider.NewClient(ctx, commonapi.OAuth)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup client: %w", err)
 	}

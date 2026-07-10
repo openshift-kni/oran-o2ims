@@ -139,17 +139,25 @@ var _ = Describe("ValidateCallbackTarget", func() {
 		resolver = &mockResolver{addrs: map[string][]string{}}
 	})
 
-	Context("cluster-local callbacks", func() {
-		It("should allow cluster-local URLs regardless of SMO URL", func() {
-			resolver.addrs["my-svc.my-ns.svc.cluster.local"] = []string{"10.0.0.1"}
-			err := api.ValidateCallbackTarget(ctx, "https://my-svc.my-ns.svc.cluster.local/cb", "", resolver)
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		It("should allow cluster-local URLs when SMO is configured", func() {
+	Context("cluster-local callbacks follow standard validation", func() {
+		It("should reject cluster-local URL not matching SMO host", func() {
 			resolver.addrs["my-svc.my-ns.svc.cluster.local"] = []string{"10.0.0.1"}
 			err := api.ValidateCallbackTarget(ctx, "https://my-svc.my-ns.svc.cluster.local/cb", "https://smo.example.com", resolver)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("does not match SMO host"))
+		})
+
+		It("should reject cluster-local URL when SMO is not configured", func() {
+			err := api.ValidateCallbackTarget(ctx, "https://my-svc.my-ns.svc.cluster.local/cb", "", resolver)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not allowed when SMO URL is not configured"))
+		})
+
+		It("should reject cluster-local URL in any namespace when SMO host differs", func() {
+			resolver.addrs["svc.oran-o2ims.svc.cluster.local"] = []string{"10.0.0.1"}
+			err := api.ValidateCallbackTarget(ctx, "https://svc.oran-o2ims.svc.cluster.local/cb", "https://smo.example.com", resolver)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("does not match SMO host"))
 		})
 	})
 
@@ -221,10 +229,11 @@ var _ = Describe("ValidateCallbackTarget", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("should allow private IPs for cluster-local callbacks", func() {
+		It("should reject cluster-local callbacks that do not match SMO host", func() {
 			resolver.addrs["svc.ns.svc.cluster.local"] = []string{"10.96.0.1"}
-			err := api.ValidateCallbackTarget(ctx, "https://svc.ns.svc.cluster.local/cb", "", resolver)
-			Expect(err).ToNot(HaveOccurred())
+			err := api.ValidateCallbackTarget(ctx, "https://svc.ns.svc.cluster.local/cb", "https://smo.example.com", resolver)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("does not match SMO host"))
 		})
 	})
 
