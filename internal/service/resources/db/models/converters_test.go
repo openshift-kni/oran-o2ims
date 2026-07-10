@@ -65,7 +65,7 @@ var _ = Describe("RedactDeploymentManagerCredentials", func() {
 	})
 })
 
-var _ = Describe("DeploymentManagerConverter", func() {
+var _ = Describe("DeploymentManagerRedactedConverter", func() {
 	It("should redact profileData credentials from the converted model", func() {
 		record := models.DeploymentManager{
 			DeploymentManagerID: uuid.New(),
@@ -87,7 +87,7 @@ var _ = Describe("DeploymentManagerConverter", func() {
 			},
 		}
 
-		result := models.DeploymentManagerConverter(record)
+		result := models.DeploymentManagerRedactedConverter(record)
 		model, ok := result.(generated.DeploymentManager)
 		Expect(ok).To(BeTrue())
 

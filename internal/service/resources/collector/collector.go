@@ -309,7 +309,7 @@ func (c *Collector) handleDeploymentManagerSyncCompletion(ctx context.Context, i
 
 	count := 0
 	for _, record := range records {
-		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, record, record.DeploymentManagerID, nil, models.DeploymentManagerConverter)
+		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, record, record.DeploymentManagerID, nil, models.DeploymentManagerRedactedConverter)
 
 		if err != nil {
 			return fmt.Errorf("failed to delete stale deployment manager: %w", err)
@@ -389,14 +389,14 @@ func (c *Collector) handleAsyncDeploymentManagerEvent(ctx context.Context, deplo
 
 	if deleted {
 		dataChangeEvent, err = svcutils.DeleteObjectWithChangeEvent(
-			ctx, c.pool, deploymentManager, deploymentManager.DeploymentManagerID, nil, models.DeploymentManagerConverter)
+			ctx, c.pool, deploymentManager, deploymentManager.DeploymentManagerID, nil, models.DeploymentManagerRedactedConverter)
 
 		if err != nil {
 			return fmt.Errorf("failed to delete deployment manager '%s'': %w", deploymentManager.DeploymentManagerID, err)
 		}
 	} else {
 		dataChangeEvent, err = svcutils.PersistObjectWithChangeEvent(
-			ctx, c.pool, deploymentManager, deploymentManager.DeploymentManagerID, nil, models.DeploymentManagerConverter)
+			ctx, c.pool, deploymentManager, deploymentManager.DeploymentManagerID, nil, models.DeploymentManagerRedactedConverter)
 
 		if err != nil {
 			return fmt.Errorf("failed to update deployment manager '%s'': %w", deploymentManager.DeploymentManagerID, err)
