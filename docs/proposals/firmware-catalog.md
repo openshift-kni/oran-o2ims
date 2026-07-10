@@ -560,17 +560,20 @@ func (v *firmwareCatalogValidator) ValidateUpdate(
 
 ### Phased Implementation
 
-This feature is implemented in two phases to minimize disruption:
+This feature is implemented in two phases to minimize disruption. Each phase
+is delivered as a single, self-contained pull request containing only the logic
+for that phase (2 PRs in total).
 
-- **Phase 1 (non-breaking):** Introduce the `FirmwareCatalog` CRD, its controller,
-  webhooks, and singleton lifecycle. The existing `HardwareProfile` API is unchanged.
-  This phase is purely additive — users can begin populating firmware catalogs while
-  existing HardwareProfiles continue to work with inline firmware fields.
+- **Phase 1 (non-breaking) — PR 1:** Introduce the `FirmwareCatalog` CRD, its
+  controller, webhooks, and singleton lifecycle. The existing `HardwareProfile` API
+  is unchanged. This phase is purely additive — users can begin populating firmware
+  catalogs while existing HardwareProfiles continue to work with inline firmware
+  fields.
 
-- **Phase 2 (breaking):** Modify the `HardwareProfile` API to reference catalog
-  entries by name instead of embedding inline structs. This phase removes the
-  `Firmware` and `Nic` types from the public API and adds catalog resolution logic
-  to the controllers.
+- **Phase 2 (breaking) — PR 2:** Modify the `HardwareProfile` API to reference
+  catalog entries by name instead of embedding inline structs. This phase removes
+  the `Firmware` and `Nic` types from the public API and adds catalog resolution
+  logic to the controllers.
 
 ### Breaking Changes
 
