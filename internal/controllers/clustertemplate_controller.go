@@ -265,6 +265,15 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 		validationErrs = append(validationErrs, err.Error())
 	}
 
+	// Validate spec.release is valid semver
+	if t.object.Spec.Release != "" {
+		if _, err = semver.NewVersion(t.object.Spec.Release); err != nil {
+			validationErrs = append(validationErrs,
+				fmt.Sprintf("spec.release %q is not a valid semantic version: %s",
+					t.object.Spec.Release, err.Error()))
+		}
+	}
+
 	// Validation for upgrade defaults
 	if t.object.Spec.TemplateDefaults.UpgradeDefaults.Size() > 0 {
 		err = t.validateUpgradeDefaults()
@@ -337,12 +346,101 @@ func (t *clusterTemplateReconcilerTask) validateHwMgmtDefaults(ctx context.Conte
 }
 
 func (t *clusterTemplateReconcilerTask) validateUpgradeDefaults() error {
-	var upgradeData map[string]json.RawMessage
+	var upgradeData map[string]any
 	if err := json.Unmarshal(t.object.Spec.TemplateDefaults.UpgradeDefaults.Raw, &upgradeData); err != nil {
 		return fmt.Errorf("upgradeDefaults is not a map: %w", err)
 	}
 
-	ibguData, ok := upgradeData[ctlrutils.UpgradeDefaultsIBGUKey]
+	hasCV := schemaPropertyExists(upgradeData, ctlrutils.UpgradeDefaultsClusterVersionKey)
+	hasIBGU := schemaPropertyExists(upgradeData, ctlrutils.UpgradeDefaultsIBGUKey)
+	if hasCV && hasIBGU {
+		return typederrors.NewInputError(
+			"upgradeDefaults contains both %q and %q keys; only one upgrade type is allowed",
+			ctlrutils.UpgradeDefaultsClusterVersionKey, ctlrutils.UpgradeDefaultsIBGUKey)
+	}
+
+	if hasCV || hasIBGU {
+		if err := t.validateUpgradeDefaultsAgainstSchema(upgradeData, hasCV, hasIBGU); err != nil {
+			return err
+		}
+	}
+
+	if hasCV {
+		if err := t.validateCVUpgradeDefaults(upgradeData); err != nil {
+			return err
+		}
+	} else if hasIBGU {
+		if err := t.validateIBGUUpgradeDefaults(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (t *clusterTemplateReconcilerTask) validateCVUpgradeDefaults(upgradeData map[string]any) error {
+	cvRaw, ok := upgradeData[ctlrutils.UpgradeDefaultsClusterVersionKey]
+	if !ok {
+		return nil
+	}
+	cvMap, ok := cvRaw.(map[string]any)
+	if !ok {
+		return typederrors.NewInputError("upgradeDefaults %q value must be an object",
+			ctlrutils.UpgradeDefaultsClusterVersionKey)
+	}
+
+	if desiredUpdate, ok := cvMap["desiredUpdate"].(map[string]any); ok {
+		if version, ok := desiredUpdate["version"].(string); ok && version != "" {
+			if version != t.object.Spec.Release {
+				return typederrors.NewInputError(
+					"the clusterVersion desiredUpdate.version (%s) does not match the ClusterTemplate spec.release (%s)",
+					version, t.object.Spec.Release)
+			}
+		}
+	}
+
+	if timeoutStr, ok := upgradeData[ctlrutils.ClusterUpgradeTimeoutConfigKey].(string); ok {
+		if _, err := time.ParseDuration(timeoutStr); err != nil {
+			return typederrors.NewInputError(
+				"invalid %s %q in upgradeDefaults: %s",
+				ctlrutils.ClusterUpgradeTimeoutConfigKey, timeoutStr, err.Error())
+		}
+	}
+
+	if intermediateVersionStr, ok := upgradeData["intermediateVersion"].(string); ok && intermediateVersionStr != "" {
+		intermediateVer, err := semver.NewVersion(intermediateVersionStr)
+		if err != nil {
+			return typederrors.NewInputError(
+				"invalid intermediateVersion %q in upgradeDefaults: %s",
+				intermediateVersionStr, err.Error())
+		}
+		releaseVer, err := semver.NewVersion(t.object.Spec.Release)
+		if err != nil {
+			return typederrors.NewInputError(
+				"cannot validate intermediateVersion: spec.release %q is not valid semver: %s",
+				t.object.Spec.Release, err.Error())
+		}
+		if intermediateVer.Major != releaseVer.Major {
+			return typederrors.NewInputError(
+				"intermediateVersion major version (%d) must equal spec.release major version (%d)",
+				intermediateVer.Major, releaseVer.Major)
+		}
+		if intermediateVer.Minor+1 != releaseVer.Minor {
+			return typederrors.NewInputError(
+				"intermediateVersion %s must be exactly one minor version below ClusterTemplate's release version %s",
+				intermediateVer, releaseVer)
+		}
+	}
+
+	return nil
+}
+
+func (t *clusterTemplateReconcilerTask) validateIBGUUpgradeDefaults() error {
+	var upgradeDataRaw map[string]json.RawMessage
+	if err := json.Unmarshal(t.object.Spec.TemplateDefaults.UpgradeDefaults.Raw, &upgradeDataRaw); err != nil {
+		return fmt.Errorf("upgradeDefaults is not a map: %w", err)
+	}
+	ibguData, ok := upgradeDataRaw[ctlrutils.UpgradeDefaultsIBGUKey]
 	if !ok {
 		return nil
 	}
@@ -356,6 +454,59 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeDefaults() error {
 		return typederrors.NewInputError(
 			"The ClusterTemplate spec.release (%s) does not match the seedImageRef version (%s) from the upgrade defaults",
 			t.object.Spec.Release, ibgu.Spec.IBUSpec.SeedImageRef.Version)
+	}
+
+	return nil
+}
+
+// validateUpgradeDefaultsAgainstSchema verifies that the upgradeDefaults upgrade type
+// matches the type defined in the upgradeParameters schema and that defaults conform
+// to that schema.
+func (t *clusterTemplateReconcilerTask) validateUpgradeDefaultsAgainstSchema(
+	upgradeData map[string]any, defaultsHasCV, defaultsHasIBGU bool) error {
+
+	if t.object.Spec.TemplateParameterSchema.Size() == 0 {
+		return typederrors.NewInputError(
+			"templateParameterSchema must define %q when upgradeDefaults is set",
+			constants.TemplateParamUpgrade)
+	}
+
+	upgradeSchema, err := provisioningv1alpha1.ExtractSubSchema(
+		t.object.Spec.TemplateParameterSchema.Raw, constants.TemplateParamUpgrade)
+	if err != nil {
+		if provisioningv1alpha1.IsErrSubSchemaNotFound(err) {
+			return typederrors.NewInputError(
+				"templateParameterSchema must define %q when upgradeDefaults is set",
+				constants.TemplateParamUpgrade)
+		}
+		return fmt.Errorf("failed to extract %q schema: %w", constants.TemplateParamUpgrade, err)
+	}
+
+	props, ok := upgradeSchema["properties"].(map[string]any)
+	if !ok {
+		return typederrors.NewInputError(
+			"%q schema must have a properties section",
+			constants.TemplateParamUpgrade)
+	}
+
+	schemaHasCV := schemaPropertyExists(props, ctlrutils.UpgradeDefaultsClusterVersionKey)
+	schemaHasIBGU := schemaPropertyExists(props, ctlrutils.UpgradeDefaultsIBGUKey)
+
+	if defaultsHasCV && !schemaHasCV {
+		return typederrors.NewInputError(
+			"upgradeDefaults defines %q, but %s schema does not include a matching %q definition",
+			ctlrutils.UpgradeDefaultsClusterVersionKey, constants.TemplateParamUpgrade, ctlrutils.UpgradeDefaultsClusterVersionKey)
+	}
+	if defaultsHasIBGU && !schemaHasIBGU {
+		return typederrors.NewInputError(
+			"upgradeDefaults defines %q, but %s schema does not include a matching %q definition",
+			ctlrutils.UpgradeDefaultsIBGUKey, constants.TemplateParamUpgrade, ctlrutils.UpgradeDefaultsIBGUKey)
+	}
+
+	if err := provisioningv1alpha1.ValidateJsonAgainstJsonSchema(upgradeSchema, upgradeData); err != nil {
+		return typederrors.NewInputError(
+			"upgradeDefaults does not conform to the %s schema: %s",
+			constants.TemplateParamUpgrade, err.Error())
 	}
 
 	return nil
@@ -560,8 +711,9 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 }
 
 // validateUpgradeParametersSchema validates the upgradeParameters sub-schema structure.
-// When the sub-schema is present it must define imageBasedGroupUpgrade as an object.
-// When upgradeDefaults is set the sub-schema is required.
+// When present, it must have type "object" with a properties section containing
+// exactly one of "clusterVersion" or "imageBasedGroupUpgrade" (both is rejected).
+// When upgradeDefaults is set, the sub-schema is required.
 func validateUpgradeParametersSchema(schemaRaw []byte, hasUpgradeDefaults bool) error {
 	upgradeSchema, err := provisioningv1alpha1.ExtractSubSchema(schemaRaw, constants.TemplateParamUpgrade)
 	if err != nil {
@@ -574,8 +726,6 @@ func validateUpgradeParametersSchema(schemaRaw []byte, hasUpgradeDefaults bool) 
 		return nil
 	}
 
-	ibguKeyPath := constants.TemplateParamUpgrade + "." + ctlrutils.UpgradeDefaultsIBGUKey
-
 	if t, _ := upgradeSchema["type"].(string); t != "object" {
 		return fmt.Errorf("%q must have type \"object\"", constants.TemplateParamUpgrade)
 	}
@@ -583,17 +733,51 @@ func validateUpgradeParametersSchema(schemaRaw []byte, hasUpgradeDefaults bool) 
 	if !ok {
 		return fmt.Errorf("%q schema must have a properties section", constants.TemplateParamUpgrade)
 	}
-	ibguProp, ok := props[ctlrutils.UpgradeDefaultsIBGUKey]
-	if !ok {
-		return fmt.Errorf("%q schema must define the %q property",
-			constants.TemplateParamUpgrade, ctlrutils.UpgradeDefaultsIBGUKey)
+
+	hasCV := schemaPropertyExists(props, ctlrutils.UpgradeDefaultsClusterVersionKey)
+	hasIBGU := schemaPropertyExists(props, ctlrutils.UpgradeDefaultsIBGUKey)
+
+	if hasCV && hasIBGU {
+		return fmt.Errorf("%q schema must not define both %q and %q; choose exactly one upgrade type",
+			constants.TemplateParamUpgrade,
+			ctlrutils.UpgradeDefaultsClusterVersionKey,
+			ctlrutils.UpgradeDefaultsIBGUKey)
 	}
-	ibguPropMap, ok := ibguProp.(map[string]any)
-	if !ok {
-		return fmt.Errorf("%q must be an object schema", ibguKeyPath)
+	if hasUpgradeDefaults && !hasCV && !hasIBGU {
+		return fmt.Errorf("%q schema must define either %q or %q when upgradeDefaults is set",
+			constants.TemplateParamUpgrade,
+			ctlrutils.UpgradeDefaultsClusterVersionKey,
+			ctlrutils.UpgradeDefaultsIBGUKey)
 	}
-	if t, _ := ibguPropMap["type"].(string); t != "object" {
-		return fmt.Errorf("%q must have type \"object\"", ibguKeyPath)
+
+	if err := validateUpgradeTypeProperty(props, ctlrutils.UpgradeDefaultsClusterVersionKey); err != nil {
+		return err
+	}
+	if err := validateUpgradeTypeProperty(props, ctlrutils.UpgradeDefaultsIBGUKey); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func schemaPropertyExists(props map[string]any, key string) bool {
+	_, ok := props[key]
+	return ok
+}
+
+func validateUpgradeTypeProperty(props map[string]any, key string) error {
+	prop, ok := props[key]
+	if !ok {
+		return nil
+	}
+	propMap, ok := prop.(map[string]any)
+	if !ok {
+		return fmt.Errorf("%s.%s must be an object schema",
+			constants.TemplateParamUpgrade, key)
+	}
+	if t, _ := propMap["type"].(string); t != "object" {
+		return fmt.Errorf("%s.%s must have type \"object\"",
+			constants.TemplateParamUpgrade, key)
 	}
 	return nil
 }
