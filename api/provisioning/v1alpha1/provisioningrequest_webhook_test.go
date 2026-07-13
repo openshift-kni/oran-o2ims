@@ -1485,7 +1485,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("should accept upgradeParameters without clusterVersion key", func() {
+		It("should accept upgradeParameters without clusterVersion key when sibling fields are valid", func() {
 			pr := &ProvisioningRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "123e4567-e89b-12d3-a456-426614174016",
@@ -1508,6 +1508,85 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 
 			_, err := validator.ValidateCreate(ctx, pr)
 			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should reject invalid clusterUpgradeTimeout without clusterVersion key", func() {
+			pr := &ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "123e4567-e89b-12d3-a456-426614174017",
+				},
+				Spec: ProvisioningRequestSpec{
+					Name:            "cluster-upgrade-8",
+					TemplateName:    "clustertemplate-upgrade",
+					TemplateVersion: "v1.0.0",
+					TemplateParameters: runtime.RawExtension{Raw: []byte(`{
+						"oCloudSiteId": "local-123",
+						"nodeClusterName": "exampleCluster",
+						"clusterInstanceParameters": {"additionalNTPSources": ["1.1.1.1"]},
+						"policyTemplateParameters": {"sriov-network-vlan-1": "140"},
+						"upgradeParameters": {
+							"clusterUpgradeTimeout": "notaduration"
+						}
+					}`)},
+				},
+			}
+
+			_, err := validator.ValidateCreate(ctx, pr)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid clusterUpgradeTimeout"))
+		})
+
+		It("should reject zero clusterUpgradeTimeout", func() {
+			pr := &ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "123e4567-e89b-12d3-a456-426614174018",
+				},
+				Spec: ProvisioningRequestSpec{
+					Name:            "cluster-upgrade-9",
+					TemplateName:    "clustertemplate-upgrade",
+					TemplateVersion: "v1.0.0",
+					TemplateParameters: runtime.RawExtension{Raw: []byte(`{
+						"oCloudSiteId": "local-123",
+						"nodeClusterName": "exampleCluster",
+						"clusterInstanceParameters": {"additionalNTPSources": ["1.1.1.1"]},
+						"policyTemplateParameters": {"sriov-network-vlan-1": "140"},
+						"upgradeParameters": {
+							"clusterVersion": {},
+							"clusterUpgradeTimeout": "0s"
+						}
+					}`)},
+				},
+			}
+
+			_, err := validator.ValidateCreate(ctx, pr)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("must be a positive duration"))
+		})
+
+		It("should reject invalid intermediateVersion without clusterVersion key", func() {
+			pr := &ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "123e4567-e89b-12d3-a456-426614174019",
+				},
+				Spec: ProvisioningRequestSpec{
+					Name:            "cluster-upgrade-10",
+					TemplateName:    "clustertemplate-upgrade",
+					TemplateVersion: "v1.0.0",
+					TemplateParameters: runtime.RawExtension{Raw: []byte(`{
+						"oCloudSiteId": "local-123",
+						"nodeClusterName": "exampleCluster",
+						"clusterInstanceParameters": {"additionalNTPSources": ["1.1.1.1"]},
+						"policyTemplateParameters": {"sriov-network-vlan-1": "140"},
+						"upgradeParameters": {
+							"intermediateVersion": "not-semver"
+						}
+					}`)},
+				},
+			}
+
+			_, err := validator.ValidateCreate(ctx, pr)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid intermediateVersion"))
 		})
 	})
 })

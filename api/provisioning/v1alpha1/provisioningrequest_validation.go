@@ -506,11 +506,7 @@ func (r *ProvisioningRequest) ValidateUpgradeInput(clusterTemplate *ClusterTempl
 		return nil
 	}
 
-	if _, ok := upgradeParams["clusterVersion"]; !ok {
-		return nil
-	}
-
-	if err := upgradevalidation.ValidateCVUpgradeData(upgradeParams, clusterTemplate.Spec.Release); err != nil {
+	if err := upgradevalidation.ValidateCVUpgradeData(upgradeParams, clusterTemplate.Spec.Release, "upgradeParameters"); err != nil {
 		return fmt.Errorf("spec.templateParameters.upgradeParameters: %w", err)
 	}
 

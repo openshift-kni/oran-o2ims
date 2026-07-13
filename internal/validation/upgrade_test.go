@@ -14,18 +14,26 @@ import (
 
 var _ = Describe("ValidateCVUpgradeData", func() {
 	const release = "4.17.0"
+	const label = "upgradeDefaults"
 
-	It("should return nil when clusterVersion key is absent", func() {
-		data := map[string]any{"clusterUpgradeTimeout": "2h"}
-		Expect(ValidateCVUpgradeData(data, release)).ToNot(HaveOccurred())
+	It("should return nil when no upgrade keys are present", func() {
+		data := map[string]any{"someOtherKey": "value"}
+		Expect(ValidateCVUpgradeData(data, release, label)).ToNot(HaveOccurred())
 	})
 
 	It("should return InputError when clusterVersion is not an object", func() {
 		data := map[string]any{"clusterVersion": "invalid"}
-		err := ValidateCVUpgradeData(data, release)
+		err := ValidateCVUpgradeData(data, release, label)
 		Expect(err).To(HaveOccurred())
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("must be an object"))
+	})
+
+	It("should use the context label in error messages", func() {
+		data := map[string]any{"clusterVersion": "invalid"}
+		err := ValidateCVUpgradeData(data, release, "upgradeParameters")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("upgradeParameters"))
 	})
 
 	Context("desiredUpdate.version", func() {
@@ -35,7 +43,7 @@ var _ = Describe("ValidateCVUpgradeData", func() {
 					"desiredUpdate": map[string]any{"version": "4.17.0"},
 				},
 			}
-			Expect(ValidateCVUpgradeData(data, release)).ToNot(HaveOccurred())
+			Expect(ValidateCVUpgradeData(data, release, label)).ToNot(HaveOccurred())
 		})
 
 		It("should reject when desiredUpdate.version does not match release", func() {
@@ -44,7 +52,7 @@ var _ = Describe("ValidateCVUpgradeData", func() {
 					"desiredUpdate": map[string]any{"version": "4.18.0"},
 				},
 			}
-			err := ValidateCVUpgradeData(data, release)
+			err := ValidateCVUpgradeData(data, release, label)
 			Expect(err).To(HaveOccurred())
 			Expect(typederrors.IsInputError(err)).To(BeTrue())
 			Expect(err.Error()).To(ContainSubstring("does not match the ClusterTemplate spec.release"))
@@ -56,14 +64,14 @@ var _ = Describe("ValidateCVUpgradeData", func() {
 					"desiredUpdate": map[string]any{"version": ""},
 				},
 			}
-			Expect(ValidateCVUpgradeData(data, release)).ToNot(HaveOccurred())
+			Expect(ValidateCVUpgradeData(data, release, label)).ToNot(HaveOccurred())
 		})
 
 		It("should pass when desiredUpdate is absent", func() {
 			data := map[string]any{
 				"clusterVersion": map[string]any{},
 			}
-			Expect(ValidateCVUpgradeData(data, release)).ToNot(HaveOccurred())
+			Expect(ValidateCVUpgradeData(data, release, label)).ToNot(HaveOccurred())
 		})
 
 		It("should pass when desiredUpdate has no version key", func() {
@@ -72,7 +80,7 @@ var _ = Describe("ValidateCVUpgradeData", func() {
 					"desiredUpdate": map[string]any{"channel": "stable-4.17"},
 				},
 			}
-			Expect(ValidateCVUpgradeData(data, release)).ToNot(HaveOccurred())
+			Expect(ValidateCVUpgradeData(data, release, label)).ToNot(HaveOccurred())
 		})
 	})
 
@@ -82,7 +90,7 @@ var _ = Describe("ValidateCVUpgradeData", func() {
 				"clusterVersion":        map[string]any{},
 				"clusterUpgradeTimeout": "2h30m",
 			}
-			Expect(ValidateCVUpgradeData(data, release)).ToNot(HaveOccurred())
+			Expect(ValidateCVUpgradeData(data, release, label)).ToNot(HaveOccurred())
 		})
 
 		It("should reject an invalid duration", func() {
@@ -90,17 +98,47 @@ var _ = Describe("ValidateCVUpgradeData", func() {
 				"clusterVersion":        map[string]any{},
 				"clusterUpgradeTimeout": "notaduration",
 			}
-			err := ValidateCVUpgradeData(data, release)
+			err := ValidateCVUpgradeData(data, release, label)
 			Expect(err).To(HaveOccurred())
 			Expect(typederrors.IsInputError(err)).To(BeTrue())
 			Expect(err.Error()).To(ContainSubstring("invalid clusterUpgradeTimeout"))
+		})
+
+		It("should reject a zero duration", func() {
+			data := map[string]any{
+				"clusterUpgradeTimeout": "0s",
+			}
+			err := ValidateCVUpgradeData(data, release, label)
+			Expect(err).To(HaveOccurred())
+			Expect(typederrors.IsInputError(err)).To(BeTrue())
+			Expect(err.Error()).To(ContainSubstring("must be a positive duration"))
+		})
+
+		It("should reject a negative duration", func() {
+			data := map[string]any{
+				"clusterUpgradeTimeout": "-5m",
+			}
+			err := ValidateCVUpgradeData(data, release, label)
+			Expect(err).To(HaveOccurred())
+			Expect(typederrors.IsInputError(err)).To(BeTrue())
+			Expect(err.Error()).To(ContainSubstring("must be a positive duration"))
 		})
 
 		It("should pass when clusterUpgradeTimeout is not present", func() {
 			data := map[string]any{
 				"clusterVersion": map[string]any{},
 			}
-			Expect(ValidateCVUpgradeData(data, release)).ToNot(HaveOccurred())
+			Expect(ValidateCVUpgradeData(data, release, label)).ToNot(HaveOccurred())
+		})
+
+		It("should validate clusterUpgradeTimeout without clusterVersion", func() {
+			data := map[string]any{
+				"clusterUpgradeTimeout": "notaduration",
+			}
+			err := ValidateCVUpgradeData(data, release, label)
+			Expect(err).To(HaveOccurred())
+			Expect(typederrors.IsInputError(err)).To(BeTrue())
+			Expect(err.Error()).To(ContainSubstring("invalid clusterUpgradeTimeout"))
 		})
 	})
 
@@ -110,7 +148,7 @@ var _ = Describe("ValidateCVUpgradeData", func() {
 				"clusterVersion":      map[string]any{},
 				"intermediateVersion": "4.16.3",
 			}
-			Expect(ValidateCVUpgradeData(data, release)).ToNot(HaveOccurred())
+			Expect(ValidateCVUpgradeData(data, release, label)).ToNot(HaveOccurred())
 		})
 
 		It("should reject non-semver intermediateVersion", func() {
@@ -118,7 +156,7 @@ var _ = Describe("ValidateCVUpgradeData", func() {
 				"clusterVersion":      map[string]any{},
 				"intermediateVersion": "not-semver",
 			}
-			err := ValidateCVUpgradeData(data, release)
+			err := ValidateCVUpgradeData(data, release, label)
 			Expect(err).To(HaveOccurred())
 			Expect(typederrors.IsInputError(err)).To(BeTrue())
 			Expect(err.Error()).To(ContainSubstring("invalid intermediateVersion"))
@@ -129,7 +167,7 @@ var _ = Describe("ValidateCVUpgradeData", func() {
 				"clusterVersion":      map[string]any{},
 				"intermediateVersion": "3.16.0",
 			}
-			err := ValidateCVUpgradeData(data, release)
+			err := ValidateCVUpgradeData(data, release, label)
 			Expect(err).To(HaveOccurred())
 			Expect(typederrors.IsInputError(err)).To(BeTrue())
 			Expect(err.Error()).To(ContainSubstring("major version (3) must equal spec.release major version (4)"))
@@ -140,7 +178,7 @@ var _ = Describe("ValidateCVUpgradeData", func() {
 				"clusterVersion":      map[string]any{},
 				"intermediateVersion": "4.15.0",
 			}
-			err := ValidateCVUpgradeData(data, release)
+			err := ValidateCVUpgradeData(data, release, label)
 			Expect(err).To(HaveOccurred())
 			Expect(typederrors.IsInputError(err)).To(BeTrue())
 			Expect(err.Error()).To(ContainSubstring("must be exactly one minor version below"))
@@ -151,7 +189,7 @@ var _ = Describe("ValidateCVUpgradeData", func() {
 				"clusterVersion":      map[string]any{},
 				"intermediateVersion": "",
 			}
-			Expect(ValidateCVUpgradeData(data, release)).ToNot(HaveOccurred())
+			Expect(ValidateCVUpgradeData(data, release, label)).ToNot(HaveOccurred())
 		})
 
 		It("should reject when release is not valid semver", func() {
@@ -159,10 +197,20 @@ var _ = Describe("ValidateCVUpgradeData", func() {
 				"clusterVersion":      map[string]any{},
 				"intermediateVersion": "4.16.0",
 			}
-			err := ValidateCVUpgradeData(data, "not-semver")
+			err := ValidateCVUpgradeData(data, "not-semver", label)
 			Expect(err).To(HaveOccurred())
 			Expect(typederrors.IsInputError(err)).To(BeTrue())
 			Expect(err.Error()).To(ContainSubstring("spec.release"))
+		})
+
+		It("should validate intermediateVersion without clusterVersion", func() {
+			data := map[string]any{
+				"intermediateVersion": "not-semver",
+			}
+			err := ValidateCVUpgradeData(data, release, label)
+			Expect(err).To(HaveOccurred())
+			Expect(typederrors.IsInputError(err)).To(BeTrue())
+			Expect(err.Error()).To(ContainSubstring("invalid intermediateVersion"))
 		})
 	})
 
@@ -175,7 +223,7 @@ var _ = Describe("ValidateCVUpgradeData", func() {
 				"clusterUpgradeTimeout": "2h30m",
 				"intermediateVersion":   "4.16.3",
 			}
-			Expect(ValidateCVUpgradeData(data, release)).ToNot(HaveOccurred())
+			Expect(ValidateCVUpgradeData(data, release, label)).ToNot(HaveOccurred())
 		})
 
 		It("should fail on the first violated rule", func() {
@@ -185,7 +233,7 @@ var _ = Describe("ValidateCVUpgradeData", func() {
 				},
 				"clusterUpgradeTimeout": "invalid",
 			}
-			err := ValidateCVUpgradeData(data, release)
+			err := ValidateCVUpgradeData(data, release, label)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("does not match"))
 		})

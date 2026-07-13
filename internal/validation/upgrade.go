@@ -16,38 +16,44 @@ import (
 // ValidateCVUpgradeData validates the semantic business rules for
 // clusterVersion upgrade parameters. It checks:
 //   - desiredUpdate.version, if set, matches releaseVersion
-//   - clusterUpgradeTimeout, if set, is a valid Go duration
+//   - clusterUpgradeTimeout, if set, is a valid positive Go duration
 //   - intermediateVersion, if set, is valid semver, same major, and
 //     exactly one minor below releaseVersion
 //
 // upgradeData is the top-level upgrade config map (containing keys like
 // "clusterVersion", "clusterUpgradeTimeout", "intermediateVersion").
 // releaseVersion is the ClusterTemplate spec.release value.
-func ValidateCVUpgradeData(upgradeData map[string]any, releaseVersion string) error {
-	cvRaw, ok := upgradeData["clusterVersion"]
-	if !ok {
-		return nil
-	}
-	cvMap, ok := cvRaw.(map[string]any)
-	if !ok {
-		return typederrors.NewInputError("upgradeDefaults %q value must be an object", "clusterVersion")
-	}
+// contextLabel identifies the caller context for error messages (e.g.
+// "upgradeDefaults" or "upgradeParameters").
+func ValidateCVUpgradeData(upgradeData map[string]any, releaseVersion, contextLabel string) error {
+	if cvRaw, ok := upgradeData["clusterVersion"]; ok {
+		cvMap, ok := cvRaw.(map[string]any)
+		if !ok {
+			return typederrors.NewInputError("%s %q value must be an object", contextLabel, "clusterVersion")
+		}
 
-	if desiredUpdate, ok := cvMap["desiredUpdate"].(map[string]any); ok {
-		if version, ok := desiredUpdate["version"].(string); ok && version != "" {
-			if version != releaseVersion {
-				return typederrors.NewInputError(
-					"the clusterVersion desiredUpdate.version (%s) does not match the ClusterTemplate spec.release (%s)",
-					version, releaseVersion)
+		if desiredUpdate, ok := cvMap["desiredUpdate"].(map[string]any); ok {
+			if version, ok := desiredUpdate["version"].(string); ok && version != "" {
+				if version != releaseVersion {
+					return typederrors.NewInputError(
+						"the clusterVersion desiredUpdate.version (%s) does not match the ClusterTemplate spec.release (%s)",
+						version, releaseVersion)
+				}
 			}
 		}
 	}
 
 	if timeoutStr, ok := upgradeData["clusterUpgradeTimeout"].(string); ok {
-		if _, err := time.ParseDuration(timeoutStr); err != nil {
+		dur, err := time.ParseDuration(timeoutStr)
+		if err != nil {
 			return typederrors.NewInputError(
-				"invalid clusterUpgradeTimeout %q in upgradeDefaults: %s",
-				timeoutStr, err.Error())
+				"invalid clusterUpgradeTimeout %q in %s: %s",
+				timeoutStr, contextLabel, err.Error())
+		}
+		if dur <= 0 {
+			return typederrors.NewInputError(
+				"invalid clusterUpgradeTimeout %q in %s: must be a positive duration",
+				timeoutStr, contextLabel)
 		}
 	}
 
@@ -55,8 +61,8 @@ func ValidateCVUpgradeData(upgradeData map[string]any, releaseVersion string) er
 		intermediateVer, err := semver.NewVersion(intermediateVersionStr)
 		if err != nil {
 			return typederrors.NewInputError(
-				"invalid intermediateVersion %q in upgradeDefaults: %s",
-				intermediateVersionStr, err.Error())
+				"invalid intermediateVersion %q in %s: %s",
+				intermediateVersionStr, contextLabel, err.Error())
 		}
 		releaseVer, err := semver.NewVersion(releaseVersion)
 		if err != nil {

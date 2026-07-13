@@ -380,7 +380,7 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeDefaults() error {
 }
 
 func (t *clusterTemplateReconcilerTask) validateCVUpgradeDefaults(upgradeData map[string]any) error {
-	if err := upgradevalidation.ValidateCVUpgradeData(upgradeData, t.object.Spec.Release); err != nil {
+	if err := upgradevalidation.ValidateCVUpgradeData(upgradeData, t.object.Spec.Release, "upgradeDefaults"); err != nil {
 		return fmt.Errorf("clusterVersion upgrade validation failed: %w", err)
 	}
 	return nil
