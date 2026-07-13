@@ -428,6 +428,16 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			)
 			return exit.Error(1)
 		}
+
+		if err = hwmgmtv1alpha1.SetupHardwareProfileWebhookWithManager(mgr); err != nil {
+			logger.ErrorContext(
+				ctx,
+				"Unable to create webhook",
+				slog.String("webhook", "HardwareProfile"),
+				slog.Any("error", err),
+			)
+			return exit.Error(1)
+		}
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
