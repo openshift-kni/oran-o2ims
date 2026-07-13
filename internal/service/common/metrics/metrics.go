@@ -14,6 +14,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+const MetricsPath = "/metrics"
+
 var uuidSegmentRe = regexp.MustCompile(
 	`/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`,
 )
@@ -43,5 +45,5 @@ func RegisterMetricsHandler(mux *http.ServeMux, authn, authz func(http.Handler) 
 	var handler http.Handler = promhttp.Handler()
 	handler = authz(handler)
 	handler = authn(handler)
-	mux.Handle("/metrics", handler)
+	mux.Handle(MetricsPath, handler)
 }

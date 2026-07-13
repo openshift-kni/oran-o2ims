@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/metrics"
 )
 
 // interceptor defines an implementation of a workaround for a limitation of the http.ServeMux.
@@ -64,7 +65,7 @@ func (e *interceptor) Write(data []byte) (int, error) {
 func ErrorJsonifier() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/metrics" {
+			if r.URL.Path == metrics.MetricsPath {
 				next.ServeHTTP(w, r)
 				return
 			}

@@ -97,6 +97,10 @@ func Serve(config *api.ProvisioningServerConfig) error {
 		return fmt.Errorf("error creating filter filterAdapter: %w", err)
 	}
 
+	// Exempt /metrics from audience-scoped token validation so Prometheus
+	// can scrape using its default-audience SA token.
+	config.AudienceExemptPaths = append(config.AudienceExemptPaths, metrics.MetricsPath)
+
 	// Create authn/authz middleware
 	authn, err := auth.GetAuthenticator(ctx, &config.CommonServerConfig)
 	if err != nil {

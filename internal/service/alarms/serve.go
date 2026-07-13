@@ -215,7 +215,7 @@ func Serve(config *api.AlarmsServerConfig) error {
 	// spec. These endpoints are exempt from audience-scoped token validation
 	// because their callers (e.g., ACM alertmanager) cannot send audience-
 	// scoped tokens. See the overlay for per-endpoint rationale.
-	config.AudienceExemptPaths = auth.GetAudienceExemptPaths(swagger)
+	config.AudienceExemptPaths = append(auth.GetAudienceExemptPaths(swagger), metrics.MetricsPath)
 
 	// Create authn/authz middleware
 	authn, err := auth.GetAuthenticator(ctx, &config.CommonServerConfig)
