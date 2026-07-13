@@ -19,6 +19,7 @@ var (
 	nodeAllocationReconciler         *NodeAllocationRequestReconciler
 	allocatedNodeReconciler          *AllocatedNodeReconciler
 	hostFirmwareComponentsReconciler *HostFirmwareComponentsReconciler
+	firmwareCatalogReconciler        *FirmwareCatalogReconciler
 )
 
 func SetupControllers(mgr ctrl.Manager, namespace string, baseLogger *slog.Logger) error {
@@ -66,6 +67,18 @@ func SetupControllers(mgr ctrl.Manager, namespace string, baseLogger *slog.Logge
 
 	if err := hostFirmwareComponentsReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("failed to setup HostFirmwareComponents controller: %w", err)
+	}
+
+	firmwareCatalogReconciler = &FirmwareCatalogReconciler{
+		Client:    mgr.GetClient(),
+		Scheme:    mgr.GetScheme(),
+		Logger:    baseLogger.With(slog.String("controller", "hwmgr_firmwarecatalog_controller")),
+		Namespace: namespace,
+		Manager:   mgr,
+	}
+
+	if err := firmwareCatalogReconciler.SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("failed to setup FirmwareCatalog controller: %w", err)
 	}
 
 	return nil
