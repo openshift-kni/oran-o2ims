@@ -102,12 +102,17 @@ func findRemovedEntries(oldImages, newImages []FirmwareImage) []string {
 	return removed
 }
 
-// isEntryReferencedByProfile checks whether a firmware catalog entry is
-// referenced by the given HardwareProfile. In Phase 1 of the firmware catalog
-// rollout, HardwareProfiles still use inline firmware structs and do not
-// reference catalog entries by name, so this always returns false. Phase 2
-// will change the HardwareProfile fields to string references and update this
-// function accordingly.
-func isEntryReferencedByProfile(_ string, _ *HardwareProfile) bool {
+func isEntryReferencedByProfile(entryName string, profile *HardwareProfile) bool {
+	if profile.Spec.BiosFirmware == entryName {
+		return true
+	}
+	if profile.Spec.BmcFirmware == entryName {
+		return true
+	}
+	for _, nic := range profile.Spec.NicFirmware {
+		if nic == entryName {
+			return true
+		}
+	}
 	return false
 }
