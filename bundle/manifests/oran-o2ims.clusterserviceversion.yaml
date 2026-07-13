@@ -2505,6 +2505,25 @@ spec:
     containerPort: 443
     deploymentName: oran-o2ims-controller-manager
     failurePolicy: Fail
+    generateName: firmwarecatalogs.clcm.openshift.io
+    rules:
+    - apiGroups:
+      - clcm.openshift.io
+      apiVersions:
+      - v1alpha1
+      operations:
+      - UPDATE
+      resources:
+      - firmwarecatalogs
+    sideEffects: None
+    targetPort: 9443
+    type: ValidatingAdmissionWebhook
+    webhookPath: /validate-clcm-openshift-io-v1alpha1-firmwarecatalog
+  - admissionReviewVersions:
+    - v1
+    containerPort: 443
+    deploymentName: oran-o2ims-controller-manager
+    failurePolicy: Fail
     generateName: provisioningrequests.clcm.openshift.io
     rules:
     - apiGroups:
