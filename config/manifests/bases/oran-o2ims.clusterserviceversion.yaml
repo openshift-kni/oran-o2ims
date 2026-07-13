@@ -171,21 +171,21 @@ spec:
         path: bios
       - displayName: Attributes
         path: bios.attributes
-      - description: BIOS firmware information
-        displayName: BIOS Firmware
+      - description: |-
+          BiosFirmware is the name of a firmware image entry in the FirmwareCatalog
+          for BIOS firmware.
+        displayName: Bios Firmware
         path: biosFirmware
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: BMC firmware information
-        displayName: BMC Firmware
+      - description: |-
+          BmcFirmware is the name of a firmware image entry in the FirmwareCatalog
+          for BMC firmware.
+        displayName: Bmc Firmware
         path: bmcFirmware
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: NIC firmware information list
-        displayName: NIC Firmware
+      - description: |-
+          NicFirmware is a list of firmware image entry names in the FirmwareCatalog
+          for NIC firmware.
+        displayName: Nic Firmware
         path: nicFirmware
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
       statusDescriptors:
       - description: Represents the observations of a HardwareProfile's current state
         displayName: Conditions
