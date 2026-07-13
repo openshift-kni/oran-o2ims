@@ -38,6 +38,11 @@ type resolvedFirmware struct {
 func resolveFirmwareFromCatalog(ctx context.Context, c client.Client,
 	namespace string, spec hwmgmtv1alpha1.HardwareProfileSpec) (resolvedFirmware, error) {
 
+	// Short-circuit: if no firmware fields reference the catalog, skip the lookup.
+	if spec.BiosFirmware == "" && spec.BmcFirmware == "" && len(spec.NicFirmware) == 0 {
+		return resolvedFirmware{}, nil
+	}
+
 	catalog := &hwmgmtv1alpha1.FirmwareCatalog{}
 	if err := c.Get(ctx, types.NamespacedName{
 		Name: hwmgmtv1alpha1.FirmwareCatalogName, Namespace: namespace,

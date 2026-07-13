@@ -72,11 +72,7 @@ var _ = Describe("SNO End-to-end ProvisioningRequestReconcile with hardware mana
 				Namespace: constants.DefaultNamespace,
 			},
 			Spec: hwmgmtv1alpha1.HardwareProfileSpec{
-				// Basic hardware profile spec - minimal firmware config to satisfy CRD validation
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
-					Version: "test-bios-v1.0",
-					URL:     "https://example.com/bios-firmware.bin",
-				},
+				BiosFirmware: "test-bios-v1.0-entry",
 			},
 		},
 	}
