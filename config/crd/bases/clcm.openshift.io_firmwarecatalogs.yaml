@@ -64,23 +64,28 @@ spec:
                     description:
                       description: Description is an optional human-readable description
                         of the firmware image.
+                      maxLength: 1024
                       type: string
                     name:
                       description: Name is a unique identifier for this firmware image
                         within the catalog.
+                      maxLength: 253
                       minLength: 1
                       type: string
                     url:
                       description: URL points to the firmware image file.
+                      maxLength: 2048
                       minLength: 1
                       pattern: ^(http|https)://.*$
                       type: string
                     vendor:
                       description: Vendor identifies the firmware vendor or manufacturer.
+                      maxLength: 256
                       minLength: 1
                       type: string
                     version:
                       description: Version is the firmware version string.
+                      maxLength: 128
                       minLength: 1
                       type: string
                   required:
@@ -89,6 +94,7 @@ spec:
                   - url
                   - version
                   type: object
+                maxItems: 1000
                 type: array
                 x-kubernetes-list-map-keys:
                 - name
@@ -101,8 +107,10 @@ spec:
                 ? self.images.filter(cur, cur.name == old.name)[0].component == old.component
                 && self.images.filter(cur, cur.name == old.name)[0].url == old.url
                 && self.images.filter(cur, cur.name == old.name)[0].version == old.version
+                && (has(old.vendor) ? has(self.images.filter(cur, cur.name == old.name)[0].vendor)
                 && self.images.filter(cur, cur.name == old.name)[0].vendor == old.vendor
-                : true)'
+                : !has(self.images.filter(cur, cur.name == old.name)[0].vendor)) :
+                true)'
           status:
             description: FirmwareCatalogStatus defines the observed state of FirmwareCatalog.
             properties:

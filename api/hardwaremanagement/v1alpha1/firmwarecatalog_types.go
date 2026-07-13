@@ -16,6 +16,7 @@ const FirmwareCatalogName = "firmware-catalog"
 type FirmwareImage struct {
 	// Name is a unique identifier for this firmware image within the catalog.
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
 	Name string `json:"name"`
 
 	// Component identifies the hardware component type.
@@ -24,28 +25,33 @@ type FirmwareImage struct {
 
 	// URL points to the firmware image file.
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=2048
 	// +kubebuilder:validation:Pattern=`^(http|https)://.*$`
 	URL string `json:"url"`
 
 	// Version is the firmware version string.
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=128
 	Version string `json:"version"`
 
 	// Vendor identifies the firmware vendor or manufacturer.
 	// +optional
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=256
 	Vendor string `json:"vendor,omitempty"`
 
 	// Description is an optional human-readable description of the firmware image.
 	// +optional
+	// +kubebuilder:validation:MaxLength=1024
 	Description string `json:"description,omitempty"`
 }
 
 // FirmwareCatalogSpec defines the desired state of FirmwareCatalog.
-// +kubebuilder:validation:XValidation:message="Firmware catalog entries are immutable: component, url, version, and vendor cannot be changed",rule="oldSelf.images.all(old, self.images.exists(cur, cur.name == old.name) ? self.images.filter(cur, cur.name == old.name)[0].component == old.component && self.images.filter(cur, cur.name == old.name)[0].url == old.url && self.images.filter(cur, cur.name == old.name)[0].version == old.version && self.images.filter(cur, cur.name == old.name)[0].vendor == old.vendor : true)"
+// +kubebuilder:validation:XValidation:message="Firmware catalog entries are immutable: component, url, version, and vendor cannot be changed",rule="oldSelf.images.all(old, self.images.exists(cur, cur.name == old.name) ? self.images.filter(cur, cur.name == old.name)[0].component == old.component && self.images.filter(cur, cur.name == old.name)[0].url == old.url && self.images.filter(cur, cur.name == old.name)[0].version == old.version && (has(old.vendor) ? has(self.images.filter(cur, cur.name == old.name)[0].vendor) && self.images.filter(cur, cur.name == old.name)[0].vendor == old.vendor : !has(self.images.filter(cur, cur.name == old.name)[0].vendor)) : true)"
 type FirmwareCatalogSpec struct {
 	// Images is the set of firmware images available in this catalog.
 	// +optional
+	// +kubebuilder:validation:MaxItems=1000
 	// +listType=map
 	// +listMapKey=name
 	Images []FirmwareImage `json:"images,omitempty"`

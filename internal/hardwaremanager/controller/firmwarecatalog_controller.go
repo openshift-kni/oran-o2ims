@@ -16,7 +16,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -139,22 +138,9 @@ func validateCatalogImages(images []hwmgmtv1alpha1.FirmwareImage) []hwmgmtv1alph
 
 // EnsureFirmwareCatalogSingleton creates the singleton FirmwareCatalog CR if it
 // does not already exist. It never overwrites user content.
+// This is safe to call before mgr.Start() because Create bypasses the cache.
 func EnsureFirmwareCatalogSingleton(ctx context.Context, c client.Client, namespace string) error {
-	catalog := &hwmgmtv1alpha1.FirmwareCatalog{}
-	err := c.Get(ctx, types.NamespacedName{
-		Name:      hwmgmtv1alpha1.FirmwareCatalogName,
-		Namespace: namespace,
-	}, catalog)
-
-	if err == nil {
-		return nil
-	}
-
-	if !errors.IsNotFound(err) {
-		return fmt.Errorf("failed to check FirmwareCatalog singleton: %w", err)
-	}
-
-	catalog = &hwmgmtv1alpha1.FirmwareCatalog{
+	catalog := &hwmgmtv1alpha1.FirmwareCatalog{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      hwmgmtv1alpha1.FirmwareCatalogName,
 			Namespace: namespace,

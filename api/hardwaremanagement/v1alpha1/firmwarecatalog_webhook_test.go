@@ -121,4 +121,21 @@ func TestFirmwareCatalogValidatorValidateUpdate(t *testing.T) {
 			t.Errorf("expected no error, got: %v", err)
 		}
 	})
+
+	t.Run("blocks removing a referenced entry", func(t *testing.T) {
+		newCatalog := oldCatalog.DeepCopy()
+		newCatalog.Spec.Images = newCatalog.Spec.Images[1:]
+
+		profile := &HardwareProfile{
+			ObjectMeta: metav1.ObjectMeta{Name: "hwprofile-1", Namespace: "test-ns"},
+			Spec:       HardwareProfileSpec{BiosFirmware: "bios-1"},
+		}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(profile).Build()
+		v := &firmwareCatalogValidator{Client: c}
+
+		_, err := v.ValidateUpdate(context.Background(), oldCatalog, newCatalog)
+		if err == nil {
+			t.Error("expected error when removing a referenced entry, got nil")
+		}
+	})
 }
