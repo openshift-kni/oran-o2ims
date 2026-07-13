@@ -1961,17 +1961,6 @@ spec:
           - monitoring.coreos.com
           resources:
           - prometheusrules
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - monitoring.coreos.com
-          resources:
           - servicemonitors
           verbs:
           - get
