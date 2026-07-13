@@ -37,7 +37,11 @@ func init() {
 	prometheus.MustRegister(AuthFailures)
 }
 
-// RegisterMetricsHandler registers the /metrics endpoint on the given mux.
-func RegisterMetricsHandler(mux *http.ServeMux) {
-	mux.Handle("/metrics", promhttp.Handler())
+// RegisterMetricsHandler registers the /metrics endpoint on the given mux,
+// wrapping it with authentication and authorization middleware.
+func RegisterMetricsHandler(mux *http.ServeMux, authn, authz func(http.Handler) http.Handler) {
+	var handler http.Handler = promhttp.Handler()
+	handler = authz(handler)
+	handler = authn(handler)
+	mux.Handle("/metrics", handler)
 }

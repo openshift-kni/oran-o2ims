@@ -170,7 +170,7 @@ func Serve(config *api.ClusterServerConfig) error {
 	}
 
 	baseRouter := http.NewServeMux()
-	metrics.RegisterMetricsHandler(baseRouter)
+	metrics.RegisterMetricsHandler(baseRouter, authn, authz)
 	opt := generated.StdHTTPServerOptions{
 		BaseRouter: baseRouter,
 		Middlewares: []generated.MiddlewareFunc{ // Add middlewares here
