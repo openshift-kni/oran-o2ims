@@ -150,6 +150,7 @@ const (
 	DefaultClusterInstallationTimeout  = 90 * time.Minute
 	DefaultClusterConfigurationTimeout = 30 * time.Minute
 	DefaultClusterUpgradeTimeout       = 4 * time.Hour
+	DefaultClusterEUSUpgradeTimeout    = 8 * time.Hour
 )
 
 // These are optional keys in the respective ConfigMaps defined in ClusterTemplate
@@ -248,8 +249,9 @@ const ClusterVersionName = "version"
 
 // Upgrade constants
 const (
-	UpgradeDefaultsIBGUKey           = "imageBasedGroupUpgrade"
-	UpgradeDefaultsClusterVersionKey = "clusterVersion"
+	UpgradeDefaultsIBGUKey              = "imageBasedGroupUpgrade"
+	UpgradeDefaultsClusterVersionKey    = "clusterVersion"
+	UpgradeIntermediateVersionConfigKey = "intermediateVersion"
 )
 
 // CRDs needed to be suppressed in ClusterInstance for upgrade

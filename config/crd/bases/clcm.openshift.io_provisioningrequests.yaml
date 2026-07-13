@@ -169,11 +169,20 @@ spec:
                           has started
                         format: date-time
                         type: string
-                      clusterUpgradeStartAt:
-                        description: A timestamp indicating when the cluster upgrade
-                          started.
-                        format: date-time
-                        type: string
+                      clusterUpgradeStatus:
+                        description: ClusterUpgradeStatus holds the state of a cluster
+                          upgrade in progress.
+                        properties:
+                          startVersion:
+                            description: StartVersion is the current cluster version
+                              before the upgrade began.
+                            type: string
+                          startedAt:
+                            description: StartedAt indicates when the cluster upgrade
+                              started.
+                            format: date-time
+                            type: string
+                        type: object
                       name:
                         description: Contains the name of the created ClusterInstance.
                         type: string

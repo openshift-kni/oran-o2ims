@@ -171,6 +171,15 @@ func IsClusterUpgradeInTerminalFailure(cr *provisioningv1alpha1.ProvisioningRequ
 			condition.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed))
 }
 
+// IsClusterUpgradePreconditionChecksFailed checks if the upgrade failed due to
+// precondition checks (user-fixable input error, not a timeout or runtime failure).
+func IsClusterUpgradePreconditionChecksFailed(cr *provisioningv1alpha1.ProvisioningRequest) bool {
+	condition := meta.FindStatusCondition(cr.Status.Conditions,
+		string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
+	return condition != nil &&
+		condition.Reason == string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed)
+}
+
 // IsClusterUpgradeInitiated checks if the cluster upgrade is initiated
 func IsClusterUpgradeInitiated(cr *provisioningv1alpha1.ProvisioningRequest) bool {
 	condition := meta.FindStatusCondition(cr.Status.Conditions,
