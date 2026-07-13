@@ -19,7 +19,8 @@ spec:
       scheme: https
       bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
       tlsConfig:
-        insecureSkipVerify: true
+        serverName: oran-o2ims-controller-manager-metrics-service.oran-o2ims.svc
+        caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
   selector:
     matchLabels:
       control-plane: controller-manager

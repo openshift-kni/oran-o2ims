@@ -4,21 +4,18 @@ metadata:
   labels:
     app.kubernetes.io/component: metrics
     app.kubernetes.io/created-by: oran-o2ims
-    app.kubernetes.io/instance: controller-manager-metrics-monitor
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: servicemonitor
     app.kubernetes.io/part-of: oran-o2ims
-    control-plane: controller-manager
-  name: oran-o2ims-controller-manager-metrics-monitor
+  name: oran-o2ims-resource-server-metrics-monitor
 spec:
   endpoints:
   - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
     path: /metrics
-    port: https
+    port: api
     scheme: https
     tlsConfig:
       caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
-      serverName: oran-o2ims-controller-manager-metrics-service.oran-o2ims.svc
+      serverName: resource-server.oran-o2ims.svc
   selector:
     matchLabels:
-      control-plane: controller-manager
+      app: resource-server
