@@ -833,31 +833,32 @@ var _ = Describe("Helpers", func() {
 				},
 			}
 
-			// Create test HardwareProfile with firmware and BIOS settings
+			// Create FirmwareCatalog with test entries
+			testCatalog := &hwmgmtv1alpha1.FirmwareCatalog{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      hwmgmtv1alpha1.FirmwareCatalogName,
+					Namespace: testNamespace,
+				},
+				Spec: hwmgmtv1alpha1.FirmwareCatalogSpec{
+					Images: []hwmgmtv1alpha1.FirmwareImage{
+						{Name: "test-bios", Component: "bios", URL: "http://example.com/bios.bin", Version: "1.2.3"},
+						{Name: "test-bmc", Component: "bmc", URL: "http://example.com/bmc.bin", Version: "4.5.6"},
+						{Name: "test-nic1", Component: "nic", URL: "http://example.com/nic1.bin", Version: "7.8.9"},
+						{Name: "test-nic2", Component: "nic", URL: "http://example.com/nic2.bin", Version: "10.11.12"},
+					},
+				},
+			}
+
+			// Create test HardwareProfile referencing catalog entries
 			testHwProfile = &hwmgmtv1alpha1.HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-profile",
 					Namespace: testNamespace,
 				},
 				Spec: hwmgmtv1alpha1.HardwareProfileSpec{
-					BiosFirmware: hwmgmtv1alpha1.Firmware{
-						Version: "1.2.3",
-						URL:     "http://example.com/bios.bin",
-					},
-					BmcFirmware: hwmgmtv1alpha1.Firmware{
-						Version: "4.5.6",
-						URL:     "http://example.com/bmc.bin",
-					},
-					NicFirmware: []hwmgmtv1alpha1.Nic{
-						{
-							Version: "7.8.9",
-							URL:     "http://example.com/nic1.bin",
-						},
-						{
-							Version: "10.11.12",
-							URL:     "http://example.com/nic2.bin",
-						},
-					},
+					BiosFirmware: "test-bios",
+					BmcFirmware:  "test-bmc",
+					NicFirmware:  []string{"test-nic1", "test-nic2"},
 					Bios: hwmgmtv1alpha1.Bios{
 						Attributes: map[string]intstr.IntOrString{
 							"VirtualizationTechnology": intstr.FromString("Enabled"),
@@ -917,7 +918,7 @@ var _ = Describe("Helpers", func() {
 
 			testClient = fake.NewClientBuilder().
 				WithScheme(scheme).
-				WithObjects(testBMH, testHwProfile, testHFC, testHFS).
+				WithObjects(testBMH, testHwProfile, testHFC, testHFS, testCatalog).
 				Build()
 		})
 
@@ -929,9 +930,10 @@ var _ = Describe("Helpers", func() {
 			})
 
 			It("should return true when no firmware versions are specified", func() {
-				// Update profile to have no firmware versions
-				testHwProfile.Spec.BiosFirmware.Version = ""
-				testHwProfile.Spec.BmcFirmware.Version = ""
+				// Update profile to have no firmware references
+				testHwProfile.Spec.BiosFirmware = ""
+				testHwProfile.Spec.BmcFirmware = ""
+				testHwProfile.Spec.NicFirmware = nil
 				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
 
 				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
@@ -1019,7 +1021,7 @@ var _ = Describe("Helpers", func() {
 
 			It("should return true when no NIC firmware is specified", func() {
 				// Update profile to have no NIC firmware
-				testHwProfile.Spec.NicFirmware = []hwmgmtv1alpha1.Nic{}
+				testHwProfile.Spec.NicFirmware = nil
 				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
 
 				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
@@ -1056,14 +1058,8 @@ var _ = Describe("Helpers", func() {
 				Expect(valid).To(BeFalse())
 			})
 
-			It("should skip NIC validation when NIC version is empty", func() {
-				// Update profile to have empty NIC version
-				testHwProfile.Spec.NicFirmware = []hwmgmtv1alpha1.Nic{
-					{
-						Version: "", // Empty version should be skipped
-						URL:     "http://example.com/nic1.bin",
-					},
-				}
+			It("should skip NIC validation when no NIC firmware is referenced", func() {
+				testHwProfile.Spec.NicFirmware = nil
 				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
 
 				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
@@ -1101,8 +1097,9 @@ var _ = Describe("Helpers", func() {
 
 			It("should return true when no firmware or BIOS settings are specified", func() {
 				// Update profile to have no firmware or BIOS settings
-				testHwProfile.Spec.BiosFirmware.Version = ""
-				testHwProfile.Spec.BmcFirmware.Version = ""
+				testHwProfile.Spec.BiosFirmware = ""
+				testHwProfile.Spec.BmcFirmware = ""
+				testHwProfile.Spec.NicFirmware = nil
 				testHwProfile.Spec.Bios.Attributes = map[string]intstr.IntOrString{}
 				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
 
@@ -1588,6 +1585,7 @@ var _ = Describe("Helpers", func() {
 
 				testNamespace        string = "test-namespace"
 				newHwProfile         *hwmgmtv1alpha1.HardwareProfile
+				testCatalog          *hwmgmtv1alpha1.FirmwareCatalog
 				currentHwProfileName string = "profile-v1"
 				newHwProfileName     string = "profile-v2"
 				nar                  *hwmgmtv1alpha1.NodeAllocationRequest
@@ -1645,6 +1643,8 @@ var _ = Describe("Helpers", func() {
 			}
 
 			buildClientWithIndex := func(scheme *runtime.Scheme, objs ...client.Object) client.Client {
+				// Always include the FirmwareCatalog so firmware resolution succeeds.
+				objs = append(objs, testCatalog)
 				return fake.NewClientBuilder().
 					WithScheme(scheme).
 					WithObjects(objs...).
@@ -1673,9 +1673,19 @@ var _ = Describe("Helpers", func() {
 				newHwProfile = &hwmgmtv1alpha1.HardwareProfile{
 					ObjectMeta: metav1.ObjectMeta{Name: newHwProfileName, Namespace: testNamespace},
 					Spec: hwmgmtv1alpha1.HardwareProfileSpec{
-						BiosFirmware: hwmgmtv1alpha1.Firmware{
-							Version: "1.0.0",
-							URL:     "https://example.com/firmware.bin",
+						BiosFirmware: "test-bios",
+					},
+				}
+
+				// FirmwareCatalog singleton with entries referenced by the HardwareProfile
+				testCatalog = &hwmgmtv1alpha1.FirmwareCatalog{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      hwmgmtv1alpha1.FirmwareCatalogName,
+						Namespace: testNamespace,
+					},
+					Spec: hwmgmtv1alpha1.FirmwareCatalogSpec{
+						Images: []hwmgmtv1alpha1.FirmwareImage{
+							{Name: "test-bios", Component: "bios", URL: "https://example.com/firmware.bin", Version: "1.0.0"},
 						},
 					},
 				}
