@@ -140,6 +140,10 @@ func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Contex
 		return err
 	}
 
+	if err := newPr.ValidateUpgradeInput(clusterTemplate); err != nil {
+		return err
+	}
+
 	// We only validate the ClusterInstance input here, not the PolicyTemplate input since
 	// its schema is not just for ProvisioningRequest.
 	newPrClusterInstanceInput, err := newPr.ValidateClusterInstanceInputMatchesSchema(clusterTemplate)

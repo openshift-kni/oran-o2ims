@@ -18,6 +18,7 @@ import (
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	upgradevalidation "github.com/openshift-kni/oran-o2ims/internal/validation"
 	"github.com/r3labs/diff/v3"
 	"github.com/xeipuuv/gojsonschema"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -477,6 +478,40 @@ func (r *ProvisioningRequest) ValidateHwMgmtHwProfiles(
 			}
 			return fmt.Errorf("failed to get HardwareProfile %q for nodeGroup %q: %w", hwProfile, name, err)
 		}
+	}
+
+	return nil
+}
+
+// ValidateUpgradeInput validates upgrade business rules on the
+// ProvisioningRequest's upgradeParameters against the ClusterTemplate's
+// release version. Schema validation is handled separately; this covers
+// semantic constraints that schema cannot express.
+func (r *ProvisioningRequest) ValidateUpgradeInput(clusterTemplate *ClusterTemplate) error {
+	if r.Spec.TemplateParameters.Raw == nil {
+		return nil
+	}
+
+	var params map[string]any
+	if err := json.Unmarshal(r.Spec.TemplateParameters.Raw, &params); err != nil {
+		return nil
+	}
+
+	upgradeParamsRaw, ok := params[constants.TemplateParamUpgrade]
+	if !ok {
+		return nil
+	}
+	upgradeParams, ok := upgradeParamsRaw.(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	if _, ok := upgradeParams["clusterVersion"]; !ok {
+		return nil
+	}
+
+	if err := upgradevalidation.ValidateCVUpgradeData(upgradeParams, clusterTemplate.Spec.Release); err != nil {
+		return fmt.Errorf("spec.templateParameters.upgradeParameters: %w", err)
 	}
 
 	return nil
