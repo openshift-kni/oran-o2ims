@@ -29,7 +29,7 @@ last-updated: 2026-07-14
   - [Proposed Design](#proposed-design)
     - [Scale-Out Flow](#scale-out-flow)
     - [Scale-In Flow](#scale-in-flow)
-    - [Worker-Only Validation](#worker-only-validation)
+    - [Worker-Only and Topology Validation](#worker-only-and-topology-validation)
     - [Scale/Upgrade Mutual Exclusion](#scaleupgrade-mutual-exclusion)
     - [Status Tracking](#status-tracking)
     - [AllocatedNodeHostMap Cleanup](#allocatednodehostmap-cleanup)
@@ -161,7 +161,7 @@ When a user removes worker node entries from the ProvisioningRequest
 nodes array:
 
 1. **Webhook allows the change** and validates that only worker nodes
-   are being removed (see [Worker-Only Validation](#worker-only-validation)).
+   are being removed (see [Worker-Only and Topology Validation](#worker-only-and-topology-validation)).
 
 2. **Controller detects generation change** and re-enters
    `executeProvisioningPhases`.
@@ -225,14 +225,20 @@ This keeps the rendering phase pure and concentrates spoke interaction
 in the cluster installation phase, consistent with how upgrades
 interact with the spoke cluster.
 
-### Worker-Only Validation
+### Worker-Only and Topology Validation
 
 Two enforcement points:
 
 1. **Webhook** (admission-time): In `validateCreateOrUpdate`, when the
-   cluster is provisioned and scaling nodes are detected, check whether
-   any removed node has `role: master`. Reject with a clear error
-   message if so. This is the primary gate.
+   cluster is provisioned and scaling nodes are detected:
+   - Reject if any **added** node has `role: master` (or
+     `role: control-plane`). Adding control plane nodes is not
+     supported.
+   - Reject if any **removed** node has `role: master`. Removing
+     control plane nodes is not supported.
+   - Reject scaling on SNO clusters (single-node has no workers to
+     scale). Detect SNO by checking that the ClusterInstance has
+     exactly one node with `role: master` and no other nodes.
 
 2. **Controller** (reconcile-time, defensive): In `handleScaleInDrain`,
    verify that only worker nodes are being removed. If a control-plane
@@ -248,9 +254,12 @@ Scale operations and upgrade operations must not run concurrently:
   node scaling changes. This gives immediate feedback to the user.
 
 - **Prevent upgrade during scale**: In the controller's
-  `handleClusterUpgrades`, check if the current and desired node counts
-  differ (indicating a scale operation is in progress). If so, skip
-  upgrade handling and requeue.
+  `handleClusterUpgrades`, compare the current ClusterInstance's node
+  hostnames against the rendered ClusterInstance's node hostnames. If
+  the sets differ (nodes added or removed, regardless of total count),
+  a scale operation is in progress — skip upgrade handling and requeue.
+  Count-based comparison is insufficient because a mixed add+remove
+  operation could leave the count unchanged.
 
 ### Status Tracking
 
@@ -315,11 +324,13 @@ without requiring hardware manager changes. The flow becomes:
 
 1. O-Cloud Manager identifies which AllocatedNodes correspond to the
    removed ClusterInstance nodes (via `allocatedNodeHostMap`).
-2. O-Cloud Manager deletes those AllocatedNode CRs.
-3. The AllocatedNode controller detects the deletion and calls
+2. O-Cloud Manager updates the NAR with the reduced `NodeGroup.Size`
+   **first**. This prevents the hardware manager from seeing
+   `pending > 0` and allocating replacement nodes during the window
+   between AllocatedNode deletion and Size update.
+3. O-Cloud Manager deletes those AllocatedNode CRs.
+4. The AllocatedNode controller detects the deletion and calls
    `deallocateBMH` to release the BMH.
-4. O-Cloud Manager updates the NAR with the reduced `NodeGroup.Size`
-   (so the allocation count stays consistent).
 
 This approach avoids any hardware manager code changes.
 
@@ -328,10 +339,15 @@ This approach avoids any hardware manager code changes.
 - **Scale-out**: Inherits the existing hardware provisioning and cluster
   provisioning timeouts. No changes needed.
 
-- **Scale-in drain**: `DrainNode` uses a 30-second timeout per node. If
-  a node is unreachable, drain fails and the controller requeues and
-  retries. If the node remains unreachable, the operation stays in a
-  failed state until the user resolves the issue manually.
+- **Scale-in drain**: `DrainNode` uses a 30-second timeout per node.
+  If a node is unreachable, drain fails and the controller requeues
+  with the standard backoff interval to retry. The controller
+  continues retrying until the overall provisioning timeout expires.
+  Once timed out, the operation moves to a Failed state with a clear
+  error message indicating which node could not be drained. The user
+  must then resolve the issue manually (fix the node, or delete the
+  Node object on the spoke cluster) and trigger a retry by updating
+  the PR spec (which bumps the generation).
 
 - **Configurable drain timeout**: Deferred to a follow-up enhancement.
   The 30-second default is sufficient for the initial implementation.
@@ -348,10 +364,12 @@ drains any nodes not in the new desired state.
 
 ### Drain failure (node unreachable)
 
-If a node cannot be drained, the operation fails with a clear error
-message indicating which node could not be drained and why. The user
-must manually resolve the issue (fix the node, or delete the Node
-object on the spoke cluster) and retry by updating the PR spec.
+If a node cannot be drained, the controller retries with standard
+backoff until the overall provisioning timeout expires. After timeout,
+the operation moves to Failed state with a message indicating which
+node could not be drained and why. The user must then resolve the
+issue (fix the node, or delete the Node object on the spoke cluster)
+and trigger a retry by updating the PR spec.
 
 Force drain options are deferred to a follow-up enhancement.
 
@@ -359,11 +377,13 @@ Force drain options are deferred to a follow-up enhancement.
 
 If the controller drains some nodes but fails on others, successfully
 drained nodes remain cordoned until the entire operation completes. If
-the user wants to abort, they can add the removed nodes back to the PR
-spec, which triggers a new generation change. The controller re-renders
-the ClusterInstance with all nodes and applies it via SSA. The
-previously drained nodes would need to be uncordoned manually or by a
-subsequent reconciliation.
+the user wants to abort a scale-in, they can add the removed nodes
+back to the PR spec, which triggers a new generation change. The
+controller detects that previously-drained nodes are back in the
+desired state and automatically uncordons them via
+`NodeOps.UncordonNode` before proceeding with the normal
+reconciliation flow. This ensures no manual intervention is needed
+to restore the cluster to its pre-scale-in state.
 
 ### Mixed scale-in and scale-out
 
@@ -453,8 +473,9 @@ ProvisioningRequest (user updates nodes array)
         │     └── Nodes: cordon + drain on each removed node
         ├── ClusterInstance (SSA: removed nodes deleted, after drain)
         │     └── Siteconfig removes BMHs for deprovisioned nodes
-        ├── NodeAllocationRequest (patched: NodeGroup.Size decreased)
-        │     └── Hardware manager deallocates excess AllocatedNodes
+        ├── NodeAllocationRequest (patched: NodeGroup.Size decreased first)
+        ├── AllocatedNode CRs (deleted by O-Cloud Manager)
+        │     └── AllocatedNode controller calls deallocateBMH → BMH released
         └── ProvisioningRequest status
               ├── allocatedNodeHostMap: stale entries removed
               └── provisioningStatus: fulfilled → pending → progressing → fulfilled
