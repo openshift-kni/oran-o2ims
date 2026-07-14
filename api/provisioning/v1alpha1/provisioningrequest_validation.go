@@ -492,22 +492,17 @@ func (r *ProvisioningRequest) ValidateUpgradeInput(clusterTemplate *ClusterTempl
 		return nil
 	}
 
-	var params map[string]any
-	if err := json.Unmarshal(r.Spec.TemplateParameters.Raw, &params); err != nil {
-		return nil
-	}
-
-	upgradeParamsRaw, ok := params[constants.TemplateParamUpgrade]
-	if !ok {
+	upgradeParamsRaw, err := ExtractMatchingInput(r.Spec.TemplateParameters.Raw, constants.TemplateParamUpgrade)
+	if err != nil {
 		return nil
 	}
 	upgradeParams, ok := upgradeParamsRaw.(map[string]any)
 	if !ok {
-		return nil
+		return fmt.Errorf("spec.templateParameters.%s must be an object", constants.TemplateParamUpgrade)
 	}
 
-	if err := upgradevalidation.ValidateCVUpgradeData(upgradeParams, clusterTemplate.Spec.Release, "upgradeParameters"); err != nil {
-		return fmt.Errorf("spec.templateParameters.upgradeParameters: %w", err)
+	if err := upgradevalidation.ValidateCVUpgradeData(upgradeParams, clusterTemplate.Spec.Release, constants.TemplateParamUpgrade); err != nil {
+		return fmt.Errorf("spec.templateParameters.%s: %w", constants.TemplateParamUpgrade, err)
 	}
 
 	return nil

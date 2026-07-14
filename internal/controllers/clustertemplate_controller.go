@@ -367,8 +367,8 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeDefaults() error {
 	}
 
 	if hasCV {
-		if err := t.validateCVUpgradeDefaults(upgradeData); err != nil {
-			return err
+		if err := upgradevalidation.ValidateCVUpgradeData(upgradeData, t.object.Spec.Release, "upgradeDefaults"); err != nil {
+			return fmt.Errorf("clusterVersion upgrade validation failed: %w", err)
 		}
 	} else if hasIBGU {
 		if err := t.validateIBGUUpgradeDefaults(); err != nil {
@@ -376,13 +376,6 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeDefaults() error {
 		}
 	}
 
-	return nil
-}
-
-func (t *clusterTemplateReconcilerTask) validateCVUpgradeDefaults(upgradeData map[string]any) error {
-	if err := upgradevalidation.ValidateCVUpgradeData(upgradeData, t.object.Spec.Release, "upgradeDefaults"); err != nil {
-		return fmt.Errorf("clusterVersion upgrade validation failed: %w", err)
-	}
 	return nil
 }
 
