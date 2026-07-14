@@ -212,6 +212,17 @@ var _ = Describe("ProvisioningServer", Label("envtest"), func() {
 		})
 	})
 
+	Describe("PatchProvisioningRequest", func() {
+		It("should return 405 Method Not Allowed", func() {
+			resp, body := httpDo(http.MethodPatch, provisioningBase+"/provisioningRequests/"+uuid.New().String(), "")
+			Expect(resp.StatusCode).To(Equal(http.StatusMethodNotAllowed))
+
+			var problem commonapi.ProblemDetails
+			Expect(json.Unmarshal(body, &problem)).To(Succeed())
+			Expect(problem.Status).To(Equal(405))
+		})
+	})
+
 	Describe("DeleteProvisioningRequest", func() {
 		When("ProvisioningRequest does not exist", func() {
 			It("should return 404", func() {
