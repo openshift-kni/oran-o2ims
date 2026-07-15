@@ -97,6 +97,13 @@ func (t *provisioningRequestReconcilerTask) buildClusterInstance(
 		}
 	}
 
+	// Validate that node scaling only affects worker nodes
+	if ciExists && ctlrutils.IsClusterProvisionCompleted(t.object) {
+		if err := validateScaleWorkerOnly(existingCIUnstructured, renderedCIUnstructured); err != nil {
+			return nil, err
+		}
+	}
+
 	// Validate the rendered ClusterInstance with dry-run. The defaults defined in the
 	// ClusterInstance CRD will be applied by the APIserver after the dry-run.
 	// NOTE: ClusterInstance immutable field validation is handled by ACM 2.13+
@@ -577,6 +584,87 @@ func (t *provisioningRequestReconcilerTask) handleClusterInstanceUpgrade(
 	}
 
 	return nil
+}
+
+// validateScaleWorkerOnly ensures that node scaling only adds worker nodes.
+// It compares the existing and rendered ClusterInstance node lists and rejects
+// any operation that removes nodes (scale-in is not yet supported), adds
+// non-worker nodes, or scales a single-node cluster.
+func validateScaleWorkerOnly(existingCI, renderedCI *unstructured.Unstructured) error {
+	existingNodes := getNodeRolesByHostname(existingCI)
+	renderedNodes := getNodeRolesByHostname(renderedCI)
+
+	// No scaling detected
+	if len(existingNodes) == len(renderedNodes) {
+		same := true
+		for hostname := range existingNodes {
+			if _, exists := renderedNodes[hostname]; !exists {
+				same = false
+				break
+			}
+		}
+		if same {
+			return nil
+		}
+	}
+
+	// Reject scaling on single-node clusters
+	masterCount := 0
+	for _, role := range existingNodes {
+		if role == "master" || role == "control-plane" {
+			masterCount++
+		}
+	}
+	if len(existingNodes) == 1 || (len(existingNodes) == masterCount && masterCount <= 1) {
+		return typederrors.NewInputError("node scaling is not supported on single-node clusters")
+	}
+
+	// Reject any node removals — scale-in is not yet supported
+	for hostname, role := range existingNodes {
+		if _, exists := renderedNodes[hostname]; !exists {
+			return typederrors.NewInputError(
+				"node removal is not yet supported: cannot remove %s node %q",
+				role, hostname)
+		}
+	}
+
+	// Check for added nodes with non-worker role
+	for hostname, role := range renderedNodes {
+		if _, exists := existingNodes[hostname]; !exists {
+			if role != "worker" {
+				return typederrors.NewInputError(
+					"node scaling is restricted to worker nodes: cannot add %s node %q",
+					role, hostname)
+			}
+		}
+	}
+
+	return nil
+}
+
+// getNodeRolesByHostname extracts a map of hostname → role from a ClusterInstance.
+func getNodeRolesByHostname(ci *unstructured.Unstructured) map[string]string {
+	result := make(map[string]string)
+	spec, ok := ci.Object["spec"].(map[string]any)
+	if !ok {
+		return result
+	}
+	nodes, ok := spec["nodes"].([]any)
+	if !ok {
+		return result
+	}
+	for _, node := range nodes {
+		nodeMap, ok := node.(map[string]any)
+		if !ok {
+			continue
+		}
+		hostname, _ := nodeMap["hostName"].(string)
+		role, _ := nodeMap["role"].(string)
+		if hostname != "" && role != "" {
+			result[hostname] = role
+		}
+	}
+	return result
 }
 
 // extractNodeDetails extracts necessary node details from the existing ClusterInstance

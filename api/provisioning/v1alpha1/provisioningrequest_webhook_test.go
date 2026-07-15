@@ -623,6 +623,59 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
 					Expect(err).ToNot(HaveOccurred())
 				})
+
+				It("should reject node scaling while upgrade is in progress", func() {
+					// Old PR has 2 nodes (MNO, not SNO)
+					oldPr.Spec.TemplateParameters.Raw = []byte(`{
+				"oCloudSiteId": "local-123",
+				"nodeClusterName": "exampleCluster",
+				"clusterInstanceParameters": {
+					"clusterName": "test-cluster",
+					"baseDomain": "example.com",
+					"nodes": [
+						{
+							"hostName": "node1.example.com"
+						},
+						{
+							"hostName": "node2.example.com"
+						}
+					]
+				},
+				"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+			}`)
+
+					newPr.Status.Conditions = append(newPr.Status.Conditions, metav1.Condition{
+						Type:   string(PRconditionTypes.UpgradeCompleted),
+						Status: metav1.ConditionFalse,
+						Reason: string(CRconditionReasons.InProgress),
+					})
+
+					// Add a third node
+					newPr.Spec.TemplateParameters.Raw = []byte(`{
+				"oCloudSiteId": "local-123",
+				"nodeClusterName": "exampleCluster",
+				"clusterInstanceParameters": {
+					"clusterName": "test-cluster",
+					"baseDomain": "example.com",
+					"nodes": [
+						{
+							"hostName": "node1.example.com"
+						},
+						{
+							"hostName": "node2.example.com"
+						},
+						{
+							"hostName": "node3.example.com"
+						}
+					]
+				},
+				"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+			}`)
+
+					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("not supported while a cluster upgrade is in progress"))
+				})
 			})
 
 			Context("When ClusterProvisioned condition is Unknown or Failed", func() {

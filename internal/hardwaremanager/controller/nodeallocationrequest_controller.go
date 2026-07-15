@@ -302,6 +302,34 @@ func (r *NodeAllocationRequestReconciler) handleNewNodeAllocationRequestCreate(
 	return hwmgrutils.DoNotRequeue(), nil
 }
 
+// handleScaleOut checks if NodeGroup sizes increased and re-enters the allocation
+// flow if additional nodes need to be allocated. Returns (result, handled, error).
+func (r *NodeAllocationRequestReconciler) handleScaleOut(
+	ctx context.Context,
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
+) (ctrl.Result, bool, error) {
+	sizeIncreased, err := hasNodeGroupSizeIncreases(ctx, r.NoncachedClient, r.Logger, r.Namespace, nodeAllocationRequest)
+	if err != nil {
+		return hwmgrutils.RequeueWithShortInterval(), false, err
+	}
+	if !sizeIncreased {
+		return ctrl.Result{}, false, nil
+	}
+
+	r.Logger.InfoContext(ctx, "NodeGroup size increase detected, re-entering allocation flow")
+	if err := hwmgrutils.UpdateNodeAllocationRequestStatusCondition(ctx, r.Client, nodeAllocationRequest,
+		hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.InProgress,
+		metav1.ConditionFalse, "Allocating additional nodes for scale-out"); err != nil {
+		return hwmgrutils.RequeueWithShortInterval(), false,
+			fmt.Errorf("failed to update status for scale-out: %w", err)
+	}
+	if err := hwmgrutils.UpdateNodeAllocationRequestObservedGeneration(ctx, r.Client, nodeAllocationRequest); err != nil {
+		return hwmgrutils.RequeueWithShortInterval(), false,
+			fmt.Errorf("failed to update ObservedGeneration for scale-out: %w", err)
+	}
+	return hwmgrutils.RequeueImmediately(), true, nil
+}
+
 func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged(
 	ctx context.Context,
 	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
@@ -328,6 +356,11 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 	configInProgress := configuredCondition != nil &&
 		configuredCondition.Status == metav1.ConditionFalse &&
 		configuredCondition.Reason == string(hwmgmtv1alpha1.InProgress)
+
+	// Check if NodeGroup sizes increased (scale-out).
+	if result, handled, err := r.handleScaleOut(ctx, nodeAllocationRequest); handled || err != nil {
+		return result, err
+	}
 
 	// Check whether the HW profile has changed.
 	hwProfileChanged, err := hasNodeGroupHwProfileChanges(ctx, r.Client, r.Logger, nodeAllocationRequest)

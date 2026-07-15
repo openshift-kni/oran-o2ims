@@ -28,6 +28,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -364,5 +365,111 @@ var _ = Describe("NodeAllocationRequest Controller Timeout Handling", func() {
 				Expect(conditionType).To(Equal(hwmgmtv1alpha1.ConditionType("")))
 			})
 		})
+	})
+})
+
+var _ = Describe("handleScaleOut", func() {
+	var (
+		reconciler *NodeAllocationRequestReconciler
+		fakeClient client.Client
+		ctx        context.Context
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		testLogger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
+		scheme := runtime.NewScheme()
+		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
+
+		fakeClient = fake.NewClientBuilder().WithScheme(scheme).
+			WithStatusSubresource(&hwmgmtv1alpha1.NodeAllocationRequest{}).Build()
+
+		reconciler = &NodeAllocationRequestReconciler{
+			Client:          fakeClient,
+			NoncachedClient: fakeClient,
+			Logger:          testLogger,
+			Namespace:       "oran-o2ims",
+		}
+	})
+
+	It("should set Provisioned=InProgress when NodeGroup size increased", func() {
+		nar := &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "test-nar",
+				Namespace:  "oran-o2ims",
+				Generation: 3,
+			},
+			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+				NodeGroup: []hwmgmtv1alpha1.NodeGroup{
+					{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: "worker"}, Size: 3},
+				},
+			},
+		}
+		Expect(fakeClient.Create(ctx, nar)).To(Succeed())
+		hwmgrutils.SetStatusCondition(&nar.Status.Conditions,
+			string(hwmgmtv1alpha1.Provisioned), string(hwmgmtv1alpha1.Completed),
+			metav1.ConditionTrue, "Provisioned")
+		Expect(fakeClient.Status().Update(ctx, nar)).To(Succeed())
+
+		// Only 2 AllocatedNodes exist — Size is 3, so scale-out needed
+		for _, name := range []string{"w1", "w2"} {
+			node := &hwmgmtv1alpha1.AllocatedNode{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name, Namespace: "oran-o2ims",
+					Labels: map[string]string{"clcm.openshift.io/nodeAllocationRequest": "test-nar"},
+				},
+				Spec: hwmgmtv1alpha1.AllocatedNodeSpec{
+					GroupName:             "worker",
+					NodeAllocationRequest: "test-nar",
+				},
+			}
+			Expect(fakeClient.Create(ctx, node)).To(Succeed())
+		}
+
+		_, handled, err := reconciler.handleScaleOut(ctx, nar)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(handled).To(BeTrue())
+
+		// Verify Provisioned condition was set to InProgress
+		updatedNAR := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(nar), updatedNAR)).To(Succeed())
+		provCond := meta.FindStatusCondition(updatedNAR.Status.Conditions, string(hwmgmtv1alpha1.Provisioned))
+		Expect(provCond).ToNot(BeNil())
+		Expect(provCond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(provCond.Reason).To(Equal(string(hwmgmtv1alpha1.InProgress)))
+	})
+
+	It("should not trigger when allocated count matches desired size", func() {
+		nar := &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "test-nar",
+				Namespace:  "oran-o2ims",
+				Generation: 2,
+			},
+			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+				NodeGroup: []hwmgmtv1alpha1.NodeGroup{
+					{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: "worker"}, Size: 2},
+				},
+			},
+		}
+		Expect(fakeClient.Create(ctx, nar)).To(Succeed())
+
+		for _, name := range []string{"w1", "w2"} {
+			node := &hwmgmtv1alpha1.AllocatedNode{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name, Namespace: "oran-o2ims",
+					Labels: map[string]string{"clcm.openshift.io/nodeAllocationRequest": "test-nar"},
+				},
+				Spec: hwmgmtv1alpha1.AllocatedNodeSpec{
+					GroupName:             "worker",
+					NodeAllocationRequest: "test-nar",
+				},
+			}
+			Expect(fakeClient.Create(ctx, node)).To(Succeed())
+		}
+
+		_, handled, err := reconciler.handleScaleOut(ctx, nar)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(handled).To(BeFalse())
 	})
 })

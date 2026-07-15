@@ -226,11 +226,20 @@ func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Contex
 	} else if crProvisionedCond.Reason == string(CRconditionReasons.Completed) {
 		// Allow specific fields and node scaling after installation completes
 		// This enables Day 2 operations like annotation/label updates and cluster scaling
-		disallowedFields, _, err = FindClusterInstanceImmutableFieldUpdates(
+		disallowedFields, scalingNodes, err = FindClusterInstanceImmutableFieldUpdates(
 			oldPrClusterInstanceInput.(map[string]any), newPrClusterInstanceInput.(map[string]any),
 			[][]string{}, AllowedClusterInstanceFields)
 		if err != nil {
 			return fmt.Errorf("failed to find immutable field updates for ClusterInstance (%s): %w", newPr.Name, err)
+		}
+
+		if len(scalingNodes) > 0 {
+			// Reject scaling while an upgrade is in progress
+			upgradeCond := meta.FindStatusCondition(
+				newPr.Status.Conditions, string(PRconditionTypes.UpgradeCompleted))
+			if upgradeCond != nil && upgradeCond.Reason == string(CRconditionReasons.InProgress) {
+				return fmt.Errorf("node scaling is not supported while a cluster upgrade is in progress")
+			}
 		}
 
 		// Only reject disallowed field changes; node scaling is explicitly allowed

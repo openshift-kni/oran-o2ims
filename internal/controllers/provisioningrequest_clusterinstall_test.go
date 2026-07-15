@@ -744,3 +744,121 @@ func TestAssignNodeDetails(t *testing.T) {
 		})
 	}
 }
+
+var _ = Describe("validateScaleWorkerOnly", func() {
+	makeCI := func(nodes []map[string]any) *unstructured.Unstructured {
+		ci := &unstructured.Unstructured{}
+		ci.Object = map[string]any{
+			"spec": map[string]any{
+				"nodes": func() []any {
+					result := make([]any, len(nodes))
+					for i, n := range nodes {
+						result[i] = n
+					}
+					return result
+				}(),
+			},
+		}
+		return ci
+	}
+
+	It("should allow adding worker nodes", func() {
+		existingCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+		})
+		renderedCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+			{"hostName": "worker2", "role": "worker"},
+		})
+		Expect(validateScaleWorkerOnly(existingCI, renderedCI)).To(Succeed())
+	})
+
+	It("should reject removing worker nodes (scale-in not yet supported)", func() {
+		existingCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+			{"hostName": "worker2", "role": "worker"},
+		})
+		renderedCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+		})
+		err := validateScaleWorkerOnly(existingCI, renderedCI)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("node removal is not yet supported"))
+	})
+
+	It("should reject replacing a worker node (simultaneous add and remove)", func() {
+		existingCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+		})
+		renderedCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "worker2", "role": "worker"},
+		})
+		err := validateScaleWorkerOnly(existingCI, renderedCI)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("node removal is not yet supported"))
+	})
+
+	It("should reject adding master nodes", func() {
+		existingCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+		})
+		renderedCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "master2", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+		})
+		err := validateScaleWorkerOnly(existingCI, renderedCI)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("cannot add master node"))
+	})
+
+	It("should reject removing master nodes", func() {
+		existingCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "master2", "role": "master"},
+			{"hostName": "master3", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+		})
+		renderedCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "master2", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+		})
+		err := validateScaleWorkerOnly(existingCI, renderedCI)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("node removal is not yet supported"))
+		Expect(err.Error()).To(ContainSubstring("master3"))
+	})
+
+	It("should reject scaling on single-node clusters", func() {
+		existingCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+		})
+		renderedCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+		})
+		err := validateScaleWorkerOnly(existingCI, renderedCI)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("not supported on single-node clusters"))
+	})
+
+	It("should pass when no scaling occurred", func() {
+		existingCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+		})
+		renderedCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+		})
+		Expect(validateScaleWorkerOnly(existingCI, renderedCI)).To(Succeed())
+	})
+})

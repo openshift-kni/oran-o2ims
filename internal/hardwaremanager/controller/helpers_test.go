@@ -3608,4 +3608,105 @@ var _ = Describe("Helpers", func() {
 			Expect(clusterName).To(Equal("actual-cluster-name"))
 		})
 	})
+
+	Describe("hasNodeGroupSizeIncreases", func() {
+		var (
+			testScheme *runtime.Scheme
+			testClient client.Client
+		)
+
+		BeforeEach(func() {
+			testScheme = runtime.NewScheme()
+			Expect(hwmgmtv1alpha1.AddToScheme(testScheme)).To(Succeed())
+		})
+
+		It("should return true when allocated count is less than desired size", func() {
+			nar := &hwmgmtv1alpha1.NodeAllocationRequest{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-nar", Namespace: "oran-o2ims"},
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+					NodeGroup: []hwmgmtv1alpha1.NodeGroup{
+						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: "worker"}, Size: 3},
+					},
+				},
+			}
+			// Only 2 AllocatedNodes exist for the worker group
+			node1 := &hwmgmtv1alpha1.AllocatedNode{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node1", Namespace: "oran-o2ims",
+					Labels: map[string]string{"clcm.openshift.io/nodeAllocationRequest": "test-nar"},
+				},
+				Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "worker", NodeAllocationRequest: "test-nar"},
+			}
+			node2 := &hwmgmtv1alpha1.AllocatedNode{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node2", Namespace: "oran-o2ims",
+					Labels: map[string]string{"clcm.openshift.io/nodeAllocationRequest": "test-nar"},
+				},
+				Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "worker", NodeAllocationRequest: "test-nar"},
+			}
+			testClient = fake.NewClientBuilder().WithScheme(testScheme).
+				WithObjects(node1, node2).Build()
+
+			result, err := hasNodeGroupSizeIncreases(ctx, testClient, logger, "oran-o2ims", nar)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(BeTrue())
+		})
+
+		It("should return false when allocated count equals desired size", func() {
+			nar := &hwmgmtv1alpha1.NodeAllocationRequest{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-nar", Namespace: "oran-o2ims"},
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+					NodeGroup: []hwmgmtv1alpha1.NodeGroup{
+						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: "worker"}, Size: 2},
+					},
+				},
+			}
+			node1 := &hwmgmtv1alpha1.AllocatedNode{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node1", Namespace: "oran-o2ims",
+					Labels: map[string]string{"clcm.openshift.io/nodeAllocationRequest": "test-nar"},
+				},
+				Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "worker", NodeAllocationRequest: "test-nar"},
+			}
+			node2 := &hwmgmtv1alpha1.AllocatedNode{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node2", Namespace: "oran-o2ims",
+					Labels: map[string]string{"clcm.openshift.io/nodeAllocationRequest": "test-nar"},
+				},
+				Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "worker", NodeAllocationRequest: "test-nar"},
+			}
+			testClient = fake.NewClientBuilder().WithScheme(testScheme).
+				WithObjects(node1, node2).Build()
+
+			result, err := hasNodeGroupSizeIncreases(ctx, testClient, logger, "oran-o2ims", nar)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(BeFalse())
+		})
+
+		It("should only detect increases for the specific group", func() {
+			nar := &hwmgmtv1alpha1.NodeAllocationRequest{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-nar", Namespace: "oran-o2ims"},
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+					NodeGroup: []hwmgmtv1alpha1.NodeGroup{
+						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "master", Role: "master"}, Size: 3},
+						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: "worker"}, Size: 3},
+					},
+				},
+			}
+			// 3 masters (satisfied) + 2 workers (needs 1 more)
+			nodes := []client.Object{
+				&hwmgmtv1alpha1.AllocatedNode{ObjectMeta: metav1.ObjectMeta{Name: "m1", Namespace: "oran-o2ims", Labels: map[string]string{"clcm.openshift.io/nodeAllocationRequest": "test-nar"}}, Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "master", NodeAllocationRequest: "test-nar"}},
+				&hwmgmtv1alpha1.AllocatedNode{ObjectMeta: metav1.ObjectMeta{Name: "m2", Namespace: "oran-o2ims", Labels: map[string]string{"clcm.openshift.io/nodeAllocationRequest": "test-nar"}}, Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "master", NodeAllocationRequest: "test-nar"}},
+				&hwmgmtv1alpha1.AllocatedNode{ObjectMeta: metav1.ObjectMeta{Name: "m3", Namespace: "oran-o2ims", Labels: map[string]string{"clcm.openshift.io/nodeAllocationRequest": "test-nar"}}, Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "master", NodeAllocationRequest: "test-nar"}},
+				&hwmgmtv1alpha1.AllocatedNode{ObjectMeta: metav1.ObjectMeta{Name: "w1", Namespace: "oran-o2ims", Labels: map[string]string{"clcm.openshift.io/nodeAllocationRequest": "test-nar"}}, Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "worker", NodeAllocationRequest: "test-nar"}},
+				&hwmgmtv1alpha1.AllocatedNode{ObjectMeta: metav1.ObjectMeta{Name: "w2", Namespace: "oran-o2ims", Labels: map[string]string{"clcm.openshift.io/nodeAllocationRequest": "test-nar"}}, Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "worker", NodeAllocationRequest: "test-nar"}},
+			}
+			testClient = fake.NewClientBuilder().WithScheme(testScheme).
+				WithObjects(nodes...).Build()
+
+			result, err := hasNodeGroupSizeIncreases(ctx, testClient, logger, "oran-o2ims", nar)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(BeTrue())
+		})
+	})
 })
