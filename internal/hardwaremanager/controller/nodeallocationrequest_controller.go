@@ -323,10 +323,11 @@ func (r *NodeAllocationRequestReconciler) handleScaleOut(
 		return hwmgrutils.RequeueWithShortInterval(), false,
 			fmt.Errorf("failed to update status for scale-out: %w", err)
 	}
-	if err := hwmgrutils.UpdateNodeAllocationRequestObservedGeneration(ctx, r.Client, nodeAllocationRequest); err != nil {
-		return hwmgrutils.RequeueWithShortInterval(), false,
-			fmt.Errorf("failed to update ObservedGeneration for scale-out: %w", err)
-	}
+	// Do not advance ObservedGeneration here. Setting Provisioned=InProgress
+	// routes the FSM directly to Processing for allocation. After allocation
+	// completes and Provisioned returns to True, the FSM will re-enter
+	// SpecChanged (since ObservedGeneration != Generation) to process any
+	// other spec changes in this generation (e.g., HwProfile updates).
 	return hwmgrutils.RequeueImmediately(), true, nil
 }
 

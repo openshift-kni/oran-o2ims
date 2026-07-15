@@ -437,6 +437,11 @@ var _ = Describe("handleScaleOut", func() {
 		Expect(provCond).ToNot(BeNil())
 		Expect(provCond.Status).To(Equal(metav1.ConditionFalse))
 		Expect(provCond.Reason).To(Equal(string(hwmgmtv1alpha1.InProgress)))
+
+		// ObservedGeneration must NOT be advanced, so that the FSM re-enters
+		// SpecChanged after allocation completes to process other spec changes
+		// (e.g., HwProfile updates in the same generation).
+		Expect(updatedNAR.Status.ObservedGeneration).To(Equal(int64(0)))
 	})
 
 	It("should not trigger when allocated count matches desired size", func() {

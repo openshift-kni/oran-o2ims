@@ -54,6 +54,7 @@ var _ = Describe("MNO Scale-Out test", Ordered, Label("mno-scale-out"), func() {
 		pr                        *provisioningv1alpha1.ProvisioningRequest
 		nar                       *hwmgmtv1alpha1.NodeAllocationRequest
 		initialAllocatedNodeNames map[string]bool
+		createdClusterImageSet    bool
 	)
 
 	testCtx = context.Background()
@@ -109,10 +110,17 @@ var _ = Describe("MNO Scale-Out test", Ordered, Label("mno-scale-out"), func() {
 			},
 			Data: map[string]string{},
 		}
-		for _, r := range []client.Object{pullSecret, extraManifests, clusterImageSet} {
+		for _, r := range []client.Object{pullSecret, extraManifests} {
 			if err := K8SClient.Create(testCtx, r); err != nil && !errors.IsAlreadyExists(err) {
 				Expect(err).ToNot(HaveOccurred())
 			}
+		}
+		if err := K8SClient.Create(testCtx, clusterImageSet); err != nil {
+			if !errors.IsAlreadyExists(err) {
+				Expect(err).ToNot(HaveOccurred())
+			}
+		} else {
+			createdClusterImageSet = true
 		}
 
 		By("Creating 6 BMHs (3 masters + 3 workers: 2 initial + 1 extra for scale-out)")
@@ -328,10 +336,12 @@ var _ = Describe("MNO Scale-Out test", Ordered, Label("mno-scale-out"), func() {
 			}
 		}
 
-		// Delete ClusterImageSet
-		cis := &hivev1.ClusterImageSet{}
-		if err := K8SClient.Get(testCtx, types.NamespacedName{Name: "4.20.16"}, cis); err == nil {
-			_ = K8SClient.Delete(testCtx, cis)
+		// Delete ClusterImageSet only if this test created it
+		if createdClusterImageSet {
+			cis := &hivev1.ClusterImageSet{}
+			if err := K8SClient.Get(testCtx, types.NamespacedName{Name: "4.20.16"}, cis); err == nil {
+				_ = K8SClient.Delete(testCtx, cis)
+			}
 		}
 	})
 
