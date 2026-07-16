@@ -369,6 +369,20 @@ var (
 			"crdFileName": "policy.open-cluster-management.io_policies.yaml",
 		},
 		{
+			"repoName":    "assisted-service",
+			"modulePath":  "github.com/openshift/assisted-service/api",
+			"crdPath":     "config/crd/bases",
+			"owner":       "openshift",
+			"crdFileName": "agent-install.openshift.io_agents.yaml",
+		},
+		{
+			"repoName":    "managed-serviceaccount",
+			"modName":     "open-cluster-management.io",
+			"crdPath":     "config/crd/bases",
+			"owner":       "open-cluster-management-io",
+			"crdFileName": "authentication.open-cluster-management.io_managedserviceaccounts.yaml",
+		},
+		{
 			"repoName":    "siteconfig",
 			"modName":     "github.com/stolostron",
 			"crdPath":     "config/crd/bases",

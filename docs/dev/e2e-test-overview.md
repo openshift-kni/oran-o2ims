@@ -15,11 +15,71 @@ feature, which parses test structure without executing tests.
 
 ## Contents
 
+- [MNO Standard ClusterVersion Upgrade [mno-cv-upgrade]](#mno-standard-clusterversion-upgrade-mno-cv-upgrade)
+  - [y-stream upgrade 4.19.3 to 4.20.5 with failure recovery and successful completion](#y-stream-upgrade-4193-to-4205-with-failure-recovery-and-successful-completion)
+  - [y-stream upgrade timeout when upgrading from 4.20.5 to 4.21.2](#y-stream-upgrade-timeout-when-upgrading-from-4205-to-4212)
+  - [Terminal failure recovery from 4.21.2 to 4.20.5](#terminal-failure-recovery-from-4212-to-4205)
+  - [EUS upgrade timeout when upgrading from 4.20.5 to 4.22.4 via 4.21.6](#eus-upgrade-timeout-when-upgrading-from-4205-to-4224-via-4216)
+  - [Terminal failure recovery after EUS timeout from 4.22.4 to 4.20.5](#terminal-failure-recovery-after-eus-timeout-from-4224-to-4205)
+  - [EUS upgrade 4.20.5 to 4.22.4 via 4.21.7 with failure recovery and successful completion](#eus-upgrade-4205-to-4224-via-4217-with-failure-recovery-and-successful-completion)
 - [MNO Day2 Hardware Configuration test [mno-day2-hw-updates]](#mno-day2-hardware-configuration-test-mno-day2-hw-updates)
   - [Performs day2 hardware configuration update successfully](#performs-day2-hardware-configuration-update-successfully)
   - [Handles day2 hardware configuration update with BMH error](#handles-day2-hardware-configuration-update-with-bmh-error)
   - [Handles mid-flight profile change by abandoning stale updates](#handles-mid-flight-profile-change-by-abandoning-stale-updates)
 - [SNO End-to-end ProvisioningRequestReconcile with hardware manager [sno-provisioning]](#sno-end-to-end-provisioningrequestreconcile-with-hardware-manager-sno-provisioning)
+
+## MNO Standard ClusterVersion Upgrade [mno-cv-upgrade]
+
+File: `test/e2e/mno_cv_upgrade_test.go`
+
+- Creating namespaces
+- Creating ClusterTemplates and supporting resources
+- Creating BMHs resources
+- Creating ProvisioningRequest referencing CT v4-19-3-v1
+- Waiting for ClusterInstance creation and simulating provisioning completion
+- Waiting for PR to reach Fulfilled
+- Creating ManagedClusterAddOn for the cluster
+- Setting up spoke client mock at version 4.19.3
+- Deleting created resources
+
+### y-stream upgrade 4.19.3 to 4.20.5 with failure recovery and successful completion
+
+1. should fail with version mismatch when PR overrides desiredUpdate.version
+1. should report CV's Upgradeable=False after fixing version
+1. should report CV's RetrievedUpdates=False after fixing Upgradeable
+1. should report target not available when graph has no target
+1. should trigger upgrade after channel update and CV's target available
+1. should show InProgress with CV's Progressing message
+1. should complete upgrade and return to fulfilled
+
+### y-stream upgrade timeout when upgrading from 4.20.5 to 4.21.2
+
+1. should start upgrade to 4.21.2 and reach InProgress
+1. should time out when clusterUpgradeTimeout is set to 5s
+
+### Terminal failure recovery from 4.21.2 to 4.20.5
+
+1. should recover to fulfilled when switching back to CT matching current ClusterVersion 4.20.5
+
+### EUS upgrade timeout when upgrading from 4.20.5 to 4.22.4 via 4.21.6
+
+1. should start EUS intermediate upgrade and reach InProgress
+1. should time out during EUS intermediate upgrade
+
+### Terminal failure recovery after EUS timeout from 4.22.4 to 4.20.5
+
+1. should recover to fulfilled when switching back to CT matching current ClusterVersion 4.20.5
+
+### EUS upgrade 4.20.5 to 4.22.4 via 4.21.7 with failure recovery and successful completion
+
+1. should fail with MCPs not updated
+1. should fail with invalid intermediateVersion after fixing MCPs
+1. should start intermediate upgrade after fixing intermediateVersion
+1. should show intermediate upgrade in progress
+1. should start target upgrade after intermediate completes
+1. should show target upgrade in progress
+1. should wait for MCPs to update after target upgrade completes
+1. should complete EUS upgrade when MCPs are updated
 
 ## MNO Day2 Hardware Configuration test [mno-day2-hw-updates]
 

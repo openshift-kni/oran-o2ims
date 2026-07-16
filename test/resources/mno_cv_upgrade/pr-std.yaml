@@ -1,0 +1,106 @@
+apiVersion: clcm.openshift.io/v1alpha1
+kind: ProvisioningRequest
+metadata:
+  name: 88744070-717a-4305-8461-796244098339
+  finalizers:
+    - provisioningrequest.clcm.openshift.io/finalizer
+spec:
+  name: std-du-test
+  templateName: std-du
+  templateVersion: v4-19-3-v1
+  templateParameters:
+    nodeClusterName: std-du-cluster
+    oCloudSiteId: "local-123"
+    policyTemplateParameters: {}
+    clusterInstanceParameters:
+      clusterName: std-du-cluster
+      apiVIPs:
+        - 192.0.2.2
+      ingressVIPs:
+        - 192.0.2.4
+      nodes:
+      - hostName: master-1.std-test.example.com
+        nodeNetwork:
+          config:
+            dns-resolver:
+              config:
+                search:
+                  - example.com
+                server:
+                  - 8.8.8.8
+            routes:
+              config:
+                - next-hop-address: 192.0.2.254
+            interfaces:
+              - ipv4:
+                  address:
+                    - ip: 192.0.2.10
+                      prefix-length: 24
+      - hostName: master-2.std-test.example.com
+        nodeNetwork:
+          config:
+            dns-resolver:
+              config:
+                search:
+                  - example.com
+                server:
+                  - 8.8.8.8
+            routes:
+              config:
+                - next-hop-address: 192.0.2.254
+            interfaces:
+              - ipv4:
+                  address:
+                    - ip: 192.0.2.17
+                      prefix-length: 24
+      - hostName: master-3.std-test.example.com
+        nodeNetwork:
+          config:
+            dns-resolver:
+              config:
+                search:
+                  - example.com
+                server:
+                  - 8.8.8.8
+            routes:
+              config:
+                - next-hop-address: 192.0.2.254
+            interfaces:
+              - ipv4:
+                  address:
+                    - ip: 192.0.2.18
+                      prefix-length: 24
+      - hostName: worker-1.std-test.example.com
+        nodeNetwork:
+          config:
+            dns-resolver:
+              config:
+                search:
+                  - example.com
+                server:
+                  - 8.8.8.8
+            routes:
+              config:
+                - next-hop-address: 192.0.2.254
+            interfaces:
+              - ipv4:
+                  address:
+                    - ip: 192.0.2.123
+                      prefix-length: 24
+      - hostName: worker-2.std-test.example.com
+        nodeNetwork:
+          config:
+            dns-resolver:
+              config:
+                search:
+                  - example.com
+                server:
+                  - 8.8.8.8
+            routes:
+              config:
+                - next-hop-address: 192.0.2.254
+            interfaces:
+              - ipv4:
+                  address:
+                    - ip: 192.0.2.51
+                      prefix-length: 24
