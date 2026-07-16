@@ -96,6 +96,11 @@ const (
 	KubernetesAPIService = "kubernetes.default.svc"
 )
 
+// DefaultKubernetesAudience is the default audience carried by service account
+// tokens mounted via the standard volume projection. It matches the API
+// server's --service-account-issuer value.
+const DefaultKubernetesAudience = "https://" + KubernetesAPIService
+
 // Network addresses
 const (
 	Localhost = "127.0.0.1"

@@ -18,6 +18,8 @@ import (
 
 	authenticationv1 "k8s.io/api/authentication/v1"
 	"k8s.io/client-go/rest"
+
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
 
 var _ = Describe("KubernetesAuthenticatorConfig", func() {
@@ -136,7 +138,7 @@ var _ = Describe("KubernetesAuthenticatorConfig", func() {
 		Expect(resp.User.GetName()).To(Equal("test-user"))
 	})
 
-	It("should skip audience injection for exempt paths", func() {
+	It("should use the default Kubernetes audience for exempt paths", func() {
 		var capturedAudiences []string
 
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -189,7 +191,7 @@ var _ = Describe("KubernetesAuthenticatorConfig", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(ok).To(BeTrue())
 		Expect(resp.User.GetName()).To(Equal("alertmanager-sa"))
-		Expect(capturedAudiences).To(BeEmpty())
+		Expect(capturedAudiences).To(ConsistOf(constants.DefaultKubernetesAudience))
 	})
 
 	It("should still inject audiences for non-exempt paths when exempt paths are configured", func() {

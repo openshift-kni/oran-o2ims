@@ -22,6 +22,8 @@ import (
 	authenticationv1 "k8s.io/client-go/kubernetes/typed/authentication/v1"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/client-go/rest"
+
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
 
 // KubernetesAuthenticatorConfig defines the attributes required to instantiate a Kubernetes-based authenticator.Request
@@ -29,18 +31,21 @@ type KubernetesAuthenticatorConfig struct {
 	RESTConfig     *rest.Config
 	ClientCABundle string
 	Audiences      []string
-	// AudienceExemptPaths lists URL paths that bypass audience validation.
-	// Requests to these paths are still authenticated via TokenReview
-	// (identity is verified and RBAC is enforced), but the TokenReview is
-	// sent without audience constraints so that callers using default-
-	// audience SA tokens are accepted. Populated at startup from OpenAPI
-	// endpoints marked with x-skip-audience-validation.
+	// AudienceExemptPaths lists URL paths that are exempt from the
+	// service-specific audience check. Requests to these paths are still
+	// authenticated via TokenReview and authorized via RBAC, and the
+	// TokenReview validates the token against the default Kubernetes API
+	// server audience rather than the service-specific audience. This
+	// accepts callers using default-audience SA tokens (e.g., ACM
+	// alertmanager). Populated at startup from OpenAPI endpoints marked
+	// with x-skip-audience-validation.
 	AudienceExemptPaths []string
 }
 
 type kubernetesAuthenticator struct {
 	authenticator       authenticator.Request
 	audiences           authenticator.Audiences
+	defaultAudiences    authenticator.Audiences
 	audienceExemptPaths map[string]bool
 }
 
@@ -52,12 +57,17 @@ func (c *KubernetesAuthenticatorConfig) New() (authenticator.Request, error) {
 		return nil, err // nolint: wrapcheck
 	}
 
+	apiAudiences := authenticator.Audiences(c.Audiences)
+	if len(c.AudienceExemptPaths) > 0 {
+		apiAudiences = append(apiAudiences, constants.DefaultKubernetesAudience)
+	}
+
 	authenticatorConfig := authenticatorfactory.DelegatingAuthenticatorConfig{
 		Anonymous:                &apiserver.AnonymousAuthConfig{Enabled: false}, // Require authentication.
 		CacheTTL:                 1 * time.Minute,
 		TokenAccessReviewClient:  authenticationV1Client,
 		TokenAccessReviewTimeout: 10 * time.Second,
-		APIAudiences:             authenticator.Audiences(c.Audiences),
+		APIAudiences:             apiAudiences,
 		// wait.Backoff is copied from: https://github.com/kubernetes/apiserver/blob/v0.29.0/pkg/server/options/authentication.go#L43-L50
 		// options.DefaultAuthWebhookRetryBackoff is not used to avoid a dependency on "k8s.io/apiserver/pkg/server/options".
 		WebhookRetryBackoff: &wait.Backoff{
@@ -93,6 +103,7 @@ func (c *KubernetesAuthenticatorConfig) New() (authenticator.Request, error) {
 	return &kubernetesAuthenticator{
 		authenticator:       delegatingAuthenticator,
 		audiences:           authenticator.Audiences(c.Audiences),
+		defaultAudiences:    authenticator.Audiences{constants.DefaultKubernetesAudience},
 		audienceExemptPaths: exemptSet,
 	}, nil
 }
@@ -101,11 +112,16 @@ func (c *KubernetesAuthenticatorConfig) New() (authenticator.Request, error) {
 // When audiences are configured, they are injected into the request context so that the
 // delegating authenticator includes them in the TokenReview spec and validates them in
 // the response — mirroring what the standard Kubernetes API server does in its
-// WithAuthentication filter. Paths in audienceExemptPaths bypass audience validation
-// while still requiring valid authentication and RBAC authorization.
+// WithAuthentication filter. Paths in audienceExemptPaths use the default Kubernetes API
+// server audience instead of the service-specific audience so that callers with default
+// SA tokens are accepted while still requiring a valid audience.
 func (h *kubernetesAuthenticator) AuthenticateRequest(req *http.Request) (*authenticator.Response, bool, error) {
-	if len(h.audiences) > 0 && !h.audienceExemptPaths[req.URL.Path] {
-		ctx := authenticator.WithAudiences(req.Context(), h.audiences)
+	if len(h.audiences) > 0 {
+		audiences := h.audiences
+		if h.audienceExemptPaths[req.URL.Path] {
+			audiences = h.defaultAudiences
+		}
+		ctx := authenticator.WithAudiences(req.Context(), audiences)
 		req = req.WithContext(ctx)
 	}
 	return h.authenticator.AuthenticateRequest(req) // nolint: wrapcheck

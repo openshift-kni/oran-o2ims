@@ -24,10 +24,11 @@ import (
 const skipAudienceValidationExtension = "x-skip-audience-validation"
 
 // GetAudienceExemptPaths extracts API paths marked with x-skip-audience-validation
-// from the OpenAPI spec. These paths are exempt from audience-scoped token
-// validation while still requiring authentication (TokenReview) and
-// authorization (RBAC). This is used at startup to build the exempt path
-// list — no per-request spec traversal is needed.
+// from the OpenAPI spec. These paths validate against the default Kubernetes
+// API server audience instead of the service-specific audience, while still
+// requiring authentication (TokenReview) and authorization (RBAC). This is
+// used at startup to build the exempt path list — no per-request spec
+// traversal is needed.
 func GetAudienceExemptPaths(spec *openapi3.T) []string {
 	if spec == nil || spec.Paths == nil {
 		return nil

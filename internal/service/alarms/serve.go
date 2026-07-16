@@ -212,9 +212,9 @@ func Serve(config *api.AlarmsServerConfig) error {
 	}
 
 	// Extract paths marked with x-skip-audience-validation from the OpenAPI
-	// spec. These endpoints are exempt from audience-scoped token validation
-	// because their callers (e.g., ACM alertmanager) cannot send audience-
-	// scoped tokens. See the overlay for per-endpoint rationale.
+	// spec. These endpoints validate against the default Kubernetes API
+	// server audience instead of the service-specific audience, because
+	// their callers (e.g., ACM alertmanager) use default-audience SA tokens.
 	config.AudienceExemptPaths = append(auth.GetAudienceExemptPaths(swagger), metrics.MetricsPath)
 
 	// Create authn/authz middleware
