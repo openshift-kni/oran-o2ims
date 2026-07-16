@@ -123,7 +123,8 @@ var _ = Describe("KubernetesAuthenticatorConfig", func() {
 					ContentType: "application/json",
 				},
 			},
-			Audiences: []string{},
+			Audiences:           []string{},
+			AudienceExemptPaths: []string{"/some/exempt/path"},
 		}
 
 		auth, err := config.New()

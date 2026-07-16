@@ -58,7 +58,7 @@ func (c *KubernetesAuthenticatorConfig) New() (authenticator.Request, error) {
 	}
 
 	apiAudiences := authenticator.Audiences(c.Audiences)
-	if len(c.AudienceExemptPaths) > 0 {
+	if len(c.Audiences) > 0 && len(c.AudienceExemptPaths) > 0 {
 		apiAudiences = append(apiAudiences, constants.DefaultKubernetesAudience)
 	}
 
