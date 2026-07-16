@@ -41,7 +41,9 @@ import (
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
+//+kubebuilder:rbac:groups="",resources=namespaces,verbs=get;update;patch
 //+kubebuilder:rbac:groups=agent-install.openshift.io,resources=agents,verbs=get;list;watch
+//+kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch
 //+kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch
 //+kubebuilder:rbac:groups=operator.openshift.io,resources=ingresscontrollers,verbs=get;list;watch
 //+kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
@@ -648,6 +650,11 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 			return
 		}
 	}
+
+	err = t.ensureNamespaceMonitoringLabel(ctx)
+	if err != nil {
+		ctlrutils.LogError(ctx, t.logger, "Failed to ensure namespace monitoring label; continuing reconciliation", err)
+	}
 	ctlrutils.LogPhaseComplete(ctx, t.logger, "infrastructure_setup", time.Since(phaseStartTime))
 
 	// Phase 2: Database setup
@@ -1051,6 +1058,21 @@ func (t *reconcilerTask) createNetworkPolicy(ctx context.Context, serverName str
 					{Protocol: &protocol, Port: &portVal},
 				},
 			},
+			{
+				// Allow from the OpenShift monitoring stack (Prometheus metrics scraping)
+				From: []networkingv1.NetworkPolicyPeer{
+					{
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"network.openshift.io/policy-group": "monitoring",
+							},
+						},
+					},
+				},
+				Ports: []networkingv1.NetworkPolicyPort{
+					{Protocol: &protocol, Port: &portVal},
+				},
+			},
 		}, ingressRules...)
 	}
 
@@ -1106,12 +1128,16 @@ func (t *reconcilerTask) createServiceAccount(ctx context.Context, resourceName 
 func (t *reconcilerTask) createService(ctx context.Context, resourceName string, port int32, targetPort string) error {
 	t.logger.DebugContext(ctx, "[createService]")
 	// Build the Service object.
+	labels := map[string]string{
+		"app": resourceName,
+	}
+	if resourceName != ctlrutils.InventoryDatabaseServerName && resourceName != ctlrutils.HardwareManagerServerName {
+		labels["oran-o2ims/metrics"] = "true"
+	}
 	serviceMeta := metav1.ObjectMeta{
 		Name:      resourceName,
 		Namespace: t.object.Namespace,
-		Labels: map[string]string{
-			"app": resourceName,
-		},
+		Labels:    labels,
 		Annotations: map[string]string{
 			"service.beta.openshift.io/serving-cert-secret-name": fmt.Sprintf("%s-tls", resourceName),
 		},
@@ -1386,6 +1412,35 @@ func (t *reconcilerTask) updateInventoryDeploymentStatus(ctx context.Context) er
 		return fmt.Errorf("failed to update inventory deployment CR status: %w", err)
 	}
 
+	return nil
+}
+
+// ensureNamespaceMonitoringLabel ensures the operator namespace has the
+// openshift.io/cluster-monitoring label so that the platform Prometheus
+// instance discovers ServiceMonitors in this namespace.
+func (t *reconcilerTask) ensureNamespaceMonitoringLabel(ctx context.Context) error {
+	ns := &corev1.Namespace{}
+	if err := t.client.Get(ctx, types.NamespacedName{Name: t.object.Namespace}, ns); err != nil {
+		return fmt.Errorf("failed to get namespace %s: %w", t.object.Namespace, err)
+	}
+
+	const monitoringLabel = "openshift.io/cluster-monitoring"
+	if ns.Labels[monitoringLabel] == "true" {
+		return nil
+	}
+
+	patch := client.MergeFrom(ns.DeepCopy())
+	if ns.Labels == nil {
+		ns.Labels = make(map[string]string)
+	}
+	ns.Labels[monitoringLabel] = "true"
+
+	if err := t.client.Patch(ctx, ns, patch); err != nil {
+		return fmt.Errorf("failed to label namespace %s with %s: %w", t.object.Namespace, monitoringLabel, err)
+	}
+
+	t.logger.InfoContext(ctx, "Labeled namespace for cluster monitoring",
+		slog.String("namespace", t.object.Namespace))
 	return nil
 }
 

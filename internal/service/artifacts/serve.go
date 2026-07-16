@@ -22,6 +22,7 @@ import (
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/auth"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/metrics"
 
 	"github.com/getkin/kin-openapi/openapi3"
 
@@ -42,6 +43,7 @@ const (
 // Serve start artifacts server
 func Serve(config *api.ArtifactsServerConfig) error {
 	slog.Info("Starting artifacts server")
+	auth.ServiceName = "artifacts-server"
 
 	// Get and validate the openapi spec file
 	swagger, err := generated.GetSwagger()
@@ -98,6 +100,10 @@ func Serve(config *api.ArtifactsServerConfig) error {
 		return fmt.Errorf("error creating filter filterAdapter: %w", err)
 	}
 
+	// Exempt /metrics from audience-scoped token validation so Prometheus
+	// can scrape using its default-audience SA token.
+	config.AudienceExemptPaths = append(config.AudienceExemptPaths, metrics.MetricsPath)
+
 	// Create authn/authz middleware
 	authn, err := auth.GetAuthenticator(ctx, &config.CommonServerConfig)
 	if err != nil {
@@ -110,6 +116,7 @@ func Serve(config *api.ArtifactsServerConfig) error {
 	}
 
 	baseRouter := http.NewServeMux()
+	metrics.RegisterMetricsHandler(baseRouter, authn, authz)
 	opt := generated.StdHTTPServerOptions{
 		BaseRouter: baseRouter,
 		Middlewares: []generated.MiddlewareFunc{ // Add middlewares here

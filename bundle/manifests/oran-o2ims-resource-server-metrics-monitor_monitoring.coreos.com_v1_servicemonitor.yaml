@@ -1,0 +1,21 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app.kubernetes.io/component: metrics
+    app.kubernetes.io/created-by: oran-o2ims
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/part-of: oran-o2ims
+  name: oran-o2ims-resource-server-metrics-monitor
+spec:
+  endpoints:
+  - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+    path: /metrics
+    port: api
+    scheme: https
+    tlsConfig:
+      caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
+      serverName: resource-server.oran-o2ims.svc
+  selector:
+    matchLabels:
+      app: resource-server

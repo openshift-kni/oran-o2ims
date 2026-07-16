@@ -146,6 +146,9 @@ var _ = BeforeSuite(func() {
 	// Get the managers for O2IMS controllers.
 	ProvisioningManager, err = ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: testScheme,
+		Metrics: metricsserver.Options{
+			BindAddress: "0", // Disable metrics listener in tests
+		},
 	})
 	Expect(err).ToNot(HaveOccurred())
 	Expect(ProvisioningManager).ToNot(BeNil())

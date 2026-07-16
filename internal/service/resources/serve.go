@@ -27,6 +27,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/auth"
 	k8sclient "github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/metrics"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	repo2 "github.com/openshift-kni/oran-o2ims/internal/service/common/repo"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/api"
@@ -49,6 +50,7 @@ const (
 // Serve start alarms server
 func Serve(config *api.ResourceServerConfig) error {
 	slog.Info("Starting resource server")
+	auth.ServiceName = "resource-server"
 
 	// Get and validate the openapi spec file
 	swagger, err := generated.GetSwagger()
@@ -199,6 +201,10 @@ func Serve(config *api.ResourceServerConfig) error {
 		return fmt.Errorf("error creating filter filterAdapter: %w", err)
 	}
 
+	// Exempt /metrics from audience-scoped token validation so Prometheus
+	// can scrape using its default-audience SA token.
+	config.AudienceExemptPaths = append(config.AudienceExemptPaths, metrics.MetricsPath)
+
 	// Create authn/authz middleware
 	authn, err := auth.GetAuthenticator(ctx, &config.CommonServerConfig)
 	if err != nil {
@@ -211,6 +217,7 @@ func Serve(config *api.ResourceServerConfig) error {
 	}
 
 	baseRouter := http.NewServeMux()
+	metrics.RegisterMetricsHandler(baseRouter, authn, authz)
 	opt := generated.StdHTTPServerOptions{
 		BaseRouter: baseRouter,
 		Middlewares: []generated.MiddlewareFunc{ // Add middlewares here

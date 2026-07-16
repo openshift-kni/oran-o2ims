@@ -1,0 +1,118 @@
+# Per-service Prometheus ServiceMonitors for O2IMS API pods.
+# Each service gets its own monitor so that tlsConfig.serverName matches
+# the serving certificate SAN (<service-name>.<namespace>.svc).
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app.kubernetes.io/component: metrics
+    app.kubernetes.io/created-by: oran-o2ims
+    app.kubernetes.io/part-of: oran-o2ims
+    app.kubernetes.io/managed-by: kustomize
+  name: alarms-server-metrics-monitor
+  namespace: system
+spec:
+  endpoints:
+    - path: /metrics
+      port: api
+      scheme: https
+      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      tlsConfig:
+        serverName: alarms-server.oran-o2ims.svc
+        caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
+  selector:
+    matchLabels:
+      app: alarms-server
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app.kubernetes.io/component: metrics
+    app.kubernetes.io/created-by: oran-o2ims
+    app.kubernetes.io/part-of: oran-o2ims
+    app.kubernetes.io/managed-by: kustomize
+  name: artifacts-server-metrics-monitor
+  namespace: system
+spec:
+  endpoints:
+    - path: /metrics
+      port: api
+      scheme: https
+      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      tlsConfig:
+        serverName: artifacts-server.oran-o2ims.svc
+        caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
+  selector:
+    matchLabels:
+      app: artifacts-server
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app.kubernetes.io/component: metrics
+    app.kubernetes.io/created-by: oran-o2ims
+    app.kubernetes.io/part-of: oran-o2ims
+    app.kubernetes.io/managed-by: kustomize
+  name: cluster-server-metrics-monitor
+  namespace: system
+spec:
+  endpoints:
+    - path: /metrics
+      port: api
+      scheme: https
+      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      tlsConfig:
+        serverName: cluster-server.oran-o2ims.svc
+        caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
+  selector:
+    matchLabels:
+      app: cluster-server
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app.kubernetes.io/component: metrics
+    app.kubernetes.io/created-by: oran-o2ims
+    app.kubernetes.io/part-of: oran-o2ims
+    app.kubernetes.io/managed-by: kustomize
+  name: provisioning-server-metrics-monitor
+  namespace: system
+spec:
+  endpoints:
+    - path: /metrics
+      port: api
+      scheme: https
+      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      tlsConfig:
+        serverName: provisioning-server.oran-o2ims.svc
+        caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
+  selector:
+    matchLabels:
+      app: provisioning-server
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app.kubernetes.io/component: metrics
+    app.kubernetes.io/created-by: oran-o2ims
+    app.kubernetes.io/part-of: oran-o2ims
+    app.kubernetes.io/managed-by: kustomize
+  name: resource-server-metrics-monitor
+  namespace: system
+spec:
+  endpoints:
+    - path: /metrics
+      port: api
+      scheme: https
+      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      tlsConfig:
+        serverName: resource-server.oran-o2ims.svc
+        caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
+  selector:
+    matchLabels:
+      app: resource-server

@@ -209,11 +209,11 @@ func HasApiEndpoints(serverName string) bool {
 		serverName == InventoryProvisioningServerName
 }
 
-// HasMetrics determines whether a server exposes a metrics endpoint that
-// requires TLS. Servers with API endpoints also serve metrics, but this
-// function identifies servers that serve metrics without API endpoints.
+// HasMetrics determines whether a server exposes a /metrics endpoint.
+// All API servers except the database and the hardware manager server expose metrics.
 func HasMetrics(serverName string) bool {
-	return serverName == HardwareManagerServerName
+	return (HasApiEndpoints(serverName) && serverName != InventoryDatabaseServerName) ||
+		serverName == HardwareManagerServerName
 }
 
 // NeedsServingCert determines whether a server needs a TLS serving

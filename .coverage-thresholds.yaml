@@ -30,6 +30,7 @@ packages:
   internal/service/common/api/middleware: 31
   internal/service/common/async: 48
   internal/service/common/auth: 29
+  internal/service/common/metrics: 75
   internal/service/common/db: 1
   internal/service/common/notifier: 71
   internal/service/common/utils: 12
