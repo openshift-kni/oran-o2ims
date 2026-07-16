@@ -31,14 +31,14 @@ type KubernetesAuthenticatorConfig struct {
 	RESTConfig     *rest.Config
 	ClientCABundle string
 	Audiences      []string
-	// AudienceExemptPaths lists URL paths that are exempt from the
-	// service-specific audience check. Requests to these paths are still
-	// authenticated via TokenReview and authorized via RBAC, and the
-	// TokenReview validates the token against the default Kubernetes API
-	// server audience rather than the service-specific audience. This
-	// accepts callers using default-audience SA tokens (e.g., ACM
-	// alertmanager). Populated at startup from OpenAPI endpoints marked
-	// with x-skip-audience-validation.
+	// AudienceExemptPaths lists URL paths that accept the default
+	// Kubernetes API server audience in addition to the service-specific
+	// audience. Requests to these paths are still authenticated via
+	// TokenReview and authorized via RBAC, but the TokenReview accepts
+	// tokens carrying either the service-specific audience or the default
+	// Kubernetes audience. This supports callers using default-audience SA
+	// tokens (e.g., ACM alertmanager). Populated at startup from OpenAPI
+	// endpoints marked with x-allow-default-audience.
 	AudienceExemptPaths []string
 }
 
@@ -112,14 +112,15 @@ func (c *KubernetesAuthenticatorConfig) New() (authenticator.Request, error) {
 // When audiences are configured, they are injected into the request context so that the
 // delegating authenticator includes them in the TokenReview spec and validates them in
 // the response — mirroring what the standard Kubernetes API server does in its
-// WithAuthentication filter. Paths in audienceExemptPaths use the default Kubernetes API
-// server audience instead of the service-specific audience so that callers with default
-// SA tokens are accepted while still requiring a valid audience.
+// WithAuthentication filter. Paths in audienceExemptPaths accept both the service-specific
+// audience and the default Kubernetes API server audience, so callers with either type of
+// token are accepted while tokens with no audience or an unrecognized audience are rejected.
 func (h *kubernetesAuthenticator) AuthenticateRequest(req *http.Request) (*authenticator.Response, bool, error) {
 	if len(h.audiences) > 0 {
 		audiences := h.audiences
 		if h.audienceExemptPaths[req.URL.Path] {
-			audiences = h.defaultAudiences
+			audiences = append(authenticator.Audiences{}, h.audiences...)
+			audiences = append(audiences, h.defaultAudiences...)
 		}
 		ctx := authenticator.WithAudiences(req.Context(), audiences)
 		req = req.WithContext(ctx)
