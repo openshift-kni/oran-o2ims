@@ -41,6 +41,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
+	upgradevalidation "github.com/openshift-kni/oran-o2ims/internal/validation"
 )
 
 // ClusterTemplateReconciler reconciles a ClusterTemplate object
@@ -366,69 +367,12 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeDefaults() error {
 	}
 
 	if hasCV {
-		if err := t.validateCVUpgradeDefaults(upgradeData); err != nil {
-			return err
+		if err := upgradevalidation.ValidateCVUpgradeData(upgradeData, t.object.Spec.Release, "upgradeDefaults"); err != nil {
+			return fmt.Errorf("clusterVersion upgrade validation failed: %w", err)
 		}
 	} else if hasIBGU {
 		if err := t.validateIBGUUpgradeDefaults(); err != nil {
 			return err
-		}
-	}
-
-	return nil
-}
-
-func (t *clusterTemplateReconcilerTask) validateCVUpgradeDefaults(upgradeData map[string]any) error {
-	cvRaw, ok := upgradeData[ctlrutils.UpgradeDefaultsClusterVersionKey]
-	if !ok {
-		return nil
-	}
-	cvMap, ok := cvRaw.(map[string]any)
-	if !ok {
-		return typederrors.NewInputError("upgradeDefaults %q value must be an object",
-			ctlrutils.UpgradeDefaultsClusterVersionKey)
-	}
-
-	if desiredUpdate, ok := cvMap["desiredUpdate"].(map[string]any); ok {
-		if version, ok := desiredUpdate["version"].(string); ok && version != "" {
-			if version != t.object.Spec.Release {
-				return typederrors.NewInputError(
-					"the clusterVersion desiredUpdate.version (%s) does not match the ClusterTemplate spec.release (%s)",
-					version, t.object.Spec.Release)
-			}
-		}
-	}
-
-	if timeoutStr, ok := upgradeData[ctlrutils.ClusterUpgradeTimeoutConfigKey].(string); ok {
-		if _, err := time.ParseDuration(timeoutStr); err != nil {
-			return typederrors.NewInputError(
-				"invalid %s %q in upgradeDefaults: %s",
-				ctlrutils.ClusterUpgradeTimeoutConfigKey, timeoutStr, err.Error())
-		}
-	}
-
-	if intermediateVersionStr, ok := upgradeData["intermediateVersion"].(string); ok && intermediateVersionStr != "" {
-		intermediateVer, err := semver.NewVersion(intermediateVersionStr)
-		if err != nil {
-			return typederrors.NewInputError(
-				"invalid intermediateVersion %q in upgradeDefaults: %s",
-				intermediateVersionStr, err.Error())
-		}
-		releaseVer, err := semver.NewVersion(t.object.Spec.Release)
-		if err != nil {
-			return typederrors.NewInputError(
-				"cannot validate intermediateVersion: spec.release %q is not valid semver: %s",
-				t.object.Spec.Release, err.Error())
-		}
-		if intermediateVer.Major != releaseVer.Major {
-			return typederrors.NewInputError(
-				"intermediateVersion major version (%d) must equal spec.release major version (%d)",
-				intermediateVer.Major, releaseVer.Major)
-		}
-		if intermediateVer.Minor+1 != releaseVer.Minor {
-			return typederrors.NewInputError(
-				"intermediateVersion %s must be exactly one minor version below ClusterTemplate's release version %s",
-				intermediateVer, releaseVer)
 		}
 	}
 
