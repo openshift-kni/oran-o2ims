@@ -40,6 +40,7 @@ import (
 	hwmgrcontrollers "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/controller"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
+	configv1 "github.com/openshift/api/config/v1"
 	assistedservicev1beta1 "github.com/openshift/assisted-service/api/v1beta1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	addonv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
@@ -119,6 +120,8 @@ var _ = BeforeSuite(func() {
 	err = msav1beta1.AddToScheme(testScheme)
 	Expect(err).ToNot(HaveOccurred())
 	err = workv1.Install(testScheme)
+	Expect(err).ToNot(HaveOccurred())
+	err = configv1.Install(testScheme)
 	Expect(err).ToNot(HaveOccurred())
 
 	// Get the needed external CRDs. Their details are under test/utils/vars.go - ExternalCrdsData.

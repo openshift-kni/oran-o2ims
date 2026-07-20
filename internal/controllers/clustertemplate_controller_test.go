@@ -1580,7 +1580,7 @@ var _ = Describe("validateUpgradeDefaults", func() {
 			err := t.validateUpgradeDefaults()
 			Expect(err).To(HaveOccurred())
 			Expect(typederrors.IsInputError(err)).To(BeTrue())
-			Expect(err.Error()).To(ContainSubstring("invalid intermediateVersion"))
+			Expect(err.Error()).To(ContainSubstring("is not valid semver"))
 		})
 
 		It("should reject intermediateVersion when major version does not match release major", func() {
@@ -1590,7 +1590,7 @@ var _ = Describe("validateUpgradeDefaults", func() {
 			err := t.validateUpgradeDefaults()
 			Expect(err).To(HaveOccurred())
 			Expect(typederrors.IsInputError(err)).To(BeTrue())
-			Expect(err.Error()).To(ContainSubstring("intermediateVersion major version (3) must equal spec.release major version (4)"))
+			Expect(err.Error()).To(ContainSubstring("major version (3) must equal ClusterTemplate's spec.release major version (4)"))
 		})
 
 		It("should reject intermediateVersion when minor+1 does not match release minor", func() {
@@ -1600,7 +1600,7 @@ var _ = Describe("validateUpgradeDefaults", func() {
 			err := t.validateUpgradeDefaults()
 			Expect(err).To(HaveOccurred())
 			Expect(typederrors.IsInputError(err)).To(BeTrue())
-			Expect(err.Error()).To(ContainSubstring("intermediateVersion 4.15.0 must be exactly one minor version below ClusterTemplate's release version 4.17.0"))
+			Expect(err.Error()).To(ContainSubstring("intermediateVersion 4.15.0 must be exactly one minor version below ClusterTemplate's spec.release version 4.17.0"))
 		})
 
 		It("should reject when clusterVersion value is not an object", func() {
