@@ -272,6 +272,8 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 		}
 		anList := testNonCachingListAllocatedNodesForNAR(testCtx, prName)
 		for i := range anList.Items {
+			anList.Items[i].Finalizers = nil
+			Expect(K8SClient.Update(testCtx, &anList.Items[i])).To(Succeed())
 			Expect(client.IgnoreNotFound(K8SClient.Delete(testCtx, &anList.Items[i]))).To(Succeed())
 		}
 

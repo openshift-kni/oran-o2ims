@@ -407,6 +407,8 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		}
 		anList := testNonCachingListAllocatedNodesForNAR(testCtx, prName)
 		for i := range anList.Items {
+			anList.Items[i].Finalizers = nil
+			_ = K8SClient.Update(testCtx, &anList.Items[i])
 			_ = K8SClient.Delete(testCtx, &anList.Items[i])
 		}
 

@@ -450,6 +450,8 @@ defaultHugepagesSize: "1G"`,
 			}
 			anList := testNonCachingListAllocatedNodesForNAR(testCtx, crName)
 			for i := range anList.Items {
+				anList.Items[i].Finalizers = nil
+				_ = K8SClient.Update(testCtx, &anList.Items[i])
 				_ = K8SClient.Delete(testCtx, &anList.Items[i])
 			}
 		}
@@ -621,12 +623,11 @@ defaultHugepagesSize: "1G"`,
 		Expect(singleNodeGroup.NodeGroupData.HwProfile).To(Equal(testutils.TestHwProfileName))
 
 		By("Waiting for AllocatedNode to be created by hardware manager")
-		allocatedNodes := &hwmgmtv1alpha1.AllocatedNodeList{}
-		Eventually(func() bool {
-			err := K8SClient.List(testCtx, allocatedNodes, client.InNamespace(constants.DefaultNamespace))
-			Expect(err).ToNot(HaveOccurred())
-			return len(allocatedNodes.Items) == 1 && allocatedNodes.Items[0].Spec.NodeAllocationRequest == crName
-		}, timeout, interval).Should(BeTrue())
+		var allocatedNodes *hwmgmtv1alpha1.AllocatedNodeList
+		Eventually(func() int {
+			allocatedNodes = testNonCachingListAllocatedNodesForNAR(testCtx, crName)
+			return len(allocatedNodes.Items)
+		}, timeout, interval).Should(Equal(1))
 
 		// Save the single allocated node for later use
 		allocatedNode = &allocatedNodes.Items[0]
