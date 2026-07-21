@@ -98,15 +98,6 @@ spec:
                   - url
                   - version
                   type: object
-                  x-kubernetes-validations:
-                  - message: component is immutable
-                    rule: self.component == oldSelf.component
-                  - message: url is immutable
-                    rule: self.url == oldSelf.url
-                  - message: version is immutable
-                    rule: self.version == oldSelf.version
-                  - message: vendor is immutable
-                    rule: self.vendor == oldSelf.vendor
                 maxItems: 1024
                 type: array
                 x-kubernetes-list-map-keys:

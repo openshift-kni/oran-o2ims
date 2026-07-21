@@ -11,10 +11,6 @@ import (
 )
 
 // FirmwareImage defines a firmware image entry in the catalog.
-// +kubebuilder:validation:XValidation:message="component is immutable",rule="self.component == oldSelf.component"
-// +kubebuilder:validation:XValidation:message="url is immutable",rule="self.url == oldSelf.url"
-// +kubebuilder:validation:XValidation:message="version is immutable",rule="self.version == oldSelf.version"
-// +kubebuilder:validation:XValidation:message="vendor is immutable",rule="self.vendor == oldSelf.vendor"
 type FirmwareImage struct {
 	// Name is a unique identifier for this firmware image within the catalog.
 	// +kubebuilder:validation:MinLength=1

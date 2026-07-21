@@ -55,6 +55,10 @@ func (v *firmwareCatalogValidator) ValidateUpdate(ctx context.Context, oldObj, n
 	}
 	firmwarecataloglog.Info("validate update", "name", oldCatalog.Name)
 
+	if modified := findModifiedImmutableFields(oldCatalog.Spec.Images, newCatalog.Spec.Images); len(modified) > 0 {
+		return nil, fmt.Errorf("firmware catalog entries are immutable: %s", strings.Join(modified, "; "))
+	}
+
 	removed := findRemovedEntries(oldCatalog.Spec.Images, newCatalog.Spec.Images)
 	if len(removed) == 0 {
 		return nil, nil
@@ -99,6 +103,36 @@ func findRemovedEntries(old, updated []FirmwareImage) []string {
 		}
 	}
 	return removed
+}
+
+// findModifiedImmutableFields compares entries that exist in both old and updated lists
+// and returns descriptions of any immutable field changes (component, url, version, vendor).
+func findModifiedImmutableFields(old, updated []FirmwareImage) []string {
+	oldByName := make(map[string]FirmwareImage, len(old))
+	for _, img := range old {
+		oldByName[img.Name] = img
+	}
+
+	var violations []string
+	for _, cur := range updated {
+		prev, exists := oldByName[cur.Name]
+		if !exists {
+			continue
+		}
+		if cur.Component != prev.Component {
+			violations = append(violations, fmt.Sprintf("%q: component is immutable", cur.Name))
+		}
+		if cur.URL != prev.URL {
+			violations = append(violations, fmt.Sprintf("%q: url is immutable", cur.Name))
+		}
+		if cur.Version != prev.Version {
+			violations = append(violations, fmt.Sprintf("%q: version is immutable", cur.Name))
+		}
+		if cur.Vendor != prev.Vendor {
+			violations = append(violations, fmt.Sprintf("%q: vendor is immutable", cur.Name))
+		}
+	}
+	return violations
 }
 
 // isEntryReferencedByAnyProfile checks whether the given catalog entry name is

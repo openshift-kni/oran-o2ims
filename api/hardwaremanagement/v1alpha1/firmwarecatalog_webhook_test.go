@@ -111,6 +111,55 @@ var _ = Describe("FirmwareCatalogValidator", func() {
 			})
 		})
 
+		Context("when modifying an immutable field", func() {
+			It("should reject a component change", func() {
+				setupValidator()
+				newCatalog.Spec.Images[0].Component = "bmc"
+
+				_, err := validator.ValidateUpdate(ctx, oldCatalog, newCatalog)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("component is immutable"))
+			})
+
+			It("should reject a url change", func() {
+				setupValidator()
+				newCatalog.Spec.Images[0].URL = "https://other.com/bios.exe"
+
+				_, err := validator.ValidateUpdate(ctx, oldCatalog, newCatalog)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("url is immutable"))
+			})
+
+			It("should reject a version change", func() {
+				setupValidator()
+				newCatalog.Spec.Images[0].Version = "9.9.9"
+
+				_, err := validator.ValidateUpdate(ctx, oldCatalog, newCatalog)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("version is immutable"))
+			})
+
+			It("should reject a vendor change", func() {
+				setupValidator()
+				newCatalog.Spec.Images[0].Vendor = "HP"
+
+				_, err := validator.ValidateUpdate(ctx, oldCatalog, newCatalog)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("vendor is immutable"))
+			})
+
+			It("should report multiple violations", func() {
+				setupValidator()
+				newCatalog.Spec.Images[0].Component = "nic"
+				newCatalog.Spec.Images[0].Version = "9.9.9"
+
+				_, err := validator.ValidateUpdate(ctx, oldCatalog, newCatalog)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("component is immutable"))
+				Expect(err.Error()).To(ContainSubstring("version is immutable"))
+			})
+		})
+
 		Context("when all entries are removed and none are referenced", func() {
 			It("should allow the removal", func() {
 				setupValidator()
