@@ -183,6 +183,13 @@ spec:
                             format: date-time
                             type: string
                         type: object
+                      fulfilledNodeCount:
+                        description: |-
+                          FulfilledNodeCount records the number of nodes at the time the PR last
+                          reached Fulfilled. Used to detect scale-out operations on subsequent
+                          reconciles — if the rendered ClusterInstance has more nodes than this
+                          value, a scale-out is in progress.
+                        type: integer
                       name:
                         description: Contains the name of the created ClusterInstance.
                         type: string

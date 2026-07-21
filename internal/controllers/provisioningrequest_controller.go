@@ -325,11 +325,20 @@ func (t *provisioningRequestReconcilerTask) handlePostProvisioning(ctx context.C
 
 	// Check if we need to requeue for ongoing operations
 	if !ctlrutils.IsClusterProvisionCompleted(t.object) || requeueForConfig {
+		// Use a shorter interval during scale-out so CSR approval and node
+		// join checks run frequently
+		fulfilledCount := 0
+		if t.object.Status.Extensions.ClusterDetails != nil {
+			fulfilledCount = t.object.Status.Extensions.ClusterDetails.FulfilledNodeCount
+		}
+		if fulfilledCount > 0 && len(getNodeRolesByHostname(renderedClusterInstance)) > fulfilledCount {
+			return requeueWithMediumInterval(), nil
+		}
 		return requeueWithLongInterval(), nil
 	}
 
 	// Finalize if everything is complete
-	err = t.finalizeProvisioningIfComplete(ctx)
+	err = t.finalizeProvisioningIfComplete(ctx, renderedClusterInstance)
 	if err != nil {
 		result, _ := requeueWithError(err)
 		return result, err
@@ -721,7 +730,7 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 		return requeueWithLongInterval(), nil
 	}
 
-	err = t.finalizeProvisioningIfComplete(ctx)
+	err = t.finalizeProvisioningIfComplete(ctx, nil)
 	if err != nil {
 		return requeueWithError(err)
 	}
@@ -1283,10 +1292,18 @@ func (r *ProvisioningRequestReconciler) handleObservabilityAddonCleanup(ctx cont
 // finalizeProvisioningIfComplete checks if the provisioning/upgrade process is completed.
 // If so, it sets the provisioning state to "fulfilled" and updates the provisioned
 // resources in the status.
-func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx context.Context) error {
+func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(
+	ctx context.Context, renderedClusterInstance *unstructured.Unstructured) error {
 	if ctlrutils.IsClusterProvisionCompleted(t.object) && ctlrutils.IsClusterConfigCompleted(t.object) &&
 		ctlrutils.IsHardwareConfigCompleted(t.object) &&
 		(!ctlrutils.IsClusterUpgradeInitiated(t.object) || ctlrutils.IsClusterUpgradeCompleted(t.object)) {
+
+		// Record the fulfilled node count so scale-out can be detected on future reconciles.
+		// This must be set here (not earlier) to ensure it only updates when the PR
+		// genuinely reaches Fulfilled with all nodes provisioned.
+		if renderedClusterInstance != nil && t.object.Status.Extensions.ClusterDetails != nil {
+			t.object.Status.Extensions.ClusterDetails.FulfilledNodeCount = len(getNodeRolesByHostname(renderedClusterInstance))
+		}
 
 		ctlrutils.SetProvisioningStateFulfilled(t.object)
 		mcl, err := t.updateOCloudNodeClusterId(ctx)
@@ -1312,6 +1329,11 @@ func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(ctx c
 		if err := t.setNARClusterProvisioned(ctx); err != nil {
 			return fmt.Errorf("failed to set clusterProvisioned on NAR: %w", err)
 		}
+		// Clean up scale-out spoke access resources (MSA, ManifestWork) if they exist
+		if t.object.Status.Extensions.ClusterDetails != nil {
+			t.cleanupScaleOutSpokeAccess(ctx, t.object.Status.Extensions.ClusterDetails.Name)
+		}
+
 		if err := t.syncNARSkipCleanup(ctx); err != nil {
 			return fmt.Errorf("failed to sync skipCleanup on NAR: %w", err)
 		}

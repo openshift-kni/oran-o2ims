@@ -207,13 +207,26 @@ func (t *provisioningRequestReconcilerTask) updateClusterInstance(ctx context.Co
 
 	configErr := t.applyNodeConfiguration(ctx, hwNodes, nodeAllocationRequest, clusterInstance)
 	if configErr != nil {
-		msg := "Failed to apply node configuration to the rendered ClusterInstance: " + configErr.Error()
-		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
-			provisioningv1alpha1.PRconditionTypes.HardwareNodeConfigApplied,
-			provisioningv1alpha1.CRconditionReasons.NotApplied,
-			metav1.ConditionFalse,
-			msg)
-		ctlrutils.SetProvisioningStateFailed(t.object, msg)
+		if ctlrutils.IsClusterProvisionCompleted(t.object) {
+			// During scale-out, the new AllocatedNode may not exist yet when the
+			// first reconcile runs. Treat this as in-progress rather than failed
+			// so the user sees "progressing" while the HW manager allocates the node.
+			msg := "Waiting for hardware allocation for new nodes"
+			ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
+				provisioningv1alpha1.PRconditionTypes.HardwareNodeConfigApplied,
+				provisioningv1alpha1.CRconditionReasons.InProgress,
+				metav1.ConditionFalse,
+				msg)
+			ctlrutils.SetProvisioningStateInProgress(t.object, msg)
+		} else {
+			failMsg := "Failed to apply node configuration to the rendered ClusterInstance: " + configErr.Error()
+			ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
+				provisioningv1alpha1.PRconditionTypes.HardwareNodeConfigApplied,
+				provisioningv1alpha1.CRconditionReasons.NotApplied,
+				metav1.ConditionFalse,
+				failMsg)
+			ctlrutils.SetProvisioningStateFailed(t.object, failMsg)
+		}
 	} else {
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.HardwareNodeConfigApplied,

@@ -63,6 +63,12 @@ type ClusterDetails struct {
 
 	// ClusterUpgradeStatus holds the state of a cluster upgrade in progress.
 	ClusterUpgradeStatus *ClusterUpgradeStatus `json:"clusterUpgradeStatus,omitempty"`
+
+	// FulfilledNodeCount records the number of nodes at the time the PR last
+	// reached Fulfilled. Used to detect scale-out operations on subsequent
+	// reconciles — if the rendered ClusterInstance has more nodes than this
+	// value, a scale-out is in progress.
+	FulfilledNodeCount int `json:"fulfilledNodeCount,omitempty"`
 }
 
 // ClusterUpgradeStatus holds the persisted state for a cluster upgrade lifecycle.

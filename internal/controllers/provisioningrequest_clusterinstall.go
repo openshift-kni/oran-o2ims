@@ -8,10 +8,16 @@ package controllers
 
 import (
 	"context"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"log/slog"
 	"slices"
+	"strings"
 
+	certificatesv1 "k8s.io/api/certificates/v1"
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,6 +30,7 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils/spokeclient"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -214,6 +221,84 @@ func (t *provisioningRequestReconcilerTask) handleClusterInstallation(ctx contex
 		// Update the ProvisioningRequest status with the clusterInstance details
 		if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
 			return fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", t.object.Name, updateErr)
+		}
+	}
+
+	// Detect scale-out: if the rendered CI has more nodes than the last fulfilled
+	// count, proactively transition the PR to Progressing. Without this, the PR
+	// stays at Fulfilled because siteconfig doesn't reset the CI's Provisioned
+	// condition when nodes are added to an already-provisioned cluster.
+	fulfilledCount := 0
+	if t.object.Status.Extensions.ClusterDetails != nil {
+		fulfilledCount = t.object.Status.Extensions.ClusterDetails.FulfilledNodeCount
+	}
+	renderedNodeCount := len(getNodeRolesByHostname(clusterInstance))
+	if fulfilledCount > 0 && renderedNodeCount > fulfilledCount {
+		t.logger.InfoContext(ctx, "Scale-out in progress",
+			slog.Int("fulfilledNodeCount", fulfilledCount),
+			slog.Int("renderedNodeCount", renderedNodeCount))
+
+		// Only set InProgress on the first detection (when ClusterProvisioned is
+		// still Completed).
+		if ctlrutils.IsClusterProvisionCompleted(t.object) {
+			message := fmt.Sprintf("Scale-out: waiting for new node to join the cluster (%d → %d nodes)",
+				fulfilledCount, renderedNodeCount)
+			t.logger.InfoContext(ctx, message)
+			ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
+				provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
+				provisioningv1alpha1.CRconditionReasons.InProgress,
+				metav1.ConditionFalse,
+				message,
+			)
+			ctlrutils.SetProvisioningStateInProgress(t.object, message)
+			currentTime := metav1.Now()
+			t.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = &currentTime
+			if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+				return fmt.Errorf("failed to update scale-out status for ProvisioningRequest %s: %w", t.object.Name, updateErr)
+			}
+		}
+
+		// WORKAROUND: Approve pending CSRs for scale-out worker nodes.
+		// The Assisted Service Agent controller should handle day-2 CSR approval
+		// via tryApproveDay2CSRs(), but it is not firing for scale-out workers
+		// (the Agent stays in installing-in-progress:Rebooting with empty
+		// csrStatus). This workaround can be removed once the Assisted Service
+		// bug is fixed. See: project_scaleout_csr_approval.md
+		if err := t.approveScaleOutCSRs(ctx, clusterInstance); err != nil {
+			t.logger.WarnContext(ctx, "Scale-out CSR approval attempt failed, will retry",
+				slog.Any("error", err))
+		}
+
+		// Check if all rendered nodes have joined the spoke cluster. If so,
+		// update fulfilledNodeCount and let the normal finalization flow run.
+		allJoined, checkErr := t.checkAllNodesJoined(ctx, clusterInstance)
+		if checkErr != nil {
+			t.logger.WarnContext(ctx, "Failed to check spoke node status, will retry",
+				slog.Any("error", checkErr))
+		}
+		t.logger.InfoContext(ctx, "Scale-out node join check",
+			slog.Bool("allJoined", allJoined))
+
+		if allJoined {
+			t.logger.InfoContext(ctx, "All scale-out nodes have joined the cluster")
+			t.object.Status.Extensions.ClusterDetails.FulfilledNodeCount = renderedNodeCount
+			ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
+				provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
+				provisioningv1alpha1.CRconditionReasons.Completed,
+				metav1.ConditionTrue,
+				"Provisioning completed",
+			)
+			if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+				return fmt.Errorf("failed to update scale-out completion status: %w", updateErr)
+			}
+			// Fall through to normal finalization
+		} else {
+			// Don't fall through to checkClusterProvisionStatus while scale-out
+			// is in progress. Siteconfig doesn't reset the CI's Provisioned
+			// condition for scale-out, so checkClusterProvisionStatus would
+			// overwrite our InProgress status back to Completed, causing
+			// premature finalization.
+			return nil
 		}
 	}
 
@@ -640,6 +725,205 @@ func validateScaleWorkerOnly(existingCI, renderedCI *unstructured.Unstructured) 
 	}
 
 	return nil
+}
+
+// scaleOutCSRRBACRules defines the RBAC permissions delivered to the spoke cluster
+// for approving CSRs during scale-out operations.
+var scaleOutCSRRBACRules = []rbacv1.PolicyRule{
+	{
+		APIGroups: []string{"certificates.k8s.io"},
+		Resources: []string{"certificatesigningrequests"},
+		Verbs:     []string{"get", "list", "watch"},
+	},
+	{
+		APIGroups: []string{"certificates.k8s.io"},
+		Resources: []string{"certificatesigningrequests/approval"},
+		Verbs:     []string{"update"},
+	},
+	{
+		APIGroups: []string{"certificates.k8s.io"},
+		Resources: []string{"signers"},
+		ResourceNames: []string{
+			"kubernetes.io/kube-apiserver-client-kubelet",
+			"kubernetes.io/kubelet-serving",
+		},
+		Verbs: []string{"approve"},
+	},
+	{
+		APIGroups: []string{""},
+		Resources: []string{"nodes"},
+		Verbs:     []string{"get", "list"},
+	},
+}
+
+// scaleOutSpokeScheme is the scheme used by the spoke client for CSR operations.
+var scaleOutSpokeScheme = spokeclient.NewSpokeScheme(certificatesv1.AddToScheme, corev1.AddToScheme)
+
+// approveScaleOutCSRs is a WORKAROUND for an Assisted Service bug where
+// tryApproveDay2CSRs() does not fire for scale-out worker nodes. It connects
+// to the spoke cluster and approves pending CSRs whose CN matches a node
+// hostname in the rendered ClusterInstance.
+//
+// This workaround can be removed once the Assisted Service bug is fixed.
+// See: project_scaleout_csr_approval.md
+func (t *provisioningRequestReconcilerTask) approveScaleOutCSRs(
+	ctx context.Context, clusterInstance *unstructured.Unstructured) error {
+
+	clusterName := clusterInstance.GetName()
+	msaName := t.object.Name + "-scaleout"
+	mwName := t.object.Name + "-scaleout-rbac"
+
+	spokeClient, ready, err := spokeclient.EnsureSpokeClient(
+		ctx, t.client, t.logger, clusterName,
+		msaName, mwName,
+		scaleOutCSRRBACRules, scaleOutSpokeScheme)
+	if err != nil {
+		return fmt.Errorf("failed to setup spoke client for CSR approval: %w", err)
+	}
+	if !ready {
+		t.logger.InfoContext(ctx, "Spoke client for CSR approval not ready yet, will retry")
+		return nil
+	}
+
+	// Build set of valid hostnames from the rendered CI
+	validHostnames := getNodeRolesByHostname(clusterInstance)
+
+	// List all CSRs on the spoke
+	csrList := &certificatesv1.CertificateSigningRequestList{}
+	if err := spokeClient.List(ctx, csrList); err != nil {
+		return fmt.Errorf("failed to list CSRs on spoke cluster: %w", err)
+	}
+
+	for i := range csrList.Items {
+		csr := &csrList.Items[i]
+
+		// Skip already approved/denied CSRs
+		if isCSRApprovedOrDenied(csr) {
+			continue
+		}
+
+		// Only handle node bootstrap and kubelet serving CSRs
+		if csr.Spec.SignerName != "kubernetes.io/kube-apiserver-client-kubelet" &&
+			csr.Spec.SignerName != "kubernetes.io/kubelet-serving" {
+			continue
+		}
+
+		// Extract the node hostname from the CSR's CN
+		hostname, err := extractNodeHostnameFromCSR(csr)
+		if err != nil {
+			t.logger.WarnContext(ctx, "Failed to parse CSR subject",
+				slog.String("csr", csr.Name), slog.Any("error", err))
+			continue
+		}
+
+		// Only approve if the hostname is in the rendered CI
+		if _, ok := validHostnames[hostname]; !ok {
+			continue
+		}
+
+		// Approve the CSR
+		csr.Status.Conditions = append(csr.Status.Conditions, certificatesv1.CertificateSigningRequestCondition{
+			Type:           certificatesv1.CertificateApproved,
+			Status:         corev1.ConditionTrue,
+			Reason:         "O2IMSScaleOutApproval",
+			Message:        "CSR approved by O-Cloud Manager for scale-out worker node",
+			LastUpdateTime: metav1.Now(),
+		})
+		if err := spokeClient.SubResource("approval").Update(ctx, csr); err != nil {
+			t.logger.WarnContext(ctx, "Failed to approve CSR",
+				slog.String("csr", csr.Name), slog.String("hostname", hostname),
+				slog.Any("error", err))
+			continue
+		}
+		t.logger.InfoContext(ctx, "Approved scale-out CSR",
+			slog.String("csr", csr.Name), slog.String("hostname", hostname),
+			slog.String("signerName", csr.Spec.SignerName))
+	}
+
+	return nil
+}
+
+// isCSRApprovedOrDenied checks if a CSR has already been approved or denied.
+func isCSRApprovedOrDenied(csr *certificatesv1.CertificateSigningRequest) bool {
+	for _, c := range csr.Status.Conditions {
+		if c.Type == certificatesv1.CertificateApproved || c.Type == certificatesv1.CertificateDenied {
+			return true
+		}
+	}
+	return false
+}
+
+// extractNodeHostnameFromCSR parses the PEM-encoded CSR request and returns
+// the node hostname from the CN (expected format: "system:node:<hostname>").
+func extractNodeHostnameFromCSR(csr *certificatesv1.CertificateSigningRequest) (string, error) {
+	block, _ := pem.Decode(csr.Spec.Request)
+	if block == nil {
+		return "", fmt.Errorf("failed to decode PEM block from CSR %s", csr.Name)
+	}
+	req, err := x509.ParseCertificateRequest(block.Bytes)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse certificate request from CSR %s: %w", csr.Name, err)
+	}
+	cn := req.Subject.CommonName
+	const nodePrefix = "system:node:"
+	if !strings.HasPrefix(cn, nodePrefix) {
+		return "", fmt.Errorf("csr %s CN %q does not have expected prefix %q", csr.Name, cn, nodePrefix)
+	}
+	return cn[len(nodePrefix):], nil
+}
+
+// checkAllNodesJoined verifies that all hostnames in the rendered ClusterInstance
+// exist as nodes on the spoke cluster. Returns true only if every rendered
+// hostname has a corresponding node.
+func (t *provisioningRequestReconcilerTask) checkAllNodesJoined(
+	ctx context.Context, clusterInstance *unstructured.Unstructured) (bool, error) {
+
+	clusterName := clusterInstance.GetName()
+	msaName := t.object.Name + "-scaleout"
+	mwName := t.object.Name + "-scaleout-rbac"
+
+	spokeClient, ready, err := spokeclient.EnsureSpokeClient(
+		ctx, t.client, t.logger, clusterName,
+		msaName, mwName,
+		scaleOutCSRRBACRules, scaleOutSpokeScheme)
+	if err != nil {
+		return false, fmt.Errorf("failed to setup spoke client for node check: %w", err)
+	}
+	if !ready {
+		return false, nil
+	}
+
+	// List nodes on the spoke
+	nodeList := &corev1.NodeList{}
+	if err := spokeClient.List(ctx, nodeList); err != nil {
+		return false, fmt.Errorf("failed to list nodes on spoke cluster: %w", err)
+	}
+
+	spokeNodes := make(map[string]bool, len(nodeList.Items))
+	for _, node := range nodeList.Items {
+		spokeNodes[node.Name] = true
+	}
+
+	// Check that every rendered hostname exists as a spoke node
+	renderedHostnames := getNodeRolesByHostname(clusterInstance)
+	for hostname := range renderedHostnames {
+		if !spokeNodes[hostname] {
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
+// cleanupScaleOutSpokeAccess removes the spoke client resources created for
+// scale-out CSR approval.
+func (t *provisioningRequestReconcilerTask) cleanupScaleOutSpokeAccess(ctx context.Context, clusterName string) {
+	msaName := t.object.Name + "-scaleout"
+	mwName := t.object.Name + "-scaleout-rbac"
+	if err := spokeclient.CleanupSpokeAccess(ctx, t.client, clusterName, msaName, mwName); err != nil {
+		t.logger.WarnContext(ctx, "Failed to cleanup scale-out spoke access",
+			slog.Any("error", err))
+	}
 }
 
 // getNodeRolesByHostname extracts a map of hostname → role from a ClusterInstance.

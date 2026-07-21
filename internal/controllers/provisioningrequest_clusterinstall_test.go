@@ -862,3 +862,54 @@ var _ = Describe("validateScaleWorkerOnly", func() {
 		Expect(validateScaleWorkerOnly(existingCI, renderedCI)).To(Succeed())
 	})
 })
+
+var _ = Describe("scale-out detection via getNodeRolesByHostname", func() {
+	makeCI := func(nodes []map[string]any) *unstructured.Unstructured {
+		ci := &unstructured.Unstructured{}
+		ci.Object = map[string]any{
+			"spec": map[string]any{
+				"nodes": func() []any {
+					result := make([]any, len(nodes))
+					for i, n := range nodes {
+						result[i] = n
+					}
+					return result
+				}(),
+			},
+		}
+		return ci
+	}
+
+	It("should detect scale-out when rendered CI has more nodes than existing CI", func() {
+		existingCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "master2", "role": "master"},
+			{"hostName": "master3", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+		})
+		renderedCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "master2", "role": "master"},
+			{"hostName": "master3", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+			{"hostName": "worker2", "role": "worker"},
+		})
+		existingCount := len(getNodeRolesByHostname(existingCI))
+		renderedCount := len(getNodeRolesByHostname(renderedCI))
+		Expect(renderedCount).To(BeNumerically(">", existingCount))
+	})
+
+	It("should not detect scale-out when node counts are equal", func() {
+		existingCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+		})
+		renderedCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+		})
+		existingCount := len(getNodeRolesByHostname(existingCI))
+		renderedCount := len(getNodeRolesByHostname(renderedCI))
+		Expect(renderedCount).To(Equal(existingCount))
+	})
+})
