@@ -419,7 +419,7 @@ spec:
       - name: name
         value: fbc-inject-lifecycle-oci-ta
       - name: bundle
-        value: quay.io/konflux-ci/tekton-catalog/task-fbc-inject-lifecycle-oci-ta:0.1@sha256:9b6d61e5e887a8f30940c1fed0e118b8974c382d0a6328db99705a44365f6b0b
+        value: quay.io/konflux-ci/tekton-catalog/task-fbc-inject-lifecycle-oci-ta:0.1@sha256:1be92a668fd429a1273dfd2046631c51ee0954209d99631614474ad6a1d02626
     params:
     - name: DOCKERFILE
       value: $(params.dockerfile)
