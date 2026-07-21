@@ -28,6 +28,7 @@ type OAuthConfig struct {
 	ClientID           string `envconfig:"SMO_OAUTH_CLIENT_ID"`
 	ClientSecret       string `envconfig:"SMO_OAUTH_CLIENT_SECRET"`
 	Scopes             []string
+	Audiences          []string
 	UsernameClaim      string
 	GroupsClaim        string
 	ClientBindingClaim string
@@ -71,6 +72,7 @@ const (
 	OAuthIssuerURLFlagName          = "oauth-issuer-url"     // nolint: gosec
 	OAuthTokenEndpointFlagName      = "oauth-token-endpoint" // nolint: gosec
 	OAuthScopesFlagName             = "oauth-scopes"
+	OAuthAudiencesFlagName          = "oauth-audiences"
 	OAuthUsernameClaimFlagName      = "oauth-username-claim"
 	OAuthGroupsClaimFlagName        = "oauth-groups-claim"
 	OAuthClientBindingClaimFlagName = "oauth-client-binding-claim"
@@ -119,6 +121,12 @@ func SetCommonServerFlags(cmd *cobra.Command, config *CommonServerConfig) error 
 		OAuthScopesFlagName,
 		[]string{},
 		"OAuth client scopes",
+	)
+	flags.StringSliceVar(
+		&config.OAuth.Audiences,
+		OAuthAudiencesFlagName,
+		[]string{},
+		"OAuth audience values for token requests",
 	)
 	flags.StringVar(
 		&config.OAuth.UsernameClaim,
@@ -247,6 +255,7 @@ func (c *CommonServerConfig) CreateOAuthConfig(ctx context.Context) (*ctlrutils.
 		ClientID:     c.OAuth.ClientID,
 		ClientSecret: c.OAuth.ClientSecret,
 		Scopes:       c.OAuth.Scopes,
+		Audiences:    c.OAuth.Audiences,
 	}
 
 	return &config, nil
