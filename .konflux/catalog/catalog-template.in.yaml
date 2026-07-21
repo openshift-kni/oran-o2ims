@@ -12,7 +12,6 @@ entries:
       # v4.22.1
       - name: o-cloud-manager.v4.22.1
         replaces: o-cloud-manager.v4.22.0
-        skipRange: '>=4.22.0 <4.22.1'
     name: stable
     package: o-cloud-manager
     schema: olm.channel
@@ -22,7 +21,6 @@ entries:
       # v4.22.1
       - name: o-cloud-manager.v4.22.1
         replaces: o-cloud-manager.v4.22.0
-        skipRange: '>=4.22.0 <4.22.1'
     name: "4.22"
     package: o-cloud-manager
     schema: olm.channel
