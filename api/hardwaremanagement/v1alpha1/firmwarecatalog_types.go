@@ -11,6 +11,10 @@ import (
 )
 
 // FirmwareImage defines a firmware image entry in the catalog.
+// +kubebuilder:validation:XValidation:message="component is immutable",rule="self.component == oldSelf.component"
+// +kubebuilder:validation:XValidation:message="url is immutable",rule="self.url == oldSelf.url"
+// +kubebuilder:validation:XValidation:message="version is immutable",rule="self.version == oldSelf.version"
+// +kubebuilder:validation:XValidation:message="vendor is immutable",rule="self.vendor == oldSelf.vendor"
 type FirmwareImage struct {
 	// Name is a unique identifier for this firmware image within the catalog.
 	// +kubebuilder:validation:MinLength=1
@@ -40,12 +44,12 @@ type FirmwareImage struct {
 }
 
 // FirmwareCatalogSpec defines the desired state of FirmwareCatalog.
-// +kubebuilder:validation:XValidation:message="Firmware catalog entries are immutable",rule="oldSelf.images.all(old, self.images.exists(cur, cur.name == old.name) ? self.images.filter(cur, cur.name == old.name)[0].component == old.component && self.images.filter(cur, cur.name == old.name)[0].url == old.url && self.images.filter(cur, cur.name == old.name)[0].version == old.version && self.images.filter(cur, cur.name == old.name)[0].vendor == old.vendor : true)"
 type FirmwareCatalogSpec struct {
 	// Images is the set of firmware images available in this catalog.
 	// +optional
 	// +listType=map
 	// +listMapKey=name
+	// +kubebuilder:validation:MaxItems=1024
 	Images []FirmwareImage `json:"images,omitempty"`
 }
 
