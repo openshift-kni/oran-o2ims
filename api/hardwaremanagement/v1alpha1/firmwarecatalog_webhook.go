@@ -85,10 +85,10 @@ func (v *firmwareCatalogValidator) ValidateDelete(_ context.Context, _ runtime.O
 	return nil, nil
 }
 
-// findRemovedEntries returns the names of entries present in old but absent from new.
-func findRemovedEntries(old, new []FirmwareImage) []string {
-	newNames := make(map[string]struct{}, len(new))
-	for _, img := range new {
+// findRemovedEntries returns the names of entries present in old but absent from updated.
+func findRemovedEntries(old, updated []FirmwareImage) []string {
+	newNames := make(map[string]struct{}, len(updated))
+	for _, img := range updated {
 		newNames[img.Name] = struct{}{}
 	}
 
