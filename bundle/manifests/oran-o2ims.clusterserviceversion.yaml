@@ -1833,6 +1833,7 @@ spec:
           resources:
           - allocatednodes/status
           - clustertemplates/status
+          - firmwarecatalogs/status
           - hardwareprofiles/status
           - nodeallocationrequests/status
           - nodes/status
@@ -1848,6 +1849,14 @@ spec:
           - provisioningrequests/finalizers
           verbs:
           - update
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - firmwarecatalogs
+          verbs:
+          - get
+          - list
+          - watch
         - apiGroups:
           - clcm.openshift.io
           resources:
@@ -2501,6 +2510,25 @@ spec:
   replaces: oran-o2ims.v0.0.0
   version: 5.0.0
   webhookdefinitions:
+  - admissionReviewVersions:
+    - v1
+    containerPort: 443
+    deploymentName: oran-o2ims-controller-manager
+    failurePolicy: Fail
+    generateName: firmwarecatalogs.clcm.openshift.io
+    rules:
+    - apiGroups:
+      - clcm.openshift.io
+      apiVersions:
+      - v1alpha1
+      operations:
+      - UPDATE
+      resources:
+      - firmwarecatalogs
+    sideEffects: None
+    targetPort: 9443
+    type: ValidatingAdmissionWebhook
+    webhookPath: /validate-clcm-openshift-io-v1alpha1-firmwarecatalog
   - admissionReviewVersions:
     - v1
     containerPort: 443

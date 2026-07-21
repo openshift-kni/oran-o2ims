@@ -394,6 +394,20 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 
 	serverErrors := make(chan error, 1)
 
+	// Start the FirmwareCatalog controller.
+	if err = (&controllers.FirmwareCatalogReconciler{
+		Client: mgr.GetClient(),
+		Logger: logger.With(slog.String("controller", "FirmwareCatalog")),
+	}).SetupWithManager(mgr); err != nil {
+		logger.ErrorContext(
+			ctx,
+			"Unable to create controller",
+			slog.String("controller", "FirmwareCatalog"),
+			slog.Any("error", err),
+		)
+		return exit.Error(1)
+	}
+
 	// Start the Provisioning Request controller.
 	if err = (&controllers.ProvisioningRequestReconciler{
 		Client: mgr.GetClient(),
@@ -414,6 +428,15 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 				ctx,
 				"Unable to create webhook",
 				slog.String("webhook", "ProvisioningRequest"),
+				slog.Any("error", err),
+			)
+			return exit.Error(1)
+		}
+		if err = (&hwmgmtv1alpha1.FirmwareCatalog{}).SetupWebhookWithManager(mgr); err != nil {
+			logger.ErrorContext(
+				ctx,
+				"Unable to create webhook",
+				slog.String("webhook", "FirmwareCatalog"),
 				slog.Any("error", err),
 			)
 			return exit.Error(1)

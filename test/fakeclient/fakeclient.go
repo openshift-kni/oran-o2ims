@@ -58,7 +58,8 @@ func init() {
 	Scheme.AddKnownTypes(hwmgmtv1alpha1.GroupVersion,
 		&hwmgmtv1alpha1.HardwareProfile{}, &hwmgmtv1alpha1.HardwareProfileList{},
 		&hwmgmtv1alpha1.NodeAllocationRequest{},
-		&hwmgmtv1alpha1.AllocatedNode{}, &hwmgmtv1alpha1.AllocatedNodeList{})
+		&hwmgmtv1alpha1.AllocatedNode{}, &hwmgmtv1alpha1.AllocatedNodeList{},
+		&hwmgmtv1alpha1.FirmwareCatalog{}, &hwmgmtv1alpha1.FirmwareCatalogList{})
 	Scheme.AddKnownTypes(policiesv1.SchemeGroupVersion,
 		&policiesv1.Policy{}, &policiesv1.PolicyList{})
 	Scheme.AddKnownTypes(clusterv1.SchemeGroupVersion,
@@ -104,6 +105,7 @@ func GetFakeClientFromObjects(objs ...client.Object) client.WithWatch {
 			&clusterv1.ManagedCluster{},
 			&hwmgmtv1alpha1.NodeAllocationRequest{},
 			&hwmgmtv1alpha1.AllocatedNode{},
+			&hwmgmtv1alpha1.FirmwareCatalog{},
 			&openshiftv1.ClusterVersion{},
 			&openshiftoperatorv1.IngressController{},
 			&policiesv1.Policy{},
