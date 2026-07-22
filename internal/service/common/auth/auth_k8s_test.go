@@ -248,7 +248,7 @@ var _ = Describe("KubernetesAuthenticatorConfig", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(ok).To(BeTrue())
 		Expect(resp.User.GetName()).To(Equal("test-user"))
-		Expect(capturedAudiences).To(ContainElement("alarms-server"))
+		Expect(capturedAudiences).To(ConsistOf("alarms-server"))
 	})
 })
 
