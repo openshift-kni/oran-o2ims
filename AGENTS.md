@@ -10,7 +10,8 @@ O-Cloud Manager operator built on OpenShift and ACM (Red Hat Advanced Cluster Ma
 
 Use `make help` to list all available targets. Key commands:
 
-- `make ci-job` - Full CI pipeline locally (format, vet, lint, test, e2e, envtest, coverage, bundle-check). Run before submitting PRs. Includes `bundle-check`, which verifies the git tree is clean after code generation — a common CI failure when API or manifest changes aren't regenerated.
+- `make ci-job` - Full CI pipeline locally (format, vet, lint, test, envtest, coverage, bundle-check). Run before submitting PRs. Includes `bundle-check`, which verifies the git tree is clean after code generation — a common CI failure when API or manifest changes aren't regenerated.
+- `make test-e2e` - Run e2e tests separately (not included in `ci-job`). Run before submitting PRs that affect controller logic, hardware manager code, or provisioning workflows.
 - `make generate && make manifests && make bundle` - Regenerate code after API changes.
 
 ### Lint by File Type
@@ -161,7 +162,7 @@ issues during code review.
 ## Contributing Requirements
 
 - All commits must be signed off with DCO: `git commit -s`
-- Commit all files and run `make ci-job` before submitting PRs
+- Commit all files and run `make ci-job` and `make test-e2e` before submitting PRs
 - After API changes: `make generate && make manifests && make bundle`
 - AI-generated code must use `Co-Authored-By` or `Assisted-By` trailer
 - Run lint checks before committing (see [Lint by File Type](#lint-by-file-type))
