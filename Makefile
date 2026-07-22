@@ -690,10 +690,10 @@ deps-update: mock-gen golangci-lint-download
 	$(PROJECT_DIR)/hack/update_deps.sh
 	$(PROJECT_DIR)/hack/install_test_deps.sh
 
-# TODO: add back `test-e2e` to ci-job
 # NOTE: `bundle-check` should be the last job in the list for `ci-job`
+# test-e2e is run separately as it takes ~20 minutes and does not contribute to coverage
 .PHONY: ci-job
-ci-job: deps-update go-generate generate fmt vet lint test test-e2e test-envtest test-crd-watcher test-coverage-check e2e-outline bundle-check
+ci-job: deps-update go-generate generate fmt vet lint test test-envtest test-crd-watcher test-coverage-check e2e-outline bundle-check
 
 .PHONY: clean
 clean:
