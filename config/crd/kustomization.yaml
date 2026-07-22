@@ -7,6 +7,7 @@ resources:
 - bases/ocloud.openshift.io_resourcepools.yaml
 
 # Hardware management:
+- bases/clcm.openshift.io_firmwarecatalogs.yaml
 - bases/clcm.openshift.io_hardwareprofiles.yaml
 - bases/clcm.openshift.io_nodeallocationrequests.yaml
 - bases/clcm.openshift.io_allocatednodes.yaml

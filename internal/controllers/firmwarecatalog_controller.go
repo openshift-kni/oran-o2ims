@@ -10,7 +10,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"regexp"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -23,14 +22,6 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
-
-var urlRegex = regexp.MustCompile(`^(http|https)://.*$`)
-
-var validComponents = map[string]struct{}{
-	"bios": {},
-	"bmc":  {},
-	"nic":  {},
-}
 
 // FirmwareCatalogReconciler reconciles a FirmwareCatalog object
 type FirmwareCatalogReconciler struct {
@@ -90,32 +81,26 @@ func (r *FirmwareCatalogReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	return result, nil
 }
 
-// validateAndSetStatus validates each image entry and writes results to status.
+// validateAndSetStatus builds image statuses and writes results to status.
+// Field-level validation (component enum, URL pattern) is enforced by CRD markers
+// at admission time, so the controller only records each accepted entry as valid.
 func (r *FirmwareCatalogReconciler) validateAndSetStatus(ctx context.Context, catalog *hwmgmtv1alpha1.FirmwareCatalog) error {
-	var imageStatuses []hwmgmtv1alpha1.ImageValidationStatus
-	allValid := true
-
+	imageStatuses := make([]hwmgmtv1alpha1.ImageValidationStatus, 0, len(catalog.Spec.Images))
 	for _, img := range catalog.Spec.Images {
-		status := validateImage(img)
-		imageStatuses = append(imageStatuses, status)
-		if !status.Valid {
-			allValid = false
-		}
+		imageStatuses = append(imageStatuses, hwmgmtv1alpha1.ImageValidationStatus{
+			Name:    img.Name,
+			Valid:   true,
+			Reason:  "Valid",
+			Message: "Firmware image entry is valid",
+		})
 	}
 
 	condition := metav1.Condition{
 		Type:               string(hwmgmtv1alpha1.Validation),
 		ObservedGeneration: catalog.Generation,
-	}
-
-	if allValid {
-		condition.Status = metav1.ConditionTrue
-		condition.Reason = string(hwmgmtv1alpha1.Completed)
-		condition.Message = "All firmware catalog entries are valid"
-	} else {
-		condition.Status = metav1.ConditionFalse
-		condition.Reason = string(hwmgmtv1alpha1.Failed)
-		condition.Message = "One or more firmware catalog entries failed validation"
+		Status:             metav1.ConditionTrue,
+		Reason:             string(hwmgmtv1alpha1.Completed),
+		Message:            "All firmware catalog entries are valid",
 	}
 
 	existingCondition := meta.FindStatusCondition(catalog.Status.Conditions, string(hwmgmtv1alpha1.Validation))
@@ -133,34 +118,6 @@ func (r *FirmwareCatalogReconciler) validateAndSetStatus(ctx context.Context, ca
 	}
 
 	return nil
-}
-
-// validateImage validates a single firmware image entry.
-func validateImage(img hwmgmtv1alpha1.FirmwareImage) hwmgmtv1alpha1.ImageValidationStatus {
-	if _, ok := validComponents[img.Component]; !ok {
-		return hwmgmtv1alpha1.ImageValidationStatus{
-			Name:    img.Name,
-			Valid:   false,
-			Reason:  "InvalidComponent",
-			Message: fmt.Sprintf("component %q is not valid; must be one of: bios, bmc, nic", img.Component),
-		}
-	}
-
-	if !urlRegex.MatchString(img.URL) {
-		return hwmgmtv1alpha1.ImageValidationStatus{
-			Name:    img.Name,
-			Valid:   false,
-			Reason:  "InvalidURL",
-			Message: fmt.Sprintf("url %q does not match the required pattern ^(http|https)://.*$", img.URL),
-		}
-	}
-
-	return hwmgmtv1alpha1.ImageValidationStatus{
-		Name:    img.Name,
-		Valid:   true,
-		Reason:  "Valid",
-		Message: "Firmware image entry is valid",
-	}
 }
 
 // SetupWithManager sets up the controller with the Manager.
