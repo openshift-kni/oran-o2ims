@@ -1301,8 +1301,19 @@ func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(
 		// Record the fulfilled node count so scale-out can be detected on future reconciles.
 		// This must be set here (not earlier) to ensure it only updates when the PR
 		// genuinely reaches Fulfilled with all nodes provisioned.
-		if renderedClusterInstance != nil && t.object.Status.Extensions.ClusterDetails != nil {
-			t.object.Status.Extensions.ClusterDetails.FulfilledNodeCount = len(getNodeRolesByHostname(renderedClusterInstance))
+		if t.object.Status.Extensions.ClusterDetails != nil {
+			if renderedClusterInstance != nil {
+				t.object.Status.Extensions.ClusterDetails.FulfilledNodeCount = len(getNodeRolesByHostname(renderedClusterInstance))
+			} else if t.object.Status.Extensions.ClusterDetails.Name != "" {
+				// Fallback for the monitoring path (checkClusterDeployConfigState)
+				// where the rendered CI is not available.
+				existingCI, err := t.getExistingClusterInstance(ctx)
+				if err == nil && existingCI != nil {
+					if ciUnstructured, convErr := ctlrutils.ConvertToUnstructured(*existingCI); convErr == nil {
+						t.object.Status.Extensions.ClusterDetails.FulfilledNodeCount = len(getNodeRolesByHostname(ciUnstructured))
+					}
+				}
+			}
 		}
 
 		ctlrutils.SetProvisioningStateFulfilled(t.object)
