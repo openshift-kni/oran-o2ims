@@ -561,7 +561,7 @@ spec:
             value: sast-shell-check-oci-ta
           - name: bundle
             value: >-
-              quay.io/konflux-ci/tekton-catalog/task-sast-shell-check-oci-ta:0.1@sha256:2e8a61aaaacd8939b01b50cc1cb1abeb8ce377be824630c45401e96114744bff
+              quay.io/konflux-ci/tekton-catalog/task-sast-shell-check-oci-ta:0.1@sha256:5e4586b010f0d09aeb1cf5a19502a601524ae28b7cad3eaf3c93a058bd9d1acc
           - name: kind
             value: task
         resolver: bundles
