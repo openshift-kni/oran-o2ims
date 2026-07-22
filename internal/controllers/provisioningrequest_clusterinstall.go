@@ -262,8 +262,8 @@ func (t *provisioningRequestReconcilerTask) handleClusterInstallation(ctx contex
 		// The Assisted Service Agent controller should handle day-2 CSR approval
 		// via tryApproveDay2CSRs(), but it is not firing for scale-out workers
 		// (the Agent stays in installing-in-progress:Rebooting with empty
-		// csrStatus). This workaround can be removed once the Assisted Service
-		// bug is fixed. See: project_scaleout_csr_approval.md
+		// csrStatus). This workaround can be removed once ACM-38075 is fixed.
+		// See: project_scaleout_csr_approval.md
 		if err := t.approveScaleOutCSRs(ctx, clusterInstance); err != nil {
 			t.logger.WarnContext(ctx, "Scale-out CSR approval attempt failed, will retry",
 				slog.Any("error", err))
@@ -759,12 +759,13 @@ var scaleOutCSRRBACRules = []rbacv1.PolicyRule{
 // scaleOutSpokeScheme is the scheme used by the spoke client for CSR operations.
 var scaleOutSpokeScheme = spokeclient.NewSpokeScheme(certificatesv1.AddToScheme, corev1.AddToScheme)
 
-// approveScaleOutCSRs is a WORKAROUND for an Assisted Service bug where
-// tryApproveDay2CSRs() does not fire for scale-out worker nodes. It connects
-// to the spoke cluster and approves pending CSRs whose CN matches a node
-// hostname in the rendered ClusterInstance.
+// approveScaleOutCSRs is a WORKAROUND for ACM-38075 where the Assisted Service
+// Agent controller's tryApproveDay2CSRs() does not fire for scale-out worker
+// nodes provisioned with pre-existing BMHs. It connects to the spoke cluster
+// and approves pending CSRs whose CN matches a node hostname in the rendered
+// ClusterInstance.
 //
-// This workaround can be removed once the Assisted Service bug is fixed.
+// This workaround can be removed once ACM-38075 is fixed.
 // See: project_scaleout_csr_approval.md
 func (t *provisioningRequestReconcilerTask) approveScaleOutCSRs(
 	ctx context.Context, clusterInstance *unstructured.Unstructured) error {
