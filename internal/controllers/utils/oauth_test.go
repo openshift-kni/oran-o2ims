@@ -16,12 +16,12 @@ import (
 )
 
 var _ = Describe("OAuth audience configuration", func() {
-	It("sets EndpointParams with audiences when provided", func() {
-		audiences := []string{"https://api.example.com", "my-api"}
+	It("sets EndpointParams with audience when provided", func() {
+		audience := "https://api.example.com"
 
 		var endpointParams url.Values
-		if len(audiences) > 0 {
-			endpointParams = url.Values{"audience": audiences}
+		if audience != "" {
+			endpointParams = url.Values{"audience": {audience}}
 		}
 
 		oauthConfig := clientcredentials.Config{
@@ -34,15 +34,15 @@ var _ = Describe("OAuth audience configuration", func() {
 		}
 
 		Expect(oauthConfig.EndpointParams).ToNot(BeNil())
-		Expect(oauthConfig.EndpointParams["audience"]).To(Equal([]string{"https://api.example.com", "my-api"}))
+		Expect(oauthConfig.EndpointParams["audience"]).To(Equal([]string{"https://api.example.com"}))
 	})
 
-	It("leaves EndpointParams nil when no audiences provided", func() {
-		var audiences []string
+	It("leaves EndpointParams nil when no audience provided", func() {
+		audience := ""
 
 		var endpointParams url.Values
-		if len(audiences) > 0 {
-			endpointParams = url.Values{"audience": audiences}
+		if audience != "" {
+			endpointParams = url.Values{"audience": {audience}}
 		}
 
 		oauthConfig := clientcredentials.Config{
@@ -57,20 +57,19 @@ var _ = Describe("OAuth audience configuration", func() {
 		Expect(oauthConfig.EndpointParams).To(BeNil())
 	})
 
-	It("OAuthConfig struct stores audiences correctly", func() {
+	It("OAuthConfig struct stores audience correctly", func() {
 		config := OAuthConfig{
 			ClientID:     "test-client",
 			ClientSecret: "test-secret",
 			TokenURL:     "https://oauth.example.com/token",
 			Scopes:       []string{"openid"},
-			Audiences:    []string{"https://api.example.com"},
+			Audience:     "https://api.example.com",
 		}
 
-		Expect(config.Audiences).To(HaveLen(1))
-		Expect(config.Audiences[0]).To(Equal("https://api.example.com"))
+		Expect(config.Audience).To(Equal("https://api.example.com"))
 	})
 
-	It("OAuthConfig struct defaults to nil audiences", func() {
+	It("OAuthConfig struct defaults to empty audience", func() {
 		config := OAuthConfig{
 			ClientID:     "test-client",
 			ClientSecret: "test-secret",
@@ -78,6 +77,6 @@ var _ = Describe("OAuth audience configuration", func() {
 			Scopes:       []string{"openid"},
 		}
 
-		Expect(config.Audiences).To(BeNil())
+		Expect(config.Audience).To(BeEmpty())
 	})
 })

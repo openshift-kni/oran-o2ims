@@ -286,12 +286,12 @@ spec:
         displayName: SMO OAuth Configuration
         path: smo.oauth
       - description: |-
-          Audiences represents the OAuth audience values to include in token requests.  When specified, these values are
-          sent as "audience" parameters in the client credentials token request to the authorization server.  If omitted,
+          Audience represents the OAuth audience value to include in token requests.  When specified, this value is
+          sent as the "audience" parameter in the client credentials token request to the authorization server.  If omitted,
           no audience parameter is included and the authorization server determines the audience based on other request
           attributes (e.g., scopes).
-        displayName: OAuth Audiences
-        path: smo.oauth.audiences
+        displayName: OAuth Audience
+        path: smo.oauth.audience
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: |-

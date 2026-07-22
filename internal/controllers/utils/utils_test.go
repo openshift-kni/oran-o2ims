@@ -1673,14 +1673,15 @@ var _ = Describe("Server predicate functions", func() {
 			Expect(args).To(BeNil())
 		})
 
-		It("includes OAuth audiences when configured", func() {
+		It("includes OAuth audience when configured", func() {
+			audience := "https://api.example.com"
 			inventory.Spec.SmoConfig = &inventoryv1alpha1.SmoConfig{
 				OAuthConfig: &inventoryv1alpha1.OAuthConfig{
 					URL:                "https://oauth.example.com",
 					TokenEndpoint:      "/token",
 					ClientSecretName:   "secret",
 					Scopes:             []string{"openid"},
-					Audiences:          []string{"https://api.example.com", "my-api"},
+					Audience:           &audience,
 					UsernameClaim:      "sub",
 					GroupsClaim:        "roles",
 					ClientBindingClaim: "cnf",
@@ -1688,10 +1689,10 @@ var _ = Describe("Server predicate functions", func() {
 			}
 			args, err := GetServerArgs(inventory, InventoryAlarmServerName)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(args).To(ContainElement("--oauth-audiences=https://api.example.com,my-api"))
+			Expect(args).To(ContainElement("--oauth-audience=https://api.example.com"))
 		})
 
-		It("omits OAuth audiences when not configured", func() {
+		It("omits OAuth audience when not configured", func() {
 			inventory.Spec.SmoConfig = &inventoryv1alpha1.SmoConfig{
 				OAuthConfig: &inventoryv1alpha1.OAuthConfig{
 					URL:                "https://oauth.example.com",
@@ -1706,27 +1707,7 @@ var _ = Describe("Server predicate functions", func() {
 			args, err := GetServerArgs(inventory, InventoryAlarmServerName)
 			Expect(err).ToNot(HaveOccurred())
 			for _, arg := range args {
-				Expect(arg).ToNot(ContainSubstring("--oauth-audiences"))
-			}
-		})
-
-		It("omits OAuth audiences when empty slice", func() {
-			inventory.Spec.SmoConfig = &inventoryv1alpha1.SmoConfig{
-				OAuthConfig: &inventoryv1alpha1.OAuthConfig{
-					URL:                "https://oauth.example.com",
-					TokenEndpoint:      "/token",
-					ClientSecretName:   "secret",
-					Scopes:             []string{"openid"},
-					Audiences:          []string{},
-					UsernameClaim:      "sub",
-					GroupsClaim:        "roles",
-					ClientBindingClaim: "cnf",
-				},
-			}
-			args, err := GetServerArgs(inventory, InventoryResourceServerName)
-			Expect(err).ToNot(HaveOccurred())
-			for _, arg := range args {
-				Expect(arg).ToNot(ContainSubstring("--oauth-audiences"))
+				Expect(arg).ToNot(ContainSubstring("--oauth-audience"))
 			}
 		})
 	})

@@ -71,9 +71,9 @@ type OAuthConfig struct {
 	// The list of OAuth scopes requested by the client.  These will be dictated by what the SMO is expecting to see in
 	// the token.
 	Scopes []string
-	// The list of OAuth audience values to include in the token request.  When non-empty these are sent as "audience"
-	// parameters in the client credentials token request.
-	Audiences []string
+	// The OAuth audience value to include in the token request.  When non-empty this is sent as the "audience"
+	// parameter in the client credentials token request.
+	Audience string
 }
 
 // OAuthClientConfig defines the parameters required to establish an HTTP Client capable of acquiring an OAuth Token
@@ -114,8 +114,8 @@ func SetupOAuthClient(ctx context.Context, logger *slog.Logger, config *OAuthCli
 
 	if config.OAuthConfig != nil && config.OAuthConfig.ClientID != "" {
 		var endpointParams url.Values
-		if len(config.OAuthConfig.Audiences) > 0 {
-			endpointParams = url.Values{"audience": config.OAuthConfig.Audiences}
+		if config.OAuthConfig.Audience != "" {
+			endpointParams = url.Values{"audience": {config.OAuthConfig.Audience}}
 		}
 
 		oauthConfig := clientcredentials.Config{

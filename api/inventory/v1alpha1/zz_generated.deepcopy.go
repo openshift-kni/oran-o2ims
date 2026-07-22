@@ -392,10 +392,10 @@ func (in *OAuthConfig) DeepCopyInto(out *OAuthConfig) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
-	if in.Audiences != nil {
-		in, out := &in.Audiences, &out.Audiences
-		*out = make([]string, len(*in))
-		copy(*out, *in)
+	if in.Audience != nil {
+		in, out := &in.Audience, &out.Audience
+		*out = new(string)
+		**out = **in
 	}
 }
 
