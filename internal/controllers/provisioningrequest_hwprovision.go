@@ -256,13 +256,24 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestStatus(
 	var timedOutOrFailed bool
 	var err error
 
+	// Guard against consuming stale Provisioned status during scale-out.
+	// After patching the NAR with a larger NodeGroup.Size, the NAR may still
+	// carry Provisioned=True from the previous provisioning until the hardware
+	// manager's handleScaleOut detects the Size increase and sets it to
+	// InProgress. Skip the check and requeue until ObservedGeneration catches up.
+	if condition == hwmgmtv1alpha1.Provisioned &&
+		nodeAllocationRequestResponse.ObjectMeta.Generation != nodeAllocationRequestResponse.Status.ObservedGeneration {
+		t.logger.InfoContext(ctx, "Skipping stale NAR Provisioned status — hardware manager has not observed new generation",
+			slog.Int64("generation", nodeAllocationRequestResponse.ObjectMeta.Generation),
+			slog.Int64("observedGeneration", nodeAllocationRequestResponse.Status.ObservedGeneration))
+		return false, false, nil
+	}
+
 	// Guard against consuming stale Configured status during day-2 retries.
 	// After a PR spec change, the NAR may still carry a Configured condition
 	// from the previous attempt (Failed, TimedOut, or True from a prior success)
 	// until the hardware manager processes the new ConfigTransactionId. Skip the update
 	// and requeue until the hardware manager has observed the new transaction.
-	// This only applies to Configured — the Provisioned condition transitions
-	// once during initial provisioning and is not affected by spec changes.
 	if condition == hwmgmtv1alpha1.Configured &&
 		nodeAllocationRequestResponse.Spec.ConfigTransactionId != 0 &&
 		nodeAllocationRequestResponse.Status.ObservedConfigTransactionId != nodeAllocationRequestResponse.Spec.ConfigTransactionId {

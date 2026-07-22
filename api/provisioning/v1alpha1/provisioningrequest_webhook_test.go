@@ -674,7 +674,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 
 					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
 					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("not supported while a cluster upgrade is in progress"))
+					Expect(err.Error()).To(ContainSubstring("not supported while a cluster upgrade is in progress or incomplete"))
 				})
 			})
 

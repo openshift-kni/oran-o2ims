@@ -880,8 +880,8 @@ func extractNodeHostnameFromCSR(csr *certificatesv1.CertificateSigningRequest) (
 }
 
 // checkAllNodesJoined verifies that all hostnames in the rendered ClusterInstance
-// exist as nodes on the spoke cluster. Returns true only if every rendered
-// hostname has a corresponding node.
+// exist as Ready nodes on the spoke cluster. Returns true only if every rendered
+// hostname has a corresponding node in Ready state.
 func (t *provisioningRequestReconcilerTask) checkAllNodesJoined(
 	ctx context.Context, clusterInstance *unstructured.Unstructured) (bool, error) {
 
@@ -906,20 +906,32 @@ func (t *provisioningRequestReconcilerTask) checkAllNodesJoined(
 		return false, fmt.Errorf("failed to list nodes on spoke cluster: %w", err)
 	}
 
-	spokeNodes := make(map[string]bool, len(nodeList.Items))
+	readyNodes := make(map[string]bool, len(nodeList.Items))
 	for _, node := range nodeList.Items {
-		spokeNodes[node.Name] = true
+		if isNodeReady(&node) {
+			readyNodes[node.Name] = true
+		}
 	}
 
-	// Check that every rendered hostname exists as a spoke node
+	// Check that every rendered hostname exists as a Ready spoke node
 	renderedHostnames := getNodeRolesByHostname(clusterInstance)
 	for hostname := range renderedHostnames {
-		if !spokeNodes[hostname] {
+		if !readyNodes[hostname] {
 			return false, nil
 		}
 	}
 
 	return true, nil
+}
+
+// isNodeReady returns true if the node has a Ready condition with status True.
+func isNodeReady(node *corev1.Node) bool {
+	for _, c := range node.Status.Conditions {
+		if c.Type == corev1.NodeReady {
+			return c.Status == corev1.ConditionTrue
+		}
+	}
+	return false
 }
 
 // cleanupScaleOutSpokeAccess removes the spoke client resources created for

@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -234,11 +235,14 @@ func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Contex
 		}
 
 		if len(scalingNodes) > 0 {
-			// Reject scaling while an upgrade is in progress
+			// Reject scaling while an upgrade is active or in a non-healthy state.
+			// Check Status != True (rather than Reason == InProgress) to also block
+			// scaling during Pending, Unknown, Failed, TimedOut, and
+			// PreconditionChecksFailed states when the cluster may not be healthy.
 			upgradeCond := meta.FindStatusCondition(
 				newPr.Status.Conditions, string(PRconditionTypes.UpgradeCompleted))
-			if upgradeCond != nil && upgradeCond.Reason == string(CRconditionReasons.InProgress) {
-				return fmt.Errorf("node scaling is not supported while a cluster upgrade is in progress")
+			if upgradeCond != nil && upgradeCond.Status != metav1.ConditionTrue {
+				return fmt.Errorf("node scaling is not supported while a cluster upgrade is in progress or incomplete")
 			}
 		}
 

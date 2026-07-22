@@ -297,9 +297,11 @@ var _ = Describe("MNO Scale-Out test", Ordered, Label("mno-scale-out"), func() {
 			_ = K8SClient.Delete(testCtx, narObj)
 		}
 
-		// Delete AllocatedNodes
+		// Delete AllocatedNodes (strip finalizers first to avoid leftovers)
 		anList := testNonCachingListAllocatedNodesForNAR(testCtx, prName)
 		for i := range anList.Items {
+			anList.Items[i].Finalizers = nil
+			_ = K8SClient.Update(testCtx, &anList.Items[i])
 			_ = K8SClient.Delete(testCtx, &anList.Items[i])
 		}
 
