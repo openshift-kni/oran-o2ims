@@ -861,6 +861,36 @@ var _ = Describe("validateScaleWorkerOnly", func() {
 		})
 		Expect(validateScaleWorkerOnly(existingCI, renderedCI)).To(Succeed())
 	})
+
+	It("should reject in-place role change from worker to master", func() {
+		existingCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+		})
+		renderedCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "worker1", "role": "master"},
+		})
+		err := validateScaleWorkerOnly(existingCI, renderedCI)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("in-place role change is not supported"))
+		Expect(err.Error()).To(ContainSubstring("worker1"))
+	})
+
+	It("should reject in-place role change from master to worker", func() {
+		existingCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+		})
+		renderedCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "worker"},
+			{"hostName": "worker1", "role": "worker"},
+		})
+		err := validateScaleWorkerOnly(existingCI, renderedCI)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("in-place role change is not supported"))
+		Expect(err.Error()).To(ContainSubstring("master1"))
+	})
 })
 
 var _ = Describe("scale-out detection via getNodeRolesByHostname", func() {

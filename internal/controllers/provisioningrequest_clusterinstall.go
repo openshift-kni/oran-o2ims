@@ -679,13 +679,19 @@ func validateScaleWorkerOnly(existingCI, renderedCI *unstructured.Unstructured) 
 	existingNodes := getNodeRolesByHostname(existingCI)
 	renderedNodes := getNodeRolesByHostname(renderedCI)
 
-	// No scaling detected
+	// No scaling detected — but check for in-place role changes
 	if len(existingNodes) == len(renderedNodes) {
 		same := true
-		for hostname := range existingNodes {
-			if _, exists := renderedNodes[hostname]; !exists {
+		for hostname, existingRole := range existingNodes {
+			renderedRole, exists := renderedNodes[hostname]
+			if !exists {
 				same = false
 				break
+			}
+			if existingRole != renderedRole {
+				return typederrors.NewInputError(
+					"in-place role change is not supported: node %q role changed from %s to %s",
+					hostname, existingRole, renderedRole)
 			}
 		}
 		if same {
