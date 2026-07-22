@@ -536,11 +536,13 @@ func (t *TUIFormatter) redrawScreen() error {
 	eventsByCRD := t.groupEventsByType()
 	orderedTypes := t.getOrderedCRDTypes(eventsByCRD)
 
+	truncated := false
 	lineCount := 2 // Account for header lines (now just 2 lines)
 	for _, crdType := range orderedTypes {
 		events := eventsByCRD[crdType]
-		if lineCount >= t.termHeight-2 {
-			break // Don't exceed terminal height
+		if lineCount >= t.termHeight-3 {
+			truncated = true
+			break // Don't exceed terminal height, leave room for status line
 		}
 
 		// Build CRD type header
@@ -561,7 +563,8 @@ func (t *TUIFormatter) redrawScreen() error {
 			lineCount++
 		} else {
 			for i, event := range events {
-				if lineCount >= t.termHeight-1 {
+				if lineCount >= t.termHeight-2 {
+					truncated = true
 					break
 				}
 				t.buildEventLine(event, widths, &screenContent)
@@ -574,14 +577,14 @@ func (t *TUIFormatter) redrawScreen() error {
 			}
 		}
 
-		if lineCount < t.termHeight-1 {
+		if lineCount < t.termHeight-2 {
 			screenContent.WriteString("\n") // Add spacing between CRD types
 			lineCount++
 		}
 	}
 
 	// Build status line
-	t.buildStatusLine(&screenContent)
+	t.buildStatusLine(&screenContent, truncated)
 
 	newContent := screenContent.String()
 
@@ -2051,8 +2054,11 @@ func truncateToWidth(s string, width int) string {
 	return s[:width-3] + "..."
 }
 
-func (t *TUIFormatter) buildStatusLine(sb *strings.Builder) {
+func (t *TUIFormatter) buildStatusLine(sb *strings.Builder, truncated bool) {
 	status := "Press Ctrl+C to exit"
+	if truncated {
+		status = "Screen output truncated │ " + status
+	}
 	sb.WriteString(fmt.Sprintf("\n%s%s%s", ansiBold+ansiBlue, status, ansiReset))
 }
 
