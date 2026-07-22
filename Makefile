@@ -208,9 +208,12 @@ help: ## Display this help.
 manifests: deps-update controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
-.PHONY: generate
-generate: deps-update controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+.PHONY: _generate
+_generate: deps-update controller-gen
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+
+.PHONY: generate
+generate: _generate fmt ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 
 ##@ Build
 .PHONY: build
