@@ -430,7 +430,7 @@ spec:
             value: sast-snyk-check-oci-ta
           - name: bundle
             value: >-
-              quay.io/konflux-ci/tekton-catalog/task-sast-snyk-check-oci-ta:0.5@sha256:b865be59a6ea0cf86e08fc8085784981a00f2c6f9d9018d4f62f210b9c572ae0
+              quay.io/konflux-ci/tekton-catalog/task-sast-snyk-check-oci-ta:0.5@sha256:eba24f5d9f4b18aa71e523b9b3dbcf22982aa4b018824260a090b19dfc9abf6f
           - name: kind
             value: task
         resolver: bundles
