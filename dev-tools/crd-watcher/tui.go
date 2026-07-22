@@ -540,7 +540,10 @@ func (t *TUIFormatter) redrawScreen() error {
 	lineCount := 2 // Account for header lines (now just 2 lines)
 	for _, crdType := range orderedTypes {
 		events := eventsByCRD[crdType]
-		if lineCount >= t.termHeight-3 {
+		// Each section needs at minimum 3 lines: section header, table header,
+		// and at least one data row (or "No resources found"). Check if there's
+		// room before starting a new section.
+		if lineCount+3 >= t.termHeight-1 {
 			truncated = true
 			break // Don't exceed terminal height, leave room for status line
 		}
