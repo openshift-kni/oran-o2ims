@@ -85,9 +85,20 @@ Before submitting a pull request, run the CI validation suite locally:
 make ci-job
 ```
 
-This runs formatting, vetting, linting, unit tests, e2e tests, and bundle
-validation — the same checks that CI runs on each pull request. Running this
-locally allows you to find and fix issues before the CI runs.
+This runs formatting, vetting, linting, unit tests, envtest tests, coverage
+checks, and bundle validation. Running this locally allows you to find and
+fix issues before the CI runs.
+
+Additionally, run the e2e tests separately:
+
+```bash
+make test-e2e
+```
+
+The e2e tests are not included in `ci-job` because they take ~20 minutes
+and do not contribute to code coverage. They should be run before submitting
+PRs that affect controller logic, hardware manager code, or provisioning
+workflows.
 
 Additional checks to run depending on the type of change:
 
@@ -101,8 +112,9 @@ All code changes must include appropriate unit tests:
 
 1. Write unit tests that cover new code paths.
 2. Ensure existing tests still pass.
-3. `make ci-job` runs both unit tests (`make test`) and e2e tests
-   (`make test-e2e`).
+3. `make ci-job` runs unit tests (`make test`), envtest tests
+   (`make test-envtest`), and coverage checks.
+4. `make test-e2e` runs the e2e tests separately.
 
 ## API and CRD Changes
 
@@ -132,7 +144,8 @@ structure.
 
 - All pull requests must be opened against the `main` branch.
 - Ensure all commits are signed off with DCO (`git commit -s`).
-- Run `make ci-job` locally and ensure all checks pass before submitting.
+- Run `make ci-job` and `make test-e2e` locally and ensure all checks pass
+  before submitting.
 - If updating documentation, also run `make markdownlint`.
 - If updating bundle metadata (e.g., adding new CRDs, updating fields), also
   run `make scorecard-test`.
