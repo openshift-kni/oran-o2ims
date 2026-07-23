@@ -1,0 +1,213 @@
+apiVersion: clcm.openshift.io/v1alpha1
+kind: ClusterTemplate
+metadata:
+  name: 3node-ran-du.v4-Y-Z+1-1
+  namespace: 3node-ran-du-v4-Y-Z+1
+spec:
+  name: 3node-ran-du
+  version: v4-Y-Z+1-1
+  release: 4.Y.Z+1
+  templateDefaults:
+    hwMgmtDefaults:
+      hardwareProvisioningTimeout: "120m"
+      nodeGroupData:
+        - name: master
+          role: master
+          resourceSelector:
+            "resourceselector.clcm.openshift.io/server-type": "XR8620t"
+            "resourceselector.clcm.openshift.io/server-colour": "purple"
+            "hardwaredata/cpu_arch": "x86_64"
+            "hardwaredata/num_threads;>=": "128"
+    clusterInstanceDefaults: clusterinstance-defaults-v1
+    policyTemplateDefaults: policytemplate-defaults-v1
+    upgradeDefaults:
+      clusterVersion:
+        channel: "stable-4.Y.Z+1"
+        desiredUpdate:
+          version: "4.Y.Z+1"
+  templateParameterSchema:
+    properties:
+      nodeClusterName:
+        type: string
+      oCloudSiteId:
+        type: string
+      hwMgmtParameters:
+        description: >
+          hwMgmtParameters allows overriding hardware management defaults.
+        properties:
+          hardwareProvisioningTimeout:
+            type: string
+          nodeGroupData:
+            type: array
+            items:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                role:
+                  type: string
+                  enum:
+                    - master
+                    - worker
+                hwProfile:
+                  type: string
+                resourcePoolId:
+                  type: string
+                resourceSelector:
+                  type: object
+                  additionalProperties:
+                    type: string
+        type: object
+      policyTemplateParameters:
+        description: policyTemplateSchema defines the available parameters for cluster configuration
+        properties:
+          sriov-network-vlan-1:
+            type: string
+          sriov-network-pfNames-1:
+            type: string
+          sriov-network-vlan-2:
+            type: string
+          sriov-network-pfNames-2:
+            type: string
+          cpu-isolated:
+            type: string
+          cpu-reserved:
+            type: string
+          hugepages-default:
+            type: string
+          hugepages-size:
+            type: string
+          hugepages-count:
+            type: string
+          install-plan-approval:
+            type: string
+        type: object
+      clusterInstanceParameters:
+        description: clusterInstanceParameters defines the available parameters for cluster installation
+        properties:
+          additionalNTPSources:
+            items:
+              type: string
+            type: array
+          apiVIPs:
+            items:
+              type: string
+            maxItems: 2
+            type: array
+          baseDomain:
+            type: string
+          clusterName:
+            type: string
+          extraAnnotations:
+            additionalProperties:
+              additionalProperties:
+                type: string
+              type: object
+            type: object
+          extraLabels:
+            additionalProperties:
+              additionalProperties:
+                type: string
+              type: object
+            type: object
+          ingressVIPs:
+            items:
+              type: string
+            maxItems: 2
+            type: array
+          machineNetwork:
+            items:
+              properties:
+                cidr:
+                  type: string
+              required:
+              - cidr
+              type: object
+            type: array
+          nodes:
+            items:
+              properties:
+                extraAnnotations:
+                  additionalProperties:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  type: object
+                extraLabels:
+                  additionalProperties:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  type: object
+                hostName:
+                  type: string
+                nodeLabels:
+                  additionalProperties:
+                    type: string
+                  type: object
+                nodeNetwork:
+                  properties:
+                    config:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                  type: object
+              required:
+              - hostName
+              type: object
+            type: array
+          serviceNetwork:
+            items:
+              properties:
+                cidr:
+                  type: string
+              required:
+              - cidr
+              type: object
+            type: array
+          sshPublicKey:
+            type: string
+        required:
+        - clusterName
+        - nodes
+        type: object
+      upgradeParameters:
+        description: upgradeParameters defines the available upgrade parameters for the cluster upgrade
+        properties:
+          clusterUpgradeTimeout:
+            description: defines the timeout for the cluster upgrade
+            type: string
+          intermediateVersion:
+            description: defines the intermediate version for the cluster EUS upgrade
+            type: string
+          clusterVersion:
+            type: object
+            description: defines the ClusterVersion parameters for the upgrade
+            properties:
+              channel:
+                type: string
+              upstream:
+                type: string
+              desiredUpdate:
+                type: object
+                properties:
+                  version:
+                    type: string
+                  image:
+                    type: string
+                  force:
+                    type: boolean
+                  architecture:
+                    type: string
+                    enum:
+                    - "Multi"
+                    - ""
+        type: object
+    required:
+      - nodeClusterName
+      - oCloudSiteId
+      - policyTemplateParameters
+      - clusterInstanceParameters
+    type: object

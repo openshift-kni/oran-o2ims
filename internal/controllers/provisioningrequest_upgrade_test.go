@@ -1815,7 +1815,7 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			Expect(proceed).To(BeFalse())
 			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
-			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.Pending),
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.InProgress),
 				"Waiting for worker MachineConfigPools to finish updating")
 			assertMCPPaused("worker", false)
 		})
