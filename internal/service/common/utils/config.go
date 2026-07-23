@@ -59,9 +59,10 @@ type CommonServerConfig struct {
 	SmoURL string
 	// Audience is the expected audience for incoming inter-service bearer tokens
 	Audience string
-	// AudienceExemptPaths lists URL paths that bypass audience validation while
-	// still requiring authentication and RBAC authorization. Populated at
-	// startup from OpenAPI endpoints marked with x-skip-audience-validation.
+	// AudienceExemptPaths lists URL paths that accept the default Kubernetes
+	// API server audience in addition to the service-specific audience.
+	// Populated at startup from OpenAPI endpoints marked with
+	// x-allow-default-audience.
 	AudienceExemptPaths []string
 }
 

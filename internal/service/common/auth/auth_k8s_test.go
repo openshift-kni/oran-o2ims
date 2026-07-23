@@ -18,6 +18,8 @@ import (
 
 	authenticationv1 "k8s.io/api/authentication/v1"
 	"k8s.io/client-go/rest"
+
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
 
 var _ = Describe("KubernetesAuthenticatorConfig", func() {
@@ -121,7 +123,8 @@ var _ = Describe("KubernetesAuthenticatorConfig", func() {
 					ContentType: "application/json",
 				},
 			},
-			Audiences: []string{},
+			Audiences:           []string{},
+			AudienceExemptPaths: []string{"/some/exempt/path"},
 		}
 
 		auth, err := config.New()
@@ -136,7 +139,7 @@ var _ = Describe("KubernetesAuthenticatorConfig", func() {
 		Expect(resp.User.GetName()).To(Equal("test-user"))
 	})
 
-	It("should skip audience injection for exempt paths", func() {
+	It("should accept both service-specific and default Kubernetes audience for exempt paths", func() {
 		var capturedAudiences []string
 
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -189,7 +192,7 @@ var _ = Describe("KubernetesAuthenticatorConfig", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(ok).To(BeTrue())
 		Expect(resp.User.GetName()).To(Equal("alertmanager-sa"))
-		Expect(capturedAudiences).To(BeEmpty())
+		Expect(capturedAudiences).To(ConsistOf("alarms-server", constants.DefaultKubernetesAudience))
 	})
 
 	It("should still inject audiences for non-exempt paths when exempt paths are configured", func() {
@@ -245,7 +248,7 @@ var _ = Describe("KubernetesAuthenticatorConfig", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(ok).To(BeTrue())
 		Expect(resp.User.GetName()).To(Equal("test-user"))
-		Expect(capturedAudiences).To(ContainElement("alarms-server"))
+		Expect(capturedAudiences).To(ConsistOf("alarms-server"))
 	})
 })
 
@@ -271,7 +274,7 @@ var _ = Describe("GetAudienceExemptPaths", func() {
 		Expect(paths).To(BeNil())
 	})
 
-	It("should extract paths with x-skip-audience-validation set to true", func() {
+	It("should extract paths with x-allow-default-audience set to true", func() {
 		spec := &openapi3.T{
 			OpenAPI: "3.0.0",
 			Info:    &openapi3.Info{Title: "test", Version: "1.0"},
@@ -281,7 +284,7 @@ var _ = Describe("GetAudienceExemptPaths", func() {
 			Post: &openapi3.Operation{
 				OperationID: "AmNotification",
 				Extensions: map[string]interface{}{
-					skipAudienceValidationExtension: true,
+					allowDefaultAudienceExtension: true,
 				},
 				Responses: openapi3.NewResponses(),
 			},
@@ -296,7 +299,7 @@ var _ = Describe("GetAudienceExemptPaths", func() {
 		Expect(paths).To(ConsistOf("/internal/v1/caas-alerts/alertmanager"))
 	})
 
-	It("should ignore paths with x-skip-audience-validation set to false", func() {
+	It("should ignore paths with x-allow-default-audience set to false", func() {
 		spec := &openapi3.T{
 			OpenAPI: "3.0.0",
 			Info:    &openapi3.Info{Title: "test", Version: "1.0"},
@@ -306,7 +309,7 @@ var _ = Describe("GetAudienceExemptPaths", func() {
 			Get: &openapi3.Operation{
 				OperationID: "listAlarms",
 				Extensions: map[string]interface{}{
-					skipAudienceValidationExtension: false,
+					allowDefaultAudienceExtension: false,
 				},
 				Responses: openapi3.NewResponses(),
 			},

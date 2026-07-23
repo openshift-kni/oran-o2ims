@@ -21,13 +21,14 @@ import (
 	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
-const skipAudienceValidationExtension = "x-skip-audience-validation"
+const allowDefaultAudienceExtension = "x-allow-default-audience"
 
-// GetAudienceExemptPaths extracts API paths marked with x-skip-audience-validation
-// from the OpenAPI spec. These paths are exempt from audience-scoped token
-// validation while still requiring authentication (TokenReview) and
-// authorization (RBAC). This is used at startup to build the exempt path
-// list — no per-request spec traversal is needed.
+// GetAudienceExemptPaths extracts API paths marked with x-allow-default-audience
+// from the OpenAPI spec. These paths accept both the service-specific audience
+// and the default Kubernetes API server audience, while still requiring
+// authentication (TokenReview) and authorization (RBAC). This is used at
+// startup to build the exempt path list — no per-request spec traversal
+// is needed.
 func GetAudienceExemptPaths(spec *openapi3.T) []string {
 	if spec == nil || spec.Paths == nil {
 		return nil
@@ -39,7 +40,7 @@ func GetAudienceExemptPaths(spec *openapi3.T) []string {
 			continue
 		}
 		for _, op := range pathItem.Operations() {
-			if v, ok := op.Extensions[skipAudienceValidationExtension].(bool); ok && v {
+			if v, ok := op.Extensions[allowDefaultAudienceExtension].(bool); ok && v {
 				paths = append(paths, path)
 				break
 			}

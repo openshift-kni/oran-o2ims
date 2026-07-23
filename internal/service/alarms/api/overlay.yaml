@@ -10,20 +10,21 @@ actions:
           operationId: AmNotification
           summary: Receive Alertmanager notifications
           description: Receives alerts from Alertmanager and notifies subscribers if available.
-          # x-skip-audience-validation: Exempt this endpoint from audience-scoped
-          # token validation. ACM's alertmanager webhook http_config uses
-          # credentials_file to read the pod's mounted SA token, which carries
-          # the default API server audience (https://kubernetes.default.svc).
-          # We do not control the alertmanager pod and cannot mount a projected
-          # volume with a custom audience token. The credentials_file option
-          # does not support dynamic token acquisition — it only reads a static
-          # file.
+          # x-allow-default-audience: Accept both the service-specific audience
+          # and the default Kubernetes API server audience
+          # (https://kubernetes.default.svc) for this endpoint. ACM's
+          # alertmanager webhook http_config uses credentials_file to read the
+          # pod's mounted SA token, which carries the default API server
+          # audience. We do not control the alertmanager pod and cannot mount a
+          # projected volume with a custom audience token.
           #
           # Authentication is still enforced via Kubernetes TokenReview (caller
-          # identity is verified), and authorization is enforced via RBAC
-          # (only the alertmanager SA in the open-cluster-management-observability
-          # namespace is granted access to this path).
-          x-skip-audience-validation: true
+          # identity is verified and the token's audience must match either the
+          # service-specific or default Kubernetes audience), and authorization
+          # is enforced via RBAC (only the alertmanager SA in the
+          # open-cluster-management-observability namespace is granted access
+          # to this path).
+          x-allow-default-audience: true
           tags:
             - internal
           requestBody:
