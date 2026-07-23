@@ -256,17 +256,23 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestStatus(
 	var timedOutOrFailed bool
 	var err error
 
-	// Guard against consuming stale Provisioned status during scale-out.
+	// Guard against consuming stale Provisioned=True during scale-out.
 	// After patching the NAR with a larger NodeGroup.Size, the NAR may still
 	// carry Provisioned=True from the previous provisioning until the hardware
 	// manager's handleScaleOut detects the Size increase and sets it to
 	// InProgress. Skip the check and requeue until ObservedGeneration catches up.
+	// Only applies when Provisioned is True — if handleScaleOut has already set
+	// it to InProgress, the condition is no longer stale. This avoids blocking
+	// day-2 hwProfile changes where generation advances but Provisioned is valid.
 	if condition == hwmgmtv1alpha1.Provisioned &&
 		nodeAllocationRequestResponse.ObjectMeta.Generation != nodeAllocationRequestResponse.Status.ObservedGeneration {
-		t.logger.InfoContext(ctx, "Skipping stale NAR Provisioned status — hardware manager has not observed new generation",
-			slog.Int64("generation", nodeAllocationRequestResponse.ObjectMeta.Generation),
-			slog.Int64("observedGeneration", nodeAllocationRequestResponse.Status.ObservedGeneration))
-		return false, false, nil
+		provCond := meta.FindStatusCondition(nodeAllocationRequestResponse.Status.Conditions, string(hwmgmtv1alpha1.Provisioned))
+		if provCond != nil && provCond.Status == metav1.ConditionTrue {
+			t.logger.InfoContext(ctx, "Skipping stale NAR Provisioned status — hardware manager has not observed new generation",
+				slog.Int64("generation", nodeAllocationRequestResponse.ObjectMeta.Generation),
+				slog.Int64("observedGeneration", nodeAllocationRequestResponse.Status.ObservedGeneration))
+			return false, false, nil
+		}
 	}
 
 	// Guard against consuming stale Configured status during day-2 retries.
