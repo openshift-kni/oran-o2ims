@@ -95,6 +95,40 @@ func hasNodeGroupHwProfileChanges(
 	return false, nil
 }
 
+// hasNodeGroupSizeIncreases checks whether any node group in the NAR spec has a
+// Size larger than the current number of allocated nodes for that group. This
+// indicates a scale-out operation where additional nodes need to be allocated.
+func hasNodeGroupSizeIncreases(
+	ctx context.Context,
+	noncachedClient client.Reader,
+	logger *slog.Logger,
+	namespace string,
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
+) (bool, error) {
+	childNodes, err := hwmgrutils.GetChildNodesUncached(ctx, noncachedClient, namespace, nodeAllocationRequest.Name)
+	if err != nil {
+		return false, fmt.Errorf("failed to list child nodes for size check: %w", err)
+	}
+
+	for _, group := range nodeAllocationRequest.Spec.NodeGroup {
+		allocatedCount := 0
+		for _, node := range childNodes.Items {
+			if node.Spec.GroupName == group.NodeGroupData.Name {
+				allocatedCount++
+			}
+		}
+		if allocatedCount < group.Size {
+			logger.InfoContext(ctx, "NodeGroup needs additional nodes",
+				slog.String("group", group.NodeGroupData.Name),
+				slog.Int("allocated", allocatedCount),
+				slog.Int("desired", group.Size))
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 // enableBMOManagementForIBINodes sets spec.online=true and removes the detached annotation
 // on IBI-provisioned BMHs (externallyProvisioned=true with detached annotation) so that BMO
 // can fully manage them. This is called when the cluster is reported as fully provisioned.

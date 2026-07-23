@@ -15,6 +15,7 @@ SPDX-License-Identifier: Apache-2.0
     * [Adding a new manifest to an existing ACM PolicyGenerator](#adding-a-new-manifest-to-an-existing-acm-policygenerator)
     * [Updating the ClusterTemplate schemas](#updating-the-clustertemplate-schemas)
     * [Switching to a new hardware profile](#switching-to-a-new-hardware-profile)
+  * [Scaling Worker Nodes](#scaling-worker-nodes)
 
 ## Overview
 
@@ -720,3 +721,77 @@ The following steps are required:
         provisioningDetails: Provisioning request has completed successfully
         provisioningPhase: fulfilled
   ```
+
+### Scaling Worker Nodes
+
+After a multi-node (MNO) cluster is provisioned, you can add worker
+nodes by updating the ProvisioningRequest's
+`clusterInstanceParameters.nodes` array. Scale-in (removing worker
+nodes) is planned for a future release.
+
+> [!NOTE]
+> Scaling is only supported for worker nodes. Control plane (master)
+> nodes cannot be added or removed after initial provisioning. Scaling
+> is not supported on single-node (SNO) clusters. Scaling and upgrade
+> operations cannot run concurrently.
+
+#### Prerequisites
+
+* The cluster must be fully provisioned (`ClusterProvisioned=Completed`).
+* For scale-out: available BareMetalHosts must exist in the resource
+  pool matching the worker node group's `resourceSelector` labels.
+* The ClusterInstance defaults ConfigMap must include a node template
+  entry for the new worker (with `role: worker`).
+* No upgrade operation is currently in progress.
+
+#### Adding a worker node (scale-out)
+
+1. If needed, update the ClusterInstance defaults ConfigMap to add a
+   worker node template entry for the new node.
+
+2. Update the ProvisioningRequest to add the new worker node entry to
+   `spec.templateParameters.clusterInstanceParameters.nodes`:
+
+   ```yaml
+   spec:
+     templateParameters:
+       clusterInstanceParameters:
+         nodes:
+           - hostName: master-1.cluster.example.com
+           - hostName: master-2.cluster.example.com
+           - hostName: master-3.cluster.example.com
+           - hostName: worker-1.cluster.example.com
+           - hostName: worker-2.cluster.example.com
+           - hostName: worker-3.cluster.example.com  # new worker
+             nodeNetwork:
+               config:
+                 dns-resolver:
+                   config:
+                     server:
+                       - 198.51.100.1
+   ```
+
+3. The controller detects the new node and:
+   * Increases the NodeAllocationRequest worker `NodeGroup.Size`.
+   * The hardware manager allocates a new BareMetalHost and creates an
+     AllocatedNode CR.
+   * The new node's BMC address and MAC are mapped to the ClusterInstance.
+   * The ClusterInstance is updated via Server-Side Apply and siteconfig
+     provisions the new node.
+
+4. Monitor progress:
+
+   ```bash
+   oc get pr <pr-name> -o jsonpath='{.status.provisioningStatus}'
+   ```
+
+   The ProvisioningRequest transitions from `fulfilled` → `pending` →
+   `progressing` → `fulfilled` once the new node joins the cluster.
+
+#### Removing a worker node (scale-in)
+
+> [!IMPORTANT]
+> Scale-in is not yet supported. Do not remove worker nodes from the
+> ProvisioningRequest nodes array. When scale-in support is added in a
+> future release, the controller will drain nodes before removal to
+> minimize workload disruption.

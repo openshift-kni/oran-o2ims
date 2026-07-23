@@ -26,6 +26,8 @@ feature, which parses test structure without executing tests.
   - [Performs day2 hardware configuration update successfully](#performs-day2-hardware-configuration-update-successfully)
   - [Handles day2 hardware configuration update with BMH error](#handles-day2-hardware-configuration-update-with-bmh-error)
   - [Handles mid-flight profile change by abandoning stale updates](#handles-mid-flight-profile-change-by-abandoning-stale-updates)
+- [MNO Scale-Out test [mno-scale-out]](#mno-scale-out-test-mno-scale-out)
+  - [Scale-out: add a worker node](#scale-out-add-a-worker-node)
 - [SNO End-to-end ProvisioningRequestReconcile with hardware manager [sno-provisioning]](#sno-end-to-end-provisioningrequestreconcile-with-hardware-manager-sno-provisioning)
 
 ## MNO Standard ClusterVersion Upgrade [mno-cv-upgrade]
@@ -135,6 +137,38 @@ File: `test/e2e/mno_hw_configuration_test.go`
    - Waiting for NAR to reach ConfigApplied after all workers converge
    - Verifying all 8 worker nodes converged to v2 profile
 1. Should PR reach HardwareConfigured=True
+
+## MNO Scale-Out test [mno-scale-out]
+
+File: `test/e2e/mno_scale_test.go`
+
+- Creating namespaces
+- Creating ConfigMaps
+- Creating ClusterTemplate and supporting resources
+- Creating 6 BMHs (3 masters + 3 workers: 2 initial + 1 extra for scale-out)
+- Waiting for all 6 BMHs to be visible
+- Waiting for ClusterTemplate reconciliation
+- Creating initial ProvisioningRequest with 3 masters + 2 workers
+- Waiting for NAR creation
+- Verifying initial NAR NodeGroup sizes
+- Waiting for all 5 AllocatedNodes to be created
+- Waiting for NAR Provisioned=True
+- Waiting for PR HardwareProvisioned=True
+- Capturing initial AllocatedNode names before scale-out
+- Simulating AllocatedNodeHostMap on PR
+- Simulating ClusterProvisioned=Completed on PR
+- Cleaning up scale test resources
+
+### Scale-out: add a worker node
+
+1. should increase NAR worker NodeGroup Size after PR update
+   - Creating CI defaults v2 with 3 workers and a new CT version
+   - Waiting for new CT reconciliation
+   - Updating PR to use new CT version and add worker-3
+   - Verifying NAR NodeGroup sizes after scale-out
+1. should create a new AllocatedNode for the added worker
+   - Waiting for 6 AllocatedNodes (3 masters + 3 workers)
+   - Verifying original nodes are preserved and new node is a worker
 
 ## SNO End-to-end ProvisioningRequestReconcile with hardware manager [sno-provisioning]
 

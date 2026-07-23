@@ -1,0 +1,110 @@
+apiVersion: clcm.openshift.io/v1alpha1
+kind: ProvisioningRequest
+metadata:
+  name: a5eb40c2-6f3d-4e0b-8c9a-1b2d3e4f5a6b
+spec:
+  name: "scale-test-pr"
+  templateName: scale-test
+  templateVersion: v4-20-16-v1
+  templateParameters:
+    nodeClusterName: scale-test
+    oCloudSiteId: "local-123"
+    hwMgmtParameters:
+      nodeGroupData:
+        - name: master
+        - name: worker
+    policyTemplateParameters: {}
+    clusterInstanceParameters:
+      clusterName: scale-cluster
+      apiVIPs:
+        - 192.0.2.2
+      ingressVIPs:
+        - 192.0.2.4
+      machineNetwork:
+        - cidr: 192.0.2.0/24
+      nodes:
+      - hostName: master-1.scale-cluster.example.com
+        nodeNetwork:
+          config:
+            dns-resolver:
+              config:
+                search:
+                  - example.com
+                server:
+                  - 8.8.8.8
+            routes:
+              config:
+                - next-hop-address: 192.0.2.254
+            interfaces:
+              - ipv4:
+                  address:
+                    - ip: 192.0.2.10
+                      prefix-length: 24
+      - hostName: master-2.scale-cluster.example.com
+        nodeNetwork:
+          config:
+            dns-resolver:
+              config:
+                search:
+                  - example.com
+                server:
+                  - 8.8.8.8
+            routes:
+              config:
+                - next-hop-address: 192.0.2.254
+            interfaces:
+              - ipv4:
+                  address:
+                    - ip: 192.0.2.17
+                      prefix-length: 24
+      - hostName: master-3.scale-cluster.example.com
+        nodeNetwork:
+          config:
+            dns-resolver:
+              config:
+                search:
+                  - example.com
+                server:
+                  - 8.8.8.8
+            routes:
+              config:
+                - next-hop-address: 192.0.2.254
+            interfaces:
+              - ipv4:
+                  address:
+                    - ip: 192.0.2.18
+                      prefix-length: 24
+      - hostName: worker-1.scale-cluster.example.com
+        nodeNetwork:
+          config:
+            dns-resolver:
+              config:
+                search:
+                  - example.com
+                server:
+                  - 8.8.8.8
+            routes:
+              config:
+                - next-hop-address: 192.0.2.254
+            interfaces:
+              - ipv4:
+                  address:
+                    - ip: 192.0.2.123
+                      prefix-length: 24
+      - hostName: worker-2.scale-cluster.example.com
+        nodeNetwork:
+          config:
+            dns-resolver:
+              config:
+                search:
+                  - example.com
+                server:
+                  - 8.8.8.8
+            routes:
+              config:
+                - next-hop-address: 192.0.2.254
+            interfaces:
+              - ipv4:
+                  address:
+                    - ip: 192.0.2.51
+                      prefix-length: 24

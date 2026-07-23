@@ -302,6 +302,35 @@ func (r *NodeAllocationRequestReconciler) handleNewNodeAllocationRequestCreate(
 	return hwmgrutils.DoNotRequeue(), nil
 }
 
+// handleScaleOut checks if NodeGroup sizes increased and re-enters the allocation
+// flow if additional nodes need to be allocated. Returns (result, handled, error).
+func (r *NodeAllocationRequestReconciler) handleScaleOut(
+	ctx context.Context,
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
+) (ctrl.Result, bool, error) {
+	sizeIncreased, err := hasNodeGroupSizeIncreases(ctx, r.NoncachedClient, r.Logger, r.Namespace, nodeAllocationRequest)
+	if err != nil {
+		return hwmgrutils.RequeueWithShortInterval(), false, err
+	}
+	if !sizeIncreased {
+		return ctrl.Result{}, false, nil
+	}
+
+	r.Logger.InfoContext(ctx, "NodeGroup size increase detected, re-entering allocation flow")
+	if err := hwmgrutils.UpdateNodeAllocationRequestStatusCondition(ctx, r.Client, nodeAllocationRequest,
+		hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.InProgress,
+		metav1.ConditionFalse, "Allocating additional nodes for scale-out"); err != nil {
+		return hwmgrutils.RequeueWithShortInterval(), false,
+			fmt.Errorf("failed to update status for scale-out: %w", err)
+	}
+	// Do not advance ObservedGeneration here. Setting Provisioned=InProgress
+	// routes the FSM directly to Processing for allocation. After allocation
+	// completes and Provisioned returns to True, the FSM will re-enter
+	// SpecChanged (since ObservedGeneration != Generation) to process any
+	// other spec changes in this generation (e.g., HwProfile updates).
+	return hwmgrutils.RequeueImmediately(), true, nil
+}
+
 func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged(
 	ctx context.Context,
 	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
@@ -328,6 +357,11 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 	configInProgress := configuredCondition != nil &&
 		configuredCondition.Status == metav1.ConditionFalse &&
 		configuredCondition.Reason == string(hwmgmtv1alpha1.InProgress)
+
+	// Check if NodeGroup sizes increased (scale-out).
+	if result, handled, err := r.handleScaleOut(ctx, nodeAllocationRequest); handled || err != nil {
+		return result, err
+	}
 
 	// Check whether the HW profile has changed.
 	hwProfileChanged, err := hasNodeGroupHwProfileChanges(ctx, r.Client, r.Logger, nodeAllocationRequest)
