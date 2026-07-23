@@ -41,6 +41,10 @@ spec:
       - kind: FirmwareCatalog
         name: firmwarecatalogs.clcm.openshift.io
         version: v1alpha1
+      specDescriptors:
+      - description: List of firmware images in the catalog
+        displayName: Images
+        path: images
       statusDescriptors:
       - description: Represents the observations of a FirmwareCatalog's current state
         displayName: Conditions

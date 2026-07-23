@@ -552,6 +552,18 @@ metadata:
                 "version": "2.22.2"
               }
             ]
+          },
+          "status": {
+            "conditions": [
+              {
+                "lastTransitionTime": "2026-01-01T00:00:00Z",
+                "message": "All firmware catalog entries are valid",
+                "reason": "Completed",
+                "status": "True",
+                "type": "Validation"
+              }
+            ],
+            "observedGeneration": 1
           }
         },
         {
@@ -1072,6 +1084,10 @@ spec:
       - kind: FirmwareCatalog
         name: firmwarecatalogs.clcm.openshift.io
         version: v1alpha1
+      specDescriptors:
+      - description: List of firmware images in the catalog
+        displayName: Images
+        path: images
       statusDescriptors:
       - description: Represents the observations of a FirmwareCatalog's current state
         displayName: Conditions

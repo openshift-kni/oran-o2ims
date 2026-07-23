@@ -9,3 +9,11 @@ spec:
       version: "2.22.2"
       component: bios
       url: https://firmware.example.com/bios-xr8620t-2.22.2.bin
+status:
+  conditions:
+    - lastTransitionTime: "2026-01-01T00:00:00Z"
+      message: All firmware catalog entries are valid
+      reason: Completed
+      status: "True"
+      type: Validation
+  observedGeneration: 1
