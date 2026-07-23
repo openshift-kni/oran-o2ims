@@ -9,7 +9,10 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -20,6 +23,7 @@ import (
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 	configv1 "github.com/openshift/api/config/v1"
 	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
+	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -255,6 +259,13 @@ var _ = Describe("prepareCVSpec", func() {
 			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 				TemplateParameters: runtime.RawExtension{Raw: []byte(`{}`)},
 			},
+			Status: provisioningv1alpha1.ProvisioningRequestStatus{
+				Extensions: provisioningv1alpha1.Extensions{
+					ClusterDetails: &provisioningv1alpha1.ClusterDetails{
+						Name: "test-cluster",
+					},
+				},
+			},
 		}
 		clusterTemplate = &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-template.v1.0.0", Namespace: "test-ns"},
@@ -270,17 +281,35 @@ var _ = Describe("prepareCVSpec", func() {
 				},
 			},
 		}
+		testCI := &siteconfig.ClusterInstance{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-cluster",
+				Namespace: "test-cluster",
+			},
+			Spec: siteconfig.ClusterInstanceSpec{
+				CPUArchitecture: siteconfig.CPUArchitectureX86_64,
+			},
+		}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(testCI).Build()
 		task = &provisioningRequestReconcilerTask{
+			client: c,
 			object: pr,
 			logger: slog.New(slog.DiscardHandler),
 		}
 	})
 
+	prepareAction := func(version string) *utils.CVUpgradeAction {
+		return &utils.CVUpgradeAction{UpgradeToVersion: version}
+	}
+	spokeCV := func() *configv1.ClusterVersion {
+		return &configv1.ClusterVersion{ObjectMeta: metav1.ObjectMeta{Name: "version"}}
+	}
+
 	It("should return cvSpec with version, channel, image, and force from upgrade defaults", func() {
 		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
 			Raw: []byte(`{"clusterVersion":{"channel":"stable-4.22","upstream":"https://custom.graph","desiredUpdate":{"version":"4.22.0","image":"quay.io/ocp:4.22.0","force":true}}}`),
 		}
-		cvSpec, err := task.prepareCVSpec(clusterTemplate, "4.22.0")
+		cvSpec, err := task.prepareCVSpec(context.Background(), clusterTemplate, spokeCV(), prepareAction("4.22.0"))
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cvSpec.DesiredUpdate).ToNot(BeNil())
 		Expect(cvSpec.DesiredUpdate.Version).To(Equal("4.22.0"))
@@ -294,7 +323,7 @@ var _ = Describe("prepareCVSpec", func() {
 		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
 			Raw: []byte(`{"imageBasedGroupUpgrade":{}}`),
 		}
-		_, err := task.prepareCVSpec(clusterTemplate, "4.22.0")
+		_, err := task.prepareCVSpec(context.Background(), clusterTemplate, spokeCV(), prepareAction("4.22.0"))
 		Expect(err).To(HaveOccurred())
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("not found in merged upgrade data"))
@@ -304,17 +333,315 @@ var _ = Describe("prepareCVSpec", func() {
 		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
 			Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.21.0"}}}`),
 		}
-		_, err := task.prepareCVSpec(clusterTemplate, "4.22.0")
+		_, err := task.prepareCVSpec(context.Background(), clusterTemplate, spokeCV(), prepareAction("4.22.0"))
 		Expect(err).To(HaveOccurred())
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("does not match the ClusterTemplate spec.release"))
 	})
 
 	It("should return InputError when target version is not valid semver", func() {
-		_, err := task.prepareCVSpec(clusterTemplate, "invalid-version")
+		_, err := task.prepareCVSpec(context.Background(), clusterTemplate, spokeCV(), prepareAction("invalid-version"))
 		Expect(err).To(HaveOccurred())
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("invalid target version"))
+	})
+
+	It("should use configured intermediateVersion for EUS intermediate upgrade", func() {
+		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`{"clusterVersion":{"channel":"eus-4.22","desiredUpdate":{"version":"4.22.0"}},"intermediateVersion":"4.21.3"}`),
+		}
+		task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{
+			StartVersion: "4.20.0",
+		}
+		action := &utils.CVUpgradeAction{IsEUS: true, UpgradeToVersion: ""}
+		cvSpec, err := task.prepareCVSpec(context.Background(), clusterTemplate, spokeCV(), action)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cvSpec.DesiredUpdate.Version).To(Equal("4.21.3"))
+		Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.IntermediateVersion).To(Equal("4.21.3"))
+	})
+
+	It("should clear desiredUpdate.image on EUS intermediate hop", func() {
+		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`{"clusterVersion":{"channel":"eus-4.22","desiredUpdate":{"version":"4.22.0","image":"quay.io/ocp:4.22.0"}},"intermediateVersion":"4.21.3"}`),
+		}
+		task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{
+			StartVersion:        "4.20.0",
+			IntermediateVersion: "4.21.3",
+		}
+		action := &utils.CVUpgradeAction{IsEUS: true, UpgradeToVersion: "4.21.3"}
+		cvSpec, err := task.prepareCVSpec(context.Background(), clusterTemplate, spokeCV(), action)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cvSpec.DesiredUpdate.Version).To(Equal("4.21.3"))
+		Expect(cvSpec.DesiredUpdate.Image).To(BeEmpty())
+	})
+
+	It("should auto-select intermediateVersion from Cincinnati when intermediateVersion is not set", func() {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			Expect(r.URL.Query().Get("channel")).To(Equal("eus-4.22"))
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"nodes": []map[string]string{
+					{"version": "4.20.0"},
+					{"version": "4.21.1"},
+					{"version": "4.21.5"},
+					{"version": "4.22.0"},
+				},
+				"edges": [][]int{{0, 1}, {0, 2}, {1, 3}, {2, 3}},
+			})
+		}))
+		defer srv.Close()
+
+		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: fmt.Appendf(nil, `{"clusterVersion":{"channel":"eus-4.22","upstream":%q,"desiredUpdate":{"version":"4.22.0"}}}`, srv.URL),
+		}
+		task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{
+			StartVersion: "4.20.0",
+		}
+
+		action := &utils.CVUpgradeAction{IsEUS: true, UpgradeToVersion: ""}
+		cvSpec, err := task.prepareCVSpec(context.Background(), clusterTemplate, spokeCV(), action)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cvSpec.DesiredUpdate.Version).To(Equal("4.21.5"))
+		Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.IntermediateVersion).To(Equal("4.21.5"))
+	})
+
+})
+
+var _ = Describe("resolveEUSIntermediateVersion", func() {
+	var task *provisioningRequestReconcilerTask
+
+	BeforeEach(func() {
+		testCI := &siteconfig.ClusterInstance{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-cluster",
+				Namespace: "test-cluster",
+			},
+			Spec: siteconfig.ClusterInstanceSpec{
+				CPUArchitecture: siteconfig.CPUArchitectureX86_64,
+			},
+		}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(testCI).Build()
+		pr := &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: "resolve-test-pr"},
+			Status: provisioningv1alpha1.ProvisioningRequestStatus{
+				Extensions: provisioningv1alpha1.Extensions{
+					ClusterDetails: &provisioningv1alpha1.ClusterDetails{Name: "test-cluster"},
+				},
+			},
+		}
+		task = &provisioningRequestReconcilerTask{
+			client: c,
+			object: pr,
+			logger: slog.New(slog.DiscardHandler),
+		}
+	})
+
+	It("should select the latest valid intermediate version", func() {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"nodes": []map[string]string{
+					{"version": "4.20.0"},
+					{"version": "4.21.1"},
+					{"version": "4.21.5"},
+					{"version": "4.22.0"},
+				},
+				"edges": [][]int{{0, 1}, {0, 2}, {1, 3}, {2, 3}},
+			})
+		}))
+		defer srv.Close()
+
+		cv := &configv1.ClusterVersion{ObjectMeta: metav1.ObjectMeta{Name: "version"}}
+		cvSpec := &configv1.ClusterVersionSpec{
+			Channel:  "eus-4.22",
+			Upstream: configv1.URL(srv.URL),
+		}
+		selected, err := task.resolveEUSIntermediateVersion(
+			context.Background(), "4.20.0", "4.22.0", cv, cvSpec)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(selected).To(Equal("4.21.5"))
+	})
+
+	It("should return error when Cincinnati is unavailable", func() {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusBadGateway)
+		}))
+		defer srv.Close()
+
+		cv := &configv1.ClusterVersion{ObjectMeta: metav1.ObjectMeta{Name: "version"}}
+		cvSpec := &configv1.ClusterVersionSpec{
+			Channel:  "eus-4.22",
+			Upstream: configv1.URL(srv.URL),
+		}
+		_, err := task.resolveEUSIntermediateVersion(
+			context.Background(), "4.20.0", "4.22.0", cv, cvSpec)
+		Expect(err).To(HaveOccurred())
+		Expect(typederrors.IsInputError(err)).To(BeFalse())
+		Expect(err.Error()).To(ContainSubstring("unable to auto-select intermediateVersion"))
+	})
+
+	It("should return InputError when channel is empty", func() {
+		cv := &configv1.ClusterVersion{ObjectMeta: metav1.ObjectMeta{Name: "version"}}
+		cvSpec := &configv1.ClusterVersionSpec{}
+		_, err := task.resolveEUSIntermediateVersion(
+			context.Background(), "4.20.0", "4.22.0", cv, cvSpec)
+		Expect(err).To(HaveOccurred())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("channel is required"))
+	})
+
+	It("should return InputError when upstream is not an absolute HTTP URL", func() {
+		cv := &configv1.ClusterVersion{ObjectMeta: metav1.ObjectMeta{Name: "version"}}
+		cvSpec := &configv1.ClusterVersionSpec{
+			Channel:  "eus-4.22",
+			Upstream: "graph",
+		}
+		_, err := task.resolveEUSIntermediateVersion(
+			context.Background(), "4.20.0", "4.22.0", cv, cvSpec)
+		Expect(err).To(HaveOccurred())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("must be an absolute HTTP or HTTPS URL"))
+	})
+
+	It("should return error when no valid intermediate path exists", func() {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"nodes": []map[string]string{
+					{"version": "4.20.0"},
+					{"version": "4.22.0"},
+				},
+				"edges": [][]int{},
+			})
+		}))
+		defer srv.Close()
+
+		cv := &configv1.ClusterVersion{ObjectMeta: metav1.ObjectMeta{Name: "version"}}
+		cvSpec := &configv1.ClusterVersionSpec{
+			Channel:  "eus-4.22",
+			Upstream: configv1.URL(srv.URL),
+		}
+		_, err := task.resolveEUSIntermediateVersion(
+			context.Background(), "4.20.0", "4.22.0", cv, cvSpec)
+		Expect(err).To(HaveOccurred())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("unable to select intermediate version"))
+	})
+})
+
+var _ = Describe("getClusterArchitecture", func() {
+	var task *provisioningRequestReconcilerTask
+
+	BeforeEach(func() {
+		testCI := &siteconfig.ClusterInstance{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "arch-cluster",
+				Namespace: "arch-cluster",
+			},
+			Spec: siteconfig.ClusterInstanceSpec{
+				CPUArchitecture: siteconfig.CPUArchitectureX86_64,
+			},
+		}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(testCI).Build()
+		pr := &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: "arch-test-pr"},
+			Status: provisioningv1alpha1.ProvisioningRequestStatus{
+				Extensions: provisioningv1alpha1.Extensions{
+					ClusterDetails: &provisioningv1alpha1.ClusterDetails{Name: "arch-cluster"},
+				},
+			},
+		}
+		task = &provisioningRequestReconcilerTask{
+			client: c,
+			object: pr,
+			logger: slog.New(slog.DiscardHandler),
+		}
+	})
+
+	It("should return architecture from CV desiredUpdate when set", func() {
+		cv := &configv1.ClusterVersion{
+			ObjectMeta: metav1.ObjectMeta{Name: "version"},
+			Spec: configv1.ClusterVersionSpec{
+				DesiredUpdate: &configv1.Update{
+					Architecture: configv1.ClusterVersionArchitectureMulti,
+				},
+			},
+		}
+		arch, err := task.getClusterArchitecture(context.Background(), cv)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(arch).To(Equal("multi"))
+	})
+
+	It("should return amd64 for x86_64 ClusterInstance", func() {
+		cv := &configv1.ClusterVersion{ObjectMeta: metav1.ObjectMeta{Name: "version"}}
+		arch, err := task.getClusterArchitecture(context.Background(), cv)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(arch).To(Equal("amd64"))
+	})
+
+	It("should return arm64 for aarch64 ClusterInstance", func() {
+		testCI := &siteconfig.ClusterInstance{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "arch-cluster",
+				Namespace: "arch-cluster",
+			},
+			Spec: siteconfig.ClusterInstanceSpec{
+				CPUArchitecture: siteconfig.CPUArchitectureAarch64,
+			},
+		}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(testCI).Build()
+		task.client = c
+		cv := &configv1.ClusterVersion{ObjectMeta: metav1.ObjectMeta{Name: "version"}}
+		arch, err := task.getClusterArchitecture(context.Background(), cv)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(arch).To(Equal("arm64"))
+	})
+
+	It("should return multi for multi-arch ClusterInstance", func() {
+		testCI := &siteconfig.ClusterInstance{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "arch-cluster",
+				Namespace: "arch-cluster",
+			},
+			Spec: siteconfig.ClusterInstanceSpec{
+				CPUArchitecture: siteconfig.CPUArchitectureMulti,
+			},
+		}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(testCI).Build()
+		task.client = c
+		cv := &configv1.ClusterVersion{ObjectMeta: metav1.ObjectMeta{Name: "version"}}
+		arch, err := task.getClusterArchitecture(context.Background(), cv)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(arch).To(Equal("multi"))
+	})
+
+	It("should default to amd64 for unknown architecture", func() {
+		testCI := &siteconfig.ClusterInstance{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "arch-cluster",
+				Namespace: "arch-cluster",
+			},
+			Spec: siteconfig.ClusterInstanceSpec{
+				CPUArchitecture: "ppc64le",
+			},
+		}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(testCI).Build()
+		task.client = c
+		cv := &configv1.ClusterVersion{ObjectMeta: metav1.ObjectMeta{Name: "version"}}
+		arch, err := task.getClusterArchitecture(context.Background(), cv)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(arch).To(Equal("amd64"))
+	})
+
+	It("should prefer CV desiredUpdate.architecture over ClusterInstance", func() {
+		cv := &configv1.ClusterVersion{
+			ObjectMeta: metav1.ObjectMeta{Name: "version"},
+			Spec: configv1.ClusterVersionSpec{
+				DesiredUpdate: &configv1.Update{
+					Architecture: "arm64",
+				},
+			},
+		}
+		arch, err := task.getClusterArchitecture(context.Background(), cv)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(arch).To(Equal("arm64"))
 	})
 })
 
@@ -592,49 +919,6 @@ var _ = Describe("parseUpgradeConfig", func() {
 		})
 	})
 
-	Context("intermediateVersion extraction", func() {
-		It("should extract intermediateVersion from PR params", func() {
-			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{}}`),
-			}
-			pr.Spec.TemplateParameters = runtime.RawExtension{
-				Raw: []byte(`{"upgradeParameters":{"intermediateVersion":"4.21.0"}}`),
-			}
-			cfg, err := parseUpgradeConfig(ct, pr)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(cfg.IntermediateVersion).To(Equal("4.21.0"))
-		})
-
-		It("should fall back to CT defaults when PR has no intermediateVersion", func() {
-			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{},"intermediateVersion":"4.19.0"}`),
-			}
-			cfg, err := parseUpgradeConfig(ct, pr)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(cfg.IntermediateVersion).To(Equal("4.19.0"))
-		})
-
-		It("should prefer PR intermediateVersion over CT defaults", func() {
-			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{},"intermediateVersion":"4.19.0"}`),
-			}
-			pr.Spec.TemplateParameters = runtime.RawExtension{
-				Raw: []byte(`{"upgradeParameters":{"intermediateVersion":"4.21.0"}}`),
-			}
-			cfg, err := parseUpgradeConfig(ct, pr)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(cfg.IntermediateVersion).To(Equal("4.21.0"))
-		})
-
-		It("should return empty intermediateVersion when not set", func() {
-			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{}}`),
-			}
-			cfg, err := parseUpgradeConfig(ct, pr)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(cfg.IntermediateVersion).To(BeEmpty())
-		})
-	})
 })
 
 var _ = Describe("handleUpgrade", func() {
@@ -812,7 +1096,7 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 				Release: "4.22.0",
 				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					UpgradeDefaults: runtime.RawExtension{
-						Raw: []byte(`{"clusterVersion":{"desiredUpdate":{}}}`),
+						Raw: []byte(`{"clusterVersion":{"desiredUpdate":{}},"intermediateVersion":"4.21.0"}`),
 					},
 				},
 				TemplateParameterSchema: runtime.RawExtension{
@@ -852,6 +1136,10 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 	setupWithSpokeReady := func(extraObjs ...client.Object) {
 		objs := []client.Object{
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: clusterName}},
+			&siteconfig.ClusterInstance{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+				Spec:       siteconfig.ClusterInstanceSpec{CPUArchitecture: siteconfig.CPUArchitectureX86_64},
+			},
 			&addonv1alpha1.ManagedClusterAddOn{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "managed-serviceaccount", Namespace: clusterName,
@@ -958,10 +1246,12 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 	}
 
 	// setEUSStartVersion pre-sets ClusterUpgradeStatus with StartVersion=4.20.0
-	// so initUpgradeStatus skips the ManagedCluster read.
+	// and IntermediateVersion=4.21.0 so initUpgradeStatus skips the ManagedCluster
+	// read and ResolveCVUpgradeAction can drive the EUS state machine.
 	setEUSStartVersion := func() {
 		task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{
-			StartVersion: "4.20.0",
+			StartVersion:        "4.20.0",
+			IntermediateVersion: "4.21.0",
 		}
 	}
 
@@ -1483,7 +1773,7 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			setEUSStartVersion()
 
 			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName,
-				&utils.UpgradeConfig{IntermediateVersion: "4.21.0"})
+				&utils.UpgradeConfig{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(proceed).To(BeFalse())
 			Expect(result.RequeueAfter).To(BeZero())
@@ -1492,7 +1782,7 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 				"MachineConfigPools not updated")
 		})
 
-		It("[EUS] should pause worker MCPs and trigger intermediate version", func() {
+		It("[EUS] should pause worker MCPs and trigger intermediate version configured in ClusterTemplate", func() {
 			cv := newBaseCV()
 			cv.Status.History = []configv1.UpdateHistory{
 				{Version: "4.20.0", State: configv1.CompletedUpdate},
@@ -1512,7 +1802,7 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			setEUSStartVersion()
 
 			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName,
-				&utils.UpgradeConfig{IntermediateVersion: "4.21.0"})
+				&utils.UpgradeConfig{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(proceed).To(BeFalse())
 			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
@@ -1521,6 +1811,50 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 				"Upgrade to intermediate version 4.21.0 triggered")
 			assertMCPPaused("worker", true)
 			assertMCPPaused("master", false)
+		})
+
+		It("[EUS] should auto-select intermediateVersion via Cincinnati when intermediateVersion is not configured", func() {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				Expect(r.URL.Query().Get("channel")).To(Equal("eus-4.22"))
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"nodes": []map[string]string{
+						{"version": "4.20.0"},
+						{"version": "4.21.7"},
+						{"version": "4.22.0"},
+					},
+					"edges": [][]int{{0, 1}, {1, 2}},
+				})
+			}))
+			defer srv.Close()
+
+			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: fmt.Appendf(nil,
+					`{"clusterVersion":{"channel":"eus-4.22","upstream":%q,"desiredUpdate":{"version":"4.22.0"}}}`,
+					srv.URL),
+			}
+			cv := newBaseCV()
+			cv.Spec.Channel = "eus-4.22"
+			cv.Spec.Upstream = configv1.URL(srv.URL)
+			cv.Status.History = []configv1.UpdateHistory{
+				{Version: "4.20.0", State: configv1.CompletedUpdate},
+			}
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{retrievedUpdatesTrue}
+			cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.21.7"}}
+			buildSpoke(cv, newUpdatedWorkerMCP())
+			setupWithSpokeReady()
+			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{
+				StartVersion: "4.20.0",
+			}
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName, &utils.UpgradeConfig{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.Pending),
+				"Upgrade to intermediate version 4.21.7 triggered")
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.IntermediateVersion).
+				To(Equal("4.21.7"))
 		})
 
 		It("[EUS] should unpause worker MCPs on intermediate version PreconditionChecksFailed", func() {
@@ -1536,7 +1870,7 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			setEUSStartVersion()
 
 			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName,
-				&utils.UpgradeConfig{IntermediateVersion: "4.21.0"})
+				&utils.UpgradeConfig{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(proceed).To(BeFalse())
 			Expect(result.RequeueAfter).To(BeZero())
@@ -1559,7 +1893,7 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			setEUSStartVersion()
 
 			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName,
-				&utils.UpgradeConfig{IntermediateVersion: "4.21.0"})
+				&utils.UpgradeConfig{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(proceed).To(BeFalse())
 			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
@@ -1580,7 +1914,7 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			setEUSStartVersion()
 
 			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName,
-				&utils.UpgradeConfig{IntermediateVersion: "4.21.0"})
+				&utils.UpgradeConfig{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(proceed).To(BeFalse())
 			Expect(result.RequeueAfter).To(BeZero())
@@ -1706,9 +2040,10 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			setupWithSpokeReady()
 			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{
 				StartedAt: &now, StartVersion: "4.20.0",
+				IntermediateVersion: "4.21.0",
 			}
 
-			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName, &utils.UpgradeConfig{IntermediateVersion: "4.21.0"})
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName, &utils.UpgradeConfig{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(proceed).To(BeFalse())
 			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
@@ -1733,10 +2068,11 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			setupWithSpokeReady()
 			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{
 				StartedAt: &pastTime, StartVersion: "4.20.0",
+				IntermediateVersion: "4.21.0",
 			}
 
 			result, _, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName,
-				&utils.UpgradeConfig{IntermediateVersion: "4.21.0"})
+				&utils.UpgradeConfig{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.RequeueAfter).To(BeZero())
 
@@ -1758,10 +2094,11 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			setupWithSpokeReady()
 			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{
 				StartedAt: &now, StartVersion: "4.20.0",
+				IntermediateVersion: "4.21.0",
 			}
 
 			_, _, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName,
-				&utils.UpgradeConfig{IntermediateVersion: "4.21.0", Timeout: 2 * time.Hour})
+				&utils.UpgradeConfig{Timeout: 2 * time.Hour})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(task.timeouts.clusterUpgrade).To(Equal(2 * time.Hour))
 		})
@@ -1807,10 +2144,11 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			now := metav1.Now()
 			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{
 				StartedAt: &now, StartVersion: "4.20.0",
+				IntermediateVersion: "4.21.0",
 			}
 
 			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName,
-				&utils.UpgradeConfig{IntermediateVersion: "4.21.0"})
+				&utils.UpgradeConfig{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(proceed).To(BeFalse())
 			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
@@ -1832,9 +2170,10 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			now := metav1.Now()
 			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{
 				StartedAt: &now, StartVersion: "4.20.0",
+				IntermediateVersion: "4.21.0",
 			}
 
-			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName, &utils.UpgradeConfig{IntermediateVersion: "4.21.0"})
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName, &utils.UpgradeConfig{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(proceed).To(BeTrue())
 			Expect(result.RequeueAfter).To(BeZero())

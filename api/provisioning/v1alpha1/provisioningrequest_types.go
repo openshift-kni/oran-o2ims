@@ -72,6 +72,11 @@ type ClusterUpgradeStatus struct {
 
 	// StartVersion is the current cluster version before the upgrade began.
 	StartVersion string `json:"startVersion,omitempty"`
+
+	// IntermediateVersion is the intermediate version selected for
+	// EUS-to-EUS upgrades, either from user configuration or
+	// auto-selected from the Cincinnati update graph.
+	IntermediateVersion string `json:"intermediateVersion,omitempty"`
 }
 
 // ResourceProvisioningPhase defines the provisioning phase of an individual infrastructure resource.

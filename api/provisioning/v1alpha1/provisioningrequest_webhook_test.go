@@ -1377,7 +1377,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 
 			_, err := validator.ValidateCreate(ctx, pr)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("invalid intermediateVersion"))
+			Expect(err.Error()).To(ContainSubstring("is not valid semver"))
 		})
 
 		It("should reject upgradeParameters with wrong intermediateVersion minor", func() {
@@ -1586,7 +1586,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 
 			_, err := validator.ValidateCreate(ctx, pr)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("invalid intermediateVersion"))
+			Expect(err.Error()).To(ContainSubstring("is not valid semver"))
 		})
 	})
 })

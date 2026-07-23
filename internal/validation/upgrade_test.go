@@ -159,7 +159,7 @@ var _ = Describe("ValidateCVUpgradeData", func() {
 			err := ValidateCVUpgradeData(data, release, label)
 			Expect(err).To(HaveOccurred())
 			Expect(typederrors.IsInputError(err)).To(BeTrue())
-			Expect(err.Error()).To(ContainSubstring("invalid intermediateVersion"))
+			Expect(err.Error()).To(ContainSubstring("is not valid semver"))
 		})
 
 		It("should reject when major version differs", func() {
@@ -170,7 +170,7 @@ var _ = Describe("ValidateCVUpgradeData", func() {
 			err := ValidateCVUpgradeData(data, release, label)
 			Expect(err).To(HaveOccurred())
 			Expect(typederrors.IsInputError(err)).To(BeTrue())
-			Expect(err.Error()).To(ContainSubstring("major version (3) must equal spec.release major version (4)"))
+			Expect(err.Error()).To(ContainSubstring("major version (3) must equal ClusterTemplate's spec.release major version (4)"))
 		})
 
 		It("should reject when not exactly one minor below", func() {
@@ -210,7 +210,7 @@ var _ = Describe("ValidateCVUpgradeData", func() {
 			err := ValidateCVUpgradeData(data, release, label)
 			Expect(err).To(HaveOccurred())
 			Expect(typederrors.IsInputError(err)).To(BeTrue())
-			Expect(err.Error()).To(ContainSubstring("invalid intermediateVersion"))
+			Expect(err.Error()).To(ContainSubstring("is not valid semver"))
 		})
 	})
 
@@ -237,5 +237,39 @@ var _ = Describe("ValidateCVUpgradeData", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("does not match"))
 		})
+	})
+})
+
+var _ = Describe("ValidateEUSIntermediate", func() {
+	It("should accept intermediate one minor below target", func() {
+		Expect(ValidateEUSIntermediate("4.21.0", "4.22.0")).ToNot(HaveOccurred())
+	})
+
+	It("should reject wrong minor gap", func() {
+		err := ValidateEUSIntermediate("4.20.5", "4.22.0")
+		Expect(err).To(HaveOccurred())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("exactly one minor version below"))
+	})
+
+	It("should reject wrong major version", func() {
+		err := ValidateEUSIntermediate("99.21.0", "4.22.0")
+		Expect(err).To(HaveOccurred())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("must equal ClusterTemplate's spec.release major version"))
+	})
+
+	It("should reject invalid intermediateVersion", func() {
+		err := ValidateEUSIntermediate("invalid", "4.22.0")
+		Expect(err).To(HaveOccurred())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("is not valid semver"))
+	})
+
+	It("should reject invalid target version", func() {
+		err := ValidateEUSIntermediate("4.21.0", "not-semver")
+		Expect(err).To(HaveOccurred())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("ClusterTemplate's spec.release"))
 	})
 })

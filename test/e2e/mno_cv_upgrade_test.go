@@ -10,6 +10,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"time"
@@ -692,18 +694,31 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 
 			waitForPRUpgradeCondition(testCtx, K8SClient,
 				string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed),
-				"intermediateVersion 4.20.3 must be exactly one minor version below targetVersion "+ctRelease4,
+				"intermediateVersion 4.20.3 must be exactly one minor version below ClusterTemplate's spec.release version "+ctRelease4,
 				provisioningv1alpha1.StateFailed,
 			)
 		})
 
-		It("should start intermediate upgrade after fixing intermediateVersion", func() {
+		It("should auto-select intermediateVersion and start intermediate upgrade", func() {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"nodes": []map[string]string{
+						{"version": ctRelease2},
+						{"version": eusIntermediateVersion},
+						{"version": ctRelease4},
+					},
+					"edges": [][]int{{0, 1}, {1, 2}},
+				})
+			}))
+			defer srv.Close()
+
 			updatePR(testCtx, K8SClient, "", map[string]any{
 				constants.TemplateParamUpgrade: map[string]any{
 					ctlrutils.UpgradeDefaultsClusterVersionKey: map[string]any{
+						"channel":       "eus-4.22",
+						"upstream":      srv.URL,
 						"desiredUpdate": map[string]any{"version": ctRelease4},
 					},
-					ctlrutils.UpgradeIntermediateVersionConfigKey: eusIntermediateVersion,
 				},
 			})
 

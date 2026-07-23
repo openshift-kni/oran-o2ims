@@ -1883,6 +1883,7 @@ spec:
           resources:
           - apiservers
           - clusterversions
+          - proxies
           verbs:
           - get
           - list

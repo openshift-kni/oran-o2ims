@@ -74,7 +74,7 @@ File: `test/e2e/mno_cv_upgrade_test.go`
 
 1. should fail with MCPs not updated
 1. should fail with invalid intermediateVersion after fixing MCPs
-1. should start intermediate upgrade after fixing intermediateVersion
+1. should auto-select intermediateVersion and start intermediate upgrade
 1. should show intermediate upgrade in progress
 1. should start target upgrade after intermediate completes
 1. should show target upgrade in progress
