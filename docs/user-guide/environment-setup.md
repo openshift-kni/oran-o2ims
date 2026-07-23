@@ -321,6 +321,10 @@ configuration requirements.
                 - profile
                 - openid
                 - role:ocloud-manager
+             # audience is optional. When specified, this value is sent as the
+             # "audience" parameter in the OAuth token request. Omit if the
+             # authorization server determines the audience from scopes alone.
+             # audience: https://api.example.com
              usernameClaim: preferred_username
              groupsClaim: roles
           tls:

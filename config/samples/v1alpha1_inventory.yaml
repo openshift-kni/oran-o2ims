@@ -22,6 +22,7 @@ spec:
         - openid
         - profile
         - role:ocloud-manager
+      # audience: https://api.example.com
       usernameClaim: preferred_username
       groupsClaim: roles
     tls:

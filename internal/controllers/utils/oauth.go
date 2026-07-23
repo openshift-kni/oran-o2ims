@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -70,6 +71,9 @@ type OAuthConfig struct {
 	// The list of OAuth scopes requested by the client.  These will be dictated by what the SMO is expecting to see in
 	// the token.
 	Scopes []string
+	// The OAuth audience value to include in the token request.  When non-empty this is sent as the "audience"
+	// parameter in the client credentials token request.
+	Audience string
 }
 
 // OAuthClientConfig defines the parameters required to establish an HTTP Client capable of acquiring an OAuth Token
@@ -109,12 +113,17 @@ func SetupOAuthClient(ctx context.Context, logger *slog.Logger, config *OAuthCli
 	}
 
 	if config.OAuthConfig != nil && config.OAuthConfig.ClientID != "" {
+		var endpointParams url.Values
+		if config.OAuthConfig.Audience != "" {
+			endpointParams = url.Values{"audience": {config.OAuthConfig.Audience}}
+		}
+
 		oauthConfig := clientcredentials.Config{
 			ClientID:       config.OAuthConfig.ClientID,
 			ClientSecret:   config.OAuthConfig.ClientSecret,
 			TokenURL:       config.OAuthConfig.TokenURL,
 			Scopes:         config.OAuthConfig.Scopes,
-			EndpointParams: nil,
+			EndpointParams: endpointParams,
 			AuthStyle:      oauth2.AuthStyleInParams,
 		}
 

@@ -105,6 +105,16 @@ spec:
                     description: OAuthConfig defines the configurable attributes required
                       to access the OAuth2 authorization server
                     properties:
+                      audience:
+                        description: |-
+                          Audience represents the OAuth audience value to include in token requests.  When specified, this value is
+                          sent as the "audience" parameter in the client credentials token request to the authorization server.  If omitted,
+                          no audience parameter is included and the authorization server determines the audience based on other request
+                          attributes (e.g., scopes).
+                        maxLength: 512
+                        minLength: 1
+                        pattern: ^\S+$
+                        type: string
                       clientBindingClaim:
                         default: 'has(claims.cnf) ? claims.cnf[''x5t#S256''] : []'
                         description: |-

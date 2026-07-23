@@ -1175,6 +1175,15 @@ spec:
         displayName: SMO OAuth Configuration
         path: smo.oauth
       - description: |-
+          Audience represents the OAuth audience value to include in token requests.  When specified, this value is
+          sent as the "audience" parameter in the client credentials token request to the authorization server.  If omitted,
+          no audience parameter is included and the authorization server determines the audience based on other request
+          attributes (e.g., scopes).
+        displayName: OAuth Audience
+        path: smo.oauth.audience
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
           ClientBindingClaim represents the claim contained within the OAuth JWT token which holds the certificate SHA256
           fingerprint.  This is expected to be a CEL mapper expression.  It should only be changed in advanced scenarios.
         displayName: OAuth Client Binding Claim
