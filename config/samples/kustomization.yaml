@@ -10,6 +10,7 @@ resources:
 - v1alpha1_allocatednode.yaml
 - v1alpha1_nodeallocationrequest.yaml
 - v1alpha1_hardwareprofile.yaml
+- hardwaremanagement_v1alpha1_firmwarecatalog.yaml
 
 # Provisioning:
 - v1alpha1_clustertemplate.yaml

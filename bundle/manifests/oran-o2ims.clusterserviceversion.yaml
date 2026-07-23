@@ -538,6 +538,24 @@ metadata:
         },
         {
           "apiVersion": "clcm.openshift.io/v1alpha1",
+          "kind": "FirmwareCatalog",
+          "metadata": {
+            "name": "firmwarecatalog-sample",
+            "namespace": "oran-o2ims"
+          },
+          "spec": {
+            "images": [
+              {
+                "component": "bios",
+                "name": "bios-dell-xr8620t",
+                "url": "https://firmware.example.com/bios-xr8620t-2.22.2.bin",
+                "version": "2.22.2"
+              }
+            ]
+          }
+        },
+        {
+          "apiVersion": "clcm.openshift.io/v1alpha1",
           "kind": "HardwareProfile",
           "metadata": {
             "name": "hardwareprofile-sample",
@@ -1046,8 +1064,20 @@ spec:
       - displayName: Conditions
         path: conditions
       version: v1alpha1
-    - kind: FirmwareCatalog
+    - description: FirmwareCatalog is the Schema for the firmwarecatalogs API
+      displayName: Firmware Catalog
+      kind: FirmwareCatalog
       name: firmwarecatalogs.clcm.openshift.io
+      resources:
+      - kind: FirmwareCatalog
+        name: firmwarecatalogs.clcm.openshift.io
+        version: v1alpha1
+      statusDescriptors:
+      - description: Represents the observations of a FirmwareCatalog's current state
+        displayName: Conditions
+        path: conditions
+      - displayName: Observed Generation
+        path: observedGeneration
       version: v1alpha1
     - description: HardwareProfile is the Schema for the hardwareprofiles API
       displayName: Hardware Profile

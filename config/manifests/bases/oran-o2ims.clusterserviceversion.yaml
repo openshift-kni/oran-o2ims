@@ -33,6 +33,21 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
+    - description: FirmwareCatalog is the Schema for the firmwarecatalogs API
+      displayName: Firmware Catalog
+      kind: FirmwareCatalog
+      name: firmwarecatalogs.clcm.openshift.io
+      resources:
+      - kind: FirmwareCatalog
+        name: firmwarecatalogs.clcm.openshift.io
+        version: v1alpha1
+      statusDescriptors:
+      - description: Represents the observations of a FirmwareCatalog's current state
+        displayName: Conditions
+        path: conditions
+      - displayName: Observed Generation
+        path: observedGeneration
+      version: v1alpha1
     - description: AllocatedNode is the schema for an allocated node
       displayName: Allocated Node
       kind: AllocatedNode
