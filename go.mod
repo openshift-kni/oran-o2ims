@@ -37,7 +37,7 @@ require (
 	github.com/r3labs/diff/v3 v3.0.2
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
-	github.com/stephenafamo/bob v0.47.0
+	github.com/stephenafamo/bob v0.48.0
 	github.com/stolostron/multicluster-observability-operator v0.0.0-20260512104411-dd07ac50e870
 	github.com/stolostron/siteconfig v0.0.0-20260520205624-a4af4403aec1
 	github.com/xeipuuv/gojsonschema v1.2.0
