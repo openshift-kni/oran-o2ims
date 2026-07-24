@@ -8,14 +8,8 @@ rules:
   - ""
   resources:
   - configmaps
-  - namespaces
-  - persistentvolumeclaims
-  - secrets
-  - serviceaccounts
-  - services
   verbs:
   - create
-  - delete
   - get
   - list
   - patch
@@ -24,18 +18,15 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - events
+  - namespaces
+  - secrets
   verbs:
   - create
-  - patch
-  - update
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  verbs:
+  - delete
   - get
   - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - addon.open-cluster-management.io
@@ -64,18 +55,6 @@ rules:
   - list
   - watch
 - apiGroups:
-  - apps
-  resources:
-  - deployments
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
   - authentication.k8s.io
   resources:
   - tokenreviews
@@ -97,18 +76,6 @@ rules:
   - subjectaccessreviews
   verbs:
   - create
-- apiGroups:
-  - batch
-  resources:
-  - cronjobs
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
 - apiGroups:
   - clcm.openshift.io
   resources:
@@ -182,18 +149,6 @@ rules:
   verbs:
   - get
   - list
-  - watch
-- apiGroups:
-  - coordination.k8s.io
-  resources:
-  - leases
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - hive.openshift.io
@@ -270,18 +225,6 @@ rules:
   verbs:
   - get
   - list
-  - watch
-- apiGroups:
-  - networking.k8s.io
-  resources:
-  - ingresses
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - observability.open-cluster-management.io
@@ -367,4 +310,91 @@ rules:
   - delete
   - get
   - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: manager-role
+  namespace: system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - persistentvolumeclaims
+  - serviceaccounts
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - cronjobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses
+  - networkpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
   - watch
