@@ -28,6 +28,7 @@ feature, which parses test structure without executing tests.
   - [Handles mid-flight profile change by abandoning stale updates](#handles-mid-flight-profile-change-by-abandoning-stale-updates)
 - [MNO Scale-Out test [mno-scale-out]](#mno-scale-out-test-mno-scale-out)
   - [Scale-out: add a worker node](#scale-out-add-a-worker-node)
+  - [Scale-in: remove a worker node](#scale-in-remove-a-worker-node)
 - [SNO End-to-end ProvisioningRequestReconcile with hardware manager [sno-provisioning]](#sno-end-to-end-provisioningrequestreconcile-with-hardware-manager-sno-provisioning)
 
 ## MNO Standard ClusterVersion Upgrade [mno-cv-upgrade]
@@ -169,6 +170,12 @@ File: `test/e2e/mno_scale_test.go`
 1. should create a new AllocatedNode for the added worker
    - Waiting for 6 AllocatedNodes (3 masters + 3 workers)
    - Verifying original nodes are preserved and new node is a worker
+
+### Scale-in: remove a worker node
+
+1. should decrease NAR worker NodeGroup Size after removing a worker
+   - Updating PR to remove worker-3 (revert to v1 CT with 2 workers)
+   - Verifying NAR NodeGroup sizes after scale-in
 
 ## SNO End-to-end ProvisioningRequestReconcile with hardware manager [sno-provisioning]
 
