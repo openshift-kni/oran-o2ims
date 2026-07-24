@@ -113,29 +113,33 @@ func SetupOAuthClient(ctx context.Context, logger *slog.Logger, config *OAuthCli
 	}
 
 	if config.OAuthConfig != nil && config.OAuthConfig.ClientID != "" {
-		var endpointParams url.Values
-		if config.OAuthConfig.Audience != "" {
-			endpointParams = url.Values{"audience": {config.OAuthConfig.Audience}}
-		}
-
-		oauthConfig := clientcredentials.Config{
-			ClientID:       config.OAuthConfig.ClientID,
-			ClientSecret:   config.OAuthConfig.ClientSecret,
-			TokenURL:       config.OAuthConfig.TokenURL,
-			Scopes:         config.OAuthConfig.Scopes,
-			EndpointParams: endpointParams,
-			AuthStyle:      oauth2.AuthStyleInParams,
-		}
-
-		ctx = context.WithValue(ctx, oauth2.HTTPClient, baseClient)
-		oauthClient := oauthConfig.Client(ctx)
-
+		oauthClient := newOAuthClient(ctx, baseClient, config.OAuthConfig)
 		logger.InfoContext(ctx, "Successfully created oauth client")
 		return oauthClient, nil
 	}
 
 	logger.InfoContext(ctx, "Successfully created base client")
 	return baseClient, nil
+}
+
+// newOAuthClient wraps the given base HTTP client with OAuth client credentials token acquisition.
+func newOAuthClient(ctx context.Context, baseClient *http.Client, config *OAuthConfig) *http.Client {
+	var endpointParams url.Values
+	if config.Audience != "" {
+		endpointParams = url.Values{"audience": {config.Audience}}
+	}
+
+	oauthConfig := clientcredentials.Config{
+		ClientID:       config.ClientID,
+		ClientSecret:   config.ClientSecret,
+		TokenURL:       config.TokenURL,
+		Scopes:         config.Scopes,
+		EndpointParams: endpointParams,
+		AuthStyle:      oauth2.AuthStyleInParams,
+	}
+
+	ctx = context.WithValue(ctx, oauth2.HTTPClient, baseClient)
+	return oauthConfig.Client(ctx)
 }
 
 // setupTLSConfig updates the TLS config with the related options from the OAuth configuration
