@@ -46,15 +46,52 @@ the host.
 ## HardwareProfile
 
 A HardwareProfile CR defines the desired firmware and BIOS state for a class of servers.
+Firmware images are managed in a shared FirmwareCatalog and referenced by name.
 All fields are optional — specify only what you need to manage:
 
 - **`spec.bios.attributes`** — BIOS settings to apply (e.g., `SriovGlobalEnable`,
   `WorkloadProfile`, `AcPwrRcvryUserDelay`).
-- **`spec.biosFirmware`** — Target BIOS firmware version and download URL.
-- **`spec.bmcFirmware`** — Target BMC/iDRAC firmware version and download URL.
-- **`spec.nicFirmware`** — Target NIC firmware versions and download URLs.
+- **`spec.biosFirmware`** — Name of a BIOS firmware entry in the FirmwareCatalog.
+- **`spec.bmcFirmware`** — Name of a BMC firmware entry in the FirmwareCatalog.
+- **`spec.nicFirmware`** — Names of NIC firmware entries in the FirmwareCatalog.
 
-Example:
+### FirmwareCatalog
+
+The FirmwareCatalog is a singleton CR that serves as a centralized registry of firmware
+images. The operator creates it automatically on startup with an empty images list.
+Users add firmware entries to `spec.images` with a unique name, component type
+(`bios`, `bmc`, or `nic`), download URL, and version:
+
+```yaml
+apiVersion: clcm.openshift.io/v1alpha1
+kind: FirmwareCatalog
+metadata:
+  name: firmware-catalog
+  namespace: oran-o2ims
+spec:
+  images:
+  - name: dell-xr8620t-bios-2.3.5
+    component: bios
+    url: https://example.com:8888/firmware/xr8620t/BIOS_JDR1R_WN64_2.3.5.EXE
+    version: "2.3.5"
+    vendor: Dell
+  - name: dell-xr8620t-bmc-7.10.70.10
+    component: bmc
+    url: https://example.com:8888/firmware/xr8620t/iDRAC-with-Lifecycle-Controller_Firmware_W4NV9_WN64_7.10.70.10_A00.EXE
+    version: "7.10.70.10"
+    vendor: Dell
+```
+
+Catalog entries are immutable once created — `component`, `url`, `version`, and `vendor`
+cannot be changed in place. The `description` field may be updated freely. Entries
+cannot be deleted while any HardwareProfile references them.
+
+To roll out new firmware, create a new catalog entry with a new name, then create a new
+HardwareProfile referencing it.
+
+### HardwareProfile Example
+
+HardwareProfiles reference firmware entries by name:
 
 ```yaml
 apiVersion: clcm.openshift.io/v1alpha1
@@ -69,13 +106,12 @@ spec:
       WorkloadProfile: TelcoOptimizedProfile
       SriovGlobalEnable: Enabled
       AcPwrRcvryUserDelay: 120
-  biosFirmware:
-    version: 2.3.5
-    url: https://example.com:8888/firmware/xr8620t/BIOS_JDR1R_WN64_2.3.5.EXE
-  bmcFirmware:
-    version: 7.10.70.10
-    url: https://example.com:8888/firmware/xr8620t/iDRAC-with-Lifecycle-Controller_Firmware_W4NV9_WN64_7.10.70.10_A00.EXE
+  biosFirmware: dell-xr8620t-bios-2.3.5
+  bmcFirmware: dell-xr8620t-bmc-7.10.70.10
 ```
+
+A validating webhook verifies that all firmware references exist in the FirmwareCatalog
+and have the correct component type when the HardwareProfile is created.
 
 The HardwareProfile can be specified in two places:
 

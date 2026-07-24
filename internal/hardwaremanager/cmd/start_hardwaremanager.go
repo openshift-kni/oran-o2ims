@@ -171,6 +171,12 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
+	if err := hwmgrctrl.EnsureFirmwareCatalogSingleton(ctx, mgr.GetClient(), namespace); err != nil {
+		logger.ErrorContext(ctx, "Failed to ensure FirmwareCatalog singleton",
+			slog.Any("error", err))
+		return exit.Error(1)
+	}
+
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		logger.ErrorContext(ctx, "Unable to set up health check", slog.Any("error", err))
 		return exit.Error(1)

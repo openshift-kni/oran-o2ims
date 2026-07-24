@@ -156,6 +156,7 @@ gather_resource "provisioningrequests.clcm.openshift.io" "clcm/provisioningreque
 gather_resource "hardwareprofiles.clcm.openshift.io" "clcm/hardwareprofiles"
 gather_resource "nodeallocationrequests.clcm.openshift.io" "clcm/nodeallocationrequests"
 gather_resource "allocatednodes.clcm.openshift.io" "clcm/allocatednodes"
+gather_resource "firmwarecatalogs.clcm.openshift.io" "clcm/firmwarecatalogs"
 
 # O-Cloud Manager CRDs - ocloud.openshift.io
 gather_resource "inventories.ocloud.openshift.io" "ocloud/inventories"
