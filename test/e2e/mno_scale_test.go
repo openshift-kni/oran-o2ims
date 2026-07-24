@@ -449,6 +449,44 @@ var _ = Describe("MNO Scale-Out test", Ordered, Label("mno-scale-out"), func() {
 			Expect(newWorkerCount).To(Equal(1), "Exactly one new worker should be allocated")
 		})
 	})
+
+	Describe("Scale-in: remove a worker node", func() {
+		It("should decrease NAR worker NodeGroup Size after removing a worker", func() {
+			By("Updating PR to remove worker-3 (revert to v1 CT with 2 workers)")
+			Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
+			pr.Spec.TemplateVersion = "v4-20-16-v1"
+
+			var templateParams map[string]any
+			Expect(json.Unmarshal(pr.Spec.TemplateParameters.Raw, &templateParams)).To(Succeed())
+			ciParams := templateParams["clusterInstanceParameters"].(map[string]any)
+			nodes := ciParams["nodes"].([]any)
+
+			// Remove the last node (worker-3)
+			Expect(len(nodes)).To(BeNumerically(">=", masterCount+workerCount+1),
+				"Should have at least %d nodes before scale-in", masterCount+workerCount+1)
+			nodes = nodes[:masterCount+workerCount]
+			ciParams["nodes"] = nodes
+			templateParams["clusterInstanceParameters"] = ciParams
+
+			updatedParams, err := json.Marshal(templateParams)
+			Expect(err).ToNot(HaveOccurred())
+			pr.Spec.TemplateParameters.Raw = updatedParams
+			Expect(K8SClient.Update(testCtx, pr)).To(Succeed())
+
+			By("Verifying NAR NodeGroup sizes after scale-in")
+			Eventually(func() bool {
+				Expect(K8SClient.Get(testCtx, client.ObjectKeyFromObject(nar), nar)).To(Succeed())
+				sizes := nodeGroupSizeMap(nar)
+				return sizes[worker] == workerCount && sizes[master] == masterCount
+			}, timeout, interval).Should(BeTrue(),
+				"Worker Size should be %d and master Size should remain %d", workerCount, masterCount)
+		})
+
+		// NOTE: AllocatedNode deletion is gated on spoke node removal
+		// (checkRemovedNodesGone), which requires a real spoke cluster.
+		// This cannot be verified in the e2e test environment. Lab testing
+		// validates the full flow including AllocatedNode cleanup.
+	})
 })
 
 func scaleBMHs(masterCount, workerCount int) []testutils.BMHData {

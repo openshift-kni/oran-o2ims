@@ -97,7 +97,9 @@ func GetClusterTemplateRefName(name, version string) string {
 //+kubebuilder:rbac:groups=policy.open-cluster-management.io,resources=policies,verbs=list;watch
 //+kubebuilder:rbac:groups=lcm.openshift.io,resources=imagebasedgroupupgrades,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=lcm.openshift.io,resources=imagebasedgroupupgrades/status,verbs=get
-//+kubebuilder:rbac:groups=agent-install.openshift.io,resources=agents,verbs=get;list;patch;update;watch
+//+kubebuilder:rbac:groups=agent-install.openshift.io,resources=agents,verbs=get;list;patch;update;watch;delete
+//+kubebuilder:rbac:groups=agent-install.openshift.io,resources=infraenvs,verbs=get;list;watch
+//+kubebuilder:rbac:groups=agent-install.openshift.io,resources=nmstateconfigs,verbs=get;list;watch
 //+kubebuilder:rbac:groups=cluster.open-cluster-management.io,resources=managedclusters,verbs=get;list;patch;update;watch
 //+kubebuilder:rbac:groups=observability.open-cluster-management.io,resources=observabilityaddons,verbs=get;list;watch;update
 //+kubebuilder:rbac:groups=authentication.open-cluster-management.io,resources=managedserviceaccounts,verbs=get;list;watch;create;delete
@@ -207,6 +209,20 @@ func (t *provisioningRequestReconcilerTask) executeProvisioningPhases(ctx contex
 	renderedClusterInstance, unstructuredClusterInstance, result, err := t.executePreProvisioningPhase(ctx)
 	if err != nil || renderedClusterInstance == nil {
 		return nil, result, err
+	}
+
+	// Handle scale-in pre-processing before hardware provisioning. Nodes must
+	// be cordoned, drained, and per-node resources (InfraEnv, NMStateConfig)
+	// pruned via siteconfig before the hardware provisioning phase updates
+	// the NAR and CI.
+	scaleInActive, err := t.handleScaleInDrain(ctx, unstructuredClusterInstance)
+	if err != nil {
+		ctlrutils.LogError(ctx, t.logger, "Scale-in pre-processing failed", err)
+		result, _ := requeueWithError(err)
+		return nil, result, err
+	}
+	if scaleInActive {
+		return nil, requeueWithMediumInterval(), nil
 	}
 
 	// Phase 2: Hardware provisioning
@@ -439,6 +455,26 @@ func (t *provisioningRequestReconcilerTask) checkOverallProvisioningTimeout(ctx 
 
 // handleClusterUpgrades handles cluster upgrade logic
 func (t *provisioningRequestReconcilerTask) handleClusterUpgrades(ctx context.Context, clusterName string) (ctrl.Result, error) {
+	// Block upgrades while a scale operation is in progress. Compare the
+	// rendered CI hostname set against the fulfilled node count to detect
+	// active scaling. Use hostname set comparison (not count) because a
+	// mixed add+remove could leave the count unchanged.
+	if t.object.Status.Extensions.ClusterDetails != nil {
+		fulfilledCount := t.object.Status.Extensions.ClusterDetails.FulfilledNodeCount
+		existingCI, err := t.getExistingClusterInstance(ctx)
+		if err == nil && existingCI != nil {
+			if ciUnstructured, convErr := ctlrutils.ConvertToUnstructured(*existingCI); convErr == nil {
+				currentNodeCount := len(getNodeRolesByHostname(ciUnstructured))
+				if fulfilledCount > 0 && currentNodeCount != fulfilledCount {
+					t.logger.InfoContext(ctx, "Skipping upgrade: scale operation in progress",
+						slog.Int("fulfilledNodeCount", fulfilledCount),
+						slog.Int("currentNodeCount", currentNodeCount))
+					return requeueWithMediumInterval(), nil
+				}
+			}
+		}
+	}
+
 	shouldUpgrade, result, err := t.IsUpgradeRequested(ctx, clusterName)
 	if err != nil {
 		return requeueWithError(err)

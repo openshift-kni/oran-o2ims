@@ -775,7 +775,7 @@ var _ = Describe("validateScaleWorkerOnly", func() {
 		Expect(validateScaleWorkerOnly(existingCI, renderedCI)).To(Succeed())
 	})
 
-	It("should reject removing worker nodes (scale-in not yet supported)", func() {
+	It("should allow removing worker nodes", func() {
 		existingCI := makeCI([]map[string]any{
 			{"hostName": "master1", "role": "master"},
 			{"hostName": "worker1", "role": "worker"},
@@ -785,12 +785,10 @@ var _ = Describe("validateScaleWorkerOnly", func() {
 			{"hostName": "master1", "role": "master"},
 			{"hostName": "worker1", "role": "worker"},
 		})
-		err := validateScaleWorkerOnly(existingCI, renderedCI)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("node removal is not yet supported"))
+		Expect(validateScaleWorkerOnly(existingCI, renderedCI)).To(Succeed())
 	})
 
-	It("should reject replacing a worker node (simultaneous add and remove)", func() {
+	It("should allow replacing a worker node (simultaneous add and remove)", func() {
 		existingCI := makeCI([]map[string]any{
 			{"hostName": "master1", "role": "master"},
 			{"hostName": "worker1", "role": "worker"},
@@ -799,9 +797,7 @@ var _ = Describe("validateScaleWorkerOnly", func() {
 			{"hostName": "master1", "role": "master"},
 			{"hostName": "worker2", "role": "worker"},
 		})
-		err := validateScaleWorkerOnly(existingCI, renderedCI)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("node removal is not yet supported"))
+		Expect(validateScaleWorkerOnly(existingCI, renderedCI)).To(Succeed())
 	})
 
 	It("should reject adding master nodes", func() {
@@ -833,7 +829,7 @@ var _ = Describe("validateScaleWorkerOnly", func() {
 		})
 		err := validateScaleWorkerOnly(existingCI, renderedCI)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("node removal is not yet supported"))
+		Expect(err.Error()).To(ContainSubstring("cannot remove master node"))
 		Expect(err.Error()).To(ContainSubstring("master3"))
 	})
 
@@ -941,5 +937,172 @@ var _ = Describe("scale-out detection via getNodeRolesByHostname", func() {
 		existingCount := len(getNodeRolesByHostname(existingCI))
 		renderedCount := len(getNodeRolesByHostname(renderedCI))
 		Expect(renderedCount).To(Equal(existingCount))
+	})
+})
+
+var _ = Describe("buildIntermediateCIWithPruneManifests", func() {
+	makeCI := func(nodes []map[string]any) *unstructured.Unstructured {
+		ci := &unstructured.Unstructured{}
+		ci.Object = map[string]any{
+			"spec": map[string]any{
+				"nodes": func() []any {
+					result := make([]any, len(nodes))
+					for i, n := range nodes {
+						result[i] = n
+					}
+					return result
+				}(),
+			},
+		}
+		return ci
+	}
+
+	It("should add removed node entries with pruneManifests", func() {
+		existingCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master", "bmcAddress": "redfish://1.2.3.4"},
+			{"hostName": "worker1", "role": "worker", "bmcAddress": "redfish://1.2.3.5"},
+			{"hostName": "worker2", "role": "worker", "bmcAddress": "redfish://1.2.3.6"},
+		})
+		renderedCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master", "bmcAddress": "redfish://1.2.3.4"},
+			{"hostName": "worker1", "role": "worker", "bmcAddress": "redfish://1.2.3.5"},
+		})
+
+		result := buildIntermediateCIWithPruneManifests(renderedCI, existingCI, []string{"worker2"})
+
+		spec := result.Object["spec"].(map[string]any)
+		nodes := spec["nodes"].([]any)
+		Expect(nodes).To(HaveLen(3))
+
+		// The third node (worker2) should have pruneManifests
+		worker2 := nodes[2].(map[string]any)
+		Expect(worker2["hostName"]).To(Equal("worker2"))
+		Expect(worker2["pruneManifests"]).ToNot(BeNil())
+
+		prune := worker2["pruneManifests"].([]any)
+		Expect(prune).To(HaveLen(2))
+		Expect(prune[0].(map[string]any)["kind"]).To(Equal("InfraEnv"))
+		Expect(prune[1].(map[string]any)["kind"]).To(Equal("NMStateConfig"))
+	})
+
+	It("should not modify the original rendered CI", func() {
+		existingCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+		})
+		renderedCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+		})
+
+		result := buildIntermediateCIWithPruneManifests(renderedCI, existingCI, []string{"worker1"})
+
+		// Original rendered CI should still have 1 node
+		origSpec := renderedCI.Object["spec"].(map[string]any)
+		origNodes := origSpec["nodes"].([]any)
+		Expect(origNodes).To(HaveLen(1))
+
+		// Result should have 2 nodes
+		resultSpec := result.Object["spec"].(map[string]any)
+		resultNodes := resultSpec["nodes"].([]any)
+		Expect(resultNodes).To(HaveLen(2))
+	})
+
+	It("should handle multiple removed nodes", func() {
+		existingCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+			{"hostName": "worker2", "role": "worker"},
+			{"hostName": "worker3", "role": "worker"},
+		})
+		renderedCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+		})
+
+		result := buildIntermediateCIWithPruneManifests(renderedCI, existingCI, []string{"worker2", "worker3"})
+
+		spec := result.Object["spec"].(map[string]any)
+		nodes := spec["nodes"].([]any)
+		Expect(nodes).To(HaveLen(4))
+
+		// Both removed nodes should have pruneManifests
+		for _, node := range nodes[2:] {
+			nodeMap := node.(map[string]any)
+			Expect(nodeMap["pruneManifests"]).ToNot(BeNil())
+		}
+	})
+
+	It("should not include BMH in pruneManifests", func() {
+		existingCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+		})
+		renderedCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+		})
+
+		result := buildIntermediateCIWithPruneManifests(renderedCI, existingCI, []string{"worker1"})
+
+		spec := result.Object["spec"].(map[string]any)
+		nodes := spec["nodes"].([]any)
+		worker1 := nodes[1].(map[string]any)
+		prune := worker1["pruneManifests"].([]any)
+
+		for _, entry := range prune {
+			kind := entry.(map[string]any)["kind"].(string)
+			Expect(kind).ToNot(Equal("BareMetalHost"))
+		}
+	})
+})
+
+var _ = Describe("getAgentHostname", func() {
+	It("should extract hostname from spec.hostname", func() {
+		agent := &unstructured.Unstructured{
+			Object: map[string]any{
+				"spec": map[string]any{
+					"hostname": "worker1.cluster.example.com",
+				},
+			},
+		}
+		Expect(getAgentHostname(agent)).To(Equal("worker1.cluster.example.com"))
+	})
+
+	It("should fall back to status.inventory.hostname", func() {
+		agent := &unstructured.Unstructured{
+			Object: map[string]any{
+				"spec": map[string]any{},
+				"status": map[string]any{
+					"inventory": map[string]any{
+						"hostname": "worker2.cluster.example.com",
+					},
+				},
+			},
+		}
+		Expect(getAgentHostname(agent)).To(Equal("worker2.cluster.example.com"))
+	})
+
+	It("should prefer spec.hostname over status.inventory.hostname", func() {
+		agent := &unstructured.Unstructured{
+			Object: map[string]any{
+				"spec": map[string]any{
+					"hostname": "from-spec",
+				},
+				"status": map[string]any{
+					"inventory": map[string]any{
+						"hostname": "from-status",
+					},
+				},
+			},
+		}
+		Expect(getAgentHostname(agent)).To(Equal("from-spec"))
+	})
+
+	It("should return empty string when no hostname is found", func() {
+		agent := &unstructured.Unstructured{
+			Object: map[string]any{
+				"spec": map[string]any{},
+			},
+		}
+		Expect(getAgentHostname(agent)).To(BeEmpty())
 	})
 })
