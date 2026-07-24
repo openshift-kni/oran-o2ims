@@ -538,6 +538,36 @@ metadata:
         },
         {
           "apiVersion": "clcm.openshift.io/v1alpha1",
+          "kind": "FirmwareCatalog",
+          "metadata": {
+            "name": "firmwarecatalog-sample",
+            "namespace": "oran-o2ims"
+          },
+          "spec": {
+            "images": [
+              {
+                "component": "bios",
+                "name": "bios-dell-xr8620t",
+                "url": "https://firmware.example.com/bios-xr8620t-2.22.2.bin",
+                "version": "2.22.2"
+              }
+            ]
+          },
+          "status": {
+            "conditions": [
+              {
+                "lastTransitionTime": "2026-01-01T00:00:00Z",
+                "message": "All firmware catalog entries are valid",
+                "reason": "Completed",
+                "status": "True",
+                "type": "Validation"
+              }
+            ],
+            "observedGeneration": 1
+          }
+        },
+        {
+          "apiVersion": "clcm.openshift.io/v1alpha1",
           "kind": "HardwareProfile",
           "metadata": {
             "name": "hardwareprofile-sample",
@@ -1045,6 +1075,25 @@ spec:
       statusDescriptors:
       - displayName: Conditions
         path: conditions
+      version: v1alpha1
+    - description: FirmwareCatalog is the Schema for the firmwarecatalogs API
+      displayName: Firmware Catalog
+      kind: FirmwareCatalog
+      name: firmwarecatalogs.clcm.openshift.io
+      resources:
+      - kind: FirmwareCatalog
+        name: firmwarecatalogs.clcm.openshift.io
+        version: v1alpha1
+      specDescriptors:
+      - description: List of firmware images in the catalog
+        displayName: Images
+        path: images
+      statusDescriptors:
+      - description: Represents the observations of a FirmwareCatalog's current state
+        displayName: Conditions
+        path: conditions
+      - displayName: Observed Generation
+        path: observedGeneration
       version: v1alpha1
     - description: HardwareProfile is the Schema for the hardwareprofiles API
       displayName: Hardware Profile
@@ -1842,6 +1891,7 @@ spec:
           resources:
           - allocatednodes/status
           - clustertemplates/status
+          - firmwarecatalogs/status
           - hardwareprofiles/status
           - nodeallocationrequests/status
           - nodes/status
@@ -1857,6 +1907,14 @@ spec:
           - provisioningrequests/finalizers
           verbs:
           - update
+        - apiGroups:
+          - clcm.openshift.io
+          resources:
+          - firmwarecatalogs
+          verbs:
+          - get
+          - list
+          - watch
         - apiGroups:
           - clcm.openshift.io
           resources:
@@ -2510,6 +2568,25 @@ spec:
   replaces: oran-o2ims.v0.0.0
   version: 5.0.0
   webhookdefinitions:
+  - admissionReviewVersions:
+    - v1
+    containerPort: 443
+    deploymentName: oran-o2ims-controller-manager
+    failurePolicy: Fail
+    generateName: firmwarecatalogs.clcm.openshift.io
+    rules:
+    - apiGroups:
+      - clcm.openshift.io
+      apiVersions:
+      - v1alpha1
+      operations:
+      - UPDATE
+      resources:
+      - firmwarecatalogs
+    sideEffects: None
+    targetPort: 9443
+    type: ValidatingAdmissionWebhook
+    webhookPath: /validate-clcm-openshift-io-v1alpha1-firmwarecatalog
   - admissionReviewVersions:
     - v1
     containerPort: 443

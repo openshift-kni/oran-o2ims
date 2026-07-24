@@ -138,6 +138,7 @@ rules:
   resources:
   - allocatednodes/status
   - clustertemplates/status
+  - firmwarecatalogs/status
   - hardwareprofiles/status
   - nodeallocationrequests/status
   - nodes/status
@@ -153,6 +154,14 @@ rules:
   - provisioningrequests/finalizers
   verbs:
   - update
+- apiGroups:
+  - clcm.openshift.io
+  resources:
+  - firmwarecatalogs
+  verbs:
+  - get
+  - list
+  - watch
 - apiGroups:
   - clcm.openshift.io
   resources:
