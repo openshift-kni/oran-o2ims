@@ -724,10 +724,9 @@ The following steps are required:
 
 ### Scaling Worker Nodes
 
-After a multi-node (MNO) cluster is provisioned, you can add worker
-nodes by updating the ProvisioningRequest's
-`clusterInstanceParameters.nodes` array. Scale-in (removing worker
-nodes) is planned for a future release.
+After a multi-node (MNO) cluster is provisioned, you can add or remove
+worker nodes by updating the ProvisioningRequest's
+`clusterInstanceParameters.nodes` array.
 
 > [!NOTE]
 > Scaling is only supported for worker nodes. Control plane (master)
