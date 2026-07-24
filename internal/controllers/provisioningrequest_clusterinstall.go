@@ -22,6 +22,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -29,8 +31,11 @@ import (
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils/spokeclient"
+	hwmgrcontroller "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/controller"
+	k8sclients "github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -204,6 +209,391 @@ func (t *provisioningRequestReconcilerTask) buildClusterInstanceUnstructured() (
 	return renderedClusterInstanceUnstructured, nil
 }
 
+// handleScaleInDrain detects nodes being removed from the ClusterInstance and
+// cordons/drains them on the spoke cluster before the CI is updated. This must
+// run before handleClusterInstallation so nodes are drained before being removed
+// from the cluster topology.
+func (t *provisioningRequestReconcilerTask) handleScaleInDrain(
+	ctx context.Context, renderedCI *unstructured.Unstructured) (bool, error) {
+
+	if !ctlrutils.IsClusterProvisionCompleted(t.object) {
+		return false, nil
+	}
+
+	// Fetch the existing CI to compare
+	ciName := renderedCI.GetName()
+	existingCI := &unstructured.Unstructured{}
+	existingCI.SetGroupVersionKind(renderedCI.GroupVersionKind())
+	exists, err := ctlrutils.DoesK8SResourceExist(ctx, t.client, ciName, ciName, existingCI)
+	if err != nil {
+		return false, fmt.Errorf("failed to get existing ClusterInstance (%s): %w", ciName, err)
+	}
+	if !exists {
+		return false, nil
+	}
+
+	// Identify removed nodes (in existing but not in rendered)
+	existingNodes := getNodeRolesByHostname(existingCI)
+	renderedNodes := getNodeRolesByHostname(renderedCI)
+
+	var removedHostnames []string
+	for hostname := range existingNodes {
+		if _, exists := renderedNodes[hostname]; !exists {
+			removedHostnames = append(removedHostnames, hostname)
+		}
+	}
+
+	if len(removedHostnames) == 0 {
+		return false, nil
+	}
+
+	t.logger.InfoContext(ctx, "Scale-in detected, processing removed nodes",
+		slog.Int("removedCount", len(removedHostnames)),
+		slog.Any("removedNodes", removedHostnames))
+
+	message := fmt.Sprintf("Scale-in: processing %d removed node(s)", len(removedHostnames))
+	ctlrutils.SetProvisioningStateInProgress(t.object, message)
+	if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+		return false, fmt.Errorf("failed to update scale-in status: %w", updateErr)
+	}
+
+	// Step 1: Drain nodes that are still on the spoke.
+	// If no kubeconfig secret exists (e.g., e2e test environment), skip drain.
+	clusterName := t.object.Status.Extensions.ClusterDetails.Name
+	spokeClient, err := k8sclients.NewClientForCluster(ctx, t.client, clusterName)
+	if err != nil {
+		if strings.Contains(err.Error(), "no kubeconfig secret found") {
+			t.logger.WarnContext(ctx, "No spoke kubeconfig secret found, skipping drain",
+				slog.String("clusterName", clusterName))
+		} else {
+			return false, fmt.Errorf("failed to create spoke client for drain: %w", err)
+		}
+	}
+
+	if spokeClient != nil {
+		if err := t.drainRemovedNodesFromSpoke(ctx, spokeClient, clusterName, removedHostnames); err != nil {
+			return false, err
+		}
+	}
+
+	// Step 2: Apply intermediate CI with pruneManifests on removed node entries.
+	// This tells siteconfig to delete InfraEnv and NMStateConfig for those nodes
+	// while the node entries remain in spec.nodes.
+	intermediateCI := buildIntermediateCIWithPruneManifests(renderedCI, existingCI, removedHostnames)
+	if err := t.applyClusterInstance(ctx, intermediateCI, false); err != nil {
+		return false, fmt.Errorf("failed to apply intermediate CI with pruneManifests: %w", err)
+	}
+
+	// Build a map of removed hostname → BMH identity (name + namespace).
+	// InfraEnv and NMStateConfig are named after the BMH, not the hostname.
+	removedNodeBMHs, err := t.lookupRemovedNodeBMHs(ctx, removedHostnames)
+	if err != nil {
+		return false, fmt.Errorf("failed to look up BMH info for removed nodes: %w", err)
+	}
+
+	// Step 3: Wait for siteconfig to delete the pruned resources
+	allPruned, err := t.checkScaleInPrunedResourcesGone(ctx, removedNodeBMHs)
+	if err != nil {
+		return false, fmt.Errorf("failed to check pruned resources: %w", err)
+	}
+
+	if !allPruned {
+		t.logger.InfoContext(ctx, "Waiting for siteconfig to process pruneManifests")
+		return true, nil
+	}
+
+	// Step 4: Delete Agent CRs (not managed by siteconfig)
+	if err := t.deleteScaleInAgentCRs(ctx, removedHostnames, removedNodeBMHs); err != nil {
+		return false, fmt.Errorf("failed to delete Agent CRs: %w", err)
+	}
+
+	t.logger.InfoContext(ctx, "Scale-in pre-processing complete, proceeding to CI update")
+	return false, nil
+}
+
+// drainRemovedNodesFromSpoke drains and deletes removed nodes that still exist
+// on the spoke cluster. Nodes already absent from the spoke are skipped.
+func (t *provisioningRequestReconcilerTask) drainRemovedNodesFromSpoke(
+	ctx context.Context, spokeClient client.Client, clusterName string,
+	removedHostnames []string) error {
+
+	nodeList := &corev1.NodeList{}
+	if err := spokeClient.List(ctx, nodeList); err != nil {
+		return fmt.Errorf("failed to list nodes on spoke cluster: %w", err)
+	}
+
+	spokeNodeSet := make(map[string]bool, len(nodeList.Items))
+	for _, node := range nodeList.Items {
+		spokeNodeSet[node.Name] = true
+	}
+
+	var nodesToDrain []string
+	for _, hostname := range removedHostnames {
+		if spokeNodeSet[hostname] {
+			nodesToDrain = append(nodesToDrain, hostname)
+		}
+	}
+
+	if len(nodesToDrain) == 0 {
+		return nil
+	}
+
+	clientset, err := k8sclients.NewClientsetForCluster(ctx, t.client, clusterName)
+	if err != nil {
+		return fmt.Errorf("failed to create spoke clientset for drain: %w", err)
+	}
+	nodeOps := hwmgrcontroller.NewNodeOps(spokeClient, clientset, t.logger, false)
+
+	for i, hostname := range nodesToDrain {
+		drainMsg := fmt.Sprintf("Scale-in: draining node %s (%d/%d)", hostname, i+1, len(nodesToDrain))
+		t.logger.InfoContext(ctx, drainMsg)
+		ctlrutils.SetProvisioningStateInProgress(t.object, drainMsg)
+		if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+			t.logger.WarnContext(ctx, "Failed to update drain progress status",
+				slog.Any("error", updateErr))
+		}
+
+		if err := nodeOps.DrainNode(ctx, hostname); err != nil {
+			return fmt.Errorf("failed to drain node %s: %w", hostname, err)
+		}
+
+		// Delete the Node object from the spoke cluster
+		spokeNode := &corev1.Node{}
+		spokeNode.Name = hostname
+		if err := spokeClient.Delete(ctx, spokeNode); err != nil {
+			if !errors.IsNotFound(err) {
+				return fmt.Errorf("failed to delete node %s from spoke cluster: %w", hostname, err)
+			}
+		}
+		t.logger.InfoContext(ctx, "Drained and deleted node from spoke cluster",
+			slog.String("hostname", hostname))
+	}
+
+	return nil
+}
+
+// buildIntermediateCIWithPruneManifests constructs a CI that includes the
+// rendered nodes plus the removed nodes with pruneManifests set for InfraEnv
+// and NMStateConfig. This intermediate CI is SSA-applied so that siteconfig
+// deletes those per-node resources before the node entries are removed.
+func buildIntermediateCIWithPruneManifests(
+	renderedCI, existingCI *unstructured.Unstructured,
+	removedHostnames []string) *unstructured.Unstructured {
+
+	intermediateCI := renderedCI.DeepCopy()
+
+	removedSet := make(map[string]bool, len(removedHostnames))
+	for _, h := range removedHostnames {
+		removedSet[h] = true
+	}
+
+	existingSpec, _ := existingCI.Object["spec"].(map[string]any)
+	existingNodes, _ := existingSpec["nodes"].([]any)
+
+	pruneManifests := []any{
+		map[string]any{
+			"apiVersion": "agent-install.openshift.io/v1beta1",
+			"kind":       "InfraEnv",
+		},
+		map[string]any{
+			"apiVersion": "agent-install.openshift.io/v1beta1",
+			"kind":       "NMStateConfig",
+		},
+	}
+
+	var removedNodeEntries []any
+	for _, node := range existingNodes {
+		nodeMap, ok := node.(map[string]any)
+		if !ok {
+			continue
+		}
+		hostname, _ := nodeMap["hostName"].(string)
+		if !removedSet[hostname] {
+			continue
+		}
+		nodeCopy := runtime.DeepCopyJSONValue(nodeMap).(map[string]any)
+		nodeCopy["pruneManifests"] = pruneManifests
+		removedNodeEntries = append(removedNodeEntries, nodeCopy)
+	}
+
+	intermediateSpec := intermediateCI.Object["spec"].(map[string]any)
+	intermediateNodes, _ := intermediateSpec["nodes"].([]any)
+	intermediateNodes = append(intermediateNodes, removedNodeEntries...)
+	intermediateSpec["nodes"] = intermediateNodes
+
+	return intermediateCI
+}
+
+// bmhIdentity holds the BMH name and namespace for a node being removed.
+type bmhIdentity struct {
+	name      string
+	namespace string
+}
+
+// lookupRemovedNodeBMHs maps removed hostnames to their BMH name and namespace
+// via AllocatedNodeHostMap and AllocatedNode CRs.
+func (t *provisioningRequestReconcilerTask) lookupRemovedNodeBMHs(
+	ctx context.Context, removedHostnames []string) ([]bmhIdentity, error) {
+
+	// Build reverse map: hostname → AllocatedNode ID
+	hostnameToNodeID := make(map[string]string)
+	for nodeID, hostname := range t.object.Status.Extensions.AllocatedNodeHostMap {
+		hostnameToNodeID[hostname] = nodeID
+	}
+
+	narNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
+	var result []bmhIdentity
+
+	for _, hostname := range removedHostnames {
+		nodeID, ok := hostnameToNodeID[hostname]
+		if !ok {
+			t.logger.WarnContext(ctx, "No AllocatedNode found in host map for removed hostname",
+				slog.String("hostname", hostname))
+			continue
+		}
+
+		an := &hwmgmtv1alpha1.AllocatedNode{}
+		if err := t.client.Get(ctx, types.NamespacedName{Name: nodeID, Namespace: narNS}, an); err != nil {
+			if errors.IsNotFound(err) {
+				continue
+			}
+			return nil, fmt.Errorf("failed to get AllocatedNode %s: %w", nodeID, err)
+		}
+
+		result = append(result, bmhIdentity{
+			name:      an.Spec.HwMgrNodeId,
+			namespace: an.Spec.HwMgrNodeNs,
+		})
+	}
+
+	return result, nil
+}
+
+// checkScaleInPrunedResourcesGone checks whether InfraEnv and NMStateConfig
+// resources for the removed nodes have been deleted by siteconfig.
+func (t *provisioningRequestReconcilerTask) checkScaleInPrunedResourcesGone(
+	ctx context.Context, removedBMHs []bmhIdentity) (bool, error) {
+
+	for _, bmh := range removedBMHs {
+		infraEnv := &unstructured.Unstructured{}
+		infraEnv.SetGroupVersionKind(schema.GroupVersionKind{
+			Group:   "agent-install.openshift.io",
+			Version: "v1beta1",
+			Kind:    "InfraEnv",
+		})
+		if exists, err := resourceStillExists(ctx, t.client, bmh.name, bmh.namespace, infraEnv); err != nil {
+			return false, fmt.Errorf("failed to check InfraEnv %s/%s: %w", bmh.namespace, bmh.name, err)
+		} else if exists {
+			t.logger.InfoContext(ctx, "InfraEnv still exists, waiting for prune",
+				slog.String("name", bmh.name),
+				slog.String("namespace", bmh.namespace))
+			return false, nil
+		}
+
+		nmsc := &unstructured.Unstructured{}
+		nmsc.SetGroupVersionKind(schema.GroupVersionKind{
+			Group:   "agent-install.openshift.io",
+			Version: "v1beta1",
+			Kind:    "NMStateConfig",
+		})
+		if exists, err := resourceStillExists(ctx, t.client, bmh.name, bmh.namespace, nmsc); err != nil {
+			return false, fmt.Errorf("failed to check NMStateConfig %s/%s: %w", bmh.namespace, bmh.name, err)
+		} else if exists {
+			t.logger.InfoContext(ctx, "NMStateConfig still exists, waiting for prune",
+				slog.String("name", bmh.name),
+				slog.String("namespace", bmh.namespace))
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
+// resourceStillExists checks if a resource exists. Returns false (not an error)
+// when the resource is not found or when the CRD for the resource type is not
+// installed on the cluster.
+func resourceStillExists(ctx context.Context, c client.Client, name, namespace string,
+	obj client.Object) (bool, error) {
+
+	exists, err := ctlrutils.DoesK8SResourceExist(ctx, c, name, namespace, obj)
+	if err != nil {
+		if meta.IsNoMatchError(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to check resource existence: %w", err)
+	}
+	return exists, nil
+}
+
+// deleteScaleInAgentCRs deletes Agent CRs for removed nodes. Agent CRs are
+// created by the Assisted Service (not siteconfig), so they must be deleted
+// explicitly during scale-in.
+func (t *provisioningRequestReconcilerTask) deleteScaleInAgentCRs(
+	ctx context.Context, removedHostnames []string, removedBMHs []bmhIdentity) error {
+
+	removedSet := make(map[string]bool, len(removedHostnames))
+	for _, h := range removedHostnames {
+		removedSet[h] = true
+	}
+
+	// Collect unique namespaces to search for Agent CRs
+	namespaces := make(map[string]bool)
+	for _, bmh := range removedBMHs {
+		namespaces[bmh.namespace] = true
+	}
+
+	for ns := range namespaces {
+		agentList := &unstructured.UnstructuredList{}
+		agentList.SetGroupVersionKind(schema.GroupVersionKind{
+			Group:   "agent-install.openshift.io",
+			Version: "v1beta1",
+			Kind:    "AgentList",
+		})
+		if err := t.client.List(ctx, agentList, client.InNamespace(ns)); err != nil {
+			if meta.IsNoMatchError(err) {
+				return nil
+			}
+			return fmt.Errorf("failed to list Agents in namespace %s: %w", ns, err)
+		}
+
+		for i := range agentList.Items {
+			agent := &agentList.Items[i]
+			hostname := getAgentHostname(agent)
+			if !removedSet[hostname] {
+				continue
+			}
+			if err := t.client.Delete(ctx, agent); err != nil {
+				if !errors.IsNotFound(err) {
+					return fmt.Errorf("failed to delete Agent %s/%s: %w", ns, agent.GetName(), err)
+				}
+			}
+			t.logger.InfoContext(ctx, "Deleted Agent CR for removed node",
+				slog.String("agent", agent.GetName()),
+				slog.String("hostname", hostname))
+		}
+	}
+
+	return nil
+}
+
+// getAgentHostname extracts the hostname from an Agent CR by checking
+// spec.hostname first, then falling back to status.inventory.hostname.
+func getAgentHostname(agent *unstructured.Unstructured) string {
+	if spec, ok := agent.Object["spec"].(map[string]any); ok {
+		if hostname, ok := spec["hostname"].(string); ok && hostname != "" {
+			return hostname
+		}
+	}
+	if status, ok := agent.Object["status"].(map[string]any); ok {
+		if inventory, ok := status["inventory"].(map[string]any); ok {
+			if hostname, ok := inventory["hostname"].(string); ok {
+				return hostname
+			}
+		}
+	}
+	return ""
+}
+
 // handleClusterInstallation creates/updates the ClusterInstance to handle the cluster provisioning.
 func (t *provisioningRequestReconcilerTask) handleClusterInstallation(ctx context.Context, clusterInstance *unstructured.Unstructured) error {
 	isDryRun := false
@@ -298,6 +688,71 @@ func (t *provisioningRequestReconcilerTask) handleClusterInstallation(ctx contex
 			// condition for scale-out, so checkClusterProvisionStatus would
 			// overwrite our InProgress status back to Completed, causing
 			// premature finalization.
+			return nil
+		}
+	}
+
+	// Detect scale-in: if the rendered CI has fewer nodes than the last fulfilled
+	// count, wait for removed nodes to leave the spoke, then perform cleanup.
+	if fulfilledCount > 0 && renderedNodeCount < fulfilledCount {
+		t.logger.InfoContext(ctx, "Scale-in in progress",
+			slog.Int("fulfilledNodeCount", fulfilledCount),
+			slog.Int("renderedNodeCount", renderedNodeCount))
+
+		// Only set InProgress on the first detection
+		if ctlrutils.IsClusterProvisionCompleted(t.object) {
+			message := fmt.Sprintf("Scale-in: waiting for removed node(s) to leave the cluster (%d → %d nodes)",
+				fulfilledCount, renderedNodeCount)
+			t.logger.InfoContext(ctx, message)
+			ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
+				provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
+				provisioningv1alpha1.CRconditionReasons.InProgress,
+				metav1.ConditionFalse,
+				message,
+			)
+			ctlrutils.SetProvisioningStateInProgress(t.object, message)
+			currentTime := metav1.Now()
+			t.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = &currentTime
+			if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+				return fmt.Errorf("failed to update scale-in status: %w", updateErr)
+			}
+		}
+
+		// Check if all removed nodes have left the spoke cluster.
+		// AllocatedNode deletion and cleanup must wait until the node is
+		// actually gone — deleting the AllocatedNode triggers BMH
+		// deallocation, which must not happen while the node is still
+		// part of the spoke cluster.
+		allGone, checkErr := t.checkRemovedNodesGone(ctx, clusterInstance)
+		if checkErr != nil {
+			t.logger.WarnContext(ctx, "Failed to check spoke node status for scale-in, will retry",
+				slog.Any("error", checkErr))
+		}
+		t.logger.InfoContext(ctx, "Scale-in node removal check",
+			slog.Bool("allGone", allGone))
+
+		if allGone {
+			t.logger.InfoContext(ctx, "All removed nodes have left the cluster, performing cleanup")
+
+			// Now it's safe to delete AllocatedNodes and clean up the host map
+			if err := t.handleScaleInCleanup(ctx, clusterInstance); err != nil {
+				return fmt.Errorf("failed to perform scale-in cleanup: %w", err)
+			}
+
+			t.object.Status.Extensions.ClusterDetails.FulfilledNodeCount = renderedNodeCount
+			ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
+				provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
+				provisioningv1alpha1.CRconditionReasons.Completed,
+				metav1.ConditionTrue,
+				"Provisioning completed",
+			)
+			if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+				return fmt.Errorf("failed to update scale-in completion status: %w", updateErr)
+			}
+			// Fall through to normal finalization
+		} else {
+			// Don't fall through to checkClusterProvisionStatus while scale-in
+			// is in progress — same pattern as scale-out
 			return nil
 		}
 	}
@@ -710,12 +1165,14 @@ func validateScaleWorkerOnly(existingCI, renderedCI *unstructured.Unstructured) 
 		return typederrors.NewInputError("node scaling is not supported on single-node clusters")
 	}
 
-	// Reject any node removals — scale-in is not yet supported
+	// Reject removal of non-worker nodes
 	for hostname, role := range existingNodes {
 		if _, exists := renderedNodes[hostname]; !exists {
-			return typederrors.NewInputError(
-				"node removal is not yet supported: cannot remove %s node %q",
-				role, hostname)
+			if role != "worker" {
+				return typederrors.NewInputError(
+					"node scaling is restricted to worker nodes: cannot remove %s node %q",
+					role, hostname)
+			}
 		}
 	}
 
@@ -936,6 +1393,98 @@ func isNodeReady(node *corev1.Node) bool {
 
 // cleanupScaleOutSpokeAccess removes the spoke client resources created for
 // scale-out CSR approval.
+// handleScaleInCleanup performs post-drain cleanup for scale-in operations:
+// deletes AllocatedNode CRs for removed nodes and cleans up AllocatedNodeHostMap.
+func (t *provisioningRequestReconcilerTask) handleScaleInCleanup(
+	ctx context.Context, renderedCI *unstructured.Unstructured) error {
+
+	renderedNodes := getNodeRolesByHostname(renderedCI)
+
+	// Build a reverse map: hostname → AllocatedNode ID
+	hostnameToNodeID := make(map[string]string)
+	for nodeID, hostname := range t.object.Status.Extensions.AllocatedNodeHostMap {
+		hostnameToNodeID[hostname] = nodeID
+	}
+
+	// Identify AllocatedNodes to delete (those whose hostname is not in the rendered CI)
+	var nodesToDelete []string
+	for hostname, nodeID := range hostnameToNodeID {
+		if _, exists := renderedNodes[hostname]; !exists {
+			nodesToDelete = append(nodesToDelete, nodeID)
+			t.logger.InfoContext(ctx, "Marking AllocatedNode for deletion",
+				slog.String("allocatedNode", nodeID),
+				slog.String("hostname", hostname))
+		}
+	}
+
+	if len(nodesToDelete) == 0 {
+		return nil
+	}
+
+	// Delete AllocatedNode CRs — the AllocatedNode controller handles BMH deallocation
+	narNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
+	for _, nodeID := range nodesToDelete {
+		an := &hwmgmtv1alpha1.AllocatedNode{}
+		an.Name = nodeID
+		an.Namespace = narNS
+		if err := t.client.Delete(ctx, an); err != nil {
+			if !errors.IsNotFound(err) {
+				return fmt.Errorf("failed to delete AllocatedNode %s: %w", nodeID, err)
+			}
+		}
+		t.logger.InfoContext(ctx, "Deleted AllocatedNode",
+			slog.String("allocatedNode", nodeID))
+	}
+
+	// Clean up AllocatedNodeHostMap — remove entries for deleted nodes
+	for _, nodeID := range nodesToDelete {
+		delete(t.object.Status.Extensions.AllocatedNodeHostMap, nodeID)
+	}
+
+	ctlrutils.SetProvisioningStateInProgress(t.object,
+		fmt.Sprintf("Scale-in: removed %d node(s), cleaning up", len(nodesToDelete)))
+
+	return nil
+}
+
+// checkRemovedNodesGone verifies that no spoke node exists for hostnames that
+// are NOT in the rendered ClusterInstance. Returns true only when all removed
+// nodes have left the spoke cluster.
+func (t *provisioningRequestReconcilerTask) checkRemovedNodesGone(
+	ctx context.Context, renderedCI *unstructured.Unstructured) (bool, error) {
+
+	clusterName := t.object.Status.Extensions.ClusterDetails.Name
+
+	// Use the admin kubeconfig spoke client (same as drain) for node listing
+	spokeClient, err := k8sclients.NewClientForCluster(ctx, t.client, clusterName)
+	if err != nil {
+		return false, fmt.Errorf("failed to create spoke client for node check: %w", err)
+	}
+
+	// List nodes on the spoke
+	nodeList := &corev1.NodeList{}
+	if err := spokeClient.List(ctx, nodeList); err != nil {
+		return false, fmt.Errorf("failed to list nodes on spoke cluster: %w", err)
+	}
+
+	spokeNodes := make(map[string]bool, len(nodeList.Items))
+	for _, node := range nodeList.Items {
+		spokeNodes[node.Name] = true
+	}
+
+	// Check that no spoke node exists for hostnames not in the rendered CI
+	renderedHostnames := getNodeRolesByHostname(renderedCI)
+	for hostname := range spokeNodes {
+		if _, inRendered := renderedHostnames[hostname]; !inRendered {
+			t.logger.InfoContext(ctx, "Removed node still present on spoke",
+				slog.String("hostname", hostname))
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
 func (t *provisioningRequestReconcilerTask) cleanupScaleOutSpokeAccess(ctx context.Context, clusterName string) {
 	msaName := t.object.Name + "-scaleout"
 	mwName := t.object.Name + "-scaleout-rbac"
