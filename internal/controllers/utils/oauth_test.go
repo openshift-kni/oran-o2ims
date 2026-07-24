@@ -32,16 +32,13 @@ var _ = Describe("OAuth audience configuration", func() {
 		}))
 		defer resourceServer.Close()
 
-		client, err := SetupOAuthClient(context.Background(), nil, &OAuthClientConfig{
-			OAuthConfig: &OAuthConfig{
-				ClientID:     "test-client",
-				ClientSecret: "test-secret",
-				TokenURL:     tokenServer.URL,
-				Scopes:       []string{"openid"},
-				Audience:     "https://api.example.com",
-			},
+		client := newOAuthClient(context.Background(), http.DefaultClient, &OAuthConfig{
+			ClientID:     "test-client",
+			ClientSecret: "test-secret",
+			TokenURL:     tokenServer.URL,
+			Scopes:       []string{"openid"},
+			Audience:     "https://api.example.com",
 		})
-		Expect(err).ToNot(HaveOccurred())
 
 		resp, err := client.Get(resourceServer.URL)
 		Expect(err).ToNot(HaveOccurred())
@@ -66,15 +63,12 @@ var _ = Describe("OAuth audience configuration", func() {
 		}))
 		defer resourceServer.Close()
 
-		client, err := SetupOAuthClient(context.Background(), nil, &OAuthClientConfig{
-			OAuthConfig: &OAuthConfig{
-				ClientID:     "test-client",
-				ClientSecret: "test-secret",
-				TokenURL:     tokenServer.URL,
-				Scopes:       []string{"openid"},
-			},
+		client := newOAuthClient(context.Background(), http.DefaultClient, &OAuthConfig{
+			ClientID:     "test-client",
+			ClientSecret: "test-secret",
+			TokenURL:     tokenServer.URL,
+			Scopes:       []string{"openid"},
 		})
-		Expect(err).ToNot(HaveOccurred())
 
 		resp, err := client.Get(resourceServer.URL)
 		Expect(err).ToNot(HaveOccurred())
