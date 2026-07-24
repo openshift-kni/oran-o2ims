@@ -775,7 +775,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			})
 
 			waitForPRUpgradeCondition(testCtx, K8SClient,
-				string(provisioningv1alpha1.CRconditionReasons.Pending),
+				string(provisioningv1alpha1.CRconditionReasons.InProgress),
 				"Waiting for worker MachineConfigPools to finish updating",
 				provisioningv1alpha1.StateProgressing,
 			)

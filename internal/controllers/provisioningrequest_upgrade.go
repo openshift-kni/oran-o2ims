@@ -693,7 +693,7 @@ func (t *provisioningRequestReconcilerTask) handleCVUpgradeCompleted(
 		// MCPs were already unpaused — the list is fresh at that point.
 		if unpaused || len(ctlrutils.GetNonUpdatedMCPs(mcps)) > 0 {
 			if err := t.updateUpgradeStatus(ctx,
-				provisioningv1alpha1.CRconditionReasons.Pending,
+				provisioningv1alpha1.CRconditionReasons.InProgress,
 				"Cluster version upgrade completed. Waiting for worker MachineConfigPools to finish updating",
 			); err != nil {
 				return ctrl.Result{}, err
