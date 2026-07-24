@@ -72,7 +72,7 @@ github.com/fsnotify/fsnotify/internal
 # github.com/fxamacker/cbor/v2 v2.9.2
 ## explicit; go 1.20
 github.com/fxamacker/cbor/v2
-# github.com/getkin/kin-openapi v0.140.0
+# github.com/getkin/kin-openapi v0.142.0
 ## explicit; go 1.25
 github.com/getkin/kin-openapi/openapi3
 github.com/getkin/kin-openapi/openapi3filter
@@ -102,9 +102,10 @@ github.com/go-openapi/analysis/internal/flatten/sortref
 # github.com/go-openapi/errors v0.22.7
 ## explicit; go 1.24.0
 github.com/go-openapi/errors
-# github.com/go-openapi/jsonpointer v0.22.5
-## explicit; go 1.24.0
+# github.com/go-openapi/jsonpointer v1.0.0
+## explicit; go 1.25.0
 github.com/go-openapi/jsonpointer
+github.com/go-openapi/jsonpointer/jsonname
 # github.com/go-openapi/jsonreference v0.21.5
 ## explicit; go 1.24.0
 github.com/go-openapi/jsonreference
@@ -131,8 +132,8 @@ github.com/go-openapi/swag/conv
 # github.com/go-openapi/swag/fileutils v0.25.5
 ## explicit; go 1.24.0
 github.com/go-openapi/swag/fileutils
-# github.com/go-openapi/swag/jsonname v0.25.5
-## explicit; go 1.24.0
+# github.com/go-openapi/swag/jsonname v0.27.0
+## explicit; go 1.25.0
 github.com/go-openapi/swag/jsonname
 # github.com/go-openapi/swag/jsonutils v0.25.5
 ## explicit; go 1.24.0
@@ -322,23 +323,23 @@ github.com/monochromegane/go-gitignore
 # github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 ## explicit
 github.com/munnerz/goautoneg
-# github.com/oapi-codegen/nethttp-middleware v1.1.2
-## explicit; go 1.22.5
+# github.com/oapi-codegen/nethttp-middleware v1.2.0
+## explicit; go 1.25.0
 github.com/oapi-codegen/nethttp-middleware
-# github.com/oapi-codegen/oapi-codegen/v2 v2.7.1
-## explicit; go 1.24.3
+# github.com/oapi-codegen/oapi-codegen/v2 v2.8.0
+## explicit; go 1.25.0
 github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
 github.com/oapi-codegen/oapi-codegen/v2/pkg/codegen
 github.com/oapi-codegen/oapi-codegen/v2/pkg/util
-# github.com/oapi-codegen/runtime v1.4.2
+# github.com/oapi-codegen/runtime v1.6.0
 ## explicit; go 1.24.0
 github.com/oapi-codegen/runtime
 github.com/oapi-codegen/runtime/types
-# github.com/oasdiff/yaml v0.1.0
-## explicit; go 1.22.5
+# github.com/oasdiff/yaml v0.1.1
+## explicit; go 1.25
 github.com/oasdiff/yaml
-# github.com/oasdiff/yaml3 v0.0.13
-## explicit; go 1.22.5
+# github.com/oasdiff/yaml3 v0.0.14
+## explicit; go 1.25
 github.com/oasdiff/yaml3
 # github.com/oklog/ulid/v2 v2.1.1
 ## explicit; go 1.15
@@ -487,8 +488,8 @@ github.com/santhosh-tekuri/jsonschema/v6/kind
 github.com/speakeasy-api/jsonpath/pkg/jsonpath
 github.com/speakeasy-api/jsonpath/pkg/jsonpath/config
 github.com/speakeasy-api/jsonpath/pkg/jsonpath/token
-# github.com/speakeasy-api/openapi v1.19.2
-## explicit; go 1.24.3
+# github.com/speakeasy-api/openapi v1.24.0
+## explicit; go 1.25.0
 github.com/speakeasy-api/openapi/internal/sliceutil
 github.com/speakeasy-api/openapi/internal/version
 github.com/speakeasy-api/openapi/overlay
@@ -646,20 +647,20 @@ go.yaml.in/yaml/v2
 # go.yaml.in/yaml/v3 v3.0.4
 ## explicit; go 1.16
 go.yaml.in/yaml/v3
-# golang.org/x/crypto v0.53.0
+# golang.org/x/crypto v0.54.0
 ## explicit; go 1.25.0
 golang.org/x/crypto/ed25519
 golang.org/x/crypto/pbkdf2
 # golang.org/x/exp v0.0.0-20250718183923-645b1fa84792
 ## explicit; go 1.23.0
 golang.org/x/exp/slices
-# golang.org/x/mod v0.37.0
+# golang.org/x/mod v0.38.0
 ## explicit; go 1.25.0
 golang.org/x/mod/internal/lazyregexp
 golang.org/x/mod/modfile
 golang.org/x/mod/module
 golang.org/x/mod/semver
-# golang.org/x/net v0.56.0
+# golang.org/x/net v0.57.0
 ## explicit; go 1.25.0
 golang.org/x/net/html
 golang.org/x/net/html/atom
@@ -678,21 +679,21 @@ golang.org/x/net/websocket
 golang.org/x/oauth2
 golang.org/x/oauth2/clientcredentials
 golang.org/x/oauth2/internal
-# golang.org/x/sync v0.21.0
+# golang.org/x/sync v0.22.0
 ## explicit; go 1.25.0
 golang.org/x/sync/errgroup
 golang.org/x/sync/semaphore
 golang.org/x/sync/singleflight
-# golang.org/x/sys v0.46.0
+# golang.org/x/sys v0.47.0
 ## explicit; go 1.25.0
 golang.org/x/sys/plan9
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 golang.org/x/sys/windows/registry
-# golang.org/x/term v0.44.0
+# golang.org/x/term v0.45.0
 ## explicit; go 1.25.0
 golang.org/x/term
-# golang.org/x/text v0.38.0
+# golang.org/x/text v0.40.0
 ## explicit; go 1.25.0
 golang.org/x/text/cases
 golang.org/x/text/encoding
@@ -728,7 +729,7 @@ golang.org/x/text/width
 # golang.org/x/time v0.15.0
 ## explicit; go 1.25.0
 golang.org/x/time/rate
-# golang.org/x/tools v0.45.0
+# golang.org/x/tools v0.48.0
 ## explicit; go 1.25.0
 golang.org/x/tools/cover
 golang.org/x/tools/go/ast/astutil
@@ -748,6 +749,7 @@ golang.org/x/tools/internal/gcimporter
 golang.org/x/tools/internal/gocommand
 golang.org/x/tools/internal/gopathwalk
 golang.org/x/tools/internal/imports
+golang.org/x/tools/internal/modindex
 golang.org/x/tools/internal/packagesinternal
 golang.org/x/tools/internal/pkgbits
 golang.org/x/tools/internal/stdlib

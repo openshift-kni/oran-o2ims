@@ -74,6 +74,11 @@ type ErrorHandlerOptsMatchedRoute struct {
 // MultiErrorHandler is called when the OpenAPI filter returns an openapi3.MultiError (https://pkg.go.dev/github.com/getkin/kin-openapi/openapi3#MultiError)
 type MultiErrorHandler func(openapi3.MultiError) (int, error)
 
+// Skipper is a function that runs before any validation middleware, and determines whether the given request should skip any validation middleware
+//
+// Return `true` if the request should be skipped
+type Skipper func(r *http.Request) bool
+
 // Options allows configuring the OapiRequestValidator.
 type Options struct {
 	// Options contains any configuration for the underlying `openapi3filter`
@@ -100,6 +105,12 @@ type Options struct {
 	SilenceServersWarning bool
 	// DoNotValidateServers ensures that there is no Host validation performed (see `SilenceServersWarning` and https://github.com/deepmap/oapi-codegen/issues/882 for more details)
 	DoNotValidateServers bool
+	// Prefix allows (optionally) trimming a prefix from the API path.
+	// This may be useful if your API is routed to an internal path that is different from the OpenAPI specification.
+	Prefix string
+
+	// Skipper allows writing a function that runs before any middleware and determines whether the given request should skip any validation middleware
+	Skipper Skipper
 }
 
 // OapiRequestValidator Creates the middleware to validate that incoming requests match the given OpenAPI 3.x spec, with a default set of configuration.
@@ -126,6 +137,11 @@ func OapiRequestValidatorWithOptions(spec *openapi3.T, options *Options) func(ne
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if options != nil && options.Skipper != nil && options.Skipper(r) {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			if options == nil {
 				performRequestValidationForErrorHandler(next, w, r, router, options, http.Error)
 			} else if options.ErrorHandlerWithOpts != nil {
@@ -153,17 +169,93 @@ func performRequestValidationForErrorHandler(next http.Handler, w http.ResponseW
 	errorHandler(w, err.Error(), statusCode)
 }
 
+// withPrefixStripped temporarily strips the configured prefix from the
+// request's path fields, calls fn, then restores the original values.
+// This avoids cloning the request (which shallow-copies the Body and
+// causes it to be consumed during validation, leaving the handler with
+// an empty body — see https://github.com/oapi-codegen/nethttp-middleware/issues/69).
+func withPrefixStripped(r *http.Request, options *Options, fn func()) {
+	if options == nil || options.Prefix == "" {
+		fn()
+		return
+	}
+
+	// Only strip the prefix when it matches on a path segment boundary:
+	// the path must equal the prefix exactly, or the character immediately
+	// after the prefix must be '/'.
+	if !hasPathPrefix(r.URL.Path, options.Prefix) {
+		fn()
+		return
+	}
+
+	origRequestURI := r.RequestURI
+	origPath := r.URL.Path
+	origRawPath := r.URL.RawPath
+
+	r.RequestURI = stripPrefix(r.RequestURI, options.Prefix)
+	r.URL.Path = stripPrefix(r.URL.Path, options.Prefix)
+	if r.URL.RawPath != "" {
+		r.URL.RawPath = stripPrefix(r.URL.RawPath, options.Prefix)
+	}
+
+	fn()
+
+	r.RequestURI = origRequestURI
+	r.URL.Path = origPath
+	r.URL.RawPath = origRawPath
+}
+
+// hasPathPrefix reports whether path starts with prefix on a segment boundary.
+func hasPathPrefix(path, prefix string) bool {
+	if !strings.HasPrefix(path, prefix) {
+		return false
+	}
+	// The prefix matches if the path equals the prefix exactly, or
+	// the next character is a '/'.
+	return len(path) == len(prefix) || path[len(prefix)] == '/'
+}
+
+// stripPrefix removes prefix from s and returns the result.
+// If s does not start with prefix it is returned unchanged.
+func stripPrefix(s, prefix string) string {
+	return strings.TrimPrefix(s, prefix)
+}
+
 // Note that this is an inline-and-modified version of `validateRequest`, with a simplified control flow and providing full access to the `error` for the `ErrorHandlerWithOpts` function.
 func performRequestValidationForErrorHandlerWithOpts(next http.Handler, w http.ResponseWriter, r *http.Request, router routers.Router, options *Options) {
-	// Find route
-	route, pathParams, err := router.FindRoute(r)
-	if err != nil {
-		errOpts := ErrorHandlerOpts{
-			// MatchedRoute will be nil, as we've not matched a route we know about
-			StatusCode: http.StatusNotFound,
+	var route *routers.Route
+	var pathParams map[string]string
+	var validationErr error
+
+	// Temporarily strip the prefix for route finding and validation,
+	// then restore it so the handler and error handler see the original path.
+	withPrefixStripped(r, options, func() {
+		var err error
+		route, pathParams, err = router.FindRoute(r)
+		if err != nil {
+			validationErr = err
+			return
 		}
 
-		options.ErrorHandlerWithOpts(r.Context(), err, w, r, errOpts)
+		requestValidationInput := &openapi3filter.RequestValidationInput{
+			Request:    r,
+			PathParams: pathParams,
+			Route:      route,
+		}
+
+		if options != nil {
+			requestValidationInput.Options = &options.Options
+		}
+
+		validationErr = openapi3filter.ValidateRequest(r.Context(), requestValidationInput)
+	})
+
+	// Route not found
+	if route == nil && validationErr != nil {
+		errOpts := ErrorHandlerOpts{
+			StatusCode: http.StatusNotFound,
+		}
+		options.ErrorHandlerWithOpts(r.Context(), validationErr, w, r, errOpts)
 		return
 	}
 
@@ -172,44 +264,26 @@ func performRequestValidationForErrorHandlerWithOpts(next http.Handler, w http.R
 			Route:      route,
 			PathParams: pathParams,
 		},
-		// other options will be added before executing
 	}
 
-	// Validate request
-	requestValidationInput := &openapi3filter.RequestValidationInput{
-		Request:    r,
-		PathParams: pathParams,
-		Route:      route,
-	}
-
-	if options != nil {
-		requestValidationInput.Options = &options.Options
-	}
-
-	err = openapi3filter.ValidateRequest(r.Context(), requestValidationInput)
-	if err == nil {
-		// it's a valid request, so serve it
+	if validationErr == nil {
 		next.ServeHTTP(w, r)
 		return
 	}
 
 	var theErr error
 
-	switch e := err.(type) {
+	switch e := validationErr.(type) {
 	case openapi3.MultiError:
 		theErr = e
 		errOpts.StatusCode = determineStatusCodeForMultiError(e)
 	case *openapi3filter.RequestError:
-		// We've got a bad request
 		theErr = e
 		errOpts.StatusCode = http.StatusBadRequest
 	case *openapi3filter.SecurityRequirementsError:
 		theErr = e
 		errOpts.StatusCode = http.StatusUnauthorized
 	default:
-		// This should never happen today, but if our upstream code changes,
-		// we don't want to crash the server, so handle the unexpected error.
-		// return http.StatusInternalServerError,
 		theErr = fmt.Errorf("error validating route: %w", e)
 		errOpts.StatusCode = http.StatusInternalServerError
 	}
@@ -220,7 +294,19 @@ func performRequestValidationForErrorHandlerWithOpts(next http.Handler, w http.R
 // validateRequest is called from the middleware above and actually does the work
 // of validating a request.
 func validateRequest(r *http.Request, router routers.Router, options *Options) (int, error) {
+	var statusCode int
+	var validationErr error
 
+	withPrefixStripped(r, options, func() {
+		statusCode, validationErr = doValidateRequest(r, router, options)
+	})
+
+	return statusCode, validationErr
+}
+
+// doValidateRequest performs the actual validation, called within
+// withPrefixStripped so the prefix is already removed from r's path.
+func doValidateRequest(r *http.Request, router routers.Router, options *Options) (int, error) {
 	// Find route
 	route, pathParams, err := router.FindRoute(r)
 	if err != nil {
@@ -233,9 +319,10 @@ func validateRequest(r *http.Request, router routers.Router, options *Options) (
 
 	// Validate request
 	requestValidationInput := &openapi3filter.RequestValidationInput{
-		Request:    r,
-		PathParams: pathParams,
-		Route:      route,
+		Request:     r,
+		PathParams:  pathParams,
+		QueryParams: r.URL.Query(),
+		Route:       route,
 	}
 
 	if options != nil {
@@ -255,7 +342,7 @@ func validateRequest(r *http.Request, router routers.Router, options *Options) (
 			// Split up the verbose error by lines and return the first one
 			// openapi errors seem to be multi-line with a decent message on the first
 			errorLines := strings.Split(e.Error(), "\n")
-			return http.StatusBadRequest, fmt.Errorf(errorLines[0])
+			return http.StatusBadRequest, errors.New(errorLines[0])
 		case *openapi3filter.SecurityRequirementsError:
 			return http.StatusUnauthorized, err
 		default:
