@@ -460,13 +460,17 @@ func (t *provisioningRequestReconcilerTask) handleClusterUpgrades(ctx context.Co
 	// rendered CI hostname set against the fulfilled node count to detect
 	// active scaling. Use hostname set comparison (not count) because a
 	// mixed add+remove could leave the count unchanged.
-	if t.object.Status.Extensions.ClusterDetails != nil {
+	if t.object.Status.Extensions.ClusterDetails != nil &&
+		t.object.Status.Extensions.ClusterDetails.FulfilledNodeCount > 0 {
 		fulfilledCount := t.object.Status.Extensions.ClusterDetails.FulfilledNodeCount
 		existingCI, err := t.getExistingClusterInstance(ctx)
-		if err == nil && existingCI != nil {
+		if err != nil {
+			return requeueWithMediumInterval(), fmt.Errorf("failed to get existing ClusterInstance for upgrade check: %w", err)
+		}
+		if existingCI != nil {
 			if ciUnstructured, convErr := ctlrutils.ConvertToUnstructured(*existingCI); convErr == nil {
 				currentNodeCount := len(getNodeRolesByHostname(ciUnstructured))
-				if fulfilledCount > 0 && currentNodeCount != fulfilledCount {
+				if currentNodeCount != fulfilledCount {
 					t.logger.InfoContext(ctx, "Skipping upgrade: scale operation in progress",
 						slog.Int("fulfilledNodeCount", fulfilledCount),
 						slog.Int("currentNodeCount", currentNodeCount))

@@ -36,6 +36,8 @@ import (
 
 const ConfigAnnotation = "clcm.openshift.io/config-in-progress"
 
+const ScaleInNodesAnnotation = "clcm.openshift.io/scale-in-nodes"
+
 // syncSkipCleanupToAllocatedNodes propagates the SkipCleanup field from the NAR
 // to all child AllocatedNodes, so the AllocatedNode deletion handler can read it
 // directly without looking up the NAR.

@@ -257,22 +257,24 @@ func (t *provisioningRequestReconcilerTask) handleScaleInDrain(
 		return false, fmt.Errorf("failed to update scale-in status: %w", updateErr)
 	}
 
-	// Step 1: Drain nodes that are still on the spoke.
-	// If no kubeconfig secret exists (e.g., e2e test environment), skip drain.
-	clusterName := t.object.Status.Extensions.ClusterDetails.Name
-	spokeClient, err := k8sclients.NewClientForCluster(ctx, t.client, clusterName)
+	// Resolve BMH identities before requesting drain. The NAR controller
+	// deletes AllocatedNodes during scale-in processing, so lookups must
+	// happen while the CRs still exist.
+	removedNodeIDs := t.hostnameToAllocatedNodeIDs(removedHostnames)
+	removedNodeBMHs, err := t.lookupRemovedNodeBMHs(ctx, removedHostnames)
 	if err != nil {
-		if strings.Contains(err.Error(), "no kubeconfig secret found") {
-			t.logger.WarnContext(ctx, "No spoke kubeconfig secret found, skipping drain",
-				slog.String("clusterName", clusterName))
-		} else {
-			return false, fmt.Errorf("failed to create spoke client for drain: %w", err)
-		}
+		return false, fmt.Errorf("failed to look up BMH info for removed nodes: %w", err)
 	}
 
-	if spokeClient != nil {
-		if err := t.drainRemovedNodesFromSpoke(ctx, spokeClient, clusterName, removedHostnames); err != nil {
-			return false, err
+	// Step 1: Request drain via NAR annotation. The NAR controller handles
+	// the actual drain, deallocation, and AllocatedNode deletion.
+	if len(removedNodeIDs) > 0 {
+		allDrained, drainErr := t.requestAndWaitForDrain(ctx, removedNodeIDs)
+		if drainErr != nil {
+			return false, fmt.Errorf("failed to request drain: %w", drainErr)
+		}
+		if !allDrained {
+			return true, nil
 		}
 	}
 
@@ -282,13 +284,6 @@ func (t *provisioningRequestReconcilerTask) handleScaleInDrain(
 	intermediateCI := buildIntermediateCIWithPruneManifests(renderedCI, existingCI, removedHostnames)
 	if err := t.applyClusterInstance(ctx, intermediateCI, false); err != nil {
 		return false, fmt.Errorf("failed to apply intermediate CI with pruneManifests: %w", err)
-	}
-
-	// Build a map of removed hostname → BMH identity (name + namespace).
-	// InfraEnv and NMStateConfig are named after the BMH, not the hostname.
-	removedNodeBMHs, err := t.lookupRemovedNodeBMHs(ctx, removedHostnames)
-	if err != nil {
-		return false, fmt.Errorf("failed to look up BMH info for removed nodes: %w", err)
 	}
 
 	// Step 3: Wait for siteconfig to delete the pruned resources
@@ -311,65 +306,74 @@ func (t *provisioningRequestReconcilerTask) handleScaleInDrain(
 	return false, nil
 }
 
-// drainRemovedNodesFromSpoke drains and deletes removed nodes that still exist
-// on the spoke cluster. Nodes already absent from the spoke are skipped.
-func (t *provisioningRequestReconcilerTask) drainRemovedNodesFromSpoke(
-	ctx context.Context, spokeClient client.Client, clusterName string,
-	removedHostnames []string) error {
+// hostnameToAllocatedNodeIDs maps removed hostnames to AllocatedNode names
+// using the AllocatedNodeHostMap.
+func (t *provisioningRequestReconcilerTask) hostnameToAllocatedNodeIDs(
+	hostnames []string) []string {
 
-	nodeList := &corev1.NodeList{}
-	if err := spokeClient.List(ctx, nodeList); err != nil {
-		return fmt.Errorf("failed to list nodes on spoke cluster: %w", err)
+	hostnameToID := make(map[string]string)
+	for nodeID, hostname := range t.object.Status.Extensions.AllocatedNodeHostMap {
+		hostnameToID[hostname] = nodeID
 	}
 
-	spokeNodeSet := make(map[string]bool, len(nodeList.Items))
-	for _, node := range nodeList.Items {
-		spokeNodeSet[node.Name] = true
-	}
-
-	var nodesToDrain []string
-	for _, hostname := range removedHostnames {
-		if spokeNodeSet[hostname] {
-			nodesToDrain = append(nodesToDrain, hostname)
+	var nodeIDs []string
+	for _, hostname := range hostnames {
+		if id, ok := hostnameToID[hostname]; ok {
+			nodeIDs = append(nodeIDs, id)
 		}
 	}
+	return nodeIDs
+}
 
-	if len(nodesToDrain) == 0 {
-		return nil
-	}
+// requestAndWaitForDrain sets the drain-nodes annotation on the NAR if not
+// already set, then checks if all listed AllocatedNodes have Drained=Completed.
+func (t *provisioningRequestReconcilerTask) requestAndWaitForDrain(
+	ctx context.Context, nodeIDs []string) (bool, error) {
 
-	clientset, err := k8sclients.NewClientsetForCluster(ctx, t.client, clusterName)
+	nar, err := t.getNAR(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create spoke clientset for drain: %w", err)
+		return false, fmt.Errorf("failed to get NAR for drain request: %w", err)
 	}
-	nodeOps := hwmgrcontroller.NewNodeOps(spokeClient, clientset, t.logger, false)
 
-	for i, hostname := range nodesToDrain {
-		drainMsg := fmt.Sprintf("Scale-in: draining node %s (%d/%d)", hostname, i+1, len(nodesToDrain))
-		t.logger.InfoContext(ctx, drainMsg)
-		ctlrutils.SetProvisioningStateInProgress(t.object, drainMsg)
-		if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
-			t.logger.WarnContext(ctx, "Failed to update drain progress status",
-				slog.Any("error", updateErr))
+	// Set the drain annotation if not already present
+	annotations := nar.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+	if _, ok := annotations[hwmgrcontroller.ScaleInNodesAnnotation]; !ok {
+		nodeList := strings.Join(nodeIDs, ",")
+		annotations[hwmgrcontroller.ScaleInNodesAnnotation] = nodeList
+		patch := client.MergeFrom(nar.DeepCopy())
+		nar.SetAnnotations(annotations)
+		if err := t.client.Patch(ctx, nar, patch); err != nil {
+			return false, fmt.Errorf("failed to set drain-nodes annotation: %w", err)
 		}
+		t.logger.InfoContext(ctx, "Set drain-nodes annotation on NAR",
+			slog.String("nodes", nodeList))
+	}
 
-		if err := nodeOps.DrainNode(ctx, hostname); err != nil {
-			return fmt.Errorf("failed to drain node %s: %w", hostname, err)
-		}
-
-		// Delete the Node object from the spoke cluster
-		spokeNode := &corev1.Node{}
-		spokeNode.Name = hostname
-		if err := spokeClient.Delete(ctx, spokeNode); err != nil {
-			if !errors.IsNotFound(err) {
-				return fmt.Errorf("failed to delete node %s from spoke cluster: %w", hostname, err)
+	// Check if all nodes have Drained=Completed
+	narNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
+	for _, nodeID := range nodeIDs {
+		an := &hwmgmtv1alpha1.AllocatedNode{}
+		if err := t.client.Get(ctx, types.NamespacedName{
+			Name: nodeID, Namespace: narNS,
+		}, an); err != nil {
+			if errors.IsNotFound(err) {
+				continue
 			}
+			return false, fmt.Errorf("failed to get AllocatedNode %s: %w", nodeID, err)
 		}
-		t.logger.InfoContext(ctx, "Drained and deleted node from spoke cluster",
-			slog.String("hostname", hostname))
+
+		drainCond := meta.FindStatusCondition(an.Status.Conditions, string(hwmgmtv1alpha1.Deprovisioned))
+		if drainCond == nil || drainCond.Reason != string(hwmgmtv1alpha1.Completed) {
+			t.logger.InfoContext(ctx, "Waiting for node drain to complete",
+				slog.String("allocatedNode", nodeID))
+			return false, nil
+		}
 	}
 
-	return nil
+	return true, nil
 }
 
 // buildIntermediateCIWithPruneManifests constructs a CI that includes the
@@ -416,7 +420,10 @@ func buildIntermediateCIWithPruneManifests(
 		removedNodeEntries = append(removedNodeEntries, nodeCopy)
 	}
 
-	intermediateSpec := intermediateCI.Object["spec"].(map[string]any)
+	intermediateSpec, ok := intermediateCI.Object["spec"].(map[string]any)
+	if !ok {
+		return intermediateCI
+	}
 	intermediateNodes, _ := intermediateSpec["nodes"].([]any)
 	intermediateNodes = append(intermediateNodes, removedNodeEntries...)
 	intermediateSpec["nodes"] = intermediateNodes
@@ -559,13 +566,14 @@ func (t *provisioningRequestReconcilerTask) deleteScaleInAgentCRs(
 		for i := range agentList.Items {
 			agent := &agentList.Items[i]
 			hostname := getAgentHostname(agent)
-			if !removedSet[hostname] {
+			if hostname == "" || !removedSet[hostname] {
 				continue
 			}
 			if err := t.client.Delete(ctx, agent); err != nil {
 				if !errors.IsNotFound(err) {
 					return fmt.Errorf("failed to delete Agent %s/%s: %w", ns, agent.GetName(), err)
 				}
+				continue
 			}
 			t.logger.InfoContext(ctx, "Deleted Agent CR for removed node",
 				slog.String("agent", agent.GetName()),
@@ -734,9 +742,13 @@ func (t *provisioningRequestReconcilerTask) handleClusterInstallation(ctx contex
 		if allGone {
 			t.logger.InfoContext(ctx, "All removed nodes have left the cluster, performing cleanup")
 
-			// Now it's safe to delete AllocatedNodes and clean up the host map
-			if err := t.handleScaleInCleanup(ctx, clusterInstance); err != nil {
+			// Wait for NAR controller to complete deallocation, then clean up host map
+			done, err := t.handleScaleInCleanup(ctx, clusterInstance)
+			if err != nil {
 				return fmt.Errorf("failed to perform scale-in cleanup: %w", err)
+			}
+			if !done {
+				return nil
 			}
 
 			t.object.Status.Extensions.ClusterDetails.FulfilledNodeCount = renderedNodeCount
@@ -1393,10 +1405,11 @@ func isNodeReady(node *corev1.Node) bool {
 
 // cleanupScaleOutSpokeAccess removes the spoke client resources created for
 // scale-out CSR approval.
-// handleScaleInCleanup performs post-drain cleanup for scale-in operations:
-// deletes AllocatedNode CRs for removed nodes and cleans up AllocatedNodeHostMap.
+// handleScaleInCleanup waits for the NAR controller to complete scale-in
+// processing (annotation removed) and then cleans up AllocatedNodeHostMap.
+// Returns done=false if the NAR controller is still processing.
 func (t *provisioningRequestReconcilerTask) handleScaleInCleanup(
-	ctx context.Context, renderedCI *unstructured.Unstructured) error {
+	ctx context.Context, renderedCI *unstructured.Unstructured) (bool, error) {
 
 	renderedNodes := getNodeRolesByHostname(renderedCI)
 
@@ -1406,37 +1419,31 @@ func (t *provisioningRequestReconcilerTask) handleScaleInCleanup(
 		hostnameToNodeID[hostname] = nodeID
 	}
 
-	// Identify AllocatedNodes to delete (those whose hostname is not in the rendered CI)
+	// Identify AllocatedNodes to remove (those whose hostname is not in the rendered CI)
 	var nodesToDelete []string
 	for hostname, nodeID := range hostnameToNodeID {
 		if _, exists := renderedNodes[hostname]; !exists {
 			nodesToDelete = append(nodesToDelete, nodeID)
-			t.logger.InfoContext(ctx, "Marking AllocatedNode for deletion",
-				slog.String("allocatedNode", nodeID),
-				slog.String("hostname", hostname))
 		}
 	}
 
 	if len(nodesToDelete) == 0 {
-		return nil
+		return true, nil
 	}
 
-	// Delete AllocatedNode CRs — the AllocatedNode controller handles BMH deallocation
-	narNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
-	for _, nodeID := range nodesToDelete {
-		an := &hwmgmtv1alpha1.AllocatedNode{}
-		an.Name = nodeID
-		an.Namespace = narNS
-		if err := t.client.Delete(ctx, an); err != nil {
-			if !errors.IsNotFound(err) {
-				return fmt.Errorf("failed to delete AllocatedNode %s: %w", nodeID, err)
-			}
-		}
-		t.logger.InfoContext(ctx, "Deleted AllocatedNode",
-			slog.String("allocatedNode", nodeID))
+	// The scale-in-nodes annotation was set by handleScaleInDrain. The NAR
+	// controller handles drain, Node deletion from spoke, AllocatedNode
+	// deletion, and nodeNames cleanup. Wait for it to finish.
+	nar, err := t.getNAR(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to get NAR for scale-in cleanup: %w", err)
+	}
+	if _, ok := nar.GetAnnotations()[hwmgrcontroller.ScaleInNodesAnnotation]; ok {
+		t.logger.InfoContext(ctx, "Waiting for NAR controller to complete scale-in")
+		return false, nil
 	}
 
-	// Clean up AllocatedNodeHostMap — remove entries for deleted nodes
+	// Clean up AllocatedNodeHostMap — remove entries for deallocated nodes
 	for _, nodeID := range nodesToDelete {
 		delete(t.object.Status.Extensions.AllocatedNodeHostMap, nodeID)
 	}
@@ -1444,7 +1451,7 @@ func (t *provisioningRequestReconcilerTask) handleScaleInCleanup(
 	ctlrutils.SetProvisioningStateInProgress(t.object,
 		fmt.Sprintf("Scale-in: removed %d node(s), cleaning up", len(nodesToDelete)))
 
-	return nil
+	return true, nil
 }
 
 // checkRemovedNodesGone verifies that no spoke node exists for hostnames that
@@ -1472,10 +1479,14 @@ func (t *provisioningRequestReconcilerTask) checkRemovedNodesGone(
 		spokeNodes[node.Name] = true
 	}
 
-	// Check that no spoke node exists for hostnames not in the rendered CI
+	// Derive the set of removed hostnames from AllocatedNodeHostMap.
+	// Only check these specific hostnames on the spoke, not all spoke nodes.
 	renderedHostnames := getNodeRolesByHostname(renderedCI)
-	for hostname := range spokeNodes {
-		if _, inRendered := renderedHostnames[hostname]; !inRendered {
+	for _, hostname := range t.object.Status.Extensions.AllocatedNodeHostMap {
+		if _, inRendered := renderedHostnames[hostname]; inRendered {
+			continue
+		}
+		if spokeNodes[hostname] {
 			t.logger.InfoContext(ctx, "Removed node still present on spoke",
 				slog.String("hostname", hostname))
 			return false, nil
