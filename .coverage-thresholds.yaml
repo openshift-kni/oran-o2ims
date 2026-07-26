@@ -8,6 +8,7 @@ overall: 51
 
 # Per-package minimum thresholds
 packages:
+  api/hardwaremanagement/v1alpha1: 20
   api/provisioning/v1alpha1: 65
   internal/hardwaremanager/utils: 5
   internal/hardwaremanager/controller: 63

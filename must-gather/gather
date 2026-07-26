@@ -154,6 +154,7 @@ fi
 gather_resource "clustertemplates.clcm.openshift.io" "clcm/clustertemplates"
 gather_resource "provisioningrequests.clcm.openshift.io" "clcm/provisioningrequests"
 gather_resource "hardwareprofiles.clcm.openshift.io" "clcm/hardwareprofiles"
+gather_resource "firmwarecatalogs.clcm.openshift.io" "clcm/firmwarecatalogs"
 gather_resource "nodeallocationrequests.clcm.openshift.io" "clcm/nodeallocationrequests"
 gather_resource "allocatednodes.clcm.openshift.io" "clcm/allocatednodes"
 
