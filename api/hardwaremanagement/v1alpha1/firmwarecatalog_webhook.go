@@ -126,16 +126,23 @@ func findModifiedImmutableFields(old, updated []FirmwareImage) []string {
 
 func isEntryReferencedByAnyProfile(entryName string, profiles []HardwareProfile) bool {
 	for i := range profiles {
-		if profiles[i].Spec.BiosFirmware == entryName {
+		if isEntryReferencedByProfile(entryName, &profiles[i]) {
 			return true
 		}
-		if profiles[i].Spec.BmcFirmware == entryName {
+	}
+	return false
+}
+
+func isEntryReferencedByProfile(entryName string, profile *HardwareProfile) bool {
+	if profile.Spec.BiosFirmware == entryName {
+		return true
+	}
+	if profile.Spec.BmcFirmware == entryName {
+		return true
+	}
+	for _, nic := range profile.Spec.NicFirmware {
+		if nic == entryName {
 			return true
-		}
-		for _, nic := range profiles[i].Spec.NicFirmware {
-			if nic == entryName {
-				return true
-			}
 		}
 	}
 	return false
