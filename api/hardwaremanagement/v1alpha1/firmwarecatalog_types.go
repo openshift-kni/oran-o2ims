@@ -47,7 +47,6 @@ type FirmwareImage struct {
 }
 
 // FirmwareCatalogSpec defines the desired state of FirmwareCatalog.
-// +kubebuilder:validation:XValidation:message="Firmware catalog entries are immutable: component, url, version, and vendor cannot be changed",rule="oldSelf.images.all(old, self.images.exists(cur, cur.name == old.name) ? self.images.filter(cur, cur.name == old.name)[0].component == old.component && self.images.filter(cur, cur.name == old.name)[0].url == old.url && self.images.filter(cur, cur.name == old.name)[0].version == old.version && (has(old.vendor) ? has(self.images.filter(cur, cur.name == old.name)[0].vendor) && self.images.filter(cur, cur.name == old.name)[0].vendor == old.vendor : !has(self.images.filter(cur, cur.name == old.name)[0].vendor)) : true)"
 type FirmwareCatalogSpec struct {
 	// Images is the set of firmware images available in this catalog.
 	// +optional
