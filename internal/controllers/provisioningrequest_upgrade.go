@@ -11,6 +11,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/coreos/go-semver/semver"
@@ -18,10 +20,13 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils/cincinnati"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils/spokeclient"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
+	upgradevalidation "github.com/openshift-kni/oran-o2ims/internal/validation"
 	configv1 "github.com/openshift/api/config/v1"
 	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
+	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -140,7 +145,6 @@ func parseUpgradeConfig(
 ) (*ctlrutils.UpgradeConfig, error) {
 	hasCV, hasIBGU := false, false
 	var timeout time.Duration
-	var intermediateVersion string
 
 	// Check ProvisioningRequest upgradeParameters first (takes precedence).
 	if pr.Spec.TemplateParameters.Size() > 0 {
@@ -166,9 +170,6 @@ func parseUpgradeConfig(
 				}
 				timeout = d
 			}
-			if iv, ok := upgradeParams[ctlrutils.UpgradeIntermediateVersionConfigKey].(string); ok {
-				intermediateVersion = iv
-			}
 		}
 	}
 
@@ -193,11 +194,6 @@ func parseUpgradeConfig(
 				timeout = d
 			}
 		}
-		if intermediateVersion == "" {
-			if iv, ok := defaults[ctlrutils.UpgradeIntermediateVersionConfigKey].(string); ok {
-				intermediateVersion = iv
-			}
-		}
 	}
 
 	if hasCV && hasIBGU {
@@ -208,16 +204,14 @@ func parseUpgradeConfig(
 
 	if hasCV {
 		return &ctlrutils.UpgradeConfig{
-			UpgradeType:         ctlrutils.UpgradeDefaultsClusterVersionKey,
-			Timeout:             timeout,
-			IntermediateVersion: intermediateVersion,
+			UpgradeType: ctlrutils.UpgradeDefaultsClusterVersionKey,
+			Timeout:     timeout,
 		}, nil
 	}
 	if hasIBGU {
 		return &ctlrutils.UpgradeConfig{
-			UpgradeType:         ctlrutils.UpgradeDefaultsIBGUKey,
-			Timeout:             timeout,
-			IntermediateVersion: intermediateVersion,
+			UpgradeType: ctlrutils.UpgradeDefaultsIBGUKey,
+			Timeout:     timeout,
 		}, nil
 	}
 	return nil, fmt.Errorf(
@@ -394,12 +388,19 @@ func (t *provisioningRequestReconcilerTask) prepareIBGU(
 	return ibguCR, nil
 }
 
-// prepareCVSpec merges and validates upgrade data, then parses the
-// clusterVersion spec into typed structs. Returns the ClusterVersionSpec
-// (for channel/upstream) and the cvSpec.DesiredUpdate (with version set to target).
+// prepareCVSpec merges and validates upgrade data, parses the
+// clusterVersion spec into typed struct, and sets DesiredUpdate.Version
+// to the upgrade step target. For EUS upgrades it also resolves the
+// intermediate version from configuration or the Cincinnati update graph,
+// updates action.UpgradeToVersion to the resolved version so the
+// upgrade continues in the same reconciliation, and persists it to
+// ClusterUpgradeStatus.IntermediateVersion so subsequent reconciliations
+// can drive the EUS state machine.
 func (t *provisioningRequestReconcilerTask) prepareCVSpec(
+	ctx context.Context,
 	clusterTemplate *provisioningv1alpha1.ClusterTemplate,
-	upgradeToVersion string,
+	cv *configv1.ClusterVersion,
+	action *ctlrutils.CVUpgradeAction,
 ) (*configv1.ClusterVersionSpec, error) {
 	// Merge and validate upgrade data against the schema.
 	mergedUpgradeData, err := t.mergeAndValidateUpgradeData(clusterTemplate)
@@ -431,8 +432,49 @@ func (t *provisioningRequestReconcilerTask) prepareCVSpec(
 			"the clusterVersion desiredUpdate version (%s) does not match the ClusterTemplate spec.release (%s)",
 			cvSpec.DesiredUpdate.Version, clusterTemplate.Spec.Release)
 	}
+
+	upgradeStatus := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus
+	// For EUS upgrades, resolve the intermediate version on the intermediate hop.
+	// If intermediateVersion is explicitly configured, use it directly.
+	// Otherwise, auto-select a valid intermediate version from the Cincinnati
+	// update graph.
+	// On the first reconciliation both action.UpgradeToVersion and
+	// upgradeStatus.IntermediateVersion are "" — the match is intentional:
+	// it enters this block to resolve the intermediate version, which then
+	// populates both fields for subsequent reconciliations.
+	isIntermediateHop := action.IsEUS && action.UpgradeToVersion == upgradeStatus.IntermediateVersion
+	if isIntermediateHop {
+		targetVersion := clusterTemplate.Spec.Release
+
+		configIntermediate := ""
+		if iv, ok := mergedUpgradeData[ctlrutils.UpgradeIntermediateVersionConfigKey].(string); ok {
+			configIntermediate = iv
+		}
+
+		if configIntermediate != "" {
+			if err := upgradevalidation.ValidateEUSIntermediate(
+				configIntermediate, targetVersion,
+			); err != nil {
+				return nil, fmt.Errorf("failed to validate intermediateVersion: %w", err)
+			}
+			action.UpgradeToVersion = configIntermediate
+		} else {
+			resolved, err := t.resolveEUSIntermediateVersion(
+				ctx, upgradeStatus.StartVersion, targetVersion, cv, &cvSpec)
+			if err != nil {
+				return nil, err
+			}
+			action.UpgradeToVersion = resolved
+		}
+		upgradeStatus.IntermediateVersion = action.UpgradeToVersion
+
+		// Intermediate upgrade is version-based; clear any user-configured
+		// image for target version.
+		cvSpec.DesiredUpdate.Image = ""
+	}
+
 	// Set the version to the actual upgrade step target (which may be the intermediate version for EUS).
-	cvSpec.DesiredUpdate.Version = upgradeToVersion
+	cvSpec.DesiredUpdate.Version = action.UpgradeToVersion
 
 	// Validate target version is valid semver.
 	if _, err := semver.NewVersion(cvSpec.DesiredUpdate.Version); err != nil {
@@ -440,6 +482,80 @@ func (t *provisioningRequestReconcilerTask) prepareCVSpec(
 	}
 
 	return &cvSpec, nil
+}
+
+// resolveEUSIntermediateVersion auto-selects the intermediate version from the Cincinnati update graph.
+func (t *provisioningRequestReconcilerTask) resolveEUSIntermediateVersion(
+	ctx context.Context,
+	startVersion, targetVersion string,
+	cv *configv1.ClusterVersion,
+	cvSpec *configv1.ClusterVersionSpec,
+) (string, error) {
+	if cvSpec.Channel == "" {
+		return "", typederrors.NewInputError(
+			"channel is required to auto-select intermediateVersion for EUS-to-EUS upgrades; " +
+				"set clusterVersion.channel in the upgrade configuration or specify intermediateVersion explicitly")
+	}
+
+	upstream := string(cvSpec.Upstream)
+	if upstream == "" {
+		upstream = cincinnati.DefaultGraphURL
+	}
+	upstreamURI, err := url.Parse(upstream)
+	if err != nil {
+		return "", typederrors.NewInputError("invalid upstream URL %q: %s", upstream, err.Error())
+	}
+	if upstreamURI.Host == "" || (upstreamURI.Scheme != "http" && upstreamURI.Scheme != "https") {
+		return "", typederrors.NewInputError(
+			"invalid upstream URL %q: must be an absolute HTTP or HTTPS URL", upstream)
+	}
+
+	arch, err := t.getClusterArchitecture(ctx, cv)
+	if err != nil {
+		return "", fmt.Errorf("failed to determine cluster architecture: %w", err)
+	}
+
+	selected, err := cincinnati.SelectIntermediateVersion(
+		ctx, t.client, t.logger, upstreamURI, cvSpec.Channel, arch, startVersion, targetVersion)
+	if err != nil {
+		return "", fmt.Errorf("unable to auto-select intermediateVersion: %w", err)
+	}
+
+	t.logger.InfoContext(ctx, "Auto-selected intermediateVersion from Cincinnati graph",
+		slog.String("intermediateVersion", selected),
+		slog.String("targetVersion", targetVersion),
+		slog.String("channel", cvSpec.Channel),
+		slog.String("upstream", upstream))
+	return selected, nil
+}
+
+// getClusterArchitecture determines the cluster architecture for Cincinnati
+// graph queries. It checks (in order):
+//  1. spec.desiredUpdate.architecture on the spoke CV (explicit multi-arch transition)
+//  2. cpuArchitecture from the ClusterInstance on the hub
+//  3. Falls back to amd64
+func (t *provisioningRequestReconcilerTask) getClusterArchitecture(
+	ctx context.Context, cv *configv1.ClusterVersion,
+) (string, error) {
+	if cv.Spec.DesiredUpdate != nil && cv.Spec.DesiredUpdate.Architecture != "" {
+		return strings.ToLower(string(cv.Spec.DesiredUpdate.Architecture)), nil
+	}
+
+	ci, err := t.getExistingClusterInstance(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to read ClusterInstance for architecture: %w", err)
+	}
+
+	switch ci.Spec.CPUArchitecture {
+	case siteconfig.CPUArchitectureX86_64:
+		return "amd64", nil
+	case siteconfig.CPUArchitectureAarch64:
+		return "arm64", nil
+	case siteconfig.CPUArchitectureMulti:
+		return "multi", nil
+	default:
+		return "amd64", nil
+	}
 }
 
 // mergeAndValidateUpgradeData merges upgrade defaults from the ClusterTemplate with
@@ -548,7 +664,6 @@ func (t *provisioningRequestReconcilerTask) handleClusterVersionUpgrade(
 	var err error
 
 	targetVersion := clusterTemplate.Spec.Release
-	intermediateVersion := upgradeCfg.IntermediateVersion
 	msaName := t.object.Name + "-upgrade"
 	mwName := t.object.Name + "-upgrade-rbac"
 
@@ -568,8 +683,9 @@ func (t *provisioningRequestReconcilerTask) handleClusterVersionUpgrade(
 	}
 
 	// Check if the upgrade is an EUS upgrade.
-	startVersion := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.StartVersion
-	isEUS, err := ctlrutils.IsEUSUpgrade(startVersion, intermediateVersion, targetVersion)
+	upgradeStatus := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus
+	startVersion := upgradeStatus.StartVersion
+	isEUS, err := ctlrutils.IsEUSUpgrade(startVersion, targetVersion)
 	if err != nil {
 		if updateErr := t.updateUpgradeStatus(ctx,
 			provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, err.Error(),
@@ -623,6 +739,9 @@ func (t *provisioningRequestReconcilerTask) handleClusterVersionUpgrade(
 		return ctrl.Result{}, false, fmt.Errorf("failed to get spoke ClusterVersion: %w", err)
 	}
 
+	// Intermediate comes from status only; IntermediateVersion is resolved
+	// inside prepareCVSpec for EUS upgrades and stored in status.
+	intermediateVersion := upgradeStatus.IntermediateVersion
 	action := ctlrutils.ResolveCVUpgradeAction(
 		cv, targetVersion, intermediateVersion, isEUS)
 
@@ -635,7 +754,7 @@ func (t *provisioningRequestReconcilerTask) handleClusterVersionUpgrade(
 			// EUS intermediate upgrade: PreconditionChecksFailed means the upgrade
 			// was never triggered, so it's safe to unpause MCPs - no operators
 			// are mid-rollout.
-			if action.IsEUSIntermediate &&
+			if action.IsEUSIntermediate(intermediateVersion) &&
 				ctlrutils.IsClusterUpgradePreconditionChecksFailed(t.object) {
 				mcps, err := ctlrutils.ListNonMasterMCPs(ctx, spokeClient)
 				if err != nil {
@@ -679,7 +798,8 @@ func (t *provisioningRequestReconcilerTask) handleCVUpgradeCompleted(
 	ctx context.Context, spokeClient client.Client,
 	clusterName, msaName, mwName string, action *ctlrutils.CVUpgradeAction,
 ) (ctrl.Result, error) {
-	if action.IsEUS && !action.IsEUSIntermediate {
+	intermediateVersion := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.IntermediateVersion
+	if action.IsEUS && !action.IsEUSIntermediate(intermediateVersion) {
 		mcps, err := ctlrutils.ListNonMasterMCPs(ctx, spokeClient)
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to list MCPs: %w", err)
@@ -725,6 +845,7 @@ func (t *provisioningRequestReconcilerTask) handleCVUpgradeInProgress(
 	ctx context.Context, cv *configv1.ClusterVersion,
 	action *ctlrutils.CVUpgradeAction,
 ) (ctrl.Result, error) {
+	intermediateVersion := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.IntermediateVersion
 	// Reset startAt to CVO's actual start time. The initial startAt was set
 	// when entering the upgrade flow (covering the pre-start/setup phase).
 	// Once CVO creates a history entry, we reset to its StartedTime so the
@@ -738,7 +859,7 @@ func (t *provisioningRequestReconcilerTask) handleCVUpgradeInProgress(
 	// rather than per-phase timeouts because the phases are sequential parts
 	// of one atomic operation, and individual phase durations vary widely
 	// depending on cluster size and workload.
-	shouldReset := !action.IsEUS || action.IsEUSIntermediate
+	shouldReset := !action.IsEUS || action.IsEUSIntermediate(intermediateVersion)
 	historyEntry := ctlrutils.FindCVHistoryEntry(cv, action.UpgradeToVersion)
 	if historyEntry != nil && shouldReset &&
 		!t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.StartedAt.Equal(&historyEntry.StartedTime) {
@@ -752,15 +873,15 @@ func (t *provisioningRequestReconcilerTask) handleCVUpgradeInProgress(
 	if progressing != nil && progressing.Status == configv1.ConditionTrue {
 		reason = provisioningv1alpha1.CRconditionReasons.InProgress
 		msg = fmt.Sprintf("Upgrading to %s version %s: %s",
-			action.VersionLabel(), action.UpgradeToVersion, progressing.Message)
+			action.VersionLabel(intermediateVersion), action.UpgradeToVersion, progressing.Message)
 	} else {
 		reason = provisioningv1alpha1.CRconditionReasons.Unknown
 		msg = fmt.Sprintf("Upgrading to %s version %s: CVO stalled",
-			action.VersionLabel(), action.UpgradeToVersion)
+			action.VersionLabel(intermediateVersion), action.UpgradeToVersion)
 		failing := ctlrutils.GetCVCondition(cv, ctlrutils.CVConditionFailing)
 		if failing != nil && failing.Status == configv1.ConditionTrue {
 			msg = fmt.Sprintf("Upgrading to %s version %s: %s",
-				action.VersionLabel(), action.UpgradeToVersion, failing.Message)
+				action.VersionLabel(intermediateVersion), action.UpgradeToVersion, failing.Message)
 		}
 	}
 	if err := t.updateUpgradeStatus(ctx, reason, msg); err != nil {
@@ -779,11 +900,18 @@ func (t *provisioningRequestReconcilerTask) handleCVUpgradePreStart(
 	action *ctlrutils.CVUpgradeAction,
 ) (ctrl.Result, error) {
 	// Always merge+validate — catches invalid input including updated PR params.
-	cvSpec, err := t.prepareCVSpec(clusterTemplate, action.UpgradeToVersion)
+	cvSpec, err := t.prepareCVSpec(ctx, clusterTemplate, cv, action)
 	if err != nil {
 		if !typederrors.IsInputError(err) {
-			return ctrl.Result{}, fmt.Errorf("failed to prepare CV upgrade spec: %w", err)
+			if err := t.updateUpgradeStatus(ctx,
+				provisioningv1alpha1.CRconditionReasons.Pending,
+				fmt.Sprintf("Preparing upgrade configuration: %s", err.Error()),
+			); err != nil {
+				return ctrl.Result{}, err
+			}
+			return requeueWithMediumInterval(), nil
 		}
+
 		if err := t.updateUpgradeStatus(ctx,
 			provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, err.Error(),
 		); err != nil {
@@ -840,8 +968,9 @@ func (t *provisioningRequestReconcilerTask) handleCVUpgradePreStart(
 		return ctrl.Result{}, fmt.Errorf("failed to apply desiredUpdate: %w", err)
 	}
 	if changed {
+		intermediateVersion := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.IntermediateVersion
 		msg := fmt.Sprintf("Upgrade to %s version %s triggered. Waiting for upgrade to start",
-			action.VersionLabel(), action.UpgradeToVersion)
+			action.VersionLabel(intermediateVersion), action.UpgradeToVersion)
 		if err := t.updateUpgradeStatus(ctx, provisioningv1alpha1.CRconditionReasons.Pending, msg); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -856,6 +985,7 @@ func (t *provisioningRequestReconcilerTask) handleCVUpgradePreStart(
 func (t *provisioningRequestReconcilerTask) monitorPostTriggerConditions(
 	ctx context.Context, cv *configv1.ClusterVersion, action *ctlrutils.CVUpgradeAction,
 ) (ctrl.Result, error) {
+	intermediateVersion := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.IntermediateVersion
 	// Invalid=True — CVO won't retry on invalid input, terminal.
 	invalid := ctlrutils.GetCVCondition(cv, ctlrutils.CVConditionInvalid)
 	if invalid != nil && invalid.Status == configv1.ConditionTrue {
@@ -881,11 +1011,11 @@ func (t *provisioningRequestReconcilerTask) monitorPostTriggerConditions(
 	}
 
 	msg := fmt.Sprintf("Upgrading to %s version %s: upgrade not started yet",
-		action.VersionLabel(), action.UpgradeToVersion)
+		action.VersionLabel(intermediateVersion), action.UpgradeToVersion)
 	failing := ctlrutils.GetCVCondition(cv, ctlrutils.CVConditionFailing)
 	if failing != nil && failing.Status == configv1.ConditionTrue {
 		msg = fmt.Sprintf("Upgrading to %s version %s: %s",
-			action.VersionLabel(), action.UpgradeToVersion, failing.Message)
+			action.VersionLabel(intermediateVersion), action.UpgradeToVersion, failing.Message)
 	}
 	if err := t.updateUpgradeStatus(ctx,
 		provisioningv1alpha1.CRconditionReasons.Unknown, msg,
@@ -920,7 +1050,8 @@ func (t *provisioningRequestReconcilerTask) ensureMCPsPreconditions(
 		return true, nil
 	}
 
-	if action.IsEUSIntermediate {
+	intermediateVersion := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.IntermediateVersion
+	if action.IsEUSIntermediate(intermediateVersion) {
 		mcps, err := ctlrutils.ListNonMasterMCPs(ctx, spokeClient)
 		if err != nil {
 			return false, fmt.Errorf("failed to list MCPs: %w", err)
@@ -1052,6 +1183,9 @@ func (t *provisioningRequestReconcilerTask) updateUpgradeStatus(
 	case provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
 		provisioningv1alpha1.CRconditionReasons.Failed,
 		provisioningv1alpha1.CRconditionReasons.TimedOut:
+		t.logger.ErrorContext(ctx, "Upgrade failed",
+			slog.String("reason", string(reason)),
+			slog.String("message", message))
 		ctlrutils.SetProvisioningStateFailed(t.object, message)
 		// Clear only StartedAt, preserving StartVersion so EUS detection
 		// remains stable if the user retries. StartVersion is eventually
@@ -1059,6 +1193,9 @@ func (t *provisioningRequestReconcilerTask) updateUpgradeStatus(
 		// condition when switching to a new CT that matches the current cluster version.
 		t.clearUpgradeStartTime()
 	default:
+		t.logger.InfoContext(ctx, "Upgrade status update",
+			slog.String("reason", string(reason)),
+			slog.String("message", message))
 		ctlrutils.SetProvisioningStateInProgress(t.object, message)
 	}
 

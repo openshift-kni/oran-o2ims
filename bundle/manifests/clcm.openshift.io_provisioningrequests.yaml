@@ -173,6 +173,12 @@ spec:
                         description: ClusterUpgradeStatus holds the state of a cluster
                           upgrade in progress.
                         properties:
+                          intermediateVersion:
+                            description: |-
+                              IntermediateVersion is the intermediate version selected for
+                              EUS-to-EUS upgrades, either from user configuration or
+                              auto-selected from the Cincinnati update graph.
+                            type: string
                           startVersion:
                             description: StartVersion is the current cluster version
                               before the upgrade began.

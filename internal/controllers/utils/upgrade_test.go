@@ -135,88 +135,58 @@ var _ = Describe("Upgrade helper functions", func() {
 	})
 
 	Describe("IsEUSUpgrade", func() {
-		It("should return true for 4.20->4.21->4.22", func() {
-			isEUS, err := IsEUSUpgrade("4.20.5", "4.21.0", "4.22.0")
+		It("should return true for 4.20->4.22", func() {
+			isEUS, err := IsEUSUpgrade("4.20.5", "4.22.0")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(isEUS).To(BeTrue())
 		})
 
-		It("should return true for 4.18->4.19->4.20", func() {
-			isEUS, err := IsEUSUpgrade("4.18.0", "4.19.0", "4.20.3")
+		It("should return true for 4.18->4.20", func() {
+			isEUS, err := IsEUSUpgrade("4.18.0", "4.20.3")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(isEUS).To(BeTrue())
 		})
 
-		It("should return false for 4.20->4.21 (odd target, no intermediate)", func() {
-			isEUS, err := IsEUSUpgrade("4.20.0", "", "4.21.0")
+		It("should return false for 4.20->4.21 (odd target)", func() {
+			isEUS, err := IsEUSUpgrade("4.20.0", "4.21.0")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(isEUS).To(BeFalse())
 		})
 
-		It("should return false for 4.21->4.23 (odd current, no intermediate)", func() {
-			isEUS, err := IsEUSUpgrade("4.21.0", "", "4.23.0")
+		It("should return false for 4.21->4.23 (odd current)", func() {
+			isEUS, err := IsEUSUpgrade("4.21.0", "4.23.0")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(isEUS).To(BeFalse())
 		})
 
-		It("should return false for 4.20->4.24 (gap of 4, no intermediate)", func() {
-			isEUS, err := IsEUSUpgrade("4.20.0", "", "4.24.0")
+		It("should return false for 4.20->4.24 (gap of 4)", func() {
+			isEUS, err := IsEUSUpgrade("4.20.0", "4.24.0")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(isEUS).To(BeFalse())
 		})
 
-		It("should return false for cross-major 3.20->4.22 (different major)", func() {
-			isEUS, err := IsEUSUpgrade("3.20.0", "", "4.22.0")
+		It("should return false for cross-major 3.20->4.22", func() {
+			isEUS, err := IsEUSUpgrade("3.20.0", "4.22.0")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(isEUS).To(BeFalse())
 		})
 
-		It("should return false for z-stream 4.20.0->4.20.3 (no intermediate)", func() {
-			isEUS, err := IsEUSUpgrade("4.20.0", "", "4.20.3")
+		It("should return false for z-stream 4.20.0->4.20.3", func() {
+			isEUS, err := IsEUSUpgrade("4.20.0", "4.20.3")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(isEUS).To(BeFalse())
 		})
 
 		It("should return false with no error for empty start version", func() {
-			isEUS, err := IsEUSUpgrade("", "4.21.0", "4.22.0")
+			isEUS, err := IsEUSUpgrade("", "4.22.0")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(isEUS).To(BeFalse())
 		})
 
 		It("should return error for invalid start version", func() {
-			_, err := IsEUSUpgrade("invalid", "", "4.22.0")
+			_, err := IsEUSUpgrade("invalid", "4.22.0")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to parse start version"))
-		})
-
-		It("should return error when intermediateVersion provided for non-EUS upgrade", func() {
-			_, err := IsEUSUpgrade("4.21.0", "4.21.0", "4.22.0")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("not EUS-to-EUS"))
-		})
-
-		It("should return error when EUS detected but intermediateVersion missing", func() {
-			_, err := IsEUSUpgrade("4.20.0", "", "4.22.0")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("intermediateVersion is required"))
-		})
-
-		It("should return error when intermediateVersion has wrong minor gap", func() {
-			_, err := IsEUSUpgrade("4.20.0", "4.20.5", "4.22.0")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("exactly one minor version below"))
-		})
-
-		It("should return error when intermediateVersion has wrong major version", func() {
-			_, err := IsEUSUpgrade("4.20.0", "99.21.0", "4.22.0")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("major version must match"))
-		})
-
-		It("should return error for invalid intermediateVersion", func() {
-			_, err := IsEUSUpgrade("4.20.0", "invalid", "4.22.0")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to parse intermediateVersion"))
 		})
 	})
 
@@ -263,6 +233,21 @@ var _ = Describe("Upgrade helper functions", func() {
 		})
 
 		Context("EUS upgrade", func() {
+			It("should return empty intermediate/PreStart when status intermediate is empty", func() {
+				cv := &configv1.ClusterVersion{
+					Status: configv1.ClusterVersionStatus{
+						History: []configv1.UpdateHistory{
+							{Version: "4.20.0", State: configv1.CompletedUpdate},
+						},
+					},
+				}
+				action := ResolveCVUpgradeAction(cv, "4.22.0", "", true)
+				Expect(action.UpgradeToVersion).To(Equal(""))
+				Expect(action.Phase).To(Equal(PhasePreStart))
+				Expect(action.IsEUS).To(BeTrue())
+				Expect(action.IsEUSIntermediate("")).To(BeTrue())
+			})
+
 			It("should return intermediate/PreStart when no intermediate history", func() {
 				cv := &configv1.ClusterVersion{
 					Status: configv1.ClusterVersionStatus{
@@ -275,7 +260,7 @@ var _ = Describe("Upgrade helper functions", func() {
 				Expect(action.UpgradeToVersion).To(Equal("4.21.0"))
 				Expect(action.Phase).To(Equal(PhasePreStart))
 				Expect(action.IsEUS).To(BeTrue())
-				Expect(action.IsEUSIntermediate).To(BeTrue())
+				Expect(action.IsEUSIntermediate("4.21.0")).To(BeTrue())
 			})
 
 			It("should return intermediate/InProgress when intermediate partial", func() {
@@ -290,7 +275,7 @@ var _ = Describe("Upgrade helper functions", func() {
 				action := ResolveCVUpgradeAction(cv, "4.22.0", "4.21.0", true)
 				Expect(action.UpgradeToVersion).To(Equal("4.21.0"))
 				Expect(action.Phase).To(Equal(PhaseInProgress))
-				Expect(action.IsEUSIntermediate).To(BeTrue())
+				Expect(action.IsEUSIntermediate("4.21.0")).To(BeTrue())
 			})
 
 			It("should return target/PreStart when intermediate completed", func() {
@@ -305,7 +290,7 @@ var _ = Describe("Upgrade helper functions", func() {
 				action := ResolveCVUpgradeAction(cv, "4.22.0", "4.21.0", true)
 				Expect(action.UpgradeToVersion).To(Equal("4.22.0"))
 				Expect(action.Phase).To(Equal(PhasePreStart))
-				Expect(action.IsEUSIntermediate).To(BeFalse())
+				Expect(action.IsEUSIntermediate("4.21.0")).To(BeFalse())
 			})
 
 			It("should return target/InProgress when target partial", func() {
@@ -321,7 +306,7 @@ var _ = Describe("Upgrade helper functions", func() {
 				action := ResolveCVUpgradeAction(cv, "4.22.0", "4.21.0", true)
 				Expect(action.UpgradeToVersion).To(Equal("4.22.0"))
 				Expect(action.Phase).To(Equal(PhaseInProgress))
-				Expect(action.IsEUSIntermediate).To(BeFalse())
+				Expect(action.IsEUSIntermediate("4.21.0")).To(BeFalse())
 			})
 
 			It("should return target/Completed when both completed", func() {

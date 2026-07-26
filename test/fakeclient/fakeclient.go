@@ -63,7 +63,9 @@ func init() {
 		&policiesv1.Policy{}, &policiesv1.PolicyList{})
 	Scheme.AddKnownTypes(clusterv1.SchemeGroupVersion,
 		&clusterv1.ManagedCluster{}, &clusterv1.ManagedClusterList{})
-	Scheme.AddKnownTypes(openshiftv1.SchemeGroupVersion, &openshiftv1.ClusterVersion{})
+	Scheme.AddKnownTypes(openshiftv1.SchemeGroupVersion,
+		&openshiftv1.ClusterVersion{},
+		&openshiftv1.Proxy{}, &openshiftv1.ProxyList{})
 	Scheme.AddKnownTypes(mcfgv1.SchemeGroupVersion,
 		&mcfgv1.MachineConfigPool{}, &mcfgv1.MachineConfigPoolList{})
 	Scheme.AddKnownTypes(openshiftoperatorv1.SchemeGroupVersion, &openshiftoperatorv1.IngressController{})

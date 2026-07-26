@@ -30,9 +30,8 @@ const (
 // upgradeConfig holds the parsed upgrade configuration extracted from
 // ProvisioningRequest upgradeParameters and ClusterTemplate upgradeDefaults.
 type UpgradeConfig struct {
-	UpgradeType         string
-	Timeout             time.Duration
-	IntermediateVersion string
+	UpgradeType string
+	Timeout     time.Duration
 }
 
 // UpgradePhase represents the current phase of a ClusterVersion upgrade.
@@ -46,16 +45,21 @@ const (
 
 // CVUpgradeAction holds the resolved upgrade state for a ClusterVersion upgrade.
 type CVUpgradeAction struct {
-	UpgradeToVersion  string
-	Phase             UpgradePhase
-	IsEUS             bool
-	IsEUSIntermediate bool
+	UpgradeToVersion string
+	Phase            UpgradePhase
+	IsEUS            bool
+}
+
+// IsEUSIntermediate returns true when this action targets the EUS intermediate
+// version. intermediateVersion is typically read from status.IntermediateVersion.
+func (a *CVUpgradeAction) IsEUSIntermediate(intermediateVersion string) bool {
+	return a.IsEUS && a.UpgradeToVersion == intermediateVersion
 }
 
 // VersionLabel returns "intermediate" for EUS intermediate upgrades,
 // "desired" otherwise. Used in condition messages.
-func (a *CVUpgradeAction) VersionLabel() string {
-	if a.IsEUSIntermediate {
+func (a *CVUpgradeAction) VersionLabel(intermediateVersion string) string {
+	if a.IsEUSIntermediate(intermediateVersion) {
 		return "intermediate"
 	}
 	return "desired"
@@ -186,6 +190,9 @@ func ResolveCVUpgradeAction(
 	var phase UpgradePhase
 
 	if isEUS {
+		// When intermediateVersion is "" (not yet resolved), FindCVHistoryEntry
+		// returns nil, producing UpgradeToVersion="" / PhasePreStart. The
+		// PreStart phase handles resolving the actual intermediate version.
 		intEntry := FindCVHistoryEntry(cv, intermediateVersion)
 		switch {
 		case intEntry == nil:
@@ -216,20 +223,16 @@ func ResolveCVUpgradeAction(
 	}
 
 	return &CVUpgradeAction{
-		UpgradeToVersion:  upgradeToVersion,
-		Phase:             phase,
-		IsEUS:             isEUS,
-		IsEUSIntermediate: isEUS && upgradeToVersion == intermediateVersion,
+		UpgradeToVersion: upgradeToVersion,
+		Phase:            phase,
+		IsEUS:            isEUS,
 	}
 }
 
 // IsEUSUpgrade determines whether the upgrade is EUS-to-EUS based on the
-// start and target versions (both even minor, exactly 2 apart). When EUS is
-// detected, it validates that intermediateVersion is provided and exactly one
-// minor version below the target. Returns an error if intermediateVersion is
-// provided for a non-EUS upgrade, or if the version chain is invalid.
+// start and target versions (both even minor, exactly 2 apart).
 // Returns false with no error for empty start/target versions.
-func IsEUSUpgrade(startVersion, intermediateVersion, targetVersion string) (bool, error) {
+func IsEUSUpgrade(startVersion, targetVersion string) (bool, error) {
 	if startVersion == "" || targetVersion == "" {
 		return false, nil
 	}
@@ -243,41 +246,9 @@ func IsEUSUpgrade(startVersion, intermediateVersion, targetVersion string) (bool
 		return false, fmt.Errorf("failed to parse target version %q: %w", targetVersion, err)
 	}
 
-	isEUS := start.Major == target.Major &&
+	return start.Major == target.Major &&
 		start.Minor%2 == 0 && target.Minor%2 == 0 &&
-		target.Minor-start.Minor == 2
-
-	if !isEUS {
-		if intermediateVersion != "" {
-			return false, fmt.Errorf(
-				"intermediateVersion %s provided but upgrade from %s to %s is not EUS-to-EUS",
-				intermediateVersion, startVersion, targetVersion)
-		}
-		return false, nil
-	}
-
-	if intermediateVersion == "" {
-		return false, fmt.Errorf(
-			"intermediateVersion is required for EUS-to-EUS upgrades (current: %s, target: %s)",
-			startVersion, targetVersion)
-	}
-
-	intermediate, err := semver.NewVersion(intermediateVersion)
-	if err != nil {
-		return false, fmt.Errorf("failed to parse intermediateVersion %q: %w", intermediateVersion, err)
-	}
-	if intermediate.Major != target.Major {
-		return false, fmt.Errorf(
-			"intermediateVersion %s major version must match targetVersion %s",
-			intermediateVersion, targetVersion)
-	}
-	if target.Minor-intermediate.Minor != 1 {
-		return false, fmt.Errorf(
-			"intermediateVersion %s must be exactly one minor version below targetVersion %s",
-			intermediateVersion, targetVersion)
-	}
-
-	return true, nil
+		target.Minor-start.Minor == 2, nil
 }
 
 // ListMCPs returns all MachineConfigPools.

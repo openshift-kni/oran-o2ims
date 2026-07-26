@@ -179,6 +179,7 @@ rules:
   resources:
   - apiservers
   - clusterversions
+  - proxies
   verbs:
   - get
   - list
