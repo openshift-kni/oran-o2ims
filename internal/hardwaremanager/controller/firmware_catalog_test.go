@@ -111,6 +111,17 @@ var _ = Describe("resolveFirmwareFromCatalog", func() {
 		Expect(resolved.NicFirmware).To(BeEmpty())
 	})
 
+	It("should not require FirmwareCatalog when spec has no firmware references", func() {
+		fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+		spec := hwmgmtv1alpha1.HardwareProfileSpec{}
+
+		resolved, err := resolveFirmwareFromCatalog(ctx, fakeClient, "test-ns", spec)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(resolved.BiosFirmware.IsEmpty()).To(BeTrue())
+		Expect(resolved.BmcFirmware.IsEmpty()).To(BeTrue())
+		Expect(resolved.NicFirmware).To(BeEmpty())
+	})
+
 	It("should return error for NIC component type mismatch", func() {
 		fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(catalog.DeepCopy()).Build()
 		spec := hwmgmtv1alpha1.HardwareProfileSpec{NicFirmware: []string{"bios-v1"}}
