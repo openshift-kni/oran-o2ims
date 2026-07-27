@@ -151,7 +151,12 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			}
 		}
 
-		By("Creating ClusterTemplate, HardwareProfiles, and supporting resources")
+		By("Creating FirmwareCatalog, ClusterTemplate, HardwareProfiles, and supporting resources")
+		fwCatalog, err := testutils.LoadYAML[hwmgmtv1alpha1.FirmwareCatalog](
+			"../resources/mno_hw_configuration/firmware-catalog.yaml")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(K8SClient.Create(testCtx, fwCatalog)).To(Succeed())
+
 		for _, yaml := range cmYamls {
 			cm, err := testutils.LoadYAML[corev1.ConfigMap](yaml)
 			Expect(err).ToNot(HaveOccurred())
@@ -431,6 +436,13 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			if err := K8SClient.Get(testCtx, types.NamespacedName{Name: hwProfile.Name, Namespace: hwProfile.Namespace}, hwProfile); err == nil {
 				_ = K8SClient.Delete(testCtx, hwProfile)
 			}
+		}
+
+		fwCatalogCleanup, err := testutils.LoadYAML[hwmgmtv1alpha1.FirmwareCatalog](
+			"../resources/mno_hw_configuration/firmware-catalog.yaml")
+		Expect(err).ToNot(HaveOccurred())
+		if err := K8SClient.Get(testCtx, types.NamespacedName{Name: fwCatalogCleanup.Name, Namespace: fwCatalogCleanup.Namespace}, fwCatalogCleanup); err == nil {
+			_ = K8SClient.Delete(testCtx, fwCatalogCleanup)
 		}
 
 		cis := &hivev1.ClusterImageSet{}
@@ -1035,21 +1047,33 @@ func completeBMHServicing(ctx context.Context, node *hwmgmtv1alpha1.AllocatedNod
 		Name: node.Spec.HwProfile, Namespace: constants.DefaultNamespace,
 	}, hwProfile)).To(Succeed())
 
+	catalog := &hwmgmtv1alpha1.FirmwareCatalog{}
+	Expect(K8SClient.Get(ctx, types.NamespacedName{
+		Name: "firmware-catalog", Namespace: constants.DefaultNamespace,
+	}, catalog)).To(Succeed())
+	imageMap := make(map[string]hwmgmtv1alpha1.FirmwareImage, len(catalog.Spec.Images))
+	for _, img := range catalog.Spec.Images {
+		imageMap[img.Name] = img
+	}
+
 	newComponents := []metal3v1alpha1.FirmwareComponentStatus{}
-	if hwProfile.Spec.BiosFirmware.Version != "" {
+	if hwProfile.Spec.BiosFirmware != "" {
+		img := imageMap[hwProfile.Spec.BiosFirmware]
 		newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
-			Component: "bios", CurrentVersion: hwProfile.Spec.BiosFirmware.Version,
+			Component: "bios", CurrentVersion: img.Version,
 		})
 	}
-	if hwProfile.Spec.BmcFirmware.Version != "" {
+	if hwProfile.Spec.BmcFirmware != "" {
+		img := imageMap[hwProfile.Spec.BmcFirmware]
 		newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
-			Component: "bmc", CurrentVersion: hwProfile.Spec.BmcFirmware.Version,
+			Component: "bmc", CurrentVersion: img.Version,
 		})
 	}
-	for i, nic := range hwProfile.Spec.NicFirmware {
-		if nic.Version != "" {
+	for i, nicName := range hwProfile.Spec.NicFirmware {
+		img := imageMap[nicName]
+		if img.Version != "" {
 			newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
-				Component: fmt.Sprintf("nic:%d", i), CurrentVersion: nic.Version,
+				Component: fmt.Sprintf("nic:%d", i), CurrentVersion: img.Version,
 			})
 		}
 	}

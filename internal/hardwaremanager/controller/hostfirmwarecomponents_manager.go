@@ -20,33 +20,32 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
-	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 )
 
 // validateFirmwareUpdateSpec checks that the BIOS and firmware URLs are valid
-func validateFirmwareUpdateSpec(spec hwmgmtv1alpha1.HardwareProfileSpec) error {
+func validateFirmwareUpdateSpec(resolved resolvedFirmware) error {
 
-	if spec.BiosFirmware.Version != "" {
-		if spec.BiosFirmware.URL == "" {
-			return typederrors.NewInputError("missing BIOS firmware URL for version: %v", spec.BiosFirmware.Version)
+	if resolved.BiosFirmware.Version != "" {
+		if resolved.BiosFirmware.URL == "" {
+			return typederrors.NewInputError("missing BIOS firmware URL for version: %v", resolved.BiosFirmware.Version)
 		}
-		if !ctlrutils.IsValidURL(spec.BiosFirmware.URL) {
-			return typederrors.NewInputError("invalid BIOS firmware URL: %v", spec.BiosFirmware.URL)
+		if !ctlrutils.IsValidURL(resolved.BiosFirmware.URL) {
+			return typederrors.NewInputError("invalid BIOS firmware URL: %v", resolved.BiosFirmware.URL)
 		}
 	}
-	if spec.BmcFirmware.Version != "" {
-		if spec.BmcFirmware.URL == "" {
-			return typederrors.NewInputError("missing BMC firmware URL for version: %v", spec.BmcFirmware.Version)
+	if resolved.BmcFirmware.Version != "" {
+		if resolved.BmcFirmware.URL == "" {
+			return typederrors.NewInputError("missing BMC firmware URL for version: %v", resolved.BmcFirmware.Version)
 		}
-		if !ctlrutils.IsValidURL(spec.BmcFirmware.URL) {
-			return typederrors.NewInputError("invalid BMC firmware URL: %v", spec.BmcFirmware.URL)
+		if !ctlrutils.IsValidURL(resolved.BmcFirmware.URL) {
+			return typederrors.NewInputError("invalid BMC firmware URL: %v", resolved.BmcFirmware.URL)
 		}
 	}
 
-	for i, nic := range spec.NicFirmware {
+	for i, nic := range resolved.NicFirmware {
 		if nic.Version != "" {
 			if nic.URL == "" {
 				return typederrors.NewInputError("missing NIC firmware URL for NIC at index %v, version: %v", i, nic.Version)
@@ -60,20 +59,20 @@ func validateFirmwareUpdateSpec(spec hwmgmtv1alpha1.HardwareProfileSpec) error {
 	return nil
 }
 
-func convertToFirmwareUpdates(spec hwmgmtv1alpha1.HardwareProfileSpec) []metal3v1alpha1.FirmwareUpdate {
+func convertToFirmwareUpdates(resolved resolvedFirmware) []metal3v1alpha1.FirmwareUpdate {
 	var updates []metal3v1alpha1.FirmwareUpdate
 
-	if spec.BiosFirmware.URL != "" {
+	if resolved.BiosFirmware.URL != "" {
 		updates = append(updates, metal3v1alpha1.FirmwareUpdate{
 			Component: componentBIOS,
-			URL:       spec.BiosFirmware.URL,
+			URL:       resolved.BiosFirmware.URL,
 		})
 	}
 
-	if spec.BmcFirmware.URL != "" {
+	if resolved.BmcFirmware.URL != "" {
 		updates = append(updates, metal3v1alpha1.FirmwareUpdate{
 			Component: componentBMC,
-			URL:       spec.BmcFirmware.URL,
+			URL:       resolved.BmcFirmware.URL,
 		})
 	}
 
@@ -122,11 +121,11 @@ func isHostFirmwareComponentsChangeDetectedAndValid(ctx context.Context,
 	return changeDetected && valid && observed, nil
 }
 
-// validateHFCHasRequiredComponents checks that all firmware components specified in the HardwareProfile
+// validateHFCHasRequiredComponents checks that all firmware components specified in the resolved firmware
 // have corresponding component data in the HostFirmwareComponents status. This prevents attempting
 // updates on components that don't have firmware data available.
 func validateHFCHasRequiredComponents(status *metal3v1alpha1.HostFirmwareComponentsStatus,
-	spec hwmgmtv1alpha1.HardwareProfileSpec) error {
+	resolved resolvedFirmware) error {
 
 	// Build a map of available components from HFC status
 	availableComponents := make(map[string]bool)
@@ -139,18 +138,18 @@ func validateHFCHasRequiredComponents(status *metal3v1alpha1.HostFirmwareCompone
 	}
 
 	// Check if BIOS firmware is required but not available
-	if !spec.BiosFirmware.IsEmpty() && !availableComponents[componentBIOS] {
+	if !resolved.BiosFirmware.IsEmpty() && !availableComponents[componentBIOS] {
 		return typederrors.NewInputError("BIOS firmware update requested but BIOS component not found in HostFirmwareComponents")
 	}
 
 	// Check if BMC firmware is required but not available
-	if !spec.BmcFirmware.IsEmpty() && !availableComponents[componentBMC] {
+	if !resolved.BmcFirmware.IsEmpty() && !availableComponents[componentBMC] {
 		return typederrors.NewInputError("BMC firmware update requested but BMC component not found in HostFirmwareComponents")
 	}
 
 	// Check if NIC firmware is required but insufficient NICs available
 	requiredNicCount := 0
-	for _, nic := range spec.NicFirmware {
+	for _, nic := range resolved.NicFirmware {
 		if nic.Version != "" && nic.URL != "" {
 			requiredNicCount++
 		}
@@ -167,11 +166,11 @@ func validateHFCHasRequiredComponents(status *metal3v1alpha1.HostFirmwareCompone
 }
 
 func isVersionChangeDetected(ctx context.Context, logger *slog.Logger, status *metal3v1alpha1.HostFirmwareComponentsStatus,
-	spec hwmgmtv1alpha1.HardwareProfileSpec) ([]metal3v1alpha1.FirmwareUpdate, bool) {
+	resolved resolvedFirmware) ([]metal3v1alpha1.FirmwareUpdate, bool) {
 
-	firmwareMap := map[string]hwmgmtv1alpha1.Firmware{
-		componentBIOS: spec.BiosFirmware,
-		componentBMC:  spec.BmcFirmware,
+	firmwareMap := map[string]Firmware{
+		componentBIOS: resolved.BiosFirmware,
+		componentBMC:  resolved.BmcFirmware,
 	}
 
 	var updates []metal3v1alpha1.FirmwareUpdate
@@ -201,7 +200,7 @@ func isVersionChangeDetected(ctx context.Context, logger *slog.Logger, status *m
 				logger.InfoContext(ctx, "No version change detected",
 					slog.String("current", component.CurrentVersion),
 					slog.String("desired", fw.Version),
-					slog.Any("spec", spec),
+					slog.Any("resolved", resolved),
 					slog.Any("hfc_status", status))
 			}
 		}
@@ -209,7 +208,7 @@ func isVersionChangeDetected(ctx context.Context, logger *slog.Logger, status *m
 
 	// Handle NIC firmware - match versions regardless of component name
 	usedComponents := make(map[string]bool)
-	for i, nic := range spec.NicFirmware {
+	for i, nic := range resolved.NicFirmware {
 		if nic.Version == "" || nic.URL == "" {
 			continue // Skip if no version or URL specified
 		}
@@ -256,9 +255,9 @@ func isVersionChangeDetected(ctx context.Context, logger *slog.Logger, status *m
 func createHostFirmwareComponents(ctx context.Context,
 	c client.Client,
 	bmh *metal3v1alpha1.BareMetalHost,
-	spec hwmgmtv1alpha1.HardwareProfileSpec) (*metal3v1alpha1.HostFirmwareComponents, error) {
+	resolved resolvedFirmware) (*metal3v1alpha1.HostFirmwareComponents, error) {
 
-	updates := convertToFirmwareUpdates(spec)
+	updates := convertToFirmwareUpdates(resolved)
 
 	hfc := metal3v1alpha1.HostFirmwareComponents{
 		ObjectMeta: metav1.ObjectMeta{
@@ -306,9 +305,9 @@ func updateHostFirmwareComponents(ctx context.Context,
 func IsFirmwareUpdateRequired(ctx context.Context,
 	c client.Client,
 	logger *slog.Logger,
-	bmh *metal3v1alpha1.BareMetalHost, spec hwmgmtv1alpha1.HardwareProfileSpec, validateOnly bool) (bool, error) {
+	bmh *metal3v1alpha1.BareMetalHost, resolved resolvedFirmware, validateOnly bool) (bool, error) {
 	// Validate firmware spec (URLs, versions) before any resource access
-	if err := validateFirmwareUpdateSpec(spec); err != nil {
+	if err := validateFirmwareUpdateSpec(resolved); err != nil {
 		return false, err
 	}
 
@@ -323,7 +322,7 @@ func IsFirmwareUpdateRequired(ctx context.Context,
 			// Return without creating HFC
 			return true, nil
 		}
-		if _, err := createHostFirmwareComponents(ctx, c, bmh, spec); err != nil {
+		if _, err := createHostFirmwareComponents(ctx, c, bmh, resolved); err != nil {
 			return false, fmt.Errorf("failed to create HostFirmwareComponents: %w", err)
 		}
 		logger.InfoContext(ctx, "Successfully created HostFirmwareComponents")
@@ -331,12 +330,12 @@ func IsFirmwareUpdateRequired(ctx context.Context,
 	}
 
 	// Validate that HFC has all required components before proceeding
-	if err := validateHFCHasRequiredComponents(&existingHFC.Status, spec); err != nil {
+	if err := validateHFCHasRequiredComponents(&existingHFC.Status, resolved); err != nil {
 		return false, err
 	}
 
 	// Compare desired firmware versions with current versions
-	updates, updateRequired := isVersionChangeDetected(ctx, logger, &existingHFC.Status, spec)
+	updates, updateRequired := isVersionChangeDetected(ctx, logger, &existingHFC.Status, resolved)
 
 	// No update needed if already up-to-date
 	if !updateRequired {

@@ -1698,12 +1698,18 @@ func validateFirmwareVersions(
 		return false, fmt.Errorf("get HardwareProfile %s/%s: %w", namespace, hwProfileName, err)
 	}
 
-	// 2) Build expected versions map (normalized)
+	// 2) Resolve firmware catalog references
+	resolved, err := resolveFirmwareFromCatalog(ctx, c, namespace, prof.Spec)
+	if err != nil {
+		return false, fmt.Errorf("resolve firmware from catalog for profile %s: %w", hwProfileName, err)
+	}
+
+	// 3) Build expected versions map (normalized)
 	expected := map[string]string{}
-	if v := strings.TrimSpace(prof.Spec.BiosFirmware.Version); v != "" {
+	if v := strings.TrimSpace(resolved.BiosFirmware.Version); v != "" {
 		expected["bios"] = normalizeVersion(v)
 	}
-	if v := strings.TrimSpace(prof.Spec.BmcFirmware.Version); v != "" {
+	if v := strings.TrimSpace(resolved.BmcFirmware.Version); v != "" {
 		expected["bmc"] = normalizeVersion(v)
 	}
 
@@ -1828,8 +1834,13 @@ func validateAppliedBiosSettings(
 
 	logger.InfoContext(ctx, "All required BIOS settings match")
 
-	// 5) Validate NIC firmware if specified
+	// 5) Validate NIC firmware if specified — resolve catalog references first
 	if len(prof.Spec.NicFirmware) > 0 {
+		resolved, err := resolveFirmwareFromCatalog(ctx, c, namespace, prof.Spec)
+		if err != nil {
+			return false, fmt.Errorf("resolve firmware from catalog for profile %s: %w", hwProfileName, err)
+		}
+
 		// Get HostFirmwareComponents to check NIC firmware versions
 		hfc, err := getHostFirmwareComponents(ctx, noncachedClient, bmh.Name, bmh.Namespace)
 		if err != nil {
@@ -1849,8 +1860,8 @@ func validateAppliedBiosSettings(
 			}
 		}
 
-		// Check each NIC firmware requirement
-		for i, nic := range prof.Spec.NicFirmware {
+		// Check each resolved NIC firmware requirement
+		for i, nic := range resolved.NicFirmware {
 			if nic.Version == "" {
 				continue // Skip if no version specified
 			}
