@@ -814,3 +814,19 @@ The controller automatically:
 > Only worker nodes can be removed. Attempting to remove a control-plane
 > node is rejected. Scale-in and upgrade operations cannot run
 > concurrently.
+
+#### Aborting a scale-in operation
+
+If a scale-in is in progress and the user re-adds the removed nodes
+to the ProvisioningRequest, the controller detects the abort,
+removes the scale-in annotation from the hardware manager, and
+automatically uncordons any nodes that were drained. The cluster
+returns to normal operation.
+
+> [!NOTE]
+> Abort is only effective while the hardware manager is still
+> draining the node. Once the node has been fully deprovisioned
+> (AllocatedNode deleted and BMH deprovisioning started), the abort
+> window has closed. Re-adding the node at that point triggers a new
+> scale-out operation, which waits for the BMH to finish
+> deprovisioning before re-provisioning the node.

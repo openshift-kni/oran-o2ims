@@ -1483,10 +1483,9 @@ var _ = Describe("checkExistingNodeAllocationRequest", func() {
 	})
 
 	It("returns nil when NAR does not exist", func() {
-		hwMgmtData := map[string]any{}
 		nodeAllocationRequestId := "test-id"
 
-		response, err := task.checkExistingNodeAllocationRequest(ctx, hwMgmtData, nodeAllocationRequestId)
+		response, err := task.checkExistingNodeAllocationRequest(ctx, nodeAllocationRequestId)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(response).To(BeNil())
 	})
@@ -1516,15 +1515,9 @@ var _ = Describe("checkExistingNodeAllocationRequest", func() {
 		}
 		Expect(c.Create(ctx, nar)).To(Succeed())
 
-		hwMgmtData := map[string]any{
-			"nodeGroupData": []any{
-				map[string]any{"name": "controller", "role": "master", "hwProfile": "profile-spr-single-processor-64G"},
-				map[string]any{"name": "worker", "role": "worker", "hwProfile": "profile-spr-dual-processor-128G"},
-			},
-		}
 		nodeAllocationRequestId := crName
 
-		response, err := task.checkExistingNodeAllocationRequest(ctx, hwMgmtData, nodeAllocationRequestId)
+		response, err := task.checkExistingNodeAllocationRequest(ctx, nodeAllocationRequestId)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(response).ToNot(BeNil())
 	})

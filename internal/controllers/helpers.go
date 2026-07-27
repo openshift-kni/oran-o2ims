@@ -48,40 +48,6 @@ func collectNodeDetails(nodeList *hwmgmtv1alpha1.AllocatedNodeList) (map[string]
 	return hwNodes, nil
 }
 
-// validateNodeGroupsMatchNAR verifies that every node group in the existing
-// NodeAllocationRequest has a corresponding entry in the merged hwMgmt data.
-func validateNodeGroupsMatchNAR(hwMgmtData map[string]any, narSpec *hwmgmtv1alpha1.NodeAllocationRequestSpec) error {
-	// Build set of valid group names from merged hwMgmt data
-	validNames := make(map[string]bool)
-	if ngData, ok := hwMgmtData["nodeGroupData"].([]any); ok {
-		for _, ng := range ngData {
-			if ngMap, ok := ng.(map[string]any); ok {
-				if name, ok := ngMap["name"].(string); ok {
-					validNames[name] = true
-				}
-			}
-		}
-	}
-
-	// Check NAR groups exist in hwMgmt data
-	narNames := make(map[string]bool)
-	for _, specNodeGroup := range narSpec.NodeGroup {
-		narNames[specNodeGroup.NodeGroupData.Name] = true
-		if !validNames[specNodeGroup.NodeGroupData.Name] {
-			return fmt.Errorf("node group %s found in NodeAllocationRequest but not in hwMgmt data", specNodeGroup.NodeGroupData.Name)
-		}
-	}
-
-	// Check hwMgmt data groups exist in NAR
-	for name := range validNames {
-		if !narNames[name] {
-			return fmt.Errorf("node group %s found in hwMgmt data but not in NodeAllocationRequest", name)
-		}
-	}
-
-	return nil
-}
-
 // newNodeGroup populates NodeGroup
 func newNodeGroup(group hwmgmtv1alpha1.NodeGroupData, roleCounts map[string]int) hwmgmtv1alpha1.NodeGroup {
 	nodeGroup := hwmgmtv1alpha1.NodeGroup{

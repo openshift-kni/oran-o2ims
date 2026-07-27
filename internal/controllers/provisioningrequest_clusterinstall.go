@@ -244,6 +244,12 @@ func (t *provisioningRequestReconcilerTask) handleScaleInDrain(
 	}
 
 	if len(removedHostnames) == 0 {
+		// No scale-in in progress. If the scale-in annotation is still on the
+		// NAR (from a previously-aborted scale-in), remove it. Then uncordon
+		// any nodes that were cordoned during the aborted drain.
+		if err := t.handleScaleInAbort(ctx); err != nil {
+			return false, fmt.Errorf("failed to handle scale-in abort: %w", err)
+		}
 		return false, nil
 	}
 
@@ -305,6 +311,93 @@ func (t *provisioningRequestReconcilerTask) handleScaleInDrain(
 
 	t.logger.InfoContext(ctx, "Scale-in pre-processing complete, proceeding to CI update")
 	return false, nil
+}
+
+// handleScaleInAbort handles the case where a scale-in was in progress but
+// the user re-added the removed nodes. It removes the scale-in annotation
+// from the NAR (stopping the NAR controller's processing) and uncordons any
+// rendered nodes that are still cordoned from the aborted drain.
+func (t *provisioningRequestReconcilerTask) handleScaleInAbort(
+	ctx context.Context) error {
+
+	nar, err := t.getNAR(ctx)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to get NAR: %w", err)
+	}
+
+	// Check if a scale-in annotation is present — if not, nothing to abort
+	annotationValue, ok := nar.GetAnnotations()[hwmgrcontroller.ScaleInNodesAnnotation]
+	if !ok {
+		return nil
+	}
+
+	// Save the scale-in target hostnames before removing the annotation
+	var abortedNodeIDs []string
+	for _, id := range strings.Split(annotationValue, ",") {
+		if trimmed := strings.TrimSpace(id); trimmed != "" {
+			abortedNodeIDs = append(abortedNodeIDs, trimmed)
+		}
+	}
+
+	// Build set of hostnames that were being drained
+	abortedHostnames := make(map[string]bool)
+	for _, nodeID := range abortedNodeIDs {
+		if hostname, ok := t.object.Status.Extensions.AllocatedNodeHostMap[nodeID]; ok {
+			abortedHostnames[hostname] = true
+		}
+	}
+
+	t.logger.InfoContext(ctx, "Aborting scale-in: removing annotation from NAR",
+		slog.Any("abortedNodes", abortedNodeIDs))
+	patch := client.MergeFrom(nar.DeepCopy())
+	annotations := nar.GetAnnotations()
+	delete(annotations, hwmgrcontroller.ScaleInNodesAnnotation)
+	nar.SetAnnotations(annotations)
+	if err := t.client.Patch(ctx, nar, patch); err != nil {
+		return fmt.Errorf("failed to remove scale-in annotation: %w", err)
+	}
+
+	// Uncordon only the nodes that were targeted by the aborted scale-in
+	if len(abortedHostnames) == 0 {
+		return nil
+	}
+
+	clusterName := t.object.Status.Extensions.ClusterDetails.Name
+	spokeClient, err := k8sclients.NewClientForCluster(ctx, t.client, clusterName)
+	if err != nil {
+		if strings.Contains(err.Error(), "no kubeconfig secret found") {
+			return nil
+		}
+		return fmt.Errorf("failed to create spoke client: %w", err)
+	}
+
+	clientset, err := k8sclients.NewClientsetForCluster(ctx, t.client, clusterName)
+	if err != nil {
+		return fmt.Errorf("failed to create spoke clientset: %w", err)
+	}
+	nodeOps := hwmgrcontroller.NewNodeOps(spokeClient, clientset, t.logger, false)
+
+	for hostname := range abortedHostnames {
+		spokeNode := &corev1.Node{}
+		if err := spokeClient.Get(ctx, types.NamespacedName{Name: hostname}, spokeNode); err != nil {
+			if errors.IsNotFound(err) {
+				continue
+			}
+			return fmt.Errorf("failed to get spoke node %s: %w", hostname, err)
+		}
+		if spokeNode.Spec.Unschedulable {
+			t.logger.InfoContext(ctx, "Uncordoning node from aborted scale-in",
+				slog.String("hostname", hostname))
+			if err := nodeOps.UncordonNode(ctx, hostname); err != nil {
+				return fmt.Errorf("failed to uncordon node %s: %w", hostname, err)
+			}
+		}
+	}
+
+	return nil
 }
 
 // hostnameToAllocatedNodeIDs maps removed hostnames to AllocatedNode names
