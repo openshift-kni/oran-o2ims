@@ -50,11 +50,44 @@ All fields are optional — specify only what you need to manage:
 
 - **`spec.bios.attributes`** — BIOS settings to apply (e.g., `SriovGlobalEnable`,
   `WorkloadProfile`, `AcPwrRcvryUserDelay`).
-- **`spec.biosFirmware`** — Target BIOS firmware version and download URL.
-- **`spec.bmcFirmware`** — Target BMC/iDRAC firmware version and download URL.
-- **`spec.nicFirmware`** — Target NIC firmware versions and download URLs.
+- **`spec.biosFirmware`** — Name of a FirmwareCatalog entry with component `bios`.
+- **`spec.bmcFirmware`** — Name of a FirmwareCatalog entry with component `bmc`.
+- **`spec.nicFirmware`** — List of FirmwareCatalog entry names with component `nic`.
 
-Example:
+Firmware images (URLs and versions) are defined once in a shared `FirmwareCatalog`
+resource and referenced by name from HardwareProfiles. This decouples firmware image
+management from profile definitions — the same catalog entry can be referenced by
+multiple profiles.
+
+### FirmwareCatalog
+
+A FirmwareCatalog CR holds the set of firmware images available for use by
+HardwareProfiles. A singleton named `firmware-catalog` must exist in the `oran-o2ims`
+namespace. Each entry has a unique name, a component type (`bios`, `bmc`, or `nic`),
+and the firmware URL and version:
+
+```yaml
+apiVersion: clcm.openshift.io/v1alpha1
+kind: FirmwareCatalog
+metadata:
+  name: firmware-catalog
+  namespace: oran-o2ims
+spec:
+  images:
+    - name: dell-xr8620t-bios-2.3.5
+      component: bios
+      version: "2.3.5"
+      url: https://example.com:8888/firmware/xr8620t/BIOS_JDR1R_WN64_2.3.5.EXE
+    - name: dell-xr8620t-bmc-7.10.70.10
+      component: bmc
+      version: "7.10.70.10"
+      url: https://example.com:8888/firmware/xr8620t/iDRAC-with-Lifecycle-Controller_Firmware_W4NV9_WN64_7.10.70.10_A00.EXE
+```
+
+Catalog entries are immutable once created. To roll out new firmware, add a new entry
+with a new name and create a new HardwareProfile referencing it.
+
+### HardwareProfile Example
 
 ```yaml
 apiVersion: clcm.openshift.io/v1alpha1
@@ -69,13 +102,12 @@ spec:
       WorkloadProfile: TelcoOptimizedProfile
       SriovGlobalEnable: Enabled
       AcPwrRcvryUserDelay: 120
-  biosFirmware:
-    version: 2.3.5
-    url: https://example.com:8888/firmware/xr8620t/BIOS_JDR1R_WN64_2.3.5.EXE
-  bmcFirmware:
-    version: 7.10.70.10
-    url: https://example.com:8888/firmware/xr8620t/iDRAC-with-Lifecycle-Controller_Firmware_W4NV9_WN64_7.10.70.10_A00.EXE
+  biosFirmware: dell-xr8620t-bios-2.3.5
+  bmcFirmware: dell-xr8620t-bmc-7.10.70.10
 ```
+
+A validating webhook verifies at creation time that each firmware reference exists in the
+FirmwareCatalog and has the correct component type.
 
 The HardwareProfile can be specified in two places:
 

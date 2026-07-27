@@ -190,17 +190,20 @@ spec:
         path: bios
       - displayName: Attributes
         path: bios.attributes
-      - description: BIOS firmware information
+      - description: BiosFirmware is the name of a FirmwareCatalog entry with component
+          "bios"
         displayName: BIOS Firmware
         path: biosFirmware
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: BMC firmware information
+      - description: BmcFirmware is the name of a FirmwareCatalog entry with component
+          "bmc"
         displayName: BMC Firmware
         path: bmcFirmware
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: NIC firmware information list
+      - description: NicFirmware is a list of FirmwareCatalog entry names with component
+          "nic"
         displayName: NIC Firmware
         path: nicFirmware
         x-descriptors:
