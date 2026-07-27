@@ -257,13 +257,14 @@ func (t *provisioningRequestReconcilerTask) handleScaleInDrain(
 		return false, fmt.Errorf("failed to update scale-in status: %w", updateErr)
 	}
 
-	// Resolve BMH identities before requesting drain. The NAR controller
-	// deletes AllocatedNodes during scale-in processing, so lookups must
-	// happen while the CRs still exist.
+	// Resolve BMH identities while AllocatedNodes still exist. The NAR
+	// controller deletes them during scale-in processing, so these lookups
+	// must happen before or concurrently with the drain request.
 	removedNodeIDs := t.hostnameToAllocatedNodeIDs(removedHostnames)
 	removedNodeBMHs, err := t.lookupRemovedNodeBMHs(ctx, removedHostnames)
 	if err != nil {
-		return false, fmt.Errorf("failed to look up BMH info for removed nodes: %w", err)
+		t.logger.WarnContext(ctx, "Failed to look up BMH info for removed nodes",
+			slog.Any("error", err))
 	}
 
 	// Step 1: Request drain via NAR annotation. The NAR controller handles

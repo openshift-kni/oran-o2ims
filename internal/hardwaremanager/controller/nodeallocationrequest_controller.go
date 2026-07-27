@@ -745,20 +745,6 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestProcessing(
 	if full {
 		r.Logger.InfoContext(ctx, "NodeAllocationRequest is fully allocated")
 
-		// Populate Status.Hostname on each AllocatedNode from the PR's
-		// AllocatedNodeHostMap. This makes the hostname available for
-		// subsequent operations (drain, deallocation) without waiting
-		// for a day-2 config trigger.
-		nodelist, err := hwmgrutils.GetChildNodes(ctx, r.Logger, r.Client, nodeAllocationRequest)
-		if err != nil {
-			return hwmgrutils.RequeueWithShortInterval(),
-				fmt.Errorf("failed to list AllocatedNodes for hostname population: %w", err)
-		}
-		if err := populateNodeHostnames(ctx, r.Client, r.Logger, nodelist, nodeAllocationRequest); err != nil {
-			r.Logger.WarnContext(ctx, "Failed to populate node hostnames, will retry on next reconcile",
-				slog.Any("error", err))
-		}
-
 		if err := hwmgrutils.UpdateNodeAllocationRequestStatusCondition(
 			ctx, r.Client, nodeAllocationRequest,
 			hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.Completed,

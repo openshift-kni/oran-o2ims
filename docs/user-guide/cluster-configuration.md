@@ -796,17 +796,19 @@ CI defaults (one fewer worker node template).
 
 The controller automatically:
 
-1. Cordons and drains the removed node on the spoke cluster
-2. Applies an intermediate ClusterInstance with `pruneManifests` to
+1. Signals the hardware manager to drain and decommission the
+   removed node (via a NAR annotation)
+2. The hardware manager cordons and drains the node on the spoke,
+   deletes the Node object, deletes the AllocatedNode CR
+   (triggering BMH deallocation), and cleans up node tracking
+3. Applies an intermediate ClusterInstance with `pruneManifests` to
    instruct siteconfig to delete per-node resources (InfraEnv,
    NMStateConfig) while the node entry is still present
-3. Waits for siteconfig to process the pruning, then deletes the
+4. Waits for siteconfig to process the pruning, then deletes the
    Agent CR
-4. Applies the reduced ClusterInstance via Server-Side Apply
+5. Applies the reduced ClusterInstance via Server-Side Apply
    (removing the node entry)
-5. Waits for the removed node to leave the spoke cluster
-6. Deletes the AllocatedNode CR (triggering BMH deallocation)
-7. Cleans up the AllocatedNodeHostMap
+6. Cleans up the AllocatedNodeHostMap
 
 > [!NOTE]
 > Only worker nodes can be removed. Attempting to remove a control-plane
