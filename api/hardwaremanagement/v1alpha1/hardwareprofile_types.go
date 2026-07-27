@@ -29,18 +29,22 @@ type HardwareProfileSpec struct {
 	// BiosFirmware is the name of a firmware image entry in the FirmwareCatalog
 	// for BIOS firmware.
 	// +optional
+	// +kubebuilder:validation:MaxLength=253
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	BiosFirmware string `json:"biosFirmware,omitempty"`
 
 	// BmcFirmware is the name of a firmware image entry in the FirmwareCatalog
 	// for BMC firmware.
 	// +optional
+	// +kubebuilder:validation:MaxLength=253
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	BmcFirmware string `json:"bmcFirmware,omitempty"`
 
 	// NicFirmware is a list of firmware image entry names in the FirmwareCatalog
 	// for NIC firmware.
 	// +optional
+	// +kubebuilder:validation:MaxItems=64
+	// +kubebuilder:validation:items:MaxLength=253
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	NicFirmware []string `json:"nicFirmware,omitempty"`
 }

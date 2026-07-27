@@ -71,18 +71,22 @@ spec:
                 description: |-
                   BiosFirmware is the name of a firmware image entry in the FirmwareCatalog
                   for BIOS firmware.
+                maxLength: 253
                 type: string
               bmcFirmware:
                 description: |-
                   BmcFirmware is the name of a firmware image entry in the FirmwareCatalog
                   for BMC firmware.
+                maxLength: 253
                 type: string
               nicFirmware:
                 description: |-
                   NicFirmware is a list of firmware image entry names in the FirmwareCatalog
                   for NIC firmware.
                 items:
+                  maxLength: 253
                   type: string
+                maxItems: 64
                 type: array
             required:
             - bios
