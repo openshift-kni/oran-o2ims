@@ -461,17 +461,42 @@ var (
 		},
 	}
 
+	TestFirmwareCatalog = &hwmgmtv1alpha1.FirmwareCatalog{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      hwmgmtv1alpha1.FirmwareCatalogName,
+			Namespace: constants.DefaultNamespace,
+		},
+		Spec: hwmgmtv1alpha1.FirmwareCatalogSpec{
+			Images: []hwmgmtv1alpha1.FirmwareImage{
+				{
+					Name:      "test-bios-entry",
+					Component: "bios",
+					Version:   "test-bios-v1.0",
+					URL:       "https://example.com/bios-firmware.bin",
+				},
+				{
+					Name:      "test-bmc-entry",
+					Component: "bmc",
+					Version:   "test-bmc-v2.0",
+					URL:       "https://example.com/bmc-firmware.bin",
+				},
+				{
+					Name:      "test-nic-entry",
+					Component: "nic",
+					Version:   "test-nic-v3.0",
+					URL:       "https://example.com/nic-firmware.bin",
+				},
+			},
+		},
+	}
+
 	HardwareProfile = &hwmgmtv1alpha1.HardwareProfile{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      TestHwProfileName,
 			Namespace: constants.DefaultNamespace,
 		},
 		Spec: hwmgmtv1alpha1.HardwareProfileSpec{
-			// Basic hardware profile spec - minimal firmware config to satisfy CRD validation
-			BiosFirmware: hwmgmtv1alpha1.Firmware{
-				Version: "test-bios-v1.0",
-				URL:     "https://example.com/bios-firmware.bin",
-			},
+			BiosFirmware: "test-bios-entry",
 		},
 	}
 

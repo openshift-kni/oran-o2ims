@@ -10,6 +10,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// FirmwareCatalogName is the well-known name of the singleton FirmwareCatalog CR.
+const FirmwareCatalogName = "firmware-catalog"
+
 // FirmwareImage defines a firmware image entry in the catalog.
 type FirmwareImage struct {
 	// Name is a unique identifier for this firmware image within the catalog.
