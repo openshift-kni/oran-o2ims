@@ -67,7 +67,7 @@ func resolveFirmwareFromCatalog(ctx context.Context, c client.Client,
 			return resolvedFirmware{},
 				fmt.Errorf("biosFirmware entry %q not found in FirmwareCatalog", spec.BiosFirmware)
 		}
-		if img.Component != "bios" {
+		if img.Component != componentBIOS {
 			return resolvedFirmware{},
 				fmt.Errorf("biosFirmware entry %q has component %q, expected bios", spec.BiosFirmware, img.Component)
 		}
@@ -80,7 +80,7 @@ func resolveFirmwareFromCatalog(ctx context.Context, c client.Client,
 			return resolvedFirmware{},
 				fmt.Errorf("bmcFirmware entry %q not found in FirmwareCatalog", spec.BmcFirmware)
 		}
-		if img.Component != "bmc" {
+		if img.Component != componentBMC {
 			return resolvedFirmware{},
 				fmt.Errorf("bmcFirmware entry %q has component %q, expected bmc", spec.BmcFirmware, img.Component)
 		}
