@@ -463,7 +463,7 @@ var (
 
 	TestFirmwareCatalog = &hwmgmtv1alpha1.FirmwareCatalog{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "firmware-catalog",
+			Name:      hwmgmtv1alpha1.FirmwareCatalogName,
 			Namespace: constants.DefaultNamespace,
 		},
 		Spec: hwmgmtv1alpha1.FirmwareCatalogSpec{

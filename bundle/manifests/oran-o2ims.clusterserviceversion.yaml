@@ -540,16 +540,24 @@ metadata:
           "apiVersion": "clcm.openshift.io/v1alpha1",
           "kind": "FirmwareCatalog",
           "metadata": {
-            "name": "firmwarecatalog-sample",
+            "name": "firmware-catalog",
             "namespace": "oran-o2ims"
           },
           "spec": {
             "images": [
               {
                 "component": "bios",
-                "name": "bios-dell-xr8620t",
-                "url": "https://firmware.example.com/bios-xr8620t-2.22.2.bin",
-                "version": "2.22.2"
+                "name": "dell-xr8620t-bios-2.7.5",
+                "url": "https://firmware.example.com/bios-xr8620t-2.7.5.bin",
+                "vendor": "Dell",
+                "version": "2.7.5"
+              },
+              {
+                "component": "bmc",
+                "name": "dell-xr8620t-bmc-7.20.70.50",
+                "url": "https://firmware.example.com/idrac-xr8620t-7.20.70.50.bin",
+                "vendor": "Dell",
+                "version": "7.20.70.50"
               }
             ]
           },

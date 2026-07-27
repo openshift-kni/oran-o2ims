@@ -20,8 +20,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-const firmwareCatalogName = "firmware-catalog"
-
 var hardwareprofilelog = logf.Log.WithName("hardwareprofile-webhook")
 
 // SetupWebhookWithManager will setup the manager to manage the webhooks
@@ -73,7 +71,7 @@ func (v *hardwareProfileValidator) validateFirmwareReferences(ctx context.Contex
 
 	catalog := &FirmwareCatalog{}
 	if err := v.Client.Get(ctx, types.NamespacedName{
-		Name: firmwareCatalogName, Namespace: hp.Namespace,
+		Name: FirmwareCatalogName, Namespace: hp.Namespace,
 	}, catalog); err != nil {
 		return fmt.Errorf("failed to get FirmwareCatalog: %w", err)
 	}

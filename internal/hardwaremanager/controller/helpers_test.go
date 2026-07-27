@@ -902,7 +902,7 @@ var _ = Describe("Helpers", func() {
 
 			testFirmwareCatalog := &hwmgmtv1alpha1.FirmwareCatalog{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      FirmwareCatalogName,
+					Name:      hwmgmtv1alpha1.FirmwareCatalogName,
 					Namespace: testNamespace,
 				},
 				Spec: hwmgmtv1alpha1.FirmwareCatalogSpec{
@@ -1641,7 +1641,7 @@ var _ = Describe("Helpers", func() {
 
 			testFwCatalog := &hwmgmtv1alpha1.FirmwareCatalog{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      FirmwareCatalogName,
+					Name:      hwmgmtv1alpha1.FirmwareCatalogName,
 					Namespace: testNamespace,
 				},
 				Spec: hwmgmtv1alpha1.FirmwareCatalogSpec{

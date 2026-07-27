@@ -16,8 +16,6 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 )
 
-const FirmwareCatalogName = "firmware-catalog"
-
 // Firmware holds the url and version resolved from a catalog entry.
 type Firmware struct {
 	Version string
@@ -53,7 +51,7 @@ func resolveFirmwareFromCatalog(ctx context.Context, c client.Client,
 
 	catalog := &hwmgmtv1alpha1.FirmwareCatalog{}
 	if err := c.Get(ctx, types.NamespacedName{
-		Name: FirmwareCatalogName, Namespace: namespace,
+		Name: hwmgmtv1alpha1.FirmwareCatalogName, Namespace: namespace,
 	}, catalog); err != nil {
 		return resolvedFirmware{}, fmt.Errorf("failed to get FirmwareCatalog: %w", err)
 	}

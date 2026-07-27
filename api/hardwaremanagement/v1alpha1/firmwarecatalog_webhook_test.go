@@ -29,7 +29,7 @@ var _ = Describe("FirmwareCatalogValidator", func() {
 		ctx = context.TODO()
 		oldCatalog = &FirmwareCatalog{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "firmware-catalog",
+				Name:      FirmwareCatalogName,
 				Namespace: "oran-o2ims",
 			},
 			Spec: FirmwareCatalogSpec{

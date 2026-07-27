@@ -8,6 +8,7 @@ package v1alpha1
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -23,7 +24,7 @@ func TestHardwareProfileWebhookValidateCreate(t *testing.T) {
 
 	catalog := &FirmwareCatalog{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      firmwareCatalogName,
+			Name:      FirmwareCatalogName,
 			Namespace: "test-ns",
 		},
 		Spec: FirmwareCatalogSpec{
@@ -127,7 +128,7 @@ func TestHardwareProfileWebhookValidateCreate(t *testing.T) {
 				if err == nil {
 					t.Errorf("expected error containing %q, got nil", tt.errMsg)
 				} else if tt.errMsg != "" {
-					if !containsSubstring(err.Error(), tt.errMsg) {
+					if !strings.Contains(err.Error(), tt.errMsg) {
 						t.Errorf("expected error containing %q, got %q", tt.errMsg, err.Error())
 					}
 				}
@@ -175,17 +176,4 @@ func TestIsEntryReferencedByAnyProfile(t *testing.T) {
 			}
 		})
 	}
-}
-
-func containsSubstring(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || s != "" && containsHelper(s, substr))
-}
-
-func containsHelper(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

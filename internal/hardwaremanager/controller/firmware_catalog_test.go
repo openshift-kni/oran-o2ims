@@ -32,7 +32,7 @@ var _ = Describe("resolveFirmwareFromCatalog", func() {
 
 		catalog = &hwmgmtv1alpha1.FirmwareCatalog{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      FirmwareCatalogName,
+				Name:      hwmgmtv1alpha1.FirmwareCatalogName,
 				Namespace: "test-ns",
 			},
 			Spec: hwmgmtv1alpha1.FirmwareCatalogSpec{

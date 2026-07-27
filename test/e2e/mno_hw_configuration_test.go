@@ -155,6 +155,10 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		fwCatalog, err := testutils.LoadYAML[hwmgmtv1alpha1.FirmwareCatalog](
 			"../resources/mno_hw_configuration/firmware-catalog.yaml")
 		Expect(err).ToNot(HaveOccurred())
+		existing := &hwmgmtv1alpha1.FirmwareCatalog{}
+		if err := K8SClient.Get(testCtx, client.ObjectKeyFromObject(fwCatalog), existing); err == nil {
+			Expect(K8SClient.Delete(testCtx, existing)).To(Succeed())
+		}
 		Expect(K8SClient.Create(testCtx, fwCatalog)).To(Succeed())
 
 		for _, yaml := range cmYamls {
@@ -1049,7 +1053,7 @@ func completeBMHServicing(ctx context.Context, node *hwmgmtv1alpha1.AllocatedNod
 
 	catalog := &hwmgmtv1alpha1.FirmwareCatalog{}
 	Expect(K8SClient.Get(ctx, types.NamespacedName{
-		Name: "firmware-catalog", Namespace: constants.DefaultNamespace,
+		Name: hwmgmtv1alpha1.FirmwareCatalogName, Namespace: constants.DefaultNamespace,
 	}, catalog)).To(Succeed())
 	imageMap := make(map[string]hwmgmtv1alpha1.FirmwareImage, len(catalog.Spec.Images))
 	for _, img := range catalog.Spec.Images {
