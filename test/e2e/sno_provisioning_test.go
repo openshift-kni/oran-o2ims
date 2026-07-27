@@ -469,6 +469,11 @@ defaultHugepagesSize: "1G"`,
 			_ = K8SClient.Delete(testCtx, hwp)
 		}
 
+		fwCatalog := &hwmgmtv1alpha1.FirmwareCatalog{}
+		if err := K8SClient.Get(testCtx, client.ObjectKeyFromObject(testutils.TestFirmwareCatalog), fwCatalog); err == nil {
+			_ = K8SClient.Delete(testCtx, fwCatalog)
+		}
+
 		cis := &hivev1.ClusterImageSet{}
 		if err := K8SClient.Get(testCtx, types.NamespacedName{Name: "4.15.0"}, cis); err == nil {
 			_ = K8SClient.Delete(testCtx, cis)
