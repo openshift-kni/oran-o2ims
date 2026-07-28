@@ -724,10 +724,9 @@ The following steps are required:
 
 ### Scaling Worker Nodes
 
-After a multi-node (MNO) cluster is provisioned, you can add worker
-nodes by updating the ProvisioningRequest's
-`clusterInstanceParameters.nodes` array. Scale-in (removing worker
-nodes) is planned for a future release.
+After a multi-node (MNO) cluster is provisioned, you can add or remove
+worker nodes by updating the ProvisioningRequest's
+`clusterInstanceParameters.nodes` array.
 
 > [!NOTE]
 > Scaling is only supported for worker nodes. Control plane (master)
@@ -790,8 +789,28 @@ nodes) is planned for a future release.
 
 #### Removing a worker node (scale-in)
 
-> [!IMPORTANT]
-> Scale-in is not yet supported. Do not remove worker nodes from the
-> ProvisioningRequest nodes array. When scale-in support is added in a
-> future release, the controller will drain nodes before removal to
-> minimize workload disruption.
+To remove a worker node, remove its entry from the
+`clusterInstanceParameters.nodes` array in the ProvisioningRequest and
+update the `templateName` to reference a ClusterTemplate with matching
+CI defaults (one fewer worker node template).
+
+The controller automatically:
+
+1. Signals the hardware manager to drain and decommission the
+   removed node (via a NAR annotation)
+2. The hardware manager cordons and drains the node on the spoke,
+   deletes the Node object, deletes the AllocatedNode CR
+   (triggering BMH deallocation), and cleans up node tracking
+3. Applies an intermediate ClusterInstance with `pruneManifests` to
+   instruct siteconfig to delete per-node resources (InfraEnv,
+   NMStateConfig) while the node entry is still present
+4. Waits for siteconfig to process the pruning, then deletes the
+   Agent CR
+5. Applies the reduced ClusterInstance via Server-Side Apply
+   (removing the node entry)
+6. Cleans up the AllocatedNodeHostMap
+
+> [!NOTE]
+> Only worker nodes can be removed. Attempting to remove a control-plane
+> node is rejected. Scale-in and upgrade operations cannot run
+> concurrently.

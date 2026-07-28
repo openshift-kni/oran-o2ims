@@ -10,8 +10,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -166,6 +168,23 @@ func (r *NodeAllocationRequestReconciler) SetupWithManager(mgr ctrl.Manager) err
 	return nil
 }
 
+// tryPopulateNodeHostnames attempts to populate Status.Hostname on
+// AllocatedNodes that don't have it yet. Failures are logged but not fatal.
+func (r *NodeAllocationRequestReconciler) tryPopulateNodeHostnames(
+	ctx context.Context, nar *hwmgmtv1alpha1.NodeAllocationRequest) {
+
+	nodelist, err := hwmgrutils.GetChildNodes(ctx, r.Logger, r.Client, nar)
+	if err != nil {
+		r.Logger.DebugContext(ctx, "Failed to list AllocatedNodes for hostname population",
+			slog.Any("error", err))
+		return
+	}
+	if err := populateNodeHostnames(ctx, r.Client, r.Logger, nodelist, nar); err != nil {
+		r.Logger.DebugContext(ctx, "Failed to populate node hostnames, will retry",
+			slog.Any("error", err))
+	}
+}
+
 // HandleNodeAllocationRequest processes the NodeAllocationRequest CR
 func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 	ctx context.Context, nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
@@ -254,6 +273,12 @@ func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 		}
 	}
 
+	// Handle scale-in annotations before the FSM. These are set by the PR
+	// controller to request drain and deallocation of specific nodes.
+	if result, handled, err := r.handleScaleInAnnotations(ctx, nodeAllocationRequest); handled || err != nil {
+		return result, err
+	}
+
 	switch hwmgrutils.DetermineAction(ctx, r.Logger, nodeAllocationRequest) {
 	case hwmgrutils.NodeAllocationRequestFSMCreate:
 		return r.handleNewNodeAllocationRequestCreate(ctx, nodeAllocationRequest)
@@ -267,6 +292,203 @@ func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 	}
 
 	return result, nil
+}
+
+// handleScaleInAnnotations checks for the scale-in-nodes annotation and
+// processes it. Returns handled=true if the annotation was found.
+func (r *NodeAllocationRequestReconciler) handleScaleInAnnotations(
+	ctx context.Context,
+	nar *hwmgmtv1alpha1.NodeAllocationRequest) (ctrl.Result, bool, error) {
+
+	annotations := nar.GetAnnotations()
+	if annotations == nil {
+		return ctrl.Result{}, false, nil
+	}
+
+	nodeList, ok := annotations[ScaleInNodesAnnotation]
+	if !ok {
+		return ctrl.Result{}, false, nil
+	}
+
+	result, err := r.handleScaleInNodesAnnotation(ctx, nar, nodeList)
+	return result, true, err
+}
+
+// handleScaleInNodesAnnotation performs the full scale-in lifecycle for the
+// listed AllocatedNodes: drain on the spoke, delete the Node object from
+// the spoke, delete the AllocatedNode CR, and clean up nodeNames. Sets the
+// Deprovisioned condition on each AllocatedNode for observability. Removes
+// the annotation when all nodes are fully processed.
+func (r *NodeAllocationRequestReconciler) handleScaleInNodesAnnotation(
+	ctx context.Context,
+	nar *hwmgmtv1alpha1.NodeAllocationRequest,
+	nodeList string) (ctrl.Result, error) {
+
+	nodeNames := strings.Split(nodeList, ",")
+	r.Logger.InfoContext(ctx, "Processing scale-in-nodes annotation",
+		slog.Any("nodes", nodeNames))
+
+	spokeClient, spokeClientset, err := createSpokeClients(ctx, r.Client, nar)
+	noSpokeKubeconfig := err != nil && strings.Contains(err.Error(), "no kubeconfig secret found")
+	if err != nil && !noSpokeKubeconfig {
+		return hwmgrutils.RequeueWithMediumInterval(),
+			fmt.Errorf("failed to create spoke clients for scale-in: %w", err)
+	}
+
+	var nodeOps NodeOps
+	if !noSpokeKubeconfig {
+		nodeOps = NewNodeOps(spokeClient, spokeClientset, r.Logger, false)
+	}
+
+	var remainingNodeNames []string
+	for _, nn := range nar.Status.Properties.NodeNames {
+		remainingNodeNames = append(remainingNodeNames, nn)
+	}
+
+	r.tryPopulateNodeHostnames(ctx, nar)
+
+	allProcessed := true
+	for _, nodeName := range nodeNames {
+		nodeName = strings.TrimSpace(nodeName)
+		if nodeName == "" {
+			continue
+		}
+
+		an := &hwmgmtv1alpha1.AllocatedNode{}
+		if err := r.Client.Get(ctx, client.ObjectKey{
+			Name: nodeName, Namespace: r.Namespace,
+		}, an); err != nil {
+			if errors.IsNotFound(err) {
+				remainingNodeNames = removeFromSlice(remainingNodeNames, nodeName)
+				continue
+			}
+			return hwmgrutils.RequeueWithShortInterval(),
+				fmt.Errorf("failed to get AllocatedNode %s: %w", nodeName, err)
+		}
+
+		// Phase 1: Drain the node on the spoke
+		deprovCond := meta.FindStatusCondition(an.Status.Conditions, string(hwmgmtv1alpha1.Deprovisioned))
+		if deprovCond == nil || deprovCond.Reason == string(hwmgmtv1alpha1.InProgress) {
+			if nodeOps != nil && an.Status.Hostname == "" {
+				allProcessed = false
+				r.Logger.WarnContext(ctx, "Hostname not yet populated, deferring scale-in for node",
+					slog.String("allocatedNode", nodeName))
+				continue
+			}
+			if nodeOps != nil {
+				hwmgrutils.SetStatusCondition(&an.Status.Conditions,
+					string(hwmgmtv1alpha1.Deprovisioned), string(hwmgmtv1alpha1.InProgress),
+					metav1.ConditionFalse, string(hwmgmtv1alpha1.NodeDraining))
+				if err := r.Client.Status().Update(ctx, an); err != nil {
+					return hwmgrutils.RequeueWithShortInterval(),
+						fmt.Errorf("failed to update Deprovisioned condition on AllocatedNode %s: %w", nodeName, err)
+				}
+
+				r.Logger.InfoContext(ctx, "Draining node for scale-in",
+					slog.String("allocatedNode", nodeName),
+					slog.String("hostname", an.Status.Hostname))
+
+				if err := nodeOps.DrainNode(ctx, an.Status.Hostname); err != nil {
+					allProcessed = false
+					r.Logger.WarnContext(ctx, "Drain failed, will retry",
+						slog.String("hostname", an.Status.Hostname),
+						slog.Any("error", err))
+					continue
+				}
+			}
+
+			hwmgrutils.SetStatusCondition(&an.Status.Conditions,
+				string(hwmgmtv1alpha1.Deprovisioned), string(hwmgmtv1alpha1.Completed),
+				metav1.ConditionTrue, "Node deprovisioned")
+			if err := r.Client.Status().Update(ctx, an); err != nil {
+				return hwmgrutils.RequeueWithShortInterval(),
+					fmt.Errorf("failed to update Deprovisioned condition on AllocatedNode %s: %w", nodeName, err)
+			}
+		}
+
+		// Phase 2: Delete Node from spoke and AllocatedNode CR
+		if spokeClient != nil && an.Status.Hostname != "" {
+			spokeNode := &corev1.Node{}
+			spokeNode.Name = an.Status.Hostname
+			if err := spokeClient.Delete(ctx, spokeNode); err != nil {
+				if !errors.IsNotFound(err) {
+					return hwmgrutils.RequeueWithShortInterval(),
+						fmt.Errorf("failed to delete node %s from spoke: %w", an.Status.Hostname, err)
+				}
+			}
+			r.Logger.InfoContext(ctx, "Deleted node from spoke cluster",
+				slog.String("hostname", an.Status.Hostname))
+		}
+
+		if err := r.Client.Delete(ctx, an); err != nil {
+			if !errors.IsNotFound(err) {
+				return hwmgrutils.RequeueWithShortInterval(),
+					fmt.Errorf("failed to delete AllocatedNode %s: %w", nodeName, err)
+			}
+		}
+		r.Logger.InfoContext(ctx, "Deleted AllocatedNode",
+			slog.String("allocatedNode", nodeName))
+
+		remainingNodeNames = removeFromSlice(remainingNodeNames, nodeName)
+	}
+
+	if !allProcessed {
+		return hwmgrutils.RequeueWithMediumInterval(), nil
+	}
+
+	// Update nodeNames in NAR status. Use a direct status update (not
+	// UpdateNodeAllocationRequestProperties, which does a union merge
+	// and would re-add the removed nodes).
+	freshNAR := &hwmgmtv1alpha1.NodeAllocationRequest{}
+	if err := r.Client.Get(ctx, client.ObjectKeyFromObject(nar), freshNAR); err != nil {
+		return hwmgrutils.RequeueWithShortInterval(),
+			fmt.Errorf("failed to re-fetch NAR for nodeNames update: %w", err)
+	}
+	freshNAR.Status.Properties.NodeNames = remainingNodeNames
+	if err := r.Client.Status().Update(ctx, freshNAR); err != nil {
+		return hwmgrutils.RequeueWithShortInterval(),
+			fmt.Errorf("failed to update nodeNames after scale-in: %w", err)
+	}
+	r.Logger.InfoContext(ctx, "Updated NodeAllocationRequest properties",
+		slog.Int("nodeCount", len(remainingNodeNames)))
+
+	if err := r.removeAnnotation(ctx, nar, ScaleInNodesAnnotation); err != nil {
+		return hwmgrutils.RequeueWithShortInterval(), err
+	}
+
+	r.Logger.InfoContext(ctx, "Scale-in processing complete")
+	return hwmgrutils.DoNotRequeue(), nil
+}
+
+// removeFromSlice removes the first occurrence of val from s.
+func removeFromSlice(s []string, val string) []string {
+	for i, v := range s {
+		if v == val {
+			return append(s[:i], s[i+1:]...)
+		}
+	}
+	return s
+}
+
+// removeAnnotation removes the specified annotation from the NAR.
+// Re-fetches the NAR to ensure the resourceVersion is current.
+func (r *NodeAllocationRequestReconciler) removeAnnotation(
+	ctx context.Context, nar *hwmgmtv1alpha1.NodeAllocationRequest,
+	annotation string) error {
+
+	fresh := &hwmgmtv1alpha1.NodeAllocationRequest{}
+	if err := r.Client.Get(ctx, client.ObjectKeyFromObject(nar), fresh); err != nil {
+		return fmt.Errorf("failed to re-fetch NAR %s: %w", nar.Name, err)
+	}
+	patch := client.MergeFromWithOptions(fresh.DeepCopy(), client.MergeFromWithOptimisticLock{})
+	annotations := fresh.GetAnnotations()
+	delete(annotations, annotation)
+	fresh.SetAnnotations(annotations)
+	if err := r.Client.Patch(ctx, fresh, patch); err != nil {
+		return fmt.Errorf("failed to remove annotation %s from NAR %s: %w",
+			annotation, nar.Name, err)
+	}
+	return nil
 }
 
 func (r *NodeAllocationRequestReconciler) handleNewNodeAllocationRequestCreate(
@@ -340,6 +562,11 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 		return hwmgrutils.RequeueWithShortInterval(),
 			fmt.Errorf("failed to sync skipCleanup to AllocatedNodes: %w", err)
 	}
+
+	// Populate Status.Hostname on AllocatedNodes that don't have it yet.
+	// The hostmap may have been updated by the PR controller since the last
+	// reconcile (e.g., after scale-out node allocation).
+	r.tryPopulateNodeHostnames(ctx, nodeAllocationRequest)
 
 	// Handle post-provisioning setup for IBI nodes when ClusterProvisioned is set.
 	// This sets online=true and removes the detached annotation so BMO can manage the nodes.
@@ -517,6 +744,7 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestProcessing(
 	// No explicit requeue requested by the checker: decide based on "full".
 	if full {
 		r.Logger.InfoContext(ctx, "NodeAllocationRequest is fully allocated")
+
 		if err := hwmgrutils.UpdateNodeAllocationRequestStatusCondition(
 			ctx, r.Client, nodeAllocationRequest,
 			hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.Completed,

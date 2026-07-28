@@ -28,6 +28,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -35,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/utils"
 )
 
@@ -476,5 +479,164 @@ var _ = Describe("handleScaleOut", func() {
 		_, handled, err := reconciler.handleScaleOut(ctx, nar)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(handled).To(BeFalse())
+	})
+})
+
+var _ = Describe("handleScaleInAnnotations", func() {
+	var (
+		ctx        context.Context
+		fakeClient client.Client
+		reconciler *NodeAllocationRequestReconciler
+		logger     *slog.Logger
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+
+		scheme := runtime.NewScheme()
+		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
+		Expect(provisioningv1alpha1.AddToScheme(scheme)).To(Succeed())
+		Expect(corev1.AddToScheme(scheme)).To(Succeed())
+
+		fakeClient = fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithStatusSubresource(
+				&hwmgmtv1alpha1.AllocatedNode{},
+				&hwmgmtv1alpha1.NodeAllocationRequest{},
+				&provisioningv1alpha1.ProvisioningRequest{},
+			).
+			WithIndex(&hwmgmtv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest",
+				func(obj client.Object) []string {
+					an := obj.(*hwmgmtv1alpha1.AllocatedNode)
+					return []string{an.Spec.NodeAllocationRequest}
+				}).
+			Build()
+
+		reconciler = &NodeAllocationRequestReconciler{
+			Client:    fakeClient,
+			Logger:    logger,
+			Namespace: "test-ns",
+		}
+
+		// Create a ProvisioningRequest (looked up by createSpokeClients)
+		pr := &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-nar",
+			},
+			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+				Name:            "test",
+				TemplateName:    "test-template",
+				TemplateVersion: "v1",
+			},
+		}
+		Expect(fakeClient.Create(ctx, pr)).To(Succeed())
+		pr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
+			Name: "test-cluster",
+		}
+		Expect(fakeClient.Status().Update(ctx, pr)).To(Succeed())
+	})
+
+	It("should return handled=false when no annotation is present", func() {
+		nar := &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-nar",
+				Namespace: "test-ns",
+			},
+		}
+		Expect(fakeClient.Create(ctx, nar)).To(Succeed())
+
+		_, handled, err := reconciler.handleScaleInAnnotations(ctx, nar)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(handled).To(BeFalse())
+	})
+
+	It("should return handled=true when scale-in annotation is present", func() {
+		nar := &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-nar",
+				Namespace: "test-ns",
+				Annotations: map[string]string{
+					ScaleInNodesAnnotation: "node-1",
+				},
+			},
+		}
+		Expect(fakeClient.Create(ctx, nar)).To(Succeed())
+
+		_, handled, err := reconciler.handleScaleInAnnotations(ctx, nar)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(handled).To(BeTrue())
+	})
+
+	It("should set Deprovisioned condition and delete AllocatedNode when no spoke", func() {
+		nar := &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-nar",
+				Namespace: "test-ns",
+				Annotations: map[string]string{
+					ScaleInNodesAnnotation: "node-1",
+				},
+			},
+		}
+		Expect(fakeClient.Create(ctx, nar)).To(Succeed())
+		nar.Status.Properties.NodeNames = []string{"node-1", "node-2"}
+		Expect(fakeClient.Status().Update(ctx, nar)).To(Succeed())
+
+		node := &hwmgmtv1alpha1.AllocatedNode{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "node-1",
+				Namespace: "test-ns",
+			},
+			Spec: hwmgmtv1alpha1.AllocatedNodeSpec{
+				NodeAllocationRequest: "test-nar",
+			},
+		}
+		Expect(fakeClient.Create(ctx, node)).To(Succeed())
+		node.Status.Hostname = "worker1.example.com"
+		Expect(fakeClient.Status().Update(ctx, node)).To(Succeed())
+
+		_, handled, err := reconciler.handleScaleInAnnotations(ctx, nar)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(handled).To(BeTrue())
+
+		// Verify annotation was removed
+		updatedNAR := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(nar), updatedNAR)).To(Succeed())
+		Expect(updatedNAR.GetAnnotations()).ToNot(HaveKey(ScaleInNodesAnnotation))
+
+		// Verify nodeNames was pruned
+		Expect(updatedNAR.Status.Properties.NodeNames).To(ConsistOf("node-2"))
+
+		// Verify AllocatedNode was deleted
+		deletedNode := &hwmgmtv1alpha1.AllocatedNode{}
+		err = fakeClient.Get(ctx, client.ObjectKeyFromObject(node), deletedNode)
+		Expect(k8serrors.IsNotFound(err)).To(BeTrue())
+	})
+
+	It("should skip AllocatedNodes that are not found and prune nodeNames", func() {
+		nar := &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-nar",
+				Namespace: "test-ns",
+				Annotations: map[string]string{
+					ScaleInNodesAnnotation: "nonexistent-node",
+				},
+			},
+		}
+		Expect(fakeClient.Create(ctx, nar)).To(Succeed())
+		nar.Status.Properties.NodeNames = []string{"nonexistent-node", "other-node"}
+		Expect(fakeClient.Status().Update(ctx, nar)).To(Succeed())
+
+		_, handled, err := reconciler.handleScaleInAnnotations(ctx, nar)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(handled).To(BeTrue())
+
+		// Verify annotation was removed
+		updatedNAR := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(nar), updatedNAR)).To(Succeed())
+		Expect(updatedNAR.GetAnnotations()).ToNot(HaveKey(ScaleInNodesAnnotation))
+
+		// Verify nodeNames was pruned even for NotFound nodes
+		Expect(updatedNAR.Status.Properties.NodeNames).To(ConsistOf("other-node"))
 	})
 })
