@@ -1406,6 +1406,18 @@ func (schema *Schema) validate(ctx context.Context, stack []*Schema) ([]*Schema,
 		return stack, newSchemaReadOnlyWriteOnlyExclusive(schema.Origin)
 	}
 
+	// The elements of `required` MUST be unique (JSON Schema 2020-12 §6.5.3
+	// for OAS 3.1, draft-04 for OAS 3.0).
+	if len(schema.Required) > 1 {
+		seen := make(map[string]struct{}, len(schema.Required))
+		for _, name := range schema.Required {
+			if _, dup := seen[name]; dup {
+				return stack, &DuplicateRequiredFieldError{Field: name, Origin: schema.Origin}
+			}
+			seen[name] = struct{}{}
+		}
+	}
+
 	// Reject fields that only exist in OAS 3.1 / JSON Schema 2020-12 when the
 	// document is OAS 3.0. Fields explicitly allowed via AllowExtraSiblingFields
 	// are skipped (opt-in escape hatch for 3.0 docs that reference external
@@ -1554,7 +1566,7 @@ func (schema *Schema) validate(ctx context.Context, stack []*Schema) ([]*Schema,
 
 		var err error
 		if stack, err = v.validate(ctx, stack); err != nil {
-			return stack, err
+			return stack, &SchemaCombinatorElementValidationError{Combinator: "oneOf", Cause: err}
 		}
 	}
 
@@ -1566,7 +1578,7 @@ func (schema *Schema) validate(ctx context.Context, stack []*Schema) ([]*Schema,
 
 		var err error
 		if stack, err = v.validate(ctx, stack); err != nil {
-			return stack, err
+			return stack, &SchemaCombinatorElementValidationError{Combinator: "anyOf", Cause: err}
 		}
 	}
 
@@ -1578,7 +1590,7 @@ func (schema *Schema) validate(ctx context.Context, stack []*Schema) ([]*Schema,
 
 		var err error
 		if stack, err = v.validate(ctx, stack); err != nil {
-			return stack, err
+			return stack, &SchemaCombinatorElementValidationError{Combinator: "allOf", Cause: err}
 		}
 	}
 
@@ -3165,9 +3177,9 @@ func deepCopyJSONValue(v any) any {
 		}
 		return cp
 	case []any:
-		cp := make([]any, len(v))
-		for i, val := range v {
-			cp[i] = deepCopyJSONValue(val)
+		cp := make([]any, 0, len(v))
+		for _, val := range v {
+			cp = append(cp, deepCopyJSONValue(val))
 		}
 		return cp
 	default:
