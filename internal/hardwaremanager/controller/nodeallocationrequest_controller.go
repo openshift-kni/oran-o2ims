@@ -457,10 +457,12 @@ func (r *NodeAllocationRequestReconciler) drainIfReady(
 
 	ready, readyErr := nodeOps.IsNodeReady(ctx, an.Status.Hostname)
 	if readyErr != nil {
-		r.Logger.InfoContext(ctx, "Node not found on spoke, skipping drain",
-			slog.String("hostname", an.Status.Hostname),
-			slog.Any("error", readyErr))
-		return nil
+		if errors.IsNotFound(readyErr) {
+			r.Logger.InfoContext(ctx, "Node not found on spoke, skipping drain",
+				slog.String("hostname", an.Status.Hostname))
+			return nil
+		}
+		return fmt.Errorf("failed to check if node %s is ready: %w", an.Status.Hostname, readyErr)
 	}
 	if !ready {
 		r.Logger.InfoContext(ctx, "Node is NotReady on spoke, skipping drain",

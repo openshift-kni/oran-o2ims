@@ -350,6 +350,41 @@ func (t *provisioningRequestReconcilerTask) handleScaleInAbort(
 		}
 	}
 
+	// Uncordon nodes before removing the annotation so failures retry
+	if len(abortedHostnames) > 0 {
+		clusterName := t.object.Status.Extensions.ClusterDetails.Name
+		spokeClient, err := k8sclients.NewClientForCluster(ctx, t.client, clusterName)
+		if err != nil {
+			if strings.Contains(err.Error(), "no kubeconfig secret found") {
+				return nil
+			}
+			return fmt.Errorf("failed to create spoke client: %w", err)
+		}
+
+		clientset, err := k8sclients.NewClientsetForCluster(ctx, t.client, clusterName)
+		if err != nil {
+			return fmt.Errorf("failed to create spoke clientset: %w", err)
+		}
+		nodeOps := hwmgrcontroller.NewNodeOps(spokeClient, clientset, t.logger, false)
+
+		for hostname := range abortedHostnames {
+			spokeNode := &corev1.Node{}
+			if err := spokeClient.Get(ctx, types.NamespacedName{Name: hostname}, spokeNode); err != nil {
+				if errors.IsNotFound(err) {
+					continue
+				}
+				return fmt.Errorf("failed to get spoke node %s: %w", hostname, err)
+			}
+			if spokeNode.Spec.Unschedulable {
+				t.logger.InfoContext(ctx, "Uncordoning node from aborted scale-in",
+					slog.String("hostname", hostname))
+				if err := nodeOps.UncordonNode(ctx, hostname); err != nil {
+					return fmt.Errorf("failed to uncordon node %s: %w", hostname, err)
+				}
+			}
+		}
+	}
+
 	t.logger.InfoContext(ctx, "Aborting scale-in: removing annotation from NAR",
 		slog.Any("abortedNodes", abortedNodeIDs))
 	patch := client.MergeFrom(nar.DeepCopy())
@@ -358,43 +393,6 @@ func (t *provisioningRequestReconcilerTask) handleScaleInAbort(
 	nar.SetAnnotations(annotations)
 	if err := t.client.Patch(ctx, nar, patch); err != nil {
 		return fmt.Errorf("failed to remove scale-in annotation: %w", err)
-	}
-
-	// Uncordon only the nodes that were targeted by the aborted scale-in
-	if len(abortedHostnames) == 0 {
-		return nil
-	}
-
-	clusterName := t.object.Status.Extensions.ClusterDetails.Name
-	spokeClient, err := k8sclients.NewClientForCluster(ctx, t.client, clusterName)
-	if err != nil {
-		if strings.Contains(err.Error(), "no kubeconfig secret found") {
-			return nil
-		}
-		return fmt.Errorf("failed to create spoke client: %w", err)
-	}
-
-	clientset, err := k8sclients.NewClientsetForCluster(ctx, t.client, clusterName)
-	if err != nil {
-		return fmt.Errorf("failed to create spoke clientset: %w", err)
-	}
-	nodeOps := hwmgrcontroller.NewNodeOps(spokeClient, clientset, t.logger, false)
-
-	for hostname := range abortedHostnames {
-		spokeNode := &corev1.Node{}
-		if err := spokeClient.Get(ctx, types.NamespacedName{Name: hostname}, spokeNode); err != nil {
-			if errors.IsNotFound(err) {
-				continue
-			}
-			return fmt.Errorf("failed to get spoke node %s: %w", hostname, err)
-		}
-		if spokeNode.Spec.Unschedulable {
-			t.logger.InfoContext(ctx, "Uncordoning node from aborted scale-in",
-				slog.String("hostname", hostname))
-			if err := nodeOps.UncordonNode(ctx, hostname); err != nil {
-				return fmt.Errorf("failed to uncordon node %s: %w", hostname, err)
-			}
-		}
 	}
 
 	return nil
