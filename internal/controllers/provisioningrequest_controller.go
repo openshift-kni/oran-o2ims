@@ -456,12 +456,18 @@ func (t *provisioningRequestReconcilerTask) checkOverallProvisioningTimeout(ctx 
 
 // handleClusterUpgrades handles cluster upgrade logic
 func (t *provisioningRequestReconcilerTask) handleClusterUpgrades(ctx context.Context, clusterName string) (ctrl.Result, error) {
-	// Block upgrades while a scale operation is in progress. Compare the
-	// rendered CI hostname set against the fulfilled node count to detect
-	// active scaling. Use hostname set comparison (not count) because a
-	// mixed add+remove could leave the count unchanged.
+	// Block upgrades while a scale operation is in progress. Check
+	// ClusterProvisioned status as the primary signal — it is set to
+	// InProgress for scale-in, scale-out, and swap operations (including
+	// same-count swaps that a count comparison would miss).
 	if t.object.Status.Extensions.ClusterDetails != nil &&
 		t.object.Status.Extensions.ClusterDetails.FulfilledNodeCount > 0 {
+		if !ctlrutils.IsClusterProvisionCompleted(t.object) {
+			t.logger.InfoContext(ctx, "Skipping upgrade: scale operation in progress")
+			return requeueWithMediumInterval(), nil
+		}
+
+		// Secondary safety net: count mismatch
 		fulfilledCount := t.object.Status.Extensions.ClusterDetails.FulfilledNodeCount
 		existingCI, err := t.getExistingClusterInstance(ctx)
 		if err != nil {

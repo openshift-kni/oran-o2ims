@@ -830,3 +830,28 @@ returns to normal operation.
 > window has closed. Re-adding the node at that point triggers a new
 > scale-out operation, which waits for the BMH to finish
 > deprovisioning before re-provisioning the node.
+
+#### Replacing a worker node (swap)
+
+A swap operation replaces one or more worker nodes in a single
+ProvisioningRequest update. Remove the old node entries and add the new
+node entries in the `clusterInstanceParameters.nodes` array at the same
+time.
+
+The controller processes the swap sequentially:
+
+1. **Scale-in phase**: The removed nodes are drained, their per-node
+   resources (InfraEnv, NMStateConfig) are pruned, and the hardware
+   manager deallocates the old nodes.
+2. **Scale-out phase**: Once scale-in is complete, the new nodes are
+   provisioned through the hardware manager, added to the cluster, and
+   the controller waits for them to join and become Ready.
+
+The ProvisioningRequest status shows `ClusterProvisioned=InProgress`
+throughout the swap, with the message reflecting which phase is active.
+
+Aborting a swap follows the same rules as aborting a standalone
+scale-in: re-add the removed nodes to the ProvisioningRequest before
+deallocation completes. The newly added nodes that have not yet been
+provisioned are treated as a separate scale-out if the removed nodes are
+restored.

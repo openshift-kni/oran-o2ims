@@ -451,6 +451,11 @@ func (r *NodeAllocationRequestReconciler) handleScaleInNodesAnnotation(
 // drainIfReady checks if a node is Ready and drains it. If the node is
 // NotReady or absent from the spoke, drain is skipped (returns nil).
 // Returns an error only if drain was attempted and failed (caller should retry).
+// drainIfReady drains the node only if it is Ready on the spoke. NotReady or
+// absent nodes are skipped — a failed/unreachable node cannot be drained (the
+// kubelet is unresponsive), so attempting drain would retry indefinitely until
+// the provisioning timeout. Skipping drain and proceeding to deallocation is
+// the intended recovery path for failed worker nodes.
 func (r *NodeAllocationRequestReconciler) drainIfReady(
 	ctx context.Context, nodeOps NodeOps,
 	an *hwmgmtv1alpha1.AllocatedNode, nodeName string) error {

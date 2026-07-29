@@ -982,9 +982,10 @@ var _ = Describe("buildIntermediateCIWithPruneManifests", func() {
 		Expect(worker2["pruneManifests"]).ToNot(BeNil())
 
 		prune := worker2["pruneManifests"].([]any)
-		Expect(prune).To(HaveLen(2))
+		Expect(prune).To(HaveLen(3))
 		Expect(prune[0].(map[string]any)["kind"]).To(Equal("InfraEnv"))
 		Expect(prune[1].(map[string]any)["kind"]).To(Equal("NMStateConfig"))
+		Expect(prune[2].(map[string]any)["kind"]).To(Equal("BareMetalHost"))
 	})
 
 	It("should not modify the original rendered CI", func() {
@@ -1034,7 +1035,41 @@ var _ = Describe("buildIntermediateCIWithPruneManifests", func() {
 		}
 	})
 
-	It("should not include BMH in pruneManifests", func() {
+	It("should exclude new nodes not in existing CI (swap case)", func() {
+		existingCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+			{"hostName": "worker2", "role": "worker"},
+		})
+		// Swap: remove worker2, add worker3
+		renderedCI := makeCI([]map[string]any{
+			{"hostName": "master1", "role": "master"},
+			{"hostName": "worker1", "role": "worker"},
+			{"hostName": "worker3", "role": "worker"},
+		})
+
+		result := buildIntermediateCIWithPruneManifests(renderedCI, existingCI, []string{"worker2"})
+
+		spec := result.Object["spec"].(map[string]any)
+		nodes := spec["nodes"].([]any)
+		// Should have: master1, worker1 (kept), worker2 (pruned) = 3 nodes
+		// worker3 should be excluded (not in existing CI)
+		Expect(nodes).To(HaveLen(3))
+
+		hostnames := make([]string, len(nodes))
+		for i, n := range nodes {
+			hostnames[i] = n.(map[string]any)["hostName"].(string)
+		}
+		Expect(hostnames).To(ContainElements("master1", "worker1", "worker2"))
+		Expect(hostnames).ToNot(ContainElement("worker3"))
+
+		// worker2 should have pruneManifests
+		worker2 := nodes[2].(map[string]any)
+		Expect(worker2["hostName"]).To(Equal("worker2"))
+		Expect(worker2["pruneManifests"]).ToNot(BeNil())
+	})
+
+	It("should include BMH in pruneManifests to clear stale manifestsRendered", func() {
 		existingCI := makeCI([]map[string]any{
 			{"hostName": "master1", "role": "master"},
 			{"hostName": "worker1", "role": "worker"},
@@ -1050,10 +1085,12 @@ var _ = Describe("buildIntermediateCIWithPruneManifests", func() {
 		worker1 := nodes[1].(map[string]any)
 		prune := worker1["pruneManifests"].([]any)
 
-		for _, entry := range prune {
-			kind := entry.(map[string]any)["kind"].(string)
-			Expect(kind).ToNot(Equal("BareMetalHost"))
+		Expect(prune).To(HaveLen(3))
+		kinds := make([]string, len(prune))
+		for i, entry := range prune {
+			kinds[i] = entry.(map[string]any)["kind"].(string)
 		}
+		Expect(kinds).To(ContainElements("InfraEnv", "NMStateConfig", "BareMetalHost"))
 	})
 })
 

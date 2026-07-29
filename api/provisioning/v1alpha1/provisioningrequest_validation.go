@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 
 	"os"
@@ -297,6 +298,17 @@ func FindClusterInstanceImmutableFieldUpdates(
 			"and new ClusterInstance input: %w", err)
 	}
 
+	// First pass: identify node indices where hostName changed (swap).
+	// When a node's hostName is updated in-place, the diff library reports
+	// field-level changes (e.g., nodes.3.hostName) rather than a whole-node
+	// add/remove. We treat all changes under such a node index as scaling.
+	swappedNodeIndices := make(map[string]bool)
+	for _, d := range diffs {
+		if len(d.Path) >= 3 && d.Path[0] == "nodes" && d.Path[2] == "hostName" && d.Type == "update" {
+			swappedNodeIndices[d.Path[1]] = true
+		}
+	}
+
 	var updatedFields []string
 	var scalingNodes []string
 	for _, diff := range diffs {
@@ -338,6 +350,9 @@ func FindClusterInstanceImmutableFieldUpdates(
 
 		Field updated at the node-level
 		  {"type": "update", "path": ["nodes", "0", "nodeNetwork", "config", "dns-resolver", "config", "server", "0"], "from": "192.10.1.2", "to": "192.10.1.3"}
+
+		Node swap (hostName changed in-place)
+		  {"type": "update", "path": ["nodes", "3", "hostName"], "from": "worker1", "to": "worker2"}
 		*/
 
 		// Check if the path matches any ignored fields
@@ -365,6 +380,18 @@ func FindClusterInstanceImmutableFieldUpdates(
 			scalingNodes = append(scalingNodes, strings.Join(diff.Path, "."))
 			continue
 		}
+
+		// Check if this change is under a node whose hostName changed
+		// (swap). Treat all such changes as scaling, not immutable
+		// field violations.
+		if len(diff.Path) >= 2 && diff.Path[0] == "nodes" && swappedNodeIndices[diff.Path[1]] {
+			nodeKey := "nodes." + diff.Path[1]
+			if !slices.Contains(scalingNodes, nodeKey) {
+				scalingNodes = append(scalingNodes, nodeKey)
+			}
+			continue
+		}
+
 		updatedFields = append(updatedFields, strings.Join(diff.Path, "."))
 	}
 
