@@ -102,11 +102,18 @@ flowchart TB
         Serve["serve.go (GetServerTLSConfig)"]
     end
 
+    subgraph hw_mgr_pod["Hardware Manager Pod"]
+        HWEnvRead["reads TLS_PROFILE_* env vars"]
+        HWMgr["controller-runtime metrics server (TLSOpts)"]
+    end
+
     APIServerRes -->|"watch"| Watcher
     Watcher -->|"OnProfileChange: cancel()"| MgrTLS
     Watcher -->|"OnProfileChange: patch annotation"| Reconciler
     Reconciler -->|"rolling restart + env var injection"| http_pods
+    Reconciler -->|"rolling restart + env var injection"| hw_mgr_pod
     EnvRead -->|"builds tls.Config"| Serve
+    HWEnvRead -->|"builds tls.Config"| HWMgr
 ```
 
 Key design decisions:
@@ -164,7 +171,8 @@ oc get pods -n oran-o2ims
 ```
 
 All HTTP server pods (`resource-server`, `cluster-server`,
-`provisioning-server`, `artifacts-server`) should be in `Running` state.
+`provisioning-server`, `artifacts-server`) and the `hardwaremanager-server`
+should be in `Running` state.
 
 ### Test 1: Default Profile Verification
 
@@ -385,10 +393,11 @@ With the cluster running the default Intermediate profile
 
 | Pod | Port | TLS Versions | PQC Ready | API MinVersion Compliance | API Cipher Compliance |
 |-----|------|-------------|-----------|---------------------------|----------------------|
+| artifacts-server | 8443 | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
 | cluster-server | 8443 | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
+| hardwaremanager-server | 8443 | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
 | oran-o2ims-controller-manager | 6443 | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
 | oran-o2ims-controller-manager | 9443 | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
-| artifacts-server | 8443 | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
 | provisioning-server | 8443 | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
 | resource-server | 8443 | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
 
