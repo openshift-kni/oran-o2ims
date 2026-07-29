@@ -1131,9 +1131,6 @@ func (t *reconcilerTask) createService(ctx context.Context, resourceName string,
 	labels := map[string]string{
 		"app": resourceName,
 	}
-	if resourceName != ctlrutils.InventoryDatabaseServerName && resourceName != ctlrutils.HardwareManagerServerName {
-		labels["oran-o2ims/metrics"] = "true"
-	}
 	serviceMeta := metav1.ObjectMeta{
 		Name:      resourceName,
 		Namespace: t.object.Namespace,
