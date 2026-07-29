@@ -355,31 +355,31 @@ func (t *provisioningRequestReconcilerTask) handleScaleInAbort(
 		clusterName := t.object.Status.Extensions.ClusterDetails.Name
 		spokeClient, err := k8sclients.NewClientForCluster(ctx, t.client, clusterName)
 		if err != nil {
-			if strings.Contains(err.Error(), "no kubeconfig secret found") {
-				return nil
+			if !strings.Contains(err.Error(), "no kubeconfig secret found") {
+				return fmt.Errorf("failed to create spoke client: %w", err)
 			}
-			return fmt.Errorf("failed to create spoke client: %w", err)
-		}
+			// Spoke is gone — nodes don't need uncordoning, fall through to remove annotation
+		} else {
+			clientset, err := k8sclients.NewClientsetForCluster(ctx, t.client, clusterName)
+			if err != nil {
+				return fmt.Errorf("failed to create spoke clientset: %w", err)
+			}
+			nodeOps := hwmgrcontroller.NewNodeOps(spokeClient, clientset, t.logger, false)
 
-		clientset, err := k8sclients.NewClientsetForCluster(ctx, t.client, clusterName)
-		if err != nil {
-			return fmt.Errorf("failed to create spoke clientset: %w", err)
-		}
-		nodeOps := hwmgrcontroller.NewNodeOps(spokeClient, clientset, t.logger, false)
-
-		for hostname := range abortedHostnames {
-			spokeNode := &corev1.Node{}
-			if err := spokeClient.Get(ctx, types.NamespacedName{Name: hostname}, spokeNode); err != nil {
-				if errors.IsNotFound(err) {
-					continue
+			for hostname := range abortedHostnames {
+				spokeNode := &corev1.Node{}
+				if err := spokeClient.Get(ctx, types.NamespacedName{Name: hostname}, spokeNode); err != nil {
+					if errors.IsNotFound(err) {
+						continue
+					}
+					return fmt.Errorf("failed to get spoke node %s: %w", hostname, err)
 				}
-				return fmt.Errorf("failed to get spoke node %s: %w", hostname, err)
-			}
-			if spokeNode.Spec.Unschedulable {
-				t.logger.InfoContext(ctx, "Uncordoning node from aborted scale-in",
-					slog.String("hostname", hostname))
-				if err := nodeOps.UncordonNode(ctx, hostname); err != nil {
-					return fmt.Errorf("failed to uncordon node %s: %w", hostname, err)
+				if spokeNode.Spec.Unschedulable {
+					t.logger.InfoContext(ctx, "Uncordoning node from aborted scale-in",
+						slog.String("hostname", hostname))
+					if err := nodeOps.UncordonNode(ctx, hostname); err != nil {
+						return fmt.Errorf("failed to uncordon node %s: %w", hostname, err)
+					}
 				}
 			}
 		}

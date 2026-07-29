@@ -1206,4 +1206,42 @@ var _ = Describe("handleScaleInAbort", func() {
 
 		Expect(task.handleScaleInAbort(ctx)).To(Succeed())
 	})
+
+	It("should remove annotation when hostmap is populated but spoke is gone", func() {
+		nar.Annotations = map[string]string{
+			hwmgrcontroller.ScaleInNodesAnnotation: "node-1,node-2",
+		}
+
+		pr := &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-pr",
+			},
+			Status: provisioningv1alpha1.ProvisioningRequestStatus{
+				Extensions: provisioningv1alpha1.Extensions{
+					ClusterDetails: &provisioningv1alpha1.ClusterDetails{
+						Name: "test-cluster",
+					},
+					AllocatedNodeHostMap: map[string]string{
+						"node-1": "worker-1.example.com",
+						"node-2": "worker-2.example.com",
+					},
+				},
+			},
+		}
+
+		// No kubeconfig secret — spoke cluster is gone
+		c := fakeclient.GetFakeClientFromObjects(pr, nar)
+		task = &provisioningRequestReconcilerTask{
+			logger: logger,
+			client: c,
+			object: pr,
+		}
+
+		Expect(task.handleScaleInAbort(ctx)).To(Succeed())
+
+		// Verify annotation was still removed even though spoke is unavailable
+		updatedNAR := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(nar), updatedNAR)).To(Succeed())
+		Expect(updatedNAR.GetAnnotations()).ToNot(HaveKey(hwmgrcontroller.ScaleInNodesAnnotation))
+	})
 })
