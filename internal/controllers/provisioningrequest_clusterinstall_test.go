@@ -62,9 +62,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	hwmgrcontroller "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/controller"
 	"github.com/openshift-kni/oran-o2ims/test/fakeclient"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 )
@@ -1104,5 +1106,142 @@ var _ = Describe("getAgentHostname", func() {
 			},
 		}
 		Expect(getAgentHostname(agent)).To(BeEmpty())
+	})
+})
+
+var _ = Describe("handleScaleInAbort", func() {
+	var (
+		ctx  context.Context
+		task *provisioningRequestReconcilerTask
+		nar  *hwmgmtv1alpha1.NodeAllocationRequest
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		nar = &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pr",
+				Namespace: "oran-o2ims",
+			},
+		}
+	})
+
+	It("should remove scale-in annotation from NAR when aborting", func() {
+		nar.Annotations = map[string]string{
+			hwmgrcontroller.ScaleInNodesAnnotation: "node-1",
+		}
+
+		pr := &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-pr",
+			},
+			Status: provisioningv1alpha1.ProvisioningRequestStatus{
+				Extensions: provisioningv1alpha1.Extensions{
+					ClusterDetails: &provisioningv1alpha1.ClusterDetails{
+						Name: "test-cluster",
+					},
+				},
+			},
+		}
+
+		c := fakeclient.GetFakeClientFromObjects(pr, nar)
+		task = &provisioningRequestReconcilerTask{
+			logger: logger,
+			client: c,
+			object: pr,
+		}
+
+		Expect(task.handleScaleInAbort(ctx)).To(Succeed())
+
+		// Verify annotation was removed
+		updatedNAR := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(nar), updatedNAR)).To(Succeed())
+		Expect(updatedNAR.GetAnnotations()).ToNot(HaveKey(hwmgrcontroller.ScaleInNodesAnnotation))
+	})
+
+	It("should be a no-op when no annotation is present", func() {
+		pr := &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-pr",
+			},
+			Status: provisioningv1alpha1.ProvisioningRequestStatus{
+				Extensions: provisioningv1alpha1.Extensions{
+					ClusterDetails: &provisioningv1alpha1.ClusterDetails{
+						Name: "test-cluster",
+					},
+				},
+			},
+		}
+
+		c := fakeclient.GetFakeClientFromObjects(pr, nar)
+		task = &provisioningRequestReconcilerTask{
+			logger: logger,
+			client: c,
+			object: pr,
+		}
+
+		Expect(task.handleScaleInAbort(ctx)).To(Succeed())
+	})
+
+	It("should be a no-op when NAR does not exist", func() {
+		pr := &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-pr",
+			},
+			Status: provisioningv1alpha1.ProvisioningRequestStatus{
+				Extensions: provisioningv1alpha1.Extensions{
+					ClusterDetails: &provisioningv1alpha1.ClusterDetails{
+						Name: "test-cluster",
+					},
+				},
+			},
+		}
+
+		c := fakeclient.GetFakeClientFromObjects(pr)
+		task = &provisioningRequestReconcilerTask{
+			logger: logger,
+			client: c,
+			object: pr,
+		}
+
+		Expect(task.handleScaleInAbort(ctx)).To(Succeed())
+	})
+
+	It("should remove annotation when hostmap is populated but spoke is gone", func() {
+		nar.Annotations = map[string]string{
+			hwmgrcontroller.ScaleInNodesAnnotation: "node-1,node-2",
+		}
+
+		pr := &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-pr",
+			},
+			Status: provisioningv1alpha1.ProvisioningRequestStatus{
+				Extensions: provisioningv1alpha1.Extensions{
+					ClusterDetails: &provisioningv1alpha1.ClusterDetails{
+						Name: "test-cluster",
+					},
+					AllocatedNodeHostMap: map[string]string{
+						"node-1": "worker-1.example.com",
+						"node-2": "worker-2.example.com",
+					},
+				},
+			},
+		}
+
+		// No kubeconfig secret — spoke cluster is gone
+		c := fakeclient.GetFakeClientFromObjects(pr, nar)
+		task = &provisioningRequestReconcilerTask{
+			logger: logger,
+			client: c,
+			object: pr,
+		}
+
+		Expect(task.handleScaleInAbort(ctx)).To(Succeed())
+
+		// Verify annotation was still removed even though spoke is unavailable
+		updatedNAR := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(nar), updatedNAR)).To(Succeed())
+		Expect(updatedNAR.GetAnnotations()).ToNot(HaveKey(hwmgrcontroller.ScaleInNodesAnnotation))
 	})
 })

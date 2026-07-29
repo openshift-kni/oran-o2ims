@@ -376,23 +376,11 @@ func (r *NodeAllocationRequestReconciler) handleScaleInNodesAnnotation(
 				continue
 			}
 			if nodeOps != nil {
-				hwmgrutils.SetStatusCondition(&an.Status.Conditions,
-					string(hwmgmtv1alpha1.Deprovisioned), string(hwmgmtv1alpha1.InProgress),
-					metav1.ConditionFalse, string(hwmgmtv1alpha1.NodeDraining))
-				if err := r.Client.Status().Update(ctx, an); err != nil {
-					return hwmgrutils.RequeueWithShortInterval(),
-						fmt.Errorf("failed to update Deprovisioned condition on AllocatedNode %s: %w", nodeName, err)
-				}
-
-				r.Logger.InfoContext(ctx, "Draining node for scale-in",
-					slog.String("allocatedNode", nodeName),
-					slog.String("hostname", an.Status.Hostname))
-
-				if err := nodeOps.DrainNode(ctx, an.Status.Hostname); err != nil {
+				// Check if the node is reachable before attempting drain.
+				// If the node is NotReady or absent from the spoke, skip
+				// drain — it would retry indefinitely on a dead node.
+				if err := r.drainIfReady(ctx, nodeOps, an, nodeName); err != nil {
 					allProcessed = false
-					r.Logger.WarnContext(ctx, "Drain failed, will retry",
-						slog.String("hostname", an.Status.Hostname),
-						slog.Any("error", err))
 					continue
 				}
 			}
@@ -458,6 +446,49 @@ func (r *NodeAllocationRequestReconciler) handleScaleInNodesAnnotation(
 
 	r.Logger.InfoContext(ctx, "Scale-in processing complete")
 	return hwmgrutils.DoNotRequeue(), nil
+}
+
+// drainIfReady checks if a node is Ready and drains it. If the node is
+// NotReady or absent from the spoke, drain is skipped (returns nil).
+// Returns an error only if drain was attempted and failed (caller should retry).
+func (r *NodeAllocationRequestReconciler) drainIfReady(
+	ctx context.Context, nodeOps NodeOps,
+	an *hwmgmtv1alpha1.AllocatedNode, nodeName string) error {
+
+	ready, readyErr := nodeOps.IsNodeReady(ctx, an.Status.Hostname)
+	if readyErr != nil {
+		if errors.IsNotFound(readyErr) {
+			r.Logger.InfoContext(ctx, "Node not found on spoke, skipping drain",
+				slog.String("hostname", an.Status.Hostname))
+			return nil
+		}
+		return fmt.Errorf("failed to check if node %s is ready: %w", an.Status.Hostname, readyErr)
+	}
+	if !ready {
+		r.Logger.InfoContext(ctx, "Node is NotReady on spoke, skipping drain",
+			slog.String("hostname", an.Status.Hostname))
+		return nil
+	}
+
+	hwmgrutils.SetStatusCondition(&an.Status.Conditions,
+		string(hwmgmtv1alpha1.Deprovisioned), string(hwmgmtv1alpha1.InProgress),
+		metav1.ConditionFalse, string(hwmgmtv1alpha1.NodeDraining))
+	if err := r.Client.Status().Update(ctx, an); err != nil {
+		return fmt.Errorf("failed to update Deprovisioned condition on AllocatedNode %s: %w", nodeName, err)
+	}
+
+	r.Logger.InfoContext(ctx, "Draining node for scale-in",
+		slog.String("allocatedNode", nodeName),
+		slog.String("hostname", an.Status.Hostname))
+
+	if err := nodeOps.DrainNode(ctx, an.Status.Hostname); err != nil {
+		r.Logger.WarnContext(ctx, "Drain failed, will retry",
+			slog.String("hostname", an.Status.Hostname),
+			slog.Any("error", err))
+		return fmt.Errorf("drain failed for node %s: %w", an.Status.Hostname, err)
+	}
+
+	return nil
 }
 
 // removeFromSlice removes the first occurrence of val from s.

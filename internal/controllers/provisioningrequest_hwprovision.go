@@ -735,28 +735,6 @@ func isConfigTransactionObserved(observedID, expectedGeneration int64) bool {
 	return observedID == expectedGeneration
 }
 
-// checkExistingNodeAllocationRequest checks for an existing NodeAllocationRequest and verifies changes if necessary
-func (t *provisioningRequestReconcilerTask) checkExistingNodeAllocationRequest(
-	ctx context.Context,
-	hwMgmtData map[string]any,
-	nodeAllocationRequestId string) (*hwmgmtv1alpha1.NodeAllocationRequest, error) {
-
-	nar, err := t.getNAR(ctx)
-	if err != nil {
-		if k8serrors.IsNotFound(err) {
-			return nil, nil //nolint:nilnil // NAR not found is not an error
-		}
-		return nil, fmt.Errorf("failed to get NodeAllocationRequest '%s': %w", nodeAllocationRequestId, err)
-	}
-
-	err = validateNodeGroupsMatchNAR(hwMgmtData, &nar.Spec)
-	if err != nil {
-		return nil, typederrors.NewInputError("%w", err)
-	}
-
-	return nar, nil
-}
-
 // buildNodeAllocationRequestSpec builds the NodeAllocationRequest from the pre-merged hwMgmt data and cluster instance
 func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec(
 	clusterInstance *unstructured.Unstructured) (*hwmgmtv1alpha1.NodeAllocationRequest, error) {
@@ -884,11 +862,9 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec(
 func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(ctx context.Context,
 	clusterInstance *unstructured.Unstructured) (*hwmgmtv1alpha1.NodeAllocationRequest, error) {
 
-	hwMgmtData := t.clusterInput.hwMgmtData
-
-	// Check if an existing NAR needs validation against current hw config
-	if _, err := t.checkExistingNodeAllocationRequest(ctx, hwMgmtData, t.object.Name); err != nil {
-		return nil, err
+	// Check if NAR can be fetched (ignore NotFound — it may not exist yet)
+	if _, err := t.getNAR(ctx); err != nil && !k8serrors.IsNotFound(err) {
+		return nil, fmt.Errorf("failed to get NodeAllocationRequest '%s': %w", t.object.Name, err)
 	}
 
 	nodeAllocationRequest, err := t.buildNodeAllocationRequestSpec(clusterInstance)
