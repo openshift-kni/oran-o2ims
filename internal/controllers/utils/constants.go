@@ -126,7 +126,7 @@ var (
 		constants.HardwareManagerCmd,
 		constants.StartSubcommand,
 		constants.HealthProbeFlag + "=" + constants.HealthProbePort,
-		constants.MetricsFlag + "=" + constants.MetricsPort,
+		fmt.Sprintf("%s=:%d", constants.MetricsFlag, constants.DefaultContainerPort),
 		fmt.Sprintf("--metrics-tls-cert-dir=%s", constants.TLSServerMountPath),
 		constants.LeaderElectFlag,
 	}
