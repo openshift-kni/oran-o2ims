@@ -869,7 +869,7 @@ func loadDefaultCABundles(config *tls.Config) error {
 // When loadCAs is true, default in-cluster CA bundles are loaded.
 // Pass loadCAs=false when the caller provides its own trust anchors (e.g., a pinned service CA).
 func GetDefaultTLSConfig(config *tls.Config, loadCAs bool) (*tls.Config, error) {
-	profile := newTLSProfileFromEnv()
+	profile := NewTLSProfileFromEnv()
 	tlsConfig, err := NewOutboundTLSConfig(profile, config)
 	if err != nil {
 		return nil, err
@@ -903,7 +903,7 @@ func AddCABundle(config *tls.Config, caBundle string) error {
 // TLS version and cipher suites are inherited from the cluster TLS security profile
 // (via operator-injected environment variables).
 func GetClientTLSConfig(ctx context.Context, certFile, keyFile, caFile string) (*tls.Config, error) {
-	profile := newTLSProfileFromEnv()
+	profile := NewTLSProfileFromEnv()
 	return NewOutboundMTLSConfig(ctx, profile, certFile, keyFile, caFile)
 }
 
@@ -911,7 +911,7 @@ func GetClientTLSConfig(ctx context.Context, certFile, keyFile, caFile string) (
 // TLS version and cipher suites are inherited from the cluster TLS security profile
 // (via operator-injected environment variables).
 func GetServerTLSConfig(ctx context.Context, certFile, keyFile string) (*tls.Config, error) {
-	profile := newTLSProfileFromEnv()
+	profile := NewTLSProfileFromEnv()
 	return NewInboundTLSConfig(ctx, profile, certFile, keyFile)
 }
 

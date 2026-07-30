@@ -28,6 +28,8 @@ The O-Cloud Manager exposes Prometheus metrics at two layers:
    `cluster-server`, `provisioning-server`, `resource-server`,
    `artifacts-server`) exposes application-level metrics on its existing TLS
    port 8443 at `/metrics`.
+3. **Hardware manager layer** — The `hardwaremanager-server` exposes
+   controller-runtime reconciliation metrics on port 8443 at `/metrics`.
 
 Both layers are scraped by the OpenShift platform Prometheus via dedicated
 `ServiceMonitor` resources.
@@ -41,8 +43,10 @@ flowchart LR
         AS[alarms-server :8443 /metrics]
         PS[provisioning-server :8443 /metrics]
         ARS[artifacts-server :8443 /metrics]
+        HW[hardwaremanager-server :8443 /metrics]
         SM1[ServiceMonitor operator]
         SM2[ServiceMonitors per-service]
+        SM3[ServiceMonitor hardware-manager]
     end
 
     subgraph monitoring [openshift-monitoring]
@@ -51,12 +55,14 @@ flowchart LR
 
     Prom -->|scrapes| SM1
     Prom -->|scrapes| SM2
+    Prom -->|scrapes| SM3
     SM1 --> CM
     SM2 --> RS
     SM2 --> CS
     SM2 --> AS
     SM2 --> PS
     SM2 --> ARS
+    SM3 --> HW
 ```
 
 For the platform Prometheus instance (in `openshift-monitoring`) to discover
@@ -222,6 +228,7 @@ will be blocked.
 | Server | Ingress allowed from |
 |--------|---------------------|
 | API servers (resource, cluster, alarms, artifacts, provisioning) | OpenShift ingress controller, OpenShift monitoring, same namespace |
+| Hardware manager (hardwaremanager-server) | OpenShift ingress controller, OpenShift monitoring, same namespace |
 | Alarms server (additional) | ACM alertmanager (`open-cluster-management-observability`) |
 | Database (postgres) | Same namespace only |
 
@@ -327,12 +334,10 @@ Key design choices:
   authorized by the `metrics-reader` ClusterRole.
 - **Shared metrics package** — All metric definitions live in
   `internal/service/common/metrics/metrics.go` to avoid duplication.
-- **Per-service ServiceMonitors** — Each API service gets its own
-  ServiceMonitor (in `config/prometheus/services-monitor.yaml`) so that
-  `tlsConfig.serverName` matches the serving certificate SAN. The database
-  (`postgres-server`) is excluded. The hardware manager uses the
-  controller-runtime metrics server pattern and is not selected by these
-  monitors.
+- **Per-service ServiceMonitors** — Each API service and the hardware manager
+  gets its own ServiceMonitor (in `config/prometheus/services-monitor.yaml`)
+  so that `tlsConfig.serverName` matches the serving certificate SAN. The
+  database (`postgres-server`) is excluded.
 
 ### Metrics Exposed
 
@@ -584,13 +589,14 @@ oc get servicemonitor -n oran-o2ims
 Expected output:
 
 ```text
-NAME                                           AGE
-oran-o2ims-alarms-server-metrics-monitor       ...
-oran-o2ims-artifacts-server-metrics-monitor    ...
-oran-o2ims-cluster-server-metrics-monitor      ...
-oran-o2ims-controller-manager-metrics-monitor  ...
-oran-o2ims-provisioning-server-metrics-monitor ...
-oran-o2ims-resource-server-metrics-monitor     ...
+NAME                                                  AGE
+oran-o2ims-alarms-server-metrics-monitor              ...
+oran-o2ims-artifacts-server-metrics-monitor            ...
+oran-o2ims-cluster-server-metrics-monitor              ...
+oran-o2ims-controller-manager-metrics-monitor          ...
+oran-o2ims-hardwaremanager-server-metrics-monitor      ...
+oran-o2ims-provisioning-server-metrics-monitor         ...
+oran-o2ims-resource-server-metrics-monitor             ...
 ```
 
 #### Verify Prometheus discovered the targets

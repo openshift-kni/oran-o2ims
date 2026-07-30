@@ -116,3 +116,26 @@ spec:
   selector:
     matchLabels:
       app: resource-server
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app.kubernetes.io/component: metrics
+    app.kubernetes.io/created-by: oran-o2ims
+    app.kubernetes.io/part-of: oran-o2ims
+    app.kubernetes.io/managed-by: kustomize
+  name: hardwaremanager-server-metrics-monitor
+  namespace: system
+spec:
+  endpoints:
+    - path: /metrics
+      port: api
+      scheme: https
+      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      tlsConfig:
+        serverName: hardwaremanager-server.oran-o2ims.svc
+        caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
+  selector:
+    matchLabels:
+      app: hardwaremanager-server
