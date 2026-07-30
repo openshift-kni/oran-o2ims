@@ -49,17 +49,20 @@ The [CRD](../../config/crd/bases/clcm.openshift.io_provisioningrequests.yaml)'s 
 - templateParameters: Provides the input data that conforms to the OpenAPI v3 schema defined in the referenced ClusterTemplate.
 - extensions(FFS): A set of key-value pairs extending the cluster's configuration.
 
-The status of the provisioning process is tracked via the following `status.conditions`:
+The status of the provisioning process is tracked via the following `status.conditions`,
+listed in the order they are set during initial provisioning:
 
 - ProvisioningRequestValidated: The ProvisioningRequest has been validated.
 - ClusterInstanceRendered: The ClusterInstance has been successfully rendered and validated.
 - ClusterResourcesCreated: The necessary cluster resources have been created.
 - NodeAllocationRequestRendered: The NodeAllocationRequest has been successfully rendered.
 - HardwareProvisioned: Hardware provisioning is complete.
-- HardwareConfigured: Firmware and BIOS configuration has been applied. See [Firmware Update Workflow](./firmware-update-workflow.md) for details.
 - HardwareNodeConfigApplied: Hardware node configuration is applied to the rendered ClusterInstance.
+- HardwareConfigured: Firmware and BIOS configuration has been applied. See [Firmware Update Workflow](./firmware-update-workflow.md) for details.
+- ClusterInstanceProcessed: The ClusterInstance has been applied and processed by siteconfig.
 - ClusterProvisioned: Cluster installation is complete.
 - ConfigurationApplied: Configuration has been successfully applied via ACM enforce policies.
+- UpgradeCompleted: Tracks cluster upgrade status (day-2 only).
 
 The `status.provisioningStatus` tracks the overall provisioning state.
 
@@ -67,6 +70,7 @@ The `status.provisioningStatus` tracks the overall provisioning state.
 - progressing: When any part of provisioning process begins (hardware provisioning, cluster installation, or cluster configuration).
 - fulfilled: When all stages of provisioning process are successfully completed.
 - failed: When any stage of provisioning process fails or times out, including resources validation or preparation.
+- deleting: When the ProvisioningRequest is being deleted and cleanup is in progress.
 
 > [!NOTE]
 
