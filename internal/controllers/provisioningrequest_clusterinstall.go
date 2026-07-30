@@ -788,6 +788,9 @@ func (t *provisioningRequestReconcilerTask) handleClusterInstallation(ctx contex
 			// Already InProgress (e.g. from scale-in portion of a swap).
 			// Update the message to reflect scale-out phase.
 			ctlrutils.SetProvisioningStateInProgress(t.object, message)
+			if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+				return fmt.Errorf("failed to update scale-out status for ProvisioningRequest %s: %w", t.object.Name, updateErr)
+			}
 		}
 
 		// WORKAROUND: Approve pending CSRs for scale-out worker nodes.
