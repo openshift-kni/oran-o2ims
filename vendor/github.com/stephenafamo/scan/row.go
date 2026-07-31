@@ -17,6 +17,7 @@ func wrapRows(r Rows, allowUnknown bool) (*Row, error) {
 		r:                r,
 		columns:          cols,
 		scanDestinations: make([]reflect.Value, len(cols)),
+		scanTargets:      make([]any, len(cols)),
 		allowUnknown:     allowUnknown,
 	}, nil
 }
@@ -32,6 +33,7 @@ type Row struct {
 	r                   Rows
 	columns             []string
 	scanDestinations    []reflect.Value
+	scanTargets         []any
 	unknownDestinations []string
 	allowUnknown        bool
 }
@@ -91,12 +93,17 @@ func (r *Row) scanCurrentRow() error {
 		return err
 	}
 
-	r.scanDestinations = make([]reflect.Value, len(r.columns))
+	// Reset scan destinations in place for the next row. The before hook
+	// re-populates the same indices deterministically, so zeroing is enough
+	// (go.mod is go 1.18, so no clear() builtin).
+	for i := range r.scanDestinations {
+		r.scanDestinations[i] = zeroValue
+	}
 	return nil
 }
 
 func (r *Row) createTargets() ([]any, error) {
-	targets := make([]any, len(r.columns))
+	targets := r.scanTargets
 
 	for i, name := range r.columns {
 		dest := r.scanDestinations[i]

@@ -23,6 +23,7 @@ func (v visited) copy() visited {
 
 type mapinfo struct {
 	name      string
+	colIndex  int
 	position  []int
 	init      [][]int
 	isPointer bool

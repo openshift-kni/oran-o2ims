@@ -37,7 +37,7 @@ require (
 	github.com/r3labs/diff/v3 v3.0.2
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
-	github.com/stephenafamo/bob v0.47.0
+	github.com/stephenafamo/bob v0.49.0
 	github.com/stolostron/multicluster-observability-operator v0.0.0-20260728124419-1354ae451c1a
 	github.com/stolostron/siteconfig v0.0.0-20260730225110-604a6a3095fc
 	github.com/xeipuuv/gojsonschema v1.2.0
@@ -148,7 +148,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
 	github.com/speakeasy-api/jsonpath v0.6.3 // indirect
 	github.com/speakeasy-api/openapi v1.19.2 // indirect
-	github.com/stephenafamo/scan v0.7.0 // indirect
+	github.com/stephenafamo/scan v0.9.0 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.2.0 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect

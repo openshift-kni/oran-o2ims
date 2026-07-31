@@ -238,9 +238,18 @@ func (s *mapperSourceImpl) setMappings(typ reflect.Type, prefix string, v visite
 }
 
 func filterColumns(c cols, m mapping, prefix string) (mapping, error) {
+	// index the mapping by name so each column is a single lookup instead of
+	// a linear search; keep the first entry per name, like the linear search did
+	byName := make(map[string]int, len(m))
+	for i, info := range m {
+		if _, ok := byName[info.name]; !ok {
+			byName[info.name] = i
+		}
+	}
+
 	// Filter the mapping so we only ask for the available columns
 	filtered := make(mapping, 0, len(c))
-	for _, name := range c {
+	for colIdx, name := range c {
 		key := name
 		if prefix != "" {
 			if !strings.HasPrefix(name, prefix) {
@@ -250,12 +259,11 @@ func filterColumns(c cols, m mapping, prefix string) (mapping, error) {
 			key = name[len(prefix):]
 		}
 
-		for _, info := range m {
-			if key == info.name {
-				info.name = name
-				filtered = append(filtered, info)
-				break
-			}
+		if i, ok := byName[key]; ok {
+			info := m[i]
+			info.name = name
+			info.colIndex = colIdx
+			filtered = append(filtered, info)
 		}
 	}
 
