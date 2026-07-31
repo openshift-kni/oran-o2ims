@@ -14,6 +14,8 @@ type Responses struct {
 	Origin     *Origin        `json:"-" yaml:"-"`
 
 	m map[string]*ResponseRef
+
+	explicitlyNull bool
 }
 
 // NewResponses builds a responses object with response objects in insertion order.
@@ -24,6 +26,10 @@ func NewResponses(opts ...NewResponsesOption) *Responses {
 		opt(responses)
 	}
 	return responses
+}
+
+func (responses *Responses) isExplicitlyNull() bool {
+	return responses != nil && responses.explicitlyNull && responses.m == nil && len(responses.Extensions) == 0
 }
 
 // NewResponsesOption describes options to NewResponses func
@@ -210,10 +216,4 @@ func (response *Response) Validate(ctx context.Context, opts ...ValidationOption
 	}
 
 	return validateExtensions(ctx, response.Extensions, response.Origin)
-}
-
-// UnmarshalJSON sets ResponseBodies to a copy of data.
-func (responseBodies *ResponseBodies) UnmarshalJSON(data []byte) (err error) {
-	*responseBodies, err = unmarshalStringMapP[ResponseRef](data)
-	return
 }
