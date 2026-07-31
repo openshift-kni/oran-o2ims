@@ -296,8 +296,8 @@ github.com/lib/pq/scram
 # github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de
 ## explicit
 github.com/liggitt/tabwriter
-# github.com/metal3-io/baremetal-operator/apis v0.12.4
-## explicit; go 1.24.0
+# github.com/metal3-io/baremetal-operator/apis v0.13.2
+## explicit; go 1.25.0
 github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1
 # github.com/mitchellh/go-wordwrap v1.0.1
 ## explicit; go 1.14
