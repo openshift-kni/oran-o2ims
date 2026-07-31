@@ -1,6 +1,6 @@
 module github.com/openshift-kni/oran-o2ims
 
-go 1.25.9
+go 1.26.5
 
 // Needed for importing the siteconfig operator, taken from the siteconfig operator repo.
 replace (
