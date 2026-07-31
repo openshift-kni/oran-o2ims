@@ -21,11 +21,8 @@ import (
 	"errors"
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/runtime"
-
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -38,8 +35,8 @@ const validationFailedMsg = "validation failed"
 // clusterInstanceValidator handles validation for ClusterInstance resources.
 type clusterInstanceValidator struct{}
 
-// Ensure clusterInstanceValidator implements the webhook.CustomValidator interface.
-var _ webhook.CustomValidator = &clusterInstanceValidator{}
+// Ensure clusterInstanceValidator implements the admission.Validator interface.
+var _ admission.Validator[*ClusterInstance] = &clusterInstanceValidator{}
 
 //nolint:lll
 // NOTE: The 'path' attribute must follow a specific pattern and should not be modified directly here.
@@ -48,8 +45,7 @@ var _ webhook.CustomValidator = &clusterInstanceValidator{}
 
 // SetupWebhookWithManager will setup the manager to manage the webhooks
 func (r *ClusterInstance) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	err := ctrl.NewWebhookManagedBy(mgr).
-		For(&ClusterInstance{}).
+	err := ctrl.NewWebhookManagedBy(mgr, &ClusterInstance{}).
 		WithValidator(&clusterInstanceValidator{}).
 		Complete()
 	if err != nil {
@@ -59,13 +55,8 @@ func (r *ClusterInstance) SetupWebhookWithManager(mgr ctrl.Manager) error {
 }
 
 // ValidateCreate checks if the ClusterInstance object is valid during creation.
-func (v *clusterInstanceValidator) ValidateCreate(ctx context.Context, obj runtime.Object,
+func (v *clusterInstanceValidator) ValidateCreate(ctx context.Context, clusterInstance *ClusterInstance,
 ) (admission.Warnings, error) {
-	clusterInstance, ok := obj.(*ClusterInstance)
-	if !ok {
-		return nil, fmt.Errorf("expected ClusterInstance but received %T", obj)
-	}
-
 	log := clusterInstanceLogger.WithValues(
 		"name", clusterInstance.Name,
 		"namespace", clusterInstance.Namespace,
@@ -90,18 +81,9 @@ func (v *clusterInstanceValidator) ValidateCreate(ctx context.Context, obj runti
 }
 
 // ValidateUpdate validates updates to a ClusterInstance object.
-func (v *clusterInstanceValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object,
+func (v *clusterInstanceValidator) ValidateUpdate(
+	ctx context.Context, oldClusterInstance, newClusterInstance *ClusterInstance,
 ) (admission.Warnings, error) {
-	oldClusterInstance, ok := oldObj.(*ClusterInstance)
-	if !ok {
-		return nil, fmt.Errorf("expected a ClusterInstance but received %T", oldObj)
-	}
-
-	newClusterInstance, ok := newObj.(*ClusterInstance)
-	if !ok {
-		return nil, fmt.Errorf("expected a ClusterInstance but received %T", newObj)
-	}
-
 	log := clusterInstanceLogger.WithValues(
 		"name", newClusterInstance.Name,
 		"namespace", newClusterInstance.Namespace,
@@ -183,7 +165,9 @@ func (v *clusterInstanceValidator) ValidateUpdate(ctx context.Context, oldObj, n
 	return nil, nil
 }
 
-// ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (v *clusterInstanceValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+// ValidateDelete implements admission.Validator so a webhook will be registered for the type
+func (v *clusterInstanceValidator) ValidateDelete(
+	ctx context.Context, obj *ClusterInstance,
+) (admission.Warnings, error) {
 	return nil, nil
 }

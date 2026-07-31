@@ -551,7 +551,7 @@ func getUnauthorizedJSONDiffs(oldNode, newNode NodeSpec, allowReinstall bool) []
 
 	var unauthorized []string
 	for _, diff := range diffs {
-		if isCRDUpgradeFieldAddition(diff) {
+		if isCRDUpgradeFieldChange(diff) {
 			continue
 		}
 		if !isPermissibleNodeChange(diff.Path, allowReinstall) {
@@ -561,10 +561,11 @@ func getUnauthorizedJSONDiffs(oldNode, newNode NodeSpec, allowReinstall bool) []
 	return unauthorized
 }
 
-// isCRDUpgradeFieldAddition returns true if the diff represents a field being added
-// for the first time during a CRD upgrade (transition from absent to a valid value).
-func isCRDUpgradeFieldAddition(diff jsondiff.Operation) bool {
-	return diff.Path == "/cpuArchitecture" && diff.Type == jsondiff.OperationAdd
+// isCRDUpgradeFieldChange returns true if the diff represents a field being added or
+// removed during/after a CRD upgrade, allowing GitOps tools to sync with pre-upgrade git sources.
+func isCRDUpgradeFieldChange(diff jsondiff.Operation) bool {
+	return diff.Path == "/cpuArchitecture" &&
+		(diff.Type == jsondiff.OperationAdd || diff.Type == jsondiff.OperationRemove)
 }
 
 // getNodeIdentifier returns a human-readable identifier for a node
@@ -677,7 +678,7 @@ func validateChangesWithJSONDiff(
 			}
 		}
 
-		if isCRDUpgradeFieldAddition(diff) {
+		if isCRDUpgradeFieldChange(diff) {
 			continue
 		}
 
@@ -846,9 +847,13 @@ func validateClusterInstanceJSONFields(clusterInstance *ClusterInstance) error {
 // validateControlPlaneAgentCount ensures that the number of control-plane nodes is valid.
 func validateControlPlaneAgentCount(clusterInstance *ClusterInstance) error {
 	controlPlaneCount := 0
+	arbiterCount := 0
 	for _, node := range clusterInstance.Spec.Nodes {
-		if node.Role == "master" {
+		switch node.Role {
+		case "master":
 			controlPlaneCount++
+		case "arbiter":
+			arbiterCount++
 		}
 	}
 
@@ -863,6 +868,19 @@ func validateControlPlaneAgentCount(clusterInstance *ClusterInstance) error {
 
 	if controlPlaneCount > 0 && clusterInstance.Spec.ClusterType == ClusterTypeHostedControlPlane {
 		return fmt.Errorf("hosted control plane clusters must not have control-plane agents")
+	}
+
+	// Ensure that HighlyAvailableArbiter clusters have at least 1 arbiter node and 2 master nodes.
+	if clusterInstance.Spec.ClusterType == ClusterTypeHighlyAvailableArbiter &&
+		(arbiterCount < 1 || controlPlaneCount < 2) {
+		return fmt.Errorf(
+			"highly available arbiter cluster-type must have at least 1 arbiter agent and 2 control-plane agents",
+		)
+	}
+
+	// Ensure that non-arbiter cluster types do not have arbiter nodes.
+	if clusterInstance.Spec.ClusterType != ClusterTypeHighlyAvailableArbiter && arbiterCount > 0 {
+		return fmt.Errorf("arbiter agents can only be used with HighlyAvailableArbiter cluster-type")
 	}
 
 	return nil // Validation succeeded

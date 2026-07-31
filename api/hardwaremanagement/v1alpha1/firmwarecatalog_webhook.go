@@ -11,11 +11,9 @@ import (
 	"fmt"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -24,8 +22,7 @@ var firmwarecataloglog = logf.Log.WithName("firmwarecatalog-webhook")
 // SetupWebhookWithManager will setup the manager to manage the webhooks
 func (r *FirmwareCatalog) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	// nolint:wrapcheck
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(&FirmwareCatalog{}).
+	return ctrl.NewWebhookManagedBy(mgr, &FirmwareCatalog{}).
 		WithValidator(&firmwareCatalogValidator{Client: mgr.GetClient()}).
 		Complete()
 }
@@ -36,23 +33,15 @@ type firmwareCatalogValidator struct {
 	client.Client
 }
 
-var _ webhook.CustomValidator = &firmwareCatalogValidator{}
+var _ admission.Validator[*FirmwareCatalog] = &firmwareCatalogValidator{}
 
-// ValidateCreate implements webhook.CustomValidator
-func (v *firmwareCatalogValidator) ValidateCreate(_ context.Context, _ runtime.Object) (admission.Warnings, error) {
+// ValidateCreate implements admission.Validator
+func (v *firmwareCatalogValidator) ValidateCreate(_ context.Context, _ *FirmwareCatalog) (admission.Warnings, error) {
 	return nil, nil
 }
 
-// ValidateUpdate implements webhook.CustomValidator
-func (v *firmwareCatalogValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	oldCatalog, ok := oldObj.(*FirmwareCatalog)
-	if !ok {
-		return nil, fmt.Errorf("expected a FirmwareCatalog but got a %T", oldObj)
-	}
-	newCatalog, ok := newObj.(*FirmwareCatalog)
-	if !ok {
-		return nil, fmt.Errorf("expected a FirmwareCatalog but got a %T", newObj)
-	}
+// ValidateUpdate implements admission.Validator
+func (v *firmwareCatalogValidator) ValidateUpdate(ctx context.Context, oldCatalog, newCatalog *FirmwareCatalog) (admission.Warnings, error) {
 	firmwarecataloglog.Info("validate update", "name", oldCatalog.Name)
 
 	if modified := findModifiedImmutableFields(oldCatalog.Spec.Images, newCatalog.Spec.Images); len(modified) > 0 {
@@ -84,8 +73,8 @@ func (v *firmwareCatalogValidator) ValidateUpdate(ctx context.Context, oldObj, n
 	return nil, nil
 }
 
-// ValidateDelete implements webhook.CustomValidator
-func (v *firmwareCatalogValidator) ValidateDelete(_ context.Context, _ runtime.Object) (admission.Warnings, error) {
+// ValidateDelete implements admission.Validator
+func (v *firmwareCatalogValidator) ValidateDelete(_ context.Context, _ *FirmwareCatalog) (admission.Warnings, error) {
 	return nil, nil
 }
 

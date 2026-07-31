@@ -20,8 +20,6 @@ updates:
     # still use the old API, so we can't upgrade until they all update.
     - dependency-name: "open-cluster-management.io/api"
       versions: [">= 1.3.0"]
-    - dependency-name: "open-cluster-management.io/governance-policy-propagator"
-      versions: [">= 0.19.0"]
     - dependency-name: "github.com/metal3-io/baremetal-operator/apis"
       versions: [">= 0.13.0"]
     - dependency-name: "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring"
