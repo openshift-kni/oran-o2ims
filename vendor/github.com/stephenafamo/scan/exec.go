@@ -13,7 +13,6 @@ func One[T any](ctx context.Context, exec Queryer, m Mapper[T], query string, ar
 	if err != nil {
 		return t, err
 	}
-	defer rows.Close()
 
 	return OneFromRows(ctx, m, rows)
 }
@@ -21,6 +20,7 @@ func One[T any](ctx context.Context, exec Queryer, m Mapper[T], query string, ar
 // OneFromRows scans a single row from the given [Rows] result and maps it to T using a [Queryer]
 func OneFromRows[T any](ctx context.Context, m Mapper[T], rows Rows) (T, error) {
 	var t T
+	defer rows.Close()
 
 	allowUnknown, _ := ctx.Value(CtxKeyAllowUnknownColumns).(bool)
 	v, err := wrapRows(rows, allowUnknown)
@@ -51,13 +51,14 @@ func All[T any](ctx context.Context, exec Queryer, m Mapper[T], query string, ar
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
 	return AllFromRows(ctx, m, rows)
 }
 
 // AllFromRows scans all rows from the given [Rows] and returns a slice []T of all rows using a [Queryer]
 func AllFromRows[T any](ctx context.Context, m Mapper[T], rows Rows) ([]T, error) {
+	defer rows.Close()
+
 	allowUnknown, _ := ctx.Value(CtxKeyAllowUnknownColumns).(bool)
 	v, err := wrapRows(rows, allowUnknown)
 	if err != nil {
@@ -122,6 +123,10 @@ func Each[T any](ctx context.Context, exec Queryer, m Mapper[T], query string, a
 				return
 			}
 		}
+
+		if err := rows.Err(); err != nil {
+			yield(*new(T), err)
+		}
 	}
 }
 
@@ -130,6 +135,7 @@ func CursorFromRows[T any](ctx context.Context, m Mapper[T], rows Rows) (ICursor
 	allowUnknown, _ := ctx.Value(CtxKeyAllowUnknownColumns).(bool)
 	v, err := wrapRows(rows, allowUnknown)
 	if err != nil {
+		rows.Close()
 		return nil, err
 	}
 

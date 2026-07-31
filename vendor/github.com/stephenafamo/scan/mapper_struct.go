@@ -2,8 +2,10 @@ package scan
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"reflect"
+	"strconv"
 )
 
 // CtxKeyAllowUnknownColumns makes it possible to allow unknown columns using the context
@@ -107,6 +109,8 @@ type mappingOptions struct {
 	rowValidator    RowValidator
 	mapperMods      []MapperMod
 	structTagPrefix string
+	rowSkipKeys     []string
+	rowSkipSeen     func([]reflect.Value) bool
 }
 
 // MappingeOption is a function type that changes how the mapper is generated
@@ -152,11 +156,13 @@ func mapperFromMapping[T any](m mapping, typ reflect.Type, isPointer bool, opts 
 		}
 
 		mapper := regular[T]{
-			typ:       typ,
-			isPointer: isPointer,
-			filtered:  filtered,
-			converter: opts.typeConverter,
-			validator: opts.rowValidator,
+			typ:         typ,
+			isPointer:   isPointer,
+			filtered:    filtered,
+			converter:   opts.typeConverter,
+			validator:   opts.rowValidator,
+			rowSkipKeys: opts.rowSkipKeys,
+			rowSkipSeen: opts.rowSkipSeen,
 		}
 		switch {
 		case opts.typeConverter == nil && opts.rowValidator == nil:
@@ -169,39 +175,50 @@ func mapperFromMapping[T any](m mapping, typ reflect.Type, isPointer bool, opts 
 }
 
 type regular[T any] struct {
-	isPointer bool
-	typ       reflect.Type
-	filtered  mapping
-	converter TypeConverter
-	validator RowValidator
+	isPointer   bool
+	typ         reflect.Type
+	filtered    mapping
+	converter   TypeConverter
+	validator   RowValidator
+	rowSkipKeys []string
+	rowSkipSeen func([]reflect.Value) bool
 }
 
 func (s regular[T]) regular() (func(*Row) (any, error), func(any) (T, error)) {
+	// The mapping is fixed for the duration of the query, so everything that
+	// only depends on it is resolved here, once, instead of once per row.
+	styp := s.typ
+	if s.isPointer {
+		styp = s.typ.Elem()
+	}
+	inits := uniqueInits(s.filtered)
+
+	// scanOneRow calls before/scan/after strictly in sequence for each row
+	// and the mapper is built once per query, so the link holder can be
+	// reused across rows, avoiding a per-row boxing allocation.
+	link := new(rowLink)
+
 	return func(v *Row) (any, error) {
-			var row reflect.Value
-			if s.isPointer {
-				row = reflect.New(s.typ.Elem()).Elem()
-			} else {
-				row = reflect.New(s.typ).Elem()
+			row := reflect.New(styp).Elem()
+
+			// row is freshly zero, so each unique nested pointer is
+			// initialized exactly once, ancestors before descendants,
+			// before any field address is scheduled
+			for _, path := range inits {
+				pv := row.FieldByIndex(path)
+				pv.Set(reflect.New(pv.Type().Elem()))
 			}
 
 			for _, info := range s.filtered {
-				for _, v := range info.init {
-					pv := row.FieldByIndex(v)
-					if !pv.IsZero() {
-						continue
-					}
-
-					pv.Set(reflect.New(pv.Type().Elem()))
-				}
-
 				fv := row.FieldByIndex(info.position)
-				v.ScheduleScanByNameX(info.name, fv.Addr())
+				v.ScheduleScanByIndexX(info.colIndex, fv.Addr())
 			}
 
-			return row, nil
+			link.v = row
+
+			return link, nil
 		}, func(v any) (T, error) {
-			row := v.(reflect.Value)
+			row := v.(*rowLink).v
 
 			if s.isPointer {
 				row = row.Addr()
@@ -211,53 +228,158 @@ func (s regular[T]) regular() (func(*Row) (any, error), func(any) (T, error)) {
 		}
 }
 
+// rowLink carries the in-progress row value from the before function to the
+// after function without boxing a new interface value on every row.
+type rowLink struct{ v reflect.Value }
+
+// uniqueInits collects the nested-pointer init paths of all filtered columns,
+// de-duplicated, preserving ancestor-before-descendant order.
+func uniqueInits(m mapping) [][]int {
+	var out [][]int
+	seen := make(map[string]struct{})
+	var key []byte
+	for _, info := range m {
+		for _, path := range info.init {
+			key = key[:0]
+			for _, i := range path {
+				key = strconv.AppendInt(key, int64(i), 10)
+				key = append(key, '.')
+			}
+			if _, ok := seen[string(key)]; ok {
+				continue
+			}
+			seen[string(key)] = struct{}{}
+			out = append(out, path)
+		}
+	}
+
+	return out
+}
+
 func (s regular[T]) allOptions() (func(*Row) (any, error), func(any) (T, error)) {
+	// The mapping is fixed for the duration of the query: the field types,
+	// the validator's column names and the nested-pointer init paths are all
+	// resolved here, once, instead of once per row (per column).
+	styp := s.typ
+	if s.isPointer {
+		styp = s.typ.Elem()
+	}
+
+	ftypes := make([]reflect.Type, len(s.filtered))
+	for i, info := range s.filtered {
+		ftypes[i] = styp.FieldByIndex(info.position).Type
+	}
+
+	colNames := s.filtered.cols()
+	inits := uniqueInits(s.filtered)
+
+	// scanOneRow calls before/scan/after strictly in sequence for each row
+	// and the mapper is built once per query, so the destinations slice can
+	// be reused across rows — like the links slice in [Mod] and the scan
+	// buffers in [Row]. Boxing it once also avoids a per-row allocation.
+	scratch := make([]reflect.Value, len(s.filtered))
+	var link any = scratch
+
+	makeDest := func(i int) reflect.Value {
+		if s.converter != nil {
+			return s.converter.TypeToDestination(ftypes[i])
+		}
+		return reflect.New(ftypes[i])
+	}
+
+	skip := buildRowSkipPlan(s.filtered, s.rowSkipKeys, s.rowSkipSeen)
+	if skip != nil {
+		skip.makeDest = makeDest
+		skip.scratch = scratch
+		// delegating a non-skipped column's scan needs the destination to
+		// be a sql.Scanner; probe one to decide for the query
+		if _, ok := makeDest(skip.conds[0].idx).Interface().(sql.Scanner); !ok {
+			skip = nil
+		}
+	}
+
 	return func(v *Row) (any, error) {
-			row := make([]reflect.Value, len(s.filtered))
-
-			for i, info := range s.filtered {
-				var ft reflect.Type
-				if s.isPointer {
-					ft = s.typ.Elem().FieldByIndex(info.position).Type
-				} else {
-					ft = s.typ.FieldByIndex(info.position).Type
-				}
-
-				if s.converter != nil {
-					row[i] = s.converter.TypeToDestination(ft)
-				} else {
-					row[i] = reflect.New(ft)
-				}
-
-				v.ScheduleScanByNameX(info.name, row[i])
+			if skip != nil {
+				skip.state.decided = false
 			}
 
-			return row, nil
+			for i, info := range s.filtered {
+				if skip != nil {
+					if slot := skip.condSlot[i]; slot >= 0 {
+						// the destination is created lazily by the
+						// condDest, and only when the row is not skipped
+						v.ScheduleScanByIndex(info.colIndex, &skip.conds[slot])
+						continue
+					}
+				}
+
+				scratch[i] = makeDest(i)
+
+				if skip != nil {
+					if slot := skip.keySlot[i]; slot >= 0 {
+						skip.keyVals[slot] = scratch[i]
+					}
+				}
+
+				v.ScheduleScanByIndexX(info.colIndex, scratch[i])
+			}
+
+			return link, nil
 		}, func(v any) (T, error) {
 			vals := v.([]reflect.Value)
 
-			if s.validator != nil && !s.validator(s.filtered.cols(), vals) {
+			if skip != nil && skip.skipped() {
+				// the row is already known: only the key columns were
+				// decoded, so build a value carrying just those — the
+				// caller promised to substitute its own copy of the row
+				row := reflect.New(styp).Elem()
+				for _, path := range inits {
+					pv := row.FieldByIndex(path)
+					pv.Set(reflect.New(pv.Type().Elem()))
+				}
+
+				for i, info := range s.filtered {
+					if skip.keySlot[i] < 0 {
+						continue
+					}
+
+					var val reflect.Value
+					if s.converter != nil {
+						val = s.converter.ValueFromDestination(vals[i])
+					} else {
+						val = vals[i].Elem()
+					}
+
+					fv := row.FieldByIndex(info.position)
+					if info.isPointer {
+						fv.Elem().Set(val)
+					} else {
+						fv.Set(val)
+					}
+				}
+
+				if s.isPointer {
+					row = row.Addr()
+				}
+
+				return row.Interface().(T), nil
+			}
+
+			if s.validator != nil && !s.validator(colNames, vals) {
 				var t T
 				return t, nil
 			}
 
-			var row reflect.Value
-			if s.isPointer {
-				row = reflect.New(s.typ.Elem()).Elem()
-			} else {
-				row = reflect.New(s.typ).Elem()
+			row := reflect.New(styp).Elem()
+
+			// row is freshly zero, so each unique nested pointer is
+			// initialized exactly once, ancestors before descendants
+			for _, path := range inits {
+				pv := row.FieldByIndex(path)
+				pv.Set(reflect.New(pv.Type().Elem()))
 			}
 
 			for i, info := range s.filtered {
-				for _, v := range info.init {
-					pv := row.FieldByIndex(v)
-					if !pv.IsZero() {
-						continue
-					}
-
-					pv.Set(reflect.New(pv.Type().Elem()))
-				}
-
 				var val reflect.Value
 				if s.converter != nil {
 					val = s.converter.ValueFromDestination(vals[i])
