@@ -171,7 +171,7 @@ func (pathItem *PathItem) GetOperation(method string) *Operation {
 	case http.MethodTrace:
 		return pathItem.Trace
 	default:
-		panic(fmt.Errorf("unsupported HTTP method %q", method))
+		return nil
 	}
 }
 

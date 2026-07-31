@@ -535,6 +535,35 @@ func (e *DuplicateParameterError) Error() string {
 	return fmt.Sprintf("more than one %q parameter has name %q", e.In, e.Name)
 }
 
+// DuplicateRequiredFieldError clusters "duplicate field in required" failures.
+// The elements of a schema's `required` array MUST be unique (JSON Schema
+// 2020-12 §6.5.3 for OpenAPI 3.1, draft-04 for OpenAPI 3.0).
+type DuplicateRequiredFieldError struct {
+	// Field is the field name listed more than once in `required`.
+	Field string
+	// Origin is the source location of the offending schema when the
+	// document was loaded with Loader.IncludeOrigin = true.
+	Origin *Origin
+}
+
+func (e *DuplicateRequiredFieldError) Error() string {
+	return fmt.Sprintf("duplicate field %q in required", e.Field)
+}
+
+// DuplicateTagError clusters "more than one tag has name X" failures. Each tag
+// name in the document-root `tags` list MUST be unique (OpenAPI Object).
+type DuplicateTagError struct {
+	// Name is the tag name that appears more than once.
+	Name string
+	// Origin is the source location of the offending tag when the document
+	// was loaded with Loader.IncludeOrigin = true.
+	Origin *Origin
+}
+
+func (e *DuplicateTagError) Error() string {
+	return fmt.Sprintf("more than one tag has name %q", e.Name)
+}
+
 // InvalidSerializationMethodError clusters "serialization method with
 // style=X and explode=Y is not supported by Z" failures. Fires for
 // invalid (style, explode) combinations on encodings, parameters,
@@ -1347,12 +1376,43 @@ func newAPIKeySecuritySchemeNameRequired(origin *Origin) error {
 		&APIKeySecuritySchemeNameRequired{ValidationError{Message: msg}}, origin)
 }
 
+// ExampleViolatesSchema and DefaultViolatesSchema mark which schema value kind
+// failed. They embed SchemaValueError, and their As exposes it, so errors.As
+// with a *SchemaValueError target keeps matching.
+type ExampleViolatesSchema struct{ SchemaValueError }
+
+func (e *ExampleViolatesSchema) As(target any) bool {
+	return asSchemaValueError(target, &e.SchemaValueError)
+}
+
+type DefaultViolatesSchema struct{ SchemaValueError }
+
+func (e *DefaultViolatesSchema) As(target any) bool {
+	return asSchemaValueError(target, &e.SchemaValueError)
+}
+
+func asSchemaValueError(target any, sve *SchemaValueError) bool {
+	t, ok := target.(**SchemaValueError)
+	if !ok {
+		return false
+	}
+	*t = sve
+	return true
+}
+
 // newSchemaValueError wraps the result of schema.VisitJSON in a
 // *SchemaValueError cluster, identifying which schema sub-field
 // (example, default, ...) carried the offending value. cause is
 // either a *SchemaError or a MultiError of them.
 func newSchemaValueError(valueKind string, cause error, origin *Origin) error {
-	return &SchemaValueError{ValueKind: valueKind, Cause: cause, Origin: origin}
+	sve := SchemaValueError{ValueKind: valueKind, Cause: cause, Origin: origin}
+	switch valueKind {
+	case "example":
+		return &ExampleViolatesSchema{sve}
+	case "default":
+		return &DefaultViolatesSchema{sve}
+	}
+	return &sve
 }
 
 // exampleValueOrigin returns an Origin pinned to the example's `value:`
@@ -1371,13 +1431,12 @@ func exampleValueOrigin(ex *Example, fallback *Origin) *Origin {
 }
 
 // newFieldVersionMismatch wraps leaf in a FieldVersionMismatchError for the
-// given field at minimum version 3.1. Used by per-call-site constructors
-// (newInfoSummaryFieldFor31Plus, etc.) and by the dispatch helper
-// newFieldFor31Plus that schema.go's reject closure goes through.
-func newFieldVersionMismatch(field string, leaf error, origin *Origin) error {
+// given field at minimum version. Used by per-call-site constructors
+// (newInfoSummaryFieldFor31Plus, etc.) and by dispatch helpers.
+func newFieldVersionMismatch(field, minVersion string, leaf error, origin *Origin) error {
 	return &FieldVersionMismatchError{
 		Field:      field,
-		MinVersion: "3.1",
+		MinVersion: minVersion,
 		Cause:      leaf,
 		Origin:     origin,
 	}
@@ -1391,25 +1450,25 @@ func newFieldVersionMismatch(field string, leaf error, origin *Origin) error {
 func newInfoSummaryFieldFor31Plus(origin *Origin) error {
 	const msg = "field summary is for OpenAPI >=3.1"
 	return newFieldVersionMismatch("summary",
-		&InfoSummaryFieldFor31Plus{ValidationError{Message: msg}}, origin)
+		"3.1", &InfoSummaryFieldFor31Plus{ValidationError{Message: msg}}, origin)
 }
 
 func newLicenseIdentifierFieldFor31Plus(origin *Origin) error {
 	const msg = "field identifier is for OpenAPI >=3.1"
 	return newFieldVersionMismatch("identifier",
-		&LicenseIdentifierFieldFor31Plus{ValidationError{Message: msg}}, origin)
+		"3.1", &LicenseIdentifierFieldFor31Plus{ValidationError{Message: msg}}, origin)
 }
 
 func newWebhooksFieldFor31Plus(origin *Origin) error {
 	const msg = "field webhooks is for OpenAPI >=3.1"
 	return newFieldVersionMismatch("webhooks",
-		&WebhooksFieldFor31Plus{ValidationError{Message: msg}}, origin)
+		"3.1", &WebhooksFieldFor31Plus{ValidationError{Message: msg}}, origin)
 }
 
 func newJSONSchemaDialectFieldFor31Plus(origin *Origin) error {
 	const msg = "field jsonschemadialect is for OpenAPI >=3.1"
 	return newFieldVersionMismatch("jsonschemadialect",
-		&JSONSchemaDialectFieldFor31Plus{ValidationError{Message: msg}}, origin)
+		"3.1", &JSONSchemaDialectFieldFor31Plus{ValidationError{Message: msg}}, origin)
 }
 
 // fieldFor31PlusLeaves maps field names (as passed to errFieldFor31Plus)
@@ -1447,7 +1506,7 @@ var fieldFor31PlusLeaves = map[string]func(msg string) error{
 	"$dynamicRef":           func(m string) error { return &DynamicRefFieldFor31Plus{ValidationError{Message: m}} },
 }
 
-// newFieldFor31Plus dispatches errFieldFor31Plus's per-field message
+// errFieldFor31Plus dispatches errFieldFor31Plus's per-field message
 // to the right typed leaf and wraps it in a FieldVersionMismatchError.
 // Fields not in fieldFor31PlusLeaves fall back to a bare
 // *ValidationError so the caller still gets a stable Message and the
@@ -1455,7 +1514,7 @@ var fieldFor31PlusLeaves = map[string]func(msg string) error{
 //
 // Reached only from schema.go's reject closure with a runtime field
 // name; the four non-schema sites use direct constructors instead.
-func newFieldFor31Plus(field string, origin *Origin) error {
+func errFieldFor31Plus(field string, origin *Origin) error {
 	msg := "field " + field + " is for OpenAPI >=3.1"
 	var leaf error
 	if ctor, ok := fieldFor31PlusLeaves[field]; ok {
@@ -1463,7 +1522,28 @@ func newFieldFor31Plus(field string, origin *Origin) error {
 	} else {
 		leaf = &ValidationError{Message: msg}
 	}
-	return newFieldVersionMismatch(field, leaf, origin)
+	return newFieldVersionMismatch(field, "3.1", leaf, origin)
+}
+
+type ItemSchemaFieldFor32Plus struct{ ValidationError }
+
+func (e *ItemSchemaFieldFor32Plus) As(target any) bool {
+	return asValidationError(target, &e.ValidationError)
+}
+
+var fieldFor32PlusLeaves = map[string]func(msg string) error{
+	"itemSchema": func(m string) error { return &ItemSchemaFieldFor32Plus{ValidationError{Message: m}} },
+}
+
+func errFieldFor32Plus(field string, origin *Origin) error {
+	msg := "field " + field + " is for OpenAPI >=3.2"
+	var leaf error
+	if ctor, ok := fieldFor32PlusLeaves[field]; ok {
+		leaf = ctor(msg)
+	} else {
+		leaf = &ValidationError{Message: msg}
+	}
+	return newFieldVersionMismatch(field, "3.2", leaf, origin)
 }
 
 func newPathParameterRequired(param string, origin *Origin) error {
