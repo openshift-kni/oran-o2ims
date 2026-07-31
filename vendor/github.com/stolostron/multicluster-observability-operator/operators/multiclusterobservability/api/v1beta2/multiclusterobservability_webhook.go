@@ -6,7 +6,10 @@ package v1beta2
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
+	"gopkg.in/yaml.v2"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -14,8 +17,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -26,32 +29,59 @@ var multiclusterobservabilitylog = logf.Log.WithName("multiclusterobservability-
 
 var kubeClient kubernetes.Interface
 
+type mcoValidator struct {
+	client.Client
+}
+
+const (
+	// defaultNamespace is the default namespace for MultiClusterObservability resources
+	defaultNamespace = "open-cluster-management-observability"
+
+	// Bucket name constraints per S3/GCS specifications
+	minBucketNameLength = 3
+	maxBucketNameLength = 63
+)
+
+// objectStorageConf represents the structure of object storage configuration
+type objectStorageConf struct {
+	Type   string               `yaml:"type"`
+	Config storageBackendConfig `yaml:"config"`
+}
+
+// storageBackendConfig represents the storage backend configuration
+type storageBackendConfig struct {
+	Bucket string `yaml:"bucket"`
+}
+
 func (mco *MultiClusterObservability) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		WithValidator(&MultiClusterObservability{}).
-		For(mco).
+	return ctrl.NewWebhookManagedBy(mgr, mco).
+		WithValidator(&mcoValidator{Client: mgr.GetClient()}).
 		Complete()
 }
 
 // +kubebuilder:webhook:path=/validate-observability-open-cluster-management-io-v1beta2-multiclusterobservability,mutating=false,failurePolicy=fail,sideEffects=None,groups=observability.open-cluster-management.io,resources=multiclusterobservabilities,verbs=create;update,versions=v1beta2,name=vmulticlusterobservability.observability.open-cluster-management.io,admissionReviewVersions={v1}
 
-var _ webhook.CustomValidator = &MultiClusterObservability{}
-
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (mco *MultiClusterObservability) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	multiclusterobservabilitylog.Info("validate create", "name", mco.Name)
-	return nil, mco.validateMultiClusterObservability(nil)
+func (v *mcoValidator) ValidateCreate(ctx context.Context, obj *MultiClusterObservability) (admission.Warnings, error) {
+	multiclusterobservabilitylog.Info("validate create", "name", obj.Name)
+	return nil, obj.validateMultiClusterObservability(nil)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (mco *MultiClusterObservability) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	multiclusterobservabilitylog.Info("validate update", "name", mco.Name)
-	return nil, mco.validateMultiClusterObservability(oldObj)
+func (v *mcoValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *MultiClusterObservability) (admission.Warnings, error) {
+	multiclusterobservabilitylog.Info("validate update", "name", newObj.Name)
+
+	if newObj.GetDeletionTimestamp() != nil {
+		multiclusterobservabilitylog.Info("skip update validation during deletion", "name", newObj.Name)
+		return nil, nil
+	}
+
+	return nil, newObj.validateMultiClusterObservability(oldObj)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (mco *MultiClusterObservability) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	multiclusterobservabilitylog.Info("validate delete", "name", mco.Name)
+func (v *mcoValidator) ValidateDelete(ctx context.Context, obj *MultiClusterObservability) (admission.Warnings, error) {
+	multiclusterobservabilitylog.Info("validate delete", "name", obj.Name)
 
 	// no validation logic upon object delete.
 	return nil, nil
@@ -95,6 +125,102 @@ func (mco *MultiClusterObservability) validateMultiClusterObservabilityName() *f
 // definition.
 func (mco *MultiClusterObservability) validateMultiClusterObservabilitySpec() *field.Error {
 	// The field helpers from the kubernetes API machinery help us return nicely structured validation errors.
+
+	// Validate object storage configuration if provided
+	if mco.Spec.StorageConfig == nil || mco.Spec.StorageConfig.MetricObjectStorage == nil {
+		// No storage config provided, skip validation
+		return nil
+	}
+
+	objStorageConf := mco.Spec.StorageConfig.MetricObjectStorage
+	storageConfigPath := field.NewPath("spec").Child("storageConfig").Child("metricObjectStorage")
+
+	// Get kubernetes client to read the secret
+	kubeClient, err := createOrGetKubeClient()
+	if err != nil {
+		return field.InternalError(storageConfigPath, fmt.Errorf("failed to create kubernetes client: %w", err))
+	}
+
+	// Read the object storage secret
+	secret, err := kubeClient.CoreV1().Secrets(defaultNamespace).Get(
+		context.TODO(),
+		objStorageConf.Name,
+		metav1.GetOptions{},
+	)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return field.Invalid(
+				storageConfigPath.Child("name"),
+				objStorageConf.Name,
+				fmt.Sprintf("object storage secret not found in namespace %s", defaultNamespace),
+			)
+		}
+		return field.InternalError(storageConfigPath.Child("name"), fmt.Errorf("failed to get object storage secret: %w", err))
+	}
+
+	// Extract the configuration data from the secret
+	data, ok := secret.Data[objStorageConf.Key]
+	if !ok {
+		return field.Invalid(
+			storageConfigPath.Child("key"),
+			objStorageConf.Key,
+			fmt.Sprintf("key '%s' not found in secret '%s'", objStorageConf.Key, objStorageConf.Name),
+		)
+	}
+
+	// Validate the object storage configuration (including bucket name length)
+	err = validateObjectStorageConfig(data)
+	if err != nil {
+		return field.Invalid(
+			storageConfigPath,
+			objStorageConf.Name,
+			fmt.Sprintf("invalid object storage configuration: %v", err),
+		)
+	}
+
+	return nil
+}
+
+// validateObjectStorageConfig validates object storage configuration including bucket name length
+func validateObjectStorageConfig(data []byte) error {
+	var objConf objectStorageConf
+	err := yaml.Unmarshal(data, &objConf)
+	if err != nil {
+		return fmt.Errorf("failed to parse object storage configuration: %w", err)
+	}
+
+	storageType := strings.ToLower(objConf.Type)
+
+	// Validate based on storage type
+	switch storageType {
+	case "s3", "gcs":
+		return validateBucketName(objConf.Config.Bucket, storageType)
+	case "azure":
+		// Azure uses "container" instead of "bucket", skip bucket validation
+		return nil
+	default:
+		return fmt.Errorf("unsupported storage type: %s", objConf.Type)
+	}
+}
+
+// validateBucketName validates bucket name length according to S3/GCS specifications
+func validateBucketName(bucket string, storageType string) error {
+	if bucket == "" {
+		return fmt.Errorf("bucket name cannot be empty")
+	}
+
+	bucketLen := len(bucket)
+
+	if bucketLen > maxBucketNameLength {
+		return fmt.Errorf("bucket name '%s' is too long (%d characters). %s bucket names must be %d characters or less",
+			bucket, bucketLen, strings.ToUpper(storageType), maxBucketNameLength)
+	}
+
+	if bucketLen < minBucketNameLength {
+		return fmt.Errorf("bucket name '%s' is too short (%d characters). %s bucket names must be at least %d characters",
+			bucket, bucketLen, strings.ToUpper(storageType), minBucketNameLength)
+	}
+
 	return nil
 }
 

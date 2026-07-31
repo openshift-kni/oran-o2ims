@@ -16,11 +16,9 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	clustervalidation "github.com/openshift-kni/oran-o2ims/internal/validation"
@@ -34,8 +32,7 @@ var provisioningrequestlog = logf.Log.WithName("provisioningrequest-webhook")
 // SetupWebhookWithManager will setup the manager to manage the webhooks
 func (r *ProvisioningRequest) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	// nolint:wrapcheck
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(&ProvisioningRequest{}).
+	return ctrl.NewWebhookManagedBy(mgr, &ProvisioningRequest{}).
 		WithValidator(&provisioningRequestValidator{Client: mgr.GetClient()}).
 		Complete()
 }
@@ -49,14 +46,10 @@ type provisioningRequestValidator struct {
 	client.Client
 }
 
-var _ webhook.CustomValidator = &provisioningRequestValidator{}
+var _ admission.Validator[*ProvisioningRequest] = &provisioningRequestValidator{}
 
-// ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (v *provisioningRequestValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	pr, casted := obj.(*ProvisioningRequest)
-	if !casted {
-		return nil, fmt.Errorf("expected a ProvisioningRequest but got a %T", obj)
-	}
+// ValidateCreate implements admission.Validator
+func (v *provisioningRequestValidator) ValidateCreate(ctx context.Context, pr *ProvisioningRequest) (admission.Warnings, error) {
 	provisioningrequestlog.Info("validate create", "name", pr.Spec.Name)
 
 	// Validate that metadata.name is a valid UUID
@@ -72,16 +65,8 @@ func (v *provisioningRequestValidator) ValidateCreate(ctx context.Context, obj r
 	return nil, nil
 }
 
-// ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (v *provisioningRequestValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	oldPr, casted := oldObj.(*ProvisioningRequest)
-	if !casted {
-		return nil, fmt.Errorf("expected a ProvisioningRequest but got a %T", oldObj)
-	}
-	newPr, casted := newObj.(*ProvisioningRequest)
-	if !casted {
-		return nil, fmt.Errorf("expected a ProvisioningRequest but got a %T", newObj)
-	}
+// ValidateUpdate implements admission.Validator
+func (v *provisioningRequestValidator) ValidateUpdate(ctx context.Context, oldPr, newPr *ProvisioningRequest) (admission.Warnings, error) {
 	provisioningrequestlog.Info("validate update", "name", oldPr.Name)
 
 	if !newPr.DeletionTimestamp.IsZero() {
@@ -97,13 +82,8 @@ func (v *provisioningRequestValidator) ValidateUpdate(ctx context.Context, oldOb
 	return nil, nil
 }
 
-// ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (v *provisioningRequestValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-
-	pr, casted := obj.(*ProvisioningRequest)
-	if !casted {
-		return nil, fmt.Errorf("expected a ProvisioningRequest but got a %T", obj)
-	}
+// ValidateDelete implements admission.Validator
+func (v *provisioningRequestValidator) ValidateDelete(ctx context.Context, pr *ProvisioningRequest) (admission.Warnings, error) {
 
 	// Re-fetch the object to ensure status is available
 	fetched := &ProvisioningRequest{}

@@ -5,10 +5,9 @@
 package v1beta2
 
 import (
+	observabilityshared "github.com/stolostron/multicluster-observability-operator/operators/multiclusterobservability/api/shared"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	observabilityshared "github.com/stolostron/multicluster-observability-operator/operators/multiclusterobservability/api/shared"
 )
 
 // MultiClusterObservabilitySpec defines the desired state of MultiClusterObservability.
@@ -98,6 +97,15 @@ type PlatformLogsSpec struct {
 	Collection PlatformLogsCollectionSpec `json:"collection,omitempty"`
 }
 
+// MetricsAlertsSpec defines the spec for the addon to forward alerts.
+type MetricsAlertsSpec struct {
+	// Enabled defines a flag to enable/disable the metrics alerts forwarding.
+	//
+	// +optional
+	// +kubebuilder:validation:Optional
+	Enabled bool `json:"enabled,omitempty"`
+}
+
 // PlatformMetricsSpec defines the spec for the addon to collect, forward and store metrics
 // from fleet managed clusters.
 type PlatformMetricsSpec struct {
@@ -113,6 +121,11 @@ type PlatformMetricsSpec struct {
 	// +optional
 	// +kubebuilder:validation:Optional
 	UI UIConfig `json:"ui,omitempty"`
+	// Alerts defines the spec for the addon to forward alerts from fleet managed clusters.
+	//
+	// +optional
+	// +kubebuilder:validation:Optional
+	Alerts MetricsAlertsSpec `json:"alerts,omitempty"`
 }
 
 // PlatformCapabilitiesSpec defines the observability capabilities managed by the addon
@@ -234,6 +247,11 @@ type UserWorkloadMetricsSpec struct {
 	// +optional
 	// +kubebuilder:validation:Optional
 	Default UserWorkloadMetricsDefaultSpec `json:"default,omitempty"`
+	// Alerts defines the spec for the addon to forward alerts from user workloads hosted on fleet managed clusters.
+	//
+	// +optional
+	// +kubebuilder:validation:Optional
+	Alerts MetricsAlertsSpec `json:"alerts,omitempty"`
 }
 
 // OpenTelemetryCollectorSpec defines the spec for the addon to collect and forward observability signals
@@ -307,6 +325,16 @@ type UserWorkloadCapabilitiesSpec struct {
 	Traces UserWorkloadTracesSpec `json:"traces,omitempty"`
 }
 
+type AddonManagerSpec struct {
+	// Compute Resources required by this component.
+	// +optional
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+
+	// Log verbosity for the addon-manager.
+	// +optional
+	LogVerbosity *int32 `json:"logVerbosity,omitempty"`
+}
+
 // CapabilitiesSpec defines the platform and user workload observabilities capabilities
 // managed exclusively by the multicluster-observability-addon. Enabling any of these
 // capabilities will result in deploying the following resources:
@@ -332,6 +360,12 @@ type CapabilitiesSpec struct {
 	// +optional
 	// +kubebuilder:validation:Optional
 	UserWorkloads *UserWorkloadCapabilitiesSpec `json:"userWorkloads,omitempty"`
+
+	// AddonManager defines the configuration spec for the addon-manager.
+	//
+	// +optional
+	// +kubebuilder:validation:Optional
+	AddonManager *AddonManagerSpec `json:"addonManager,omitempty"`
 }
 
 type AdvancedConfig struct {
@@ -345,6 +379,13 @@ type AdvancedConfig struct {
 	// For the alertmanager that runs in the hub this setting has no effect.
 	// +optional
 	CustomAlertmanagerHubURL observabilityshared.URL `json:"customAlertmanagerHubURL,omitempty"`
+	// QueryTimeout is the timeout for queries executed in Grafana.
+	// It is applied to the read path components from Grafana.
+	// Default is 300s.
+	// +optional
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\.[0-9]+)?(ms|s|m|h))+$`
+	// +kubebuilder:default="300s"
+	QueryTimeout string `json:"queryTimeout,omitempty"`
 	// The spec of the data retention configurations
 	// +optional
 	RetentionConfig *RetentionConfig `json:"retentionConfig,omitempty"`
@@ -438,6 +479,10 @@ type ReceiveSpec struct {
 	// +optional
 	Containers []corev1.Container `json:"containers,omitempty"`
 
+	// Debug defines the configuration for debugging and tuning the receiver.
+	// +optional
+	Debug *ReceiveDebugSpec `json:"debug,omitempty"`
+
 	CommonSpec `json:",inline"`
 }
 
@@ -486,6 +531,37 @@ type CompactSpec struct {
 	// lead to an unrecoverable state, data loss, or both, which is not covered by Red Hat Support.
 	// +optional
 	Containers []corev1.Container `json:"containers,omitempty"`
+
+	// Debug defines the configuration for debugging and tuning the compactor.
+	// +optional
+	Debug *CompactDebugSpec `json:"debug,omitempty"`
+}
+
+type CompactDebugSpec struct {
+	// LogLevel for the compactor (e.g., debug, info, warn, error).
+	// +optional
+	// +kubebuilder:validation:Enum=debug;info;warn;error
+	LogLevel string `json:"logLevel,omitempty"`
+	// WaitInterval is the time to wait between compaction cycles.
+	// Setting this will also synchronize --compact.cleanup-interval and --compact.progress-interval.
+	// +optional
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\.[0-9]+)?(ms|s|m|h))+$`
+	WaitInterval string `json:"waitInterval,omitempty"`
+	// BlockMetaFetchConcurrency is the number of concurrent requests to fetch block metadata.
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	BlockMetaFetchConcurrency *int32 `json:"blockMetaFetchConcurrency,omitempty"`
+	// DownsampleConcurrency is the number of goroutines to use when downsampling blocks.
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	DownsampleConcurrency *int32 `json:"downsampleConcurrency,omitempty"`
+}
+
+type ReceiveDebugSpec struct {
+	// LogLevel for the receiver (e.g., debug, info, warn, error).
+	// +optional
+	// +kubebuilder:validation:Enum=debug;info;warn;error
+	LogLevel string `json:"logLevel,omitempty"`
 }
 
 // CacheConfig is the spec of memcached.
@@ -553,7 +629,6 @@ type StorageConfig struct {
 	// be used for Object Storage if MetricObjectStorage was configured for
 	// the system to create the storage.
 	// +optional
-	// +kubebuilder:default:=gp2
 	StorageClass string `json:"storageClass,omitempty"`
 	// The amount of storage applied to alertmanager stateful sets,
 	// +optional

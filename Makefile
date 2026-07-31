@@ -133,6 +133,9 @@ IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
 ENVTEST_K8S_VERSION ?= $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -F'[v.]' '{printf "1.%d", $$3}')
 ENVTEST_VERSION ?= $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller-runtime | awk -F'[v.]' '{printf "release-%d.%d", $$2, $$3}')
 
+# E2E_TEST_TIMEOUT is the maximum time the e2e test suite is allowed to run.
+E2E_TEST_TIMEOUT ?= 30m
+
 # OCLOUD_MANAGER_NAMESPACE refers to the namespace of the O-Cloud Manager
 OCLOUD_MANAGER_NAMESPACE ?= oran-o2ims
 
@@ -654,7 +657,7 @@ test-e2e: envtest kubectl
 ifeq ($(shell uname -s),Linux)
 	@chmod -R u+w $(LOCALBIN)
 endif
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -i --bin-dir $(LOCALBIN) -p path)" go test ./test/e2e/ -v -timeout 20m ginkgo.v
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -i --bin-dir $(LOCALBIN) -p path)" go test ./test/e2e/ -v -timeout $(E2E_TEST_TIMEOUT) ginkgo.v
 
 .PHONY: test-envtest
 test-envtest: envtest
