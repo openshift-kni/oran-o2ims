@@ -11,12 +11,10 @@ import (
 	"fmt"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -25,8 +23,7 @@ var hardwareprofilelog = logf.Log.WithName("hardwareprofile-webhook")
 // SetupHardwareProfileWebhookWithManager sets up the validating webhook for HardwareProfile
 func SetupHardwareProfileWebhookWithManager(mgr ctrl.Manager) error {
 	// nolint:wrapcheck
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(&HardwareProfile{}).
+	return ctrl.NewWebhookManagedBy(mgr, &HardwareProfile{}).
 		WithValidator(&hardwareProfileValidator{Client: mgr.GetClient()}).
 		Complete()
 }
@@ -37,13 +34,9 @@ type hardwareProfileValidator struct {
 	client.Client
 }
 
-var _ webhook.CustomValidator = &hardwareProfileValidator{}
+var _ admission.Validator[*HardwareProfile] = &hardwareProfileValidator{}
 
-func (v *hardwareProfileValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	hp, ok := obj.(*HardwareProfile)
-	if !ok {
-		return nil, fmt.Errorf("expected a HardwareProfile but got a %T", obj)
-	}
+func (v *hardwareProfileValidator) ValidateCreate(ctx context.Context, hp *HardwareProfile) (admission.Warnings, error) {
 	hardwareprofilelog.Info("validate create", "name", hp.Name)
 
 	if !hasFirmwareReferences(hp) {
@@ -90,11 +83,11 @@ func (v *hardwareProfileValidator) ValidateCreate(ctx context.Context, obj runti
 	return nil, nil
 }
 
-func (v *hardwareProfileValidator) ValidateUpdate(_ context.Context, _, _ runtime.Object) (admission.Warnings, error) {
+func (v *hardwareProfileValidator) ValidateUpdate(_ context.Context, _, _ *HardwareProfile) (admission.Warnings, error) {
 	return nil, nil
 }
 
-func (v *hardwareProfileValidator) ValidateDelete(_ context.Context, _ runtime.Object) (admission.Warnings, error) {
+func (v *hardwareProfileValidator) ValidateDelete(_ context.Context, _ *HardwareProfile) (admission.Warnings, error) {
 	return nil, nil
 }
 
