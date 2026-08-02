@@ -218,6 +218,20 @@ var _ = BeforeSuite(func() {
 		Expect(err).ToNot(HaveOccurred())
 	}
 
+	// Create the FirmwareCatalog singleton with entries required by all e2e tests.
+	// In production this is created by EnsureFirmwareCatalogSingleton at startup,
+	// but the e2e suite does not run the full startup path.
+	err = K8SClient.Create(context.Background(), &hwmgmtv1alpha1.FirmwareCatalog{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      hwmgmtv1alpha1.FirmwareCatalogName,
+			Namespace: constants.DefaultNamespace,
+		},
+		Spec: hwmgmtv1alpha1.FirmwareCatalogSpec{
+			Images: testutils.E2EFirmwareCatalogImages,
+		},
+	})
+	Expect(err).ToNot(HaveOccurred())
+
 	// Start the main O2IMS manager
 	go func() {
 		defer GinkgoRecover()
