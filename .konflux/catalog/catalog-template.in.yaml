@@ -6,24 +6,22 @@ entries:
       mediatype: image/svg+xml
     name: o-cloud-manager
     schema: olm.package
-    # Channel entries for 'stable' channel
+    # Channel 'stable' — always points to the latest z-stream
   - entries:
-      - name: o-cloud-manager.v4.22.0
-      # v4.22.1
       - name: o-cloud-manager.v4.22.1
-        replaces: o-cloud-manager.v4.22.0
-        skipRange: '>=4.22.0 <4.22.1'
     name: stable
     package: o-cloud-manager
     schema: olm.channel
-    # Channel entries for '4.22' channel
+    # Channel '4.22.0' — pinned z-stream, no automatic upgrade
   - entries:
       - name: o-cloud-manager.v4.22.0
-      # v4.22.1
+    name: "4.22.0"
+    package: o-cloud-manager
+    schema: olm.channel
+    # Channel '4.22.1' — pinned z-stream, no automatic upgrade
+  - entries:
       - name: o-cloud-manager.v4.22.1
-        replaces: o-cloud-manager.v4.22.0
-        skipRange: '>=4.22.0 <4.22.1'
-    name: "4.22"
+    name: "4.22.1"
     package: o-cloud-manager
     schema: olm.channel
   # v4.22.0 bundle
