@@ -232,14 +232,23 @@ func (t *provisioningRequestReconcilerTask) handleScaleInDrain(
 		return false, nil
 	}
 
-	// Identify removed nodes (in existing but not in rendered)
+	// Identify removed nodes (in existing but not in rendered). Only consider
+	// nodes that are still tracked in AllocatedNodeHostMap — nodes already
+	// cleaned up by a prior scale-in pass (e.g., during a swap) are skipped.
 	existingNodes := getNodeRolesByHostname(existingCI)
 	renderedNodes := getNodeRolesByHostname(renderedCI)
+
+	hostMapHostnames := make(map[string]bool)
+	for _, h := range t.object.Status.Extensions.AllocatedNodeHostMap {
+		hostMapHostnames[h] = true
+	}
 
 	var removedHostnames []string
 	for hostname := range existingNodes {
 		if _, exists := renderedNodes[hostname]; !exists {
-			removedHostnames = append(removedHostnames, hostname)
+			if hostMapHostnames[hostname] {
+				removedHostnames = append(removedHostnames, hostname)
+			}
 		}
 	}
 
@@ -486,6 +495,19 @@ func buildIntermediateCIWithPruneManifests(
 	existingSpec, _ := existingCI.Object["spec"].(map[string]any)
 	existingNodes, _ := existingSpec["nodes"].([]any)
 
+	// Build set of existing hostnames to identify new nodes being added
+	// as part of a swap. New nodes must be excluded from the intermediate
+	// CI because their BMC secrets don't exist yet (hardware provisioning
+	// hasn't run).
+	existingHostnames := make(map[string]bool, len(existingNodes))
+	for _, node := range existingNodes {
+		if nodeMap, ok := node.(map[string]any); ok {
+			if hostname, _ := nodeMap["hostName"].(string); hostname != "" {
+				existingHostnames[hostname] = true
+			}
+		}
+	}
+
 	pruneManifests := []any{
 		map[string]any{
 			"apiVersion": "agent-install.openshift.io/v1beta1",
@@ -494,6 +516,10 @@ func buildIntermediateCIWithPruneManifests(
 		map[string]any{
 			"apiVersion": "agent-install.openshift.io/v1beta1",
 			"kind":       "NMStateConfig",
+		},
+		map[string]any{
+			"apiVersion": "metal3.io/v1alpha1",
+			"kind":       "BareMetalHost",
 		},
 	}
 
@@ -516,9 +542,21 @@ func buildIntermediateCIWithPruneManifests(
 	if !ok {
 		return intermediateCI
 	}
+
+	// Filter out new nodes not present in the existing CI (swap case)
 	intermediateNodes, _ := intermediateSpec["nodes"].([]any)
-	intermediateNodes = append(intermediateNodes, removedNodeEntries...)
-	intermediateSpec["nodes"] = intermediateNodes
+	var filteredNodes []any
+	for _, node := range intermediateNodes {
+		if nodeMap, ok := node.(map[string]any); ok {
+			hostname, _ := nodeMap["hostName"].(string)
+			if existingHostnames[hostname] {
+				filteredNodes = append(filteredNodes, node)
+			}
+		}
+	}
+
+	filteredNodes = append(filteredNodes, removedNodeEntries...)
+	intermediateSpec["nodes"] = filteredNodes
 
 	return intermediateCI
 }
@@ -728,11 +766,11 @@ func (t *provisioningRequestReconcilerTask) handleClusterInstallation(ctx contex
 			slog.Int("fulfilledNodeCount", fulfilledCount),
 			slog.Int("renderedNodeCount", renderedNodeCount))
 
-		// Only set InProgress on the first detection (when ClusterProvisioned is
-		// still Completed).
+		message := fmt.Sprintf("Scale-out: waiting for new node to join the cluster (%d → %d nodes)",
+			fulfilledCount, renderedNodeCount)
+
 		if ctlrutils.IsClusterProvisionCompleted(t.object) {
-			message := fmt.Sprintf("Scale-out: waiting for new node to join the cluster (%d → %d nodes)",
-				fulfilledCount, renderedNodeCount)
+			// First detection: set InProgress and record start time
 			t.logger.InfoContext(ctx, message)
 			ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 				provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
@@ -743,6 +781,13 @@ func (t *provisioningRequestReconcilerTask) handleClusterInstallation(ctx contex
 			ctlrutils.SetProvisioningStateInProgress(t.object, message)
 			currentTime := metav1.Now()
 			t.object.Status.Extensions.ClusterDetails.ClusterProvisionStartedAt = &currentTime
+			if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+				return fmt.Errorf("failed to update scale-out status for ProvisioningRequest %s: %w", t.object.Name, updateErr)
+			}
+		} else {
+			// Already InProgress (e.g. from scale-in portion of a swap).
+			// Update the message to reflect scale-out phase.
+			ctlrutils.SetProvisioningStateInProgress(t.object, message)
 			if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
 				return fmt.Errorf("failed to update scale-out status for ProvisioningRequest %s: %w", t.object.Name, updateErr)
 			}
@@ -792,17 +837,32 @@ func (t *provisioningRequestReconcilerTask) handleClusterInstallation(ctx contex
 		}
 	}
 
-	// Detect scale-in: if the rendered CI has fewer nodes than the last fulfilled
-	// count, wait for removed nodes to leave the spoke, then perform cleanup.
-	if fulfilledCount > 0 && renderedNodeCount < fulfilledCount {
+	// Detect scale-in: check if any hostname in the AllocatedNodeHostMap is
+	// absent from the rendered CI. This catches both pure scale-in (count
+	// decreased) and the scale-in portion of a swap (count unchanged but
+	// hostnames differ).
+	removedNodesExist := false
+	numRemoved := 0
+	if fulfilledCount > 0 {
+		renderedNodes := getNodeRolesByHostname(clusterInstance)
+		for _, hostname := range t.object.Status.Extensions.AllocatedNodeHostMap {
+			if _, exists := renderedNodes[hostname]; !exists {
+				removedNodesExist = true
+				numRemoved++
+			}
+		}
+	}
+
+	if removedNodesExist {
 		t.logger.InfoContext(ctx, "Scale-in in progress",
 			slog.Int("fulfilledNodeCount", fulfilledCount),
-			slog.Int("renderedNodeCount", renderedNodeCount))
+			slog.Int("renderedNodeCount", renderedNodeCount),
+			slog.Int("numRemoved", numRemoved))
 
 		// Only set InProgress on the first detection
 		if ctlrutils.IsClusterProvisionCompleted(t.object) {
 			message := fmt.Sprintf("Scale-in: waiting for removed node(s) to leave the cluster (%d → %d nodes)",
-				fulfilledCount, renderedNodeCount)
+				fulfilledCount, fulfilledCount-numRemoved)
 			t.logger.InfoContext(ctx, message)
 			ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 				provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
@@ -843,7 +903,21 @@ func (t *provisioningRequestReconcilerTask) handleClusterInstallation(ctx contex
 				return nil
 			}
 
-			t.object.Status.Extensions.ClusterDetails.FulfilledNodeCount = renderedNodeCount
+			newFulfilledCount := fulfilledCount - numRemoved
+			t.object.Status.Extensions.ClusterDetails.FulfilledNodeCount = newFulfilledCount
+
+			if renderedNodeCount > newFulfilledCount {
+				// Swap: scale-in complete but scale-out pending. Keep
+				// InProgress so scale-out fires on the next reconcile.
+				t.logger.InfoContext(ctx, "Scale-in cleanup complete, scale-out pending (swap)",
+					slog.Int("newFulfilledCount", newFulfilledCount),
+					slog.Int("renderedNodeCount", renderedNodeCount))
+				if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+					return fmt.Errorf("failed to update swap transition status: %w", updateErr)
+				}
+				return nil
+			}
+
 			ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 				provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
 				provisioningv1alpha1.CRconditionReasons.Completed,

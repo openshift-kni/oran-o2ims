@@ -118,8 +118,10 @@ func (t *provisioningRequestReconcilerTask) createOrUpdateNodeAllocationRequest(
 	nodeAllocationRequest.Spec.ClusterProvisioned = existingNAR.Spec.ClusterProvisioned
 	renderedConfigTransactionId := nodeAllocationRequest.Spec.ConfigTransactionId
 	nodeAllocationRequest.Spec.ConfigTransactionId = existingNAR.Spec.ConfigTransactionId
-	if !equality.Semantic.DeepEqual(existingNAR.Spec, nodeAllocationRequest.Spec) {
-		// Real NAR-relevant fields changed, restore the actual new ConfigTransactionId
+
+	specChanged := !equality.Semantic.DeepEqual(existingNAR.Spec, nodeAllocationRequest.Spec)
+
+	if specChanged {
 		nodeAllocationRequest.Spec.ConfigTransactionId = renderedConfigTransactionId
 		patch := client.MergeFrom(existingNAR.DeepCopy())
 		existingNAR.Spec = nodeAllocationRequest.Spec
@@ -129,7 +131,35 @@ func (t *provisioningRequestReconcilerTask) createOrUpdateNodeAllocationRequest(
 
 		t.logger.InfoContext(ctx,
 			fmt.Sprintf("NodeAllocationRequest (%s) spec changes have been detected", t.object.Name))
+		return nil
 	}
+
+	// Check for swap case: spec unchanged but AllocatedNode count is short.
+	// After a swap's scale-in removes an AllocatedNode, the spec still has
+	// the same sizes, so DeepEqual sees no change. Only trigger when the
+	// NAR was previously fully provisioned (Provisioned=Completed) — this
+	// distinguishes a swap from initial provisioning where nodes haven't
+	// been allocated yet.
+	provisionedCond := meta.FindStatusCondition(existingNAR.Status.Conditions, string(hwmgmtv1alpha1.Provisioned))
+	isProvisioned := provisionedCond != nil && provisionedCond.Status == metav1.ConditionTrue
+	totalRequested := 0
+	for _, ng := range existingNAR.Spec.NodeGroup {
+		totalRequested += ng.Size
+	}
+	currentAllocated := len(existingNAR.Status.Properties.NodeNames)
+	if isProvisioned &&
+		existingNAR.Status.ObservedConfigTransactionId == existingNAR.Spec.ConfigTransactionId &&
+		currentAllocated < totalRequested {
+		t.logger.InfoContext(ctx, "NAR spec unchanged but allocation incomplete, forcing reallocation",
+			slog.Int("requested", totalRequested),
+			slog.Int("allocated", currentAllocated))
+		patch := client.MergeFrom(existingNAR.DeepCopy())
+		existingNAR.Spec.ConfigTransactionId++
+		if err := t.client.Patch(ctx, existingNAR, patch); err != nil {
+			return fmt.Errorf("failed to bump ConfigTransactionId on NodeAllocationRequest %s: %w", t.object.Name, err)
+		}
+	}
+
 	return nil
 }
 

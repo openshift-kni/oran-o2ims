@@ -305,6 +305,23 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 		Expect(updatedFields).To(BeEmpty())
 		Expect(scalingNodes).To(ContainElement("nodes.0"))
 	})
+
+	It("should detect node swap as scaling when hostName changes in-place", func() {
+		// Change the hostName of an existing node (swap)
+		spec := newClusterInstance.Object["spec"].(map[string]any)
+		nodes := spec["nodes"].([]any)
+		node := nodes[0].(map[string]any)
+		node["hostName"] = "replacement-worker.example.com"
+
+		updatedFields, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
+			oldClusterInstance.Object["spec"].(map[string]any),
+			newClusterInstance.Object["spec"].(map[string]any),
+			IgnoredClusterInstanceFields,
+			provisioningv1alpha1.AllowedClusterInstanceFields)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(updatedFields).To(BeEmpty())
+		Expect(scalingNodes).To(ContainElement("nodes.0"))
+	})
 })
 
 var _ = Describe("ClusterIsReadyForPolicyConfig", func() {
