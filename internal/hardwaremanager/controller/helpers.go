@@ -141,6 +141,15 @@ func enableBMOManagementForIBINodes(
 			return fmt.Errorf("failed to delete DataImage for BMH %s: %w", bmh.Name, err)
 		}
 
+		// Delete the IBI network-data secret and clear the PPI's networkDataName.
+		// IBI provisioning creates a secret (named after the BMH) with network
+		// data and sets ownerReferences to both the BMH and PPI. BMO protects it
+		// with a finalizer. If not cleaned up now, it blocks ClusterInstance
+		// deletion later because siteconfig can't delete a finalized secret.
+		if err := deleteIBINetworkDataSecret(nodeCtx, c, logger, bmh); err != nil {
+			return fmt.Errorf("failed to delete IBI network-data secret for BMH %s: %w", bmh.Name, err)
+		}
+
 		if !bmh.Spec.Online {
 			logger.InfoContext(nodeCtx, "Setting BMH online=true for IBI post-provisioning")
 			if err := patchBMHOnline(nodeCtx, c, bmh, true); err != nil {
