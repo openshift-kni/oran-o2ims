@@ -120,6 +120,7 @@ flowchart TB
     Reconciler -->|"rolling restart + env var injection"| hw_mgr_pod
     Reconciler -->|"regenerate ConfigMap + rolling restart"| PGConf
     EnvRead -->|"builds tls.Config"| Serve
+    HWEnvRead -->|"builds tls.Config"| HWMgr
 ```
 
 Key design decisions:
@@ -194,7 +195,8 @@ oc get pods -n oran-o2ims
 ```
 
 All HTTP server pods (`resource-server`, `cluster-server`,
-`provisioning-server`, `artifacts-server`) should be in `Running` state.
+`provisioning-server`, `artifacts-server`) and the `hardwaremanager-server`
+should be in `Running` state.
 
 ### Test 1: Default Profile Verification
 

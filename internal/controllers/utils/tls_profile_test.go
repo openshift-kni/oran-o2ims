@@ -160,14 +160,14 @@ var _ = Describe("TLS Profile", func() {
 		})
 	})
 
-	Describe("newTLSProfileFromEnv", func() {
+	Describe("NewTLSProfileFromEnv", func() {
 		AfterEach(func() {
 			os.Unsetenv(TLSProfileMinVersionEnvName)
 			os.Unsetenv(TLSProfileCiphersEnvName)
 		})
 
 		It("should fall back to Intermediate when env vars are not set", func() {
-			profile := newTLSProfileFromEnv()
+			profile := NewTLSProfileFromEnv()
 			Expect(profile.MinTLSVersion).To(Equal(configv1.VersionTLS12))
 			Expect(profile.Ciphers).ToNot(BeEmpty())
 		})
@@ -176,7 +176,7 @@ var _ = Describe("TLS Profile", func() {
 			os.Setenv(TLSProfileMinVersionEnvName, string(configv1.VersionTLS13))
 			os.Setenv(TLSProfileCiphersEnvName, "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384")
 
-			profile := newTLSProfileFromEnv()
+			profile := NewTLSProfileFromEnv()
 			Expect(profile.MinTLSVersion).To(Equal(configv1.VersionTLS13))
 			Expect(profile.Ciphers).To(Equal([]string{
 				"TLS_AES_128_GCM_SHA256",
@@ -188,7 +188,7 @@ var _ = Describe("TLS Profile", func() {
 			os.Setenv(TLSProfileMinVersionEnvName, string(configv1.VersionTLS13))
 			os.Setenv(TLSProfileCiphersEnvName, "")
 
-			profile := newTLSProfileFromEnv()
+			profile := NewTLSProfileFromEnv()
 			Expect(profile.MinTLSVersion).To(Equal(configv1.VersionTLS13))
 			Expect(profile.Ciphers).To(BeEmpty())
 		})
@@ -197,7 +197,7 @@ var _ = Describe("TLS Profile", func() {
 			os.Setenv(TLSProfileMinVersionEnvName, "TLS1.2") // invalid format
 			os.Setenv(TLSProfileCiphersEnvName, "ECDHE-RSA-AES128-GCM-SHA256")
 
-			profile := newTLSProfileFromEnv()
+			profile := NewTLSProfileFromEnv()
 			Expect(profile.MinTLSVersion).To(Equal(configv1.VersionTLS12))
 			Expect(profile.Ciphers).ToNot(BeEmpty())
 		})
