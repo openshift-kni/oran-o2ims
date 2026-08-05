@@ -231,6 +231,67 @@ var _ = Describe("TLS Profile", func() {
 		})
 	})
 
+	Describe("TLSVersionToPostgres", func() {
+		It("should map VersionTLS12 to TLSv1.2", func() {
+			Expect(TLSVersionToPostgres(string(configv1.VersionTLS12))).To(Equal("TLSv1.2"))
+		})
+
+		It("should map VersionTLS13 to TLSv1.3", func() {
+			Expect(TLSVersionToPostgres(string(configv1.VersionTLS13))).To(Equal("TLSv1.3"))
+		})
+
+		It("should map VersionTLS10 to TLSv1", func() {
+			Expect(TLSVersionToPostgres(string(configv1.VersionTLS10))).To(Equal("TLSv1"))
+		})
+
+		It("should map VersionTLS11 to TLSv1.1", func() {
+			Expect(TLSVersionToPostgres(string(configv1.VersionTLS11))).To(Equal("TLSv1.1"))
+		})
+
+		It("should return TLSv1.2 as default for unrecognized values", func() {
+			Expect(TLSVersionToPostgres("UnknownVersion")).To(Equal("TLSv1.2"))
+		})
+
+		It("should return TLSv1.2 as default for empty string", func() {
+			Expect(TLSVersionToPostgres("")).To(Equal("TLSv1.2"))
+		})
+	})
+
+	Describe("TLSCiphersToPostgres", func() {
+		It("should exclude TLS 1.3 ciphers and join TLS 1.2 ciphers with colons", func() {
+			ciphers := []string{
+				"TLS_AES_128_GCM_SHA256",
+				"TLS_AES_256_GCM_SHA384",
+				"ECDHE-RSA-AES128-GCM-SHA256",
+				"ECDHE-RSA-AES256-GCM-SHA384",
+			}
+			Expect(TLSCiphersToPostgres(ciphers)).To(Equal(
+				"ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384"))
+		})
+
+		It("should return empty string when only TLS 1.3 ciphers are present (Modern profile)", func() {
+			ciphers := []string{
+				"TLS_AES_128_GCM_SHA256",
+				"TLS_AES_256_GCM_SHA384",
+				"TLS_CHACHA20_POLY1305_SHA256",
+			}
+			Expect(TLSCiphersToPostgres(ciphers)).To(BeEmpty())
+		})
+
+		It("should return empty string for empty input", func() {
+			Expect(TLSCiphersToPostgres(nil)).To(BeEmpty())
+			Expect(TLSCiphersToPostgres([]string{})).To(BeEmpty())
+		})
+
+		It("should produce the full Intermediate cipher string without TLS 1.3 ciphers", func() {
+			profile := *configv1.TLSProfiles[configv1.TLSProfileIntermediateType]
+			result := TLSCiphersToPostgres(profile.Ciphers)
+			Expect(result).To(ContainSubstring("ECDHE-RSA-AES128-GCM-SHA256"))
+			Expect(result).To(ContainSubstring("ECDHE-RSA-CHACHA20-POLY1305"))
+			Expect(result).ToNot(ContainSubstring("TLS_AES"))
+		})
+	})
+
 	Describe("NewOutboundMTLSConfig", func() {
 		var (
 			ctx    context.Context
