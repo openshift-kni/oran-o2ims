@@ -9,6 +9,9 @@ entries:
     # Channel 'stable' — always points to the latest z-stream
   - entries:
       - name: o-cloud-manager.v4.22.1
+      # v4.22.2
+      - name: o-cloud-manager.v4.22.2
+        replaces: o-cloud-manager.v4.22.1
     name: stable
     package: o-cloud-manager
     schema: olm.channel
@@ -21,6 +24,9 @@ entries:
     # Channel '4.22.1' — pinned z-stream, no automatic upgrade
   - entries:
       - name: o-cloud-manager.v4.22.1
+      # v4.22.2
+      - name: o-cloud-manager.v4.22.2
+        replaces: o-cloud-manager.v4.22.1
     name: "4.22.1"
     package: o-cloud-manager
     schema: olm.channel
@@ -28,6 +34,9 @@ entries:
   - image: registry.redhat.io/openshift4/o-cloud-manager-operator-bundle@sha256:fef1f183eb8cdc6330ed039fa6bb40432c0496dd4d2e146fd056c03310564da8
     schema: olm.bundle
     # v4.22.1 bundle
+  - image: registry.redhat.io/openshift4/o-cloud-manager-operator-bundle@sha256:50fe6d65b219314a92f2850d5ea6b57c9c25aefb59249516061fdfa699f96ca8
+    schema: olm.bundle
+    # v4.22.2 bundle
   # The url for this last entry is updated by telco5g-konflux/scripts/catalog/update-catalog-template.sh automatically
   - image: placeholder.will.be.updated.by.telco5g-konflux.scripts.catalog.update-catalog-template.sh
     schema: olm.bundle
