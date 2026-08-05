@@ -1080,6 +1080,16 @@ var _ = Describe("BareMetalHost Manager", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
+		It("should skip when OrigNetworkDataAnnotation is absent", func() {
+			bmh := createBMH("test-bmh", "test-ns", nil, nil, metal3v1alpha1.StateAvailable)
+			bmh.Spec.PreprovisioningNetworkDataName = "some-secret"
+
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
+
+			err := deleteIBINetworkDataSecret(ctx, fakeClient, logger, bmh)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
 		It("should restore BMH and PPI even when secret is already gone", func() {
 			bmh := createBMH("test-bmh", "test-ns", nil, map[string]string{
 				OrigNetworkDataAnnotation: "",

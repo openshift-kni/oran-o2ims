@@ -1213,18 +1213,21 @@ func deallocateBMH(ctx context.Context, c client.Client, logger *slog.Logger, bm
 // (alongside the DataImage cleanup) eliminates the race condition where the
 // finalizer blocks ClusterInstance deletion later.
 func deleteIBINetworkDataSecret(ctx context.Context, c client.Client, logger *slog.Logger, bmh *metal3v1alpha1.BareMetalHost) error {
-	// Only proceed if IBI changed the preprovisioningNetworkDataName from
-	// the original value. If the current value matches the saved original,
-	// IBI didn't create a new secret and there's nothing to clean up.
-	origValue := ""
-	if v, exists := bmh.Annotations[OrigNetworkDataAnnotation]; exists {
-		origValue = v
+	// Only proceed if the saved annotation exists — this proves we saved the
+	// original value during allocation. Without it, we can't distinguish an
+	// IBI-created secret from a user-created one.
+	origValue, exists := bmh.Annotations[OrigNetworkDataAnnotation]
+	if !exists {
+		return nil
 	}
 	if bmh.Spec.PreprovisioningNetworkDataName == origValue {
 		return nil
 	}
 
-	// Delete the IBI-generated secret if it exists and has BMO's finalizer.
+	// Delete the IBI-generated secret if it exists. Remove the finalizer
+	// conditionally (may already be gone from a prior attempt), but always
+	// attempt the delete to handle the case where finalizer removal
+	// succeeded but delete failed on a previous reconcile.
 	secretName := types.NamespacedName{Name: bmh.Spec.PreprovisioningNetworkDataName, Namespace: bmh.Namespace}
 	secret := &corev1.Secret{}
 	if err := c.Get(ctx, secretName, secret); err != nil {
@@ -1232,11 +1235,13 @@ func deleteIBINetworkDataSecret(ctx context.Context, c client.Client, logger *sl
 			return fmt.Errorf("failed to get secret %s: %w", secretName, err)
 		}
 		// Secret already gone — fall through to restore BMH/PPI references
-	} else if controllerutil.ContainsFinalizer(secret, BmhSecretFinalizer) {
-		patch := client.MergeFrom(secret.DeepCopy())
-		controllerutil.RemoveFinalizer(secret, BmhSecretFinalizer)
-		if err := c.Patch(ctx, secret, patch); err != nil {
-			return fmt.Errorf("failed to remove finalizer from secret %s: %w", secretName, err)
+	} else {
+		if controllerutil.ContainsFinalizer(secret, BmhSecretFinalizer) {
+			patch := client.MergeFrom(secret.DeepCopy())
+			controllerutil.RemoveFinalizer(secret, BmhSecretFinalizer)
+			if err := c.Patch(ctx, secret, patch); err != nil {
+				return fmt.Errorf("failed to remove finalizer from secret %s: %w", secretName, err)
+			}
 		}
 		if err := c.Delete(ctx, secret); err != nil && !k8serrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete IBI network-data secret %s: %w", secretName, err)
@@ -1245,8 +1250,28 @@ func deleteIBINetworkDataSecret(ctx context.Context, c client.Client, logger *sl
 			slog.String("secret", secretName.String()))
 	}
 
+	// Clear the PPI's networkDataName before restoring the BMH reference.
+	// This ordering ensures that if PPI cleanup fails, the BMH still has
+	// the IBI value and the next reconcile will retry both operations.
+	ppiName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
+	ppi := &metal3v1alpha1.PreprovisioningImage{}
+	if err := c.Get(ctx, ppiName, ppi); err != nil {
+		if !k8serrors.IsNotFound(err) {
+			return fmt.Errorf("failed to get PreprovisioningImage %s: %w", ppiName, err)
+		}
+	} else if ppi.Spec.NetworkDataName != "" {
+		ppiPatch := client.MergeFrom(ppi.DeepCopy())
+		ppi.Spec.NetworkDataName = ""
+		if err := c.Patch(ctx, ppi, ppiPatch); err != nil {
+			return fmt.Errorf("failed to clear networkDataName on PPI %s: %w", ppiName, err)
+		}
+		logger.InfoContext(ctx, "Cleared networkDataName on PreprovisioningImage",
+			slog.String("ppi", ppiName.String()))
+	}
+
 	// Restore the BMH's preprovisioningNetworkDataName to the original value
-	// saved during allocation.
+	// saved during allocation. This is done last so failures in earlier steps
+	// leave the BMH unchanged and the next reconcile retries everything.
 	bmhName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
 	if err := retry.OnError(retry.DefaultRetry, k8serrors.IsConflict, func() error {
 		var current metal3v1alpha1.BareMetalHost
@@ -1261,26 +1286,6 @@ func deleteIBINetworkDataSecret(ctx context.Context, c client.Client, logger *sl
 		return c.Patch(ctx, &current, patch)
 	}); err != nil {
 		return fmt.Errorf("failed to restore preprovisioningNetworkDataName on BMH %s: %w", bmh.Name, err)
-	}
-
-	// Clear the PPI's networkDataName
-	ppiName := types.NamespacedName{Name: bmh.Name, Namespace: bmh.Namespace}
-	ppi := &metal3v1alpha1.PreprovisioningImage{}
-	if err := c.Get(ctx, ppiName, ppi); err != nil {
-		if k8serrors.IsNotFound(err) {
-			return nil
-		}
-		return fmt.Errorf("failed to get PreprovisioningImage %s: %w", ppiName, err)
-	}
-
-	if ppi.Spec.NetworkDataName != "" {
-		ppiPatch := client.MergeFrom(ppi.DeepCopy())
-		ppi.Spec.NetworkDataName = ""
-		if err := c.Patch(ctx, ppi, ppiPatch); err != nil {
-			return fmt.Errorf("failed to clear networkDataName on PPI %s: %w", ppiName, err)
-		}
-		logger.InfoContext(ctx, "Cleared networkDataName on PreprovisioningImage",
-			slog.String("ppi", ppiName.String()))
 	}
 
 	return nil
