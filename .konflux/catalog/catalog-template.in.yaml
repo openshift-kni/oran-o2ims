@@ -24,10 +24,13 @@ entries:
     # Channel '4.22.1' — pinned z-stream, no automatic upgrade
   - entries:
       - name: o-cloud-manager.v4.22.1
-      # v4.22.2
-      - name: o-cloud-manager.v4.22.2
-        replaces: o-cloud-manager.v4.22.1
     name: "4.22.1"
+    package: o-cloud-manager
+    schema: olm.channel
+    # Channel '4.22.2' — pinned z-stream, no automatic upgrade
+  - entries:
+      - name: o-cloud-manager.v4.22.2
+    name: "4.22.2"
     package: o-cloud-manager
     schema: olm.channel
   # v4.22.0 bundle
