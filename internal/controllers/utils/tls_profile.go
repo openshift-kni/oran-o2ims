@@ -171,6 +171,56 @@ func newTLSProfileFromEnv() configv1.TLSProfileSpec {
 	}
 }
 
+// TLSVersionToPostgres converts an OpenShift TLS version string (e.g. "VersionTLS13")
+// to the PostgreSQL ssl_min_protocol_version format (e.g. "TLSv1.3").
+// Returns "TLSv1.2" as a safe default for unrecognized values.
+func TLSVersionToPostgres(version string) string {
+	pgVersions := map[string]string{
+		string(configv1.VersionTLS10): "TLSv1",
+		string(configv1.VersionTLS11): "TLSv1.1",
+		string(configv1.VersionTLS12): "TLSv1.2",
+		string(configv1.VersionTLS13): "TLSv1.3",
+	}
+	if v, ok := pgVersions[version]; ok {
+		return v
+	}
+	slog.Warn("Unrecognized TLS version for PostgreSQL, falling back to TLSv1.2",
+		slog.String("version", version))
+	return "TLSv1.2"
+}
+
+// TLSCiphersToPostgres converts a cipher list from the cluster TLS profile into
+// the colon-separated format expected by PostgreSQL's ssl_ciphers setting.
+//
+// TLS 1.3 cipher suites (prefixed with "TLS_") are excluded because PostgreSQL's
+// ssl_ciphers only accepts TLS 1.2 cipher names — passing TLS 1.3 names causes
+// "could not set the cipher list (no valid ciphers available)".
+// PostgreSQL manages TLS 1.3 ciphers internally via OpenSSL.
+//
+// Returns an empty string if no TLS 1.2 ciphers are present (e.g., Modern profile),
+// signaling to the caller that ssl_ciphers should not be set.
+func TLSCiphersToPostgres(ciphers []string) string {
+	var pgCiphers []string
+	for _, c := range ciphers {
+		if !strings.HasPrefix(c, "TLS_") {
+			pgCiphers = append(pgCiphers, c)
+		}
+	}
+	return strings.Join(pgCiphers, ":")
+}
+
+// PostgreSQL TLS 1.3 and key-exchange defaults for PG18+ native controls.
+// These are the OpenShift-approved values that satisfy tls-scanner compliance.
+const (
+	// PostgresTLS13Ciphers is the ssl_tls13_ciphers value: all standard TLS 1.3
+	// ciphers except TLS_AES_128_CCM_SHA256 (not in the OpenShift Modern profile).
+	PostgresTLS13Ciphers = "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256"
+
+	// PostgresSSLGroups is the ssl_groups value: ML-KEM for PQC key exchange
+	// alongside classical fallbacks.
+	PostgresSSLGroups = "X25519MLKEM768:X25519:prime256v1"
+)
+
 var validTLSVersions = map[string]bool{
 	string(configv1.VersionTLS10): true,
 	string(configv1.VersionTLS11): true,

@@ -47,6 +47,30 @@ func CreateConfigMapFromEmbeddedFile(ctx context.Context, c client.Client, owner
 	return nil
 }
 
+// CreateConfigMapFromString creates a ConfigMap from a string value.
+func CreateConfigMapFromString(ctx context.Context, c client.Client, ownerObject client.Object, namespace, name, key, data string) error {
+	configmap := &corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ConfigMap",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      name,
+		},
+		Data: map[string]string{
+			key: data,
+		},
+	}
+
+	err := CreateK8sCR(ctx, c, configmap, ownerObject, UPDATE)
+	if err != nil {
+		return fmt.Errorf("failed to create configmap '%s/%s': %w", namespace, name, err)
+	}
+
+	return nil
+}
+
 // GetConfigmap attempts to retrieve a ConfigMap object for the given name
 func GetConfigmap(ctx context.Context, c client.Client, name, namespace string) (*corev1.ConfigMap, error) {
 	existingConfigmap := &corev1.ConfigMap{}
