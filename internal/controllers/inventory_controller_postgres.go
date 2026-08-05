@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -169,6 +170,7 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 			ObjectMeta: metav1.ObjectMeta{
 				Annotations: map[string]string{
 					"kubectl.kubernetes.io/default-container": constants.ServerContainerName,
+					"ocloud.openshift.io/tls-profile-hash":    t.tlsProfileHash,
 				},
 				Labels: map[string]string{
 					"app": serverName,
@@ -320,11 +322,31 @@ func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
 		return
 	}
 
-	// Create the config volume
+	// Create the config volume with TLS profile settings appended dynamically
 	t.logger.DebugContext(ctx, "[createDatabase] creating database config volume")
 	configVolumeName := fmt.Sprintf("%s-config", ctlrutils.InventoryDatabaseServerName)
-	err = ctlrutils.CreateConfigMapFromEmbeddedFile(ctx, t.client, t.object,
-		postgres.Artifacts, postgres.ConfigFilePath, t.object.Namespace, configVolumeName, postgres.ConfigFileName)
+	pgConfData, readErr := postgres.Artifacts.ReadFile(postgres.ConfigFilePath)
+	if readErr != nil {
+		err = fmt.Errorf("failed to read embedded %s: %w", postgres.ConfigFilePath, readErr)
+		t.logger.ErrorContext(ctx, "Failed to read embedded postgresql.conf", slog.Any("error", err))
+		return
+	}
+	pgConf := string(pgConfData)
+	if t.tlsMinVersion != "" {
+		pgConf += fmt.Sprintf("\nssl_min_protocol_version = '%s'", ctlrutils.TLSVersionToPostgres(t.tlsMinVersion))
+	}
+	if t.tlsCiphers != "" {
+		pgCiphers := ctlrutils.TLSCiphersToPostgres(strings.Split(t.tlsCiphers, ","))
+		if pgCiphers != "" {
+			pgConf += fmt.Sprintf("\nssl_ciphers = '%s'", pgCiphers)
+			t.logger.InfoContext(ctx, "PostgreSQL ssl_ciphers configured from cluster TLS profile",
+				slog.String("sslCiphers", pgCiphers))
+		}
+	}
+	pgConf += fmt.Sprintf("\nssl_tls13_ciphers = '%s'", ctlrutils.PostgresTLS13Ciphers)
+	pgConf += fmt.Sprintf("\nssl_groups = '%s'", ctlrutils.PostgresSSLGroups)
+	err = ctlrutils.CreateConfigMapFromString(ctx, t.client, t.object,
+		t.object.Namespace, configVolumeName, postgres.ConfigFileName, pgConf)
 	if err != nil {
 		t.logger.ErrorContext(
 			ctx,
