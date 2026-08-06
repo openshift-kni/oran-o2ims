@@ -1034,6 +1034,10 @@ var _ = Describe("BareMetalHost Manager", func() {
 					Name:       "test-bmh",
 					Namespace:  "test-ns",
 					Finalizers: []string{BmhSecretFinalizer},
+					OwnerReferences: []metav1.OwnerReference{
+						{Kind: "BareMetalHost", Name: "test-bmh", APIVersion: "metal3.io/v1alpha1"},
+						{Kind: "PreprovisioningImage", Name: "test-bmh", APIVersion: "metal3.io/v1alpha1"},
+					},
 				},
 			}
 			ppi := &metal3v1alpha1.PreprovisioningImage{
