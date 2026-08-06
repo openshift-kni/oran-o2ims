@@ -1424,7 +1424,7 @@ func exampleValueOrigin(ex *Example, fallback *Origin) *Origin {
 	if ex == nil || ex.Origin == nil {
 		return fallback
 	}
-	if loc, ok := ex.Origin.Fields["value"]; ok {
+	if loc, ok := ex.Origin.Fields.Lookup("value"); ok {
 		return &Origin{Key: &loc}
 	}
 	return ex.Origin
