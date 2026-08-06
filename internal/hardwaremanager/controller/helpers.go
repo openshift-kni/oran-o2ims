@@ -1783,6 +1783,7 @@ func validateAppliedBiosSettings(
 	bmh *metal3v1alpha1.BareMetalHost,
 	namespace string,
 	hwProfileName string,
+	resolved resolvedFirmware,
 ) (bool, error) {
 
 	// 1) Fetch HardwareProfile
@@ -1834,13 +1835,8 @@ func validateAppliedBiosSettings(
 
 	logger.InfoContext(ctx, "All required BIOS settings match")
 
-	// 5) Validate NIC firmware if specified — resolve catalog references first
+	// 5) Validate NIC firmware if specified — use pre-resolved catalog references
 	if len(prof.Spec.NicFirmware) > 0 {
-		resolved, err := resolveFirmwareFromCatalog(ctx, c, namespace, prof.Spec)
-		if err != nil {
-			return false, fmt.Errorf("resolve firmware from catalog for profile %s: %w", hwProfileName, err)
-		}
-
 		// Get HostFirmwareComponents to check NIC firmware versions
 		hfc, err := getHostFirmwareComponents(ctx, noncachedClient, bmh.Name, bmh.Namespace)
 		if err != nil {
@@ -1904,6 +1900,16 @@ func validateNodeConfiguration(
 	namespace string,
 	hwProfileName string,
 ) (bool, error) {
+	// Resolve firmware catalog references once for both validation steps
+	prof := &hwmgmtv1alpha1.HardwareProfile{}
+	if err := c.Get(ctx, types.NamespacedName{Name: hwProfileName, Namespace: namespace}, prof); err != nil {
+		return false, fmt.Errorf("get HardwareProfile %s/%s: %w", namespace, hwProfileName, err)
+	}
+	resolved, err := resolveFirmwareFromCatalog(ctx, c, namespace, prof.Spec)
+	if err != nil {
+		return false, fmt.Errorf("resolve firmware from catalog for profile %s: %w", hwProfileName, err)
+	}
+
 	// Validate firmware versions
 	firmwareValid, err := validateFirmwareVersions(ctx, c, noncachedClient, logger, bmh, namespace, hwProfileName)
 	if err != nil {
@@ -1917,7 +1923,7 @@ func validateNodeConfiguration(
 	}
 
 	// Validate BIOS settings
-	biosValid, err := validateAppliedBiosSettings(ctx, c, noncachedClient, logger, bmh, namespace, hwProfileName)
+	biosValid, err := validateAppliedBiosSettings(ctx, c, noncachedClient, logger, bmh, namespace, hwProfileName, resolved)
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to validate BIOS settings",
 			slog.Any("error", err))

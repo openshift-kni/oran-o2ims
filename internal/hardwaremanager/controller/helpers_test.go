@@ -815,10 +815,11 @@ var _ = Describe("Helpers", func() {
 	Describe("Validation Functions", func() {
 		var (
 			testBMH       *metal3v1alpha1.BareMetalHost
-			testHwProfile *hwmgmtv1alpha1.HardwareProfile
-			testHFC       *metal3v1alpha1.HostFirmwareComponents
-			testHFS       *metal3v1alpha1.HostFirmwareSettings
-			testClient    client.Client
+			testHwProfile  *hwmgmtv1alpha1.HardwareProfile
+			testHFC        *metal3v1alpha1.HostFirmwareComponents
+			testHFS        *metal3v1alpha1.HostFirmwareSettings
+			testClient     client.Client
+			testResolved   resolvedFirmware
 		)
 
 		BeforeEach(func() {
@@ -919,6 +920,15 @@ var _ = Describe("Helpers", func() {
 				WithScheme(scheme).
 				WithObjects(testBMH, testHwProfile, testHFC, testHFS, testFirmwareCatalog).
 				Build()
+
+			testResolved = resolvedFirmware{
+				BiosFirmware: Firmware{Version: "1.2.3", URL: "http://example.com/bios.bin"},
+				BmcFirmware:  Firmware{Version: "4.5.6", URL: "http://example.com/bmc.bin"},
+				NicFirmware: []Nic{
+					{Version: "7.8.9", URL: "http://example.com/nic1.bin"},
+					{Version: "10.11.12", URL: "http://example.com/nic2.bin"},
+				},
+			}
 		})
 
 		Describe("validateFirmwareVersions", func() {
@@ -967,7 +977,7 @@ var _ = Describe("Helpers", func() {
 
 		Describe("validateAppliedBiosSettings", func() {
 			It("should return true when BIOS settings match", func() {
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile", testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
@@ -977,7 +987,7 @@ var _ = Describe("Helpers", func() {
 				testHwProfile.Spec.Bios.Attributes = map[string]intstr.IntOrString{}
 				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile", testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
@@ -987,7 +997,7 @@ var _ = Describe("Helpers", func() {
 				testHFS.Status.Settings["VirtualizationTechnology"] = "Disabled" // Different value
 				Expect(testClient.Update(ctx, testHFS)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile", testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
@@ -997,7 +1007,7 @@ var _ = Describe("Helpers", func() {
 				delete(testHFS.Status.Settings, "HyperThreading")
 				Expect(testClient.Update(ctx, testHFS)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile", testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
@@ -1006,13 +1016,13 @@ var _ = Describe("Helpers", func() {
 				// Delete HFS
 				Expect(testClient.Delete(ctx, testHFS)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile", testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
 
 			It("should return true when NIC firmware versions match", func() {
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile", testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
@@ -1022,7 +1032,7 @@ var _ = Describe("Helpers", func() {
 				testHwProfile.Spec.NicFirmware = []string{}
 				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile", testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
@@ -1032,7 +1042,7 @@ var _ = Describe("Helpers", func() {
 				testHFC.Status.Components[2].CurrentVersion = "7.0.0" // Different version for nic1
 				Expect(testClient.Update(ctx, testHFC)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile", testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
@@ -1042,7 +1052,7 @@ var _ = Describe("Helpers", func() {
 				testHFC.Status.Components = testHFC.Status.Components[:3] // Remove the second NIC
 				Expect(testClient.Update(ctx, testHFC)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile", testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
@@ -1051,7 +1061,7 @@ var _ = Describe("Helpers", func() {
 				// Delete HFC
 				Expect(testClient.Delete(ctx, testHFC)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile", testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
@@ -1061,7 +1071,7 @@ var _ = Describe("Helpers", func() {
 				testHwProfile.Spec.NicFirmware = []string{}
 				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile", testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
