@@ -28,7 +28,7 @@ func (r *HardwareProfile) SetupWebhookWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
-//+kubebuilder:webhook:path=/validate-clcm-openshift-io-v1alpha1-hardwareprofile,mutating=false,failurePolicy=fail,sideEffects=None,groups=clcm.openshift.io,resources=hardwareprofiles,verbs=create,versions=v1alpha1,name=hardwareprofiles.clcm.openshift.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/validate-clcm-openshift-io-v1alpha1-hardwareprofile,mutating=false,failurePolicy=fail,sideEffects=None,groups=clcm.openshift.io,resources=hardwareprofiles,verbs=create;update,versions=v1alpha1,name=hardwareprofiles.clcm.openshift.io,admissionReviewVersions=v1
 
 type hardwareProfileValidator struct {
 	client.Client
@@ -44,8 +44,9 @@ func (v *hardwareProfileValidator) ValidateCreate(ctx context.Context, hp *Hardw
 }
 
 // ValidateUpdate implements admission.Validator
-func (v *hardwareProfileValidator) ValidateUpdate(_ context.Context, _, _ *HardwareProfile) (admission.Warnings, error) {
-	return nil, nil
+func (v *hardwareProfileValidator) ValidateUpdate(ctx context.Context, _ *HardwareProfile, newHP *HardwareProfile) (admission.Warnings, error) {
+	hardwareprofilelog.Info("validate update", "name", newHP.Name)
+	return nil, v.validateFirmwareReferences(ctx, newHP)
 }
 
 // ValidateDelete implements admission.Validator
