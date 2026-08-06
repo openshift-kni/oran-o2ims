@@ -95,9 +95,9 @@ func resolveFirmwareFromCatalog(ctx context.Context, c client.Client,
 			return resolvedFirmware{},
 				fmt.Errorf("nicFirmware entry %q not found in FirmwareCatalog", name)
 		}
-		if img.Component != "nic" {
+		if img.Component != hwmgmtv1alpha1.ComponentNIC {
 			return resolvedFirmware{},
-				fmt.Errorf("nicFirmware entry %q has component %q, expected nic", name, img.Component)
+				fmt.Errorf("nicFirmware entry %q has component %q, expected "+hwmgmtv1alpha1.ComponentNIC, name, img.Component)
 		}
 		resolved.NicFirmware = append(resolved.NicFirmware, Nic{URL: img.URL, Version: img.Version})
 	}

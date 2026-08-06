@@ -80,24 +80,24 @@ func (v *hardwareProfileValidator) validateFirmwareReferences(ctx context.Contex
 	if hp.Spec.BiosFirmware != "" {
 		if img, ok := imageMap[hp.Spec.BiosFirmware]; !ok {
 			errs = append(errs, fmt.Sprintf("biosFirmware entry %q not found in FirmwareCatalog", hp.Spec.BiosFirmware))
-		} else if img.Component != "bios" {
-			errs = append(errs, fmt.Sprintf("biosFirmware entry %q has component %q, expected bios", hp.Spec.BiosFirmware, img.Component))
+		} else if img.Component != ComponentBIOS {
+			errs = append(errs, fmt.Sprintf("biosFirmware entry %q has component %q, expected "+ComponentBIOS, hp.Spec.BiosFirmware, img.Component))
 		}
 	}
 
 	if hp.Spec.BmcFirmware != "" {
 		if img, ok := imageMap[hp.Spec.BmcFirmware]; !ok {
 			errs = append(errs, fmt.Sprintf("bmcFirmware entry %q not found in FirmwareCatalog", hp.Spec.BmcFirmware))
-		} else if img.Component != "bmc" {
-			errs = append(errs, fmt.Sprintf("bmcFirmware entry %q has component %q, expected bmc", hp.Spec.BmcFirmware, img.Component))
+		} else if img.Component != ComponentBMC {
+			errs = append(errs, fmt.Sprintf("bmcFirmware entry %q has component %q, expected "+ComponentBMC, hp.Spec.BmcFirmware, img.Component))
 		}
 	}
 
 	for _, name := range hp.Spec.NicFirmware {
 		if img, ok := imageMap[name]; !ok {
 			errs = append(errs, fmt.Sprintf("nicFirmware entry %q not found in FirmwareCatalog", name))
-		} else if img.Component != "nic" {
-			errs = append(errs, fmt.Sprintf("nicFirmware entry %q has component %q, expected nic", name, img.Component))
+		} else if img.Component != ComponentNIC {
+			errs = append(errs, fmt.Sprintf("nicFirmware entry %q has component %q, expected "+ComponentNIC, name, img.Component))
 		}
 	}
 
