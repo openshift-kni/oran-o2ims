@@ -1468,6 +1468,13 @@ func allocateBMHToNodeAllocationRequest(
 		return "", fmt.Errorf("failed to create allocated node (%s): %w", nodeName, err)
 	}
 
+	// Set bootMACAddress from interface labels before processing the HW
+	// profile. If the boot-interface label doesn't match any NIC on the BMH,
+	// we want to fail before submitting firmware/BIOS update jobs to the BMC.
+	if err := setBootMACAddressFromLabel(ctx, c, logger, bmh); err != nil {
+		return "", fmt.Errorf("failed to set bootMACAddress from interface label for BMH (%s): %w", bmh.Name, err)
+	}
+
 	// Process HW profile
 	updating, err := processHwProfileWithHandledError(ctx, c, noncachedClient, logger, namespace, bmh, node, group.NodeGroupData.HwProfile, false, false)
 	if err != nil {
@@ -1490,13 +1497,6 @@ func allocateBMHToNodeAllocationRequest(
 	// Allow Host Management
 	if err := allowHostManagement(ctx, c, logger, bmh); err != nil {
 		return "", fmt.Errorf("failed to add host management annotation to BMH (%s): %w", bmh.Name, err)
-	}
-
-	// Set bootMACAddress from interface labels if not already set
-	// This enables the pre-provisioned hardware workflow where boot interface
-	// is identified via labels instead of requiring bootMACAddress in the spec
-	if err := setBootMACAddressFromLabel(ctx, c, logger, bmh); err != nil {
-		return "", fmt.Errorf("failed to set bootMACAddress from interface label for BMH (%s): %w", bmh.Name, err)
 	}
 
 	// Update node status
