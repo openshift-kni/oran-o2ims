@@ -107,11 +107,17 @@ flowchart TB
         HWMgr["controller-runtime metrics server (TLSOpts)"]
     end
 
+    subgraph postgres_pod["PostgreSQL Pod"]
+        PGConf["postgresql.conf (ssl_min_protocol_version,
+        ssl_ciphers, ssl_tls13_ciphers, ssl_groups)"]
+    end
+
     APIServerRes -->|"watch"| Watcher
     Watcher -->|"OnProfileChange: cancel()"| MgrTLS
     Watcher -->|"OnProfileChange: patch annotation"| Reconciler
     Reconciler -->|"rolling restart + env var injection"| http_pods
     Reconciler -->|"rolling restart + env var injection"| hw_mgr_pod
+    Reconciler -->|"regenerate ConfigMap + rolling restart"| PGConf
     EnvRead -->|"builds tls.Config"| Serve
     HWEnvRead -->|"builds tls.Config"| HWMgr
 ```
@@ -125,6 +131,23 @@ Key design decisions:
 - **Profile changes trigger rolling restarts** via annotation changes on
   the pod template. The new pods start with the updated environment
   variables and apply the new TLS configuration at startup.
+- **PostgreSQL inherits the TLS profile** through dynamic `postgresql.conf`
+  generation. The operator appends the following settings to the embedded
+  base configuration:
+  - `ssl_min_protocol_version` — mapped from the cluster profile via
+    `TLSVersionToPostgres()`
+  - `ssl_ciphers` — TLS 1.2 ciphers only, filtered via
+    `TLSCiphersToPostgres()` (TLS 1.3 cipher names are excluded because
+    PostgreSQL's `ssl_ciphers` only accepts TLS 1.2 names)
+  - `ssl_tls13_ciphers` — statically set to exclude `TLS_AES_128_CCM_SHA256`
+    (not in the OpenShift Modern profile's allowed list)
+  - `ssl_groups` — statically set to `X25519MLKEM768:X25519:prime256v1`
+    to enable ML-KEM post-quantum key exchange
+
+  The `tls-profile-hash` annotation triggers a rolling restart when the
+  profile changes. These native PostgreSQL 18 settings replace the
+  `opensslcnf.config` crypto-policy override that was required with
+  PostgreSQL 16.
 - **The operator itself restarts** when the profile changes because
   `controller-runtime` does not support modifying `TLSOpts` on a running
   manager. The `SecurityProfileWatcher` calls `cancel()` on the manager
@@ -209,18 +232,25 @@ Expected: `TLS_PROFILE_MIN_VERSION=VersionTLS12` and
 Run a test pod inside the cluster:
 
 ```bash
+HOST=resource-server.oran-o2ims.svc.cluster.local:8443
 oc run tls-test --rm -i --restart=Never \
   --image=registry.access.redhat.com/ubi9/ubi:latest -n oran-o2ims \
-  --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,
-    "seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"tls-test",
-    "image":"registry.access.redhat.com/ubi9/ubi:latest","command":["bash","-c",
-    "echo \"=== TLS 1.1 (expect FAIL) ===\"
-     echo | openssl s_client -connect resource-server.oran-o2ims.svc.cluster.local:8443 -tls1_1 2>&1 | grep -E \"error|Protocol|Cipher\"
-     echo \"=== TLS 1.2 (expect PASS) ===\"
-     echo | openssl s_client -connect resource-server.oran-o2ims.svc.cluster.local:8443 -tls1_2 2>&1 | grep -E \"Protocol|Cipher\" | head -3
-     echo \"=== TLS 1.3 (expect PASS) ===\"
-     echo | openssl s_client -connect resource-server.oran-o2ims.svc.cluster.local:8443 -tls1_3 2>&1 | grep -E \"Protocol|Cipher\" | head -3"],
-    "securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}}]}}'
+  --overrides='{
+    "spec":{
+      "securityContext":{
+        "runAsNonRoot":true,
+        "seccompProfile":{"type":"RuntimeDefault"}
+      }
+    }
+  }' \
+  -- bash -c "
+    echo '=== TLS 1.1 (expect FAIL) ==='
+    echo | openssl s_client -connect $HOST -tls1_1 2>&1 | grep -E 'error|Protocol|Cipher'
+    echo '=== TLS 1.2 (expect PASS) ==='
+    echo | openssl s_client -connect $HOST -tls1_2 2>&1 | grep -E 'Protocol|Cipher' | head -3
+    echo '=== TLS 1.3 (expect PASS) ==='
+    echo | openssl s_client -connect $HOST -tls1_3 2>&1 | grep -E 'Protocol|Cipher' | head -3
+  "
 ```
 
 Expected results:
@@ -272,16 +302,23 @@ Expected:
 **2.5 Verify TLS 1.2 is now rejected:**
 
 ```bash
+HOST=resource-server.oran-o2ims.svc.cluster.local:8443
 oc run tls-modern-test --rm -i --restart=Never \
   --image=registry.access.redhat.com/ubi9/ubi:latest -n oran-o2ims \
-  --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,
-    "seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"tls-modern-test",
-    "image":"registry.access.redhat.com/ubi9/ubi:latest","command":["bash","-c",
-    "echo \"=== TLS 1.2 (expect FAIL with Modern) ===\"
-     echo | openssl s_client -connect resource-server.oran-o2ims.svc.cluster.local:8443 -tls1_2 2>&1 | grep -E \"error|alert|Cipher\"
-     echo \"=== TLS 1.3 (expect PASS) ===\"
-     echo | openssl s_client -connect resource-server.oran-o2ims.svc.cluster.local:8443 -tls1_3 2>&1 | grep -E \"Protocol|Cipher\" | head -3"],
-    "securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}}]}}'
+  --overrides='{
+    "spec":{
+      "securityContext":{
+        "runAsNonRoot":true,
+        "seccompProfile":{"type":"RuntimeDefault"}
+      }
+    }
+  }' \
+  -- bash -c "
+    echo '=== TLS 1.2 (expect FAIL with Modern) ==='
+    echo | openssl s_client -connect $HOST -tls1_2 2>&1 | grep -E 'error|alert|Cipher'
+    echo '=== TLS 1.3 (expect PASS) ==='
+    echo | openssl s_client -connect $HOST -tls1_3 2>&1 | grep -E 'Protocol|Cipher' | head -3
+  "
 ```
 
 Expected results:
@@ -307,6 +344,20 @@ After pods restart, verify that only the listed ciphers are accepted:
 | `ECDHE-RSA-AES128-GCM-SHA256` | **Accepted** |
 | `ECDHE-RSA-AES256-GCM-SHA384` | **Accepted** |
 | `ECDHE-RSA-CHACHA20-POLY1305` (not in list) | `handshake failure` — **rejected** |
+
+> **Note:** Custom profiles only accept TLS 1.2 cipher names. The APIServer
+> rejects TLS 1.3 cipher suites — for example, attempting to set
+> `"ciphers":["TLS_CHACHA20_POLY1305_SHA256"]` returns:
+>
+> ```text
+> spec.tlsSecurityProfile.custom.ciphers: Invalid value:
+>   ["TLS_CHACHA20_POLY1305_SHA256"]: TLS 1.3 cipher suites are not configurable
+> ```
+>
+> TLS 1.3 ciphers are managed by the platform (OpenSSL) and cannot be
+> restricted through the APIServer's `tlsSecurityProfile`. This is why
+> the operator's PostgreSQL configuration uses a static `ssl_tls13_ciphers`
+> value rather than deriving it from the profile.
 
 **2.7 Revert to original configuration:**
 
@@ -374,8 +425,15 @@ export KUBECONFIG=/path/to/kubeconfig
 export SCANNER_IMAGE="quay.io/<your-username>/tls-scanner:1.0"
 export NAMESPACE="oran-o2ims"
 export NAMESPACE_FILTER="oran-o2ims"
+export STARTTLS_PORTS="postgres=5432"
 ./deploy.sh --verbose deploy
 ```
+
+The `STARTTLS_PORTS` variable enables the scanner's
+[STARTTLS support](https://github.com/openshift/tls-scanner#command-line-options)
+for PostgreSQL. Without it, the scanner cannot negotiate PostgreSQL's in-band
+TLS handshake (`SSLRequest` wire protocol) and will report `NO_TLS` for port
+5432.
 
 The scanner discovers all pods in the namespace, probes their listening ports
 for TLS, and produces results in `./artifacts/` (CSV and JSON formats).
@@ -391,31 +449,36 @@ After the scan completes, clean up cluster resources:
 With the cluster running the default Intermediate profile
 (`spec.tlsSecurityProfile` unset on APIServer), the scanner reports:
 
-| Pod | Port | TLS Versions | PQC Ready | API MinVersion Compliance | API Cipher Compliance |
-|-----|------|-------------|-----------|---------------------------|----------------------|
-| artifacts-server | 8443 | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
-| cluster-server | 8443 | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
-| hardwaremanager-server | 8443 | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
-| oran-o2ims-controller-manager | 6443 | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
-| oran-o2ims-controller-manager | 9443 | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
-| provisioning-server | 8443 | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
-| resource-server | 8443 | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
+| Pod | Port | STARTTLS | TLS Versions | PQC Ready | API MinVersion Compliance | API Cipher Compliance |
+|-----|------|----------|-------------|-----------|---------------------------|----------------------|
+| artifacts-server | 8443 | N/A | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
+| cluster-server | 8443 | N/A | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
+| hardwaremanager-server | 8443 | N/A | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
+| oran-o2ims-controller-manager | 6443 | N/A | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
+| oran-o2ims-controller-manager | 9443 | N/A | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
+| provisioning-server | 8443 | N/A | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
+| resource-server | 8443 | N/A | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
+| postgres-server | 5432 | postgres | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
 
 Key observations:
 
-- **All endpoints pass API MinVersion Compliance** — the offered minimum TLS
-  version matches (or exceeds) what the cluster profile requires.
-- **All endpoints pass API Cipher Compliance** — only ciphers allowed by the
-  Intermediate profile are offered.
-- **All endpoints are PQC-ready** — ML-KEM (`X25519MLKEM768`) key exchange is
-  supported, provided by Go 1.25's native TLS 1.3 implementation.
-- **Forward Secrecy confirmed** on all TLS-enabled endpoints (only ECDHE
-  and TLS 1.3 AEAD ciphers offered).
+- **All endpoints pass API MinVersion and Cipher Compliance** — the offered
+  minimum TLS version and cipher suites match the cluster profile requirements.
+- **Go-based endpoints** achieve compliance via Go's native TLS implementation.
+  ML-KEM (`X25519MLKEM768`) support comes from Go's `crypto/tls` (available
+  since Go 1.24; this project requires Go 1.26).
+- **postgres-server** achieves compliance through dynamic `postgresql.conf`
+  generation using PostgreSQL 18's native TLS controls:
+  - `ssl_min_protocol_version` — enforces the cluster profile's minimum
+    TLS version (e.g. `TLSv1.3` under Modern)
+  - `ssl_ciphers` — restricts TLS 1.2 cipher suites to those in the
+    cluster profile (filtered via `TLSCiphersToPostgres()`)
+  - `ssl_tls13_ciphers` — excludes `TLS_AES_128_CCM_SHA256` (not in
+    OpenShift profiles) to pass scanner cipher compliance
+  - `ssl_groups` — enables ML-KEM (`X25519MLKEM768`) for PQC readiness
+- **Forward Secrecy confirmed** on all endpoints (only ECDHE and TLS 1.3
+  AEAD ciphers offered).
 - **No weak ciphers** — NULL, export, DES, RC4, and CBC cipher categories are
   all confirmed "not offered".
 - Scanner readiness note: *"Endpoint offers TLS 1.3 and ML-KEM — ready for
   Modern profile"*.
-
-The `postgres-server` pod (port 5432) reports `NO_TLS` which is expected — it
-uses PostgreSQL's native wire protocol without TLS on the pod network (traffic
-is cluster-internal only).
