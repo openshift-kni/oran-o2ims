@@ -815,11 +815,11 @@ var _ = Describe("Helpers", func() {
 	Describe("Validation Functions", func() {
 		var (
 			testBMH       *metal3v1alpha1.BareMetalHost
-			testHwProfile  *hwmgmtv1alpha1.HardwareProfile
-			testHFC        *metal3v1alpha1.HostFirmwareComponents
-			testHFS        *metal3v1alpha1.HostFirmwareSettings
-			testClient     client.Client
-			testResolved   resolvedFirmware
+			testHwProfile *hwmgmtv1alpha1.HardwareProfile
+			testHFC       *metal3v1alpha1.HostFirmwareComponents
+			testHFS       *metal3v1alpha1.HostFirmwareSettings
+			testClient    client.Client
+			testResolved  resolvedFirmware
 		)
 
 		BeforeEach(func() {

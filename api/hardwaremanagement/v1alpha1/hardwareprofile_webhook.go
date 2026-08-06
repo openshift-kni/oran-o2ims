@@ -44,7 +44,7 @@ func (v *hardwareProfileValidator) ValidateCreate(ctx context.Context, hp *Hardw
 }
 
 // ValidateUpdate implements admission.Validator
-func (v *hardwareProfileValidator) ValidateUpdate(ctx context.Context, _ *HardwareProfile, newHP *HardwareProfile) (admission.Warnings, error) {
+func (v *hardwareProfileValidator) ValidateUpdate(ctx context.Context, _, newHP *HardwareProfile) (admission.Warnings, error) {
 	hardwareprofilelog.Info("validate update", "name", newHP.Name)
 	return nil, v.validateFirmwareReferences(ctx, newHP)
 }
