@@ -197,7 +197,11 @@ func (t *provisioningRequestReconcilerTask) buildClusterInstanceUnstructured() (
 
 	// Remove interface labels from the ClusterInstance spec as they are not part of the ClusterInstance CRD schema
 	// but are needed during hardware provisioning for MAC address assignment
-	if err := ctlrutils.RemoveLabelFromInterfaces(renderedClusterInstanceUnstructured.Object["spec"]); err != nil {
+	spec, ok := renderedClusterInstanceUnstructured.Object["spec"].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("clusterInstance spec is not a map")
+	}
+	if err := ctlrutils.RemoveLabelFromInterfaces(spec, ctlrutils.ClusterInstanceNodesKey); err != nil {
 		return nil, fmt.Errorf("failed to remove interface labels from ClusterInstance spec: %w", err)
 	}
 

@@ -112,17 +112,15 @@ func ClusterIsReadyForPolicyConfig(
 
 // ValidateDefaultInterfaces verifies that each interface has a specified label field,
 // as labels are not part of the ClusterInstance structure by default.
-func ValidateDefaultInterfaces[T any](data T) error {
-	// clusterinstance-default data
-	dataMap, _ := any(data).(map[string]any)
-	nodes, ok := dataMap["nodes"].([]any)
+func ValidateDefaultInterfaces(data map[string]any, entriesKey string) error {
+	entries, ok := data[entriesKey].([]any)
 	if ok {
-		for _, node := range nodes {
-			nodeMap, ok := node.(map[string]interface{})
+		for _, entry := range entries {
+			entryMap, ok := entry.(map[string]any)
 			if !ok {
-				return fmt.Errorf("unexpected: invalid node data structure")
+				return fmt.Errorf("unexpected: invalid %s data structure", entriesKey)
 			}
-			interfaces := getInterfaces(nodeMap)
+			interfaces := getInterfaces(entryMap)
 			if interfaces == nil {
 				return fmt.Errorf("failed to extract the interfaces from the node map")
 			}
@@ -142,16 +140,15 @@ func ValidateDefaultInterfaces[T any](data T) error {
 
 // RemoveLabelFromInterfaces removes the label property for each interface as the label
 // property is not part of the ClusterInstance schema.
-func RemoveLabelFromInterfaces[T any](data T) error {
-	dataMap, _ := any(data).(map[string]any)
-	nodes, ok := dataMap["nodes"].([]any)
+func RemoveLabelFromInterfaces(data map[string]any, entriesKey string) error {
+	entries, ok := data[entriesKey].([]any)
 	if ok {
-		for _, node := range nodes {
-			nodeMap, ok := node.(map[string]interface{})
+		for _, entry := range entries {
+			entryMap, ok := entry.(map[string]any)
 			if !ok {
-				return fmt.Errorf("unexpected: invalid node data structure")
+				return fmt.Errorf("unexpected: invalid %s data structure", entriesKey)
 			}
-			interfaces := getInterfaces(nodeMap)
+			interfaces := getInterfaces(entryMap)
 			if interfaces == nil {
 				return fmt.Errorf("failed to extract the interfaces from the node map")
 			}
@@ -187,9 +184,69 @@ func removeRequiredFromSchema(schema map[string]any) {
 	}
 }
 
+// ValidateNodeGroupsNames validates nodeGroups entries: unique non-empty names,
+// optional existence in allowedGroupNames, and rejects nested nodes.
+func ValidateNodeGroupsNames(
+	data map[string]any, allowedGroupNames map[string]struct{}) error {
+	groups, ok := data[ClusterInstanceNodeGroupsKey].([]any)
+	if !ok {
+		return fmt.Errorf("%q must be an array", ClusterInstanceNodeGroupsKey)
+	}
+
+	seen := map[string]struct{}{}
+	for i, group := range groups {
+		groupMap, ok := group.(map[string]any)
+		if !ok {
+			return fmt.Errorf("%s[%d] is not an object", ClusterInstanceNodeGroupsKey, i)
+		}
+		if _, hasNodes := groupMap[ClusterInstanceNodesKey]; hasNodes {
+			return fmt.Errorf(
+				"%s[%d] must omit %q; per-host identity belongs only in the ProvisioningRequest",
+				ClusterInstanceNodeGroupsKey, i, ClusterInstanceNodesKey)
+		}
+		name, _ := groupMap["name"].(string)
+		if name == "" {
+			return fmt.Errorf("%s[%d].name must be a non-empty string",
+				ClusterInstanceNodeGroupsKey, i)
+		}
+		if _, exists := seen[name]; exists {
+			return fmt.Errorf("duplicate %s name %q", ClusterInstanceNodeGroupsKey, name)
+		}
+		seen[name] = struct{}{}
+		if allowedGroupNames != nil {
+			if _, exists := allowedGroupNames[name]; !exists {
+				return fmt.Errorf(
+					"%s name %q does not match any hardware node group in the nodeGroupData",
+					ClusterInstanceNodeGroupsKey, name)
+			}
+		}
+	}
+	return nil
+}
+
+// RemoveNodeGroupNames strips the O-Cloud-only name field from each nodeGroup entry.
+func RemoveNodeGroupNames(data map[string]any) error {
+	groups, ok := data[ClusterInstanceNodeGroupsKey].([]any)
+	if !ok {
+		return nil
+	}
+	for i, group := range groups {
+		groupMap, ok := group.(map[string]any)
+		if !ok {
+			return fmt.Errorf("%s[%d] is not an object", ClusterInstanceNodeGroupsKey, i)
+		}
+		delete(groupMap, "name")
+	}
+	return nil
+}
+
 // ValidateConfigmapSchemaAgainstClusterInstanceCRD checks if the data of the ClusterInstance
-// default ConfigMap matches the ClusterInstance CRD schema.
-func ValidateConfigmapSchemaAgainstClusterInstanceCRD[T any](ctx context.Context, c client.Client, data T) error {
+// default ConfigMap matches the ClusterInstance CRD schema. The entriesKey is "nodes" or "nodeGroups".
+// For nodeGroups, the CRD nodes property is renamed to nodeGroups before validation.
+// Caller must strip O-Cloud-only fields (interface labels, and nodeGroups[].name) from the
+// data before validation.
+func ValidateConfigmapSchemaAgainstClusterInstanceCRD(
+	ctx context.Context, c client.Client, data map[string]any, entriesKey string) error {
 	// Get the ClusterInstance CRD.
 	clusterInstanceCrd := &unstructured.Unstructured{}
 	clusterInstanceCrd.SetGroupVersionKind(schema.GroupVersionKind{
@@ -204,7 +261,7 @@ func ValidateConfigmapSchemaAgainstClusterInstanceCRD[T any](ctx context.Context
 	}
 
 	// Extract the OpenAPIV3Schema.
-	openAPIV3Schema := make(map[string]interface{})
+	openAPIV3Schema := make(map[string]any)
 	versions, found, err := unstructured.NestedSlice(clusterInstanceCrd.Object, "spec", "versions")
 	if err != nil || !found {
 		return fmt.Errorf("failed to obtain the versions of the %s.%s CRD: %w", ClusterInstanceCrdName, siteconfig.Group, err)
@@ -212,7 +269,7 @@ func ValidateConfigmapSchemaAgainstClusterInstanceCRD[T any](ctx context.Context
 
 	// Find the version that is stored and served.
 	for index, version := range versions {
-		versionMap, ok := version.(map[string]interface{})
+		versionMap, ok := version.(map[string]any)
 		if !ok {
 			return fmt.Errorf(
 				"failed to convert version %d of the %s.%s CRD to map: %w",
@@ -236,20 +293,28 @@ func ValidateConfigmapSchemaAgainstClusterInstanceCRD[T any](ctx context.Context
 
 	// If the properties and spec attributes are missing or the conversion fails, then something is wrong
 	// with k8s itself.
-	openAPIV3SchemaSpec := openAPIV3Schema["properties"].(map[string]interface{})["spec"].(map[string]interface{})
+	openAPIV3SchemaSpec := openAPIV3Schema["properties"].(map[string]any)["spec"].(map[string]any)
+
+	if entriesKey == ClusterInstanceNodeGroupsKey {
+		props, ok := openAPIV3SchemaSpec["properties"].(map[string]any)
+		if !ok {
+			return fmt.Errorf("%s CRD spec schema is missing properties", ClusterInstanceCrdName)
+		}
+		nodesSchema, ok := props[ClusterInstanceNodesKey]
+		if !ok {
+			return fmt.Errorf("%s CRD schema is missing %q property", ClusterInstanceCrdName, ClusterInstanceNodesKey)
+		}
+		props[ClusterInstanceNodeGroupsKey] = nodesSchema
+		delete(props, ClusterInstanceNodesKey)
+	}
 
 	// Prepare the data for schema validation.
 	// Remove the `required` property as the default ConfigMaps contains only a subset of the ClusterInstance spec.
 	removeRequiredFromSchema(openAPIV3SchemaSpec)
-	// Disalllow unknown properties in the ClusterInstance CRD schema.
+	// Disallow unknown properties in the ClusterInstance CRD schema.
 	provisioningv1alpha1.DisallowUnknownFieldsInSchema(openAPIV3SchemaSpec)
-	// Remove the interface label properties as it's not part of the ClusterInstance CRD schema.
-	dataMap, _ := any(data).(map[string]any)
-	if err := RemoveLabelFromInterfaces(dataMap); err != nil {
-		return fmt.Errorf("error removing label from interfaces")
-	}
 
-	err = provisioningv1alpha1.ValidateJsonAgainstJsonSchema(openAPIV3SchemaSpec, dataMap)
+	err = provisioningv1alpha1.ValidateJsonAgainstJsonSchema(openAPIV3SchemaSpec, data)
 	if err != nil {
 		return fmt.Errorf("the ConfigMap does not match the ClusterInstance schema: %w", err)
 	}
