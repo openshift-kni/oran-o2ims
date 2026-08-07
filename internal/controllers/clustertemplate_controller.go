@@ -218,8 +218,7 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 	validationErrs = append(validationErrs, hwMgmtErrs...)
 
 	// Validate the ClusterInstance defaults configmap
-	err = validateConfigmapReference[map[string]any](
-		ctx, t.client,
+	err = t.validateConfigmapReference(ctx,
 		t.object.Spec.TemplateDefaults.ClusterInstanceDefaults,
 		t.object.Namespace,
 		ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
@@ -252,8 +251,7 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 	}
 
 	// Validation for the policy template defaults configmap.
-	err = validateConfigmapReference[map[string]any](
-		ctx, t.client,
+	err = t.validateConfigmapReference(ctx,
 		t.object.Spec.TemplateDefaults.PolicyTemplateDefaults,
 		t.object.Namespace,
 		ctlrutils.PolicyTemplateDefaultsConfigmapKey,
@@ -456,28 +454,24 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeDefaultsAgainstSchema(
 	return nil
 }
 
-// validateConfigmapReference validates a given configmap reference within the ClusterTemplate
-func validateConfigmapReference[T any](
-	ctx context.Context, c client.Client, name, namespace, templateDataKey, timeoutConfigKey string) error {
+// validateConfigmapReference validates a given configmap reference within the ClusterTemplate.
+func (t *clusterTemplateReconcilerTask) validateConfigmapReference(
+	ctx context.Context, name, namespace, templateDataKey, timeoutConfigKey string) error {
 
-	existingConfigmap, err := ctlrutils.GetConfigmap(ctx, c, name, namespace)
+	existingConfigmap, err := ctlrutils.GetConfigmap(ctx, t.client, name, namespace)
 	if err != nil {
 		return fmt.Errorf("failed to get ConfigmapReference: %w", err)
 	}
 
 	// Extract and validate the template from the configmap
-	data, err := ctlrutils.ExtractTemplateDataFromConfigMap[T](existingConfigmap, templateDataKey)
+	data, err := ctlrutils.ExtractTemplateDataFromConfigMap[map[string]any](existingConfigmap, templateDataKey)
 	if err != nil {
 		return err
 	}
 
 	if templateDataKey == ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey {
-		if err = ctlrutils.ValidateDefaultInterfaces(data); err != nil {
-			return typederrors.NewInputError("failed to validate the default ConfigMap: %w", err)
-		}
-
-		if err = ctlrutils.ValidateConfigmapSchemaAgainstClusterInstanceCRD(ctx, c, data); err != nil {
-			return typederrors.NewInputError("failed to validate the default ConfigMap: %w", err)
+		if err := t.validateClusterInstanceDefaults(ctx, data); err != nil {
+			return err
 		}
 	}
 
@@ -496,12 +490,109 @@ func validateConfigmapReference[T any](
 		newConfigmap := existingConfigmap.DeepCopy()
 		newConfigmap.Immutable = &immutable
 
-		if err := ctlrutils.CreateK8sCR(ctx, c, newConfigmap, nil, ctlrutils.PATCH); err != nil {
+		if err := ctlrutils.CreateK8sCR(ctx, t.client, newConfigmap, nil, ctlrutils.PATCH); err != nil {
 			return fmt.Errorf("failed to patch ConfigMap as immutable: %w", err)
 		}
 	}
 
 	return nil
+}
+
+// validateClusterInstanceDefaults validates clusterinstance-defaults data against the
+// ClusterInstance CRD and ensures its nodes/nodeGroups format matches the
+// ClusterInstanceParameters schema.
+func (t *clusterTemplateReconcilerTask) validateClusterInstanceDefaults(
+	ctx context.Context, data map[string]any) error {
+
+	defaultsFormat, err := validateClusterInstanceDefaultsFormat(
+		t.object.Spec.TemplateParameterSchema.Raw, data)
+	if err != nil {
+		return typederrors.NewInputError("%s", err.Error())
+	}
+
+	if err := ctlrutils.ValidateDefaultInterfaces(data, defaultsFormat); err != nil {
+		return typederrors.NewInputError("failed to validate the default ConfigMap: %w", err)
+	}
+
+	if defaultsFormat == ctlrutils.ClusterInstanceNodeGroupsKey {
+		// A nil map skips the membership check when hardware groups come from
+		// hwMgmtParameters instead of hwMgmtDefaults.nodeGroupData.
+		var hwMgmtNames map[string]struct{}
+		if len(t.object.Spec.TemplateDefaults.HwMgmtDefaults.NodeGroupData) > 0 {
+			// Collect the hardware node group names.
+			hwMgmtNames = map[string]struct{}{}
+			for _, ng := range t.object.Spec.TemplateDefaults.HwMgmtDefaults.NodeGroupData {
+				hwMgmtNames[ng.Name] = struct{}{}
+			}
+		}
+		if err := ctlrutils.ValidateNodeGroupsNames(data, hwMgmtNames); err != nil {
+			return typederrors.NewInputError("failed to validate the default ConfigMap: %w", err)
+		}
+		// Strip O-Cloud-only nodeGroups[].name before ClusterInstance CRD schema validation.
+		if err := ctlrutils.RemoveNodeGroupNames(data); err != nil {
+			return typederrors.NewInputError("failed to validate the default ConfigMap: %w", err)
+		}
+	}
+
+	// Strip O-Cloud-only interface labels before ClusterInstance CRD schema validation.
+	if err := ctlrutils.RemoveLabelFromInterfaces(data, defaultsFormat); err != nil {
+		return typederrors.NewInputError("failed to validate the default ConfigMap: %w", err)
+	}
+
+	if err := ctlrutils.ValidateConfigmapSchemaAgainstClusterInstanceCRD(
+		ctx, t.client, data, defaultsFormat); err != nil {
+		return typederrors.NewInputError("failed to validate the default ConfigMap: %w", err)
+	}
+
+	return nil
+}
+
+// validateClusterInstanceDefaultsFormat ensures clusterinstance-defaults uses
+// exactly one of nodes / nodeGroups and that clusterInstanceParameters in the
+// templateParameterSchema exposes a matching property.
+// Returns the defaults format key ("nodes" or "nodeGroups") or an error if
+// the format is invalid.
+func validateClusterInstanceDefaultsFormat(
+	schemaRaw []byte, data map[string]any) (string, error) {
+	_, hasNodes := data[ctlrutils.ClusterInstanceNodesKey]
+	_, hasNodeGroups := data[ctlrutils.ClusterInstanceNodeGroupsKey]
+
+	var defaultsFormat string
+	switch {
+	case hasNodes && hasNodeGroups:
+		return "", fmt.Errorf("%s must not define both %q and %q",
+			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			ctlrutils.ClusterInstanceNodesKey, ctlrutils.ClusterInstanceNodeGroupsKey)
+	case hasNodes:
+		defaultsFormat = ctlrutils.ClusterInstanceNodesKey
+	case hasNodeGroups:
+		defaultsFormat = ctlrutils.ClusterInstanceNodeGroupsKey
+	default:
+		return "", fmt.Errorf("%s must define either %q or %q",
+			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			ctlrutils.ClusterInstanceNodesKey, ctlrutils.ClusterInstanceNodeGroupsKey)
+	}
+
+	cipSchema, err := provisioningv1alpha1.ExtractSubSchema(
+		schemaRaw, constants.TemplateParamClusterInstance)
+	if err != nil {
+		return "", fmt.Errorf("failed to extract %q schema for defaults validation: %w",
+			constants.TemplateParamClusterInstance, err)
+	}
+	props, ok := cipSchema["properties"].(map[string]any)
+	if !ok {
+		return "", fmt.Errorf("%q schema must have a properties section",
+			constants.TemplateParamClusterInstance)
+	}
+
+	hasFormat := schemaPropertyExists(props, defaultsFormat)
+	if !hasFormat {
+		return "", fmt.Errorf(
+			"%s defines %q, but %s schema does not include a matching %q definition",
+			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
+			defaultsFormat, constants.TemplateParamClusterInstance, defaultsFormat)
+	}
+	return defaultsFormat, nil
 }
 
 // validateName return true if the ClusterTemplate name is the
@@ -620,6 +711,7 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 	validationFailureReason := fmt.Sprintf("failed to validate ClusterTemplate: %s.", object.Name)
 	if len(missingParameter) != 0 {
 		validationFailureReason += fmt.Sprintf(" The following mandatory fields are missing: %s.", strings.Join(missingParameter, ","))
+		return typederrors.NewInputError("%s", validationFailureReason)
 	}
 	if len(badType) != 0 {
 		validationFailureReason += fmt.Sprintf(" The following entries are present but have a unexpected type: %s.",
@@ -630,6 +722,12 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 		validationFailureReason += fmt.Sprintf(" The following entries are missing in the required section of the template: %s",
 			strings.Join(missingRequired, ","))
 		return typederrors.NewInputError("%s", validationFailureReason)
+	}
+
+	clusterInstanceParamsSchema := subSchemas[constants.TemplateParamClusterInstance].(map[string]any)
+	if err := validateClusterInstanceParametersSchema(clusterInstanceParamsSchema); err != nil {
+		return typederrors.NewInputError("Error validating the %s schema: %s",
+			constants.TemplateParamClusterInstance, err.Error())
 	}
 
 	policyTemplateParamsSchema := subSchemas[constants.TemplateParamPolicyConfig].(map[string]any)
@@ -651,6 +749,32 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 		return typederrors.NewInputError("Error validating the %s schema: %s", constants.TemplateParamUpgrade, err.Error())
 	}
 
+	return nil
+}
+
+// validateClusterInstanceParametersSchema requires clusterInstanceParameters.properties to
+// expose exactly one of "nodes" or "nodeGroups".
+func validateClusterInstanceParametersSchema(cipSchema map[string]any) error {
+	props, ok := cipSchema["properties"].(map[string]any)
+	if !ok {
+		return fmt.Errorf("%q schema must have a properties section",
+			constants.TemplateParamClusterInstance)
+	}
+
+	hasNodes := schemaPropertyExists(props, ctlrutils.ClusterInstanceNodesKey)
+	hasNodeGroups := schemaPropertyExists(props, ctlrutils.ClusterInstanceNodeGroupsKey)
+	if hasNodes && hasNodeGroups {
+		return fmt.Errorf("%q schema must not define both %q and %q; choose exactly one",
+			constants.TemplateParamClusterInstance,
+			ctlrutils.ClusterInstanceNodesKey,
+			ctlrutils.ClusterInstanceNodeGroupsKey)
+	}
+	if !hasNodes && !hasNodeGroups {
+		return fmt.Errorf("%q schema must define either %q or %q",
+			constants.TemplateParamClusterInstance,
+			ctlrutils.ClusterInstanceNodesKey,
+			ctlrutils.ClusterInstanceNodeGroupsKey)
+	}
 	return nil
 }
 

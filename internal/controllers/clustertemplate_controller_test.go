@@ -160,7 +160,8 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 				Data: map[string]string{
 					ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 baseDomain: value
-clusterImageSetNameRef: "4.15.0"`,
+clusterImageSetNameRef: "4.15.0"
+nodes: []`,
 				},
 			},
 			{
@@ -550,7 +551,8 @@ var _ = Describe("validateClusterTemplateCR", func() {
 					ctlrutils.ClusterInstallationTimeoutConfigKey: "80m",
 					ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 baseDomain: value
-clusterImageSetNameRef: "4.15.0"`,
+clusterImageSetNameRef: "4.15.0"
+nodes: []`,
 				},
 			},
 			{
@@ -735,15 +737,21 @@ var _ = Describe("validateConfigmapReference", func() {
 	var (
 		c             client.Client
 		ctx           context.Context
+		ctTask        *clusterTemplateReconcilerTask
 		namespace     = "default"
 		configmapName = "test-configmap"
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		clusterInstanceCRD, err := ctlrutils.BuildTestClusterInstanceCRD(ctlrutils.TestClusterInstanceSpecOk)
-		Expect(err).ToNot(HaveOccurred())
-		c = fakeclient.GetFakeClientFromObjects([]client.Object{clusterInstanceCRD}...)
+		c = fakeclient.GetFakeClientFromObjects()
+		ctTask = &clusterTemplateReconcilerTask{
+			client: c,
+			logger: slog.Default(),
+			object: &provisioningv1alpha1.ClusterTemplate{
+				ObjectMeta: metav1.ObjectMeta{Name: "ct", Namespace: namespace},
+			},
+		}
 	})
 
 	It("should validate a valid configmap", func() {
@@ -754,53 +762,29 @@ var _ = Describe("validateConfigmapReference", func() {
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				ctlrutils.ClusterInstallationTimeoutConfigKey: "40m",
-				ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+				ctlrutils.ClusterConfigurationTimeoutConfigKey: "40m",
+				ctlrutils.PolicyTemplateDefaultsConfigmapKey: `
 baseDomain: example.sno.com`,
 			},
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
-		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace,
-			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			ctlrutils.ClusterInstallationTimeoutConfigKey)
+		err := ctTask.validateConfigmapReference(
+			ctx, configmapName, namespace,
+			ctlrutils.PolicyTemplateDefaultsConfigmapKey,
+			ctlrutils.ClusterConfigurationTimeoutConfigKey)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
 	It("should return validation error message for a missing configmap", func() {
 		// No ConfigMap created
-		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace,
-			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			ctlrutils.ClusterInstallationTimeoutConfigKey)
+		err := ctTask.validateConfigmapReference(
+			ctx, configmapName, namespace,
+			ctlrutils.PolicyTemplateDefaultsConfigmapKey,
+			ctlrutils.ClusterConfigurationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(Equal(fmt.Sprintf(
 			"failed to get ConfigmapReference: the ConfigMap '%s' is not found in the namespace '%s'", configmapName, namespace)))
-	})
-
-	It("should return validation error message for a configmap that does not match the ClusterInstance CRD", func() {
-		// Create a valid ConfigMap but with a wrong schema.
-		cm := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      configmapName,
-				Namespace: namespace,
-			},
-			Data: map[string]string{
-				ctlrutils.ClusterInstallationTimeoutConfigKey: "40m",
-				ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
-baDomain: example.sno.com`,
-			},
-		}
-		Expect(c.Create(ctx, cm)).To(Succeed())
-		// Cluster Instance schema error.
-		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace,
-			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			ctlrutils.ClusterInstallationTimeoutConfigKey)
-		Expect(err).To(HaveOccurred())
-		Expect(typederrors.IsInputError(err)).To(BeTrue())
-		Expect(err.Error()).To(ContainSubstring("failed to validate the default ConfigMap: the ConfigMap does not match the ClusterInstance schema"))
 	})
 
 	It("should return validation error message for missing template data key in configmap", func() {
@@ -816,14 +800,14 @@ baDomain: example.sno.com`,
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
-		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace,
-			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			ctlrutils.ClusterInstallationTimeoutConfigKey)
+		err := ctTask.validateConfigmapReference(
+			ctx, configmapName, namespace,
+			ctlrutils.PolicyTemplateDefaultsConfigmapKey,
+			ctlrutils.ClusterConfigurationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(Equal(fmt.Sprintf(
-			"the ConfigMap '%s' does not contain a field named '%s'", configmapName, ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey)))
+			"the ConfigMap '%s' does not contain a field named '%s'", configmapName, ctlrutils.PolicyTemplateDefaultsConfigmapKey)))
 	})
 
 	It("should return validation error message for invalid YAML in configmap template data", func() {
@@ -834,75 +818,18 @@ baDomain: example.sno.com`,
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `invalid-yaml`,
+				ctlrutils.PolicyTemplateDefaultsConfigmapKey: `invalid-yaml`,
 			},
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
-		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace,
-			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			ctlrutils.ClusterInstallationTimeoutConfigKey)
+		err := ctTask.validateConfigmapReference(
+			ctx, configmapName, namespace,
+			ctlrutils.PolicyTemplateDefaultsConfigmapKey,
+			ctlrutils.ClusterConfigurationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("the value of key"))
-	})
-
-	It("should return validation error message for missing interface label in configmap template data", func() {
-		// Create a ConfigMap with invalid data YAML
-		cm := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      configmapName,
-				Namespace: namespace,
-			},
-			Data: map[string]string{
-				ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
-nodes:
-- hostname: "node1"
-  nodeNetwork:
-    interfaces:
-    - name: "eno1"
-`,
-			},
-		}
-		Expect(c.Create(ctx, cm)).To(Succeed())
-
-		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace,
-			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			ctlrutils.ClusterInstallationTimeoutConfigKey)
-		Expect(err).To(HaveOccurred())
-		Expect(typederrors.IsInputError(err)).To(BeTrue())
-		Expect(err.Error()).To(ContainSubstring("'label' is missing for interface"))
-	})
-
-	It("should return validation error message for an empty interface label in configmap template data", func() {
-		// Create a ConfigMap with invalid data YAML
-		cm := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      configmapName,
-				Namespace: namespace,
-			},
-			Data: map[string]string{
-				ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
-nodes:
-- hostname: "node1"
-  nodeNetwork:
-    interfaces:
-    - name: "eno1"
-      label: ""
-`,
-			},
-		}
-		Expect(c.Create(ctx, cm)).To(Succeed())
-
-		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace,
-			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			ctlrutils.ClusterInstallationTimeoutConfigKey)
-		Expect(err).To(HaveOccurred())
-		Expect(typederrors.IsInputError(err)).To(BeTrue())
-		Expect(err.Error()).To(ContainSubstring("'label' is empty for interface"))
 	})
 
 	It("should return validation error message for invalid timeout value in configmap", func() {
@@ -913,17 +840,17 @@ nodes:
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				ctlrutils.ClusterInstallationTimeoutConfigKey: "invalid-timeout",
-				ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+				ctlrutils.ClusterConfigurationTimeoutConfigKey: "invalid-timeout",
+				ctlrutils.PolicyTemplateDefaultsConfigmapKey: `
 baseDomain: value`,
 			},
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
-		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace,
-			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			ctlrutils.ClusterInstallationTimeoutConfigKey)
+		err := ctTask.validateConfigmapReference(
+			ctx, configmapName, namespace,
+			ctlrutils.PolicyTemplateDefaultsConfigmapKey,
+			ctlrutils.ClusterConfigurationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("is not a valid duration string"))
@@ -938,17 +865,17 @@ baseDomain: value`,
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+				ctlrutils.PolicyTemplateDefaultsConfigmapKey: `
 baseDomain: value`,
 			},
 			Immutable: &mutable,
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
-		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace,
-			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			ctlrutils.ClusterInstallationTimeoutConfigKey)
+		err := ctTask.validateConfigmapReference(
+			ctx, configmapName, namespace,
+			ctlrutils.PolicyTemplateDefaultsConfigmapKey,
+			ctlrutils.ClusterConfigurationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(Equal(fmt.Sprintf(
@@ -963,16 +890,16 @@ baseDomain: value`,
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
+				ctlrutils.PolicyTemplateDefaultsConfigmapKey: `
 baseDomain: value`,
 			},
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
-		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace,
-			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			ctlrutils.ClusterInstallationTimeoutConfigKey)
+		err := ctTask.validateConfigmapReference(
+			ctx, configmapName, namespace,
+			ctlrutils.PolicyTemplateDefaultsConfigmapKey,
+			ctlrutils.ClusterConfigurationTimeoutConfigKey)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Verify that the configmap is patched to be immutable
@@ -980,6 +907,335 @@ baseDomain: value`,
 		Expect(c.Get(ctx, client.ObjectKey{Name: configmapName, Namespace: namespace}, updatedCM)).To(Succeed())
 		Expect(updatedCM.Immutable).ToNot(BeNil())
 		Expect(*updatedCM.Immutable).To(BeTrue())
+	})
+})
+
+var _ = Describe("validateClusterInstanceDefaults", func() {
+	var (
+		t             *clusterTemplateReconcilerTask
+		c             client.Client
+		ctx           context.Context
+		namespace     = "default"
+		configmapName = "ci-defaults"
+		tName         = "cluster-template-a"
+		tVersion      = "v1.0.0"
+	)
+
+	cipSchemaWithNodes := runtime.RawExtension{Raw: []byte(`{
+		"properties": {
+			"nodeClusterName": {"type": "string"},
+			"oCloudSiteId": {"type": "string"},
+			"clusterInstanceParameters": {
+				"type": "object",
+				"properties": {"nodes": {"type": "array"}}
+			},
+			"policyTemplateParameters": {"type": "object", "properties": {}}
+		},
+		"type": "object",
+		"required": ["nodeClusterName", "oCloudSiteId", "policyTemplateParameters", "clusterInstanceParameters"]
+	}`)}
+
+	cipSchemaWithNodeGroups := runtime.RawExtension{Raw: []byte(`{
+		"properties": {
+			"nodeClusterName": {"type": "string"},
+			"oCloudSiteId": {"type": "string"},
+			"clusterInstanceParameters": {
+				"type": "object",
+				"properties": {"nodeGroups": {"type": "array"}}
+			},
+			"policyTemplateParameters": {"type": "object", "properties": {}}
+		},
+		"type": "object",
+		"required": ["nodeClusterName", "oCloudSiteId", "policyTemplateParameters", "clusterInstanceParameters"]
+	}`)}
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		clusterInstanceCRD, err := ctlrutils.BuildTestClusterInstanceCRD(ctlrutils.TestClusterInstanceSpecOk)
+		Expect(err).ToNot(HaveOccurred())
+		c = fakeclient.GetFakeClientFromObjects([]client.Object{clusterInstanceCRD}...)
+	})
+
+	newTask := func(schema runtime.RawExtension, hwMgmt []hwmgmtv1alpha1.NodeGroupData) *clusterTemplateReconcilerTask {
+		return &clusterTemplateReconcilerTask{
+			client: c,
+			logger: slog.Default(),
+			object: &provisioningv1alpha1.ClusterTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      GetClusterTemplateRefName(tName, tVersion),
+					Namespace: namespace,
+				},
+				Spec: provisioningv1alpha1.ClusterTemplateSpec{
+					Name:    tName,
+					Version: tVersion,
+					TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
+						ClusterInstanceDefaults: configmapName,
+						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
+							NodeGroupData: hwMgmt,
+						},
+					},
+					TemplateParameterSchema: schema,
+				},
+			},
+		}
+	}
+
+	loadDefaults := func(yamlBody string) map[string]any {
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: configmapName, Namespace: namespace},
+			Data: map[string]string{
+				ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: yamlBody,
+			},
+		}
+		Expect(c.Create(ctx, cm)).To(Succeed())
+		data, err := ctlrutils.ExtractTemplateDataFromConfigMap[map[string]any](
+			cm, ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey)
+		Expect(err).ToNot(HaveOccurred())
+		return data
+	}
+
+	It("validates nodes defaults matching schema", func() {
+		data := loadDefaults(`
+baseDomain: example.sno.com
+nodes:
+- hostName: node1
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: boot-interface
+`)
+		t = newTask(cipSchemaWithNodes, nil)
+		Expect(t.validateClusterInstanceDefaults(ctx, data)).To(Succeed())
+	})
+
+	It("rejects nodes defaults with unknown fields against ClusterInstance CRD", func() {
+		data := loadDefaults(`
+baDomain: example.sno.com
+nodes: []
+`)
+		t = newTask(cipSchemaWithNodes, nil)
+		err := t.validateClusterInstanceDefaults(ctx, data)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("does not match the ClusterInstance schema"))
+		Expect(err.Error()).To(ContainSubstring("Additional property baDomain is not allowed"))
+	})
+
+	It("rejects missing interface label on nodes", func() {
+		data := loadDefaults(`
+nodes:
+- hostName: "node1"
+  nodeNetwork:
+    interfaces:
+    - name: "eno1"
+`)
+		t = newTask(cipSchemaWithNodes, nil)
+		err := t.validateClusterInstanceDefaults(ctx, data)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("'label' is missing for interface"))
+	})
+
+	It("rejects defaults that define both nodes and nodeGroups", func() {
+		data := loadDefaults(`
+nodes: []
+nodeGroups:
+- name: master
+  role: master
+`)
+		t = newTask(cipSchemaWithNodes, []hwmgmtv1alpha1.NodeGroupData{
+			{Name: "master", Role: "master", HwProfile: "profile"},
+		})
+		err := t.validateClusterInstanceDefaults(ctx, data)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("must not define both"))
+	})
+
+	It("rejects format mismatch between defaults nodeGroups and schema nodes", func() {
+		data := loadDefaults(`
+nodeGroups:
+- name: master
+  role: master
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: boot-interface
+`)
+		t = newTask(cipSchemaWithNodes, []hwmgmtv1alpha1.NodeGroupData{
+			{Name: "master", Role: "master", HwProfile: "profile"},
+		})
+		err := t.validateClusterInstanceDefaults(ctx, data)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("does not include a matching"))
+	})
+
+	It("validates nodeGroups defaults matching schema", func() {
+		data := loadDefaults(`
+baseDomain: example.com
+nodeGroups:
+- name: master
+  role: master
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: boot-interface
+`)
+		t = newTask(cipSchemaWithNodeGroups, []hwmgmtv1alpha1.NodeGroupData{
+			{Name: "master", Role: "master", HwProfile: "profile"},
+		})
+		Expect(t.validateClusterInstanceDefaults(ctx, data)).To(Succeed())
+	})
+
+	It("validates nodeGroups defaults when hwMgmtDefaults.nodeGroupData is empty", func() {
+		data := loadDefaults(`
+baseDomain: example.com
+nodeGroups:
+- name: master
+  role: master
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: boot-interface
+`)
+		// Hardware groups may be supplied later via hwMgmtParameters; skip membership check.
+		t = newTask(cipSchemaWithNodeGroups, nil)
+		Expect(t.validateClusterInstanceDefaults(ctx, data)).To(Succeed())
+	})
+
+	It("rejects nodeGroups defaults with wrong field type against ClusterInstance CRD", func() {
+		data := loadDefaults(`
+baseDomain: example.com
+nodeGroups:
+- name: master
+  role: 123
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: boot-interface
+`)
+		t = newTask(cipSchemaWithNodeGroups, []hwmgmtv1alpha1.NodeGroupData{
+			{Name: "master", Role: "master", HwProfile: "profile"},
+		})
+		err := t.validateClusterInstanceDefaults(ctx, data)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("does not match the ClusterInstance schema"))
+		Expect(err.Error()).To(ContainSubstring("Invalid type. Expected: string, given: integer"))
+	})
+
+	It("rejects nodeGroups[].nodes in defaults", func() {
+		data := loadDefaults(`
+nodeGroups:
+- name: master
+  role: master
+  nodes: []
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: boot-interface
+`)
+		t = newTask(cipSchemaWithNodeGroups, []hwmgmtv1alpha1.NodeGroupData{
+			{Name: "master", Role: "master", HwProfile: "profile"},
+		})
+		err := t.validateClusterInstanceDefaults(ctx, data)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(`nodeGroups[0] must omit "nodes"`))
+	})
+
+	It("rejects empty interface label on nodeGroups", func() {
+		data := loadDefaults(`
+nodeGroups:
+- name: master
+  role: master
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: ""
+`)
+		t = newTask(cipSchemaWithNodeGroups, []hwmgmtv1alpha1.NodeGroupData{
+			{Name: "master", Role: "master", HwProfile: "profile"},
+		})
+		err := t.validateClusterInstanceDefaults(ctx, data)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("'label' is empty for interface"))
+	})
+
+	It("rejects nodeGroups name not in allowed hardware node groups", func() {
+		data := loadDefaults(`
+nodeGroups:
+- name: unknown
+  role: master
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: boot-interface
+`)
+		t = newTask(cipSchemaWithNodeGroups, []hwmgmtv1alpha1.NodeGroupData{
+			{Name: "master", Role: "master", HwProfile: "profile"},
+		})
+		err := t.validateClusterInstanceDefaults(ctx, data)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("does not match any hardware node group"))
+	})
+})
+
+var _ = Describe("validateClusterInstanceDefaultsFormat", func() {
+	cipSchemaNodes := []byte(`{
+		"properties": {
+			"clusterInstanceParameters": {
+				"type": "object",
+				"properties": {"nodes": {"type": "array"}}
+			}
+		}
+	}`)
+	cipSchemaNodeGroups := []byte(`{
+		"properties": {
+			"clusterInstanceParameters": {
+				"type": "object",
+				"properties": {"nodeGroups": {"type": "array"}}
+			}
+		}
+	}`)
+
+	It("accepts nodes defaults matching schema", func() {
+		format, err := validateClusterInstanceDefaultsFormat(cipSchemaNodes, map[string]any{
+			"nodes": []any{},
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(format).To(Equal(ctlrutils.ClusterInstanceNodesKey))
+	})
+
+	It("accepts nodeGroups defaults matching schema", func() {
+		format, err := validateClusterInstanceDefaultsFormat(cipSchemaNodeGroups, map[string]any{
+			"nodeGroups": []any{},
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(format).To(Equal(ctlrutils.ClusterInstanceNodeGroupsKey))
+	})
+
+	It("rejects both nodes and nodeGroups in defaults", func() {
+		_, err := validateClusterInstanceDefaultsFormat(cipSchemaNodes, map[string]any{
+			"nodes":      []any{},
+			"nodeGroups": []any{},
+		})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal(
+			`clusterinstance-defaults must not define both "nodes" and "nodeGroups"`))
+	})
+
+	It("rejects neither nodes nor nodeGroups in defaults", func() {
+		_, err := validateClusterInstanceDefaultsFormat(cipSchemaNodes, map[string]any{
+			"baseDomain": "example.com",
+		})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal(
+			`clusterinstance-defaults must define either "nodes" or "nodeGroups"`))
+	})
+
+	It("rejects defaults format that does not match schema", func() {
+		_, err := validateClusterInstanceDefaultsFormat(cipSchemaNodes, map[string]any{
+			"nodeGroups": []any{},
+		})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal(
+			`clusterinstance-defaults defines "nodeGroups", but clusterInstanceParameters schema does not include a matching "nodeGroups" definition`))
 	})
 })
 
@@ -1243,7 +1499,12 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 		"properties": {
 			"nodeClusterName": {"type": "string"},
 			"oCloudSiteId": {"type": "string"},
-			"clusterInstanceParameters": {"type": "object"},
+			"clusterInstanceParameters": {
+				"type": "object",
+				"properties": {
+					"nodeGroups": {"type": "array"}
+				}
+			},
 			"policyTemplateParameters": {"type": "object", "properties": {}}
 		},
 		"type": "object",
@@ -1279,7 +1540,12 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 		"properties": {
 			"nodeClusterName": {"type": "string"},
 			"oCloudSiteId": {"type": "string"},
-			"clusterInstanceParameters": {"type": "object"},
+			"clusterInstanceParameters": {
+				"type": "object",
+				"properties": {
+					"nodeGroups": {"type": "array"}
+				}
+			},
 			"policyTemplateParameters": {"type": "object", "properties": {"a": {}}}
 		},
 		"type": "object",
@@ -1365,7 +1631,42 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 				},
 			},
 			wantErr: true,
-			errText: "failed to validate ClusterTemplate: cluster-template-a.v1.0.0. The following mandatory fields are missing: nodeClusterName. The following entries are present but have a unexpected type: clusterInstanceParameters (expected = object actual= string).",
+			errText: "failed to validate ClusterTemplate: cluster-template-a.v1.0.0. The following mandatory fields are missing: nodeClusterName.",
+		},
+		{
+			name: "missing parameter still listed in required",
+			args: args{
+				object: &provisioningv1alpha1.ClusterTemplate{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: GetClusterTemplateRefName(tName, tVersion),
+					},
+					Spec: provisioningv1alpha1.ClusterTemplateSpec{
+						TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
+							HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
+								NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+									{Name: "controller", Role: "master", HwProfile: "profile-64G"},
+								},
+							},
+						},
+						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`{
+		"properties": {
+			"nodeClusterName": {"type": "string"},
+			"oCloudSiteId": {"type": "string"},
+			"policyTemplateParameters": {"type": "object", "properties": {"a": {"type": "string"}}}
+		},
+		"type": "object",
+		"required": [
+	"nodeClusterName",
+	"oCloudSiteId",
+	"policyTemplateParameters",
+	"clusterInstanceParameters"
+	]
+	}`)},
+					},
+				},
+			},
+			wantErr: true,
+			errText: "failed to validate ClusterTemplate: cluster-template-a.v1.0.0. The following mandatory fields are missing: clusterInstanceParameters.",
 		},
 		{
 			name: "missing parameter and bad type, and missing required entry",
@@ -1399,7 +1700,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 				},
 			},
 			wantErr: true,
-			errText: "failed to validate ClusterTemplate: cluster-template-a.v1.0.0. The following mandatory fields are missing: nodeClusterName. The following entries are present but have a unexpected type: clusterInstanceParameters (expected = object actual= string).",
+			errText: "failed to validate ClusterTemplate: cluster-template-a.v1.0.0. The following mandatory fields are missing: nodeClusterName.",
 		},
 	}
 	for _, tt := range tests {
@@ -1410,6 +1711,80 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 			}
 			if err != nil && err.Error() != tt.errText {
 				t.Errorf("validateTemplateParameterSchema() errorText = %s, wantErrorText %s", err.Error(), tt.errText)
+			}
+		})
+	}
+}
+
+func Test_validateClusterInstanceParametersSchema(t *testing.T) {
+	tests := []struct {
+		name      string
+		cipSchema string
+		wantErr   bool
+		errText   string
+	}{
+		{
+			name: "nodes only is ok",
+			cipSchema: `{
+				"type": "object",
+				"properties": {
+					"nodes": {"type": "array"}
+				}
+			}`,
+			wantErr: false,
+		},
+		{
+			name: "nodeGroups only is ok",
+			cipSchema: `{
+				"type": "object",
+				"properties": {
+					"nodeGroups": {"type": "array"}
+				}
+			}`,
+			wantErr: false,
+		},
+		{
+			name: "missing nodes and nodeGroups",
+			cipSchema: `{
+				"type": "object",
+				"properties": {}
+			}`,
+			wantErr: true,
+			errText: `"clusterInstanceParameters" schema must define either "nodes" or "nodeGroups"`,
+		},
+		{
+			name: "defines both nodes and nodeGroups",
+			cipSchema: `{
+				"type": "object",
+				"properties": {
+					"nodes": {"type": "array"},
+					"nodeGroups": {"type": "array"}
+				}
+			}`,
+			wantErr: true,
+			errText: `"clusterInstanceParameters" schema must not define both "nodes" and "nodeGroups"; choose exactly one`,
+		},
+		{
+			name: "missing properties section",
+			cipSchema: `{
+				"type": "object"
+			}`,
+			wantErr: true,
+			errText: `"clusterInstanceParameters" schema must have a properties section`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var cipSchema map[string]any
+			if err := json.Unmarshal([]byte(tt.cipSchema), &cipSchema); err != nil {
+				t.Fatalf("failed to unmarshal cipSchema: %v", err)
+			}
+			err := validateClusterInstanceParametersSchema(cipSchema)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateClusterInstanceParametersSchema() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err != nil && err.Error() != tt.errText {
+				t.Errorf("validateClusterInstanceParametersSchema() errorText = %s, wantErrorText %s", err.Error(), tt.errText)
 			}
 		})
 	}

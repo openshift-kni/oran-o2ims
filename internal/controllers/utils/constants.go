@@ -168,6 +168,11 @@ const (
 	ClusterInstanceTemplateName                 = "ClusterInstance"
 	ClusterInstanceTemplateDefaultsConfigmapKey = "clusterinstance-defaults"
 	ClusterInstanceCrdName                      = "clusterinstances"
+
+	// ClusterInstanceNodesKey is the legacy flat nodes list in ClusterInstanceParameters / ClusterInstance data.
+	ClusterInstanceNodesKey = "nodes"
+	// ClusterInstanceNodeGroupsKey is the grouped node config list in ClusterInstanceParameters / ClusterInstance data.
+	ClusterInstanceNodeGroupsKey = "nodeGroups"
 )
 
 var (
