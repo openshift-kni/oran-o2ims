@@ -25,12 +25,18 @@ var invalidPtrObjectTypeFields = "ptrToString/value"
 var invalidObjectTypeFields = "string/value"
 var validFields = "name, subObject,ptrSubObject,arraySubObject"
 var validNestedFields = "subObject/value, arraySubObject/value,ptrSubObject/value"
+var validMapFields = "mapField,ptrMapField"
+var validNestedMapFields = "mapField/someKey,ptrMapField/anotherKey"
+var validNestedMapDeepFields = "mapField/some/deep/path"
+var excludeNestedMapFields = "mapField/someKey"
+var includeNestedMapFields = "mapField/someKey"
 
 func TestFieldOptions_IsIncluded(t *testing.T) {
 	type MyStruct struct {
-		Name        string             `json:"name,omitempty"`
-		Description string             `json:"description,omitempty"`
-		Extensions  *map[string]string `json:"extensions,omitempty"`
+		Name        string                 `json:"name,omitempty"`
+		Description string                 `json:"description,omitempty"`
+		Extensions  *map[string]string     `json:"extensions,omitempty"`
+		MapField    map[string]interface{} `json:"mapField,omitempty"`
 	}
 	type fields struct {
 		allFields      *string
@@ -83,6 +89,12 @@ func TestFieldOptions_IsIncluded(t *testing.T) {
 			args:   args{"extensions"},
 			want:   true,
 		},
+		{
+			name:   "Include nested map path includes parent",
+			fields: fields{includeFields: &includeNestedMapFields},
+			args:   args{"mapField"},
+			want:   true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -102,12 +114,14 @@ func TestFieldOptions_Validate(t *testing.T) {
 		Value string `json:"value"`
 	}
 	type MyObject struct {
-		Name           string        `json:"name"`
-		SubObject      MySubObject   `json:"subObject"`
-		PtrSubObject   *MySubObject  `json:"ptrSubObject"`
-		ArraySubObject []MySubObject `json:"arraySubObject"`
-		PtrToString    *string       `json:"ptrToString"`
-		String         string        `json:"string"`
+		Name           string                  `json:"name"`
+		SubObject      MySubObject             `json:"subObject"`
+		PtrSubObject   *MySubObject            `json:"ptrSubObject"`
+		ArraySubObject []MySubObject           `json:"arraySubObject"`
+		PtrToString    *string                 `json:"ptrToString"`
+		String         string                  `json:"string"`
+		MapField       map[string]interface{}  `json:"mapField"`
+		PtrMapField    *map[string]interface{} `json:"ptrMapField"`
 		NoTag          bool
 	}
 
@@ -180,6 +194,30 @@ func TestFieldOptions_Validate(t *testing.T) {
 			fields:  fields{includeFields: &invalidObjectTypeFields},
 			args:    args{object: object},
 			wantErr: true,
+		},
+		{
+			name:    "Valid map fields",
+			fields:  fields{includeFields: &validMapFields},
+			args:    args{object: object},
+			wantErr: false,
+		},
+		{
+			name:    "Valid nested map fields",
+			fields:  fields{includeFields: &validNestedMapFields},
+			args:    args{object: object},
+			wantErr: false,
+		},
+		{
+			name:    "Valid deeply nested map path",
+			fields:  fields{includeFields: &validNestedMapDeepFields},
+			args:    args{object: object},
+			wantErr: false,
+		},
+		{
+			name:    "Valid nested map field in exclude_fields",
+			fields:  fields{excludeFields: &excludeNestedMapFields},
+			args:    args{object: object},
+			wantErr: false,
 		},
 	}
 	for _, tt := range tests {

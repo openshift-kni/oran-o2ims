@@ -114,17 +114,24 @@ func (o *FieldOptions) findFieldByName(v reflect.Type, depth int, fieldName stri
 			switch field.Type.Kind() {
 			case reflect.Pointer, reflect.Slice:
 				ft := field.Type.Elem()
-				if ft.Kind() != reflect.Struct {
+				switch ft.Kind() {
+				case reflect.Struct:
+					if err := o.findFieldByName(ft, depth+1, fieldName); err != nil {
+						return err
+					}
+				case reflect.Map:
+					// Map keys are dynamic; accept any sub-path
+				default:
 					return fmt.Errorf("field %s cannot exist on a primitive data type", fieldName)
-				}
-				if err := o.findFieldByName(ft, depth+1, fieldName); err != nil {
-					return err
 				}
 				found = true
 			case reflect.Struct:
 				if err := o.findFieldByName(field.Type, depth+1, fieldName); err != nil {
 					return err
 				}
+				found = true
+			case reflect.Map:
+				// Map keys are dynamic; accept any sub-path
 				found = true
 			default:
 				return fmt.Errorf("field %s is not a struct or slice", fieldName)
