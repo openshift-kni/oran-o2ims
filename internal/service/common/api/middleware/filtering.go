@@ -231,11 +231,20 @@ func (i *FilterResponseInterceptor) Flush(r *http.Request) error {
 	return nil
 }
 
+// sanitizeQuerySemicolons encodes bare semicolons in the raw query string as %3B so that
+// url.ParseQuery (which rejects bare semicolons since Go 1.17) preserves them as literal
+// characters in query parameter values. This is needed because the O-RAN filter syntax
+// uses semicolons as compound filter separators, e.g. (eq,name,foo);(eq,value,1).
+func sanitizeQuerySemicolons(rawQuery string) string {
+	return strings.ReplaceAll(rawQuery, ";", "%3B")
+}
+
 // ResponseFilter intercepts the response body and removes fields that are not required.
 func ResponseFilter(adapter *FilterAdapter) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var err error
+			r.URL.RawQuery = sanitizeQuerySemicolons(r.URL.RawQuery)
 			query, err := url.ParseQuery(r.URL.RawQuery)
 			if err != nil {
 				slog.ErrorContext(r.Context(), "failed to parse query", slog.String("rawQuery", r.URL.RawQuery), slog.Any("error", err))
