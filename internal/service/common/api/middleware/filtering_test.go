@@ -126,12 +126,57 @@ var _ = Describe("ResponseFilter", func() {
 		Expect(list).To(HaveLen(0))
 	})
 
-	It("should return bad request on invalid query", func() {
-		// Bad ';' ... needs to be encoded
+	It("should handle compound filter with raw semicolons", func() {
+		req.URL.RawQuery = "filter=(eq,name,hello);(eq,value,1)"
+		handler.ServeHTTP(recorder, req)
+
+		Expect(recorder.Code).To(Equal(http.StatusOK))
+		var list []object
+		err := json.Unmarshal(recorder.Body.Bytes(), &list)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(list).To(HaveLen(1))
+		Expect(list[0].Name).To(Equal("hello"))
+		Expect(list[0].Value).To(Equal(1))
+	})
+
+	It("should handle compound filter with raw semicolons that excludes all items", func() {
 		req.URL.RawQuery = "filter=(eq,name,foo);(eq,value,10)"
 		handler.ServeHTTP(recorder, req)
 
-		Expect(recorder.Code).To(Equal(http.StatusBadRequest))
+		Expect(recorder.Code).To(Equal(http.StatusOK))
+		var list []object
+		err := json.Unmarshal(recorder.Body.Bytes(), &list)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(list).To(HaveLen(0))
+	})
+
+	It("should handle compound filter with raw semicolons alongside other query params", func() {
+		req.URL.RawQuery = "filter=(eq,name,hello);(eq,value,1)&other=bar"
+		handler.ServeHTTP(recorder, req)
+
+		Expect(recorder.Code).To(Equal(http.StatusOK))
+		var list []object
+		err := json.Unmarshal(recorder.Body.Bytes(), &list)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(list).To(HaveLen(1))
+		Expect(list[0].Name).To(Equal("hello"))
+	})
+
+	It("should preserve raw query sanitization for downstream handlers", func() {
+		var capturedRawQuery string
+		next = func(w http.ResponseWriter, r *http.Request) {
+			capturedRawQuery = r.URL.RawQuery
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[]`))
+		}
+		handler = ResponseFilter(adapter)(next)
+
+		req.URL.RawQuery = "filter=(eq,name,hello);(eq,value,1)"
+		handler.ServeHTTP(recorder, req)
+
+		Expect(recorder.Code).To(Equal(http.StatusOK))
+		Expect(capturedRawQuery).ToNot(ContainSubstring(";"))
+		Expect(capturedRawQuery).To(ContainSubstring("%3B"))
 	})
 
 	It("should return bad request on invalid filter", func() {
@@ -387,6 +432,19 @@ var _ = Describe("ResponseFilter", func() {
 			Expect(result).To(HaveLen(1))
 			Expect(result[0].Name).To(Equal("hello"))
 		})
+	})
+
+	Context("sanitizeQuerySemicolons", func() {
+		DescribeTable("encodes bare semicolons",
+			func(input, expected string) {
+				Expect(sanitizeQuerySemicolons(input)).To(Equal(expected))
+			},
+			Entry("no semicolons", "filter=(eq,name,foo)", "filter=(eq,name,foo)"),
+			Entry("single semicolon", "filter=(eq,name,foo);(eq,value,1)", "filter=(eq,name,foo)%3B(eq,value,1)"),
+			Entry("already encoded", "filter=(eq,name,foo)%3b(eq,value,1)", "filter=(eq,name,foo)%3b(eq,value,1)"),
+			Entry("mixed with ampersand", "filter=(eq,name,foo);(eq,value,1)&other=bar", "filter=(eq,name,foo)%3B(eq,value,1)&other=bar"),
+			Entry("empty string", "", ""),
+		)
 	})
 
 	It("should not reflect the raw query string in query parse error responses", func() {
