@@ -139,6 +139,8 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			c.NextProtos = []string{"http/1.1"}
 		})
 	}
+	tlsProfile := ctlrutils.NewTLSProfileFromEnv()
+	tlsOpts = append(tlsOpts, ctlrutils.NewTLSConfiguratorFromProfile(tlsProfile))
 
 	if err := hwmgrutils.InitNodeAllocationRequestUtils(scheme); err != nil {
 		logger.ErrorContext(ctx, "failed InitNodeAllocationRequestUtils", slog.Any("error", err))

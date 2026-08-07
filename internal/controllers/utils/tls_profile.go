@@ -130,8 +130,8 @@ func TLSProfileHash(profile configv1.TLSProfileSpec) string {
 	return hex.EncodeToString(sum[:])[:16]
 }
 
-// newTLSProfileFromEnv reconstructs a TLSProfileSpec from operator-injected environment variables.
-func newTLSProfileFromEnv() configv1.TLSProfileSpec {
+// NewTLSProfileFromEnv reconstructs a TLSProfileSpec from operator-injected environment variables.
+func NewTLSProfileFromEnv() configv1.TLSProfileSpec {
 	minVersion := os.Getenv(TLSProfileMinVersionEnvName)
 	ciphersStr := os.Getenv(TLSProfileCiphersEnvName)
 
