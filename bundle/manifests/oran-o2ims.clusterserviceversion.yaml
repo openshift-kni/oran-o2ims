@@ -1761,14 +1761,8 @@ spec:
           - ""
           resources:
           - configmaps
-          - namespaces
-          - persistentvolumeclaims
-          - secrets
-          - serviceaccounts
-          - services
           verbs:
           - create
-          - delete
           - get
           - list
           - patch
@@ -1777,18 +1771,15 @@ spec:
         - apiGroups:
           - ""
           resources:
-          - events
+          - namespaces
+          - secrets
           verbs:
           - create
-          - patch
-          - update
-        - apiGroups:
-          - ""
-          resources:
-          - pods
-          verbs:
+          - delete
           - get
           - list
+          - patch
+          - update
           - watch
         - apiGroups:
           - addon.open-cluster-management.io
@@ -1827,18 +1818,6 @@ spec:
           - list
           - watch
         - apiGroups:
-          - apps
-          resources:
-          - deployments
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
           - authentication.k8s.io
           resources:
           - tokenreviews
@@ -1860,18 +1839,6 @@ spec:
           - subjectaccessreviews
           verbs:
           - create
-        - apiGroups:
-          - batch
-          resources:
-          - cronjobs
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
         - apiGroups:
           - clcm.openshift.io
           resources:
@@ -1957,18 +1924,6 @@ spec:
           - list
           - watch
         - apiGroups:
-          - coordination.k8s.io
-          resources:
-          - leases
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
           - hive.openshift.io
           resources:
           - clusterimagesets
@@ -2043,18 +1998,6 @@ spec:
           verbs:
           - get
           - list
-          - watch
-        - apiGroups:
-          - networking.k8s.io
-          resources:
-          - ingresses
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
           - watch
         - apiGroups:
           - observability.open-cluster-management.io
@@ -2513,26 +2456,17 @@ spec:
           - ""
           resources:
           - configmaps
+          - persistentvolumeclaims
+          - serviceaccounts
+          - services
           verbs:
+          - create
+          - delete
           - get
           - list
-          - watch
-          - create
-          - update
           - patch
-          - delete
-        - apiGroups:
-          - coordination.k8s.io
-          resources:
-          - leases
-          verbs:
-          - get
-          - list
-          - watch
-          - create
           - update
-          - patch
-          - delete
+          - watch
         - apiGroups:
           - ""
           resources:
@@ -2540,9 +2474,55 @@ spec:
           verbs:
           - create
           - patch
+          - update
+        - apiGroups:
+          - ""
+          resources:
+          - pods
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - apps
+          resources:
+          - deployments
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - batch
+          resources:
+          - cronjobs
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - coordination.k8s.io
+          resources:
+          - leases
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
         - apiGroups:
           - networking.k8s.io
           resources:
+          - ingresses
           - networkpolicies
           verbs:
           - create

@@ -41,7 +41,9 @@ import (
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
+// Cluster-scoped permissions — resources accessed across namespaces
 //+kubebuilder:rbac:groups="",resources=namespaces,verbs=get;update;patch
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=get;delete;list;watch;update
 //+kubebuilder:rbac:groups=agent-install.openshift.io,resources=agents,verbs=get;list;watch
 //+kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch
 //+kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch
@@ -51,20 +53,9 @@ import (
 //+kubebuilder:rbac:groups=ocloud.openshift.io,resources=inventories,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=ocloud.openshift.io,resources=inventories/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=ocloud.openshift.io,resources=inventories/finalizers,verbs=update
-//+kubebuilder:rbac:groups="apps",resources=deployments,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups="networking.k8s.io",resources=ingresses,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="cluster.open-cluster-management.io",resources=managedclusters,verbs=get;list;watch
-//+kubebuilder:rbac:groups="",resources=secrets,verbs=get;delete;list;watch;update
-//+kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
 //+kubebuilder:rbac:groups="config.openshift.io",resources=apiservers,verbs=get;list;watch
 //+kubebuilder:rbac:groups="config.openshift.io",resources=clusterversions,verbs=get;list;watch
-//+kubebuilder:rbac:groups="batch",resources=cronjobs,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups="",resources=events,verbs=create;patch;update
-//+kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=nodeallocationrequests,verbs=get;list;watch;update;patch;delete
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=nodeallocationrequests/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=nodeallocationrequests/finalizers,verbs=update;patch
@@ -79,6 +70,19 @@ import (
 //+kubebuilder:rbac:groups=metal3.io,resources=hostfirmwarecomponents,verbs=get;create;list;watch;update;patch
 //+kubebuilder:rbac:groups=metal3.io,resources=hostupdatepolicies,verbs=get;create;list;watch;update;patch
 //+kubebuilder:rbac:groups=metal3.io,resources=firmwareschemas,verbs=get;list;watch
+
+// Namespace-scoped permissions — resources only used in the operator's own namespace
+//+kubebuilder:rbac:groups="apps",namespace=system,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="networking.k8s.io",namespace=system,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="networking.k8s.io",namespace=system,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",namespace=system,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",namespace=system,resources=services,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",namespace=system,resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",namespace=system,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",namespace=system,resources=pods,verbs=get;list;watch
+//+kubebuilder:rbac:groups="batch",namespace=system,resources=cronjobs,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",namespace=system,resources=events,verbs=create;patch;update
+//+kubebuilder:rbac:groups=coordination.k8s.io,namespace=system,resources=leases,verbs=get;list;watch;create;update;patch;delete
 
 // Reconciler reconciles a Inventory object
 type Reconciler struct {
