@@ -125,10 +125,20 @@ func findModifiedImmutableFields(old, updated []FirmwareImage) []string {
 }
 
 // isEntryReferencedByAnyProfile checks whether the given catalog entry name is
-// referenced by any HardwareProfile's firmware fields. In Phase 1 of the
-// FirmwareCatalog rollout, HardwareProfile firmware fields are structs (not
-// string references), so this always returns false. When Phase 2 changes those
-// fields to string references, this function will need to be updated.
-func isEntryReferencedByAnyProfile(_ string, _ []HardwareProfile) bool {
+// referenced by any HardwareProfile's firmware fields.
+func isEntryReferencedByAnyProfile(entryName string, profiles []HardwareProfile) bool {
+	for i := range profiles {
+		if profiles[i].Spec.BiosFirmware == entryName {
+			return true
+		}
+		if profiles[i].Spec.BmcFirmware == entryName {
+			return true
+		}
+		for _, nic := range profiles[i].Spec.NicFirmware {
+			if nic == entryName {
+				return true
+			}
+		}
+	}
 	return false
 }

@@ -1,14 +1,20 @@
 apiVersion: clcm.openshift.io/v1alpha1
 kind: FirmwareCatalog
 metadata:
-  name: firmwarecatalog-sample
+  name: firmware-catalog
   namespace: oran-o2ims
 spec:
   images:
-    - name: bios-dell-xr8620t
-      version: "2.22.2"
+    - name: dell-xr8620t-bios-2.7.5
+      version: "2.7.5"
       component: bios
-      url: https://firmware.example.com/bios-xr8620t-2.22.2.bin
+      url: https://firmware.example.com/bios-xr8620t-2.7.5.bin
+      vendor: Dell
+    - name: dell-xr8620t-bmc-7.20.70.50
+      version: "7.20.70.50"
+      component: bmc
+      url: https://firmware.example.com/idrac-xr8620t-7.20.70.50.bin
+      vendor: Dell
 status:
   conditions:
     - lastTransitionTime: "2026-01-01T00:00:00Z"

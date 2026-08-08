@@ -1698,12 +1698,18 @@ func validateFirmwareVersions(
 		return false, fmt.Errorf("get HardwareProfile %s/%s: %w", namespace, hwProfileName, err)
 	}
 
-	// 2) Build expected versions map (normalized)
+	// 2) Resolve firmware catalog references
+	resolved, err := resolveFirmwareFromCatalog(ctx, c, namespace, prof.Spec)
+	if err != nil {
+		return false, fmt.Errorf("resolve firmware from catalog for profile %s: %w", hwProfileName, err)
+	}
+
+	// 3) Build expected versions map (normalized)
 	expected := map[string]string{}
-	if v := strings.TrimSpace(prof.Spec.BiosFirmware.Version); v != "" {
+	if v := strings.TrimSpace(resolved.BiosFirmware.Version); v != "" {
 		expected["bios"] = normalizeVersion(v)
 	}
-	if v := strings.TrimSpace(prof.Spec.BmcFirmware.Version); v != "" {
+	if v := strings.TrimSpace(resolved.BmcFirmware.Version); v != "" {
 		expected["bmc"] = normalizeVersion(v)
 	}
 
@@ -1777,6 +1783,7 @@ func validateAppliedBiosSettings(
 	bmh *metal3v1alpha1.BareMetalHost,
 	namespace string,
 	hwProfileName string,
+	resolved resolvedFirmware,
 ) (bool, error) {
 
 	// 1) Fetch HardwareProfile
@@ -1828,7 +1835,7 @@ func validateAppliedBiosSettings(
 
 	logger.InfoContext(ctx, "All required BIOS settings match")
 
-	// 5) Validate NIC firmware if specified
+	// 5) Validate NIC firmware if specified — use pre-resolved catalog references
 	if len(prof.Spec.NicFirmware) > 0 {
 		// Get HostFirmwareComponents to check NIC firmware versions
 		hfc, err := getHostFirmwareComponents(ctx, noncachedClient, bmh.Name, bmh.Namespace)
@@ -1849,8 +1856,8 @@ func validateAppliedBiosSettings(
 			}
 		}
 
-		// Check each NIC firmware requirement
-		for i, nic := range prof.Spec.NicFirmware {
+		// Check each resolved NIC firmware requirement
+		for i, nic := range resolved.NicFirmware {
 			if nic.Version == "" {
 				continue // Skip if no version specified
 			}
@@ -1893,6 +1900,16 @@ func validateNodeConfiguration(
 	namespace string,
 	hwProfileName string,
 ) (bool, error) {
+	// Resolve firmware catalog references once for both validation steps
+	prof := &hwmgmtv1alpha1.HardwareProfile{}
+	if err := c.Get(ctx, types.NamespacedName{Name: hwProfileName, Namespace: namespace}, prof); err != nil {
+		return false, fmt.Errorf("get HardwareProfile %s/%s: %w", namespace, hwProfileName, err)
+	}
+	resolved, err := resolveFirmwareFromCatalog(ctx, c, namespace, prof.Spec)
+	if err != nil {
+		return false, fmt.Errorf("resolve firmware from catalog for profile %s: %w", hwProfileName, err)
+	}
+
 	// Validate firmware versions
 	firmwareValid, err := validateFirmwareVersions(ctx, c, noncachedClient, logger, bmh, namespace, hwProfileName)
 	if err != nil {
@@ -1906,7 +1923,7 @@ func validateNodeConfiguration(
 	}
 
 	// Validate BIOS settings
-	biosValid, err := validateAppliedBiosSettings(ctx, c, noncachedClient, logger, bmh, namespace, hwProfileName)
+	biosValid, err := validateAppliedBiosSettings(ctx, c, noncachedClient, logger, bmh, namespace, hwProfileName, resolved)
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to validate BIOS settings",
 			slog.Any("error", err))

@@ -10,9 +10,5 @@ spec:
       WorkloadProfile: TelcoOptimizedProfile
       SriovGlobalEnable: Enabled
       AcPwrRcvryUserDelay: 130
-  biosFirmware:
-    version: 2.3.5
-    url: https://example.com:8888/firmware/xr8620t/BIOS_JDR1R_WN64_2.3.5.EXE
-  bmcFirmware:
-    version: 7.10.70.10
-    url: https://example.com:8888/firmware/xr8620t/iDRAC-with-Lifecycle-Controller_Firmware_W4NV9_WN64_7.10.70.10_A00.EXE
+  biosFirmware: dell-xr8620t-bios-2.3.5
+  bmcFirmware: dell-xr8620t-bmc-7.10.70.10
