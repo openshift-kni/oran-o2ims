@@ -29,9 +29,10 @@ import (
 
 const (
 	// Component names for firmware validation
-	componentBIOS = "bios"
-	componentBMC  = "bmc"
-	componentNIC  = "nic:"
+	componentBIOS    = "bios"
+	componentBMC     = "bmc"
+	componentNIC     = "nic:"
+	componentNICType = "nic"
 )
 
 // HostFirmwareComponentsReconciler reconciles HostFirmwareComponents objects

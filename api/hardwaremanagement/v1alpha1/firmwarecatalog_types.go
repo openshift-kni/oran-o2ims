@@ -10,10 +10,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const FirmwareCatalogName = "firmware-catalog"
+
 // FirmwareImage defines a firmware image entry in the catalog.
 type FirmwareImage struct {
 	// Name is a unique identifier for this firmware image within the catalog.
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
 	Name string `json:"name"`
 
 	// Component identifies the hardware component type.
@@ -22,20 +25,24 @@ type FirmwareImage struct {
 
 	// URL points to the firmware image file.
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=2048
 	// +kubebuilder:validation:Pattern=`^(http|https)://.*$`
 	URL string `json:"url"`
 
 	// Version is the firmware version string.
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=128
 	Version string `json:"version"`
 
 	// Vendor identifies the firmware vendor or manufacturer.
 	// +optional
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=256
 	Vendor string `json:"vendor,omitempty"`
 
 	// Description is an optional human-readable description of the firmware image.
 	// +optional
+	// +kubebuilder:validation:MaxLength=1024
 	Description string `json:"description,omitempty"`
 }
 

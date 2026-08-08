@@ -170,6 +170,27 @@ var _ = Describe("FirmwareCatalogValidator", func() {
 				Expect(warnings).To(BeNil())
 			})
 		})
+
+		Context("when a referenced entry is removed", func() {
+			It("should block the removal", func() {
+				profile := &HardwareProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "hwprofile-1",
+						Namespace: "oran-o2ims",
+					},
+					Spec: HardwareProfileSpec{
+						BiosFirmware: "dell-bios-2.3.5",
+					},
+				}
+				setupValidator(profile)
+				newCatalog.Spec.Images = []FirmwareImage{oldCatalog.Spec.Images[1]}
+
+				_, err := validator.ValidateUpdate(ctx, oldCatalog, newCatalog)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("dell-bios-2.3.5"))
+				Expect(err.Error()).To(ContainSubstring("still referenced"))
+			})
+		})
 	})
 
 	Describe("ValidateDelete", func() {

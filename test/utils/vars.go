@@ -467,12 +467,27 @@ var (
 			Namespace: constants.DefaultNamespace,
 		},
 		Spec: hwmgmtv1alpha1.HardwareProfileSpec{
-			// Basic hardware profile spec - minimal firmware config to satisfy CRD validation
-			BiosFirmware: hwmgmtv1alpha1.Firmware{
-				Version: "test-bios-v1.0",
-				URL:     "https://example.com/bios-firmware.bin",
-			},
+			BiosFirmware: "test-bios-v1.0-entry",
 		},
+	}
+
+	// E2EFirmwareCatalogImages contains all firmware image entries required by e2e tests.
+	E2EFirmwareCatalogImages = []hwmgmtv1alpha1.FirmwareImage{
+		// SNO test entry (version must match HFC CurrentVersion in sno_provisioning_test.go)
+		{Name: "test-bios-v1.0-entry", Component: "bios", URL: "https://example.com/firmware/bios-v1.0.bin", Version: "test-bios-v1.0"},
+		// MNO R740 v2 entries
+		{Name: "r740-bios-2.22.2", Component: "bios", URL: "http://example.com:8888/firmware/r740/BIOS_F8GPH_WN64_2.22.2.EXE", Version: "2.22.2"},
+		{Name: "r740-bmc-7.00.00.173", Component: "bmc", URL: "http://example.com:8888/firmware/r740/iDRAC-with-Lifecycle-Controller_Firmware_XTFXJ_WN64_7.00.00.173_A00.EXE", Version: "7.00.00.173"},
+		{Name: "r740-nic-16.35.30.06", Component: "nic", URL: "https://example.com:8888/firmware/network/dell/mellanox/ConnectX-5/Network_Firmware_XY16R_WN64_16.35.30.06_01.EXE", Version: "16.35.30.06"},
+		// MNO XR8620t v1 entries
+		{Name: "xr8620t-bios-2.1.0", Component: "bios", URL: "https://example.com:8888/firmware/xr8620t/BIOS_JDR1R_WN64_2.1.0.EXE", Version: "2.1.0"},
+		{Name: "xr8620t-bmc-7.0.0", Component: "bmc", URL: "https://example.com:8888/firmware/xr8620t/iDRAC-with-Lifecycle-Controller_Firmware_W4NV9_WN64_7.0.0_A00.EXE", Version: "7.0.0"},
+		// MNO XR8620t v2 entries
+		{Name: "xr8620t-bios-2.3.5", Component: "bios", URL: "https://example.com:8888/firmware/xr8620t/BIOS_JDR1R_WN64_2.3.5.EXE", Version: "2.3.5"},
+		{Name: "xr8620t-bmc-7.10.70.10", Component: "bmc", URL: "https://example.com:8888/firmware/xr8620t/iDRAC-with-Lifecycle-Controller_Firmware_W4NV9_WN64_7.10.70.10_A00.EXE", Version: "7.10.70.10"},
+		// MNO XR8620t v3 entries
+		{Name: "xr8620t-bios-2.4.0", Component: "bios", URL: "https://example.com:8888/firmware/xr8620t/BIOS_JDR1R_WN64_2.4.0.EXE", Version: "2.4.0"},
+		{Name: "xr8620t-bmc-7.10.80.00", Component: "bmc", URL: "https://example.com:8888/firmware/xr8620t/iDRAC-with-Lifecycle-Controller_Firmware_W4NV9_WN64_7.10.80.00_A00.EXE", Version: "7.10.80.00"},
 	}
 
 	// MNO BMH definitions: N master (R740/green) + M worker (XR8620t/blue)

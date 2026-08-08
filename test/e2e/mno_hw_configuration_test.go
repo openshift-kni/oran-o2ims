@@ -1035,21 +1035,36 @@ func completeBMHServicing(ctx context.Context, node *hwmgmtv1alpha1.AllocatedNod
 		Name: node.Spec.HwProfile, Namespace: constants.DefaultNamespace,
 	}, hwProfile)).To(Succeed())
 
+	// Resolve firmware versions from catalog
+	catalog := &hwmgmtv1alpha1.FirmwareCatalog{}
+	Expect(K8SClient.Get(ctx, types.NamespacedName{
+		Name: hwmgmtv1alpha1.FirmwareCatalogName, Namespace: constants.DefaultNamespace,
+	}, catalog)).To(Succeed())
+
+	imageMap := make(map[string]hwmgmtv1alpha1.FirmwareImage, len(catalog.Spec.Images))
+	for _, img := range catalog.Spec.Images {
+		imageMap[img.Name] = img
+	}
+
 	newComponents := []metal3v1alpha1.FirmwareComponentStatus{}
-	if hwProfile.Spec.BiosFirmware.Version != "" {
-		newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
-			Component: "bios", CurrentVersion: hwProfile.Spec.BiosFirmware.Version,
-		})
-	}
-	if hwProfile.Spec.BmcFirmware.Version != "" {
-		newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
-			Component: "bmc", CurrentVersion: hwProfile.Spec.BmcFirmware.Version,
-		})
-	}
-	for i, nic := range hwProfile.Spec.NicFirmware {
-		if nic.Version != "" {
+	if hwProfile.Spec.BiosFirmware != "" {
+		if img, ok := imageMap[hwProfile.Spec.BiosFirmware]; ok {
 			newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
-				Component: fmt.Sprintf("nic:%d", i), CurrentVersion: nic.Version,
+				Component: "bios", CurrentVersion: img.Version,
+			})
+		}
+	}
+	if hwProfile.Spec.BmcFirmware != "" {
+		if img, ok := imageMap[hwProfile.Spec.BmcFirmware]; ok {
+			newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
+				Component: "bmc", CurrentVersion: img.Version,
+			})
+		}
+	}
+	for i, name := range hwProfile.Spec.NicFirmware {
+		if img, ok := imageMap[name]; ok {
+			newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
+				Component: fmt.Sprintf("nic:%d", i), CurrentVersion: img.Version,
 			})
 		}
 	}
