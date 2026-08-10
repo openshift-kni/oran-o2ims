@@ -173,8 +173,50 @@ var _ = Describe("FirmwareCatalogValidator", func() {
 	})
 
 	Describe("ValidateDelete", func() {
-		It("should allow deletion", func() {
+		It("should allow deletion when no HardwareProfiles reference entries", func() {
 			setupValidator()
+			warnings, err := validator.ValidateDelete(ctx, oldCatalog)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(warnings).To(BeNil())
+		})
+
+		It("should reject deletion when a HardwareProfile references a biosFirmware entry", func() {
+			hp := &HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-profile", Namespace: "oran-o2ims"},
+				Spec:       HardwareProfileSpec{BiosFirmware: "dell-bios-2.3.5"},
+			}
+			setupValidator(hp)
+			_, err := validator.ValidateDelete(ctx, oldCatalog)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("cannot delete FirmwareCatalog"))
+			Expect(err.Error()).To(ContainSubstring("dell-bios-2.3.5"))
+		})
+
+		It("should reject deletion when a HardwareProfile references a nicFirmware entry", func() {
+			catalog := oldCatalog.DeepCopy()
+			catalog.Spec.Images = append(catalog.Spec.Images, FirmwareImage{
+				Name:      "broadcom-nic-25.2",
+				Component: "nic",
+				URL:       "https://example.com/nic.bin",
+				Version:   "25.2",
+			})
+			hp := &HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-profile", Namespace: "oran-o2ims"},
+				Spec:       HardwareProfileSpec{NicFirmware: []string{"broadcom-nic-25.2"}},
+			}
+			setupValidator(hp)
+			_, err := validator.ValidateDelete(ctx, catalog)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("cannot delete FirmwareCatalog"))
+			Expect(err.Error()).To(ContainSubstring("broadcom-nic-25.2"))
+		})
+
+		It("should allow deletion when HardwareProfiles exist but have no firmware references", func() {
+			hp := &HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-profile", Namespace: "oran-o2ims"},
+				Spec:       HardwareProfileSpec{},
+			}
+			setupValidator(hp)
 			warnings, err := validator.ValidateDelete(ctx, oldCatalog)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(warnings).To(BeNil())

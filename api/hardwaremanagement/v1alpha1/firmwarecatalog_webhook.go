@@ -27,7 +27,7 @@ func (r *FirmwareCatalog) SetupWebhookWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
-//+kubebuilder:webhook:path=/validate-clcm-openshift-io-v1alpha1-firmwarecatalog,mutating=false,failurePolicy=fail,sideEffects=None,groups=clcm.openshift.io,resources=firmwarecatalogs,verbs=update,versions=v1alpha1,name=firmwarecatalogs.clcm.openshift.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/validate-clcm-openshift-io-v1alpha1-firmwarecatalog,mutating=false,failurePolicy=fail,sideEffects=None,groups=clcm.openshift.io,resources=firmwarecatalogs,verbs=update;delete,versions=v1alpha1,name=firmwarecatalogs.clcm.openshift.io,admissionReviewVersions=v1
 
 type firmwareCatalogValidator struct {
 	client.Client
@@ -74,7 +74,26 @@ func (v *firmwareCatalogValidator) ValidateUpdate(ctx context.Context, oldCatalo
 }
 
 // ValidateDelete implements admission.Validator
-func (v *firmwareCatalogValidator) ValidateDelete(_ context.Context, _ *FirmwareCatalog) (admission.Warnings, error) {
+func (v *firmwareCatalogValidator) ValidateDelete(ctx context.Context, catalog *FirmwareCatalog) (admission.Warnings, error) {
+	firmwarecataloglog.Info("validate delete", "name", catalog.Name)
+
+	hwProfiles := &HardwareProfileList{}
+	if err := v.Client.List(ctx, hwProfiles, client.InNamespace(catalog.Namespace)); err != nil {
+		return nil, fmt.Errorf("failed to list HardwareProfiles: %w", err)
+	}
+
+	var referenced []string
+	for _, img := range catalog.Spec.Images {
+		if isEntryReferencedByAnyProfile(img.Name, hwProfiles.Items) {
+			referenced = append(referenced, img.Name)
+		}
+	}
+
+	if len(referenced) > 0 {
+		return nil, fmt.Errorf("cannot delete FirmwareCatalog: entries still referenced by HardwareProfiles: %s",
+			strings.Join(referenced, ", "))
+	}
+
 	return nil, nil
 }
 
