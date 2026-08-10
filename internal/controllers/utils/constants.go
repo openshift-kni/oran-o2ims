@@ -175,6 +175,9 @@ const (
 	ClusterInstanceNodeGroupsKey = "nodeGroups"
 )
 
+// HwMgmtNodeGroupDataKey is the node group list in hwMgmtDefaults / hwMgmtParameters data.
+const HwMgmtNodeGroupDataKey = "nodeGroupData"
+
 var (
 	// AllowedClusterInstanceFields contains path patterns for fields that are allowed to be updated.
 	// The wildcard "*" is used to match any index in a list.
