@@ -421,19 +421,19 @@ var _ = Describe("ClusterIsReadyForPolicyConfig", func() {
 
 var _ = Describe("RemoveLabelFromInterfaces", func() {
 
-	It("returns error for invalid node structure", func() {
+	It("returns error for invalid nodes structure", func() {
 		data := map[string]interface{}{
 			"baseDomain": "example.sno",
 			"nodes": []interface{}{
 				42, // should be a map
 			},
 		}
-		err := RemoveLabelFromInterfaces(data)
+		err := RemoveLabelFromInterfaces(data, ClusterInstanceNodesKey)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(Equal("unexpected: invalid node data structure"))
+		Expect(err.Error()).To(Equal("unexpected: invalid nodes data structure"))
 	})
 
-	It("returns error for failing to extract node interfaces", func() {
+	It("returns error for failing to extract nodes interfaces", func() {
 		data := map[string]interface{}{
 			"baseDomain": "example.sno",
 			"nodes": []interface{}{
@@ -442,12 +442,12 @@ var _ = Describe("RemoveLabelFromInterfaces", func() {
 				},
 			},
 		}
-		err := RemoveLabelFromInterfaces(data)
+		err := RemoveLabelFromInterfaces(data, ClusterInstanceNodesKey)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(Equal("failed to extract the interfaces from the node map"))
 	})
 
-	It("removes the labels from the  node interfaces", func() {
+	It("removes the labels from the nodes interfaces", func() {
 		data := map[string]interface{}{
 			"baseDomain": "example.sno",
 			"nodes": []interface{}{
@@ -464,7 +464,7 @@ var _ = Describe("RemoveLabelFromInterfaces", func() {
 				},
 			},
 		}
-		err := RemoveLabelFromInterfaces(data)
+		err := RemoveLabelFromInterfaces(data, ClusterInstanceNodesKey)
 		Expect(err).To(Not(HaveOccurred()))
 		Expect(
 			data["nodes"].([]interface{})[0].(map[string]interface{})["nodeNetwork"].(map[string]interface{})["interfaces"].([]interface{})[0].(map[string]interface{})).
@@ -475,41 +475,208 @@ var _ = Describe("RemoveLabelFromInterfaces", func() {
 				}),
 			)
 	})
-})
 
-var _ = Describe("removeRequiredFromClusterInstanceSchema", func() {
+	It("returns error for invalid nodeGroups structure", func() {
+		data := map[string]any{
+			"nodeGroups": []any{
+				42, // should be a map
+			},
+		}
+		err := RemoveLabelFromInterfaces(data, ClusterInstanceNodeGroupsKey)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal("unexpected: invalid nodeGroups data structure"))
+	})
 
-	It("removes all the requested attributes from maps and arrays", func() {
-		var specIntf map[string]interface{}
-		err := yaml.Unmarshal([]byte(TestClusterInstancePropertiesRequiredRemoval), &specIntf)
+	It("returns error for failing to extract nodeGroups interfaces", func() {
+		data := map[string]any{
+			"nodeGroups": []any{
+				map[string]any{
+					"nodeNetwork": "value", // should be a map
+				},
+			},
+		}
+		err := RemoveLabelFromInterfaces(data, ClusterInstanceNodeGroupsKey)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal("failed to extract the interfaces from the node map"))
+	})
+
+	It("removes the labels from the nodeGroups interfaces", func() {
+		data := map[string]any{
+			"nodeGroups": []any{
+				map[string]any{
+					"nodeNetwork": map[string]any{
+						"interfaces": []any{
+							map[string]any{
+								"name":       "ens3f0",
+								"label":      constants.BootInterfaceLabel,
+								"macAddress": "some-mac",
+							},
+						},
+					},
+				},
+			},
+		}
+		err := RemoveLabelFromInterfaces(data, ClusterInstanceNodeGroupsKey)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(specIntf).To(HaveKey("required"))
 		Expect(
-			specIntf["properties"].(map[string]interface{})["machineNetwork"].(map[string]interface{})["items"].(map[string]interface{})).To(HaveKey("required"))
-		removeRequiredFromSchema(specIntf)
-		Expect(specIntf).To(Not(HaveKey("required")))
-		Expect(
-			specIntf["properties"].(map[string]interface{})["machineNetwork"].(map[string]interface{})["items"].(map[string]interface{})).To(Not(HaveKey("required")))
-		nodeItems := specIntf["properties"].(map[string]interface{})["nodes"].(map[string]interface{})["items"].(map[string]interface{})
-		nodeNetworkProperties := nodeItems["properties"].(map[string]interface{})["nodeNetwork"].(map[string]interface{})["properties"].(map[string]interface{})
-		interfacesItems := nodeNetworkProperties["interfaces"].(map[string]interface{})["items"].(map[string]interface{})
-		Expect(interfacesItems).To(Not(HaveKey("required")))
+			data["nodeGroups"].([]any)[0].(map[string]any)["nodeNetwork"].(map[string]any)["interfaces"].([]any)[0].(map[string]any)).
+			To(Equal(
+				map[string]any{
+					"name":       "ens3f0",
+					"macAddress": "some-mac",
+				}),
+			)
 	})
 })
 
-var _ = Describe("ValidateDefaultConfigmapSchema", func() {
+var _ = Describe("ValidateNodeGroupsNames", func() {
+	hwMgmt := map[string]struct{}{"master": {}, "worker": {}}
+
+	It("accepts well-formed groups", func() {
+		err := ValidateNodeGroupsNames(map[string]any{
+			"nodeGroups": []any{
+				map[string]any{"name": "master", "role": "master"},
+				map[string]any{"name": "worker", "role": "worker"},
+			},
+		}, hwMgmt)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("rejects nested nodes including empty list", func() {
+		err := ValidateNodeGroupsNames(map[string]any{
+			"nodeGroups": []any{
+				map[string]any{"name": "master", "nodes": []any{}},
+			},
+		}, hwMgmt)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal(
+			`nodeGroups[0] must omit "nodes"; per-host identity belongs only in the ProvisioningRequest`))
+	})
+
+	It("rejects missing name", func() {
+		err := ValidateNodeGroupsNames(map[string]any{
+			"nodeGroups": []any{
+				map[string]any{"role": "master"},
+			},
+		}, hwMgmt)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal(`nodeGroups[0].name must be a non-empty string`))
+	})
+
+	It("rejects duplicate names", func() {
+		err := ValidateNodeGroupsNames(map[string]any{
+			"nodeGroups": []any{
+				map[string]any{"name": "master"},
+				map[string]any{"name": "master"},
+			},
+		}, hwMgmt)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal(`duplicate nodeGroups name "master"`))
+	})
+
+	It("rejects name not in allowed hardware node groups", func() {
+		err := ValidateNodeGroupsNames(map[string]any{
+			"nodeGroups": []any{
+				map[string]any{"name": "extra"},
+			},
+		}, hwMgmt)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal(
+			`nodeGroups name "extra" does not match any hardware node group in the nodeGroupData`))
+	})
+
+	It("skips membership check when allowedGroupNames is nil", func() {
+		err := ValidateNodeGroupsNames(map[string]any{
+			"nodeGroups": []any{
+				map[string]any{"name": "any-group"},
+			},
+		}, nil)
+		Expect(err).ToNot(HaveOccurred())
+	})
+})
+
+var _ = Describe("ValidateDefaultInterfaces", func() {
+	It("returns error if nodes interfaces are missing labels", func() {
+		err := ValidateDefaultInterfaces(map[string]any{
+			"nodes": []any{
+				map[string]any{
+					"hostName": "node1",
+					"nodeNetwork": map[string]any{
+						"interfaces": []any{
+							map[string]any{"name": "eno1"},
+						},
+					},
+				},
+			},
+		}, ClusterInstanceNodesKey)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal("'label' is missing for interface: eno1"))
+	})
+
+	It("returns no error if nodes interfaces have labels", func() {
+		err := ValidateDefaultInterfaces(map[string]any{
+			"nodes": []any{
+				map[string]any{
+					"hostName": "node1",
+					"nodeNetwork": map[string]any{
+						"interfaces": []any{
+							map[string]any{"name": "eno1", "label": "boot-interface"},
+						},
+					},
+				},
+			},
+		}, ClusterInstanceNodesKey)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("returns error if nodeGroups interfaces are missing labels", func() {
+		err := ValidateDefaultInterfaces(map[string]any{
+			"nodeGroups": []any{
+				map[string]any{
+					"name": "master",
+					"nodeNetwork": map[string]any{
+						"interfaces": []any{
+							map[string]any{"name": "ens3f0"},
+						},
+					},
+				},
+			},
+		}, ClusterInstanceNodeGroupsKey)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal("'label' is missing for interface: ens3f0"))
+	})
+
+	It("returns no error if nodeGroups interfaces have labels", func() {
+		err := ValidateDefaultInterfaces(map[string]any{
+			"nodeGroups": []any{
+				map[string]any{
+					"name": "master",
+					"nodeNetwork": map[string]any{
+						"interfaces": []any{
+							map[string]any{"name": "ens3f0", "label": "boot-interface"},
+						},
+					},
+				},
+			},
+		}, ClusterInstanceNodeGroupsKey)
+		Expect(err).ToNot(HaveOccurred())
+	})
+})
+
+var _ = Describe("ValidateConfigmapSchemaAgainstClusterInstanceCRD", func() {
 	var (
 		ctx        context.Context
 		fakeClient client.Client
 	)
 
 	BeforeEach(func() {
+		ctx = context.Background()
 		fakeClient = fakeclient.GetFakeClientFromObjects()
 	})
 
 	It("returns an error when the ClusterInstance CRD does not exist", func() {
-		var data map[string]interface{}
-		err := ValidateConfigmapSchemaAgainstClusterInstanceCRD(ctx, fakeClient, data)
+		err := ValidateConfigmapSchemaAgainstClusterInstanceCRD(
+			ctx, fakeClient, nil, ClusterInstanceNodesKey)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).
 			To(Equal(
@@ -524,8 +691,8 @@ var _ = Describe("ValidateDefaultConfigmapSchema", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(fakeClient.Create(ctx, clusterInstanceCRD)).To(Succeed())
 
-			var data map[string]interface{}
-			err = ValidateConfigmapSchemaAgainstClusterInstanceCRD(ctx, fakeClient, data)
+			err = ValidateConfigmapSchemaAgainstClusterInstanceCRD(
+				ctx, fakeClient, nil, ClusterInstanceNodesKey)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("failed to obtain the versions of the %s.%s CRD", ClusterInstanceCrdName, siteconfig.Group)))
 		})
@@ -535,43 +702,92 @@ var _ = Describe("ValidateDefaultConfigmapSchema", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(fakeClient.Create(ctx, clusterInstanceCRD)).To(Succeed())
 
-			var data map[string]interface{}
-			err = ValidateConfigmapSchemaAgainstClusterInstanceCRD(ctx, fakeClient, data)
+			err = ValidateConfigmapSchemaAgainstClusterInstanceCRD(
+				ctx, fakeClient, nil, ClusterInstanceNodesKey)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("no version served & stored in the %s.%s CRD ", ClusterInstanceCrdName, siteconfig.Group)))
 		})
 
-		It("returns error if the ConfigMap schema does not match the ClusterInstance CRD schema", func() {
+		It("returns error if the nodes-format ConfigMap schema does not match the ClusterInstance CRD schema", func() {
 			clusterInstanceCRD, err := BuildTestClusterInstanceCRD(TestClusterInstanceSpecOk)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(fakeClient.Create(ctx, clusterInstanceCRD)).To(Succeed())
 
-			data := map[string]interface{}{
+			data := map[string]any{
 				"clusterImageSetNameRef": "4.15",
-				"pullSecretRef": map[string]interface{}{
+				"pullSecretRef": map[string]any{
 					"should-be-name": "pull-secret",
 				},
 			}
-			err = ValidateConfigmapSchemaAgainstClusterInstanceCRD(ctx, fakeClient, data)
+			err = ValidateConfigmapSchemaAgainstClusterInstanceCRD(
+				ctx, fakeClient, data, ClusterInstanceNodesKey)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(
 				"ConfigMap does not match the ClusterInstance schema: " +
 					"invalid input: pullSecretRef: Additional property should-be-name is not allowed"))
 		})
 
-		It("returns no error if the ConfigMap schema matches the ClusterInstance CRD schema", func() {
+		It("returns no error if the nodes-format ConfigMap schema matches the ClusterInstance CRD schema", func() {
 			clusterInstanceCRD, err := BuildTestClusterInstanceCRD(TestClusterInstanceSpecOk)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(fakeClient.Create(ctx, clusterInstanceCRD)).To(Succeed())
 
-			data := map[string]interface{}{
+			data := map[string]any{
 				"clusterImageSetNameRef": "4.15",
-				"pullSecretRef": map[string]interface{}{
+				"pullSecretRef": map[string]any{
 					"name": "pull-secret",
 				},
 			}
-			err = ValidateConfigmapSchemaAgainstClusterInstanceCRD(ctx, fakeClient, data)
+			err = ValidateConfigmapSchemaAgainstClusterInstanceCRD(
+				ctx, fakeClient, data, ClusterInstanceNodesKey)
 			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("returns no error if the nodeGroups-format ConfigMap schema matches the ClusterInstance CRD schema", func() {
+			clusterInstanceCRD, err := BuildTestClusterInstanceCRD(TestClusterInstanceSpecOk)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(fakeClient.Create(ctx, clusterInstanceCRD)).To(Succeed())
+
+			data := map[string]any{
+				"baseDomain": "example.com",
+				"nodeGroups": []any{
+					map[string]any{
+						"role": "master",
+						"nodeNetwork": map[string]any{
+							"interfaces": []any{
+								map[string]any{"name": "ens3f0"},
+							},
+						},
+					},
+				},
+			}
+			Expect(ValidateConfigmapSchemaAgainstClusterInstanceCRD(
+				ctx, fakeClient, data, ClusterInstanceNodeGroupsKey)).To(Succeed())
+		})
+
+		It("returns error if the nodeGroups-format ConfigMap schema does not match the ClusterInstance CRD schema", func() {
+			clusterInstanceCRD, err := BuildTestClusterInstanceCRD(TestClusterInstanceSpecOk)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(fakeClient.Create(ctx, clusterInstanceCRD)).To(Succeed())
+
+			data := map[string]any{
+				"nodeGroups": []any{
+					map[string]any{
+						"notAField": true,
+						"nodeNetwork": map[string]any{
+							"interfaces": []any{
+								map[string]any{"name": "ens3f0"},
+							},
+						},
+					},
+				},
+			}
+			err = ValidateConfigmapSchemaAgainstClusterInstanceCRD(
+				ctx, fakeClient, data, ClusterInstanceNodeGroupsKey)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(
+				"ConfigMap does not match the ClusterInstance schema: " +
+					"invalid input: nodeGroups.0: Additional property notAField is not allowed"))
 		})
 	})
 })
