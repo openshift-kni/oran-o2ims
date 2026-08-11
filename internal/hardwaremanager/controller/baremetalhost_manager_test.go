@@ -64,6 +64,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -1017,6 +1018,114 @@ var _ = Describe("BareMetalHost Manager", func() {
 			err = fakeClient.Get(ctx, name, &updatedImage)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(updatedImage.Finalizers).To(ContainElement("other-finalizer"))
+		})
+
+	})
+
+	Describe("deleteIBINetworkDataSecret", func() {
+		It("should delete secret, restore BMH, and clear PPI networkDataName", func() {
+			bmh := createBMH("test-bmh", "test-ns", nil, map[string]string{
+				OrigNetworkDataAnnotation: "",
+			}, metal3v1alpha1.StateAvailable)
+			bmh.Spec.PreprovisioningNetworkDataName = "test-bmh"
+
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-bmh",
+					Namespace:  "test-ns",
+					Finalizers: []string{BmhSecretFinalizer},
+					OwnerReferences: []metav1.OwnerReference{
+						{Kind: "BareMetalHost", Name: "test-bmh", APIVersion: "metal3.io/v1alpha1"},
+						{Kind: "PreprovisioningImage", Name: "test-bmh", APIVersion: "metal3.io/v1alpha1"},
+					},
+				},
+			}
+			ppi := &metal3v1alpha1.PreprovisioningImage{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-bmh",
+					Namespace: "test-ns",
+				},
+				Spec: metal3v1alpha1.PreprovisioningImageSpec{
+					NetworkDataName: "test-bmh",
+				},
+			}
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh, secret, ppi).Build()
+
+			err := deleteIBINetworkDataSecret(ctx, fakeClient, logger, bmh)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Secret should be deleted
+			var deletedSecret corev1.Secret
+			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-ns"}, &deletedSecret)
+			Expect(k8serrors.IsNotFound(err)).To(BeTrue())
+
+			// BMH preprovisioningNetworkDataName should be restored to original (empty)
+			var updatedBMH metal3v1alpha1.BareMetalHost
+			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-ns"}, &updatedBMH)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedBMH.Spec.PreprovisioningNetworkDataName).To(BeEmpty())
+
+			// PPI networkDataName should be cleared
+			var updatedPPI metal3v1alpha1.PreprovisioningImage
+			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-ns"}, &updatedPPI)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedPPI.Spec.NetworkDataName).To(BeEmpty())
+		})
+
+		It("should skip when preprovisioningNetworkDataName matches original", func() {
+			bmh := createBMH("test-bmh", "test-ns", nil, map[string]string{
+				OrigNetworkDataAnnotation: "original-secret",
+			}, metal3v1alpha1.StateAvailable)
+			bmh.Spec.PreprovisioningNetworkDataName = "original-secret"
+
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
+
+			err := deleteIBINetworkDataSecret(ctx, fakeClient, logger, bmh)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should skip when OrigNetworkDataAnnotation is absent", func() {
+			bmh := createBMH("test-bmh", "test-ns", nil, nil, metal3v1alpha1.StateAvailable)
+			bmh.Spec.PreprovisioningNetworkDataName = "some-secret"
+
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh).Build()
+
+			err := deleteIBINetworkDataSecret(ctx, fakeClient, logger, bmh)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should restore BMH and PPI even when secret is already gone", func() {
+			bmh := createBMH("test-bmh", "test-ns", nil, map[string]string{
+				OrigNetworkDataAnnotation: "",
+			}, metal3v1alpha1.StateAvailable)
+			bmh.Spec.PreprovisioningNetworkDataName = "test-bmh"
+
+			ppi := &metal3v1alpha1.PreprovisioningImage{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-bmh",
+					Namespace: "test-ns",
+				},
+				Spec: metal3v1alpha1.PreprovisioningImageSpec{
+					NetworkDataName: "test-bmh",
+				},
+			}
+			// No secret in the fake client — already deleted
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(bmh, ppi).Build()
+
+			err := deleteIBINetworkDataSecret(ctx, fakeClient, logger, bmh)
+			Expect(err).ToNot(HaveOccurred())
+
+			// BMH should still be restored
+			var updatedBMH metal3v1alpha1.BareMetalHost
+			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-ns"}, &updatedBMH)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedBMH.Spec.PreprovisioningNetworkDataName).To(BeEmpty())
+
+			// PPI should still be cleared
+			var updatedPPI metal3v1alpha1.PreprovisioningImage
+			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-ns"}, &updatedPPI)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedPPI.Spec.NetworkDataName).To(BeEmpty())
 		})
 	})
 
