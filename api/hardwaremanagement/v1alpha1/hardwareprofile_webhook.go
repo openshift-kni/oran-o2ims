@@ -28,7 +28,7 @@ func (r *HardwareProfile) SetupWebhookWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
-//+kubebuilder:webhook:path=/validate-clcm-openshift-io-v1alpha1-hardwareprofile,mutating=false,failurePolicy=fail,sideEffects=None,groups=clcm.openshift.io,resources=hardwareprofiles,verbs=create,versions=v1alpha1,name=hardwareprofiles.clcm.openshift.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/validate-clcm-openshift-io-v1alpha1-hardwareprofile,mutating=false,failurePolicy=fail,sideEffects=None,groups=clcm.openshift.io,resources=hardwareprofiles,verbs=create;update,versions=v1alpha1,name=hardwareprofiles.clcm.openshift.io,admissionReviewVersions=v1
 
 type hardwareProfileValidator struct {
 	client.Client
@@ -44,8 +44,9 @@ func (v *hardwareProfileValidator) ValidateCreate(ctx context.Context, hp *Hardw
 }
 
 // ValidateUpdate implements admission.Validator
-func (v *hardwareProfileValidator) ValidateUpdate(_ context.Context, _, _ *HardwareProfile) (admission.Warnings, error) {
-	return nil, nil
+func (v *hardwareProfileValidator) ValidateUpdate(ctx context.Context, _, newHP *HardwareProfile) (admission.Warnings, error) {
+	hardwareprofilelog.Info("validate update", "name", newHP.Name)
+	return nil, v.validateFirmwareReferences(ctx, newHP)
 }
 
 // ValidateDelete implements admission.Validator
@@ -57,8 +58,7 @@ func (v *hardwareProfileValidator) ValidateDelete(_ context.Context, _ *Hardware
 // HardwareProfile exist in the singleton FirmwareCatalog and have the
 // correct component type.
 func (v *hardwareProfileValidator) validateFirmwareReferences(ctx context.Context, hp *HardwareProfile) error {
-	refs := collectFirmwareReferences(hp)
-	if len(refs) == 0 {
+	if !hasFirmwareReferences(hp) {
 		return nil
 	}
 
@@ -79,24 +79,24 @@ func (v *hardwareProfileValidator) validateFirmwareReferences(ctx context.Contex
 	if hp.Spec.BiosFirmware != "" {
 		if img, ok := imageMap[hp.Spec.BiosFirmware]; !ok {
 			errs = append(errs, fmt.Sprintf("biosFirmware entry %q not found in FirmwareCatalog", hp.Spec.BiosFirmware))
-		} else if img.Component != "bios" {
-			errs = append(errs, fmt.Sprintf("biosFirmware entry %q has component %q, expected bios", hp.Spec.BiosFirmware, img.Component))
+		} else if img.Component != ComponentBIOS {
+			errs = append(errs, fmt.Sprintf("biosFirmware entry %q has component %q, expected %s", hp.Spec.BiosFirmware, img.Component, ComponentBIOS))
 		}
 	}
 
 	if hp.Spec.BmcFirmware != "" {
 		if img, ok := imageMap[hp.Spec.BmcFirmware]; !ok {
 			errs = append(errs, fmt.Sprintf("bmcFirmware entry %q not found in FirmwareCatalog", hp.Spec.BmcFirmware))
-		} else if img.Component != "bmc" {
-			errs = append(errs, fmt.Sprintf("bmcFirmware entry %q has component %q, expected bmc", hp.Spec.BmcFirmware, img.Component))
+		} else if img.Component != ComponentBMC {
+			errs = append(errs, fmt.Sprintf("bmcFirmware entry %q has component %q, expected %s", hp.Spec.BmcFirmware, img.Component, ComponentBMC))
 		}
 	}
 
 	for _, name := range hp.Spec.NicFirmware {
 		if img, ok := imageMap[name]; !ok {
 			errs = append(errs, fmt.Sprintf("nicFirmware entry %q not found in FirmwareCatalog", name))
-		} else if img.Component != "nic" {
-			errs = append(errs, fmt.Sprintf("nicFirmware entry %q has component %q, expected nic", name, img.Component))
+		} else if img.Component != ComponentNIC {
+			errs = append(errs, fmt.Sprintf("nicFirmware entry %q has component %q, expected %s", name, img.Component, ComponentNIC))
 		}
 	}
 
@@ -107,16 +107,6 @@ func (v *hardwareProfileValidator) validateFirmwareReferences(ctx context.Contex
 	return nil
 }
 
-// collectFirmwareReferences returns all non-empty firmware reference names
-// from a HardwareProfile.
-func collectFirmwareReferences(hp *HardwareProfile) []string {
-	var refs []string
-	if hp.Spec.BiosFirmware != "" {
-		refs = append(refs, hp.Spec.BiosFirmware)
-	}
-	if hp.Spec.BmcFirmware != "" {
-		refs = append(refs, hp.Spec.BmcFirmware)
-	}
-	refs = append(refs, hp.Spec.NicFirmware...)
-	return refs
+func hasFirmwareReferences(hp *HardwareProfile) bool {
+	return hp.Spec.BiosFirmware != "" || hp.Spec.BmcFirmware != "" || len(hp.Spec.NicFirmware) > 0
 }

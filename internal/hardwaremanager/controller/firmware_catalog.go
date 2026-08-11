@@ -69,7 +69,7 @@ func resolveFirmwareFromCatalog(ctx context.Context, c client.Client,
 			return resolvedFirmware{},
 				fmt.Errorf("biosFirmware entry %q not found in FirmwareCatalog", spec.BiosFirmware)
 		}
-		if img.Component != componentBIOS {
+		if img.Component != hwmgmtv1alpha1.ComponentBIOS {
 			return resolvedFirmware{},
 				fmt.Errorf("biosFirmware entry %q has component %q, expected bios", spec.BiosFirmware, img.Component)
 		}
@@ -82,7 +82,7 @@ func resolveFirmwareFromCatalog(ctx context.Context, c client.Client,
 			return resolvedFirmware{},
 				fmt.Errorf("bmcFirmware entry %q not found in FirmwareCatalog", spec.BmcFirmware)
 		}
-		if img.Component != componentBMC {
+		if img.Component != hwmgmtv1alpha1.ComponentBMC {
 			return resolvedFirmware{},
 				fmt.Errorf("bmcFirmware entry %q has component %q, expected bmc", spec.BmcFirmware, img.Component)
 		}
@@ -95,9 +95,9 @@ func resolveFirmwareFromCatalog(ctx context.Context, c client.Client,
 			return resolvedFirmware{},
 				fmt.Errorf("nicFirmware entry %q not found in FirmwareCatalog", name)
 		}
-		if img.Component != "nic" {
+		if img.Component != hwmgmtv1alpha1.ComponentNIC {
 			return resolvedFirmware{},
-				fmt.Errorf("nicFirmware entry %q has component %q, expected nic", name, img.Component)
+				fmt.Errorf("nicFirmware entry %q has component %q, expected %s", name, img.Component, hwmgmtv1alpha1.ComponentNIC)
 		}
 		resolved.NicFirmware = append(resolved.NicFirmware, Nic{URL: img.URL, Version: img.Version})
 	}

@@ -1092,19 +1092,22 @@ func completeBMHServicing(ctx context.Context, node *hwmgmtv1alpha1.AllocatedNod
 
 	newComponents := []metal3v1alpha1.FirmwareComponentStatus{}
 	if hwProfile.Spec.BiosFirmware != "" {
-		img := imageMap[hwProfile.Spec.BiosFirmware]
+		img, ok := imageMap[hwProfile.Spec.BiosFirmware]
+		Expect(ok).To(BeTrue(), "FirmwareCatalog missing entry %q referenced by HardwareProfile biosFirmware", hwProfile.Spec.BiosFirmware)
 		newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
 			Component: "bios", CurrentVersion: img.Version,
 		})
 	}
 	if hwProfile.Spec.BmcFirmware != "" {
-		img := imageMap[hwProfile.Spec.BmcFirmware]
+		img, ok := imageMap[hwProfile.Spec.BmcFirmware]
+		Expect(ok).To(BeTrue(), "FirmwareCatalog missing entry %q referenced by HardwareProfile bmcFirmware", hwProfile.Spec.BmcFirmware)
 		newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
 			Component: "bmc", CurrentVersion: img.Version,
 		})
 	}
 	for i, nicName := range hwProfile.Spec.NicFirmware {
-		img := imageMap[nicName]
+		img, ok := imageMap[nicName]
+		Expect(ok).To(BeTrue(), "FirmwareCatalog missing entry %q referenced by HardwareProfile nicFirmware[%d]", nicName, i)
 		if img.Version != "" {
 			newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
 				Component: fmt.Sprintf("nic:%d", i), CurrentVersion: img.Version,
