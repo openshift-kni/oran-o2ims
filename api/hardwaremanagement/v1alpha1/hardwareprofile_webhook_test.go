@@ -37,10 +37,11 @@ func TestHardwareProfileWebhookValidateCreate(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		hp      *HardwareProfile
-		wantErr bool
-		errMsg  string
+		name      string
+		hp        *HardwareProfile
+		noCatalog bool
+		wantErr   bool
+		errMsg    string
 	}{
 		{
 			name: "valid BIOS reference",
@@ -112,6 +113,110 @@ func TestHardwareProfileWebhookValidateCreate(t *testing.T) {
 			wantErr: true,
 			errMsg:  "not found in FirmwareCatalog",
 		},
+		{
+			name: "missing FirmwareCatalog",
+			hp: &HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
+				Spec:       HardwareProfileSpec{BiosFirmware: "bios-entry"},
+			},
+			noCatalog: true,
+			wantErr:   true,
+			errMsg:    "failed to get FirmwareCatalog",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			builder := fake.NewClientBuilder().WithScheme(scheme)
+			if !tt.noCatalog {
+				builder = builder.WithObjects(catalog.DeepCopy())
+			}
+			fakeClient := builder.Build()
+
+			v := &hardwareProfileValidator{Client: fakeClient}
+			_, err := v.ValidateCreate(context.Background(), tt.hp)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("expected error containing %q, got nil", tt.errMsg)
+				} else if tt.errMsg != "" {
+					if !strings.Contains(err.Error(), tt.errMsg) {
+						t.Errorf("expected error containing %q, got %q", tt.errMsg, err.Error())
+					}
+				}
+			} else if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestHardwareProfileWebhookValidateUpdate(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add scheme: %v", err)
+	}
+
+	catalog := &FirmwareCatalog{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      FirmwareCatalogName,
+			Namespace: "test-ns",
+		},
+		Spec: FirmwareCatalogSpec{
+			Images: []FirmwareImage{
+				{Name: "bios-entry", Component: "bios", URL: "https://example.com/bios.bin", Version: "1.0"},
+				{Name: "bmc-entry", Component: "bmc", URL: "https://example.com/bmc.bin", Version: "2.0"},
+				{Name: "nic-entry", Component: "nic", URL: "https://example.com/nic.bin", Version: "3.0"},
+			},
+		},
+	}
+
+	oldHP := &HardwareProfile{
+		ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
+		Spec:       HardwareProfileSpec{BiosFirmware: "bios-entry"},
+	}
+
+	tests := []struct {
+		name    string
+		newHP   *HardwareProfile
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid firmware references",
+			newHP: &HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
+				Spec: HardwareProfileSpec{
+					BiosFirmware: "bios-entry",
+					BmcFirmware:  "bmc-entry",
+				},
+			},
+		},
+		{
+			name: "nonexistent BIOS entry",
+			newHP: &HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
+				Spec:       HardwareProfileSpec{BiosFirmware: "missing-entry"},
+			},
+			wantErr: true,
+			errMsg:  "not found in FirmwareCatalog",
+		},
+		{
+			name: "wrong component type for BMC",
+			newHP: &HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
+				Spec:       HardwareProfileSpec{BmcFirmware: "bios-entry"},
+			},
+			wantErr: true,
+			errMsg:  "expected bmc",
+		},
+		{
+			name: "removing all firmware references",
+			newHP: &HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
+				Spec:       HardwareProfileSpec{},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -122,7 +227,7 @@ func TestHardwareProfileWebhookValidateCreate(t *testing.T) {
 				Build()
 
 			v := &hardwareProfileValidator{Client: fakeClient}
-			_, err := v.ValidateCreate(context.Background(), tt.hp)
+			_, err := v.ValidateUpdate(context.Background(), oldHP, tt.newHP)
 
 			if tt.wantErr {
 				if err == nil {

@@ -106,7 +106,7 @@ spec:
   bmcFirmware: dell-xr8620t-bmc-7.10.70.10
 ```
 
-A validating webhook verifies at creation time that each firmware reference exists in the
+A validating webhook verifies at creation and update time that each firmware reference exists in the
 FirmwareCatalog and has the correct component type.
 
 The HardwareProfile can be specified in two places:

@@ -122,6 +122,15 @@ var _ = Describe("resolveFirmwareFromCatalog", func() {
 		Expect(resolved.NicFirmware).To(BeEmpty())
 	})
 
+	It("should return error for BMC component type mismatch", func() {
+		fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(catalog.DeepCopy()).Build()
+		spec := hwmgmtv1alpha1.HardwareProfileSpec{BmcFirmware: "bios-v1"}
+
+		_, err := resolveFirmwareFromCatalog(ctx, fakeClient, "test-ns", spec)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("expected bmc"))
+	})
+
 	It("should return error for NIC component type mismatch", func() {
 		fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(catalog.DeepCopy()).Build()
 		spec := hwmgmtv1alpha1.HardwareProfileSpec{NicFirmware: []string{"bios-v1"}}

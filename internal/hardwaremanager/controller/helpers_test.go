@@ -819,6 +819,7 @@ var _ = Describe("Helpers", func() {
 			testHFC       *metal3v1alpha1.HostFirmwareComponents
 			testHFS       *metal3v1alpha1.HostFirmwareSettings
 			testClient    client.Client
+			testResolved  resolvedFirmware
 		)
 
 		BeforeEach(func() {
@@ -919,22 +920,28 @@ var _ = Describe("Helpers", func() {
 				WithScheme(scheme).
 				WithObjects(testBMH, testHwProfile, testHFC, testHFS, testFirmwareCatalog).
 				Build()
+
+			testResolved = resolvedFirmware{
+				BiosFirmware: Firmware{Version: "1.2.3", URL: "http://example.com/bios.bin"},
+				BmcFirmware:  Firmware{Version: "4.5.6", URL: "http://example.com/bmc.bin"},
+				NicFirmware: []Nic{
+					{Version: "7.8.9", URL: "http://example.com/nic1.bin"},
+					{Version: "10.11.12", URL: "http://example.com/nic2.bin"},
+				},
+			}
 		})
 
 		Describe("validateFirmwareVersions", func() {
 			It("should return true when firmware versions match", func() {
-				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateFirmwareVersions(ctx, testClient, logger, testBMH, testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
 
 			It("should return true when no firmware versions are specified", func() {
-				// Update profile to have no firmware references
-				testHwProfile.Spec.BiosFirmware = ""
-				testHwProfile.Spec.BmcFirmware = ""
-				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
+				emptyResolved := resolvedFirmware{}
 
-				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateFirmwareVersions(ctx, testClient, logger, testBMH, emptyResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
@@ -944,7 +951,7 @@ var _ = Describe("Helpers", func() {
 				testHFC.Status.Components[0].CurrentVersion = "1.0.0" // Different BIOS version
 				Expect(testClient.Update(ctx, testHFC)).To(Succeed())
 
-				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateFirmwareVersions(ctx, testClient, logger, testBMH, testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
@@ -953,21 +960,15 @@ var _ = Describe("Helpers", func() {
 				// Delete HFC
 				Expect(testClient.Delete(ctx, testHFC)).To(Succeed())
 
-				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateFirmwareVersions(ctx, testClient, logger, testBMH, testResolved)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(valid).To(BeFalse())
-			})
-
-			It("should return error when HardwareProfile is missing", func() {
-				valid, err := validateFirmwareVersions(ctx, testClient, testClient, logger, testBMH, testNamespace, "nonexistent-profile")
-				Expect(err).To(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
 		})
 
 		Describe("validateAppliedBiosSettings", func() {
 			It("should return true when BIOS settings match", func() {
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, logger, testBMH, testHwProfile, testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
@@ -975,9 +976,8 @@ var _ = Describe("Helpers", func() {
 			It("should return true when no BIOS settings are specified", func() {
 				// Update profile to have no BIOS settings
 				testHwProfile.Spec.Bios.Attributes = map[string]intstr.IntOrString{}
-				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, logger, testBMH, testHwProfile, testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
@@ -987,7 +987,7 @@ var _ = Describe("Helpers", func() {
 				testHFS.Status.Settings["VirtualizationTechnology"] = "Disabled" // Different value
 				Expect(testClient.Update(ctx, testHFS)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, logger, testBMH, testHwProfile, testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
@@ -997,7 +997,7 @@ var _ = Describe("Helpers", func() {
 				delete(testHFS.Status.Settings, "HyperThreading")
 				Expect(testClient.Update(ctx, testHFS)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, logger, testBMH, testHwProfile, testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
@@ -1006,13 +1006,13 @@ var _ = Describe("Helpers", func() {
 				// Delete HFS
 				Expect(testClient.Delete(ctx, testHFS)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, logger, testBMH, testHwProfile, testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
 
 			It("should return true when NIC firmware versions match", func() {
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, logger, testBMH, testHwProfile, testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
@@ -1020,9 +1020,8 @@ var _ = Describe("Helpers", func() {
 			It("should return true when no NIC firmware is specified", func() {
 				// Update profile to have no NIC firmware
 				testHwProfile.Spec.NicFirmware = []string{}
-				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, logger, testBMH, testHwProfile, testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
@@ -1032,7 +1031,7 @@ var _ = Describe("Helpers", func() {
 				testHFC.Status.Components[2].CurrentVersion = "7.0.0" // Different version for nic1
 				Expect(testClient.Update(ctx, testHFC)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, logger, testBMH, testHwProfile, testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
@@ -1042,7 +1041,7 @@ var _ = Describe("Helpers", func() {
 				testHFC.Status.Components = testHFC.Status.Components[:3] // Remove the second NIC
 				Expect(testClient.Update(ctx, testHFC)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, logger, testBMH, testHwProfile, testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
@@ -1051,7 +1050,7 @@ var _ = Describe("Helpers", func() {
 				// Delete HFC
 				Expect(testClient.Delete(ctx, testHFC)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, logger, testBMH, testHwProfile, testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeFalse())
 			})
@@ -1059,9 +1058,8 @@ var _ = Describe("Helpers", func() {
 			It("should skip NIC validation when NIC firmware list is empty", func() {
 				// Update profile to have no NIC firmware
 				testHwProfile.Spec.NicFirmware = []string{}
-				Expect(testClient.Update(ctx, testHwProfile)).To(Succeed())
 
-				valid, err := validateAppliedBiosSettings(ctx, testClient, testClient, logger, testBMH, testNamespace, "test-profile")
+				valid, err := validateAppliedBiosSettings(ctx, testClient, logger, testBMH, testHwProfile, testResolved)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(valid).To(BeTrue())
 			})
