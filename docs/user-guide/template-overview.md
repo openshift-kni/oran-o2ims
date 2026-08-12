@@ -10,6 +10,8 @@ SPDX-License-Identifier: Apache-2.0
   - [ClusterTemplate CR](#clustertemplate-cr)
     - [Template name](#template-name)
     - [Template schema](#template-schema)
+      - [hwMgmtParameters schema](#hwmgmtparameters-schema)
+      - [clusterInstanceParameters schema](#clusterinstanceparameters-schema)
     - [Hardware resources](#hardware-resources)
       - [HardwareProfile](#hardwareprofile)
       - [hwMgmtDefaults](#hwmgmtdefaults)
@@ -17,6 +19,8 @@ SPDX-License-Identifier: Apache-2.0
         - [Hardware data selectors](#hardware-data-selectors)
         - [Complete example](#complete-example)
     - [ClusterInstance defaults ConfigMap](#clusterinstance-defaults-configmap)
+      - [Legacy format (`nodes`)](#legacy-format-nodes)
+      - [Recommended format (`nodeGroups`)](#recommended-format-nodegroups)
     - [PolicyTemplate defaults ConfigMap](#policytemplate-defaults-configmap)
   - [Validation](#validation)
   - [Viewing ClusterTemplates](#viewing-clustertemplates)
@@ -66,7 +70,13 @@ The schema defined in the `templateParameterSchema` must include the following *
 - nodeClusterName: Specifies the name of the node cluster.
 - oCloudSiteId: Specifies the oCloud site identifier.
 - policyTemplateParameters: A subschema that defines the parameters for cluster configuration.
-- clusterInstanceParameters: A subschema for [ClusterInstance](https://github.com/stolostron/siteconfig/blob/main/config/crd/bases/siteconfig.open-cluster-management.io_clusterinstances.yaml), defining the parameters that are allowed in the ProvisioningRequest for cluster installation.
+- clusterInstanceParameters: A subschema that defines which cluster installation
+  fields the ProvisioningRequest may supply. It is based on the SiteConfig
+  [ClusterInstance](https://github.com/stolostron/siteconfig/blob/main/config/crd/bases/siteconfig.open-cluster-management.io_clusterinstances.yaml)
+  shape, but O-Cloud templates customize it (notably `nodeGroups`). See
+  [clusterInstanceParameters schema](#clusterinstanceparameters-schema).
+
+#### hwMgmtParameters schema
 
 The schema may also include the **optional** `hwMgmtParameters` property, which
 allows the ProvisioningRequest to override settings from the ClusterTemplate's
@@ -129,6 +139,111 @@ dedicated ClusterTemplate.
 
 See the [hwMgmtParameters sample](../samples/hwMgmtParameters.yaml) for the schema
 definition of `hwMgmtParameters`.
+
+#### clusterInstanceParameters schema
+
+The `templateParameterSchema.clusterInstanceParameters` subschema controls what
+the ProvisioningRequest may send for cluster installation. It is **not** a full
+copy of the SiteConfig ClusterInstance CRD: templates expose only the fields the
+SMO is allowed to set.
+
+**Two formats.** Each template must expose **exactly one** node-layout format.
+Cluster-level fields (`clusterName`, VIPs, networks, and so on) stay
+ClusterInstance-shaped in both cases; the difference is how hosts are expressed:
+
+| Format | Status | Host layout | Sample schema |
+| --- | --- | --- | --- |
+| `nodeGroups` | Recommended | O-Cloud extension: hosts are grouped; node-group-level configuration remains ClusterInstance-shaped | [`clusterInstanceParameters-nodeGroups.yaml`](../samples/clusterInstanceParameters-nodeGroups.yaml) |
+| `nodes` | Legacy | Flat top-level ClusterInstance `nodes` subschema (as used by current SNO samples) | [`clusterInstanceParameters-legacy-nodes.yaml`](../samples/clusterInstanceParameters-legacy-nodes.yaml) |
+
+The referenced `clusterInstanceDefaults` ConfigMap must use the **same** format.
+Mixing `nodes` and `nodeGroups` across the schema, defaults, and ProvisioningRequest
+is rejected.
+
+Full ClusterTemplate examples that embed these schemas:
+[Standard](../samples/git-setup/clustertemplates/version_4.Y.Z/std-ran-du/std-ran-du-v4-Y-Z-1.yaml),
+[3node](../samples/git-setup/clustertemplates/version_4.Y.Z/3node-ran-du/3node-ran-du-v4-Y-Z-1.yaml),
+[SNO (legacy)](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1.yaml).
+
+##### Providing `nodeGroups` in the ProvisioningRequest
+
+When the template schema uses `nodeGroups`, the ProvisioningRequest supplies
+site-specific cluster and host data under `clusterInstanceParameters`. Typical
+inputs:
+
+| Path | What to provide |
+| --- | --- |
+| `clusterName`, VIPs, networks, … | Cluster-level fields allowed by the schema |
+| `nodeGroups[].name` | Target group (must already exist in ClusterInstance defaults / hardware groups) |
+| `nodeGroups[].nodeNetwork.config` | Optional group-wide nmstate overlay (for example DNS, routes) shared by every host in the group |
+| `nodeGroups[].extraLabels` / `extraAnnotations` / `nodeLabels` | Optional group-wide labels and annotations |
+| `nodeGroups[].nodes[].hostName` | Hostname for each host in the group |
+| `nodeGroups[].nodes[].nodeNetwork.interfaces[]` | Per-host IP addressing (see below) |
+| `nodeGroups[].nodes[].extraLabels` / `extraAnnotations` / `nodeLabels` | Optional per-host labels and annotations |
+
+**Per-host addressing.** For each host, list one entry per interface that needs
+an address. Use the interface `name` from the defaults ConfigMap for that group.
+Under `addresses`, set at least one of `ipv4` or `ipv6`; each value is a CIDR
+string (for example `"192.0.2.10/24"` or `"fd00:1:1::10/64"`), not a bare IP.
+O-Cloud Manager maps those addresses into the matching nmstate interface config
+when it expands `nodeGroups` to the flat ClusterInstance `nodes[]` list.
+
+**Example.** Defaults define `master` and `worker` groups with interface skeletons
+(see [Recommended format (`nodeGroups`)](#recommended-format-nodegroups)).
+A ProvisioningRequest can then supply hosts, optional group-wide overlays, and
+addresses:
+
+```yaml
+# ProvisioningRequest clusterInstanceParameters (excerpt)
+clusterInstanceParameters:
+  clusterName: site-a
+  nodeGroups:
+    - name: master
+      nodeNetwork:
+        config:                    # optional: shared by all hosts in this group
+          dns-resolver:
+            config:
+              server: ["8.8.8.8", "2001:4860:4860::8888"]
+      nodes:
+        - hostName: master-1.site-a.example.com
+          nodeNetwork:
+            interfaces:
+              - name: eno1         # same name as in defaults
+                addresses:
+                  ipv4: ["192.0.2.10/24"]
+                  ipv6: ["fd00:1:1::10/64"]
+              - name: eno2
+                addresses:
+                  ipv4: ["198.51.100.10/24"]
+                  ipv6: ["fd00:1:2::10/64"]
+        # ... additional masters
+    - name: worker
+      nodeNetwork:
+        config:                    # optional: shared by all hosts in this group
+          dns-resolver:
+            config:
+              server: ["8.8.8.8", "2001:4860:4860::8888"]
+      nodes:
+        - hostName: worker-1.site-a.example.com
+          nodeNetwork:
+            interfaces:
+              - name: eno1
+                addresses:
+                  ipv4: ["192.0.2.20/24"]
+                  ipv6: ["fd00:1:1::20/64"]
+        # ... additional workers
+```
+
+A single-node cluster uses the same shape with one group and one host under
+`nodes`.
+
+> [!NOTE]
+>
+> - Reference groups and interfaces that already exist in the template defaults;
+> unknown `nodeGroups[].name` or `nodeGroups[].nodes[].nodeNetwork.interfaces[].name` values are rejected.
+>
+> - `extraLabels` / `extraAnnotations` keys already set in defaults cannot be
+> overridden (at group or nested node level); new keys can be appended.
 
 ### Hardware resources
 
@@ -304,15 +419,38 @@ For details about server onboarding, refer to [Server Onboarding](./server-onboa
 
 ### ClusterInstance defaults ConfigMap
 
-Cluster installation defaults that are common across clusters are provided in a ConfigMap and referenced by the ClusterTemplate. These defaults can include node configuration, networking, and other baseline settings. All fields must comply with the SiteConfig `ClusterInstance` schema.
+Cluster installation defaults that are common across clusters are provided in a
+ConfigMap and referenced by the ClusterTemplate. These defaults include
+cluster-level settings (networking, image set, template references) and the
+shared node configuration for each role.
 
-Each node’s boot interface in the `interfaces` list must include a `boot-interface` label.  This allows the O-Cloud manager to resolve the boot NIC’s MAC address from the NIC-to-MAC mappings retrieved from the hardware manager.
+The ConfigMap is not a raw SiteConfig ClusterInstance. It may include O-Cloud
+extensions such as interface `label` values and `nodeGroups`. After the
+ProvisioningRequest is merged and expanded, the controller renders a
+ClusterInstance that complies with the SiteConfig schema.
 
-For example,
+The defaults must define **exactly one** of `nodes` or `nodeGroups`, matching the
+`clusterInstanceParameters` schema in the ClusterTemplate (see
+[clusterInstanceParameters schema](#clusterinstanceparameters-schema)).
+
+Each node’s boot interface in the `interfaces` list must include a `boot-interface` label.
+This allows the O-Cloud manager to resolve the boot NIC’s MAC address from the NIC-to-MAC
+mappings retrieved from the hardware manager.
+
+#### Legacy format (`nodes`)
+
+Flat `nodes` list: one stub per expected host with defaults such as role, boot
+mode, interface skeleton, and nmstate config. The ProvisioningRequest supplies
+host-specific values (hostname, addresses, MAC) by index merge.
+
+Current SNO sample templates still use this format; they will move to
+`nodeGroups` later.
 
 ```yaml
+# ConfigMap data.clusterinstance-defaults (legacy nodes excerpt)
 nodes:
   - role: master
+    bootMode: UEFI
     nodeNetwork:
       interfaces:
         - name: ens3f0
@@ -320,9 +458,44 @@ nodes:
         - name: ens3f1
 ```
 
-Complete examples of ClusterInstance defaults:
-[SNO](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v1.yaml),
-[3node](../samples/git-setup/clustertemplates/version_4.Y.Z/3node-ran-du/clusterinstance-defaults-v1.yaml) and
+Complete example (current SNO sample):
+[clusterinstance-defaults-v1](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v1.yaml).
+
+#### Recommended format (`nodeGroups`)
+
+One entry per hardware / MCP group, keyed by `name`. That `name` must match
+`hwMgmtDefaults.nodeGroupData[].name` (or the merged hardware group name when
+groups are supplied via `hwMgmtParameters`) and is the spoke MachineConfigPool
+name.
+
+Defaults hold **shared** per-group fields only (role, boot mode, interface
+skeleton, shared nmstate pieces, template references, and so on).
+**Per-host fields must not appear in the defaults** — in particular,
+`nodeGroups[].nodes` is rejected at ClusterTemplate validation; hostnames and
+addresses belong only in the ProvisioningRequest.
+
+```yaml
+# ConfigMap data.clusterinstance-defaults (nodeGroups excerpt)
+nodeGroups:
+  - name: master   # matches hwMgmtDefaults.nodeGroupData[].name (MCP name)
+    role: master
+    nodeNetwork:
+      interfaces:
+        - name: ens1f0
+          label: boot-interface
+        - name: ens1f1
+          label: data-interface
+  - name: worker
+    role: worker
+    nodeNetwork:
+      interfaces:
+        - name: ens1f0
+          label: boot-interface
+```
+
+Complete examples:
+[3node](../samples/git-setup/clustertemplates/version_4.Y.Z/3node-ran-du/clusterinstance-defaults-v1.yaml)
+and
 [Standard](../samples/git-setup/clustertemplates/version_4.Y.Z/std-ran-du/clusterinstance-defaults-v1.yaml).
 
 ### PolicyTemplate defaults ConfigMap

@@ -9,6 +9,7 @@ package utils
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -383,4 +384,200 @@ func PrepareClusterInstanceForServerSideApply(ci *siteconfig.ClusterInstance) {
 	// This is defensive: controller-runtime should set these, but we guarantee they're present
 	ci.APIVersion = fmt.Sprintf("%s/%s", siteconfig.Group, siteconfig.Version)
 	ci.Kind = siteconfig.ClusterInstanceKind
+}
+
+// ExpandNodeGroupsToNodes replaces merged["nodeGroups"] with a flat merged["nodes"]
+// slice. For each group, shared fields are deep-copied onto every host, then the
+// host overlay is merged on top (interfaces by name). Flattened interface
+// addresses (CIDR strings) are mapped into nmstate config. O-cloud-only sugar fields
+// (group name, interfaces[].addresses) are stripped.
+func ExpandNodeGroupsToNodes(merged map[string]any) error {
+	raw, ok := merged[ClusterInstanceNodeGroupsKey]
+	if !ok {
+		return fmt.Errorf("%q is required for the nodeGroups format", ClusterInstanceNodeGroupsKey)
+	}
+	groups, ok := raw.([]any)
+	if !ok {
+		return fmt.Errorf("%q must be an array", ClusterInstanceNodeGroupsKey)
+	}
+
+	nodeMergeRules := SliceMergeRules{
+		"nodeNetwork.interfaces": {
+			Key: "name",
+			ByKey: ByKeyMergeOptions{
+				AllowDuplicateKeys: true, // Per-node interface merge is by interface name (last occurrence wins).
+				RejectUnmatchedSrc: true, // PR group nodes may only overlay interfaces that exist on the group defaults.
+			},
+		},
+	}
+
+	flatNodes := []any{}
+	for i, group := range groups {
+		groupMap, ok := group.(map[string]any)
+		if !ok {
+			return fmt.Errorf("%s[%d] is not an object", ClusterInstanceNodeGroupsKey, i)
+		}
+		groupName, _ := groupMap["name"].(string)
+
+		// Groups with missing or empty nodes are kept in defaults for shared
+		// template fields (e.g. a worker group with no hosts yet) and contribute
+		// no flat hosts. PR groups may be a subset of defaults groups.
+		nodesRaw, hasNodes := groupMap[ClusterInstanceNodesKey]
+		if !hasNodes {
+			continue
+		}
+		groupNodes, ok := nodesRaw.([]any)
+		if !ok {
+			return fmt.Errorf("node group %q nodes must be an array", groupName)
+		}
+		if len(groupNodes) == 0 {
+			continue
+		}
+
+		// Drop nodes (already held in groupNodes) and name (O-Cloud-only; not a
+		// ClusterInstance node field) before copying the remaining shared fields
+		// onto each expanded host.
+		delete(groupMap, ClusterInstanceNodesKey)
+		delete(groupMap, "name")
+
+		for j, node := range groupNodes {
+			nodeMap, ok := node.(map[string]any)
+			if !ok {
+				return fmt.Errorf("node group %q node[%d] is not an object", groupName, j)
+			}
+
+			// Fresh copy of the shared/common fields per node so expanded nodes are independent.
+			flatNode := runtime.DeepCopyJSON(groupMap)
+			if err := DeepMergeMaps(flatNode, nodeMap, false, nodeMergeRules); err != nil {
+				return fmt.Errorf("failed to merge node[%d] onto node group %q: %w", j, groupName, err)
+			}
+
+			// Map flattened nodeNetwork.interfaces[].addresses CIDR strings into the matching nmstate entry.
+			if err := applyInterfaceAddresses(flatNode); err != nil {
+				return fmt.Errorf("node group %q node[%d]: %w", groupName, j, err)
+			}
+
+			flatNodes = append(flatNodes, flatNode)
+		}
+	}
+
+	if len(groups) > 0 && len(flatNodes) == 0 {
+		return fmt.Errorf(
+			"at least one node is required across %s in clusterInstanceParameters",
+			ClusterInstanceNodeGroupsKey)
+	}
+
+	delete(merged, ClusterInstanceNodeGroupsKey)
+	merged[ClusterInstanceNodesKey] = flatNodes
+	return nil
+}
+
+// applyInterfaceAddresses maps flattened nodeNetwork.interfaces[].addresses CIDR
+// strings into the matching nodeNetwork.config.interfaces[<name>].ipv4/ipv6.address
+// nmstate entry, then strips the O-Cloud-only addresses field. An interface with
+// addresses but no matching config interface is rejected.
+func applyInterfaceAddresses(node map[string]any) error {
+	nodeNetwork, ok := node["nodeNetwork"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	interfaces, ok := nodeNetwork["interfaces"].([]any)
+	if !ok {
+		return nil
+	}
+
+	// Index nodeNetwork.config.interfaces by name so addresses can be routed to the right entry.
+	configByName := map[string]map[string]any{}
+	if config, ok := nodeNetwork["config"].(map[string]any); ok {
+		if configIfaces, ok := config["interfaces"].([]any); ok {
+			for _, ci := range configIfaces {
+				ciMap, ok := ci.(map[string]any)
+				if !ok {
+					continue
+				}
+				if name, _ := ciMap["name"].(string); name != "" {
+					configByName[name] = ciMap
+				}
+			}
+		}
+	}
+
+	for _, iface := range interfaces {
+		ifaceMap, ok := iface.(map[string]any)
+		if !ok {
+			continue
+		}
+		addrRaw, hasAddr := ifaceMap["addresses"]
+		if !hasAddr {
+			continue
+		}
+
+		name, _ := ifaceMap["name"].(string)
+		configIface, ok := configByName[name]
+		if !ok {
+			return fmt.Errorf(
+				"interface %q has addresses but no matching entry in nodeNetwork.config.interfaces", name)
+		}
+
+		addresses, ok := addrRaw.(map[string]any)
+		if !ok {
+			return fmt.Errorf("interface %q addresses must be an object", name)
+		}
+		for _, family := range []string{"ipv4", "ipv6"} {
+			cidrsRaw, ok := addresses[family]
+			if !ok {
+				continue
+			}
+			cidrs, ok := cidrsRaw.([]any)
+			if !ok {
+				return fmt.Errorf("interface %q addresses.%s must be an array", name, family)
+			}
+			nmAddresses := make([]any, 0, len(cidrs))
+			for _, c := range cidrs {
+				cidr, ok := c.(string)
+				if !ok {
+					return fmt.Errorf("interface %q addresses.%s entries must be strings", name, family)
+				}
+				ip, prefix, err := splitCIDR(cidr)
+				if err != nil {
+					return fmt.Errorf("interface %q addresses.%s %q: %w", name, family, cidr, err)
+				}
+				nmAddresses = append(nmAddresses, map[string]any{
+					"ip":            ip,
+					"prefix-length": prefix,
+				})
+			}
+
+			familyMap, ok := configIface[family].(map[string]any)
+			if !ok {
+				familyMap = map[string]any{}
+				configIface[family] = familyMap
+			}
+			familyMap["address"] = nmAddresses
+		}
+
+		// Strip the O-Cloud-only addresses field.
+		delete(ifaceMap, "addresses")
+	}
+	return nil
+}
+
+// splitCIDR splits a CIDR string (e.g. "10.6.34.10/24" or "fd00:1:1::10/64") into
+// its host address and prefix length. The host address is preserved as written
+// (host bits are not masked), matching the nmstate config.interfaces[].ipvX.address
+// shape. The prefix length is returned as float64 to match yaml/json.Unmarshal into
+// map[string]any (same as the legacy nodes format). The prefix must be a base-10
+// integer string (rejects values like "24.0" or "1e2"). IP address and prefix-range
+// validity are left to later nmstate/dry-run checks.
+func splitCIDR(cidr string) (ip string, prefix float64, err error) {
+	host, prefixStr, found := strings.Cut(cidr, "/")
+	if !found || host == "" || prefixStr == "" {
+		return "", 0, fmt.Errorf("not a valid CIDR (expected <address>/<prefix>)")
+	}
+	// ParseUint rejects non-integer forms (e.g. "24.0", "1e2", "-1").
+	p, err := strconv.ParseUint(prefixStr, 10, 32)
+	if err != nil {
+		return "", 0, fmt.Errorf("invalid prefix length %q", prefixStr)
+	}
+	return host, float64(p), nil
 }

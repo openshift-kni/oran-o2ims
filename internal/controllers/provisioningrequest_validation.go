@@ -126,12 +126,11 @@ func (t *provisioningRequestReconcilerTask) validateClusterInstanceInputMatchesS
 	clusterInstanceMatchingInputMap := clusterInstanceMatchingInput.(map[string]any)
 
 	// Get the merged ClusterInstance input data
-	mergedClusterInstanceData, err := t.getMergedClusterInputData(
+	mergedClusterInstanceData, err := t.getMergedClusterInstanceData(
 		ctx, clusterTemplate.Spec.TemplateDefaults.ClusterInstanceDefaults,
-		clusterInstanceMatchingInputMap,
-		constants.TemplateParamClusterInstance)
+		clusterInstanceMatchingInputMap)
 	if err != nil {
-		return fmt.Errorf("failed to get merged cluster input data: %w", err)
+		return err
 	}
 
 	t.clusterInput.clusterInstanceData = mergedClusterInstanceData
@@ -185,14 +184,28 @@ func (t *provisioningRequestReconcilerTask) validatePolicyTemplateInputMatchesSc
 	}
 	policyTemplateMatchingInputMap := policyTemplateMatchingInput.(map[string]any)
 
-	// Get the merged PolicyTemplate input data
-	mergedPolicyTemplateData, err := t.getMergedClusterInputData(
-		ctx, clusterTemplate.Spec.TemplateDefaults.PolicyTemplateDefaults,
-		policyTemplateMatchingInputMap,
-		constants.TemplateParamPolicyConfig)
+	// Retrieve the ConfigMap holding the PolicyTemplate default data and merge the
+	// ProvisioningRequest input over it.
+	policyTemplateDefaultsCm := clusterTemplate.Spec.TemplateDefaults.PolicyTemplateDefaults
+	templateCm, err := ctlrutils.GetConfigmap(ctx, t.client, policyTemplateDefaultsCm, t.ctDetails.namespace)
 	if err != nil {
-		return fmt.Errorf("failed to get merged cluster input data: %w", err)
+		return fmt.Errorf("failed to get ConfigMap %s: %w", policyTemplateDefaultsCm, err)
 	}
+	policyTemplateDefaults, err := ctlrutils.ExtractTemplateDataFromConfigMap[map[string]any](
+		templateCm, ctlrutils.PolicyTemplateDefaultsConfigmapKey)
+	if err != nil {
+		return fmt.Errorf("failed to get template defaults from ConfigMap %s: %w", policyTemplateDefaultsCm, err)
+	}
+
+	mergedPolicyTemplateData, err := mergeClusterTemplateInputWithDefaults(
+		policyTemplateMatchingInputMap, policyTemplateDefaults, nil)
+	if err != nil {
+		return typederrors.NewInputError(
+			"failed to merge data for %s: %s", constants.TemplateParamPolicyConfig, err.Error())
+	}
+	t.logger.InfoContext(ctx,
+		fmt.Sprintf("Merged the PolicyTemplate default data with the %s for ProvisioningRequest", constants.TemplateParamPolicyConfig),
+		slog.String("name", t.object.Name))
 
 	// Validate the merged PolicyTemplate input data matches the schema
 	err = provisioningv1alpha1.ValidateJsonAgainstJsonSchema(
@@ -418,56 +431,108 @@ func hwMgmtDefaultsToMap(defaults provisioningv1alpha1.HwMgmtDefaults) map[strin
 	return result
 }
 
-func (t *provisioningRequestReconcilerTask) getMergedClusterInputData(
-	ctx context.Context, templateDefaultsCm string, clusterTemplateInput map[string]any, templateParam string) (map[string]any, error) {
+// getMergedClusterInstanceData retrieves the ClusterInstance default data from the
+// referenced ConfigMap and merges the ProvisioningRequest clusterInstanceParameters
+// over it. extraLabels/extraAnnotations common to both are forced to the default
+// values. nodeGroups-format input is merged by group name and expanded into the flat
+// nodes[] shape the rest of the pipeline consumes; legacy flat nodes use an
+// index-based deep merge.
+func (t *provisioningRequestReconcilerTask) getMergedClusterInstanceData(
+	ctx context.Context, templateDefaultsCm string, clusterInstanceInput map[string]any) (map[string]any, error) {
 
-	var templateDefaultsCmKey string
-
-	switch templateParam {
-	case constants.TemplateParamClusterInstance:
-		templateDefaultsCmKey = ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey
-	case constants.TemplateParamPolicyConfig:
-		templateDefaultsCmKey = ctlrutils.PolicyTemplateDefaultsConfigmapKey
-	default:
-		return nil, typederrors.NewInputError("unsupported template parameter")
-	}
-
-	// Retrieve the configmap that holds the default data.
+	// Retrieve the configmap that holds the ClusterInstance default data.
 	templateCm, err := ctlrutils.GetConfigmap(ctx, t.client, templateDefaultsCm, t.ctDetails.namespace)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ConfigMap %s: %w", templateDefaultsCm, err)
 	}
-	clusterTemplateDefaultsMap, err := ctlrutils.ExtractTemplateDataFromConfigMap[map[string]any](
-		templateCm, templateDefaultsCmKey)
+	clusterInstanceDefaults, err := ctlrutils.ExtractTemplateDataFromConfigMap[map[string]any](
+		templateCm, ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get template defaults from ConfigMap %s: %w", templateDefaultsCm, err)
 	}
 
-	if templateParam == constants.TemplateParamClusterInstance {
-		// Special handling for overrides of ClusterInstance's extraLabels and extraAnnotations.
-		// The clusterTemplateInput will be overridden with the values from defaut configmap
-		// if same labels/annotations exist in both.
-		if err := t.overrideClusterInstanceLabelsOrAnnotations(
-			clusterTemplateInput, clusterTemplateDefaultsMap); err != nil {
-			return nil, typederrors.NewInputError("%s", err.Error())
+	// Special handling for overrides of ClusterInstance's extraLabels and extraAnnotations.
+	// The clusterInstanceInput values are overridden with the values from the default
+	// configmap if the same labels/annotations exist in both.
+	if err := t.overrideClusterInstanceLabelsOrAnnotations(
+		clusterInstanceInput, clusterInstanceDefaults); err != nil {
+		return nil, typederrors.NewInputError("%s", err.Error())
+	}
+
+	format, err := resolveClusterInstanceFormat(clusterInstanceInput, clusterInstanceDefaults)
+	if err != nil {
+		return nil, typederrors.NewInputError("%s", err.Error())
+	}
+
+	var rules ctlrutils.SliceMergeRules
+	if format == ctlrutils.ClusterInstanceNodeGroupsKey {
+		rules = ctlrutils.SliceMergeRules{
+			ctlrutils.ClusterInstanceNodeGroupsKey: {
+				Key:   "name",
+				ByKey: ctlrutils.ByKeyMergeOptions{RejectUnmatchedSrc: true},
+			},
+			// Kept for consistency with per-node expand: intended PR schema doesn't
+			// overlay nodeNetwork.interfaces at group-level; this path is unused for
+			// schema-compliant input.
+			ctlrutils.ClusterInstanceNodeGroupsKey + "[].nodeNetwork.interfaces": {
+				Key: "name",
+				ByKey: ctlrutils.ByKeyMergeOptions{
+					AllowDuplicateKeys: true,
+					RejectUnmatchedSrc: true,
+				},
+			},
 		}
 	}
 
-	// Get the merged cluster data
-	mergedClusterDataMap, err := mergeClusterTemplateInputWithDefaults(clusterTemplateInput, clusterTemplateDefaultsMap)
+	mergedClusterDataMap, err := mergeClusterTemplateInputWithDefaults(
+		clusterInstanceInput, clusterInstanceDefaults, rules)
 	if err != nil {
-		return nil, typederrors.NewInputError("failed to merge data for %s: %s", templateParam, err.Error())
+		return nil, typederrors.NewInputError(
+			"failed to merge data for %s: %s", constants.TemplateParamClusterInstance, err.Error())
+	}
+
+	if format == ctlrutils.ClusterInstanceNodeGroupsKey {
+		if err := ctlrutils.ExpandNodeGroupsToNodes(mergedClusterDataMap); err != nil {
+			return nil, typederrors.NewInputError(
+				"failed to merge data for %s: %s", constants.TemplateParamClusterInstance, err.Error())
+		}
 	}
 
 	t.logger.InfoContext(ctx,
-		fmt.Sprintf("Merged the %s default data with the clusterTemplateInput data for ProvisioningRequest", templateParam),
+		fmt.Sprintf("Merged the ClusterInstance default data with the %s for ProvisioningRequest", constants.TemplateParamClusterInstance),
 		slog.String("name", t.object.Name),
 	)
 	return mergedClusterDataMap, nil
 }
 
-// mergeClusterTemplateInputWithDefaults merges the cluster template input with the default data
-func mergeClusterTemplateInputWithDefaults(clusterTemplateInput, clusterTemplateInputDefaults map[string]any) (map[string]any, error) {
+// resolveClusterInstanceFormat returns the nodes-list format when both sides
+// exclusively use the same key (nodeGroups or nodes). Mixed or incomplete
+// combinations are rejected.
+func resolveClusterInstanceFormat(input, defaults map[string]any) (string, error) {
+	_, inputHasNodeGroups := input[ctlrutils.ClusterInstanceNodeGroupsKey]
+	_, defaultsHasNodeGroups := defaults[ctlrutils.ClusterInstanceNodeGroupsKey]
+	_, inputHasNodes := input[ctlrutils.ClusterInstanceNodesKey]
+	_, defaultsHasNodes := defaults[ctlrutils.ClusterInstanceNodesKey]
+
+	switch {
+	case inputHasNodeGroups && defaultsHasNodeGroups && !inputHasNodes && !defaultsHasNodes:
+		return ctlrutils.ClusterInstanceNodeGroupsKey, nil
+	case inputHasNodes && defaultsHasNodes && !inputHasNodeGroups && !defaultsHasNodeGroups:
+		return ctlrutils.ClusterInstanceNodesKey, nil
+	default:
+		//nolint:revive // string-format: capitalize CR name ProvisioningRequest
+		return "", fmt.Errorf(
+			"ProvisioningRequest %s and ClusterTemplate defaults must both use %q or both use %q",
+			constants.TemplateParamClusterInstance, ctlrutils.ClusterInstanceNodeGroupsKey, ctlrutils.ClusterInstanceNodesKey)
+	}
+}
+
+// mergeClusterTemplateInputWithDefaults merges the cluster template input with the default data.
+// rules controls how nested slices are merged (nil = by-index); see DeepMergeMaps.
+func mergeClusterTemplateInputWithDefaults(
+	clusterTemplateInput, clusterTemplateInputDefaults map[string]any,
+	rules ctlrutils.SliceMergeRules,
+) (map[string]any, error) {
 	// Initialize a map to hold the merged data
 	var mergedClusterData map[string]any
 
@@ -479,7 +544,7 @@ func mergeClusterTemplateInputWithDefaults(clusterTemplateInput, clusterTemplate
 
 		checkType := false
 		// DeepMergeMaps treats defaults as destination and ProvisioningRequest input as source.
-		err := ctlrutils.DeepMergeMaps(mergedClusterData, clusterTemplateInput, checkType, nil)
+		err := ctlrutils.DeepMergeMaps(mergedClusterData, clusterTemplateInput, checkType, rules)
 		if err != nil {
 			return nil, fmt.Errorf(
 				"failed to merge ProvisioningRequest clusterTemplateInput over ClusterTemplate defaults: %w", err)
@@ -539,7 +604,7 @@ func (t *provisioningRequestReconcilerTask) overrideClusterInstanceLabelsOrAnnot
 		}
 	}
 
-	// Process label/annotation overrides for nodes
+	// Process label/annotation overrides for the flat nodes format.
 	dstNodes, dstExists := dstProvisioningRequestInput["nodes"]
 	srcNodes, srcExists := srcConfigmap["nodes"]
 	if dstExists && srcExists {
@@ -555,6 +620,53 @@ func (t *provisioningRequestReconcilerTask) overrideClusterInstanceLabelsOrAnnot
 				srcNodes.([]any)[i].(map[string]any),
 			); err != nil {
 				return fmt.Errorf("type mismatch for nodes: %w", err)
+			}
+		}
+	}
+
+	// Process label/annotation overrides for nodeGroups: match by name; group-level defaults win over PR group and node extra*.
+	dstGroups, dstGroupsExists := dstProvisioningRequestInput[ctlrutils.ClusterInstanceNodeGroupsKey].([]any)
+	srcGroups, srcGroupsExists := srcConfigmap[ctlrutils.ClusterInstanceNodeGroupsKey].([]any)
+	if dstGroupsExists && srcGroupsExists {
+		// Index the defaults groups by name.
+		srcGroupsByName := make(map[string]map[string]any, len(srcGroups))
+		for _, g := range srcGroups {
+			if groupMap, ok := g.(map[string]any); ok {
+				if name, _ := groupMap["name"].(string); name != "" {
+					srcGroupsByName[name] = groupMap
+				}
+			}
+		}
+
+		for _, g := range dstGroups {
+			dstGroup, ok := g.(map[string]any)
+			if !ok {
+				continue
+			}
+			name, _ := dstGroup["name"].(string)
+			srcGroup, ok := srcGroupsByName[name]
+			if !ok {
+				continue
+			}
+
+			// Group-level extra*: defaults win over the PR group-level values. The
+			// defaults group carries no per-host nodes, so the flat-nodes branch above
+			// is a no-op on this recursion.
+			if err := t.overrideClusterInstanceLabelsOrAnnotations(dstGroup, srcGroup); err != nil {
+				return fmt.Errorf("node group %q: %w", name, err)
+			}
+
+			// Node-level extra*: the same group-level defaults win over each PR node's values.
+			if nodes, ok := dstGroup[ctlrutils.ClusterInstanceNodesKey].([]any); ok {
+				for _, n := range nodes {
+					nodeMap, ok := n.(map[string]any)
+					if !ok {
+						continue
+					}
+					if err := t.overrideClusterInstanceLabelsOrAnnotations(nodeMap, srcGroup); err != nil {
+						return fmt.Errorf("node group %q node: %w", name, err)
+					}
+				}
 			}
 		}
 	}

@@ -136,6 +136,7 @@ linters:
         - .WrapPrefixf(
     goconst:
       min-occurrences: 5
+      ignore-tests: true
       ignore-string-values: '^(get|list|watch|create|update|patch|delete|app|name|namespace|master|worker|role|macAddress|nodes|interfaces|label|extraAnnotations|extraLabels|nodeNetwork|apiextensions\.k8s\.io|CustomResourceDefinition|default|true|agent-install\.openshift\.io/clusterdeployment-namespace|apiVersion|kind)$'
   exclusions:
     generated: lax
