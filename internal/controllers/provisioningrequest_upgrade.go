@@ -592,7 +592,7 @@ func (t *provisioningRequestReconcilerTask) mergeAndValidateUpgradeData(
 		return map[string]any{}, nil
 	}
 	// Merge PR overrides on top of CT defaults
-	mergedUpgradeData, err := mergeClusterTemplateInputWithDefaults(upgradeParamsMap, upgradeDefaultsMap)
+	mergedUpgradeData, err := mergeClusterTemplateInputWithDefaults(upgradeParamsMap, upgradeDefaultsMap, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to merge upgrade parameters with defaults: %w", err)
 	}

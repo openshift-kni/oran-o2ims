@@ -910,3 +910,323 @@ func TestRootPolicyMatchesClusterTemplate(t *testing.T) {
 		})
 	}
 }
+
+var _ = Describe("ExpandNodeGroupsToNodes", func() {
+	mustYAMLMap := func(s string) map[string]any {
+		var out map[string]any
+		Expect(yaml.Unmarshal([]byte(s), &out)).To(Succeed())
+		return out
+	}
+
+	It("expands group shared fields onto per-node hosts with mapped addresses", func() {
+		merged := mustYAMLMap(`
+clusterName: from-defaults
+nodeGroups:
+- name: master
+  role: master
+  bootMode: UEFI
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: boot-interface
+    config:
+      dns-resolver:
+        config:
+          server:
+          - "8.8.8.8"
+      interfaces:
+      - name: eno1
+        type: ethernet
+        state: up
+        ipv4:
+          enabled: true
+        ipv6:
+          enabled: true
+  nodes:
+  - hostName: master-1.example.com
+    nodeNetwork:
+      interfaces:
+      - name: eno1
+        addresses:
+          ipv4:
+          - "192.0.2.10/24"
+          ipv6:
+          - "fd00:1:1::10/64"
+  - hostName: master-2.example.com
+    nodeNetwork:
+      interfaces:
+      - name: eno1
+        addresses:
+          ipv4:
+          - "192.0.2.11/24"
+          ipv6:
+          - "fd00:1:1::11/64"
+- name: worker
+  role: worker
+  bootMode: UEFI
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: boot-interface
+    config:
+      interfaces:
+      - name: eno1
+        type: ethernet
+        state: up
+        ipv4:
+          enabled: true
+        ipv6:
+          enabled: false
+  nodes:
+  - hostName: worker-1.example.com
+    nodeNetwork:
+      interfaces:
+      - name: eno1
+        addresses:
+          ipv4:
+          - "192.0.2.20/24"
+`)
+		expected := `
+clusterName: from-defaults
+nodes:
+- hostName: master-1.example.com
+  role: master
+  bootMode: UEFI
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: boot-interface
+    config:
+      dns-resolver:
+        config:
+          server:
+          - "8.8.8.8"
+      interfaces:
+      - name: eno1
+        type: ethernet
+        state: up
+        ipv4:
+          enabled: true
+          address:
+          - ip: "192.0.2.10"
+            prefix-length: 24
+        ipv6:
+          enabled: true
+          address:
+          - ip: "fd00:1:1::10"
+            prefix-length: 64
+- hostName: master-2.example.com
+  role: master
+  bootMode: UEFI
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: boot-interface
+    config:
+      dns-resolver:
+        config:
+          server:
+          - "8.8.8.8"
+      interfaces:
+      - name: eno1
+        type: ethernet
+        state: up
+        ipv4:
+          enabled: true
+          address:
+          - ip: "192.0.2.11"
+            prefix-length: 24
+        ipv6:
+          enabled: true
+          address:
+          - ip: "fd00:1:1::11"
+            prefix-length: 64
+- hostName: worker-1.example.com
+  role: worker
+  bootMode: UEFI
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: boot-interface
+    config:
+      interfaces:
+      - name: eno1
+        type: ethernet
+        state: up
+        ipv4:
+          enabled: true
+          address:
+          - ip: "192.0.2.20"
+            prefix-length: 24
+        ipv6:
+          enabled: false
+`
+
+		Expect(ExpandNodeGroupsToNodes(merged)).To(Succeed())
+		got, err := yaml.Marshal(merged)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(got).To(MatchYAML(expected))
+	})
+
+	It("applies last-wins on duplicate interface names in a node", func() {
+		merged := mustYAMLMap(`
+nodeGroups:
+- name: master
+  role: master
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: boot-interface
+    config:
+      interfaces:
+      - name: eno1
+        type: ethernet
+        state: up
+        ipv4:
+          enabled: true
+  nodes:
+  - hostName: master-1.example.com
+    nodeNetwork:
+      interfaces:
+      - name: eno1
+        addresses:
+          ipv4:
+          - "192.0.2.10/24"
+      - name: eno1
+        addresses:
+          ipv4:
+          - "192.0.2.99/24"
+`)
+		expected := `
+nodes:
+- hostName: master-1.example.com
+  role: master
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: boot-interface
+    config:
+      interfaces:
+      - name: eno1
+        type: ethernet
+        state: up
+        ipv4:
+          enabled: true
+          address:
+          - ip: "192.0.2.99"
+            prefix-length: 24
+`
+
+		Expect(ExpandNodeGroupsToNodes(merged)).To(Succeed())
+		got, err := yaml.Marshal(merged)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(got).To(MatchYAML(expected))
+	})
+
+	It("rejects a per-node interface not defined on the group", func() {
+		merged := mustYAMLMap(`
+nodeGroups:
+- name: master
+  role: master
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: boot-interface
+    config:
+      interfaces:
+      - name: eno1
+        type: ethernet
+  nodes:
+  - hostName: master-1.example.com
+    nodeNetwork:
+      interfaces:
+      - name: eth99
+        addresses:
+          ipv4:
+          - "192.0.2.10/24"
+`)
+		err := ExpandNodeGroupsToNodes(merged)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(`name "eth99" at path "nodeNetwork.interfaces" in source does not match any destination entry`))
+	})
+
+	It("rejects an interface with addresses that has no matching config interface", func() {
+		merged := mustYAMLMap(`
+nodeGroups:
+- name: master
+  role: master
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: boot-interface
+    config:
+      interfaces: []
+  nodes:
+  - hostName: master-1.example.com
+    nodeNetwork:
+      interfaces:
+      - name: eno1
+        addresses:
+          ipv4:
+          - "192.0.2.10/24"
+`)
+		err := ExpandNodeGroupsToNodes(merged)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(`interface "eno1" has addresses but no matching entry in nodeNetwork.config.interfaces`))
+	})
+
+	It("rejects an invalid CIDR string", func() {
+		merged := mustYAMLMap(`
+nodeGroups:
+- name: master
+  role: master
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: boot-interface
+    config:
+      interfaces:
+      - name: eno1
+        type: ethernet
+        ipv4:
+          enabled: true
+  nodes:
+  - hostName: master-1.example.com
+    nodeNetwork:
+      interfaces:
+      - name: eno1
+        addresses:
+          ipv4:
+          - "192.0.2.10"
+`)
+		err := ExpandNodeGroupsToNodes(merged)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("not a valid CIDR"))
+	})
+
+	It("errors when a group defines no nodes", func() {
+		merged := mustYAMLMap(`
+nodeGroups:
+- name: master
+  role: master
+`)
+		err := ExpandNodeGroupsToNodes(merged)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(`node group "master" must define at least one node in clusterInstanceParameters`))
+	})
+
+	It("expands an empty nodeGroups list to empty nodes", func() {
+		merged := mustYAMLMap(`
+clusterName: x
+nodeGroups: []
+`)
+		expected := `
+clusterName: x
+nodes: []
+`
+		Expect(ExpandNodeGroupsToNodes(merged)).To(Succeed())
+		got, err := yaml.Marshal(merged)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(got).To(MatchYAML(expected))
+	})
+})

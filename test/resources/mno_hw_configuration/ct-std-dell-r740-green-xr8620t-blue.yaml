@@ -144,29 +144,33 @@ spec:
               - cidr
               type: object
             type: array
-          nodes:
+          nodeGroups:
+            description: Node configuration by group.
             items:
-              description: NodeSpec
               properties:
+                name:
+                  type: string
+                  minLength: 1
+                  description: >
+                    Node group name. Must match a ClusterTemplate defaults
+                    nodeGroups entry and the corresponding hardware node
+                    group / MachineConfigPool name.
                 extraAnnotations:
                   additionalProperties:
                     additionalProperties:
                       type: string
                     type: object
-                  description: Additional node-level annotations to be applied
-                    to the rendered templates
+                  description: Additional node-level annotations applied to every
+                    host in this group
                   type: object
                 extraLabels:
                   additionalProperties:
                     additionalProperties:
                       type: string
                     type: object
-                  description: Additional node-level labels to be applied to the
-                    rendered templates
+                  description: Additional node-level labels applied to every host
+                    in this group
                   type: object
-                hostName:
-                  description: Hostname is the desired hostname for the host
-                  type: string
                 nodeLabels:
                   additionalProperties:
                     type: string
@@ -181,18 +185,88 @@ spec:
                     is complete.
                   type: object
                 nodeNetwork:
-                  description: NodeNetwork is a set of configurations pertaining
-                    to the network settings for the node.
+                  description: Group-level network overlay applied to every host
+                    in this group.
                   properties:
                     config:
-                      description: yaml that can be processed by nmstate, using
-                        custom marshaling/unmarshaling that will allow to populate
-                        nmstate config as plain yaml.
+                      description: Opaque nmstate overlay (for example dns-resolver
+                        and routes) shared by every host in this group.
                       type: object
                       x-kubernetes-preserve-unknown-fields: true
                   type: object
+                nodes:
+                  description: Per-host identity and addressing for this group.
+                  minItems: 1
+                  items:
+                    properties:
+                      hostName:
+                        description: Hostname is the desired hostname for the host
+                        type: string
+                      extraAnnotations:
+                        additionalProperties:
+                          additionalProperties:
+                            type: string
+                          type: object
+                        description: Additional annotations for this host
+                        type: object
+                      extraLabels:
+                        additionalProperties:
+                          additionalProperties:
+                            type: string
+                          type: object
+                        description: Additional labels for this host
+                        type: object
+                      nodeLabels:
+                        additionalProperties:
+                          type: string
+                        description: Custom node labels for this host
+                        type: object
+                      nodeNetwork:
+                        description: Per-host addressing keyed by interface name.
+                        properties:
+                          interfaces:
+                            description: Per-interface addressing. Each name must
+                              match a defaults nodeNetwork.interfaces[].name.
+                            minItems: 1
+                            items:
+                              properties:
+                                name:
+                                  type: string
+                                  minLength: 1
+                                addresses:
+                                  description: At least one of ipv4 or ipv6; CIDR
+                                    strings, e.g. "192.0.2.10/24" or "fd00:1:1::10/64".
+                                  properties:
+                                    ipv4:
+                                      items:
+                                        type: string
+                                        minLength: 1
+                                      minItems: 1
+                                      type: array
+                                    ipv6:
+                                      items:
+                                        type: string
+                                        minLength: 1
+                                      minItems: 1
+                                      type: array
+                                  minProperties: 1
+                                  type: object
+                              required:
+                              - name
+                              - addresses
+                              type: object
+                            type: array
+                        required:
+                        - interfaces
+                        type: object
+                    required:
+                    - hostName
+                    - nodeNetwork
+                    type: object
+                  type: array
               required:
-              - hostName
+              - name
+              - nodes
               type: object
             type: array
           serviceNetwork:
@@ -216,7 +290,7 @@ spec:
             type: string
         required:
         - clusterName
-        - nodes
+        - nodeGroups
         type: object
     required:
       - nodeClusterName
