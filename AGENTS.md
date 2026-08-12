@@ -86,6 +86,31 @@ This project has not reached GA, so there are no production databases to migrate
 When adding a new CRD, also add a corresponding `gather_resource` call in
 `must-gather/gather` so the resource is collected in support archives.
 
+### RBAC and kubebuilder Markers
+
+RBAC permissions are defined via `//+kubebuilder:rbac` markers scattered
+across multiple controller files. `controller-gen` unions all markers
+into a single ClusterRole (`config/rbac/role.yaml`) and optionally a
+namespaced Role. When reviewing or modifying RBAC:
+
+- **Always check the generated `config/rbac/role.yaml`** — it is the
+  source of truth, not any individual controller's markers. A permission
+  that appears missing from one controller may be granted by another
+  controller's markers in a different file.
+- After any RBAC marker change, run `make manifests` and inspect the
+  generated role to verify the effective permissions.
+- Namespace-scoped markers (`namespace=system`) generate a namespaced
+  Role; markers without `namespace` generate ClusterRole entries.
+  The `system` placeholder is replaced by kustomize with the actual
+  operator namespace.
+- **Service-specific RBAC is manually maintained**, not generated from
+  markers. Each service (hardware manager, alarms server, resource server,
+  etc.) has its own ClusterRole under `config/rbac/` (e.g.,
+  `clusterrole_hardwaremanager_server.yaml`). The `//+kubebuilder:rbac`
+  markers have no effect on these files — changing service permissions
+  requires directly editing the appropriate ClusterRole file and
+  regenerating the bundle with `make manifests && make bundle`.
+
 ### Design Decisions
 
 The following are accepted design decisions. Do not flag these patterns as
