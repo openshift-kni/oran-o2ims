@@ -99,10 +99,10 @@ namespaced Role. When reviewing or modifying RBAC:
   controller's markers in a different file.
 - After any RBAC marker change, run `make manifests` and inspect the
   generated role to verify the effective permissions.
-- Namespace-scoped markers (`namespace=system`) generate a namespaced
-  Role; markers without `namespace` generate ClusterRole entries.
-  The `system` placeholder is replaced by kustomize with the actual
-  operator namespace.
+- Use `namespace=system` only for namespaced resources. Cluster-scoped
+  resources must omit `namespace` so `controller-gen` generates
+  ClusterRole entries. The `system` placeholder is replaced by
+  kustomize with the actual operator namespace.
 - **Service-specific RBAC is manually maintained**, not generated from
   markers. Each service (hardware manager, alarms server, resource server,
   etc.) has its own ClusterRole under `config/rbac/` (e.g.,
