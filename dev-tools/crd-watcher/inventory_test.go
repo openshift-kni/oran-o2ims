@@ -744,7 +744,7 @@ func (r *recordingRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 	if req.Body != nil {
 		b, err := io.ReadAll(req.Body)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to read request body: %w", err)
 		}
 		r.body = string(b)
 	}
