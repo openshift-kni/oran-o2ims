@@ -74,6 +74,36 @@ The ProvisioningRequestController runs a multi-phase state machine:
 
 Each phase sets typed conditions on the CR status. Condition helpers are in `internal/controllers/utils/conditions.go`. Condition types and reasons are defined in `api/provisioning/v1alpha1/conditions.go`.
 
+### Deep Merge Semantics
+
+When merging ClusterTemplate defaults with ProvisioningRequest input (or
+other nested `map[string]any` trees), use `DeepMergeMaps` in
+`internal/controllers/utils/merge.go`. It deep-merges request input
+(source) over defaults (destination). The destination is mutated in
+place — callers that must preserve the original should clone first.
+
+Pass `SliceMergeRules` argument to `DeepMergeMaps` to choose how nested
+slices merge, for example:
+
+```go
+nil // by index (default)
+
+// By key for listed paths; paths not listed still use by-index merge
+SliceMergeRules{
+    "nodeGroups":                          {Key: "name"}, // top-level slices merged by name
+    "nodeGroups[].nodeNetwork.interfaces": {Key: "name"}, // nested slices merged by name
+}
+```
+
+Use by-index when list position is the identity; use by-key when elements
+should match on a field such as `name`. See `deepMergeSlicesByIndex` and
+`deepMergeSlicesByKey` in `merge.go` for merge rules, and `SliceMergeRule` /
+`ByKeyMergeOptions` for by-key options.
+
+Do not add domain-specific merge helpers. If a new list needs different
+slice merge behavior, extend `SliceMergeRule` / `ByKeyMergeOptions` (or
+the by-index path in `merge.go`), then pass rules at the call site.
+
 ### Database Schema Changes
 
 This project has not reached GA, so there are no production databases to migrate. Do not add new incremental migration files. Instead, modify the existing baseline files in `internal/service/{service}/db/migrations/` in place.

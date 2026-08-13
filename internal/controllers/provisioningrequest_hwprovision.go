@@ -791,13 +791,13 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec(
 	}
 
 	// Extract nodeGroupData from the pre-merged hwMgmt data
-	nodeGroupDataRaw, ok := hwMgmtData["nodeGroupData"]
+	nodeGroupDataRaw, ok := hwMgmtData[ctlrutils.HwMgmtNodeGroupDataKey]
 	if !ok {
-		return nil, typederrors.NewInputError("nodeGroupData not found in merged hwMgmt data")
+		return nil, typederrors.NewInputError("%s not found in merged hwMgmt data", ctlrutils.HwMgmtNodeGroupDataKey)
 	}
 	nodeGroupDataSlice, ok := nodeGroupDataRaw.([]any)
 	if !ok {
-		return nil, typederrors.NewInputError("nodeGroupData must be an array")
+		return nil, typederrors.NewInputError("%s must be an array", ctlrutils.HwMgmtNodeGroupDataKey)
 	}
 
 	// Node group validation (name, role, duplicates) is handled by validateMergedNodeGroups
@@ -806,7 +806,7 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec(
 	for _, ngRaw := range nodeGroupDataSlice {
 		ngMap, ok := ngRaw.(map[string]any)
 		if !ok {
-			return nil, fmt.Errorf("nodeGroupData element is not a map")
+			return nil, fmt.Errorf("%s element is not a map", ctlrutils.HwMgmtNodeGroupDataKey)
 		}
 
 		name, _ := ngMap["name"].(string)

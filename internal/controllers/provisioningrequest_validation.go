@@ -252,34 +252,14 @@ func (t *provisioningRequestReconcilerTask) validateAndMergeHwMgmtInput(
 			return typederrors.NewInputError("templateParameters.%s must be an object", constants.TemplateParamHwMgmt)
 		}
 
-		// Handle nodeGroupData with name-keyed merge
-		srcNodeGroups, srcHasNG := hwMgmtParamsMap["nodeGroupData"]
-		if srcHasNG {
-			srcSlice, ok := srcNodeGroups.([]any)
-			if !ok {
-				return typederrors.NewInputError("templateParameters.%s.nodeGroupData must be an array", constants.TemplateParamHwMgmt)
-			}
-			dstSlice := []any{}
-			if dstNodeGroups, dstHasNG := mergedData["nodeGroupData"]; dstHasNG {
-				dstSlice, ok = dstNodeGroups.([]any)
-				if !ok {
-					return typederrors.NewInputError("hwMgmtDefaults nodeGroupData must be an array")
-				}
-			}
-			mergedNG, err := ctlrutils.MergeNodeGroupData(dstSlice, srcSlice)
-			if err != nil {
-				return typederrors.NewInputError("failed to merge nodeGroupData: %s", err.Error())
-			}
-			mergedData["nodeGroupData"] = mergedNG
-			// Remove nodeGroupData from params so DeepMergeMaps doesn't overwrite
-			delete(hwMgmtParamsMap, "nodeGroupData")
-		}
-
-		// Merge remaining scalar fields (e.g., hardwareProvisioningTimeout)
-		if len(hwMgmtParamsMap) > 0 {
-			if err := ctlrutils.DeepMergeMaps(mergedData, hwMgmtParamsMap, false); err != nil {
-				return typederrors.NewInputError("failed to merge hwMgmt parameters: %s", err.Error())
-			}
+		// Merge hwMgmtParameters over defaults. nodeGroupData is matched by name.
+		// DeepMergeMaps treats defaults as destination and ProvisioningRequest input as source.
+		if err := ctlrutils.DeepMergeMaps(mergedData, hwMgmtParamsMap, false,
+			ctlrutils.SliceMergeRules{ctlrutils.HwMgmtNodeGroupDataKey: {Key: "name"}},
+		); err != nil {
+			return typederrors.NewInputError(
+				"failed to merge ProvisioningRequest templateParameters.%s over ClusterTemplate hwMgmtDefaults: %s",
+				constants.TemplateParamHwMgmt, err.Error())
 		}
 	}
 
@@ -310,7 +290,7 @@ func (t *provisioningRequestReconcilerTask) validateAndMergeHwMgmtInput(
 	}
 
 	t.logger.InfoContext(ctx,
-		fmt.Sprintf("Merged hwMgmt default data with hwMgmtParameters for ProvisioningRequest"),
+		"Merged hwMgmt default data with hwMgmtParameters for ProvisioningRequest",
 		slog.String("name", t.object.Name),
 	)
 	return nil
@@ -319,31 +299,31 @@ func (t *provisioningRequestReconcilerTask) validateAndMergeHwMgmtInput(
 // validateMergedNodeGroups checks that the merged nodeGroupData entries have valid
 // name and role values. Selector fields (hwProfile, resourcePoolId, resourceSelector) are optional.
 func validateMergedNodeGroups(mergedData map[string]any) error {
-	ngRaw, ok := mergedData["nodeGroupData"]
+	ngRaw, ok := mergedData[ctlrutils.HwMgmtNodeGroupDataKey]
 	if !ok {
 		return typederrors.NewInputError(
-			"nodeGroupData is required: provide it via hwMgmtDefaults in the ClusterTemplate " +
-				"or hwMgmtParameters in the ProvisioningRequest")
+			"%s is required: provide it via hwMgmtDefaults in the ClusterTemplate "+
+				"or hwMgmtParameters in the ProvisioningRequest", ctlrutils.HwMgmtNodeGroupDataKey)
 	}
 	ngSlice, ok := ngRaw.([]any)
 	if !ok {
-		return typederrors.NewInputError("nodeGroupData must be an array")
+		return typederrors.NewInputError("%s must be an array", ctlrutils.HwMgmtNodeGroupDataKey)
 	}
 	if len(ngSlice) == 0 {
 		return typederrors.NewInputError(
-			"nodeGroupData must not be empty: provide at least one node group via hwMgmtDefaults " +
-				"or hwMgmtParameters")
+			"%s must not be empty: provide at least one node group via hwMgmtDefaults "+
+				"or hwMgmtParameters", ctlrutils.HwMgmtNodeGroupDataKey)
 	}
 
 	seenRoles := map[string]string{}
 	for _, ng := range ngSlice {
 		ngMap, ok := ng.(map[string]any)
 		if !ok {
-			return typederrors.NewInputError("nodeGroupData element is not a map")
+			return typederrors.NewInputError("%s element is not a map", ctlrutils.HwMgmtNodeGroupDataKey)
 		}
 		name, _ := ngMap["name"].(string)
 		if name == "" {
-			return typederrors.NewInputError("nodeGroupData element is missing required field 'name'")
+			return typederrors.NewInputError("%s element is missing required field 'name'", ctlrutils.HwMgmtNodeGroupDataKey)
 		}
 		role, _ := ngMap["role"].(string)
 		if role == "" {
@@ -353,7 +333,7 @@ func validateMergedNodeGroups(mergedData map[string]any) error {
 			return typederrors.NewInputError("invalid role %q for nodeGroup %q: must be 'master' or 'worker'", role, name)
 		}
 		if prev, exists := seenRoles[role]; exists {
-			return typederrors.NewInputError("duplicate role %q in nodeGroupData for groups %q and %q", role, prev, name)
+			return typederrors.NewInputError("duplicate role %q in %s for groups %q and %q", role, ctlrutils.HwMgmtNodeGroupDataKey, prev, name)
 		}
 		seenRoles[role] = name
 
@@ -368,7 +348,7 @@ func validateMergedNodeGroups(mergedData map[string]any) error {
 // validateMergedHwProfiles checks that hwProfile values in the merged nodeGroupData
 // reference existing HardwareProfile CRs.
 func (t *provisioningRequestReconcilerTask) validateMergedHwProfiles(ctx context.Context, mergedData map[string]any) error {
-	ngRaw, ok := mergedData["nodeGroupData"]
+	ngRaw, ok := mergedData[ctlrutils.HwMgmtNodeGroupDataKey]
 	if !ok {
 		return nil
 	}
@@ -432,7 +412,7 @@ func hwMgmtDefaultsToMap(defaults provisioningv1alpha1.HwMgmtDefaults) map[strin
 			}
 			ngSlice[i] = ngMap
 		}
-		result["nodeGroupData"] = ngSlice
+		result[ctlrutils.HwMgmtNodeGroupDataKey] = ngSlice
 	}
 
 	return result
@@ -498,9 +478,11 @@ func mergeClusterTemplateInputWithDefaults(clusterTemplateInput, clusterTemplate
 		mergedClusterData = maps.Clone(clusterTemplateInputDefaults)
 
 		checkType := false
-		err := ctlrutils.DeepMergeMaps(mergedClusterData, clusterTemplateInput, checkType) // clusterTemplateInput overrides the defaults
+		// DeepMergeMaps treats defaults as destination and ProvisioningRequest input as source.
+		err := ctlrutils.DeepMergeMaps(mergedClusterData, clusterTemplateInput, checkType, nil)
 		if err != nil {
-			return nil, fmt.Errorf("failed to merge the clusterTemplateInput(src) with the defaults(dst): %w", err)
+			return nil, fmt.Errorf(
+				"failed to merge ProvisioningRequest clusterTemplateInput over ClusterTemplate defaults: %w", err)
 		}
 	case len(clusterTemplateInputDefaults) == 0 && len(clusterTemplateInput) != 0:
 		mergedClusterData = maps.Clone(clusterTemplateInput)
