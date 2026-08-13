@@ -213,6 +213,16 @@ func runCommand() error {
 		return fmt.Errorf("--alarms requires --enable-inventory")
 	}
 
+	// Fall back to environment variables for the OAuth credentials so the
+	// client secret need not appear in process argv (readable via
+	// /proc/<pid>/cmdline). The CLI flags take precedence when both are set.
+	if config.OAuthClientID == "" {
+		config.OAuthClientID = os.Getenv("OAUTH_CLIENT_ID")
+	}
+	if config.OAuthClientSecret == "" {
+		config.OAuthClientSecret = os.Getenv("OAUTH_CLIENT_SECRET")
+	}
+
 	// Process OAuth scopes - handle space-separated scopes in a single string
 	processedScopes := processOAuthScopes(config.OAuthScopes)
 	config.OAuthScopes = processedScopes
