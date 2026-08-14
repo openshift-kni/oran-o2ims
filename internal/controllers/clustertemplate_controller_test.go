@@ -1199,7 +1199,7 @@ var _ = Describe("validateClusterInstanceDefaultsFormat", func() {
 			"nodes": []any{},
 		})
 		Expect(err).ToNot(HaveOccurred())
-		Expect(format).To(Equal(ctlrutils.ClusterInstanceNodesKey))
+		Expect(format).To(Equal(constants.ClusterInstanceNodesKey))
 	})
 
 	It("accepts nodeGroups defaults matching schema", func() {
@@ -1207,7 +1207,7 @@ var _ = Describe("validateClusterInstanceDefaultsFormat", func() {
 			"nodeGroups": []any{},
 		})
 		Expect(err).ToNot(HaveOccurred())
-		Expect(format).To(Equal(ctlrutils.ClusterInstanceNodeGroupsKey))
+		Expect(format).To(Equal(constants.ClusterInstanceNodeGroupsKey))
 	})
 
 	It("rejects both nodes and nodeGroups in defaults", func() {

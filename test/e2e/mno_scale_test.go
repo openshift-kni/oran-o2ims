@@ -322,16 +322,16 @@ var _ = Describe("MNO Scale-Out test", Ordered, Label("mno-scale-out"), func() {
 			}
 		}
 
-		// Delete ClusterTemplates
-		for _, ctName := range []string{"scale-test.v4-20-16-v1", "scale-test.v4-20-16-v2"} {
-			ct := &provisioningv1alpha1.ClusterTemplate{}
-			if err := K8SClient.Get(testCtx, types.NamespacedName{Name: ctName, Namespace: ctNamespace}, ct); err == nil {
-				_ = K8SClient.Delete(testCtx, ct)
-			}
+		// Delete ClusterTemplate
+		ct := &provisioningv1alpha1.ClusterTemplate{}
+		if err := K8SClient.Get(testCtx, types.NamespacedName{
+			Name: "scale-test.v4-20-16-v1", Namespace: ctNamespace,
+		}, ct); err == nil {
+			_ = K8SClient.Delete(testCtx, ct)
 		}
 
 		// Delete ConfigMaps
-		for _, cmName := range []string{"clusterinstance-defaults-v1", "clusterinstance-defaults-v2", "policytemplate-defaults-v1", "clustertemplate-sample.v1.0.0-extramanifests"} {
+		for _, cmName := range []string{"clusterinstance-defaults-v1", "policytemplate-defaults-v1", "clustertemplate-sample.v1.0.0-extramanifests"} {
 			cm := &corev1.ConfigMap{}
 			if err := K8SClient.Get(testCtx, types.NamespacedName{Name: cmName, Namespace: ctNamespace}, cm); err == nil {
 				_ = K8SClient.Delete(testCtx, cm)
@@ -349,71 +349,32 @@ var _ = Describe("MNO Scale-Out test", Ordered, Label("mno-scale-out"), func() {
 
 	Describe("Scale-out: add a worker node", func() {
 		It("should increase NAR worker NodeGroup Size after PR update", func() {
-			By("Creating CI defaults v2 with 3 workers and a new CT version")
-			ciDefaultsV2, err := testutils.LoadYAML[corev1.ConfigMap](resourceDir + "/clusterinstance-defaults-v2.yaml")
-			Expect(err).ToNot(HaveOccurred())
-			Expect(K8SClient.Create(testCtx, ciDefaultsV2)).To(Succeed())
-
-			ctV2 := &provisioningv1alpha1.ClusterTemplate{}
-			Expect(K8SClient.Get(testCtx, types.NamespacedName{
-				Name: "scale-test.v4-20-16-v1", Namespace: ctNamespace,
-			}, ctV2)).To(Succeed())
-			ctV2New := ctV2.DeepCopy()
-			ctV2New.ResourceVersion = ""
-			ctV2New.UID = ""
-			ctV2New.Name = "scale-test.v4-20-16-v2"
-			ctV2New.Spec.Version = "v4-20-16-v2"
-			ctV2New.Spec.TemplateDefaults.ClusterInstanceDefaults = "clusterinstance-defaults-v2"
-			ctV2New.Status = provisioningv1alpha1.ClusterTemplateStatus{}
-			Expect(K8SClient.Create(testCtx, ctV2New)).To(Succeed())
-
-			By("Waiting for new CT reconciliation")
-			Eventually(func() bool {
-				ct := &provisioningv1alpha1.ClusterTemplate{}
-				Expect(K8SClient.Get(testCtx, types.NamespacedName{
-					Name: "scale-test.v4-20-16-v2", Namespace: ctNamespace,
-				}, ct)).To(Succeed())
-				return ct.Status.Conditions != nil
-			}, timeout, interval).Should(BeTrue())
-
-			By("Updating PR to use new CT version and add worker-3")
+			By("Updating PR to append worker-3 under the worker nodeGroup")
 			Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
-			pr.Spec.TemplateVersion = "v4-20-16-v2"
 
 			var templateParams map[string]any
 			Expect(json.Unmarshal(pr.Spec.TemplateParameters.Raw, &templateParams)).To(Succeed())
 			ciParams := templateParams["clusterInstanceParameters"].(map[string]any)
-			nodes := ciParams["nodes"].([]any)
+			nodeGroups := ciParams["nodeGroups"].([]any)
+			workerGroup := findNodeGroupByName(nodeGroups, worker)
+			Expect(workerGroup).ToNot(BeNil())
+			workerNodes := workerGroup["nodes"].([]any)
 
 			newWorkerNode := map[string]any{
 				"hostName": fmt.Sprintf("worker-3.%s.example.com", clusterName),
 				"nodeNetwork": map[string]any{
-					"config": map[string]any{
-						"dns-resolver": map[string]any{
-							"config": map[string]any{
-								"search": []any{"example.com"},
-								"server": []any{"198.51.100.1"},
-							},
-						},
-						"routes": map[string]any{
-							"config": []any{
-								map[string]any{"next-hop-address": "192.0.2.254"},
-							},
-						},
-						"interfaces": []any{
-							map[string]any{
-								"ipv4": map[string]any{
-									"address": []any{
-										map[string]any{"ip": "192.0.2.52", "prefix-length": 24},
-									},
-								},
+					"interfaces": []any{
+						map[string]any{
+							"name": "eno1",
+							"addresses": map[string]any{
+								"ipv4": []any{"192.0.2.52/24"},
 							},
 						},
 					},
 				},
 			}
-			nodes = append(nodes, newWorkerNode)
-			ciParams["nodes"] = nodes
+			workerGroup["nodes"] = append(workerNodes, newWorkerNode)
+			ciParams["nodeGroups"] = nodeGroups
 			templateParams["clusterInstanceParameters"] = ciParams
 
 			updatedParams, err := json.Marshal(templateParams)
@@ -452,20 +413,22 @@ var _ = Describe("MNO Scale-Out test", Ordered, Label("mno-scale-out"), func() {
 
 	Describe("Scale-in: remove a worker node", func() {
 		It("should decrease NAR worker NodeGroup Size after removing a worker", func() {
-			By("Updating PR to remove worker-3 (revert to v1 CT with 2 workers)")
+			By("Updating PR to remove worker-3 from the worker nodeGroup")
 			Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
-			pr.Spec.TemplateVersion = "v4-20-16-v1"
 
 			var templateParams map[string]any
 			Expect(json.Unmarshal(pr.Spec.TemplateParameters.Raw, &templateParams)).To(Succeed())
 			ciParams := templateParams["clusterInstanceParameters"].(map[string]any)
-			nodes := ciParams["nodes"].([]any)
+			nodeGroups := ciParams["nodeGroups"].([]any)
 
-			// Remove the last node (worker-3)
-			Expect(len(nodes)).To(BeNumerically(">=", masterCount+workerCount+1),
-				"Should have at least %d nodes before scale-in", masterCount+workerCount+1)
-			nodes = nodes[:masterCount+workerCount]
-			ciParams["nodes"] = nodes
+			workerGroup := findNodeGroupByName(nodeGroups, worker)
+			Expect(workerGroup).ToNot(BeNil())
+			workerNodes := workerGroup["nodes"].([]any)
+
+			Expect(len(workerNodes)).To(BeNumerically(">=", workerCount+1),
+				"Should have at least %d workers before scale-in", workerCount+1)
+			workerGroup["nodes"] = workerNodes[:workerCount]
+			ciParams["nodeGroups"] = nodeGroups
 			templateParams["clusterInstanceParameters"] = ciParams
 
 			updatedParams, err := json.Marshal(templateParams)
@@ -488,6 +451,21 @@ var _ = Describe("MNO Scale-Out test", Ordered, Label("mno-scale-out"), func() {
 		// validates the full flow including AllocatedNode cleanup.
 	})
 })
+
+// findNodeGroupByName returns the nodeGroup map with the given name from a
+// clusterInstanceParameters.nodeGroups slice.
+func findNodeGroupByName(nodeGroups []any, name string) map[string]any {
+	for _, ng := range nodeGroups {
+		group, ok := ng.(map[string]any)
+		if !ok {
+			continue
+		}
+		if group["name"] == name {
+			return group
+		}
+	}
+	return nil
+}
 
 func scaleBMHs(masterCount, workerCount int) []testutils.BMHData {
 	var bmhs []testutils.BMHData

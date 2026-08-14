@@ -23,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -189,36 +190,36 @@ func removeRequiredFromSchema(schema map[string]any) {
 // optional existence in allowedGroupNames, and rejects nested nodes.
 func ValidateNodeGroupsNames(
 	data map[string]any, allowedGroupNames map[string]struct{}) error {
-	groups, ok := data[ClusterInstanceNodeGroupsKey].([]any)
+	groups, ok := data[constants.ClusterInstanceNodeGroupsKey].([]any)
 	if !ok {
-		return fmt.Errorf("%q must be an array", ClusterInstanceNodeGroupsKey)
+		return fmt.Errorf("%q must be an array", constants.ClusterInstanceNodeGroupsKey)
 	}
 
 	seen := map[string]struct{}{}
 	for i, group := range groups {
 		groupMap, ok := group.(map[string]any)
 		if !ok {
-			return fmt.Errorf("%s[%d] is not an object", ClusterInstanceNodeGroupsKey, i)
+			return fmt.Errorf("%s[%d] is not an object", constants.ClusterInstanceNodeGroupsKey, i)
 		}
-		if _, hasNodes := groupMap[ClusterInstanceNodesKey]; hasNodes {
+		if _, hasNodes := groupMap[constants.ClusterInstanceNodesKey]; hasNodes {
 			return fmt.Errorf(
 				"%s[%d] must omit %q; per-host identity belongs only in the ProvisioningRequest",
-				ClusterInstanceNodeGroupsKey, i, ClusterInstanceNodesKey)
+				constants.ClusterInstanceNodeGroupsKey, i, constants.ClusterInstanceNodesKey)
 		}
 		name, _ := groupMap["name"].(string)
 		if name == "" {
 			return fmt.Errorf("%s[%d].name must be a non-empty string",
-				ClusterInstanceNodeGroupsKey, i)
+				constants.ClusterInstanceNodeGroupsKey, i)
 		}
 		if _, exists := seen[name]; exists {
-			return fmt.Errorf("duplicate %s name %q", ClusterInstanceNodeGroupsKey, name)
+			return fmt.Errorf("duplicate %s name %q", constants.ClusterInstanceNodeGroupsKey, name)
 		}
 		seen[name] = struct{}{}
 		if allowedGroupNames != nil {
 			if _, exists := allowedGroupNames[name]; !exists {
 				return fmt.Errorf(
 					"%s name %q does not match any hardware node group in the nodeGroupData",
-					ClusterInstanceNodeGroupsKey, name)
+					constants.ClusterInstanceNodeGroupsKey, name)
 			}
 		}
 	}
@@ -227,14 +228,14 @@ func ValidateNodeGroupsNames(
 
 // RemoveNodeGroupNames strips the O-Cloud-only name field from each nodeGroup entry.
 func RemoveNodeGroupNames(data map[string]any) error {
-	groups, ok := data[ClusterInstanceNodeGroupsKey].([]any)
+	groups, ok := data[constants.ClusterInstanceNodeGroupsKey].([]any)
 	if !ok {
 		return nil
 	}
 	for i, group := range groups {
 		groupMap, ok := group.(map[string]any)
 		if !ok {
-			return fmt.Errorf("%s[%d] is not an object", ClusterInstanceNodeGroupsKey, i)
+			return fmt.Errorf("%s[%d] is not an object", constants.ClusterInstanceNodeGroupsKey, i)
 		}
 		delete(groupMap, "name")
 	}
@@ -296,17 +297,17 @@ func ValidateConfigmapSchemaAgainstClusterInstanceCRD(
 	// with k8s itself.
 	openAPIV3SchemaSpec := openAPIV3Schema["properties"].(map[string]any)["spec"].(map[string]any)
 
-	if entriesKey == ClusterInstanceNodeGroupsKey {
+	if entriesKey == constants.ClusterInstanceNodeGroupsKey {
 		props, ok := openAPIV3SchemaSpec["properties"].(map[string]any)
 		if !ok {
 			return fmt.Errorf("%s CRD spec schema is missing properties", ClusterInstanceCrdName)
 		}
-		nodesSchema, ok := props[ClusterInstanceNodesKey]
+		nodesSchema, ok := props[constants.ClusterInstanceNodesKey]
 		if !ok {
-			return fmt.Errorf("%s CRD schema is missing %q property", ClusterInstanceCrdName, ClusterInstanceNodesKey)
+			return fmt.Errorf("%s CRD schema is missing %q property", ClusterInstanceCrdName, constants.ClusterInstanceNodesKey)
 		}
-		props[ClusterInstanceNodeGroupsKey] = nodesSchema
-		delete(props, ClusterInstanceNodesKey)
+		props[constants.ClusterInstanceNodeGroupsKey] = nodesSchema
+		delete(props, constants.ClusterInstanceNodesKey)
 	}
 
 	// Prepare the data for schema validation.
@@ -392,13 +393,13 @@ func PrepareClusterInstanceForServerSideApply(ci *siteconfig.ClusterInstance) {
 // addresses (CIDR strings) are mapped into nmstate config. O-cloud-only sugar fields
 // (group name, interfaces[].addresses) are stripped.
 func ExpandNodeGroupsToNodes(merged map[string]any) error {
-	raw, ok := merged[ClusterInstanceNodeGroupsKey]
+	raw, ok := merged[constants.ClusterInstanceNodeGroupsKey]
 	if !ok {
-		return fmt.Errorf("%q is required for the nodeGroups format", ClusterInstanceNodeGroupsKey)
+		return fmt.Errorf("%q is required for the nodeGroups format", constants.ClusterInstanceNodeGroupsKey)
 	}
 	groups, ok := raw.([]any)
 	if !ok {
-		return fmt.Errorf("%q must be an array", ClusterInstanceNodeGroupsKey)
+		return fmt.Errorf("%q must be an array", constants.ClusterInstanceNodeGroupsKey)
 	}
 
 	nodeMergeRules := SliceMergeRules{
@@ -415,14 +416,14 @@ func ExpandNodeGroupsToNodes(merged map[string]any) error {
 	for i, group := range groups {
 		groupMap, ok := group.(map[string]any)
 		if !ok {
-			return fmt.Errorf("%s[%d] is not an object", ClusterInstanceNodeGroupsKey, i)
+			return fmt.Errorf("%s[%d] is not an object", constants.ClusterInstanceNodeGroupsKey, i)
 		}
 		groupName, _ := groupMap["name"].(string)
 
 		// Groups with missing or empty nodes are kept in defaults for shared
 		// template fields (e.g. a worker group with no hosts yet) and contribute
 		// no flat hosts. PR groups may be a subset of defaults groups.
-		nodesRaw, hasNodes := groupMap[ClusterInstanceNodesKey]
+		nodesRaw, hasNodes := groupMap[constants.ClusterInstanceNodesKey]
 		if !hasNodes {
 			continue
 		}
@@ -437,7 +438,7 @@ func ExpandNodeGroupsToNodes(merged map[string]any) error {
 		// Drop nodes (already held in groupNodes) and name (O-Cloud-only; not a
 		// ClusterInstance node field) before copying the remaining shared fields
 		// onto each expanded host.
-		delete(groupMap, ClusterInstanceNodesKey)
+		delete(groupMap, constants.ClusterInstanceNodesKey)
 		delete(groupMap, "name")
 
 		for j, node := range groupNodes {
@@ -464,11 +465,11 @@ func ExpandNodeGroupsToNodes(merged map[string]any) error {
 	if len(groups) > 0 && len(flatNodes) == 0 {
 		return fmt.Errorf(
 			"at least one node is required across %s in clusterInstanceParameters",
-			ClusterInstanceNodeGroupsKey)
+			constants.ClusterInstanceNodeGroupsKey)
 	}
 
-	delete(merged, ClusterInstanceNodeGroupsKey)
-	merged[ClusterInstanceNodesKey] = flatNodes
+	delete(merged, constants.ClusterInstanceNodeGroupsKey)
+	merged[constants.ClusterInstanceNodesKey] = flatNodes
 	return nil
 }
 

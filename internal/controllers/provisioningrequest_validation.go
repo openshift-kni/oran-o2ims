@@ -465,16 +465,16 @@ func (t *provisioningRequestReconcilerTask) getMergedClusterInstanceData(
 	}
 
 	var rules ctlrutils.SliceMergeRules
-	if format == ctlrutils.ClusterInstanceNodeGroupsKey {
+	if format == constants.ClusterInstanceNodeGroupsKey {
 		rules = ctlrutils.SliceMergeRules{
-			ctlrutils.ClusterInstanceNodeGroupsKey: {
+			constants.ClusterInstanceNodeGroupsKey: {
 				Key:   "name",
 				ByKey: ctlrutils.ByKeyMergeOptions{RejectUnmatchedSrc: true},
 			},
 			// Kept for consistency with per-node expand: intended PR schema doesn't
 			// overlay nodeNetwork.interfaces at group-level; this path is unused for
 			// schema-compliant input.
-			ctlrutils.ClusterInstanceNodeGroupsKey + "[].nodeNetwork.interfaces": {
+			constants.ClusterInstanceNodeGroupsKey + "[].nodeNetwork.interfaces": {
 				Key: "name",
 				ByKey: ctlrutils.ByKeyMergeOptions{
 					AllowDuplicateKeys: true,
@@ -491,7 +491,7 @@ func (t *provisioningRequestReconcilerTask) getMergedClusterInstanceData(
 			"failed to merge data for %s: %s", constants.TemplateParamClusterInstance, err.Error())
 	}
 
-	if format == ctlrutils.ClusterInstanceNodeGroupsKey {
+	if format == constants.ClusterInstanceNodeGroupsKey {
 		if err := ctlrutils.ExpandNodeGroupsToNodes(mergedClusterDataMap); err != nil {
 			return nil, typederrors.NewInputError(
 				"failed to merge data for %s: %s", constants.TemplateParamClusterInstance, err.Error())
@@ -509,21 +509,21 @@ func (t *provisioningRequestReconcilerTask) getMergedClusterInstanceData(
 // exclusively use the same key (nodeGroups or nodes). Mixed or incomplete
 // combinations are rejected.
 func resolveClusterInstanceFormat(input, defaults map[string]any) (string, error) {
-	_, inputHasNodeGroups := input[ctlrutils.ClusterInstanceNodeGroupsKey]
-	_, defaultsHasNodeGroups := defaults[ctlrutils.ClusterInstanceNodeGroupsKey]
-	_, inputHasNodes := input[ctlrutils.ClusterInstanceNodesKey]
-	_, defaultsHasNodes := defaults[ctlrutils.ClusterInstanceNodesKey]
+	_, inputHasNodeGroups := input[constants.ClusterInstanceNodeGroupsKey]
+	_, defaultsHasNodeGroups := defaults[constants.ClusterInstanceNodeGroupsKey]
+	_, inputHasNodes := input[constants.ClusterInstanceNodesKey]
+	_, defaultsHasNodes := defaults[constants.ClusterInstanceNodesKey]
 
 	switch {
 	case inputHasNodeGroups && defaultsHasNodeGroups && !inputHasNodes && !defaultsHasNodes:
-		return ctlrutils.ClusterInstanceNodeGroupsKey, nil
+		return constants.ClusterInstanceNodeGroupsKey, nil
 	case inputHasNodes && defaultsHasNodes && !inputHasNodeGroups && !defaultsHasNodeGroups:
-		return ctlrutils.ClusterInstanceNodesKey, nil
+		return constants.ClusterInstanceNodesKey, nil
 	default:
 		//nolint:revive // string-format: capitalize CR name ProvisioningRequest
 		return "", fmt.Errorf(
 			"ProvisioningRequest %s and ClusterTemplate defaults must both use %q or both use %q",
-			constants.TemplateParamClusterInstance, ctlrutils.ClusterInstanceNodeGroupsKey, ctlrutils.ClusterInstanceNodesKey)
+			constants.TemplateParamClusterInstance, constants.ClusterInstanceNodeGroupsKey, constants.ClusterInstanceNodesKey)
 	}
 }
 
@@ -625,8 +625,8 @@ func (t *provisioningRequestReconcilerTask) overrideClusterInstanceLabelsOrAnnot
 	}
 
 	// Process label/annotation overrides for nodeGroups: match by name; group-level defaults win over PR group and node extra*.
-	dstGroups, dstGroupsExists := dstProvisioningRequestInput[ctlrutils.ClusterInstanceNodeGroupsKey].([]any)
-	srcGroups, srcGroupsExists := srcConfigmap[ctlrutils.ClusterInstanceNodeGroupsKey].([]any)
+	dstGroups, dstGroupsExists := dstProvisioningRequestInput[constants.ClusterInstanceNodeGroupsKey].([]any)
+	srcGroups, srcGroupsExists := srcConfigmap[constants.ClusterInstanceNodeGroupsKey].([]any)
 	if dstGroupsExists && srcGroupsExists {
 		// Index the defaults groups by name.
 		srcGroupsByName := make(map[string]map[string]any, len(srcGroups))
@@ -657,7 +657,7 @@ func (t *provisioningRequestReconcilerTask) overrideClusterInstanceLabelsOrAnnot
 			}
 
 			// Node-level extra*: the same group-level defaults win over each PR node's values.
-			if nodes, ok := dstGroup[ctlrutils.ClusterInstanceNodesKey].([]any); ok {
+			if nodes, ok := dstGroup[constants.ClusterInstanceNodesKey].([]any); ok {
 				for _, n := range nodes {
 					nodeMap, ok := n.(map[string]any)
 					if !ok {

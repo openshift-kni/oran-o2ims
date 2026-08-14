@@ -153,6 +153,28 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 									}
 								}
 							},
+							"nodeGroups": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"name": {
+											"type": "string"
+										},
+										"nodes": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"hostName": {
+														"type": "string"
+													}
+												}
+											}
+										}
+									}
+								}
+							},
 							"extraAnnotations": {
 								"type": "object"
 							},
@@ -311,19 +333,64 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				})
 
 				It("should reject node scaling (adding nodes) during installation", func() {
-					// Try to add a node
+					// Start with master + empty worker group
+					oldPr.Spec.TemplateParameters.Raw = []byte(`{
+				"oCloudSiteId": "local-123",
+				"nodeClusterName": "exampleCluster",
+				"clusterInstanceParameters": {
+					"clusterName": "test-cluster",
+					"baseDomain": "example.com",
+					"nodeGroups": [
+						{
+							"name": "master",
+							"nodes": [
+								{
+									"hostName": "node1.example.com"
+								}
+							]
+						},
+						{
+							"name": "worker",
+							"nodes": []
+						}
+					],
+					"extraAnnotations": {
+						"ManagedCluster": {
+							"key1": "value1"
+						}
+					},
+					"extraLabels": {
+						"ManagedCluster": {
+							"label1": "labelvalue1"
+						}
+					}
+				},
+				"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+			}`)
+
+					// Try to add a worker node
 					newPr.Spec.TemplateParameters.Raw = []byte(`{
 				"oCloudSiteId": "local-123",
 				"nodeClusterName": "exampleCluster",
 				"clusterInstanceParameters": {
 					"clusterName": "test-cluster",
 					"baseDomain": "example.com",
-					"nodes": [
+					"nodeGroups": [
 						{
-							"hostName": "node1.example.com"
+							"name": "master",
+							"nodes": [
+								{
+									"hostName": "node1.example.com"
+								}
+							]
 						},
 						{
-							"hostName": "node2.example.com"
+							"name": "worker",
+							"nodes": [
+								{
+									"hostName": "node2.example.com"
+								}
+							]
 						}
 					],
 					"extraAnnotations": {
@@ -343,23 +410,33 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("disallowed during cluster installation"))
-					Expect(err.Error()).To(ContainSubstring("nodes.1"))
+					Expect(err.Error()).To(ContainSubstring("nodeGroups.1.nodes.0"))
 				})
 
 				It("should reject node scaling (removing nodes) during installation", func() {
-					// Start with 2 nodes in oldPr
+					// Start with master + worker node in oldPr
 					oldPr.Spec.TemplateParameters.Raw = []byte(`{
 				"oCloudSiteId": "local-123",
 				"nodeClusterName": "exampleCluster",
 				"clusterInstanceParameters": {
 					"clusterName": "test-cluster",
 					"baseDomain": "example.com",
-					"nodes": [
+					"nodeGroups": [
 						{
-							"hostName": "node1.example.com"
+							"name": "master",
+							"nodes": [
+								{
+									"hostName": "node1.example.com"
+								}
+							]
 						},
 						{
-							"hostName": "node2.example.com"
+							"name": "worker",
+							"nodes": [
+								{
+									"hostName": "node2.example.com"
+								}
+							]
 						}
 					],
 					"extraAnnotations": {
@@ -371,16 +448,25 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
 			}`)
 
-					// Try to remove a node
+					// Try to remove the worker node
 					newPr.Spec.TemplateParameters.Raw = []byte(`{
 				"oCloudSiteId": "local-123",
 				"nodeClusterName": "exampleCluster",
 				"clusterInstanceParameters": {
 					"clusterName": "test-cluster",
 					"baseDomain": "example.com",
-					"nodes": [
+					"nodeGroups": [
 						{
-							"hostName": "node1.example.com"
+							"name": "master",
+							"nodes": [
+								{
+									"hostName": "node1.example.com"
+								}
+							]
+						},
+						{
+							"name": "worker",
+							"nodes": []
 						}
 					],
 					"extraAnnotations": {
@@ -472,19 +558,64 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				})
 
 				It("should allow node scaling (adding nodes) after completion", func() {
-					// Add a node
+					// Start with master + empty worker group
+					oldPr.Spec.TemplateParameters.Raw = []byte(`{
+				"oCloudSiteId": "local-123",
+				"nodeClusterName": "exampleCluster",
+				"clusterInstanceParameters": {
+					"clusterName": "test-cluster",
+					"baseDomain": "example.com",
+					"nodeGroups": [
+						{
+							"name": "master",
+							"nodes": [
+								{
+									"hostName": "node1.example.com"
+								}
+							]
+						},
+						{
+							"name": "worker",
+							"nodes": []
+						}
+					],
+					"extraAnnotations": {
+						"ManagedCluster": {
+							"key1": "value1"
+						}
+					},
+					"extraLabels": {
+						"ManagedCluster": {
+							"label1": "labelvalue1"
+						}
+					}
+				},
+				"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+			}`)
+
+					// Add a worker node
 					newPr.Spec.TemplateParameters.Raw = []byte(`{
 				"oCloudSiteId": "local-123",
 				"nodeClusterName": "exampleCluster",
 				"clusterInstanceParameters": {
 					"clusterName": "test-cluster",
 					"baseDomain": "example.com",
-					"nodes": [
+					"nodeGroups": [
 						{
-							"hostName": "node1.example.com"
+							"name": "master",
+							"nodes": [
+								{
+									"hostName": "node1.example.com"
+								}
+							]
 						},
 						{
-							"hostName": "node2.example.com"
+							"name": "worker",
+							"nodes": [
+								{
+									"hostName": "node2.example.com"
+								}
+							]
 						}
 					],
 					"extraAnnotations": {
@@ -506,19 +637,29 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				})
 
 				It("should allow node scaling (removing nodes) after completion", func() {
-					// Start with 2 nodes
+					// Start with master + worker node
 					oldPr.Spec.TemplateParameters.Raw = []byte(`{
 				"oCloudSiteId": "local-123",
 				"nodeClusterName": "exampleCluster",
 				"clusterInstanceParameters": {
 					"clusterName": "test-cluster",
 					"baseDomain": "example.com",
-					"nodes": [
+					"nodeGroups": [
 						{
-							"hostName": "node1.example.com"
+							"name": "master",
+							"nodes": [
+								{
+									"hostName": "node1.example.com"
+								}
+							]
 						},
 						{
-							"hostName": "node2.example.com"
+							"name": "worker",
+							"nodes": [
+								{
+									"hostName": "node2.example.com"
+								}
+							]
 						}
 					],
 					"extraAnnotations": {
@@ -530,16 +671,151 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
 			}`)
 
-					// Remove a node
+					// Remove the worker node
 					newPr.Spec.TemplateParameters.Raw = []byte(`{
 				"oCloudSiteId": "local-123",
 				"nodeClusterName": "exampleCluster",
 				"clusterInstanceParameters": {
 					"clusterName": "test-cluster",
 					"baseDomain": "example.com",
-					"nodes": [
+					"nodeGroups": [
 						{
-							"hostName": "node1.example.com"
+							"name": "master",
+							"nodes": [
+								{
+									"hostName": "node1.example.com"
+								}
+							]
+						},
+						{
+							"name": "worker",
+							"nodes": []
+						}
+					],
+					"extraAnnotations": {
+						"ManagedCluster": {
+							"key1": "value1"
+						}
+					}
+				},
+				"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+			}`)
+
+					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
+					Expect(err).ToNot(HaveOccurred())
+				})
+
+				It("should allow node scaling (adding an entire nodeGroup) after completion", func() {
+					oldPr.Spec.TemplateParameters.Raw = []byte(`{
+				"oCloudSiteId": "local-123",
+				"nodeClusterName": "exampleCluster",
+				"clusterInstanceParameters": {
+					"clusterName": "test-cluster",
+					"baseDomain": "example.com",
+					"nodeGroups": [
+						{
+							"name": "master",
+							"nodes": [
+								{
+									"hostName": "node1.example.com"
+								}
+							]
+						}
+					],
+					"extraAnnotations": {
+						"ManagedCluster": {
+							"key1": "value1"
+						}
+					}
+				},
+				"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+			}`)
+
+					newPr.Spec.TemplateParameters.Raw = []byte(`{
+				"oCloudSiteId": "local-123",
+				"nodeClusterName": "exampleCluster",
+				"clusterInstanceParameters": {
+					"clusterName": "test-cluster",
+					"baseDomain": "example.com",
+					"nodeGroups": [
+						{
+							"name": "master",
+							"nodes": [
+								{
+									"hostName": "node1.example.com"
+								}
+							]
+						},
+						{
+							"name": "worker",
+							"nodes": [
+								{
+									"hostName": "node2.example.com"
+								}
+							]
+						}
+					],
+					"extraAnnotations": {
+						"ManagedCluster": {
+							"key1": "value1"
+						}
+					}
+				},
+				"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+			}`)
+
+					_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
+					Expect(err).ToNot(HaveOccurred())
+				})
+
+				It("should allow node scaling (removing an entire nodeGroup) after completion", func() {
+					oldPr.Spec.TemplateParameters.Raw = []byte(`{
+				"oCloudSiteId": "local-123",
+				"nodeClusterName": "exampleCluster",
+				"clusterInstanceParameters": {
+					"clusterName": "test-cluster",
+					"baseDomain": "example.com",
+					"nodeGroups": [
+						{
+							"name": "master",
+							"nodes": [
+								{
+									"hostName": "node1.example.com"
+								}
+							]
+						},
+						{
+							"name": "worker",
+							"nodes": [
+								{
+									"hostName": "node2.example.com"
+								}
+							]
+						}
+					],
+					"extraAnnotations": {
+						"ManagedCluster": {
+							"key1": "value1"
+						}
+					}
+				},
+				"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+			}`)
+
+					newPr.Spec.TemplateParameters.Raw = []byte(`{
+				"oCloudSiteId": "local-123",
+				"nodeClusterName": "exampleCluster",
+				"clusterInstanceParameters": {
+					"clusterName": "test-cluster",
+					"baseDomain": "example.com",
+					"nodeGroups": [
+						{
+							"name": "master",
+							"nodes": [
+								{
+									"hostName": "node1.example.com"
+								}
+							]
 						}
 					],
 					"extraAnnotations": {
@@ -592,18 +868,63 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				})
 
 				It("should allow combined changes (annotations + labels + node scaling)", func() {
+					// Start with master + empty worker group
+					oldPr.Spec.TemplateParameters.Raw = []byte(`{
+				"oCloudSiteId": "local-123",
+				"nodeClusterName": "exampleCluster",
+				"clusterInstanceParameters": {
+					"clusterName": "test-cluster",
+					"baseDomain": "example.com",
+					"nodeGroups": [
+						{
+							"name": "master",
+							"nodes": [
+								{
+									"hostName": "node1.example.com"
+								}
+							]
+						},
+						{
+							"name": "worker",
+							"nodes": []
+						}
+					],
+					"extraAnnotations": {
+						"ManagedCluster": {
+							"key1": "value1"
+						}
+					},
+					"extraLabels": {
+						"ManagedCluster": {
+							"label1": "labelvalue1"
+						}
+					}
+				},
+				"policyTemplateParameters": {"sriov-network-vlan-1": "140"}
+			}`)
+
 					newPr.Spec.TemplateParameters.Raw = []byte(`{
 				"oCloudSiteId": "local-123",
 				"nodeClusterName": "exampleCluster",
 				"clusterInstanceParameters": {
 					"clusterName": "test-cluster",
 					"baseDomain": "example.com",
-					"nodes": [
+					"nodeGroups": [
 						{
-							"hostName": "node1.example.com"
+							"name": "master",
+							"nodes": [
+								{
+									"hostName": "node1.example.com"
+								}
+							]
 						},
 						{
-							"hostName": "node2.example.com"
+							"name": "worker",
+							"nodes": [
+								{
+									"hostName": "node2.example.com"
+								}
+							]
 						}
 					],
 					"extraAnnotations": {
@@ -625,19 +946,29 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				})
 
 				It("should reject node scaling while upgrade is in progress", func() {
-					// Old PR has 2 nodes (MNO, not SNO)
+					// Old PR has master + worker (MNO, not SNO)
 					oldPr.Spec.TemplateParameters.Raw = []byte(`{
 				"oCloudSiteId": "local-123",
 				"nodeClusterName": "exampleCluster",
 				"clusterInstanceParameters": {
 					"clusterName": "test-cluster",
 					"baseDomain": "example.com",
-					"nodes": [
+					"nodeGroups": [
 						{
-							"hostName": "node1.example.com"
+							"name": "master",
+							"nodes": [
+								{
+									"hostName": "node1.example.com"
+								}
+							]
 						},
 						{
-							"hostName": "node2.example.com"
+							"name": "worker",
+							"nodes": [
+								{
+									"hostName": "node2.example.com"
+								}
+							]
 						}
 					]
 				},
@@ -650,22 +981,32 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 						Reason: string(CRconditionReasons.InProgress),
 					})
 
-					// Add a third node
+					// Add a second worker node
 					newPr.Spec.TemplateParameters.Raw = []byte(`{
 				"oCloudSiteId": "local-123",
 				"nodeClusterName": "exampleCluster",
 				"clusterInstanceParameters": {
 					"clusterName": "test-cluster",
 					"baseDomain": "example.com",
-					"nodes": [
+					"nodeGroups": [
 						{
-							"hostName": "node1.example.com"
+							"name": "master",
+							"nodes": [
+								{
+									"hostName": "node1.example.com"
+								}
+							]
 						},
 						{
-							"hostName": "node2.example.com"
-						},
-						{
-							"hostName": "node3.example.com"
+							"name": "worker",
+							"nodes": [
+								{
+									"hostName": "node2.example.com"
+								},
+								{
+									"hostName": "node3.example.com"
+								}
+							]
 						}
 					]
 				},
