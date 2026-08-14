@@ -725,8 +725,8 @@ The following steps are required:
 ### Scaling Worker Nodes
 
 After a multi-node (MNO) cluster is provisioned, you can add or remove
-worker nodes by updating the ProvisioningRequest's
-`clusterInstanceParameters.nodes` array.
+worker nodes by updating the ProvisioningRequest: add or remove hosts under
+the worker group’s `clusterInstanceParameters.nodeGroups[].nodes` list.
 
 > [!NOTE]
 > Scaling is only supported for worker nodes. Control plane (master)
@@ -739,35 +739,62 @@ worker nodes by updating the ProvisioningRequest's
 * The cluster must be fully provisioned (`ClusterProvisioned=Completed`).
 * For scale-out: available BareMetalHosts must exist in the resource
   pool matching the worker node group's `resourceSelector` labels.
-* The ClusterInstance defaults ConfigMap must include a node template
-  entry for the new worker (with `role: worker`).
+* The worker group must exist in the ClusterInstance defaults.
 * No upgrade operation is currently in progress.
 
 #### Adding a worker node (scale-out)
 
-1. If needed, update the ClusterInstance defaults ConfigMap to add a
-   worker node template entry for the new node.
+1. Ensure the ClusterTemplate / ClusterInstance defaults include the
+   worker `nodeGroups` entry (see the following note).
+   Typical std templates already include it.
 
-2. Update the ProvisioningRequest to add the new worker node entry to
-   `spec.templateParameters.clusterInstanceParameters.nodes`:
+   > [!NOTE]
+   > Scale-out adds hosts under an existing `nodeGroups` entry. The worker
+   > group must already be defined in the ClusterInstance defaults (and
+   > matching hardware `nodeGroupData`) for the ClusterTemplate in use.
+   > Typical STD templates already include both `master` and `worker`, so
+   > scale-in/out is only a ProvisioningRequest change.
+   >
+   > If the cluster was provisioned from a masters-only template (no
+   > `worker` group in defaults), create a new ClusterTemplate version
+   > whose ClusterInstance defaults and hardware `nodeGroupData` include
+   > the worker group, then update the ProvisioningRequest to that
+   > version and add the worker hosts under `nodeGroups[].nodes`.
+
+2. Update the ProvisioningRequest to append the new worker node under
+   `spec.templateParameters.clusterInstanceParameters.nodeGroups`
+   (worker group’s `nodes` list):
 
    ```yaml
    spec:
      templateParameters:
        clusterInstanceParameters:
-         nodes:
-           - hostName: master-1.cluster.example.com
-           - hostName: master-2.cluster.example.com
-           - hostName: master-3.cluster.example.com
-           - hostName: worker-1.cluster.example.com
-           - hostName: worker-2.cluster.example.com
-           - hostName: worker-3.cluster.example.com  # new worker
-             nodeNetwork:
-               config:
-                 dns-resolver:
-                   config:
-                     server:
-                       - 198.51.100.1
+         nodeGroups:
+           - name: master
+             nodes:
+               - hostName: master-1.cluster.example.com
+               - hostName: master-2.cluster.example.com
+               - hostName: master-3.cluster.example.com
+           - name: worker
+             nodes:
+               - hostName: worker-1.cluster.example.com
+                 nodeNetwork:
+                   interfaces:
+                     - name: eno1
+                       addresses:
+                         ipv4: ["192.0.2.20/24"]
+               - hostName: worker-2.cluster.example.com
+                 nodeNetwork:
+                   interfaces:
+                     - name: eno1
+                       addresses:
+                         ipv4: ["192.0.2.21/24"]
+               - hostName: worker-2.cluster.example.com  # new worker
+                 nodeNetwork:
+                   interfaces:
+                     - name: eno1
+                       addresses:
+                         ipv4: ["192.0.2.22/24"]
    ```
 
 3. The controller detects the new node and:
@@ -789,10 +816,8 @@ worker nodes by updating the ProvisioningRequest's
 
 #### Removing a worker node (scale-in)
 
-To remove a worker node, remove its entry from the
-`clusterInstanceParameters.nodes` array in the ProvisioningRequest and
-update the `templateName` to reference a ClusterTemplate with matching
-CI defaults (one fewer worker node template).
+To remove a worker node, remove its host entry from the worker group’s
+`clusterInstanceParameters.nodeGroups[].nodes` list in the ProvisioningRequest.
 
 The controller automatically:
 
@@ -835,8 +860,8 @@ returns to normal operation.
 
 A swap operation replaces one or more worker nodes in a single
 ProvisioningRequest update. Remove the old node entries and add the new
-node entries in the `clusterInstanceParameters.nodes` array at the same
-time.
+node entries in the worker group’s `clusterInstanceParameters.nodeGroups[].nodes`
+list at the same time.
 
 The controller processes the swap sequentially:
 

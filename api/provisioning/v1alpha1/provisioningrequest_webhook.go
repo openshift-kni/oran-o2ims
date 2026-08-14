@@ -228,9 +228,10 @@ func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Contex
 
 		// Only reject disallowed field changes; node scaling is explicitly allowed
 		if len(disallowedFields) > 0 {
-			return fmt.Errorf("only \"%s\" and/or \"%s\" changes in spec.TemplateParameters.ClusterInstanceParameters "+
-				"are allowed after cluster installation is completed, detected changes in immutable fields: %s",
-				AllowedClusterInstanceFields[0], AllowedClusterInstanceFields[1], strings.Join(disallowedFields, ", "))
+			return fmt.Errorf("only extraLabels/extraAnnotations and node scaling changes in "+
+				"spec.TemplateParameters.ClusterInstanceParameters are allowed after cluster "+
+				"installation is completed, detected changes in immutable fields: %s",
+				strings.Join(disallowedFields, ", "))
 		}
 	}
 

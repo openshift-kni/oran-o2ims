@@ -274,12 +274,10 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 		Expect(scalingNodes).To(BeEmpty())
 	})
 
-	It("should detect addition of a new node", func() {
-		// Add a new node
+	It("should treat flat nodes membership changes as immutable (scaling requires nodeGroups)", func() {
 		spec := newClusterInstance.Object["spec"].(map[string]any)
 		nodes := spec["nodes"].([]any)
-		nodes = append(nodes, map[string]any{"hostName": "worker2"})
-		spec["nodes"] = nodes
+		spec["nodes"] = append(nodes, map[string]any{"hostName": "worker2"})
 
 		updatedFields, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
 			oldClusterInstance.Object["spec"].(map[string]any),
@@ -287,40 +285,178 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 			IgnoredClusterInstanceFields,
 			provisioningv1alpha1.AllowedClusterInstanceFields)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(updatedFields).To(BeEmpty())
-		Expect(scalingNodes).To(ContainElement("nodes.1"))
+		Expect(updatedFields).To(ContainElement("nodes.1"))
+		Expect(scalingNodes).To(BeEmpty())
 	})
 
-	It("should detect deletion of a node", func() {
-		// Remove the node
-		spec := newClusterInstance.Object["spec"].(map[string]any)
-		spec["nodes"] = []any{}
+	// nodeGroups format cases (cluster-level coverage is shared with the flat-nodes
+	// cases above; drop this Context when cleaning up legacy flat nodes).
+	Context("with nodeGroups format", func() {
+		// Convert legacy flat nodes into a single master nodeGroup.
+		toNodeGroupsSpec := func(spec map[string]any) {
+			nodes, ok := spec["nodes"]
+			if !ok {
+				return
+			}
+			delete(spec, "nodes")
+			spec["nodeGroups"] = []any{
+				map[string]any{
+					"name":  "master",
+					"nodes": nodes,
+				},
+			}
+		}
 
-		updatedFields, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
-			oldClusterInstance.Object["spec"].(map[string]any),
-			newClusterInstance.Object["spec"].(map[string]any),
-			IgnoredClusterInstanceFields,
-			provisioningv1alpha1.AllowedClusterInstanceFields)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(updatedFields).To(BeEmpty())
-		Expect(scalingNodes).To(ContainElement("nodes.0"))
-	})
+		BeforeEach(func() {
+			toNodeGroupsSpec(oldClusterInstance.Object["spec"].(map[string]any))
+			toNodeGroupsSpec(newClusterInstance.Object["spec"].(map[string]any))
+		})
 
-	It("should detect node swap as scaling when hostName changes in-place", func() {
-		// Change the hostName of an existing node (swap)
-		spec := newClusterInstance.Object["spec"].(map[string]any)
-		nodes := spec["nodes"].([]any)
-		node := nodes[0].(map[string]any)
-		node["hostName"] = "replacement-worker.example.com"
+		It("should detect changes in disallowed node-level fields", func() {
+			spec := newClusterInstance.Object["spec"].(map[string]any)
+			node0 := spec["nodeGroups"].([]any)[0].(map[string]any)["nodes"].([]any)[0].(map[string]any)
+			node0Network := node0["nodeNetwork"].(map[string]any)["config"].(map[string]any)["dns-resolver"].(map[string]any)
+			node0Network["config"].(map[string]any)["server"].([]any)[0] = "10.19.42.42"
 
-		updatedFields, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
-			oldClusterInstance.Object["spec"].(map[string]any),
-			newClusterInstance.Object["spec"].(map[string]any),
-			IgnoredClusterInstanceFields,
-			provisioningv1alpha1.AllowedClusterInstanceFields)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(updatedFields).To(BeEmpty())
-		Expect(scalingNodes).To(ContainElement("nodes.0"))
+			updatedFields, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
+				oldClusterInstance.Object["spec"].(map[string]any),
+				newClusterInstance.Object["spec"].(map[string]any),
+				IgnoredClusterInstanceFields,
+				provisioningv1alpha1.AllowedClusterInstanceFields)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedFields).To(ContainElement(
+				"nodeGroups.0.nodes.0.nodeNetwork.config.dns-resolver.config.server.0"))
+			Expect(scalingNodes).To(BeEmpty())
+		})
+
+		It("should not flag changes in allowed node-level fields alongside immutable fields", func() {
+			spec := newClusterInstance.Object["spec"].(map[string]any)
+			node0 := spec["nodeGroups"].([]any)[0].(map[string]any)["nodes"].([]any)[0].(map[string]any)
+			node0["extraAnnotations"] = map[string]map[string]string{
+				"BareMetalHost": {
+					"newAnnotationKey": "newAnnotationValue",
+				},
+			}
+			node0Network := node0["nodeNetwork"].(map[string]any)["config"].(map[string]any)["dns-resolver"].(map[string]any)
+			node0Network["config"].(map[string]any)["server"].([]any)[0] = "10.19.42.42"
+
+			updatedFields, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
+				oldClusterInstance.Object["spec"].(map[string]any),
+				newClusterInstance.Object["spec"].(map[string]any),
+				IgnoredClusterInstanceFields,
+				provisioningv1alpha1.AllowedClusterInstanceFields)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedFields).To(ContainElement(
+				"nodeGroups.0.nodes.0.nodeNetwork.config.dns-resolver.config.server.0"))
+			Expect(len(updatedFields)).To(Equal(1))
+			Expect(scalingNodes).To(BeEmpty())
+		})
+
+		It("should detect addition of a new node", func() {
+			spec := newClusterInstance.Object["spec"].(map[string]any)
+			group0 := spec["nodeGroups"].([]any)[0].(map[string]any)
+			nodes := group0["nodes"].([]any)
+			group0["nodes"] = append(nodes, map[string]any{"hostName": "worker2"})
+
+			updatedFields, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
+				oldClusterInstance.Object["spec"].(map[string]any),
+				newClusterInstance.Object["spec"].(map[string]any),
+				IgnoredClusterInstanceFields,
+				provisioningv1alpha1.AllowedClusterInstanceFields)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedFields).To(BeEmpty())
+			Expect(scalingNodes).To(ContainElement("nodeGroups.0.nodes.1"))
+		})
+
+		It("should detect deletion of a node", func() {
+			spec := newClusterInstance.Object["spec"].(map[string]any)
+			group0 := spec["nodeGroups"].([]any)[0].(map[string]any)
+			group0["nodes"] = []any{}
+
+			updatedFields, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
+				oldClusterInstance.Object["spec"].(map[string]any),
+				newClusterInstance.Object["spec"].(map[string]any),
+				IgnoredClusterInstanceFields,
+				provisioningv1alpha1.AllowedClusterInstanceFields)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedFields).To(BeEmpty())
+			Expect(scalingNodes).To(ContainElement("nodeGroups.0.nodes.0"))
+		})
+
+		It("should detect node swap as scaling when hostName changes in-place", func() {
+			spec := newClusterInstance.Object["spec"].(map[string]any)
+			node0 := spec["nodeGroups"].([]any)[0].(map[string]any)["nodes"].([]any)[0].(map[string]any)
+			node0["hostName"] = "replacement-worker.example.com"
+
+			updatedFields, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
+				oldClusterInstance.Object["spec"].(map[string]any),
+				newClusterInstance.Object["spec"].(map[string]any),
+				IgnoredClusterInstanceFields,
+				provisioningv1alpha1.AllowedClusterInstanceFields)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedFields).To(BeEmpty())
+			Expect(scalingNodes).To(ContainElement("nodeGroups.0.nodes.0"))
+		})
+
+		It("should not flag changes in allowed nodeGroup-level fields", func() {
+			spec := newClusterInstance.Object["spec"].(map[string]any)
+			group0 := spec["nodeGroups"].([]any)[0].(map[string]any)
+			group0["extraLabels"] = map[string]any{
+				"ManagedCluster": map[string]any{"site": "edge-1"},
+			}
+			group0["extraAnnotations"] = map[string]any{
+				"ManagedCluster": map[string]any{"ann": "value"},
+			}
+
+			updatedFields, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
+				oldClusterInstance.Object["spec"].(map[string]any),
+				newClusterInstance.Object["spec"].(map[string]any),
+				IgnoredClusterInstanceFields,
+				provisioningv1alpha1.AllowedClusterInstanceFields)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedFields).To(BeEmpty())
+			Expect(scalingNodes).To(BeEmpty())
+		})
+
+		It("should detect changes in disallowed nodeGroup-level fields", func() {
+			spec := newClusterInstance.Object["spec"].(map[string]any)
+			group0 := spec["nodeGroups"].([]any)[0].(map[string]any)
+			group0["nodeNetwork"] = map[string]any{
+				"config": map[string]any{
+					"dns-resolver": map[string]any{
+						"config": map[string]any{"server": []any{"8.8.8.8"}},
+					},
+				},
+			}
+
+			updatedFields, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
+				oldClusterInstance.Object["spec"].(map[string]any),
+				newClusterInstance.Object["spec"].(map[string]any),
+				IgnoredClusterInstanceFields,
+				provisioningv1alpha1.AllowedClusterInstanceFields)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedFields).ToNot(BeEmpty())
+			Expect(updatedFields[0]).To(HavePrefix("nodeGroups.0.nodeNetwork"))
+			Expect(scalingNodes).To(BeEmpty())
+		})
+
+		It("should detect addition of an entire nodeGroup as an immutable change", func() {
+			spec := newClusterInstance.Object["spec"].(map[string]any)
+			spec["nodeGroups"] = append(spec["nodeGroups"].([]any),
+				map[string]any{
+					"name":  "extra",
+					"nodes": []any{map[string]any{"hostName": "extra-1.example.com"}},
+				})
+
+			updatedFields, scalingNodes, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
+				oldClusterInstance.Object["spec"].(map[string]any),
+				newClusterInstance.Object["spec"].(map[string]any),
+				IgnoredClusterInstanceFields,
+				provisioningv1alpha1.AllowedClusterInstanceFields)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedFields).To(ContainElement("nodeGroups.1"))
+			Expect(scalingNodes).To(BeEmpty())
+		})
 	})
 })
 

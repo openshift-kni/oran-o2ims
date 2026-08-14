@@ -163,9 +163,7 @@ File: `test/e2e/mno_scale_test.go`
 ### Scale-out: add a worker node
 
 1. should increase NAR worker NodeGroup Size after PR update
-   - Creating CI defaults v2 with 3 workers and a new CT version
-   - Waiting for new CT reconciliation
-   - Updating PR to use new CT version and add worker-3
+   - Updating PR to append worker-3 under the worker nodeGroup
    - Verifying NAR NodeGroup sizes after scale-out
 1. should create a new AllocatedNode for the added worker
    - Waiting for 6 AllocatedNodes (3 masters + 3 workers)
@@ -174,7 +172,7 @@ File: `test/e2e/mno_scale_test.go`
 ### Scale-in: remove a worker node
 
 1. should decrease NAR worker NodeGroup Size after removing a worker
-   - Updating PR to remove worker-3 (revert to v1 CT with 2 workers)
+   - Updating PR to remove worker-3 from the worker nodeGroup
    - Verifying NAR NodeGroup sizes after scale-in
 
 ## SNO End-to-end ProvisioningRequestReconcile with hardware manager [sno-provisioning]
