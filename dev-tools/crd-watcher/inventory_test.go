@@ -13,7 +13,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -661,3 +663,93 @@ var _ = Describe("InventoryClient HTTP Operations", func() {
 		// Would test actual HTTP calls with mock server
 	})
 })
+
+var _ = Describe("debugTransport redaction", func() {
+	Describe("redactSensitiveFormFields", func() {
+		It("redacts client_secret in the form body", func() {
+			body := "grant_type=client_credentials&client_id=abc&client_secret=supersecret"
+
+			redacted := redactSensitiveFormFields(body)
+
+			Expect(redacted).To(ContainSubstring("client_secret=***REDACTED***"))
+			Expect(redacted).ToNot(ContainSubstring("supersecret"))
+		})
+
+		It("redacts password in the form body", func() {
+			body := "grant_type=password&username=alice&password=hunter2"
+
+			redacted := redactSensitiveFormFields(body)
+
+			Expect(redacted).To(ContainSubstring("password=***REDACTED***"))
+			Expect(redacted).ToNot(ContainSubstring("hunter2"))
+		})
+
+		It("preserves non-secret form fields", func() {
+			body := "grant_type=client_credentials&client_id=abc&client_secret=supersecret&scope=role:o2ims-reader"
+
+			redacted := redactSensitiveFormFields(body)
+
+			Expect(redacted).To(ContainSubstring("grant_type=client_credentials"))
+			Expect(redacted).To(ContainSubstring("client_id=abc"))
+			Expect(redacted).To(ContainSubstring("scope=role:o2ims-reader"))
+		})
+
+		It("redacts case-insensitively and handles multiple secret fields", func() {
+			body := "Client_Secret=supersecret&PASSWORD=hunter2&client_id=abc"
+
+			redacted := redactSensitiveFormFields(body)
+
+			Expect(redacted).To(ContainSubstring("Client_Secret=***REDACTED***"))
+			Expect(redacted).To(ContainSubstring("PASSWORD=***REDACTED***"))
+			Expect(redacted).ToNot(ContainSubstring("supersecret"))
+			Expect(redacted).ToNot(ContainSubstring("hunter2"))
+			Expect(redacted).To(ContainSubstring("client_id=abc"))
+		})
+
+		It("leaves a body without secret fields unchanged", func() {
+			body := "grant_type=client_credentials&client_id=abc&scope=role:o2ims-reader"
+
+			Expect(redactSensitiveFormFields(body)).To(Equal(body))
+		})
+	})
+
+	Describe("RoundTrip", func() {
+		It("sends the unredacted body to the underlying transport", func() {
+			base := &recordingRoundTripper{}
+			transport := &debugTransport{base: base}
+			formBody := "grant_type=client_credentials&client_id=abc&client_secret=supersecret"
+
+			req, err := http.NewRequest(http.MethodPost, "https://example.com/token", strings.NewReader(formBody))
+			Expect(err).ToNot(HaveOccurred())
+
+			resp, err := transport.RoundTrip(req)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp.Body.Close()).To(Succeed())
+
+			// Redaction applies only to the log output; the real request must
+			// still carry the original, unredacted body on the wire.
+			Expect(base.body).To(Equal(formBody))
+			Expect(base.body).To(ContainSubstring("client_secret=supersecret"))
+		})
+	})
+})
+
+// recordingRoundTripper is a stub http.RoundTripper that captures the request
+// body it receives so tests can assert on what debugTransport forwards.
+type recordingRoundTripper struct {
+	body string
+}
+
+func (r *recordingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.Body != nil {
+		b, err := io.ReadAll(req.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read request body: %w", err)
+		}
+		r.body = string(b)
+	}
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader("")),
+	}, nil
+}

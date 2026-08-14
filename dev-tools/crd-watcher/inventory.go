@@ -20,6 +20,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -42,14 +43,28 @@ type debugTransport struct {
 	base http.RoundTripper
 }
 
+// sensitiveFormFieldRegex matches secret-bearing URL-encoded form fields
+// (client_secret, password) and their values up to the next field separator.
+var sensitiveFormFieldRegex = regexp.MustCompile(`(?i)(client_secret|password)=[^&]*`)
+
+// redactSensitiveFormFields masks secret-bearing values in a URL-encoded form
+// body before it is logged. The field names are preserved so the log remains
+// useful for debugging, but the values are replaced with a placeholder.
+func redactSensitiveFormFields(body string) string {
+	return sensitiveFormFieldRegex.ReplaceAllString(body, "${1}=***REDACTED***")
+}
+
 func (t *debugTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if req.URL.Path != "" && req.Method == http.MethodPost {
 		klog.V(3).Infof("OAuth request to %s", req.URL.String())
 		if req.Body != nil {
 			body, err := io.ReadAll(req.Body)
 			if err == nil {
-				klog.V(3).Infof("OAuth request body: %s", string(body))
-				// Restore the body for the actual request
+				// Redact secret-bearing form fields (e.g. client_secret,
+				// password) before logging; the OAuth client credentials flow
+				// POSTs the client secret in cleartext through this transport.
+				klog.V(3).Infof("OAuth request body: %s", redactSensitiveFormFields(string(body)))
+				// Restore the body for the actual request (unredacted)
 				req.Body = io.NopCloser(strings.NewReader(string(body)))
 			}
 		}

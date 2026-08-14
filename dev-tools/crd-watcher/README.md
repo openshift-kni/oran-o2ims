@@ -360,6 +360,12 @@ export OAUTH_CLIENT_ID="my-client"
 export OAUTH_CLIENT_SECRET="my-secret"
 ```
 
+These variables act as a fallback: each is used only when its corresponding
+CLI flag (`--oauth-client-id` / `--oauth-client-secret`) is not set, so the
+flag takes precedence when both are provided. Prefer the environment variables
+for the client secret — passing `--oauth-client-secret` places the secret in
+the process arguments, which are world-readable via `/proc/<pid>/cmdline`.
+
 ### Inventory Resource Types
 
 When enabled, the inventory module fetches:
