@@ -27,8 +27,12 @@ const (
 	sslClientVerifiedHeaderKey = "x-ssl-client-verify"
 )
 
-// From RFC9440.  We are always behind an HAProxy, and it doesn't yet support RFC9440 but some day it likely will so
-// this provides a bit of future-proofing.
+// From RFC9440.  We are always behind an HAProxy, and OpenShift's HAProxy edge does not implement RFC9440: it neither
+// sets nor strips the Client-Cert/Client-Chain headers, so a client-supplied value would pass straight through to this
+// backend.  Trusting it would let an attacker holding a stolen mTLS-bound token spoof proof-of-possession without the
+// private key (CWE-290).  We therefore do not trust these headers; instead we strip any incoming values defensively so
+// they cannot be referenced or leaked downstream.  RFC9440 support can be re-added once the OpenShift edge implements
+// and sanitises these headers (mirroring the existing x-ssl-client-* filter).
 const (
 	sslClientCertKey  = "Client-Cert"
 	sslClientChainKey = "Client-Chain"
@@ -46,37 +50,33 @@ func getClientCertificate(req *http.Request) ([]byte, bool, error) {
 	// correct microservice.  It is not possible to route the request without first terminating TLS since the connection
 	// is encrypted and the final API endpoint is not known.
 
-	// Check the standard value from RFC9440 first.
-	certString := req.Header.Get(sslClientCertKey)
-	if certString == "" {
-		// If it doesn't exist, then check those used by HA-Proxy
-		verified := req.Header.Get(sslClientVerifiedHeaderKey)
-		if verified != "0" {
-			// No cert was provided, or the cert provided could not be verified and was allowed
-			return nil, false, nil
-		}
+	// Defensively strip any client-supplied RFC9440 headers.  The OpenShift HAProxy edge does not sanitise these, so a
+	// malicious client could otherwise spoof them; we ignore them entirely and delete them so they cannot be referenced
+	// or leaked downstream.
+	req.Header.Del(sslClientCertKey)
+	req.Header.Del(sslClientChainKey)
 
-		certString = req.Header.Get(sslClientDERHeaderKey)
-		if certString == "" {
-			// This is unexpected
-			slog.ErrorContext(req.Context(), "No client certificate found, but verification passed", slog.String("header", sslClientDERHeaderKey))
-			return nil, false, nil
-		}
-
-		// Remove these so that they are not accidentally referenced or leaked elsewhere
-		req.Header.Del(sslClientVerifiedHeaderKey)
-		req.Header.Del(sslClientDERHeaderKey)
-		req.Header.Del(sslChainDERHeaderKey)
-	} else {
-		// RFC9440 book-ends the certificate data with colons so we need to remove them before proceeding.
-		certString = strings.TrimLeft(strings.TrimRight(certString, ":"), ":")
-
-		// Remove these so that they are not accidentally referenced or leaked elsewhere
-		req.Header.Del(sslClientCertKey)
-		req.Header.Del(sslClientChainKey)
+	// Only the HAProxy x-ssl-client-* headers are trusted.  HAProxy provably sets/overwrites them on the mTLS
+	// connection and the OpenShift router strips any incoming x-ssl-* headers to prevent spoofing.
+	verified := req.Header.Get(sslClientVerifiedHeaderKey)
+	if verified != "0" {
+		// No cert was provided, or the cert provided could not be verified and was allowed
+		return nil, false, nil
 	}
 
-	// Both HAProxy and RFC9440 use standard Base64 encoding rather than URL-encoded Base64.
+	certString := req.Header.Get(sslClientDERHeaderKey)
+	if certString == "" {
+		// This is unexpected
+		slog.ErrorContext(req.Context(), "No client certificate found, but verification passed", slog.String("header", sslClientDERHeaderKey))
+		return nil, false, nil
+	}
+
+	// Remove these so that they are not accidentally referenced or leaked elsewhere
+	req.Header.Del(sslClientVerifiedHeaderKey)
+	req.Header.Del(sslClientDERHeaderKey)
+	req.Header.Del(sslChainDERHeaderKey)
+
+	// HAProxy uses standard Base64 encoding rather than URL-encoded Base64.
 	certBytes, err := base64.StdEncoding.DecodeString(certString)
 	if err != nil {
 		return nil, false, fmt.Errorf("error decoding client certificate: %w", err)
