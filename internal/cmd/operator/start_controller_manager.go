@@ -26,6 +26,8 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/klog/v2"
 
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -238,13 +240,25 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
 		Cache: cache.Options{
-			ByObject: map[client.Object]cache.ByObject{
-				&networkingv1.NetworkPolicy{}: {
-					Namespaces: map[string]cache.Config{
-						operatorNamespace: {},
-					},
-				},
-			},
+			ByObject: func() map[client.Object]cache.ByObject {
+				// Resources managed exclusively within the operator namespace have their
+				// RBAC scoped to a namespaced Role. Their informers must be scoped to
+				// the same namespace — a cluster-wide LIST/WATCH would require ClusterRole
+				// permissions that are intentionally no longer granted.
+				operatorScoped := cache.ByObject{
+					Namespaces: map[string]cache.Config{operatorNamespace: {}},
+				}
+				return map[client.Object]cache.ByObject{
+					&appsv1.Deployment{}:            operatorScoped,
+					&corev1.PersistentVolumeClaim{}: operatorScoped,
+					&corev1.Pod{}:                   operatorScoped,
+					&corev1.Service{}:               operatorScoped,
+					&corev1.ServiceAccount{}:        operatorScoped,
+					&inventoryv1alpha1.Inventory{}:  operatorScoped,
+					&networkingv1.Ingress{}:         operatorScoped,
+					&networkingv1.NetworkPolicy{}:   operatorScoped,
+				}
+			}(),
 		},
 		Metrics: metricsserver.Options{
 			SecureServing:  c.metricsCertDir != "",

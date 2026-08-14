@@ -1761,14 +1761,8 @@ spec:
           - ""
           resources:
           - configmaps
-          - namespaces
-          - persistentvolumeclaims
-          - secrets
-          - serviceaccounts
-          - services
           verbs:
           - create
-          - delete
           - get
           - list
           - patch
@@ -1777,18 +1771,15 @@ spec:
         - apiGroups:
           - ""
           resources:
-          - events
+          - namespaces
+          - secrets
           verbs:
           - create
-          - patch
-          - update
-        - apiGroups:
-          - ""
-          resources:
-          - pods
-          verbs:
+          - delete
           - get
           - list
+          - patch
+          - update
           - watch
         - apiGroups:
           - addon.open-cluster-management.io
@@ -1827,18 +1818,6 @@ spec:
           - list
           - watch
         - apiGroups:
-          - apps
-          resources:
-          - deployments
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
           - authentication.k8s.io
           resources:
           - tokenreviews
@@ -1860,18 +1839,6 @@ spec:
           - subjectaccessreviews
           verbs:
           - create
-        - apiGroups:
-          - batch
-          resources:
-          - cronjobs
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
         - apiGroups:
           - clcm.openshift.io
           resources:
@@ -1957,18 +1924,6 @@ spec:
           - list
           - watch
         - apiGroups:
-          - coordination.k8s.io
-          resources:
-          - leases
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
           - hive.openshift.io
           resources:
           - clusterimagesets
@@ -2008,14 +1963,6 @@ spec:
         - apiGroups:
           - metal3.io
           resources:
-          - dataimages
-          verbs:
-          - delete
-          - get
-          - list
-        - apiGroups:
-          - metal3.io
-          resources:
           - firmwareschemas
           - hardwaredata
           verbs:
@@ -2036,27 +1983,6 @@ spec:
           - update
           - watch
         - apiGroups:
-          - monitoring.coreos.com
-          resources:
-          - prometheusrules
-          - servicemonitors
-          verbs:
-          - get
-          - list
-          - watch
-        - apiGroups:
-          - networking.k8s.io
-          resources:
-          - ingresses
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
           - observability.open-cluster-management.io
           resources:
           - observabilityaddons
@@ -2068,35 +1994,6 @@ spec:
         - apiGroups:
           - ocloud.openshift.io
           resources:
-          - inventories
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - ocloud.openshift.io
-          resources:
-          - inventories/finalizers
-          verbs:
-          - update
-        - apiGroups:
-          - ocloud.openshift.io
-          resources:
-          - inventories/status
-          - locations/status
-          - ocloudsites/status
-          - resourcepools/status
-          verbs:
-          - get
-          - patch
-          - update
-        - apiGroups:
-          - ocloud.openshift.io
-          resources:
           - locations
           - ocloudsites
           - resourcepools
@@ -2104,6 +2001,16 @@ spec:
           - get
           - list
           - watch
+        - apiGroups:
+          - ocloud.openshift.io
+          resources:
+          - locations/status
+          - ocloudsites/status
+          - resourcepools/status
+          verbs:
+          - get
+          - patch
+          - update
         - apiGroups:
           - operator.openshift.io
           resources:
@@ -2514,26 +2421,17 @@ spec:
           - ""
           resources:
           - configmaps
+          - persistentvolumeclaims
+          - serviceaccounts
+          - services
           verbs:
+          - create
+          - delete
           - get
           - list
-          - watch
-          - create
-          - update
           - patch
-          - delete
-        - apiGroups:
-          - coordination.k8s.io
-          resources:
-          - leases
-          verbs:
-          - get
-          - list
-          - watch
-          - create
           - update
-          - patch
-          - delete
+          - watch
         - apiGroups:
           - ""
           resources:
@@ -2541,9 +2439,43 @@ spec:
           verbs:
           - create
           - patch
+          - update
+        - apiGroups:
+          - ""
+          resources:
+          - pods
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - apps
+          resources:
+          - deployments
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - coordination.k8s.io
+          resources:
+          - leases
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
         - apiGroups:
           - networking.k8s.io
           resources:
+          - ingresses
           - networkpolicies
           verbs:
           - create
@@ -2553,6 +2485,32 @@ spec:
           - patch
           - update
           - watch
+        - apiGroups:
+          - ocloud.openshift.io
+          resources:
+          - inventories
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ocloud.openshift.io
+          resources:
+          - inventories/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - ocloud.openshift.io
+          resources:
+          - inventories/status
+          verbs:
+          - get
+          - patch
+          - update
         serviceAccountName: oran-o2ims-controller-manager
     strategy: deployment
   installModes:
