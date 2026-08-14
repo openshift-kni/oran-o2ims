@@ -44,7 +44,7 @@ LABEL operators.operatorframework.io.test.config.v1=tests/scorecard/
 LABEL com.redhat.openshift.versions="=v5.0"
 LABEL com.redhat.delivery.backport=false
 LABEL com.redhat.component="o-cloud-manager-operator-bundle-container"
-LABEL name="openshift4/o-cloud-manager-operator-bundle-container-rhel9"
+LABEL name="openshift5/o-cloud-manager-operator-bundle-container-rhel9"
 LABEL summary="o-cloud"
 LABEL io.k8s.display-name="o-cloud-manager"
 LABEL io.k8s.description="o-cloud-manager"
