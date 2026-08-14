@@ -138,6 +138,22 @@ var _ = Describe("WithClientVerification", func() {
 		Expect(response.User.GetName()).To(Equal("test"))
 	})
 
+	It("strips spoofed RFC9440 headers on the unbound-token path", func() {
+		// A valid but unbound token (no fingerprint binding claim) short-circuits before the certificate-binding
+		// check.  The spoofed RFC9440 headers must still be stripped so they cannot be referenced or leaked
+		// downstream.
+		delete(noopAuthenticator.Response.User.GetExtra(), fingerprintKey)
+		tokenAuthenticator = WithClientVerification(&noopAuthenticator)
+		request.Header.Set(sslClientCertKey, "spoofed")
+		request.Header.Set(sslClientChainKey, "spoofed")
+		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ok).To(BeTrue())
+		Expect(response.User.GetName()).To(Equal("test"))
+		Expect(request.Header.Get(sslClientCertKey)).To(Equal(""))
+		Expect(request.Header.Get(sslClientChainKey)).To(Equal(""))
+	})
+
 	It("rejects a request with HAProxy headers with invalid certificate encoding", func() {
 		request.Header.Set(sslClientDERHeaderKey, "invalid")
 		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)

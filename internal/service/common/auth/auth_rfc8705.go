@@ -50,13 +50,9 @@ func getClientCertificate(req *http.Request) ([]byte, bool, error) {
 	// correct microservice.  It is not possible to route the request without first terminating TLS since the connection
 	// is encrypted and the final API endpoint is not known.
 
-	// Defensively strip any client-supplied RFC9440 headers.  The OpenShift HAProxy edge does not sanitise these, so a
-	// malicious client could otherwise spoof them; we ignore them entirely and delete them so they cannot be referenced
-	// or leaked downstream.
-	req.Header.Del(sslClientCertKey)
-	req.Header.Del(sslClientChainKey)
-
-	// Only the HAProxy x-ssl-client-* headers are trusted.  HAProxy provably sets/overwrites them on the mTLS
+	// The untrusted RFC9440 Client-Cert/Client-Chain headers are stripped up front in AuthenticateRequest (the
+	// middleware entry point) so they are removed for every request, including tokens that are not certificate-bound.
+	// Only the HAProxy x-ssl-client-* headers are trusted here.  HAProxy provably sets/overwrites them on the mTLS
 	// connection and the OpenShift router strips any incoming x-ssl-* headers to prevent spoofing.
 	verified := req.Header.Get(sslClientVerifiedHeaderKey)
 	if verified != "0" {
@@ -131,6 +127,13 @@ func WithClientVerification(request authenticator.Request) authenticator.Request
 }
 
 func (w *withClientVerification) AuthenticateRequest(req *http.Request) (*authenticator.Response, bool, error) {
+	// Defensively strip any client-supplied RFC9440 headers from every request handled by this middleware, before any
+	// early return.  The OpenShift HAProxy edge does not sanitise these, so a malicious client could otherwise spoof
+	// them; we ignore them entirely and delete them so they cannot be referenced or leaked downstream.  This runs for
+	// unbound tokens too, which short-circuit below without a certificate-binding check.
+	req.Header.Del(sslClientCertKey)
+	req.Header.Del(sslClientChainKey)
+
 	response, ok, err := w.authenticator.AuthenticateRequest(req)
 	if err != nil {
 		return nil, false, err // nolint: wrapcheck
