@@ -128,8 +128,9 @@ pullSecretRef:
 templateRefs:
 - name: "ai-cluster-templates-v1"
   namespace: "siteconfig-operator"
-nodes:
-- role: master
+nodeGroups:
+- name: master
+  role: master
   automatedCleaningMode: disabled
   ironicInspect: ""
   bootMode: UEFI
@@ -141,6 +142,15 @@ nodes:
       label: base-interface
     - name: eth1
       label: data-interface
+    config:
+      interfaces:
+      - name: eno1
+        type: ethernet
+        state: up
+        ipv4:
+          enabled: true
+        ipv6:
+          enabled: false
 `,
 			},
 		},
@@ -162,12 +172,12 @@ pullSecretRef:
 templateRefs:
 - name: "ai-cluster-templates-v1"
   namespace: "siteconfig-operator"
-nodes:
-- role: master
+nodeGroups:
+- name: master
+  role: master
   automatedCleaningMode: disabled
   ironicInspect: ""
   bootMode: UEFI
-  hostName: node1
   nodeNetwork:
     interfaces:
     - name: eno1
@@ -176,6 +186,15 @@ nodes:
       label: base-interface
     - name: eth1
       label: data-interface
+    config:
+      interfaces:
+      - name: eno1
+        type: ethernet
+        state: up
+        ipv4:
+          enabled: true
+        ipv6:
+          enabled: false
   templateRefs:
   - name: test
     namespace: test
@@ -235,7 +254,7 @@ defaultHugepagesSize: "1G"`,
 					HardwareProvisioningTimeout: &metav1.Duration{Duration: 10 * time.Minute},
 					NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 						{
-							Name:           "single-node",
+							Name:           "master",
 							Role:           "master",
 							ResourcePoolId: testutils.TestPoolID,
 							HwProfile:      testutils.TestHwProfileName,
@@ -266,7 +285,7 @@ defaultHugepagesSize: "1G"`,
 					HardwareProvisioningTimeout: &metav1.Duration{Duration: 10 * time.Minute},
 					NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 						{
-							Name:           "single-node",
+							Name:           "master",
 							Role:           "master",
 							ResourcePoolId: testutils.TestPoolID,
 							HwProfile:      testutils.TestHwProfileName,
@@ -613,12 +632,12 @@ defaultHugepagesSize: "1G"`,
 			return true
 		}, timeout, interval).Should(BeTrue())
 
-		// Verify NodeAllocationRequest contains expected node groups (only 1 single-node group).
+		// Verify NodeAllocationRequest contains expected node groups (only 1 master group).
 		Expect(len(nar.Spec.NodeGroup)).To(Equal(1))
 
 		// Verify the single node group.
 		singleNodeGroup := nar.Spec.NodeGroup[0]
-		Expect(singleNodeGroup.NodeGroupData.Name).To(Equal("single-node"))
+		Expect(singleNodeGroup.NodeGroupData.Name).To(Equal("master"))
 		Expect(singleNodeGroup.Size).To(Equal(1))
 		Expect(singleNodeGroup.NodeGroupData.HwProfile).To(Equal(testutils.TestHwProfileName))
 

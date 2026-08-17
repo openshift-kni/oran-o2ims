@@ -37,8 +37,9 @@ data:
     cpuPartitioningMode: AllNodes
     extraManifestsRefs:
       - name: clustertemplate-sample.v1.0.0-extramanifests
-    nodes:
-      - role: master
+    nodeGroups:
+      - name: master
+        role: master
         bootMode: UEFI
         ironicInspect: "disabled"
         automatedCleaningMode: disabled

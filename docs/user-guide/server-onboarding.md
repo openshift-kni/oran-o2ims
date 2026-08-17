@@ -411,8 +411,9 @@ interfaces in the ClusterInstance defaults.
 For example, if the ClusterInstance defaults define:
 
 ```yaml
-nodes:
-  - nodeNetwork:
+nodeGroups:
+  - name: master
+    nodeNetwork:
       interfaces:
         - name: eno1
           label: boot-interface

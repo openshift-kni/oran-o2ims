@@ -112,15 +112,15 @@ spec:
   templateParameters:
     clusterInstanceParameters:
       clusterName: sno-ran-du-1
-      nodes:
-      - bmcCredentialsName:
-          name: sno-ran-du-1-bmc-secret
-        extraAnnotations:
-          BareMetalHost:
-            test: test <<< added as a Day 2 change
-        extraLabels:
-          BareMetalHost:
-            test: test <<< added as a Day 2 change
+      nodeGroups:
+      - name: master
+        nodes:
+        - extraAnnotations:
+            BareMetalHost:
+              test: test <<< added as a Day 2 change
+          extraLabels:
+            BareMetalHost:
+              test: test <<< added as a Day 2 change
 ```
 
 The `status.conditions` records the success/failure of the update.
@@ -552,14 +552,14 @@ The following steps are required:
     * Update the kustomization files to include the new `HardwareProfile`. ArgoCD will automatically sync it to the hub cluster.
     * No changes to `hwMgmtDefaults` or `ClusterTemplate` CRs are needed.
 2. Update the `ProvisioningRequest` to reference the new `HardwareProfile`:
-    * Set the `hwProfile` for the controller node group in `spec.templateParameters.hwMgmtParameters.nodeGroupData` to the new profile name (`dell-xr8620t-bios-2.6.3-bmc-7.20.30.50`).
+    * Set the `hwProfile` for the master node group in `spec.templateParameters.hwMgmtParameters.nodeGroupData` to the new profile name (`dell-xr8620t-bios-2.6.3-bmc-7.20.30.50`).
 
     ```yaml
     spec:
       templateParameters:
         hwMgmtParameters:
           nodeGroupData:
-            - name: controller
+            - name: master
               hwProfile: dell-xr8620t-bios-2.6.3-bmc-7.20.30.50
     ```
 

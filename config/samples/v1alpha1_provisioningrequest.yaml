@@ -21,7 +21,7 @@ spec:
       # Override the hardware provisioning timeout (optional)
       # hardwareProvisioningTimeout: "120m"
       nodeGroupData:
-        - name: controller
+        - name: master
           hwProfile: hardwareprofile-sample
           # Additional resource selector criteria (optional, merged with hwMgmtDefaults selectors)
           # resourceSelector:
@@ -50,15 +50,14 @@ spec:
         - 192.0.2.3
       machineNetwork:
         - cidr: 192.0.2.0/24
-      nodes:
-        - bootMode: UEFI
+      nodeGroups:
+        - name: master
           extraAnnotations:
             BareMetalHost:
               extra-annotation-key: extra-annotation-value
           extraLabels:
             BareMetalHost:
               extra-label-key: extra-label-value
-          hostName: node1.baseDomain.com
           nodeLabels:
             node-role.kubernetes.io/infra: ""
             node-role.kubernetes.io/master: ""
@@ -68,35 +67,26 @@ spec:
                 config:
                   server:
                     - 192.0.2.22
-              interfaces:
-                - ipv4:
-                    address:
-                      - ip: 192.0.2.10
-                        prefix-length: 24
-                      - ip: 192.0.2.11
-                        prefix-length: 24
-                      - ip: 192.0.2.12
-                        prefix-length: 24
-                    dhcp: false
-                    enabled: true
-                  ipv6:
-                    address:
-                      - ip: 2620:52:0:10e7:e42:a1ff:fe8a:601
-                        prefix-length: 64
-                      - ip: 2620:52:0:10e7:e42:a1ff:fe8a:602
-                        prefix-length: 64
-                      - ip: 2620:52:0:10e7:e42:a1ff:fe8a:603
-                        prefix-length: 64
-                    dhcp: false
-                    enabled: true
-                  name: ens3f0
-                  type: ethernet
               routes:
                 config:
                   - destination: 0.0.0.0/0
                     next-hop-address: 192.0.2.254
                     next-hop-interface: ens3f0
                     table-id: 254
+          nodes:
+            - hostName: node1.baseDomain.com
+              nodeNetwork:
+                interfaces:
+                  - name: ens3f0
+                    addresses:
+                      ipv4:
+                        - 192.0.2.10/24
+                        - 192.0.2.11/24
+                        - 192.0.2.12/24
+                      ipv6:
+                        - 2620:52:0:10e7:e42:a1ff:fe8a:601/64
+                        - 2620:52:0:10e7:e42:a1ff:fe8a:602/64
+                        - 2620:52:0:10e7:e42:a1ff:fe8a:603/64
       serviceNetwork:
         - cidr: 233.252.0.0/24
       sshPublicKey: ssh-rsa

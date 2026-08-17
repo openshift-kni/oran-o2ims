@@ -87,8 +87,8 @@ holdInstallation: false
 templateRefs:
   - name: "ai-cluster-templates-v1"
     namespace: "siteconfig-operator"
-nodes:
-- hostname: "node1"
+nodeGroups:
+- name: master
   role: master
   ironicInspect: ""
   nodeNetwork:
@@ -99,6 +99,15 @@ nodes:
       label: base-interface
     - name: eth1
       label: data-interface
+    config:
+      interfaces:
+      - name: eno1
+        type: ethernet
+        state: up
+        ipv4:
+          enabled: true
+        ipv6:
+          enabled: false
   templateRefs:
     - name: "ai-node-templates-v1"
       namespace: "siteconfig-operator"`,
