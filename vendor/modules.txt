@@ -435,7 +435,7 @@ github.com/pmezard/go-difflib/difflib
 ## explicit; go 1.16
 github.com/pquerna/cachecontrol
 github.com/pquerna/cachecontrol/cacheobject
-# github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.93.0
+# github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.93.1
 ## explicit; go 1.26.0
 github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring
 github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1
