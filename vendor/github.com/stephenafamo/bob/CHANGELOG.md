@@ -5,9 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v0.49.0] - 2026-07-20
+## [v0.50.0] - 2026-08-11
 
-- Fixed column_order on `*` selectors in sql queries in postgres
+### Added
+
+- Generated `dberrors` packages now include generic and per-table check-constraint errors for PostgreSQL, matched by constraint name for `pq` and `pgx` drivers. (thanks @keithbro-imx)
+
+### Changed
+
+- PostgreSQL single-column slice relationship loaders (`<Parent>Slice.<Rel>`) and batch counts (`<Parent>Slice.LoadCount<Rel>`) now de-duplicate the key array bound to `= ANY($1)` when the key column can contain duplicates (a non-unique foreign key). The array is only a semi-join filter, so query results are unchanged — a slice of 10,000 parents sharing 50 related rows now binds 50 keys instead of 10,000. Keys that are unique by construction (the parent's own primary key or a uniquely-constrained column) and key types not comparable with `==` keep the previous plain loop, decided at codegen time ([#740](https://github.com/stephenafamo/bob/pull/740)). (thanks @sandonemaki)
+- Generated through-relationship loaders (`Load<Rel>`) no longer apply every query mod twice (once against a throwaway query to detect whether the user set columns, then again for real). The default columns are now added by a deferred `bob.ModFunc` during the single real application — the same pattern `View.Query` uses — and the join-key slice is pre-allocated to the parent slice length. Generated SQL is unchanged ([#740](https://github.com/stephenafamo/bob/pull/740)). (thanks @sandonemaki)
+
+### Fixed
+
+- Fixed the PostgreSQL code generator's query parser renumbering each reference to a repeated query parameter (`$N`) as a distinct argument (e.g. `id = $1 OR parent_id = $1` generating `$1`/`$2`), which changed the meaning of the generated query mods. Repeated `$N` references now map to a single generated parameter ([#745](https://github.com/stephenafamo/bob/pull/745)). (thanks @dmakushin)
+
+## [v0.49.0] - 2026-07-20
 
 ### Added
 
@@ -19,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `NewViewx` and `NewTablex` in the `psql`, `mysql` and `sqlite` dialects now take a `scan.Mapper[T]` argument used for all queries built from the view/table. Pass `nil` to keep the previous reflection-based `scan.StructMapper` behaviour. `NewView`/`NewTable` are unchanged. (thanks @sandonemaki)
 - JOIN a DISTINCT unnest(...) for composite-key relationship loaders & counts on PostgreSQL. (thanks @sandonemaki)
+- `Preload` now shares a single related-struct instance between all parent rows with the same join key, instead of building an identical instance per parent row — the same semantics as `ThenLoad`. The emitted SQL is unchanged; construction, nested loader collection and mapping now run once per distinct related row, which significantly reduces time, allocations and retained memory on high-duplication workloads. Preloaded structs should be treated as read-only: code that mutates a preloaded struct and relies on each parent having its own copy must copy the struct first. (thanks @sandonemaki)
 
 ### Fixed
 
@@ -26,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed the counts plugin's generated `C` field reusing the `relation_tag` struct tag, which collided with the relations `R` field and caused `encoding/json` to drop both fields when a real tag name was configured. The `C` field now uses a dedicated `relation_tag_count` config option (default `"-"`). (thanks @jacobmolby)
 - Fixed generated join alias suffixes using `randInt()`, which could produce negative values when `maphash.Hash.Sum64()` overflowed `int64` ([#719](https://github.com/stephenafamo/bob/issues/719)). Generated join mods now use `bob.NextUniqueInt()` instead. (thanks @atzedus)
 - Fixed `orm.Query.Clone()` dropping the `Scanner`, which made `All`/`One`/`Cursor`/`Each` on a cloned query panic with a nil pointer dereference. (thanks @sandonemaki)
+- Fixed column_order on `*` selectors in sql queries in postgres
 
 ## [v0.48.0] - 2026-06-26
 
@@ -343,8 +358,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added the `fallback_null` top level configuraiton option. Which can be either `database/sql` or `github.com/aarondl/opt/null`.  
-   This is used to determine how to create null values in the generated code. If set to `database/sql`, it will use `sql.Null[T]` for nullable types, and if set to `github.com/aarondl/opt/null`, it will use `opt.null.Val[T]`.  
-   The default value is `database/sql`.
+  This is used to determine how to create null values in the generated code. If set to `database/sql`, it will use `sql.Null[T]` for nullable types, and if set to `github.com/aarondl/opt/null`, it will use `opt.null.Val[T]`.  
+  The default value is `database/sql`.
 
 ### Fixed
 
@@ -365,7 +380,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The `bob.Transaction` interface now takes a `context.Context` argument in the `Commit` and `Rollback` methods.
 - The method `BeginTx` on the `bob.Transaction` interface is now changed to `Begin` and it takes a single context argument.  
-   This is to make it easier to implement for non `database/sql` drivers.
+  This is to make it easier to implement for non `database/sql` drivers.
 - In the generated model, the `PrimaryKeyVals()` method is now private.
 - Renamed `driver_name` to `driver` in code generation configuration.
 - In type replacements, nullability is not used in matching.
@@ -458,11 +473,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ```
 
 - In the generated model code, `Preload` is now a struct instead of multiple standaalone functions.  
-   It is now used like `Preload.User.Pilots()`, instead of `PreloadUserPilots()`.
+  It is now used like `Preload.User.Pilots()`, instead of `PreloadUserPilots()`.
 - In the generated model code, `ThenLoad` is now a struct and has been split for each query type.  
-   It is now used like `SelectThenLoad.User.Pilots()`, instead of `ThenLoadUserPilots()`.
+  It is now used like `SelectThenLoad.User.Pilots()`, instead of `ThenLoadUserPilots()`.
 - In the generated model code, the **Load** interfaces no longer include the name of the source model since it is a method on the model.  
-   It now looks like `*models.User.LoadPilots` instead of `*models.User.LoadUserPilots`.
+  It now looks like `*models.User.LoadPilots` instead of `*models.User.LoadUserPilots`.
 - Made changes to better support generating code in multiple languages.
 - Mark queries with `ON DUPLICATE KEY UPDATE` as unretrievable in MySQL.
 - Unretrievable `INSERT` queries using `One, All, Cursor` now immediately return `orm.ErrCannotRetrieveRow` instead of executing the query first.
@@ -689,9 +704,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Moved `orm.Hooks` to `bob.Hooks` since it should not be limited to only ORM queries.
 - Moved `mods.QueryModFunc` to `bob.ModFunc` since it should be available to all packages.
 - The mod capability for `orm.Setter` is now reversed. It should now be a mod for Insert and have a method that returns a mod for Update.  
-   This makes more sense since one would at most use one setter during updates, but can use multiple setters in a bulk insert.
+  This makes more sense since one would at most use one setter during updates, but can use multiple setters in a bulk insert.
 - `table.InsertQ` has been renamed to `table.Insert`. The old implementation of `Insert` has been removed.  
-   The same functionality can be achieved in the following way:
+  The same functionality can be achieved in the following way:
 
   ```go
   //----------------------------------------------
@@ -711,11 +726,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ```
 
 - `table.UpdateQ` has been renamed to `table.Update`. The old implementation of `Update` has been removed.  
-   The same functionality can be achieved by using `model.Update()` or `modelSlice.UpdateAll()`.
+  The same functionality can be achieved by using `model.Update()` or `modelSlice.UpdateAll()`.
 - `table.DeleteQ` has been renamed to `table.Delete`. The old implementation of `Delete` has been removed.  
-   The same functionality can be achieved by using `modelSlice.DeleteAll()` or creating an `Delete` query using `table.Delete()`.
+  The same functionality can be achieved by using `modelSlice.DeleteAll()` or creating an `Delete` query using `table.Delete()`.
 - `BeforeInsertHooks` now only takes a single `ModelSetter` at a time.  
-   This is because it is not possible to know before executing the queries exactly how many setters are being used since additional rows can be inserted by applying another setter as a mod.
+  This is because it is not possible to know before executing the queries exactly how many setters are being used since additional rows can be inserted by applying another setter as a mod.
 - `bob.Cache()` now requires an `Executor`. This is used to run any query hooks.
 - `bob.Prepare()` now requires a type parameter to be used to bind named arguments. The type can either be:
   - A struct with fields that match the named arguments in the query
