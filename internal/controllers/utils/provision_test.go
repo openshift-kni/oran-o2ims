@@ -1185,6 +1185,30 @@ nodeGroups:
         addresses:
           ipv4:
           - "192.0.2.20/24"
+- name: worker-cnf
+  role: worker
+  bootMode: UEFI
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: boot-interface
+    config:
+      interfaces:
+      - name: eno1
+        type: ethernet
+        state: up
+        ipv4:
+          enabled: true
+        ipv6:
+          enabled: false
+  nodes:
+  - hostName: worker-2.example.com
+    nodeNetwork:
+      interfaces:
+      - name: eno1
+        addresses:
+          ipv4:
+          - "192.0.2.21/24"
 `)
 		expected := `
 clusterName: from-defaults
@@ -1260,9 +1284,35 @@ nodes:
             prefix-length: 24
         ipv6:
           enabled: false
+- hostName: worker-2.example.com
+  role: worker
+  bootMode: UEFI
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: boot-interface
+    config:
+      interfaces:
+      - name: eno1
+        type: ethernet
+        state: up
+        ipv4:
+          enabled: true
+          address:
+          - ip: "192.0.2.21"
+            prefix-length: 24
+        ipv6:
+          enabled: false
 `
 
-		Expect(ExpandNodeGroupsToNodes(merged)).To(Succeed())
+		hostToGroupName, err := ExpandNodeGroupsToNodes(merged)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(hostToGroupName).To(Equal(map[string]string{
+			"master-1.example.com": "master",
+			"master-2.example.com": "master",
+			"worker-1.example.com": "worker",
+			"worker-2.example.com": "worker-cnf",
+		}))
 		got, err := yaml.Marshal(merged)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(got).To(MatchYAML(expected))
@@ -1317,7 +1367,8 @@ nodes:
             prefix-length: 24
 `
 
-		Expect(ExpandNodeGroupsToNodes(merged)).To(Succeed())
+		_, err := ExpandNodeGroupsToNodes(merged)
+		Expect(err).ToNot(HaveOccurred())
 		got, err := yaml.Marshal(merged)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(got).To(MatchYAML(expected))
@@ -1345,7 +1396,7 @@ nodeGroups:
           ipv4:
           - "192.0.2.10/24"
 `)
-		err := ExpandNodeGroupsToNodes(merged)
+		_, err := ExpandNodeGroupsToNodes(merged)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(`name "eth99" at path "nodeNetwork.interfaces" in source does not match any destination entry`))
 	})
@@ -1370,7 +1421,7 @@ nodeGroups:
           ipv4:
           - "192.0.2.10/24"
 `)
-		err := ExpandNodeGroupsToNodes(merged)
+		_, err := ExpandNodeGroupsToNodes(merged)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(`interface "eno1" has addresses but no matching entry in nodeNetwork.config.interfaces`))
 	})
@@ -1399,7 +1450,7 @@ nodeGroups:
           ipv4:
           - "192.0.2.10"
 `)
-		err := ExpandNodeGroupsToNodes(merged)
+		_, err := ExpandNodeGroupsToNodes(merged)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("not a valid CIDR"))
 	})
@@ -1419,7 +1470,11 @@ nodes:
 - hostName: master-1.example.com
   role: master
 `
-		Expect(ExpandNodeGroupsToNodes(merged)).To(Succeed())
+		hostToGroupName, err := ExpandNodeGroupsToNodes(merged)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(hostToGroupName).To(Equal(map[string]string{
+			"master-1.example.com": "master",
+		}))
 		got, err := yaml.Marshal(merged)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(got).To(MatchYAML(expected))
@@ -1441,7 +1496,11 @@ nodes:
 - hostName: master-1.example.com
   role: master
 `
-		Expect(ExpandNodeGroupsToNodes(merged)).To(Succeed())
+		hostToGroupName, err := ExpandNodeGroupsToNodes(merged)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(hostToGroupName).To(Equal(map[string]string{
+			"master-1.example.com": "master",
+		}))
 		got, err := yaml.Marshal(merged)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(got).To(MatchYAML(expected))
@@ -1456,7 +1515,7 @@ nodeGroups:
   role: worker
   nodes: []
 `)
-		err := ExpandNodeGroupsToNodes(merged)
+		_, err := ExpandNodeGroupsToNodes(merged)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("at least one node is required across nodeGroups"))
 	})
@@ -1470,9 +1529,80 @@ nodeGroups: []
 clusterName: x
 nodes: []
 `
-		Expect(ExpandNodeGroupsToNodes(merged)).To(Succeed())
+		hostToGroupName, err := ExpandNodeGroupsToNodes(merged)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(hostToGroupName).To(BeEmpty())
 		got, err := yaml.Marshal(merged)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(got).To(MatchYAML(expected))
+	})
+
+	It("rejects malformed nodeGroups", func() {
+		_, err := ExpandNodeGroupsToNodes(map[string]any{})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(`"nodeGroups" is required for the nodeGroups format`))
+
+		_, err = ExpandNodeGroupsToNodes(map[string]any{
+			"nodeGroups": "not-an-array",
+		})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(`"nodeGroups" must be an array`))
+
+		_, err = ExpandNodeGroupsToNodes(map[string]any{
+			"nodeGroups": []any{"not-an-object"},
+		})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("nodeGroups[0] is not an object"))
+
+		_, err = ExpandNodeGroupsToNodes(map[string]any{
+			"nodeGroups": []any{map[string]any{"nodes": []any{}}},
+		})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(`nodeGroups[0] is missing required field "name"`))
+
+		_, err = ExpandNodeGroupsToNodes(map[string]any{
+			"nodeGroups": []any{map[string]any{"name": "master", "nodes": "not-an-array"}},
+		})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(`node group "master" nodes must be an array`))
+
+		_, err = ExpandNodeGroupsToNodes(map[string]any{
+			"nodeGroups": []any{map[string]any{"name": "master", "nodes": []any{"not-an-object"}}},
+		})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(`node group "master" node[0] is not an object`))
+
+		_, err = ExpandNodeGroupsToNodes(map[string]any{
+			"nodeGroups": []any{map[string]any{"name": "master", "nodes": []any{map[string]any{}}}},
+		})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(`node group "master" node[0] is missing required field "hostName"`))
+	})
+
+	It("rejects duplicate hostName within or across groups", func() {
+		_, err := ExpandNodeGroupsToNodes(mustYAMLMap(`
+nodeGroups:
+- name: master
+  role: master
+  nodes:
+  - hostName: master-1.example.com
+  - hostName: master-1.example.com
+`))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal(`node group "master" node[1] has duplicate hostName "master-1.example.com" (already in node group "master")`))
+
+		_, err = ExpandNodeGroupsToNodes(mustYAMLMap(`
+nodeGroups:
+- name: master
+  role: master
+  nodes:
+  - hostName: shared.example.com
+- name: worker
+  role: worker
+  nodes:
+  - hostName: shared.example.com
+`))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal(`node group "worker" node[0] has duplicate hostName "shared.example.com" (already in node group "master")`))
 	})
 })

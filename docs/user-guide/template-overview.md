@@ -22,6 +22,7 @@ SPDX-License-Identifier: Apache-2.0
       - [Deprecated format (`nodes`)](#deprecated-format-nodes)
       - [Recommended format (`nodeGroups`)](#recommended-format-nodegroups)
     - [PolicyTemplate defaults ConfigMap](#policytemplate-defaults-configmap)
+    - [Preparing templates for multiple worker MachineConfigPools](#preparing-templates-for-multiple-worker-machineconfigpools)
   - [Validation](#validation)
   - [Viewing ClusterTemplates](#viewing-clustertemplates)
     - [Using the CLI](#using-the-cli)
@@ -529,6 +530,198 @@ Complete examples of PolicyTemplate defaults:
 [SNO](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/policytemplates-defaults-v1.yaml),
 [3node](../samples/git-setup/clustertemplates/version_4.Y.Z/3node-ran-du/policytemplates-defaults-v1.yaml) and
 [Standard](../samples/git-setup/clustertemplates/version_4.Y.Z/std-ran-du/policytemplates-defaults-v1.yaml).
+
+### Preparing templates for multiple worker MachineConfigPools
+
+This section describes how to author a ClusterTemplate for provisioning a
+multi-node cluster with more than one worker MachineConfigPool.
+
+> [!NOTE]
+> This is supported only for clusters provisioned through the assisted installer.
+
+Complete sample:
+
+- [ClusterTemplate](../samples/git-setup/clustertemplates/version_4.Y.Z/std-ran-du/std-ran-du-multi-mcp-v4-Y-Z-1.yaml)
+- [ClusterInstance defaults](../samples/git-setup/clustertemplates/version_4.Y.Z/std-ran-du/clusterinstance-defaults-multi-mcp-v1.yaml)
+- [PolicyTemplate defaults](../samples/git-setup/clustertemplates/version_4.Y.Z/std-ran-du/policytemplates-defaults-multi-mcp-v1.yaml)
+- [Custom MCP extra manifests](../samples/git-setup/clustertemplates/version_4.Y.Z/extra-manifest/custom-machine-config-pools.yaml)
+- [PolicyGenerator](../samples/git-setup/policytemplates/version_4.Y.Z/std-ran-du/std-ran-du-pg-multi-mcp-v4-Y-Z-v1.yaml)
+- [Custom inform validators](../samples/git-setup/policytemplates/version_4.Y.Z/source-crs/custom-crs/)
+
+#### Extra-manifest MachineConfigPool CRs
+
+The extra-manifest MachineConfigPool CR defines the spoke pool name
+(`metadata.name`). The hardware node group
+(`hwMgmtDefaults.nodeGroupData[].name`) and ClusterInstance node group
+(`nodeGroups[].name`) use that same name. Pools can be grouped by hardware
+type, for example `worker-dell-xr8620t`, `worker-hpe-dl380` etc.
+
+Add one MachineConfigPool CR per custom worker pool as a day-0 extra
+manifest, alongside the telco-reference manifests. Those files are rendered
+into the extra-manifest ConfigMap, which ClusterInstance references through
+`extraManifestsRefs` so the pools are applied at installation.
+
+Each pool CR needs three things:
+
+- `machineConfigSelector` includes `"worker"` so the pool inherits the base
+  worker MachineConfigs.
+- `nodeSelector` uses `node-role.kubernetes.io/<pool>: ""` so nodes with that
+  label join the pool.
+- Label the MCP with `pools.operator.machineconfiguration.openshift.io/<pool>: ""`.
+  The PerformanceProfile `machineConfigPoolSelector` uses that label to apply
+  the profile's MachineConfigs to this pool.
+
+```yaml
+# One MachineConfigPool per worker pool (worker-dell-xr8620t shown)
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfigPool
+metadata:
+  name: worker-dell-xr8620t
+  labels:
+    pools.operator.machineconfiguration.openshift.io/worker-dell-xr8620t: ""
+spec:
+  machineConfigSelector:
+    matchExpressions:
+      - key: machineconfiguration.openshift.io/role
+        operator: In
+        values: [worker, worker-dell-xr8620t]
+  nodeSelector:
+    matchLabels:
+      node-role.kubernetes.io/worker-dell-xr8620t: ""
+```
+
+#### Hardware node groups
+
+Add one `hwMgmtDefaults.nodeGroupData` entry per worker pool. Use the MCP
+`metadata.name` as `name`, keep `role: worker`, and set `resourceSelector`
+to the hardware that belongs in that pool:
+
+```yaml
+# ClusterTemplate spec.templateDefaults.hwMgmtDefaults (excerpt)
+nodeGroupData:
+  - name: master
+    role: master
+    resourceSelector:
+      "resourceselector.clcm.openshift.io/server-type": "R740"
+      "resourceselector.clcm.openshift.io/server-colour": "green"
+  - name: worker-dell-r740  # same hardware as master, split by colour
+    role: worker
+    resourceSelector:
+      "resourceselector.clcm.openshift.io/server-type": "R740"
+      "resourceselector.clcm.openshift.io/server-colour": "blue"
+  - name: worker-dell-xr8620t
+    role: worker
+    resourceSelector:
+      "resourceselector.clcm.openshift.io/server-type": "XR8620t"
+      "resourceselector.clcm.openshift.io/server-colour": "green"
+  - name: worker-hpe-dl380
+    role: worker
+    resourceSelector:
+      "resourceselector.clcm.openshift.io/server-type": "DL380"
+      "resourceselector.clcm.openshift.io/server-colour": "green"
+```
+
+#### ClusterInstance defaults
+
+Add a `nodeGroups` entry per worker pool. Use the MCP `metadata.name`
+as `name`, and keep `role: worker`. Set `nodeLabels` to `node-role.kubernetes.io/<pool>: ""`
+so they match the MCP `nodeSelector` and hosts in the group join that pool.
+Set `extraManifestsRefs` to the extra-manifest ConfigMap that contains
+those MCP CRs (along with the usual telco extra manifests).
+
+```yaml
+# ConfigMap data.clusterinstance-defaults (excerpt)
+extraManifestsRefs:
+  - name: std-ran-du-multi-mcp-extra-manifest-1
+nodeGroups:
+  - name: master
+    role: master
+    # ...
+  - name: worker-dell-r740
+    role: worker
+    nodeLabels:
+      node-role.kubernetes.io/worker-dell-r740: ""
+    # per-hardware boot mode, rootDeviceHints, interfaces, nmstate, ...
+  - name: worker-dell-xr8620t
+    role: worker
+    nodeLabels:
+      node-role.kubernetes.io/worker-dell-xr8620t: ""
+    # per-hardware boot mode, rootDeviceHints, interfaces, nmstate, ...
+  - name: worker-hpe-dl380
+    role: worker
+    nodeLabels:
+      node-role.kubernetes.io/worker-hpe-dl380: ""
+    # per-hardware boot mode, rootDeviceHints, interfaces, nmstate, ...
+```
+
+Site host data is still supplied in the ProvisioningRequest as described in
+[Providing `nodeGroups` in the ProvisioningRequest](#providing-nodegroups-in-the-provisioningrequest).
+Use the extra pool names from these ClusterInstance defaults; unknown
+`nodeGroups[].name` values are rejected.
+
+#### Policy generator
+
+Each heterogeneous worker group needs its own PerformanceProfile. Select that
+pool with `machineConfigPoolSelector` and `nodeSelector` on the pool labels,
+not `node-role.kubernetes.io/worker`.
+
+CPU isolation and reservation are per pool. Declare
+`<pool>-cpu-isolated` and `<pool>-cpu-reserved` in the ClusterTemplate
+`policyTemplateParameters` schema, set default values in the PolicyTemplate
+defaults ConfigMap, and substitute them into each PerformanceProfile with
+`fromConfigMap`. See the
+[ClusterTemplate](../samples/git-setup/clustertemplates/version_4.Y.Z/std-ran-du/std-ran-du-multi-mcp-v4-Y-Z-1.yaml)
+schema and
+[PolicyTemplate defaults](../samples/git-setup/clustertemplates/version_4.Y.Z/std-ran-du/policytemplates-defaults-multi-mcp-v1.yaml).
+
+```yaml
+# PolicyGenerator PerformanceProfile patch (excerpt)
+spec:
+  # other configuration ...
+  cpu:
+    isolated: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "worker-dell-xr8620t-cpu-isolated" hub}}'
+    reserved: '{{hub fromConfigMap "" (printf "%s-pg" .ManagedClusterName) "worker-dell-xr8620t-cpu-reserved" hub}}'
+  machineConfigPoolSelector:
+    pools.operator.machineconfiguration.openshift.io/worker-dell-xr8620t: ""
+  nodeSelector:
+    node-role.kubernetes.io/worker-dell-xr8620t: ""
+```
+
+A single Tuned CR can cover every worker pool (one `profile` and `recommend`
+entry per pool), or each pool can have its own Tuned CR. Either approach
+works. Each pool profile `include`s that pool's PerformanceProfile
+(`include=openshift-node-performance-${PerformanceProfile.metadata.name}`)
+and any shared common profiles, and can also carry pool-specific settings.
+Tuned `machineConfigLabels` use the MCP MachineConfig role (the pool name).
+
+```yaml
+# PolicyGenerator Tuned patch (excerpt)
+spec:
+  profile:
+    - name: performance-patch-worker-dell-xr8620t
+      data: |
+        [main]
+        summary=Top-level ran-du performance tuning overrides
+        include=openshift-node-performance-openshift-node-performance-worker-dell-xr8620t-profile,ran-du-performance-architecture-common
+        # Optional pool-specific settings go here.
+    # ran-du-performance-architecture-common and related profiles omitted
+  recommend:
+    - machineConfigLabels:
+        machineconfiguration.openshift.io/role: "worker-dell-xr8620t"
+      priority: 18
+      profile: performance-patch-worker-dell-xr8620t
+```
+
+To confirm each custom worker MCP has applied its PerformanceProfile, the
+PolicyGenerator should include an inform validator that checks pool status and that
+the generated MachineConfigs
+(`50-performance-${PerformanceProfile.metadata.name}` and `50-nto-<pool>`)
+appear in `status.configuration.source`. See
+[workerMcpsValidator.yaml](../samples/git-setup/policytemplates/version_4.Y.Z/source-crs/custom-crs/workerMcpsValidator.yaml).
+Include custom inform CRs [ptpDaemonValidator.yaml](../samples/git-setup/policytemplates/version_4.Y.Z/source-crs/custom-crs/ptpDaemonValidator.yaml) and
+[sriovNetworkNodeStateValidator.yaml](../samples/git-setup/policytemplates/version_4.Y.Z/source-crs/custom-crs/sriovNetworkNodeStateValidator.yaml)
+(the same PTP and SR-IOV checks, split out of the stock validator `validatorCRs/informDuValidatorWorker.yaml` so they can be included with the custom MCP validator) together
+in the same inform policy.
 
 ## Validation
 

@@ -1,0 +1,68 @@
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfigPool
+metadata:
+  name: worker-hpe-dl380
+status:
+  conditions:
+    - type: Updated
+      status: "True"
+    - type: Updating
+      status: "False"
+  degradedMachineCount: 0
+  unavailableMachineCount: 0
+  configuration:
+    source:
+      - apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfig
+        # This name must match the associated PerformanceProfile name:
+        # name: 50-performance-${PerformanceProfile.metadata.name}
+        name: 50-performance-openshift-node-performance-worker-hpe-dl380-profile
+      - apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfig
+        name: 50-nto-worker-hpe-dl380
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfigPool
+metadata:
+  name: worker-dell-xr8620t
+status:
+  conditions:
+    - type: Updated
+      status: "True"
+    - type: Updating
+      status: "False"
+  degradedMachineCount: 0
+  unavailableMachineCount: 0
+  configuration:
+    source:
+      - apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfig
+        # This name must match the associated PerformanceProfile name:
+        # name: 50-performance-${PerformanceProfile.metadata.name}
+        name: 50-performance-openshift-node-performance-worker-dell-xr8620t-profile
+      - apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfig
+        name: 50-nto-worker-dell-xr8620t
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfigPool
+metadata:
+  name: worker-dell-r740
+status:
+  conditions:
+    - type: Updated
+      status: "True"
+    - type: Updating
+      status: "False"
+  degradedMachineCount: 0
+  unavailableMachineCount: 0
+  configuration:
+    source:
+      - apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfig
+        # This name must match the associated PerformanceProfile name:
+        # name: 50-performance-${PerformanceProfile.metadata.name}
+        name: 50-performance-openshift-node-performance-worker-dell-r740-profile
+      - apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfig
+        name: 50-nto-worker-dell-r740

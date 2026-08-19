@@ -48,20 +48,6 @@ func collectNodeDetails(nodeList *hwmgmtv1alpha1.AllocatedNodeList) (map[string]
 	return hwNodes, nil
 }
 
-// newNodeGroup populates NodeGroup
-func newNodeGroup(group hwmgmtv1alpha1.NodeGroupData, roleCounts map[string]int) hwmgmtv1alpha1.NodeGroup {
-	nodeGroup := hwmgmtv1alpha1.NodeGroup{
-		NodeGroupData: group,
-	}
-
-	// Assign size if available in roleCounts
-	if count, ok := roleCounts[group.Role]; ok {
-		nodeGroup.Size = count
-	}
-
-	return nodeGroup
-}
-
 // listAllocatedNodesForNAR lists AllocatedNodes that belong to the given NodeAllocationRequest
 // using a field index on spec.nodeAllocationRequest. The client must have the field indexer
 // registered (via RegisterAllocatedNodeFieldIndexer or SetupWithManager).

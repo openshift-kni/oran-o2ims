@@ -48,6 +48,7 @@ const (
 	BmhDeallocationDoneAnnotation            = "clcm.openshift.io/deallocation-complete"
 	BmhErrorTimestampAnnotation              = "clcm.openshift.io/bmh-error-timestamp"
 	BmhHostMgmtAnnotation                    = "bmac.agent-install.openshift.io/allow-provisioned-host-management"
+	BmhNodeLabelAnnotationPrefix             = "bmac.agent-install.openshift.io.node-label."
 	BmhInfraEnvLabel                         = "infraenvs.agent-install.openshift.io"
 	BmhSecretFinalizer                       = "baremetalhost.metal3.io/secret"
 	PreprovisioningImageDeprovisionFinalizer = "preprovisioningimage.agent-install.openshift.io/ai-deprovision"
@@ -1099,6 +1100,15 @@ func finalizeBMHDeallocation(ctx context.Context, c client.Client, logger *slog.
 		// Remove configuration-related annotations
 		for _, key := range []string{BiosUpdateNeededAnnotation, FirmwareUpdateNeededAnnotation} {
 			delete(patched.Annotations, key)
+		}
+
+		// Remove node-label annotations that SiteConfig stamped on the BMH from the ClusterInstance nodeLabels.
+		// These are propagated to the node by Baremetal Agent Controller (BAMC), so leaving them behind leaks
+		// stale node labels into the next allocation cycle when the BMH is reused.
+		for key := range patched.Annotations {
+			if strings.HasPrefix(key, BmhNodeLabelAnnotationPrefix) {
+				delete(patched.Annotations, key)
+			}
 		}
 
 		// Initialize annotations map if it's nil
