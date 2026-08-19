@@ -61,7 +61,7 @@ spec:
       value: []
     - name: additional-labels
       value:
-        - name=openshift4/o-cloud-manager-operator-bundle
+        - name=openshift5/o-cloud-manager-operator-bundle
   pipelineRef:
     name: build-pipeline
   taskRunTemplate:
