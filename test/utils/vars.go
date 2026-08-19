@@ -16,8 +16,10 @@ import (
 )
 
 const (
-	GithubCommitsAPI          = "https://api.github.com/repos/%s/%s/commits/%s"
-	GithubUserContentLink     = "https://raw.githubusercontent.com/%s/%s/%s/%s/%s"
+	GithubCommitsAPI      = "https://api.github.com/repos/%s/%s/commits/%s"
+	GithubUserContentLink = "https://raw.githubusercontent.com/%s/%s/%s/%s/%s"
+	// TestClusterInstanceSchema is the recommended nodeGroups clusterInstanceParameters
+	// subschema. Tests that exercise the deprecated flat-nodes path use inline schemas.
 	TestClusterInstanceSchema = `{
 		"description": "ClusterInstanceSpec defines the params that are allowed in the ProvisioningRequest spec.clusterInstanceInput",
 		"properties": {
@@ -89,10 +91,14 @@ const (
 			},
 			"type": "array"
 		  },
-		  "nodes": {
+		  "nodeGroups": {
+			"description": "Node configuration by group.",
 			"items": {
-			  "description": "NodeSpec",
 			  "properties": {
+				"name": {
+				  "type": "string",
+				  "minLength": 1
+				},
 				"extraAnnotations": {
 				  "additionalProperties": {
 					"additionalProperties": {
@@ -100,7 +106,6 @@ const (
 					},
 					"type": "object"
 				  },
-				  "description": "Additional node-level annotations to be applied to the rendered templates",
 				  "type": "object"
 				},
 				"extraLabels": {
@@ -110,34 +115,113 @@ const (
 					},
 					"type": "object"
 				  },
-				  "description": "Additional node-level labels to be applied to the rendered templates",
 				  "type": "object"
-				},
-				"hostName": {
-				  "description": "Hostname is the desired hostname for the host",
-				  "type": "string"
 				},
 				"nodeLabels": {
 				  "additionalProperties": {
 					"type": "string"
 				  },
-				  "description": "NodeLabels allows the specification of custom roles for your nodes in your managed clusters. These are additional roles are not used by any OpenShift Container Platform components, only by the user. When you add a custom role, it can be associated with a custom machine config pool that references a specific configuration for that role. Adding custom labels or roles during installation makes the deployment process more effective and prevents the need for additional reboots after the installation is complete.",
 				  "type": "object"
 				},
 				"nodeNetwork": {
-				  "description": "NodeNetwork is a set of configurations pertaining to the network settings for the node.",
 				  "properties": {
 					"config": {
-					  "description": "yaml that can be processed by nmstate, using custom marshaling/unmarshaling that will allow to populate nmstate config as plain yaml.",
 					  "type": "object",
 					  "x-kubernetes-preserve-unknown-fields": true
 					}
 				  },
 				  "type": "object"
+				},
+				"nodes": {
+				  "items": {
+					"properties": {
+					  "hostName": {
+						"type": "string"
+					  },
+					  "extraAnnotations": {
+						"additionalProperties": {
+						  "additionalProperties": {
+							"type": "string"
+						  },
+						  "type": "object"
+						},
+						"type": "object"
+					  },
+					  "extraLabels": {
+						"additionalProperties": {
+						  "additionalProperties": {
+							"type": "string"
+						  },
+						  "type": "object"
+						},
+						"type": "object"
+					  },
+					  "nodeLabels": {
+						"additionalProperties": {
+						  "type": "string"
+						},
+						"type": "object"
+					  },
+					  "nodeNetwork": {
+						"properties": {
+						  "interfaces": {
+							"minItems": 1,
+							"items": {
+							  "properties": {
+								"name": {
+								  "type": "string",
+								  "minLength": 1
+								},
+								"addresses": {
+								  "properties": {
+									"ipv4": {
+									  "items": {
+										"type": "string",
+										"minLength": 1
+									  },
+									  "minItems": 1,
+									  "type": "array"
+									},
+									"ipv6": {
+									  "items": {
+										"type": "string",
+										"minLength": 1
+									  },
+									  "minItems": 1,
+									  "type": "array"
+									}
+								  },
+								  "minProperties": 1,
+								  "type": "object"
+								}
+							  },
+							  "required": [
+								"name",
+								"addresses"
+							  ],
+							  "type": "object"
+							},
+							"type": "array"
+						  }
+						},
+						"required": [
+						  "interfaces"
+						],
+						"type": "object"
+					  }
+					},
+					"required": [
+					  "hostName",
+					  "nodeNetwork"
+					],
+					"type": "object"
+				  },
+				  "type": "array"
 				}
 			  },
 			  "required": [
-				"hostName"
+				"name",
+				"nodes"
 			  ],
 			  "type": "object"
 			},
@@ -167,7 +251,7 @@ const (
 		},
 		"required": [
 		  "clusterName",
-		  "nodes"
+		  "nodeGroups"
 		],
 		"type": "object"
 	  }`
@@ -202,9 +286,9 @@ const (
 		"ingressVIPs": [
 		  "192.0.2.4"
 		],
-		"nodes": [
+		"nodeGroups": [
 		  {
-			"hostName": "node1",
+			"name": "master",
 			"nodeLabels": {
 			  "node-role.kubernetes.io/infra": "",
 			  "node-role.kubernetes.io/master": ""
@@ -218,72 +302,6 @@ const (
 					]
 				  }
 				},
-				"interfaces": [
-				  {
-					"ipv4": {
-					  "address": [
-						{
-						  "ip": "192.0.2.10",
-						  "prefix-length": 24
-						},
-						{
-						  "ip": "192.0.2.11",
-						  "prefix-length": 24
-						},
-						{
-						  "ip": "192.0.2.12",
-						  "prefix-length": 24
-						}
-					  ],
-					  "dhcp": false,
-					  "enabled": true
-					},
-					"ipv6": {
-					  "address": [
-						{
-						  "ip": "2001:db8:0:1::42",
-						  "prefix-length": 32
-						},
-						{
-						  "ip": "2001:db8:0:1::43",
-						  "prefix-length": 32
-						},
-						{
-						  "ip": "2001:db8:0:1::44",
-						  "prefix-length": 32
-						}
-					  ],
-					  "dhcp": false,
-					  "enabled": true
-					},
-					"name": "eno1",
-					"type": "ethernet"
-				  },
-				  {
-					"ipv6": {
-					  "address": [
-						{
-						  "ip": "2001:db8:abcd:1234::1"
-						}
-					  ],
-					  "enabled": true,
-					  "link-aggregation": {
-						"mode": "balance-rr",
-						"options": {
-						  "miimon": "140"
-						},
-						"slaves": [
-						  "eth0",
-						  "eth1"
-						]
-					  },
-					  "prefix-length": 64
-					},
-					"name": "bond99",
-					"state": "up",
-					"type": "bond"
-				  }
-				],
 				"routes": {
 				  "config": [
 					{
@@ -293,9 +311,38 @@ const (
 					  "table-id": 254
 					}
 				  ]
+				},
+				"interfaces": [
+				  {
+					"name": "eno1",
+					"type": "ethernet",
+					"state": "up",
+					"ipv4": {
+					  "enabled": true
+					},
+					"ipv6": {
+					  "enabled": true
+					}
+				  }
+				]
+			  }
+			},
+			"nodes": [
+			  {
+				"hostName": "node1",
+				"nodeNetwork": {
+				  "interfaces": [
+					{
+					  "name": "eno1",
+					  "addresses": {
+						"ipv4": ["192.0.2.10/24"],
+						"ipv6": ["2001:db8:0:1::42/32"]
+					  }
+					}
+				  ]
 				}
 			  }
-			}
+			]
 		  }
 		],
 		"serviceNetwork": [
@@ -360,6 +407,7 @@ var (
 		constants.TemplateParamPolicyConfig,
 		TestPolicyTemplateInput,
 	)
+
 	ExternalCrdData = []map[string]string{
 		{
 			"repoName":    "governance-policy-propagator",

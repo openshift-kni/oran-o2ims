@@ -449,7 +449,7 @@ curl -sk -X POST \
     "oCloudSiteId": "local-west",
     "hwMgmtParameters": {
       "nodeGroupData": {
-        "controller": {
+        "master": {
           "hwProfile": "rh-profile-xr8620t-bios-settings"
         }
       }
@@ -465,9 +465,9 @@ curl -sk -X POST \
         }
       },
       "clusterName": "sno1",
-      "nodes": [
+      "nodeGroups": [
         {
-          "hostName": "sno1.example.com",
+          "name": "master",
           "nodeNetwork": {
             "config": {
               "dns-resolver": {
@@ -481,25 +481,24 @@ curl -sk -X POST \
                     "next-hop-address": "192.0.2.254"
                   }
                 ]
-              },
-              "interfaces": [
-                {
-                  "ipv6": {
-                    "enabled": false
-                  },
-                  "ipv4": {
-                    "enabled": true,
-                    "address": [
-                      {
-                        "ip": "192.0.2.34",
-                        "prefix-length": 24
-                      }
-                    ]
-                  }
-                }
-              ]
+              }
             }
-          }
+          },
+          "nodes": [
+            {
+              "hostName": "sno1.example.com",
+              "nodeNetwork": {
+                "interfaces": [
+                  {
+                    "name": "ens3f0",
+                    "addresses": {
+                      "ipv4": ["192.0.2.34/24"]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
         }
       ]
     }
@@ -525,7 +524,7 @@ curl -sk -X PUT \
     "oCloudSiteId": "local-west",
     "hwMgmtParameters": {
       "nodeGroupData": {
-        "controller": {
+        "master": {
           "hwProfile": "rh-profile-xr8620t-bios-settings"
         }
       }
@@ -541,9 +540,9 @@ curl -sk -X PUT \
         }
       },
       "clusterName": "sno1",
-      "nodes": [
+      "nodeGroups": [
         {
-          "hostName": "sno1.example.com",
+          "name": "master",
           "nodeNetwork": {
             "config": {
               "dns-resolver": {
@@ -557,25 +556,24 @@ curl -sk -X PUT \
                     "next-hop-address": "192.0.2.254"
                   }
                 ]
-              },
-              "interfaces": [
-                {
-                  "ipv6": {
-                    "enabled": false
-                  },
-                  "ipv4": {
-                    "enabled": true,
-                    "address": [
-                      {
-                        "ip": "192.0.2.34",
-                        "prefix-length": 24
-                      }
-                    ]
-                  }
-                }
-              ]
+              }
             }
-          }
+          },
+          "nodes": [
+            {
+              "hostName": "sno1.example.com",
+              "nodeNetwork": {
+                "interfaces": [
+                  {
+                    "name": "ens3f0",
+                    "addresses": {
+                      "ipv4": ["192.0.2.34/24"]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
         }
       ]
     }

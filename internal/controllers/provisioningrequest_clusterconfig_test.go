@@ -176,7 +176,7 @@ var _ = Describe("policyManagement", func() {
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 							HardwareProvisioningTimeout: &metav1.Duration{Duration: 1 * time.Minute},
 							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-								{Name: "controller", Role: "master", ResourcePoolId: "xyz", HwProfile: "profile-spr-single-processor-64G"},
+								{Name: "master", Role: "master", ResourcePoolId: "xyz", HwProfile: "profile-spr-single-processor-64G"},
 								{Name: "worker", Role: "worker", ResourcePoolId: "xyz", HwProfile: "profile-spr-dual-processor-128G"},
 							},
 						},
@@ -207,8 +207,8 @@ pullSecretRef:
 templateRefs:
 - name: "ai-cluster-templates-v1"
   namespace: "siteconfig-operator"
-nodes:
-- hostName: "node1"
+nodeGroups:
+- name: master
   role: master
   ironicInspect: ""
   automatedCleaningMode: "disabled"
@@ -348,7 +348,7 @@ defaultHugepagesSize: "1G"`,
 				NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 					{
 						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
-							Name:           "controller",
+							Name:           "master",
 							Role:           "master",
 							HwProfile:      "profile-spr-single-processor-64G",
 							ResourcePoolId: "xyz",
@@ -1845,7 +1845,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 							HardwareProvisioningTimeout: &metav1.Duration{Duration: 1 * time.Minute},
 							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-								{Name: "controller", Role: "master", ResourcePoolId: "xyz", HwProfile: "profile-spr-single-processor-64G"},
+								{Name: "master", Role: "master", ResourcePoolId: "xyz", HwProfile: "profile-spr-single-processor-64G"},
 								{Name: "worker", Role: "worker", ResourcePoolId: "xyz", HwProfile: "profile-spr-dual-processor-128G"},
 							},
 						},
@@ -1888,7 +1888,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 					{
 						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
-							Name:           "controller",
+							Name:           "master",
 							Role:           "master",
 							HwProfile:      "profile-spr-single-processor-64G",
 							ResourcePoolId: "xyz",
@@ -1936,7 +1936,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 						HardwareProvisioningTimeout: &metav1.Duration{Duration: 1 * time.Minute},
 						NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-							{Name: "controller", Role: "master", ResourcePoolId: "xyz", HwProfile: "profile-spr-single-processor-64G"},
+							{Name: "master", Role: "master", ResourcePoolId: "xyz", HwProfile: "profile-spr-single-processor-64G"},
 							{Name: "worker", Role: "worker", ResourcePoolId: "xyz", HwProfile: "profile-spr-dual-processor-128G"},
 						},
 					},
@@ -2162,7 +2162,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 					},
 					Spec: hwmgmtv1alpha1.AllocatedNodeSpec{
 						NodeAllocationRequest: "cluster-1",
-						GroupName:             "controller",
+						GroupName:             "master",
 					},
 				}
 				Expect(c.Create(ctx, allocatedNode)).To(Succeed())

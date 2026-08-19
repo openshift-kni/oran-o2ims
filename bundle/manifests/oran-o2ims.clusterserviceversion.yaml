@@ -101,7 +101,7 @@ metadata:
                 "nodeGroupData": [
                   {
                     "hwProfile": "hardwareprofile-sample",
-                    "name": "controller",
+                    "name": "master",
                     "resourceSelector": {
                       "resourceselector.clcm.openshift.io/server-type": "xr8620t"
                     },
@@ -258,9 +258,9 @@ metadata:
                       },
                       "type": "array"
                     },
-                    "nodes": {
+                    "nodeGroups": {
+                      "description": "Node configuration by group.",
                       "items": {
-                        "description": "NodeSpec",
                         "properties": {
                           "extraAnnotations": {
                             "additionalProperties": {
@@ -269,7 +269,7 @@ metadata:
                               },
                               "type": "object"
                             },
-                            "description": "Additional node-level annotations to be applied to the rendered templates",
+                            "description": "Additional node-level annotations applied to every host in this group",
                             "type": "object"
                           },
                           "extraLabels": {
@@ -279,11 +279,12 @@ metadata:
                               },
                               "type": "object"
                             },
-                            "description": "Additional node-level labels to be applied to the rendered templates",
+                            "description": "Additional node-level labels applied to every host in this group",
                             "type": "object"
                           },
-                          "hostName": {
-                            "description": "Hostname is the desired hostname for the host",
+                          "name": {
+                            "description": "Node group name. Must match a ClusterTemplate defaults nodeGroups entry and the corresponding hardware node group / MachineConfigPool name.\n",
+                            "minLength": 1,
                             "type": "string"
                           },
                           "nodeLabels": {
@@ -294,19 +295,114 @@ metadata:
                             "type": "object"
                           },
                           "nodeNetwork": {
-                            "description": "NodeNetwork is a set of configurations pertaining to the network settings for the node.",
+                            "description": "Group-level network overlay applied to every host in this group.",
                             "properties": {
                               "config": {
-                                "description": "yaml that can be processed by nmstate, using custom marshaling/unmarshaling that will allow to populate nmstate config as plain yaml.",
+                                "description": "Opaque nmstate overlay (for example dns-resolver and routes) shared by every host in this group.",
                                 "type": "object",
                                 "x-kubernetes-preserve-unknown-fields": true
                               }
                             },
                             "type": "object"
+                          },
+                          "nodes": {
+                            "description": "Per-host identity and addressing for this group.",
+                            "items": {
+                              "properties": {
+                                "extraAnnotations": {
+                                  "additionalProperties": {
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    },
+                                    "type": "object"
+                                  },
+                                  "description": "Additional annotations for this host",
+                                  "type": "object"
+                                },
+                                "extraLabels": {
+                                  "additionalProperties": {
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    },
+                                    "type": "object"
+                                  },
+                                  "description": "Additional labels for this host",
+                                  "type": "object"
+                                },
+                                "hostName": {
+                                  "description": "Hostname is the desired hostname for the host",
+                                  "type": "string"
+                                },
+                                "nodeLabels": {
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  },
+                                  "description": "Custom node labels for this host",
+                                  "type": "object"
+                                },
+                                "nodeNetwork": {
+                                  "description": "Per-host addressing keyed by interface name.",
+                                  "properties": {
+                                    "interfaces": {
+                                      "description": "Per-interface addressing. Each name must match a defaults nodeNetwork.interfaces[].name.",
+                                      "items": {
+                                        "properties": {
+                                          "addresses": {
+                                            "description": "At least one of ipv4 or ipv6; CIDR strings, e.g. \"192.0.2.10/24\" or \"fd00:1:1::10/64\".",
+                                            "minProperties": 1,
+                                            "properties": {
+                                              "ipv4": {
+                                                "items": {
+                                                  "minLength": 1,
+                                                  "type": "string"
+                                                },
+                                                "minItems": 1,
+                                                "type": "array"
+                                              },
+                                              "ipv6": {
+                                                "items": {
+                                                  "minLength": 1,
+                                                  "type": "string"
+                                                },
+                                                "minItems": 1,
+                                                "type": "array"
+                                              }
+                                            },
+                                            "type": "object"
+                                          },
+                                          "name": {
+                                            "minLength": 1,
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "name",
+                                          "addresses"
+                                        ],
+                                        "type": "object"
+                                      },
+                                      "minItems": 1,
+                                      "type": "array"
+                                    }
+                                  },
+                                  "required": [
+                                    "interfaces"
+                                  ],
+                                  "type": "object"
+                                }
+                              },
+                              "required": [
+                                "hostName",
+                                "nodeNetwork"
+                              ],
+                              "type": "object"
+                            },
+                            "type": "array"
                           }
                         },
                         "required": [
-                          "hostName"
+                          "name",
+                          "nodes"
                         ],
                         "type": "object"
                       },
@@ -336,7 +432,7 @@ metadata:
                   },
                   "required": [
                     "clusterName",
-                    "nodes"
+                    "nodeGroups"
                   ],
                   "type": "object"
                 },
@@ -690,9 +786,8 @@ metadata:
                     "cidr": "192.0.2.0/24"
                   }
                 ],
-                "nodes": [
+                "nodeGroups": [
                   {
-                    "bootMode": "UEFI",
                     "extraAnnotations": {
                       "BareMetalHost": {
                         "extra-annotation-key": "extra-annotation-value"
@@ -703,7 +798,7 @@ metadata:
                         "extra-label-key": "extra-label-value"
                       }
                     },
-                    "hostName": "node1.baseDomain.com",
+                    "name": "master",
                     "nodeLabels": {
                       "node-role.kubernetes.io/infra": "",
                       "node-role.kubernetes.io/master": ""
@@ -717,48 +812,6 @@ metadata:
                             ]
                           }
                         },
-                        "interfaces": [
-                          {
-                            "ipv4": {
-                              "address": [
-                                {
-                                  "ip": "192.0.2.10",
-                                  "prefix-length": 24
-                                },
-                                {
-                                  "ip": "192.0.2.11",
-                                  "prefix-length": 24
-                                },
-                                {
-                                  "ip": "192.0.2.12",
-                                  "prefix-length": 24
-                                }
-                              ],
-                              "dhcp": false,
-                              "enabled": true
-                            },
-                            "ipv6": {
-                              "address": [
-                                {
-                                  "ip": "2620:52:0:10e7:e42:a1ff:fe8a:601",
-                                  "prefix-length": 64
-                                },
-                                {
-                                  "ip": "2620:52:0:10e7:e42:a1ff:fe8a:602",
-                                  "prefix-length": 64
-                                },
-                                {
-                                  "ip": "2620:52:0:10e7:e42:a1ff:fe8a:603",
-                                  "prefix-length": 64
-                                }
-                              ],
-                              "dhcp": false,
-                              "enabled": true
-                            },
-                            "name": "ens3f0",
-                            "type": "ethernet"
-                          }
-                        ],
                         "routes": {
                           "config": [
                             {
@@ -770,7 +823,31 @@ metadata:
                           ]
                         }
                       }
-                    }
+                    },
+                    "nodes": [
+                      {
+                        "hostName": "node1.baseDomain.com",
+                        "nodeNetwork": {
+                          "interfaces": [
+                            {
+                              "addresses": {
+                                "ipv4": [
+                                  "192.0.2.10/24",
+                                  "192.0.2.11/24",
+                                  "192.0.2.12/24"
+                                ],
+                                "ipv6": [
+                                  "2620:52:0:10e7:e42:a1ff:fe8a:601/64",
+                                  "2620:52:0:10e7:e42:a1ff:fe8a:602/64",
+                                  "2620:52:0:10e7:e42:a1ff:fe8a:603/64"
+                                ]
+                              },
+                              "name": "ens3f0"
+                            }
+                          ]
+                        }
+                      }
+                    ]
                   }
                 ],
                 "serviceNetwork": [
@@ -784,7 +861,7 @@ metadata:
                 "nodeGroupData": [
                   {
                     "hwProfile": "hardwareprofile-sample",
-                    "name": "controller"
+                    "name": "master"
                   }
                 ]
               },

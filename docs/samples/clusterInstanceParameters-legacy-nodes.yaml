@@ -1,5 +1,6 @@
-# Sample clusterInstanceParameters schema using legacy flat nodes.
-# Prefer clusterInstanceParameters-nodeGroups.yaml for new templates.
+# DEPRECATED: Sample clusterInstanceParameters schema using flat nodes.
+# New templates must use clusterInstanceParameters-nodeGroups.yaml.
+# This format remains valid for existing templates until the legacy path is removed.
 # Copy under ClusterTemplate spec.templateParameterSchema.properties.
 
 clusterInstanceParameters:

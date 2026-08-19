@@ -161,7 +161,7 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 					ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 baseDomain: value
 clusterImageSetNameRef: "4.15.0"
-nodes: []`,
+nodeGroups: []`,
 				},
 			},
 			{
@@ -552,7 +552,7 @@ var _ = Describe("validateClusterTemplateCR", func() {
 					ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey: `
 baseDomain: value
 clusterImageSetNameRef: "4.15.0"
-nodes: []`,
+nodeGroups: []`,
 				},
 			},
 			{

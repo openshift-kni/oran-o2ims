@@ -19,7 +19,7 @@ SPDX-License-Identifier: Apache-2.0
         - [Hardware data selectors](#hardware-data-selectors)
         - [Complete example](#complete-example)
     - [ClusterInstance defaults ConfigMap](#clusterinstance-defaults-configmap)
-      - [Legacy format (`nodes`)](#legacy-format-nodes)
+      - [Deprecated format (`nodes`)](#deprecated-format-nodes)
       - [Recommended format (`nodeGroups`)](#recommended-format-nodegroups)
     - [PolicyTemplate defaults ConfigMap](#policytemplate-defaults-configmap)
   - [Validation](#validation)
@@ -154,16 +154,16 @@ ClusterInstance-shaped in both cases; the difference is how hosts are expressed:
 | Format | Status | Host layout | Sample schema |
 | --- | --- | --- | --- |
 | `nodeGroups` | Recommended | O-Cloud extension: hosts are grouped; node-group-level configuration remains ClusterInstance-shaped | [`clusterInstanceParameters-nodeGroups.yaml`](../samples/clusterInstanceParameters-nodeGroups.yaml) |
-| `nodes` | Legacy | Flat top-level ClusterInstance `nodes` subschema (as used by current SNO samples) | [`clusterInstanceParameters-legacy-nodes.yaml`](../samples/clusterInstanceParameters-legacy-nodes.yaml) |
+| `nodes` | Deprecated | Flat top-level ClusterInstance `nodes` subschema. Still accepted for existing templates; new templates must use `nodeGroups` | [`clusterInstanceParameters-legacy-nodes.yaml`](../samples/clusterInstanceParameters-legacy-nodes.yaml) |
 
 The referenced `clusterInstanceDefaults` ConfigMap must use the **same** format.
 Mixing `nodes` and `nodeGroups` across the schema, defaults, and ProvisioningRequest
 is rejected.
 
 Full ClusterTemplate examples that embed these schemas:
-[Standard](../samples/git-setup/clustertemplates/version_4.Y.Z/std-ran-du/std-ran-du-v4-Y-Z-1.yaml),
+[SNO](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1.yaml),
 [3node](../samples/git-setup/clustertemplates/version_4.Y.Z/3node-ran-du/3node-ran-du-v4-Y-Z-1.yaml),
-[SNO (legacy)](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1.yaml).
+[Standard](../samples/git-setup/clustertemplates/version_4.Y.Z/std-ran-du/std-ran-du-v4-Y-Z-1.yaml).
 
 ##### Providing `nodeGroups` in the ProvisioningRequest
 
@@ -188,10 +188,12 @@ string (for example `"192.0.2.10/24"` or `"fd00:1:1::10/64"`), not a bare IP.
 O-Cloud Manager maps those addresses into the matching nmstate interface config
 when it expands `nodeGroups` to the flat ClusterInstance `nodes[]` list.
 
-**Example.** Defaults define `master` and `worker` groups with interface skeletons
+The following examples are ProvisioningRequest `clusterInstanceParameters`
+excerpts. Group names and interface `name` values must already exist in the
+ClusterInstance defaults
 (see [Recommended format (`nodeGroups`)](#recommended-format-nodegroups)).
-A ProvisioningRequest can then supply hosts, optional group-wide overlays, and
-addresses:
+
+A multi-node cluster uses `master` and `worker` groups:
 
 ```yaml
 # ProvisioningRequest clusterInstanceParameters (excerpt)
@@ -234,8 +236,30 @@ clusterInstanceParameters:
         # ... additional workers
 ```
 
-A single-node cluster uses the same shape with one group and one host under
-`nodes`.
+A single-node cluster uses the same shape with one group and one host:
+
+```yaml
+# SNO ProvisioningRequest clusterInstanceParameters (excerpt)
+clusterInstanceParameters:
+  clusterName: sno1
+  nodeGroups:
+    - name: master
+      nodeNetwork:
+        config:
+          dns-resolver:
+            config:
+              server: ["198.51.100.20"]
+          routes:
+            config:
+              - next-hop-address: 192.0.2.254
+      nodes:
+        - hostName: sno1.example.com
+          nodeNetwork:
+            interfaces:
+              - name: ens3f0
+                addresses:
+                  ipv4: ["192.0.2.34/24"]
+```
 
 > [!NOTE]
 >
@@ -437,17 +461,17 @@ Each node’s boot interface in the `interfaces` list must include a `boot-inter
 This allows the O-Cloud manager to resolve the boot NIC’s MAC address from the NIC-to-MAC
 mappings retrieved from the hardware manager.
 
-#### Legacy format (`nodes`)
+#### Deprecated format (`nodes`)
 
 Flat `nodes` list: one stub per expected host with defaults such as role, boot
 mode, interface skeleton, and nmstate config. The ProvisioningRequest supplies
 host-specific values (hostname, addresses, MAC) by index merge.
 
-Current SNO sample templates still use this format; they will move to
-`nodeGroups` later.
+This format is deprecated. Existing templates that still use it continue to
+work; new templates must use `nodeGroups`.
 
 ```yaml
-# ConfigMap data.clusterinstance-defaults (legacy nodes excerpt)
+# ConfigMap data.clusterinstance-defaults (deprecated nodes excerpt)
 nodes:
   - role: master
     bootMode: UEFI
@@ -457,9 +481,6 @@ nodes:
           label: boot-interface
         - name: ens3f1
 ```
-
-Complete example (current SNO sample):
-[clusterinstance-defaults-v1](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v1.yaml).
 
 #### Recommended format (`nodeGroups`)
 
@@ -494,6 +515,7 @@ nodeGroups:
 ```
 
 Complete examples:
+[SNO](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-v1.yaml),
 [3node](../samples/git-setup/clustertemplates/version_4.Y.Z/3node-ran-du/clusterinstance-defaults-v1.yaml)
 and
 [Standard](../samples/git-setup/clustertemplates/version_4.Y.Z/std-ran-du/clusterinstance-defaults-v1.yaml).
