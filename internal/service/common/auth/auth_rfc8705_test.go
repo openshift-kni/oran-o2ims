@@ -33,7 +33,7 @@ var _ = Describe("WithClientVerification", func() {
 	var request http.Request
 	var tokenAuthenticator authenticator.Request
 	var noopAuthenticator NoopAuthenticator
-	var testCertificate, testStdCertificate string
+	var testCertificate string
 	var testFingerprint string
 	var logBuffer bytes.Buffer
 	var origLogger *slog.Logger
@@ -53,7 +53,6 @@ var _ = Describe("WithClientVerification", func() {
 		Expect(err).ToNot(HaveOccurred())
 		fingerprint := sha256.Sum256(testCerts[0].Raw)
 		testCertificate = base64.StdEncoding.EncodeToString(testCerts[0].Raw)
-		testStdCertificate = ":" + testCertificate + ":"
 		testFingerprint = strings.Trim(base64.URLEncoding.EncodeToString(fingerprint[:]), "=")
 		noopAuthenticator = NoopAuthenticator{
 			Response: &authenticator.Response{
@@ -70,14 +69,17 @@ var _ = Describe("WithClientVerification", func() {
 			Error: nil,
 		}
 		tokenAuthenticator = WithClientVerification(&noopAuthenticator)
+		// Seed the request with the trusted HAProxy x-ssl-client-* headers.  These are the only headers the
+		// authenticator trusts; the untrusted RFC9440 Client-Cert/Client-Chain headers are set only by the specs that
+		// exercise spoofing and defensive-strip behavior.  Use Set so the header keys are canonicalized.
 		request = http.Request{
 			Method: http.MethodGet,
 			URL:    &url.URL{Path: "/o2ims-infrastructureInventory/v1/resourcePools"},
-			Header: http.Header{
-				sslClientCertKey:  []string{testStdCertificate},
-				sslClientChainKey: []string{testStdCertificate},
-			},
+			Header: http.Header{},
 		}
+		request.Header.Set(sslClientVerifiedHeaderKey, "0")
+		request.Header.Set(sslClientDERHeaderKey, testCertificate)
+		request.Header.Set(sslChainDERHeaderKey, "test")
 		ServiceName = "test-service"
 		Expect(tokenAuthenticator).ToNot(BeNil())
 	})
@@ -86,22 +88,45 @@ var _ = Describe("WithClientVerification", func() {
 		slog.SetDefault(origLogger)
 	})
 
-	It("authorizes a request with RFC9440 compliant headers", func() {
+	It("authorizes a request with HAProxy compliant headers", func() {
+		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ok).To(BeTrue())
+		Expect(response.User.GetName()).To(Equal("test"))
+		Expect(request.Header.Get(sslClientDERHeaderKey)).To(Equal(""))
+		Expect(request.Header.Get(sslClientVerifiedHeaderKey)).To(Equal(""))
+		Expect(request.Header.Get(sslChainDERHeaderKey)).To(Equal(""))
+	})
+
+	It("rejects a spoofed RFC9440 Client-Cert header when no HAProxy headers are present", func() {
+		// A malicious client supplies only the untrusted RFC9440 Client-Cert header.  Because OpenShift HAProxy does
+		// not set the trusted x-ssl-client-* headers, the request must be treated as having no client certificate.
+		request.Header.Del(sslClientVerifiedHeaderKey)
+		request.Header.Del(sslClientDERHeaderKey)
+		request.Header.Del(sslChainDERHeaderKey)
+		request.Header.Set(sslClientCertKey, "spoofed")
+		request.Header.Set(sslClientChainKey, "spoofed")
+		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal("a client certificate is required"))
+		Expect(ok).To(BeFalse())
+		Expect(response).To(BeNil())
+		// The spoofed headers must be stripped so they cannot be referenced or leaked downstream.
+		Expect(request.Header.Get(sslClientCertKey)).To(Equal(""))
+		Expect(request.Header.Get(sslClientChainKey)).To(Equal(""))
+	})
+
+	It("ignores a spoofed Client-Cert header when HAProxy headers are present", func() {
+		// Both the trusted HAProxy headers (from BeforeEach) and spoofed RFC9440 headers are present.  The result must
+		// be bound to the HAProxy-derived certificate, and the spoofed headers must be stripped.
+		request.Header.Set(sslClientCertKey, "spoofed")
+		request.Header.Set(sslClientChainKey, "spoofed")
 		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(ok).To(BeTrue())
 		Expect(response.User.GetName()).To(Equal("test"))
 		Expect(request.Header.Get(sslClientCertKey)).To(Equal(""))
 		Expect(request.Header.Get(sslClientChainKey)).To(Equal(""))
-	})
-
-	It("rejects a request with RFC9440 headers without certificate", func() {
-		request.Header.Del(sslClientCertKey)
-		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(Equal("a client certificate is required"))
-		Expect(ok).To(BeFalse())
-		Expect(response).To(BeNil())
 	})
 
 	It("authorizes a request that without a client binding", func() {
@@ -113,18 +138,34 @@ var _ = Describe("WithClientVerification", func() {
 		Expect(response.User.GetName()).To(Equal("test"))
 	})
 
-	It("rejects a request with RFC9440 headers with invalid certificate encoding", func() {
-		request.Header.Set(sslClientCertKey, "invalid")
+	It("strips spoofed RFC9440 headers on the unbound-token path", func() {
+		// A valid but unbound token (no fingerprint binding claim) short-circuits before the certificate-binding
+		// check.  The spoofed RFC9440 headers must still be stripped so they cannot be referenced or leaked
+		// downstream.
+		delete(noopAuthenticator.Response.User.GetExtra(), fingerprintKey)
+		tokenAuthenticator = WithClientVerification(&noopAuthenticator)
+		request.Header.Set(sslClientCertKey, "spoofed")
+		request.Header.Set(sslClientChainKey, "spoofed")
+		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ok).To(BeTrue())
+		Expect(response.User.GetName()).To(Equal("test"))
+		Expect(request.Header.Get(sslClientCertKey)).To(Equal(""))
+		Expect(request.Header.Get(sslClientChainKey)).To(Equal(""))
+	})
+
+	It("rejects a request with HAProxy headers with invalid certificate encoding", func() {
+		request.Header.Set(sslClientDERHeaderKey, "invalid")
 		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
 		Expect(err.Error()).To(ContainSubstring("error decoding client certificate"))
 		Expect(ok).To(BeFalse())
 		Expect(response).To(BeNil())
 	})
 
-	It("rejects a request with RFC9440 headers with invalid certificate encoding", func() {
-		cert := []rune(testStdCertificate)
+	It("rejects a request with HAProxy headers with invalid certificate", func() {
+		cert := []rune(testCertificate)
 		cert[2] = 'B'
-		request.Header.Set(sslClientCertKey, string(cert))
+		request.Header.Set(sslClientDERHeaderKey, string(cert))
 		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("error parsing client certificate"))
@@ -132,27 +173,8 @@ var _ = Describe("WithClientVerification", func() {
 		Expect(response).To(BeNil())
 	})
 
-	It("authorizes a request with HAProxy compliant headers", func() {
-		request.Header.Del(sslClientCertKey)
-		request.Header.Del(sslClientChainKey)
-		request.Header.Set(sslClientDERHeaderKey, testCertificate)
-		request.Header.Set(sslClientVerifiedHeaderKey, "0")
-		request.Header.Set(sslChainDERHeaderKey, "test")
-		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(ok).To(BeTrue())
-		Expect(response.User.GetName()).To(Equal("test"))
-		Expect(request.Header.Get(sslClientDERHeaderKey)).To(Equal(""))
-		Expect(request.Header.Get(sslClientVerifiedHeaderKey)).To(Equal(""))
-		Expect(request.Header.Get(sslChainDERHeaderKey)).To(Equal(""))
-	})
-
 	It("rejects a request with HAProxy headers without valid certificate", func() {
-		request.Header.Del(sslClientCertKey)
-		request.Header.Del(sslClientChainKey)
-		request.Header.Set(sslClientDERHeaderKey, testCertificate)
 		request.Header.Set(sslClientVerifiedHeaderKey, "1")
-		request.Header.Set(sslChainDERHeaderKey, "test")
 		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
 		Expect(err).To(HaveOccurred())
 		Expect(ok).To(BeFalse())
@@ -160,10 +182,7 @@ var _ = Describe("WithClientVerification", func() {
 	})
 
 	It("rejects a request with HAProxy headers without certificate", func() {
-		request.Header.Del(sslClientCertKey)
-		request.Header.Del(sslClientChainKey)
-		request.Header.Set(sslClientVerifiedHeaderKey, "0")
-		request.Header.Set(sslChainDERHeaderKey, "test")
+		request.Header.Del(sslClientDERHeaderKey)
 		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
 		Expect(err).To(HaveOccurred())
 		Expect(ok).To(BeFalse())
@@ -180,6 +199,8 @@ var _ = Describe("WithClientVerification", func() {
 	})
 
 	It("reject a request with mismatched fingerprints", func() {
+		request.Header.Set(sslClientCertKey, "spoofed")
+		request.Header.Set(sslClientChainKey, "spoofed")
 		noopAuthenticator.Response.User.GetExtra()[fingerprintKey] = []string{"other"}
 		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
 		Expect(err).To(HaveOccurred())
@@ -191,6 +212,8 @@ var _ = Describe("WithClientVerification", func() {
 	})
 
 	It("reject a request with multiple fingerprints", func() {
+		request.Header.Set(sslClientCertKey, "spoofed")
+		request.Header.Set(sslClientChainKey, "spoofed")
 		noopAuthenticator.Response.User.GetExtra()[fingerprintKey] = []string{"foo", "bar"}
 		response, ok, err := tokenAuthenticator.AuthenticateRequest(&request)
 		Expect(err).To(HaveOccurred())
@@ -221,7 +244,8 @@ var _ = Describe("WithClientVerification", func() {
 		})
 
 		It("increments certificate_binding counter on missing client certificate", func() {
-			request.Header.Del(sslClientCertKey)
+			request.Header.Del(sslClientVerifiedHeaderKey)
+			request.Header.Del(sslClientDERHeaderKey)
 			_, _, _ = tokenAuthenticator.AuthenticateRequest(&request)
 			Expect(getCounterValue(metrics.AuthFailures, "test-service", "certificate_binding", "GET", "/o2ims-infrastructureInventory/v1/resourcePools")).To(Equal(float64(1)))
 		})
