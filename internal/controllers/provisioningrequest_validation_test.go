@@ -559,7 +559,7 @@ var _ = Describe("resolveClusterInstanceFormat", func() {
 			map[string]any{"nodeGroups": []any{}},
 		)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(format).To(Equal(ctlrutils.ClusterInstanceNodeGroupsKey))
+		Expect(format).To(Equal(constants.ClusterInstanceNodeGroupsKey))
 	})
 
 	It("returns nodes when both sides exclusively use nodes", func() {
@@ -568,7 +568,7 @@ var _ = Describe("resolveClusterInstanceFormat", func() {
 			map[string]any{"nodes": []any{}},
 		)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(format).To(Equal(ctlrutils.ClusterInstanceNodesKey))
+		Expect(format).To(Equal(constants.ClusterInstanceNodesKey))
 	})
 
 	It("rejects mixed or incomplete formats", func() {

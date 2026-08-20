@@ -514,7 +514,7 @@ func (t *clusterTemplateReconcilerTask) validateClusterInstanceDefaults(
 		return typederrors.NewInputError("failed to validate the default ConfigMap: %w", err)
 	}
 
-	if defaultsFormat == ctlrutils.ClusterInstanceNodeGroupsKey {
+	if defaultsFormat == constants.ClusterInstanceNodeGroupsKey {
 		// A nil map skips the membership check when hardware groups come from
 		// hwMgmtParameters instead of hwMgmtDefaults.nodeGroupData.
 		var hwMgmtNames map[string]struct{}
@@ -554,23 +554,23 @@ func (t *clusterTemplateReconcilerTask) validateClusterInstanceDefaults(
 // the format is invalid.
 func validateClusterInstanceDefaultsFormat(
 	schemaRaw []byte, data map[string]any) (string, error) {
-	_, hasNodes := data[ctlrutils.ClusterInstanceNodesKey]
-	_, hasNodeGroups := data[ctlrutils.ClusterInstanceNodeGroupsKey]
+	_, hasNodes := data[constants.ClusterInstanceNodesKey]
+	_, hasNodeGroups := data[constants.ClusterInstanceNodeGroupsKey]
 
 	var defaultsFormat string
 	switch {
 	case hasNodes && hasNodeGroups:
 		return "", fmt.Errorf("%s must not define both %q and %q",
 			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			ctlrutils.ClusterInstanceNodesKey, ctlrutils.ClusterInstanceNodeGroupsKey)
+			constants.ClusterInstanceNodesKey, constants.ClusterInstanceNodeGroupsKey)
 	case hasNodes:
-		defaultsFormat = ctlrutils.ClusterInstanceNodesKey
+		defaultsFormat = constants.ClusterInstanceNodesKey
 	case hasNodeGroups:
-		defaultsFormat = ctlrutils.ClusterInstanceNodeGroupsKey
+		defaultsFormat = constants.ClusterInstanceNodeGroupsKey
 	default:
 		return "", fmt.Errorf("%s must define either %q or %q",
 			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			ctlrutils.ClusterInstanceNodesKey, ctlrutils.ClusterInstanceNodeGroupsKey)
+			constants.ClusterInstanceNodesKey, constants.ClusterInstanceNodeGroupsKey)
 	}
 
 	cipSchema, err := provisioningv1alpha1.ExtractSubSchema(
@@ -761,19 +761,19 @@ func validateClusterInstanceParametersSchema(cipSchema map[string]any) error {
 			constants.TemplateParamClusterInstance)
 	}
 
-	hasNodes := schemaPropertyExists(props, ctlrutils.ClusterInstanceNodesKey)
-	hasNodeGroups := schemaPropertyExists(props, ctlrutils.ClusterInstanceNodeGroupsKey)
+	hasNodes := schemaPropertyExists(props, constants.ClusterInstanceNodesKey)
+	hasNodeGroups := schemaPropertyExists(props, constants.ClusterInstanceNodeGroupsKey)
 	if hasNodes && hasNodeGroups {
 		return fmt.Errorf("%q schema must not define both %q and %q; choose exactly one",
 			constants.TemplateParamClusterInstance,
-			ctlrutils.ClusterInstanceNodesKey,
-			ctlrutils.ClusterInstanceNodeGroupsKey)
+			constants.ClusterInstanceNodesKey,
+			constants.ClusterInstanceNodeGroupsKey)
 	}
 	if !hasNodes && !hasNodeGroups {
 		return fmt.Errorf("%q schema must define either %q or %q",
 			constants.TemplateParamClusterInstance,
-			ctlrutils.ClusterInstanceNodesKey,
-			ctlrutils.ClusterInstanceNodeGroupsKey)
+			constants.ClusterInstanceNodesKey,
+			constants.ClusterInstanceNodeGroupsKey)
 	}
 	return nil
 }

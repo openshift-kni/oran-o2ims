@@ -29,15 +29,21 @@ import (
 )
 
 var (
-	// allowedClusterInstanceFields contains path patterns for fields that are allowed to be updated.
+	// AllowedClusterInstanceFields contains path patterns for fields that are allowed
+	// to be updated from the ProvisioningRequest after cluster installation.
 	// The wildcard "*" is used to match any index in a list.
 	AllowedClusterInstanceFields = [][]string{
 		// Cluster-level non-immutable fields
 		{"extraAnnotations"},
 		{"extraLabels"},
-		// Node-level non-immutable fields
-		{"nodes", "*", "extraAnnotations"},
-		{"nodes", "*", "extraLabels"},
+		// Node-level non-immutable fields (legacy flat nodes)
+		{constants.ClusterInstanceNodesKey, "*", "extraAnnotations"},
+		{constants.ClusterInstanceNodesKey, "*", "extraLabels"},
+		// Node-group-level and nested node non-immutable fields
+		{constants.ClusterInstanceNodeGroupsKey, "*", "extraAnnotations"},
+		{constants.ClusterInstanceNodeGroupsKey, "*", "extraLabels"},
+		{constants.ClusterInstanceNodeGroupsKey, "*", constants.ClusterInstanceNodesKey, "*", "extraAnnotations"},
+		{constants.ClusterInstanceNodeGroupsKey, "*", constants.ClusterInstanceNodesKey, "*", "extraLabels"},
 	}
 )
 
@@ -288,7 +294,7 @@ func (r *ProvisioningRequest) GetClusterTemplateRef(ctx context.Context, client 
 // FindClusterInstanceImmutableFieldUpdates identifies updates made to immutable fields
 // in the ClusterInstance fields. It returns two lists of paths: a list of updated fields
 // that are considered immutable and should not be modified and a list of fields related
-// to node scaling, indicating nodes that were added or removed.
+// to node scaling, indicating nodes that were added, removed or swapped.
 func FindClusterInstanceImmutableFieldUpdates(
 	oldData, newData map[string]any, ignoredFields [][]string, allowedFields [][]string) ([]string, []string, error) {
 
@@ -298,14 +304,22 @@ func FindClusterInstanceImmutableFieldUpdates(
 			"and new ClusterInstance input: %w", err)
 	}
 
-	// First pass: identify node indices where hostName changed (swap).
-	// When a node's hostName is updated in-place, the diff library reports
-	// field-level changes (e.g., nodes.3.hostName) rather than a whole-node
-	// add/remove. We treat all changes under such a node index as scaling.
-	swappedNodeIndices := make(map[string]bool)
+	// First pass: find hosts whose hostName changed in-place (swap) under nodeGroups.
+	// When a node's hostName is updated in-place, the diff library reports field-level
+	// changes (e.g., nodeGroups.0.nodes.1.hostName) rather than a whole-node
+	// add/remove. We treat all changes under that host as scaling.
+	// Keys are "nodeGroups.<gi>.nodes.<ni>".
+	swappedNodeKeys := make(map[string]bool)
 	for _, d := range diffs {
-		if len(d.Path) >= 3 && d.Path[0] == "nodes" && d.Path[2] == "hostName" && d.Type == "update" {
-			swappedNodeIndices[d.Path[1]] = true
+		if d.Type != "update" {
+			continue
+		}
+		// ["nodeGroups", "<gi>", "nodes", "<ni>", "hostName", ...]
+		if len(d.Path) >= 5 && d.Path[0] == constants.ClusterInstanceNodeGroupsKey &&
+			d.Path[2] == constants.ClusterInstanceNodesKey && d.Path[4] == "hostName" {
+			swappedNodeKeys[fmt.Sprintf("%s.%s.%s.%s",
+				constants.ClusterInstanceNodeGroupsKey, d.Path[1],
+				constants.ClusterInstanceNodesKey, d.Path[3])] = true
 		}
 	}
 
@@ -342,17 +356,32 @@ func FindClusterInstanceImmutableFieldUpdates(
 		Field updated at the cluster-level
 		  {"type": "update", "path": ["baseDomain"], "from": "domain.example.com", "to": "newdomain.example.com"}
 
-		New node added
-		  {"type": "create", "path": ["nodes", "1"], "from": null, "to": {"hostName": "worker2"}}
+		New nodeGroup added (e.g. first workers after a masters-only provision)
+		  {"type": "create", "path": ["nodeGroups", "1"], "from": null, "to": {"name": "worker", "nodes": [...]}}
 
-		Existing node removed
-		  {"type": "delete", "path": ["nodes", "1"], "from": {"hostName": "worker2"}, "to": null}
+		Entire nodeGroup removed (e.g. scale workers to zero by omitting the group)
+		  {"type": "delete", "path": ["nodeGroups", "1"], "from": {"name": "worker", "nodes": [...]}, "to": null}
 
-		Field updated at the node-level
+		Entire nodes list added under a nodeGroup (e.g. first workers after a masters-only provision)
+		  {"type": "create", "path": ["nodeGroups", "1", "nodes"], "from": null, "to": [...]}
+
+		Entire nodes list omitted under a nodeGroup (e.g, scale workers to zero by dropping the nodes key from the group)
+		  {"type": "delete", "path": ["nodeGroups", "1", "nodes"], "from": [...], "to": null}
+
+		New node added under a nodeGroup
+		  {"type": "create", "path": ["nodeGroups", "1", "nodes", "0"], "from": null, "to": {"hostName": "worker2"}}
+
+		Existing node removed under a nodeGroup
+		  {"type": "delete", "path": ["nodeGroups", "1", "nodes", "0"], "from": {"hostName": "worker2"}, "to": null}
+
+		Field updated at the node-level (legacy flat nodes)
 		  {"type": "update", "path": ["nodes", "0", "nodeNetwork", "config", "dns-resolver", "config", "server", "0"], "from": "192.10.1.2", "to": "192.10.1.3"}
 
+		Field updated at the node-level (nodeGroups)
+		  {"type": "update", "path": ["nodeGroups", "0", "nodes", "0", "nodeNetwork", "config", "dns-resolver", "config", "server", "0"], "from": "192.10.1.2", "to": "192.10.1.3"}
+
 		Node swap (hostName changed in-place)
-		  {"type": "update", "path": ["nodes", "3", "hostName"], "from": "worker1", "to": "worker2"}
+		  {"type": "update", "path": ["nodeGroups", "0", "nodes", "1", "hostName"], "from": "worker1", "to": "worker2"}
 		*/
 
 		// Check if the path matches any ignored fields
@@ -374,22 +403,35 @@ func FindClusterInstanceImmutableFieldUpdates(
 			continue
 		}
 
-		// Check if the change is adding or removing a node.
-		// Path like ["nodes", "1"], indicating node addition or removal.
-		if diff.Path[0] == "nodes" && len(diff.Path) == 2 {
+		// Scaling: adding or removing an entire nodeGroup entry.
+		// Path like ["nodeGroups", "1"].
+		if len(diff.Path) == 2 && diff.Path[0] == constants.ClusterInstanceNodeGroupsKey {
 			scalingNodes = append(scalingNodes, strings.Join(diff.Path, "."))
 			continue
 		}
 
-		// Check if this change is under a node whose hostName changed
-		// (swap). Treat all such changes as scaling, not immutable
-		// field violations.
-		if len(diff.Path) >= 2 && diff.Path[0] == "nodes" && swappedNodeIndices[diff.Path[1]] {
-			nodeKey := "nodes." + diff.Path[1]
-			if !slices.Contains(scalingNodes, nodeKey) {
-				scalingNodes = append(scalingNodes, nodeKey)
-			}
+		// Scaling: adding or removing an entire nodes list or single node under a nodeGroup.
+		// Path like ["nodeGroups", "1", "nodes"] or ["nodeGroups", "1", "nodes", "0"].
+		if (len(diff.Path) == 3 || len(diff.Path) == 4) &&
+			diff.Path[0] == constants.ClusterInstanceNodeGroupsKey &&
+			diff.Path[2] == constants.ClusterInstanceNodesKey {
+			scalingNodes = append(scalingNodes, strings.Join(diff.Path, "."))
 			continue
+		}
+
+		// Scaling: any change under a node whose hostName was swapped in-place.
+		// Path like ["nodeGroups", "0", "nodes", "1", "hostName"].
+		if len(diff.Path) > 4 && diff.Path[0] == constants.ClusterInstanceNodeGroupsKey &&
+			diff.Path[2] == constants.ClusterInstanceNodesKey {
+			parentKey := fmt.Sprintf("%s.%s.%s.%s",
+				constants.ClusterInstanceNodeGroupsKey, diff.Path[1],
+				constants.ClusterInstanceNodesKey, diff.Path[3])
+			if swappedNodeKeys[parentKey] {
+				if !slices.Contains(scalingNodes, parentKey) {
+					scalingNodes = append(scalingNodes, parentKey)
+				}
+				continue
+			}
 		}
 
 		updatedFields = append(updatedFields, strings.Join(diff.Path, "."))

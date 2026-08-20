@@ -201,7 +201,7 @@ func (t *provisioningRequestReconcilerTask) buildClusterInstanceUnstructured() (
 	if !ok {
 		return nil, fmt.Errorf("clusterInstance spec is not a map")
 	}
-	if err := ctlrutils.RemoveLabelFromInterfaces(spec, ctlrutils.ClusterInstanceNodesKey); err != nil {
+	if err := ctlrutils.RemoveLabelFromInterfaces(spec, constants.ClusterInstanceNodesKey); err != nil {
 		return nil, fmt.Errorf("failed to remove interface labels from ClusterInstance spec: %w", err)
 	}
 
@@ -1308,10 +1308,10 @@ func (t *provisioningRequestReconcilerTask) handleClusterInstanceUpgrade(
 	return nil
 }
 
-// validateScaleWorkerOnly ensures that node scaling only adds worker nodes.
-// It compares the existing and rendered ClusterInstance node lists and rejects
-// any operation that removes nodes (scale-in is not yet supported), adds
-// non-worker nodes, or scales a single-node cluster.
+// validateScaleWorkerOnly ensures that node scaling only adds or removes worker
+// nodes. It compares the existing and rendered ClusterInstance node lists and
+// rejects operations that add/remove non-worker nodes, change roles in-place,
+// or scale a single-node cluster.
 func validateScaleWorkerOnly(existingCI, renderedCI *unstructured.Unstructured) error {
 	existingNodes := getNodeRolesByHostname(existingCI)
 	renderedNodes := getNodeRolesByHostname(renderedCI)

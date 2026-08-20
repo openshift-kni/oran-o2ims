@@ -188,3 +188,11 @@ const (
 	TemplateParamHwMgmt          = "hwMgmtParameters"
 	TemplateParamUpgrade         = "upgradeParameters"
 )
+
+// ClusterInstance input field names used in ClusterInstanceParameters / ClusterInstance data.
+const (
+	// ClusterInstanceNodesKey is the legacy flat nodes list.
+	ClusterInstanceNodesKey = "nodes"
+	// ClusterInstanceNodeGroupsKey is the grouped node config list.
+	ClusterInstanceNodeGroupsKey = "nodeGroups"
+)
