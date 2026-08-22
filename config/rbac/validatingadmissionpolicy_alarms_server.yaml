@@ -1,0 +1,53 @@
+# Constrains CronJobs created or updated by the alarms-server ServiceAccount so
+# that their pods may only run as the namespace 'default' ServiceAccount. This
+# closes the privilege-escalation vector where a compromised alarms-server pod
+# could create a CronJob with serviceAccountName: oran-o2ims-controller-manager
+# (the near-cluster-admin SA) and run workloads as it. The legitimate
+# events-cleanup CronJob sets no serviceAccountName, so it defaults to 'default'
+# and is admitted. ValidatingAdmissionPolicy is GA on Kubernetes >= 1.30
+# (OpenShift >= 4.16).
+#
+# The match condition selects the alarms-server SA by its fixed short name in
+# ANY namespace (system:serviceaccount:<ns>:oran-o2ims-alarms-server) rather than
+# deriving the namespace from the object being created. This keeps the policy
+# independent of the install namespace AND prevents evasion by creating the
+# CronJob in a namespace other than the SA's own. The SA short name is fixed
+# because the kustomize namePrefix (oran-o2ims-) is fixed.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: alarms-server-restrict-cronjob-sa
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["batch"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["cronjobs"]
+  matchConditions:
+    - name: only-alarms-server
+      expression: >-
+        request.userInfo.username.startsWith('system:serviceaccount:') &&
+        request.userInfo.username.endsWith(':oran-o2ims-alarms-server')
+  variables:
+    # serviceAccountName is optional and is NOT defaulted to 'default' at CronJob
+    # admission time (that defaulting happens only when Pods are created), so an
+    # unset value must be treated as the namespace 'default' SA and admitted.
+    - name: podSA
+      expression: >-
+        has(object.spec.jobTemplate.spec.template.spec.serviceAccountName)
+        ? object.spec.jobTemplate.spec.template.spec.serviceAccountName
+        : ''
+  validations:
+    - expression: "variables.podSA == '' || variables.podSA == 'default'"
+      reason: Forbidden
+      message: "alarms-server may only create CronJobs that run as the 'default' ServiceAccount"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: alarms-server-restrict-cronjob-sa
+spec:
+  policyName: alarms-server-restrict-cronjob-sa
+  validationActions: ["Deny"]
