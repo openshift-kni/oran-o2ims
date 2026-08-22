@@ -1693,26 +1693,18 @@ func isNodeProvisioningInProgress(allocatednode *hwmgmtv1alpha1.AllocatedNode) b
 // returns (false, err) on API errors.
 func validateFirmwareVersions(
 	ctx context.Context,
-	c client.Client,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	bmh *metal3v1alpha1.BareMetalHost,
-	namespace string,
-	hwProfileName string,
+	resolved resolvedFirmware,
 ) (bool, error) {
 
-	// 1) Fetch HardwareProfile
-	prof := &hwmgmtv1alpha1.HardwareProfile{}
-	if err := c.Get(ctx, types.NamespacedName{Name: hwProfileName, Namespace: namespace}, prof); err != nil {
-		return false, fmt.Errorf("get HardwareProfile %s/%s: %w", namespace, hwProfileName, err)
-	}
-
-	// 2) Build expected versions map (normalized)
+	// Build expected versions map (normalized)
 	expected := map[string]string{}
-	if v := strings.TrimSpace(prof.Spec.BiosFirmware.Version); v != "" {
+	if v := strings.TrimSpace(resolved.BiosFirmware.Version); v != "" {
 		expected["bios"] = normalizeVersion(v)
 	}
-	if v := strings.TrimSpace(prof.Spec.BmcFirmware.Version); v != "" {
+	if v := strings.TrimSpace(resolved.BmcFirmware.Version); v != "" {
 		expected["bmc"] = normalizeVersion(v)
 	}
 
@@ -1722,7 +1714,7 @@ func validateFirmwareVersions(
 		return true, nil
 	}
 
-	// 3) Get HostFirmwareComponents
+	// Get HostFirmwareComponents
 	hfc, err := getHostFirmwareComponents(ctx, noncachedClient, bmh.Name, bmh.Namespace)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
@@ -1733,14 +1725,14 @@ func validateFirmwareVersions(
 		return false, fmt.Errorf("get HostFirmwareComponents %s/%s: %w", bmh.Namespace, bmh.Name, err)
 	}
 
-	// 4) Index actual components by normalized name
+	// Index actual components by normalized name
 	actual := map[string]string{}
 	for _, comp := range hfc.Status.Components {
 		k := strings.ToLower(strings.TrimSpace(comp.Component))
 		actual[k] = normalizeVersion(comp.CurrentVersion)
 	}
 
-	// 5) Check presence & equality for each expected component
+	// Check presence & equality for each expected component
 	for k, want := range expected {
 		have, ok := actual[k]
 		if !ok {
@@ -1780,28 +1772,21 @@ func normalizeVersion(v string) string {
 // returns (false, err) on API errors.
 func validateAppliedBiosSettings(
 	ctx context.Context,
-	c client.Client,
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	bmh *metal3v1alpha1.BareMetalHost,
-	namespace string,
-	hwProfileName string,
+	prof *hwmgmtv1alpha1.HardwareProfile,
+	resolved resolvedFirmware,
 ) (bool, error) {
 
-	// 1) Fetch HardwareProfile
-	prof := &hwmgmtv1alpha1.HardwareProfile{}
-	if err := c.Get(ctx, types.NamespacedName{Name: hwProfileName, Namespace: namespace}, prof); err != nil {
-		return false, fmt.Errorf("get HardwareProfile %s/%s: %w", namespace, hwProfileName, err)
-	}
-
-	// 2) Check if any BIOS settings are specified
+	// Check if any BIOS settings are specified
 	if len(prof.Spec.Bios.Attributes) == 0 {
 		// No BIOS settings specified => nothing to validate
 		logger.DebugContext(ctx, "No BIOS settings specified in hardware profile; treating as valid")
 		return true, nil
 	}
 
-	// 3) Get HostFirmwareSettings
+	// Get HostFirmwareSettings
 	hfs, err := getHostFirmwareSettings(ctx, noncachedClient, bmh.Name, bmh.Namespace)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
@@ -1812,7 +1797,7 @@ func validateAppliedBiosSettings(
 		return false, fmt.Errorf("get HostFirmwareSettings %s/%s: %w", bmh.Namespace, bmh.Name, err)
 	}
 
-	// 4) Compare each expected BIOS setting with actual status
+	// Compare each expected BIOS setting with actual status
 	for key, expectedValue := range prof.Spec.Bios.Attributes {
 		actualValue, exists := hfs.Status.Settings[key]
 		if !exists {
@@ -1837,7 +1822,7 @@ func validateAppliedBiosSettings(
 
 	logger.InfoContext(ctx, "All required BIOS settings match")
 
-	// 5) Validate NIC firmware if specified
+	// Validate NIC firmware if specified — use pre-resolved catalog references
 	if len(prof.Spec.NicFirmware) > 0 {
 		// Get HostFirmwareComponents to check NIC firmware versions
 		hfc, err := getHostFirmwareComponents(ctx, noncachedClient, bmh.Name, bmh.Namespace)
@@ -1858,8 +1843,8 @@ func validateAppliedBiosSettings(
 			}
 		}
 
-		// Check each NIC firmware requirement
-		for i, nic := range prof.Spec.NicFirmware {
+		// Check each resolved NIC firmware requirement
+		for i, nic := range resolved.NicFirmware {
 			if nic.Version == "" {
 				continue // Skip if no version specified
 			}
@@ -1902,8 +1887,18 @@ func validateNodeConfiguration(
 	namespace string,
 	hwProfileName string,
 ) (bool, error) {
+	// Resolve firmware catalog references once for both validation steps
+	prof := &hwmgmtv1alpha1.HardwareProfile{}
+	if err := c.Get(ctx, types.NamespacedName{Name: hwProfileName, Namespace: namespace}, prof); err != nil {
+		return false, fmt.Errorf("get HardwareProfile %s/%s: %w", namespace, hwProfileName, err)
+	}
+	resolved, err := resolveFirmwareFromCatalog(ctx, c, namespace, prof.Spec)
+	if err != nil {
+		return false, fmt.Errorf("resolve firmware from catalog for profile %s: %w", hwProfileName, err)
+	}
+
 	// Validate firmware versions
-	firmwareValid, err := validateFirmwareVersions(ctx, c, noncachedClient, logger, bmh, namespace, hwProfileName)
+	firmwareValid, err := validateFirmwareVersions(ctx, noncachedClient, logger, bmh, resolved)
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to validate firmware versions",
 			slog.Any("error", err))
@@ -1915,7 +1910,7 @@ func validateNodeConfiguration(
 	}
 
 	// Validate BIOS settings
-	biosValid, err := validateAppliedBiosSettings(ctx, c, noncachedClient, logger, bmh, namespace, hwProfileName)
+	biosValid, err := validateAppliedBiosSettings(ctx, noncachedClient, logger, bmh, prof, resolved)
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to validate BIOS settings",
 			slog.Any("error", err))
