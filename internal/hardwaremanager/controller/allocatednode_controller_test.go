@@ -710,6 +710,87 @@ var _ = Describe("AllocatedNodeReconciler", func() {
 				Expect(completed).To(BeFalse())
 			})
 		})
+
+		Context("when IBI BMH has network-data secret with BMO finalizer", func() {
+			It("should delete the IBI network-data secret during deletion", func() {
+				// Set up BMH as IBI (ExternallyProvisioned)
+				bmh.Spec.ExternallyProvisioned = true
+				bmh.Spec.PreprovisioningNetworkDataName = "ibi-secret"
+				bmh.Annotations = map[string]string{
+					OrigNetworkDataAnnotation: "original-netdata",
+				}
+				Expect(fakeClient.Update(ctx, bmh)).To(Succeed())
+
+				// Create the IBI network-data secret with BMO finalizer and owner references
+				ibiSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "ibi-secret",
+						Namespace:  bmh.Namespace,
+						Finalizers: []string{BmhSecretFinalizer},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								APIVersion: "metal3.io/v1alpha1",
+								Kind:       "BareMetalHost",
+								Name:       bmh.Name,
+								UID:        bmh.UID,
+							},
+							{
+								APIVersion: "metal3.io/v1alpha1",
+								Kind:       "PreprovisioningImage",
+								Name:       bmh.Name,
+							},
+						},
+					},
+					Data: map[string][]byte{"nmstate": []byte("test")},
+				}
+				Expect(fakeClient.Create(ctx, ibiSecret)).To(Succeed())
+
+				// Create PreprovisioningImage
+				ppi := &metal3v1alpha1.PreprovisioningImage{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      bmh.Name,
+						Namespace: bmh.Namespace,
+					},
+					Spec: metal3v1alpha1.PreprovisioningImageSpec{
+						NetworkDataName: "ibi-secret",
+					},
+				}
+				Expect(fakeClient.Create(ctx, ppi)).To(Succeed())
+
+				completed, err := reconciler.handleAllocatedNodeDeletion(ctx, allocatedNode)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(completed).To(BeFalse()) // Deallocation in progress
+
+				// Verify the IBI secret was deleted (or at least finalizer removed)
+				updatedSecret := &corev1.Secret{}
+				err = fakeClient.Get(ctx, types.NamespacedName{
+					Name: "ibi-secret", Namespace: bmh.Namespace,
+				}, updatedSecret)
+				if err == nil {
+					Expect(controllerutil.ContainsFinalizer(updatedSecret, BmhSecretFinalizer)).To(BeFalse())
+				}
+				// else: secret already deleted, which is also correct
+			})
+
+			It("should skip IBI cleanup for non-IBI BMHs", func() {
+				// BMH is not ExternallyProvisioned (non-IBI)
+				bmh.Spec.ExternallyProvisioned = false
+				Expect(fakeClient.Update(ctx, bmh)).To(Succeed())
+
+				// Create PreprovisioningImage
+				ppi := &metal3v1alpha1.PreprovisioningImage{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      bmh.Name,
+						Namespace: bmh.Namespace,
+					},
+				}
+				Expect(fakeClient.Create(ctx, ppi)).To(Succeed())
+
+				completed, err := reconciler.handleAllocatedNodeDeletion(ctx, allocatedNode)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(completed).To(BeFalse()) // Deallocation in progress, no IBI cleanup needed
+			})
+		})
 	})
 
 	Describe("Helper function tests", func() {
