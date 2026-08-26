@@ -146,6 +146,17 @@ func (r *AllocatedNodeReconciler) handleAllocatedNodeDeletion(ctx context.Contex
 
 	skipCleanup := allocatednode.Spec.SkipCleanup
 
+	// Delete the IBI network-data secret if it exists. On the happy path this
+	// is handled during post-provisioning (enableBMOManagementForIBINodes), but
+	// if provisioning timed out or failed, the cleanup never ran. The secret
+	// has a BMO finalizer that blocks siteconfig's ClusterInstance deletion, so
+	// it must be removed before the cluster namespace can be deleted.
+	if !skipCleanup && bmh.Spec.ExternallyProvisioned {
+		if err := deleteIBINetworkDataSecret(ctx, r.Client, r.Logger, bmh); err != nil {
+			return false, fmt.Errorf("failed to delete IBI network-data secret for BMH %s: %w", bmh.Name, err)
+		}
+	}
+
 	if !isBMHDeallocated(bmh) {
 		if err = deallocateBMH(ctx, r.Client, r.Logger, bmh, skipCleanup); err != nil {
 			return false, fmt.Errorf("failed to deallocate BMH: %w", err)
