@@ -664,6 +664,13 @@ const (
 	urlDecoderDelimiter = "\x1F" // should not conflict with URL characters
 )
 
+func decodesAdditionalProperties(schema *openapi3.Schema) bool {
+	if schema.AdditionalProperties.Schema != nil {
+		return true
+	}
+	return schema.AdditionalProperties.Has != nil && *schema.AdditionalProperties.Has
+}
+
 func (d *urlValuesDecoder) DecodeObject(param string, sm *openapi3.SerializationMethod, schema *openapi3.SchemaRef) (map[string]any, bool, error) {
 	var propsFn func(url.Values) (map[string]string, error)
 	switch sm.Style {
@@ -733,7 +740,7 @@ func (d *urlValuesDecoder) DecodeObject(param string, sm *openapi3.Serialization
 		return nil, false, err
 	}
 
-	found := false
+	found := sm.Style == "deepObject" && len(props) > 0 && decodesAdditionalProperties(schema.Value)
 	for propName := range schema.Value.Properties {
 		if _, ok := props[propName]; ok {
 			found = true
@@ -1070,6 +1077,15 @@ func buildResObj(params map[string]any, parentKeys []string, key string, schema 
 				}
 				if r != nil {
 					resultMap[k] = r
+				}
+			}
+		} else if schema.Value.AdditionalProperties.Has != nil && *schema.Value.AdditionalProperties.Has {
+			// additionalProperties: true is free-form: retain dynamic values as
+			// decoded query-string data, but never overwrite schema-decoded
+			// properties.
+			for k, v := range objectParams {
+				if _, exists := resultMap[k]; !exists {
+					resultMap[k] = v
 				}
 			}
 		}
@@ -1694,7 +1710,7 @@ func ZipFileBodyDecoder(body io.Reader, header http.Header, schema *openapi3.Sch
 			for {
 				n, err := rc.Read(buffer)
 				if 0 < n {
-					content = append(content, buffer...)
+					content = append(content, buffer[:n]...)
 				}
 				if err == io.EOF {
 					break
