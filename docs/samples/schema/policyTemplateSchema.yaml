@@ -19,4 +19,4 @@ policyTemplateParameters:
       type: string
     install-plan-approval:
       type: string
-
+  type: object

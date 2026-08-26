@@ -14,3 +14,17 @@ spec:
   extensions:
     hardware-profile: "dell-xr8620t"
     purpose: "ran-du"
+---
+apiVersion: ocloud.openshift.io/v1alpha1
+kind: ResourcePool
+metadata:
+  # Must match: BareMetalHost label resources.clcm.openshift.io/resourcePoolName
+  name: dell-r740-pool
+  namespace: oran-o2ims
+spec:
+  # Must match an existing OCloudSite's metadata.name
+  oCloudSiteName: "site-local-west"
+  description: "Resource pool for Dell r740 servers"
+  extensions:
+    hardware-profile: "dell-r740"
+    purpose: "ran-du"

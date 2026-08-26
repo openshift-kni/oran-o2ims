@@ -107,11 +107,17 @@ spec:
 
 * The source path for the ArgoCD Application [policies](https://github.com/openshift-kni/telco-reference/blob/main/telco-ran/configuration/argocd/deployment/policies-app.yaml) should point to the [policytemplates](../samples/git-setup/policytemplates) directory.
 
-* The following **additional CRDs** should be added to the [AppProject](https://github.com/openshift-kni/telco-reference/blob/main/telco-ran/configuration/argocd/deployment/app-project.yaml), under `spec.clusterResourceWhitelist`:
+* The following **additional CRDs** should be added to the [AppProject](https://github.com/openshift-kni/telco-reference/blob/main/telco-ran/configuration/argocd/deployment/app-project.yaml), under `spec.namespaceResourceWhitelist`:
 
 ```yaml
   - group: clcm.openshift.io
     kind: ClusterTemplate
   - group: clcm.openshift.io
     kind: HardwareProfile
+  - group: ocloud.openshift.io
+    kind: Location
+  - group: ocloud.openshift.io
+    kind: OCloudSite
+  - group: ocloud.openshift.io
+    kind: ResourcePool
 ```
