@@ -47,14 +47,18 @@ const (
 
 var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day2-hw-updates"), func() {
 	const (
-		timeout     = mnoTimeout
-		interval    = mnoInterval
-		master      = "master"
-		worker      = "worker"
-		masterCount = 3
-		workerCount = 8
+		timeout       = mnoTimeout
+		interval      = mnoInterval
+		master        = "master"
+		workerR740    = "worker-r740-blue"
+		workerXR8620t = "worker-xr8620t-blue"
+		masterCount   = 3
+		// Two worker pools exercise concurrent per-MCP day2 updates.
+		r740WorkerCount    = 4
+		xr8620tWorkerCount = 4
+		workerCount        = r740WorkerCount + xr8620tWorkerCount
 
-		// Resource pool label values on MNO BMHs (see testutils.MnoBMHs).
+		// Resource pool label values on MNO BMHs (see testutils.MnoBMHsTwoWorkerPools).
 		mnoBMHResourcePoolDellR740   = "dell-r740-pool"
 		mnoBMHResourcePoolDellXR8620 = "dell-xr8620t-pool"
 	)
@@ -195,7 +199,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		}
 
 		By("Creating 11 BMHs with BMC secrets, HardwareData, HFS, and HFC")
-		bmhList := testutils.MnoBMHs(masterCount, workerCount)
+		bmhList := mnoBMHsTwoWorkerPools(masterCount, r740WorkerCount, xr8620tWorkerCount)
 		for _, bmhData := range bmhList {
 			bmh := testutils.CreateBareMetalHost(bmhData)
 			bmcSecret := testutils.CreateBMCSecret(bmhData.Name)
@@ -334,7 +338,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
 		nodeList := testNonCachingListAllocatedNodesForNAR(testCtx, prName)
 		hostMap := make(map[string]string)
-		masterIdx, workerIdx := 1, 1
+		masterIdx, r740Idx, xr8620tIdx := 1, 1, 1
 		hostnames := []string{}
 		for _, node := range nodeList.Items {
 			hostname := ""
@@ -343,10 +347,14 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 				Expect(masterIdx).To(BeNumerically("<=", masterCount))
 				hostname = fmt.Sprintf("master-%d.%s.example.com", masterIdx, clusterName)
 				masterIdx++
-			case worker:
-				Expect(workerIdx).To(BeNumerically("<=", workerCount))
-				hostname = fmt.Sprintf("worker-%d.%s.example.com", workerIdx, clusterName)
-				workerIdx++
+			case workerR740:
+				Expect(r740Idx).To(BeNumerically("<=", r740WorkerCount))
+				hostname = fmt.Sprintf("worker-r740-%d.%s.example.com", r740Idx, clusterName)
+				r740Idx++
+			case workerXR8620t:
+				Expect(xr8620tIdx).To(BeNumerically("<=", xr8620tWorkerCount))
+				hostname = fmt.Sprintf("worker-xr8620t-%d.%s.example.com", xr8620tIdx, clusterName)
+				xr8620tIdx++
 			}
 			hostMap[node.Name] = hostname
 			hostnames = append(hostnames, hostname)
@@ -369,7 +377,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 
 		By("Deleting created resources")
 		// Delete BMH-related resources first (BMH, HardwareData, HFS, HFC, FirmwareSchema, BMC secrets)
-		bmhList := testutils.MnoBMHs(masterCount, workerCount)
+		bmhList := mnoBMHsTwoWorkerPools(masterCount, r740WorkerCount, xr8620tWorkerCount)
 		for _, bmhData := range bmhList {
 			for _, obj := range []client.Object{
 				&metal3v1alpha1.BareMetalHost{ObjectMeta: metav1.ObjectMeta{Name: bmhData.Name, Namespace: bmhData.Namespace}},
@@ -477,8 +485,11 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			}, timeout, interval).Should(BeTrue(), "PR should reach InProgress")
 		})
 
-		It("Should complete rolling update: masters first (maxUnavailable=1), then workers (maxUnavailable=3)", func() {
+		It("Should complete rolling update: masters first (maxUnavailable=1), then both worker pools concurrently (worker-r740-blue maxUnavailable=2, worker-xr8620t-blue maxUnavailable=3)", func() {
 			By("Polling and advancing BMH state transitions for each node")
+			// Tracks whether both worker pools were ever observed updating at the
+			// same time (proves cross-pool concurrency).
+			bothWorkerPoolsConcurrent := false
 			Eventually(func() bool {
 				allComplete := true
 				nodeList := testNonCachingListAllocatedNodesForNAR(testCtx, prName)
@@ -486,7 +497,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 				// Track rolling-update invariants
 				mastersAllDone := true
 				mastersInProgress := 0
-				workersInProgress := 0
+				inProgressByWorkerPool := map[string]int{} // keyed by worker pool GroupName
 
 				for i := range nodeList.Items {
 					node := &nodeList.Items[i]
@@ -503,10 +514,9 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 						if isInProgress {
 							mastersInProgress++
 						}
-					} else if node.Spec.GroupName == worker {
-						if isInProgress {
-							workersInProgress++
-						}
+					} else if isInProgress {
+						// Any non-master group is a worker pool; count per pool.
+						inProgressByWorkerPool[node.Spec.GroupName]++
 					}
 
 					// Skip nodes that are already completed
@@ -579,21 +589,34 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 					}
 				}
 
-				// Verify rolling-update invariants:
-				// 1. No workers should be in-progress before all masters are done
+				// Verify rolling-update invariants, split by rollout phase.
 				if !mastersAllDone {
-					Expect(workersInProgress).To(Equal(0),
+					// Masters roll first, serially: no worker pool may start yet,
+					// and masters honor the control-plane maxUnavailable=1.
+					inProgressWorkers := inProgressByWorkerPool[workerR740] + inProgressByWorkerPool[workerXR8620t]
+					Expect(inProgressWorkers).To(Equal(0),
 						"workers should not start updates before all masters complete")
+					Expect(mastersInProgress).To(BeNumerically("<=", 1),
+						"masters in-progress should not exceed maxUnavailable=1")
+				} else {
+					// Masters done: worker pools roll concurrently, each bounded by
+					// its own MCP maxUnavailable.
+					Expect(inProgressByWorkerPool[workerR740]).To(BeNumerically("<=", 2),
+						"worker-r740-blue in-progress should not exceed its maxUnavailable=2")
+					Expect(inProgressByWorkerPool[workerXR8620t]).To(BeNumerically("<=", 3),
+						"worker-xr8620t-blue in-progress should not exceed its maxUnavailable=3")
+					// Record cross-pool concurrency: both worker pools updating at once.
+					if inProgressByWorkerPool[workerR740] > 0 && inProgressByWorkerPool[workerXR8620t] > 0 {
+						bothWorkerPoolsConcurrent = true
+					}
 				}
-				// 2. Masters in-progress should not exceed maxUnavailable (1)
-				Expect(mastersInProgress).To(BeNumerically("<=", 1),
-					"masters in-progress should not exceed maxUnavailable=1")
-				// 3. Workers in-progress should not exceed maxUnavailable (3)
-				Expect(workersInProgress).To(BeNumerically("<=", 3),
-					"workers in-progress should not exceed maxUnavailable=3")
 
 				return allComplete
 			}, timeout*5, interval).Should(BeTrue(), "All nodes should reach ConfigApplied after rolling update")
+
+			By("Verifying the two worker pools were updated concurrently")
+			Expect(bothWorkerPoolsConcurrent).To(BeTrue(),
+				"worker-r740-blue and worker-xr8620t-blue should be in-progress simultaneously after masters complete")
 
 			By("Waiting for NAR to reach ConfigApplied")
 			Eventually(func() bool {
@@ -701,14 +724,14 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		})
 	})
 
-	// Test mid-flight profile change with mixed BMH states:
-	// 1. Trigger a real v1 update (BIOS + firmware changes) so workers enter ConfigUpdate
+	// Test mid-flight profile change with mixed BMH states (scoped to the worker-xr8620t-blue pool):
+	// 1. Trigger a real v1 update (BIOS + firmware changes) so its workers enter ConfigUpdate
 	// 2. Advance ONE worker's BMH to Servicing with config-in-progress annotation
 	// 3. Change profile to v2 mid-flight
-	// 4. The 2 workers with BMH=OK are abandoned immediately
+	// 4. Workers with BMH=OK are abandoned immediately
 	// 5. The 1 worker with BMH=Servicing defers abandon (controller requeues)
 	// 6. Transition the Servicing BMH to OK -> deferred abandon proceeds
-	// 7. All workers reconverge to v2
+	// 7. All worker-xr8620t-blue nodes reconverge to v2
 	Describe("Handles mid-flight profile change by abandoning stale updates", func() {
 		var (
 			servicingNodeKey types.NamespacedName
@@ -719,9 +742,11 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		v2WorkerProfile := "dell-xr8620t-bios-2.3.5-bmc-7.10.70.10"
 
 		It("Should update PR with v1 worker profile requiring BIOS and firmware changes", func() {
-			// Start from pr-std-succeed (master=v2, worker=v2), then override worker
-			// hwProfile to v1. This forces real BIOS changes (AcPwrRcvryUserDelay 130→120)
-			// and firmware downgrades (bios 2.3.5→2.1.0, bmc 7.10.70.10→7.0.0).
+			// Start from pr-std-succeed, then override only the worker-xr8620t-blue
+			// hwProfile to v1 (dell-xr8620t-bios-basic). Master and worker-r740-blue
+			// stay on their succeed profiles, so only the xr8620t pool rolls. This
+			// forces real BIOS changes (AcPwrRcvryUserDelay 130→120) and firmware
+			// downgrades (bios 2.3.5→2.1.0, bmc 7.10.70.10→7.0.0).
 			Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
 			v2PR, err := testutils.LoadYAML[provisioningv1alpha1.ProvisioningRequest](
 				"../resources/mno_hw_configuration/pr-std-succeed.yaml")
@@ -734,7 +759,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			nodeGroupData := hwParams["nodeGroupData"].([]interface{})
 			for _, ng := range nodeGroupData {
 				ngMap := ng.(map[string]interface{})
-				if ngMap["name"] == "worker" {
+				if ngMap["name"] == workerXR8620t {
 					ngMap["hwProfile"] = v1Profile
 				}
 			}
@@ -752,13 +777,13 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 				return cond != nil && cond.Reason == string(hwmgmtv1alpha1.InProgress)
 			}, timeout, interval).Should(BeTrue(), "NAR should be in InProgress")
 
-			By("Waiting for at least 3 workers in ConfigUpdate with v1 profile")
+			By("Waiting for 3 nodes in the worker-xr8620t-blue pool to be in ConfigUpdate with v1 profile")
 			Eventually(func() int {
 				count := 0
 				nodeList := testNonCachingListAllocatedNodesForNAR(testCtx, prName)
 				for i := range nodeList.Items {
 					node := &nodeList.Items[i]
-					if node.Spec.GroupName != worker || node.Spec.HwProfile != v1Profile {
+					if node.Spec.GroupName != workerXR8620t || node.Spec.HwProfile != v1Profile {
 						continue
 					}
 					cond := meta.FindStatusCondition(node.Status.Conditions, string(hwmgmtv1alpha1.Configured))
@@ -768,13 +793,13 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 				}
 				return count
 			}, timeout, interval).Should(BeNumerically(">=", 3),
-				"At least 3 workers should be in ConfigUpdate with v1 profile")
+				"3 nodes in the worker-xr8620t-blue pool should be in ConfigUpdate with the v1 profile")
 
 			By("Picking one worker and advancing its BMH to Servicing with config-in-progress")
 			nodeList := testNonCachingListAllocatedNodesForNAR(testCtx, prName)
 			for i := range nodeList.Items {
 				node := &nodeList.Items[i]
-				if node.Spec.GroupName != worker || node.Spec.HwProfile != v1Profile {
+				if node.Spec.GroupName != workerXR8620t || node.Spec.HwProfile != v1Profile {
 					continue
 				}
 				cond := meta.FindStatusCondition(node.Status.Conditions, string(hwmgmtv1alpha1.Configured))
@@ -816,18 +841,16 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			pr.Spec.TemplateParameters = v2PR.Spec.TemplateParameters
 			Expect(K8SClient.Update(testCtx, pr)).To(Succeed())
 
-			By("Waiting for 7 workers to converge to v2 while Servicing worker defers abandon")
-			// The 2 workers with BMH=OK are abandoned immediately -> re-initiated with v2 ->
-			// ConfigApplied quickly (HFS/HFC status already matches v2 from the success test,
-			// so no actual HW changes are needed).
-			// The 5 pending workers are reset to v2 -> initiated -> ConfigApplied quickly
-			// (same reason: HFS/HFC status already at v2 values).
+			By("Waiting for the non-servicing worker-xr8620t-blue nodes to converge to v2 while the Servicing worker defers abandon")
+			// Within the worker-xr8620t-blue pool: workers with BMH=OK are abandoned
+			// immediately -> re-initiated with v2 -> ConfigApplied quickly (HFS/HFC status
+			// already matches v2 from the success test, so no actual HW changes are needed).
 			// The 1 Servicing worker can't be abandoned (BMH Servicing) -> stays in ConfigUpdate.
 			Eventually(func() int {
 				count := 0
 				nodeList := testNonCachingListAllocatedNodesForNAR(testCtx, prName)
 				for _, node := range nodeList.Items {
-					if node.Spec.GroupName != worker {
+					if node.Spec.GroupName != workerXR8620t {
 						continue
 					}
 					cond := meta.FindStatusCondition(node.Status.Conditions, string(hwmgmtv1alpha1.Configured))
@@ -838,8 +861,8 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 					}
 				}
 				return count
-			}, mnoLongTimeout, interval).Should(Equal(7),
-				"7 workers should converge to v2 ConfigApplied while Servicing worker defers")
+			}, mnoLongTimeout, interval).Should(Equal(xr8620tWorkerCount-1),
+				"all worker-xr8620t-blue nodes except the deferred Servicing one should converge to v2")
 
 			By("Verifying the Servicing worker is still in ConfigUpdate with v1 profile (deferred abandon)")
 			n := &hwmgmtv1alpha1.AllocatedNode{}
@@ -865,10 +888,10 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 					cond.Reason == string(hwmgmtv1alpha1.ConfigApplied)
 			}, timeout, interval).Should(BeTrue(), "NAR should reach ConfigApplied")
 
-			By("Verifying all 8 worker nodes converged to v2 profile")
+			By("Verifying all worker-xr8620t-blue nodes converged to v2 profile")
 			nodeList := testNonCachingListAllocatedNodesForNAR(testCtx, prName)
 			for _, node := range nodeList.Items {
-				if node.Spec.GroupName != worker {
+				if node.Spec.GroupName != workerXR8620t {
 					continue
 				}
 				Expect(node.Spec.HwProfile).To(Equal(v2WorkerProfile),
@@ -920,15 +943,22 @@ func setupSpokeClientMock(ctx context.Context, hostnames []string) func() {
 			MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: 1},
 		},
 	}
-	// Set worker MCP maxUnavailable to 3.
-	workerMCP := &machineconfigv1.MachineConfigPool{
-		ObjectMeta: metav1.ObjectMeta{Name: "worker"},
+	// Two worker MCPs with different maxUnavailable, keyed by group/MCP name, so
+	// GetMaxUnavailable resolves each worker pool's own rolling ceiling.
+	workerR740MCP := &machineconfigv1.MachineConfigPool{
+		ObjectMeta: metav1.ObjectMeta{Name: "worker-r740-blue"},
+		Spec: machineconfigv1.MachineConfigPoolSpec{
+			MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: 2},
+		},
+	}
+	workerXR8620tMCP := &machineconfigv1.MachineConfigPool{
+		ObjectMeta: metav1.ObjectMeta{Name: "worker-xr8620t-blue"},
 		Spec: machineconfigv1.MachineConfigPoolSpec{
 			MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: 3},
 		},
 	}
 	var spokeObjects []client.Object
-	spokeObjects = append(spokeObjects, masterMCP, workerMCP)
+	spokeObjects = append(spokeObjects, masterMCP, workerR740MCP, workerXR8620tMCP)
 	var k8sNodes []runtime.Object
 	for _, hostname := range hostnames {
 		node := &corev1.Node{
@@ -1129,4 +1159,45 @@ func patchBMHStatus(ctx context.Context, bmhKey types.NamespacedName, mutateFn f
 	patch := client.MergeFrom(bmh.DeepCopy())
 	mutateFn(bmh)
 	Expect(K8SClient.Status().Patch(ctx, bmh, patch)).To(Succeed())
+}
+
+// Masters and the R740 worker pool share the same server-type (R740) and are
+// distinguished by colour (green vs blue); the two worker pools share the same
+// colour (blue) and are distinguished by server-type (R740 vs XR8620t).
+func mnoBMHsTwoWorkerPools(masterCount, r740WorkerCount, xr8620tWorkerCount int) []testutils.BMHData {
+	var bmhs []testutils.BMHData
+	for i := 1; i <= masterCount; i++ {
+		bmhs = append(bmhs, testutils.BMHData{
+			Name:           fmt.Sprintf("test-master%d", i),
+			Namespace:      "dell-r740-pool",
+			MacAddress:     fmt.Sprintf("aa:bb:cc:11:00:%02x", i),
+			BmcAddress:     fmt.Sprintf("redfish://192.168.1.%d/redfish/v1/Systems/1", 100+i),
+			ServerType:     "R740",
+			Colour:         "green",
+			ResourcePoolId: "dell-r740-pool",
+		})
+	}
+	for i := 1; i <= r740WorkerCount; i++ {
+		bmhs = append(bmhs, testutils.BMHData{
+			Name:           fmt.Sprintf("test-worker-r740-%d", i),
+			Namespace:      "dell-r740-pool",
+			MacAddress:     fmt.Sprintf("aa:bb:cc:33:00:%02x", i),
+			BmcAddress:     fmt.Sprintf("redfish://192.168.3.%d/redfish/v1/Systems/1", 100+i),
+			ServerType:     "R740",
+			Colour:         "blue",
+			ResourcePoolId: "dell-r740-pool",
+		})
+	}
+	for i := 1; i <= xr8620tWorkerCount; i++ {
+		bmhs = append(bmhs, testutils.BMHData{
+			Name:           fmt.Sprintf("test-worker-xr8620t-%d", i),
+			Namespace:      "dell-xr8620t-pool",
+			MacAddress:     fmt.Sprintf("aa:bb:cc:22:00:%02x", i),
+			BmcAddress:     fmt.Sprintf("redfish://192.168.2.%d/redfish/v1/Systems/1", 100+i),
+			ServerType:     "XR8620t",
+			Colour:         "blue",
+			ResourcePoolId: "dell-xr8620t-pool",
+		})
+	}
+	return bmhs
 }
