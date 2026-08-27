@@ -1,0 +1,57 @@
+# Sample upgradeParameters schema for MNO ClusterVersion upgrade.
+# Copy under ClusterTemplate spec.templateParameterSchema.properties.
+# Must not be combined with imageBasedGroupUpgrade in the same schema.
+
+upgradeParameters:
+  description: >
+    upgradeParameters allows overriding upgrade defaults defined in
+    templateDefaults.upgradeDefaults. Values provided here are deep-merged
+    on top of the defaults, with ProvisioningRequest values taking precedence.
+  properties:
+    clusterUpgradeTimeout:
+      description: >
+        Timeout for the entire cluster upgrade, including both hops for
+        EUS upgrades. Must be a valid duration string (e.g., "6h").
+        Defaults to 4h for standard upgrades or 8h for EUS upgrades
+        when omitted.
+      type: string
+    intermediateVersion:
+      description: >
+        Intermediate OCP version for EUS-to-EUS upgrades. Must be valid
+        semver with the same major version and exactly one minor version
+        below desiredUpdate.version. Auto-selected from the configured
+        channel and upstream when omitted.
+      type: string
+    clusterVersion:
+      type: object
+      description: ClusterVersion parameters applied to the spoke cluster.
+      properties:
+        channel:
+          description: >
+            Update channel (e.g., "stable-4.22"). Required for minor
+            version and EUS upgrades.
+          type: string
+        upstream:
+          description: >
+            Optional Cincinnati update graph URL. Defaults to the OpenShift
+            public graph when omitted.
+          type: string
+        desiredUpdate:
+          type: object
+          properties:
+            version:
+              description: >
+                Target OCP version. Must match the ClusterTemplate's
+                spec.release.
+              type: string
+            image:
+              description: Optional payload image pull spec for the upgrade.
+              type: string
+            force:
+              type: boolean
+            architecture:
+              type: string
+              enum:
+              - "Multi"
+              - ""
+  type: object

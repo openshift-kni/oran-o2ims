@@ -127,7 +127,18 @@ metadata:
 data:
   clusterinstance-defaults: |
     clusterImageSetNameRef: "4.Y.Z+1"
----
+```
+
+> [!NOTE]
+> The SiteConfig operator only permits updates to a limited
+> subset of ClusterInstance fields after initial installation. The rest
+> of the configuration must remain identical to the original ConfigMap
+> used for provisioning. In particular, `extraManifestsRefs` must
+> reference the same ConfigMap names as the original version — for
+> example, if the original used `clustertemplate-sample.v1.0.0-extramanifests`,
+> the new ConfigMap must also use `clustertemplate-sample.v1.0.0-extramanifests`.
+
+```yaml
 # clustertemplates/version_4.Y.Z+1/sno-ran-du/sno-ran-du-v4-Y-Z+1-1.yaml
 kind: ClusterTemplate
 metadata:
@@ -177,25 +188,8 @@ spec:
   templateParameterSchema:
     properties:
       # ... other parameters ...
-      upgradeParameters:
-        description: >
-          upgradeParameters allows overriding upgrade defaults defined in
-          templateDefaults.upgradeDefaults.
-        properties:
-          imageBasedGroupUpgrade:
-            type: object
-            properties:
-              ibuSpec:
-                type: object
-              plan:
-                type: array
-        type: object
-    required:
-      - nodeClusterName
-      - oCloudSiteId
-      - policyTemplateParameters
-      - clusterInstanceParameters
-    type: object
+      # Paste the complete `upgradeParameters:` mapping from
+      # docs/samples/schema/upgradeParameters-imageBasedGroupUpgrade.yaml
 ```
 
 ### Overriding Upgrade Parameters per ProvisioningRequest
@@ -443,34 +437,8 @@ spec:
     type: object
     properties:
       # ... other parameters ...
-      upgradeParameters:
-        type: object
-        properties:
-          clusterUpgradeTimeout:
-            type: string
-          intermediateVersion:
-            type: string
-          clusterVersion:
-            type: object
-            properties:
-              channel:
-                type: string
-              upstream:
-                type: string
-              desiredUpdate:
-                type: object
-                properties:
-                  version:
-                    type: string
-                  image:
-                    type: string
-                  force:
-                    type: boolean
-                  architecture:
-                    type: string
-                    enum:
-                    - Multi
-                    - ""
+      # Paste the complete `upgradeParameters:` mapping from
+      # docs/samples/schema/upgradeParameters-clusterVersion.yaml
 ```
 
 **Notes:**
