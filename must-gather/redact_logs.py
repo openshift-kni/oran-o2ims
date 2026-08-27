@@ -33,6 +33,12 @@ through free text. Hostnames, users, and serial numbers are only redacted
 where a key identifies the content, since they have no distinctive
 format.
 
+A string value that is itself a serialized JSON document — such as the
+metal3 `baremetalhost.metal3.io/status` annotation or the
+`kubectl.kubernetes.io/last-applied-configuration` annotation — is parsed
+and redacted by key as well, so sensitive fields nested inside embedded
+JSON strings do not survive in the archive.
+
 Only the Python standard library is used, so the script runs on the
 Python 3.9 interpreter shipped in the ose-cli-rhel9 must-gather base
 image without any additional build dependencies.
@@ -211,6 +217,26 @@ def redact_obj(obj, key_prefix, categories, salt):
     if isinstance(obj, list):
         return [redact_obj(item, key_prefix, categories, salt) for item in obj]
     if isinstance(obj, str):
+        # A string value may itself be a serialized JSON document — for
+        # example the metal3 `baremetalhost.metal3.io/status` annotation (which
+        # carries hostname, serialNumber and wwn) or the
+        # `kubectl.kubernetes.io/last-applied-configuration` annotation (a full
+        # copy of the CR spec). Those sensitive fields are keyed by name inside
+        # the embedded JSON, so free-text IP/MAC scrubbing alone would leave
+        # them exposed. Parse such values, redact them by key, and re-serialize;
+        # fall back to plain text redaction for ordinary (non-JSON) strings.
+        stripped = obj.strip()
+        if stripped[:1] in ("{", "["):
+            try:
+                nested = json.loads(stripped)
+            except ValueError:
+                pass
+            else:
+                return json.dumps(
+                    redact_obj(nested, key_prefix, categories, salt),
+                    separators=(",", ":"),
+                    ensure_ascii=False,
+                )
         return redact_text(obj, categories, salt)
     return obj
 

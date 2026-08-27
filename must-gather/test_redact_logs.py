@@ -164,6 +164,52 @@ class FreeTextInJsonTest(unittest.TestCase):
         result = redact_json_line({"msg": "reconciling cluster mycluster.example.com"})
         self.assertIn("mycluster.example.com", result["msg"])
 
+    def test_embedded_json_string_redacted_by_key(self):
+        # A string value that is itself a serialized JSON document (e.g. a
+        # metal3 status annotation) must be parsed and redacted by key, so
+        # sensitive fields inside it — which free-text IP/MAC scrubbing would
+        # miss, since they are key-identified — do not leak.
+        embedded = json.dumps({
+            "hostname": "worker-0.example.com",
+            "serialNumber": "CNFDG21X1234",
+            "wwn": "0x5000c500a1b2c3d4",
+            "manufacturer": "Dell",
+        })
+        obj = {"metadata": {"annotations": {
+            "baremetalhost.metal3.io/status": embedded,
+        }}}
+        result = redact_json_line(obj)
+        redacted = result["metadata"]["annotations"]["baremetalhost.metal3.io/status"]
+        dumped = json.dumps(result)
+        self.assertNotIn("worker-0.example.com", dumped)
+        self.assertNotIn("CNFDG21X1234", dumped)
+        self.assertNotIn("0x5000c500a1b2c3d4", dumped)
+        # The value is still valid JSON with the sensitive fields pseudonymized
+        # and the non-sensitive field preserved.
+        nested = json.loads(redacted)
+        self.assertTrue(nested["hostname"].startswith("host-"))
+        self.assertTrue(nested["serialNumber"].startswith("serial-"))
+        self.assertTrue(nested["wwn"].startswith("serial-"))
+        self.assertEqual(nested["manufacturer"], "Dell")
+
+    def test_embedded_json_correlates_with_top_level(self):
+        # A value appearing both as a top-level sensitive field and inside an
+        # embedded JSON string maps to the same pseudonym under one salt.
+        embedded = json.dumps({"hostname": "worker-0.example.com"})
+        result = redact_json_line({
+            "hostname": "worker-0.example.com",
+            "annotation": embedded,
+        })
+        nested = json.loads(result["annotation"])
+        self.assertEqual(result["hostname"], nested["hostname"])
+
+    def test_non_json_string_still_text_scrubbed(self):
+        # A string that merely starts with a brace but is not valid JSON falls
+        # back to free-text IP/MAC scrubbing rather than being left untouched.
+        result = redact_json_line({"msg": "{not json but has 10.8.34.97 in it"})
+        self.assertNotIn("10.8.34.97", result["msg"])
+        self.assertIn("ip-", result["msg"])
+
 
 class NonJsonTest(unittest.TestCase):
     def test_non_json_line_ip_mac_regex(self):
