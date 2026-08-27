@@ -46,11 +46,12 @@ gather_resource() {
         name=$(echo "${line}" | awk '{print $2}')
 
         if [ "${ns}" == "<none>" ]; then
-            # Cluster-scoped resource
-            oc get "${resource}" "${name}" -o yaml > "${output_dir}/${name}.yaml" 2>/dev/null || true
+            # Cluster-scoped resource. Collected as JSON so the redaction
+            # pass (redact_logs.py) can pseudonymize sensitive fields.
+            oc get "${resource}" "${name}" -o json > "${output_dir}/${name}.json" 2>/dev/null || true
         else
             mkdir -p "${output_dir}/${ns}"
-            oc get "${resource}" "${name}" -n "${ns}" -o yaml > "${output_dir}/${ns}/${name}.yaml" 2>/dev/null || true
+            oc get "${resource}" "${name}" -n "${ns}" -o json > "${output_dir}/${ns}/${name}.json" 2>/dev/null || true
         fi
         count=$((count + 1))
     done <<< "${items}"
@@ -144,32 +145,58 @@ gather_pod_logs() {
     log "  Collected logs from ${count} pods"
 }
 
-# redact_collected_logs pseudonymizes sensitive fields (IP addresses,
-# hostnames, user identities, MAC addresses, serial numbers) in the collected
-# pod logs before they are written into the support archive. Redaction is
-# consistent within a collection so events can still be correlated. Controlled
-# by MUST_GATHER_REDACT and MUST_GATHER_REDACT_CATEGORIES.
-redact_collected_logs() {
+# redact_collected_data pseudonymizes sensitive fields (IP addresses,
+# hostnames, user identities, MAC addresses, serial numbers) in both the
+# collected pod logs and the collected CRs before they are written into the
+# support archive. Logs and CRs are redacted in a single invocation so the
+# same value maps to the same pseudonym in both, keeping them correlatable.
+# Redaction is consistent within a collection so events can still be
+# correlated. Controlled by MUST_GATHER_REDACT and
+# MUST_GATHER_REDACT_CATEGORIES.
+redact_collected_data() {
     if [ "${MUST_GATHER_REDACT}" == "false" ]; then
-        log "WARNING: Log redaction is disabled (MUST_GATHER_REDACT=false). Logs may contain sensitive data."
+        log "WARNING: Redaction is disabled (MUST_GATHER_REDACT=false). Collected logs and CRs may contain sensitive data."
         return
     fi
 
-    if [ ! -d "${BASE_DIR}/logs" ]; then
+    # Build the redaction arguments for whichever collections are present.
+    # CR trees are collected as JSON so their sensitive fields can be
+    # pseudonymized by key; the preprovisioning-secrets under metal3/ are
+    # YAML with their data already blanked at collection time, so the
+    # redactor (which only touches *.json) leaves them untouched.
+    local redact_args=()
+    local cleanup_dirs=()
+    if [ -d "${BASE_DIR}/logs" ]; then
+        redact_args+=(--log-dir "${BASE_DIR}/logs")
+        cleanup_dirs+=("${BASE_DIR}/logs")
+    fi
+    local cr_dir
+    for cr_dir in clcm ocloud metal3; do
+        if [ -d "${BASE_DIR}/${cr_dir}" ]; then
+            redact_args+=(--cr-dir "${BASE_DIR}/${cr_dir}")
+            cleanup_dirs+=("${BASE_DIR}/${cr_dir}")
+        fi
+    done
+
+    if [ "${#redact_args[@]}" -eq 0 ]; then
         return
     fi
 
-    log "Redacting sensitive fields from collected logs (categories: ${MUST_GATHER_REDACT_CATEGORIES})..."
+    log "Redacting sensitive fields from collected logs and CRs (categories: ${MUST_GATHER_REDACT_CATEGORIES})..."
     if ! python3 "${SCRIPT_DIR}/redact_logs.py" \
-        --log-dir "${BASE_DIR}/logs" \
+        "${redact_args[@]}" \
         --categories "${MUST_GATHER_REDACT_CATEGORIES}"; then
-        # Fail closed: if redaction cannot complete, remove the collected logs
-        # rather than shipping potentially-unredacted data in the archive.
-        log "ERROR: Log redaction failed; removing collected logs to avoid leaking sensitive data"
-        rm -rf "${BASE_DIR:?}/logs"
+        # Fail closed: if redaction cannot complete, remove the collected
+        # logs and CRs rather than shipping potentially-unredacted data in
+        # the archive.
+        log "ERROR: Redaction failed; removing collected logs and CRs to avoid leaking sensitive data"
+        local dir
+        for dir in "${cleanup_dirs[@]}"; do
+            rm -rf "${dir:?}"
+        done
         return
     fi
-    log "Log redaction complete"
+    log "Redaction complete"
 }
 
 log "Starting O-Cloud Manager must-gather collection"
@@ -216,7 +243,7 @@ gather_pod_logs "${OCLOUD_NS}" "ocloud-manager"
 # Metal3 pod logs (metal3-baremetal-operator and metal3 pods in openshift-machine-api)
 gather_pod_logs "${METAL3_NS}" "metal3" "k8s-app=metal3"
 
-# Redact sensitive fields from the collected pod logs (enabled by default)
-redact_collected_logs
+# Redact sensitive fields from the collected pod logs and CRs (enabled by default)
+redact_collected_data
 
 log "O-Cloud Manager must-gather collection complete"

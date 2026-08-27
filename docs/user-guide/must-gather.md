@@ -82,26 +82,30 @@ oc adm must-gather \
 > [!NOTE]
 > The O-Cloud Manager must-gather does not collect BMC credentials. The only Secrets collected are the
 > preprovisioning network data Secrets (nmstate configuration) referenced by
-> BareMetalHosts. The collected CRs still include IP addresses, hostnames, and cluster
-> configuration details — review before sharing externally if needed.
+> BareMetalHosts, and their `data` values are always blanked at collection time.
+> By default, sensitive fields in the other collected CRs and in the pod logs are
+> pseudonymized (see [Data redaction](#data-redaction) below) — review before
+> sharing externally if needed.
 
-### Log redaction
+### Data redaction
 
-By default, sensitive fields in the collected **pod logs** are redacted before
-they are written into the archive. This lets support archives be shared across
-organizational boundaries without exposing operational details. Redaction does
-not apply to collected CRs.
+By default, sensitive fields in both the collected **pod logs** and the
+collected **CRs** are redacted before they are written into the archive. This
+lets support archives be shared across organizational boundaries without
+exposing operational details. Pod logs and CRs are redacted in a single pass so
+a value that appears in both (for example a BMC address) maps to the same
+pseudonym in each, keeping them correlatable.
 
-Five categories of fields are redacted, identified by their structured
-(slog) key name:
+Five categories of fields are redacted, identified by their key name (the
+structured slog key in pod logs, or the JSON field name in collected CRs):
 
-| Category | Log keys | Pseudonym prefix |
+| Category | Keys | Pseudonym prefix |
 |---|---|---|
-| IP addresses | `clientIp`, `bmcAddress`, `host`, `ip` | `ip-` |
-| Hostnames | `clusterName`, `hostName`, `bmh`, `managedCluster` | `host-` |
+| IP addresses | `clientIp`, `bmcAddress`, `host`, `ip`, `address` | `ip-` |
+| Hostnames | `clusterName`, `hostName`, `hostname`, `bmh`, `managedCluster`, `nodeNames`, `resourceName`, `ingressHost`, `clusterID`, `clusterId`, `allocatedNodeHostMap` | `host-` |
 | User identities | `user`, `preferred_username` | `user-` |
 | MAC addresses | `bootMACAddress`, `macAddress`, `mac` | `mac-` |
-| Serial numbers | `serialNumber`, `serial` | `serial-` |
+| Serial numbers | `serialNumber`, `serial`, `wwn`, `wwnWithExtension`, `wwnVendorExtension` | `serial-` |
 
 Each value is replaced with a consistent pseudonym computed as
 `prefix + HMAC-SHA256(salt, value)` (for example, `10.8.34.97` becomes
@@ -109,18 +113,18 @@ Each value is replaced with a consistent pseudonym computed as
 to the archive, so:
 
 - the same value always maps to the same pseudonym within one collection,
-  preserving event correlation across log lines;
+  preserving event correlation across log lines and CRs;
 - different collections produce different pseudonyms for the same value; and
 - the mapping cannot be reversed from the archive alone.
 
 In addition to key-based redaction, IP and MAC address tokens embedded in
-free-text values (such as `msg` and `error` fields) and in non-JSON log lines
-are scrubbed by pattern, since those formats are distinctive. Hostnames,
-users, and serial numbers are only redacted where a key identifies the
-content.
+free-text values (such as `msg` and `error` fields, or a `redfish://` BMC URL)
+and in non-JSON log lines are scrubbed by pattern, since those formats are
+distinctive. Hostnames, users, and serial numbers are only redacted where a key
+identifies the content.
 
 If redaction cannot complete (for example, if the redaction script fails), the
-collected pod logs are removed from the archive rather than shipped
+collected pod logs and CRs are removed from the archive rather than shipped
 unredacted.
 
 Redaction is controlled by environment variables read by the `gather` script:
@@ -131,7 +135,8 @@ Redaction is controlled by environment variables read by the `gather` script:
   `ip,host,user,mac,serial` to redact (default: `all`). Unknown category
   names are ignored, but a value that selects no valid categories at all
   (for example a typo such as `bogus`) is treated as a redaction failure,
-  so the collected pod logs are removed rather than shipped unredacted.
+  so the collected pod logs and CRs are removed rather than shipped
+  unredacted.
 
 The default `oc adm must-gather` invocation redacts all categories. To
 override the defaults, run the `gather` script with the environment variables
@@ -151,7 +156,9 @@ tar xvf must-gather.tar.gz
 cd must-gather.local.*/<image-digest>/
 ```
 
-Key locations within the output:
+Collected CRs are stored as JSON (`.json`) so that sensitive fields can be
+redacted; the preprovisioning-secrets are stored as YAML (`.yaml`) with their
+`data` values blanked. Key locations within the output:
 
 | Path | Contents |
 |---|---|
@@ -165,5 +172,5 @@ Key locations within the output:
 To quickly check a ProvisioningRequest status from the collected data:
 
 ```shell
-cat clcm/provisioningrequests/<namespace>/<name>.yaml | grep -A 5 "provisioningPhase"
+grep -A 5 "provisioningPhase" clcm/provisioningrequests/<namespace>/<name>.json
 ```

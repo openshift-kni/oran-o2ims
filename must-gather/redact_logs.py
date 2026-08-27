@@ -3,15 +3,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Redact sensitive fields from must-gather pod logs.
+"""Redact sensitive fields from must-gather pod logs and collected CRs.
 
-This script post-processes the JSON-structured pod logs collected by the
-O-Cloud Manager must-gather `gather` script. Sensitive fields (IP
-addresses, hostnames, user identities, MAC addresses, and serial numbers)
-are replaced with consistent pseudonyms so that support archives can be
-shared across organizational boundaries without exposing the original
-values, while still allowing events to be correlated within a single
-collection.
+This script post-processes the JSON-structured pod logs and the collected
+custom resources (gathered as JSON) produced by the O-Cloud Manager
+must-gather `gather` script. Sensitive fields (IP addresses, hostnames,
+user identities, MAC addresses, and serial numbers) are replaced with
+consistent pseudonyms so that support archives can be shared across
+organizational boundaries without exposing the original values, while
+still allowing events to be correlated within a single collection.
 
 Pseudonymization uses HMAC-SHA256 with a random per-collection salt:
 
@@ -20,14 +20,18 @@ Pseudonymization uses HMAC-SHA256 with a random per-collection salt:
 The same value always maps to the same pseudonym within one invocation
 (one salt), and different invocations produce different pseudonyms. The
 salt is generated in memory and is never written to any file, so the
-mapping cannot be reversed from the archive.
+mapping cannot be reversed from the archive. Because logs and CRs are
+redacted in a single invocation, a value that appears in both (for
+example a `bmcAddress`) maps to the same pseudonym in both, so it can
+still be correlated across the two.
 
-Structured JSON log lines are redacted by slog key name. In addition,
-distinctive IP and MAC tokens embedded in string values (for example in
-`msg` or `error` text) and in non-JSON lines are scrubbed by pattern, so
-those values do not leak through free text. Hostnames, users, and serial
-numbers are only redacted where a key identifies the content, since they
-have no distinctive format.
+Structured JSON log lines and CR documents are redacted by key name. In
+addition, distinctive IP and MAC tokens embedded in string values (for
+example in `msg` or `error` text, or a `redfish://` BMC URL) and in
+non-JSON lines are scrubbed by pattern, so those values do not leak
+through free text. Hostnames, users, and serial numbers are only redacted
+where a key identifies the content, since they have no distinctive
+format.
 
 Only the Python standard library is used, so the script runs on the
 Python 3.9 interpreter shipped in the ose-cli-rhel9 must-gather base
@@ -45,15 +49,32 @@ import secrets
 import sys
 import tempfile
 
-# Sensitive slog keys grouped by category. Keys are matched exactly and
-# case-sensitively, mirroring the slog attribute names used across the
-# codebase.
+# Sensitive keys grouped by category. Keys are matched exactly and
+# case-sensitively. The list mirrors the slog attribute names used across
+# the codebase (for pod logs) and the JSON field names of the collected
+# CRs (for `oc get -o json` output). Case and spelling are intentionally
+# inconsistent because the two sources differ: for example logs use
+# `hostName` while the metal3 CRs use `hostname`, and cluster identifiers
+# appear as both `clusterID` (ocloud API) and `clusterId` (clcm API).
 CATEGORY_KEYS = {
-    "ip": ("clientIp", "bmcAddress", "host", "ip"),
-    "host": ("clusterName", "hostName", "bmh", "managedCluster"),
+    "ip": ("clientIp", "bmcAddress", "host", "ip", "address"),
+    "host": (
+        "clusterName", "hostName", "bmh", "managedCluster",
+        "hostname", "nodeNames", "resourceName", "ingressHost",
+        "clusterID", "clusterId",
+    ),
     "user": ("user", "preferred_username"),
     "mac": ("bootMACAddress", "macAddress", "mac"),
-    "serial": ("serialNumber", "serial"),
+    "serial": ("serialNumber", "serial", "wwn", "wwnWithExtension", "wwnVendorExtension"),
+}
+
+# Keys whose sensitive data lives in the value subtree rather than under a
+# further sensitive key — for example a map of node ID to hostname, where
+# the hostnames are the (dynamically-keyed) values. Every scalar in the
+# subtree is pseudonymized with the category's prefix. Applied only when
+# the mapped category is enabled.
+SUBTREE_VALUE_KEYS = {
+    "allocatedNodeHostMap": "host",
 }
 
 # Pseudonym prefix for each category.
@@ -147,6 +168,23 @@ def _redact_matched(value, prefix, key_prefix, categories, salt):
     return pseudonym(prefix, value, salt)
 
 
+def _redact_subtree_values(value, prefix, salt):
+    """Pseudonymize every scalar in a subtree with a single prefix.
+
+    Used for keys listed in ``SUBTREE_VALUE_KEYS`` whose sensitive data is
+    carried by the values (at any depth) rather than under a further
+    sensitive key. Structure is preserved; None and empty strings are left
+    untouched.
+    """
+    if isinstance(value, dict):
+        return {k: _redact_subtree_values(v, prefix, salt) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_redact_subtree_values(item, prefix, salt) for item in value]
+    if value is None or value == "":
+        return value
+    return pseudonym(prefix, value, salt)
+
+
 def redact_obj(obj, key_prefix, categories, salt):
     """Recursively redact a parsed JSON structure.
 
@@ -158,6 +196,12 @@ def redact_obj(obj, key_prefix, categories, salt):
     if isinstance(obj, dict):
         result = {}
         for key, value in obj.items():
+            subtree_category = SUBTREE_VALUE_KEYS.get(key)
+            if subtree_category is not None and subtree_category in categories:
+                result[key] = _redact_subtree_values(
+                    value, CATEGORY_PREFIX[subtree_category], salt
+                )
+                continue
             prefix = key_prefix.get(key)
             if prefix is not None:
                 result[key] = _redact_matched(value, prefix, key_prefix, categories, salt)
@@ -246,6 +290,64 @@ def process_directory(log_dir, key_prefix, categories, salt):
     return count
 
 
+def process_cr_file(path, key_prefix, categories, salt):
+    """Redact a collected CR file (a single JSON document) in place.
+
+    Unlike a pod log, a collected CR is one JSON document (produced by
+    ``oc get -o json``) rather than one JSON object per line, so it is
+    parsed and rewritten as a whole. Sensitive keys are pseudonymized and
+    distinctive IP/MAC tokens in string values are scrubbed, exactly as for
+    logs, so pseudonyms stay consistent between logs and CRs under the
+    shared salt.
+
+    An empty file (a resource type with no instances yields an empty
+    collection file) is left untouched. A file that does not parse as JSON
+    falls back to regex-based IP/MAC scrubbing of its raw text, mirroring
+    the malformed-line fallback used for logs, so a parse error never aborts
+    the run and leaves data unredacted.
+    """
+    with open(path, "r", encoding="utf-8", errors="replace") as src:
+        content = src.read()
+
+    if not content.strip():
+        return
+
+    try:
+        obj = json.loads(content)
+    except ValueError:
+        redacted = redact_text(content, categories, salt)
+    else:
+        redacted = json.dumps(
+            redact_obj(obj, key_prefix, categories, salt),
+            indent=2,
+            ensure_ascii=False,
+        )
+        if content.endswith("\n"):
+            redacted += "\n"
+
+    directory = os.path.dirname(path) or "."
+    fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".redact-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as dst:
+            dst.write(redacted)
+        os.replace(tmp_path, path)
+    except BaseException:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise
+
+
+def process_cr_directory(cr_dir, key_prefix, categories, salt):
+    """Redact every *.json CR document under cr_dir; return the file count."""
+    count = 0
+    for root, _dirs, files in os.walk(cr_dir):
+        for name in files:
+            if name.endswith(".json"):
+                process_cr_file(os.path.join(root, name), key_prefix, categories, salt)
+                count += 1
+    return count
+
+
 def resolve_salt(salt_arg):
     """Return the salt bytes: decode a base64 argument or generate one."""
     if salt_arg:
@@ -259,8 +361,17 @@ def main(argv=None):
     )
     parser.add_argument(
         "--log-dir",
-        required=True,
+        default=None,
         help="Directory tree to scan for *.log files to redact in place.",
+    )
+    parser.add_argument(
+        "--cr-dir",
+        action="append",
+        default=[],
+        metavar="DIR",
+        dest="cr_dirs",
+        help="Directory tree of collected CRs to scan for *.json documents to "
+        "redact in place. May be given multiple times.",
     )
     parser.add_argument(
         "--categories",
@@ -274,6 +385,9 @@ def main(argv=None):
         "salt is generated per invocation when omitted.",
     )
     args = parser.parse_args(argv)
+
+    if not args.log_dir and not args.cr_dirs:
+        parser.error("at least one of --log-dir or --cr-dir is required")
 
     categories = parse_categories(args.categories)
     if not categories:
@@ -290,8 +404,14 @@ def main(argv=None):
     key_prefix = build_key_prefix_map(categories)
     salt = resolve_salt(args.salt)
 
-    count = process_directory(args.log_dir, key_prefix, categories, salt)
-    print("redact_logs: redacted %d log file(s) in %s" % (count, args.log_dir))
+    if args.log_dir:
+        log_count = process_directory(args.log_dir, key_prefix, categories, salt)
+        print("redact_logs: redacted %d log file(s) in %s" % (log_count, args.log_dir))
+
+    for cr_dir in args.cr_dirs:
+        cr_count = process_cr_directory(cr_dir, key_prefix, categories, salt)
+        print("redact_logs: redacted %d CR file(s) in %s" % (cr_count, cr_dir))
+
     return 0
 
 

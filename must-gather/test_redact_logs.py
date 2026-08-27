@@ -257,6 +257,130 @@ class FileProcessingTest(unittest.TestCase):
             self.assertFalse(raw.endswith(b"\n"))
 
 
+class CrRedactionTest(unittest.TestCase):
+    # A BareMetalHost-shaped CR document (as produced by `oc get -o json`),
+    # exercising the CR-specific field names: bmc `address`, lowercase
+    # `hostname`, NIC `ip`/`mac`, `serialNumber`, and `bootMACAddress`.
+    BMH = {
+        "apiVersion": "metal3.io/v1alpha1",
+        "kind": "BareMetalHost",
+        "metadata": {"name": "worker-0", "namespace": "openshift-machine-api"},
+        "spec": {
+            "bootMACAddress": "aa:bb:cc:dd:ee:ff",
+            "bmc": {"address": "redfish://10.8.34.97/redfish/v1/Systems/1",
+                    "credentialsName": "worker-0-bmc-secret"},
+        },
+        "status": {
+            "hardware": {
+                "hostname": "worker-0.example.com",
+                "systemVendor": {"serialNumber": "CNFDG21X1234", "manufacturer": "Dell"},
+                "nics": [{"ip": "10.0.0.5", "mac": "11:22:33:44:55:66", "name": "eno1"}],
+            },
+        },
+    }
+
+    def _redact_doc(self, doc, categories=redact_logs.ALL_CATEGORIES):
+        key_prefix = redact_logs.build_key_prefix_map(categories)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "worker-0.json")
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump(doc, handle, indent=2)
+                handle.write("\n")
+            redact_logs.process_cr_file(path, key_prefix, categories, SALT_A)
+            with open(path, "r", encoding="utf-8") as handle:
+                raw = handle.read()
+        return raw, json.loads(raw)
+
+    def test_cr_document_sensitive_fields_redacted(self):
+        raw, result = self._redact_doc(self.BMH)
+        # The credentialsName (a Secret reference, not a secret) and
+        # structural fields are preserved.
+        self.assertEqual(result["spec"]["bmc"]["credentialsName"], "worker-0-bmc-secret")
+        self.assertEqual(result["status"]["hardware"]["systemVendor"]["manufacturer"], "Dell")
+        self.assertEqual(result["kind"], "BareMetalHost")
+        # Sensitive values are pseudonymized with the right prefixes.
+        self.assertTrue(result["spec"]["bootMACAddress"].startswith("mac-"))
+        self.assertTrue(result["spec"]["bmc"]["address"].startswith("ip-"))
+        self.assertTrue(result["status"]["hardware"]["hostname"].startswith("host-"))
+        vendor = result["status"]["hardware"]["systemVendor"]
+        self.assertTrue(vendor["serialNumber"].startswith("serial-"))
+        nic = result["status"]["hardware"]["nics"][0]
+        self.assertTrue(nic["ip"].startswith("ip-"))
+        self.assertTrue(nic["mac"].startswith("mac-"))
+        # No original sensitive value survives anywhere in the document.
+        for leaked in ("aa:bb:cc:dd:ee:ff", "10.8.34.97", "worker-0.example.com",
+                       "CNFDG21X1234", "10.0.0.5", "11:22:33:44:55:66"):
+            self.assertNotIn(leaked, raw)
+
+    def test_cr_document_is_pretty_printed_json(self):
+        # The rewritten document must remain human-readable JSON (indented),
+        # not collapsed to a single line as log lines are.
+        raw, _ = self._redact_doc(self.BMH)
+        self.assertIn("\n  ", raw)
+        self.assertTrue(raw.endswith("\n"))
+
+    def test_allocated_node_host_map_values_redacted(self):
+        # allocatedNodeHostMap carries hostnames as its (dynamically-keyed)
+        # values; the whole subtree's values must be pseudonymized.
+        doc = {"status": {"extensions": {"allocatedNodeHostMap": {
+            "node-id-1": "worker-0.example.com",
+            "node-id-2": "worker-1.example.com",
+        }}}}
+        raw, result = self._redact_doc(doc)
+        host_map = result["status"]["extensions"]["allocatedNodeHostMap"]
+        self.assertTrue(host_map["node-id-1"].startswith("host-"))
+        self.assertTrue(host_map["node-id-2"].startswith("host-"))
+        self.assertNotEqual(host_map["node-id-1"], host_map["node-id-2"])
+        self.assertNotIn("worker-0.example.com", raw)
+        self.assertNotIn("worker-1.example.com", raw)
+
+    def test_empty_cr_file_left_untouched(self):
+        # A resource type with no instances produces an empty collection
+        # file; it must be skipped rather than treated as a parse failure.
+        key_prefix = redact_logs.build_key_prefix_map(redact_logs.ALL_CATEGORIES)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "empty.json")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write("")
+            redact_logs.process_cr_file(path, key_prefix, redact_logs.ALL_CATEGORIES, SALT_A)
+            with open(path, "r", encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "")
+
+    def test_malformed_cr_file_falls_back_to_text_scrub(self):
+        # A file that does not parse as JSON must not abort; IP/MAC tokens
+        # are scrubbed by pattern instead of leaving the file unredacted.
+        key_prefix = redact_logs.build_key_prefix_map(redact_logs.ALL_CATEGORIES)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "broken.json")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write('{"bmc": {"address": "10.8.34.97", broken')
+            redact_logs.process_cr_file(path, key_prefix, redact_logs.ALL_CATEGORIES, SALT_A)
+            with open(path, "r", encoding="utf-8") as handle:
+                contents = handle.read()
+        self.assertNotIn("10.8.34.97", contents)
+        self.assertIn("ip-", contents)
+
+    def test_process_cr_directory_counts_json_and_skips_other(self):
+        # Only *.json documents are processed; a YAML file (e.g. the
+        # preprovisioning-secrets, already blanked at collection) is skipped.
+        key_prefix = redact_logs.build_key_prefix_map(redact_logs.ALL_CATEGORIES)
+        with tempfile.TemporaryDirectory() as tmp:
+            nested = os.path.join(tmp, "baremetalhosts", "openshift-machine-api")
+            os.makedirs(nested)
+            with open(os.path.join(nested, "worker-0.json"), "w", encoding="utf-8") as handle:
+                json.dump(self.BMH, handle)
+            yaml_path = os.path.join(tmp, "secret.yaml")
+            with open(yaml_path, "w", encoding="utf-8") as handle:
+                handle.write("data: REDACTED\nhostname: keep-me.example.com\n")
+
+            count = redact_logs.process_cr_directory(
+                tmp, key_prefix, redact_logs.ALL_CATEGORIES, SALT_A
+            )
+            self.assertEqual(count, 1)
+            with open(yaml_path, "r", encoding="utf-8") as handle:
+                self.assertIn("keep-me.example.com", handle.read())
+
+
 class MainTest(unittest.TestCase):
     def test_main_fails_closed_on_fully_invalid_categories(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -268,6 +392,35 @@ class MainTest(unittest.TestCase):
             rc = redact_logs.main(["--log-dir", tmp, "--categories", "ip,bogus", "--salt",
                                    base64.b64encode(SALT_A).decode("ascii")])
         self.assertEqual(rc, 0)
+
+    def test_main_requires_a_directory(self):
+        # With neither --log-dir nor --cr-dir, argparse exits non-zero.
+        with self.assertRaises(SystemExit) as ctx:
+            redact_logs.main(["--categories", "all"])
+        self.assertNotEqual(ctx.exception.code, 0)
+
+    def test_main_correlates_logs_and_crs_under_one_salt(self):
+        # A value present in both a pod log and a collected CR must map to
+        # the same pseudonym, so the two can still be correlated.
+        salt_b64 = base64.b64encode(SALT_A).decode("ascii")
+        with tempfile.TemporaryDirectory() as logs, tempfile.TemporaryDirectory() as crs:
+            log_path = os.path.join(logs, "controller.log")
+            with open(log_path, "w", encoding="utf-8") as handle:
+                handle.write(json.dumps({"bmcAddress": "10.8.34.97"}) + "\n")
+            cr_path = os.path.join(crs, "bmh.json")
+            with open(cr_path, "w", encoding="utf-8") as handle:
+                json.dump({"spec": {"bmc": {"address": "10.8.34.97"}}}, handle)
+
+            rc = redact_logs.main(["--log-dir", logs, "--cr-dir", crs,
+                                   "--categories", "ip", "--salt", salt_b64])
+            self.assertEqual(rc, 0)
+
+            with open(log_path, "r", encoding="utf-8") as handle:
+                log_out = json.loads(handle.read())
+            with open(cr_path, "r", encoding="utf-8") as handle:
+                cr_out = json.loads(handle.read())
+        self.assertEqual(log_out["bmcAddress"], cr_out["spec"]["bmc"]["address"])
+        self.assertTrue(cr_out["spec"]["bmc"]["address"].startswith("ip-"))
 
 
 if __name__ == "__main__":
