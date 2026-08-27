@@ -552,6 +552,45 @@ var _ = Describe("Helpers", func() {
 			Expect(reason).To(Equal(string(hwmgmtv1alpha1.ConfigApplied)))
 			Expect(message).To(Equal(string(hwmgmtv1alpha1.ConfigSuccess)))
 		})
+
+		It("should stay in-progress until every worker pool completes", func() {
+			// Add a second worker pool to the NAR. Even with the master and
+			// the first worker pool fully applied, the NAR must remain in-progress
+			// (so ObservedGeneration is not advanced) until the second worker pool
+			// also finishes.
+			mnoNAR.Spec.NodeGroup = append(mnoNAR.Spec.NodeGroup,
+				hwmgmtv1alpha1.NodeGroup{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker-b", HwProfile: "profile-v2", Role: "worker"}, Size: 3})
+
+			var nodes []hwmgmtv1alpha1.AllocatedNode
+			for _, name := range []string{"m1", "m2", "m3"} {
+				n := createNodeWithCondition(name, testNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
+				n.Spec.GroupName = testGroupMaster
+				nodes = append(nodes, *n)
+			}
+			for _, name := range []string{"w1", "w2"} {
+				n := createNodeWithCondition(name, testNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
+				n.Spec.GroupName = testGroupWorker
+				nodes = append(nodes, *n)
+			}
+			for _, name := range []string{"wb1", "wb2"} {
+				n := createNodeWithCondition(name, testNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
+				n.Spec.GroupName = "worker-b"
+				nodes = append(nodes, *n)
+			}
+			wb3 := createNodeWithCondition("wb3", testNamespace, configured, string(hwmgmtv1alpha1.ConfigUpdatePending), metav1.ConditionFalse)
+			wb3.Spec.GroupName = "worker-b"
+			nodes = append(nodes, *wb3)
+
+			for i := range nodes {
+				Expect(fakeClient.Create(ctx, &nodes[i])).To(Succeed())
+			}
+
+			nodeList := &hwmgmtv1alpha1.AllocatedNodeList{Items: nodes}
+			status, reason, message := deriveNARStatusFromMultipleNodes(ctx, fakeNoncached, logger, nodeList, mnoNAR)
+			Expect(status).To(Equal(metav1.ConditionFalse))
+			Expect(reason).To(Equal(string(hwmgmtv1alpha1.InProgress)))
+			Expect(message).To(Equal(fmt.Sprintf("%s (group master: 3/3 completed, group worker: 2/2 completed, group worker-b: 2/3 completed)", string(hwmgmtv1alpha1.ConfigInProgress))))
+		})
 	})
 
 	Describe("processNewNodeAllocationRequest", func() {
@@ -2511,6 +2550,48 @@ var _ = Describe("Helpers", func() {
 			Expect(nodesToProcess).To(HaveLen(2))
 			Expect(nodesToProcess[0].actionType).To(Equal(actionInitiate))
 			Expect(nodesToProcess[1].actionType).To(Equal(actionInitiate))
+		})
+
+		It("should move to all worker pools concurrently once masters are done, each bounded by its own maxUnavailable", func() {
+			var items []hwmgmtv1alpha1.AllocatedNode
+			m1 := createNodeWithCondition("m1", testNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
+			m1.Spec.GroupName = testGroupMaster
+			m1.Spec.HwProfile = newProfile
+			items = append(items, *m1)
+			for _, name := range []string{"wa1", "wa2", "wa3"} {
+				n := createNodeWithCondition(name, testNamespace, configured, string(hwmgmtv1alpha1.ConfigUpdatePending), metav1.ConditionFalse)
+				n.Spec.GroupName = "worker-a"
+				n.Spec.HwProfile = newProfile
+				items = append(items, *n)
+			}
+			for _, name := range []string{"wb1", "wb2", "wb3"} {
+				n := createNodeWithCondition(name, testNamespace, configured, string(hwmgmtv1alpha1.ConfigUpdatePending), metav1.ConditionFalse)
+				n.Spec.GroupName = "worker-b"
+				n.Spec.HwProfile = newProfile
+				items = append(items, *n)
+			}
+
+			nodelist := &hwmgmtv1alpha1.AllocatedNodeList{Items: items}
+			// Workers listed before master in spec to exercise sorting.
+			nar := createNAR([]hwmgmtv1alpha1.NodeGroup{
+				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker-a", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newProfile}},
+				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker-b", Role: hwmgmtv1alpha1.NodeRoleWorker, HwProfile: newProfile}},
+				{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "master", Role: hwmgmtv1alpha1.NodeRoleMaster, HwProfile: newProfile}},
+			})
+			// Master group is done (skipped); both worker pools are released in the same
+			// pass, each capped by its own maxUnavailable (worker-a=1, worker-b=2).
+			mockOps.EXPECT().GetMaxUnavailable(gomock.Any(), "worker-a", 3).Return(1, nil)
+			mockOps.EXPECT().GetMaxUnavailable(gomock.Any(), "worker-b", 3).Return(2, nil)
+
+			nodesToProcess, err := selectNodesToProcess(ctx, logger, mockOps, nodelist, nar)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(nodesToProcess).To(HaveLen(3))
+			perGroup := map[string]int{}
+			for _, r := range nodesToProcess {
+				perGroup[r.node.Spec.GroupName]++
+			}
+			Expect(perGroup["worker-a"]).To(Equal(1))
+			Expect(perGroup["worker-b"]).To(Equal(2))
 		})
 
 		It("should return error when GetMaxUnavailable fails", func() {

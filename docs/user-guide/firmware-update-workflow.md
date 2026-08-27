@@ -219,15 +219,15 @@ with example status output, see
 
 The Day-2 flow differs from Day-0 in several important ways:
 
-1. **Group-priority ordering** — Node groups are processed by role: master group is
-   updated first, then worker groups. A group must fully complete before the next group
-   begins.
+1. **Group-priority ordering** — Node groups are processed by role: the master
+   (control-plane) group is updated first and must fully complete before any worker
+   group begins.
 
-2. **Rolling concurrency** — Master nodes are updated one at a time (serially). Worker
-   nodes can be updated in parallel — `spec.maxUnavailable` from the corresponding
-   MachineConfigPool (MCP) on the spoke cluster determines how many nodes in the group
-   can be updated concurrently. If the MCP is not found or `maxUnavailable` is not set,
-   the default is 1 (serial update).
+2. **Rolling concurrency** — Master nodes are updated one at a time (serially). Once the
+   master group completes, all worker groups roll out concurrently, and within each group
+   worker nodes are updated in parallel up to `spec.maxUnavailable` from that group's
+   corresponding MachineConfigPool (MCP) on the spoke cluster. If the MCP is not found or
+   `maxUnavailable` is not set, the default is 1 (serial update).
 
 3. **Cordon and drain** — Before applying firmware to a node on a multi-node cluster,
    the hardware manager cordons the Kubernetes node and drains its workloads to ensure pods are

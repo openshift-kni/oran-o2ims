@@ -106,8 +106,9 @@ File: `test/e2e/mno_hw_configuration_test.go`
 1. Should update the PR with new hwProfiles and trigger configuration update
 1. Should detect HW configuration changes and begin update process (NAR InProgress=True)
 1. Should PR reach InProgress
-1. Should complete rolling update: masters first (maxUnavailable=1), then workers (maxUnavailable=3)
+1. Should complete rolling update: masters first (maxUnavailable=1), then both worker pools concurrently (worker-r740-blue maxUnavailable=2, worker-xr8620t-blue maxUnavailable=3)
    - Polling and advancing BMH state transitions for each node
+   - Verifying the two worker pools were updated concurrently
    - Waiting for NAR to reach ConfigApplied
 1. Should PR reach HardwareConfigured=True
 
@@ -128,15 +129,15 @@ File: `test/e2e/mno_hw_configuration_test.go`
 1. Should update PR with v1 worker profile requiring BIOS and firmware changes
 1. Should have 3 workers in ConfigUpdate and advance one BMH to Servicing
    - Detect worker configuration changes and begin update (NAR InProgress)
-   - Waiting for at least 3 workers in ConfigUpdate with v1 profile
+   - Waiting for 3 nodes in the worker-xr8620t-blue pool to be in ConfigUpdate with v1 profile
    - Picking one worker and advancing its BMH to Servicing with config-in-progress
 1. Should change to v2 worker profile mid-flight, defer abandon for Servicing worker, then converge all
    - Changing worker profile to v2 while v1 updates are in-flight
-   - Waiting for 7 workers to converge to v2 while Servicing worker defers abandon
+   - Waiting for the non-servicing worker-xr8620t-blue nodes to converge to v2 while the Servicing worker defers abandon
    - Verifying the Servicing worker is still in ConfigUpdate with v1 profile (deferred abandon)
    - Transitioning the Servicing BMH to OK to allow deferred abandon
    - Waiting for NAR to reach ConfigApplied after all workers converge
-   - Verifying all 8 worker nodes converged to v2 profile
+   - Verifying all worker-xr8620t-blue nodes converged to v2 profile
 1. Should PR reach HardwareConfigured=True
 
 ## MNO Scale-Out test [mno-scale-out]

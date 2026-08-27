@@ -16,7 +16,12 @@ spec:
           resourceSelector:
             "resourceselector.clcm.openshift.io/server-type": "R740"
             "resourceselector.clcm.openshift.io/server-colour": "green"
-        - name: worker
+        - name: worker-r740-blue
+          role: worker
+          resourceSelector:
+            "resourceselector.clcm.openshift.io/server-type": "R740"
+            "resourceselector.clcm.openshift.io/server-colour": "blue"
+        - name: worker-xr8620t-blue
           role: worker
           resourceSelector:
             "resourceselector.clcm.openshift.io/server-type": "XR8620t"

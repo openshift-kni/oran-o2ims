@@ -1062,10 +1062,11 @@ func handleNodeAllocationRequestConfiguring(
 }
 
 // selectNodesToProcess selects nodes that need to be processed for day2 hardware updates.
-// It selects nodes from one group at a time in priority order (master first, then workers).
-// The next group is not considered until all nodes in the current group have completed.
-// Within the active group, it retrieves the MCP maxUnavailable as a rolling concurrency ceiling.
-// As long as there capacity remains, pending nodes are selected for processing. If there are
+// The control-plane (master) group is updated first: while it still has work, no worker pool
+// is started. Once the master group completes, all worker pools are released to roll out
+// concurrently, each independently bounded by its own MCP maxUnavailable as a rolling
+// concurrency ceiling. As long as capacity remains in a group, pending nodes are selected
+// for processing. If there are no pending nodes, the next group is processed.
 // abandoned nodes (from a mid-flight profile change), they are prioritized over regular pending
 // nodes. Nodes already in progress are also included so they can continue processing to completion.
 func selectNodesToProcess(
@@ -1161,8 +1162,14 @@ func selectNodesToProcess(
 			}
 		}
 
-		// Stop processing the next group as the current group is not fully updated.
-		break
+		// Masters must complete before workers begin: if this is the control-plane
+		// group and it still has work, stop here so no worker pool starts this
+		// reconcile. Worker pools roll out concurrently - keep looping to accumulate
+		// candidates from every worker group, each bounded by its own MCP maxUnavailable
+		// (computed per-group above).
+		if strings.EqualFold(nodegroup.NodeGroupData.Role, hwmgmtv1alpha1.NodeRoleMaster) {
+			break
+		}
 	}
 
 	return nodesToProcess, nil
