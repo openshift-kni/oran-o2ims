@@ -328,7 +328,7 @@ func validateMergedNodeGroups(mergedData map[string]any) error {
 				"or hwMgmtParameters", ctlrutils.HwMgmtNodeGroupDataKey)
 	}
 
-	seenRoles := map[string]string{}
+	var masterGroup string
 	for _, ng := range ngSlice {
 		ngMap, ok := ng.(map[string]any)
 		if !ok {
@@ -345,10 +345,12 @@ func validateMergedNodeGroups(mergedData map[string]any) error {
 		if role != "master" && role != "worker" {
 			return typederrors.NewInputError("invalid role %q for nodeGroup %q: must be 'master' or 'worker'", role, name)
 		}
-		if prev, exists := seenRoles[role]; exists {
-			return typederrors.NewInputError("duplicate role %q in %s for groups %q and %q", role, ctlrutils.HwMgmtNodeGroupDataKey, prev, name)
+		if role == "master" {
+			if masterGroup != "" {
+				return typederrors.NewInputError("duplicate role %q in %s for groups %q and %q", role, ctlrutils.HwMgmtNodeGroupDataKey, masterGroup, name)
+			}
+			masterGroup = name
 		}
-		seenRoles[role] = name
 
 		// hwProfile, resourcePoolId, and resourceSelector are all optional.
 		// The hardware manager handles node selection based on whatever criteria are provided.
@@ -492,10 +494,15 @@ func (t *provisioningRequestReconcilerTask) getMergedClusterInstanceData(
 	}
 
 	if format == constants.ClusterInstanceNodeGroupsKey {
-		if err := ctlrutils.ExpandNodeGroupsToNodes(mergedClusterDataMap); err != nil {
+		// Expand nodeGroups to flat nodes and capture hostName -> group name
+		// before expansion strips nodeGroups[].name.
+		hostToGroupName, err := ctlrutils.ExpandNodeGroupsToNodes(mergedClusterDataMap)
+		if err != nil {
 			return nil, typederrors.NewInputError(
-				"failed to merge data for %s: %s", constants.TemplateParamClusterInstance, err.Error())
+				"failed to expand %s nodeGroups: %s",
+				constants.TemplateParamClusterInstance, err.Error())
 		}
+		t.clusterInput.hostToGroupName = hostToGroupName
 	}
 
 	t.logger.InfoContext(ctx,

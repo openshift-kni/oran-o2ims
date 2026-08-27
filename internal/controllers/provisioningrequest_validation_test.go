@@ -785,6 +785,10 @@ nodes:
 		task = newTask(defaults, params)
 		merged, err := task.getMergedClusterInstanceData(ctx, ciDefaultsCm, extractClusterInstanceInput(task))
 		Expect(err).ToNot(HaveOccurred())
+		Expect(task.clusterInput.hostToGroupName).To(Equal(map[string]string{
+			"master-1.example.com": "master",
+			"master-2.example.com": "master",
+		}))
 		mergedYAML, err := yaml.Marshal(merged)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(mergedYAML).To(MatchYAML(expectedYAML))
@@ -833,6 +837,7 @@ nodes:
 		task = newTask(defaults, params)
 		merged, err := task.getMergedClusterInstanceData(ctx, ciDefaultsCm, extractClusterInstanceInput(task))
 		Expect(err).ToNot(HaveOccurred())
+		Expect(task.clusterInput.hostToGroupName).To(BeNil())
 		mergedYAML, err := yaml.Marshal(merged)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(mergedYAML).To(MatchYAML(expectedYAML))
@@ -957,6 +962,9 @@ nodeGroups:
 		task = newTask(defaults, params)
 		merged, err := task.getMergedClusterInstanceData(ctx, ciDefaultsCm, extractClusterInstanceInput(task))
 		Expect(err).ToNot(HaveOccurred())
+		Expect(task.clusterInput.hostToGroupName).To(Equal(map[string]string{
+			"m1": "master",
+		}))
 		Expect(merged).To(HaveKey("nodes"))
 		nodes := merged["nodes"].([]any)
 		Expect(nodes).To(HaveLen(1))
@@ -985,6 +993,9 @@ nodeGroups:
 		task = newTask(defaults, params)
 		merged, err := task.getMergedClusterInstanceData(ctx, ciDefaultsCm, extractClusterInstanceInput(task))
 		Expect(err).ToNot(HaveOccurred())
+		Expect(task.clusterInput.hostToGroupName).To(Equal(map[string]string{
+			"m1": "master",
+		}))
 		nodes := merged["nodes"].([]any)
 		Expect(nodes).To(HaveLen(1))
 		Expect(nodes[0].(map[string]any)["hostName"]).To(Equal("m1"))

@@ -5699,4 +5699,25 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("nodeGroupData must not be empty"))
 	})
+
+	It("should return error for duplicate master role in merged nodeGroupData", func() {
+		ct.Spec.TemplateDefaults.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{
+			NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+				{Name: "controller", Role: "master", HwProfile: "profile-64G"},
+			},
+		}
+		c = fakeclient.GetFakeClientFromObjects(createHwProfiles()...)
+		task = buildTask(c, `{
+			"nodeClusterName": "test",
+			"hwMgmtParameters": {
+				"nodeGroupData": [
+					{"name": "controller-b", "role": "master", "hwProfile": "profile-128G"}
+				]
+			}
+		}`)
+
+		err := task.validateAndMergeHwMgmtInput(ctx, ct)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(`duplicate role "master"`))
+	})
 })

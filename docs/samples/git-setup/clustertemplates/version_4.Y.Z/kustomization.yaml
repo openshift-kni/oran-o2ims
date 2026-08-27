@@ -4,6 +4,14 @@ configMapGenerator:
   - extra-manifest/....
   name: sno-ran-du-extra-manifest-1
   namespace: sno-ran-du-v4-Y-Z
+- files:
+  - extra-manifest/....
+  name: std-ran-du-extra-manifest-1
+- files:
+  - extra-manifest/....
+  - extra-manifest/custom-manifest/custom-machine-config-pools.yaml
+  name: std-ran-du-multi-mcp-extra-manifest-1
+  namespace: std-ran-du-v4-Y-Z
 generatorOptions:
   disableNameSuffixHash: true
 
@@ -42,3 +50,7 @@ resources:
 - std-ran-du/policytemplates-defaults-v1.yaml
 - std-ran-du/std-ran-du-v4-Y-Z-1.yaml
 - std-ran-du/clusterinstance-defaults-v1.yaml
+# Standard cluster with multiple worker MachineConfigPools:
+- std-ran-du/policytemplates-defaults-multi-mcp-v1.yaml
+- std-ran-du/std-ran-du-multi-mcp-v4-Y-Z-1.yaml
+- std-ran-du/clusterinstance-defaults-multi-mcp-v1.yaml

@@ -54,6 +54,10 @@ type clusterInput struct {
 	clusterInstanceData map[string]any
 	policyTemplateData  map[string]any
 	hwMgmtData          map[string]any
+	// hostToGroupName maps ClusterInstance hostName to nodeGroups[].name
+	// Populated only for the ClusterInstance nodeGroups input format,
+	// before expansion strips group identity from spec.nodes[].
+	hostToGroupName map[string]string
 }
 
 // clusterTemplateDetails holds the details for the referenced ClusterTemplate

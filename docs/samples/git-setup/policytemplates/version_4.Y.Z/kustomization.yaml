@@ -9,6 +9,7 @@ generators:
 - 3node-ran-du/3node-ran-du-pg-v4-Y-Z-v1.yaml
 # Standard cluster:
 - std-ran-du/std-ran-du-pg-v4-Y-Z-v1.yaml
+- std-ran-du/std-ran-du-pg-multi-mcp-v4-Y-Z-v1.yaml
 
 resources:
 - sno-ran-du/ns.yaml

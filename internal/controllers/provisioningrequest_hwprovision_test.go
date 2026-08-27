@@ -89,10 +89,10 @@ import (
 )
 
 const (
-	groupNameController = "controller"
-	groupNameWorker     = "worker"
-	testNodeID          = "node-1"
-	testHostName        = "host-1"
+	groupNameMaster = "master"
+	groupNameWorker = "worker"
+	testNodeID      = "node-1"
+	testHostName    = "host-1"
 )
 
 var _ = Describe("buildNodeAllocationRequest", func() {
@@ -189,7 +189,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		task.clusterInput = &clusterInput{
 			hwMgmtData: map[string]any{
 				"nodeGroupData": []any{
-					map[string]any{"name": "controller", "role": "master", "hwProfile": "profile-spr-single-processor-64G", "resourcePoolId": "xyz"},
+					map[string]any{"name": "master", "role": "master", "hwProfile": "profile-spr-single-processor-64G", "resourcePoolId": "xyz"},
 					map[string]any{"name": "worker", "role": "worker", "hwProfile": "profile-spr-dual-processor-128G", "resourcePoolId": "xyz"},
 				},
 			},
@@ -211,8 +211,8 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		expectedNodeGroups := map[string]struct {
 			size int
 		}{
-			groupNameController: {size: roleCounts["master"]},
-			groupNameWorker:     {size: roleCounts["worker"]},
+			groupNameMaster: {size: roleCounts["master"]},
+			groupNameWorker: {size: roleCounts["worker"]},
 		}
 
 		for _, group := range nodeAllocationRequest.Spec.NodeGroup {
@@ -910,7 +910,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		task.clusterInput = &clusterInput{
 			hwMgmtData: map[string]any{
 				"nodeGroupData": []any{
-					map[string]any{"name": "controller", "role": "master", "hwProfile": "profile-1", "resourcePoolId": "pool-1"},
+					map[string]any{"name": "master", "role": "master", "hwProfile": "profile-1", "resourcePoolId": "pool-1"},
 					map[string]any{"name": "worker", "role": "worker", "hwProfile": "profile-2", "resourcePoolId": "pool-2"},
 				},
 			},
@@ -926,9 +926,10 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		// Check master nodes
 		var masterGroup, workerGroup *hwmgmtv1alpha1.NodeGroup
 		for i := range nar.Spec.NodeGroup {
-			if nar.Spec.NodeGroup[i].NodeGroupData.Name == "controller" {
+			switch nar.Spec.NodeGroup[i].NodeGroupData.Name {
+			case groupNameMaster:
 				masterGroup = &nar.Spec.NodeGroup[i]
-			} else if nar.Spec.NodeGroup[i].NodeGroupData.Name == groupNameWorker {
+			case groupNameWorker:
 				workerGroup = &nar.Spec.NodeGroup[i]
 			}
 		}
@@ -940,6 +941,97 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		Expect(workerGroup).ToNot(BeNil())
 		Expect(workerGroup.Size).To(Equal(1)) // 1 worker node
 		Expect(workerGroup.NodeGroupData.Role).To(Equal("worker"))
+	})
+
+	It("builds NodeAllocationRequest with multiple worker pools for nodeGroups format", func() {
+		clusterInstance := &unstructured.Unstructured{}
+		clusterInstance.Object = map[string]interface{}{
+			"spec": map[string]interface{}{
+				"nodes": []interface{}{
+					map[string]interface{}{
+						"role":     "master",
+						"hostName": "master-1",
+					},
+					map[string]interface{}{
+						"role":     "master",
+						"hostName": "master-2",
+					},
+					map[string]interface{}{
+						"role":     "worker",
+						"hostName": "worker-1",
+					},
+					map[string]interface{}{
+						"role":     "worker",
+						"hostName": "worker-2",
+					},
+					map[string]interface{}{
+						"role":     "worker",
+						"hostName": "worker-3",
+					},
+					map[string]interface{}{
+						"role":     "worker",
+						"hostName": "worker-4",
+					},
+				},
+			},
+		}
+
+		task.clusterInput = &clusterInput{
+			hwMgmtData: map[string]any{
+				"nodeGroupData": []any{
+					map[string]any{"name": "master", "role": "master", "hwProfile": "profile-1"},
+					map[string]any{"name": "worker-group-1", "role": "worker", "hwProfile": "profile-2"},
+					map[string]any{"name": "worker-group-2", "role": "worker", "hwProfile": "profile-3"},
+					map[string]any{"name": "worker-group-3", "role": "worker", "hwProfile": "profile-4"},
+				},
+			},
+			hostToGroupName: map[string]string{
+				"master-1": "master",
+				"master-2": "master",
+				"worker-1": "worker-group-1",
+				"worker-2": "worker-group-1",
+				"worker-3": "worker-group-2",
+				"worker-4": "worker-group-3",
+			},
+		}
+
+		nar, err := task.buildNodeAllocationRequestSpec(clusterInstance)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(nar).ToNot(BeNil())
+		Expect(nar.Spec.LocationSpec.Site).To(Equal("local-123"))
+		Expect(nar.Spec.ClusterId).To(Equal("exampleCluster"))
+		Expect(nar.Spec.NodeGroup).To(HaveLen(4))
+
+		// Check node groups
+		var masterGroup, workerGroup1, workerGroup2, workerGroup3 *hwmgmtv1alpha1.NodeGroup
+		for i := range nar.Spec.NodeGroup {
+			switch nar.Spec.NodeGroup[i].NodeGroupData.Name {
+			case groupNameMaster:
+				masterGroup = &nar.Spec.NodeGroup[i]
+			case "worker-group-1":
+				workerGroup1 = &nar.Spec.NodeGroup[i]
+			case "worker-group-2":
+				workerGroup2 = &nar.Spec.NodeGroup[i]
+			case "worker-group-3":
+				workerGroup3 = &nar.Spec.NodeGroup[i]
+			}
+		}
+
+		Expect(masterGroup).ToNot(BeNil())
+		Expect(masterGroup.Size).To(Equal(2)) // 2 master nodes
+		Expect(masterGroup.NodeGroupData.Role).To(Equal("master"))
+
+		Expect(workerGroup1).ToNot(BeNil())
+		Expect(workerGroup1.Size).To(Equal(2))
+		Expect(workerGroup1.NodeGroupData.Role).To(Equal("worker"))
+
+		Expect(workerGroup2).ToNot(BeNil())
+		Expect(workerGroup2.Size).To(Equal(1))
+		Expect(workerGroup2.NodeGroupData.Role).To(Equal("worker"))
+
+		Expect(workerGroup3).ToNot(BeNil())
+		Expect(workerGroup3.Size).To(Equal(1))
+		Expect(workerGroup3.NodeGroupData.Role).To(Equal("worker"))
 	})
 
 	It("should set ConfigTransactionId to ProvisioningRequest generation", func() {
@@ -1118,7 +1210,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		task.clusterInput = &clusterInput{
 			hwMgmtData: map[string]any{
 				"nodeGroupData": []any{
-					map[string]any{"name": "controller", "role": "master", "hwProfile": "override-profile-1", "resourcePoolId": "pool-1"},
+					map[string]any{"name": "master", "role": "master", "hwProfile": "override-profile-1", "resourcePoolId": "pool-1"},
 					map[string]any{"name": "worker", "role": "worker", "hwProfile": "template-profile-2", "resourcePoolId": "pool-2"},
 				},
 			},
@@ -1132,9 +1224,10 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		// Check that controller group uses the overridden profile
 		var controllerGroup, workerGroup *hwmgmtv1alpha1.NodeGroup
 		for i := range nar.Spec.NodeGroup {
-			if nar.Spec.NodeGroup[i].NodeGroupData.Name == "controller" {
+			switch nar.Spec.NodeGroup[i].NodeGroupData.Name {
+			case groupNameMaster:
 				controllerGroup = &nar.Spec.NodeGroup[i]
-			} else if nar.Spec.NodeGroup[i].NodeGroupData.Name == groupNameWorker {
+			case groupNameWorker:
 				workerGroup = &nar.Spec.NodeGroup[i]
 			}
 		}
@@ -1537,7 +1630,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 						HardwareProvisioningTimeout: &metav1.Duration{Duration: 90 * time.Minute},
 						NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-							{Name: "controller", Role: "master", HwProfile: "profile-64G"},
+							{Name: "master", Role: "master", HwProfile: "profile-64G"},
 						},
 					},
 				},
@@ -1555,7 +1648,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 
 		// Set up hardware nodes map
 		hwNodes = map[string][]utils.NodeInfo{
-			"controller": {
+			"master": {
 				{
 					BmcAddress:     "192.168.1.100",
 					BmcCredentials: "master-01-bmc-secret",
@@ -1614,7 +1707,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 				NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 					{
 						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
-							Name: "controller",
+							Name: "master",
 							Role: "master",
 						},
 					},
@@ -1642,7 +1735,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 						HardwareProvisioningTimeout: &metav1.Duration{Duration: 90 * time.Minute},
 						NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-							{Name: "controller", Role: "master", HwProfile: "profile-64G"},
+							{Name: "master", Role: "master", HwProfile: "profile-64G"},
 						},
 					},
 				},
@@ -1740,6 +1833,48 @@ var _ = Describe("applyNodeConfiguration", func() {
 		Expect(workerNode2["bootMACAddress"]).To(Equal("aa:bb:cc:dd:ee:22"))
 	})
 
+	It("successfully applies node configuration for nodeGroups format with multiple worker MCPs", func() {
+		// Workers use custom MCPs.
+		hwNodes["worker-group-1"] = []utils.NodeInfo{hwNodes["worker"][0]}
+		hwNodes["worker-group-2"] = []utils.NodeInfo{hwNodes["worker"][1]}
+		delete(hwNodes, "worker")
+		nar.Spec.NodeGroup = []hwmgmtv1alpha1.NodeGroup{
+			{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "master", Role: "master"}},
+			{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker-group-1", Role: "worker"}},
+			{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker-group-2", Role: "worker"}},
+		}
+		task.clusterInput.hostToGroupName = map[string]string{
+			"master-01": "master",
+			"worker-01": "worker-group-1",
+			"worker-02": "worker-group-2",
+		}
+
+		err := task.applyNodeConfiguration(ctx, hwNodes, nar, ci)
+		Expect(err).ToNot(HaveOccurred())
+
+		nodes, found, err := unstructured.NestedSlice(ci.Object, "spec", "nodes")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(found).To(BeTrue())
+		Expect(nodes).To(HaveLen(3))
+
+		masterNode := nodes[0].(map[string]interface{})
+		Expect(masterNode["bmcAddress"]).To(Equal("192.168.1.100"))
+		bmcCreds, found, err := unstructured.NestedString(masterNode, "bmcCredentialsName", "name")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(found).To(BeTrue())
+		Expect(bmcCreds).To(Equal("master-01-bmc-secret"))
+		Expect(masterNode["bootMACAddress"]).To(Equal("aa:bb:cc:dd:ee:01"))
+
+		// worker-01 from hardware group "worker-group-1", worker-02 from "worker-group-2"
+		workerNode1 := nodes[1].(map[string]interface{})
+		Expect(workerNode1["bmcAddress"]).To(Equal("192.168.1.101"))
+		Expect(workerNode1["bootMACAddress"]).To(Equal("aa:bb:cc:dd:ee:11"))
+
+		workerNode2 := nodes[2].(map[string]interface{})
+		Expect(workerNode2["bmcAddress"]).To(Equal("192.168.1.102"))
+		Expect(workerNode2["bootMACAddress"]).To(Equal("aa:bb:cc:dd:ee:22"))
+	})
+
 	It("returns error when spec.nodes not found in cluster instance", func() {
 		// Remove nodes from cluster instance spec
 		ci.Object = map[string]interface{}{
@@ -1781,7 +1916,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 		// Remove HwMgrNodeId and HwMgrNodeNs from hardware nodes
 		// Also provide both interfaces to match the cluster instance structure
 		hwNodesWithoutHostRef := map[string][]utils.NodeInfo{
-			"controller": {
+			"master": {
 				{
 					BmcAddress:     "192.168.1.100",
 					BmcCredentials: "master-01-bmc-secret",
@@ -1886,8 +2021,8 @@ var _ = Describe("applyNodeConfiguration", func() {
 			},
 		}
 
-		// Add second controller node
-		hwNodes["controller"] = append(hwNodes["controller"], utils.NodeInfo{
+		// Add second master node
+		hwNodes["master"] = append(hwNodes["master"], utils.NodeInfo{
 			BmcAddress:     "192.168.1.102",
 			BmcCredentials: "master-02-bmc-secret",
 			NodeID:         "node-master-02",
@@ -1902,7 +2037,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 			},
 		})
 
-		Expect(hwNodes["controller"]).To(HaveLen(2))
+		Expect(hwNodes["master"]).To(HaveLen(2))
 
 		err := task.applyNodeConfiguration(ctx, hwNodes, nar, ci)
 		Expect(err).ToNot(HaveOccurred())

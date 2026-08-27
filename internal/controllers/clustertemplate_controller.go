@@ -305,7 +305,7 @@ func (t *clusterTemplateReconcilerTask) validateHwMgmtDefaults(ctx context.Conte
 
 	if len(t.object.Spec.TemplateDefaults.HwMgmtDefaults.NodeGroupData) > 0 {
 		seenNodeGroups := map[string]struct{}{}
-		seenRoles := map[string]string{}
+		var masterGroup string
 		hwProfileNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
 		for _, ng := range t.object.Spec.TemplateDefaults.HwMgmtDefaults.NodeGroupData {
 			if _, exists := seenNodeGroups[ng.Name]; exists {
@@ -313,11 +313,13 @@ func (t *clusterTemplateReconcilerTask) validateHwMgmtDefaults(ctx context.Conte
 					fmt.Sprintf("duplicate nodeGroupData name %q in hwMgmtDefaults", ng.Name))
 			}
 			seenNodeGroups[ng.Name] = struct{}{}
-			if prev, exists := seenRoles[ng.Role]; exists {
-				validationErrs = append(validationErrs,
-					fmt.Sprintf("duplicate role %q in hwMgmtDefaults for groups %q and %q", ng.Role, prev, ng.Name))
+			if ng.Role == hwmgmtv1alpha1.NodeRoleMaster {
+				if masterGroup != "" {
+					validationErrs = append(validationErrs,
+						fmt.Sprintf("duplicate role %q in hwMgmtDefaults for groups %q and %q", ng.Role, masterGroup, ng.Name))
+				}
+				masterGroup = ng.Name
 			}
-			seenRoles[ng.Role] = ng.Name
 			if ng.HwProfile != "" {
 				hwProfileObj := &hwmgmtv1alpha1.HardwareProfile{}
 				if err := t.client.Get(ctx, client.ObjectKey{Name: ng.HwProfile, Namespace: hwProfileNS}, hwProfileObj); err != nil {

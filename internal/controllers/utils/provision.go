@@ -391,15 +391,16 @@ func PrepareClusterInstanceForServerSideApply(ci *siteconfig.ClusterInstance) {
 // slice. For each group, shared fields are deep-copied onto every host, then the
 // host overlay is merged on top (interfaces by name). Flattened interface
 // addresses (CIDR strings) are mapped into nmstate config. O-cloud-only sugar fields
-// (group name, interfaces[].addresses) are stripped.
-func ExpandNodeGroupsToNodes(merged map[string]any) error {
+// (group name, interfaces[].addresses) are stripped. It also returns a map of
+// hostName -> nodeGroups[].name (spoke MCP name).
+func ExpandNodeGroupsToNodes(merged map[string]any) (map[string]string, error) {
 	raw, ok := merged[constants.ClusterInstanceNodeGroupsKey]
 	if !ok {
-		return fmt.Errorf("%q is required for the nodeGroups format", constants.ClusterInstanceNodeGroupsKey)
+		return nil, fmt.Errorf("%q is required for the nodeGroups format", constants.ClusterInstanceNodeGroupsKey)
 	}
 	groups, ok := raw.([]any)
 	if !ok {
-		return fmt.Errorf("%q must be an array", constants.ClusterInstanceNodeGroupsKey)
+		return nil, fmt.Errorf("%q must be an array", constants.ClusterInstanceNodeGroupsKey)
 	}
 
 	nodeMergeRules := SliceMergeRules{
@@ -412,13 +413,17 @@ func ExpandNodeGroupsToNodes(merged map[string]any) error {
 		},
 	}
 
+	hostToGroupName := map[string]string{}
 	flatNodes := []any{}
 	for i, group := range groups {
 		groupMap, ok := group.(map[string]any)
 		if !ok {
-			return fmt.Errorf("%s[%d] is not an object", constants.ClusterInstanceNodeGroupsKey, i)
+			return nil, fmt.Errorf("%s[%d] is not an object", constants.ClusterInstanceNodeGroupsKey, i)
 		}
 		groupName, _ := groupMap["name"].(string)
+		if groupName == "" {
+			return nil, fmt.Errorf("%s[%d] is missing required field %q", constants.ClusterInstanceNodeGroupsKey, i, "name")
+		}
 
 		// Groups with missing or empty nodes are kept in defaults for shared
 		// template fields (e.g. a worker group with no hosts yet) and contribute
@@ -429,7 +434,7 @@ func ExpandNodeGroupsToNodes(merged map[string]any) error {
 		}
 		groupNodes, ok := nodesRaw.([]any)
 		if !ok {
-			return fmt.Errorf("node group %q nodes must be an array", groupName)
+			return nil, fmt.Errorf("node group %q nodes must be an array", groupName)
 		}
 		if len(groupNodes) == 0 {
 			continue
@@ -444,18 +449,28 @@ func ExpandNodeGroupsToNodes(merged map[string]any) error {
 		for j, node := range groupNodes {
 			nodeMap, ok := node.(map[string]any)
 			if !ok {
-				return fmt.Errorf("node group %q node[%d] is not an object", groupName, j)
+				return nil, fmt.Errorf("node group %q node[%d] is not an object", groupName, j)
 			}
+			// Capture the hostName -> groupName mapping.
+			hostName, _ := nodeMap["hostName"].(string)
+			if hostName == "" {
+				return nil, fmt.Errorf("node group %q node[%d] is missing required field %q", groupName, j, "hostName")
+			}
+			if existing, ok := hostToGroupName[hostName]; ok {
+				return nil, fmt.Errorf("node group %q node[%d] has duplicate hostName %q (already in node group %q)",
+					groupName, j, hostName, existing)
+			}
+			hostToGroupName[hostName] = groupName
 
 			// Fresh copy of the shared/common fields per node so expanded nodes are independent.
 			flatNode := runtime.DeepCopyJSON(groupMap)
 			if err := DeepMergeMaps(flatNode, nodeMap, false, nodeMergeRules); err != nil {
-				return fmt.Errorf("failed to merge node[%d] onto node group %q: %w", j, groupName, err)
+				return nil, fmt.Errorf("failed to merge node[%d] onto node group %q: %w", j, groupName, err)
 			}
 
 			// Map flattened nodeNetwork.interfaces[].addresses CIDR strings into the matching nmstate entry.
 			if err := applyInterfaceAddresses(flatNode); err != nil {
-				return fmt.Errorf("node group %q node[%d]: %w", groupName, j, err)
+				return nil, fmt.Errorf("node group %q node[%d]: %w", groupName, j, err)
 			}
 
 			flatNodes = append(flatNodes, flatNode)
@@ -463,14 +478,14 @@ func ExpandNodeGroupsToNodes(merged map[string]any) error {
 	}
 
 	if len(groups) > 0 && len(flatNodes) == 0 {
-		return fmt.Errorf(
+		return nil, fmt.Errorf(
 			"at least one node is required across %s in clusterInstanceParameters",
 			constants.ClusterInstanceNodeGroupsKey)
 	}
 
 	delete(merged, constants.ClusterInstanceNodeGroupsKey)
 	merged[constants.ClusterInstanceNodesKey] = flatNodes
-	return nil
+	return hostToGroupName, nil
 }
 
 // applyInterfaceAddresses maps flattened nodeNetwork.interfaces[].addresses CIDR

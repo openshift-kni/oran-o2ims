@@ -1,0 +1,56 @@
+# Custom worker MachineConfigPools. Copy into the extra-manifests ConfigMap
+# alongside the telco-reference extra manifests. Each metadata.name must match
+# the corresponding nodeGroups[].name / hwMgmtDefaults.nodeGroupData[].name.
+#
+# machineConfigSelector includes "worker" so these pools inherit worker
+# MachineConfigs.
+# The pools.operator.machineconfiguration.openshift.io/<pool> label is needed
+# so the PerformanceProfile can use it to select the pool and bind its generated
+# KubeletConfig to the pool.
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfigPool
+metadata:
+  name: worker-dell-r740
+  labels:
+    pools.operator.machineconfiguration.openshift.io/worker-dell-r740: ""
+spec:
+  machineConfigSelector:
+    matchExpressions:
+      - key: machineconfiguration.openshift.io/role
+        operator: In
+        values: [worker, worker-dell-r740]
+  nodeSelector:
+    matchLabels:
+      node-role.kubernetes.io/worker-dell-r740: ""
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfigPool
+metadata:
+  name: worker-dell-xr8620t
+  labels:
+    pools.operator.machineconfiguration.openshift.io/worker-dell-xr8620t: ""
+spec:
+  machineConfigSelector:
+    matchExpressions:
+      - key: machineconfiguration.openshift.io/role
+        operator: In
+        values: [worker, worker-dell-xr8620t]
+  nodeSelector:
+    matchLabels:
+      node-role.kubernetes.io/worker-dell-xr8620t: ""
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfigPool
+metadata:
+  name: worker-hpe-dl380
+  labels:
+    pools.operator.machineconfiguration.openshift.io/worker-hpe-dl380: ""
+spec:
+  machineConfigSelector:
+    matchExpressions:
+      - key: machineconfiguration.openshift.io/role
+        operator: In
+        values: [worker, worker-hpe-dl380]
+  nodeSelector:
+    matchLabels:
+      node-role.kubernetes.io/worker-hpe-dl380: ""

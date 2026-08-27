@@ -1,0 +1,160 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clusterinstance-defaults-multi-mcp-v1
+  namespace: std-ran-du-v4-Y-Z
+data:
+  # clusterInstallationTimeout is optional.
+  # The value should be a duration string
+  # (e.g., "180m" for 180 minutes)
+  # clusterInstallationTimeout: "180m"
+  clusterInstallationTimeout: "240m"
+  clusterinstance-defaults: |
+    baseDomain: example.com
+    extraLabels:
+      ManagedCluster:
+        cluster-version: "v4-Y-Z"
+        std-ran-du-multi-mcp-policy: "v1"
+    clusterType: HighlyAvailable
+    clusterImageSetNameRef: "4.Y.Z"
+    pullSecretRef:
+      name: pull-secret
+    networkType: OVNKubernetes
+    sshPublicKey: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDTca4Qyu5AYBmZbSl74cNTKuNINJ7d+ceBRzKUrhHcQpMbl8UnAYhjh/ffTyVCsgwzm1RjTAm6/tPj9euEa+YX4U78Sx+ioLHmjDvACYsti4DekIR+opFwfIw+JTDXoyVv06lOPaTOa/vtgpe+gDEL364j47f3p9H/tGhsLmpjeG3DVAhbqSh3s0IHpd4OzF/r6g6mbPyHadvedkBZp/qeUX054Gc2QqJeg/s/eddPlQDJbmL8yRVkZu+SsFTOEOAtrdA3czeaEaA8s+aWP9PN3X539Ddw3qahyOSCXpCE2eJXPh8DJCBWVEcFFYgmIFVvCQ+o9cjEmIYg6drGGvRV
+    installConfigOverrides: '{"capabilities": {"baselineCapabilitySet": "None", "additionalEnabledCapabilities": ["NodeTuning", "OperatorLifecycleManager", "Ingress", "baremetal", "MachineAPI"]}}'
+    clusterNetwork:
+      - cidr: 203.0.113.0/24
+        hostPrefix: 25
+    serviceNetwork:
+      - cidr: 198.51.100.0/24
+    additionalNTPSources:
+      - 1.pool.ntp.org
+    templateRefs:
+      - name: ai-cluster-templates-v1
+        namespace: open-cluster-management
+    cpuPartitioningMode: AllNodes
+    holdInstallation: false
+    extraManifestsRefs:
+      - name: std-ran-du-multi-mcp-extra-manifest-1
+    nodeGroups:
+      - name: master
+        role: master
+        bootMode: UEFI
+        ironicInspect: "disabled"
+        automatedCleaningMode: disabled
+        rootDeviceHints:
+          deviceName: /dev/disk/by-path/pci-0000:01:00.0-nvme-1
+        nodeNetwork:
+          interfaces:
+            - name: ens1f0
+              label: boot-interface
+            - name: ens1f1
+              label: data-interface
+          config:
+            routes:
+              config:
+                - destination: 0.0.0.0/0
+                  next-hop-interface: ens1f0
+                  table-id: 254
+            interfaces:
+              - ipv6:
+                  enabled: false
+                ipv4:
+                  enabled: true
+                name: ens1f0
+                state: up
+                type: ethernet
+        templateRefs:
+          - name: ai-node-templates-v1
+            namespace: open-cluster-management
+      # Configure common configuration for each worker group that maps to the corresponding hardware node group.
+      - name: worker-dell-r740
+        role: worker
+        nodeLabels:
+          node-role.kubernetes.io/worker-dell-r740: ""
+        bootMode: UEFI
+        ironicInspect: "disabled"
+        automatedCleaningMode: disabled
+        rootDeviceHints:
+          deviceName: /dev/disk/by-path/pci-0000:01:00.0-nvme-1
+        nodeNetwork:
+          interfaces:
+            - name: ens1f0
+              label: boot-interface
+          config:
+            routes:
+              config:
+                - destination: 0.0.0.0/0
+                  next-hop-interface: ens1f0
+                  table-id: 254
+            interfaces:
+              - ipv6:
+                  enabled: false
+                ipv4:
+                  enabled: true
+                name: ens1f0
+                state: up
+                type: ethernet
+        templateRefs:
+          - name: ai-node-templates-v1
+            namespace: open-cluster-management
+      - name: worker-dell-xr8620t
+        role: worker
+        nodeLabels:
+          node-role.kubernetes.io/worker-dell-xr8620t: ""
+        bootMode: UEFI
+        ironicInspect: "disabled"
+        automatedCleaningMode: disabled
+        rootDeviceHints:
+          deviceName: /dev/disk/by-path/pci-0000:44:00.0-nvme-1
+        nodeNetwork:
+          interfaces:
+            - name: eno8303np0
+              label: boot-interface
+          config:
+            routes:
+              config:
+                - destination: 0.0.0.0/0
+                  next-hop-interface: eno8303np0
+                  table-id: 254
+            interfaces:
+              - ipv6:
+                  enabled: false
+                ipv4:
+                  enabled: true
+                name: eno8303np0
+                state: up
+                type: ethernet
+        templateRefs:
+          - name: ai-node-templates-v1
+            namespace: open-cluster-management
+      - name: worker-hpe-dl380
+        role: worker
+        nodeLabels:
+          node-role.kubernetes.io/worker-hpe-dl380: ""
+        bootMode: UEFI
+        ironicInspect: "disabled"
+        automatedCleaningMode: disabled
+        rootDeviceHints:
+          deviceName: /dev/disk/by-path/pci-0000:62:00.0-scsi-0:2:7:0
+        nodeNetwork:
+          interfaces:
+            - name: ens15f0
+              label: boot-interface
+          config:
+            routes:
+              config:
+                - destination: 0.0.0.0/0
+                  next-hop-interface: ens15f0
+                  table-id: 254
+            interfaces:
+              - ipv6:
+                  enabled: false
+                ipv4:
+                  enabled: true
+                name: ens15f0
+                state: up
+                type: ethernet
+        templateRefs:
+          - name: ai-node-templates-v1
+            namespace: open-cluster-management

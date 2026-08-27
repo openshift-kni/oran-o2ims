@@ -462,7 +462,13 @@ func (t *provisioningRequestReconcilerTask) applyNodeConfiguration(
 	// Create a map to track unmatched nodes
 	unmatchedNodes := make(map[int]string)
 
+	// ClusterInstance nodes format (legacy): one hardware group per installer role.
 	roleToNodeGroupName := getRoleToGroupNameMap(&nar.Spec)
+	// ClusterInstance nodeGroups format: hardware group by hostname.
+	hostToGroupName := map[string]string{}
+	if t.clusterInput != nil {
+		hostToGroupName = t.clusterInput.hostToGroupName
+	}
 
 	// Extract the nodes slice
 	nodes, found, err := unstructured.NestedSlice(clusterInstance.Object, "spec", "nodes")
@@ -497,7 +503,12 @@ func (t *provisioningRequestReconcilerTask) applyNodeConfiguration(
 
 		role, _, _ := unstructured.NestedString(nodeMap, "role")
 		hostName, _, _ := unstructured.NestedString(nodeMap, "hostName")
-		groupName := roleToNodeGroupName[role]
+		var groupName string
+		if len(hostToGroupName) > 0 {
+			groupName = hostToGroupName[hostName]
+		} else {
+			groupName = roleToNodeGroupName[role]
+		}
 
 		var nodeInfo ctlrutils.NodeInfo
 		matched := false
@@ -771,6 +782,8 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec(
 
 	hwMgmtData := t.clusterInput.hwMgmtData
 
+	// ClusterInstance nodes format (legacy): size each hardware group by installer role
+	// (one hardware group per role).
 	roleCounts := make(map[string]int)
 	nodes, found, err := unstructured.NestedSlice(clusterInstance.Object, "spec", "nodes")
 	if err != nil {
@@ -788,6 +801,12 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec(
 
 		role, _, _ := unstructured.NestedString(nodeMap, "role")
 		roleCounts[role]++
+	}
+
+	// ClusterInstance nodeGroups format: size each hardware group by hostname membership.
+	groupSizes := make(map[string]int)
+	for _, groupName := range t.clusterInput.hostToGroupName {
+		groupSizes[groupName]++
 	}
 
 	// Extract nodeGroupData from the pre-merged hwMgmt data
@@ -830,8 +849,19 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec(
 			ResourceSelector: resourceSelector,
 			Role:             role,
 		}
-		nodeGroup := newNodeGroup(ngd, roleCounts)
-		nodeGroups = append(nodeGroups, nodeGroup)
+
+		var size int
+		if len(t.clusterInput.hostToGroupName) > 0 {
+			// ClusterInstance nodeGroups format path
+			size = groupSizes[name]
+		} else {
+			// ClusterInstance nodes format path (legacy)
+			size = roleCounts[role]
+		}
+		nodeGroups = append(nodeGroups, hwmgmtv1alpha1.NodeGroup{
+			NodeGroupData: ngd,
+			Size:          size,
+		})
 	}
 
 	siteIDRaw, err := provisioningv1alpha1.ExtractMatchingInput(

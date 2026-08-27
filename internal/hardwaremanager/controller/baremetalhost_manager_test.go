@@ -730,6 +730,11 @@ var _ = Describe("BareMetalHost Manager", func() {
 			}, map[string]string{
 				BiosUpdateNeededAnnotation:     ValueTrue,
 				FirmwareUpdateNeededAnnotation: ValueTrue,
+				// node-label.* annotations are stamped from ClusterInstance nodeLabels
+				// and propagated to the node by BMAC; they must be cleared on
+				// deallocation regardless of the underlying label prefix.
+				BmhNodeLabelAnnotationPrefix + "node-role.kubernetes.io/worker-cnf": "",
+				BmhNodeLabelAnnotationPrefix + "custom.example.com/pool":            "blue",
 			}, metal3v1alpha1.StateProvisioned)
 
 			// Set up CustomDeploy and Image
@@ -766,6 +771,12 @@ var _ = Describe("BareMetalHost Manager", func() {
 			Expect(hasBiosAnnotation).To(BeFalse())
 			_, hasFirmwareAnnotation := updatedBMH.Annotations[FirmwareUpdateNeededAnnotation]
 			Expect(hasFirmwareAnnotation).To(BeFalse())
+
+			// Check that node-label annotations were removed
+			_, hasRoleLabel := updatedBMH.Annotations[BmhNodeLabelAnnotationPrefix+"node-role.kubernetes.io/worker-cnf"]
+			Expect(hasRoleLabel).To(BeFalse())
+			_, hasCustomLabel := updatedBMH.Annotations[BmhNodeLabelAnnotationPrefix+"custom.example.com/pool"]
+			Expect(hasCustomLabel).To(BeFalse())
 
 			// Check that spec fields were updated
 			Expect(updatedBMH.Spec.Online).To(BeFalse())
