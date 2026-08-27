@@ -235,6 +235,40 @@ class FileProcessingTest(unittest.TestCase):
         generated = redact_logs.resolve_salt(None)
         self.assertEqual(len(generated), 32)
 
+    def test_process_file_preserves_crlf_line_endings(self):
+        salt = SALT_A
+        key_prefix = redact_logs.build_key_prefix_map(redact_logs.ALL_CATEGORIES)
+        with tempfile.TemporaryDirectory() as tmp:
+            log_path = os.path.join(tmp, "controller.log")
+            with open(log_path, "wb") as handle:
+                handle.write(json.dumps({"clientIp": "10.8.34.97"}).encode("utf-8") + b"\r\n")
+                handle.write(b"plain line 10.8.34.97\r\n")
+                handle.write(b"no trailing newline 10.8.34.97")
+
+            redact_logs.process_file(log_path, key_prefix, redact_logs.ALL_CATEGORIES, salt)
+
+            with open(log_path, "rb") as handle:
+                raw = handle.read()
+            self.assertNotIn(b"10.8.34.97", raw)
+            self.assertIn(b"ip-", raw)
+            # CRLF terminators preserved untranslated; final line unterminated.
+            self.assertEqual(raw.count(b"\r\n"), 2)
+            self.assertFalse(raw.endswith(b"\r\n"))
+            self.assertFalse(raw.endswith(b"\n"))
+
+
+class MainTest(unittest.TestCase):
+    def test_main_fails_closed_on_fully_invalid_categories(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rc = redact_logs.main(["--log-dir", tmp, "--categories", "bogus"])
+        self.assertNotEqual(rc, 0)
+
+    def test_main_succeeds_with_at_least_one_valid_category(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rc = redact_logs.main(["--log-dir", tmp, "--categories", "ip,bogus", "--salt",
+                                   base64.b64encode(SALT_A).decode("ascii")])
+        self.assertEqual(rc, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

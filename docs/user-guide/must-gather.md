@@ -128,7 +128,10 @@ Redaction is controlled by environment variables read by the `gather` script:
 - `MUST_GATHER_REDACT` — set to `false` to disable redaction entirely
   (enabled by default). Disabling is not recommended for support cases.
 - `MUST_GATHER_REDACT_CATEGORIES` — comma-separated subset of
-  `ip,host,user,mac,serial` to redact (default: `all`).
+  `ip,host,user,mac,serial` to redact (default: `all`). Unknown category
+  names are ignored, but a value that selects no valid categories at all
+  (for example a typo such as `bogus`) is treated as a redaction failure,
+  so the collected pod logs are removed rather than shipped unredacted.
 
 The default `oc adm must-gather` invocation redacts all categories. To
 override the defaults, run the `gather` script with the environment variables

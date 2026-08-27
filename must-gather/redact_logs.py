@@ -212,20 +212,22 @@ def _split_eol(raw):
 
 
 def process_file(path, key_prefix, categories, salt):
-    """Redact a log file in place, preserving line endings."""
-    with open(path, "r", encoding="utf-8", errors="replace") as handle:
-        content = handle.read()
+    """Redact a log file in place, preserving line endings.
 
-    out = []
-    for raw in content.splitlines(keepends=True):
-        body, eol = _split_eol(raw)
-        out.append(redact_line(body, key_prefix, categories, salt) + eol)
-
+    Lines are streamed one at a time from the input handle straight into the
+    temporary output file, so a large pod log never has to be held in memory
+    all at once. Both handles use ``newline=""`` so that line endings
+    (``\\r\\n``, ``\\n``, ``\\r``) are recognized for splitting but never
+    translated, matching the original ``_split_eol`` behavior.
+    """
     directory = os.path.dirname(path) or "."
     fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".redact-", suffix=".tmp")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write("".join(out))
+        with open(path, "r", encoding="utf-8", errors="replace", newline="") as src, \
+                os.fdopen(fd, "w", encoding="utf-8", newline="") as dst:
+            for raw in src:
+                body, eol = _split_eol(raw)
+                dst.write(redact_line(body, key_prefix, categories, salt) + eol)
         os.replace(tmp_path, path)
     except BaseException:
         if os.path.exists(tmp_path):
@@ -275,8 +277,15 @@ def main(argv=None):
 
     categories = parse_categories(args.categories)
     if not categories:
-        print("redact_logs: no valid categories selected; nothing to redact", file=sys.stderr)
-        return 0
+        # Fail closed: a non-empty but fully invalid categories value (e.g.
+        # "bogus") must not be treated as "nothing to redact", or the caller
+        # would ship unredacted logs. Return non-zero so the gather script's
+        # cleanup path removes the collected logs.
+        print(
+            "redact_logs: error: no valid categories selected in %r" % args.categories,
+            file=sys.stderr,
+        )
+        return 1
 
     key_prefix = build_key_prefix_map(categories)
     salt = resolve_salt(args.salt)
