@@ -4,6 +4,8 @@
 *.exe
 *.swp
 *.swo
+*.pyc
+__pycache__/
 /__debug*
 /oran-o2ims
 /bin/*

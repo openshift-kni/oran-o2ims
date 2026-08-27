@@ -1,5 +1,6 @@
 FROM registry.redhat.io/openshift4/ose-cli-rhel9:latest
 
 COPY must-gather/gather /usr/bin/gather
+COPY must-gather/redact_logs.py /usr/bin/redact_logs.py
 
 ENTRYPOINT ["/usr/bin/gather"]

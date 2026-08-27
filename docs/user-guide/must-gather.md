@@ -82,8 +82,62 @@ oc adm must-gather \
 > [!NOTE]
 > The O-Cloud Manager must-gather does not collect BMC credentials. The only Secrets collected are the
 > preprovisioning network data Secrets (nmstate configuration) referenced by
-> BareMetalHosts. The collected data does include IP addresses, hostnames, and cluster
+> BareMetalHosts. The collected CRs still include IP addresses, hostnames, and cluster
 > configuration details — review before sharing externally if needed.
+
+### Log redaction
+
+By default, sensitive fields in the collected **pod logs** are redacted before
+they are written into the archive. This lets support archives be shared across
+organizational boundaries without exposing operational details. Redaction does
+not apply to collected CRs.
+
+Five categories of fields are redacted, identified by their structured
+(slog) key name:
+
+| Category | Log keys | Pseudonym prefix |
+|---|---|---|
+| IP addresses | `clientIp`, `bmcAddress`, `host`, `ip` | `ip-` |
+| Hostnames | `clusterName`, `hostName`, `bmh`, `managedCluster` | `host-` |
+| User identities | `user`, `preferred_username` | `user-` |
+| MAC addresses | `bootMACAddress`, `macAddress`, `mac` | `mac-` |
+| Serial numbers | `serialNumber`, `serial` | `serial-` |
+
+Each value is replaced with a consistent pseudonym computed as
+`prefix + HMAC-SHA256(salt, value)` (for example, `10.8.34.97` becomes
+`ip-a3f7b2c1`). A random salt is generated per collection and is never written
+to the archive, so:
+
+- the same value always maps to the same pseudonym within one collection,
+  preserving event correlation across log lines;
+- different collections produce different pseudonyms for the same value; and
+- the mapping cannot be reversed from the archive alone.
+
+In addition to key-based redaction, IP and MAC address tokens embedded in
+free-text values (such as `msg` and `error` fields) and in non-JSON log lines
+are scrubbed by pattern, since those formats are distinctive. Hostnames,
+users, and serial numbers are only redacted where a key identifies the
+content.
+
+If redaction cannot complete (for example, if the redaction script fails), the
+collected pod logs are removed from the archive rather than shipped
+unredacted.
+
+Redaction is controlled by environment variables read by the `gather` script:
+
+- `MUST_GATHER_REDACT` — set to `false` to disable redaction entirely
+  (enabled by default). Disabling is not recommended for support cases.
+- `MUST_GATHER_REDACT_CATEGORIES` — comma-separated subset of
+  `ip,host,user,mac,serial` to redact (default: `all`).
+
+The default `oc adm must-gather` invocation redacts all categories. To
+override the defaults, run the `gather` script with the environment variables
+set, for example when collecting manually from the must-gather image:
+
+```shell
+MUST_GATHER_REDACT=false /usr/bin/gather
+MUST_GATHER_REDACT_CATEGORIES=ip,mac /usr/bin/gather
+```
 
 ## Analyzing collected data
 

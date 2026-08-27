@@ -244,6 +244,11 @@ must-gather-build: ## Build the must-gather image.
 must-gather-push: must-gather-build ## Push the must-gather image.
 	$(CONTAINER_TOOL) push $(MUST_GATHER_IMG)
 
+.PHONY: must-gather-test
+must-gather-test: ## Run unit tests for the must-gather log redaction script.
+	@echo "Running must-gather Python unit tests..."
+	cd $(PROJECT_DIR)/must-gather && python3 -m unittest discover -s . -p 'test_*.py'
+
 # PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
 # architectures. (i.e. make docker-buildx IMG=myregistry/mypoperator:0.0.1). To use this option you need to:
 # - be able to use docker buildx. More info: https://docs.docker.com/build/buildx/
@@ -499,7 +504,7 @@ $(BASHATE): $(LOCALBIN)
 .PHONY: $(BASHATE)
 bashate: bashate-download ## Run bashate against bash files in the repository.
 	@echo "Running bashate on repository bash files..."
-	find $(PROJECT_DIR) -name '*.sh' \
+	find $(PROJECT_DIR) \( -name '*.sh' -o -path '$(PROJECT_DIR)/must-gather/gather' \) \
 		-not -path '$(PROJECT_DIR)/vendor/*' \
 		-not -path '$(PROJECT_DIR)/*/vendor/*' \
 		-not -path '$(PROJECT_DIR)/git/*' \
@@ -544,7 +549,7 @@ $(SHELLCHECK): $(LOCALBIN)
 .PHONY: $(SHELLCHECK)
 shellcheck: shellcheck-download ## Run shellcheck against bash scripts in the repository.
 	@echo "Running shellcheck on repository bash files..."
-	find $(PROJECT_DIR) -name '*.sh' \
+	find $(PROJECT_DIR) \( -name '*.sh' -o -path '$(PROJECT_DIR)/must-gather/gather' \) \
 		-not -path '$(PROJECT_DIR)/vendor/*' \
 		-not -path '$(PROJECT_DIR)/*/vendor/*' \
 		-not -path '$(PROJECT_DIR)/git/*' \
@@ -715,7 +720,7 @@ deps-update: mock-gen golangci-lint-download
 # NOTE: `bundle-check` should be the last job in the list for `ci-job`
 # test-e2e is run separately as it takes ~20 minutes and does not contribute to coverage
 .PHONY: ci-job
-ci-job: deps-update go-generate generate fmt vet lint test test-envtest test-crd-watcher test-coverage-check e2e-outline bundle-check
+ci-job: deps-update go-generate generate fmt vet lint test test-envtest test-crd-watcher must-gather-test test-coverage-check e2e-outline bundle-check
 
 .PHONY: clean
 clean:
