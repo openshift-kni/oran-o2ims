@@ -267,19 +267,29 @@ func decodeStyledParameter(param *openapi3.Parameter, input *RequestValidationIn
 	return decodeValue(dec, param.Name, sm, param.Schema, param.Required)
 }
 
+var errCircularSchema = errors.New("circular schema reference detected while decoding")
+
 func decodeValue(dec valueDecoder, param string, sm *openapi3.SerializationMethod, schema *openapi3.SchemaRef, required bool) (any, bool, error) {
+	return decodeValueGuarded(dec, param, sm, schema, required, nil)
+}
+
+func decodeValueGuarded(dec valueDecoder, param string, sm *openapi3.SerializationMethod, schema *openapi3.SchemaRef, required bool, seen []*openapi3.Schema) (any, bool, error) {
 	var found bool
 
 	if schema == nil {
 		return nil, false, nil
 	}
+	if slices.Contains(seen, schema.Value) {
+		return nil, false, errCircularSchema
+	}
+	seen = append(seen, schema.Value)
 
 	if len(schema.Value.AllOf) > 0 {
 		var value any
 		var err error
 		for _, sr := range schema.Value.AllOf {
 			var f bool
-			value, f, err = decodeValue(dec, param, sm, sr, required)
+			value, f, err = decodeValueGuarded(dec, param, sm, sr, required, seen)
 			found = found || f
 			if value == nil || err != nil {
 				break
@@ -290,7 +300,7 @@ func decodeValue(dec valueDecoder, param string, sm *openapi3.SerializationMetho
 
 	if len(schema.Value.AnyOf) > 0 {
 		for _, sr := range schema.Value.AnyOf {
-			value, f, _ := decodeValue(dec, param, sm, sr, required)
+			value, f, _ := decodeValueGuarded(dec, param, sm, sr, required, seen)
 			found = found || f
 			if value != nil {
 				return value, found, nil
@@ -306,7 +316,7 @@ func decodeValue(dec valueDecoder, param string, sm *openapi3.SerializationMetho
 		isMatched := 0
 		var value any
 		for _, sr := range schema.Value.OneOf {
-			v, f, _ := decodeValue(dec, param, sm, sr, required)
+			v, f, _ := decodeValueGuarded(dec, param, sm, sr, required, seen)
 			found = found || f
 			if v != nil {
 				value = v
@@ -578,6 +588,9 @@ func (d *urlValuesDecoder) DecodeArray(param string, sm *openapi3.SerializationM
 // Every item is parsed as a primitive value.
 // The function returns an error when an error happened while parse array's items.
 func (d *urlValuesDecoder) parseArray(raw []string, schemaRef *openapi3.SchemaRef) ([]any, error) {
+	if schemaRef.Value.Items == nil || schemaRef.Value.Items.Value == nil {
+		return nil, errors.New("array items schema is required for decoding")
+	}
 	var value []any
 
 	for i, v := range raw {
@@ -1026,6 +1039,9 @@ func buildResObj(params map[string]any, parentKeys []string, key string, schema 
 
 	switch {
 	case schema.Value.Type.Is("array"):
+		if schema.Value.Items == nil || schema.Value.Items.Value == nil {
+			return nil, &ParseError{path: pathFromKeys(mapKeys), Kind: KindOther, Reason: "array items schema is required"}
+		}
 		paramArr, ok := deepGet(params, mapKeys...)
 		if !ok {
 			return nil, nil
