@@ -59,6 +59,14 @@ func (a *NoopAuthorizer) Authorize(_ context.Context, _ authorizer.Attributes) (
 	return a.Decision, a.Reason, a.Error
 }
 
+func (a *NoopAuthorizer) ConditionsAwareAuthorize(ctx context.Context, attr authorizer.Attributes) authorizer.ConditionsAwareDecision {
+	return authorizer.ConditionsAwareDecisionFromParts(a.Authorize(ctx, attr))
+}
+
+func (a *NoopAuthorizer) EvaluateConditions(_ context.Context, _ authorizer.ConditionsAwareDecision, _ authorizer.ConditionsData) (authorizer.Decision, string, error) {
+	return authorizer.DecisionDeny, "", authorizer.ErrorConditionEvaluationNotSupported
+}
+
 type NoopHandler struct {
 	called  bool
 	request http.Request
