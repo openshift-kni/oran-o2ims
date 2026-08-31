@@ -368,10 +368,10 @@ var _ = Describe("handleClusterInstallation", func() {
 	})
 })
 
-// OCPBUGS-65697: a spec-level cpuArchitecture set in the ProvisioningRequest
-// input or the clusterInstanceDefaults ConfigMap must reach the rendered
-// ClusterInstance spec. Otherwise siteconfig applies its x86_64 CRD default and
-// ARM (aarch64) deployments fail with an image-architecture mismatch.
+// A spec-level cpuArchitecture set in the ProvisioningRequest input or the
+// clusterInstanceDefaults ConfigMap must reach the rendered ClusterInstance
+// spec. Otherwise siteconfig applies its x86_64 CRD default and ARM (aarch64)
+// deployments fail with an image-architecture mismatch.
 var _ = Describe("cpuArchitecture propagation into rendered ClusterInstance", func() {
 	var (
 		ctx          context.Context

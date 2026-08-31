@@ -1318,9 +1318,9 @@ nodes:
 		Expect(got).To(MatchYAML(expected))
 	})
 
-	// OCPBUGS-65697: a spec-level cpuArchitecture (e.g. aarch64 for an ARM
-	// cluster) must survive nodeGroups expansion so it reaches the rendered
-	// ClusterInstance spec instead of defaulting to x86_64.
+	// A spec-level cpuArchitecture (e.g. aarch64 for an ARM cluster) must
+	// survive nodeGroups expansion so it reaches the rendered ClusterInstance
+	// spec instead of defaulting to x86_64.
 	It("preserves a spec-level cpuArchitecture while expanding nodeGroups", func() {
 		merged := mustYAMLMap(`
 clusterName: sno-arm

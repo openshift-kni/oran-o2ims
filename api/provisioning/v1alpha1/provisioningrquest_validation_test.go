@@ -421,9 +421,9 @@ nodes:
 			ContainSubstring("Additional property clusterType is not allowed"))
 	})
 
-	// OCPBUGS-65697: when the ClusterTemplate schema does not declare
-	// cpuArchitecture, additionalProperties:false rejects a ProvisioningRequest
-	// that sets it - the original bug that blocked ARM (aarch64) deployments.
+	// When the ClusterTemplate schema does not declare cpuArchitecture,
+	// additionalProperties:false rejects a ProvisioningRequest that sets it -
+	// the original bug that blocked ARM (aarch64) deployments.
 	It("rejects cpuArchitecture when the schema does not declare it", func() {
 		DisallowUnknownFieldsInSchema(schemaMap)
 		input := `
@@ -443,8 +443,8 @@ nodes:
 			ContainSubstring("Additional property cpuArchitecture is not allowed"))
 	})
 
-	// OCPBUGS-65697: declaring cpuArchitecture as a cluster-level property (as
-	// the reference schemas now do) lets the field pass validation.
+	// Declaring cpuArchitecture as a cluster-level property (as the reference
+	// schemas now do) lets the field pass validation.
 	It("accepts cpuArchitecture once the schema declares it", func() {
 		props := schemaMap["properties"].(map[string]any)
 		props["cpuArchitecture"] = map[string]any{
