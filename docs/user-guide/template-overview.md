@@ -307,9 +307,10 @@ End-to-end steps for an aarch64 deployment:
              # ... per-host addressing as above
    ```
 
-If `cpuArchitecture` is omitted (or the schema does not expose it), the
-ClusterInstance defaults to `x86_64` and an x86_64 InfraEnv image is generated,
-which fails on ARM hardware with
+If `cpuArchitecture` is omitted from both the ProvisioningRequest and the
+`clusterInstanceDefaults` ConfigMap, the ClusterInstance uses the effective
+`x86_64` default and an x86_64 InfraEnv image is generated, which fails on ARM
+hardware with
 `Specified CPU architecture (x86_64) doesn't match the cluster (arm64)`.
 
 > [!NOTE]
