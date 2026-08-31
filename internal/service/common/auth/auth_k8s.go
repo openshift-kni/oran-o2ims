@@ -171,3 +171,13 @@ func (c *KubernetesAuthorizerConfig) New() (authorizer.Authorizer, error) {
 func (a *kubernetesAuthorizer) Authorize(ctx context.Context, attributes authorizer.Attributes) (authorized authorizer.Decision, reason string, err error) {
 	return a.authorizer.Authorize(ctx, attributes) // nolint: wrapcheck
 }
+
+// ConditionsAwareAuthorize delegates to the wrapped authorizer.
+func (a *kubernetesAuthorizer) ConditionsAwareAuthorize(ctx context.Context, attributes authorizer.Attributes) authorizer.ConditionsAwareDecision {
+	return a.authorizer.ConditionsAwareAuthorize(ctx, attributes)
+}
+
+// EvaluateConditions delegates to the wrapped authorizer.
+func (a *kubernetesAuthorizer) EvaluateConditions(ctx context.Context, decision authorizer.ConditionsAwareDecision, data authorizer.ConditionsData) (authorizer.Decision, string, error) {
+	return a.authorizer.EvaluateConditions(ctx, decision, data) // nolint: wrapcheck
+}
