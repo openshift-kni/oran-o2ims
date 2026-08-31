@@ -272,6 +272,51 @@ clusterInstanceParameters:
 > - `extraLabels` / `extraAnnotations` keys already set in defaults cannot be
 > overridden (at group or nested node level); new keys can be appended.
 
+##### CPU architecture (ARM / aarch64)
+
+A rendered ClusterInstance installs with `cpuArchitecture: x86_64` by default.
+To deploy on ARM hardware (for example an NVIDIA Grace-Hopper server), expose
+the cluster-level `cpuArchitecture` field in the template schema and set it to
+`aarch64`. The reference schemas
+([`clusterInstanceParameters-nodeGroups.yaml`](../samples/schema/clusterInstanceParameters-nodeGroups.yaml)
+and [`clusterInstanceParameters-legacy-nodes.yaml`](../samples/schema/clusterInstanceParameters-legacy-nodes.yaml))
+declare it with the allowed values `x86_64`, `aarch64`, and `multi`. The shipped
+sample ClusterTemplates already include it.
+
+End-to-end steps for an aarch64 deployment:
+
+1. Reference an aarch64 `ClusterImageSet` from the `clusterInstanceDefaults`
+   ConfigMap (`clusterImageSetNameRef`). Its architecture must match the value
+   set below.
+2. Ensure the template's `clusterInstanceParameters` schema declares
+   `cpuArchitecture` (the shipped reference schemas and sample ClusterTemplates
+   already do).
+3. Set the cluster-level `cpuArchitecture` to `aarch64`, either in the
+   `clusterInstanceDefaults` ConfigMap or in the ProvisioningRequest's
+   `clusterInstanceParameters`:
+
+   ```yaml
+   # ProvisioningRequest clusterInstanceParameters (excerpt)
+   clusterInstanceParameters:
+     clusterName: sno-arm
+     cpuArchitecture: aarch64
+     nodeGroups:
+       - name: master
+         nodes:
+           - hostName: sno-arm.example.com
+             # ... per-host addressing as above
+   ```
+
+If `cpuArchitecture` is omitted (or the schema does not expose it), the
+ClusterInstance defaults to `x86_64` and an x86_64 InfraEnv image is generated,
+which fails on ARM hardware with
+`Specified CPU architecture (x86_64) doesn't match the cluster (arm64)`.
+
+> [!NOTE]
+>
+> - `cpuArchitecture` is a cluster installation parameter; its value cannot be
+> changed once the cluster is provisioned.
+
 #### upgradeParameters schema
 
 The schema may also include the optional `upgradeParameters` property, which

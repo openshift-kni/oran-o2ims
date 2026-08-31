@@ -420,6 +420,51 @@ nodes:
 		Expect(err.Error()).To(
 			ContainSubstring("Additional property clusterType is not allowed"))
 	})
+
+	// OCPBUGS-65697: when the ClusterTemplate schema does not declare
+	// cpuArchitecture, additionalProperties:false rejects a ProvisioningRequest
+	// that sets it - the original bug that blocked ARM (aarch64) deployments.
+	It("rejects cpuArchitecture when the schema does not declare it", func() {
+		DisallowUnknownFieldsInSchema(schemaMap)
+		input := `
+clusterName: sno1
+cpuArchitecture: aarch64
+machineNetwork:
+  - cidr: 192.0.2.0/24
+nodes:
+  - hostName: sno1.example.com
+`
+		inputMap := make(map[string]any)
+		Expect(yaml.Unmarshal([]byte(input), &inputMap)).To(Succeed())
+
+		err := ValidateJsonAgainstJsonSchema(schemaMap, inputMap)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(
+			ContainSubstring("Additional property cpuArchitecture is not allowed"))
+	})
+
+	// OCPBUGS-65697: declaring cpuArchitecture as a cluster-level property (as
+	// the reference schemas now do) lets the field pass validation.
+	It("accepts cpuArchitecture once the schema declares it", func() {
+		props := schemaMap["properties"].(map[string]any)
+		props["cpuArchitecture"] = map[string]any{
+			"type": "string",
+			"enum": []any{"x86_64", "aarch64", "multi"},
+		}
+		DisallowUnknownFieldsInSchema(schemaMap)
+		input := `
+clusterName: sno1
+cpuArchitecture: aarch64
+machineNetwork:
+  - cidr: 192.0.2.0/24
+nodes:
+  - hostName: sno1.example.com
+`
+		inputMap := make(map[string]any)
+		Expect(yaml.Unmarshal([]byte(input), &inputMap)).To(Succeed())
+
+		Expect(ValidateJsonAgainstJsonSchema(schemaMap, inputMap)).To(Succeed())
+	})
 })
 
 var _ = Describe("GetClusterTemplateRef", func() {
