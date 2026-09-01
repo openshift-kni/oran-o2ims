@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	addonv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -36,8 +37,21 @@ const (
 	defaultAddonInstallNamespace   = "open-cluster-management-agent-addon"
 )
 
+// Clients holds the spoke clients built from a scoped MSA token.
+type Clients struct {
+	Client    client.Client
+	Clientset kubernetes.Interface
+}
+
+const (
+	// RuntimeClientOnly skips building a kubernetes.Interface.
+	RuntimeClientOnly = false
+	// WithClientset also builds a kubernetes.Interface from the scoped token.
+	WithClientset = true
+)
+
 type spokeClientEntry struct {
-	client               client.Client
+	clients              Clients
 	tokenResourceVersion string
 }
 
@@ -46,13 +60,27 @@ var (
 	spokeClients   = make(map[string]*spokeClientEntry)
 )
 
-// newSpokeClientFunc builds a spoke client from connection details.
+// newSpokeClientFunc builds a controller-runtime spoke client from connection details.
 // Extracted as a package-level variable so tests can override it.
 var newSpokeClientFunc = buildSpokeClient
 
+// newSpokeClientsetFunc builds a kubernetes clientset from the same connection details.
+var newSpokeClientsetFunc = buildSpokeClientset
+
 // SetTestSpokeClientCreator overrides the spoke client builder for tests.
-func SetTestSpokeClientCreator(fn func(apiServerURL, token string, caCert []byte, spokeScheme *runtime.Scheme) (client.Client, error)) {
+// It returns a restore function that resets the original builder.
+func SetTestSpokeClientCreator(fn func(apiServerURL, token string, caCert []byte, spokeScheme *runtime.Scheme) (client.Client, error)) func() {
+	orig := newSpokeClientFunc
 	newSpokeClientFunc = fn
+	return func() { newSpokeClientFunc = orig }
+}
+
+// SetTestSpokeClientsetCreator overrides the spoke clientset builder for tests.
+// It returns a restore function that resets the original builder.
+func SetTestSpokeClientsetCreator(fn func(apiServerURL, token string, caCert []byte) (kubernetes.Interface, error)) func() {
+	orig := newSpokeClientsetFunc
+	newSpokeClientsetFunc = fn
+	return func() { newSpokeClientsetFunc = orig }
 }
 
 // NewSpokeScheme creates a scheme from the provided installer functions.
@@ -64,23 +92,38 @@ func NewSpokeScheme(installers ...func(*runtime.Scheme) error) *runtime.Scheme {
 	return s
 }
 
-// buildSpokeClient creates a controller-runtime client for a spoke cluster
-// using bearer token authentication and the provided scheme.
-func buildSpokeClient(apiServerURL, token string, caCert []byte, spokeScheme *runtime.Scheme) (client.Client, error) {
+func spokeRESTConfig(apiServerURL, token string, caCert []byte) *rest.Config {
 	tlsConfig := rest.TLSClientConfig{}
 	if len(caCert) > 0 {
 		tlsConfig.CAData = caCert
 	}
-	cfg := &rest.Config{
+	return &rest.Config{
 		Host:            apiServerURL,
 		BearerToken:     token,
 		TLSClientConfig: tlsConfig,
 	}
-	c, err := client.New(cfg, client.Options{Scheme: spokeScheme})
+}
+
+// buildSpokeClient creates a controller-runtime client for a spoke cluster
+// using bearer token authentication and the provided scheme.
+func buildSpokeClient(apiServerURL, token string, caCert []byte, spokeScheme *runtime.Scheme) (client.Client, error) {
+	config := spokeRESTConfig(apiServerURL, token, caCert)
+	c, err := client.New(config, client.Options{Scheme: spokeScheme})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create spoke client: %w", err)
 	}
 	return c, nil
+}
+
+// buildSpokeClientset creates a kubernetes clientset for a spoke cluster
+// using bearer token authentication.
+func buildSpokeClientset(apiServerURL, token string, caCert []byte) (kubernetes.Interface, error) {
+	config := spokeRESTConfig(apiServerURL, token, caCert)
+	cs, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create spoke clientset: %w", err)
+	}
+	return cs, nil
 }
 
 // EnsureSpokeClient returns a scoped spoke client or creates one through the
@@ -88,15 +131,16 @@ func buildSpokeClient(apiServerURL, token string, caCert []byte, spokeScheme *ru
 // on cache miss it runs the full setup.
 //
 // Returns:
-//   - (client, true, nil): spoke client is ready to use
-//   - (nil, false, nil): spoke client is not ready yet — caller should requeue
-//   - (nil, false, err): real failure (API error or InputError) — caller should handle
+//   - (clients, true, nil): spoke client is ready to use
+//   - (zero, false, nil): spoke client is not ready yet — caller should requeue
+//   - (zero, false, err): real failure (API error or InputError) — caller should handle
 //
 // Parameters:
 //   - msaName: name for the ManagedServiceAccount CR (e.g. "<pr-name>-upgrade")
 //   - mwName: name for the RBAC ManifestWork (e.g. "<pr-name>-upgrade-rbac")
 //   - rules: RBAC PolicyRules to deliver to the spoke via ManifestWork
 //   - spokeScheme: scheme for the spoke client (determines which types it can work with)
+//   - needClientset: whether to build a kubernetes.Interface from the same token
 func EnsureSpokeClient(
 	ctx context.Context,
 	hubClient client.Client,
@@ -104,19 +148,20 @@ func EnsureSpokeClient(
 	clusterName, msaName, mwName string,
 	rules []rbacv1.PolicyRule,
 	spokeScheme *runtime.Scheme,
-) (client.Client, bool, error) {
+	buildClientset bool,
+) (Clients, bool, error) {
 	spokeClientsMu.RLock()
 	entry, cached := spokeClients[msaName]
 	spokeClientsMu.RUnlock()
 
 	if cached {
-		spokeClient, needsFullSetup, err := refreshCachedSpokeClient(
-			ctx, hubClient, logger, clusterName, msaName, entry, spokeScheme)
+		clients, needsFullSetup, err := refreshCachedSpokeClient(
+			ctx, hubClient, logger, clusterName, msaName, entry, spokeScheme, buildClientset)
 		if err != nil {
-			return nil, false, err
+			return Clients{}, false, err
 		}
 		if !needsFullSetup {
-			return spokeClient, true, nil
+			return clients, true, nil
 		}
 	}
 
@@ -127,10 +172,10 @@ func EnsureSpokeClient(
 		Name: managedServiceAccountAddonName, Namespace: clusterName,
 	}, addon); err != nil {
 		if errors.IsNotFound(err) {
-			return nil, false, typederrors.NewInputError(
+			return Clients{}, false, typederrors.NewInputError(
 				"the managed-serviceaccount addon is not available on cluster %s", clusterName)
 		}
-		return nil, false, fmt.Errorf("failed to check managed-serviceaccount addon: %w", err)
+		return Clients{}, false, fmt.Errorf("failed to check managed-serviceaccount addon: %w", err)
 	}
 
 	// 2. Create ManagedServiceAccount if not present.
@@ -139,7 +184,7 @@ func EnsureSpokeClient(
 		Name: msaName, Namespace: clusterName,
 	}, msa); err != nil {
 		if !errors.IsNotFound(err) {
-			return nil, false, fmt.Errorf("failed to get ManagedServiceAccount: %w", err)
+			return Clients{}, false, fmt.Errorf("failed to get ManagedServiceAccount: %w", err)
 		}
 		msa = &msav1beta1.ManagedServiceAccount{
 			ObjectMeta: metav1.ObjectMeta{
@@ -154,7 +199,7 @@ func EnsureSpokeClient(
 			},
 		}
 		if err := hubClient.Create(ctx, msa); err != nil {
-			return nil, false, fmt.Errorf("failed to create ManagedServiceAccount: %w", err)
+			return Clients{}, false, fmt.Errorf("failed to create ManagedServiceAccount: %w", err)
 		}
 	}
 
@@ -162,7 +207,7 @@ func EnsureSpokeClient(
 	if msa.Status.TokenSecretRef == nil || msa.Status.TokenSecretRef.Name == "" {
 		logger.InfoContext(ctx, "Waiting for ManagedServiceAccount token to be synced",
 			slog.String("clusterName", clusterName), slog.String("msaName", msaName))
-		return nil, false, nil
+		return Clients{}, false, nil
 	}
 
 	// 4. Read token Secret.
@@ -170,7 +215,7 @@ func EnsureSpokeClient(
 	if err := hubClient.Get(ctx, types.NamespacedName{
 		Name: msa.Status.TokenSecretRef.Name, Namespace: clusterName,
 	}, tokenSecret); err != nil {
-		return nil, false, fmt.Errorf("failed to read token secret: %w", err)
+		return Clients{}, false, fmt.Errorf("failed to read token secret: %w", err)
 	}
 
 	// 5. Create RBAC ManifestWork if not present.
@@ -183,14 +228,14 @@ func EnsureSpokeClient(
 		Name: mwName, Namespace: clusterName,
 	}, mw); err != nil {
 		if !errors.IsNotFound(err) {
-			return nil, false, fmt.Errorf("failed to get RBAC ManifestWork: %w", err)
+			return Clients{}, false, fmt.Errorf("failed to get RBAC ManifestWork: %w", err)
 		}
 		mw, err = BuildRBACManifestWork(mwName, clusterName, msaName, saNamespace, rules)
 		if err != nil {
-			return nil, false, fmt.Errorf("failed to build RBAC ManifestWork: %w", err)
+			return Clients{}, false, fmt.Errorf("failed to build RBAC ManifestWork: %w", err)
 		}
 		if err := hubClient.Create(ctx, mw); err != nil {
-			return nil, false, fmt.Errorf("failed to create RBAC ManifestWork: %w", err)
+			return Clients{}, false, fmt.Errorf("failed to create RBAC ManifestWork: %w", err)
 		}
 	}
 
@@ -199,39 +244,47 @@ func EnsureSpokeClient(
 	if availableCondition == nil || availableCondition.Status != metav1.ConditionTrue {
 		logger.InfoContext(ctx, "Waiting for RBAC ManifestWork resources to be available on spoke",
 			slog.String("clusterName", clusterName), slog.String("mwName", mwName))
-		return nil, false, nil
+		return Clients{}, false, nil
 	}
 
-	// 7. Build spoke client.
+	// 7. Build spoke clients from the scoped token.
 	token, caCert, err := extractTokenData(tokenSecret, clusterName)
 	if err != nil {
-		return nil, false, err
+		return Clients{}, false, err
 	}
 	apiServerURL, err := getAPIServerURL(ctx, hubClient, clusterName)
 	if err != nil {
-		return nil, false, err
+		return Clients{}, false, err
 	}
-	spokeClient, err := newSpokeClientFunc(apiServerURL, string(token), caCert, spokeScheme)
+	c, err := newSpokeClientFunc(apiServerURL, string(token), caCert, spokeScheme)
 	if err != nil {
-		return nil, false, err
+		return Clients{}, false, err
+	}
+	clients := Clients{Client: c}
+	if buildClientset {
+		cs, err := newSpokeClientsetFunc(apiServerURL, string(token), caCert)
+		if err != nil {
+			return Clients{}, false, err
+		}
+		clients.Clientset = cs
 	}
 
-	// 8. Cache the client.
+	// 8. Cache the clients.
 	spokeClientsMu.Lock()
 	spokeClients[msaName] = &spokeClientEntry{
-		client:               spokeClient,
+		clients:              clients,
 		tokenResourceVersion: tokenSecret.ResourceVersion,
 	}
 	spokeClientsMu.Unlock()
 
-	return spokeClient, true, nil
+	return clients, true, nil
 }
 
 // refreshCachedSpokeClient checks whether a cached spoke client is still valid.
 // Returns:
-//   - (client, false, nil): cached client is still valid or was rebuilt from rotated token
-//   - (nil, true, nil): cache invalidated (token secret gone) — caller should fall through to full setup
-//   - (nil, false, err): transient API error — caller should requeue without re-running full setup
+//   - (clients, false, nil): cached clients are still valid or were rebuilt from rotated token
+//   - (zero, true, nil): cache invalidated (token secret gone) — caller should fall through to full setup
+//   - (zero, false, err): transient API error — caller should requeue without re-running full setup
 func refreshCachedSpokeClient(
 	ctx context.Context,
 	hubClient client.Client,
@@ -239,7 +292,8 @@ func refreshCachedSpokeClient(
 	clusterName, msaName string,
 	entry *spokeClientEntry,
 	spokeScheme *runtime.Scheme,
-) (client.Client, bool, error) {
+	needClientset bool,
+) (Clients, bool, error) {
 	tokenSecret, err := getTokenSecret(ctx, hubClient, msaName, clusterName)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -248,37 +302,44 @@ func refreshCachedSpokeClient(
 			spokeClientsMu.Unlock()
 			logger.InfoContext(ctx, "Spoke client token secret missing, re-creating spoke access",
 				slog.String("clusterName", clusterName))
-			return nil, true, nil
+			return Clients{}, true, nil
 		}
-		return nil, false, fmt.Errorf("failed to refresh spoke client token: %w", err)
+		return Clients{}, false, fmt.Errorf("failed to refresh spoke client token: %w", err)
 	}
 
 	if tokenSecret.ResourceVersion == entry.tokenResourceVersion {
-		return entry.client, false, nil
+		return entry.clients, false, nil
 	}
 
 	logger.InfoContext(ctx, "Spoke client token rotated, rebuilding client",
 		slog.String("clusterName", clusterName))
 	token, caCert, err := extractTokenData(tokenSecret, clusterName)
 	if err != nil {
-		return nil, false, err
+		return Clients{}, false, err
 	}
 	apiServerURL, err := getAPIServerURL(ctx, hubClient, clusterName)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to get API server URL during token rotation: %w", err)
+		return Clients{}, false, fmt.Errorf("failed to get API server URL during token rotation: %w", err)
 	}
-	spokeClient, err := newSpokeClientFunc(
-		apiServerURL, string(token), caCert, spokeScheme)
+	c, err := newSpokeClientFunc(apiServerURL, string(token), caCert, spokeScheme)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to rebuild spoke client after token rotation: %w", err)
+		return Clients{}, false, fmt.Errorf("failed to rebuild spoke client after token rotation: %w", err)
+	}
+	clients := Clients{Client: c}
+	if needClientset {
+		cs, err := newSpokeClientsetFunc(apiServerURL, string(token), caCert)
+		if err != nil {
+			return Clients{}, false, fmt.Errorf("failed to rebuild spoke client after token rotation: %w", err)
+		}
+		clients.Clientset = cs
 	}
 	spokeClientsMu.Lock()
 	spokeClients[msaName] = &spokeClientEntry{
-		client:               spokeClient,
+		clients:              clients,
 		tokenResourceVersion: tokenSecret.ResourceVersion,
 	}
 	spokeClientsMu.Unlock()
-	return spokeClient, false, nil
+	return clients, false, nil
 }
 
 // CleanupSpokeAccess deletes the ManagedServiceAccount and RBAC ManifestWork,

@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -232,15 +233,6 @@ func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 					nodeAllocationRequest.Name, updateErr)
 		}
 
-		// Update ObservedGeneration to mark this generation as processed
-		// This prevents FSM from treating this as a spec change on next reconciliation
-		if updateErr := hwmgrutils.UpdateNodeAllocationRequestObservedGeneration(ctx, r.Client, nodeAllocationRequest); updateErr != nil {
-			r.Logger.ErrorContext(ctx, "Failed to update ObservedGeneration after timeout",
-				slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
-				slog.Any("error", updateErr))
-			// Don't return error, timeout condition is already set
-		}
-
 		if conditionType == hwmgmtv1alpha1.Configured {
 			if err := clearConfigAnnotationForAllocatedNodes(ctx, r.Client, r.NoncachedClient, r.Logger, nodeAllocationRequest); err != nil {
 				r.Logger.ErrorContext(ctx, "Failed to clear config in progress annotations after configuration timeout",
@@ -259,6 +251,11 @@ func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 				return hwmgrutils.RequeueWithMediumInterval(),
 					fmt.Errorf("failed to clear BMH update annotations after configuration timeout %s: %w",
 						nodeAllocationRequest.Name, err)
+			}
+			if err := cleanupSpokeAccess(ctx, r.Client, r.Logger, nodeAllocationRequest,
+				nodeAllocationRequest.Name+hwConfigMSASuffix, nodeAllocationRequest.Name+hwConfigMWSuffix); err != nil {
+				r.Logger.WarnContext(ctx, "Failed to clean up hw-config spoke access after timeout",
+					slog.Any("error", err))
 			}
 		}
 
@@ -327,16 +324,21 @@ func (r *NodeAllocationRequestReconciler) handleScaleInNodesAnnotation(
 	r.Logger.InfoContext(ctx, "Processing scale-in-nodes annotation",
 		slog.Any("nodes", nodeNames))
 
-	spokeClient, spokeClientset, err := createSpokeClients(ctx, r.Client, nar)
-	noSpokeKubeconfig := err != nil && strings.Contains(err.Error(), "no kubeconfig secret found")
-	if err != nil && !noSpokeKubeconfig {
+	spokeClients, ready, err := ensureSpokeClients(ctx, r.Client, r.Logger, nar,
+		nar.Name+scaleInMSASuffix, nar.Name+scaleInMWSuffix,
+		scaleInRBACRules, scaleInSpokeScheme)
+	if err != nil && !typederrors.IsInputError(err) {
 		return hwmgrutils.RequeueWithMediumInterval(),
 			fmt.Errorf("failed to create spoke clients for scale-in: %w", err)
 	}
+	if err == nil && !ready {
+		r.Logger.InfoContext(ctx, "Spoke client for scale-in not ready yet, will retry")
+		return hwmgrutils.RequeueWithShortInterval(), nil
+	}
 
 	var nodeOps NodeOps
-	if !noSpokeKubeconfig {
-		nodeOps = NewNodeOps(spokeClient, spokeClientset, r.Logger, false)
+	if ready {
+		nodeOps = NewNodeOps(spokeClients.Client, spokeClients.Clientset, r.Logger, false)
 	}
 
 	var remainingNodeNames []string
@@ -394,10 +396,10 @@ func (r *NodeAllocationRequestReconciler) handleScaleInNodesAnnotation(
 		}
 
 		// Phase 2: Delete Node from spoke and AllocatedNode CR
-		if spokeClient != nil && an.Status.Hostname != "" {
+		if spokeClients.Client != nil && an.Status.Hostname != "" {
 			spokeNode := &corev1.Node{}
 			spokeNode.Name = an.Status.Hostname
-			if err := spokeClient.Delete(ctx, spokeNode); err != nil {
+			if err := spokeClients.Client.Delete(ctx, spokeNode); err != nil {
 				if !errors.IsNotFound(err) {
 					return hwmgrutils.RequeueWithShortInterval(),
 						fmt.Errorf("failed to delete node %s from spoke: %w", an.Status.Hostname, err)
@@ -444,6 +446,10 @@ func (r *NodeAllocationRequestReconciler) handleScaleInNodesAnnotation(
 	}
 
 	r.Logger.InfoContext(ctx, "Scale-in processing complete")
+	if err := cleanupSpokeAccess(ctx, r.Client, r.Logger, nar, nar.Name+scaleInMSASuffix, nar.Name+scaleInMWSuffix); err != nil {
+		r.Logger.WarnContext(ctx, "Failed to clean up scale-in spoke access",
+			slog.Any("error", err))
+	}
 	return hwmgrutils.DoNotRequeue(), nil
 }
 
@@ -551,7 +557,7 @@ func (r *NodeAllocationRequestReconciler) handleNewNodeAllocationRequestCreate(
 		return hwmgrutils.RequeueWithMediumInterval(),
 			fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
 	}
-	// Update the NodeAllocationRequest ObservedGeneration status
+	// Ack this generation on create. Special case to acknowledge generation on Provisioned=InProgress state.
 	if err := hwmgrutils.UpdateNodeAllocationRequestObservedGeneration(ctx, r.Client, nodeAllocationRequest); err != nil {
 		return hwmgrutils.RequeueWithShortInterval(), fmt.Errorf("failed to update ObservedGeneration status: %w", err)
 	}
@@ -630,15 +636,31 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 	if err != nil {
 		return hwmgrutils.RequeueWithShortInterval(), err
 	}
+
 	// If no HW profile actually changed and no configuration is in progress(e.g., only
-	// skipCleanup or clusterProvisioned was updated), acknowledge the spec change and skip.
+	// skipCleanup/clusterProvisioned was updated, or the user reverted a spec that failed
+	// before nodes were mutated), acknowledge the spec change and skip the hardware configuration
+	// handling.
 	if !hwProfileChanged && !configInProgress {
 		r.Logger.InfoContext(ctx, "No HW profile changes detected, acknowledging spec change")
-		if err := hwmgrutils.UpdateNodeAllocationRequestObservedStatus(ctx, r.Client, nodeAllocationRequest); err != nil {
-			return hwmgrutils.RequeueWithShortInterval(),
-				fmt.Errorf("failed to acknowledge spec change: %w", err)
+		if configuredCondition != nil {
+			// Re-derive Configured from existing AllocatedNodes and ack generation on terminal states.
+			// This is to cover the case where the spec was reverted after a failed config before nodes
+			// were mutated to the new profile.
+			nodelist, listErr := hwmgrutils.GetChildNodes(ctx, r.Logger, r.Client, nodeAllocationRequest)
+			if listErr != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to list AllocatedNodes: %w", listErr)
+			}
+			if _, _, updateErr := r.updateConfiguredFromNodes(ctx, nodeAllocationRequest, nodelist); updateErr != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, updateErr)
+			}
+		} else {
+			if err := hwmgrutils.UpdateNodeAllocationRequestObservedStatus(ctx, r.Client, nodeAllocationRequest); err != nil {
+				return hwmgrutils.RequeueWithShortInterval(),
+					fmt.Errorf("failed to acknowledge spec change: %w", err)
+			}
 		}
-		return hwmgrutils.DoNotRequeue(), nil
+		return ctrl.Result{}, nil
 	}
 
 	// Set Configured=InProgress with message AwaitConfig when HW profile changed and not already in progress.
@@ -659,68 +681,81 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 	}
 
 	// Handle the hardware configuration changes.
-	result, nodelist, err := handleNodeAllocationRequestConfiguring(ctx, r.Client, r.NoncachedClient, r.Logger, r.Namespace, nodeAllocationRequest)
+	return r.handleHardwareProfileChanges(ctx, nodeAllocationRequest)
+}
 
-	if nodelist != nil {
-		// Check if NAR already has a terminal condition (Failed or TimedOut) - if so, skip aggregation
-		// to preserve the terminal status. These terminal states are detected at NAR level, not node level.
-		configuredCondition := meta.FindStatusCondition(nodeAllocationRequest.Status.Conditions, string(hwmgmtv1alpha1.Configured))
-		if configuredCondition != nil &&
-			(configuredCondition.Reason == string(hwmgmtv1alpha1.Failed) ||
-				configuredCondition.Reason == string(hwmgmtv1alpha1.TimedOut)) {
-			r.Logger.InfoContext(ctx, "Skipping status aggregation - NAR already has terminal condition",
-				slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
-				slog.String("reason", configuredCondition.Reason))
-
-			// Update observedGeneration to acknowledge the spec change was processed
-			// This prevents the FSM from re-triggering spec change handling
-			if updateErr := hwmgrutils.UpdateNodeAllocationRequestObservedGeneration(ctx, r.Client, nodeAllocationRequest); updateErr != nil {
-				r.Logger.ErrorContext(ctx, "Failed to update ObservedGeneration status",
-					slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
-					slog.Any("error", updateErr))
-				// Return error to trigger requeue
-				return hwmgrutils.RequeueWithShortInterval(),
-					fmt.Errorf("failed to update ObservedGeneration status: %w", updateErr)
-			}
-
-			return result, err
-		}
-
-		var status metav1.ConditionStatus
-		var reason, message string
-		if len(nodelist.Items) == 1 {
-			status, reason, message = deriveNARStatusFromSingleNode(ctx, r.NoncachedClient, r.Logger, &nodelist.Items[0])
-		} else {
-			status, reason, message = deriveNARStatusFromMultipleNodes(ctx, r.NoncachedClient, r.Logger, nodelist, nodeAllocationRequest)
-		}
-		// Update the NAR status
-		if updateErr := hwmgrutils.UpdateNodeAllocationRequestStatusCondition(ctx, r.Client, nodeAllocationRequest,
-			hwmgmtv1alpha1.Configured, hwmgmtv1alpha1.ConditionReason(reason), status, message); updateErr != nil {
-
-			r.Logger.ErrorContext(ctx, "Failed to update aggregated NodeAllocationRequest status",
-				slog.Any("error", updateErr))
-
-			if err == nil {
-				err = updateErr
-			}
-		}
-
-		// Update observedGeneration when configuration reaches a terminal state (success, failure, or timeout).
-		if status == metav1.ConditionTrue ||
-			reason == string(hwmgmtv1alpha1.Failed) ||
-			reason == string(hwmgmtv1alpha1.TimedOut) {
-			if updateErr := hwmgrutils.UpdateNodeAllocationRequestObservedGeneration(ctx, r.Client, nodeAllocationRequest); updateErr != nil {
-				r.Logger.ErrorContext(ctx, "Failed to update ObservedGeneration status",
-					slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
-					slog.Any("error", updateErr))
-				// Return error to trigger requeue
-				return hwmgrutils.RequeueWithShortInterval(),
-					fmt.Errorf("failed to update ObservedGeneration status: %w", updateErr)
-			}
-		}
+// handleHardwareProfileChanges prepares spoke access, applies day-2 hardware
+// profile updates, then sets Configured from AllocatedNodes.
+func (r *NodeAllocationRequestReconciler) handleHardwareProfileChanges(
+	ctx context.Context,
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
+) (ctrl.Result, error) {
+	nodelist, err := hwmgrutils.GetChildNodes(ctx, r.Logger, r.Client, nodeAllocationRequest)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get child nodes for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
 	}
 
+	// Deterministic ordering of listed nodes by name across reconciles
+	sort.Slice(nodelist.Items, func(i, j int) bool {
+		return nodelist.Items[i].Name < nodelist.Items[j].Name
+	})
+
+	spokeClients, ready, err := ensureSpokeClients(ctx, r.Client, r.Logger, nodeAllocationRequest,
+		nodeAllocationRequest.Name+hwConfigMSASuffix, nodeAllocationRequest.Name+hwConfigMWSuffix,
+		hwConfigRBACRules, hwConfigSpokeScheme)
+	if err != nil {
+		if !typederrors.IsInputError(err) {
+			return ctrl.Result{}, fmt.Errorf("failed to create spoke clients: %w", err)
+		}
+		r.Logger.ErrorContext(ctx, "Hardware configuration failed", slog.Any("error", err))
+		if updateErr := hwmgrutils.UpdateNodeAllocationRequestStatusCondition(ctx, r.Client, nodeAllocationRequest,
+			hwmgmtv1alpha1.Configured, hwmgmtv1alpha1.Failed, metav1.ConditionFalse, err.Error()); updateErr != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, updateErr)
+		}
+		return ctrl.Result{}, nil
+	}
+	if !ready {
+		r.Logger.InfoContext(ctx, "Spoke client for hardware configuration not ready yet, will retry")
+		return hwmgrutils.RequeueWithShortInterval(), nil
+	}
+
+	result, err := handleNodeAllocationRequestConfiguring(ctx, r.Client, r.NoncachedClient, r.Logger, r.Namespace, nodeAllocationRequest, nodelist, spokeClients)
+
+	// Still aggregate even when configuring returns a transient error. The error is still returned so the reconcile requeues after aggregation.
+	status, reason, updateErr := r.updateConfiguredFromNodes(ctx, nodeAllocationRequest, nodelist)
+	if updateErr != nil {
+		return ctrl.Result{}, updateErr
+	}
+
+	if status == metav1.ConditionTrue || reason == string(hwmgmtv1alpha1.Failed) {
+		if cleanupErr := cleanupSpokeAccess(ctx, r.Client, r.Logger, nodeAllocationRequest,
+			nodeAllocationRequest.Name+hwConfigMSASuffix, nodeAllocationRequest.Name+hwConfigMWSuffix); cleanupErr != nil {
+			r.Logger.WarnContext(ctx, "Failed to clean up hw-config spoke access after terminal configuration",
+				slog.Any("error", cleanupErr))
+		}
+	}
 	return result, err
+}
+
+// updateConfiguredFromNodes aggregates AllocatedNode conditions onto the NAR Configured condition.
+func (r *NodeAllocationRequestReconciler) updateConfiguredFromNodes(
+	ctx context.Context,
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
+	nodelist *hwmgmtv1alpha1.AllocatedNodeList,
+) (metav1.ConditionStatus, string, error) {
+	var status metav1.ConditionStatus
+	var reason, message string
+	if len(nodelist.Items) == 1 {
+		status, reason, message = deriveNARStatusFromSingleNode(ctx, r.NoncachedClient, r.Logger, &nodelist.Items[0])
+	} else {
+		status, reason, message = deriveNARStatusFromMultipleNodes(ctx, r.NoncachedClient, r.Logger, nodelist, nodeAllocationRequest)
+	}
+
+	if err := hwmgrutils.UpdateNodeAllocationRequestStatusCondition(ctx, r.Client, nodeAllocationRequest,
+		hwmgmtv1alpha1.Configured, hwmgmtv1alpha1.ConditionReason(reason), status, message); err != nil {
+		return "", "", fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
+	}
+	return status, reason, nil
 }
 
 func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestProcessing(
@@ -903,6 +938,16 @@ func (r *NodeAllocationRequestReconciler) checkHardwareTimeout(
 func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestDeletion(ctx context.Context, nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (bool, error) {
 
 	r.Logger.InfoContext(ctx, "Finalizing NodeAllocationRequest")
+
+	// Restrict cleanup of spoke access resources on NAR deletion.
+	if err := cleanupSpokeAccess(ctx, r.Client, r.Logger, nodeAllocationRequest,
+		nodeAllocationRequest.Name+hwConfigMSASuffix, nodeAllocationRequest.Name+hwConfigMWSuffix); err != nil {
+		return false, fmt.Errorf("failed to clean up hw-config spoke access: %w", err)
+	}
+	if err := cleanupSpokeAccess(ctx, r.Client, r.Logger, nodeAllocationRequest,
+		nodeAllocationRequest.Name+scaleInMSASuffix, nodeAllocationRequest.Name+scaleInMWSuffix); err != nil {
+		return false, fmt.Errorf("failed to clean up scale-in spoke access: %w", err)
+	}
 
 	return releaseNodeAllocationRequest(ctx, r.Client, r.Logger, nodeAllocationRequest)
 }

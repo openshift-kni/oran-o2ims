@@ -19,7 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils/spokeclient"
+	"github.com/openshift-kni/oran-o2ims/internal/spokeclient"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 	configv1 "github.com/openshift/api/config/v1"
 	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"

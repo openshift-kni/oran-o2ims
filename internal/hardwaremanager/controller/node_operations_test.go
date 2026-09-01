@@ -22,6 +22,9 @@ import (
 	machineconfigv1 "github.com/openshift/api/machineconfiguration/v1"
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	workv1 "open-cluster-management.io/api/work/v1"
+	msav1beta1 "open-cluster-management.io/managed-serviceaccount/apis/authentication/v1beta1"
 )
 
 var _ = Describe("Node Operations", func() {
@@ -301,5 +304,83 @@ var _ = Describe("Node Operations", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(8))
 		})
+	})
+})
+
+var _ = Describe("cleanupSpokeAccess", func() {
+	const (
+		narName     = "test-nar"
+		clusterName = "std-test"
+		msaName     = narName + "-hwconfig"
+		mwName      = narName + "-hwconfig-rbac"
+	)
+
+	var (
+		ctx    context.Context
+		logger *slog.Logger
+		scheme *runtime.Scheme
+		nar    *hwmgmtv1alpha1.NodeAllocationRequest
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		logger = slog.Default()
+		scheme = runtime.NewScheme()
+		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
+		Expect(provisioningv1alpha1.AddToScheme(scheme)).To(Succeed())
+		Expect(msav1beta1.AddToScheme(scheme)).To(Succeed())
+		Expect(workv1.Install(scheme)).To(Succeed())
+
+		nar = &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: narName, Namespace: "oran-o2ims"},
+		}
+	})
+
+	It("should no-op when the ProvisioningRequest is missing", func() {
+		hubClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+		Expect(cleanupSpokeAccess(ctx, hubClient, logger, nar, msaName, mwName)).To(Succeed())
+	})
+
+	It("should no-op when ClusterDetails is nil", func() {
+		pr := &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: narName},
+		}
+		hubClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pr).Build()
+		Expect(cleanupSpokeAccess(ctx, hubClient, logger, nar, msaName, mwName)).To(Succeed())
+	})
+
+	It("should no-op when ClusterDetails.Name is empty", func() {
+		pr := &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: narName},
+			Status: provisioningv1alpha1.ProvisioningRequestStatus{
+				Extensions: provisioningv1alpha1.Extensions{
+					ClusterDetails: &provisioningv1alpha1.ClusterDetails{Name: ""},
+				},
+			},
+		}
+		hubClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pr).Build()
+		Expect(cleanupSpokeAccess(ctx, hubClient, logger, nar, msaName, mwName)).To(Succeed())
+	})
+
+	It("should delete MSA and ManifestWork when the cluster name is known", func() {
+		pr := &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: narName},
+			Status: provisioningv1alpha1.ProvisioningRequestStatus{
+				Extensions: provisioningv1alpha1.Extensions{
+					ClusterDetails: &provisioningv1alpha1.ClusterDetails{Name: clusterName},
+				},
+			},
+		}
+		msa := &msav1beta1.ManagedServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{Name: msaName, Namespace: clusterName},
+		}
+		mw := &workv1.ManifestWork{
+			ObjectMeta: metav1.ObjectMeta{Name: mwName, Namespace: clusterName},
+		}
+		hubClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pr, msa, mw).Build()
+
+		Expect(cleanupSpokeAccess(ctx, hubClient, logger, nar, msaName, mwName)).To(Succeed())
+		Expect(hubClient.Get(ctx, client.ObjectKeyFromObject(msa), msa)).To(HaveOccurred())
+		Expect(hubClient.Get(ctx, client.ObjectKeyFromObject(mw), mw)).To(HaveOccurred())
 	})
 })
