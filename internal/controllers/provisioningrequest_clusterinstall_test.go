@@ -368,6 +368,107 @@ var _ = Describe("handleClusterInstallation", func() {
 	})
 })
 
+// A spec-level cpuArchitecture set in the ProvisioningRequest input or the
+// clusterInstanceDefaults ConfigMap must reach the rendered ClusterInstance
+// spec. Otherwise siteconfig applies its x86_64 CRD default and ARM (aarch64)
+// deployments fail with an image-architecture mismatch.
+var _ = Describe("cpuArchitecture propagation into rendered ClusterInstance", func() {
+	var (
+		ctx          context.Context
+		ciDefaultsCm = "clusterinstance-defaults-v1"
+		tName        = "clustertemplate-a"
+		tVersion     = "v1.0.0"
+		ctNamespace  = "clustertemplate-a-v4-16"
+		crName       = "cluster-1"
+	)
+
+	// buildTask wires a task with the given ClusterInstance defaults ConfigMap so
+	// the merge/render path can be exercised end-to-end.
+	buildTask := func(cm *corev1.ConfigMap) *provisioningRequestReconcilerTask {
+		cr := &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: crName},
+			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+				TemplateName:    tName,
+				TemplateVersion: tVersion,
+				TemplateParameters: runtime.RawExtension{
+					Raw: []byte(testutils.TestFullTemplateParameters),
+				},
+			},
+		}
+		ct := &provisioningv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      GetClusterTemplateRefName(tName, tVersion),
+				Namespace: ctNamespace,
+			},
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
+					ClusterInstanceDefaults: ciDefaultsCm,
+				},
+			},
+		}
+		c := fakeclient.GetFakeClientFromObjects([]client.Object{cr, ct, cm}...)
+		return &provisioningRequestReconcilerTask{
+			logger:       logger,
+			client:       c,
+			object:       cr,
+			clusterInput: &clusterInput{},
+			ctDetails:    &clusterTemplateDetails{namespace: ctNamespace},
+		}
+	}
+
+	// prInput returns the clusterInstanceParameters supplied by the sample
+	// ProvisioningRequest.
+	prInput := func() map[string]any {
+		input, err := provisioningv1alpha1.ExtractMatchingInput(
+			[]byte(testutils.TestFullTemplateParameters), constants.TemplateParamClusterInstance)
+		Expect(err).ToNot(HaveOccurred())
+		return input.(map[string]any)
+	}
+
+	// renderSpec merges the input with the defaults and returns the rendered
+	// ClusterInstance spec.
+	renderSpec := func(task *provisioningRequestReconcilerTask, input map[string]any) map[string]any {
+		merged, err := task.getMergedClusterInstanceData(ctx, ciDefaultsCm, input)
+		Expect(err).ToNot(HaveOccurred())
+		task.clusterInput.clusterInstanceData = merged
+		rendered, err := task.buildClusterInstanceUnstructured()
+		Expect(err).ToNot(HaveOccurred())
+		spec, ok := rendered.Object["spec"].(map[string]any)
+		Expect(ok).To(BeTrue())
+		return spec
+	}
+
+	BeforeEach(func() {
+		ctx = context.Background()
+	})
+
+	It("renders spec.cpuArchitecture from the ProvisioningRequest input", func() {
+		task := buildTask(getClusterInstanceDefaultsConfigMap(ciDefaultsCm, ctNamespace))
+		input := prInput()
+		input["cpuArchitecture"] = "aarch64"
+		spec := renderSpec(task, input)
+		Expect(spec["cpuArchitecture"]).To(Equal("aarch64"))
+	})
+
+	It("renders spec.cpuArchitecture from the clusterInstance defaults ConfigMap", func() {
+		cm := getClusterInstanceDefaultsConfigMap(ciDefaultsCm, ctNamespace)
+		cm.Data[utils.ClusterInstanceTemplateDefaultsConfigmapKey] =
+			"cpuArchitecture: aarch64\n" + cm.Data[utils.ClusterInstanceTemplateDefaultsConfigmapKey]
+		task := buildTask(cm)
+		spec := renderSpec(task, prInput())
+		Expect(spec["cpuArchitecture"]).To(Equal("aarch64"))
+	})
+
+	It("leaves cpuArchitecture unset when neither input nor defaults provide it", func() {
+		// Documents the root cause: with nothing to pass through, siteconfig's CRD
+		// default (x86_64) applies, which breaks ARM deployments.
+		task := buildTask(getClusterInstanceDefaultsConfigMap(ciDefaultsCm, ctNamespace))
+		spec := renderSpec(task, prInput())
+		_, present := spec["cpuArchitecture"]
+		Expect(present).To(BeFalse())
+	})
+})
+
 // ptr is a helper function to create pointers
 func ptr[T any](v T) *T {
 	return &v

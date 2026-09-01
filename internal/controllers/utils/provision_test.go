@@ -1318,6 +1318,33 @@ nodes:
 		Expect(got).To(MatchYAML(expected))
 	})
 
+	// A spec-level cpuArchitecture (e.g. aarch64 for an ARM cluster) must
+	// survive nodeGroups expansion so it reaches the rendered ClusterInstance
+	// spec instead of defaulting to x86_64.
+	It("preserves a spec-level cpuArchitecture while expanding nodeGroups", func() {
+		merged := mustYAMLMap(`
+clusterName: sno-arm
+cpuArchitecture: aarch64
+nodeGroups:
+- name: master
+  role: master
+  nodes:
+  - hostName: sno-arm.example.com
+`)
+		hostToGroupName, err := ExpandNodeGroupsToNodes(merged)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(hostToGroupName).To(Equal(map[string]string{
+			"sno-arm.example.com": "master",
+		}))
+		// nodeGroups is replaced by a flat nodes list, but the cluster-level
+		// cpuArchitecture is untouched.
+		Expect(merged).ToNot(HaveKey("nodeGroups"))
+		Expect(merged["cpuArchitecture"]).To(Equal("aarch64"))
+		nodes, ok := merged["nodes"].([]any)
+		Expect(ok).To(BeTrue())
+		Expect(nodes).To(HaveLen(1))
+	})
+
 	It("applies last-wins on duplicate interface names in a node", func() {
 		merged := mustYAMLMap(`
 nodeGroups:

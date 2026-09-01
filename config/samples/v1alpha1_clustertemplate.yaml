@@ -226,6 +226,16 @@ spec:
           clusterName:
             description: ClusterName is the name of the cluster.
             type: string
+          cpuArchitecture:
+            description: CPUArchitecture is the default software architecture for
+              nodes that do not define their own. Set to aarch64 to deploy on ARM
+              hardware; the value must match the architecture of the referenced
+              ClusterImageSet. Defaults to x86_64 when omitted.
+            enum:
+            - x86_64
+            - aarch64
+            - multi
+            type: string
           extraAnnotations:
             additionalProperties:
               additionalProperties:
