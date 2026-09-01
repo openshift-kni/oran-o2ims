@@ -198,8 +198,11 @@ func isVersionChangeDetected(ctx context.Context, logger *slog.Logger, status *m
 				updateRequired = true
 			} else {
 				logger.InfoContext(ctx, "No version change detected",
+					slog.String("component", component.Component),
 					slog.String("current", component.CurrentVersion),
-					slog.String("desired", fw.Version),
+					slog.String("desired", fw.Version))
+				logger.DebugContext(ctx, "No version change detected (details)",
+					slog.String("component", component.Component),
 					slog.Any("resolved", resolved),
 					slog.Any("hfc_status", status))
 			}

@@ -1783,7 +1783,6 @@ func validateAppliedBiosSettings(
 	logger *slog.Logger,
 	bmh *metal3v1alpha1.BareMetalHost,
 	prof *hwmgmtv1alpha1.HardwareProfile,
-	resolved resolvedFirmware,
 ) (bool, error) {
 
 	// Check if any BIOS settings are specified
@@ -1829,50 +1828,71 @@ func validateAppliedBiosSettings(
 
 	logger.InfoContext(ctx, "All required BIOS settings match")
 
-	// Validate NIC firmware if specified — use pre-resolved catalog references
-	if len(prof.Spec.NicFirmware) > 0 {
-		// Get HostFirmwareComponents to check NIC firmware versions
-		hfc, err := getHostFirmwareComponents(ctx, noncachedClient, bmh.Name, bmh.Namespace)
-		if err != nil {
-			if k8serrors.IsNotFound(err) {
-				// Profile expects NIC firmware but HFC absent -> not valid yet
-				logger.InfoContext(ctx, "HostFirmwareComponents not found while NIC firmware is specified; not valid yet")
-				return false, nil
-			}
-			return false, fmt.Errorf("get HostFirmwareComponents %s/%s: %w", bmh.Namespace, bmh.Name, err)
-		}
+	return true, nil
+}
 
-		// Create a set of current NIC firmware versions from HFC status
-		nicVersions := make(map[string]bool)
-		for _, component := range hfc.Status.Components {
-			if strings.HasPrefix(component.Component, "nic:") && component.CurrentVersion != "" {
-				nicVersions[normalizeVersion(component.CurrentVersion)] = true
-			}
-		}
+// validateNicFirmware checks whether HostFirmwareComponents on the BMH match the
+// NIC firmware versions specified in the HardwareProfile. NIC firmware is validated
+// independently of BIOS attributes so that profiles specifying only NIC firmware
+// (and no BIOS settings) are still enforced.
+// Returns (valid=true) if matches or no NIC firmware is specified;
+// returns (valid=false, nil) for mismatches or missing components;
+// returns (false, err) on API errors.
+func validateNicFirmware(
+	ctx context.Context,
+	noncachedClient client.Reader,
+	logger *slog.Logger,
+	bmh *metal3v1alpha1.BareMetalHost,
+	prof *hwmgmtv1alpha1.HardwareProfile,
+	resolved resolvedFirmware,
+) (bool, error) {
 
-		// Check each resolved NIC firmware requirement
-		for i, nic := range resolved.NicFirmware {
-			if nic.Version == "" {
-				continue // Skip if no version specified
-			}
-
-			normalizedExpected := normalizeVersion(nic.Version)
-			if !nicVersions[normalizedExpected] {
-				logger.InfoContext(ctx, "NIC firmware version not found in any nic: component",
-					slog.Int("nicIndex", i),
-					slog.String("expected", nic.Version),
-					slog.String("normalizedExpected", normalizedExpected))
-				return false, nil
-			}
-
-			logger.DebugContext(ctx, "NIC firmware version matches",
-				slog.Int("nicIndex", i),
-				slog.String("version", nic.Version))
-		}
-
-		logger.InfoContext(ctx, "All required NIC firmware versions match")
+	// No NIC firmware specified => nothing to validate
+	if len(prof.Spec.NicFirmware) == 0 {
+		logger.DebugContext(ctx, "No NIC firmware specified in hardware profile; treating as valid")
+		return true, nil
 	}
 
+	// Get HostFirmwareComponents to check NIC firmware versions
+	hfc, err := getHostFirmwareComponents(ctx, noncachedClient, bmh.Name, bmh.Namespace)
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			// Profile expects NIC firmware but HFC absent -> not valid yet
+			logger.InfoContext(ctx, "HostFirmwareComponents not found while NIC firmware is specified; not valid yet")
+			return false, nil
+		}
+		return false, fmt.Errorf("get HostFirmwareComponents %s/%s: %w", bmh.Namespace, bmh.Name, err)
+	}
+
+	// Create a set of current NIC firmware versions from HFC status
+	nicVersions := make(map[string]bool)
+	for _, component := range hfc.Status.Components {
+		if strings.HasPrefix(component.Component, "nic:") && component.CurrentVersion != "" {
+			nicVersions[normalizeVersion(component.CurrentVersion)] = true
+		}
+	}
+
+	// Check each resolved NIC firmware requirement
+	for i, nic := range resolved.NicFirmware {
+		if nic.Version == "" {
+			continue // Skip if no version specified
+		}
+
+		normalizedExpected := normalizeVersion(nic.Version)
+		if !nicVersions[normalizedExpected] {
+			logger.InfoContext(ctx, "NIC firmware version not found in any nic: component",
+				slog.Int("nicIndex", i),
+				slog.String("expected", nic.Version),
+				slog.String("normalizedExpected", normalizedExpected))
+			return false, nil
+		}
+
+		logger.DebugContext(ctx, "NIC firmware version matches",
+			slog.Int("nicIndex", i),
+			slog.String("version", nic.Version))
+	}
+
+	logger.InfoContext(ctx, "All required NIC firmware versions match")
 	return true, nil
 }
 
@@ -1917,7 +1937,7 @@ func validateNodeConfiguration(
 	}
 
 	// Validate BIOS settings
-	biosValid, err := validateAppliedBiosSettings(ctx, noncachedClient, logger, bmh, prof, resolved)
+	biosValid, err := validateAppliedBiosSettings(ctx, noncachedClient, logger, bmh, prof)
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to validate BIOS settings",
 			slog.Any("error", err))
@@ -1928,7 +1948,20 @@ func validateNodeConfiguration(
 		return false, nil
 	}
 
-	logger.InfoContext(ctx, "Firmware versions and BIOS settings validated successfully")
+	// Validate NIC firmware independently of BIOS settings, so profiles that
+	// specify only NIC firmware (no BIOS attributes) are still enforced.
+	nicValid, err := validateNicFirmware(ctx, noncachedClient, logger, bmh, prof, resolved)
+	if err != nil {
+		logger.ErrorContext(ctx, "Failed to validate NIC firmware",
+			slog.Any("error", err))
+		return false, err
+	}
+	if !nicValid {
+		logger.InfoContext(ctx, "NIC firmware not yet updated, continuing to poll")
+		return false, nil
+	}
+
+	logger.InfoContext(ctx, "Firmware versions, BIOS settings and NIC firmware validated successfully")
 	return true, nil
 }
 
