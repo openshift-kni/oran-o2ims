@@ -62,7 +62,7 @@ multiple profiles.
 ### FirmwareCatalog
 
 A FirmwareCatalog CR holds the set of firmware images available for use by
-HardwareProfiles. A singleton named `firmware-catalog` must exist in the `oran-o2ims`
+HardwareProfiles. A singleton named `firmware-catalog` must exist in the operator's
 namespace. Each entry has a unique name, a component type (`bios`, `bmc`, or `nic`),
 and the firmware URL and version:
 

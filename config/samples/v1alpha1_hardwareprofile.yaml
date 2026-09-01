@@ -11,5 +11,8 @@ spec:
       WorkloadProfile: TelcoOptimizedProfile
   biosFirmware: dell-xr8620t-bios-2.7.5
   bmcFirmware: dell-xr8620t-bmc-7.20.70.50
+  nicFirmware:
+    - dell-xr8620t-nic-mlx-22.36.1010
+    - dell-xr8620t-nic-intel-22.5.7
 status:
   conditions: []

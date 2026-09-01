@@ -15,6 +15,16 @@ spec:
       component: bmc
       url: https://firmware.example.com/idrac-xr8620t-7.20.70.50.bin
       vendor: Dell
+    - name: dell-xr8620t-nic-mlx-22.36.1010
+      version: "22.36.1010"
+      component: nic
+      url: https://firmware.example.com/nic-mlx-xr8620t-22.36.1010.bin
+      vendor: Dell
+    - name: dell-xr8620t-nic-intel-22.5.7
+      version: "22.5.7"
+      component: nic
+      url: https://firmware.example.com/nic-intel-xr8620t-22.5.7.bin
+      vendor: Dell
 status:
   conditions:
     - lastTransitionTime: "2026-01-01T00:00:00Z"
