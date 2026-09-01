@@ -71,7 +71,7 @@ apiVersion: clcm.openshift.io/v1alpha1
 kind: FirmwareCatalog
 metadata:
   name: firmware-catalog
-  namespace: oran-o2ims
+  namespace: <operator-namespace> # the namespace where the operator is installed
 spec:
   images:
     - name: dell-xr8620t-bios-2.3.5
@@ -94,7 +94,7 @@ apiVersion: clcm.openshift.io/v1alpha1
 kind: HardwareProfile
 metadata:
   name: dell-xr8620t-bios-2.3.5-bmc-7.10.70.10
-  namespace: oran-o2ims
+  namespace: <operator-namespace> # the namespace where the operator is installed
 spec:
   bios:
     attributes:
