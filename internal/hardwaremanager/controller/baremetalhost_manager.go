@@ -880,36 +880,30 @@ func handleBMHCompletion(ctx context.Context,
 
 	logger.DebugContext(ctx, "Handling nodes for completion", slog.Int("count", len(nodes)))
 	var (
-		wg          sync.WaitGroup
 		mu          sync.Mutex
 		anyUpdating bool
 		errs        []error
 	)
 
-	// Process each node in parallel for better performance with large clusters (e.g. 3 masters + 50+ workers).
-	for _, node := range nodes {
-		wg.Add(1)
-		go func(node *hwmgmtv1alpha1.AllocatedNode) {
-			defer wg.Done()
+	// Process nodes in parallel (capped) for better performance with large
+	// clusters (e.g. 3 masters + 50+ workers).
+	forEachConcurrent(len(nodes), maxConcurrentNodeOps, func(i int) {
+		node := nodes[i]
+		nodeCtx := logging.AppendCtx(ctx, slog.String("node", node.Name))
+		updating, err := handleSingleNodeCompletion(nodeCtx, c, noncachedClient, logger, namespace, node)
 
-			nodeCtx := logging.AppendCtx(ctx, slog.String("node", node.Name))
-			updating, err := handleSingleNodeCompletion(nodeCtx, c, noncachedClient, logger, namespace, node)
+		mu.Lock()
+		defer mu.Unlock()
 
-			mu.Lock()
-			defer mu.Unlock()
-
-			if updating {
-				anyUpdating = true
-			}
-			if err != nil {
-				logger.ErrorContext(nodeCtx, "failed to handle single node completion",
-					slog.Any("error", err))
-				errs = append(errs, fmt.Errorf("node %s, error: %w", node.Name, err))
-			}
-		}(node)
-	}
-
-	wg.Wait()
+		if updating {
+			anyUpdating = true
+		}
+		if err != nil {
+			logger.ErrorContext(nodeCtx, "failed to handle single node completion",
+				slog.Any("error", err))
+			errs = append(errs, fmt.Errorf("node %s, error: %w", node.Name, err))
+		}
+	})
 
 	if len(errs) > 0 {
 		aggErr := fmt.Errorf("failed to handle BMH completion: %w", errors.Join(errs...))

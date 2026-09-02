@@ -84,6 +84,8 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
@@ -3723,5 +3725,85 @@ var _ = Describe("Helpers", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(BeTrue())
 		})
+	})
+})
+
+var _ = Describe("forEachConcurrent", func() {
+	It("invokes fn for every index when n is greater than the limit", func() {
+		var (
+			mu   sync.Mutex
+			seen []int
+		)
+		forEachConcurrent(5, 2, func(i int) {
+			mu.Lock()
+			seen = append(seen, i)
+			mu.Unlock()
+		})
+		Expect(seen).To(ConsistOf(0, 1, 2, 3, 4))
+	})
+
+	It("invokes fn for every index when n is less than the limit", func() {
+		var (
+			mu   sync.Mutex
+			seen []int
+		)
+		forEachConcurrent(3, 10, func(i int) {
+			mu.Lock()
+			seen = append(seen, i)
+			mu.Unlock()
+		})
+		Expect(seen).To(ConsistOf(0, 1, 2))
+	})
+
+	It("does not skip later indices when one call is slow", func() {
+		var (
+			mu   sync.Mutex
+			seen []int
+		)
+		forEachConcurrent(4, 2, func(i int) {
+			if i == 0 {
+				time.Sleep(50 * time.Millisecond)
+			}
+			mu.Lock()
+			seen = append(seen, i)
+			mu.Unlock()
+		})
+		Expect(seen).To(ConsistOf(0, 1, 2, 3))
+	})
+
+	It("keeps at most limit goroutines in flight", func() {
+		var inFlight, maxInFlight atomic.Int32
+		started := make(chan struct{}, 8)
+		release := make(chan struct{})
+		done := make(chan struct{})
+
+		go func() {
+			defer close(done)
+			forEachConcurrent(6, 2, func(_ int) {
+				cur := inFlight.Add(1)
+				for {
+					old := maxInFlight.Load()
+					if cur <= old || maxInFlight.CompareAndSwap(old, cur) {
+						break
+					}
+				}
+				started <- struct{}{}
+				<-release
+				inFlight.Add(-1)
+			})
+		}()
+
+		Eventually(func() int { return len(started) }).
+			WithTimeout(2 * time.Second).
+			WithPolling(10 * time.Millisecond).
+			Should(Equal(2))
+		Consistently(inFlight.Load).
+			WithTimeout(80 * time.Millisecond).
+			WithPolling(10 * time.Millisecond).
+			Should(BeNumerically("<=", 2))
+		close(release)
+		Eventually(done).WithTimeout(2 * time.Second).Should(BeClosed())
+		Expect(maxInFlight.Load()).To(BeNumerically("<=", 2))
+		Expect(maxInFlight.Load()).To(BeNumerically(">=", 1))
 	})
 })
