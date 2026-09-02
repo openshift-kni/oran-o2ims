@@ -309,33 +309,8 @@ and worker nodes.
 
 ### MNO Prerequisites
 
-- The [ManagedServiceAccount](https://github.com/open-cluster-management-io/managed-serviceaccount)
-  addon is enabled on the hub cluster. This addon is enabled by default in
-  ACM/MCE. To verify, check the MultiClusterEngine CR:
-
-  ```console
-  oc get multiclusterengines.multicluster.openshift.io multiclusterengine \
-    -o jsonpath='{.spec.overrides.components[?(@.name=="managedserviceaccount")].enabled}'
-  ```
-
-  If it returns `false` or is not present, enable it using
-  `oc edit` to add or update the entry while preserving existing
-  component overrides:
-
-  ```console
-  oc edit multiclusterengines.multicluster.openshift.io multiclusterengine
-  ```
-
-  Ensure the `managedserviceaccount` component is listed and enabled:
-
-  ```yaml
-  spec:
-    overrides:
-      components:
-      - name: managedserviceaccount
-        enabled: true
-      # ... other existing components ...
-  ```
+- The ManagedServiceAccount addon is enabled on the hub cluster. See
+  [Hub Cluster Requirements](./prereqs.md#required-operators-and-addons-on-the-hub).
 
 - Administrator pre-upgrade tasks are completed before triggering the upgrade.
   These are the administrator's responsibility and must be done before updating

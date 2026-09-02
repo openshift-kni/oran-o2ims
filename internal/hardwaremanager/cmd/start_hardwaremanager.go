@@ -32,6 +32,10 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/exit"
 	hwmgrctrl "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/controller"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/utils"
+	addonv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
+	workv1 "open-cluster-management.io/api/work/v1"
+	msav1beta1 "open-cluster-management.io/managed-serviceaccount/apis/authentication/v1beta1"
 )
 
 var (
@@ -44,6 +48,11 @@ func init() {
 	utilruntime.Must(bmhv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(provisioningv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(inventoryv1alpha1.AddToScheme(scheme))
+	// ACM types used by spokeclient to create/delete scoped hub access (MSA, ManifestWork).
+	utilruntime.Must(clusterv1.Install(scheme))
+	utilruntime.Must(msav1beta1.AddToScheme(scheme))
+	utilruntime.Must(workv1.Install(scheme))
+	utilruntime.Must(addonv1alpha1.Install(scheme))
 }
 
 // Start creates and returns the `hardwaremanager` command.

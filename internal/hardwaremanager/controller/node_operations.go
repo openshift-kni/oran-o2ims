@@ -8,15 +8,17 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
-	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
@@ -27,12 +29,77 @@ import (
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
-	k8sclients "github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
+	"github.com/openshift-kni/oran-o2ims/internal/spokeclient"
 )
 
 const (
 	DefaultDrainTimeout   = 30 * time.Second
 	DefaultMaxUnavailable = 1
+
+	hwConfigMSASuffix = "-hwconfig"
+	hwConfigMWSuffix  = "-hwconfig-rbac"
+	scaleInMSASuffix  = "-scalein"
+	scaleInMWSuffix   = "-scalein-rbac"
+)
+
+// hwConfigRBACRules is the least-privilege spoke RBAC for day2 hardware
+// configuration (node readiness, cordon/drain/uncordon, MCP maxUnavailable).
+var hwConfigRBACRules = []rbacv1.PolicyRule{
+	{
+		APIGroups: []string{""},
+		Resources: []string{"nodes"},
+		Verbs:     []string{"get", "list", "update", "patch"},
+	},
+	{
+		APIGroups: []string{""},
+		Resources: []string{"pods"},
+		Verbs:     []string{"get", "list", "delete"},
+	},
+	{
+		APIGroups: []string{""},
+		Resources: []string{"pods/eviction"},
+		Verbs:     []string{"create"},
+	},
+	{
+		APIGroups: []string{"apps"},
+		Resources: []string{"daemonsets"},
+		Verbs:     []string{"get"},
+	},
+	{
+		APIGroups: []string{"machineconfiguration.openshift.io"},
+		Resources: []string{"machineconfigpools"},
+		Verbs:     []string{"get"},
+	},
+}
+
+// scaleInRBACRules is the least-privilege spoke RBAC for scale-in (drain plus
+// Node delete).
+var scaleInRBACRules = []rbacv1.PolicyRule{
+	{
+		APIGroups: []string{""},
+		Resources: []string{"nodes"},
+		Verbs:     []string{"get", "list", "update", "patch", "delete"},
+	},
+	{
+		APIGroups: []string{""},
+		Resources: []string{"pods"},
+		Verbs:     []string{"get", "list", "delete"},
+	},
+	{
+		APIGroups: []string{""},
+		Resources: []string{"pods/eviction"},
+		Verbs:     []string{"create"},
+	},
+	{
+		APIGroups: []string{"apps"},
+		Resources: []string{"daemonsets"},
+		Verbs:     []string{"get"},
+	},
+}
+
+var (
+	hwConfigSpokeScheme = spokeclient.NewSpokeScheme(corev1.AddToScheme, machineconfigv1.Install)
+	scaleInSpokeScheme  = spokeclient.NewSpokeScheme(corev1.AddToScheme)
 )
 
 // logWriter adapts an slog function into an io.Writer so that the kubectl drain
@@ -47,34 +114,6 @@ func (w logWriter) Write(p []byte) (int, error) {
 		w.logFunc(msg)
 	}
 	return len(p), nil
-}
-
-// Testability hooks for spoke client creation.
-var (
-	spokeClientCreatorsMu      sync.RWMutex
-	newClientForClusterFunc    = k8sclients.NewClientForCluster
-	newClientsetForClusterFunc = k8sclients.NewClientsetForCluster
-)
-
-// SetTestSpokeClientCreators overrides the spoke client creation functions for
-// e2e tests. It returns a restore function that resets the originals.
-func SetTestSpokeClientCreators(
-	clientFunc func(ctx context.Context, hubClient client.Client, clusterName string) (client.Client, error),
-	clientsetFunc func(ctx context.Context, hubClient client.Client, clusterName string) (kubernetes.Interface, error),
-) func() {
-	spokeClientCreatorsMu.Lock()
-	defer spokeClientCreatorsMu.Unlock()
-
-	origClient := newClientForClusterFunc
-	origClientset := newClientsetForClusterFunc
-	newClientForClusterFunc = clientFunc
-	newClientsetForClusterFunc = clientsetFunc
-	return func() {
-		spokeClientCreatorsMu.Lock()
-		defer spokeClientCreatorsMu.Unlock()
-		newClientForClusterFunc = origClient
-		newClientsetForClusterFunc = origClientset
-	}
 }
 
 // NodeOps abstracts node-level operations against a managed cluster
@@ -250,35 +289,62 @@ func isNodeStatusConditionTrue(conditions []corev1.NodeCondition, conditionType 
 	return false
 }
 
-// createSpokeClients creates both a controller-runtime client and a kubernetes clientset
-// for a managed cluster. The controller-runtime client is used for MCP and node status reads,
-// and the clientset is used for cordon/drain/uncordon operations.
-func createSpokeClients(
+// ensureSpokeClients returns scoped spoke clients for a managed cluster.
+// ready=false means the MSA token or ManifestWork is not available yet.
+func ensureSpokeClients(
 	ctx context.Context,
 	hubClient client.Client,
+	logger *slog.Logger,
 	nar *hwmgmtv1alpha1.NodeAllocationRequest,
-) (client.Client, kubernetes.Interface, error) {
+	msaName, mwName string,
+	rules []rbacv1.PolicyRule,
+	spokeScheme *runtime.Scheme,
+) (spokeclient.Clients, bool, error) {
 	clusterName, err := getClusterNameFromPR(ctx, hubClient, nar.Name)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to resolve cluster name for NAR %s: %w", nar.Name, err)
+		return spokeclient.Clients{}, false, fmt.Errorf("failed to resolve cluster name for NAR %s: %w", nar.Name, err)
 	}
 
-	spokeClient, err := newClientForClusterFunc(ctx, hubClient, clusterName)
+	clients, ready, err := spokeclient.EnsureSpokeClient(
+		ctx, hubClient, logger, clusterName, msaName, mwName, rules, spokeScheme, spokeclient.WithClientset)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create spoke client for cluster %s: %w", clusterName, err)
+		return spokeclient.Clients{}, false, fmt.Errorf("failed to ensure scoped spoke clients: %w", err)
 	}
-
-	clientset, err := newClientsetForClusterFunc(ctx, hubClient, clusterName)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create spoke clientset for cluster %s: %w", clusterName, err)
+	if !ready {
+		return spokeclient.Clients{}, false, nil
 	}
-
-	return spokeClient, clientset, nil
+	return clients, true, nil
 }
+
+func cleanupSpokeAccess(
+	ctx context.Context,
+	hubClient client.Client,
+	logger *slog.Logger,
+	nar *hwmgmtv1alpha1.NodeAllocationRequest,
+	msaName, mwName string,
+) error {
+	clusterName, err := getClusterNameFromPR(ctx, hubClient, nar.Name)
+	if err != nil {
+		if k8serrors.IsNotFound(err) || errors.Is(err, errMissingClusterDetails) {
+			logger.InfoContext(ctx, "Skipping spoke access cleanup; cluster name could not be resolved",
+				slog.String("nar", nar.Name), slog.Any("error", err))
+			return nil
+		}
+		return fmt.Errorf("failed to get cluster name for NodeAllocationRequest %s: %w", nar.Name, err)
+	}
+	if err := spokeclient.CleanupSpokeAccess(ctx, hubClient, clusterName, msaName, mwName); err != nil {
+		return fmt.Errorf("failed to clean up spoke access %s: %w", msaName, err)
+	}
+	return nil
+}
+
+// errMissingClusterDetails is returned when the ProvisioningRequest exists but
+// has no cluster name in ClusterDetails.
+var errMissingClusterDetails = errors.New("provisioningRequest has no cluster name in ClusterDetails")
 
 // getClusterNameFromPR looks up the ProvisioningRequest (1:1 with the NAR by name)
 // and returns the actual cluster name from ClusterDetails. The cluster name is the
-// namespace where the kubeconfig secret is stored, which may differ from
+// namespace where hub MSA/ManifestWork objects live, which may differ from
 // nar.Spec.ClusterId.
 func getClusterNameFromPR(ctx context.Context, hubClient client.Client, narName string) (string, error) {
 	pr := &provisioningv1alpha1.ProvisioningRequest{}
@@ -287,11 +353,11 @@ func getClusterNameFromPR(ctx context.Context, hubClient client.Client, narName 
 	}
 
 	if pr.Status.Extensions.ClusterDetails == nil {
-		return "", fmt.Errorf("provisioningRequest %s has no ClusterDetails in status", narName)
+		return "", fmt.Errorf("%w: provisioningRequest %s has no ClusterDetails in status", errMissingClusterDetails, narName)
 	}
 
 	if pr.Status.Extensions.ClusterDetails.Name == "" {
-		return "", fmt.Errorf("provisioningRequest %s has no cluster name in ClusterDetails", narName)
+		return "", fmt.Errorf("%w: provisioningRequest %s has no cluster name in ClusterDetails", errMissingClusterDetails, narName)
 	}
 
 	return pr.Status.Extensions.ClusterDetails.Name, nil

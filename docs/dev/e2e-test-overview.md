@@ -99,6 +99,7 @@ File: `test/e2e/mno_hw_configuration_test.go`
 - Waiting for day0 to complete (NAR Provisioned=True)
 - Waiting for PR HardwareProvisioned=True
 - Simulating AllocatedNodeHostMap on PR
+- Creating ManagedClusterAddOn for the cluster
 - Deleting created resources
 
 ### Performs day2 hardware configuration update successfully

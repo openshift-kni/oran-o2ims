@@ -83,6 +83,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"time"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
@@ -96,7 +97,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/kubernetes"
 	kubefake "k8s.io/client-go/kubernetes/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -105,6 +105,7 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/spokeclient"
 )
 
 // Helper functions
@@ -1405,14 +1406,13 @@ var _ = Describe("Helpers", func() {
 
 		Context("handleNodeInProgressUpdate", func() {
 			var (
-				testBMH            *metal3v1alpha1.BareMetalHost
-				testNode           *hwmgmtv1alpha1.AllocatedNode
-				testClient         client.Client
-				mockOps            *MockNodeOps
-				mockCtrl           *gomock.Controller
-				ctx                context.Context
-				logger             *slog.Logger
-				originalClientFunc func(context.Context, client.Client, string) (client.Client, error)
+				testBMH    *metal3v1alpha1.BareMetalHost
+				testNode   *hwmgmtv1alpha1.AllocatedNode
+				testClient client.Client
+				mockOps    *MockNodeOps
+				mockCtrl   *gomock.Controller
+				ctx        context.Context
+				logger     *slog.Logger
 			)
 
 			BeforeEach(func() {
@@ -1420,9 +1420,6 @@ var _ = Describe("Helpers", func() {
 				logger = slog.New(slog.NewTextHandler(GinkgoWriter, &slog.HandlerOptions{}))
 				mockCtrl = gomock.NewController(GinkgoT())
 				mockOps = NewMockNodeOps(mockCtrl)
-
-				// Save original function and restore in AfterEach
-				originalClientFunc = newClientForClusterFunc
 
 				// Create a test AllocatedNode with config-in-progress annotation and pre-populated hostname
 				testNode = &hwmgmtv1alpha1.AllocatedNode{
@@ -1484,7 +1481,6 @@ var _ = Describe("Helpers", func() {
 
 			AfterEach(func() {
 				mockCtrl.Finish()
-				newClientForClusterFunc = originalClientFunc
 			})
 
 			It("should clean up config annotation when BMH is in error state", func() {
@@ -1631,9 +1627,6 @@ var _ = Describe("Helpers", func() {
 				newHwProfileName     string = "profile-v2"
 				nar                  *hwmgmtv1alpha1.NodeAllocationRequest
 
-				savedClientForClusterFunc    func(ctx context.Context, hubClient client.Client, clusterName string) (client.Client, error)
-				savedClientsetForClusterFunc func(ctx context.Context, hubClient client.Client, clusterName string) (kubernetes.Interface, error)
-
 				spokeNodeNames []string // populated by each context's BeforeEach
 			)
 
@@ -1666,6 +1659,43 @@ var _ = Describe("Helpers", func() {
 				nar := createNodeAllocationRequest("test-nar", testNamespace)
 				nar.Spec.NodeGroup = nodeGroups
 				return nar
+			}
+
+			childNodes := func() *hwmgmtv1alpha1.AllocatedNodeList {
+				nodelist, err := hwmgrutils.GetChildNodes(ctx, logger, testClient, nar)
+				Expect(err).ToNot(HaveOccurred())
+				sort.Slice(nodelist.Items, func(i, j int) bool {
+					return nodelist.Items[i].Name < nodelist.Items[j].Name
+				})
+				return nodelist
+			}
+
+			readySpokeClients := func() spokeclient.Clients {
+				spokeScheme := runtime.NewScheme()
+				Expect(corev1.AddToScheme(spokeScheme)).To(Succeed())
+				Expect(machineconfigv1.Install(spokeScheme)).To(Succeed())
+				var objs []client.Object
+				var clientsetObjs []runtime.Object
+				for _, name := range spokeNodeNames {
+					objs = append(objs, &corev1.Node{
+						ObjectMeta: metav1.ObjectMeta{Name: name},
+						Status: corev1.NodeStatus{
+							Conditions: []corev1.NodeCondition{
+								{Type: corev1.NodeReady, Status: corev1.ConditionTrue},
+							},
+						},
+					})
+					clientsetObjs = append(clientsetObjs, &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: name}})
+				}
+				maxUnavailable := intstr.FromInt32(1)
+				objs = append(objs, &machineconfigv1.MachineConfigPool{
+					ObjectMeta: metav1.ObjectMeta{Name: "master"},
+					Spec:       machineconfigv1.MachineConfigPoolSpec{MaxUnavailable: &maxUnavailable},
+				})
+				return spokeclient.Clients{
+					Client:    fake.NewClientBuilder().WithScheme(spokeScheme).WithObjects(objs...).Build(),
+					Clientset: kubefake.NewSimpleClientset(clientsetObjs...),
+				}
 			}
 
 			// createPRWithHostMap creates a ProvisioningRequest and sets up its status with the
@@ -1718,50 +1748,6 @@ var _ = Describe("Helpers", func() {
 						},
 					},
 				}
-
-				// Mock spoke client creation to return a fake spoke client with a default MCP.
-				// Tests needing custom spoke setup can override these after BeforeEach.
-				savedClientForClusterFunc = newClientForClusterFunc
-				savedClientsetForClusterFunc = newClientsetForClusterFunc
-
-				newClientForClusterFunc = func(_ context.Context, _ client.Client, _ string) (client.Client, error) {
-					spokeScheme := runtime.NewScheme()
-					Expect(corev1.AddToScheme(spokeScheme)).To(Succeed())
-					Expect(machineconfigv1.Install(spokeScheme)).To(Succeed())
-					var objs []client.Object
-					for _, name := range spokeNodeNames {
-						objs = append(objs, &corev1.Node{
-							ObjectMeta: metav1.ObjectMeta{Name: name},
-							Status: corev1.NodeStatus{
-								Conditions: []corev1.NodeCondition{
-									{Type: corev1.NodeReady, Status: corev1.ConditionTrue},
-								},
-							},
-						})
-					}
-					// Explicitly set master MCP maxUnavailable to 1.
-					// For MNO clusters, the workers are updated sequentially if not setting the maxUnavailable.
-					maxUnavailable := intstr.FromInt32(1)
-					objs = append(objs,
-						&machineconfigv1.MachineConfigPool{
-							ObjectMeta: metav1.ObjectMeta{Name: "master"},
-							Spec:       machineconfigv1.MachineConfigPoolSpec{MaxUnavailable: &maxUnavailable},
-						},
-					)
-					return fake.NewClientBuilder().WithScheme(spokeScheme).WithObjects(objs...).Build(), nil
-				}
-				newClientsetForClusterFunc = func(_ context.Context, _ client.Client, _ string) (kubernetes.Interface, error) {
-					var objs []runtime.Object
-					for _, name := range spokeNodeNames {
-						objs = append(objs, &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: name}})
-					}
-					return kubefake.NewSimpleClientset(objs...), nil
-				}
-			})
-
-			AfterEach(func() {
-				newClientForClusterFunc = savedClientForClusterFunc
-				newClientsetForClusterFunc = savedClientsetForClusterFunc
 			})
 
 			Context("SNO cluster", func() {
@@ -1789,21 +1775,19 @@ var _ = Describe("Helpers", func() {
 					testClient = buildClientWithIndex(scheme, upToDateNode, bmh, nar, newHwProfile)
 					createPRWithHostMap(testClient, map[string]string{"node1": "node1"})
 
-					result, nodelist, err := handleNodeAllocationRequestConfiguring(ctx, testClient, testClient, logger, testNamespace, nar)
+					result, err := handleNodeAllocationRequestConfiguring(ctx, testClient, testClient, logger, testNamespace, nar, childNodes(), readySpokeClients())
 
 					Expect(err).ToNot(HaveOccurred())
 					Expect(result.Requeue).To(BeFalse())
 					Expect(result.RequeueAfter).To(BeZero())
-					Expect(nodelist.Items).To(HaveLen(1))
 				})
 
 				It("should initiate update when node needs new profile", func() {
 					bmh := createBMH("node1", metal3v1alpha1.OperationalStatusOK)
 					Expect(testClient.Create(ctx, bmh)).To(Succeed())
 
-					result, nodelist, err := handleNodeAllocationRequestConfiguring(ctx, testClient, testClient, logger, testNamespace, nar)
+					result, err := handleNodeAllocationRequestConfiguring(ctx, testClient, testClient, logger, testNamespace, nar, childNodes(), readySpokeClients())
 					Expect(err).ToNot(HaveOccurred())
-					Expect(nodelist.Items).To(HaveLen(1))
 					Expect(result.RequeueAfter).To(Equal(1 * time.Minute))
 
 					// Verify node spec was updated to new profile
@@ -1815,49 +1799,6 @@ var _ = Describe("Helpers", func() {
 					Expect(updatedNode.Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
 					Expect(updatedNode.Status.Conditions[0].Reason).To(Equal(string(hwmgmtv1alpha1.ConfigUpdate)))
 					Expect(updatedNode.Status.Conditions[0].Message).To(Equal(string(hwmgmtv1alpha1.NodeUpdateRequested)))
-				})
-
-				It("should use cluster name from PR, not ClusterId from NAR, for spoke client", func() {
-					// Set NAR ClusterId to a value that differs from the PR's ClusterDetails.Name
-					nar.Spec.ClusterId = "node-cluster-name"
-
-					bmh := createBMH("node1", metal3v1alpha1.OperationalStatusOK)
-					testClient = buildClientWithIndex(scheme,
-						createNode("node1", "test-nar", "master", currentHwProfileName, currentHwProfileName, nil, nil),
-						bmh, nar, newHwProfile)
-					createPRWithHostMap(testClient, map[string]string{"node1": "node1"})
-
-					// Capture the cluster name passed to the spoke client constructors
-					var capturedClientClusterName, capturedClientsetClusterName string
-					newClientForClusterFunc = func(_ context.Context, _ client.Client, clusterName string) (client.Client, error) {
-						capturedClientClusterName = clusterName
-						spokeScheme := runtime.NewScheme()
-						Expect(corev1.AddToScheme(spokeScheme)).To(Succeed())
-						Expect(machineconfigv1.Install(spokeScheme)).To(Succeed())
-						return fake.NewClientBuilder().WithScheme(spokeScheme).WithObjects(
-							&corev1.Node{
-								ObjectMeta: metav1.ObjectMeta{Name: "node1"},
-								Status: corev1.NodeStatus{
-									Conditions: []corev1.NodeCondition{
-										{Type: corev1.NodeReady, Status: corev1.ConditionTrue},
-									},
-								},
-							},
-						).Build(), nil
-					}
-					newClientsetForClusterFunc = func(_ context.Context, _ client.Client, clusterName string) (kubernetes.Interface, error) {
-						capturedClientsetClusterName = clusterName
-						return kubefake.NewSimpleClientset(
-							&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1"}},
-						), nil
-					}
-
-					_, _, err := handleNodeAllocationRequestConfiguring(ctx, testClient, testClient, logger, testNamespace, nar)
-					Expect(err).ToNot(HaveOccurred())
-
-					// Must use the PR's ClusterDetails.Name ("test-cluster"), not the NAR's ClusterId ("node-cluster-name")
-					Expect(capturedClientClusterName).To(Equal("test-cluster"))
-					Expect(capturedClientsetClusterName).To(Equal("test-cluster"))
 				})
 			})
 
@@ -1890,9 +1831,8 @@ var _ = Describe("Helpers", func() {
 				})
 
 				It("should initiate update for first node only when all need update", func() {
-					result, nodelist, err := handleNodeAllocationRequestConfiguring(ctx, testClient, testClient, logger, testNamespace, nar)
+					result, err := handleNodeAllocationRequestConfiguring(ctx, testClient, testClient, logger, testNamespace, nar, childNodes(), readySpokeClients())
 					Expect(err).ToNot(HaveOccurred())
-					Expect(nodelist.Items).To(HaveLen(3))
 					Expect(result.RequeueAfter).To(Equal(1 * time.Minute))
 
 					// Only node1 (first alphabetically) should have its spec updated
@@ -1935,9 +1875,8 @@ var _ = Describe("Helpers", func() {
 					bmh1.Status.OperationalStatus = metal3v1alpha1.OperationalStatusServicing
 					Expect(testClient.Status().Update(ctx, bmh1)).To(Succeed())
 
-					result, nodelist, err := handleNodeAllocationRequestConfiguring(ctx, testClient, testClient, logger, testNamespace, nar)
+					result, err := handleNodeAllocationRequestConfiguring(ctx, testClient, testClient, logger, testNamespace, nar, childNodes(), readySpokeClients())
 					Expect(err).ToNot(HaveOccurred())
-					Expect(nodelist.Items).To(HaveLen(3))
 					// Should requeue to continue monitoring the in-progress node
 					Expect(result.RequeueAfter).To(Equal(1 * time.Minute))
 				})
@@ -1978,9 +1917,8 @@ var _ = Describe("Helpers", func() {
 					}
 					Expect(testClient.Create(ctx, hfs1)).To(Succeed())
 
-					result, nodelist, err := handleNodeAllocationRequestConfiguring(ctx, testClient, testClient, logger, testNamespace, nar)
+					result, err := handleNodeAllocationRequestConfiguring(ctx, testClient, testClient, logger, testNamespace, nar, childNodes(), readySpokeClients())
 					Expect(err).ToNot(HaveOccurred())
-					Expect(nodelist.Items).To(HaveLen(3))
 					// Should requeue to continue monitoring BMH operational status
 					Expect(result.RequeueAfter).To(Equal(15 * time.Second))
 
@@ -2000,9 +1938,8 @@ var _ = Describe("Helpers", func() {
 					}
 					Expect(testClient.Status().Update(ctx, node1)).To(Succeed())
 
-					result, nodelist, err := handleNodeAllocationRequestConfiguring(ctx, testClient, testClient, logger, testNamespace, nar)
+					result, err := handleNodeAllocationRequestConfiguring(ctx, testClient, testClient, logger, testNamespace, nar, childNodes(), readySpokeClients())
 					Expect(err).ToNot(HaveOccurred())
-					Expect(nodelist.Items).To(HaveLen(3))
 					Expect(result.RequeueAfter).To(Equal(1 * time.Minute))
 
 					// node2 should be updated next
@@ -2059,9 +1996,8 @@ var _ = Describe("Helpers", func() {
 				})
 
 				It("should process master group before worker group", func() {
-					result, nodelist, err := handleNodeAllocationRequestConfiguring(ctx, testClient, testClient, logger, testNamespace, nar)
+					result, err := handleNodeAllocationRequestConfiguring(ctx, testClient, testClient, logger, testNamespace, nar, childNodes(), readySpokeClients())
 					Expect(err).ToNot(HaveOccurred())
-					Expect(nodelist.Items).To(HaveLen(5))
 					Expect(result.RequeueAfter).To(Equal(1 * time.Minute))
 
 					// Master1 (first master alphabetically) should be updated first
@@ -2095,9 +2031,8 @@ var _ = Describe("Helpers", func() {
 					Expect(testClient.Status().Update(ctx, master1)).To(Succeed())
 					Expect(testClient.Status().Update(ctx, master2)).To(Succeed())
 
-					result, nodelist, err := handleNodeAllocationRequestConfiguring(ctx, testClient, testClient, logger, testNamespace, nar)
+					result, err := handleNodeAllocationRequestConfiguring(ctx, testClient, testClient, logger, testNamespace, nar, childNodes(), readySpokeClients())
 					Expect(err).ToNot(HaveOccurred())
-					Expect(nodelist.Items).To(HaveLen(5))
 					Expect(result.RequeueAfter).To(Equal(1 * time.Minute))
 
 					// master3 should be updated next
@@ -2142,9 +2077,8 @@ var _ = Describe("Helpers", func() {
 					Expect(testClient.Status().Update(ctx, master2)).To(Succeed())
 					Expect(testClient.Status().Update(ctx, master3)).To(Succeed())
 
-					result, nodelist, err := handleNodeAllocationRequestConfiguring(ctx, testClient, testClient, logger, testNamespace, nar)
+					result, err := handleNodeAllocationRequestConfiguring(ctx, testClient, testClient, logger, testNamespace, nar, childNodes(), readySpokeClients())
 					Expect(err).ToNot(HaveOccurred())
-					Expect(nodelist.Items).To(HaveLen(5))
 					Expect(result.RequeueAfter).To(Equal(1 * time.Minute))
 
 					// Worker1 (first worker alphabetically) should be updated

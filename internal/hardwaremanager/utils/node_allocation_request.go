@@ -166,6 +166,11 @@ func UpdateNodeAllocationRequestStatusCondition(
 				conditionReason == hwmgmtv1alpha1.TimedOut {
 				// Clear start time when provisioning operation completes, fails, or times out
 				newNodeAllocationRequest.Status.HardwareOperationStartTime = nil
+				// Acknowledge generation only on Failed/TimedOut states.
+				if conditionReason == hwmgmtv1alpha1.Failed ||
+					conditionReason == hwmgmtv1alpha1.TimedOut {
+					newNodeAllocationRequest.Status.ObservedGeneration = newNodeAllocationRequest.ObjectMeta.Generation
+				}
 			}
 
 		case hwmgmtv1alpha1.Configured:
@@ -195,6 +200,8 @@ func UpdateNodeAllocationRequestStatusCondition(
 				conditionReason == hwmgmtv1alpha1.TimedOut {
 				// Clear start time when configuration operation completes, fails, or times out
 				newNodeAllocationRequest.Status.HardwareOperationStartTime = nil
+				// Acknowledge generation on terminal states.
+				newNodeAllocationRequest.Status.ObservedGeneration = newNodeAllocationRequest.ObjectMeta.Generation
 			}
 		}
 

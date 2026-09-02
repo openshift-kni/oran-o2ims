@@ -42,6 +42,19 @@ SPDX-License-Identifier: Apache-2.0
     oc patch multiclusterengines.multicluster.openshift.io multiclusterengine --type json --patch '[{"op": "add", "path":"/spec/overrides/components/-", "value": {"name":"image-based-install-operator","enabled": true}}]'
     ```
 
+  - Managed Service Account addon
+
+    The [ManagedServiceAccount](https://github.com/open-cluster-management-io/managed-serviceaccount)
+    addon is required for scoped access to managed clusters. The O-Cloud Manager
+    uses it for [MNO ClusterVersion upgrades](./upgrade.md#mno-clusterversion-upgrade),
+    [day-2 hardware configuration](./cluster-configuration.md#switching-to-a-new-hardware-profile),
+    and [worker node scale-in/out](./cluster-configuration.md#scaling-worker-nodes).
+    This addon is enabled by default in ACM/MCE. If it was disabled, enable it in the MultiClusterEngine:
+
+    ```console
+    oc patch multiclusterengines.multicluster.openshift.io multiclusterengine --type json --patch '[{"op": "add", "path":"/spec/overrides/components/-", "value": {"name":"managedserviceaccount","enabled": true}}]'
+    ```
+
 - Red Hat OpenShift GitOps Operator
 - Topology Aware Lifecycle Manager
 

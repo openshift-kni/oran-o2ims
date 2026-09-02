@@ -33,10 +33,13 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	hwmgrcontrollers "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/controller"
+	"github.com/openshift-kni/oran-o2ims/internal/spokeclient"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	machineconfigv1 "github.com/openshift/api/machineconfiguration/v1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	"k8s.io/client-go/kubernetes"
+	addonv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
 )
 
 const (
@@ -61,13 +64,16 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		// Resource pool label values on MNO BMHs (see testutils.MnoBMHsTwoWorkerPools).
 		mnoBMHResourcePoolDellR740   = "dell-r740-pool"
 		mnoBMHResourcePoolDellXR8620 = "dell-xr8620t-pool"
+
+		prName          = "88744070-717a-4305-8461-796244098338"
+		hwConfigMSAName = prName + "-hwconfig"
+		hwConfigMWName  = prName + "-hwconfig-rbac"
 	)
 
 	var (
 		testCtx      context.Context
 		clusterName  = "std-test"
 		ctNamespace  = "std-4-20-15"
-		prName       string // populated from PR YAML metadata.name
 		spokeRestore func()
 
 		pr  *provisioningv1alpha1.ProvisioningRequest
@@ -193,6 +199,14 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		}
 		resources := []client.Object{
 			pullSecret, extraManifests, clusterImageSet,
+			&clusterv1.ManagedCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName},
+				Spec: clusterv1.ManagedClusterSpec{
+					ManagedClusterClientConfigs: []clusterv1.ClientConfig{
+						{URL: "https://api." + clusterName + ".example.com:6443"},
+					},
+				},
+			},
 		}
 		for _, r := range resources {
 			Expect(K8SClient.Create(testCtx, r)).To(Succeed())
@@ -306,7 +320,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		By("Creating ProvisioningRequest with v1 hwProfiles (basic BIOS settings)")
 		prFromYAML, err := testutils.LoadYAML[provisioningv1alpha1.ProvisioningRequest]("../resources/mno_hw_configuration/pr-std.yaml")
 		Expect(err).ToNot(HaveOccurred())
-		prName = prFromYAML.Name
+		Expect(prFromYAML.Name).To(Equal(prName))
 		Expect(K8SClient.Create(testCtx, prFromYAML)).To(Succeed())
 
 		By("Waiting for NAR creation")
@@ -360,6 +374,10 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			hostnames = append(hostnames, hostname)
 		}
 		pr.Status.Extensions.AllocatedNodeHostMap = hostMap
+		if pr.Status.Extensions.ClusterDetails == nil {
+			pr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{}
+		}
+		pr.Status.Extensions.ClusterDetails.Name = clusterName
 		Expect(K8SClient.Status().Update(testCtx, pr)).To(Succeed())
 		Eventually(func() bool {
 			Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
@@ -367,7 +385,12 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 		}, timeout, interval).Should(BeTrue(), "AllocatedNodeHostMap should be populated")
 
 		// Set up spoke client mock for day2 operations
-		spokeRestore = setupSpokeClientMock(testCtx, hostnames)
+		spokeRestore = setupSpokeClientMock(hostnames)
+
+		By("Creating ManagedClusterAddOn for the cluster")
+		Expect(client.IgnoreAlreadyExists(K8SClient.Create(testCtx, &addonv1alpha1.ManagedClusterAddOn{
+			ObjectMeta: metav1.ObjectMeta{Name: "managed-serviceaccount", Namespace: clusterName},
+		}))).To(Succeed())
 	})
 
 	AfterAll(func() {
@@ -446,6 +469,10 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			_ = K8SClient.Delete(testCtx, cis)
 		}
 
+		Expect(client.IgnoreNotFound(K8SClient.Delete(testCtx, &clusterv1.ManagedCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterName},
+		}))).To(Succeed())
+
 		// Delete remaining resources in test namespaces.
 		for _, obj := range []client.Object{
 			&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "pull-secret", Namespace: ctNamespace}},
@@ -466,6 +493,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			Expect(err).ToNot(HaveOccurred())
 			pr.Spec.TemplateParameters = newPrFromYAML.Spec.TemplateParameters
 			Expect(K8SClient.Update(testCtx, pr)).To(Succeed())
+			testutils.SimulateSpokeAccessReady(testCtx, K8SClient, clusterName, hwConfigMSAName, hwConfigMWName, timeout, interval)
 		})
 
 		It("Should detect HW configuration changes and begin update process (NAR InProgress=True)", func() {
@@ -646,6 +674,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			Expect(err).ToNot(HaveOccurred())
 			pr.Spec.TemplateParameters = newPrFromYAML.Spec.TemplateParameters
 			Expect(K8SClient.Update(testCtx, pr)).To(Succeed())
+			testutils.SimulateSpokeAccessReady(testCtx, K8SClient, clusterName, hwConfigMSAName, hwConfigMWName, timeout, interval)
 		})
 
 		It("Should detect worker configuration changes and begin update (NAR InProgress)", func() {
@@ -767,6 +796,7 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			Expect(err).ToNot(HaveOccurred())
 			pr.Spec.TemplateParameters = runtime.RawExtension{Raw: raw}
 			Expect(K8SClient.Update(testCtx, pr)).To(Succeed())
+			testutils.SimulateSpokeAccessReady(testCtx, K8SClient, clusterName, hwConfigMSAName, hwConfigMWName, timeout, interval)
 		})
 
 		It("Should have 3 workers in ConfigUpdate and advance one BMH to Servicing", func() {
@@ -930,8 +960,7 @@ func testNonCachingListAllocatedNodesForNAR(ctx context.Context, narName string)
 	return filtered
 }
 
-func setupSpokeClientMock(ctx context.Context, hostnames []string) func() {
-	_ = ctx
+func setupSpokeClientMock(hostnames []string) func() {
 	spokeScheme := runtime.NewScheme()
 	Expect(corev1.AddToScheme(spokeScheme)).To(Succeed())
 	Expect(machineconfigv1.Install(spokeScheme)).To(Succeed())
@@ -979,14 +1008,21 @@ func setupSpokeClientMock(ctx context.Context, hostnames []string) func() {
 		Build()
 	spokeClientset := kubefake.NewSimpleClientset(k8sNodes...)
 
-	return hwmgrcontrollers.SetTestSpokeClientCreators(
-		func(_ context.Context, _ client.Client, _ string) (client.Client, error) {
+	restoreClient := spokeclient.SetTestSpokeClientCreator(
+		func(_ string, _ string, _ []byte, _ *runtime.Scheme) (client.Client, error) {
 			return spokeClient, nil
 		},
-		func(_ context.Context, _ client.Client, _ string) (kubernetes.Interface, error) {
+	)
+	restoreClientset := spokeclient.SetTestSpokeClientsetCreator(
+		func(_ string, _ string, _ []byte) (kubernetes.Interface, error) {
 			return spokeClientset, nil
 		},
 	)
+	return func() {
+		restoreClient()
+		restoreClientset()
+		spokeclient.ClearCache()
+	}
 }
 
 // failBMHDay2 simulates a BMH entering an error state during a day2 hardware configuration update.

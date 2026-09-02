@@ -22,6 +22,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
+	kubefake "k8s.io/client-go/kubernetes/fake"
 	addonv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	workv1 "open-cluster-management.io/api/work/v1"
@@ -110,17 +112,21 @@ var _ = Describe("EnsureSpokeClient", func() {
 		SetTestSpokeClientCreator(func(apiServerURL, token string, caCert []byte, spokeScheme *runtime.Scheme) (client.Client, error) {
 			return fake.NewClientBuilder().WithScheme(testScheme).Build(), nil
 		})
+		SetTestSpokeClientsetCreator(func(apiServerURL, token string, caCert []byte) (kubernetes.Interface, error) {
+			return kubefake.NewSimpleClientset(), nil
+		})
 	})
 
 	AfterEach(func() {
 		newSpokeClientFunc = buildSpokeClient
+		newSpokeClientsetFunc = buildSpokeClientset
 	})
 
 	It("should return InputError when managed-serviceaccount addon is not found", func() {
 		c := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(ns).Build()
 
 		_, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
-			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme())
+			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme(), RuntimeClientOnly)
 		Expect(err).To(HaveOccurred())
 		Expect(ready).To(BeFalse())
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
@@ -131,7 +137,7 @@ var _ = Describe("EnsureSpokeClient", func() {
 		c := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(ns, addon).Build()
 
 		_, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
-			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme())
+			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme(), RuntimeClientOnly)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(ready).To(BeFalse())
 	})
@@ -143,7 +149,7 @@ var _ = Describe("EnsureSpokeClient", func() {
 			WithObjects(ns, addon, tokenSecret, mc, msa, mw).Build()
 
 		_, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
-			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme())
+			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme(), RuntimeClientOnly)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(ready).To(BeFalse())
 	})
@@ -161,7 +167,7 @@ var _ = Describe("EnsureSpokeClient", func() {
 		Expect(c.Status().Update(ctx, msa)).To(Succeed())
 
 		_, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
-			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme())
+			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme(), RuntimeClientOnly)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(ready).To(BeFalse())
 
@@ -187,7 +193,7 @@ var _ = Describe("EnsureSpokeClient", func() {
 
 		// First call: MW created but not yet Available → not ready.
 		_, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
-			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme())
+			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme(), WithClientset)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(ready).To(BeFalse())
 
@@ -207,18 +213,37 @@ var _ = Describe("EnsureSpokeClient", func() {
 		Expect(c.Status().Update(ctx, mw)).To(Succeed())
 
 		// Second call: MW Available → ready.
-		spokeClient, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
-			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme())
+		clients, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
+			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme(), WithClientset)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(ready).To(BeTrue())
-		Expect(spokeClient).ToNot(BeNil())
+		Expect(clients.Client).ToNot(BeNil())
+		Expect(clients.Clientset).ToNot(BeNil())
 
-		// Verify client is cached.
+		// Verify both clients are cached.
 		spokeClientsMu.RLock()
 		entry, ok := spokeClients["test-pr-upgrade"]
 		spokeClientsMu.RUnlock()
 		Expect(ok).To(BeTrue())
 		Expect(entry.tokenResourceVersion).To(Equal("100"))
+		Expect(entry.clients.Clientset).ToNot(BeNil())
+	})
+
+	It("should not build a clientset when called with RuntimeClientOnly", func() {
+		c := fake.NewClientBuilder().WithScheme(testScheme).
+			WithObjects(ns, addon, tokenSecret, mc, msa, mw).Build()
+
+		clients, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
+			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme(), RuntimeClientOnly)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeTrue())
+		Expect(clients.Client).ToNot(BeNil())
+		Expect(clients.Clientset).To(BeNil())
+
+		spokeClientsMu.RLock()
+		entry := spokeClients["test-pr-upgrade"]
+		spokeClientsMu.RUnlock()
+		Expect(entry.clients.Clientset).To(BeNil())
 	})
 
 	It("should return InputError when token secret is missing the 'token' key", func() {
@@ -228,7 +253,7 @@ var _ = Describe("EnsureSpokeClient", func() {
 			WithObjects(ns, addon, tokenSecret, mc, msa, mw).Build()
 
 		_, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
-			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme())
+			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme(), RuntimeClientOnly)
 		Expect(err).To(HaveOccurred())
 		Expect(ready).To(BeFalse())
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
@@ -242,7 +267,7 @@ var _ = Describe("EnsureSpokeClient", func() {
 			WithObjects(ns, addon, tokenSecret, mc, msa, mw).Build()
 
 		_, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
-			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme())
+			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme(), RuntimeClientOnly)
 		Expect(err).To(HaveOccurred())
 		Expect(ready).To(BeFalse())
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
@@ -256,7 +281,7 @@ var _ = Describe("EnsureSpokeClient", func() {
 			WithObjects(ns, addon, tokenSecret, mc, msa, mw).Build()
 
 		_, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
-			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme())
+			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme(), RuntimeClientOnly)
 		Expect(err).To(HaveOccurred())
 		Expect(ready).To(BeFalse())
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
@@ -265,9 +290,10 @@ var _ = Describe("EnsureSpokeClient", func() {
 
 	It("should return cached client when token resourceVersion is unchanged", func() {
 		fakeSpokeClient := fake.NewClientBuilder().WithScheme(testScheme).Build()
+		fakeSpokeClientset := kubefake.NewSimpleClientset()
 		spokeClientsMu.Lock()
 		spokeClients["test-pr-upgrade"] = &spokeClientEntry{
-			client:               fakeSpokeClient,
+			clients:              Clients{Client: fakeSpokeClient, Clientset: fakeSpokeClientset},
 			tokenResourceVersion: "100",
 		}
 		spokeClientsMu.Unlock()
@@ -276,17 +302,19 @@ var _ = Describe("EnsureSpokeClient", func() {
 			WithObjects(ns, msa, tokenSecret).Build()
 
 		result, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
-			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme())
+			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme(), WithClientset)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(ready).To(BeTrue())
-		Expect(result).To(Equal(fakeSpokeClient))
+		Expect(result.Client).To(Equal(fakeSpokeClient))
+		Expect(result.Clientset).To(Equal(fakeSpokeClientset))
 	})
 
 	It("should rebuild client when token resourceVersion changes", func() {
 		oldClient := fake.NewClientBuilder().WithScheme(testScheme).Build()
+		oldClientset := kubefake.NewSimpleClientset()
 		spokeClientsMu.Lock()
 		spokeClients["test-pr-upgrade"] = &spokeClientEntry{
-			client:               oldClient,
+			clients:              Clients{Client: oldClient, Clientset: oldClientset},
 			tokenResourceVersion: "99",
 		}
 		spokeClientsMu.Unlock()
@@ -295,21 +323,24 @@ var _ = Describe("EnsureSpokeClient", func() {
 			WithObjects(ns, msa, tokenSecret, mc).Build()
 
 		result, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
-			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme())
+			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme(), WithClientset)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(ready).To(BeTrue())
-		Expect(result).ToNot(Equal(oldClient))
+		Expect(result.Client).ToNot(Equal(oldClient))
+		Expect(result.Clientset).ToNot(BeNil())
+		Expect(result.Clientset).ToNot(Equal(oldClientset))
 
 		spokeClientsMu.RLock()
 		entry := spokeClients["test-pr-upgrade"]
 		spokeClientsMu.RUnlock()
 		Expect(entry.tokenResourceVersion).To(Equal("100"))
+		Expect(entry.clients.Clientset).ToNot(Equal(oldClientset))
 	})
 
 	It("should clear cache and re-setup when token secret is missing", func() {
 		spokeClientsMu.Lock()
 		spokeClients["test-pr-upgrade"] = &spokeClientEntry{
-			client:               fake.NewClientBuilder().WithScheme(testScheme).Build(),
+			clients:              Clients{Client: fake.NewClientBuilder().WithScheme(testScheme).Build()},
 			tokenResourceVersion: "99",
 		}
 		spokeClientsMu.Unlock()
@@ -317,7 +348,7 @@ var _ = Describe("EnsureSpokeClient", func() {
 		c := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(ns).Build()
 
 		_, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
-			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme())
+			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme(), RuntimeClientOnly)
 		Expect(err).To(HaveOccurred())
 		Expect(ready).To(BeFalse())
 
@@ -348,7 +379,7 @@ var _ = Describe("CleanupSpokeAccess", func() {
 
 		spokeClientsMu.Lock()
 		spokeClients["test-pr-upgrade"] = &spokeClientEntry{
-			client:               fake.NewClientBuilder().WithScheme(testScheme).Build(),
+			clients:              Clients{Client: fake.NewClientBuilder().WithScheme(testScheme).Build()},
 			tokenResourceVersion: "100",
 		}
 		spokeClientsMu.Unlock()

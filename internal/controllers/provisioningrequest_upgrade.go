@@ -21,7 +21,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils/cincinnati"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils/spokeclient"
+	"github.com/openshift-kni/oran-o2ims/internal/spokeclient"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 	upgradevalidation "github.com/openshift-kni/oran-o2ims/internal/validation"
 	configv1 "github.com/openshift/api/config/v1"
@@ -706,10 +706,10 @@ func (t *provisioningRequestReconcilerTask) handleClusterVersionUpgrade(
 	}
 
 	// Ensure spoke client is ready.
-	spokeClient, ready, err := spokeclient.EnsureSpokeClient(
+	clients, ready, err := spokeclient.EnsureSpokeClient(
 		ctx, t.client, t.logger, clusterName,
 		msaName, mwName,
-		upgradeRBACRules, upgradeSpokeScheme)
+		upgradeRBACRules, upgradeSpokeScheme, spokeclient.RuntimeClientOnly)
 	if err != nil {
 		if !typederrors.IsInputError(err) {
 			return ctrl.Result{}, false, fmt.Errorf("failed to setup spoke client: %w", err)
@@ -732,6 +732,7 @@ func (t *provisioningRequestReconcilerTask) handleClusterVersionUpgrade(
 		}
 		return requeueWithShortInterval(), false, nil
 	}
+	spokeClient := clients.Client
 
 	// Get ClusterVersion from spoke.
 	cv := &configv1.ClusterVersion{}

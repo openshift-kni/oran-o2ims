@@ -34,7 +34,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	provisioningcontrollers "github.com/openshift-kni/oran-o2ims/internal/controllers"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils/spokeclient"
+	"github.com/openshift-kni/oran-o2ims/internal/spokeclient"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	configv1 "github.com/openshift/api/config/v1"
 	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
@@ -42,8 +42,6 @@ import (
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	addonv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
-	workv1 "open-cluster-management.io/api/work/v1"
-	msav1beta1 "open-cluster-management.io/managed-serviceaccount/apis/authentication/v1beta1"
 )
 
 const (
@@ -51,6 +49,8 @@ const (
 	cvUpgradeInterval = time.Second * 3
 	prName            = "88744070-717a-4305-8461-796244098339"
 	clusterName       = "std-du-cluster"
+	upgradeMSAName    = prName + "-upgrade"
+	upgradeMWName     = prName + "-upgrade-rbac"
 )
 
 // --- Test suite ---
@@ -345,7 +345,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 				},
 			})
 
-			simulateSpokeAccessReady(testCtx, K8SClient)
+			testutils.SimulateSpokeAccessReady(testCtx, K8SClient, clusterName, upgradeMSAName, upgradeMWName, timeout, interval)
 			waitForPRUpgradeCondition(testCtx, K8SClient,
 				string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed),
 				"does not match the ClusterTemplate spec.release",
@@ -451,7 +451,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			)
 
 			// Verify spoke access resources are cleaned up
-			assertSpokeAccessCleaned(testCtx, K8SClient)
+			testutils.AssertSpokeAccessCleaned(testCtx, K8SClient, clusterName, upgradeMSAName, upgradeMWName, timeout, interval)
 
 			// Simulate the ACM controller behavior after upgrade - update the ManagedCluster label to the new version
 			mc := &clusterv1.ManagedCluster{}
@@ -476,7 +476,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 				},
 			})
 
-			simulateSpokeAccessReady(testCtx, K8SClient)
+			testutils.SimulateSpokeAccessReady(testCtx, K8SClient, clusterName, upgradeMSAName, upgradeMWName, timeout, interval)
 
 			updateSpokeCV(testCtx, spokeClient, func(cv *configv1.ClusterVersion) {
 				cv.Status.History = []configv1.UpdateHistory{
@@ -517,7 +517,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 				provisioningv1alpha1.StateFailed,
 			)
 
-			assertSpokeAccessCleaned(testCtx, K8SClient)
+			testutils.AssertSpokeAccessCleaned(testCtx, K8SClient, clusterName, upgradeMSAName, upgradeMWName, timeout, interval)
 		})
 	})
 
@@ -570,7 +570,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 				},
 			})
 
-			simulateSpokeAccessReady(testCtx, K8SClient)
+			testutils.SimulateSpokeAccessReady(testCtx, K8SClient, clusterName, upgradeMSAName, upgradeMWName, timeout, interval)
 
 			waitForPRUpgradeCondition(testCtx, K8SClient,
 				string(provisioningv1alpha1.CRconditionReasons.Pending),
@@ -618,7 +618,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			Expect(spokeClient.Get(testCtx, types.NamespacedName{Name: "worker"}, mcp)).To(Succeed())
 			Expect(mcp.Spec.Paused).To(BeTrue(), "Worker MCP should still be paused after timeout")
 
-			assertSpokeAccessCleaned(testCtx, K8SClient)
+			testutils.AssertSpokeAccessCleaned(testCtx, K8SClient, clusterName, upgradeMSAName, upgradeMWName, timeout, interval)
 		})
 	})
 
@@ -671,7 +671,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 				},
 			})
 
-			simulateSpokeAccessReady(testCtx, K8SClient)
+			testutils.SimulateSpokeAccessReady(testCtx, K8SClient, clusterName, upgradeMSAName, upgradeMWName, timeout, interval)
 
 			waitForPRUpgradeCondition(testCtx, K8SClient,
 				string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed),
@@ -809,7 +809,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 				provisioningv1alpha1.StateFulfilled,
 			)
 
-			assertSpokeAccessCleaned(testCtx, K8SClient)
+			testutils.AssertSpokeAccessCleaned(testCtx, K8SClient, clusterName, upgradeMSAName, upgradeMWName, timeout, interval)
 
 			mc := &clusterv1.ManagedCluster{}
 			Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: clusterName}, mc)).To(Succeed())
@@ -866,66 +866,6 @@ func setCVCondition(
 		Type: condType, Status: status, Message: message,
 		LastTransitionTime: metav1.Now(),
 	})
-}
-
-// simulateSpokeAccessReady waits for the controller to create the MSA and MW,
-// then simulates the addon controller by creating the token secret and setting
-// the MSA tokenSecretRef and MW Available status.
-func simulateSpokeAccessReady(ctx context.Context, k8sClient client.Client) {
-	msaName := prName + "-upgrade"
-	mwName := prName + "-upgrade-rbac"
-	tokenSecretName := msaName + "-token"
-
-	Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Name: msaName, Namespace: clusterName},
-			&msav1beta1.ManagedServiceAccount{})
-	}, cvUpgradeTimeout, cvUpgradeInterval).Should(Succeed(), "MSA should be created by the controller")
-
-	tokenSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: tokenSecretName, Namespace: clusterName},
-		Data:       map[string][]byte{"token": []byte("test-token"), "ca.crt": []byte("test-ca")},
-	}
-	err := k8sClient.Create(ctx, tokenSecret)
-	if err != nil && !errors.IsAlreadyExists(err) {
-		Expect(err).ToNot(HaveOccurred())
-	}
-
-	msa := &msav1beta1.ManagedServiceAccount{}
-	Expect(k8sClient.Get(ctx, types.NamespacedName{Name: msaName, Namespace: clusterName}, msa)).To(Succeed())
-	msa.Status.TokenSecretRef = &msav1beta1.SecretRef{
-		Name:                 tokenSecretName,
-		LastRefreshTimestamp: metav1.Now(),
-	}
-	Expect(k8sClient.Status().Update(ctx, msa)).To(Succeed())
-
-	Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Name: mwName, Namespace: clusterName},
-			&workv1.ManifestWork{})
-	}, cvUpgradeTimeout, cvUpgradeInterval).Should(Succeed(), "ManifestWork should be created by the controller")
-
-	mw := &workv1.ManifestWork{}
-	Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mwName, Namespace: clusterName}, mw)).To(Succeed())
-	mw.Status.Conditions = []metav1.Condition{
-		{Type: workv1.WorkAvailable, Status: metav1.ConditionTrue, Reason: "Applied", LastTransitionTime: metav1.Now()},
-	}
-	Expect(k8sClient.Status().Update(ctx, mw)).To(Succeed())
-}
-
-func assertSpokeAccessCleaned(ctx context.Context, k8sClient client.Client) {
-	msaName := prName + "-upgrade"
-	mwName := prName + "-upgrade-rbac"
-
-	Eventually(func() bool {
-		err := k8sClient.Get(ctx, types.NamespacedName{Name: msaName, Namespace: clusterName},
-			&msav1beta1.ManagedServiceAccount{})
-		return errors.IsNotFound(err)
-	}, cvUpgradeTimeout, cvUpgradeInterval).Should(BeTrue(), "MSA should be deleted")
-
-	Eventually(func() bool {
-		err := k8sClient.Get(ctx, types.NamespacedName{Name: mwName, Namespace: clusterName},
-			&workv1.ManifestWork{})
-		return errors.IsNotFound(err)
-	}, cvUpgradeTimeout, cvUpgradeInterval).Should(BeTrue(), "ManifestWork should be deleted")
 }
 
 func waitForPRUpgradeCondition(ctx context.Context, k8SClient client.Client,

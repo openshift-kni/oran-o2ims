@@ -32,6 +32,7 @@ import (
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
+	"github.com/openshift-kni/oran-o2ims/internal/spokeclient"
 )
 
 const ConfigAnnotation = "clcm.openshift.io/config-in-progress"
@@ -997,17 +998,11 @@ const (
 // handleNodeAllocationRequestConfiguring orchestrates day2 hardware profile updates for all nodes
 // in a NodeAllocationRequest.
 //
-// Updates are processed by node group in priority order (masters first, then workers),
-// with each group completing before the next begins. When a hardware profile change is
+// The control-plane (master) group is updated first. While it still has work, no worker
+// pool is started. Once masters complete, worker pools roll out in parallel, each
+// independently bounded by its MCP maxUnavailable. When a hardware profile change is
 // detected for a node group, all nodes in that group are marked as ConfigUpdatePending
 // to ensure a clean starting state.
-//
-// Within a group, the number of nodes selected for processing is limited by the MCP
-// maxUnavailable value, and the selected nodes are processed in parallel.
-
-// This function also returns the nodeList for the caller to determine the NAR status.
-// Note that status conditions in the returned nodeList may be stale since nodes are updated
-// during processing, but the caller will refetch the latest version of each node.
 func handleNodeAllocationRequestConfiguring(
 	ctx context.Context,
 	c client.Client,
@@ -1015,50 +1010,33 @@ func handleNodeAllocationRequestConfiguring(
 	logger *slog.Logger,
 	namespace string,
 	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
-) (ctrl.Result, *hwmgmtv1alpha1.AllocatedNodeList, error) {
+	nodelist *hwmgmtv1alpha1.AllocatedNodeList,
+	spokeClients spokeclient.Clients,
+) (ctrl.Result, error) {
 
 	logger.InfoContext(ctx, "Handling NodeAllocationRequest Configuring")
 
-	nodelist, err := hwmgrutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
-	if err != nil {
-		return ctrl.Result{}, nil, fmt.Errorf("failed to get child nodes for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
-	}
-	// Deterministic ordering of listed nodes by name across reconciles
-	sort.Slice(nodelist.Items, func(i, j int) bool {
-		return nodelist.Items[i].Name < nodelist.Items[j].Name
-	})
-
 	// Mark all nodes whose spec.HwProfile differs from the target profile as ConfigUpdatePending
 	if err := markPendingNodesForUpdate(ctx, c, noncachedClient, logger, nodelist, nodeAllocationRequest); err != nil {
-		return ctrl.Result{}, nodelist, fmt.Errorf("failed to mark pending nodes: %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to mark pending nodes: %w", err)
 	}
 
 	// Ensure every node has Status.Hostname populated (reads PR once, patches nodes that are missing it)
 	if err := populateNodeHostnames(ctx, c, logger, nodelist, nodeAllocationRequest); err != nil {
-		return ctrl.Result{}, nodelist, fmt.Errorf("failed to populate node hostnames: %w", err)
-	}
-
-	spokeClient, spokeClientset, err := createSpokeClients(ctx, c, nodeAllocationRequest)
-	if err != nil {
-		return ctrl.Result{}, nodelist, fmt.Errorf("failed to create spoke clients: %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to populate node hostnames: %w", err)
 	}
 
 	// Skip drain if there is only one node in the NAR
 	skipDrain := len(nodelist.Items) == 1
-	nodeOps := NewNodeOps(spokeClient, spokeClientset, logger, skipDrain)
+	nodeOps := NewNodeOps(spokeClients.Client, spokeClients.Clientset, logger, skipDrain)
 
 	nodesToProcess, err := selectNodesToProcess(ctx, logger, nodeOps, nodelist, nodeAllocationRequest)
 	if err != nil {
-		return ctrl.Result{}, nodelist, err
+		return ctrl.Result{}, err
 	}
 
-	result, err := executeNodeUpdates(ctx, c, noncachedClient, logger, namespace,
+	return executeNodeUpdates(ctx, c, noncachedClient, logger, namespace,
 		nodeAllocationRequest, nodeOps, nodesToProcess)
-	if err != nil {
-		return ctrl.Result{}, nodelist, err
-	}
-
-	return result, nodelist, nil
 }
 
 // selectNodesToProcess selects nodes that need to be processed for day2 hardware updates.

@@ -33,9 +33,9 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils/spokeclient"
 	hwmgrcontroller "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/controller"
 	k8sclients "github.com/openshift-kni/oran-o2ims/internal/service/common/clients/k8s"
+	"github.com/openshift-kni/oran-o2ims/internal/spokeclient"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -1419,10 +1419,10 @@ func (t *provisioningRequestReconcilerTask) approveScaleOutCSRs(
 	msaName := t.object.Name + "-scaleout"
 	mwName := t.object.Name + "-scaleout-rbac"
 
-	spokeClient, ready, err := spokeclient.EnsureSpokeClient(
+	clients, ready, err := spokeclient.EnsureSpokeClient(
 		ctx, t.client, t.logger, clusterName,
 		msaName, mwName,
-		scaleOutCSRRBACRules, scaleOutSpokeScheme)
+		scaleOutCSRRBACRules, scaleOutSpokeScheme, spokeclient.RuntimeClientOnly)
 	if err != nil {
 		return fmt.Errorf("failed to setup spoke client for CSR approval: %w", err)
 	}
@@ -1430,6 +1430,7 @@ func (t *provisioningRequestReconcilerTask) approveScaleOutCSRs(
 		t.logger.InfoContext(ctx, "Spoke client for CSR approval not ready yet, will retry")
 		return nil
 	}
+	spokeClient := clients.Client
 
 	// Build set of valid hostnames from the rendered CI
 	validHostnames := getNodeRolesByHostname(clusterInstance)
@@ -1528,16 +1529,17 @@ func (t *provisioningRequestReconcilerTask) checkAllNodesJoined(
 	msaName := t.object.Name + "-scaleout"
 	mwName := t.object.Name + "-scaleout-rbac"
 
-	spokeClient, ready, err := spokeclient.EnsureSpokeClient(
+	clients, ready, err := spokeclient.EnsureSpokeClient(
 		ctx, t.client, t.logger, clusterName,
 		msaName, mwName,
-		scaleOutCSRRBACRules, scaleOutSpokeScheme)
+		scaleOutCSRRBACRules, scaleOutSpokeScheme, spokeclient.RuntimeClientOnly)
 	if err != nil {
 		return false, fmt.Errorf("failed to setup spoke client for node check: %w", err)
 	}
 	if !ready {
 		return false, nil
 	}
+	spokeClient := clients.Client
 
 	// List nodes on the spoke
 	nodeList := &corev1.NodeList{}
