@@ -5,7 +5,7 @@
 // uses json.Marshal and json.Unmarshal to convert to or from the struct. This
 // means that it effectively reuses the JSON struct tags as well as the custom
 // JSON methods MarshalJSON and UnmarshalJSON unlike go-yaml.
-package yaml // import "github.com/invopop/yaml"
+package yaml // import "github.com/oasdiff/yaml"
 
 import (
 	"bytes"
