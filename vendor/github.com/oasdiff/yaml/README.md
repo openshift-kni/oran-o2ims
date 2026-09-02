@@ -1,9 +1,9 @@
 # YAML marshaling and unmarshaling support for Go
 
-[![Lint](https://github.com/invopop/yaml/actions/workflows/lint.yaml/badge.svg)](https://github.com/invopop/yaml/actions/workflows/lint.yaml)
-[![Test Go](https://github.com/invopop/yaml/actions/workflows/test.yaml/badge.svg)](https://github.com/invopop/yaml/actions/workflows/test.yaml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/invopop/yaml)](https://goreportcard.com/report/github.com/invopop/yaml)
-![Latest Tag](https://img.shields.io/github/v/tag/invopop/yaml)
+[![Lint](https://github.com/oasdiff/yaml/actions/workflows/lint.yaml/badge.svg)](https://github.com/oasdiff/yaml/actions/workflows/lint.yaml)
+[![Test Go](https://github.com/oasdiff/yaml/actions/workflows/test.yaml/badge.svg)](https://github.com/oasdiff/yaml/actions/workflows/test.yaml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/oasdiff/yaml)](https://goreportcard.com/report/github.com/oasdiff/yaml)
+![Latest Tag](https://img.shields.io/github/v/tag/oasdiff/yaml)
 
 ## Fork
 This fork is an improved version of the invopop/yaml package, designed to include line and column location information for YAML elements during unmarshalling.
@@ -63,13 +63,13 @@ GOOD:
 To install, run:
 
 ```
-$ go get github.com/invopop/yaml
+$ go get github.com/oasdiff/yaml
 ```
 
 And import using:
 
 ```
-import "github.com/invopop/yaml"
+import "github.com/oasdiff/yaml"
 ```
 
 Usage is very similar to the JSON library:
@@ -80,7 +80,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/invopop/yaml"
+	"github.com/oasdiff/yaml"
 )
 
 type Person struct {
@@ -124,7 +124,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/invopop/yaml"
+	"github.com/oasdiff/yaml"
 )
 
 func main() {
