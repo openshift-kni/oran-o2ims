@@ -27,8 +27,8 @@ feature, which parses test structure without executing tests.
   - [Handles day2 hardware configuration update with BMH error](#handles-day2-hardware-configuration-update-with-bmh-error)
   - [Handles mid-flight profile change by abandoning stale updates](#handles-mid-flight-profile-change-by-abandoning-stale-updates)
 - [MNO Scale-Out test [mno-scale-out]](#mno-scale-out-test-mno-scale-out)
-  - [Scale-out: add a worker node](#scale-out-add-a-worker-node)
-  - [Scale-in: remove a worker node](#scale-in-remove-a-worker-node)
+  - [Scale-out: add a worker to each custom pool](#scale-out-add-a-worker-to-each-custom-pool)
+  - [Scale-in: remove a worker from each custom pool](#scale-in-remove-a-worker-from-each-custom-pool)
 - [SNO End-to-end ProvisioningRequestReconcile with hardware manager [sno-provisioning]](#sno-end-to-end-provisioningrequestreconcile-with-hardware-manager-sno-provisioning)
 
 ## MNO Standard ClusterVersion Upgrade [mno-cv-upgrade]
@@ -148,13 +148,13 @@ File: `test/e2e/mno_scale_test.go`
 - Creating namespaces
 - Creating ConfigMaps
 - Creating ClusterTemplate and supporting resources
-- Creating 6 BMHs (3 masters + 3 workers: 2 initial + 1 extra for scale-out)
-- Waiting for all 6 BMHs to be visible
+- Creating 8 BMHs (3 masters + 2 r740 workers + 1 xr8620t worker + 1 extra xr8620t and 1 extra r740 for scale-out)
+- Waiting for all 8 BMHs to be visible
 - Waiting for ClusterTemplate reconciliation
-- Creating initial ProvisioningRequest with 3 masters + 2 workers
+- Creating initial ProvisioningRequest with 3 masters + 2 r740 workers + 1 xr8620t worker
 - Waiting for NAR creation
 - Verifying initial NAR NodeGroup sizes
-- Waiting for all 5 AllocatedNodes to be created
+- Waiting for all 6 AllocatedNodes to be created
 - Waiting for NAR Provisioned=True
 - Waiting for PR HardwareProvisioned=True
 - Capturing initial AllocatedNode names before scale-out
@@ -162,19 +162,19 @@ File: `test/e2e/mno_scale_test.go`
 - Simulating ClusterProvisioned=Completed on PR
 - Cleaning up scale test resources
 
-### Scale-out: add a worker node
+### Scale-out: add a worker to each custom pool
 
-1. should increase NAR worker NodeGroup Size after PR update
-   - Updating PR to append worker-3 under the worker nodeGroup
+1. should increase NAR Size for both worker groups
+   - Updating PR to append a host under worker-dell-r740 and worker-dell-xr8620t
    - Verifying NAR NodeGroup sizes after scale-out
-1. should create a new AllocatedNode for the added worker
-   - Waiting for 6 AllocatedNodes (3 masters + 3 workers)
-   - Verifying original nodes are preserved and new node is a worker
+1. should create a new AllocatedNode in each scaled worker group
+   - Waiting for 8 AllocatedNodes (3 masters + 3 r740 workers + 2 xr8620t workers)
+   - Verifying original nodes are preserved and each worker group gained one node
 
-### Scale-in: remove a worker node
+### Scale-in: remove a worker from each custom pool
 
-1. should decrease NAR worker NodeGroup Size after removing a worker
-   - Updating PR to remove worker-3 from the worker nodeGroup
+1. should decrease NAR Size for both worker groups
+   - Updating PR to remove the added host from worker-dell-r740 and worker-dell-xr8620t
    - Verifying NAR NodeGroup sizes after scale-in
 
 ## SNO End-to-end ProvisioningRequestReconcile with hardware manager [sno-provisioning]
