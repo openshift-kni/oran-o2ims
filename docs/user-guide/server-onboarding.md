@@ -268,6 +268,12 @@ metadata:
 Each server requires a Secret containing the BMC username and password. The
 Secret must be in the same namespace as the BareMetalHost:
 
+> [!WARNING]
+> BMC credential Secrets contain sensitive credentials. Kubernetes Secrets are
+> only base64-encoded, not encrypted, and must not be committed to Git in
+> cleartext. See [Handling Secrets](./secrets-management.md) for how to keep
+> these credentials out of Git.
+
 ```yaml
 apiVersion: v1
 kind: Secret
@@ -705,6 +711,13 @@ Additional sample files are available under
 In a production environment, server inventory is typically managed through
 GitOps. The infrastructure hierarchy CRs, server namespace, secrets, and BMH
 CRs are stored in a Git repository and synced to the hub cluster via ArgoCD.
+
+> [!WARNING]
+> The BMC credential Secrets and preprovisioning network-data Secrets in the
+> server inventory are sensitive. Kubernetes Secrets are only base64-encoded,
+> not encrypted, and must not be committed to Git in cleartext. See
+> [Handling Secrets](./secrets-management.md) for how to keep these credentials
+> out of Git while still managing the rest of the inventory through GitOps.
 
 See [GitOps Layout and Setup](./gitops-layout-and-setup.md) for the recommended
 directory structure and ArgoCD configuration.
