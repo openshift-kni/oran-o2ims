@@ -3706,17 +3706,19 @@ var _ = Describe("Helpers", func() {
 				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
 					NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "master", Role: "master"}, Size: 3},
-						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: "worker"}, Size: 3},
+						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker-dell-r740", Role: "worker"}, Size: 3},
+						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker-dell-xr8620t", Role: "worker"}, Size: 1},
 					},
 				},
 			}
-			// 3 masters (satisfied) + 2 workers (needs 1 more)
+			// 3 masters (satisfied) + 2 r740 workers (needs 1 more) + 1 xr8620t (satisfied)
 			nodes := []client.Object{
 				&hwmgmtv1alpha1.AllocatedNode{ObjectMeta: metav1.ObjectMeta{Name: "m1", Namespace: "oran-o2ims", Labels: map[string]string{"clcm.openshift.io/nodeAllocationRequest": "test-nar"}}, Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "master", NodeAllocationRequest: "test-nar"}},
 				&hwmgmtv1alpha1.AllocatedNode{ObjectMeta: metav1.ObjectMeta{Name: "m2", Namespace: "oran-o2ims", Labels: map[string]string{"clcm.openshift.io/nodeAllocationRequest": "test-nar"}}, Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "master", NodeAllocationRequest: "test-nar"}},
 				&hwmgmtv1alpha1.AllocatedNode{ObjectMeta: metav1.ObjectMeta{Name: "m3", Namespace: "oran-o2ims", Labels: map[string]string{"clcm.openshift.io/nodeAllocationRequest": "test-nar"}}, Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "master", NodeAllocationRequest: "test-nar"}},
-				&hwmgmtv1alpha1.AllocatedNode{ObjectMeta: metav1.ObjectMeta{Name: "w1", Namespace: "oran-o2ims", Labels: map[string]string{"clcm.openshift.io/nodeAllocationRequest": "test-nar"}}, Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "worker", NodeAllocationRequest: "test-nar"}},
-				&hwmgmtv1alpha1.AllocatedNode{ObjectMeta: metav1.ObjectMeta{Name: "w2", Namespace: "oran-o2ims", Labels: map[string]string{"clcm.openshift.io/nodeAllocationRequest": "test-nar"}}, Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "worker", NodeAllocationRequest: "test-nar"}},
+				&hwmgmtv1alpha1.AllocatedNode{ObjectMeta: metav1.ObjectMeta{Name: "r740-1", Namespace: "oran-o2ims", Labels: map[string]string{"clcm.openshift.io/nodeAllocationRequest": "test-nar"}}, Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "worker-dell-r740", NodeAllocationRequest: "test-nar"}},
+				&hwmgmtv1alpha1.AllocatedNode{ObjectMeta: metav1.ObjectMeta{Name: "r740-2", Namespace: "oran-o2ims", Labels: map[string]string{"clcm.openshift.io/nodeAllocationRequest": "test-nar"}}, Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "worker-dell-r740", NodeAllocationRequest: "test-nar"}},
+				&hwmgmtv1alpha1.AllocatedNode{ObjectMeta: metav1.ObjectMeta{Name: "xr-1", Namespace: "oran-o2ims", Labels: map[string]string{"clcm.openshift.io/nodeAllocationRequest": "test-nar"}}, Spec: hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "worker-dell-xr8620t", NodeAllocationRequest: "test-nar"}},
 			}
 			testClient = fake.NewClientBuilder().WithScheme(testScheme).
 				WithObjects(nodes...).Build()

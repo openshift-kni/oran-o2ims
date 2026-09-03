@@ -48,6 +48,48 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/spokeclient"
 )
 
+// spokeAccessReadyObjects returns hub objects that make EnsureSpokeClient
+// report ready for the given MSA and ManifestWork names on test-cluster.
+func spokeAccessReadyObjects(msaName, mwName string) []client.Object {
+	tokenName := msaName + "-token"
+	return []client.Object{
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"}},
+		&addonv1alpha1.ManagedClusterAddOn{
+			ObjectMeta: metav1.ObjectMeta{Name: "managed-serviceaccount", Namespace: "test-cluster"},
+		},
+		&msav1beta1.ManagedServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{Name: msaName, Namespace: "test-cluster"},
+			Status: msav1beta1.ManagedServiceAccountStatus{
+				TokenSecretRef: &msav1beta1.SecretRef{Name: tokenName},
+			},
+		},
+		&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: tokenName, Namespace: "test-cluster", ResourceVersion: "100",
+			},
+			Data: map[string][]byte{"token": []byte("t"), "ca.crt": []byte("c")},
+		},
+		&workv1.ManifestWork{
+			ObjectMeta: metav1.ObjectMeta{Name: mwName, Namespace: "test-cluster"},
+			Status: workv1.ManifestWorkStatus{
+				Conditions: []metav1.Condition{{
+					Type:               workv1.WorkAvailable,
+					Status:             metav1.ConditionTrue,
+					LastTransitionTime: metav1.Now(),
+				}},
+			},
+		},
+		&clusterv1.ManagedCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+			Spec: clusterv1.ManagedClusterSpec{
+				ManagedClusterClientConfigs: []clusterv1.ClientConfig{
+					{URL: "https://api.test-cluster.example.com:6443"},
+				},
+			},
+		},
+	}
+}
+
 var _ = Describe("NodeAllocationRequest Controller Timeout Handling", func() {
 	var (
 		c          client.Client
@@ -411,7 +453,8 @@ var _ = Describe("handleScaleOut", func() {
 			},
 			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
 				NodeGroup: []hwmgmtv1alpha1.NodeGroup{
-					{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker", Role: "worker"}, Size: 3},
+					{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker-dell-r740", Role: "worker"}, Size: 3},
+					{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker-dell-xr8620t", Role: "worker"}, Size: 1},
 				},
 			},
 		}
@@ -421,15 +464,20 @@ var _ = Describe("handleScaleOut", func() {
 			metav1.ConditionTrue, "Provisioned")
 		Expect(fakeClient.Status().Update(ctx, nar)).To(Succeed())
 
-		// Only 2 AllocatedNodes exist — Size is 3, so scale-out needed
-		for _, name := range []string{"w1", "w2"} {
+		// r740 is short of its desired size; xr8620t already matches.
+		nodes := []struct{ name, group string }{
+			{"r740-1", "worker-dell-r740"},
+			{"r740-2", "worker-dell-r740"},
+			{"xr-1", "worker-dell-xr8620t"},
+		}
+		for _, n := range nodes {
 			node := &hwmgmtv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: name, Namespace: "oran-o2ims",
+					Name: n.name, Namespace: "oran-o2ims",
 					Labels: map[string]string{"clcm.openshift.io/nodeAllocationRequest": "test-nar"},
 				},
 				Spec: hwmgmtv1alpha1.AllocatedNodeSpec{
-					GroupName:             "worker",
+					GroupName:             n.group,
 					NodeAllocationRequest: "test-nar",
 				},
 			}
@@ -525,9 +573,10 @@ var _ = Describe("handleScaleInAnnotations", func() {
 			Build()
 
 		reconciler = &NodeAllocationRequestReconciler{
-			Client:    fakeClient,
-			Logger:    logger,
-			Namespace: "test-ns",
+			Client:          fakeClient,
+			NoncachedClient: fakeClient,
+			Logger:          logger,
+			Namespace:       "test-ns",
 		}
 
 		// Create a ProvisioningRequest (looked up by ensureSpokeClients)
@@ -624,6 +673,50 @@ var _ = Describe("handleScaleInAnnotations", func() {
 		Expect(k8serrors.IsNotFound(err)).To(BeTrue())
 	})
 
+	It("should process every listed node and prune all of them from nodeNames", func() {
+		nar := &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-nar",
+				Namespace: "test-ns",
+				Annotations: map[string]string{
+					ScaleInNodesAnnotation: "node-1, node-2",
+				},
+			},
+		}
+		Expect(fakeClient.Create(ctx, nar)).To(Succeed())
+		nar.Status.Properties.NodeNames = []string{"node-1", "node-2", "node-keep"}
+		Expect(fakeClient.Status().Update(ctx, nar)).To(Succeed())
+
+		for _, name := range []string{"node-1", "node-2"} {
+			node := &hwmgmtv1alpha1.AllocatedNode{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      name,
+					Namespace: "test-ns",
+				},
+				Spec: hwmgmtv1alpha1.AllocatedNodeSpec{
+					NodeAllocationRequest: "test-nar",
+				},
+			}
+			Expect(fakeClient.Create(ctx, node)).To(Succeed())
+			node.Status.Hostname = name + ".example.com"
+			Expect(fakeClient.Status().Update(ctx, node)).To(Succeed())
+		}
+
+		_, handled, err := reconciler.handleScaleInAnnotations(ctx, nar)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(handled).To(BeTrue())
+
+		updatedNAR := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(nar), updatedNAR)).To(Succeed())
+		Expect(updatedNAR.GetAnnotations()).ToNot(HaveKey(ScaleInNodesAnnotation))
+		Expect(updatedNAR.Status.Properties.NodeNames).To(ConsistOf("node-keep"))
+
+		for _, name := range []string{"node-1", "node-2"} {
+			err := fakeClient.Get(ctx, client.ObjectKey{Name: name, Namespace: "test-ns"}, &hwmgmtv1alpha1.AllocatedNode{})
+			Expect(k8serrors.IsNotFound(err)).To(BeTrue())
+		}
+	})
+
 	It("should skip AllocatedNodes that are not found and prune nodeNames", func() {
 		nar := &hwmgmtv1alpha1.NodeAllocationRequest{
 			ObjectMeta: metav1.ObjectMeta{
@@ -649,6 +742,104 @@ var _ = Describe("handleScaleInAnnotations", func() {
 
 		// Verify nodeNames was pruned even for NotFound nodes
 		Expect(updatedNAR.Status.Properties.NodeNames).To(ConsistOf("other-node"))
+	})
+
+	It("should skip drain for NotReady nodes and still deallocate them", func() {
+		spokeclient.ClearCache()
+		DeferCleanup(spokeclient.ClearCache)
+
+		hostname := "worker1.example.com"
+		spokeScheme := runtime.NewScheme()
+		Expect(corev1.AddToScheme(spokeScheme)).To(Succeed())
+		spokeNode := &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: hostname},
+			Status: corev1.NodeStatus{
+				Conditions: []corev1.NodeCondition{{
+					Type:   corev1.NodeReady,
+					Status: corev1.ConditionFalse,
+				}},
+			},
+		}
+		spoke := fake.NewClientBuilder().WithScheme(spokeScheme).WithObjects(spokeNode).Build()
+		restore := spokeclient.SetTestSpokeClientCreator(
+			func(string, string, []byte, *runtime.Scheme) (client.Client, error) {
+				return spoke, nil
+			})
+		DeferCleanup(restore)
+		restoreCS := spokeclient.SetTestSpokeClientsetCreator(
+			func(string, string, []byte) (kubernetes.Interface, error) {
+				return kubefake.NewSimpleClientset(), nil
+			})
+		DeferCleanup(restoreCS)
+
+		nar := &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-nar",
+				Namespace: "test-ns",
+				Annotations: map[string]string{
+					ScaleInNodesAnnotation: "node-1",
+				},
+			},
+			Status: hwmgmtv1alpha1.NodeAllocationRequestStatus{
+				Properties: hwmgmtv1alpha1.Properties{
+					NodeNames: []string{"node-1", "node-keep"},
+				},
+			},
+		}
+		allocated := &hwmgmtv1alpha1.AllocatedNode{
+			ObjectMeta: metav1.ObjectMeta{Name: "node-1", Namespace: "test-ns"},
+			Spec:       hwmgmtv1alpha1.AllocatedNodeSpec{NodeAllocationRequest: "test-nar"},
+			Status:     hwmgmtv1alpha1.AllocatedNodeStatus{Hostname: hostname},
+		}
+		pr := &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-nar"},
+			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+				Name: "test", TemplateName: "test-template", TemplateVersion: "v1",
+			},
+			Status: provisioningv1alpha1.ProvisioningRequestStatus{
+				Extensions: provisioningv1alpha1.Extensions{
+					ClusterDetails: &provisioningv1alpha1.ClusterDetails{Name: "test-cluster"},
+				},
+			},
+		}
+
+		objs := append([]client.Object{pr, nar, allocated},
+			spokeAccessReadyObjects("test-nar"+scaleInMSASuffix, "test-nar"+scaleInMWSuffix)...)
+		c := fake.NewClientBuilder().
+			WithScheme(fakeClient.Scheme()).
+			WithObjects(objs...).
+			WithStatusSubresource(
+				&hwmgmtv1alpha1.AllocatedNode{},
+				&hwmgmtv1alpha1.NodeAllocationRequest{},
+				&provisioningv1alpha1.ProvisioningRequest{},
+				&msav1beta1.ManagedServiceAccount{},
+				&workv1.ManifestWork{},
+			).
+			WithIndex(&hwmgmtv1alpha1.AllocatedNode{}, "spec.nodeAllocationRequest",
+				func(obj client.Object) []string {
+					return []string{obj.(*hwmgmtv1alpha1.AllocatedNode).Spec.NodeAllocationRequest}
+				}).
+			Build()
+		rec := &NodeAllocationRequestReconciler{
+			Client:          c,
+			NoncachedClient: c,
+			Logger:          logger,
+			Namespace:       "test-ns",
+		}
+
+		_, handled, err := rec.handleScaleInAnnotations(ctx, nar)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(handled).To(BeTrue())
+
+		updatedNAR := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(nar), updatedNAR)).To(Succeed())
+		Expect(updatedNAR.GetAnnotations()).ToNot(HaveKey(ScaleInNodesAnnotation))
+		Expect(updatedNAR.Status.Properties.NodeNames).To(ConsistOf("node-keep"))
+
+		err = c.Get(ctx, client.ObjectKeyFromObject(allocated), &hwmgmtv1alpha1.AllocatedNode{})
+		Expect(k8serrors.IsNotFound(err)).To(BeTrue())
+		err = spoke.Get(ctx, client.ObjectKey{Name: hostname}, &corev1.Node{})
+		Expect(k8serrors.IsNotFound(err)).To(BeTrue())
 	})
 })
 
@@ -841,48 +1032,6 @@ var _ = Describe("handleHardwareProfileChanges", func() {
 		return scheme
 	}
 
-	spokeAccessReadyObjects := func() []client.Object {
-		msaName := narName + hwConfigMSASuffix
-		mwName := narName + hwConfigMWSuffix
-		tokenName := msaName + "-token"
-		return []client.Object{
-			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"}},
-			&addonv1alpha1.ManagedClusterAddOn{
-				ObjectMeta: metav1.ObjectMeta{Name: "managed-serviceaccount", Namespace: "test-cluster"},
-			},
-			&msav1beta1.ManagedServiceAccount{
-				ObjectMeta: metav1.ObjectMeta{Name: msaName, Namespace: "test-cluster"},
-				Status: msav1beta1.ManagedServiceAccountStatus{
-					TokenSecretRef: &msav1beta1.SecretRef{Name: tokenName},
-				},
-			},
-			&corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: tokenName, Namespace: "test-cluster", ResourceVersion: "100",
-				},
-				Data: map[string][]byte{"token": []byte("t"), "ca.crt": []byte("c")},
-			},
-			&workv1.ManifestWork{
-				ObjectMeta: metav1.ObjectMeta{Name: mwName, Namespace: "test-cluster"},
-				Status: workv1.ManifestWorkStatus{
-					Conditions: []metav1.Condition{{
-						Type:               workv1.WorkAvailable,
-						Status:             metav1.ConditionTrue,
-						LastTransitionTime: metav1.Now(),
-					}},
-				},
-			},
-			&clusterv1.ManagedCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
-				Spec: clusterv1.ManagedClusterSpec{
-					ManagedClusterClientConfigs: []clusterv1.ClientConfig{
-						{URL: "https://api.test-cluster.example.com:6443"},
-					},
-				},
-			},
-		}
-	}
-
 	stubSpokeCreators := func() {
 		restore := spokeclient.SetTestSpokeClientCreator(
 			func(string, string, []byte, *runtime.Scheme) (client.Client, error) {
@@ -1015,7 +1164,8 @@ var _ = Describe("handleHardwareProfileChanges", func() {
 			hwmgrutils.SetStatusCondition(&node.Status.Conditions,
 				string(hwmgmtv1alpha1.Configured), nodeReason, nodeStatus, nodeReason)
 
-			objs := append([]client.Object{nar, node, prWithCluster()}, spokeAccessReadyObjects()...)
+			objs := append([]client.Object{nar, node, prWithCluster()},
+				spokeAccessReadyObjects(narName+hwConfigMSASuffix, narName+hwConfigMWSuffix)...)
 			reconciler = newReconciler(hubScheme(), objs...)
 
 			_, err := reconciler.handleHardwareProfileChanges(ctx, nar)

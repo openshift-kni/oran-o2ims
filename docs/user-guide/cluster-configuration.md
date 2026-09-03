@@ -744,7 +744,7 @@ ProvisioningRequest.
   ClusterTemplate in use.
 * No upgrade operation is currently in progress.
 
-#### Adding a worker node (scale-out)
+#### Adding worker node(s) (scale-out)
 
 1. Ensure the ClusterTemplate / ClusterInstance defaults include the
    worker `nodeGroups` entry (see the following note).
@@ -753,8 +753,9 @@ ProvisioningRequest.
    > [!NOTE]
    > Scale-out adds hosts under a `nodeGroups` entry that already exists in
    > the ClusterInstance defaults. Typical STD templates already include
-   > both `master` and `worker`, so day-2 scale-in/out is only a
-   > ProvisioningRequest change.
+   > both `master` and `worker`, and templates with multiple worker
+   > MachineConfigPools already include those named worker groups, so
+   > day-2 scale-in/out is only a ProvisioningRequest change.
    >
    > If the cluster was provisioned from a 3-node template (no `worker`
    > group in defaults), create a new ClusterTemplate version whose
@@ -762,9 +763,10 @@ ProvisioningRequest.
    > worker group, then update the ProvisioningRequest to that version
    > and add the worker group with hosts under `nodeGroups[].nodes`.
 
-2. Update the ProvisioningRequest to append the new worker node under
-   `spec.templateParameters.clusterInstanceParameters.nodeGroups`
-   (worker group’s `nodes` list):
+2. Update the ProvisioningRequest to append the new worker node(s)
+   under the target `nodeGroup(s)`
+   (`spec.templateParameters.clusterInstanceParameters.nodeGroups[].nodes`).
+   A single update can append hosts under more than one worker group:
 
    ```yaml
    spec:
@@ -776,35 +778,44 @@ ProvisioningRequest.
                - hostName: master-1.cluster.example.com
                - hostName: master-2.cluster.example.com
                - hostName: master-3.cluster.example.com
-           - name: worker
+           - name: worker-dell-r740
              nodes:
-               - hostName: worker-1.cluster.example.com
+               - hostName: worker-r740-1.cluster.example.com
                  nodeNetwork:
                    interfaces:
                      - name: eno1
                        addresses:
                          ipv4: ["192.0.2.20/24"]
-               - hostName: worker-2.cluster.example.com
-                 nodeNetwork:
-                   interfaces:
-                     - name: eno1
-                       addresses:
-                         ipv4: ["192.0.2.21/24"]
-               - hostName: worker-3.cluster.example.com  # new worker
+               - hostName: worker-r740-2.cluster.example.com  # new worker
                  nodeNetwork:
                    interfaces:
                      - name: eno1
                        addresses:
                          ipv4: ["192.0.2.22/24"]
+           - name: worker-dell-xr8620t
+             nodes:
+               - hostName: worker-xr8620-1.cluster.example.com
+                 nodeNetwork:
+                   interfaces:
+                     - name: eno1
+                       addresses:
+                         ipv4: ["192.0.2.21/24"]
+               - hostName: worker-xr8620-2.cluster.example.com  # new worker
+                 nodeNetwork:
+                   interfaces:
+                     - name: eno1
+                       addresses:
+                         ipv4: ["192.0.2.23/24"]
    ```
 
-3. The controller detects the new node and:
-   * Increases the NodeAllocationRequest worker `NodeGroup.Size`.
+3. The controller detects the new node(s) and:
+   * Increases the NodeAllocationRequest `NodeGroup.Size` for each scaled
+     group.
    * The hardware manager allocates a new BareMetalHost and creates an
-     AllocatedNode CR.
-   * The new node's BMC address and MAC are mapped to the ClusterInstance.
+     AllocatedNode CR for each added host.
+   * Each new node's BMC address and MAC are mapped to the ClusterInstance.
    * The ClusterInstance is updated via Server-Side Apply and siteconfig
-     provisions the new node.
+     provisions the new node(s).
 
 4. Monitor progress:
 
@@ -813,11 +824,21 @@ ProvisioningRequest.
    ```
 
    The ProvisioningRequest transitions from `fulfilled` → `pending` →
-   `progressing` → `fulfilled` once the new node joins the cluster.
+   `progressing` → `fulfilled` once the new node(s) join the cluster.
 
-#### Removing a worker node (scale-in)
+##### Adding workers to a new MachineConfigPool at day-2
 
-To remove a worker node, remove its host entry from the worker group’s
+To add workers to a new MachineConfigPool after the cluster is
+fulfilled, first create the new MCP on spoke cluster through the
+PolicyGenerator, as described in [Adding a new manifest to an existing ACM PolicyGenerator](#adding-a-new-manifest-to-an-existing-acm-policygenerator).
+Then create a new ClusterTemplate version whose
+`hwMgmtDefaults.nodeGroupData` and ClusterInstance defaults include the
+new worker group. Update the ProvisioningRequest to that template version
+and add hosts under the new `nodeGroups[].nodes`.
+
+#### Removing worker node(s) (scale-in)
+
+To remove worker node(s), remove their host entries from the worker group’s
 `clusterInstanceParameters.nodeGroups[].nodes` list in the ProvisioningRequest.
 To remove the last worker (scale back to a 3-node cluster), either clear that
 `nodes` list or omit the entire worker group from the ProvisioningRequest.
@@ -825,9 +846,9 @@ To remove the last worker (scale back to a 3-node cluster), either clear that
 The controller automatically:
 
 1. Signals the hardware manager to drain and decommission the
-   removed node (via a NAR annotation)
-2. The hardware manager cordons and drains the node on the spoke,
-   deletes the Node object, deletes the AllocatedNode CR
+   removed node(s) (via a NAR annotation)
+2. The hardware manager cordons and drains the node(s) on the spoke,
+   deletes the Node object(s), deletes the AllocatedNode CR(s)
    (triggering BMH deallocation), and cleans up node tracking
 3. Applies an intermediate ClusterInstance with `pruneManifests` to
    instruct siteconfig to delete per-node resources (InfraEnv,
@@ -862,9 +883,9 @@ returns to normal operation.
 #### Replacing a worker node (swap)
 
 A swap operation replaces one or more worker nodes in a single
-ProvisioningRequest update. Remove the old node entries and add the new
-node entries in the worker group’s `clusterInstanceParameters.nodeGroups[].nodes`
-list at the same time.
+ProvisioningRequest update including hosts in different worker groups.
+Remove the old node entries and add the new node entries in the worker
+group’s `clusterInstanceParameters.nodeGroups[].nodes` list at the same time.
 
 The controller processes the swap sequentially:
 

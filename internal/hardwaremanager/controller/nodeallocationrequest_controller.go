@@ -8,14 +8,16 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -105,7 +107,7 @@ func (r *NodeAllocationRequestReconciler) Reconcile(ctx context.Context, req ctr
 	// Fetch the nodeAllocationRequest, using non-caching client
 	nodeAllocationRequest := &hwmgmtv1alpha1.NodeAllocationRequest{}
 	if err := hwmgrutils.GetNodeAllocationRequest(ctx, r.NoncachedClient, req.NamespacedName, nodeAllocationRequest); err != nil {
-		if errors.IsNotFound(err) {
+		if k8serrors.IsNotFound(err) {
 			// The NodeAllocationRequest object has likely been deleted
 			r.Logger.InfoContext(ctx, "NodeAllocationRequest not found, assuming deleted")
 			return hwmgrutils.DoNotRequeue(), nil
@@ -337,90 +339,56 @@ func (r *NodeAllocationRequestReconciler) handleScaleInNodesAnnotation(
 	}
 
 	var nodeOps NodeOps
+	var spokeClient client.Client
 	if ready {
-		nodeOps = NewNodeOps(spokeClients.Client, spokeClients.Clientset, r.Logger, false)
+		spokeClient = spokeClients.Client
+		nodeOps = NewNodeOps(spokeClient, spokeClients.Clientset, r.Logger, false)
 	}
 
-	var remainingNodeNames []string
-	for _, nn := range nar.Status.Properties.NodeNames {
-		remainingNodeNames = append(remainingNodeNames, nn)
-	}
+	remainingNodeNames := append([]string(nil), nar.Status.Properties.NodeNames...)
 
 	r.tryPopulateNodeHostnames(ctx, nar)
 
-	allProcessed := true
+	var names []string
 	for _, nodeName := range nodeNames {
 		nodeName = strings.TrimSpace(nodeName)
-		if nodeName == "" {
-			continue
+		if nodeName != "" {
+			names = append(names, nodeName)
 		}
-
-		an := &hwmgmtv1alpha1.AllocatedNode{}
-		if err := r.Client.Get(ctx, client.ObjectKey{
-			Name: nodeName, Namespace: r.Namespace,
-		}, an); err != nil {
-			if errors.IsNotFound(err) {
-				remainingNodeNames = removeFromSlice(remainingNodeNames, nodeName)
-				continue
-			}
-			return hwmgrutils.RequeueWithShortInterval(),
-				fmt.Errorf("failed to get AllocatedNode %s: %w", nodeName, err)
-		}
-
-		// Phase 1: Drain the node on the spoke
-		deprovCond := meta.FindStatusCondition(an.Status.Conditions, string(hwmgmtv1alpha1.Deprovisioned))
-		if deprovCond == nil || deprovCond.Reason == string(hwmgmtv1alpha1.InProgress) {
-			if nodeOps != nil && an.Status.Hostname == "" {
-				allProcessed = false
-				r.Logger.WarnContext(ctx, "Hostname not yet populated, deferring scale-in for node",
-					slog.String("allocatedNode", nodeName))
-				continue
-			}
-			if nodeOps != nil {
-				// Check if the node is reachable before attempting drain.
-				// If the node is NotReady or absent from the spoke, skip
-				// drain — it would retry indefinitely on a dead node.
-				if err := r.drainIfReady(ctx, nodeOps, an, nodeName); err != nil {
-					allProcessed = false
-					continue
-				}
-			}
-
-			hwmgrutils.SetStatusCondition(&an.Status.Conditions,
-				string(hwmgmtv1alpha1.Deprovisioned), string(hwmgmtv1alpha1.Completed),
-				metav1.ConditionTrue, "Node deprovisioned")
-			if err := r.Client.Status().Update(ctx, an); err != nil {
-				return hwmgrutils.RequeueWithShortInterval(),
-					fmt.Errorf("failed to update Deprovisioned condition on AllocatedNode %s: %w", nodeName, err)
-			}
-		}
-
-		// Phase 2: Delete Node from spoke and AllocatedNode CR
-		if spokeClients.Client != nil && an.Status.Hostname != "" {
-			spokeNode := &corev1.Node{}
-			spokeNode.Name = an.Status.Hostname
-			if err := spokeClients.Client.Delete(ctx, spokeNode); err != nil {
-				if !errors.IsNotFound(err) {
-					return hwmgrutils.RequeueWithShortInterval(),
-						fmt.Errorf("failed to delete node %s from spoke: %w", an.Status.Hostname, err)
-				}
-			}
-			r.Logger.InfoContext(ctx, "Deleted node from spoke cluster",
-				slog.String("hostname", an.Status.Hostname))
-		}
-
-		if err := r.Client.Delete(ctx, an); err != nil {
-			if !errors.IsNotFound(err) {
-				return hwmgrutils.RequeueWithShortInterval(),
-					fmt.Errorf("failed to delete AllocatedNode %s: %w", nodeName, err)
-			}
-		}
-		r.Logger.InfoContext(ctx, "Deleted AllocatedNode",
-			slog.String("allocatedNode", nodeName))
-
-		remainingNodeNames = removeFromSlice(remainingNodeNames, nodeName)
 	}
 
+	var (
+		mu           sync.Mutex
+		allProcessed = true
+		errs         []error
+	)
+
+	// Scale in nodes concurrently, capped by maxConcurrentNodeOps.
+	forEachConcurrent(len(names), maxConcurrentNodeOps, func(i int) {
+		nodeName := names[i]
+		nodeCtx := logging.AppendCtx(ctx, slog.String("node", nodeName))
+
+		processed, err := r.scaleInNode(nodeCtx, nodeName, nodeOps, spokeClient)
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		if err != nil {
+			r.Logger.ErrorContext(ctx, "Failed to scale in node", slog.String("nodeName", nodeName), slog.Any("error", err))
+			errs = append(errs, fmt.Errorf("node %s, error: %w", nodeName, err))
+			return
+		}
+
+		if processed {
+			remainingNodeNames = removeFromSlice(remainingNodeNames, nodeName)
+		} else {
+			allProcessed = false
+		}
+	})
+
+	if len(errs) > 0 {
+		return ctrl.Result{}, fmt.Errorf("failed to scale in nodes: %w", errors.Join(errs...))
+	}
 	if !allProcessed {
 		return hwmgrutils.RequeueWithMediumInterval(), nil
 	}
@@ -453,9 +421,75 @@ func (r *NodeAllocationRequestReconciler) handleScaleInNodesAnnotation(
 	return hwmgrutils.DoNotRequeue(), nil
 }
 
-// drainIfReady checks if a node is Ready and drains it. If the node is
-// NotReady or absent from the spoke, drain is skipped (returns nil).
-// Returns an error only if drain was attempted and failed (caller should retry).
+// scaleInNode drains a AllocatedNode and deletes it.
+// Returns:
+// true, nil when the node is fully processed (deleted or already gone).
+// false, nil when work is still in progress (hostname not yet populated, or drain not finished).
+// false, error when there is a transient error.
+func (r *NodeAllocationRequestReconciler) scaleInNode(
+	ctx context.Context,
+	nodeName string,
+	nodeOps NodeOps,
+	spokeClient client.Client,
+) (bool, error) {
+	an := &hwmgmtv1alpha1.AllocatedNode{}
+	if err := r.Client.Get(ctx, client.ObjectKey{
+		Name: nodeName, Namespace: r.Namespace,
+	}, an); err != nil {
+		if k8serrors.IsNotFound(err) {
+			return true, nil
+		}
+		return false, fmt.Errorf("failed to get AllocatedNode %s: %w", nodeName, err)
+	}
+
+	// Phase 1: Drain the node on the spoke
+	deprovCond := meta.FindStatusCondition(an.Status.Conditions, string(hwmgmtv1alpha1.Deprovisioned))
+	if deprovCond == nil || deprovCond.Reason == string(hwmgmtv1alpha1.InProgress) {
+		if nodeOps != nil && an.Status.Hostname == "" {
+			r.Logger.WarnContext(ctx, "Hostname not yet populated, deferring scale-in for node",
+				slog.String("allocatedNode", nodeName))
+			return false, nil
+		}
+		if nodeOps != nil {
+			// Check if the node is reachable before attempting drain.
+			// If the node is NotReady or absent from the spoke, skip
+			// drain — it would retry indefinitely on a dead node.
+			if err := r.drainIfReady(ctx, nodeOps, an, nodeName); err != nil {
+				return false, nil
+			}
+		}
+
+		hwmgrutils.SetStatusCondition(&an.Status.Conditions,
+			string(hwmgmtv1alpha1.Deprovisioned), string(hwmgmtv1alpha1.Completed),
+			metav1.ConditionTrue, "Node deprovisioned")
+		if err := r.Client.Status().Update(ctx, an); err != nil {
+			return false, fmt.Errorf("failed to update Deprovisioned condition on AllocatedNode %s: %w", nodeName, err)
+		}
+	}
+
+	// Phase 2: Delete Node from spoke and AllocatedNode CR
+	if spokeClient != nil && an.Status.Hostname != "" {
+		spokeNode := &corev1.Node{}
+		spokeNode.Name = an.Status.Hostname
+		if err := spokeClient.Delete(ctx, spokeNode); err != nil {
+			if !k8serrors.IsNotFound(err) {
+				return false, fmt.Errorf("failed to delete node %s from spoke: %w", an.Status.Hostname, err)
+			}
+		}
+		r.Logger.InfoContext(ctx, "Deleted node from spoke cluster",
+			slog.String("hostname", an.Status.Hostname))
+	}
+
+	if err := r.Client.Delete(ctx, an); err != nil {
+		if !k8serrors.IsNotFound(err) {
+			return false, fmt.Errorf("failed to delete AllocatedNode %s: %w", nodeName, err)
+		}
+	}
+	r.Logger.InfoContext(ctx, "Deleted AllocatedNode",
+		slog.String("allocatedNode", nodeName))
+	return true, nil
+}
+
 // drainIfReady drains the node only if it is Ready on the spoke. NotReady or
 // absent nodes are skipped — a failed/unreachable node cannot be drained (the
 // kubelet is unresponsive), so attempting drain would retry indefinitely until
@@ -467,7 +501,7 @@ func (r *NodeAllocationRequestReconciler) drainIfReady(
 
 	ready, readyErr := nodeOps.IsNodeReady(ctx, an.Status.Hostname)
 	if readyErr != nil {
-		if errors.IsNotFound(readyErr) {
+		if k8serrors.IsNotFound(readyErr) {
 			r.Logger.InfoContext(ctx, "Node not found on spoke, skipping drain",
 				slog.String("hostname", an.Status.Hostname))
 			return nil
@@ -512,17 +546,23 @@ func removeFromSlice(s []string, val string) []string {
 }
 
 // removeAnnotation removes the specified annotation from the NAR.
-// Re-fetches the NAR to ensure the resourceVersion is current.
+// Callers may have just written NAR status (for example nodeNames after
+// scale-in). Get from the API, not the informer, to avoid a stale
+// resourceVersion after a status write in this reconcile.
 func (r *NodeAllocationRequestReconciler) removeAnnotation(
 	ctx context.Context, nar *hwmgmtv1alpha1.NodeAllocationRequest,
 	annotation string) error {
 
 	fresh := &hwmgmtv1alpha1.NodeAllocationRequest{}
-	if err := r.Client.Get(ctx, client.ObjectKeyFromObject(nar), fresh); err != nil {
+	if err := r.NoncachedClient.Get(ctx, client.ObjectKeyFromObject(nar), fresh); err != nil {
 		return fmt.Errorf("failed to re-fetch NAR %s: %w", nar.Name, err)
 	}
-	patch := client.MergeFromWithOptions(fresh.DeepCopy(), client.MergeFromWithOptimisticLock{})
 	annotations := fresh.GetAnnotations()
+	if _, ok := annotations[annotation]; !ok {
+		return nil
+	}
+
+	patch := client.MergeFromWithOptions(fresh.DeepCopy(), client.MergeFromWithOptimisticLock{})
 	delete(annotations, annotation)
 	fresh.SetAnnotations(annotations)
 	if err := r.Client.Patch(ctx, fresh, patch); err != nil {
