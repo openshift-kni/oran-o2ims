@@ -6,22 +6,28 @@ entries:
       mediatype: image/svg+xml
     name: o-cloud-manager
     schema: olm.package
-    # Channel entries for 'stable' channel
+    # Channel 'stable' — always points to the latest released z-stream
   - entries:
-      - name: o-cloud-manager.v5.0.0
-        skipRange: '>=4.21.0 <4.23.0'
+      - name: o-cloud-manager.v4.22.1
     name: stable
     package: o-cloud-manager
     schema: olm.channel
-    # Channel entries for '5.0' channel
+    # Channel '4.22.0' — pinned z-stream, no automatic upgrade
   - entries:
-      - name: o-cloud-manager.v5.0.0
-        skipRange: '>=4.21.0 <4.23.0'
-    name: "5.0"
+      - name: o-cloud-manager.v4.22.0
+    name: "4.22.0"
     package: o-cloud-manager
     schema: olm.channel
-  # v5.0.0 bundle
-  # The url for this last entry is updated by telco5g-konflux/scripts/catalog/update-catalog-template.sh automatically
-  - image: placeholder.will.be.updated.by.telco5g-konflux.scripts.catalog.update-catalog-template.sh
+    # Channel '4.22.1' — pinned z-stream, no automatic upgrade
+  - entries:
+      - name: o-cloud-manager.v4.22.1
+    name: "4.22.1"
+    package: o-cloud-manager
+    schema: olm.channel
+  # v4.22.0 bundle
+  - image: registry.redhat.io/openshift4/o-cloud-manager-operator-bundle@sha256:fef1f183eb8cdc6330ed039fa6bb40432c0496dd4d2e146fd056c03310564da8
+    schema: olm.bundle
+  # v4.22.1 bundle
+  - image: registry.redhat.io/openshift4/o-cloud-manager-operator-bundle@sha256:50fe6d65b219314a92f2850d5ea6b57c9c25aefb59249516061fdfa699f96ca8
     schema: olm.bundle
 schema: olm.template.basic
