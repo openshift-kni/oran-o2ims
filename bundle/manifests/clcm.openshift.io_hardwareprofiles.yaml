@@ -68,36 +68,18 @@ spec:
                     type: object
                 type: object
               biosFirmware:
-                description: BIOS firmware information
-                properties:
-                  url:
-                    description: URL points to the firmware file
-                    type: string
-                  version:
-                    description: Version is the desired firmware version
-                    type: string
-                type: object
+                description: BiosFirmware is the name of a FirmwareCatalog entry with
+                  component "bios"
+                type: string
               bmcFirmware:
-                description: BMC firmware information
-                properties:
-                  url:
-                    description: URL points to the firmware file
-                    type: string
-                  version:
-                    description: Version is the desired firmware version
-                    type: string
-                type: object
+                description: BmcFirmware is the name of a FirmwareCatalog entry with
+                  component "bmc"
+                type: string
               nicFirmware:
-                description: NIC firmware information list
+                description: NicFirmware is a list of FirmwareCatalog entry names
+                  with component "nic"
                 items:
-                  properties:
-                    url:
-                      description: URL points to the NIC firmware file
-                      type: string
-                    version:
-                      description: Version is the NIC firmware version
-                      type: string
-                  type: object
+                  type: string
                 type: array
             required:
             - bios

@@ -18,20 +18,6 @@ type Bios struct {
 	Attributes map[string]intstr.IntOrString `json:"attributes,omitempty"`
 }
 
-type Firmware struct {
-	// Version is the desired firmware version
-	Version string `json:"version,omitempty"`
-	// URL points to the firmware file
-	URL string `json:"url,omitempty"`
-}
-
-type Nic struct {
-	// Version is the NIC firmware version
-	Version string `json:"version,omitempty"`
-	// URL points to the NIC firmware file
-	URL string `json:"url,omitempty"`
-}
-
 // HardwareProfileSpec defines the desired state of HardwareProfile
 type HardwareProfileSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
@@ -40,17 +26,17 @@ type HardwareProfileSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	Bios Bios `json:"bios"`
 
-	// BIOS firmware information
+	// BiosFirmware is the name of a FirmwareCatalog entry with component "bios"
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="BIOS Firmware",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	BiosFirmware Firmware `json:"biosFirmware,omitempty"`
+	BiosFirmware string `json:"biosFirmware,omitempty"`
 
-	// BMC firmware information
+	// BmcFirmware is the name of a FirmwareCatalog entry with component "bmc"
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="BMC Firmware",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	BmcFirmware Firmware `json:"bmcFirmware,omitempty"`
+	BmcFirmware string `json:"bmcFirmware,omitempty"`
 
-	// NIC firmware information list
+	// NicFirmware is a list of FirmwareCatalog entry names with component "nic"
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="NIC Firmware",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	NicFirmware []Nic `json:"nicFirmware,omitempty"`
+	NicFirmware []string `json:"nicFirmware,omitempty"`
 }
 
 // HardwareProfileStatus defines the observed state of HardwareProfile
@@ -99,8 +85,4 @@ type HardwareProfileList struct {
 
 func init() {
 	SchemeBuilder.Register(&HardwareProfile{}, &HardwareProfileList{})
-}
-
-func (fm Firmware) IsEmpty() bool {
-	return fm.Version == "" && fm.URL == ""
 }

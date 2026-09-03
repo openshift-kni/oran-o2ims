@@ -645,16 +645,38 @@ metadata:
           "apiVersion": "clcm.openshift.io/v1alpha1",
           "kind": "FirmwareCatalog",
           "metadata": {
-            "name": "firmwarecatalog-sample",
+            "name": "firmware-catalog",
             "namespace": "oran-o2ims"
           },
           "spec": {
             "images": [
               {
                 "component": "bios",
-                "name": "bios-dell-xr8620t",
-                "url": "https://firmware.example.com/bios-xr8620t-2.22.2.bin",
-                "version": "2.22.2"
+                "name": "dell-xr8620t-bios-2.7.5",
+                "url": "https://firmware.example.com/bios-xr8620t-2.7.5.bin",
+                "vendor": "Dell",
+                "version": "2.7.5"
+              },
+              {
+                "component": "bmc",
+                "name": "dell-xr8620t-bmc-7.20.70.50",
+                "url": "https://firmware.example.com/idrac-xr8620t-7.20.70.50.bin",
+                "vendor": "Dell",
+                "version": "7.20.70.50"
+              },
+              {
+                "component": "nic",
+                "name": "dell-xr8620t-nic-mlx-22.36.1010",
+                "url": "https://firmware.example.com/nic-mlx-xr8620t-22.36.1010.bin",
+                "vendor": "Dell",
+                "version": "22.36.1010"
+              },
+              {
+                "component": "nic",
+                "name": "dell-xr8620t-nic-intel-22.5.7",
+                "url": "https://firmware.example.com/nic-intel-xr8620t-22.5.7.bin",
+                "vendor": "Dell",
+                "version": "22.5.7"
               }
             ]
           },
@@ -686,14 +708,12 @@ metadata:
                 "WorkloadProfile": "TelcoOptimizedProfile"
               }
             },
-            "biosFirmware": {
-              "url": "http://example.com:8888/firmware/xr8620t/BIOS_W23G7_WN64_2.7.5_01.EXE",
-              "version": "2.7.5"
-            },
-            "bmcFirmware": {
-              "url": "http://example.com:8888/firmware/xr8620t/iDRAC-with-Lifecycle-Controller_Firmware_K2KHC_WN64_7.20.70.50_A00.EXE",
-              "version": "7.20.70.50"
-            }
+            "biosFirmware": "dell-xr8620t-bios-2.7.5",
+            "bmcFirmware": "dell-xr8620t-bmc-7.20.70.50",
+            "nicFirmware": [
+              "dell-xr8620t-nic-mlx-22.36.1010",
+              "dell-xr8620t-nic-intel-22.5.7"
+            ]
           },
           "status": {
             "conditions": []
@@ -1195,17 +1215,20 @@ spec:
         path: bios
       - displayName: Attributes
         path: bios.attributes
-      - description: BIOS firmware information
+      - description: BiosFirmware is the name of a FirmwareCatalog entry with component
+          "bios"
         displayName: BIOS Firmware
         path: biosFirmware
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: BMC firmware information
+      - description: BmcFirmware is the name of a FirmwareCatalog entry with component
+          "bmc"
         displayName: BMC Firmware
         path: bmcFirmware
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: NIC firmware information list
+      - description: NicFirmware is a list of FirmwareCatalog entry names with component
+          "nic"
         displayName: NIC Firmware
         path: nicFirmware
         x-descriptors:
@@ -2673,12 +2696,33 @@ spec:
       - v1alpha1
       operations:
       - UPDATE
+      - DELETE
       resources:
       - firmwarecatalogs
     sideEffects: None
     targetPort: 9443
     type: ValidatingAdmissionWebhook
     webhookPath: /validate-clcm-openshift-io-v1alpha1-firmwarecatalog
+  - admissionReviewVersions:
+    - v1
+    containerPort: 443
+    deploymentName: oran-o2ims-controller-manager
+    failurePolicy: Fail
+    generateName: hardwareprofiles.clcm.openshift.io
+    rules:
+    - apiGroups:
+      - clcm.openshift.io
+      apiVersions:
+      - v1alpha1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - hardwareprofiles
+    sideEffects: None
+    targetPort: 9443
+    type: ValidatingAdmissionWebhook
+    webhookPath: /validate-clcm-openshift-io-v1alpha1-hardwareprofile
   - admissionReviewVersions:
     - v1
     containerPort: 443

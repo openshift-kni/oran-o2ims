@@ -10,6 +10,18 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	// FirmwareCatalogName is the well-known name of the singleton FirmwareCatalog CR.
+	FirmwareCatalogName = "firmware-catalog"
+
+	// ComponentBIOS is the component type for BIOS firmware.
+	ComponentBIOS = "bios"
+	// ComponentBMC is the component type for BMC firmware.
+	ComponentBMC = "bmc"
+	// ComponentNIC is the component type for NIC firmware.
+	ComponentNIC = "nic"
+)
+
 // FirmwareImage defines a firmware image entry in the catalog.
 type FirmwareImage struct {
 	// Name is a unique identifier for this firmware image within the catalog.
