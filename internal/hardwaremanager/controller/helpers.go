@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,9 +36,51 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/spokeclient"
 )
 
-const ConfigAnnotation = "clcm.openshift.io/config-in-progress"
+const (
+	ConfigAnnotation       = "clcm.openshift.io/config-in-progress"
+	ScaleInNodesAnnotation = "clcm.openshift.io/scale-in-nodes"
 
-const ScaleInNodesAnnotation = "clcm.openshift.io/scale-in-nodes"
+	// UpdateAbandonedAnnotation marks an AllocatedNode whose in-progress hardware update
+	// was abandoned because the desired hardware profile changed mid-flight. The node is
+	// safe to re-process with the new profile on the next reconcile.
+	UpdateAbandonedAnnotation = "clcm.openshift.io/update-abandoned"
+
+	DoNotRequeue               = 0
+	RequeueAfterShortInterval  = 15
+	RequeueAfterMediumInterval = 30
+	RequeueAfterLongInterval   = 60
+
+	// maxConcurrentNodeOps is the operator-wide ceiling on in-flight per-node goroutines
+	// in a single reconcile (e.g., day-0 allocation, day-2 hardware-profile updates,etc.).
+	maxConcurrentNodeOps = 10
+)
+
+// forEachConcurrent calls fn(i) for i in [0, n) with at most limit goroutines
+// in flight, then waits for every call to finish. fn must be safe to run
+// concurrently. The helper does not collect or return errors, and a failed
+// call does not stop the rest. Callers must aggregate errors from inside fn
+// (for example appending to a shared slice under a mutex) and join them after
+// this function returns.
+func forEachConcurrent(n, limit int, fn func(i int)) {
+	if n == 0 {
+		return
+	}
+	if limit < 1 {
+		limit = 1
+	}
+
+	// Effective concurrency is min(limit, n).
+	g := new(errgroup.Group)
+	g.SetLimit(limit)
+	for i := 0; i < n; i++ {
+		g.Go(func() error {
+			fn(i)
+			return nil
+		})
+	}
+	// Wait for all goroutines to finish.
+	_ = g.Wait()
+}
 
 // syncSkipCleanupToAllocatedNodes propagates the SkipCleanup field from the NAR
 // to all child AllocatedNodes, so the AllocatedNode deletion handler can read it
@@ -205,18 +248,6 @@ func enableBMOManagementForIBINodes(
 
 	return nil
 }
-
-// UpdateAbandonedAnnotation marks an AllocatedNode whose in-progress hardware update
-// was abandoned because the desired hardware profile changed mid-flight. The node is
-// safe to re-process with the new profile on the next reconcile.
-const UpdateAbandonedAnnotation = "clcm.openshift.io/update-abandoned"
-
-const (
-	DoNotRequeue               = 0
-	RequeueAfterShortInterval  = 15
-	RequeueAfterMediumInterval = 30
-	RequeueAfterLongInterval   = 60
-)
 
 func setConfigAnnotation(object client.Object, reason string) {
 	annotations := object.GetAnnotations()
@@ -1169,71 +1200,64 @@ func executeNodeUpdates(
 	nodesToProcess []nodeAction,
 ) (ctrl.Result, error) {
 	var (
-		wg         sync.WaitGroup
 		mu         sync.Mutex
 		errs       []error
 		minRequeue time.Duration
 	)
 
-	for _, nodeToProcess := range nodesToProcess {
-		wg.Add(1)
-		go func(nodeToProcess nodeAction) {
-			defer wg.Done()
+	forEachConcurrent(len(nodesToProcess), maxConcurrentNodeOps, func(i int) {
+		nodeToProcess := nodesToProcess[i]
+		nodeCtx := logging.AppendCtx(ctx, slog.String("node", nodeToProcess.node.Name))
+		var res ctrl.Result
+		var err error
 
-			nodeCtx := logging.AppendCtx(ctx, slog.String("node", nodeToProcess.node.Name))
-			var res ctrl.Result
-			var err error
+		newHwProfile := getNewHwProfileForNode(nar, nodeToProcess.node)
 
-			newHwProfile := getNewHwProfileForNode(nar, nodeToProcess.node)
-
-			// For actionTransition and actionInProgressUpdate nodes, detect mid-flight profile changes:
-			// if the desired profile no longer matches the node's current spec, safely abandon the stale
-			// update so the node can be re-processed with the new profile.
-			switch nodeToProcess.actionType {
-			case actionInitiate:
-				res, err = initiateNodeUpdate(nodeCtx, c, noncachedClient, logger,
-					namespace, nodeToProcess.node, newHwProfile, nodeOps)
-			case actionTransition:
-				if nodeToProcess.node.Spec.HwProfile != newHwProfile {
-					res, err = abandonNodeUpdate(nodeCtx, c, noncachedClient, logger,
-						newHwProfile, nodeToProcess.node, nodeOps)
-				} else {
-					res, err = handleTransitionNode(nodeCtx, c, noncachedClient, logger,
-						namespace, nodeToProcess.node, true, nodeOps)
-				}
-			case actionInProgressUpdate:
-				if nodeToProcess.node.Spec.HwProfile != newHwProfile {
-					res, err = abandonNodeUpdate(nodeCtx, c, noncachedClient, logger,
-						newHwProfile, nodeToProcess.node, nodeOps)
-				} else {
-					res, err = handleNodeInProgressUpdate(nodeCtx, c, noncachedClient, logger,
-						namespace, nodeToProcess.node, nodeOps)
-				}
+		// For actionTransition and actionInProgressUpdate nodes, detect mid-flight profile changes:
+		// if the desired profile no longer matches the node's current spec, safely abandon the stale
+		// update so the node can be re-processed with the new profile.
+		switch nodeToProcess.actionType {
+		case actionInitiate:
+			res, err = initiateNodeUpdate(nodeCtx, c, noncachedClient, logger,
+				namespace, nodeToProcess.node, newHwProfile, nodeOps)
+		case actionTransition:
+			if nodeToProcess.node.Spec.HwProfile != newHwProfile {
+				res, err = abandonNodeUpdate(nodeCtx, c, noncachedClient, logger,
+					newHwProfile, nodeToProcess.node, nodeOps)
+			} else {
+				res, err = handleTransitionNode(nodeCtx, c, noncachedClient, logger,
+					namespace, nodeToProcess.node, true, nodeOps)
 			}
-
-			mu.Lock()
-			defer mu.Unlock()
-
-			if err != nil {
-				logger.ErrorContext(nodeCtx, "Node processing error",
-					slog.Any("error", err))
-				errs = append(errs, fmt.Errorf("node %s, error: %w", nodeToProcess.node.Name, err))
+		case actionInProgressUpdate:
+			if nodeToProcess.node.Spec.HwProfile != newHwProfile {
+				res, err = abandonNodeUpdate(nodeCtx, c, noncachedClient, logger,
+					newHwProfile, nodeToProcess.node, nodeOps)
+			} else {
+				res, err = handleNodeInProgressUpdate(nodeCtx, c, noncachedClient, logger,
+					namespace, nodeToProcess.node, nodeOps)
 			}
+		}
 
-			// Get the shortest requeue interval to requeue with.
-			if res.RequeueAfter > 0 || res.Requeue {
-				interval := res.RequeueAfter
-				if interval == 0 {
-					interval = time.Second
-				}
-				if minRequeue == 0 || interval < minRequeue {
-					minRequeue = interval
-				}
+		mu.Lock()
+		defer mu.Unlock()
+
+		if err != nil {
+			logger.ErrorContext(nodeCtx, "Node processing error",
+				slog.Any("error", err))
+			errs = append(errs, fmt.Errorf("node %s, error: %w", nodeToProcess.node.Name, err))
+		}
+
+		// Get the shortest requeue interval to requeue with.
+		if res.RequeueAfter > 0 || res.Requeue {
+			interval := res.RequeueAfter
+			if interval == 0 {
+				interval = time.Second
 			}
-		}(nodeToProcess)
-	}
-
-	wg.Wait()
+			if minRequeue == 0 || interval < minRequeue {
+				minRequeue = interval
+			}
+		}
+	})
 
 	if len(errs) > 0 {
 		aggErr := fmt.Errorf("failed to process nodes: %w", errors.Join(errs...))
@@ -1565,7 +1589,6 @@ func processNodeAllocationRequestAllocation(
 ) (ctrl.Result, error) {
 
 	var (
-		wg             sync.WaitGroup
 		mu             sync.Mutex
 		errs           []error
 		allocatedNames []string
@@ -1602,46 +1625,41 @@ func processNodeAllocationRequestAllocation(
 				nodeAllocationRequest.Spec.Site, nodeGroup.NodeGroupData.Name)
 		}
 
-		// Allocate up to 'pending' nodes concurrently
+		// Select up to 'pending' nodes to allocate
 		need := pending
+		var toAllocateBMHs []*metal3v1alpha1.BareMetalHost
 		for i := range unallocatedBMHs.Items {
-			mu.Lock()
 			if need <= 0 {
-				mu.Unlock()
 				break
 			}
 			need--
-			mu.Unlock()
-
-			bmh := &unallocatedBMHs.Items[i] // address of slice element (avoid range-var bug)
-
-			wg.Add(1)
-			go func(bmh *metal3v1alpha1.BareMetalHost) {
-				defer wg.Done()
-
-				bmhCtx := logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
-				nodeName, err := allocateBMHToNodeAllocationRequest(
-					bmhCtx, c, noncachedClient, logger, namespace,
-					bmh, nodeAllocationRequest, nodeGroup,
-				)
-
-				mu.Lock()
-				defer mu.Unlock()
-
-				if nodeName != "" {
-					allocatedNames = append(allocatedNames, nodeName)
-				}
-				if err != nil {
-					logger.ErrorContext(bmhCtx, "Failed to allocate BMH to NodeAllocationRequest",
-						slog.Any("error", err))
-					errs = append(errs, fmt.Errorf("bmh %s, error: %w", bmh.Name, err))
-				}
-			}(bmh)
+			toAllocateBMHs = append(toAllocateBMHs, &unallocatedBMHs.Items[i])
 		}
 
-		// Wait for all goroutines in this group to finish before processing the next group,
-		// so that fetchBMHList won't return BMHs still being allocated by in-flight goroutines.
-		wg.Wait()
+		// Allocate selected nodes concurrently, capped by maxConcurrentNodeOps.
+		forEachConcurrent(len(toAllocateBMHs), maxConcurrentNodeOps, func(i int) {
+			bmh := toAllocateBMHs[i]
+			bmhCtx := logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
+			nodeName, err := allocateBMHToNodeAllocationRequest(
+				bmhCtx, c, noncachedClient, logger, namespace,
+				bmh, nodeAllocationRequest, nodeGroup,
+			)
+
+			mu.Lock()
+			defer mu.Unlock()
+
+			if nodeName != "" {
+				allocatedNames = append(allocatedNames, nodeName)
+			}
+			if err != nil {
+				logger.ErrorContext(bmhCtx, "Failed to allocate BMH to NodeAllocationRequest",
+					slog.Any("error", err))
+				errs = append(errs, fmt.Errorf("bmh %s, error: %w", bmh.Name, err))
+			}
+		})
+		// The next node group will not start until the current group is complete,
+		// ensuring that fetchBMHList will not return BMHs still being allocated
+		// by in-flight goroutines.
 	}
 
 	// Append all allocated node names and do a single NAR properties update
