@@ -35,7 +35,7 @@ SPDX-License-Identifier: Apache-2.0
   - [3. ACM self-healing during cleanup phase](#3-acm-self-healing-during-cleanup-phase)
   - [4. Seed cluster afterlife and PR terminal state](#4-seed-cluster-afterlife-and-pr-terminal-state)
   - [5. Seed SNO prerequisites](#5-seed-sno-prerequisites)
-  - [6. Standalone access token lifetime and cleanup](#6-standalone-access-token-lifetime-and-cleanup)
+  - [6. Spoke access after ACM removal](#6-spoke-access-after-acm-removal)
   - [7. ISO generation Job storage requirements](#7-iso-generation-job-storage-requirements)
   - [8. Disconnected environment registry configuration](#8-disconnected-environment-registry-configuration)
   - [9. HTTPS ISO server certificate management](#9-https-iso-server-certificate-management)
@@ -89,8 +89,10 @@ The manual seed generation workflow has several pain points:
   operators no longer need to SSH and tail logs.
 - Treat the seed cluster as a disposable factory: remove all ACM agent
   state (klusterlet and addons) from the spoke so it does not contaminate
-  the seed, retain spoke access during generation via a standalone
-  long-lived token, and do **not** restore ACM afterward. The controller
+  the seed, retain spoke access during generation via the spoke's admin
+  kubeconfig retrieved from the hub (which survives ACM teardown and writes
+  nothing to the spoke, so nothing is baked into the seed), and do **not**
+  restore ACM afterward. The controller
   never deletes the `ManagedCluster` itself; the operator deletes the
   ProvisioningRequest to reclaim the hardware once the seed is captured.
 - Reuse the existing `upgradeDefaults` / `upgradeParameters`
@@ -529,8 +531,7 @@ its status is flushed, every create in the state machine is **create-or-adopt**,
 not blind create. Deterministic names alone are not enough: a restart that
 re-issues a `create` would hit `AlreadyExists`, and a name collision with an
 unrelated object left by a prior run (or an external actor) could silently
-reuse the wrong resource. For each generated resource — the standalone
-`ServiceAccount` and its token `Secret`, the RBAC objects, the `seedgen`
+reuse the wrong resource. For each generated resource — the `seedgen`
 Secret, the ISO-build `Job`, its workspace `PVC`, and the per-run mirror/CA
 `ConfigMap` — the controller:
 
@@ -578,10 +579,10 @@ attempt — which is out of scope here.)
 The spoke's `ManagedCluster` on the hub is left intact throughout the process — the controller never deletes it, so there is no re-provisioning or ClusterInstance recreation. What must be removed is the spoke-side ACM *agent state* (the klusterlet and all addon agents), because it
 would otherwise be captured in the seed image and cause a clone to register with the original hub on first boot.
 
-Because a proper klusterlet teardown deletes the ACM agent namespaces (`open-cluster-management-agent*`) — where the existing `ManagedServiceAccount` token and its RBAC live — the controller cannot rely on that token during generation. Instead, before any ACM removal, it mints a
-**standalone long-lived token** (a dedicated ServiceAccount, token Secret, and RBAC RoleBinding, named deterministically from the ProvisioningRequest) in a non-ACM namespace on the spoke and rebuilds the spoke client from it. This token survives the full ACM teardown and provides
-spoke API access for the entire workflow. The seed cluster is a disposable factory, so ACM is **not** restored after generation: the controller removes the standalone token and workflow artifacts during cleanup, sets a terminal `SeedGenerationCompleted` condition, and the operator
-deletes the ProvisioningRequest to reclaim the hardware.
+Because a proper klusterlet teardown deletes the ACM agent namespaces (`open-cluster-management-agent*`) — where the existing `ManagedServiceAccount` token and its RBAC live — the controller cannot rely on that token during generation. Instead, before any ACM removal, it retrieves the
+spoke's **admin kubeconfig from the hub** (the Secret referenced by the spoke `ClusterDeployment`'s `spec.clusterMetadata.adminKubeconfigSecretRef`) and builds the spoke client from it. That kubeconfig authenticates with an embedded client certificate that is independent of ACM, so it
+survives the full ACM teardown and provides spoke API access for the entire workflow — while writing nothing to the spoke's etcd, so no new credential is captured into the seed. The seed cluster is a disposable factory, so ACM is **not** restored after generation: the controller removes the
+transient workflow artifacts during cleanup, sets a terminal `SeedGenerationCompleted` condition, and the operator deletes the ProvisioningRequest to reclaim the hardware.
 
 Note that lca-cli's own cleanup does **not** strip klusterlet/registration identity, so the controller must remove it explicitly — it cannot defer this to LCA's seed preparation.
 
@@ -662,90 +663,48 @@ The workflow is a multi-phase state machine tracked via a new `SeedGenerationCom
 
 Remove all ACM agent state from the spoke so it doesn't contaminate the seed image. The `ManagedCluster` on the hub is left intact.
 
-1. **Mint a standalone access token**: Using the current (MSA-based) spoke client, create a dedicated ServiceAccount in a non-ACM namespace on the spoke (e.g. the `openshift-lifecycle-agent` namespace), named deterministically from
-   the ProvisioningRequest, plus a **long-lived token**. Because the token
-   must outlive the whole operation (2h/3h) and survive ACM teardown, it is
-   issued as a **`kubernetes.io/service-account-token`-typed Secret annotated
-   with `kubernetes.io/service-account.name`**, not by relying on
-   auto-mounted tokens (absent since Kubernetes 1.24) or a `TokenRequest`
-   token (bounded by a maximum TTL and thus liable to expire mid-operation).
-   The legacy-style token Secret yields a non-expiring credential the
-   controller can read once and rebuild the spoke client from; if the Secret
-   is not populated with a token within a short poll, Phase 2 fails
-   `PreconditionChecksFailed` before any teardown. Phase 5 deletes the
-   ServiceAccount and Secret (which invalidates the token) on every terminal
-   path.
+1. **Retrieve the spoke admin kubeconfig from the hub**: Before any ACM
+   removal, read the spoke's admin kubeconfig from the hub — the Secret named by
+   the spoke `ClusterDeployment`'s
+   `spec.clusterMetadata.adminKubeconfigSecretRef` in the cluster's namespace —
+   and build the spoke client from it. This kubeconfig authenticates with an
+   embedded **client certificate** (`system:admin`), not a ServiceAccount
+   token, which is what makes it suitable here:
+   - **It survives ACM teardown.** The client cert is signed by the cluster's
+     admin-kubeconfig-signer at install time and is independent of the
+     klusterlet and the `ManagedServiceAccount` token that live in the
+     `open-cluster-management-agent*` namespaces. Deleting the `Klusterlet` CR
+     (step 4) does not affect it, so it stays valid for the entire operation. It
+     stops working only if the spoke's **API server certificate** is rotated
+     under a new CA — which happens at *restore* time on the target (recert),
+     not during generation on the seed — so it remains valid through Phase 5.
+   - **Using it writes nothing to the spoke's etcd.** No ServiceAccount, token
+     Secret, or RBAC object is created on the spoke, so no new credential is
+     captured into the seed image. This is the decisive difference from minting
+     a spoke-side token: the workflow adds no persisted credential that a clone
+     deployed from the seed would carry (see
+     [Challenge 6](#6-spoke-access-after-acm-removal)). The only object this
+     workflow places on the spoke is the transient `seedgen` Secret in Phase 3,
+     which lca-cli consumes and Phase 5 deletes — the same Secret the manual
+     workflow uses.
+   - **No revocation is required.** Because nothing is minted, there is no
+     standalone credential to delete or leave behind; Phase 5 spoke cleanup is
+     limited to the transient `seedgen` Secret and the `SeedGenerator` CR. The
+     admin kubeconfig is a pre-existing hub Secret the controller only *reads*.
 
-   Bind the required RBAC least-privilege:
-   - A namespaced `RoleBinding` for the namespaced `seedgen` Secret in the LCA
-     namespace.
-   - A `ClusterRole`/`ClusterRoleBinding` scoped to **only** the genuinely
-     cluster-scoped needs: `create`/`get`/`list`/`watch`/`delete` on the
-     cluster-scoped `SeedGenerator` resource (the LCA `SeedGenerator` is the
-     cluster-scoped singleton `seedimage`, so a namespaced `RoleBinding` cannot
-     authorize creating, monitoring, or deleting it); `delete` **and
-     `get`/`list`/`watch`** on the cluster-scoped `Klusterlet` resource (a
-     namespaced `RoleBinding` cannot authorize either operation on a
-     cluster-scoped object, and the teardown poll in step 5 needs read access to
-     observe the `Klusterlet` disappear), plus `get`/`list`/`watch` on
-     `namespaces` (inherently cluster-scoped, so it cannot be limited by a
-     `RoleBinding`).
-   - **Pod read permissions are bound per-namespace, not cluster-wide:**
-     `get`/`list`/`watch` on `pods` is granted through `RoleBinding` objects
-     in the specific agent namespaces the poll watches
-     (`open-cluster-management-agent*`), so the standalone token cannot read
-     pod specs in unrelated namespaces.
-   - **Self-cleanup permissions (so Phase 5 can revoke this very
-     credential).** After ACM/MSA teardown, the standalone token is the *only*
-     path back to the spoke, so it must be able to delete its own artifacts.
-     The grants therefore also include `delete` on the namespaced `seedgen`
-     Secret (via the LCA-namespace `RoleBinding`) and on the cluster-scoped
-     `SeedGenerator` CR (via the `ClusterRole`/`ClusterRoleBinding` above),
-     `delete` on the credential's own `ServiceAccount` and token `Secret`
-     (namespaced), and `delete` on its namespaced `RoleBinding`s. `delete` is
-     not escalation, so this needs no additional `escalate`/`bind`.
-   - **The token does not delete its own `ClusterRole`/`ClusterRoleBinding` —
-     that self-deletion is unsound.** A `ClusterRoleBinding` confers the very
-     permissions the token would use to delete it: removing the binding first
-     immediately revokes the `delete` verb, so the paired `ClusterRole` can no
-     longer be removed; removing the `ClusterRole` first strips the same verb
-     and orphans the binding. Either order leaves one cluster-scoped object
-     behind, so a credential cannot reliably remove the RBAC that grants it.
-     Instead, Phase 5 deletes the `ServiceAccount` and token `Secret` **last**;
-     once the subject `ServiceAccount` is gone the residual
-     `ClusterRole`/`ClusterRoleBinding` grant nothing to anyone (the binding's
-     subject no longer resolves). These two **inert** cluster-scoped objects are
-     reclaimed when the disposable seed cluster is torn down (PR deletion). If
-     the cluster is instead retained for diagnostics, the still-attached hub
-     removes them out of band using an independently granted identity — never
-     the standalone token itself. Because the token never needs cluster-scoped
-     `delete`, that grant is dropped entirely, further shrinking its blast
-     radius.
+   The trade-off is that the admin kubeconfig is a broad (`cluster-admin`)
+   credential rather than a least-privilege, purpose-scoped one. This is
+   accepted because the credential is (a) used only by the O-Cloud Manager
+   controller during a controlled, one-shot operation, (b) never persisted or
+   copied to the spoke, and (c) never baked into the seed — so its blast radius
+   is bounded by the operation's duration, not by any artifact that outlives it.
 
-   Rebuild the spoke client from this token. All subsequent phases use this
-   client, which survives the ACM teardown below. Phase 5 removes the
-   namespaced `RoleBinding`s and, last, the credential itself; the inert
-   cluster-scoped `ClusterRole`/`ClusterRoleBinding` are reclaimed with the
-   disposable cluster (or by the hub out of band) as described above.
-
-   **MSA bootstrap authority (precondition).** The MSA-based client performs
-   the entire bootstrap of the standalone credential, so it needs more than the
-   RBAC-creation verbs. Specifically it requires, on the spoke:
-   - `create` on `serviceaccounts` and `secrets` in the LCA namespace (to make
-     the standalone `ServiceAccount` and its token `Secret`) and `get` on that
-     `Secret` (to read the token the token-controller populates).
-   - `create` on `rolebindings` in each namespace where a namespaced
-     `RoleBinding` is bound (the LCA namespace and the
-     `open-cluster-management-agent*` agent namespaces for pod reads).
-   - `create` on the cluster-scoped `ClusterRole`/`ClusterRoleBinding` **plus
-     `escalate`/`bind`** (or an aggregated role already granting them) —
-     Kubernetes escalation prevention allows creating an RBAC object only if the
-     creator already holds the verbs it confers.
-
-   All of this is a **precondition**: if the MSA client lacks any of these
-   verbs — or the agent namespaces do not yet exist — Phase 2 fails with
+   **Precondition.** If the admin-kubeconfig Secret is absent, malformed, or the
+   resulting client cannot reach the spoke API server, Phase 2 fails with
    `PreconditionChecksFailed` **before** any destructive ACM removal, so the
-   spoke is never left partially detached without a working access path.
+   spoke is never left partially detached without a working access path. This
+   needs only a hub-side `get` on the admin-kubeconfig Secret in the cluster's
+   namespace (see the hub RBAC contract) — no spoke-side RBAC at all.
 2. **Record detachment intent**: Persist
    `SeedGenerationStatus.DetachmentStarted = true` (and flush the status
    update) **before** step 3 performs the first destructive ACM removal. This
@@ -753,7 +712,7 @@ Remove all ACM agent state from the spoke so it doesn't contaminate the seed ima
    a controller restart mid-detachment still treats the spoke as (partially)
    detached — see [Challenge 4](#4-seed-cluster-afterlife-and-pr-terminal-state).
 3. **Delete hub-side addon CRs**: Delete all `ManagedClusterAddOn` resources from the spoke's namespace on the hub (including `managed-serviceaccount`). This tells the ACM addon framework to stop reconciling them.
-4. **Delete the klusterlet**: Delete the `Klusterlet` CR on the spoke (via the standalone-token client). The klusterlet operator tears down the registration and work agents and their namespaces (`open-cluster-management-agent*`) — including the identity secrets
+4. **Delete the klusterlet**: Delete the `Klusterlet` CR on the spoke (via the admin-kubeconfig client). The klusterlet operator tears down the registration and work agents and their namespaces (`open-cluster-management-agent*`) — including the identity secrets
    (`bootstrap-hub-kubeconfig`, `hub-kubeconfig-secret`) that would otherwise be captured in the seed. Deleting only the klusterlet Deployment is **not** sufficient: those secrets persist in etcd and on disk.
 5. **Wait for teardown**: Poll the spoke until the klusterlet and addon agent namespaces/pods are gone.
 
@@ -761,7 +720,7 @@ Remove all ACM agent state from the spoke so it doesn't contaminate the seed ima
 
 ### Phase 3: Trigger Seed Generation
 
-Using the standalone-token spoke client established in Phase 2:
+Using the admin-kubeconfig spoke client established in Phase 2:
 
 1. **Create the seedgen Secret**: Deliver the `seedgen` Secret to the `openshift-lifecycle-agent` namespace on the spoke, reading credentials from the hub Secret referenced by `seedAuthSecretRef`.
 2. **Create the SeedGenerator CR**: Apply the singleton `seedimage` SeedGenerator CR with the configured `seedImage` (and optionally `recertImage`).
@@ -995,8 +954,12 @@ in its own namespace:
 - `core/persistentvolumeclaims`: `create`, `get`, `delete` (the ~20GB build
   workspace PVC).
 - `core/secrets`: `create`, `get`, `delete` (per-run credential copies) and
-  `get` on the source Secrets in the ClusterTemplate namespace and
-  `openshift-config/pull-secret`.
+  `get` on the source Secrets in the ClusterTemplate namespace,
+  `openshift-config/pull-secret`, and the spoke's admin-kubeconfig Secret
+  (named by the `ClusterDeployment`'s `adminKubeconfigSecretRef`) in the
+  cluster's namespace — the credential Phase 2 uses to reach the spoke. This
+  `get` is the **only** access the workflow needs to obtain spoke API access;
+  no spoke-side RBAC is created.
 - `core/configmaps`: `create`, `get`, `delete` (the per-run mirror/CA
   ConfigMap), `get` on the hub image-config `additionalTrustedCA`, and `get` on
   the ConfigMap named by `liveISO.additionalTrustBundleConfigMapRef` in the
@@ -1042,12 +1005,8 @@ The seed cluster is a disposable factory, so there is no ACM restoration. Once t
 On success (seed generation complete, and ISO generation complete if configured):
 
 1. **Record results**: Store the seed image digest reference in `SeedGenerationStatus.SeedImage` and, if ISO was built, the resolved per-run URL in `SeedGenerationStatus.ISOURL` and the verified digest in `SeedGenerationStatus.ISODigest`.
-2. **Clean up workflow artifacts**: On the spoke, delete the SeedGenerator CR and seedgen Secret first, then the standalone credential's namespaced `RoleBinding`s, and **last** the credential-bearing `ServiceAccount` and token `Secret` —
-   deleting the credential last so the token stays valid for every preceding spoke delete (see the self-cleanup permissions in Phase 2).
-   The token does **not** delete its own `ClusterRole`/`ClusterRoleBinding`
-   (that self-deletion is unsound — Phase 2); once the `ServiceAccount` is gone
-   they are inert and are reclaimed when the disposable cluster is torn down, or
-   removed by the hub out of band if the cluster is retained.
+2. **Clean up workflow artifacts**: On the spoke, delete the SeedGenerator CR and the transient `seedgen` Secret (using the admin-kubeconfig client from Phase 2). No standalone credential was minted, so there is nothing else to
+   revoke on the spoke — the admin kubeconfig is a hub Secret the controller only read and never copied to the spoke.
    Delete the ISO generation Job, its build workspace PVC, the per-run credential Secret copies created in the Job namespace, and associated resources from the hub.
 3. **Update conditions**: `SeedGenerationCompleted = True / Reason: Completed`. This is a **terminal** condition — the controller does not re-run seed generation, and it suppresses the PR's ACM-dependent reconciliation (see [Challenge 4](#4-seed-cluster-afterlife-and-pr-terminal-state)).
 
@@ -1088,30 +1047,19 @@ On failure (at any phase):
      input Secrets) may be retained under a **bounded diagnostic-retention
      policy** (a TTL after which it is reclaimed), not "until the PR is
      deleted" indefinitely.
-   - **Spoke**: deletes the `seedgen` Secret, the SeedGenerator CR, and the
-     standalone credential (ServiceAccount, token Secret, and namespaced
-     RoleBindings), the ServiceAccount and token Secret last. The inert
-     cluster-scoped `ClusterRole`/`ClusterRoleBinding` are reclaimed with the
-     disposable cluster (or removed by the hub out of band), not self-deleted by
-     the token — see Phase 2. The standalone token
-     is a **non-expiring** `kubernetes.io/service-account-token` Secret (chosen
-     precisely so it cannot lapse mid-operation), so there is **no token TTL**
-     and revocation is explicit: deleting the ServiceAccount and its token
-     Secret immediately invalidates the credential. Because the token never
-     expires on its own, the design must **not** rely on expiry to bound a
-     leaked credential — an abandoned workflow that never reached Phase 5 would
-     otherwise leave a permanently valid spoke credential. Revocation is
-     therefore driven by two mechanisms, both independent of any TTL: (1) spoke
-     scrubbing runs as part of reaching every terminal state, not lazily on PR
-     deletion; and (2) a hub-side finalizer plus a bounded overall operation
-     **deadline** — after the deadline the controller force-runs Phase 5
-     revocation even for a stuck/abandoned run, deleting the SA and token
-     Secret while the spoke is still reachable. The deadline bounds *when
-     revocation happens*; it is not a lifetime on the token itself. If the
-     spoke is genuinely unreachable at cleanup time (e.g. the controller was
-     down and the spoke was independently torn down), the residual credential
-     is documented as requiring manual removal, and the `seedgen` Secret is the
-     sensitive item to purge.
+   - **Spoke**: deletes the transient `seedgen` Secret and the SeedGenerator
+     CR. No standalone credential was minted, so there is no spoke-side
+     ServiceAccount, token Secret, or RBAC to revoke — the admin kubeconfig used
+     for spoke access is a pre-existing hub Secret the controller only read and
+     never copied to the spoke, and nothing about it is baked into the seed. The
+     only sensitive item this workflow places on the spoke is the `seedgen`
+     Secret (registry push credentials); a hub-side finalizer plus a bounded
+     overall operation **deadline** ensure that even a stuck or abandoned run
+     force-runs this spoke cleanup while the spoke is still reachable, rather
+     than leaving the `seedgen` Secret behind. If the spoke is genuinely
+     unreachable at cleanup time (e.g. the controller was down and the spoke was
+     independently torn down), the `seedgen` Secret is the item to purge
+     manually.
 4. The spoke cluster remains running (detached) for manual intervention. ACM
    is **not** restored automatically; the operator can re-import the cluster
    manually for debugging or delete the ProvisioningRequest to tear it down.
@@ -1325,18 +1273,17 @@ secrets such as `hub-alertmanager-router-ca-*` and `observability-alertmanager-a
 `openshift-user-workload-monitoring` namespaces on the spoke — exactly the kind of hub-coupled artifact that must not be baked into a portable seed image. Because
 the seed cluster is a disposable, purpose-built cluster the operator provisions, the seed `ClusterTemplate` sets the `observability: disabled` label on the
 `ManagedCluster` (via `clusterInstanceDefaults`) so the label is present from the moment the cluster is imported. The observability-operator then never deploys
-the addon to it, so the metrics-collector and the secrets above are never created and cannot contaminate the seed. This is strictly preferable to enumerating and
-deleting those secrets during teardown: the exact secret set drifts across RHACM/MCE versions, and spoke-side deletion would require broadening the standalone
-credential's RBAC into `openshift-monitoring`/`openshift-user-workload-monitoring` — enlarging its blast radius for no benefit. A residual secret sweep is needed
-only if a cluster that *already* had observability deployed is later repurposed as a seed cluster (not the standard flow); it is called out as a fallback in
-[Open Question 4](#open-questions), not the default path.
+the addon to it, so the metrics-collector and the secrets above are never created and cannot contaminate the seed. This is preferable to enumerating and deleting
+those secrets during teardown, whose exact set drifts across RHACM/MCE versions — a hardcoded deletion list is fragile, and preventing the secrets from ever being
+created is more robust than racing to remove them before capture. A residual secret sweep is needed only if a cluster that *already* had observability deployed is
+later repurposed as a seed cluster (not the standard flow); it is called out as a fallback in [Open Question 4](#open-questions), not the default path.
 
 ### 2. Spoke client availability during seed generation
 
 **Challenge**: During Phase 3, the lca-cli shuts down cluster operators on the spoke, which may temporarily affect API server availability and disrupt the spoke client.
 
-**Mitigation**: The controller uses polling with backoff when monitoring the SeedGenerator CR. The spoke API server itself stays running (lca-cli stops operators, not the API server). The standalone token minted in Phase 2 remains valid — it is long-lived and independent of ACM — so
-the spoke client keeps working even though the ACM agents are gone. Transient API errors during operator shutdown are retried.
+**Mitigation**: The controller uses polling with backoff when monitoring the SeedGenerator CR. The spoke API server itself stays running (lca-cli stops operators, not the API server). The admin kubeconfig retrieved in Phase 2 remains valid — its client certificate is independent of ACM and is
+not affected by the klusterlet teardown — so the spoke client keeps working even though the ACM agents are gone. Transient API errors during operator shutdown are retried.
 
 ### 3. ACM self-healing during cleanup phase
 
@@ -1375,26 +1322,24 @@ manual workflow, which also never re-attaches the seed cluster.
 **Mitigation**: The controller validates what it can (OCP version, `var-lib-containers` partition, LCA operator presence, OADP operator presence, registry credentials). Hardware prerequisites are the cluster template author's responsibility — they must ensure the ClusterTemplate's
 `clusterInstanceDefaults` and `policyTemplateDefaults` produce a seed SNO that meets the documented prerequisites.
 
-### 6. Standalone access token lifetime and cleanup
+### 6. Spoke access after ACM removal
 
-**Challenge**: With ACM fully removed, spoke access depends entirely on the standalone credential minted in Phase 2. It must not expire mid-operation; and if the workflow is abandoned, a valid credential could be left behind on the spoke.
+**Challenge**: The klusterlet teardown in Phase 2 deletes the ACM agent namespaces where the `ManagedServiceAccount` token lives, so the controller cannot use that token to drive the rest of seed generation. It needs a spoke credential that survives ACM removal, stays valid for the whole
+operation (2h/3h), and — critically — does **not** end up baked into the seed image, since anything present in the spoke's etcd at capture time is cloned into every cluster deployed from that seed.
 
-**Mitigation**: The credential is a **non-expiring** `kubernetes.io/service-account-token` Secret (not a TTL-bounded `TokenRequest` token), so it cannot lapse mid-operation.
-Because it never expires on its own, a bounded credential lifetime is enforced by *revocation*, not by a token TTL: its ServiceAccount, token Secret, RoleBinding, and cluster-scoped `ClusterRole`/`ClusterRoleBinding` are named deterministically from the ProvisioningRequest.
-Phase 5 can therefore always find and delete them on both the success and failure paths (deletion immediately invalidates the token).
-The PR finalizer plus a bounded overall operation **deadline** force-runs this revocation if the operation is abandoned, so a leaked credential is bounded by *when cleanup runs*, not by an expiry on the token.
-The RBAC is scoped to only the permissions the workflow needs on the spoke and must be **repeated identically wherever this contract is summarized** (see Phase 2 for the authoritative statement):
+**Mitigation**: The controller uses the spoke's **admin kubeconfig, retrieved from the hub** (the Secret named by the spoke `ClusterDeployment`'s `spec.clusterMetadata.adminKubeconfigSecretRef`), rather than minting a new spoke-side credential. This kubeconfig authenticates with an embedded
+`system:admin` **client certificate** signed at install time, which has three properties that fit this workflow exactly:
 
-- A namespaced `RoleBinding` for the namespaced `seedgen` Secret in the LCA namespace.
-- A `ClusterRole`/`ClusterRoleBinding` for the genuinely cluster-scoped needs:
-  `create`/`get`/`list`/`watch`/`delete` on the cluster-scoped `SeedGenerator`
-  (the singleton `seedimage` CR is cluster-scoped); `delete` **and
-  `get`/`list`/`watch`** on the cluster-scoped `Klusterlet` (read verbs are
-  needed so the teardown poll can observe it disappear), plus
-  `get`/`list`/`watch` on `namespaces`.
-- Per-namespace `RoleBinding`s granting `get`/`list`/`watch` on `pods` in the `open-cluster-management-agent*` namespaces (not a cluster-wide pod-read grant).
+- **It survives ACM teardown.** The client cert is independent of the klusterlet and the `ManagedServiceAccount`; deleting the `Klusterlet` CR does not affect it. It stops working only if the spoke's API server certificate is rotated under a new CA, which happens at *restore* time on the
+  target (recert), not during generation on the seed — so it remains valid through Phase 5.
+- **Using it writes nothing to the spoke.** No ServiceAccount, token Secret, or RBAC object is created on the spoke, so **no new credential is captured into the seed image**. This directly resolves the concern that a minted credential would become part of the seed and would need to be found and
+  deleted after every IBI/IBU: there is nothing to find. The only object this workflow places on the spoke is the transient `seedgen` Secret in Phase 3 (the same Secret the manual LCA workflow uses), which lca-cli consumes and Phase 5 deletes.
+- **No revocation is required.** Because nothing is minted, there is no standalone credential to revoke or leak. Phase 5 spoke cleanup is limited to deleting the transient `seedgen` Secret and the `SeedGenerator` CR; a hub-side finalizer plus a bounded operation **deadline** force-run that
+  cleanup even for a stuck or abandoned run, so the `seedgen` Secret is not left behind.
 
-The Phase 2 deletion of `ManagedClusterAddOn` CRs is a **hub-side** operation performed with the O-Cloud Manager's own hub client, so it is covered by the hub RBAC contract (see the hub RBAC contract earlier in this document), not by this spoke credential.
+The trade-off is that the admin kubeconfig is a broad (`cluster-admin`) credential. This is accepted because it is used only by the controller during a controlled one-shot operation, is never persisted or copied to the spoke, and is never baked into the seed — so its blast radius is bounded by the
+operation's duration, not by any artifact that outlives it. The controller's only new access requirement is a hub-side `get` on the admin-kubeconfig Secret in the cluster's namespace (see the hub RBAC contract); it needs **no spoke-side RBAC at all**. The Phase 2 deletion of `ManagedClusterAddOn` CRs
+is a **hub-side** operation performed with the O-Cloud Manager's own hub client, so it is also covered by the hub RBAC contract, not by any spoke credential.
 
 ### 7. ISO generation Job storage requirements
 
@@ -1442,7 +1387,7 @@ may still fail. In disconnected environments, the `seedImage` pull-spec should r
 
 Detach the spoke entirely by deleting the ClusterInstance/ManagedCluster, as the manual workflow does today. Rejected because deleting the ClusterInstance risks triggering deprovisioning of the running spoke and discards the hub-side record of the cluster. The chosen approach instead
 keeps the `ManagedCluster` intact and removes only the spoke-side ACM agent state (klusterlet + addons), achieving the same seed cleanliness without touching the provisioning lifecycle; the operator reclaims the hardware by deleting the ProvisioningRequest when the seed is captured.
-(A standalone spoke token is minted either way — klusterlet teardown removes the MSA token regardless — so token pre-provisioning is not what distinguishes this alternative.)
+(Spoke access is obtained the same way either way — the hub-held admin kubeconfig survives klusterlet teardown regardless — so the access credential is not what distinguishes this alternative.)
 
 ### B. Separate SeedGenerationRequest CRD
 
@@ -1488,9 +1433,9 @@ const DefaultSeedGenerationWithISOTimeout = 3 * time.Hour
 | `IsSeedGenerationRequested` predicate + reconciler dispatch (separate trigger from `IsUpgradeRequested`) | 1 file | ~40 | Medium |
 | CT validation — seedGen defaults, registry pre-flight, release image check, TLS handshake, upload Secret validation | 1 file | ~150 | Medium |
 | Seed generation controller — Phases 1-3 + Phase 5 state machine (ACM cleanup, SeedGenerator lifecycle, spoke client, terminal state) | 1 new file | ~600 | High |
-| ACM removal helpers — standalone token mint, `Klusterlet` CR delete + wait, hub addon-CR delete (no restore) | 1 new file | ~180 | Medium |
+| ACM removal helpers — admin-kubeconfig retrieval + spoke client build, `Klusterlet` CR delete + wait, hub addon-CR delete (no restore) | 1 new file | ~140 | Medium |
 | ISO generation Phase 4 — PVC creation, Job template (extract `openshift-install`, build config, build ISO, SCP upload, HTTPS verification), Job lifecycle monitoring, pull secret merging, hub mirror-config derivation from IDMS/ICSP and `additionalTrustedCA` | 1 new file | ~420 | High |
-| RBAC — spoke (`RoleBinding` for seedgen Secret + per-ns pod read; `ClusterRole` for the cluster-scoped `SeedGenerator`, `Klusterlet` and `namespaces` verbs; self-cleanup deletes — full contract in Phase 2) and hub (see **hub RBAC contract** above) | 2 files | ~40 | Low |
+| RBAC — hub only (`get` on the admin-kubeconfig Secret for spoke access, plus the **hub RBAC contract** above); no spoke-side RBAC is created | 1 file | ~20 | Low |
 | Tests — seed gen controller, ACM helpers, ISO Job lifecycle, validation, TLS checks | 2-3 new files | ~1200 | High |
 | Samples — ClusterTemplate YAML, upload Secret | 2 files | ~80 | Low |
 | Docs — update ibi-based-cluster-provisioning.md | 1 file | ~120 | Low |
@@ -1499,7 +1444,7 @@ const DefaultSeedGenerationWithISOTimeout = 3 * time.Hour
 Roughly 4 working sessions to implement:
 
 - **Session 1**: API types, constants, conditions, `parseUpgradeConfig` extension, CT validation (registry pre-flight, release image check, TLS handshake, upload Secret validation), sample YAMLs
-- **Session 2**: Core seed generation state machine (Phases 1-3, 5), ACM removal helpers (standalone token mint, `Klusterlet` CR delete, addon-CR delete), terminal-state / config-reconcile suppression, spoke and hub RBAC, wiring into the main reconciler
+- **Session 2**: Core seed generation state machine (Phases 1-3, 5), ACM removal helpers (admin-kubeconfig retrieval + spoke client, `Klusterlet` CR delete, addon-CR delete), terminal-state / config-reconcile suppression, hub RBAC, wiring into the main reconciler
 - **Session 3**: ISO generation — hub mirror-config derivation, PVC creation, Job template (release image extract, config generation, ISO build, SCP upload, HTTPS post-upload verification), pull secret merging, Job lifecycle monitoring, cleanup
 - **Session 4**: Tests, edge cases, docs update, `make ci-job` pass
 
