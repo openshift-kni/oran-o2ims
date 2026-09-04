@@ -92,9 +92,10 @@ The manual seed generation workflow has several pain points:
   the seed, retain spoke access during generation via the spoke's admin
   kubeconfig retrieved from the hub (which survives ACM teardown and writes
   nothing to the spoke, so nothing is baked into the seed), and do **not**
-  restore ACM afterward. The controller
-  never deletes the `ManagedCluster` itself; the operator deletes the
-  ProvisioningRequest to reclaim the hardware once the seed is captured.
+  restore ACM afterward. The controller never deletes the `ManagedCluster`
+  itself, and it **never auto-deletes the ProvisioningRequest** — results
+  stay readable as conditions on the PR until the operator deletes it to
+  reclaim the hardware once the seed is captured.
 - Reuse the existing `upgradeDefaults` / `upgradeParameters`
   merge-and-validate infrastructure rather than introducing a new CRD or
   controller.
@@ -130,10 +131,15 @@ The manual seed generation workflow has several pain points:
 The seed SNO cluster must be provisioned with the following already in place:
 
 - **LifeCycle Agent (LCA) Operator**: Must be installed as part of the initial cluster configuration via the ClusterTemplate's `policyTemplateDefaults`. The controller validates LCA is present before proceeding with seed generation.
-- **`var-lib-containers` partition**: The ClusterTemplate's `clusterInstanceDefaults` must include the MachineConfig that creates a separate `/var/lib/containers` partition shared between stateroots.
+- **`var-lib-containers` partition**: The ClusterTemplate's `clusterInstanceDefaults` must include the MachineConfig that creates a separate `/var/lib/containers` partition. This is a **seed-generation** prerequisite on the seed cluster:
+  LCA validates a shared `/var/lib/containers` before it will generate the seed, independent of whether the resulting seed is later consumed by IBI or IBU. (The matching *target*-side shared partition is what is IBU-specific — for the dual-stateroot
+  pivot during upgrade — and is out of scope for this proposal, which only produces the seed and, optionally, the IBI live ISO.)
 - **OADP Operator**: Required by LCA for backup/restore operations during seed generation.
 
 These are the responsibility of the cluster template author. The controller validates their presence but does not install them.
+
+Live ISO generation (Phase 4) is **IBI-only and optional**: it is driven by the `liveISO` block and produces the bootable installation ISO that IBI needs to install bare-metal targets. A seed intended only for IBU (in-place upgrade of an existing
+cluster) needs no ISO — omit `liveISO` and the controller stops after the seed image is pushed.
 
 ## Proposed API Changes
 
@@ -1374,6 +1380,9 @@ reference when mounting the ISO via virtual media. The controller does not confi
 responsibility of the hardware manager or the BMC pre-configuration
 workflow. The controller's role is to validate the cert, use it during pre-flight checks, and surface it via the ConfigMap reference for downstream consumption.
 
+BMC-side certificate management proper — for example uploading CA certificates to BMCs via the Redfish `ImportCertificate` action as a day-0/day-2 operation — is intentionally **out of scope** for this proposal and is better handled as a separate
+certificate-management feature (consistent with the Non-Goals). This proposal deliberately stops at validating the ISO server certificate and surfacing it for downstream consumers, rather than taking on BMC trust provisioning.
+
 ### 10. Registry pre-flight check limitations
 
 **Challenge**: The registry validation in Phase 1 runs from the hub cluster, which may have different network access than the spoke (where the actual image push occurs).
@@ -1388,6 +1397,11 @@ may still fail. In disconnected environments, the `seedImage` pull-spec should r
 Detach the spoke entirely by deleting the ClusterInstance/ManagedCluster, as the manual workflow does today. Rejected because deleting the ClusterInstance risks triggering deprovisioning of the running spoke and discards the hub-side record of the cluster. The chosen approach instead
 keeps the `ManagedCluster` intact and removes only the spoke-side ACM agent state (klusterlet + addons), achieving the same seed cleanliness without touching the provisioning lifecycle; the operator reclaims the hardware by deleting the ProvisioningRequest when the seed is captured.
 (Spoke access is obtained the same way either way — the hub-held admin kubeconfig survives klusterlet teardown regardless — so the access credential is not what distinguishes this alternative.)
+
+Taking on spoke cleanup ourselves does add responsibility that deleting the `ManagedCluster` would otherwise leave to ACM, and that responsibility must be bounded so it does not become a maintenance burden as ACM adds features. The design
+deliberately leans on ACM's **own teardown primitives** rather than a hardcoded inventory of agent objects: it deletes the `Klusterlet` CR (so the klusterlet operator tears down *all* of its current and future registration/work agents and
+namespaces) and enumerates and deletes **all** `ManagedClusterAddOn` CRs (so new addons are covered without code changes). The residual risk is limited to spoke state that is neither klusterlet-managed nor modeled as a `ManagedClusterAddOn` — the
+observability secrets in [Challenge 1](#1-incomplete-acm-cleanup-contaminates-the-seed-image) are the known example, and the pattern there (prevent creation at the source via a label rather than chase deletions) is the template for any future such case.
 
 ### B. Separate SeedGenerationRequest CRD
 
