@@ -16,7 +16,7 @@ SPDX-License-Identifier: Apache-2.0
 - [Proposed API Changes](#proposed-api-changes)
   - [New key: `seedGeneration`](#new-key-seedgeneration)
   - [ProvisioningRequest overrides](#provisioningrequest-overrides)
-  - [Schema in templateParameterSchema](#schema-in-templateparameterschema)
+  - [Schema: PR-facing and effective-object](#schema-pr-facing-and-effective-object)
 - [Controller Workflow](#controller-workflow)
   - [Functional Overview](#functional-overview)
   - [Trigger and Dispatch](#trigger-and-dispatch)
@@ -254,36 +254,41 @@ upgradeParameters:
     seedImage: quay.io/my-org/seed-image:4.Y.Z-custom
 ```
 
-**Validation applies to the merged object, not the raw override.** A PR
-override is intentionally partial — the example above supplies only
+**PR input and the merged object are validated by two separate schemas.**
+A PR override is intentionally partial — the example above supplies only
 `seedImage`, relying on the ClusterTemplate defaults for
-`seedAuthSecretRef`, `liveISO`, and the rest. Required-field validation
-(`required: [seedImage, seedAuthSecretRef]`, and the `liveISO` required
-set) must therefore run **after** the CT defaults are merged over the PR
-overrides, not against the raw `spec.templateParameters` in isolation.
+`seedAuthSecretRef`, `liveISO`, and the rest:
 
-There is a specific ordering hazard the implementation must resolve. The
-admission webhook today calls `ValidateTemplateInputMatchesSchema` on the
-**raw** `spec.templateParameters` *before* `ValidateUpgradeInput` runs, and that
-first call does **not** merge `TemplateDefaults.UpgradeDefaults`. If the
-`seedGeneration` sub-schema carries `required: [seedImage, seedAuthSecretRef]`
-(and the `liveISO` required set), a partial override supplying only `seedImage`
-is rejected at that first gate before any merge. Two acceptable fixes: (a) merge
-`UpgradeDefaults` into the effective object *before* the schema check, so
-admission sees the same document the controller acts on; or (b) keep the
-raw-params check structural only (types/patterns) and move `required`
-enforcement into the post-merge `ValidateUpgradeInput` path. This proposal
-specifies option (a) — validate the merged object — so a partial override is
-never rejected for fields the defaults provide, and admission and the controller
-agree on one document. A test must cover this ordering by submitting a
-`seedImage`-only override against defaults that provide the rest.
+- The **PR-facing schema** (`templateParameterSchema.upgradeParameters.seedGeneration`,
+  defined below) lists only the fields a PR may override and sets
+  `additionalProperties: false`. Admission validates the **raw**
+  `spec.templateParameters` against it, so a PR that supplies any
+  template-owned field is rejected structurally by the schema — there is no
+  separate deny-list to keep in sync. Because this schema requires no
+  template-owned field, a partial (`seedImage`-only) override is never
+  rejected for fields the defaults provide.
+- The **effective-object schema** — internal to the controller, not part of
+  `templateParameterSchema` — validates the merged object (defaults ⊕ PR
+  input) in the post-merge `ValidateUpgradeInput` path. It carries the full
+  `seedGeneration` shape and the required-field rules
+  (`required: [seedImage, seedAuthSecretRef]`, the `liveISO` required set),
+  so "does the effective document have everything it needs" is answered
+  after the merge, never against raw PR input.
 
-**Restricting PR-controlled outbound targets and credential selection.**
-Two distinct classes of `seedGeneration` field are dangerous in the hands
-of a less-trusted PR author:
+Splitting the schemas also removes an admission ordering hazard. The webhook
+calls `ValidateTemplateInputMatchesSchema` on the raw `spec.templateParameters`
+*before* `ValidateUpgradeInput` runs, without merging
+`TemplateDefaults.UpgradeDefaults`. Because the PR-facing schema requires
+nothing template-owned, a `seedImage`-only override passes that first gate,
+and the controller's post-merge check owns full-shape validation. A test must
+submit a `seedImage`-only override against defaults that provide the rest.
+
+**Why the template-owned fields stay out of the PR-facing schema.** Three
+classes of `seedGeneration` field are dangerous in the hands of a
+less-trusted PR author, so none of them appears there:
 
 - **Outbound targets** that drive hub-side network egress while credentials
-  are mounted: `liveISO.urlBase`, `liveISO.releaseImage`, `seedImage`,
+  are mounted: `liveISO.urlBase`, `liveISO.releaseImage`,
   `liveISO.imageDigestSources` / `additionalTrustBundleConfigMapRef`.
   Overriding these can redirect hub egress to attacker-controlled or
   internal endpoints (SSRF) or push/pull against an unintended registry.
@@ -291,9 +296,8 @@ of a less-trusted PR author:
   generation: `recertImage`. Phase 3 passes `recertImage` to the
   `SeedGenerator` CR, and the LCA runs it (the recert tool) on the spoke, so
   a PR-supplied value would let an untrusted author run an arbitrary image on
-  the seed cluster. This is template-owned; when set from a PR it is rejected,
-  and the resolved value must be an allowlisted, immutable
-  (`repo@sha256:<digest>`) reference.
+  the seed cluster. When resolved from `upgradeDefaults` it must be an
+  allowlisted, immutable (`repo@sha256:<digest>`) reference.
 - **Credential references** that select which hub Secret/ConfigMap the
   workflow reads and mounts into the ISO-build Job: `seedAuthSecretRef`,
   `liveISO.uploadSecretRef`, `liveISO.pullSecretRef`. Overriding these lets
@@ -301,147 +305,127 @@ of a less-trusted PR author:
   account can read, exfiltrating those credentials into an ISO/Job the
   caller influences.
 
-The default posture is that **all** of these fields are template-owned: set by
-trusted authors in `upgradeDefaults` and **not** exposed in
-`templateParameterSchema.upgradeParameters`, so admission rejects any override
-attempt, making them effectively immutable from the PR side. The only field
-expected to be overridable is a benign one such as the `seedImage` tag *when*
-the deployment trusts its PR authors. Where a deployment must accept these
-overrides from less-trusted principals, it must enforce admission checks rather
-than trust the value: validate that Secret/ConfigMap references resolve to an
-allowlisted set, that URL schemes are `https`, and that resolved destinations
-pass an egress allowlist rejecting private and link-local addresses after DNS
-resolution. Requiring `https` alone is **not** sufficient SSRF protection.
+The default posture is that **every** `seedGeneration` field is
+template-owned: set by trusted authors in `upgradeDefaults` and absent from
+the PR-facing schema, so `additionalProperties: false` rejects any override
+attempt. The one field a deployment may choose to expose — when it trusts its
+PR authors — is the benign `seedImage` tag, by adding it to the PR-facing
+schema as shown below. A deployment that opts in any richer override must not
+trust the value: it must validate that Secret/ConfigMap references resolve to
+an allowlisted set, that URL schemes are `https`, and that resolved
+destinations pass an egress allowlist rejecting private and link-local
+addresses after DNS resolution. Requiring `https` alone is **not** sufficient
+SSRF protection.
 
-### Schema in templateParameterSchema
+### Schema: PR-facing and effective-object
 
-The ClusterTemplate's `templateParameterSchema` would include the `seedGeneration` sub-schema under `upgradeParameters`, following the same pattern as `imageBasedGroupUpgrade`.
+Two schemas validate `seedGeneration`; only the PR-facing one is exposed to
+PR authors, and it follows the same `templateParameterSchema` pattern as
+`imageBasedGroupUpgrade`.
 
-Two points about this schema, both tied to the security posture above:
-
-- **Declaring a field here does not make it PR-overridable.** Because the
-  design validates the **merged** object (defaults over PR input — option (a)
-  above), the schema must describe the full `seedGeneration` shape, including
-  the credential and outbound-target fields, or the merged document would fail
-  validation. JSON Schema alone therefore cannot express "present in defaults
-  but forbidden from PR input." Template-ownership of `seedAuthSecretRef`,
-  `recertImage`, `liveISO.releaseImage`, `uploadSecretRef`, `urlBase`,
-  `pullSecretRef`, `imageDigestSources`, and `additionalTrustBundleConfigMapRef`
-  is instead enforced by an **admission check on the raw
-  `spec.templateParameters`** that rejects those keys in PR input unless the
-  deployment has explicitly opted them in. The schema does structural
-  validation of the merged object; the admission check is what makes these
-  fields effectively immutable from the PR side.
-- **`additionalProperties: false` at every object level.** Unknown or
-  mistyped keys are rejected rather than silently ignored, so a typo like
-  `seedimage` or an attempt to smuggle an unrecognized field fails admission
-  instead of being dropped.
+**PR-facing schema.** Lists only the fields a PR may override, with
+`additionalProperties: false` at every object level so unknown or mistyped
+keys — and every template-owned field — are rejected rather than silently
+ignored. The strictest posture exposes nothing; the example below opts in the
+benign `seedImage` tag:
 
 ```yaml
-upgradeParameters:
+# templateParameterSchema.upgradeParameters
+properties:
+  seedGeneration:
+    type: object
+    additionalProperties: false
+    properties:
+      seedImage:
+        type: string
+        description: Full pull-spec for the seed container image to publish
+        minLength: 1
+        pattern: "^([a-z0-9]+://)?[\\S]+$"
+    # No template-owned field (seedAuthSecretRef, recertImage, liveISO.*,
+    # uploadSecretRef, pullSecretRef, urlBase, imageDigestSources,
+    # additionalTrustBundleConfigMapRef) appears here, so additionalProperties:
+    # false rejects any attempt to set one from a PR.
+```
+
+**Effective-object schema.** The controller validates the merged object
+(defaults ⊕ PR input) against this internal schema in `ValidateUpgradeInput`,
+after the merge — it never sees raw PR input. It carries the full shape and
+the required-field rules, and sets `additionalProperties: false` at every
+level so a typo in `upgradeDefaults` (e.g. `seedimage`) fails validation:
+
+```yaml
+# Controller-internal; not part of templateParameterSchema.
+seedGeneration:
+  type: object
+  additionalProperties: false
   properties:
-    seedGeneration:
+    seedImage: { type: string, minLength: 1, pattern: "^([a-z0-9]+://)?[\\S]+$" }
+    seedAuthSecretRef:
+      type: object
+      additionalProperties: false
+      properties: { name: { type: string } }
+      required: [name]
+    recertImage:
+      type: string
+      description: >
+        Template-owned; when set it must be an allowlisted, immutable digest
+        reference (repo@sha256:<digest>), because Phase 3 passes it to the
+        SeedGenerator CR where it runs as executable code during seed
+        generation.
+    liveISO:
       type: object
       additionalProperties: false
       properties:
-        seedImage:
+        releaseImage:
           type: string
-          description: Full pull-spec for the seed container image to publish
           minLength: 1
-          pattern: "^([a-z0-9]+://)?[\\S]+$"
-        seedAuthSecretRef:
-          type: object
-          additionalProperties: false
-          properties:
-            name:
-              type: string
-          required: [name]
-        recertImage:
-          type: string
           description: >
-            Override for the recert tool image used during seed generation.
-            Template-owned (see the security posture and the admission check
-            above): rejected as PR input, and when set it must be an
-            allowlisted, immutable digest reference (repo@sha256:<digest>),
-            because Phase 3 passes it to the SeedGenerator CR where it runs
-            as executable code during seed generation.
-        liveISO:
+            OCP release image to extract openshift-install from — the
+            canonical release pull-spec (redirected by the hub-derived mirror
+            mappings) or a direct mirror pull-spec.
+        installationDisk: { type: string, minLength: 1, description: Disk device path on the target servers }
+        sshKey: { type: string, description: SSH public key for debugging access }
+        uploadSecretRef:
           type: object
           additionalProperties: false
-          properties:
-            releaseImage:
-              type: string
-              description: >
-                OCP release image to extract openshift-install from.
-                In disconnected environments, either the canonical release
-                pull-spec (redirected by the hub-derived mirror mappings)
-                or a direct mirror pull-spec.
-              minLength: 1
-            installationDisk:
-              type: string
-              description: Disk device path on the target servers
-              minLength: 1
-            sshKey:
-              type: string
-              description: SSH public key for debugging access to pre-provisioned servers
-            uploadSecretRef:
-              type: object
-              additionalProperties: false
-              properties:
-                name:
-                  type: string
-              required: [name]
-            urlBase:
-              type: string
-              description: >
-                HTTPS origin plus base path from which the uploaded ISO is
-                served, backed by the same directory tree the upload
-                writes into. The effective per-run ISO URL is computed by
-                the controller as urlBase + the per-run suffix and recorded
-                in status; it is never supplied directly.
-              minLength: 1
-            pullSecretRef:
-              type: object
-              additionalProperties: false
-              properties:
-                name:
-                  type: string
-              required: [name]
-            storageClass:
-              type: string
-              description: >
-                StorageClass for the ISO build workspace PVC (~20GB).
-                Uses the cluster default StorageClass if omitted.
-            imageDigestSources:
-              type: array
-              description: >
-                Mirror mappings for the ISO build. Auto-derived from the
-                hub's ImageDigestMirrorSet/ImageContentSourcePolicy if
-                omitted; set only to target a different mirror.
-              items:
-                type: object
-                additionalProperties: false
-                properties:
-                  source:
-                    type: string
-                  mirrors:
-                    type: array
-                    items:
-                      type: string
-                required: [source, mirrors]
-            additionalTrustBundleConfigMapRef:
-              type: object
-              additionalProperties: false
-              description: >
-                ConfigMap holding the registry CA trust bundle for the
-                mirror. Auto-derived from the hub's image config
-                additionalTrustedCA if omitted.
-              properties:
-                name:
-                  type: string
-              required: [name]
-          required: [releaseImage, installationDisk, uploadSecretRef, urlBase]
-      required: [seedImage, seedAuthSecretRef]
+          properties: { name: { type: string } }
+          required: [name]
+        urlBase:
+          type: string
+          minLength: 1
+          description: >
+            HTTPS origin plus base path from which the uploaded ISO is served.
+            The effective per-run ISO URL is computed as urlBase + the per-run
+            suffix and recorded in status; it is never supplied directly.
+        pullSecretRef:
+          type: object
+          additionalProperties: false
+          properties: { name: { type: string } }
+          required: [name]
+        storageClass: { type: string, description: StorageClass for the ISO build workspace PVC (~20GB); cluster default if omitted }
+        imageDigestSources:
+          type: array
+          description: >
+            Mirror mappings for the ISO build. Auto-derived from the hub's
+            ImageDigestMirrorSet/ImageContentSourcePolicy if omitted.
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              source: { type: string }
+              mirrors: { type: array, items: { type: string } }
+            required: [source, mirrors]
+        additionalTrustBundleConfigMapRef:
+          type: object
+          additionalProperties: false
+          description: >
+            ConfigMap holding the registry CA trust bundle for the mirror.
+            Auto-derived from the hub's image config additionalTrustedCA if
+            omitted.
+          properties: { name: { type: string } }
+          required: [name]
+      required: [releaseImage, installationDisk, uploadSecretRef, urlBase]
+  required: [seedImage, seedAuthSecretRef]
 ```
 
 ## Controller Workflow
@@ -1144,57 +1128,21 @@ spec:
           urlBase: https://iso-server.example.com/ibi/
       clusterUpgradeTimeout: "3h"
   templateParameterSchema:
-    # Abbreviated: field types only. The `additionalProperties: false` guard
-    # (required at every object level) and some fields are elided — the canonical
-    # "Schema in templateParameterSchema" is authoritative; copy from there.
+    # PR-facing schema: exposes only the PR-overridable field(s). Every
+    # template-owned field lives in upgradeDefaults and is validated post-merge
+    # by the controller's effective-object schema — see "Schema: PR-facing and
+    # effective-object". additionalProperties: false rejects any other override.
     properties:
       # ... standard provisioning parameters ...
       upgradeParameters:
         properties:
           seedGeneration:
             type: object
+            additionalProperties: false
             properties:
               seedImage:
                 type: string
                 minLength: 1
-              seedAuthSecretRef:
-                type: object
-                properties:
-                  name:
-                    type: string
-                required: [name]
-              recertImage:
-                type: string
-              liveISO:
-                type: object
-                properties:
-                  releaseImage:
-                    type: string
-                    minLength: 1
-                  installationDisk:
-                    type: string
-                    minLength: 1
-                  sshKey:
-                    type: string
-                  uploadSecretRef:
-                    type: object
-                    properties:
-                      name:
-                        type: string
-                    required: [name]
-                  urlBase:
-                    type: string
-                    minLength: 1
-                  pullSecretRef:
-                    type: object
-                    properties:
-                      name:
-                        type: string
-                    required: [name]
-                  storageClass:
-                    type: string
-                required: [releaseImage, installationDisk, uploadSecretRef, urlBase]
-            required: [seedImage, seedAuthSecretRef]
         type: object
     type: object
 ```
