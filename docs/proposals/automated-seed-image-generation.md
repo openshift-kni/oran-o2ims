@@ -1084,11 +1084,14 @@ type SeedGenerationStatus struct {
     ISOServerCACertRef *ConfigMapKeyRef `json:"isoServerCACertRef,omitempty"`
 }
 
-// ConfigMapKeyRef references a single key in a ConfigMap.
+// ConfigMapKeyRef references a single key in a ConfigMap. Key is always
+// "ca-bundle.crt" for ISOServerCACertRef: the IBI pre-provisioning consumer
+// reads a name-only reference under that fixed key, so the producer must not
+// emit any other key or the consumer silently fails to resolve the bundle.
 type ConfigMapKeyRef struct {
     Name      string `json:"name"`
     Namespace string `json:"namespace"`
-    Key       string `json:"key"`
+    Key       string `json:"key"` // always "ca-bundle.crt"
 }
 ```
 
@@ -1141,6 +1144,9 @@ spec:
           urlBase: https://iso-server.example.com/ibi/
       clusterUpgradeTimeout: "3h"
   templateParameterSchema:
+    # Abbreviated: field types only. The `additionalProperties: false` guard
+    # (required at every object level) and some fields are elided — the canonical
+    # "Schema in templateParameterSchema" is authoritative; copy from there.
     properties:
       # ... standard provisioning parameters ...
       upgradeParameters:
