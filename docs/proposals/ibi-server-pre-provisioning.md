@@ -388,7 +388,10 @@ hwMgmtDefaults:
   # Passed through to ImageClusterInstall.spec.preProvisioning.
   ibiPreProvisioning:
     # Required: HTTPS URL of the live IBI ISO reachable from the BMC network.
-    isoURL: https://iso-server.example.com/ibi/rhcos-ibi-4.Y.Z.iso
+    # Must be an immutable, content-addressed per-run URL (see "Restricting
+    # ISOURL"), not a mutable "latest" path — here the seed workflow's per-run
+    # path (ProvisioningRequest name + seed image digest).
+    isoURL: https://iso-server.example.com/ibi/example-pr/sha256-abc123/rhcos-ibi.iso
     # Required: expected SHA-256 digest, verified before boot to pin the exact
     # artifact (admission rejects a config that omits it). Matches
     # SeedGenerationStatus.ISODigest from seed generation.
@@ -553,6 +556,10 @@ ImageClusterInstall created (with spec.preProvisioning set)
   → NEW: preProvisionHost (ordered so every write is recoverable — see
     "Crash-safety of the boot handoff" below; each step is idempotent and the
     next reconcile resumes from the first incomplete one):
+      # On the first reconcile where spec.preProvisioning is set but no attempt
+      # is yet in flight (case (c)-in-backoff or (d)-before-mint below), the
+      # condition is RequirementsMet = False / PreProvisioningPending
+      # (recognized, not yet booting) until step 2 records an attempt.
       # RECOVERY: classify the current state first:
       #   (a) Status.PreProvisioningAttempt set → in-flight attempt: resume it.
       #       Do NOT mint a new id/token; reuse the attempt and its token Secret
@@ -584,17 +591,15 @@ ImageClusterInstall created (with spec.preProvisioning set)
           → do NOT set PreProvisioningBootTime yet (see step 5)
       → 3. deliver the per-host callback data (URL, attempt id, token,
          CALLBACK_BUDGET_SECS) on a DataImage carrier (create-or-adopt), NOT via
-         preprovisioningNetworkDataName (that field is an nmstate network-data
-         Secret and does not inject callback config into a live-iso boot — see
-         Challenge 4). The DataImage MUST be named and namespaced after the
-         BareMetalHost: BMO v0.13.2's DataImageReconciler resolves the owning
-         host by matching the request name/namespace to a BareMetalHost, so an
-         attempt-id-named DataImage would never attach. The attempt id is bound
-         instead through carrier content and a label (e.g.
-         `ibi.openshift.io/attempt: <id>`), which the create-or-adopt step also
-         uses to detect and replace a stale carrier from a prior attempt. The
-         generic callback client is already baked into the live ISO via
-         ignitionConfigOverride at build time (identical for every host).
+         preprovisioningNetworkDataName (an nmstate network-data Secret that a
+         live-iso boot ignores — see Challenge 4). The DataImage MUST be named and
+         namespaced after the BareMetalHost (BMO v0.13.2's DataImageReconciler
+         matches request name/namespace to a BareMetalHost, so any other name
+         never attaches); the attempt id is bound through carrier content and an
+         `ibi.openshift.io/attempt` label, which create-or-adopt also uses to
+         replace a stale carrier from a prior attempt. The generic callback client
+         is already baked into the live ISO via ignitionConfigOverride (identical
+         for every host).
       → 4. mutate the BMH (idempotent patch):
           → set BMH spec.image.url = isoURL, spec.image.format = "live-iso"
           → set BMH spec.online = true
@@ -603,7 +608,9 @@ ImageClusterInstall created (with spec.preProvisioning set)
          anchor, so it must mark an actual boot request, not merely recorded
          intent; a resumed attempt whose steps 3-4 completed but whose BootTime
          is unset verifies the BMH is booting the expected ISO and then stamps
-         BootTime.
+         BootTime. In the SAME update, advance the condition to
+         RequirementsMet = False / PreProvisioningInProgress (boot confirmed; now
+         waiting for the callback) — the Booting→InProgress transition.
   → NEW: waitForCallback:
       → IBI Operator HTTP server receives POST to
         /callbacks/<namespace>/<name>/status
@@ -888,22 +895,18 @@ not what a normal provisioned boot offers:
 
 - **`ignitionConfigOverride` baked into the ISO (authoritative path).** The
   live ISO's embedded Ignition is the one delivery surface Ironic reliably
-  applies for a live-iso boot; `ImageBasedInstallationConfig` supports
-  `ignitionConfigOverride`, so the callback systemd unit can be merged in at
-  build time. The cost is the callback target must be known at build time —
-  which conflicts with a per-ICI URL/token in a shared ISO (see
-  [Challenge 4](#4-callback-url-injection-into-the-iso)). The resolution:
-  bake only a **generic** callback client that reads its per-server URL and
-  token from a well-known location, and deliver that small data at boot.
-- **`DataImage` is not an ignition overlay.** It attaches an extra
-  virtual-media device; BMO does **not** merge its contents into the live
-  environment's Ignition, so it cannot *inject* the callback systemd unit — it
-  can only carry data the ISO's baked-in generic client explicitly mounts and
-  reads (e.g. a config drive).
-- **`spec.preprovisioningNetworkDataName` / `userData` / `networkData` /
-  `metaData` are not safe for live-iso.** BMO/Ironic do not process these for
-  a live-iso boot as they do for a normal deploy, so the design must not depend
-  on them to carry the ignition override.
+  applies for a live-iso boot, and `ImageBasedInstallationConfig` supports
+  `ignitionConfigOverride`, so the callback systemd unit is merged in at build
+  time. Since a per-ICI URL/token cannot be baked into a shared ISO (see
+  [Challenge 4](#4-callback-url-injection-into-the-iso)), only a **generic**
+  callback client is baked in; it reads its per-server URL and token from a
+  well-known location delivered at boot.
+- **Other surfaces cannot inject ignition.** A `DataImage` attaches an extra
+  virtual-media device but BMO does **not** merge its contents into the live
+  Ignition (it can only carry data the baked-in client mounts and reads);
+  `spec.preprovisioningNetworkDataName` / `userData` / `networkData` / `metaData`
+  are likewise not processed for a live-iso boot as they are for a normal deploy.
+  The design must not depend on any of them to carry the ignition override.
 
 Because the exact behavior of `live-iso` + `DataImage` + config-drive discovery
 is version-dependent in BMO/Ironic, this recommended path **must be covered by a
@@ -994,7 +997,9 @@ patch := client.MergeFrom(bmh.DeepCopy())
 bmh.Spec.Image = &bmh_v1alpha1.Image{
     URL:        preProvisioning.ISOURL,
     DiskFormat: pointer.String("live-iso"),
-    // Populated from PreProvisioningConfig.ISODigest when set.
+    // Best-effort only: Ironic's live-iso path does NOT reliably enforce these
+    // and BMO clears them before passing boot_iso (see prose below). The real
+    // guarantee is the operator's stream-and-verify of ISOURL before this patch.
     Checksum:     preProvisioning.ISODigest, // "sha256:<hex>"
     ChecksumType: bmh_v1alpha1.SHA256,
 }
@@ -1097,8 +1102,9 @@ condition type for this handoff (see above); the phase is carried in the
 
 | Phase | Condition | Reason | Terminal? |
 |---|---|---|---|
-| Booting from ISO | `RequirementsMet = False` | `PreProvisioningBooting` | No |
-| Waiting for callback | `RequirementsMet = False` | `PreProvisioningInProgress` | No |
+| Recognized, no attempt in flight yet | `RequirementsMet = False` | `PreProvisioningPending` | No |
+| Boot request being applied (BootTime not yet stamped) | `RequirementsMet = False` | `PreProvisioningBooting` | No |
+| Boot confirmed, waiting for callback | `RequirementsMet = False` | `PreProvisioningInProgress` | No |
 | Attempt failed/timed out, retry budget remains | `RequirementsMet = False` | `PreProvisioningRetrying` | No (backoff, then re-boot) |
 | Callback received (success) | `RequirementsMet = True` | `PreProvisioningSucceeded` | Yes |
 | Failure with retry budget exhausted | `RequirementsMet = False` | `PreProvisioningFailed` | Yes |
@@ -1133,15 +1139,14 @@ the transition to `PreProvisioningTimedOut`.
 
 **Timeout and callback compete for the same terminal state.** The timeout
 teardown uses the **same resourceVersion compare-and-swap** on
-`preProvisioningResult` as the callback handler: it re-reads the ICI and, only if
-the attempt is still non-terminal, writes the terminal result guarded by
-`resourceVersion`. A callback landing in the same instant either wins the CAS
-(the timeout write then conflicts and is dropped) or loses it (the timeout wins
-and the late callback is rejected against the invalidated token). Exactly one
-path becomes the terminal writer, and **only that winner performs the teardown**
-below — the loser observes the already-terminal state and does nothing. This
-prevents double teardown and a torn state where, e.g., the token is invalidated
-by timeout while the callback is concurrently accepted.
+`preProvisioningResult` as the callback handler: it writes the terminal result
+only if the attempt is still non-terminal, guarded by `resourceVersion`. A
+callback landing in the same instant either wins the CAS (the timeout write
+conflicts and is dropped) or loses it (the timeout wins and the late callback is
+rejected against the invalidated token). Exactly one path becomes the terminal
+writer, and **only that winner performs the teardown** below — the loser observes
+the already-terminal state and does nothing, preventing double teardown and a torn
+state.
 
 The winning timeout path then performs teardown. Because teardown spans several
 resources (ICI status, BMH spec, DataImage, token Secret), it must be
@@ -1204,7 +1209,7 @@ The O-Cloud Manager changes are minimal:
 
    | ICI pre-provisioning reason | PR `HardwareProvisioned` condition | PR `provisioningStatus.provisioningPhase` |
    | --- | --- | --- |
-   | `PreProvisioningBooting` / `PreProvisioningInProgress` | `False`, reason `InProgress` | `progressing` |
+   | `PreProvisioningPending` / `PreProvisioningBooting` / `PreProvisioningInProgress` | `False`, reason `InProgress` | `progressing` |
    | `PreProvisioningRetrying` | `False`, reason `InProgress` | `progressing` (attempt failed, backing off to retry) |
    | `PreProvisioningSucceeded` | `True`, reason `Completed` | `progressing` (proceed to cluster install) |
    | `PreProvisioningFailed` | `False`, reason `Failed` | `failed` |
@@ -1281,7 +1286,8 @@ spec:
           resourceSelector:
             resourceselector.clcm.openshift.io/server-type: XR8620t
       ibiPreProvisioning:
-        isoURL: https://iso-server.example.com/ibi/rhcos-ibi-4.Y.Z.iso
+        # Immutable, content-addressed per-run URL (see "Restricting ISOURL").
+        isoURL: https://iso-server.example.com/ibi/example-pr/sha256-abc123/rhcos-ibi.iso
         isoDigest: sha256:0000000000000000000000000000000000000000000000000000000000000000
         isoServerCACertRef:
           name: iso-server-ca-cert
@@ -1330,24 +1336,22 @@ disconnected environments, the server may be on a different network
 (provisioning/BMC network) than the hub's service network.
 
 **Mitigation**: The IBI Operator's image server is already exposed via a Route
-or NodePort for serving config ISOs to BMHs; the same network path that lets
-BMH/Ironic fetch ISOs from the hub can carry the callback over the same
-externally-reachable hostname. If the provisioning network is isolated, a Route
-or LoadBalancer exposes the callback endpoint — the same requirement as DataImage
-ISO serving.
+or NodePort for serving config ISOs to BMHs; the same externally-reachable
+hostname that lets BMH/Ironic fetch ISOs carries the callback. If the
+provisioning network is isolated, a Route or LoadBalancer exposes the callback
+endpoint — the same requirement as DataImage ISO serving.
 
 This reachability is an explicit **precondition**, not an assumption. BMH/Ironic
 fetches ISOs from the hub's *service* network via the BMC, whereas the callback
 originates from the *booted host* on the provisioning network — these can differ,
 so "Ironic can pull the ISO" does not prove "the host can reach the callback."
 Before booting, the IBI Operator validates that the resolved callback endpoint is
-DNS-resolvable, its hostname routable from the target network, and its TLS
-certificate chains to a CA the host will trust (the bundle injected via
-`additionalTrustBundle`, see [Challenge 7](#7-hub-ca-trust-on-the-pre-provisioned-server)).
-If these fail, the ICI reports a configuration error up front rather than booting
-a server that can never call back. `PreProvisioningTimedOut` is documented as
-ambiguous between "preparation never finished" and "callback could not be
-delivered," and the operator surfaces both possibilities.
+DNS-resolvable, routable from the target network, and TLS-trusted by the host
+(the bundle injected via `additionalTrustBundle`, see
+[Challenge 7](#7-hub-ca-trust-on-the-pre-provisioned-server)), failing closed with
+a configuration error rather than booting a server that can never call back.
+`PreProvisioningTimedOut` is documented as ambiguous between "preparation never
+finished" and "callback could not be delivered," and the operator surfaces both.
 
 ### 2. Callback delivery reliability
 
@@ -1358,20 +1362,16 @@ temporarily unavailable. A missed callback would leave the ICI stuck in
 
 **Mitigation**: The `ibi-prep-callback` script retries curl against an
 **absolute wall-clock deadline derived from `CALLBACK_BUDGET_SECS`** (a loop with
-a per-attempt `--max-time`), so cumulative retry effort is bounded regardless of
-how many attempts fail — something `TimeoutStartSec` (per single start) and
-`Restart=on-failure` (unbounded relaunches) cannot guarantee alone.
-`CALLBACK_BUDGET_SECS` is the per-host budget delivered on the data carrier,
-derived from `PreProvisioningConfig.Timeout` (default 60m) anchored to
-`PreProvisioningBootTime`, so the host's retry window tracks the operator's
-timeout rather than a fixed value that could expire before it (a hard-coded 10m
-deadline would give up ~50m early on a default-timeout host). The script fails
-closed if `CALLBACK_BUDGET_SECS` is absent; `Restart=on-failure` plus
-`StartLimitIntervalSec`/`StartLimitBurst` remain only a bounded backstop for an
-outright script crash. Additionally, the operator's reconcile loop checks the
-timeout — if no callback arrives within it, the ICI transitions to
-`PreProvisioningTimedOut` — so it can distinguish "callback never arrived"
-(timeout) from "preparation failed" (failure callback).
+a per-attempt `--max-time`), so cumulative retry effort is bounded — something
+`TimeoutStartSec` and `Restart=on-failure` cannot guarantee alone (see
+[the reporter script](#1-callback-ignition-override)). The budget is the per-host
+value delivered on the data carrier, derived from `PreProvisioningConfig.Timeout`
+(default 60m) and anchored to `PreProvisioningBootTime`, so the host's retry
+window tracks the operator's timeout rather than a fixed value that could expire
+before it. The script fails closed if `CALLBACK_BUDGET_SECS` is absent. The
+operator's reconcile loop independently enforces the timeout, so it can
+distinguish "callback never arrived" (timeout) from "preparation failed" (failure
+callback).
 
 ### 3. Callback authentication and security
 
