@@ -6,6 +6,52 @@ SPDX-License-Identifier: Apache-2.0
 
 # Proposal: Automated IBI Server Pre-Provisioning via ProvisioningRequest API
 
+## Table of Contents
+
+- [Background](#background)
+- [Problem Statement](#problem-statement)
+- [Architecture](#architecture)
+  - [Why the IBI Operator](#why-the-ibi-operator)
+  - [Monitoring Approach: HTTP Callback](#monitoring-approach-http-callback)
+  - [Component Responsibilities](#component-responsibilities)
+- [Proposed API Changes](#proposed-api-changes)
+  - [IBI Operator: ImageClusterInstall CRD Changes](#ibi-operator-imageclusterinstall-crd-changes)
+  - [O-Cloud Manager: ClusterTemplate Configuration](#o-cloud-manager-clustertemplate-configuration)
+  - [Schema in templateParameterSchema](#schema-in-templateparameterschema)
+- [IBI Operator Workflow Changes](#ibi-operator-workflow-changes)
+  - [Current Flow (no pre-provisioning)](#current-flow-no-pre-provisioning)
+  - [New Flow (with pre-provisioning)](#new-flow-with-pre-provisioning)
+  - [Key Implementation Details in the IBI Operator](#key-implementation-details-in-the-ibi-operator)
+- [O-Cloud Manager Changes](#o-cloud-manager-changes)
+- [Integration with Seed Generation Proposal](#integration-with-seed-generation-proposal)
+- [Sample: ClusterTemplate with IBI Pre-Provisioning](#sample-clustertemplate-with-ibi-pre-provisioning)
+- [Challenges and Mitigations](#challenges-and-mitigations)
+  - [1. Callback URL must be reachable from the pre-provisioned server](#1-callback-url-must-be-reachable-from-the-pre-provisioned-server)
+  - [2. Callback delivery reliability](#2-callback-delivery-reliability)
+  - [3. Callback authentication and security](#3-callback-authentication-and-security)
+  - [4. Callback URL injection into the ISO](#4-callback-url-injection-into-the-iso)
+  - [5. BMC CA trust for HTTPS virtual media](#5-bmc-ca-trust-for-https-virtual-media)
+  - [6. Server state after failed pre-provisioning](#6-server-state-after-failed-pre-provisioning)
+  - [7. Hub CA trust on the pre-provisioned server](#7-hub-ca-trust-on-the-pre-provisioned-server)
+- [Required Upstream Changes (IBI Operator)](#required-upstream-changes-ibi-operator)
+  - [Summary](#summary)
+  - [1. API Types](#1-api-types-apiv1alpha1imageclusterinstall_typesgo)
+  - [2. Controller](#2-controller-controllersimageclusterinstall_controllergo)
+  - [3. Image Server](#3-image-server-internalimageserverimageservergo)
+  - [4. Ignition Package](#4-ignition-package-internalignition--new)
+  - [5. Webhook](#5-webhook-apiv1alpha1imageclusterinstall_webhookgo)
+  - [6. RBAC](#6-rbac)
+  - [7. Tests](#7-tests)
+  - [Estimated Upstream Effort](#estimated-upstream-effort)
+- [O-Cloud Manager Effort Estimate](#o-cloud-manager-effort-estimate)
+- [Alternatives Considered](#alternatives-considered)
+  - [A. SSH-based monitoring from the IBI Operator](#a-ssh-based-monitoring-from-the-ibi-operator)
+  - [B. Pre-provisioning entirely in the O-Cloud Manager controller](#b-pre-provisioning-entirely-in-the-o-cloud-manager-controller)
+  - [C. Pre-provisioning as part of the hardware manager / NAR flow](#c-pre-provisioning-as-part-of-the-hardware-manager--nar-flow)
+  - [D. Pre-provisioning without monitoring (timeout-based)](#d-pre-provisioning-without-monitoring-timeout-based)
+  - [E. BMH provisioning state as completion signal](#e-bmh-provisioning-state-as-completion-signal)
+- [Open Questions](#open-questions)
+
 ## Background
 
 The IBI-based cluster provisioning workflow (documented in
@@ -93,8 +139,8 @@ This approach:
   server must reach the hub's callback endpoint over HTTPS (DNS, IP routing
   from the provisioning network to the hub Route/Service, and TLS trust of
   the hub certificate) — the same *direction* already needed to pull images
-  from the hub, but a concrete precondition, not a given: an environment that
-  blocks provisioning-network → hub egress, or resolves/routes the endpoint
+  from the hub, but a concrete precondition: an environment that blocks
+  provisioning-network → hub egress, or resolves/routes the endpoint
   differently from the image registries, will drop callbacks. The IBI
   Operator therefore validates that the callback endpoint is resolvable,
   routable, and TLS-trusted from the target's network **before** booting the
@@ -168,14 +214,13 @@ type PreProvisioningConfig struct {
     ISOURL string `json:"isoURL"`
 
     // ISODigest is the expected SHA-256 digest ("sha256:<hex>") of the live ISO
-    // served at ISOURL. The operator verifies the fetched ISO against it before
-    // setting the BMH image, so a mutated or stale artifact at that URL cannot be
-    // booted. Same digest the seed-generation workflow records in
-    // SeedGenerationStatus.ISODigest, pinning the boot to the exact built and
-    // verified artifact. Required for automated boot: admission rejects a config
-    // that omits it (PreProvisioningConfigInvalid) rather than falling back to
-    // URL-only trust. The json tag keeps omitempty only so the zero value is
-    // caught by the required-field check, not silently defaulted.
+    // at ISOURL. The operator verifies the fetched ISO against it before setting
+    // the BMH image, so a mutated or stale artifact cannot be booted. Same digest
+    // the seed-generation workflow records in SeedGenerationStatus.ISODigest,
+    // pinning the boot to the exact verified artifact. Required for automated
+    // boot: admission rejects a config that omits it (PreProvisioningConfigInvalid)
+    // rather than falling back to URL-only trust. omitempty is kept only so the
+    // zero value is caught by the required-field check, not silently defaulted.
     ISODigest string `json:"isoDigest,omitempty"`
 
     // ISOServerCACertRef is a reference to a ConfigMap containing the
@@ -342,15 +387,13 @@ hwMgmtDefaults:
   # Optional: IBI pre-provisioning configuration.
   # Passed through to ImageClusterInstall.spec.preProvisioning.
   ibiPreProvisioning:
-    # Required: HTTPS URL of the live IBI ISO accessible from the BMC
-    # management network.
+    # Required: HTTPS URL of the live IBI ISO reachable from the BMC network.
     isoURL: https://iso-server.example.com/ibi/rhcos-ibi-4.Y.Z.iso
-    # Optional (recommended): expected SHA-256 digest of the ISO, verified
-    # before boot to pin the exact artifact. Matches
-    # SeedGenerationStatus.ISODigest from the seed-generation workflow.
+    # Required: expected SHA-256 digest, verified before boot to pin the exact
+    # artifact (admission rejects a config that omits it). Matches
+    # SeedGenerationStatus.ISODigest from seed generation.
     isoDigest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-    # Optional: reference to a ConfigMap containing the CA certificate
-    # bundle for the HTTPS ISO server.
+    # Optional: ConfigMap (key ca-bundle.crt) with the ISO server CA.
     isoServerCACertRef:
       name: iso-server-ca-cert
     # Optional: timeout for pre-provisioning a single server.
@@ -409,16 +452,16 @@ matches an operator-maintained **allowlist** of callback origins (the same
 with `PreProvisioningConfigInvalid` and the ISO is never booted (an admission
 test covers a spoofed off-allowlist origin).
 
-If none of these yields a URL reachable from the target provisioning network,
-the operator **fails closed**: it does not boot the ISO and reports
-`PreProvisioningConfigInvalid`, rather than booting a host that can never call
-back and timing out 60 minutes later. The in-cluster fallback is accepted only
-when the Challenge 1 reachability check confirms the host is on the hub network.
+If none yields a URL reachable from the target provisioning network, the operator
+**fails closed**: it reports `PreProvisioningConfigInvalid` rather than booting a
+host that can never call back and times out 60 minutes later. The in-cluster
+fallback is accepted only when the Challenge 1 reachability check confirms the
+host is on the hub network.
 
-Keeping the names distinct is intentional: `preProvisioningTimeout` reads clearly
-alongside `hardwareProvisioningTimeout` in the hardware-timeouts block, while
-`timeout` is scoped by its `preProvisioning` parent on the ICI. The mapping table
-above is the authoritative contract between the two field sets.
+The names are kept distinct intentionally: `preProvisioningTimeout` reads clearly
+alongside `hardwareProvisioningTimeout`, while `timeout` is scoped by its
+`preProvisioning` parent on the ICI; the mapping table above is the authoritative
+contract.
 
 ### Schema in templateParameterSchema
 
@@ -473,13 +516,12 @@ controller applies the `PreProvisioningConfig` defaults (`maxRetries: 0`,
 `retryBackoff: 5m`).
 
 Because `isoURL` and `isoDigest` are caller-overridable through
-`hwMgmtParameters`, validation also enforces the two artifact-trust checks before
-the operator fetches the URL (see "Restricting `ISOURL`"): `isoURL` must resolve
-to an operator-owned or allowlisted origin, and `isoDigest` is required (schema
-marks it required; the webhook and passthrough re-check, rejecting a missing or
-off-allowlist value with `PreProvisioningConfigInvalid`). The allowlist is
-operator configuration and cannot be widened by a template or
-`ProvisioningRequest`.
+`hwMgmtParameters`, validation enforces the two artifact-trust checks before the
+operator fetches the URL (see "Restricting `ISOURL`"): `isoURL` must resolve to an
+operator-owned or allowlisted origin, and `isoDigest` is required (schema, webhook
+and passthrough all re-check, rejecting a missing or off-allowlist value with
+`PreProvisioningConfigInvalid`). The allowlist is operator configuration and
+cannot be widened by a template or `ProvisioningRequest`.
 
 ## IBI Operator Workflow Changes
 
@@ -615,39 +657,36 @@ invariants:
   status, so an attempt id can never reference a token that was never stored. If
   the step-2 status write is lost after the Secret exists, the next reconcile
   finds the pending Secret by owner + label and **adopts its attempt id** rather
-  than minting a second token (no orphaned Secret, no duplicate token).
+  than minting a second token.
 - **Attempt id is the recovery key for an in-flight attempt.** Once
-  `PreProvisioningAttempt` is set, every subsequent reconcile **resumes the same
-  attempt** — reusing the existing id and token Secret and re-driving steps 3-5
-  idempotently (create-or-adopt the BMH-named DataImage whose attempt-id label
-  identifies the current attempt, idempotent BMH patch) — rather than minting a
-  fresh attempt while the previous ISO may still be booting.
-- **A retired attempt is never resumed.** On a retry, the failed attempt's
+  `PreProvisioningAttempt` is set, every reconcile **resumes the same attempt** —
+  reusing the id and token Secret and re-driving steps 3-5 idempotently
+  (create-or-adopt the BMH-named DataImage whose attempt-id label identifies the
+  current attempt, idempotent BMH patch) — rather than minting a fresh attempt
+  while the previous ISO may still be booting.
+- **A retired attempt is never resumed.** On retry, the failed attempt's
   `PreProvisioningAttempt` is cleared in the same update that sets
-  `RetryNotBefore`, so recovery cannot mistake the retired attempt (token
-  already invalidated) for an in-flight one. Recovery distinguishes three
-  post-failure states purely from persisted status: attempt set = resume;
-  attempt unset + `RetryNotBefore` in the future = wait out the backoff;
-  attempt unset + `RetryNotBefore` reached = mint the next attempt. The backoff
-  remainder is recomputed from `RetryNotBefore` each reconcile, so a restart
-  that loses the in-memory `RequeueAfter` still honors it.
+  `RetryNotBefore`, so recovery cannot mistake the retired attempt (token already
+  invalidated) for an in-flight one — it falls to the backoff/mint cases above.
+  The backoff remainder is recomputed from `RetryNotBefore` each reconcile, so a
+  restart that loses the in-memory `RequeueAfter` still honors it.
 - **BootTime marks a real boot, and is written last.** `PreProvisioningBootTime`
   — the timeout anchor — is stamped only after the BMH boot request is confirmed
   applied. A resumed attempt with steps 3-4 complete but no BootTime verifies the
   BMH is booting the expected ISO, then stamps it; the clock cannot start before
-  the host was actually asked to boot.
+  the host was asked to boot.
 - **Timeout still bounds a stuck resume.** An in-flight attempt whose
   `PreProvisioningBootTime` + `timeout` has elapsed is treated as timed out and
   enters the retry/terminal branch — never a silent re-mint.
 
-Each partial-write window — "token Secret written, status not" (asserts the
-pending Secret is adopted by owner + label, not re-minted); "status written,
-DataImage not"; "DataImage created, BMH not patched"; "BMH patched, BootTime not
-stamped"; and "retry recorded (`RetryNotBefore` set, attempt cleared), restarted
-mid-backoff" (asserts the remaining backoff is honored and exactly one fresh
-attempt is then minted) — is covered by its own **fault-injection test** that
-kills the reconcile at that point and asserts the next reconcile resumes the same
-attempt (no new token, no duplicate boot, exactly one booting ISO).
+Each partial-write window — "token Secret written, status not" (pending Secret
+adopted by owner + label, not re-minted); "status written, DataImage not";
+"DataImage created, BMH not patched"; "BMH patched, BootTime not stamped"; and
+"retry recorded (`RetryNotBefore` set, attempt cleared), restarted mid-backoff"
+(remaining backoff honored, exactly one fresh attempt minted) — is covered by its
+own **fault-injection test** that kills the reconcile at that point and asserts
+the next reconcile resumes the same attempt (no new token, no duplicate boot,
+exactly one booting ISO).
 
 ### Key Implementation Details in the IBI Operator
 
@@ -659,16 +698,14 @@ the result back to the hub via HTTP.
 
 **This depends on `install-rhcos-and-restore-seed.service` being a
 `Type=oneshot` unit** (which the IBI seed-restore service is): a oneshot unit
-does not reach `active`/exit until its `ExecStart` finishes, so its `Result`
-property is a *terminal* verdict by the time the reporter reads it. `After=` only
-orders start-up — it does **not** wait for a `Type=simple` (or other
-long-running) unit to finish, so a non-oneshot unit could let the reporter read a
-non-failure `Result` while preparation is still running and send a premature
-"success". If a future base changes that unit's type, the design must gate on an
-explicit completion sentinel (a dedicated oneshot unit ordered `After=` the prep
-service, whose own terminal `Result` the reporter reads) rather than the prep
-service's live state. The reporter contract: read a terminal result, never a
-mid-flight one.
+does not reach `active`/exit until its `ExecStart` finishes, so its `Result` is a
+*terminal* verdict when the reporter reads it. `After=` only orders start-up — it
+does **not** wait for a `Type=simple` unit to finish, so a non-oneshot prep unit
+could let the reporter read a non-failure `Result` mid-flight and send a
+premature "success". If a future base changes that unit's type, the design must
+gate on an explicit completion sentinel (a dedicated oneshot unit ordered
+`After=` the prep service, whose terminal `Result` the reporter reads) rather
+than the prep service's live state.
 
 ```yaml
 # Generated by the IBI Operator, injected as ignition override
@@ -711,17 +748,12 @@ systemd:
         # any older base the ExecStart must wrap the send in its own retry loop.
         Type=oneshot
         ExecStart=/usr/local/bin/ibi-prep-callback
-        # The retry budget is an ABSOLUTE deadline inside the script (a
-        # wall-clock loop), not per-attempt timers, sized from the operator's
-        # PreProvisioningConfig.Timeout (default 60m, delivered as
-        # CALLBACK_BUDGET_SECS) so callbacks stay alive for the whole window the
-        # operator waits. TimeoutStartSec/Restart alone cannot bound total
-        # effort: TimeoutStartSec caps a SINGLE start, and Restart=on-failure
-        # would relaunch with no ceiling on cumulative time. So the script owns
-        # the budget (retries curl until success or deadline, then exits). It is
-        # DISABLED here (infinity) because a fixed cap baked into the shared ISO
-        # would truncate a host-specific budget; the script's persisted deadline
-        # is the real bound. Restart + StartLimit remain a crash backstop only.
+        # TimeoutStartSec is DISABLED (infinity): a fixed cap baked into the
+        # shared ISO would truncate a host-specific budget. The real bound is the
+        # script's ABSOLUTE wall-clock deadline (CALLBACK_BUDGET_SECS, from
+        # PreProvisioningConfig.Timeout, default 60m); TimeoutStartSec caps only
+        # a single start and Restart alone can't bound cumulative time. Restart +
+        # StartLimit remain a crash backstop only.
         TimeoutStartSec=infinity
         Restart=on-failure
         RestartSec=30
@@ -772,24 +804,16 @@ PAYLOAD=$(jq -nc \
   --arg message "${MSG}" \
   '{attempt: $attempt, status: $status, message: $message}')
 
-# Retry against an ABSOLUTE wall-clock deadline, not a per-attempt timer. This
-# bounds cumulative effort regardless of how many attempts fail, which neither
-# TimeoutStartSec nor Restart= can do alone. Exit 0 on first success; exit
-# non-zero if the deadline passes (Restart is a crash backstop only, bounded by
-# StartLimit).
-#
-# The budget MUST cover the operator's whole wait window. The operator waits up
-# to PreProvisioningConfig.Timeout (default 60m); if the host stopped retrying
-# after a fixed ~10m, a hub unreachable for 10-59m after prep succeeds would
-# never receive the already-produced result and the operator would time out a
-# host that actually succeeded. So the operator delivers CALLBACK_BUDGET_SECS
-# per-host (effective timeout minus a small margin so the last send precedes the
-# operator's own deadline); the script uses that, not a hardcoded constant.
-#
-# CALLBACK_BUDGET_SECS is REQUIRED (see env file below) with deliberately NO
-# silent fallback: a missing budget is a delivery bug, and defaulting to a short
-# window would reintroduce the "host stops before the operator's timeout"
-# failure this value prevents. Fail loudly instead.
+# Retry against an ABSOLUTE wall-clock deadline (not a per-attempt timer): this
+# bounds cumulative effort, which neither TimeoutStartSec nor Restart= can do
+# alone. Exit 0 on first success; exit non-zero past the deadline (Restart is a
+# crash backstop only). The budget MUST cover the operator's whole wait window
+# (PreProvisioningConfig.Timeout, default 60m); a shorter fixed cap would let a
+# host that succeeded but couldn't reach a briefly-unreachable hub get timed out.
+# So the operator delivers CALLBACK_BUDGET_SECS per-host (effective timeout minus
+# a small margin) and the script uses that, not a hardcoded constant. It is
+# REQUIRED with deliberately NO silent fallback — a missing budget is a delivery
+# bug, and a short default would reintroduce the very failure it prevents.
 : "${CALLBACK_BUDGET_SECS:?CALLBACK_BUDGET_SECS not delivered}"
 #
 # Anchor the deadline to the host's BOOT time, not this script's first-run time.
@@ -881,13 +905,10 @@ not what a normal provisioned boot offers:
   a live-iso boot as they do for a normal deploy, so the design must not depend
   on them to carry the ignition override.
 
-**Recommended path:** bake a generic callback client into the ISO via
-`ignitionConfigOverride` at build time, and deliver the per-server callback URL +
-token at boot through a mechanism the client reads itself. Because the exact
-behavior of `live-iso` + `DataImage` + config-drive discovery is version-dependent
-in BMO/Ironic, this path **must be covered by a version-pinned integration test**
-against the supported version rather than assumed; if that test cannot pass, the
-fallback is a unique per-ICI ISO with the URL/token baked directly into
+Because the exact behavior of `live-iso` + `DataImage` + config-drive discovery
+is version-dependent in BMO/Ironic, this recommended path **must be covered by a
+version-pinned integration test** rather than assumed; if that test cannot pass,
+the fallback is a unique per-ICI ISO with the URL/token baked directly into
 `ignitionConfigOverride`. Tracked in [Open Question 2](#open-questions).
 
 #### Host network configuration for the callback
@@ -956,17 +977,12 @@ On receiving a callback:
 6. Trigger a reconciliation of the ICI (the reconciler picks up the
    result and proceeds with the BMH state transition)
 
-The endpoint is authenticated with a **per-attempt** bearer token generated when
-the pre-provisioning phase starts. It is presented in an `Authorization: Bearer
-<token>` header (not in the URL query or path), so it does not leak into
-image-server access logs, proxy logs, or the ISO's cloud-init/journal output. The
-token is stored only in a per-ICI Secret owned by the ICI (not in `status`, which
-is readable by anyone with `get` on the ICI), delivered inside the ignition
-overlay, compared in constant time on receipt, and invalidated once a terminal
-callback is accepted or the attempt times out. A fresh token is minted every boot
-attempt so one captured from an earlier attempt cannot drive a later one. Where
-supported, mutual TLS (a client certificate in the ignition overlay) is preferred
-over the bearer token. See [Challenge 3](#3-callback-authentication-and-security).
+The endpoint is authenticated with a **per-attempt** bearer token minted when the
+pre-provisioning phase starts, carried only in an `Authorization: Bearer` header
+and invalidated once a terminal callback is accepted or the attempt times out. The
+full token handling — header-not-URL, Secret-not-status, constant-time comparison,
+per-attempt expiry, and mTLS where available — is detailed in
+[Challenge 3](#3-callback-authentication-and-security).
 
 #### 3. BMH Image Configuration for ISO Boot
 
@@ -995,17 +1011,16 @@ preparation service within the ISO handles the actual disk installation.
 the exact artifact built and verified — a mutable HTTPS URL alone can be swapped
 for a stale or tampered ISO between build and boot. Because Ironic's `live-iso`
 path does **not** reliably enforce the BMH `Image.Checksum` the way the normal
-deploy path does, the operator does not rely solely on populating `Checksum`
-above: before setting `spec.image`, it **streams the ISO bytes from `ISOURL`**
-over HTTPS and computes the SHA-256 **over those bytes**, comparing to
-`ISODigest` and failing closed with `PreProvisioningConfigInvalid` on mismatch.
-A published `.sha256` **sidecar is explicitly not trusted**: comparing sidecar
-text to `ISODigest` only checks that two pieces of metadata agree, not that
-`ISOURL` returns those bytes — a stale or mispublished sidecar would pass while
-the URL serves an ISO that was never hashed. The bytes handed to the BMC are the
-bytes that must be hashed. This digest is the same value the seed-generation
-workflow records in `SeedGenerationStatus.ISODigest`, so the two proposals pin to
-one artifact end to end.
+deploy path does, the operator does not rely on populating `Checksum` above:
+before setting `spec.image`, it **streams the ISO bytes from `ISOURL`** and
+computes the SHA-256 **over those bytes**, comparing to `ISODigest` and failing
+closed with `PreProvisioningConfigInvalid` on mismatch. A published `.sha256`
+**sidecar is explicitly not trusted** — comparing sidecar text to `ISODigest`
+only checks that two pieces of metadata agree, not that `ISOURL` returns those
+bytes; the bytes handed to the BMC are the bytes that must be hashed. This digest
+is the same value the seed-generation workflow records in
+`SeedGenerationStatus.ISODigest`, pinning both proposals to one artifact end to
+end.
 
 **Restricting `ISOURL` before the operator fetches it.** Because `isoURL` is
 overridable through `hwMgmtParameters`, an untrusted caller could otherwise point
@@ -1016,46 +1031,46 @@ checks **before any byte of `ISOURL` is fetched**, failing closed with
 `PreProvisioningConfigInvalid`:
 
 - **Origin allowlist.** `ISOURL` must resolve to an operator-owned or
-  allowlisted ISO origin (the seed-generation upload origins plus any
-  operator-configured additions); a URL outside that set is rejected before the
-  fetch, so the operator never requests a caller-chosen host. The allowlist is
-  operator configuration, not template/`ProvisioningRequest` input, so a request
-  author cannot widen it.
+  allowlisted ISO origin (seed-generation upload origins plus operator-configured
+  additions); a URL outside that set is rejected before the fetch, so the
+  operator never requests a caller-chosen host. The allowlist is operator
+  configuration, not template/`ProvisioningRequest` input, so a request author
+  cannot widen it.
 - **Mandatory digest for automated boot.** `ISODigest` is **required** whenever
-  the operator drives an automated boot from a caller-influenceable `ISOURL`;
-  URL-only trust is not accepted. A missing digest is rejected up front, so the
-  bytes handed to the BMC are always pinned to a verified artifact.
+  the operator drives an automated boot; URL-only trust is not accepted. A
+  missing digest is rejected up front, so the bytes handed to the BMC are always
+  pinned to a verified artifact.
 
-**The operator's pre-fetch is necessary but not sufficient on its own — the
-`ISOURL` must also be immutable.** There is an unavoidable time-of-check /
-time-of-use gap: the operator verifies the bytes at `ISOURL` *before* setting
-`spec.image`, but the BMC (via Ironic) fetches them *later*, and BMO's
-`live-iso` path passes only `imageData.URL` as the Ironic `boot_iso` while
-clearing the checksum fields — so nothing in the boot path re-binds what the
-BMC actually pulls. If the content at `ISOURL` changes after the check, the BMC
+**The operator's pre-fetch is necessary but not sufficient — the `ISOURL` must
+also be immutable.** There is an unavoidable time-of-check/time-of-use gap: the
+operator verifies the bytes at `ISOURL` *before* setting `spec.image`, but the
+BMC fetches them *later*, and BMO's `live-iso` path passes only `imageData.URL`
+as the Ironic `boot_iso` while clearing the checksum fields — nothing in the boot
+path re-binds what the BMC pulls. If the content changes after the check, the BMC
 can boot different bytes than were verified. The design therefore **requires
 `ISOURL` to be an immutable, content-addressed reference** (a per-run URL whose
 bytes are never rewritten), not a mutable "latest" URL. The seed-generation
-workflow already satisfies this: it uploads to a **unique per-run path**
-(ProvisioningRequest name + seed image digest + filename), written once and
-never overwritten. Immutability is a **producer-side contract** (the seed
-workflow guarantees it; a generic webhook cannot prove a URL immutable), and the
-pre-fetch then confirms that artifact matches `ISODigest` — immutability closes
-the TOCTOU window, the pre-fetch confirms identity. Because `ISODigest` is
-mandatory for automated boot (above), identity is always verified at check time;
-what a non-immutable `ISOURL` costs is the guarantee that the BMC's *later* fetch
-pulls those same bytes. A deployment that cannot guarantee an immutable,
-allowlisted URL therefore cannot offer automated IBI pre-provisioning through
-this path — it is rejected up front, not silently downgraded to URL-only trust.
+workflow satisfies this, uploading to a **unique per-run path**
+(ProvisioningRequest name + seed image digest + filename), written once and never
+overwritten. Immutability is a **producer-side contract** (a generic webhook
+cannot prove a URL immutable) that closes the TOCTOU window, while the mandatory
+`ISODigest` pre-fetch confirms identity at check time. A deployment that cannot
+guarantee an immutable, allowlisted URL therefore cannot offer automated IBI
+pre-provisioning through this path — it is rejected up front, not silently
+downgraded to URL-only trust.
 
 The HTTPS client used for this fetch trusts the **same private CA as the boot**:
 when `ISOServerCACertRef` is set, the operator reads the `ca-bundle.crt` key from
 that ConfigMap (resolved in the ICI's namespace, requiring `get` on `configmaps`)
-and uses it as the root pool for the verification request; otherwise the system
-trust store. Without this, digest verification against a private-CA ISO server
-would fail the TLS handshake before the BMH boots. This is distinct from the
-BMC's own trust of the ISO server (a pre-installed prerequisite, out of scope) —
-`ISOServerCACertRef` configures the *operator's* client, not the BMC's.
+as the root pool for the verification request; otherwise the system trust store.
+Seed generation emits this bundle as a namespaced, keyed
+`SeedGenerationStatus.ISOServerCACertRef` in the O-Cloud Manager namespace under
+`ca-bundle.crt`; when rendering the ICI the O-Cloud Manager controller copies it
+into the ICI namespace under the same key so this name-only reference resolves.
+Without it, digest verification against a private-CA ISO server fails the TLS
+handshake before the BMH boots. This is distinct from the BMC's own trust of the
+ISO server (a pre-installed prerequisite, out of scope) — `ISOServerCACertRef`
+configures the *operator's* client, not the BMC's.
 
 #### 4. BMH State Transition After Pre-Provisioning
 
@@ -1108,13 +1123,12 @@ configured `Timeout` (default: 60m) on each reconciliation.
 
 **The timeout must be self-triggering.** A callback is the only external event
 that wakes the reconciler; if none arrives, nothing would re-enqueue the ICI and
-it would remain `PreProvisioningInProgress` forever. While an attempt is in
-flight, every reconcile therefore returns `RequeueAfter` set to the remaining
-time until `PreProvisioningBootTime + Timeout` (bounded to a minimum floor so
-clock skew cannot produce a zero/negative delay and a tight requeue loop),
-guaranteeing a reconcile fires at — or just after — the deadline even with no
-callback, no BMH change, and no other watched event. The no-callback path is
-covered by an envtest that advances the fake clock past the deadline and asserts
+it would stay `PreProvisioningInProgress` forever. While an attempt is in flight,
+every reconcile therefore returns `RequeueAfter` set to the time remaining until
+`PreProvisioningBootTime + Timeout` (bounded to a minimum floor so clock skew
+cannot produce a zero/negative delay and a tight requeue loop), guaranteeing a
+reconcile fires at the deadline even with no callback, BMH change, or other
+watched event. An envtest advances the fake clock past the deadline and asserts
 the transition to `PreProvisioningTimedOut`.
 
 **Timeout and callback compete for the same terminal state.** The timeout
@@ -1168,26 +1182,24 @@ The O-Cloud Manager changes are minimal:
    `hwMgmtDefaults` / `hwMgmtParameters` and populate the
    `ImageClusterInstall.spec.preProvisioning` fields. The **preferred** path is
    for SiteConfig to render `preProvisioning` into the ICI at creation time, so
-   the field is present before the IBI Operator reconciles the ICI. If instead it
-   must be patched onto an ICI SiteConfig already created, the patch introduces a
-   race: the IBI Operator could reconcile the ICI (and begin a normal,
-   non-pre-provisioning install) before the patch lands. The design therefore
-   requires that on the patch-after-create path, IBI reconciliation is **gated**
-   until `preProvisioning` is present — e.g. the ICI is created paused/annotated
-   and the O-Cloud Manager clears the gate only after the patch is applied — so
-   the operator never observes a pre-provisioning ICI without its spec.
+   the field is present before the IBI Operator reconciles it. Patching it onto an
+   already-created ICI instead races the IBI Operator, which could begin a normal,
+   non-pre-provisioning install before the patch lands; on that path IBI
+   reconciliation is therefore **gated** until `preProvisioning` is present (e.g.
+   the ICI is created paused/annotated and the O-Cloud Manager clears the gate
+   only after patching), so the operator never observes a pre-provisioning ICI
+   without its spec.
 2. **Validation**: Verify ConfigMaps referenced by `ibiPreProvisioning`
    exist and are valid during ClusterTemplate validation.
 3. **Status handoff (new controller logic)**: define how the ICI's
    pre-provisioning status maps onto `ProvisioningRequest` conditions and
-   `provisioningStatus`. This is a real gap: the ProvisioningRequest controller
-   today gates cluster-install progress on a fixed set of `ClusterInstance`
-   conditions (`ClusterInstanceValidated`, `RenderedTemplates`,
-   `RenderedTemplatesValidated`, `RenderedTemplatesApplied`) and does **not**
-   look at `ImageClusterInstall` status, so without an explicit handoff the
-   request could advance to (or report) cluster installation while
-   pre-provisioning is still pending or has failed. The controller must
-   therefore, **before** treating hardware as ready, block on the ICI
+   `provisioningStatus`. This is a real gap: the controller today gates
+   cluster-install progress on a fixed set of `ClusterInstance` conditions
+   (`ClusterInstanceValidated`, `RenderedTemplates`, `RenderedTemplatesValidated`,
+   `RenderedTemplatesApplied`) and does **not** look at `ImageClusterInstall`
+   status, so without an explicit handoff the request could advance to cluster
+   installation while pre-provisioning is still pending or has failed. Before
+   treating hardware as ready, the controller must block on the ICI
    pre-provisioning state and translate it:
 
    | ICI pre-provisioning reason | PR `HardwareProvisioned` condition | PR `provisioningStatus.provisioningPhase` |
@@ -1199,28 +1211,27 @@ The O-Cloud Manager changes are minimal:
    | `PreProvisioningTimedOut` | `False`, reason `TimedOut` | `failed` |
 
    Pre-provisioning is modelled as part of the hardware-provisioning gate: the
-   PR does not proceed to (or report) cluster installation until the ICI reports
+   PR does not proceed to cluster installation until the ICI reports
    `PreProvisioningSucceeded`. Crucially, `PreProvisioningRetrying` is
    **non-terminal** — the PR keeps `progressing` across a failed attempt's
    backoff, so the configured `MaxRetries`/`RetryBackoff` budget can be used
-   without the PR prematurely latching `failed`. Only
+   without prematurely latching `failed`. Only
    `PreProvisioningFailed`/`PreProvisioningTimedOut` (emitted after the budget is
-   exhausted) drive the PR to a terminal `failed` `provisioningStatus` with the
-   ICI message surfaced. `MaxRetries` and `RetryBackoff` are carried in
-   `ibiPreProvisioning` (same `hwMgmtDefaults`/`hwMgmtParameters` passthrough as
-   the other fields, present in the ClusterTemplate schema). This mapping is the
-   contract between the two controllers and must be covered by an integration
-   test, including the retry path.
+   exhausted) drive the PR to terminal `failed`, surfacing the ICI message.
+   `MaxRetries`/`RetryBackoff` ride the same
+   `hwMgmtDefaults`/`hwMgmtParameters` passthrough as the other fields. This
+   mapping is the contract between the two controllers and must be covered by an
+   integration test, including the retry path.
 4. **Watch `ImageClusterInstall` to enqueue the owning
    `ProvisioningRequest`.** The item-3 mapping only runs when the PR reconciles,
-   and pre-provisioning transitions (callback success/failure, timeout, retry)
+   but pre-provisioning transitions (callback success/failure, timeout, retry)
    update **`ImageClusterInstall` status and nothing else**. The
    `ProvisioningRequestReconciler` today watches `NodeAllocationRequest` and
    `ClusterInstance` but **not** `ImageClusterInstall`, so without a new watch a
-   callback- or timeout-driven ICI status change would not wake the PR, and the
-   request would sit stale — never advancing on success nor reporting failure —
-   until some unrelated event requeued it. The reconciler therefore adds a watch
-   on `ImageClusterInstall` with a mapper that enqueues the owning
+   callback- or timeout-driven ICI status change would leave the request stale —
+   never advancing on success nor reporting failure — until some unrelated event
+   requeued it. The reconciler therefore adds a watch on
+   `ImageClusterInstall` with a mapper that enqueues the owning
    `ProvisioningRequest` (resolved via the ICI→ClusterInstance→PR ownership
    chain, or a field index on the PR name). Consistent with **DD-002**, the
    enqueued `NamespacedName` omits the namespace because `ProvisioningRequest` is
@@ -1299,7 +1310,12 @@ spec:
                 required: [name]
               preProvisioningTimeout:
                 type: string
-            required: [isoURL]
+              maxRetries:
+                type: integer
+                minimum: 0
+              retryBackoff:
+                type: string
+            required: [isoURL, isoDigest]
         type: object
     type: object
 ```
@@ -1315,21 +1331,21 @@ disconnected environments, the server may be on a different network
 
 **Mitigation**: The IBI Operator's image server is already exposed via a Route
 or NodePort for serving config ISOs to BMHs; the same network path that lets
-BMH/Ironic fetch ISOs from the hub can carry the callback, using the same
+BMH/Ironic fetch ISOs from the hub can carry the callback over the same
 externally-reachable hostname. If the provisioning network is isolated, a Route
-or LoadBalancer service exposes the callback endpoint — the same requirement as
-DataImage ISO serving.
+or LoadBalancer exposes the callback endpoint — the same requirement as DataImage
+ISO serving.
 
 This reachability is an explicit **precondition**, not an assumption. BMH/Ironic
 fetches ISOs from the hub's *service* network via the BMC, whereas the callback
 originates from the *booted host* on the provisioning network — these can differ,
 so "Ironic can pull the ISO" does not prove "the host can reach the callback."
 Before booting, the IBI Operator validates that the resolved callback endpoint is
-DNS-resolvable, its hostname is routable from the target network, and its TLS
-certificate chains to a CA the host will trust (the same bundle injected via
+DNS-resolvable, its hostname routable from the target network, and its TLS
+certificate chains to a CA the host will trust (the bundle injected via
 `additionalTrustBundle`, see [Challenge 7](#7-hub-ca-trust-on-the-pre-provisioned-server)).
 If these fail, the ICI reports a configuration error up front rather than booting
-a server that can never call back. A `PreProvisioningTimedOut` is documented as
+a server that can never call back. `PreProvisioningTimedOut` is documented as
 ambiguous between "preparation never finished" and "callback could not be
 delivered," and the operator surfaces both possibilities.
 
@@ -1343,20 +1359,19 @@ temporarily unavailable. A missed callback would leave the ICI stuck in
 **Mitigation**: The `ibi-prep-callback` script retries curl against an
 **absolute wall-clock deadline derived from `CALLBACK_BUDGET_SECS`** (a loop with
 a per-attempt `--max-time`), so cumulative retry effort is bounded regardless of
-how many individual attempts fail — something `TimeoutStartSec` (per single
-start) and `Restart=on-failure` (unbounded relaunches) cannot guarantee alone.
+how many attempts fail — something `TimeoutStartSec` (per single start) and
+`Restart=on-failure` (unbounded relaunches) cannot guarantee alone.
 `CALLBACK_BUDGET_SECS` is the per-host budget delivered on the data carrier,
 derived from `PreProvisioningConfig.Timeout` (default 60m) anchored to
 `PreProvisioningBootTime`, so the host's retry window tracks the operator's
 timeout rather than a fixed value that could expire before it (a hard-coded 10m
-deadline would give up ~50m early on a default-timeout host and mark a prepared
-server as timed out). The script fails closed if `CALLBACK_BUDGET_SECS` is
-absent. `Restart=on-failure` plus `StartLimitIntervalSec`/`StartLimitBurst`
-remain only a bounded backstop for an outright script crash. This covers
-transient network issues during boot. Additionally, the operator's reconcile
-loop checks the timeout — if no callback arrives within it, the ICI transitions
-to `PreProvisioningTimedOut` — so the operator can distinguish "callback never
-arrived" (timeout) from "preparation failed" (failure callback).
+deadline would give up ~50m early on a default-timeout host). The script fails
+closed if `CALLBACK_BUDGET_SECS` is absent; `Restart=on-failure` plus
+`StartLimitIntervalSec`/`StartLimitBurst` remain only a bounded backstop for an
+outright script crash. Additionally, the operator's reconcile loop checks the
+timeout — if no callback arrives within it, the ICI transitions to
+`PreProvisioningTimedOut` — so it can distinguish "callback never arrived"
+(timeout) from "preparation failed" (failure callback).
 
 ### 3. Callback authentication and security
 
@@ -1404,44 +1419,39 @@ viable options remain:
   callback client (the `ibi-prep-callback` script and its
   `ibi-prep-callback.service` unit — identical for every server). The per-server
   data (`/etc/ibi-callback/env` and the root-only `/etc/ibi-callback/auth.cfg`)
-  is delivered at boot through a concrete carrier, not "a well-known location":
+  is delivered at boot through a concrete carrier:
 
   - **Carrier**: a per-ICI `DataImage` (a tiny ISO9660/FAT image the IBI
     Operator builds and attaches as an additional virtual-media device), used
-    **purely as a data device**, not as an ignition overlay. The `DataImage` is
-    **named and namespaced after the BareMetalHost** (BMO v0.13.2's
-    `DataImageReconciler` resolves the owning host by matching the request
-    name/namespace to a `BareMetalHost`, so a differently named carrier never
-    attaches); the attempt id is bound through the carrier content and an
-    `ibi.openshift.io/attempt` label, not the resource name. Its filesystem is
-    labelled `ibi-callback` so it is addressable by label regardless of device
-    enumeration order. An integration test verifies BMO attaches the image and
-    the guest sees the `ibi-callback` device label.
+    **purely as a data device**, not as an ignition overlay. It is **named and
+    namespaced after the BareMetalHost** (BMO v0.13.2's `DataImageReconciler`
+    resolves the owning host by matching request name/namespace to a
+    `BareMetalHost`, so a differently named carrier never attaches); the attempt
+    id is bound through the carrier content and an `ibi.openshift.io/attempt`
+    label, not the resource name. Its filesystem is labelled `ibi-callback` so it
+    is addressable regardless of device enumeration order. An integration test
+    verifies BMO attaches the image and the guest sees the `ibi-callback` label.
   - **Mount + materialize**: a baked-in `ibi-callback-data.service`
     (`Type=oneshot` **with `RemainAfterExit=yes`**) mounts
     `/dev/disk/by-label/ibi-callback` read-only, copies `env` to
     `/etc/ibi-callback/env` (0644) and `auth.cfg` to `/etc/ibi-callback/auth.cfg`
     (0600, root-only), then unmounts. Copying to a root-only path — rather than
-    reading the token off the shared virtual-media device — keeps the 0600
-    guarantee. `RemainAfterExit=yes` is load-bearing: without it a `Type=oneshot`
-    unit goes `inactive` the moment `ExecStart` returns, and since the reporter
-    declares `Requires=` on it, systemd would treat the dependency as inactive
-    and could stop the reporter before it runs. With it, the data unit stays
-    `active (exited)`, so the `Requires=`/`After=` pair holds for the whole boot.
-  - **Ordering and dependency (runtime, not `[Install]`)**: the dependency is a
-    **runtime** relationship in the reporter's `[Unit]` section —
-    `ibi-prep-callback.service` declares `Requires=ibi-callback-data.service` and
-    `After=ibi-callback-data.service`. Relying on `RequiredBy=`/`WantedBy=` in the
-    *data* unit's `[Install]` section is a mistake: `[Install]` directives take
-    effect only when the unit is `enable`d, so a missed enablement would let the
-    reporter run before (or without) its data files. Both units are also marked
-    `enabled: true` so they are active on first boot, but the correctness
-    guarantee comes from the runtime `Requires=`/`After=`, not enablement. With
-    `Requires=`, if the data mount fails (device absent) the reporter never starts,
-    surfacing as a timeout rather than a callback with an empty URL/token. A
-    systemd integration test must assert the data unit stays `active (exited)`
-    after materialization and the reporter then actually runs (not just that
-    ordering is declared).
+    reading the token off the shared device — keeps the 0600 guarantee.
+    `RemainAfterExit=yes` is load-bearing: without it a `Type=oneshot` unit goes
+    `inactive` when `ExecStart` returns, and the reporter's `Requires=` could then
+    be treated as inactive and stop the reporter before it runs; with it the data
+    unit stays `active (exited)` so the `Requires=`/`After=` pair holds for the
+    whole boot.
+  - **Ordering and dependency (runtime, not `[Install]`)**: the reporter's
+    `[Unit]` section declares `Requires=`/`After=ibi-callback-data.service`.
+    Relying on `RequiredBy=`/`WantedBy=` in the *data* unit's `[Install]` section
+    would be a mistake — `[Install]` takes effect only when the unit is `enable`d,
+    so a missed enablement would let the reporter run without its data files; the
+    correctness guarantee comes from the runtime `Requires=`/`After=`, not
+    enablement. With `Requires=`, a failed data mount (device absent) stops the
+    reporter from starting, surfacing as a timeout rather than a callback with an
+    empty URL/token. A systemd integration test asserts the data unit stays
+    `active (exited)` and the reporter then runs.
 
   This keeps the ISO reusable. It depends on version-specific `live-iso` +
   DataImage behavior in BMO/Ironic and therefore **must be backed by a
@@ -1499,47 +1509,40 @@ inconsistent state (partial RHCOS installation, incomplete seed image pull).
 **Mitigation**: IBI preparation is idempotent — rebooting from the ISO restarts
 the process. On failure callback (or timeout), the IBI Operator first tears the
 attempt down cleanly (clears `spec.image`, removes the per-attempt data carrier,
-powers the BMH off, invalidates the per-attempt token — leaving the host **not**
+powers the BMH off, invalidates the token — leaving the host **not**
 `externallyProvisioned`), records the retry-pending marker
 (`Status.RetryNotBefore`) while **clearing** the retired `PreProvisioningAttempt`
 so the invalidated token is never re-driven, then retries with a **fresh
-attempt**: new token and marker, and `Status.PreProvisioningBootTime` reset so
-the timeout is measured from the new boot.
+attempt**: new token and marker, and `Status.PreProvisioningBootTime` reset so the
+timeout is measured from the new boot.
 
-**Retry is explicitly bounded — there is no infinite retry and no retry
-after a terminal result.** `PreProvisioningConfig` carries the retry policy
-so the operator does not have to invent unbounded behavior:
+**Retry is explicitly bounded — no infinite retry, no retry after a terminal
+result.** `PreProvisioningConfig` carries the retry policy:
 
 - `MaxRetries` (default: `0`, a single attempt) caps additional attempts after
   the first; retries stop once this budget is exhausted.
 - `RetryBackoff` (default: `5m`) is the delay between a failed attempt's teardown
   and the next boot. It is persisted durably as `Status.RetryNotBefore` (=
-  failure time + `RetryBackoff`) in the same update that clears the retired
-  `PreProvisioningAttempt`, and also applied as a `RequeueAfter` so the retry is
-  self-triggering. The `RequeueAfter` is only a wake-up hint; `RetryNotBefore` is
-  the source of truth, so an operator restart that loses the in-memory timer
-  still waits out the remaining backoff and never re-drives the retired attempt.
+  failure time + `RetryBackoff`) and also applied as a `RequeueAfter` so the retry
+  is self-triggering. The `RequeueAfter` is only a wake-up hint; `RetryNotBefore`
+  is the source of truth, so an operator restart that loses the in-memory timer
+  still waits out the remaining backoff.
 - The per-attempt `Timeout` bounds each boot; the operator also enforces an
   overall ceiling of `(MaxRetries + 1) × Timeout + MaxRetries × RetryBackoff` so
   total retry effort is finite even in the worst case.
 
-**A failed attempt with budget remaining is a distinct, non-terminal state —
-`PreProvisioningFailed`/`PreProvisioningTimedOut` are *not* recorded until the
-budget is exhausted.** Those two reasons are terminal and map the
-`ProvisioningRequest` to `failed`; recording them on an attempt that still owes
-a retry would make the configured budget unusable (the PR would latch `failed`
-before the retry ran). Instead, a failed/timed-out attempt with
-`PreProvisioningRetryCount < MaxRetries` transitions to the non-terminal
-`PreProvisioningRetrying` reason, the PR keeps `progressing`, and the operator
-re-boots a fresh attempt after `RetryBackoff`. Only once the budget is exhausted
-does the operator write the terminal result — via the compare-and-swap above —
-and let the PR map to `failed`.
-
+**A failed attempt with budget remaining is non-terminal.**
+`PreProvisioningFailed`/`PreProvisioningTimedOut` are terminal (mapping the PR to
+`failed`) and are recorded **only** once the budget is exhausted — recording them
+while a retry is still owed would make the configured budget unusable. A
+failed/timed-out attempt with `PreProvisioningRetryCount < MaxRetries` instead
+transitions to the non-terminal `PreProvisioningRetrying` reason, the PR keeps
+`progressing`, and the operator re-boots a fresh attempt after `RetryBackoff`.
 `Status.PreProvisioningRetryCount` records attempts consumed so the budget
-survives operator restarts. A retry is scheduled **only** from the non-terminal
-`PreProvisioningRetrying` state (reached only after a clean teardown) and **only**
-while budget remains; once a terminal result has been written via the
-compare-and-swap above, no further attempt is booted.
+survives operator restarts; a retry is scheduled only from `PreProvisioningRetrying`
+(reached only after a clean teardown) and only while budget remains. Once a
+terminal result is written via the compare-and-swap above, no further attempt is
+booted.
 
 Each attempt is explicitly bound so a stale signal cannot be mistaken for the
 current one:
@@ -1686,7 +1689,8 @@ repository:
 
 - Validate `PreProvisioning` fields when set:
   - `ISOURL` must be a valid HTTPS URL
-  - `ISODigest`, when set, must match `^sha256:[a-f0-9]{64}$`
+  - `ISODigest` is required whenever `PreProvisioning` is set and must match
+    `^sha256:[a-f0-9]{64}$` (admission rejects a config that omits it)
   - `Timeout` must be a valid duration if provided
   - `MaxRetries` must be `>= 0`; `RetryBackoff`, when set, must be a valid
     non-negative duration
