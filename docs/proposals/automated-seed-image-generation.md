@@ -778,7 +778,7 @@ The controller creates a Kubernetes Job on the hub cluster that builds the live 
    The pull secret is constructed by merging the hub cluster pull secret (`openshift-config/pull-secret`) with the `seedAuthSecretRef` credentials. If `liveISO.pullSecretRef` is provided, its contents are used directly instead of the auto-merged secret. In disconnected environments,
    the pull secret must include credentials for both the local seed image mirror and the OCP release image mirror.
 
-4. **Build the ISO**: Run `openshift-install image-based create image --dir <workdir>`. This pulls the seed image, generates ignition configuration, and produces the `rhcos-ibi.iso` file. This step requires significant ephemeral storage (~15GB for seed image pull + ISO generation).
+4. **Build the ISO**: Run `openshift-install image-based create image --dir <workdir>`. This pulls the seed image, generates ignition configuration, and produces the `rhcos-ibi.iso` file. This step requires significant workspace storage (~15-20GB for seed image pull + ISO generation).
 
 5. **Upload the ISO**: SCP the ISO to the HTTPS server using the SSH credentials from `uploadSecretRef`, pinning the server host key from `knownHosts` with strict checking:
 
@@ -1067,7 +1067,11 @@ type SeedGenerationStatus struct {
     // ISOServerCACertRef is a typed reference to a ConfigMap the controller
     // materializes on completion (in the O-Cloud Manager namespace, named
     // deterministically from the ProvisioningRequest) holding the PEM CA bundle
-    // for the HTTPS ISO server under a well-known key. Populated only when
+    // for the HTTPS ISO server under the well-known key "ca-bundle.crt".
+    // Consumers that resolve the bundle in a different namespace (e.g. the IBI
+    // pre-provisioning flow, which reads ImageClusterInstall's name-only
+    // ISOServerCACertRef under "ca-bundle.crt" in the ICI namespace) copy this
+    // ConfigMap into the target namespace under the same key. Populated only when
     // uploadSecretRef.caCert is present. The controller creates the ConfigMap
     // rather than storing raw PEM here, so downstream consumers (e.g. BMC
     // virtual media configuration) get a stable object reference, not inline
