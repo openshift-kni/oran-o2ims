@@ -12,7 +12,8 @@ spec:
     hwMgmtParameters:
       nodeGroupData:
         - name: master
-        - name: worker
+        - name: worker-dell-r740
+        - name: worker-dell-xr8620t
     policyTemplateParameters: {}
     clusterInstanceParameters:
       clusterName: scale-cluster
@@ -54,7 +55,7 @@ spec:
                   - name: eno1
                     addresses:
                       ipv4: ["192.0.2.18/24"]
-        - name: worker
+        - name: worker-dell-r740
           nodeNetwork:
             config:
               dns-resolver:
@@ -67,15 +68,34 @@ spec:
                 config:
                   - next-hop-address: 192.0.2.254
           nodes:
-            - hostName: worker-1.scale-cluster.example.com
+            - hostName: worker-r740-1.scale-cluster.example.com
               nodeNetwork:
                 interfaces:
                   - name: eno1
                     addresses:
                       ipv4: ["192.0.2.123/24"]
-            - hostName: worker-2.scale-cluster.example.com
+            - hostName: worker-r740-2.scale-cluster.example.com
               nodeNetwork:
                 interfaces:
                   - name: eno1
                     addresses:
                       ipv4: ["192.0.2.51/24"]
+        - name: worker-dell-xr8620t
+          nodeNetwork:
+            config:
+              dns-resolver:
+                config:
+                  search:
+                    - example.com
+                  server:
+                    - 8.8.8.8
+              routes:
+                config:
+                  - next-hop-address: 192.0.2.254
+          nodes:
+            - hostName: worker-xr8620-1.scale-cluster.example.com
+              nodeNetwork:
+                interfaces:
+                  - name: eno1
+                    addresses:
+                      ipv4: ["192.0.2.56/24"]

@@ -17,7 +17,13 @@ spec:
           resourceSelector:
             "resourceselector.clcm.openshift.io/server-type": "R740"
             "resourceselector.clcm.openshift.io/server-colour": "green"
-        - name: worker
+        - name: worker-dell-r740
+          role: worker
+          resourcePoolId: scale-r740-pool
+          resourceSelector:
+            "resourceselector.clcm.openshift.io/server-type": "R740"
+            "resourceselector.clcm.openshift.io/server-colour": "blue"
+        - name: worker-dell-xr8620t
           role: worker
           resourcePoolId: scale-xr8620t-pool
           resourceSelector:

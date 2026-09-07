@@ -34,12 +34,14 @@ import (
 
 var _ = Describe("MNO Scale-Out test", Ordered, Label("mno-scale-out"), func() {
 	const (
-		timeout     = time.Minute * 2
-		interval    = time.Second * 3
-		master      = "master"
-		worker      = "worker"
-		masterCount = 3
-		workerCount = 2
+		timeout            = time.Minute * 2
+		interval           = time.Second * 3
+		master             = "master"
+		workerR740         = "worker-dell-r740"
+		workerXR8620t      = "worker-dell-xr8620t"
+		masterCount        = 3
+		r740WorkerCount    = 2
+		xr8620tWorkerCount = 1
 
 		scalePoolR740   = "scale-r740-pool"
 		scalePoolXR8620 = "scale-xr8620t-pool"
@@ -123,8 +125,8 @@ var _ = Describe("MNO Scale-Out test", Ordered, Label("mno-scale-out"), func() {
 			createdClusterImageSet = true
 		}
 
-		By("Creating 6 BMHs (3 masters + 3 workers: 2 initial + 1 extra for scale-out)")
-		bmhList := scaleBMHs(masterCount, workerCount+1)
+		By("Creating 8 BMHs (3 masters + 2 r740 workers + 1 xr8620t worker + 1 extra xr8620t and 1 extra r740 for scale-out)")
+		bmhList := scaleBMHs(masterCount, r740WorkerCount+1, xr8620tWorkerCount+1)
 		for _, bmhData := range bmhList {
 			bmh := testutils.CreateBareMetalHost(bmhData)
 			bmcSecret := testutils.CreateBMCSecret(bmhData.Name)
@@ -183,7 +185,7 @@ var _ = Describe("MNO Scale-Out test", Ordered, Label("mno-scale-out"), func() {
 		Expect(reqErr).ToNot(HaveOccurred())
 		poolSel = poolSel.Add(*req)
 
-		By("Waiting for all 6 BMHs to be visible")
+		By("Waiting for all 8 BMHs to be visible")
 		Eventually(func() int {
 			bmhListResult := &metal3v1alpha1.BareMetalHostList{}
 			Expect(K8SClient.List(testCtx, bmhListResult,
@@ -195,7 +197,7 @@ var _ = Describe("MNO Scale-Out test", Ordered, Label("mno-scale-out"), func() {
 				}
 			}
 			return available
-		}, timeout, interval).Should(Equal(masterCount + workerCount + 1))
+		}, timeout, interval).Should(Equal(masterCount + r740WorkerCount + 1 + xr8620tWorkerCount + 1))
 
 		By("Waiting for ClusterTemplate reconciliation")
 		Eventually(func() bool {
@@ -204,7 +206,7 @@ var _ = Describe("MNO Scale-Out test", Ordered, Label("mno-scale-out"), func() {
 			return newct.Status.Conditions != nil
 		}, timeout, interval).Should(BeTrue())
 
-		By("Creating initial ProvisioningRequest with 3 masters + 2 workers")
+		By("Creating initial ProvisioningRequest with 3 masters + 2 r740 workers + 1 xr8620t worker")
 		prFromYAML, err := testutils.LoadYAML[provisioningv1alpha1.ProvisioningRequest](resourceDir + "/pr-scale-initial.yaml")
 		Expect(err).ToNot(HaveOccurred())
 		prName = prFromYAML.Name
@@ -218,12 +220,16 @@ var _ = Describe("MNO Scale-Out test", Ordered, Label("mno-scale-out"), func() {
 
 		By("Verifying initial NAR NodeGroup sizes")
 		Expect(K8SClient.Get(testCtx, client.ObjectKeyFromObject(nar), nar)).To(Succeed())
-		verifyNodeGroupSizes(nar, map[string]int{master: masterCount, worker: workerCount})
+		verifyNodeGroupSizes(nar, map[string]int{
+			master:        masterCount,
+			workerR740:    r740WorkerCount,
+			workerXR8620t: xr8620tWorkerCount,
+		})
 
-		By("Waiting for all 5 AllocatedNodes to be created")
+		By("Waiting for all 6 AllocatedNodes to be created")
 		Eventually(func() int {
 			return len(testNonCachingListAllocatedNodesForNAR(testCtx, prName).Items)
-		}, timeout, interval).Should(Equal(masterCount + workerCount))
+		}, timeout, interval).Should(Equal(masterCount + r740WorkerCount + xr8620tWorkerCount))
 
 		By("Waiting for NAR Provisioned=True")
 		Eventually(func() bool {
@@ -250,16 +256,21 @@ var _ = Describe("MNO Scale-Out test", Ordered, Label("mno-scale-out"), func() {
 		Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
 		nodeList := testNonCachingListAllocatedNodesForNAR(testCtx, prName)
 		hostMap := make(map[string]string)
-		masterIdx, workerIdx := 1, 1
+		masterIdx, r740Idx, xr8620tIdx := 1, 1, 1
 		for _, node := range nodeList.Items {
 			hostname := ""
 			switch node.Spec.GroupName {
 			case master:
 				hostname = fmt.Sprintf("master-%d.%s.example.com", masterIdx, clusterName)
 				masterIdx++
-			case worker:
-				hostname = fmt.Sprintf("worker-%d.%s.example.com", workerIdx, clusterName)
-				workerIdx++
+			case workerR740:
+				hostname = fmt.Sprintf("worker-r740-%d.%s.example.com", r740Idx, clusterName)
+				r740Idx++
+			case workerXR8620t:
+				hostname = fmt.Sprintf("worker-xr8620-%d.%s.example.com", xr8620tIdx, clusterName)
+				xr8620tIdx++
+			default:
+				Fail(fmt.Sprintf("unexpected AllocatedNode group %q", node.Spec.GroupName))
 			}
 			hostMap[node.Name] = hostname
 		}
@@ -306,7 +317,7 @@ var _ = Describe("MNO Scale-Out test", Ordered, Label("mno-scale-out"), func() {
 		}
 
 		// Delete BMHs and associated resources
-		bmhList := scaleBMHs(masterCount, workerCount+1)
+		bmhList := scaleBMHs(masterCount, r740WorkerCount+1, xr8620tWorkerCount+1)
 		for _, bmhData := range bmhList {
 			for _, obj := range []client.Object{
 				&metal3v1alpha1.BareMetalHost{ObjectMeta: metav1.ObjectMeta{Name: bmhData.Name, Namespace: bmhData.Namespace}},
@@ -347,33 +358,21 @@ var _ = Describe("MNO Scale-Out test", Ordered, Label("mno-scale-out"), func() {
 		}
 	})
 
-	Describe("Scale-out: add a worker node", func() {
-		It("should increase NAR worker NodeGroup Size after PR update", func() {
-			By("Updating PR to append worker-3 under the worker nodeGroup")
+	Describe("Scale-out: add a worker to each custom pool", func() {
+		It("should increase NAR Size for both worker groups", func() {
+			By("Updating PR to append a host under worker-dell-r740 and worker-dell-xr8620t")
 			Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
 
 			var templateParams map[string]any
 			Expect(json.Unmarshal(pr.Spec.TemplateParameters.Raw, &templateParams)).To(Succeed())
 			ciParams := templateParams["clusterInstanceParameters"].(map[string]any)
 			nodeGroups := ciParams["nodeGroups"].([]any)
-			workerGroup := findNodeGroupByName(nodeGroups, worker)
-			Expect(workerGroup).ToNot(BeNil())
-			workerNodes := workerGroup["nodes"].([]any)
 
-			newWorkerNode := map[string]any{
-				"hostName": fmt.Sprintf("worker-3.%s.example.com", clusterName),
-				"nodeNetwork": map[string]any{
-					"interfaces": []any{
-						map[string]any{
-							"name": "eno1",
-							"addresses": map[string]any{
-								"ipv4": []any{"192.0.2.52/24"},
-							},
-						},
-					},
-				},
-			}
-			workerGroup["nodes"] = append(workerNodes, newWorkerNode)
+			appendWorkerHost(nodeGroups, workerR740,
+				fmt.Sprintf("worker-r740-3.%s.example.com", clusterName), "192.0.2.52/24")
+			appendWorkerHost(nodeGroups, workerXR8620t,
+				fmt.Sprintf("worker-xr8620-2.%s.example.com", clusterName), "192.0.2.57/24")
+
 			ciParams["nodeGroups"] = nodeGroups
 			templateParams["clusterInstanceParameters"] = ciParams
 
@@ -386,34 +385,37 @@ var _ = Describe("MNO Scale-Out test", Ordered, Label("mno-scale-out"), func() {
 			Eventually(func() bool {
 				Expect(K8SClient.Get(testCtx, client.ObjectKeyFromObject(nar), nar)).To(Succeed())
 				sizes := nodeGroupSizeMap(nar)
-				return sizes[worker] == workerCount+1 && sizes[master] == masterCount
+				return sizes[workerR740] == r740WorkerCount+1 &&
+					sizes[workerXR8620t] == xr8620tWorkerCount+1 &&
+					sizes[master] == masterCount
 			}, timeout, interval).Should(BeTrue(),
-				"Worker Size should be 3 and master Size should remain 3")
+				"both worker groups should grow by 1; master Size should remain %d", masterCount)
 		})
 
-		It("should create a new AllocatedNode for the added worker", func() {
-			By("Waiting for 6 AllocatedNodes (3 masters + 3 workers)")
+		It("should create a new AllocatedNode in each scaled worker group", func() {
+			By("Waiting for 8 AllocatedNodes (3 masters + 3 r740 workers + 2 xr8620t workers)")
 			Eventually(func() int {
 				return len(testNonCachingListAllocatedNodesForNAR(testCtx, prName).Items)
-			}, timeout, interval).Should(Equal(masterCount + workerCount + 1))
+			}, timeout, interval).Should(Equal(masterCount + r740WorkerCount + 1 + xr8620tWorkerCount + 1))
 
-			By("Verifying original nodes are preserved and new node is a worker")
+			By("Verifying original nodes are preserved and each worker group gained one node")
 			allNodes := testNonCachingListAllocatedNodesForNAR(testCtx, prName)
-			newWorkerCount := 0
+			newByGroup := map[string]int{}
 			for _, n := range allNodes.Items {
 				if !initialAllocatedNodeNames[n.Name] {
-					Expect(n.Spec.GroupName).To(Equal(worker),
-						"New AllocatedNode should be in the worker group")
-					newWorkerCount++
+					newByGroup[n.Spec.GroupName]++
 				}
 			}
-			Expect(newWorkerCount).To(Equal(1), "Exactly one new worker should be allocated")
+			Expect(newByGroup).To(Equal(map[string]int{
+				workerR740:    1,
+				workerXR8620t: 1,
+			}))
 		})
 	})
 
-	Describe("Scale-in: remove a worker node", func() {
-		It("should decrease NAR worker NodeGroup Size after removing a worker", func() {
-			By("Updating PR to remove worker-3 from the worker nodeGroup")
+	Describe("Scale-in: remove a worker from each custom pool", func() {
+		It("should decrease NAR Size for both worker groups", func() {
+			By("Updating PR to remove the added host from worker-dell-r740 and worker-dell-xr8620t")
 			Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
 
 			var templateParams map[string]any
@@ -421,13 +423,9 @@ var _ = Describe("MNO Scale-Out test", Ordered, Label("mno-scale-out"), func() {
 			ciParams := templateParams["clusterInstanceParameters"].(map[string]any)
 			nodeGroups := ciParams["nodeGroups"].([]any)
 
-			workerGroup := findNodeGroupByName(nodeGroups, worker)
-			Expect(workerGroup).ToNot(BeNil())
-			workerNodes := workerGroup["nodes"].([]any)
+			truncateWorkerHosts(nodeGroups, workerR740, r740WorkerCount)
+			truncateWorkerHosts(nodeGroups, workerXR8620t, xr8620tWorkerCount)
 
-			Expect(len(workerNodes)).To(BeNumerically(">=", workerCount+1),
-				"Should have at least %d workers before scale-in", workerCount+1)
-			workerGroup["nodes"] = workerNodes[:workerCount]
 			ciParams["nodeGroups"] = nodeGroups
 			templateParams["clusterInstanceParameters"] = ciParams
 
@@ -440,9 +438,11 @@ var _ = Describe("MNO Scale-Out test", Ordered, Label("mno-scale-out"), func() {
 			Eventually(func() bool {
 				Expect(K8SClient.Get(testCtx, client.ObjectKeyFromObject(nar), nar)).To(Succeed())
 				sizes := nodeGroupSizeMap(nar)
-				return sizes[worker] == workerCount && sizes[master] == masterCount
+				return sizes[workerR740] == r740WorkerCount &&
+					sizes[workerXR8620t] == xr8620tWorkerCount &&
+					sizes[master] == masterCount
 			}, timeout, interval).Should(BeTrue(),
-				"Worker Size should be %d and master Size should remain %d", workerCount, masterCount)
+				"both worker groups should return to the initial size; master Size should remain %d", masterCount)
 		})
 
 		// NOTE: AllocatedNode deletion is gated on spoke node removal
@@ -467,7 +467,37 @@ func findNodeGroupByName(nodeGroups []any, name string) map[string]any {
 	return nil
 }
 
-func scaleBMHs(masterCount, workerCount int) []testutils.BMHData {
+func appendWorkerHost(nodeGroups []any, groupName, hostName, ipv4 string) {
+	group := findNodeGroupByName(nodeGroups, groupName)
+	Expect(group).ToNot(BeNil(), "nodeGroup %q should exist", groupName)
+	nodes, ok := group["nodes"].([]any)
+	Expect(ok).To(BeTrue(), "nodeGroup %q nodes should be a list", groupName)
+	group["nodes"] = append(nodes, map[string]any{
+		"hostName": hostName,
+		"nodeNetwork": map[string]any{
+			"interfaces": []any{
+				map[string]any{
+					"name": "eno1",
+					"addresses": map[string]any{
+						"ipv4": []any{ipv4},
+					},
+				},
+			},
+		},
+	})
+}
+
+func truncateWorkerHosts(nodeGroups []any, groupName string, keep int) {
+	group := findNodeGroupByName(nodeGroups, groupName)
+	Expect(group).ToNot(BeNil(), "nodeGroup %q should exist", groupName)
+	nodes, ok := group["nodes"].([]any)
+	Expect(ok).To(BeTrue(), "nodeGroup %q nodes should be a list", groupName)
+	Expect(len(nodes)).To(BeNumerically(">=", keep),
+		"nodeGroup %q should have at least %d hosts", groupName, keep)
+	group["nodes"] = nodes[:keep]
+}
+
+func scaleBMHs(masterCount, r740WorkerCount, xr8620tWorkerCount int) []testutils.BMHData {
 	var bmhs []testutils.BMHData
 	for i := 1; i <= masterCount; i++ {
 		bmhs = append(bmhs, testutils.BMHData{
@@ -480,12 +510,23 @@ func scaleBMHs(masterCount, workerCount int) []testutils.BMHData {
 			ResourcePoolId: "scale-r740-pool",
 		})
 	}
-	for i := 1; i <= workerCount; i++ {
+	for i := 1; i <= r740WorkerCount; i++ {
 		bmhs = append(bmhs, testutils.BMHData{
-			Name:           fmt.Sprintf("scale-worker%d", i),
-			Namespace:      "scale-xr8620t-pool",
+			Name:           fmt.Sprintf("scale-worker-r740-%d", i),
+			Namespace:      "scale-r740-pool",
 			MacAddress:     fmt.Sprintf("aa:bb:cc:44:00:%02x", i),
 			BmcAddress:     fmt.Sprintf("redfish://192.168.4.%d/redfish/v1/Systems/1", 100+i),
+			ServerType:     "R740",
+			Colour:         "blue",
+			ResourcePoolId: "scale-r740-pool",
+		})
+	}
+	for i := 1; i <= xr8620tWorkerCount; i++ {
+		bmhs = append(bmhs, testutils.BMHData{
+			Name:           fmt.Sprintf("scale-worker-xr8620t-%d", i),
+			Namespace:      "scale-xr8620t-pool",
+			MacAddress:     fmt.Sprintf("aa:bb:cc:55:00:%02x", i),
+			BmcAddress:     fmt.Sprintf("redfish://192.168.5.%d/redfish/v1/Systems/1", 100+i),
 			ServerType:     "XR8620t",
 			Colour:         "blue",
 			ResourcePoolId: "scale-xr8620t-pool",
@@ -497,16 +538,16 @@ func scaleBMHs(masterCount, workerCount int) []testutils.BMHData {
 func nodeGroupSizeMap(nar *hwmgmtv1alpha1.NodeAllocationRequest) map[string]int {
 	sizes := make(map[string]int)
 	for _, ng := range nar.Spec.NodeGroup {
-		sizes[ng.NodeGroupData.Role] = ng.Size
+		sizes[ng.NodeGroupData.Name] = ng.Size
 	}
 	return sizes
 }
 
 func verifyNodeGroupSizes(nar *hwmgmtv1alpha1.NodeAllocationRequest, expected map[string]int) {
 	sizes := nodeGroupSizeMap(nar)
-	for role, expectedSize := range expected {
-		Expect(sizes).To(HaveKey(role), "NodeGroup for role %q should exist", role)
-		Expect(sizes[role]).To(Equal(expectedSize),
-			"NodeGroup.Size for role %q should be %d", role, expectedSize)
+	for name, expectedSize := range expected {
+		Expect(sizes).To(HaveKey(name), "NodeGroup %q should exist", name)
+		Expect(sizes[name]).To(Equal(expectedSize),
+			"NodeGroup.Size for %q should be %d", name, expectedSize)
 	}
 }
