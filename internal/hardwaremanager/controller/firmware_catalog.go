@@ -40,14 +40,29 @@ type resolvedFirmware struct {
 	NicFirmware  []Nic
 }
 
-// resolveFirmwareFromCatalog looks up firmware entry names from the HardwareProfile
-// in the singleton FirmwareCatalog and returns resolved url/version pairs.
+// resolveFirmwareFromCatalog resolves the firmware url/version pairs for a
+// HardwareProfile using one of two mutually exclusive approaches:
+//
+//   - FirmwareImages (recommended): each name is looked up in the singleton
+//     FirmwareCatalog and auto-classified by the entry's component type.
+//   - The deprecated inline BiosFirmware/BmcFirmware/NicFirmware fields: their
+//     URL/version values are used directly, without consulting the catalog.
+//
+// If neither approach is configured, an empty resolvedFirmware is returned.
 func resolveFirmwareFromCatalog(ctx context.Context, c client.Client,
 	namespace string, spec hwmgmtv1alpha1.HardwareProfileSpec) (resolvedFirmware, error) {
 
-	if spec.BiosFirmware == "" && spec.BmcFirmware == "" && len(spec.NicFirmware) == 0 {
-		return resolvedFirmware{}, nil
+	if len(spec.FirmwareImages) > 0 {
+		return resolveFirmwareImages(ctx, c, namespace, spec.FirmwareImages)
 	}
+
+	return resolveInlineFirmware(spec), nil
+}
+
+// resolveFirmwareImages looks up each firmwareImages entry in the singleton
+// FirmwareCatalog and auto-classifies it by the catalog entry's component type.
+func resolveFirmwareImages(ctx context.Context, c client.Client,
+	namespace string, images []string) (resolvedFirmware, error) {
 
 	catalog := &hwmgmtv1alpha1.FirmwareCatalog{}
 	if err := c.Get(ctx, types.NamespacedName{
@@ -62,45 +77,37 @@ func resolveFirmwareFromCatalog(ctx context.Context, c client.Client,
 	}
 
 	var resolved resolvedFirmware
-
-	if spec.BiosFirmware != "" {
-		img, ok := imageMap[spec.BiosFirmware]
-		if !ok {
-			return resolvedFirmware{},
-				fmt.Errorf("biosFirmware entry %q not found in FirmwareCatalog", spec.BiosFirmware)
-		}
-		if img.Component != hwmgmtv1alpha1.ComponentBIOS {
-			return resolvedFirmware{},
-				fmt.Errorf("biosFirmware entry %q has component %q, expected bios", spec.BiosFirmware, img.Component)
-		}
-		resolved.BiosFirmware = Firmware{URL: img.URL, Version: img.Version}
-	}
-
-	if spec.BmcFirmware != "" {
-		img, ok := imageMap[spec.BmcFirmware]
-		if !ok {
-			return resolvedFirmware{},
-				fmt.Errorf("bmcFirmware entry %q not found in FirmwareCatalog", spec.BmcFirmware)
-		}
-		if img.Component != hwmgmtv1alpha1.ComponentBMC {
-			return resolvedFirmware{},
-				fmt.Errorf("bmcFirmware entry %q has component %q, expected bmc", spec.BmcFirmware, img.Component)
-		}
-		resolved.BmcFirmware = Firmware{URL: img.URL, Version: img.Version}
-	}
-
-	for _, name := range spec.NicFirmware {
+	for _, name := range images {
 		img, ok := imageMap[name]
 		if !ok {
 			return resolvedFirmware{},
-				fmt.Errorf("nicFirmware entry %q not found in FirmwareCatalog", name)
+				fmt.Errorf("firmwareImages entry %q not found in FirmwareCatalog", name)
 		}
-		if img.Component != hwmgmtv1alpha1.ComponentNIC {
+		switch img.Component {
+		case hwmgmtv1alpha1.ComponentBIOS:
+			resolved.BiosFirmware = Firmware{URL: img.URL, Version: img.Version}
+		case hwmgmtv1alpha1.ComponentBMC:
+			resolved.BmcFirmware = Firmware{URL: img.URL, Version: img.Version}
+		case hwmgmtv1alpha1.ComponentNIC:
+			resolved.NicFirmware = append(resolved.NicFirmware, Nic{URL: img.URL, Version: img.Version})
+		default:
 			return resolvedFirmware{},
-				fmt.Errorf("nicFirmware entry %q has component %q, expected %s", name, img.Component, hwmgmtv1alpha1.ComponentNIC)
+				fmt.Errorf("firmwareImages entry %q has unsupported component %q", name, img.Component)
 		}
-		resolved.NicFirmware = append(resolved.NicFirmware, Nic{URL: img.URL, Version: img.Version})
 	}
 
 	return resolved, nil
+}
+
+// resolveInlineFirmware builds the resolved firmware directly from the legacy
+// inline BiosFirmware/BmcFirmware/NicFirmware fields, which already carry their
+// own URL and version.
+func resolveInlineFirmware(spec hwmgmtv1alpha1.HardwareProfileSpec) resolvedFirmware {
+	var resolved resolvedFirmware
+	resolved.BiosFirmware = Firmware{URL: spec.BiosFirmware.URL, Version: spec.BiosFirmware.Version}
+	resolved.BmcFirmware = Firmware{URL: spec.BmcFirmware.URL, Version: spec.BmcFirmware.Version}
+	for _, nic := range spec.NicFirmware {
+		resolved.NicFirmware = append(resolved.NicFirmware, Nic{URL: nic.URL, Version: nic.Version})
+	}
+	return resolved
 }

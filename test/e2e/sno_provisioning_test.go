@@ -74,7 +74,7 @@ var _ = Describe("SNO End-to-end ProvisioningRequestReconcile with hardware mana
 				Namespace: constants.DefaultNamespace,
 			},
 			Spec: hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: "test-bios-entry",
+				FirmwareImages: []string{"test-bios-entry"},
 			},
 		},
 	}

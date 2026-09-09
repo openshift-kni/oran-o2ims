@@ -544,7 +544,7 @@ var (
 			Namespace: constants.DefaultNamespace,
 		},
 		Spec: hwmgmtv1alpha1.HardwareProfileSpec{
-			BiosFirmware: "test-bios-entry",
+			FirmwareImages: []string{"test-bios-entry"},
 		},
 	}
 

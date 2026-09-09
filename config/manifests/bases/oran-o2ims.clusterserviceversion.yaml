@@ -190,20 +190,42 @@ spec:
         path: bios
       - displayName: Attributes
         path: bios.attributes
-      - description: BiosFirmware is the name of a FirmwareCatalog entry with component
-          "bios"
+      - description: |-
+          BiosFirmware is the inline BIOS firmware (version and url).
+
+          Deprecated: use FirmwareImages with FirmwareCatalog entries instead.
+          Mutually exclusive with FirmwareImages.
         displayName: BIOS Firmware
         path: biosFirmware
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: BmcFirmware is the name of a FirmwareCatalog entry with component
-          "bmc"
+      - description: |-
+          BmcFirmware is the inline BMC firmware (version and url).
+
+          Deprecated: use FirmwareImages with FirmwareCatalog entries instead.
+          Mutually exclusive with FirmwareImages.
         displayName: BMC Firmware
         path: bmcFirmware
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
-      - description: NicFirmware is a list of FirmwareCatalog entry names with component
-          "nic"
+      - description: |-
+          FirmwareImages is a list of FirmwareCatalog entry names. Each entry is
+          looked up in the singleton FirmwareCatalog to resolve its component type
+          (bios, bmc, or nic), URL, and version. At most one entry may resolve to
+          component "bios" and at most one to component "bmc"; multiple "nic"
+          entries are allowed.
+
+          Mutually exclusive with the deprecated BiosFirmware, BmcFirmware, and
+          NicFirmware fields.
+        displayName: Firmware Images
+        path: firmwareImages
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+      - description: |-
+          NicFirmware is the inline NIC firmware list (version and url per entry).
+
+          Deprecated: use FirmwareImages with FirmwareCatalog entries instead.
+          Mutually exclusive with FirmwareImages.
         displayName: NIC Firmware
         path: nicFirmware
         x-descriptors:

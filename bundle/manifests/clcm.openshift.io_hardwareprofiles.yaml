@@ -68,18 +68,63 @@ spec:
                     type: object
                 type: object
               biosFirmware:
-                description: BiosFirmware is the name of a FirmwareCatalog entry with
-                  component "bios"
-                type: string
+                description: |-
+                  BiosFirmware is the inline BIOS firmware (version and url).
+
+                  Deprecated: use FirmwareImages with FirmwareCatalog entries instead.
+                  Mutually exclusive with FirmwareImages.
+                properties:
+                  url:
+                    description: URL points to the firmware file
+                    type: string
+                  version:
+                    description: Version is the desired firmware version
+                    type: string
+                type: object
               bmcFirmware:
-                description: BmcFirmware is the name of a FirmwareCatalog entry with
-                  component "bmc"
-                type: string
-              nicFirmware:
-                description: NicFirmware is a list of FirmwareCatalog entry names
-                  with component "nic"
+                description: |-
+                  BmcFirmware is the inline BMC firmware (version and url).
+
+                  Deprecated: use FirmwareImages with FirmwareCatalog entries instead.
+                  Mutually exclusive with FirmwareImages.
+                properties:
+                  url:
+                    description: URL points to the firmware file
+                    type: string
+                  version:
+                    description: Version is the desired firmware version
+                    type: string
+                type: object
+              firmwareImages:
+                description: |-
+                  FirmwareImages is a list of FirmwareCatalog entry names. Each entry is
+                  looked up in the singleton FirmwareCatalog to resolve its component type
+                  (bios, bmc, or nic), URL, and version. At most one entry may resolve to
+                  component "bios" and at most one to component "bmc"; multiple "nic"
+                  entries are allowed.
+
+                  Mutually exclusive with the deprecated BiosFirmware, BmcFirmware, and
+                  NicFirmware fields.
                 items:
                   type: string
+                type: array
+              nicFirmware:
+                description: |-
+                  NicFirmware is the inline NIC firmware list (version and url per entry).
+
+                  Deprecated: use FirmwareImages with FirmwareCatalog entries instead.
+                  Mutually exclusive with FirmwareImages.
+                items:
+                  description: Nic holds an inline NIC firmware version and download
+                    URL.
+                  properties:
+                    url:
+                      description: URL points to the NIC firmware file
+                      type: string
+                    version:
+                      description: Version is the NIC firmware version
+                      type: string
+                  type: object
                 type: array
             required:
             - bios

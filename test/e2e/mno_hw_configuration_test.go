@@ -1090,28 +1090,51 @@ func completeBMHServicing(ctx context.Context, node *hwmgmtv1alpha1.AllocatedNod
 		imageMap[img.Name] = img
 	}
 
+	// Build the expected HostFirmwareComponents status from the profile's
+	// firmware, supporting both the recommended firmwareImages approach (names
+	// resolved via the catalog) and the deprecated inline fields.
 	newComponents := []metal3v1alpha1.FirmwareComponentStatus{}
-	if hwProfile.Spec.BiosFirmware != "" {
-		img, ok := imageMap[hwProfile.Spec.BiosFirmware]
-		Expect(ok).To(BeTrue(), "FirmwareCatalog missing entry %q referenced by HardwareProfile biosFirmware", hwProfile.Spec.BiosFirmware)
-		newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
-			Component: "bios", CurrentVersion: img.Version,
-		})
-	}
-	if hwProfile.Spec.BmcFirmware != "" {
-		img, ok := imageMap[hwProfile.Spec.BmcFirmware]
-		Expect(ok).To(BeTrue(), "FirmwareCatalog missing entry %q referenced by HardwareProfile bmcFirmware", hwProfile.Spec.BmcFirmware)
-		newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
-			Component: "bmc", CurrentVersion: img.Version,
-		})
-	}
-	for i, nicName := range hwProfile.Spec.NicFirmware {
-		img, ok := imageMap[nicName]
-		Expect(ok).To(BeTrue(), "FirmwareCatalog missing entry %q referenced by HardwareProfile nicFirmware[%d]", nicName, i)
-		if img.Version != "" {
+	if len(hwProfile.Spec.FirmwareImages) > 0 {
+		nicIdx := 0
+		for _, name := range hwProfile.Spec.FirmwareImages {
+			img, ok := imageMap[name]
+			Expect(ok).To(BeTrue(), "FirmwareCatalog missing entry %q referenced by HardwareProfile firmwareImages", name)
+			if img.Version == "" {
+				continue
+			}
+			switch img.Component {
+			case hwmgmtv1alpha1.ComponentBIOS:
+				newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
+					Component: "bios", CurrentVersion: img.Version,
+				})
+			case hwmgmtv1alpha1.ComponentBMC:
+				newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
+					Component: "bmc", CurrentVersion: img.Version,
+				})
+			case hwmgmtv1alpha1.ComponentNIC:
+				newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
+					Component: fmt.Sprintf("nic:%d", nicIdx), CurrentVersion: img.Version,
+				})
+				nicIdx++
+			}
+		}
+	} else {
+		if hwProfile.Spec.BiosFirmware.Version != "" {
 			newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
-				Component: fmt.Sprintf("nic:%d", i), CurrentVersion: img.Version,
+				Component: "bios", CurrentVersion: hwProfile.Spec.BiosFirmware.Version,
 			})
+		}
+		if hwProfile.Spec.BmcFirmware.Version != "" {
+			newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
+				Component: "bmc", CurrentVersion: hwProfile.Spec.BmcFirmware.Version,
+			})
+		}
+		for i, nic := range hwProfile.Spec.NicFirmware {
+			if nic.Version != "" {
+				newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
+					Component: fmt.Sprintf("nic:%d", i), CurrentVersion: nic.Version,
+				})
+			}
 		}
 	}
 	hfc := &metal3v1alpha1.HostFirmwareComponents{}

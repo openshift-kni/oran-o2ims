@@ -180,10 +180,10 @@ var _ = Describe("FirmwareCatalogValidator", func() {
 			Expect(warnings).To(BeNil())
 		})
 
-		It("should reject deletion when a HardwareProfile references a biosFirmware entry", func() {
+		It("should reject deletion when a HardwareProfile references a BIOS entry via firmwareImages", func() {
 			hp := &HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-profile", Namespace: "oran-o2ims"},
-				Spec:       HardwareProfileSpec{BiosFirmware: "dell-bios-2.3.5"},
+				Spec:       HardwareProfileSpec{FirmwareImages: []string{"dell-bios-2.3.5"}},
 			}
 			setupValidator(hp)
 			_, err := validator.ValidateDelete(ctx, oldCatalog)
@@ -192,7 +192,7 @@ var _ = Describe("FirmwareCatalogValidator", func() {
 			Expect(err.Error()).To(ContainSubstring("dell-bios-2.3.5"))
 		})
 
-		It("should reject deletion when a HardwareProfile references a nicFirmware entry", func() {
+		It("should reject deletion when a HardwareProfile references a NIC entry via firmwareImages", func() {
 			catalog := oldCatalog.DeepCopy()
 			catalog.Spec.Images = append(catalog.Spec.Images, FirmwareImage{
 				Name:      "broadcom-nic-25.2",
@@ -202,7 +202,7 @@ var _ = Describe("FirmwareCatalogValidator", func() {
 			})
 			hp := &HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-profile", Namespace: "oran-o2ims"},
-				Spec:       HardwareProfileSpec{NicFirmware: []string{"broadcom-nic-25.2"}},
+				Spec:       HardwareProfileSpec{FirmwareImages: []string{"broadcom-nic-25.2"}},
 			}
 			setupValidator(hp)
 			_, err := validator.ValidateDelete(ctx, catalog)

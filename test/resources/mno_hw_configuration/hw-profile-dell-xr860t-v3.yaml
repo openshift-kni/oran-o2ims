@@ -10,5 +10,6 @@ spec:
       WorkloadProfile: TelcoOptimizedProfile
       SriovGlobalEnable: Enabled
       AcPwrRcvryUserDelay: 140
-  biosFirmware: dell-xr8620t-bios-2.4.0
-  bmcFirmware: dell-xr8620t-bmc-7.10.80.00
+  firmwareImages:
+    - dell-xr8620t-bios-2.4.0
+    - dell-xr8620t-bmc-7.10.80.00

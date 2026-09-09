@@ -1843,12 +1843,12 @@ func validateNicFirmware(
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	bmh *metal3v1alpha1.BareMetalHost,
-	prof *hwmgmtv1alpha1.HardwareProfile,
 	resolved resolvedFirmware,
 ) (bool, error) {
 
-	// No NIC firmware specified => nothing to validate
-	if len(prof.Spec.NicFirmware) == 0 {
+	// No NIC firmware resolved (from firmwareImages or the deprecated inline
+	// fields) => nothing to validate.
+	if len(resolved.NicFirmware) == 0 {
 		logger.DebugContext(ctx, "No NIC firmware specified in hardware profile; treating as valid")
 		return true, nil
 	}
@@ -1950,7 +1950,7 @@ func validateNodeConfiguration(
 
 	// Validate NIC firmware independently of BIOS settings, so profiles that
 	// specify only NIC firmware (no BIOS attributes) are still enforced.
-	nicValid, err := validateNicFirmware(ctx, noncachedClient, logger, bmh, prof, resolved)
+	nicValid, err := validateNicFirmware(ctx, noncachedClient, logger, bmh, resolved)
 	if err != nil {
 		logger.ErrorContext(ctx, "Failed to validate NIC firmware",
 			slog.Any("error", err))

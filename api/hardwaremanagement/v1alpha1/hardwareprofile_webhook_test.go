@@ -16,13 +16,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-func TestHardwareProfileWebhookValidateCreate(t *testing.T) {
-	scheme := runtime.NewScheme()
-	if err := AddToScheme(scheme); err != nil {
-		t.Fatalf("failed to add scheme: %v", err)
-	}
-
-	catalog := &FirmwareCatalog{
+// testCatalog returns a FirmwareCatalog with one bios, one bmc, one nic entry,
+// plus a second bios entry and an unsupported-component entry used by the
+// negative test cases.
+func testCatalog() *FirmwareCatalog {
+	return &FirmwareCatalog{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      FirmwareCatalogName,
 			Namespace: "test-ns",
@@ -30,10 +28,19 @@ func TestHardwareProfileWebhookValidateCreate(t *testing.T) {
 		Spec: FirmwareCatalogSpec{
 			Images: []FirmwareImage{
 				{Name: "bios-entry", Component: "bios", URL: "https://example.com/bios.bin", Version: "1.0"},
+				{Name: "bios-entry-2", Component: "bios", URL: "https://example.com/bios2.bin", Version: "1.1"},
 				{Name: "bmc-entry", Component: "bmc", URL: "https://example.com/bmc.bin", Version: "2.0"},
 				{Name: "nic-entry", Component: "nic", URL: "https://example.com/nic.bin", Version: "3.0"},
+				{Name: "gpu-entry", Component: "gpu", URL: "https://example.com/gpu.bin", Version: "4.0"},
 			},
 		},
+	}
+}
+
+func TestHardwareProfileWebhookValidateCreate(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add scheme: %v", err)
 	}
 
 	tests := []struct {
@@ -44,20 +51,18 @@ func TestHardwareProfileWebhookValidateCreate(t *testing.T) {
 		errMsg    string
 	}{
 		{
-			name: "valid BIOS reference",
+			name: "valid firmwareImages with single BIOS entry",
 			hp: &HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec:       HardwareProfileSpec{BiosFirmware: "bios-entry"},
+				Spec:       HardwareProfileSpec{FirmwareImages: []string{"bios-entry"}},
 			},
 		},
 		{
-			name: "valid all references",
+			name: "valid firmwareImages with bios, bmc and nic",
 			hp: &HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
 				Spec: HardwareProfileSpec{
-					BiosFirmware: "bios-entry",
-					BmcFirmware:  "bmc-entry",
-					NicFirmware:  []string{"nic-entry"},
+					FirmwareImages: []string{"bios-entry", "bmc-entry", "nic-entry"},
 				},
 			},
 		},
@@ -69,55 +74,61 @@ func TestHardwareProfileWebhookValidateCreate(t *testing.T) {
 			},
 		},
 		{
-			name: "nonexistent BIOS entry",
+			name: "deprecated inline fields require no catalog",
 			hp: &HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec:       HardwareProfileSpec{BiosFirmware: "missing-entry"},
+				Spec: HardwareProfileSpec{
+					BiosFirmware: Firmware{Version: "1.0", URL: "https://example.com/bios.bin"},
+					BmcFirmware:  Firmware{Version: "2.0", URL: "https://example.com/bmc.bin"},
+					NicFirmware:  []Nic{{Version: "3.0", URL: "https://example.com/nic.bin"}},
+				},
+			},
+			noCatalog: true,
+		},
+		{
+			name: "mutually exclusive approaches rejected",
+			hp: &HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
+				Spec: HardwareProfileSpec{
+					BiosFirmware:   Firmware{Version: "1.0", URL: "https://example.com/bios.bin"},
+					FirmwareImages: []string{"bios-entry"},
+				},
+			},
+			wantErr: true,
+			errMsg:  "mutually exclusive",
+		},
+		{
+			name: "nonexistent firmwareImages entry",
+			hp: &HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
+				Spec:       HardwareProfileSpec{FirmwareImages: []string{"missing-entry"}},
 			},
 			wantErr: true,
 			errMsg:  "not found in FirmwareCatalog",
 		},
 		{
-			name: "wrong component type for BIOS",
+			name: "more than one BIOS entry rejected",
 			hp: &HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec:       HardwareProfileSpec{BiosFirmware: "bmc-entry"},
+				Spec:       HardwareProfileSpec{FirmwareImages: []string{"bios-entry", "bios-entry-2"}},
 			},
 			wantErr: true,
-			errMsg:  "expected bios",
+			errMsg:  "at most one",
 		},
 		{
-			name: "wrong component type for BMC",
+			name: "unsupported component rejected",
 			hp: &HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec:       HardwareProfileSpec{BmcFirmware: "bios-entry"},
+				Spec:       HardwareProfileSpec{FirmwareImages: []string{"gpu-entry"}},
 			},
 			wantErr: true,
-			errMsg:  "expected bmc",
-		},
-		{
-			name: "wrong component type for NIC",
-			hp: &HardwareProfile{
-				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec:       HardwareProfileSpec{NicFirmware: []string{"bios-entry"}},
-			},
-			wantErr: true,
-			errMsg:  "expected nic",
-		},
-		{
-			name: "nonexistent NIC entry",
-			hp: &HardwareProfile{
-				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec:       HardwareProfileSpec{NicFirmware: []string{"missing-nic"}},
-			},
-			wantErr: true,
-			errMsg:  "not found in FirmwareCatalog",
+			errMsg:  "unsupported component",
 		},
 		{
 			name: "missing FirmwareCatalog",
 			hp: &HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec:       HardwareProfileSpec{BiosFirmware: "bios-entry"},
+				Spec:       HardwareProfileSpec{FirmwareImages: []string{"bios-entry"}},
 			},
 			noCatalog: true,
 			wantErr:   true,
@@ -129,7 +140,7 @@ func TestHardwareProfileWebhookValidateCreate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			builder := fake.NewClientBuilder().WithScheme(scheme)
 			if !tt.noCatalog {
-				builder = builder.WithObjects(catalog.DeepCopy())
+				builder = builder.WithObjects(testCatalog())
 			}
 			fakeClient := builder.Build()
 
@@ -157,23 +168,9 @@ func TestHardwareProfileWebhookValidateUpdate(t *testing.T) {
 		t.Fatalf("failed to add scheme: %v", err)
 	}
 
-	catalog := &FirmwareCatalog{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      FirmwareCatalogName,
-			Namespace: "test-ns",
-		},
-		Spec: FirmwareCatalogSpec{
-			Images: []FirmwareImage{
-				{Name: "bios-entry", Component: "bios", URL: "https://example.com/bios.bin", Version: "1.0"},
-				{Name: "bmc-entry", Component: "bmc", URL: "https://example.com/bmc.bin", Version: "2.0"},
-				{Name: "nic-entry", Component: "nic", URL: "https://example.com/nic.bin", Version: "3.0"},
-			},
-		},
-	}
-
 	oldHP := &HardwareProfile{
 		ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-		Spec:       HardwareProfileSpec{BiosFirmware: "bios-entry"},
+		Spec:       HardwareProfileSpec{FirmwareImages: []string{"bios-entry"}},
 	}
 
 	tests := []struct {
@@ -183,32 +180,43 @@ func TestHardwareProfileWebhookValidateUpdate(t *testing.T) {
 		errMsg  string
 	}{
 		{
-			name: "valid firmware references",
+			name: "valid firmwareImages references",
 			newHP: &HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
 				Spec: HardwareProfileSpec{
-					BiosFirmware: "bios-entry",
-					BmcFirmware:  "bmc-entry",
+					FirmwareImages: []string{"bios-entry", "bmc-entry"},
 				},
 			},
 		},
 		{
-			name: "nonexistent BIOS entry",
+			name: "nonexistent firmwareImages entry",
 			newHP: &HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec:       HardwareProfileSpec{BiosFirmware: "missing-entry"},
+				Spec:       HardwareProfileSpec{FirmwareImages: []string{"missing-entry"}},
 			},
 			wantErr: true,
 			errMsg:  "not found in FirmwareCatalog",
 		},
 		{
-			name: "wrong component type for BMC",
+			name: "switch to deprecated inline fields",
 			newHP: &HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec:       HardwareProfileSpec{BmcFirmware: "bios-entry"},
+				Spec: HardwareProfileSpec{
+					BiosFirmware: Firmware{Version: "1.0", URL: "https://example.com/bios.bin"},
+				},
+			},
+		},
+		{
+			name: "mutually exclusive approaches rejected",
+			newHP: &HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
+				Spec: HardwareProfileSpec{
+					BiosFirmware:   Firmware{Version: "1.0", URL: "https://example.com/bios.bin"},
+					FirmwareImages: []string{"bios-entry"},
+				},
 			},
 			wantErr: true,
-			errMsg:  "expected bmc",
+			errMsg:  "mutually exclusive",
 		},
 		{
 			name: "removing all firmware references",
@@ -223,7 +231,7 @@ func TestHardwareProfileWebhookValidateUpdate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().
 				WithScheme(scheme).
-				WithObjects(catalog.DeepCopy()).
+				WithObjects(testCatalog()).
 				Build()
 
 			v := &hardwareProfileValidator{Client: fakeClient}
@@ -248,14 +256,19 @@ func TestIsEntryReferencedByAnyProfile(t *testing.T) {
 	profiles := []HardwareProfile{
 		{
 			Spec: HardwareProfileSpec{
-				BiosFirmware: "bios-entry-1",
-				BmcFirmware:  "bmc-entry-1",
-				NicFirmware:  []string{"nic-entry-1", "nic-entry-2"},
+				FirmwareImages: []string{"bios-entry-1", "bmc-entry-1", "nic-entry-1", "nic-entry-2"},
 			},
 		},
 		{
 			Spec: HardwareProfileSpec{
-				BiosFirmware: "bios-entry-2",
+				FirmwareImages: []string{"bios-entry-2"},
+			},
+		},
+		{
+			// A profile using the deprecated inline fields creates no catalog
+			// dependency because those fields carry their own URL/version.
+			Spec: HardwareProfileSpec{
+				BiosFirmware: Firmware{Version: "9.9", URL: "https://example.com/inline.bin"},
 			},
 		},
 	}
@@ -265,10 +278,10 @@ func TestIsEntryReferencedByAnyProfile(t *testing.T) {
 		entryName string
 		want      bool
 	}{
-		{"referenced by biosFirmware", "bios-entry-1", true},
-		{"referenced by bmcFirmware", "bmc-entry-1", true},
-		{"referenced by nicFirmware", "nic-entry-1", true},
-		{"referenced by second NIC", "nic-entry-2", true},
+		{"referenced BIOS entry", "bios-entry-1", true},
+		{"referenced BMC entry", "bmc-entry-1", true},
+		{"referenced NIC entry", "nic-entry-1", true},
+		{"referenced second NIC", "nic-entry-2", true},
 		{"referenced by second profile", "bios-entry-2", true},
 		{"not referenced", "missing-entry", false},
 	}

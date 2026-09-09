@@ -40,13 +40,13 @@ var _ admission.Validator[*HardwareProfile] = &hardwareProfileValidator{}
 func (v *hardwareProfileValidator) ValidateCreate(ctx context.Context, hp *HardwareProfile) (admission.Warnings, error) {
 	hardwareprofilelog.Info("validate create", "name", hp.Name)
 
-	return nil, v.validateFirmwareReferences(ctx, hp)
+	return nil, v.validateFirmware(ctx, hp)
 }
 
 // ValidateUpdate implements admission.Validator
 func (v *hardwareProfileValidator) ValidateUpdate(ctx context.Context, _, newHP *HardwareProfile) (admission.Warnings, error) {
 	hardwareprofilelog.Info("validate update", "name", newHP.Name)
-	return nil, v.validateFirmwareReferences(ctx, newHP)
+	return nil, v.validateFirmware(ctx, newHP)
 }
 
 // ValidateDelete implements admission.Validator
@@ -54,14 +54,41 @@ func (v *hardwareProfileValidator) ValidateDelete(_ context.Context, _ *Hardware
 	return nil, nil
 }
 
-// validateFirmwareReferences checks that all firmware references in the
-// HardwareProfile exist in the singleton FirmwareCatalog and have the
-// correct component type.
-func (v *hardwareProfileValidator) validateFirmwareReferences(ctx context.Context, hp *HardwareProfile) error {
-	if !hasFirmwareReferences(hp) {
+// validateFirmware validates the HardwareProfile firmware configuration.
+//
+// A HardwareProfile may specify firmware using one of two mutually exclusive
+// approaches:
+//   - the recommended FirmwareImages list, which references FirmwareCatalog
+//     entries by name; or
+//   - the deprecated inline BiosFirmware/BmcFirmware/NicFirmware fields.
+//
+// Setting both approaches at once is rejected. When FirmwareImages is used,
+// every entry must exist in the singleton FirmwareCatalog, and at most one
+// entry may resolve to component "bios" and at most one to component "bmc".
+// The deprecated inline fields carry their own URL/version and require no
+// catalog validation.
+func (v *hardwareProfileValidator) validateFirmware(ctx context.Context, hp *HardwareProfile) error {
+	hasInline := hasInlineFirmware(hp)
+	hasImages := len(hp.Spec.FirmwareImages) > 0
+
+	if hasInline && hasImages {
+		return fmt.Errorf("firmwareImages is mutually exclusive with the deprecated " +
+			"biosFirmware, bmcFirmware, and nicFirmware fields; set only one approach")
+	}
+
+	if !hasImages {
+		// Nothing to resolve: either no firmware is configured, or only the
+		// deprecated inline fields (which carry their own URL/version) are set.
 		return nil
 	}
 
+	return v.validateFirmwareImages(ctx, hp)
+}
+
+// validateFirmwareImages checks that every entry in spec.firmwareImages exists
+// in the singleton FirmwareCatalog and that the resolved component types are
+// consistent (at most one bios, at most one bmc; multiple nic allowed).
+func (v *hardwareProfileValidator) validateFirmwareImages(ctx context.Context, hp *HardwareProfile) error {
 	catalog := &FirmwareCatalog{}
 	if err := v.Client.Get(ctx, types.NamespacedName{
 		Name: FirmwareCatalogName, Namespace: hp.Namespace,
@@ -75,29 +102,31 @@ func (v *hardwareProfileValidator) validateFirmwareReferences(ctx context.Contex
 	}
 
 	var errs []string
+	var biosCount, bmcCount int
 
-	if hp.Spec.BiosFirmware != "" {
-		if img, ok := imageMap[hp.Spec.BiosFirmware]; !ok {
-			errs = append(errs, fmt.Sprintf("biosFirmware entry %q not found in FirmwareCatalog", hp.Spec.BiosFirmware))
-		} else if img.Component != ComponentBIOS {
-			errs = append(errs, fmt.Sprintf("biosFirmware entry %q has component %q, expected %s", hp.Spec.BiosFirmware, img.Component, ComponentBIOS))
+	for _, name := range hp.Spec.FirmwareImages {
+		img, ok := imageMap[name]
+		if !ok {
+			errs = append(errs, fmt.Sprintf("firmwareImages entry %q not found in FirmwareCatalog", name))
+			continue
+		}
+		switch img.Component {
+		case ComponentBIOS:
+			biosCount++
+		case ComponentBMC:
+			bmcCount++
+		case ComponentNIC:
+			// Multiple NIC entries are allowed.
+		default:
+			errs = append(errs, fmt.Sprintf("firmwareImages entry %q has unsupported component %q", name, img.Component))
 		}
 	}
 
-	if hp.Spec.BmcFirmware != "" {
-		if img, ok := imageMap[hp.Spec.BmcFirmware]; !ok {
-			errs = append(errs, fmt.Sprintf("bmcFirmware entry %q not found in FirmwareCatalog", hp.Spec.BmcFirmware))
-		} else if img.Component != ComponentBMC {
-			errs = append(errs, fmt.Sprintf("bmcFirmware entry %q has component %q, expected %s", hp.Spec.BmcFirmware, img.Component, ComponentBMC))
-		}
+	if biosCount > 1 {
+		errs = append(errs, fmt.Sprintf("at most one firmwareImages entry with component %q is allowed, found %d", ComponentBIOS, biosCount))
 	}
-
-	for _, name := range hp.Spec.NicFirmware {
-		if img, ok := imageMap[name]; !ok {
-			errs = append(errs, fmt.Sprintf("nicFirmware entry %q not found in FirmwareCatalog", name))
-		} else if img.Component != ComponentNIC {
-			errs = append(errs, fmt.Sprintf("nicFirmware entry %q has component %q, expected %s", name, img.Component, ComponentNIC))
-		}
+	if bmcCount > 1 {
+		errs = append(errs, fmt.Sprintf("at most one firmwareImages entry with component %q is allowed, found %d", ComponentBMC, bmcCount))
 	}
 
 	if len(errs) > 0 {
@@ -107,6 +136,8 @@ func (v *hardwareProfileValidator) validateFirmwareReferences(ctx context.Contex
 	return nil
 }
 
-func hasFirmwareReferences(hp *HardwareProfile) bool {
-	return hp.Spec.BiosFirmware != "" || hp.Spec.BmcFirmware != "" || len(hp.Spec.NicFirmware) > 0
+// hasInlineFirmware reports whether any of the deprecated inline firmware
+// fields are populated.
+func hasInlineFirmware(hp *HardwareProfile) bool {
+	return !hp.Spec.BiosFirmware.IsEmpty() || !hp.Spec.BmcFirmware.IsEmpty() || len(hp.Spec.NicFirmware) > 0
 }

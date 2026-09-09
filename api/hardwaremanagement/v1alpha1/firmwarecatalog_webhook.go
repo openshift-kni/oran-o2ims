@@ -144,17 +144,14 @@ func findModifiedImmutableFields(old, updated []FirmwareImage) []string {
 }
 
 // isEntryReferencedByAnyProfile checks whether the given catalog entry name is
-// referenced by any HardwareProfile's firmware fields.
+// referenced by any HardwareProfile's firmwareImages list. Only the
+// firmwareImages approach references catalog entries by name; the deprecated
+// inline BiosFirmware/BmcFirmware/NicFirmware fields carry their own URL and
+// version and therefore create no dependency on the catalog.
 func isEntryReferencedByAnyProfile(entryName string, profiles []HardwareProfile) bool {
 	for i := range profiles {
-		if profiles[i].Spec.BiosFirmware == entryName {
-			return true
-		}
-		if profiles[i].Spec.BmcFirmware == entryName {
-			return true
-		}
-		for _, nic := range profiles[i].Spec.NicFirmware {
-			if nic == entryName {
+		for _, ref := range profiles[i].Spec.FirmwareImages {
+			if ref == entryName {
 				return true
 			}
 		}
