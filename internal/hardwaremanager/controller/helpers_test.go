@@ -391,29 +391,51 @@ var _ = Describe("Helpers", func() {
 
 	Describe("deriveNARStatusFromSingleNode", func() {
 		configured := string(hwmgmtv1alpha1.Configured)
+		var snoNAR *hwmgmtv1alpha1.NodeAllocationRequest
 
 		BeforeEach(func() {
 			fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
 			fakeNoncached = fakeClient
+			snoNAR = &hwmgmtv1alpha1.NodeAllocationRequest{
+				Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+					NodeGroup: []hwmgmtv1alpha1.NodeGroup{
+						{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "master", HwProfile: "profile-v2"}},
+					},
+				},
+			}
 		})
 
-		It("should return InProgress when node is missing Configured condition", func() {
+		It("should return InProgress when a node without Configured has a different profile", func() {
 			node := &hwmgmtv1alpha1.AllocatedNode{
 				ObjectMeta: metav1.ObjectMeta{Name: "n1", Namespace: testNamespace},
+				Spec:       hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "master", HwProfile: "profile-v1"},
 			}
 			Expect(fakeClient.Create(ctx, node)).To(Succeed())
 
-			status, reason, message := deriveNARStatusFromSingleNode(ctx, fakeNoncached, logger, node)
+			status, reason, message := deriveNARStatusFromSingleNode(ctx, fakeNoncached, logger, node, snoNAR)
 			Expect(status).To(Equal(metav1.ConditionFalse))
 			Expect(reason).To(Equal(string(hwmgmtv1alpha1.InProgress)))
 			Expect(message).To(Equal("Configuration update in progress (AllocatedNode n1)"))
+		})
+
+		It("should return ConfigApplied when a node without Configured already has the desired profile", func() {
+			node := &hwmgmtv1alpha1.AllocatedNode{
+				ObjectMeta: metav1.ObjectMeta{Name: "n1", Namespace: testNamespace},
+				Spec:       hwmgmtv1alpha1.AllocatedNodeSpec{GroupName: "master", HwProfile: "profile-v2"},
+			}
+			Expect(fakeClient.Create(ctx, node)).To(Succeed())
+
+			status, reason, message := deriveNARStatusFromSingleNode(ctx, fakeNoncached, logger, node, snoNAR)
+			Expect(status).To(Equal(metav1.ConditionTrue))
+			Expect(reason).To(Equal(string(hwmgmtv1alpha1.ConfigApplied)))
+			Expect(message).To(Equal(string(hwmgmtv1alpha1.ConfigUpToDate)))
 		})
 
 		It("should return ConfigApplied when node is successfully configured", func() {
 			node := createNodeWithCondition("n1", testNamespace, configured, string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
 			Expect(fakeClient.Create(ctx, node)).To(Succeed())
 
-			status, reason, message := deriveNARStatusFromSingleNode(ctx, fakeNoncached, logger, node)
+			status, reason, message := deriveNARStatusFromSingleNode(ctx, fakeNoncached, logger, node, snoNAR)
 			Expect(status).To(Equal(metav1.ConditionTrue))
 			Expect(reason).To(Equal(string(hwmgmtv1alpha1.ConfigApplied)))
 			Expect(message).To(Equal(string(hwmgmtv1alpha1.ConfigSuccess)))
@@ -423,7 +445,7 @@ var _ = Describe("Helpers", func() {
 			node := createNodeWithCondition("n1", testNamespace, configured, string(hwmgmtv1alpha1.ConfigUpdatePending), metav1.ConditionFalse)
 			Expect(fakeClient.Create(ctx, node)).To(Succeed())
 
-			status, reason, message := deriveNARStatusFromSingleNode(ctx, fakeNoncached, logger, node)
+			status, reason, message := deriveNARStatusFromSingleNode(ctx, fakeNoncached, logger, node, snoNAR)
 			Expect(status).To(Equal(metav1.ConditionFalse))
 			Expect(reason).To(Equal(string(hwmgmtv1alpha1.InProgress)))
 			Expect(message).To(Equal("Configuration update in progress (AllocatedNode n1)"))
@@ -433,7 +455,7 @@ var _ = Describe("Helpers", func() {
 			node := createNodeWithCondition("n1", testNamespace, configured, string(hwmgmtv1alpha1.ConfigUpdate), metav1.ConditionFalse)
 			Expect(fakeClient.Create(ctx, node)).To(Succeed())
 
-			status, reason, message := deriveNARStatusFromSingleNode(ctx, fakeNoncached, logger, node)
+			status, reason, message := deriveNARStatusFromSingleNode(ctx, fakeNoncached, logger, node, snoNAR)
 			Expect(status).To(Equal(metav1.ConditionFalse))
 			Expect(reason).To(Equal(string(hwmgmtv1alpha1.InProgress)))
 			Expect(message).To(Equal("Configuration update in progress (AllocatedNode n1)"))
@@ -444,7 +466,7 @@ var _ = Describe("Helpers", func() {
 			node.Status.Conditions[0].Message = "BIOS update failed"
 			Expect(fakeClient.Create(ctx, node)).To(Succeed())
 
-			status, reason, message := deriveNARStatusFromSingleNode(ctx, fakeNoncached, logger, node)
+			status, reason, message := deriveNARStatusFromSingleNode(ctx, fakeNoncached, logger, node, snoNAR)
 			Expect(status).To(Equal(metav1.ConditionFalse))
 			Expect(reason).To(Equal(string(hwmgmtv1alpha1.Failed)))
 			Expect(message).To(Equal("Configuration update failed (AllocatedNode n1: BIOS update failed)"))
@@ -455,7 +477,7 @@ var _ = Describe("Helpers", func() {
 			node.Status.Conditions[0].Message = "Invalid BIOS setting"
 			Expect(fakeClient.Create(ctx, node)).To(Succeed())
 
-			status, reason, message := deriveNARStatusFromSingleNode(ctx, fakeNoncached, logger, node)
+			status, reason, message := deriveNARStatusFromSingleNode(ctx, fakeNoncached, logger, node, snoNAR)
 			Expect(status).To(Equal(metav1.ConditionFalse))
 			Expect(reason).To(Equal(string(hwmgmtv1alpha1.Failed)))
 			Expect(message).To(Equal("Configuration update failed (AllocatedNode n1: Invalid BIOS setting)"))
@@ -554,6 +576,56 @@ var _ = Describe("Helpers", func() {
 			Expect(status).To(Equal(metav1.ConditionTrue))
 			Expect(reason).To(Equal(string(hwmgmtv1alpha1.ConfigApplied)))
 			Expect(message).To(Equal(string(hwmgmtv1alpha1.ConfigSuccess)))
+		})
+
+		It("should count nodes without Configured as complete when their profiles are unchanged", func() {
+			var nodes []hwmgmtv1alpha1.AllocatedNode
+			for _, name := range []string{"m1", "m2", "m3"} {
+				node := createNodeWithCondition(name, testNamespace, configured,
+					string(hwmgmtv1alpha1.ConfigApplied), metav1.ConditionTrue)
+				node.Spec.GroupName = testGroupMaster
+				nodes = append(nodes, *node)
+			}
+			// worker nodes match the desired profile without Configured condition
+			for _, name := range []string{"w1", "w2"} {
+				node := createAllocatedNodeWithGroup(name, testNamespace, "bmh-"+name,
+					testNamespace, testGroupWorker, "profile-v2")
+				nodes = append(nodes, *node)
+			}
+
+			for i := range nodes {
+				Expect(fakeClient.Create(ctx, &nodes[i])).To(Succeed())
+			}
+
+			nodeList := &hwmgmtv1alpha1.AllocatedNodeList{Items: nodes}
+			status, reason, message := deriveNARStatusFromMultipleNodes(ctx, fakeNoncached, logger, nodeList, mnoNAR)
+			Expect(status).To(Equal(metav1.ConditionTrue))
+			Expect(reason).To(Equal(string(hwmgmtv1alpha1.ConfigApplied)))
+			Expect(message).To(Equal(string(hwmgmtv1alpha1.ConfigSuccess)))
+		})
+
+		It("should report configuration up to date when all nodes have no Configured condition", func() {
+			var nodes []hwmgmtv1alpha1.AllocatedNode
+			for _, name := range []string{"m1", "m2", "m3"} {
+				node := createAllocatedNodeWithGroup(name, testNamespace, "bmh-"+name,
+					testNamespace, testGroupMaster, "profile-v2")
+				nodes = append(nodes, *node)
+			}
+			for _, name := range []string{"w1", "w2"} {
+				node := createAllocatedNodeWithGroup(name, testNamespace, "bmh-"+name,
+					testNamespace, testGroupWorker, "profile-v2")
+				nodes = append(nodes, *node)
+			}
+
+			for i := range nodes {
+				Expect(fakeClient.Create(ctx, &nodes[i])).To(Succeed())
+			}
+
+			nodeList := &hwmgmtv1alpha1.AllocatedNodeList{Items: nodes}
+			status, reason, message := deriveNARStatusFromMultipleNodes(ctx, fakeNoncached, logger, nodeList, mnoNAR)
+			Expect(status).To(Equal(metav1.ConditionTrue))
+			Expect(reason).To(Equal(string(hwmgmtv1alpha1.ConfigApplied)))
+			Expect(message).To(Equal(string(hwmgmtv1alpha1.ConfigUpToDate)))
 		})
 
 		It("should stay in-progress until every worker pool completes", func() {
@@ -2246,13 +2318,19 @@ var _ = Describe("Helpers", func() {
 			// hwFailed: InvalidInput
 			invalidInput1 := createNodeWithCondition("invalidInput", testNamespace, configured, string(hwmgmtv1alpha1.InvalidInput), metav1.ConditionFalse)
 			invalidInput1.Spec.HwProfile = newProfile
-			// hwPending: no condition
+			// hwDone: no condition + matching profile
 			noCond := createAllocatedNodeWithGroup("noCond", testNamespace, "bmh-noCond", testNamespace, "g1", newProfile)
+			// hwPending: no condition + old profile
+			noCondStale := createAllocatedNodeWithGroup("noCondStale", testNamespace, "bmh-noCondStale",
+				testNamespace, "g2", currentProfile)
 
-			nodes := []*hwmgmtv1alpha1.AllocatedNode{done1, stale, ip1, fail1, noCond, pend1, invalidInput1}
+			nodes := []*hwmgmtv1alpha1.AllocatedNode{
+				done1, stale, ip1, fail1, noCond, noCondStale, pend1, invalidInput1,
+			}
 			nc := classifyNodes(ctx, logger, mockOps, nodes, newProfile)
-			Expect(nc.DoneNodes).To(HaveLen(1))
+			Expect(nc.DoneNodes).To(HaveLen(2))
 			Expect(nc.DoneNodes[0].Name).To(Equal("done1"))
+			Expect(nc.DoneNodes[1].Name).To(Equal("noCond"))
 			Expect(nc.InProgressNodes).To(HaveLen(1))
 			Expect(nc.InProgressNodes[0].Name).To(Equal("ip1"))
 			Expect(nc.FailedNodes).To(HaveLen(2))
@@ -2260,7 +2338,7 @@ var _ = Describe("Helpers", func() {
 			Expect(nc.FailedNodes[1].Name).To(Equal("invalidInput"))
 			Expect(nc.PendingNodes).To(HaveLen(3))
 			Expect(nc.PendingNodes[0].Name).To(Equal("stale"))
-			Expect(nc.PendingNodes[1].Name).To(Equal("noCond"))
+			Expect(nc.PendingNodes[1].Name).To(Equal("noCondStale"))
 			Expect(nc.PendingNodes[2].Name).To(Equal("pend1"))
 			Expect(nc.PriorityNodes).To(BeNil())
 		})

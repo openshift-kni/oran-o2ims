@@ -786,7 +786,8 @@ func (r *NodeAllocationRequestReconciler) updateConfiguredFromNodes(
 	var status metav1.ConditionStatus
 	var reason, message string
 	if len(nodelist.Items) == 1 {
-		status, reason, message = deriveNARStatusFromSingleNode(ctx, r.NoncachedClient, r.Logger, &nodelist.Items[0])
+		node := &nodelist.Items[0]
+		status, reason, message = deriveNARStatusFromSingleNode(ctx, r.NoncachedClient, r.Logger, node, nodeAllocationRequest)
 	} else {
 		status, reason, message = deriveNARStatusFromMultipleNodes(ctx, r.NoncachedClient, r.Logger, nodelist, nodeAllocationRequest)
 	}

@@ -51,6 +51,7 @@ type ConditionMessage string
 const (
 	AwaitConfig      ConditionMessage = "Spec updated; awaiting configuration application by the hardware manager"
 	ConfigSuccess    ConditionMessage = "Configuration has been applied successfully"
+	ConfigUpToDate   ConditionMessage = "Configuration is up to date"
 	ConfigInProgress ConditionMessage = "Configuration update in progress"
 	ConfigFailed     ConditionMessage = "Configuration update failed"
 )
