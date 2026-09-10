@@ -28,13 +28,16 @@ for service_name in "${!services[@]}"; do
     # Create the user. Bind the password with psql's variable substitution
     # (:'pw') rather than interpolating it into the SQL string, so psql handles
     # the string-literal quoting/escaping regardless of the password contents.
-    psql -U postgres -v pw="${password}" -c "CREATE USER ${service_name} WITH PASSWORD :'pw';" || true
+    # -X (--no-psqlrc) skips startup files (e.g. ~/.psqlrc) so a stray
+    # "\set pw ..." there cannot override -v pw and silently set the wrong
+    # password (errors are ignored below with "|| true").
+    psql -X -U postgres -v pw="${password}" -c "CREATE USER ${service_name} WITH PASSWORD :'pw';" || true
 
     # Create the database
-    psql -U postgres -c "CREATE DATABASE ${service_name} OWNER ${service_name};" || true
+    psql -X -U postgres -c "CREATE DATABASE ${service_name} OWNER ${service_name};" || true
 
     # Grant privileges (safe to run multiple times)
-    psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE ${service_name} TO ${service_name};" || true
+    psql -X -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE ${service_name} TO ${service_name};" || true
 
     echo "Completed setup for service: ${service_name}"
 done
