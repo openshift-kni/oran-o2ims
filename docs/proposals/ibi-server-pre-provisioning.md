@@ -117,17 +117,16 @@ Rather than SSH-based monitoring (which requires hub-to-server network
 access, SSH key management, and IP discovery), the IBI Operator uses an
 **HTTP callback** pattern:
 
-1. The IBI Operator generates a small ignition config override containing a
-   systemd unit that calls back to the hub after the IBI preparation service
-   completes (success or failure).
-2. This callback unit is injected into the ISO via the
-   `ignitionConfigOverride` field already supported by the
-   `ImageBasedInstallationConfig`.
-3. The IBI Operator's existing HTTP server exposes a callback endpoint
+1. The seed/ISO workflow bakes `ibi-prep-callback.service` and
+   `/usr/local/bin/ibi-prep-callback` into the reusable ISO via
+   `ignitionConfigOverride`; they read `/etc/ibi-callback/{env,auth.cfg}`.
+2. The IBI Operator creates a per-attempt `DataImage` with URL, attempt,
+   budget, and token; the client reads it after boot.
+3. The HTTP server exposes a callback endpoint
    (e.g., `/callbacks/<ici-namespace>/<ici-name>/status`).
-4. When the preparation service finishes, the callback unit `curl`s the
+4. When the preparation service finishes, the callback client `curl`s the
    hub endpoint with the result.
-5. The IBI Operator receives the callback, updates the ICI condition, and
+5. It receives the callback, updates the ICI condition, and
    proceeds with the BMH state transition.
 
 This approach:
@@ -171,7 +170,7 @@ This approach:
 ├─────────────────────────────────────────────────────────────────┤
 │ IBI Operator (upstream changes required)                        │
 │                                                                 │
-│  1. NEW: Generate callback ignition override                    │
+│  1. NEW: Create per-attempt DataImage; seed-baked client         │
 │  2. NEW: Boot BMH from live ISO via spec.image (live-iso)       │
 │  3. NEW: Receive HTTP callback on preparation completion        │
 │  4. NEW: Transition BMH to IBI-ready state                      │
@@ -1244,12 +1243,9 @@ The O-Cloud Manager changes are minimal:
    timeout-only ICI status change — with no NAR or ClusterInstance change — each
    wake the PR and drive the item-3 transition.
 
-No hub-side Jobs and no SSH infrastructure are introduced, but the status handoff
-above is new controller logic on the O-Cloud Manager side.
-
 ## Integration with Seed Generation Proposal
 
-When both proposals are implemented, the full automated pipeline is:
+Pipeline:
 
 ```text
 ProvisioningRequest (seed gen CT)     ProvisioningRequest (IBI CT)
@@ -1264,6 +1260,12 @@ ProvisioningRequest (seed gen CT)     ProvisioningRequest (IBI CT)
                                         │    └─ Cluster provisioned
                                         └─ Post-provisioning (policies)
 ```
+
+Phase 4 of the [seed-generation proposal](./automated-seed-image-generation.md#phase-4-live-iso-generation)
+bakes the generic client via `ignitionConfigOverride`; the IBI template
+references immutable ISO metadata without a status handoff. Deployments receive
+callback data in a `DataImage`; per-ICI ISO is the [Open Question 2](#open-questions)
+fallback.
 
 ## Sample: ClusterTemplate with IBI Pre-Provisioning
 
