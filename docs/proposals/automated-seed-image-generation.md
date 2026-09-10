@@ -757,12 +757,28 @@ The controller creates a Kubernetes Job on the hub cluster that builds the live 
    additionalTrustBundle: |      # hub-derived (or liveISO override); omitted when empty
      -----BEGIN CERTIFICATE-----
      ...
+   ignitionConfigOverride: <generated generic IBI pre-provisioning callback Ignition JSON>
    ```
 
    The pull secret is constructed by merging the hub cluster pull secret (`openshift-config/pull-secret`) with the `seedAuthSecretRef` credentials. If `liveISO.pullSecretRef` is provided, its contents are used directly instead of the auto-merged secret. In disconnected environments,
    the pull secret must include credentials for both the local seed image mirror and the OCP release image mirror.
 
-4. **Build the ISO**: Run `openshift-install image-based create image --dir <workdir>`. This pulls the seed image, generates ignition configuration, and produces the `rhcos-ibi.iso` file. This step requires significant workspace storage (~15-20GB for seed image pull + ISO generation).
+   When pre-provisioning is enabled, `ignitionConfigOverride` contains the
+   generic IBI pre-provisioning callback client: the
+   `ibi-prep-callback.service` unit and `/usr/local/bin/ibi-prep-callback`
+   script. The client is identical across hosts and reads its per-host data
+   from `/etc/ibi-callback/env` and `/etc/ibi-callback/auth.cfg`, which are
+   delivered by the per-attempt carrier described in the
+   [IBI pre-provisioning proposal](./ibi-server-pre-provisioning.md#1-callback-ignition-override).
+   The override must not contain a per-host callback URL, attempt ID, or token.
+
+4. **Build the ISO**: Populate `ImageBasedInstallationConfig.ignitionConfigOverride`
+   with the generic callback client described above, then run
+   `openshift-install image-based create image --dir <workdir>`. This pulls the
+   seed image, generates ignition configuration (merging the override), and
+   produces the `rhcos-ibi.iso` file. Because the override carries no per-host
+   data, the ISO stays reusable across IBI deployments. This step requires
+   significant workspace storage (~15-20GB for seed image pull + ISO generation).
 
 5. **Upload the ISO**: SCP the ISO to the HTTPS server using the SSH credentials from `uploadSecretRef`, pinning the server host key from `knownHosts` with strict checking:
 
