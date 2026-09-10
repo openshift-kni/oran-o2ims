@@ -443,11 +443,9 @@ func (a *AlarmsServer) PatchAlarmServiceConfiguration(ctx context.Context, reque
 		return nil, fmt.Errorf("failed to patch Alarm Service Configuration: %w", err)
 	}
 
-	// TODO make it event-driven with PG listen/notify
-	// Update Cronjob
-	if err := a.ServiceConfig.EnsureCleanupCronJob(ctx, patched); err != nil {
-		return nil, fmt.Errorf("failed to start cleanup cronjob during AlarmServiceConfiguration patch: %w", err)
-	}
+	// The in-process events cleanup reads the retention period fresh on every run,
+	// so the updated value takes effect on the next cleanup without any additional
+	// coordination here.
 
 	slog.DebugContext(ctx, "Alarm Service Configuration patched", slog.Int("retentionPeriod", patched.RetentionPeriod), slog.Any("extensions", patched.Extensions))
 	return api.PatchAlarmServiceConfiguration200JSONResponse(models.ConvertServiceConfigurationToAPI(*patched)), nil
@@ -487,10 +485,9 @@ func (a *AlarmsServer) UpdateAlarmServiceConfiguration(ctx context.Context, requ
 		return nil, fmt.Errorf("failed to update Alarm Service Configuration: %w", err)
 	}
 
-	// Update Cronjob
-	if err := a.ServiceConfig.EnsureCleanupCronJob(ctx, updated); err != nil {
-		return nil, fmt.Errorf("failed to start cleanup cronjob during AlarmServiceConfiguration update: %w", err)
-	}
+	// The in-process events cleanup reads the retention period fresh on every run,
+	// so the updated value takes effect on the next cleanup without any additional
+	// coordination here.
 
 	slog.DebugContext(ctx, "Alarm Service Configuration updated", slog.Int("retentionPeriod", updated.RetentionPeriod), slog.Any("extensions", updated.Extensions))
 	return api.UpdateAlarmServiceConfiguration200JSONResponse(models.ConvertServiceConfigurationToAPI(*updated)), nil

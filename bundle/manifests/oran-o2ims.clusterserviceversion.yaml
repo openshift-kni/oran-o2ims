@@ -1696,14 +1696,6 @@ spec:
           - list
           - watch
         - apiGroups:
-          - batch
-          resources:
-          - cronjobs
-          verbs:
-          - get
-          - list
-          - watch
-        - apiGroups:
           - ""
           resourceNames:
           - oran-o2ims-alarms-server
@@ -2517,7 +2509,6 @@ spec:
           - ""
           resources:
           - secrets
-          - configmaps
           verbs:
           - get
           - list
@@ -2525,18 +2516,6 @@ spec:
           - create
           - update
           - delete
-        - apiGroups:
-          - batch
-          resources:
-          - cronjobs
-          verbs:
-          - get
-          - list
-          - watch
-          - create
-          - delete
-          - update
-          - patch
         serviceAccountName: oran-o2ims-alarms-server
       - rules:
         - apiGroups:

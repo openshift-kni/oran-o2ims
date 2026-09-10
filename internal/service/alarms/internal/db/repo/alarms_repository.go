@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -268,4 +269,64 @@ func (ar *AlarmsRepository) DeleteAlarmsDataChange(ctx context.Context, dataChan
 	}
 
 	return nil
+}
+
+// alarmsCleanupAdvisoryLockKey is a fixed, arbitrary key used with a
+// transaction-scoped PostgreSQL advisory lock so that concurrent alarms-server
+// replicas don't run the resolved alarm event cleanup at the same time.
+const alarmsCleanupAdvisoryLockKey int64 = 8151505598819887131
+
+// DeleteResolvedAlarmEventsBefore deletes resolved alarm event records whose
+// cleared time is older than retentionDays. The deletion runs inside a
+// transaction guarded by a transaction-scoped advisory lock so that only one
+// alarms-server replica performs the cleanup at a time; if another replica
+// already holds the lock this call does nothing and reports ran=false. The lock
+// is released automatically when the transaction ends. It returns the number of
+// rows deleted and whether the cleanup actually ran.
+func (ar *AlarmsRepository) DeleteResolvedAlarmEventsBefore(ctx context.Context, retentionDays int) (int64, bool, error) {
+	// A "0" (or negative) retention would delete every resolved event, so guard
+	// against it here since the query is sensitive to it.
+	if retentionDays <= 0 {
+		return 0, false, fmt.Errorf("invalid retention period: %d", retentionDays)
+	}
+
+	var deleted int64
+	ran := false
+	err := ar.WithTransaction(ctx, func(tx pgx.Tx) error {
+		var acquired bool
+		if err := tx.QueryRow(ctx, "SELECT pg_try_advisory_xact_lock($1)", alarmsCleanupAdvisoryLockKey).Scan(&acquired); err != nil {
+			return fmt.Errorf("failed to acquire alarms cleanup advisory lock: %w", err)
+		}
+		if !acquired {
+			// Another replica is already running the cleanup for this interval.
+			return nil
+		}
+		ran = true
+
+		aer := models.AlarmEventRecord{}
+		dbTags := svcutils.GetAllDBTagsFromStruct(aer)
+		q := psql.Delete(
+			dm.From(aer.TableName()),
+			dm.Where(psql.Quote(dbTags["AlarmClearedTime"]).LT(
+				psql.Raw("now() - interval '"+strconv.Itoa(retentionDays)+" days'"),
+			)),
+			dm.Where(psql.Quote(dbTags["AlarmStatus"]).EQ(psql.S(string(api.Resolved)))),
+		)
+		sql, params, err := q.Build(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to build resolved alarm events cleanup query: %w", err)
+		}
+
+		tag, err := tx.Exec(ctx, sql, params...)
+		if err != nil {
+			return fmt.Errorf("failed to execute resolved alarm events cleanup: %w", err)
+		}
+		deleted = tag.RowsAffected()
+		return nil
+	})
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to delete resolved alarm events: %w", err)
+	}
+
+	return deleted, ran, nil
 }

@@ -8,7 +8,6 @@ rules:
   - ""
   resources:
   - secrets
-  - configmaps
   verbs:
   - get
   - list
@@ -16,15 +15,3 @@ rules:
   - create
   - update
   - delete
-- apiGroups:
-  - batch
-  resources:
-  - cronjobs
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - delete
-  - update
-  - patch
