@@ -101,6 +101,22 @@ func (mr *MockAlarmRepositoryInterfaceMockRecorder) DeleteAlarmsDataChange(ctx, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAlarmsDataChange", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).DeleteAlarmsDataChange), ctx, dataChangeId)
 }
 
+// DeleteResolvedAlarmEventsBefore mocks base method.
+func (m *MockAlarmRepositoryInterface) DeleteResolvedAlarmEventsBefore(ctx context.Context, retentionDays int) (int64, bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteResolvedAlarmEventsBefore", ctx, retentionDays)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// DeleteResolvedAlarmEventsBefore indicates an expected call of DeleteResolvedAlarmEventsBefore.
+func (mr *MockAlarmRepositoryInterfaceMockRecorder) DeleteResolvedAlarmEventsBefore(ctx, retentionDays any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteResolvedAlarmEventsBefore", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).DeleteResolvedAlarmEventsBefore), ctx, retentionDays)
+}
+
 // GetAlarmEventRecord mocks base method.
 func (m *MockAlarmRepositoryInterface) GetAlarmEventRecord(ctx context.Context, id uuid.UUID) (*models.AlarmEventRecord, error) {
 	m.ctrl.T.Helper()

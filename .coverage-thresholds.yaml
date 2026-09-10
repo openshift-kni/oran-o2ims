@@ -22,6 +22,7 @@ packages:
   internal/service/alarms/internal/alertmanager: 42
   internal/service/alarms/internal/db/repo: 40
   internal/service/alarms/internal/infrastructure: 30
+  internal/service/alarms/internal/serviceconfig: 60
   internal/service/artifacts/api: 10
   internal/service/cluster/api: 11
   internal/service/cluster/collector: 5

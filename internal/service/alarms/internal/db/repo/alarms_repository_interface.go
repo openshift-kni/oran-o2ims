@@ -22,6 +22,7 @@ type AlarmRepositoryInterface interface {
 	GetAlarmEventRecords(ctx context.Context) ([]models.AlarmEventRecord, error)
 	PatchAlarmEventRecordACK(ctx context.Context, id uuid.UUID, record *models.AlarmEventRecord) (*models.AlarmEventRecord, error)
 	GetAlarmEventRecord(ctx context.Context, id uuid.UUID) (*models.AlarmEventRecord, error)
+	DeleteResolvedAlarmEventsBefore(ctx context.Context, retentionDays int) (int64, bool, error)
 	CreateServiceConfiguration(ctx context.Context, defaultRetentionPeriod int) (*models.ServiceConfiguration, error)
 	GetServiceConfigurations(ctx context.Context) ([]models.ServiceConfiguration, error)
 	UpdateServiceConfiguration(ctx context.Context, id uuid.UUID, record *models.ServiceConfiguration) (*models.ServiceConfiguration, error)

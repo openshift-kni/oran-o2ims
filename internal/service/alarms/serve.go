@@ -192,9 +192,9 @@ func Serve(config *api.AlarmsServerConfig) error {
 		slog.InfoContext(ctx, "Done listening to alarms pg channels")
 	}()
 
-	// Configure server and start alarms cleanup cronjob
-	if err := ConfigAlarmServerCleanup(ctx, &alarmServer, pgConfig); err != nil {
-		return fmt.Errorf("failed configure and start cleanup cronjob: %w", err)
+	// Configure and start the in-process alarms events cleanup
+	if err := ConfigAlarmServerCleanup(ctx, &alarmServer); err != nil {
+		return fmt.Errorf("failed to configure and start alarms events cleanup: %w", err)
 	}
 
 	alarmServerStrictHandler := generated.NewStrictHandlerWithOptions(&alarmServer, nil,
@@ -324,31 +324,29 @@ func gracefulShutdownWithTasks(srv *http.Server, alarmsServer *api.AlarmsServer)
 	}
 }
 
-// ConfigAlarmServerCleanup configure server and launch the cleanup cronjob for resolved alarm events
-func ConfigAlarmServerCleanup(ctx context.Context, alarmServer *api.AlarmsServer, pgConfig db.PgConfig) error {
-	// Add Alarm Service Configuration to the database
+// ConfigAlarmServerCleanup configures and launches the in-process cleanup of
+// resolved alarm events. The cleanup runs the retention DELETE directly against
+// the database pool the server already holds, replacing the previous Kubernetes
+// CronJob so the alarms-server ServiceAccount no longer needs to create CronJobs
+// (ORAN-O2IMS-2026-008).
+func ConfigAlarmServerCleanup(ctx context.Context, alarmServer *api.AlarmsServer) error {
+	// Ensure the Alarm Service Configuration (which holds the retention period)
+	// exists in the database.
 	serviceConfig, err := alarmServer.AlarmsRepository.CreateServiceConfiguration(ctx, api.DefaultRetentionPeriod)
 	if err != nil {
 		return fmt.Errorf("failed to create alarm service configuration: %w", err)
 	}
 	slog.InfoContext(ctx, "Alarm Service configuration created/found", slog.Int("retentionPeriod", serviceConfig.RetentionPeriod), slog.Any("extensions", serviceConfig.Extensions))
 
-	// Init ServiceConfig and start cronjob
-	alarmServer.ServiceConfig, err = serviceconfig.LoadEnvConfig()
-	if err != nil {
-		return fmt.Errorf("failed to load alarm service configuration: %w", err)
-	}
-	alarmServer.ServiceConfig.PgConnConfig = pgConfig
-	clientForHub, err := k8s.NewClientForHub()
-	if err != nil {
-		return fmt.Errorf("failed to create k8s client for hub: %w", err)
-	}
-	alarmServer.ServiceConfig.HubClient = clientForHub
+	// Run the cleanup in-process against the existing DB pool.
+	alarmServer.ServiceConfig = serviceconfig.Config{Repository: alarmServer.AlarmsRepository}
 
-	if err := alarmServer.ServiceConfig.EnsureCleanupCronJob(ctx, serviceConfig); err != nil {
-		return fmt.Errorf("failed to start alarms cleanup cron job: %w", err)
-	}
-	slog.InfoContext(ctx, "Successfully created initial set of cronjob and resources")
+	alarmServer.Wg.Add(1)
+	go func() {
+		defer alarmServer.Wg.Done()
+		alarmServer.ServiceConfig.Start(ctx, serviceconfig.CleanupInterval)
+	}()
+	slog.InfoContext(ctx, "Successfully started in-process alarms events cleanup")
 
 	return nil
 }

@@ -562,4 +562,60 @@ var _ = Describe("AlarmsRepository", func() {
 			Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
 		})
 	})
+
+	Describe("DeleteResolvedAlarmEventsBefore", func() {
+		aerTable := models.AlarmEventRecord{}.TableName()
+
+		When("the advisory lock is acquired", func() {
+			It("deletes resolved events older than the retention period and reports it ran", func() {
+				mock.ExpectBegin()
+				// The cleanup is guarded by a transaction-scoped advisory lock so that
+				// concurrent replicas don't run it at the same time.
+				mock.ExpectQuery("pg_try_advisory_xact_lock").
+					WithArgs(pgxmock.AnyArg()).
+					WillReturnRows(pgxmock.NewRows([]string{"pg_try_advisory_xact_lock"}).AddRow(true))
+				mock.ExpectExec(fmt.Sprintf("DELETE FROM %s WHERE", aerTable)).
+					WillReturnResult(pgxmock.NewResult("DELETE", 5))
+				mock.ExpectCommit()
+				mock.ExpectRollback()
+
+				deleted, ran, err := repo.DeleteResolvedAlarmEventsBefore(ctx, 10)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(ran).To(BeTrue())
+				Expect(deleted).To(Equal(int64(5)))
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
+			})
+		})
+
+		When("another replica holds the advisory lock", func() {
+			It("does not delete anything and reports it did not run", func() {
+				mock.ExpectBegin()
+				mock.ExpectQuery("pg_try_advisory_xact_lock").
+					WithArgs(pgxmock.AnyArg()).
+					WillReturnRows(pgxmock.NewRows([]string{"pg_try_advisory_xact_lock"}).AddRow(false))
+				// No DELETE is expected when the lock is not acquired.
+				mock.ExpectCommit()
+				mock.ExpectRollback()
+
+				deleted, ran, err := repo.DeleteResolvedAlarmEventsBefore(ctx, 10)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(ran).To(BeFalse())
+				Expect(deleted).To(Equal(int64(0)))
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
+			})
+		})
+
+		When("the retention period is not positive", func() {
+			It("returns an error without touching the database", func() {
+				// A zero/negative retention would delete every resolved event, so it is
+				// rejected before any transaction is started.
+				deleted, ran, err := repo.DeleteResolvedAlarmEventsBefore(ctx, 0)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("invalid retention period"))
+				Expect(ran).To(BeFalse())
+				Expect(deleted).To(Equal(int64(0)))
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
+			})
+		})
+	})
 })
