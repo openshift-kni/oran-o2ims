@@ -385,6 +385,7 @@ func deriveNARStatusFromSingleNode(
 	noncachedClient client.Reader,
 	logger *slog.Logger,
 	node *hwmgmtv1alpha1.AllocatedNode,
+	nar *hwmgmtv1alpha1.NodeAllocationRequest,
 ) (metav1.ConditionStatus, string, string) {
 	updatedNode, err := hwmgrutils.GetNode(ctx, logger, noncachedClient, node.Namespace, node.Name)
 	if err != nil {
@@ -395,6 +396,13 @@ func deriveNARStatusFromSingleNode(
 	}
 
 	cond := meta.FindStatusCondition(updatedNode.Status.Conditions, string(hwmgmtv1alpha1.Configured))
+	if cond == nil {
+		newHwProfile := getNewHwProfileForNode(nar, updatedNode)
+		if updatedNode.Spec.HwProfile == newHwProfile {
+			return metav1.ConditionTrue, string(hwmgmtv1alpha1.ConfigApplied),
+				string(hwmgmtv1alpha1.ConfigUpToDate)
+		}
+	}
 	if cond != nil &&
 		cond.Status == metav1.ConditionTrue &&
 		cond.Reason == string(hwmgmtv1alpha1.ConfigApplied) {
@@ -435,6 +443,7 @@ func deriveNARStatusFromMultipleNodes(
 	}
 
 	groupStats := make(map[string]*groupCounts)
+	allNodesMissingConfigured := true
 	for _, node := range nodelist.Items {
 		updatedNode, err := hwmgrutils.GetNode(ctx, logger, noncachedClient, node.Namespace, node.Name)
 		if err != nil {
@@ -453,18 +462,26 @@ func deriveNARStatusFromMultipleNodes(
 
 		// Count completed and failed nodes for the group, the rest are in progress nodes.
 		cond := meta.FindStatusCondition(updatedNode.Status.Conditions, string(hwmgmtv1alpha1.Configured))
-		if cond != nil &&
-			cond.Status == metav1.ConditionTrue &&
-			cond.Reason == string(hwmgmtv1alpha1.ConfigApplied) {
-			groupCount.completed++
-			continue
-		}
-		if cond != nil &&
-			cond.Status == metav1.ConditionFalse &&
-			(cond.Reason == string(hwmgmtv1alpha1.InvalidInput) ||
-				cond.Reason == string(hwmgmtv1alpha1.Failed)) {
-			groupCount.failed++
-			continue
+		if cond == nil {
+			newHwProfile := getNewHwProfileForNode(nar, updatedNode)
+			if updatedNode.Spec.HwProfile == newHwProfile {
+				groupCount.completed++
+				continue
+			}
+		} else {
+			allNodesMissingConfigured = false
+
+			if cond.Status == metav1.ConditionTrue &&
+				cond.Reason == string(hwmgmtv1alpha1.ConfigApplied) {
+				groupCount.completed++
+				continue
+			}
+			if cond.Status == metav1.ConditionFalse &&
+				(cond.Reason == string(hwmgmtv1alpha1.InvalidInput) ||
+					cond.Reason == string(hwmgmtv1alpha1.Failed)) {
+				groupCount.failed++
+				continue
+			}
 		}
 	}
 
@@ -495,6 +512,9 @@ func deriveNARStatusFromMultipleNodes(
 	}
 
 	if overallCompleted == len(nodelist.Items) {
+		if allNodesMissingConfigured {
+			return metav1.ConditionTrue, string(hwmgmtv1alpha1.ConfigApplied), string(hwmgmtv1alpha1.ConfigUpToDate)
+		}
 		return metav1.ConditionTrue, string(hwmgmtv1alpha1.ConfigApplied), string(hwmgmtv1alpha1.ConfigSuccess)
 	}
 	if overallFailed > 0 {
@@ -1318,7 +1338,7 @@ func markPendingNodesForUpdate(
 // nodeClassification holds the result of classifyNodes — each bucket represents a
 // distinct lifecycle state for nodes within a single group.
 type nodeClassification struct {
-	// DoneNodes: ConfigApplied and spec.hwProfile == newHwProfile
+	// DoneNodes: spec.hwProfile == newHwProfile and either ConfigApplied or no Configured condition
 	DoneNodes []*hwmgmtv1alpha1.AllocatedNode
 	// InProgressNodes: Configured=False with reason ConfigUpdate (without abandoned annotation)
 	InProgressNodes []*hwmgmtv1alpha1.AllocatedNode
@@ -1342,10 +1362,9 @@ func classifyNodes(
 	for _, node := range nodes {
 		cond := meta.FindStatusCondition(node.Status.Conditions, string(hwmgmtv1alpha1.Configured))
 
-		if cond != nil &&
-			cond.Status == metav1.ConditionTrue &&
-			cond.Reason == string(hwmgmtv1alpha1.ConfigApplied) &&
-			node.Spec.HwProfile == newHwProfile {
+		if node.Spec.HwProfile == newHwProfile &&
+			(cond == nil ||
+				(cond.Status == metav1.ConditionTrue && cond.Reason == string(hwmgmtv1alpha1.ConfigApplied))) {
 			nc.DoneNodes = append(nc.DoneNodes, node)
 			continue
 		}
