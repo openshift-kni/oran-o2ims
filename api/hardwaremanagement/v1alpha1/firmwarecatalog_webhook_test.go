@@ -60,6 +60,7 @@ var _ = Describe("FirmwareCatalogValidator", func() {
 			Build()
 		validator = &firmwareCatalogValidator{
 			Client: fakeClient,
+			Reader: fakeClient,
 		}
 	}
 

@@ -23,7 +23,10 @@ var firmwarecataloglog = logf.Log.WithName("firmwarecatalog-webhook")
 func (r *FirmwareCatalog) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	// nolint:wrapcheck
 	return ctrl.NewWebhookManagedBy(mgr, &FirmwareCatalog{}).
-		WithValidator(&firmwareCatalogValidator{Client: mgr.GetClient()}).
+		WithValidator(&firmwareCatalogValidator{
+			Client: mgr.GetClient(),
+			Reader: mgr.GetAPIReader(),
+		}).
 		Complete()
 }
 
@@ -31,6 +34,13 @@ func (r *FirmwareCatalog) SetupWebhookWithManager(mgr ctrl.Manager) error {
 
 type firmwareCatalogValidator struct {
 	client.Client
+	// Reader is an uncached API reader used to list HardwareProfiles when
+	// validating entry removal and catalog deletion. The cached client can
+	// lag behind the API server, and here staleness fails open: a
+	// newly created HardwareProfile that is not yet in the cache would let a
+	// referenced entry be removed. Reading directly from the API server
+	// avoids that window.
+	Reader client.Reader
 }
 
 var _ admission.Validator[*FirmwareCatalog] = &firmwareCatalogValidator{}
@@ -54,7 +64,7 @@ func (v *firmwareCatalogValidator) ValidateUpdate(ctx context.Context, oldCatalo
 	}
 
 	hwProfiles := &HardwareProfileList{}
-	if err := v.Client.List(ctx, hwProfiles, client.InNamespace(oldCatalog.Namespace)); err != nil {
+	if err := v.Reader.List(ctx, hwProfiles, client.InNamespace(oldCatalog.Namespace)); err != nil {
 		return nil, fmt.Errorf("failed to list HardwareProfiles: %w", err)
 	}
 
@@ -78,7 +88,7 @@ func (v *firmwareCatalogValidator) ValidateDelete(ctx context.Context, catalog *
 	firmwarecataloglog.Info("validate delete", "name", catalog.Name)
 
 	hwProfiles := &HardwareProfileList{}
-	if err := v.Client.List(ctx, hwProfiles, client.InNamespace(catalog.Namespace)); err != nil {
+	if err := v.Reader.List(ctx, hwProfiles, client.InNamespace(catalog.Namespace)); err != nil {
 		return nil, fmt.Errorf("failed to list HardwareProfiles: %w", err)
 	}
 
