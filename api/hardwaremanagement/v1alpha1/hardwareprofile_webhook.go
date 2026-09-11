@@ -103,8 +103,15 @@ func (v *hardwareProfileValidator) validateFirmwareImages(ctx context.Context, h
 
 	var errs []string
 	var biosCount, bmcCount int
+	seen := make(map[string]struct{}, len(hp.Spec.FirmwareImages))
 
 	for _, name := range hp.Spec.FirmwareImages {
+		if _, dup := seen[name]; dup {
+			errs = append(errs, fmt.Sprintf("firmwareImages contains duplicate entry %q", name))
+			continue
+		}
+		seen[name] = struct{}{}
+
 		img, ok := imageMap[name]
 		if !ok {
 			errs = append(errs, fmt.Sprintf("firmwareImages entry %q not found in FirmwareCatalog", name))

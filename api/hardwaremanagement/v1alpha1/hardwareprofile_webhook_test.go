@@ -125,6 +125,15 @@ func TestHardwareProfileWebhookValidateCreate(t *testing.T) {
 			errMsg:  "unsupported component",
 		},
 		{
+			name: "duplicate firmwareImages entry rejected",
+			hp: &HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
+				Spec:       HardwareProfileSpec{FirmwareImages: []string{"nic-entry", "nic-entry"}},
+			},
+			wantErr: true,
+			errMsg:  `firmwareImages contains duplicate entry "nic-entry"`,
+		},
+		{
 			name: "missing FirmwareCatalog",
 			hp: &HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
