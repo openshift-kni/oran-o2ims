@@ -169,7 +169,8 @@ upgradeDefaults:
     # docker/podman auth JSON (same format as LCA's seedgen Secret).
     seedAuthSecretRef:
       name: seed-registry-credentials
-    # Optional: custom recert image override (LCA default used if omitted)
+    # Optional: custom recert image selected by the trusted template author
+    # (LCA default used if omitted); not exposed to PR authors.
     recertImage: ""
     # Optional: live ISO generation configuration. When present, the
     # controller builds a live installation ISO after seed generation
@@ -296,8 +297,11 @@ less-trusted PR author, so none of them appears there:
   generation: `recertImage`. Phase 3 passes `recertImage` to the
   `SeedGenerator` CR, and the LCA runs it (the recert tool) on the spoke, so
   a PR-supplied value would let an untrusted author run an arbitrary image on
-  the seed cluster. When resolved from `upgradeDefaults` it must be an
-  allowlisted, immutable (`repo@sha256:<digest>`) reference.
+  the seed cluster. `recertImage` is therefore template-owned and is only
+  selected by a trusted template author. This proposal does not require the
+  operator to enforce a digest or registry allowlist for that trusted input;
+  deployments that impose such a policy may enforce it through their normal
+  platform or admission controls.
 - **Credential references** that select which hub Secret/ConfigMap the
   workflow reads and mounts into the ISO-build Job: `seedAuthSecretRef`,
   `liveISO.uploadSecretRef`, `liveISO.pullSecretRef`. Overriding these lets
@@ -331,7 +335,10 @@ benign `seedImage` tag:
 
 ```yaml
 # templateParameterSchema.upgradeParameters
+type: object
+additionalProperties: false
 properties:
+  # Existing upgrade-parameter properties are omitted from this excerpt.
   seedGeneration:
     type: object
     additionalProperties: false
@@ -355,77 +362,82 @@ level so a typo in `upgradeDefaults` (e.g. `seedimage`) fails validation:
 
 ```yaml
 # Controller-internal; not part of templateParameterSchema.
-seedGeneration:
-  type: object
-  additionalProperties: false
-  properties:
-    seedImage: { type: string, minLength: 1, pattern: "^([a-z0-9]+://)?[\\S]+$" }
-    seedAuthSecretRef:
-      type: object
-      additionalProperties: false
-      properties: { name: { type: string } }
-      required: [name]
-    recertImage:
-      type: string
-      description: >
-        Template-owned; when set it must be an allowlisted, immutable digest
-        reference (repo@sha256:<digest>), because Phase 3 passes it to the
-        SeedGenerator CR where it runs as executable code during seed
-        generation.
-    liveISO:
-      type: object
-      additionalProperties: false
-      properties:
-        releaseImage:
-          type: string
-          minLength: 1
-          description: >
-            OCP release image to extract openshift-install from — the
-            canonical release pull-spec (redirected by the hub-derived mirror
-            mappings) or a direct mirror pull-spec.
-        installationDisk: { type: string, minLength: 1, description: Disk device path on the target servers }
-        sshKey: { type: string, description: SSH public key for debugging access }
-        uploadSecretRef:
-          type: object
-          additionalProperties: false
-          properties: { name: { type: string } }
-          required: [name]
-        urlBase:
-          type: string
-          minLength: 1
-          description: >
-            HTTPS origin plus base path from which the uploaded ISO is served.
-            The effective per-run ISO URL is computed as urlBase + the per-run
-            suffix and recorded in status; it is never supplied directly.
-        pullSecretRef:
-          type: object
-          additionalProperties: false
-          properties: { name: { type: string } }
-          required: [name]
-        storageClass: { type: string, description: StorageClass for the ISO build workspace PVC (~20GB); cluster default if omitted }
-        imageDigestSources:
-          type: array
-          description: >
-            Mirror mappings for the ISO build. Auto-derived from the hub's
-            ImageDigestMirrorSet/ImageContentSourcePolicy if omitted.
-          items:
+type: object
+additionalProperties: false
+properties:
+  # Existing upgrade-parameter properties are omitted from this excerpt.
+  seedGeneration:
+    type: object
+    additionalProperties: false
+    properties:
+      seedImage: { type: string, minLength: 1, pattern: "^([a-z0-9]+://)?[\\S]+$" }
+      seedAuthSecretRef:
+        type: object
+        additionalProperties: false
+        properties: { name: { type: string } }
+        required: [name]
+      recertImage:
+        type: string
+        description: >
+          Template-owned and selected only by a trusted template author. The
+          operator passes it to the SeedGenerator CR, where LCA runs it as the
+          recert tool during seed generation. It is not exposed to PR authors;
+          any deployment-specific digest or registry policy is enforced by
+          the deployment's normal platform or admission controls.
+      liveISO:
+        type: object
+        additionalProperties: false
+        properties:
+          releaseImage:
+            type: string
+            minLength: 1
+            description: >
+              OCP release image to extract openshift-install from — the
+              canonical release pull-spec (redirected by the hub-derived mirror
+              mappings) or a direct mirror pull-spec.
+          installationDisk: { type: string, minLength: 1, description: Disk device path on the target servers }
+          sshKey: { type: string, description: SSH public key for debugging access }
+          uploadSecretRef:
             type: object
             additionalProperties: false
-            properties:
-              source: { type: string }
-              mirrors: { type: array, items: { type: string } }
-            required: [source, mirrors]
-        additionalTrustBundleConfigMapRef:
-          type: object
-          additionalProperties: false
-          description: >
-            ConfigMap holding the registry CA trust bundle for the mirror.
-            Auto-derived from the hub's image config additionalTrustedCA if
-            omitted.
-          properties: { name: { type: string } }
-          required: [name]
-      required: [releaseImage, installationDisk, uploadSecretRef, urlBase]
-  required: [seedImage, seedAuthSecretRef]
+            properties: { name: { type: string } }
+            required: [name]
+          urlBase:
+            type: string
+            minLength: 1
+            description: >
+              HTTPS origin plus base path from which the uploaded ISO is served.
+              The effective per-run ISO URL is computed as urlBase + the per-run
+              suffix and recorded in status; it is never supplied directly.
+          pullSecretRef:
+            type: object
+            additionalProperties: false
+            properties: { name: { type: string } }
+            required: [name]
+          storageClass: { type: string, description: StorageClass for the ISO build workspace PVC (~20GB); cluster default if omitted }
+          imageDigestSources:
+            type: array
+            description: >
+              Mirror mappings for the ISO build. Auto-derived from the hub's
+              ImageDigestMirrorSet/ImageContentSourcePolicy if omitted.
+            items:
+              type: object
+              additionalProperties: false
+              properties:
+                source: { type: string }
+                mirrors: { type: array, items: { type: string } }
+              required: [source, mirrors]
+          additionalTrustBundleConfigMapRef:
+            type: object
+            additionalProperties: false
+            description: >
+              ConfigMap holding the registry CA trust bundle for the mirror.
+              Auto-derived from the hub's image config additionalTrustedCA if
+              omitted.
+            properties: { name: { type: string } }
+            required: [name]
+        required: [releaseImage, installationDisk, uploadSecretRef, urlBase]
+    required: [seedImage, seedAuthSecretRef]
 ```
 
 ## Controller Workflow
@@ -1151,7 +1163,10 @@ spec:
     properties:
       # ... standard provisioning parameters ...
       upgradeParameters:
+        type: object
+        additionalProperties: false
         properties:
+          # Existing upgrade-parameter properties are omitted from this excerpt.
           seedGeneration:
             type: object
             additionalProperties: false

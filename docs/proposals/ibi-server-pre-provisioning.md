@@ -472,6 +472,7 @@ hwMgmtParameters:
   properties:
     ibiPreProvisioning:
       type: object
+      additionalProperties: false
       properties:
         isoURL:
           type: string
@@ -489,6 +490,7 @@ hwMgmtParameters:
           pattern: '^sha256:[a-f0-9]{64}$'
         isoServerCACertRef:
           type: object
+          additionalProperties: false
           properties:
             name:
               type: string
@@ -510,20 +512,14 @@ hwMgmtParameters:
   type: object
 ```
 
-Validation mirrors the schema: `maxRetries` must be a non-negative integer and
-`retryBackoff` must parse as a non-negative Go `time.Duration`. Both the admission
-webhook and the ICI passthrough reject out-of-range values so a bad override is
-caught at write time rather than surfacing as a stuck attempt. When omitted, the
-controller applies the `PreProvisioningConfig` defaults (`maxRetries: 0`,
-`retryBackoff: 5m`).
+Validation mirrors the schema: `maxRetries` is non-negative and `retryBackoff`
+is a non-negative Go duration. Admission and ICI passthrough reject invalid
+values; omitted fields use `maxRetries: 0` and `retryBackoff: 5m`.
 
-Because `isoURL` and `isoDigest` are caller-overridable through
-`hwMgmtParameters`, validation enforces the two artifact-trust checks before the
-operator fetches the URL (see "Restricting `ISOURL`"): `isoURL` must resolve to an
-operator-owned or allowlisted origin, and `isoDigest` is required (schema, webhook
-and passthrough all re-check, rejecting a missing or off-allowlist value with
-`PreProvisioningConfigInvalid`). The allowlist is operator configuration and
-cannot be widened by a template or `ProvisioningRequest`.
+Because callers may override `isoURL` and `isoDigest`, schema, webhook, and
+passthrough all enforce the artifact checks before fetch: `isoURL` must be
+allowlisted and `isoDigest` is mandatory. The operator owns the allowlist; a
+template or `ProvisioningRequest` cannot widen it.
 
 ## IBI Operator Workflow Changes
 
@@ -616,6 +612,8 @@ ImageClusterInstall created (with spec.preProvisioning set)
       → callback payload: {"attempt": "<n>", "status": "success|failure", "message": "..."}
       → on success:
           → clear BMH spec.image
+          → remove the callback DataImage and wait for deletion before
+            creating the configuration DataImage
           → set BMH spec.externallyProvisioned = true
           → set BMH spec.online = false (power off)
           → set Status.PreProvisioningResult
@@ -1303,6 +1301,7 @@ spec:
         properties:
           ibiPreProvisioning:
             type: object
+            additionalProperties: false
             properties:
               isoURL:
                 type: string
@@ -1312,6 +1311,7 @@ spec:
                 pattern: '^sha256:[a-f0-9]{64}$'
               isoServerCACertRef:
                 type: object
+                additionalProperties: false
                 properties:
                   name:
                     type: string
@@ -1719,7 +1719,7 @@ repository:
 - Unit tests for the pre-provisioning state machine
 - Unit tests for the callback HTTP handler (with mock HTTP client)
 - Integration tests for the full pre-provisioning → cluster installation
-  flow
+  flow, covering carrier cleanup on success, retry, and deletion-in-progress
 
 ### Estimated Upstream Effort
 
