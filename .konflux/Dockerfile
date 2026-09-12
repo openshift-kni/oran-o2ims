@@ -8,7 +8,7 @@ COPY . .
 RUN GOEXPERIMENT=strictfipsruntime CGO_ENABLED=1 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -mod=vendor -tags strictfipsruntime -a -o /bin/oran-o2ims main.go
 
 # Runtime stage
-FROM registry.redhat.io/ubi9/ubi-minimal-pqc:latest@sha256:ef0438e9f078e71a7317c247fdf1d09644441fefe1fe26efbde5f4fa201435fb
+FROM registry.redhat.io/ubi9/ubi-minimal-pqc:latest@sha256:3809cd52a2b09bd49fe0b6d8067d7fda7bd07138f88708e7a2928ef0014c7122
 
 WORKDIR /
 
