@@ -89,7 +89,7 @@ File: `test/e2e/mno_cv_upgrade_test.go`
 File: `test/e2e/mno_hw_configuration_test.go`
 
 - Creating namespaces
-- Creating ClusterTemplate, HardwareProfiles, and supporting resources
+- Creating FirmwareCatalog, ClusterTemplate, HardwareProfiles, and supporting resources
 - Creating 11 BMHs with BMC secrets, HardwareData, HFS, and HFC
 - Waiting for all 11 BMHs to be visible via List
 - Waiting for ClusterTemplate reconciliation

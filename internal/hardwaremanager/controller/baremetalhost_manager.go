@@ -456,9 +456,15 @@ func processHwProfile(ctx context.Context,
 			slog.Bool("biosUpdateRequired", biosUpdateRequired))
 	}
 
+	// Resolve firmware catalog references to internal types
+	resolved, err := resolveFirmwareFromCatalog(ctx, c, namespace, hwProfile.Spec)
+	if err != nil {
+		return false, fmt.Errorf("failed to resolve firmware from catalog for profile %s: %w", profileName, err)
+	}
+
 	// Check if firmware update is required
 	logger.DebugContext(ctx, "Checking if firmware update is required")
-	firmwareUpdateRequired, err := IsFirmwareUpdateRequired(ctx, c, logger, bmh, hwProfile.Spec, validateOnly)
+	firmwareUpdateRequired, err := IsFirmwareUpdateRequired(ctx, c, logger, bmh, resolved, validateOnly)
 	if err != nil {
 		return false, err
 	}

@@ -23,14 +23,24 @@ var firmwarecataloglog = logf.Log.WithName("firmwarecatalog-webhook")
 func (r *FirmwareCatalog) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	// nolint:wrapcheck
 	return ctrl.NewWebhookManagedBy(mgr, &FirmwareCatalog{}).
-		WithValidator(&firmwareCatalogValidator{Client: mgr.GetClient()}).
+		WithValidator(&firmwareCatalogValidator{
+			Client: mgr.GetClient(),
+			Reader: mgr.GetAPIReader(),
+		}).
 		Complete()
 }
 
-//+kubebuilder:webhook:path=/validate-clcm-openshift-io-v1alpha1-firmwarecatalog,mutating=false,failurePolicy=fail,sideEffects=None,groups=clcm.openshift.io,resources=firmwarecatalogs,verbs=update,versions=v1alpha1,name=firmwarecatalogs.clcm.openshift.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/validate-clcm-openshift-io-v1alpha1-firmwarecatalog,mutating=false,failurePolicy=fail,sideEffects=None,groups=clcm.openshift.io,resources=firmwarecatalogs,verbs=update;delete,versions=v1alpha1,name=firmwarecatalogs.clcm.openshift.io,admissionReviewVersions=v1
 
 type firmwareCatalogValidator struct {
 	client.Client
+	// Reader is an uncached API reader used to list HardwareProfiles when
+	// validating entry removal and catalog deletion. The cached client can
+	// lag behind the API server, and here staleness fails open: a
+	// newly created HardwareProfile that is not yet in the cache would let a
+	// referenced entry be removed. Reading directly from the API server
+	// avoids that window.
+	Reader client.Reader
 }
 
 var _ admission.Validator[*FirmwareCatalog] = &firmwareCatalogValidator{}
@@ -54,7 +64,7 @@ func (v *firmwareCatalogValidator) ValidateUpdate(ctx context.Context, oldCatalo
 	}
 
 	hwProfiles := &HardwareProfileList{}
-	if err := v.Client.List(ctx, hwProfiles, client.InNamespace(oldCatalog.Namespace)); err != nil {
+	if err := v.Reader.List(ctx, hwProfiles, client.InNamespace(oldCatalog.Namespace)); err != nil {
 		return nil, fmt.Errorf("failed to list HardwareProfiles: %w", err)
 	}
 
@@ -74,7 +84,26 @@ func (v *firmwareCatalogValidator) ValidateUpdate(ctx context.Context, oldCatalo
 }
 
 // ValidateDelete implements admission.Validator
-func (v *firmwareCatalogValidator) ValidateDelete(_ context.Context, _ *FirmwareCatalog) (admission.Warnings, error) {
+func (v *firmwareCatalogValidator) ValidateDelete(ctx context.Context, catalog *FirmwareCatalog) (admission.Warnings, error) {
+	firmwarecataloglog.Info("validate delete", "name", catalog.Name)
+
+	hwProfiles := &HardwareProfileList{}
+	if err := v.Reader.List(ctx, hwProfiles, client.InNamespace(catalog.Namespace)); err != nil {
+		return nil, fmt.Errorf("failed to list HardwareProfiles: %w", err)
+	}
+
+	var referenced []string
+	for _, img := range catalog.Spec.Images {
+		if isEntryReferencedByAnyProfile(img.Name, hwProfiles.Items) {
+			referenced = append(referenced, img.Name)
+		}
+	}
+
+	if len(referenced) > 0 {
+		return nil, fmt.Errorf("cannot delete FirmwareCatalog: entries still referenced by HardwareProfiles: %s",
+			strings.Join(referenced, ", "))
+	}
+
 	return nil, nil
 }
 
@@ -125,10 +154,17 @@ func findModifiedImmutableFields(old, updated []FirmwareImage) []string {
 }
 
 // isEntryReferencedByAnyProfile checks whether the given catalog entry name is
-// referenced by any HardwareProfile's firmware fields. In Phase 1 of the
-// FirmwareCatalog rollout, HardwareProfile firmware fields are structs (not
-// string references), so this always returns false. When Phase 2 changes those
-// fields to string references, this function will need to be updated.
-func isEntryReferencedByAnyProfile(_ string, _ []HardwareProfile) bool {
+// referenced by any HardwareProfile's firmwareImages list. Only the
+// firmwareImages approach references catalog entries by name; the deprecated
+// inline BiosFirmware/BmcFirmware/NicFirmware fields carry their own URL and
+// version and therefore create no dependency on the catalog.
+func isEntryReferencedByAnyProfile(entryName string, profiles []HardwareProfile) bool {
+	for i := range profiles {
+		for _, ref := range profiles[i].Spec.FirmwareImages {
+			if ref == entryName {
+				return true
+			}
+		}
+	}
 	return false
 }
