@@ -37,6 +37,7 @@ The typical workflow for deploying and managing clusters with the O-Cloud Manage
 - [Environment Setup](./docs/user-guide/environment-setup.md)
 - [GitOps Repository Layout and Setup](./docs/user-guide/gitops-layout-and-setup.md)
 - [Server Onboarding](./docs/user-guide/server-onboarding-orig.md)
+- [Handling Secrets](./docs/user-guide/secrets-management.md)
 - [Template Overview](./docs/user-guide/template-overview.md)
 
 ### Cluster Provisioning

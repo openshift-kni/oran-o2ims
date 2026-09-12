@@ -13,6 +13,11 @@ See [Environment Setup](./environment-setup.md).
 
 This guide describes the Git repository content required by the O‑Cloud Manager to deploy and configure a cluster. We recommend organizing the repo as follows. For concrete examples, see the sample content under [git-setup](../samples/git-setup/).
 
+> [!WARNING]
+> The layout below includes Kubernetes `Secret` objects such as `pull-secret.yaml` and the BMC credential Secrets in the sample inventory.
+> Kubernetes Secrets are only base64-encoded, not encrypted, and must not be committed to Git in cleartext.
+> Before populating this repository, see [Handling Secrets](./secrets-management.md) for how to keep sensitive credentials out of Git.
+
 Recommended layout:
 
 ```text
