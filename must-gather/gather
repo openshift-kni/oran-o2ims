@@ -80,8 +80,15 @@ gather_bmh_preprovisioning_secrets() {
         mkdir -p "${output_dir}/${ns}"
         # Collect metadata and data key names only — redact values to
         # avoid leaking network credentials into support-case archives.
+        # The first sed redacts values under the top-level data: block. The
+        # second sed redacts the kubectl.kubernetes.io/last-applied-configuration
+        # annotation, which on apply-created Secrets carries a full copy of the
+        # data values. `oc get -o yaml` renders that annotation inline as a
+        # single-quoted scalar on one line, so replacing everything after the
+        # key with REDACTED masks the value without touching adjacent lines.
         oc get secret "${secret_name}" -n "${ns}" -o yaml 2>/dev/null \
             | sed '/^data:/,/^[^ ]/{/^data:/!{/^[^ ]/!s/:.*$/: REDACTED/}}' \
+            | sed 's#\(kubectl\.kubernetes\.io/last-applied-configuration:\).*#\1 REDACTED#' \
             > "${output_dir}/${ns}/${secret_name}.yaml" 2>/dev/null || true
         count=$((count + 1))
     done <<< "${bmhs}"
