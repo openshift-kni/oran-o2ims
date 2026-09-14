@@ -1,5 +1,44 @@
+# Build stage: download and verify the pinned yq binary used by the gather
+# script for YAML-aware Secret redaction.
+FROM registry.redhat.io/openshift4/ose-cli-rhel9:latest AS yq-downloader
+
+# yq (mikefarah) is pinned by version and per-arch SHA-256 so the Secret
+# redaction is independent of YAML formatting and supply-chain safe.
+# TARGETARCH is populated automatically by BuildKit/buildah for multi-arch
+# builds; it falls back to uname for plain single-arch builds.
+ARG TARGETARCH
+ARG YQ_VERSION=v4.45.4
+ARG YQ_SHA256_amd64=b96de04645707e14a12f52c37e6266832e03c29e95b9b139cddcae7314466e69
+ARG YQ_SHA256_arm64=a02cc637409db44a9f9cb55ea92c40019582ba88083c4d930a727ec4b59ed439
+ARG YQ_SHA256_ppc64le=f1a79075debd825ba148056e4ee970f006fda39d7fbd04cc2057758e64963d4c
+ARG YQ_SHA256_s390x=febb4890dce0cdb51c00ca810c11c257be8f652844ffe40f8d7dd13e2762b8b9
+
+USER 0
+RUN set -eu; \
+    arch="${TARGETARCH:-}"; \
+    if [ -z "${arch}" ]; then \
+        case "$(uname -m)" in \
+            x86_64) arch=amd64 ;; \
+            aarch64) arch=arm64 ;; \
+            ppc64le) arch=ppc64le ;; \
+            s390x) arch=s390x ;; \
+            *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;; \
+        esac; \
+    fi; \
+    case "${arch}" in \
+        amd64) sha="${YQ_SHA256_amd64}" ;; \
+        arm64) sha="${YQ_SHA256_arm64}" ;; \
+        ppc64le) sha="${YQ_SHA256_ppc64le}" ;; \
+        s390x) sha="${YQ_SHA256_s390x}" ;; \
+        *) echo "unsupported TARGETARCH: ${arch}" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /tmp/yq "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${arch}"; \
+    echo "${sha}  /tmp/yq" | sha256sum -c -; \
+    chmod +x /tmp/yq
+
 FROM registry.redhat.io/openshift4/ose-cli-rhel9:latest
 
+COPY --from=yq-downloader /tmp/yq /usr/bin/yq
 COPY must-gather/gather /usr/bin/gather
 
 ENTRYPOINT ["/usr/bin/gather"]

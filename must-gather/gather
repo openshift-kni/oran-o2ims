@@ -50,6 +50,21 @@ gather_resource() {
     log "  Collected ${count} ${resource}"
 }
 
+# redact_secret_yaml masks sensitive values in a Secret's YAML read from
+# stdin and writes the sanitized result to stdout. It uses yq for a
+# YAML-aware redaction so the guarantee holds regardless of how a value is
+# serialized (an inline single-quoted scalar or a multi-line block scalar).
+# It masks every value under the top-level data: block and the
+# kubectl.kubernetes.io/last-applied-configuration annotation, which on
+# apply-created Secrets carries a full copy of the data values. Both updates
+# are guarded with select(...) so fields that are absent are never created.
+#
+# This MUST stay in sync with redact_secret_yaml() in
+# must-gather/tests/redact_secret_test.sh.
+redact_secret_yaml() {
+    yq 'with(select(.data != null); .data.[] |= "REDACTED") | with(select(.metadata.annotations."kubectl.kubernetes.io/last-applied-configuration" != null); .metadata.annotations."kubectl.kubernetes.io/last-applied-configuration" = "REDACTED")'
+}
+
 # gather_bmh_preprovisioning_secrets collects Secrets referenced by BMH preprovisioningNetworkDataName fields.
 gather_bmh_preprovisioning_secrets() {
     local output_dir="${BASE_DIR}/metal3/preprovisioning-secrets"
@@ -78,17 +93,12 @@ gather_bmh_preprovisioning_secrets() {
         fi
 
         mkdir -p "${output_dir}/${ns}"
-        # Collect metadata and data key names only — redact values to
-        # avoid leaking network credentials into support-case archives.
-        # The first sed redacts values under the top-level data: block. The
-        # second sed redacts the kubectl.kubernetes.io/last-applied-configuration
-        # annotation, which on apply-created Secrets carries a full copy of the
-        # data values. `oc get -o yaml` renders that annotation inline as a
-        # single-quoted scalar on one line, so replacing everything after the
-        # key with REDACTED masks the value without touching adjacent lines.
+        # Collect metadata and data key names only — redact values with a
+        # YAML-aware pass (see redact_secret_yaml) to avoid leaking network
+        # credentials into support-case archives regardless of how the YAML
+        # serializer renders them.
         oc get secret "${secret_name}" -n "${ns}" -o yaml 2>/dev/null \
-            | sed '/^data:/,/^[^ ]/{/^data:/!{/^[^ ]/!s/:.*$/: REDACTED/}}' \
-            | sed 's#\(kubectl\.kubernetes\.io/last-applied-configuration:\).*#\1 REDACTED#' \
+            | redact_secret_yaml \
             > "${output_dir}/${ns}/${secret_name}.yaml" 2>/dev/null || true
         count=$((count + 1))
     done <<< "${bmhs}"
