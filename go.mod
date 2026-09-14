@@ -12,7 +12,7 @@ require (
 	github.com/coreos/go-semver v0.3.1
 	github.com/getkin/kin-openapi v0.149.0
 	github.com/go-logr/logr v1.4.4
-	github.com/golang-migrate/migrate/v4 v4.19.1
+	github.com/golang-migrate/migrate/v4 v4.20.1
 	github.com/google/uuid v1.6.0
 	github.com/integralist/go-findroot v0.0.0-20160518114804-ac90681525dc
 	github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438

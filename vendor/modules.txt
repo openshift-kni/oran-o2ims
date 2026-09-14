@@ -170,8 +170,8 @@ github.com/go-task/slim-sprig/v3
 ## explicit; go 1.18
 github.com/go-viper/mapstructure/v2
 github.com/go-viper/mapstructure/v2/internal/errors
-# github.com/golang-migrate/migrate/v4 v4.19.1
-## explicit; go 1.24.0
+# github.com/golang-migrate/migrate/v4 v4.20.1
+## explicit; go 1.25.11
 github.com/golang-migrate/migrate/v4
 github.com/golang-migrate/migrate/v4/database
 github.com/golang-migrate/migrate/v4/database/multistmt
