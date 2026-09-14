@@ -18,6 +18,7 @@ type Bios struct {
 	Attributes map[string]intstr.IntOrString `json:"attributes,omitempty"`
 }
 
+// Firmware holds an inline firmware version and download URL.
 type Firmware struct {
 	// Version is the desired firmware version
 	Version string `json:"version,omitempty"`
@@ -25,11 +26,17 @@ type Firmware struct {
 	URL string `json:"url,omitempty"`
 }
 
+// Nic holds an inline NIC firmware version and download URL.
 type Nic struct {
 	// Version is the NIC firmware version
 	Version string `json:"version,omitempty"`
 	// URL points to the NIC firmware file
 	URL string `json:"url,omitempty"`
+}
+
+// IsEmpty returns true when both Version and URL are empty.
+func (fm Firmware) IsEmpty() bool {
+	return fm.Version == "" && fm.URL == ""
 }
 
 // HardwareProfileSpec defines the desired state of HardwareProfile
@@ -40,17 +47,37 @@ type HardwareProfileSpec struct {
 	//+operator-sdk:csv:customresourcedefinitions:type=spec
 	Bios Bios `json:"bios"`
 
-	// BIOS firmware information
+	// BiosFirmware is the inline BIOS firmware (version and url).
+	//
+	// Deprecated: use FirmwareImages with FirmwareCatalog entries instead.
+	// Mutually exclusive with FirmwareImages.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="BIOS Firmware",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	BiosFirmware Firmware `json:"biosFirmware,omitempty"`
 
-	// BMC firmware information
+	// BmcFirmware is the inline BMC firmware (version and url).
+	//
+	// Deprecated: use FirmwareImages with FirmwareCatalog entries instead.
+	// Mutually exclusive with FirmwareImages.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="BMC Firmware",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	BmcFirmware Firmware `json:"bmcFirmware,omitempty"`
 
-	// NIC firmware information list
+	// NicFirmware is the inline NIC firmware list (version and url per entry).
+	//
+	// Deprecated: use FirmwareImages with FirmwareCatalog entries instead.
+	// Mutually exclusive with FirmwareImages.
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="NIC Firmware",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	NicFirmware []Nic `json:"nicFirmware,omitempty"`
+
+	// FirmwareImages is a list of FirmwareCatalog entry names. Each entry is
+	// looked up in the singleton FirmwareCatalog to resolve its component type
+	// (bios, bmc, or nic), URL, and version. At most one entry may resolve to
+	// component "bios" and at most one to component "bmc"; multiple "nic"
+	// entries are allowed.
+	//
+	// Mutually exclusive with the deprecated BiosFirmware, BmcFirmware, and
+	// NicFirmware fields.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Firmware Images",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	FirmwareImages []string `json:"firmwareImages,omitempty"`
 }
 
 // HardwareProfileStatus defines the observed state of HardwareProfile
@@ -99,8 +126,4 @@ type HardwareProfileList struct {
 
 func init() {
 	SchemeBuilder.Register(&HardwareProfile{}, &HardwareProfileList{})
-}
-
-func (fm Firmware) IsEmpty() bool {
-	return fm.Version == "" && fm.URL == ""
 }

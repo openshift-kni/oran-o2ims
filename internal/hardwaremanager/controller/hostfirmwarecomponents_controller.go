@@ -14,6 +14,7 @@ import (
 	"time"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
@@ -28,10 +29,9 @@ import (
 )
 
 const (
-	// Component names for firmware validation
-	componentBIOS = "bios"
-	componentBMC  = "bmc"
-	componentNIC  = "nic:"
+	componentBIOS = hwmgmtv1alpha1.ComponentBIOS
+	componentBMC  = hwmgmtv1alpha1.ComponentBMC
+	componentNIC  = hwmgmtv1alpha1.ComponentNIC + ":"
 )
 
 // HostFirmwareComponentsReconciler reconciles HostFirmwareComponents objects
