@@ -778,28 +778,20 @@ body can be serialized safely and the token kept out of argv:
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Determine the prep service result for THIS boot/attempt only. Use the
-# systemd-tracked Result property rather than grepping the journal, and scope any
-# journal read to the current boot (-b 0). An unscoped `journalctl -u ...` would
-# also match a "finished successfully" line from an earlier boot or a previous
-# attempt on the same disk, producing a false success. After= ordering alone does
-# NOT disambiguate attempts.
+# Use systemd's Result for THIS boot/attempt; After= ordering alone does not
+# disambiguate attempts.
 RESULT=$(systemctl show -p Result --value install-rhcos-and-restore-seed.service)
 if [ "${RESULT}" = "success" ]; then
   STATUS="success"
   MSG="IBI preparation process finished successfully"
 else
   STATUS="failure"
-  MSG=$(journalctl -b 0 -u install-rhcos-and-restore-seed.service \
-    --no-pager -n 20 | tail -5)
+  # Keep journal details local; they can contain credentials or tokens.
+  MSG="IBI preparation failed; inspect host-local logs"
 fi
 
-# Serialize the body with a real JSON encoder. MSG is arbitrary journal text
-# (newlines, quotes, backslashes); a hand-built "{\"message\": \"${MSG}\"}"
-# produces invalid JSON and enables field injection. Use jq (shipped in RHCOS)
-# not python3 (NOT present in the RHCOS live ISO — invoking it would fail and,
-# under `set -e`, exit before curl, turning every callback into a timeout).
-# --arg passes each value as a literal string, so no field injection. The
+# Serialize with jq (shipped in RHCOS; python3 is absent from the live ISO).
+# --arg passes each value as a literal string. The
 # attempt id ties this callback to the exact boot the operator waits on (see
 # PreProvisioningAttempt); the operator rejects any mismatch.
 PAYLOAD=$(jq -nc \
@@ -959,22 +951,26 @@ type CallbackPayload struct {
 
 On receiving a callback:
 
-1. Look up the `ImageClusterInstall` by namespace/name
-2. Verify the ICI has `spec.preProvisioning` set and is in the
+1. Enforce a 16 KiB maximum body **before decoding or persistence**; reject an
+   oversized or chunked body with `413` using `http.MaxBytesReader` (or equivalent
+   middleware).
+2. Look up the ICI and authenticate the bearer token before decoding; invalid or
+   expired tokens get `401` without parsing attacker JSON.
+3. Verify the ICI has `spec.preProvisioning` set and is in the
    `PreProvisioningBooting` or `PreProvisioningInProgress` state
-3. Verify the payload `attempt` equals `status.preProvisioningAttempt` (and the
+4. Verify the decoded payload `attempt` equals `status.preProvisioningAttempt` (and the
    bearer token is the one minted for that attempt); reject with 409/401
    otherwise. This drops late callbacks from a superseded boot.
-4. Reject if `status.preProvisioningResult` for this attempt is **already set** —
+5. Reject if `status.preProvisioningResult` for this attempt is **already set** —
    only the **first** terminal callback wins.
-5. Store the result in `status.preProvisioningResult` (with its `attempt`)
+6. Store the result in `status.preProvisioningResult` (with its `attempt`)
    using an **atomic compare-and-swap on the ICI `resourceVersion`** (a status
    update with the read `resourceVersion` as precondition). On a conflict,
    re-read and re-apply step 4: a concurrent callback (duplicate host retries,
    or a success/failure race) that already recorded a terminal result drops this
    one with 409. This guarantees exactly one terminal result even under
    concurrent POSTs, rather than last-writer-wins.
-6. Trigger a reconciliation of the ICI (the reconciler picks up the
+7. Trigger a reconciliation of the ICI (the reconciler picks up the
    result and proceeds with the BMH state transition)
 
 The endpoint is authenticated with a **per-attempt** bearer token minted when the
@@ -994,11 +990,7 @@ patch := client.MergeFrom(bmh.DeepCopy())
 bmh.Spec.Image = &bmh_v1alpha1.Image{
     URL:        preProvisioning.ISOURL,
     DiskFormat: pointer.String("live-iso"),
-    // Best-effort only: Ironic's live-iso path does NOT reliably enforce these
-    // and BMO clears them before passing boot_iso (see prose below). The real
-    // guarantee is the operator's stream-and-verify of ISOURL before this patch.
-    Checksum:     preProvisioning.ISODigest, // "sha256:<hex>"
-    ChecksumType: bmh_v1alpha1.SHA256,
+    // Do not populate Checksum/ChecksumType: BMO clears them before boot_iso.
 }
 bmh.Spec.Online = true
 err := r.Patch(ctx, bmh, patch)
@@ -1024,6 +1016,11 @@ is the same value the seed-generation workflow records in
 `SeedGenerationStatus.ISODigest`, pinning both proposals to one artifact end to
 end.
 
+This is producer/server binding, not cryptographic verification by the BMC: the
+unique allowlisted URL must never be rewritten and must return the ISO directly.
+Deployments unable to guarantee this are rejected; BMH checksum fields are not
+a substitute.
+
 **Restricting `ISOURL` before the operator fetches it.** Because `isoURL` is
 overridable through `hwMgmtParameters`, an untrusted caller could otherwise point
 the operator's pre-fetch at an arbitrary HTTPS endpoint. Requiring HTTPS is not
@@ -1042,6 +1039,12 @@ checks **before any byte of `ISOURL` is fetched**, failing closed with
   the operator drives an automated boot; URL-only trust is not accepted. A
   missing digest is rejected up front, so the bytes handed to the BMC are always
   pinned to a verified artifact.
+
+**Redirect policy for every ISO fetch.** Operator digest/content and sidecar
+requests disable redirects; any `3xx` fails closed with
+`PreProvisioningConfigInvalid`. BMO/Ironic cannot revalidate the later BMC
+fetch, so the per-run origin must return direct `200`; tests cover off-list
+redirects and a direct BMC URL.
 
 **The operator's pre-fetch is necessary but not sufficient — the `ISOURL` must
 also be immutable.** There is an unavoidable time-of-check/time-of-use gap: the
@@ -1717,7 +1720,9 @@ repository:
 
 - Unit tests for callback ignition generation
 - Unit tests for the pre-provisioning state machine
-- Unit tests for the callback HTTP handler (with mock HTTP client)
+- Unit tests for the callback handler proving fixed/redacted failure text and
+  pre-decode oversized/invalid-token rejection (`413`/`401`)
+- ISO-fetch tests for off-list redirect rejection and a direct `200` BMC URL
 - Integration tests for the full pre-provisioning → cluster installation
   flow, covering carrier cleanup on success, retry, and deletion-in-progress
 
