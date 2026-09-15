@@ -527,8 +527,9 @@ its status is flushed, every create in the state machine is **create-or-adopt**,
 not blind create. Deterministic names alone are not enough: a restart re-issuing
 a `create` hits `AlreadyExists`, and a name collision with an unrelated object
 (prior run or external actor) could silently reuse the wrong resource. For each
-generated resource — the `seedgen` Secret, the ISO-build `Job`, its workspace
-`PVC`, and the per-run mirror/CA `ConfigMap` — the controller:
+generated resource — the spoke `seedgen` Secret/`SeedGenerator` CR, ISO-build
+`Job`/workspace `PVC`, per-run credential Secrets, and mirror/CA `ConfigMap` —
+the controller:
 
 - Stamps a **per-run ownership label** carrying the ProvisioningRequest name
   and UID at creation time.
@@ -545,6 +546,10 @@ Each create has restart-after-create test coverage: kill the reconcile
 immediately after the create and assert the next reconcile adopts (not
 duplicates, not `AlreadyExists`-fails) its own resource and rejects a same-named
 foreign object.
+
+Phase 2 uses the spoke admin kubeconfig and creates no spoke `ServiceAccount`,
+token `Secret`, `RoleBinding`, or `ClusterRoleBinding`; the only spoke objects
+created are the transient `seedgen` Secret and `SeedGenerator` CR.
 
 #### Regenerating a seed
 
@@ -862,7 +867,12 @@ The controller creates a Kubernetes Job on the hub cluster that builds the live 
 
 **Job pod spec considerations:**
 
-- The Job image uses `oc` (available from the OCP CLI tools image) and `openshift-install` (extracted at runtime)
+- **Pinned ISO-build toolchain.** The Job uses an operator-owned image by
+  immutable digest (never a tag) containing `oc`, POSIX shell, `ssh`, `scp`, and
+  `sha256sum`; `openshift-install` is extracted from the pinned release image.
+  Before creating the PVC or Job, Phase 1 runs a short-lived capability-check
+  Pod from the same digest and fails `PreconditionChecksFailed` if a tool or
+  image pull is unavailable. Tests cover complete and missing-tool images.
 - **PVC for build workspace**: The controller creates a dedicated PVC (~20GB), mounted into the Job pod as the working directory, because `openshift-install` pulls the full seed image and generates an ISO, exceeding typical ephemeral storage limits. It is created before the Job and deleted
   during Phase 5 after successful upload. Its name is derived from the ProvisioningRequest name (e.g. `<pr-name>-iso-build`); the StorageClass comes from the optional `liveISO.storageClass` field, or the cluster default if omitted.
 - **Per-run credential copies in the Job namespace.** A pod can only mount
@@ -915,12 +925,11 @@ in its own namespace:
   cluster's namespace — the credential Phase 2 uses to reach the spoke. This
   `get` is the **only** access the workflow needs to obtain spoke API access;
   no spoke-side RBAC is created.
-- `core/configmaps`: `create`, `get`, `delete` (the per-run mirror/CA
-  ConfigMap), `get` on the hub image-config `additionalTrustedCA`, and `get` on
-  the ConfigMap named by `liveISO.additionalTrustBundleConfigMapRef` in the
-  ClusterTemplate namespace. That override **replaces** the hub-derived trust
-  bundle (see Phase 4 step 1); without a namespaced `get` for it the override
-  fails with `Forbidden` and stops ISO generation.
+- `core/configmaps`: `create`, `get`, `delete` in the O-Cloud Manager namespace
+  for the per-run mirror/CA ConfigMap; `get` on hub `additionalTrustedCA`; and
+  namespaced `get` on the `liveISO.additionalTrustBundleConfigMapRef` target
+  in the ClusterTemplate namespace. Without the latter, the override fails
+  `Forbidden`; authorization tests cover both namespaces.
 - `core/pods` and `core/pods/log`: `get`, `list` (read the build pod and its
   logs for the redacted failure summary).
 - `config.openshift.io` `images` / `ImageDigestMirrorSet` /
@@ -1174,7 +1183,6 @@ spec:
               seedImage:
                 type: string
                 minLength: 1
-        type: object
     type: object
 ```
 
@@ -1376,8 +1384,11 @@ Roughly 4 working sessions to implement:
    be validated against the specific ACM/MCE version — in particular that the agent namespaces and identity secrets are fully removed so the captured seed carries no stale hub-registration state. (Confirmed: lca-cli does **not** strip klusterlet identity, so the controller cannot
    defer this.)
 
-2. **What container image should the ISO generation Job use?** The Job needs `oc` (for `oc adm release extract`) and basic tools (`scp`, shell). Options include the OCP CLI tools image (`registry.redhat.io/openshift4/ose-cli`), which is available on disconnected mirrors and already
-   contains `oc`. The `openshift-install` binary is extracted at runtime from the release image rather than baked into the Job image.
+2. **What container image should the ISO generation Job use?** Resolved: an
+   operator-owned ISO-build image by immutable digest containing `oc`, POSIX
+   shell, `ssh`, `scp`, and `sha256sum`; `openshift-install` is extracted from
+   the pinned release image. Phase 1 checks the same image before creating the
+   PVC or Job and fails closed if a tool is unavailable.
 
 3. **Should ISO upload support mechanisms beyond SCP?** The initial implementation uses SCP/SFTP for simplicity (matching the existing manual workflow). Future iterations could add S3-compatible upload, HTTP PUT, or NFS mount as alternative upload mechanisms if there is demand.
 
