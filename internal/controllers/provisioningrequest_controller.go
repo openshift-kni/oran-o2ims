@@ -125,6 +125,8 @@ func (r *ProvisioningRequestReconciler) Reconcile(
 	// Add standard reconciliation context
 	ctx = ctlrutils.LogReconcileStart(ctx, r.Logger, req, "ProvisioningRequest")
 
+	r.Logger.InfoContext(ctx, "This is just a test log")
+
 	defer func() {
 		duration := time.Since(startTime)
 		if err != nil {
