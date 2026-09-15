@@ -22,7 +22,13 @@
 # Requires yq (kislyuk/yq, a jq wrapper) and jq on PATH, matching the
 # tooling installed into the must-gather image by Dockerfile.must-gather.
 #
-# Run manually: ./must-gather/tests/redact_secret_test.sh
+# By default it sources the sibling ../gather script and uses whatever yq is
+# on PATH. Set GATHER_SCRIPT to point at a different gather (for example the
+# /usr/bin/gather baked into the image) so the test exercises the shipped
+# script and the image's pinned yq rather than whatever happens to be local.
+#
+# Run manually:              ./must-gather/tests/redact_secret_test.sh
+# Run against the image:     make test-must-gather
 
 set -uo pipefail
 
@@ -31,12 +37,25 @@ if ! command -v yq >/dev/null 2>&1; then
     exit 127
 fi
 
+# The production redaction targets kislyuk/yq (the jq wrapper). A mikefarah/yq
+# (Go) binary on PATH uses incompatible syntax and would fail spuriously, so
+# skip cleanly rather than report false failures. Run 'make test-must-gather'
+# to test against the image's pinned kislyuk/yq regardless of the local PATH.
+if yq --version 2>&1 | grep -qi mikefarah; then
+    echo "SKIP: found mikefarah/yq on PATH; this test needs kislyuk/yq (pip install yq)." >&2
+    echo "      Run 'make test-must-gather' to test against the image's pinned yq." >&2
+    exit 127
+fi
+
 # Source the production gather script to reuse its redact_secret_yaml()
 # function. gather guards its collection body with a BASH_SOURCE check, so
-# sourcing it defines the helpers without running any collection.
+# sourcing it defines the helpers without running any collection. The path
+# defaults to the sibling ../gather but can be overridden with GATHER_SCRIPT
+# so the test can source the /usr/bin/gather shipped in the must-gather image.
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GATHER_SCRIPT="${GATHER_SCRIPT:-${TEST_DIR}/../gather}"
 # shellcheck source=must-gather/gather
-source "${TEST_DIR}/../gather"
+source "${GATHER_SCRIPT}"
 
 failures=0
 
