@@ -1,11 +1,12 @@
 #!/bin/bash
 
-# Self-contained test for the Secret redaction pipeline used by
+# Test for the Secret redaction pipeline used by
 # gather_bmh_preprovisioning_secrets() in must-gather/gather.
 #
-# The redaction below MUST stay in sync with redact_secret_yaml() in
-# must-gather/gather. It exercises the two guarantees the collection
-# relies on:
+# This test sources must-gather/gather and exercises its real
+# redact_secret_yaml() function, so it always guards the shipped redaction
+# rather than a copy that could drift out of sync. It verifies the two
+# guarantees the collection relies on:
 #   1. Values under the top-level data: block are redacted.
 #   2. The kubectl.kubernetes.io/last-applied-configuration annotation
 #      (present on apply-created Secrets, carrying a full copy of the
@@ -30,14 +31,12 @@ if ! command -v yq >/dev/null 2>&1; then
     exit 127
 fi
 
-# redact_secret_yaml applies the same YAML-aware redaction as
-# redact_secret_yaml() in must-gather/gather.
-redact_secret_yaml() {
-    yq -y 'if .data != null then .data |= map_values("REDACTED") else . end
-        | if .metadata.annotations["kubectl.kubernetes.io/last-applied-configuration"] != null
-            then .metadata.annotations["kubectl.kubernetes.io/last-applied-configuration"] = "REDACTED"
-            else . end'
-}
+# Source the production gather script to reuse its redact_secret_yaml()
+# function. gather guards its collection body with a BASH_SOURCE check, so
+# sourcing it defines the helpers without running any collection.
+TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=must-gather/gather
+source "${TEST_DIR}/../gather"
 
 failures=0
 

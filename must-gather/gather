@@ -8,7 +8,6 @@ set -uo pipefail
 
 BASE_DIR="${BASE_DIR:-/must-gather}"
 METAL3_NS="openshift-machine-api"
-mkdir -p "${BASE_DIR}"
 
 log() {
     echo "$(date '+%Y-%m-%dT%H:%M:%S') $*"
@@ -59,8 +58,8 @@ gather_resource() {
 # which on apply-created Secrets carries a full copy of the data values.
 # Both updates are guarded so fields that are absent are never created.
 #
-# This MUST stay in sync with redact_secret_yaml() in
-# must-gather/tests/redact_secret_test.sh.
+# must-gather/tests/redact_secret_test.sh sources this script and exercises
+# this exact function, so the test always covers the shipped redaction.
 redact_secret_yaml() {
     yq -y 'if .data != null then .data |= map_values("REDACTED") else . end
         | if .metadata.annotations["kubectl.kubernetes.io/last-applied-configuration"] != null
@@ -156,48 +155,62 @@ gather_pod_logs() {
     log "  Collected logs from ${count} pods"
 }
 
-log "Starting O-Cloud Manager must-gather collection"
-log "Output directory: ${BASE_DIR}"
+# main runs the full collection. It is invoked only when this script is
+# executed directly; when it is sourced (e.g. by
+# must-gather/tests/redact_secret_test.sh to reuse redact_secret_yaml) the
+# collection does not run.
+main() {
+    mkdir -p "${BASE_DIR}"
 
-# Discover the O-Cloud Manager operator namespace by finding the controller-manager deployment
-OCLOUD_NS=$(oc get deployments --all-namespaces -l app.kubernetes.io/part-of=oran-o2ims \
-    -o jsonpath='{.items[0].metadata.namespace}' 2>/dev/null) || true
+    log "Starting O-Cloud Manager must-gather collection"
+    log "Output directory: ${BASE_DIR}"
 
-if [ -z "${OCLOUD_NS}" ]; then
-    log "WARNING: Could not discover O-Cloud Manager namespace, falling back to oran-o2ims"
-    OCLOUD_NS="oran-o2ims"
-else
-    log "Discovered O-Cloud Manager namespace: ${OCLOUD_NS}"
+    # Discover the O-Cloud Manager operator namespace by finding the controller-manager deployment
+    local OCLOUD_NS
+    OCLOUD_NS=$(oc get deployments --all-namespaces -l app.kubernetes.io/part-of=oran-o2ims \
+        -o jsonpath='{.items[0].metadata.namespace}' 2>/dev/null) || true
+
+    if [ -z "${OCLOUD_NS}" ]; then
+        log "WARNING: Could not discover O-Cloud Manager namespace, falling back to oran-o2ims"
+        OCLOUD_NS="oran-o2ims"
+    else
+        log "Discovered O-Cloud Manager namespace: ${OCLOUD_NS}"
+    fi
+
+    # O-Cloud Manager CRDs - clcm.openshift.io
+    gather_resource "clustertemplates.clcm.openshift.io" "clcm/clustertemplates"
+    gather_resource "provisioningrequests.clcm.openshift.io" "clcm/provisioningrequests"
+    gather_resource "hardwareprofiles.clcm.openshift.io" "clcm/hardwareprofiles"
+    gather_resource "firmwarecatalogs.clcm.openshift.io" "clcm/firmwarecatalogs"
+    gather_resource "nodeallocationrequests.clcm.openshift.io" "clcm/nodeallocationrequests"
+    gather_resource "allocatednodes.clcm.openshift.io" "clcm/allocatednodes"
+
+    # O-Cloud Manager CRDs - ocloud.openshift.io
+    gather_resource "inventories.ocloud.openshift.io" "ocloud/inventories"
+    gather_resource "locations.ocloud.openshift.io" "ocloud/locations"
+    gather_resource "ocloudsites.ocloud.openshift.io" "ocloud/ocloudsites"
+    gather_resource "resourcepools.ocloud.openshift.io" "ocloud/resourcepools"
+
+    # Metal3 resources
+    gather_resource "baremetalhosts.metal3.io" "metal3/baremetalhosts"
+    gather_resource "hostfirmwaresettings.metal3.io" "metal3/hostfirmwaresettings"
+    gather_resource "hostfirmwarecomponents.metal3.io" "metal3/hostfirmwarecomponents"
+    gather_resource "preprovisioningimages.metal3.io" "metal3/preprovisioningimages"
+    gather_resource "hardwaredata.metal3.io" "metal3/hardwaredata"
+
+    # Secrets referenced by BMH preprovisioningNetworkDataName
+    gather_bmh_preprovisioning_secrets
+
+    # O-Cloud Manager pod logs (all pods in the oran-o2ims namespace)
+    gather_pod_logs "${OCLOUD_NS}" "ocloud-manager"
+
+    # Metal3 pod logs (metal3-baremetal-operator and metal3 pods in openshift-machine-api)
+    gather_pod_logs "${METAL3_NS}" "metal3" "k8s-app=metal3"
+
+    log "O-Cloud Manager must-gather collection complete"
+}
+
+# Only run the collection when executed directly, not when sourced.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
 fi
-
-# O-Cloud Manager CRDs - clcm.openshift.io
-gather_resource "clustertemplates.clcm.openshift.io" "clcm/clustertemplates"
-gather_resource "provisioningrequests.clcm.openshift.io" "clcm/provisioningrequests"
-gather_resource "hardwareprofiles.clcm.openshift.io" "clcm/hardwareprofiles"
-gather_resource "firmwarecatalogs.clcm.openshift.io" "clcm/firmwarecatalogs"
-gather_resource "nodeallocationrequests.clcm.openshift.io" "clcm/nodeallocationrequests"
-gather_resource "allocatednodes.clcm.openshift.io" "clcm/allocatednodes"
-
-# O-Cloud Manager CRDs - ocloud.openshift.io
-gather_resource "inventories.ocloud.openshift.io" "ocloud/inventories"
-gather_resource "locations.ocloud.openshift.io" "ocloud/locations"
-gather_resource "ocloudsites.ocloud.openshift.io" "ocloud/ocloudsites"
-gather_resource "resourcepools.ocloud.openshift.io" "ocloud/resourcepools"
-
-# Metal3 resources
-gather_resource "baremetalhosts.metal3.io" "metal3/baremetalhosts"
-gather_resource "hostfirmwaresettings.metal3.io" "metal3/hostfirmwaresettings"
-gather_resource "hostfirmwarecomponents.metal3.io" "metal3/hostfirmwarecomponents"
-gather_resource "preprovisioningimages.metal3.io" "metal3/preprovisioningimages"
-gather_resource "hardwaredata.metal3.io" "metal3/hardwaredata"
-
-# Secrets referenced by BMH preprovisioningNetworkDataName
-gather_bmh_preprovisioning_secrets
-
-# O-Cloud Manager pod logs (all pods in the oran-o2ims namespace)
-gather_pod_logs "${OCLOUD_NS}" "ocloud-manager"
-
-# Metal3 pod logs (metal3-baremetal-operator and metal3 pods in openshift-machine-api)
-gather_pod_logs "${METAL3_NS}" "metal3" "k8s-app=metal3"
-
-log "O-Cloud Manager must-gather collection complete"
