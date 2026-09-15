@@ -18,22 +18,25 @@
 # (the form a different serializer/version could emit), asserting that no
 # Secret material survives either way.
 #
-# Requires yq (mikefarah) on PATH, matching the binary bundled into the
-# must-gather image by Dockerfile.must-gather.
+# Requires yq (kislyuk/yq, a jq wrapper) and jq on PATH, matching the
+# tooling installed into the must-gather image by Dockerfile.must-gather.
 #
 # Run manually: ./must-gather/tests/redact_secret_test.sh
 
 set -uo pipefail
 
 if ! command -v yq >/dev/null 2>&1; then
-    echo "SKIP: yq not found on PATH; install mikefarah/yq to run this test" >&2
+    echo "SKIP: yq not found on PATH; install kislyuk/yq (pip install yq) to run this test" >&2
     exit 127
 fi
 
 # redact_secret_yaml applies the same YAML-aware redaction as
 # redact_secret_yaml() in must-gather/gather.
 redact_secret_yaml() {
-    yq 'with(select(.data != null); .data.[] |= "REDACTED") | with(select(.metadata.annotations."kubectl.kubernetes.io/last-applied-configuration" != null); .metadata.annotations."kubectl.kubernetes.io/last-applied-configuration" = "REDACTED")'
+    yq -y 'if .data != null then .data |= map_values("REDACTED") else . end
+        | if .metadata.annotations["kubectl.kubernetes.io/last-applied-configuration"] != null
+            then .metadata.annotations["kubectl.kubernetes.io/last-applied-configuration"] = "REDACTED"
+            else . end'
 }
 
 failures=0
@@ -111,7 +114,7 @@ assert_annotation_redacted() {
     # The annotation value is redacted to exactly REDACTED, whatever the
     # input scalar style was.
     local ann
-    ann=$(echo "${output}" | yq '.metadata.annotations."kubectl.kubernetes.io/last-applied-configuration"')
+    ann=$(echo "${output}" | yq -r '.metadata.annotations["kubectl.kubernetes.io/last-applied-configuration"]')
     if [ "${ann}" == "REDACTED" ]; then
         pass "${style}: last-applied-configuration annotation is redacted"
     else
@@ -128,7 +131,7 @@ assert_annotation_redacted() {
 
     # Top-level data: values are still redacted (regression).
     local data_val
-    data_val=$(echo "${output}" | yq '.data.nmstate')
+    data_val=$(echo "${output}" | yq -r '.data.nmstate')
     if [ "${data_val}" == "REDACTED" ]; then
         pass "${style}: top-level data: values are redacted"
     else
@@ -149,7 +152,7 @@ assert_annotation_redacted() {
         '.metadata.namespace=openshift-machine-api' \
         '.type=Opaque'; do
         local path="${field%%=*}" want="${field#*=}" got
-        got=$(echo "${output}" | yq "${path}")
+        got=$(echo "${output}" | yq -r "${path}")
         if [ "${got}" == "${want}" ]; then
             pass "${style}: preserved ${path}=${want}"
         else
@@ -165,8 +168,8 @@ assert_annotation_redacted "block" "$(secret_with_block_annotation | redact_secr
 # A Secret without the annotation still has its data values redacted, leaks
 # nothing, and gains no spurious last-applied-configuration annotation.
 output2=$(secret_without_annotation | redact_secret_yaml)
-if [ "$(echo "${output2}" | yq '.data.nmstate')" == "REDACTED" ] \
-    && [ "$(echo "${output2}" | yq '.data.extra')" == "REDACTED" ]; then
+if [ "$(echo "${output2}" | yq -r '.data.nmstate')" == "REDACTED" ] \
+    && [ "$(echo "${output2}" | yq -r '.data.extra')" == "REDACTED" ]; then
     pass "annotation-less Secret still has data values redacted"
 else
     fail "annotation-less Secret data values were not redacted"

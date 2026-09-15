@@ -51,18 +51,21 @@ gather_resource() {
 }
 
 # redact_secret_yaml masks sensitive values in a Secret's YAML read from
-# stdin and writes the sanitized result to stdout. It uses yq for a
-# YAML-aware redaction so the guarantee holds regardless of how a value is
-# serialized (an inline single-quoted scalar or a multi-line block scalar).
-# It masks every value under the top-level data: block and the
-# kubectl.kubernetes.io/last-applied-configuration annotation, which on
-# apply-created Secrets carries a full copy of the data values. Both updates
-# are guarded with select(...) so fields that are absent are never created.
+# stdin and writes the sanitized result to stdout. It uses yq (kislyuk/yq,
+# a jq wrapper) for a YAML-aware redaction so the guarantee holds regardless
+# of how a value is serialized (an inline single-quoted scalar or a
+# multi-line block scalar). It masks every value under the top-level data:
+# block and the kubectl.kubernetes.io/last-applied-configuration annotation,
+# which on apply-created Secrets carries a full copy of the data values.
+# Both updates are guarded so fields that are absent are never created.
 #
 # This MUST stay in sync with redact_secret_yaml() in
 # must-gather/tests/redact_secret_test.sh.
 redact_secret_yaml() {
-    yq 'with(select(.data != null); .data.[] |= "REDACTED") | with(select(.metadata.annotations."kubectl.kubernetes.io/last-applied-configuration" != null); .metadata.annotations."kubectl.kubernetes.io/last-applied-configuration" = "REDACTED")'
+    yq -y 'if .data != null then .data |= map_values("REDACTED") else . end
+        | if .metadata.annotations["kubectl.kubernetes.io/last-applied-configuration"] != null
+            then .metadata.annotations["kubectl.kubernetes.io/last-applied-configuration"] = "REDACTED"
+            else . end'
 }
 
 # gather_bmh_preprovisioning_secrets collects Secrets referenced by BMH preprovisioningNetworkDataName fields.
