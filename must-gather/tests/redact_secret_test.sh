@@ -19,33 +19,18 @@
 # (the form a different serializer/version could emit), asserting that no
 # Secret material survives either way.
 #
-# Requires yq (kislyuk/yq, a jq wrapper) and jq on PATH, matching the
-# tooling installed into the must-gather image by Dockerfile.must-gather.
+# This test is meant to run inside the must-gather image, where the pinned
+# yq (kislyuk/yq, a jq wrapper) and jq installed by Dockerfile.must-gather
+# are present and match the tooling the shipped redaction actually uses. Run
+# it with:
 #
-# By default it sources the sibling ../gather script and uses whatever yq is
-# on PATH. Set GATHER_SCRIPT to point at a different gather (for example the
-# /usr/bin/gather baked into the image) so the test exercises the shipped
-# script and the image's pinned yq rather than whatever happens to be local.
+#   make test-must-gather
 #
-# Run manually:              ./must-gather/tests/redact_secret_test.sh
-# Run against the image:     make test-must-gather
+# which builds the image and runs this script inside it against the shipped
+# /usr/bin/gather (via GATHER_SCRIPT). Set GATHER_SCRIPT to point at the
+# gather script to source; it defaults to the sibling ../gather.
 
 set -uo pipefail
-
-if ! command -v yq >/dev/null 2>&1; then
-    echo "SKIP: yq not found on PATH; install kislyuk/yq (pip install yq) to run this test" >&2
-    exit 0
-fi
-
-# The production redaction targets kislyuk/yq (the jq wrapper). A mikefarah/yq
-# (Go) binary on PATH uses incompatible syntax and would fail spuriously, so
-# skip cleanly rather than report false failures. Run 'make test-must-gather'
-# to test against the image's pinned kislyuk/yq regardless of the local PATH.
-if yq --version 2>&1 | grep -qi mikefarah; then
-    echo "SKIP: found mikefarah/yq on PATH; this test needs kislyuk/yq (pip install yq)." >&2
-    echo "      Run 'make test-must-gather' to test against the image's pinned yq." >&2
-    exit 0
-fi
 
 # Source the production gather script to reuse its redact_secret_yaml()
 # function. gather guards its collection body with a BASH_SOURCE check, so
