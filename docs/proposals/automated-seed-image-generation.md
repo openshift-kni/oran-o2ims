@@ -650,6 +650,11 @@ The workflow is a multi-phase state machine tracked via a new `SeedGenerationCom
     lacks credentials for the seed mirror (or vice versa) passes it and then
     fails deep in the ISO build. Report `PreconditionChecksFailed` naming the
     registry that rejected the credentials.
+  - **Preflight the installer before build resources.** A short-lived Pod uses
+    the pinned image, persisted digest, mirror/CA config, and pull secret to run
+    `oc adm release extract --command=openshift-install`; it must produce an
+    executable. Failure is `PreconditionChecksFailed`; delete the Pod and make
+    no PVC or Job. Tests cover extraction and missing-binary failures.
 - **Condition**: `SeedGenerationCompleted = False / Reason: Validating`
 
 ### Phase 2: ACM Agent Cleanup
@@ -867,12 +872,9 @@ The controller creates a Kubernetes Job on the hub cluster that builds the live 
 
 **Job pod spec considerations:**
 
-- **Pinned ISO-build toolchain.** The Job uses an operator-owned image by
-  immutable digest (never a tag) containing `oc`, POSIX shell, `ssh`, `scp`, and
-  `sha256sum`; `openshift-install` is extracted from the pinned release image.
-  Before creating the PVC or Job, Phase 1 runs a short-lived capability-check
-  Pod from the same digest and fails `PreconditionChecksFailed` if a tool or
-  image pull is unavailable. Tests cover complete and missing-tool images.
+- **Pinned ISO-build toolchain.** An operator-owned immutable-digest image
+  contains `oc`, POSIX shell, `ssh`, `scp`, and `sha256sum`;
+  Phase 1 checks this image before creating the PVC or Job.
 - **PVC for build workspace**: The controller creates a dedicated PVC (~20GB), mounted into the Job pod as the working directory, because `openshift-install` pulls the full seed image and generates an ISO, exceeding typical ephemeral storage limits. It is created before the Job and deleted
   during Phase 5 after successful upload. Its name is derived from the ProvisioningRequest name (e.g. `<pr-name>-iso-build`); the StorageClass comes from the optional `liveISO.storageClass` field, or the cluster default if omitted.
 - **Per-run credential copies in the Job namespace.** A pod can only mount
@@ -1385,10 +1387,9 @@ Roughly 4 working sessions to implement:
    defer this.)
 
 2. **What container image should the ISO generation Job use?** Resolved: an
-   operator-owned ISO-build image by immutable digest containing `oc`, POSIX
-   shell, `ssh`, `scp`, and `sha256sum`; `openshift-install` is extracted from
-   the pinned release image. Phase 1 checks the same image before creating the
-   PVC or Job and fails closed if a tool is unavailable.
+   immutable-digest image containing `oc`, shell, `ssh`, `scp`,
+   and `sha256sum`; Phase 1 performs the capability and installer-extraction
+   preflight before creating the PVC or Job.
 
 3. **Should ISO upload support mechanisms beyond SCP?** The initial implementation uses SCP/SFTP for simplicity (matching the existing manual workflow). Future iterations could add S3-compatible upload, HTTP PUT, or NFS mount as alternative upload mechanisms if there is demand.
 
