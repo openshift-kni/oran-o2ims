@@ -613,7 +613,9 @@ go-generate:
 .PHONY: test tests
 test tests:
 	@echo "Run ginkgo excluding envtest tests"
-	ginkgo run -r --label-filter="!envtest" ./internal ./api ./hwmgr-plugins $(ginkgo_flags)
+	timeout --kill-after=30s 60m ginkgo run -r --compilers=1 --label-filter="!envtest" --no-color \
+		--poll-progress-after=30s --poll-progress-interval=30s --timeout=45m \
+		./internal ./api ./hwmgr-plugins $(ginkgo_flags)
 
 .PHONY: test-e2e
 test-e2e: envtest kubectl
@@ -628,7 +630,9 @@ ifeq ($(shell uname -s),Linux)
 	@chmod -R u+w $(LOCALBIN)
 endif
 	@echo "Run ginkgo envtest tests"
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -i --bin-dir $(LOCALBIN) -p path)" ginkgo run -r --label-filter="envtest" ./internal $(ginkgo_flags)
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -i --bin-dir $(LOCALBIN) -p path)" timeout --kill-after=30s 60m ginkgo run -r --compilers=1 --label-filter="envtest" --no-color \
+		--poll-progress-after=30s --poll-progress-interval=30s --timeout=45m \
+		./internal $(ginkgo_flags)
 
 .PHONY: test-crd-watcher
 test-crd-watcher:
