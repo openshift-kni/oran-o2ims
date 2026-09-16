@@ -650,7 +650,9 @@ COVERAGE_MERGED := $(COVERAGE_DIR)/merged.out
 test tests:
 	@echo "Run ginkgo excluding envtest tests"
 	@mkdir -p $(COVERAGE_DIR)
-	ginkgo run -r --label-filter="!envtest" --coverprofile=unit.out --output-dir=$(COVERAGE_DIR) ./internal ./api $(ginkgo_flags)
+	timeout --kill-after=30s 60m ginkgo run -r --compilers=1 --label-filter="!envtest" --no-color \
+		--poll-progress-after=30s --poll-progress-interval=30s --timeout=45m \
+		--coverprofile=unit.out --output-dir=$(COVERAGE_DIR) ./internal ./api $(ginkgo_flags)
 
 .PHONY: test-e2e
 test-e2e: envtest kubectl
@@ -666,7 +668,9 @@ ifeq ($(shell uname -s),Linux)
 endif
 	@echo "Run ginkgo envtest tests"
 	@mkdir -p $(COVERAGE_DIR)
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" ginkgo run -r --label-filter="envtest" --coverprofile=envtest.out --output-dir=$(COVERAGE_DIR) ./internal $(ginkgo_flags)
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" timeout --kill-after=30s 60m ginkgo run -r --compilers=1 --label-filter="envtest" --no-color \
+		--poll-progress-after=30s --poll-progress-interval=30s --timeout=45m \
+		--coverprofile=envtest.out --output-dir=$(COVERAGE_DIR) ./internal $(ginkgo_flags)
 
 .PHONY: test-crd-watcher
 test-crd-watcher:
