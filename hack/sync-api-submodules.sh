@@ -7,7 +7,7 @@
 # This script uses go workspaces to sync the dependencies of the exported API submodules against the main go.mod
 #
 
-PINNED_GO="1.24.0"
+PINNED_GO="1.25.11"
 
 # shellcheck disable=SC2329
 function cleanup {
