@@ -823,7 +823,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.PoweredOn = true
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.ACTIVE))
+			Expect(result).To(Equal(inventory.ResourceInfoUsageStateACTIVE))
 		})
 
 		It("should return ACTIVE for externally provisioned BMH with all conditions met", func() {
@@ -834,7 +834,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.PoweredOn = true
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.ACTIVE))
+			Expect(result).To(Equal(inventory.ResourceInfoUsageStateACTIVE))
 		})
 
 		It("should return BUSY for provisioned BMH when not operational", func() {
@@ -843,7 +843,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusError
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.BUSY))
+			Expect(result).To(Equal(inventory.ResourceInfoUsageStateBUSY))
 		})
 
 		It("should return BUSY for provisioned BMH when offline", func() {
@@ -853,7 +853,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Spec.Online = false
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.BUSY))
+			Expect(result).To(Equal(inventory.ResourceInfoUsageStateBUSY))
 		})
 
 		It("should return BUSY for provisioned BMH when powered off", func() {
@@ -864,7 +864,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.PoweredOn = false
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.BUSY))
+			Expect(result).To(Equal(inventory.ResourceInfoUsageStateBUSY))
 		})
 
 		It("should return IDLE for available BMH with operational status OK", func() {
@@ -873,7 +873,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusOK
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.IDLE))
+			Expect(result).To(Equal(inventory.ResourceInfoUsageStateIDLE))
 		})
 
 		It("should return BUSY for available BMH when not operational", func() {
@@ -882,7 +882,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.OperationalStatus = metal3v1alpha1.OperationalStatusError
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.BUSY))
+			Expect(result).To(Equal(inventory.ResourceInfoUsageStateBUSY))
 		})
 
 		It("should return BUSY for transitional states - provisioning", func() {
@@ -890,7 +890,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.Provisioning.State = metal3v1alpha1.StateProvisioning
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.BUSY))
+			Expect(result).To(Equal(inventory.ResourceInfoUsageStateBUSY))
 		})
 
 		It("should return BUSY for transitional states - preparing", func() {
@@ -898,7 +898,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.Provisioning.State = metal3v1alpha1.StatePreparing
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.BUSY))
+			Expect(result).To(Equal(inventory.ResourceInfoUsageStateBUSY))
 		})
 
 		It("should return BUSY for transitional states - deprovisioning", func() {
@@ -906,7 +906,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.Provisioning.State = metal3v1alpha1.StateDeprovisioning
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.BUSY))
+			Expect(result).To(Equal(inventory.ResourceInfoUsageStateBUSY))
 		})
 
 		It("should return BUSY for transitional states - inspecting", func() {
@@ -914,7 +914,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.Provisioning.State = metal3v1alpha1.StateInspecting
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.BUSY))
+			Expect(result).To(Equal(inventory.ResourceInfoUsageStateBUSY))
 		})
 
 		It("should return BUSY for transitional states - powering off before delete", func() {
@@ -922,7 +922,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.Provisioning.State = metal3v1alpha1.StatePoweringOffBeforeDelete
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.BUSY))
+			Expect(result).To(Equal(inventory.ResourceInfoUsageStateBUSY))
 		})
 
 		It("should return BUSY for transitional states - deleting", func() {
@@ -930,7 +930,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.Provisioning.State = metal3v1alpha1.StateDeleting
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.BUSY))
+			Expect(result).To(Equal(inventory.ResourceInfoUsageStateBUSY))
 		})
 
 		It("should return UNKNOWN for unrecognized states", func() {
@@ -939,7 +939,7 @@ var _ = Describe("Inventory", func() {
 			bmh.Status.Provisioning.State = ""
 
 			result := getResourceInfoUsageState(bmh)
-			Expect(result).To(Equal(inventory.UNKNOWN))
+			Expect(result).To(Equal(inventory.ResourceInfoUsageStateUNKNOWN))
 		})
 	})
 
@@ -1147,7 +1147,7 @@ var _ = Describe("Inventory", func() {
 			Expect(result.ResourceId).To(Equal(string(testUID)))
 			Expect(result.ResourcePoolId).To(Equal("pool123"))
 			Expect(*result.Tags).To(ContainElement("zone: zone1"))
-			Expect(result.UsageState).To(Equal(inventory.ACTIVE))
+			Expect(result.UsageState).To(Equal(inventory.ResourceInfoUsageStateACTIVE))
 			Expect(result.Vendor).To(Equal("Dell Inc."))
 			Expect(*result.GlobalAssetId).To(Equal("ABC123456"))
 			Expect(result.Allocated).ToNot(BeNil())

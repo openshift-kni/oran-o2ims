@@ -299,25 +299,25 @@ func getResourceInfoUsageState(bmh *metal3v1alpha1.BareMetalHost) inventory.Reso
 	switch bmh.Status.Provisioning.State {
 	case metal3v1alpha1.StateProvisioned, metal3v1alpha1.StateExternallyProvisioned:
 		if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusOK && bmh.Spec.Online && bmh.Status.PoweredOn {
-			return inventory.ACTIVE
+			return inventory.ResourceInfoUsageStateACTIVE
 		}
 
-		return inventory.BUSY
+		return inventory.ResourceInfoUsageStateBUSY
 	case metal3v1alpha1.StateAvailable:
 		if bmh.Status.OperationalStatus == metal3v1alpha1.OperationalStatusOK {
-			return inventory.IDLE
+			return inventory.ResourceInfoUsageStateIDLE
 		}
 
-		return inventory.BUSY
+		return inventory.ResourceInfoUsageStateBUSY
 	case metal3v1alpha1.StateProvisioning,
 		metal3v1alpha1.StatePreparing,
 		metal3v1alpha1.StateDeprovisioning,
 		metal3v1alpha1.StateInspecting,
 		metal3v1alpha1.StatePoweringOffBeforeDelete,
 		metal3v1alpha1.StateDeleting:
-		return inventory.BUSY
+		return inventory.ResourceInfoUsageStateBUSY
 	default:
-		return inventory.UNKNOWN
+		return inventory.ResourceInfoUsageStateUNKNOWN
 	}
 }
 

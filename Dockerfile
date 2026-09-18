@@ -1,8 +1,6 @@
 # Build the manager binary
-FROM registry.hub.docker.com/library/golang:1.24 AS dlvbuilder
-# Pin delve to v1.26.3 — the last version compatible with Go 1.24.
-# Later versions require Go 1.25+.
-RUN go install github.com/go-delve/delve/cmd/dlv@v1.26.3
+FROM registry.hub.docker.com/library/golang:1.25 AS dlvbuilder
+RUN go install github.com/go-delve/delve/cmd/dlv@v1.27.2
 
 FROM dlvbuilder AS builder
 ARG GOBUILD_GCFLAGS=""

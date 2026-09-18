@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
-	"github.com/speakeasy-api/openapi-overlay/pkg/loader"
+	"github.com/speakeasy-api/openapi/overlay/loader"
 	"gopkg.in/yaml.v3"
 )
 
@@ -16,6 +16,9 @@ func LoadSwagger(filePath string) (swagger *openapi3.T, err error) {
 
 	loader := openapi3.NewLoader()
 	loader.IsExternalRefsAllowed = true
+	// Record each element's source location so route registration can be
+	// emitted in the order paths are declared in the spec (issue #1887).
+	loader.IncludeOrigin = true
 
 	u, err := url.Parse(filePath)
 	if err == nil && u.Scheme != "" && u.Host != "" {
@@ -74,7 +77,7 @@ func LoadSwaggerWithOverlay(filePath string, opts LoadSwaggerWithOverlayOpts) (s
 	}
 
 	if opts.Strict {
-		err, vs := overlay.ApplyToStrict(&node)
+		vs, err := overlay.ApplyToStrict(&node)
 		if err != nil {
 			return nil, fmt.Errorf("failed to apply Overlay %#v to specification %#v: %v\nAdditionally, the following validation errors were found:\n- %s", opts.Path, filePath, err, strings.Join(vs, "\n- "))
 		}
@@ -92,6 +95,7 @@ func LoadSwaggerWithOverlay(filePath string, opts LoadSwaggerWithOverlayOpts) (s
 
 	loader := openapi3.NewLoader()
 	loader.IsExternalRefsAllowed = true
+	loader.IncludeOrigin = true
 
 	swagger, err = loader.LoadFromDataWithPath(b, &url.URL{
 		Path: filepath.ToSlash(filePath),

@@ -7,7 +7,7 @@
 
 set -e
 
-PINNED_GO="1.24.0"
+PINNED_GO="1.25.11"
 
 # Handle the exported api/hardwaremanagement submodule first
 pushd api/hardwaremanagement >/dev/null
