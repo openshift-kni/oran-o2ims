@@ -597,7 +597,9 @@ go-generate:
 .PHONY: test tests
 test tests:
 	@echo "Run ginkgo"
-	ginkgo run -r ./internal ./api ./hwmgr-plugins $(ginkgo_flags)
+	timeout --kill-after=30s 60m ginkgo run -r --compilers=1 --no-color \
+		--poll-progress-after=30s --poll-progress-interval=30s --timeout=45m \
+		./internal ./api ./hwmgr-plugins $(ginkgo_flags)
 
 .PHONY: test-e2e
 test-e2e: envtest kubectl
