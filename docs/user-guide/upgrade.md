@@ -404,10 +404,10 @@ spec:
       # clusterUpgradeTimeout: "6h"            # optional; defaults to 4h (standard upgrades) or 8h (EUS upgrades)
       # intermediateVersion: "4.21.5"          # optional; for EUS upgrades (auto-selected if omitted)
       clusterVersion:
-        channel: "stable-4.22"                 # required for minior version and EUS upgrades
+        channel: "stable-4.22"                 # required for minor version and EUS upgrades
         # upstream: "https://api.openshift.com/api/upgrades_info/v1/graph"  # optional
         desiredUpdate:
-          version: "4.22.0"                    # must match spec.release 
+          version: "4.22.0"                    # must match spec.release
   templateParameterSchema:
     type: object
     properties:
@@ -433,7 +433,35 @@ Update the ProvisioningRequest to reference the new ClusterTemplate to trigger t
 CLI or the [Provisioning REST API](./cluster-provisioning.md#provisioning-rest-apis).
 
 ProvisioningRequests can also override specific upgrade defaults by providing `upgradeParameters` in `spec.templateParameters`. The values
-are deep-merged on top of the ClusterTemplate's `upgradeDefaults`, with ProvisioningRequest values taking precedence:
+are deep-merged on top of the ClusterTemplate's `upgradeDefaults`, with ProvisioningRequest values taking precedence.
+
+#### Configuring worker MachineConfigPool rollout
+
+The optional `workerPoolUpgrade` configuration is intended for clusters with
+multiple worker MachineConfigPools when their rollout must be coordinated with
+the control-plane upgrade. The default strategy is `OpenShiftDefault` for
+non-EUS upgrades and `Parallel` for EUS upgrades.
+
+Choose a strategy based on the required rollout:
+
+- `OpenShiftDefault` uses the default OpenShift behavior, allowing the control
+  plane and worker MachineConfigPools to upgrade together. The controller does
+  not pause or order worker MachineConfigPools. This strategy is not supported
+  for EUS upgrades.
+- `Serial` upgrades the control plane first and then upgrades the remaining
+  worker MachineConfigPools one at a time in alphabetical order.
+- `Parallel` upgrades the control plane first and then upgrades all remaining
+  worker MachineConfigPools together.
+
+For a non-EUS Serial or Parallel upgrade, `poolsWithControlPlane` can name
+worker MachineConfigPools that should remain unpaused and upgrade with the
+control plane. All other worker MachineConfigPools follow the selected strategy
+after the control plane and the named pools have completed upgrading.
+`poolsWithControlPlane` is not supported for EUS upgrades.
+
+The following override is for a non-EUS cluster with multiple worker
+MachineConfigPools. It upgrades `worker-canary` with the control plane, then
+upgrades every remaining worker MachineConfigPool serially:
 
 ```yaml
 spec:
@@ -441,8 +469,12 @@ spec:
     upgradeParameters:
       clusterUpgradeTimeout: "6h"
       clusterVersion:
-        channel: "eus-4.22"
+        channel: "stable-4.22"
         upstream: "https://example.com/graph"
+      workerPoolUpgrade:
+        strategy: Serial
+        poolsWithControlPlane:
+          - worker-canary
 ```
 
 ### Timeout Configuration
@@ -470,9 +502,11 @@ The MNO ClusterVersion upgrade follows these steps:
    ClusterVersion and MachineConfigPool resources.
 
 2. **Pre-upgrade checks** — for minor version upgrades, verifies the
-   `Upgradeable` condition on the spoke ClusterVersion. For standard
-   upgrades, requires all MachineConfigPools are unpaused. For EUS
-   upgrades, requires all MachineConfigPools show `Updated=True`.
+   `Upgradeable` condition on the spoke ClusterVersion. Before the upgrade
+   starts, all MachineConfigPools must be unpaused, regardless of worker-pool
+   strategy. The Serial and Parallel strategies also require worker
+   MachineConfigPools to report current-generation `Updated=True` before the
+   controller takes ownership of their pause state.
 
 3. **Set channel and upstream** — patches the spoke ClusterVersion with
    the configured channel and upstream if provided, then waits for the CVO
@@ -482,15 +516,30 @@ The MNO ClusterVersion upgrade follows these steps:
    `desiredUpdate.image`), confirms the target version is listed in the
    spoke ClusterVersion's `status.availableUpdates`.
 
-5. **Trigger upgrade and monitor** — patches `spec.desiredUpdate` on
-   the spoke ClusterVersion and monitors CVO progress via ClusterVersion
-   history and conditions.
+5. **Prepare worker MachineConfigPools** — immediately before triggering the
+   ClusterVersion upgrade, the controller applies the selected rollout. The
+   `OpenShiftDefault` strategy leaves worker MachineConfigPools unpaused. For a
+   non-EUS `Serial` or `Parallel` rollout, the controller keeps the
+   `poolsWithControlPlane` MachineConfigPools unpaused and pauses all remaining
+   worker MachineConfigPools. For EUS, it pauses all worker MachineConfigPools.
 
-6. **For EUS** — resolves the intermediate version (from configuration
-   or the Cincinnati update graph), pauses non-master worker MCPs,
-   triggers the intermediate version upgrade first, then the target
-   version upgrade, and finally unpauses MCPs and waits for workers to
-   update.
+6. **Trigger the ClusterVersion upgrade** — patches `spec.desiredUpdate` on the
+   spoke ClusterVersion and monitors CVO progress through ClusterVersion
+   history and conditions. For an EUS upgrade, the controller resolves the
+   intermediate version from the configuration or the Cincinnati update graph,
+   upgrades to the intermediate version first, and then upgrades to the target
+   version while the worker MachineConfigPools remain paused.
+
+7. **Roll out paused worker MachineConfigPools** — for any strategy other than
+   `OpenShiftDefault`, the controller starts the worker rollout after the target
+   ClusterVersion upgrade completes. It first waits for any MachineConfigPools
+   upgrading with the control plane to finish, then unpauses the remaining
+   MachineConfigPools one at a time in alphabetical order for `Serial`, or all
+   together for `Parallel`. The controller waits for each rollout wave to
+   report current-generation `Updated=True` before continuing. Each
+   MachineConfigPool still honors its own `maxUnavailable`. The
+   ProvisioningRequest is marked completed only after all worker
+   MachineConfigPools have finished updating.
 
 ### MNO Monitoring Upgrade Progress
 
@@ -506,16 +555,16 @@ oc get provisioningrequests.clcm.openshift.io <name> \
 | False | Pending | Upgrade not yet started or waiting | Spoke client setup in progress, waiting for CVO to retrieve update graph or image payload, `Upgradeable=False` on spoke (minor version upgrade) |
 | False | InProgress | Upgrade is running | CVO updating control plane and worker nodes |
 | False | Unknown | Upgrade stalled | CVO not progressing, possible `Failing` condition on spoke |
-| False | PreconditionChecksFailed | Cannot proceed with upgrade | MCPs not unpaused (standard) or not updated (EUS), spoke client setup issue, invalid upgrade configuration |
+| False | PreconditionChecksFailed | Cannot proceed with upgrade | MachineConfigPools are paused or not updated, OpenShiftDefault or poolsWithControlPlane used on EUS, spoke client setup issue, invalid upgrade configuration |
 | True | Completed | Upgrade finished successfully | — |
 | False | TimedOut | Upgrade exceeded the configured timeout | Timeout too short for cluster size, spoke connectivity issues, upgrade stalled |
 
 The condition message provides details about the current phase:
 
 - Spoke client setup: `"Preparing upgrade resources"`
-- Upgrade triggered, waiting for CVO to begin: `"Upgrade to [intermediate/target] version X.Y.Z triggered. Waiting for upgrade to start"`
-- Upgrade is in progress with CVO Progressing details: `"Upgrading to [intermediate/target] version X.Y.Z: ..."`
-- EUS: MCPs unpaused, workers updating: `"Cluster version upgrade completed. Waiting for worker MachineConfigPools to finish updating"`
+- Upgrade triggered, waiting for CVO to begin: `"Upgrade to [intermediate/desired] version X.Y.Z triggered. Waiting for upgrade to start"`
+- Upgrade is in progress with CVO Progressing details: `"Upgrading to [intermediate/desired] version X.Y.Z: ..."`
+- Serial / Parallel: waiting for worker pools: `"Cluster version upgrade completed. Waiting for worker pools [<name>, ...] to finish updating"`
 - Upgrade completed: `"Upgrade to version X.Y.Z completed"`
 - Timeout with optional CVO Failing details: `"Upgrade timed out"` or `"Upgrade timed out: ..."`
 
@@ -530,6 +579,10 @@ status:
         startedAt: "2026-07-20T15:30:00Z"
         startVersion: "4.18.25"
         intermediateVersion: "4.19.31"  # present for EUS upgrades
+        workerPoolUpgrade:
+          strategy: Serial
+          poolsWithControlPlane:        # if any
+            - worker-canary
 ```
 
 The upgrade status is also reflected in the ProvisioningRequest's `provisioningPhase` and `provisioningDetails`. The message from the
@@ -548,15 +601,15 @@ oc get provisioningrequests.clcm.openshift.io
 ### MNO Retry After Failure
 
 **Pending (requires attention):** Some `Pending` states indicate issues that may require
-investigation. The controller continues to requeue in ase the issue is temporaray
+investigation. The controller continues to requeue in case the issue is temporary
 (e.g., network connectivity), but if the condition persists, user action may be needed:
 
-  The `UpgradeCompleted` condition message includes the relevant spoke
-  ClusterVersion condition details (e.g., `Upgradeable`, `RetrievedUpdates`,
-  `ReleaseAccepted`). Check the message to determine the root cause —
-  for example, it may indicate a required administrator acknowledgement,
-  a degraded cluster operator, a channel/upstream misconfiguration, or
-  a payload verification failure.
+The `UpgradeCompleted` condition message includes the relevant spoke
+ClusterVersion condition details (e.g., `Upgradeable`, `RetrievedUpdates`,
+`ReleaseAccepted`). Check the message to determine the root cause —
+for example, it may indicate a required administrator acknowledgement,
+a degraded cluster operator, a channel/upstream misconfiguration, or
+a payload verification failure.
 
 The controller will automatically proceed once the issue is resolved.
 

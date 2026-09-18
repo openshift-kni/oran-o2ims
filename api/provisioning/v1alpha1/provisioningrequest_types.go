@@ -83,6 +83,24 @@ type ClusterUpgradeStatus struct {
 	// EUS-to-EUS upgrades, either from user configuration or
 	// auto-selected from the Cincinnati update graph.
 	IntermediateVersion string `json:"intermediateVersion,omitempty"`
+
+	// WorkerPoolUpgrade is the resolved worker MachineConfigPool rollout
+	// configuration prepared from the current upgrade parameters.
+	WorkerPoolUpgrade *WorkerPoolUpgradeStatus `json:"workerPoolUpgrade,omitempty"`
+}
+
+// WorkerPoolUpgradeStatus holds the worker MachineConfigPool rollout status
+// for a cluster upgrade.
+type WorkerPoolUpgradeStatus struct {
+	// Strategy is the resolved rollout strategy.
+	Strategy string `json:"strategy,omitempty"`
+
+	// PoolsWithControlPlane lists worker MCPs that upgrade alongside the control plane.
+	PoolsWithControlPlane []string `json:"poolsWithControlPlane,omitempty"`
+
+	// PauseStateManaged indicates that the controller has started managing worker
+	// MCP pause state for the current ClusterVersion upgrade step.
+	PauseStateManaged bool `json:"pauseStateManaged,omitempty"`
 }
 
 // ResourceProvisioningPhase defines the provisioning phase of an individual infrastructure resource.

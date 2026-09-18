@@ -7,9 +7,11 @@ SPDX-License-Identifier: Apache-2.0
 package utils
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/coreos/go-semver/semver"
@@ -27,11 +29,18 @@ const (
 	CVConditionReleaseAccepted = configv1.ClusterStatusConditionType("ReleaseAccepted")
 )
 
-// upgradeConfig holds the parsed upgrade configuration extracted from
+// UpgradeConfig holds the parsed upgrade configuration extracted from
 // ProvisioningRequest upgradeParameters and ClusterTemplate upgradeDefaults.
 type UpgradeConfig struct {
 	UpgradeType string
 	Timeout     time.Duration
+}
+
+// WorkerPoolUpgrade is the worker MachineConfigPool rollout configuration
+// decoded from upgradeParameters or upgradeDefaults.
+type WorkerPoolUpgrade struct {
+	Strategy              string   `json:"strategy,omitempty"`
+	PoolsWithControlPlane []string `json:"poolsWithControlPlane,omitempty"`
 }
 
 // UpgradePhase represents the current phase of a ClusterVersion upgrade.
@@ -70,7 +79,7 @@ func (a *CVUpgradeAction) VersionLabel(intermediateVersion string) string {
 func TriggerCVUpgrade(ctx context.Context, spokeClient client.Client, logger *slog.Logger,
 	cv *configv1.ClusterVersion, desiredUpdate *configv1.Update,
 ) (bool, error) {
-	if cv.Spec.DesiredUpdate != nil && equality.Semantic.DeepEqual(*cv.Spec.DesiredUpdate, *desiredUpdate) {
+	if IsCVUpgradeTriggered(cv, desiredUpdate) {
 		return false, nil
 	}
 
@@ -82,6 +91,13 @@ func TriggerCVUpgrade(ctx context.Context, spokeClient client.Client, logger *sl
 	logger.InfoContext(ctx, "Upgrade triggered on spoke",
 		slog.String("targetVersion", desiredUpdate.Version))
 	return true, nil
+}
+
+// IsCVUpgradeTriggered reports whether the ClusterVersion already contains the
+// desired update updated by the ProvisioningRequest controller.
+func IsCVUpgradeTriggered(cv *configv1.ClusterVersion, desiredUpdate *configv1.Update) bool {
+	return cv != nil && cv.Spec.DesiredUpdate != nil && desiredUpdate != nil &&
+		equality.Semantic.DeepEqual(*cv.Spec.DesiredUpdate, *desiredUpdate)
 }
 
 // PatchCVChannelUpstream patches channel and upstream on the spoke ClusterVersion
@@ -327,10 +343,22 @@ func GetPausedMCPs(mcps []mcfgv1.MachineConfigPool) []string {
 	return names
 }
 
-// GetNonUpdatedMCPs returns the names of MCPs that do not have Updated=True.
-func GetNonUpdatedMCPs(mcps []mcfgv1.MachineConfigPool) []string {
+// GetNonUpdatedMCPs returns the names of MCPs whose current generation has not
+// been observed with Updated=True.
+func GetNonUpdatedMCPs(
+	ctx context.Context, logger *slog.Logger, mcps []mcfgv1.MachineConfigPool,
+) []string {
 	var names []string
 	for i := range mcps {
+		if mcps[i].Status.ObservedGeneration != mcps[i].Generation {
+			logger.InfoContext(ctx, "MachineConfigPool status has not observed current generation",
+				slog.String("mcpName", mcps[i].Name),
+				slog.Int64("generation", mcps[i].Generation),
+				slog.Int64("observedGeneration", mcps[i].Status.ObservedGeneration))
+			names = append(names, mcps[i].Name)
+			continue
+		}
+
 		updated := false
 		for _, c := range mcps[i].Status.Conditions {
 			if c.Type == mcfgv1.MachineConfigPoolUpdated &&
@@ -344,4 +372,38 @@ func GetNonUpdatedMCPs(mcps []mcfgv1.MachineConfigPool) []string {
 		}
 	}
 	return names
+}
+
+// FilterMCPsByNames returns MCPs whose names are in names, preserving names order.
+func FilterMCPsByNames(mcps []mcfgv1.MachineConfigPool, names []string) []mcfgv1.MachineConfigPool {
+	byName := make(map[string]mcfgv1.MachineConfigPool, len(mcps))
+	for i := range mcps {
+		byName[mcps[i].Name] = mcps[i]
+	}
+	var filtered []mcfgv1.MachineConfigPool
+	for _, name := range names {
+		if mcp, ok := byName[name]; ok {
+			filtered = append(filtered, mcp)
+		}
+	}
+	return filtered
+}
+
+// ExcludeMCPsByNames returns MCPs whose names are not in names, sorted alphabetically by name.
+func ExcludeMCPsByNames(mcps []mcfgv1.MachineConfigPool, names []string) []mcfgv1.MachineConfigPool {
+	exclude := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		exclude[name] = struct{}{}
+	}
+	var remaining []mcfgv1.MachineConfigPool
+	for i := range mcps {
+		if _, skip := exclude[mcps[i].Name]; skip {
+			continue
+		}
+		remaining = append(remaining, mcps[i])
+	}
+	slices.SortFunc(remaining, func(a, b mcfgv1.MachineConfigPool) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
+	return remaining
 }

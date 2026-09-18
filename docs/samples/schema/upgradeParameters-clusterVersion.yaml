@@ -54,4 +54,42 @@ upgradeParameters:
               enum:
               - "Multi"
               - ""
+    workerPoolUpgrade:
+      type: object
+      description: >
+        Controls the rollout relationship between the control plane and
+        worker MachineConfigPools. When omitted, the controller uses
+        OpenShiftDefault for non-EUS upgrades and Parallel for EUS upgrades.
+      properties:
+        strategy:
+          type: string
+          enum:
+          - OpenShiftDefault
+          - Serial
+          - Parallel
+          description: >
+            Selects how worker MachineConfigPools are rolled out. When the
+            strategy is omitted, OpenShiftDefault is used for non-EUS
+            upgrades and Parallel is used for EUS upgrades. The
+            OpenShiftDefault strategy is supported only for non-EUS upgrades
+            and uses the default OpenShift behavior, allowing the control
+            plane and worker MachineConfigPools to upgrade together. The
+            Serial strategy upgrades the remaining worker MachineConfigPools
+            one at a time in alphabetical order, starting only after the
+            control plane and any MachineConfigPools upgrading with it have
+            completed their upgrades. The Parallel strategy upgrades all
+            remaining worker MachineConfigPools together, starting only after
+            the control plane and any MachineConfigPools upgrading with it
+            have completed their upgrades.
+        poolsWithControlPlane:
+          type: array
+          uniqueItems: true
+          description: >
+            Names of worker MachineConfigPools that remain unpaused and
+            upgrade alongside the control plane. Supported only for non-EUS
+            Serial and Parallel upgrades. When omitted or empty, no worker
+            MachineConfigPools upgrade with the control plane.
+          items:
+            type: string
+            minLength: 1
   type: object

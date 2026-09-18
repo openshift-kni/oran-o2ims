@@ -53,7 +53,7 @@ File: `test/e2e/mno_cv_upgrade_test.go`
 1. should report target not available when graph has no target
 1. should trigger upgrade after channel update and CV's target available
 1. should show InProgress with CV's Progressing message
-1. should complete upgrade and return to fulfilled
+1. should complete upgrade after Parallel worker pools roll out
 
 ### y-stream upgrade timeout when upgrading from 4.20.5 to 4.21.2
 
@@ -81,7 +81,7 @@ File: `test/e2e/mno_cv_upgrade_test.go`
 1. should show intermediate upgrade in progress
 1. should start target upgrade after intermediate completes
 1. should show target upgrade in progress
-1. should wait for MCPs to update after target upgrade completes
+1. should roll out worker pools serially after target upgrade completes
 1. should complete EUS upgrade when MCPs are updated
 
 ## MNO Day2 Hardware Configuration test [mno-day2-hw-updates]

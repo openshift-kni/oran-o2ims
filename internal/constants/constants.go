@@ -189,6 +189,16 @@ const (
 	TemplateParamUpgrade         = "upgradeParameters"
 )
 
+// Worker MachineConfigPool rollout strategies used by cluster upgrades with ClusterVersion.
+const (
+	// Control-plane and worker pools are upgraded together.
+	WorkerPoolUpgradeStrategyOpenShiftDefault = "OpenShiftDefault"
+	// Control-plane is upgraded first, then the worker pools in serial ordered by name.
+	WorkerPoolUpgradeStrategySerial = "Serial"
+	// Control-plane is upgraded first, then the worker pools in parallel.
+	WorkerPoolUpgradeStrategyParallel = "Parallel"
+)
+
 // ClusterInstance input field names used in ClusterInstanceParameters / ClusterInstance data.
 const (
 	// ClusterInstanceNodesKey is the legacy flat nodes list.

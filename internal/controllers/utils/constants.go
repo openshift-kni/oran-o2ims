@@ -246,6 +246,7 @@ const (
 	UpgradeDefaultsIBGUKey              = "imageBasedGroupUpgrade"
 	UpgradeDefaultsClusterVersionKey    = "clusterVersion"
 	UpgradeIntermediateVersionConfigKey = "intermediateVersion"
+	UpgradeWorkerPoolUpgradeKey         = "workerPoolUpgrade"
 )
 
 // CRDs needed to be suppressed in ClusterInstance for upgrade

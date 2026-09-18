@@ -7,10 +7,13 @@ SPDX-License-Identifier: Apache-2.0
 package validation
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/coreos/go-semver/semver"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
+	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
 )
 
 // ValidateCVUpgradeData validates the semantic business rules for
@@ -90,6 +93,62 @@ func ValidateEUSIntermediate(intermediateVersion, targetVersion string) error {
 		return typederrors.NewInputError(
 			"intermediateVersion %s must be exactly one minor version below ClusterTemplate's spec.release version %s",
 			intermediateVer, targetVer)
+	}
+	return nil
+}
+
+// ValidateWorkerPoolUpgrade validates strategy-specific worker MCP rollout rules.
+func ValidateWorkerPoolUpgrade(isEUS bool, strategy string, poolsWithControlPlane []string) error {
+	switch strategy {
+	case constants.WorkerPoolUpgradeStrategyOpenShiftDefault:
+		if isEUS {
+			return fmt.Errorf(
+				"workerPoolUpgrade.strategy %s is not applicable to EUS upgrades",
+				constants.WorkerPoolUpgradeStrategyOpenShiftDefault)
+		}
+		if len(poolsWithControlPlane) > 0 {
+			return fmt.Errorf(
+				"workerPoolUpgrade.poolsWithControlPlane is not supported with strategy %s",
+				constants.WorkerPoolUpgradeStrategyOpenShiftDefault)
+		}
+	case constants.WorkerPoolUpgradeStrategySerial, constants.WorkerPoolUpgradeStrategyParallel:
+		if isEUS && len(poolsWithControlPlane) > 0 {
+			return fmt.Errorf(
+				"workerPoolUpgrade.poolsWithControlPlane is not supported for EUS upgrades")
+		}
+	default:
+		return fmt.Errorf(
+			"unsupported workerPoolUpgrade.strategy %q; must be %s, %s, or %s",
+			strategy,
+			constants.WorkerPoolUpgradeStrategyOpenShiftDefault,
+			constants.WorkerPoolUpgradeStrategySerial,
+			constants.WorkerPoolUpgradeStrategyParallel)
+	}
+	return nil
+}
+
+// ValidatePoolsWithControlPlaneNames checks that each name is a unique live non-master MachineConfigPool.
+func ValidatePoolsWithControlPlaneNames(mcps []mcfgv1.MachineConfigPool, names []string) error {
+	known := make(map[string]struct{}, len(mcps))
+	for i := range mcps {
+		known[mcps[i].Name] = struct{}{}
+	}
+	seen := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		if name == "" {
+			return fmt.Errorf("workerPoolUpgrade.poolsWithControlPlane contains an empty name")
+		}
+		if name == "master" {
+			return fmt.Errorf("workerPoolUpgrade.poolsWithControlPlane must not include %q", "master")
+		}
+		if _, duplicate := seen[name]; duplicate {
+			return fmt.Errorf("workerPoolUpgrade.poolsWithControlPlane contains duplicate name %q", name)
+		}
+		seen[name] = struct{}{}
+		if _, ok := known[name]; !ok {
+			return fmt.Errorf(
+				"workerPoolUpgrade.poolsWithControlPlane refers to unknown MachineConfigPool %q", name)
+		}
 	}
 	return nil
 }

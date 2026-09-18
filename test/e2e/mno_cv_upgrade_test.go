@@ -72,7 +72,9 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 
 		eusIntermediateVersion = "4.21.7"
 
-		ctNamespace = "std-ran-v4-19-3"
+		ctNamespace   = "std-ran-v4-19-3"
+		workerR740    = "worker-dell-r740"
+		workerXR8620t = "worker-dell-xr8620t"
 
 		resourceDir = "../resources/mno_cv_upgrade"
 	)
@@ -165,7 +167,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 		createUpgradeCT(testCtx, K8SClient, resourceDir, ctName, ctVersion4, ctRelease4, "clusterinstance-defaults-v4")
 
 		By("Creating BMHs resources")
-		bmhList := testutils.MnoBMHs(3, 2)
+		bmhList := upgradeBMHs(3, 2, 2)
 		for _, bmhData := range bmhList {
 			bmh := testutils.CreateBareMetalHost(bmhData)
 			bmcSecret := testutils.CreateBMCSecret(bmhData.Name)
@@ -280,7 +282,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 		}
 
 		// Delete BMH-related resources
-		for _, bmhData := range testutils.MnoBMHs(3, 2) {
+		for _, bmhData := range upgradeBMHs(3, 2, 2) {
 			Expect(client.IgnoreNotFound(K8SClient.Delete(testCtx, &metal3v1alpha1.BareMetalHost{
 				ObjectMeta: metav1.ObjectMeta{Name: bmhData.Name, Namespace: bmhData.Namespace}}))).To(Succeed())
 			Expect(client.IgnoreNotFound(K8SClient.Delete(testCtx, &metal3v1alpha1.HardwareData{
@@ -399,6 +401,10 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 		})
 
 		It("should trigger upgrade after channel update and CV's target available", func() {
+			// Before starting the upgrade, MCPs are unpaused and updated.
+			ensureSpokeMCP(testCtx, spokeClient, workerR740, corev1.ConditionTrue)
+			ensureSpokeMCP(testCtx, spokeClient, workerXR8620t, corev1.ConditionTrue)
+
 			updateSpokeCV(testCtx, spokeClient, func(cv *configv1.ClusterVersion) {
 				cv.Status.AvailableUpdates = []configv1.Release{{Version: ctRelease2}}
 			})
@@ -409,6 +415,9 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 						"desiredUpdate": map[string]any{"version": ctRelease2},
 						"channel":       "stable-4.20",
 					},
+					ctlrutils.UpgradeWorkerPoolUpgradeKey: map[string]any{
+						"strategy": constants.WorkerPoolUpgradeStrategyParallel,
+					},
 				},
 			})
 
@@ -417,6 +426,9 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 				"triggered. Waiting for upgrade to start",
 				provisioningv1alpha1.StateProgressing,
 			)
+
+			assertSpokeMCPPaused(testCtx, spokeClient, workerR740, true)
+			assertSpokeMCPPaused(testCtx, spokeClient, workerXR8620t, true)
 		})
 
 		It("should show InProgress with CV's Progressing message", func() {
@@ -436,13 +448,25 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			)
 		})
 
-		It("should complete upgrade and return to fulfilled", func() {
+		It("should complete upgrade after Parallel worker pools roll out", func() {
 			updateSpokeCV(testCtx, spokeClient, func(cv *configv1.ClusterVersion) {
 				cv.Status.History[0].State = configv1.CompletedUpdate
 				cv.Status.Conditions = setCVCondition(cv.Status.Conditions,
 					configv1.OperatorProgressing, configv1.ConditionFalse,
 					"Cluster version is "+ctRelease2)
 			})
+
+			waitForPRUpgradeCondition(testCtx, K8SClient,
+				string(provisioningv1alpha1.CRconditionReasons.InProgress),
+				"Waiting for worker pools ["+workerR740+", "+workerXR8620t+"] to finish updating",
+				provisioningv1alpha1.StateProgressing,
+			)
+			assertSpokeMCPPaused(testCtx, spokeClient, workerR740, false)
+			assertSpokeMCPPaused(testCtx, spokeClient, workerXR8620t, false)
+
+			// Complete worker-dell-r740 and worker-dell-xr8620t pool updates.
+			ensureSpokeMCP(testCtx, spokeClient, workerR740, corev1.ConditionTrue)
+			ensureSpokeMCP(testCtx, spokeClient, workerXR8620t, corev1.ConditionTrue)
 
 			waitForPRUpgradeCondition(testCtx, K8SClient,
 				string(provisioningv1alpha1.CRconditionReasons.Completed),
@@ -559,7 +583,9 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 				cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.21.6"}}
 			})
 
-			updateSpokeMCP(testCtx, spokeClient, false, corev1.ConditionTrue)
+			// Before starting the EUS upgrade, MCPs are unpaused and updated.
+			ensureSpokeMCP(testCtx, spokeClient, workerR740, corev1.ConditionTrue)
+			ensureSpokeMCP(testCtx, spokeClient, workerXR8620t, corev1.ConditionTrue)
 
 			updatePR(testCtx, K8SClient, ctVersion4, map[string]any{
 				constants.TemplateParamUpgrade: map[string]any{
@@ -614,9 +640,8 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 				provisioningv1alpha1.StateFailed,
 			)
 
-			mcp := &mcfgv1.MachineConfigPool{}
-			Expect(spokeClient.Get(testCtx, types.NamespacedName{Name: "worker"}, mcp)).To(Succeed())
-			Expect(mcp.Spec.Paused).To(BeTrue(), "Worker MCP should still be paused after timeout")
+			assertSpokeMCPPaused(testCtx, spokeClient, workerR740, true)
+			assertSpokeMCPPaused(testCtx, spokeClient, workerXR8620t, true)
 
 			testutils.AssertSpokeAccessCleaned(testCtx, K8SClient, clusterName, upgradeMSAName, upgradeMWName, timeout, interval)
 		})
@@ -660,7 +685,8 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 				cv.Status.AvailableUpdates = []configv1.Release{{Version: eusIntermediateVersion}}
 			})
 
-			updateSpokeMCP(testCtx, spokeClient, false, corev1.ConditionFalse)
+			ensureSpokeMCP(testCtx, spokeClient, workerR740, corev1.ConditionFalse)
+			ensureSpokeMCP(testCtx, spokeClient, workerXR8620t, corev1.ConditionFalse)
 
 			updatePR(testCtx, K8SClient, ctVersion4, map[string]any{
 				constants.TemplateParamUpgrade: map[string]any{
@@ -681,7 +707,8 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 		})
 
 		It("should fail with invalid intermediateVersion after fixing MCPs", func() {
-			updateSpokeMCP(testCtx, spokeClient, false, corev1.ConditionTrue)
+			ensureSpokeMCP(testCtx, spokeClient, workerR740, corev1.ConditionTrue)
+			ensureSpokeMCP(testCtx, spokeClient, workerXR8620t, corev1.ConditionTrue)
 
 			updatePR(testCtx, K8SClient, "", map[string]any{
 				constants.TemplateParamUpgrade: map[string]any{
@@ -719,6 +746,10 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 						"upstream":      srv.URL,
 						"desiredUpdate": map[string]any{"version": ctRelease4},
 					},
+					// Also set the worker pool upgrade strategy to serial
+					ctlrutils.UpgradeWorkerPoolUpgradeKey: map[string]any{
+						"strategy": constants.WorkerPoolUpgradeStrategySerial,
+					},
 				},
 			})
 
@@ -727,6 +758,8 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 				"Upgrade to intermediate version "+eusIntermediateVersion+" triggered. Waiting for upgrade to start",
 				provisioningv1alpha1.StateProgressing,
 			)
+			assertSpokeMCPPaused(testCtx, spokeClient, workerR740, true)
+			assertSpokeMCPPaused(testCtx, spokeClient, workerXR8620t, true)
 		})
 
 		It("should show intermediate upgrade in progress", func() {
@@ -760,6 +793,8 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 				"Upgrade to desired version "+ctRelease4+" triggered. Waiting for upgrade to start",
 				provisioningv1alpha1.StateProgressing,
 			)
+			assertSpokeMCPPaused(testCtx, spokeClient, workerR740, true)
+			assertSpokeMCPPaused(testCtx, spokeClient, workerXR8620t, true)
 		})
 
 		It("should show target upgrade in progress", func() {
@@ -779,9 +814,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			)
 		})
 
-		It("should wait for MCPs to update after target upgrade completes", func() {
-			updateSpokeMCP(testCtx, spokeClient, true, corev1.ConditionFalse)
-
+		It("should roll out worker pools serially after target upgrade completes", func() {
 			updateSpokeCV(testCtx, spokeClient, func(cv *configv1.ClusterVersion) {
 				cv.Status.History[0].State = configv1.CompletedUpdate
 				cv.Status.Conditions = setCVCondition(cv.Status.Conditions,
@@ -791,17 +824,25 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 
 			waitForPRUpgradeCondition(testCtx, K8SClient,
 				string(provisioningv1alpha1.CRconditionReasons.InProgress),
-				"Waiting for worker MachineConfigPools to finish updating",
+				"Waiting for worker pools ["+workerR740+"] to finish updating",
 				provisioningv1alpha1.StateProgressing,
 			)
+			assertSpokeMCPPaused(testCtx, spokeClient, workerR740, false)
+			assertSpokeMCPPaused(testCtx, spokeClient, workerXR8620t, true)
+			// Complete worker-dell-r740 pool update.
+			ensureSpokeMCP(testCtx, spokeClient, workerR740, corev1.ConditionTrue)
 
-			mcp := &mcfgv1.MachineConfigPool{}
-			Expect(spokeClient.Get(testCtx, types.NamespacedName{Name: "worker"}, mcp)).To(Succeed())
-			Expect(mcp.Spec.Paused).To(BeFalse(), "Worker MCP should be unpaused after target upgrade completes")
+			waitForPRUpgradeCondition(testCtx, K8SClient,
+				string(provisioningv1alpha1.CRconditionReasons.InProgress),
+				"Waiting for worker pools ["+workerXR8620t+"] to finish updating",
+				provisioningv1alpha1.StateProgressing,
+			)
+			assertSpokeMCPPaused(testCtx, spokeClient, workerXR8620t, false)
 		})
 
 		It("should complete EUS upgrade when MCPs are updated", func() {
-			updateSpokeMCP(testCtx, spokeClient, false, corev1.ConditionTrue)
+			// Complete worker-dell-xr8620t pool update.
+			ensureSpokeMCP(testCtx, spokeClient, workerXR8620t, corev1.ConditionTrue)
 
 			waitForPRUpgradeCondition(testCtx, K8SClient,
 				string(provisioningv1alpha1.CRconditionReasons.Completed),
@@ -920,14 +961,54 @@ func createUpgradeCT(ctx context.Context, k8SClient client.Client,
 	Expect(k8SClient.Create(ctx, baseCT)).To(Succeed())
 }
 
-func updateSpokeMCP(ctx context.Context, spokeClient client.Client, paused bool, updated corev1.ConditionStatus) {
+func upgradeBMHs(masterCount, r740WorkerCount, xr8620tWorkerCount int) []testutils.BMHData {
+	var bmhs []testutils.BMHData
+	for i := 1; i <= masterCount; i++ {
+		bmhs = append(bmhs, testutils.BMHData{
+			Name:           fmt.Sprintf("test-master%d", i),
+			Namespace:      "dell-r740-pool",
+			MacAddress:     fmt.Sprintf("aa:bb:cc:11:00:%02x", i),
+			BmcAddress:     fmt.Sprintf("redfish://192.168.1.%d/redfish/v1/Systems/1", 100+i),
+			ServerType:     "R740",
+			Colour:         "green",
+			ResourcePoolId: "dell-r740-pool",
+		})
+	}
+	for i := 1; i <= r740WorkerCount; i++ {
+		bmhs = append(bmhs, testutils.BMHData{
+			Name:           fmt.Sprintf("test-worker-r740-%d", i),
+			Namespace:      "dell-r740-pool",
+			MacAddress:     fmt.Sprintf("aa:bb:cc:22:00:%02x", i),
+			BmcAddress:     fmt.Sprintf("redfish://192.168.2.%d/redfish/v1/Systems/1", 100+i),
+			ServerType:     "R740",
+			Colour:         "blue",
+			ResourcePoolId: "dell-r740-pool",
+		})
+	}
+	for i := 1; i <= xr8620tWorkerCount; i++ {
+		bmhs = append(bmhs, testutils.BMHData{
+			Name:           fmt.Sprintf("test-worker-xr8620t-%d", i),
+			Namespace:      "dell-xr8620t-pool",
+			MacAddress:     fmt.Sprintf("aa:bb:cc:33:00:%02x", i),
+			BmcAddress:     fmt.Sprintf("redfish://192.168.3.%d/redfish/v1/Systems/1", 100+i),
+			ServerType:     "XR8620t",
+			Colour:         "blue",
+			ResourcePoolId: "dell-xr8620t-pool",
+		})
+	}
+	return bmhs
+}
+
+func ensureSpokeMCP(
+	ctx context.Context, spokeClient client.Client, name string, updated corev1.ConditionStatus,
+) {
 	mcp := &mcfgv1.MachineConfigPool{}
-	err := spokeClient.Get(ctx, types.NamespacedName{Name: "worker"}, mcp)
+	err := spokeClient.Get(ctx, types.NamespacedName{Name: name}, mcp)
 	if errors.IsNotFound(err) {
 		mcp = &mcfgv1.MachineConfigPool{
-			ObjectMeta: metav1.ObjectMeta{Name: "worker"},
-			Spec:       mcfgv1.MachineConfigPoolSpec{Paused: paused},
+			ObjectMeta: metav1.ObjectMeta{Name: name, Generation: 1},
 			Status: mcfgv1.MachineConfigPoolStatus{
+				ObservedGeneration: 1,
 				Conditions: []mcfgv1.MachineConfigPoolCondition{
 					{Type: mcfgv1.MachineConfigPoolUpdated, Status: updated, LastTransitionTime: metav1.Now()},
 				},
@@ -937,19 +1018,29 @@ func updateSpokeMCP(ctx context.Context, spokeClient client.Client, paused bool,
 		return
 	}
 	Expect(err).ToNot(HaveOccurred())
-	mcp.Spec.Paused = paused
+	mcp.Spec.Paused = false
+	foundUpdated := false
 	for i, c := range mcp.Status.Conditions {
 		if c.Type == mcfgv1.MachineConfigPoolUpdated {
 			mcp.Status.Conditions[i].Status = updated
 			mcp.Status.Conditions[i].LastTransitionTime = metav1.Now()
-			Expect(spokeClient.Update(ctx, mcp)).To(Succeed())
-			return
+			foundUpdated = true
+			break
 		}
 	}
-	mcp.Status.Conditions = append(mcp.Status.Conditions, mcfgv1.MachineConfigPoolCondition{
-		Type: mcfgv1.MachineConfigPoolUpdated, Status: updated, LastTransitionTime: metav1.Now(),
-	})
+	if !foundUpdated {
+		mcp.Status.Conditions = append(mcp.Status.Conditions, mcfgv1.MachineConfigPoolCondition{
+			Type: mcfgv1.MachineConfigPoolUpdated, Status: updated, LastTransitionTime: metav1.Now(),
+		})
+	}
+	mcp.Status.ObservedGeneration = mcp.Generation
 	Expect(spokeClient.Update(ctx, mcp)).To(Succeed())
+}
+
+func assertSpokeMCPPaused(ctx context.Context, spokeClient client.Client, name string, expectedPaused bool) {
+	mcp := &mcfgv1.MachineConfigPool{}
+	Expect(spokeClient.Get(ctx, types.NamespacedName{Name: name}, mcp)).To(Succeed())
+	Expect(mcp.Spec.Paused).To(Equal(expectedPaused), "MachineConfigPool %s paused=%v", name, expectedPaused)
 }
 
 func createCIDefaultsCM(ctx context.Context, k8SClient client.Client,
