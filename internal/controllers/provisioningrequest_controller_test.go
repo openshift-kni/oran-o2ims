@@ -292,6 +292,22 @@ var _ = Describe("ProvisioningRequestReconciler Unit Tests", func() {
 			})
 		})
 
+		Context("when template version has a higher major version", func() {
+			BeforeEach(func() {
+				managedCluster.Labels["openshiftVersion"] = "4.22.0"
+				Expect(c.Update(ctx, managedCluster)).To(Succeed())
+				clusterTemplate.Spec.Release = "5.0.1"
+				Expect(c.Update(ctx, clusterTemplate)).To(Succeed())
+			})
+
+			It("should return true", func() {
+				upgradeRequested, result, err := task.IsUpgradeRequested(ctx, clusterName)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(result).To(BeZero())
+				Expect(upgradeRequested).To(BeTrue())
+			})
+		})
+
 		Context("when template version equals cluster version", func() {
 			BeforeEach(func() {
 				managedCluster.Labels["openshiftVersion"] = "4.17.0"
