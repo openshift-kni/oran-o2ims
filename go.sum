@@ -773,12 +773,12 @@ k8s.io/utils v0.0.0-20210802155522-efc7438f0176/go.mod h1:jPW/WVKK9YHAvNhRxK0md/
 k8s.io/utils v0.0.0-20211116205334-6203023598ed/go.mod h1:jPW/WVKK9YHAvNhRxK0md/EJ228hCsBRufyofKtW8HA=
 k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3 h1:jVkFFVfXdXP74B/zbO3hM3hpSFD0xvhQ5U686DPurkE=
 k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3/go.mod h1:M2s5JB1lIYP3jzZdorPLHXIPJzt9vv2muW5a6L9DtNM=
-open-cluster-management.io/api v1.3.0 h1:Q3miH38BE3N5+PesHQ0kcFi5nhX5350m7OJWapZcVqY=
-open-cluster-management.io/api v1.3.0/go.mod h1:t0DsBv4gjIo9ojd7GYfA2tcEMpNf0h5Ix68pFDXwNSk=
+open-cluster-management.io/api v1.3.1-0.20260709055002-403378b57558 h1:Ny12QGibGK2KAZ9KM0E89+jeqmYtQQi3fpi1dOLG5SA=
+open-cluster-management.io/api v1.3.1-0.20260709055002-403378b57558/go.mod h1:/qLKuMbMS1+MpirTjaw4BoS3INKG8jV3s5J7iju48tg=
 open-cluster-management.io/governance-policy-propagator v0.20.0 h1:Y8G23ZNaQw8Ayn4gHHr6/kQAmJ33agA9jRoADb7Scg4=
 open-cluster-management.io/governance-policy-propagator v0.20.0/go.mod h1:TjMiMEliMLKpvwOm5dwdxSgfcVOLTHqbFqVOpe9q8qg=
-open-cluster-management.io/managed-serviceaccount v0.9.0 h1:YK2AwVyjDF3IJGv48+Nc8dDjfHA9AklHvVBO9fPSNd4=
-open-cluster-management.io/managed-serviceaccount v0.9.0/go.mod h1:q/pASWYWNEz3AodqKWphmMvK0IdmlWYltwDicjYBizs=
+open-cluster-management.io/managed-serviceaccount v0.11.0 h1:/KYQShvFosfEoesFz8GCprvlXXryPuOwqKWcoRMv8rQ=
+open-cluster-management.io/managed-serviceaccount v0.11.0/go.mod h1:cnZSLbFknYAjPrkmeYgTvrbZi0sDSoyL0muM6NkMlWQ=
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.36.0 h1:/YpDJ4vReG7ZmzSpBGxduXgywWkJU9zHubgJG03MT+Y=
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.36.0/go.mod h1:tJo1aepTXyR+8Xs3sUsGBDk4Ub2AM5dPAPKJx0mpm5c=
 sigs.k8s.io/controller-runtime v0.25.1 h1:BKgU9OeE8xv8EbbM8cY0NVzTQs35rokkdq1jh12fMb4=
