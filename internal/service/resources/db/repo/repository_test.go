@@ -13,7 +13,7 @@ import (
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/pashagolub/pgxmock/v4"
+	"github.com/pashagolub/pgxmock/v5"
 
 	commonrepo "github.com/openshift-kni/oran-o2ims/internal/service/common/repo"
 	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
