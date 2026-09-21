@@ -56,9 +56,9 @@ require (
 	k8s.io/klog/v2 v2.140.0
 	k8s.io/kubectl v0.37.0
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3
-	open-cluster-management.io/api v1.3.0
+	open-cluster-management.io/api v1.3.1-0.20260709055002-403378b57558
 	open-cluster-management.io/governance-policy-propagator v0.20.0
-	open-cluster-management.io/managed-serviceaccount v0.9.0
+	open-cluster-management.io/managed-serviceaccount v0.11.0
 	sigs.k8s.io/controller-runtime v0.25.1
 	sigs.k8s.io/yaml v1.6.0
 )
