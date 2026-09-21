@@ -251,10 +251,11 @@ github.com/jackc/pgpassfile
 # github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761
 ## explicit; go 1.14
 github.com/jackc/pgservicefile
-# github.com/jackc/pgx/v5 v5.10.0
+# github.com/jackc/pgx/v5 v5.11.0
 ## explicit; go 1.25.0
 github.com/jackc/pgx/v5
 github.com/jackc/pgx/v5/internal/iobufpool
+github.com/jackc/pgx/v5/internal/pgdatetime
 github.com/jackc/pgx/v5/internal/pgio
 github.com/jackc/pgx/v5/internal/sanitize
 github.com/jackc/pgx/v5/internal/stmtcache
@@ -423,9 +424,9 @@ github.com/openshift/hive/apis/scheme
 # github.com/openshift/library-go v0.0.0-20260318142011-72bf34f474bc
 ## explicit; go 1.25.0
 github.com/openshift/library-go/pkg/crypto
-# github.com/pashagolub/pgxmock/v4 v4.9.0
-## explicit; go 1.23.0
-github.com/pashagolub/pgxmock/v4
+# github.com/pashagolub/pgxmock/v5 v5.2.0
+## explicit; go 1.25.0
+github.com/pashagolub/pgxmock/v5
 # github.com/peterbourgon/diskv v2.0.1+incompatible
 ## explicit
 github.com/peterbourgon/diskv
