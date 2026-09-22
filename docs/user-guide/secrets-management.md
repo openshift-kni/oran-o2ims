@@ -59,21 +59,30 @@ not mandate any particular approach:
 
 - **External Secrets Operator** — synchronizes Secrets into the cluster from
   an external secret store (for example, HashiCorp Vault, AWS Secrets Manager,
-  or Azure Key Vault). Only a non-sensitive `ExternalSecret` reference is
-  committed to Git.
+  or Azure Key Vault). Manifests committed to Git must contain only
+  non-sensitive configuration and remote references. Do not embed sensitive
+  values through `spec.target.template.data` or `templateFrom`, and provision
+  any `Secret` used for provider authentication (for example, the
+  `SecretStore` credentials) outside of Git.
 - **Sealed Secrets** — encrypts a `Secret` into a `SealedSecret` custom
   resource that is safe to commit to Git; the controller decrypts it in the
   cluster.
 - **HashiCorp Vault with the ArgoCD Vault Plugin** — keeps secret values in
-  Vault and injects them into manifests at sync time, so only placeholders are
-  committed to Git. HashiCorp Vault is a commonly preferred approach.
+  Vault and injects them into manifests during manifest generation, so only
+  placeholders are committed to Git. HashiCorp Vault is a commonly preferred
+  approach. Note that the generated manifests contain plaintext secret values
+  and are cached by ArgoCD; restrict access to the `argocd-repo-server` and
+  Redis components accordingly.
 
 Whichever mechanism you choose, the goal is the same: keep the sensitive
 values out of the Git repository while still driving the deployment from Git.
 
-Ultimately, the choice is up to you. If, after understanding the risks
-described above, you decide to store Secrets directly in Git, that is your
-decision and responsibility.
+Do not commit real Secret values to Git. Base64 encoding does not make a
+Secret value safe to store in a repository — it is trivially reversible. Treat
+any credential that has been committed to Git as exposed: rotate or revoke it
+promptly, and follow your organization's process for purging sensitive data
+from repository history. Deleting the file in a later commit does not remove
+the value from the repository's history.
 
 ## About the sample Secret files
 
