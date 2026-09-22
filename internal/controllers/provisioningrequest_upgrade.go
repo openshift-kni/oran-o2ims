@@ -921,14 +921,14 @@ func (t *provisioningRequestReconcilerTask) handleCVUpgradePreStart(
 		return ctrl.Result{}, nil
 	}
 
-	// Check Upgradeable condition for minor version upgrades but not if force is set.
+	// Check Upgradeable condition for major and minor version upgrades but not if force is set.
 	if !cvSpec.DesiredUpdate.Force {
 		currentVersion := ctlrutils.GetCurrentCVVersion(cv)
-		isMinor, err := ctlrutils.IsMinorUpgrade(currentVersion, action.UpgradeToVersion)
+		isMajorOrMinor, err := ctlrutils.IsMajorOrMinorUpgrade(currentVersion, action.UpgradeToVersion)
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to determine upgrade type: %w", err)
 		}
-		if isMinor {
+		if isMajorOrMinor {
 			upgradeable := ctlrutils.GetCVCondition(cv, configv1.OperatorUpgradeable)
 			if upgradeable != nil && upgradeable.Status == configv1.ConditionFalse {
 				if err := t.updateUpgradeStatus(ctx,

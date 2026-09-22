@@ -160,9 +160,9 @@ func GetCurrentCVVersion(cv *configv1.ClusterVersion) string {
 	return ""
 }
 
-// IsMinorUpgrade returns true if the target version has a higher minor version
-// than the current version. Returns an error if either version is not valid semver.
-func IsMinorUpgrade(currentVersion, targetVersion string) (bool, error) {
+// IsMajorOrMinorUpgrade returns true if the target version is a major or minor upgrade
+// from the current version. Returns an error if either version is not valid semver.
+func IsMajorOrMinorUpgrade(currentVersion, targetVersion string) (bool, error) {
 	if currentVersion == "" || targetVersion == "" {
 		return false, nil
 	}
@@ -175,7 +175,8 @@ func IsMinorUpgrade(currentVersion, targetVersion string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to parse target version %q: %w", targetVersion, err)
 	}
-	return target.Minor > current.Minor, nil
+	return target.Major > current.Major ||
+		(target.Major == current.Major && target.Minor > current.Minor), nil
 }
 
 // ResolveCVUpgradeAction determines the current phase and version from CV

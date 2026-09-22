@@ -55,45 +55,57 @@ var _ = Describe("Upgrade helper functions", func() {
 		})
 	})
 
-	Describe("IsMinorUpgrade", func() {
+	Describe("IsMajorOrMinorUpgrade", func() {
 		It("should return true for minor version upgrade", func() {
-			isMinor, err := IsMinorUpgrade("4.21.3", "4.22.0")
+			isMinorOrMajor, err := IsMajorOrMinorUpgrade("4.21.3", "4.22.0")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(isMinor).To(BeTrue())
+			Expect(isMinorOrMajor).To(BeTrue())
+		})
+
+		It("should return true for major version upgrade", func() {
+			isMinorOrMajor, err := IsMajorOrMinorUpgrade("4.22.0", "5.0.1")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(isMinorOrMajor).To(BeTrue())
 		})
 
 		It("should return false for z-stream upgrade", func() {
-			isMinor, err := IsMinorUpgrade("4.21.0", "4.21.3")
+			isMinorOrMajor, err := IsMajorOrMinorUpgrade("4.21.0", "4.21.3")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(isMinor).To(BeFalse())
+			Expect(isMinorOrMajor).To(BeFalse())
 		})
 
 		It("should return false for same version", func() {
-			isMinor, err := IsMinorUpgrade("4.21.0", "4.21.0")
+			isMinorOrMajor, err := IsMajorOrMinorUpgrade("4.21.0", "4.21.0")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(isMinor).To(BeFalse())
+			Expect(isMinorOrMajor).To(BeFalse())
+		})
+
+		It("should return false for major version downgrade", func() {
+			isMinorOrMajor, err := IsMajorOrMinorUpgrade("5.0.1", "4.22.0")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(isMinorOrMajor).To(BeFalse())
 		})
 
 		It("should return false with no error for empty current version", func() {
-			isMinor, err := IsMinorUpgrade("", "4.22.0")
+			isMinorOrMajor, err := IsMajorOrMinorUpgrade("", "4.22.0")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(isMinor).To(BeFalse())
+			Expect(isMinorOrMajor).To(BeFalse())
 		})
 
 		It("should return false with no error for empty target version", func() {
-			isMinor, err := IsMinorUpgrade("4.21.0", "")
+			isMinorOrMajor, err := IsMajorOrMinorUpgrade("4.21.0", "")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(isMinor).To(BeFalse())
+			Expect(isMinorOrMajor).To(BeFalse())
 		})
 
 		It("should return error for invalid current version", func() {
-			_, err := IsMinorUpgrade("invalid", "4.22.0")
+			_, err := IsMajorOrMinorUpgrade("invalid", "4.22.0")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to parse current version"))
 		})
 
 		It("should return error for invalid target version", func() {
-			_, err := IsMinorUpgrade("4.21.0", "invalid")
+			_, err := IsMajorOrMinorUpgrade("4.21.0", "invalid")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to parse target version"))
 		})
