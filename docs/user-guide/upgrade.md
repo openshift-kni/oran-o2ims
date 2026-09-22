@@ -53,11 +53,11 @@ Individual ProvisioningRequests can override specific upgrade parameters via
 
 - The OpenShift API for Data Protection (OADP) operator and the Lifecycle Agent (LCA)
   operator are installed on the spoke cluster, and the OADP backend is configured.
-  See [Installing operators for IBU](https://docs.openshift.com/container-platform/latest/edge_computing/image_based_upgrade/preparing_for_image_based_upgrade/cnf-image-based-upgrade-install-operators.html).
+  See [Installing operators for IBU](https://docs.redhat.com/en/documentation/openshift_container_platform/4.22/html/edge_computing/image-based-upgrade-for-single-node-openshift-clusters).
 
 - A compatible seed image for the target OCP version (`4.Y.Z+1`) has been created.
   Both the target cluster and the seed image must have a
-  [shared container partition configured for IBU](https://docs.openshift.com/container-platform/latest/edge_computing/image_based_upgrade/preparing_for_image_based_upgrade/cnf-image-based-upgrade-shared-container-partition.html).
+  [shared container partition configured for IBU](https://docs.redhat.com/en/documentation/openshift_container_platform/4.22/html/edge_computing/image-based-upgrade-for-single-node-openshift-clusters).
 
 - The spoke cluster is successfully deployed and configured:
 
