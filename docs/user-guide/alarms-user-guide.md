@@ -38,7 +38,7 @@ oc -n open-cluster-management-observability get secret alertmanager-config \
   --template='{{ index .data "alertmanager.yaml" }}' | base64 -d | grep -A 3 o2ims
 ```
 
-All commands should return running pods/resources. If any fail, check the [ACM Observability Documentation](https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_management_for_kubernetes/2.14/html-single/observability/index).
+All commands should return running pods/resources. If any fail, check the [ACM Observability Documentation](https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_management_for_kubernetes/2.17/html/observability/index).
 
 > [!WARNING]
 > The alarms service is **completely dependent** on a healthy ACM Observability stack. The O2IMS alarms server only configures the alertmanager webhook - it cannot function without ACM's monitoring infrastructure already running and generating alerts.
@@ -254,7 +254,7 @@ curl -s -k -H "Authorization: Bearer ${MY_TOKEN}" "${BASE_URL}/alarms" | jq '. |
 
 ### Dependencies
 
-- **[ACM Observability](https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_management_for_kubernetes/2.14/html-single/observability/index)** - Required for alert ingestion
+- **[ACM Observability](https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_management_for_kubernetes/2.17/html/observability/index)** - Required for alert ingestion
 - **[Prometheus Alertmanager](https://prometheus.io/docs/alerting/latest/alertmanager/)** - Source of alerts processed by this service
 
 ---

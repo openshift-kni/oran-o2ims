@@ -32,7 +32,7 @@ SPDX-License-Identifier: Apache-2.0
 
   - Observability Operator
 
-    Enable Observability in ACM by following the official guide: [Red Hat ACM Observability - Enabling the Observability service](https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_management_for_kubernetes/2.14/html-single/observability/index#enabling-observability)
+    Enable Observability in ACM by following the official guide: [Red Hat ACM Observability - Enabling the Observability service](https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_management_for_kubernetes/2.17/html/observability/observing-environments-intro)
 
   - Image-Based Install Operator (optional, required for [IBI provisioning](./ibi-based-cluster-provisioning.md))
 
@@ -76,7 +76,7 @@ client present a certificate.
 
 To configure the primary controller to enable mTLS the following attributes must be set in the `clientTLS` section of
 the `spec`. For more information, please refer to the
-[Ingress Operator in OpenShift Container Platform documentation](https://docs.redhat.com/en/documentation/openshift_container_platform/4.21/html/networking_operators/configuring-ingress#configuring-ingress-controller-tls).
+[Ingress Operator in OpenShift Container Platform documentation](https://docs.redhat.com/en/documentation/openshift_container_platform/4.22/html/networking_operators/configuring-ingress#configuring-ingress-controller-tls).
 
 ```yaml
 apiVersion: operator.openshift.io/v1

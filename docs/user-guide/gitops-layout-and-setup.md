@@ -80,7 +80,8 @@ or extracted from the [ztp-site-generate](https://catalog.redhat.com/software/co
 
 ## SNO Full DU (Distributed Unit) profile
 
-For configuring an SNO with a full DU profile according to the [RAN RDS](https://docs.redhat.com/en/documentation/openshift_container_platform/4.21/html/scalability_and_performance/telco-ran-du-ref-design-specs#telco-ran-du-reference-configuration-crs),
+For configuring an SNO with a full DU profile according to the [RAN
+RDS](https://docs.redhat.com/en/documentation/openshift_container_platform/4.22/html/scalability_and_performance/telco-ran-du-ref-design-specs#telco-ran-du-reference-configuration-crs_telco-ran-du),
 the following main samples can be used as a starting example:
 
 * [ClusterInstance defaults ConfigMap](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-full-du/clusterinstance-defaults-full-du-v1.yaml)
