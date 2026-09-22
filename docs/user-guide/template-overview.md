@@ -611,7 +611,7 @@ Complete sample:
 - [ClusterTemplate](../samples/git-setup/clustertemplates/version_4.Y.Z/std-ran-du/std-ran-du-multi-mcp-v4-Y-Z-1.yaml)
 - [ClusterInstance defaults](../samples/git-setup/clustertemplates/version_4.Y.Z/std-ran-du/clusterinstance-defaults-multi-mcp-v1.yaml)
 - [PolicyTemplate defaults](../samples/git-setup/clustertemplates/version_4.Y.Z/std-ran-du/policytemplates-defaults-multi-mcp-v1.yaml)
-- [Custom MCP extra manifests](../samples/git-setup/clustertemplates/version_4.Y.Z/extra-manifest/custom-machine-config-pools.yaml)
+- [Custom MCP extra manifests](../samples/git-setup/clustertemplates/version_4.Y.Z/extra-manifest/custom-manifest/custom-machine-config-pools.yaml)
 - [PolicyGenerator](../samples/git-setup/policytemplates/version_4.Y.Z/std-ran-du/std-ran-du-pg-multi-mcp-v4-Y-Z-v1.yaml)
 - [Custom inform validators](../samples/git-setup/policytemplates/version_4.Y.Z/source-crs/custom-crs/)
 
