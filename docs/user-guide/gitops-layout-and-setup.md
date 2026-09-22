@@ -62,7 +62,7 @@ git-root/
 Notes
 
 * Keep content versioned by OCP release using the `version_4.Y.Z/` folders so templates and policies align with the target OCP.
-* The content of the `extra-manifest` directory should be copied over from the [telco-reference extra-manifest](https://github.com/openshift-kni/telco-reference/tree/main/telco-ran/configuration/source-crs/extra-manifest) repo
+* The content of the `extra-manifest` directory should be copied over from the [telco-reference extra-manifest](https://github.com/openshift-kni/telco-reference/tree/main/telco-ran/install/clusterinstance/extra-manifests) repo
 or extracted from the [ztp-site-generate](https://catalog.redhat.com/software/containers/openshift4/ztp-site-generate-rhel8/6154c29fd2c7f84a4d2edca1) container.
   * ArgoCD will assemble all the extra-manifests into a ConfigMap.
 * The content of the `source-crs` directory should be copied over from the [telco-reference source-crs](https://github.com/openshift-kni/telco-reference/tree/main/telco-ran/configuration/source-crs) repo
