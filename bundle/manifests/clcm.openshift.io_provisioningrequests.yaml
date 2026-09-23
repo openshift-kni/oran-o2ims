@@ -188,6 +188,26 @@ spec:
                               started.
                             format: date-time
                             type: string
+                          workerPoolUpgrade:
+                            description: |-
+                              WorkerPoolUpgrade is the resolved worker MachineConfigPool rollout
+                              configuration prepared from the current upgrade parameters.
+                            properties:
+                              pauseStateManaged:
+                                description: |-
+                                  PauseStateManaged indicates that the controller has started managing worker
+                                  MCP pause state for the current ClusterVersion upgrade step.
+                                type: boolean
+                              poolsWithControlPlane:
+                                description: PoolsWithControlPlane lists worker MCPs
+                                  that upgrade alongside the control plane.
+                                items:
+                                  type: string
+                                type: array
+                              strategy:
+                                description: Strategy is the resolved rollout strategy.
+                                type: string
+                            type: object
                         type: object
                       fulfilledNodeCount:
                         description: |-

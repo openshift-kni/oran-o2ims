@@ -28,6 +28,7 @@ import (
 	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -388,24 +389,35 @@ func (t *provisioningRequestReconcilerTask) prepareIBGU(
 	return ibguCR, nil
 }
 
-// prepareCVSpec merges and validates upgrade data, parses the
-// clusterVersion spec into typed struct, and sets DesiredUpdate.Version
-// to the upgrade step target. For EUS upgrades it also resolves the
-// intermediate version from configuration or the Cincinnati update graph,
-// updates action.UpgradeToVersion to the resolved version so the
-// upgrade continues in the same reconciliation, and persists it to
-// ClusterUpgradeStatus.IntermediateVersion so subsequent reconciliations
-// can drive the EUS state machine.
+// prepareCVSpec merges and validates upgrade data, prepares the ClusterVersion spec,
+// validates the worker-pool rollout configuration, and stores the resolved rollout
+// in ClusterUpgradeStatus. For EUS upgrades, it also resolves from configuration or
+// the Cincinnati update graph, and persists the intermediate version so subsequent
+// reconciliations can drive the EUS state machine.
 func (t *provisioningRequestReconcilerTask) prepareCVSpec(
 	ctx context.Context,
 	clusterTemplate *provisioningv1alpha1.ClusterTemplate,
 	cv *configv1.ClusterVersion,
 	action *ctlrutils.CVUpgradeAction,
 ) (*configv1.ClusterVersionSpec, error) {
+	statusBefore := t.object.DeepCopy()
+	upgradeStatus := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus
+
 	// Merge and validate upgrade data against the schema.
 	mergedUpgradeData, err := t.mergeAndValidateUpgradeData(clusterTemplate)
 	if err != nil {
 		return nil, typederrors.NewInputError("%s", err.Error())
+	}
+
+	// Extract the workerPoolUpgrade data from the merged result
+	workerPoolUpgrade, err := extractWorkerPoolUpgrade(mergedUpgradeData, action.IsEUS)
+	if err != nil {
+		return nil, typederrors.NewInputError("%s", err.Error())
+	}
+	if err := upgradevalidation.ValidateWorkerPoolUpgrade(
+		action.IsEUS, workerPoolUpgrade.Strategy, workerPoolUpgrade.PoolsWithControlPlane,
+	); err != nil {
+		return nil, typederrors.NewInputError("invalid workerPoolUpgrade: %s", err.Error())
 	}
 
 	// Extract the clusterVersion data from the merged result
@@ -433,7 +445,6 @@ func (t *provisioningRequestReconcilerTask) prepareCVSpec(
 			cvSpec.DesiredUpdate.Version, clusterTemplate.Spec.Release)
 	}
 
-	upgradeStatus := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus
 	// For EUS upgrades, resolve the intermediate version on the intermediate hop.
 	// If intermediateVersion is explicitly configured, use it directly.
 	// Otherwise, auto-select a valid intermediate version from the Cincinnati
@@ -451,6 +462,8 @@ func (t *provisioningRequestReconcilerTask) prepareCVSpec(
 			configIntermediate = iv
 		}
 
+		// Update action.UpgradeToVersion to the resolved version so the
+		// upgrade continues in the same reconciliation.
 		if configIntermediate != "" {
 			if err := upgradevalidation.ValidateEUSIntermediate(
 				configIntermediate, targetVersion,
@@ -466,8 +479,6 @@ func (t *provisioningRequestReconcilerTask) prepareCVSpec(
 			}
 			action.UpgradeToVersion = resolved
 		}
-		upgradeStatus.IntermediateVersion = action.UpgradeToVersion
-
 		// Intermediate upgrade is version-based; clear any user-configured
 		// image for target version.
 		cvSpec.DesiredUpdate.Image = ""
@@ -481,7 +492,55 @@ func (t *provisioningRequestReconcilerTask) prepareCVSpec(
 		return nil, typederrors.NewInputError("invalid target version %q: %s", cvSpec.DesiredUpdate.Version, err.Error())
 	}
 
+	// Update the upgrade status with the resolved values after validation.
+	pauseStateManaged := upgradeStatus.WorkerPoolUpgrade != nil &&
+		upgradeStatus.WorkerPoolUpgrade.PauseStateManaged
+	upgradeStatus.WorkerPoolUpgrade = &provisioningv1alpha1.WorkerPoolUpgradeStatus{
+		Strategy:              workerPoolUpgrade.Strategy,
+		PoolsWithControlPlane: append([]string(nil), workerPoolUpgrade.PoolsWithControlPlane...),
+		PauseStateManaged:     pauseStateManaged,
+	}
+	if isIntermediateHop {
+		upgradeStatus.IntermediateVersion = action.UpgradeToVersion
+	}
+	if !equality.Semantic.DeepEqual(statusBefore.Status, t.object.Status) {
+		if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+			return nil, fmt.Errorf("failed to persist cluster upgrade configuration status: %w", err)
+		}
+	}
+
 	return &cvSpec, nil
+}
+
+// extractWorkerPoolUpgrade decodes the merged worker-pool rollout configuration,
+// applying OpenShiftDefault for non-EUS upgrades and Parallel for EUS upgrades
+// as default when the configuration does not specify a strategy.
+func extractWorkerPoolUpgrade(
+	mergedUpgradeData map[string]any, isEUS bool,
+) (ctlrutils.WorkerPoolUpgrade, error) {
+	// Set the default strategy.
+	strategy := constants.WorkerPoolUpgradeStrategyOpenShiftDefault
+	if isEUS {
+		strategy = constants.WorkerPoolUpgradeStrategyParallel
+	}
+	workerPoolUpgrade := ctlrutils.WorkerPoolUpgrade{
+		Strategy: strategy,
+	}
+
+	raw, ok := mergedUpgradeData[ctlrutils.UpgradeWorkerPoolUpgradeKey]
+	if !ok {
+		return workerPoolUpgrade, nil
+	}
+	workerPoolUpgradeData, err := json.Marshal(raw)
+	if err != nil {
+		return ctlrutils.WorkerPoolUpgrade{}, fmt.Errorf(
+			"failed to marshal %s: %w", ctlrutils.UpgradeWorkerPoolUpgradeKey, err)
+	}
+	if err := json.Unmarshal(workerPoolUpgradeData, &workerPoolUpgrade); err != nil {
+		return ctlrutils.WorkerPoolUpgrade{}, fmt.Errorf(
+			"invalid %s: %w", ctlrutils.UpgradeWorkerPoolUpgradeKey, err)
+	}
+	return workerPoolUpgrade, nil
 }
 
 // resolveEUSIntermediateVersion auto-selects the intermediate version from the Cincinnati update graph.
@@ -752,19 +811,6 @@ func (t *provisioningRequestReconcilerTask) handleClusterVersionUpgrade(
 		case ctlrutils.PhasePreStart:
 			nextReconcile, err = t.handleCVUpgradePreStart(
 				ctx, spokeClient, cv, clusterTemplate, action)
-			// EUS intermediate upgrade: PreconditionChecksFailed means the upgrade
-			// was never triggered, so it's safe to unpause MCPs - no operators
-			// are mid-rollout.
-			if action.IsEUSIntermediate(intermediateVersion) &&
-				ctlrutils.IsClusterUpgradePreconditionChecksFailed(t.object) {
-				mcps, err := ctlrutils.ListNonMasterMCPs(ctx, spokeClient)
-				if err != nil {
-					return ctrl.Result{}, false, fmt.Errorf("failed to list MCPs for unpause: %w", err)
-				}
-				if _, err := ctlrutils.UnpauseMCPs(ctx, spokeClient, t.logger, mcps); err != nil {
-					return ctrl.Result{}, false, fmt.Errorf("failed to unpause MCPs: %w", err)
-				}
-			}
 		case ctlrutils.PhaseCompleted:
 			nextReconcile, err = t.handleCVUpgradeCompleted(
 				ctx, spokeClient, clusterName, msaName, mwName, action)
@@ -792,35 +838,16 @@ func (t *provisioningRequestReconcilerTask) handleClusterVersionUpgrade(
 	return nextReconcile, proceed, err
 }
 
-// handleCVUpgradeCompleted handles the terminal success state. For EUS upgrades,
-// it unpauses MCPs and waits for all to report Updated=True before completing the
-// upgrade and cleanup.
+// handleCVUpgradeCompleted handles a completed ClusterVersion update. It first
+// reconciles any controller-managed worker-pool rollout, then cleans up spoke
+// access and marks the overall upgrade completed.
 func (t *provisioningRequestReconcilerTask) handleCVUpgradeCompleted(
 	ctx context.Context, spokeClient client.Client,
 	clusterName, msaName, mwName string, action *ctlrutils.CVUpgradeAction,
 ) (ctrl.Result, error) {
-	intermediateVersion := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.IntermediateVersion
-	if action.IsEUS && !action.IsEUSIntermediate(intermediateVersion) {
-		mcps, err := ctlrutils.ListNonMasterMCPs(ctx, spokeClient)
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to list MCPs: %w", err)
-		}
-		unpaused, err := ctlrutils.UnpauseMCPs(ctx, spokeClient, t.logger, mcps)
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to unpause MCPs: %w", err)
-		}
-		// Short-circuits: if MCPs were just unpaused, requeue without checking
-		// status. GetNonUpdatedMCPs only runs on subsequent reconciles when
-		// MCPs were already unpaused — the list is fresh at that point.
-		if unpaused || len(ctlrutils.GetNonUpdatedMCPs(mcps)) > 0 {
-			if err := t.updateUpgradeStatus(ctx,
-				provisioningv1alpha1.CRconditionReasons.InProgress,
-				"Cluster version upgrade completed. Waiting for worker MachineConfigPools to finish updating",
-			); err != nil {
-				return ctrl.Result{}, err
-			}
-			return requeueWithMediumInterval(), nil
-		}
+	result, completed, err := t.reconcileWorkerPoolRollout(ctx, spokeClient)
+	if err != nil || !completed {
+		return result, err
 	}
 
 	t.logger.InfoContext(ctx, "Cluster upgrade completed",
@@ -837,6 +864,95 @@ func (t *provisioningRequestReconcilerTask) handleCVUpgradeCompleted(
 		return ctrl.Result{}, err
 	}
 	return doNotRequeue(), nil
+}
+
+// reconcileWorkerPoolRollout builds the rollout waves for the persisted
+// strategy and reconciles them in order. It starts at most one rollout wave
+// and waits for it to report Updated=True before proceeding to the next wave.
+// PoolsWithControlPlane form a common prerequisite and must be updated before
+// any later wave starts.
+func (t *provisioningRequestReconcilerTask) reconcileWorkerPoolRollout(
+	ctx context.Context, spokeClient client.Client,
+) (ctrl.Result, bool, error) {
+	upgradeStatus := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus
+	if upgradeStatus.WorkerPoolUpgrade == nil {
+		return ctrl.Result{}, false, fmt.Errorf(
+			"workerPoolUpgrade status is missing for completed ClusterVersion upgrade")
+	}
+	workerPoolUpgrade := upgradeStatus.WorkerPoolUpgrade
+
+	if workerPoolUpgrade.Strategy == constants.WorkerPoolUpgradeStrategyOpenShiftDefault {
+		// All worker pools were upgraded with control plane together, so skip the rollout.
+		return ctrl.Result{}, true, nil
+	}
+
+	mcps, err := ctlrutils.ListNonMasterMCPs(ctx, spokeClient)
+	if err != nil {
+		return ctrl.Result{}, false, fmt.Errorf("failed to list MCPs: %w", err)
+	}
+
+	// Verify that the pools with control plane are updated.
+	poolsWithControlPlane := ctlrutils.FilterMCPsByNames(mcps, workerPoolUpgrade.PoolsWithControlPlane)
+	if notUpdated := ctlrutils.GetNonUpdatedMCPs(ctx, t.logger, poolsWithControlPlane); len(notUpdated) > 0 {
+		if err := t.updateUpgradeStatus(ctx,
+			provisioningv1alpha1.CRconditionReasons.InProgress,
+			fmt.Sprintf(
+				"Cluster version upgrade completed. Waiting for worker pools [%s] to finish updating",
+				strings.Join(notUpdated, ", ")),
+		); err != nil {
+			return ctrl.Result{}, false, err
+		}
+		return requeueWithMediumInterval(), false, nil
+	}
+
+	// Get the remaining pools sorted alphabetically by name.
+	remaining := ctlrutils.ExcludeMCPsByNames(mcps, workerPoolUpgrade.PoolsWithControlPlane)
+	if len(remaining) == 0 {
+		return ctrl.Result{}, true, nil
+	}
+
+	var waves [][]mcfgv1.MachineConfigPool
+	switch workerPoolUpgrade.Strategy {
+	case constants.WorkerPoolUpgradeStrategySerial:
+		// Pools are upgraded one at a time in serial, so there is one wave per pool.
+		waves = make([][]mcfgv1.MachineConfigPool, 0, len(remaining))
+		for i := range remaining {
+			waves = append(waves, []mcfgv1.MachineConfigPool{remaining[i]})
+		}
+	case constants.WorkerPoolUpgradeStrategyParallel:
+		// Pools are upgraded concurrently, so there is only one wave.
+		waves = [][]mcfgv1.MachineConfigPool{remaining}
+	default:
+		return ctrl.Result{}, false, fmt.Errorf(
+			"unsupported persisted workerPoolUpgrade strategy %q", workerPoolUpgrade.Strategy)
+	}
+
+	// Unpause the pools in the waves one by one.
+	for _, wave := range waves {
+		notUpdated := ctlrutils.GetNonUpdatedMCPs(ctx, t.logger, wave)
+		unpaused, err := ctlrutils.UnpauseMCPs(ctx, spokeClient, t.logger, wave)
+		if err != nil {
+			return ctrl.Result{}, false, fmt.Errorf("failed to unpause MCPs: %w", err)
+		}
+		if unpaused || len(notUpdated) > 0 {
+			if len(notUpdated) == 0 {
+				notUpdated = make([]string, 0, len(wave))
+				for i := range wave {
+					notUpdated = append(notUpdated, wave[i].Name)
+				}
+			}
+			if err := t.updateUpgradeStatus(ctx,
+				provisioningv1alpha1.CRconditionReasons.InProgress,
+				fmt.Sprintf(
+					"Cluster version upgrade completed. Waiting for worker pools [%s] to finish updating",
+					strings.Join(notUpdated, ", ")),
+			); err != nil {
+				return ctrl.Result{}, false, err
+			}
+			return requeueWithMediumInterval(), false, nil
+		}
+	}
+	return ctrl.Result{}, true, nil
 }
 
 // handleCVUpgradeInProgress handles the state where the target version has a
@@ -913,12 +1029,8 @@ func (t *provisioningRequestReconcilerTask) handleCVUpgradePreStart(
 			return requeueWithMediumInterval(), nil
 		}
 
-		if err := t.updateUpgradeStatus(ctx,
-			provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, err.Error(),
-		); err != nil {
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, t.handleTerminalCVPreStartFailure(
+			ctx, spokeClient, action, err.Error())
 	}
 
 	// Check Upgradeable condition for major and minor version upgrades but not if force is set.
@@ -942,29 +1054,35 @@ func (t *provisioningRequestReconcilerTask) handleCVUpgradePreStart(
 		}
 	}
 
-	if passed, err := t.ensureMCPsPreconditions(ctx, spokeClient, action); !passed || err != nil {
-		// Stop processing if MCPs preconditions do not pass.
+	upgradeTriggered := ctlrutils.IsCVUpgradeTriggered(cv, cvSpec.DesiredUpdate)
+	if err := t.validateMCPsPreconditions(ctx, spokeClient, action, upgradeTriggered); err != nil {
+		if typederrors.IsInputError(err) {
+			return ctrl.Result{}, t.handleTerminalCVPreStartFailure(
+				ctx, spokeClient, action, err.Error())
+		}
 		return ctrl.Result{}, err
 	}
 
 	// Graph preconditions: patch channel/upstream, check RetrievedUpdates,
 	// verify target in availableUpdates.
 	if result, proceed, err := t.checkCVGraphPreconditions(
-		ctx, spokeClient, cv, cvSpec,
+		ctx, spokeClient, cv, cvSpec, action,
 	); result.RequeueAfter > 0 || !proceed || err != nil {
 		return result, err
+	}
+
+	// Prepare the worker MCPs right before triggering the upgrade.
+	err = t.prepareWorkerMCPsForUpgrade(ctx, spokeClient, action)
+	if err != nil {
+		return ctrl.Result{}, err
 	}
 
 	// Apply desiredUpdate. Returns whether the spec actually changed.
 	changed, err := ctlrutils.TriggerCVUpgrade(ctx, spokeClient, t.logger, cv, cvSpec.DesiredUpdate)
 	if err != nil {
 		if errors.IsInvalid(err) || errors.IsBadRequest(err) || errors.IsForbidden(err) {
-			if err := t.updateUpgradeStatus(ctx,
-				provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, err.Error(),
-			); err != nil {
-				return ctrl.Result{}, err
-			}
-			return ctrl.Result{}, nil
+			return ctrl.Result{}, t.handleTerminalCVPreStartFailure(
+				ctx, spokeClient, action, err.Error())
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to apply desiredUpdate: %w", err)
 	}
@@ -978,25 +1096,22 @@ func (t *provisioningRequestReconcilerTask) handleCVUpgradePreStart(
 		return requeueWithShortInterval(), nil
 	}
 
-	return t.monitorPostTriggerConditions(ctx, cv, action)
+	return t.monitorPostTriggerConditions(ctx, spokeClient, cv, action)
 }
 
 // monitorPostTriggerConditions checks CV conditions when desiredUpdate is set
 // but no history entry exists yet.
 func (t *provisioningRequestReconcilerTask) monitorPostTriggerConditions(
-	ctx context.Context, cv *configv1.ClusterVersion, action *ctlrutils.CVUpgradeAction,
+	ctx context.Context, spokeClient client.Client, cv *configv1.ClusterVersion,
+	action *ctlrutils.CVUpgradeAction,
 ) (ctrl.Result, error) {
 	intermediateVersion := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.IntermediateVersion
 	// Invalid=True — CVO won't retry on invalid input, terminal.
 	invalid := ctlrutils.GetCVCondition(cv, ctlrutils.CVConditionInvalid)
 	if invalid != nil && invalid.Status == configv1.ConditionTrue {
-		if err := t.updateUpgradeStatus(ctx,
-			provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
-			fmt.Sprintf("Upgrade spec is invalid: %s", invalid.Message),
-		); err != nil {
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, t.handleTerminalCVPreStartFailure(
+			ctx, spokeClient, action,
+			fmt.Sprintf("Upgrade spec is invalid: %s", invalid.Message))
 	}
 
 	// ReleaseAccepted=False — CVO retries payload loading failures, non-terminal.
@@ -1026,51 +1141,153 @@ func (t *provisioningRequestReconcilerTask) monitorPostTriggerConditions(
 	return requeueWithMediumInterval(), nil
 }
 
-// ensureMCPsPreconditions verifies MachineConfigPool state before an upgrade.
-// For standard upgrades, all MCPs must be unpaused. For EUS intermediate
-// phase, all worker MCPs must be updated and are then paused. For the EUS
-// target phase this is a no-op — worker MCPs should still be paused from
-// the intermediate phase. Returns true if all preconditions pass.
-func (t *provisioningRequestReconcilerTask) ensureMCPsPreconditions(
+// validateMCPsPreconditions validates MachineConfigPool state before triggering an upgrade.
+// All MCPs must be unpaused when the upgrade first starts. Serial and Parallel upgrade strategies
+// also require worker MCPs to be updated. The EUS target hop skips these initial checks because
+// its workers should stay paused from the intermediate hop. User-correctable
+// precondition failures are returned as input errors for the caller to handle.
+func (t *provisioningRequestReconcilerTask) validateMCPsPreconditions(
 	ctx context.Context, spokeClient client.Client, action *ctlrutils.CVUpgradeAction,
-) (bool, error) {
-	if !action.IsEUS {
-		mcps, err := ctlrutils.ListMCPs(ctx, spokeClient)
-		if err != nil {
-			return false, fmt.Errorf("failed to list MCPs: %w", err)
+	upgradeTriggered bool,
+) error {
+	workerPoolUpgrade := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.WorkerPoolUpgrade
+	mcps, err := ctlrutils.ListMCPs(ctx, spokeClient)
+	if err != nil {
+		return fmt.Errorf("failed to list MCPs: %w", err)
+	}
+	nonMasterMCPs := make([]mcfgv1.MachineConfigPool, 0, len(mcps))
+	for i := range mcps {
+		if mcps[i].Name != "master" {
+			nonMasterMCPs = append(nonMasterMCPs, mcps[i])
 		}
-		if paused := ctlrutils.GetPausedMCPs(mcps); len(paused) > 0 {
-			msg := fmt.Sprintf("MachineConfigPools are paused: %v", paused)
-			if updateErr := t.updateUpgradeStatus(ctx,
-				provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, msg,
-			); updateErr != nil {
-				return false, updateErr
-			}
-			return false, nil
-		}
-		return true, nil
+	}
+
+	if err := upgradevalidation.ValidatePoolsWithControlPlaneNames(
+		nonMasterMCPs, workerPoolUpgrade.PoolsWithControlPlane,
+	); err != nil {
+		return typederrors.NewInputError("%s", err.Error())
 	}
 
 	intermediateVersion := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.IntermediateVersion
-	if action.IsEUSIntermediate(intermediateVersion) {
-		mcps, err := ctlrutils.ListNonMasterMCPs(ctx, spokeClient)
-		if err != nil {
-			return false, fmt.Errorf("failed to list MCPs: %w", err)
+	checkInitialMCPState := (!action.IsEUS || action.IsEUSIntermediate(intermediateVersion)) && !upgradeTriggered && !workerPoolUpgrade.PauseStateManaged
+	if checkInitialMCPState {
+		if paused := ctlrutils.GetPausedMCPs(mcps); len(paused) > 0 {
+			return typederrors.NewInputError("MachineConfigPools are paused: %v", paused)
 		}
-		if notUpdated := ctlrutils.GetNonUpdatedMCPs(mcps); len(notUpdated) > 0 {
-			msg := fmt.Sprintf("MachineConfigPools not updated: %v", notUpdated)
-			if updateErr := t.updateUpgradeStatus(ctx,
-				provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, msg,
-			); updateErr != nil {
-				return false, updateErr
+
+		if workerPoolUpgrade.Strategy != constants.WorkerPoolUpgradeStrategyOpenShiftDefault {
+			if notUpdated := ctlrutils.GetNonUpdatedMCPs(ctx, t.logger, nonMasterMCPs); len(notUpdated) > 0 {
+				return typederrors.NewInputError("MachineConfigPools not updated: %v", notUpdated)
 			}
-			return false, nil
-		}
-		if err := ctlrutils.PauseMCPs(ctx, spokeClient, t.logger, mcps); err != nil {
-			return false, fmt.Errorf("failed to pause MCPs: %w", err)
 		}
 	}
-	return true, nil
+	return nil
+}
+
+// prepareWorkerMCPsForUpgrade configures worker MachineConfigPool pause states
+// before triggering a ClusterVersion upgrade. OpenShiftDefault restores any
+// pause state previously managed by the controller and otherwise leaves MCPs
+// unchanged. Serial and Parallel strategies keep PoolsWithControlPlane unpaused
+// and pause the remaining worker pools. The function persists pause-state ownership
+// before modifying MCPs so transient failures can be retried safely.
+func (t *provisioningRequestReconcilerTask) prepareWorkerMCPsForUpgrade(
+	ctx context.Context, spokeClient client.Client, action *ctlrutils.CVUpgradeAction,
+) error {
+	workerPoolUpgrade := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.WorkerPoolUpgrade
+	if workerPoolUpgrade.Strategy == constants.WorkerPoolUpgradeStrategyOpenShiftDefault {
+		if !workerPoolUpgrade.PauseStateManaged {
+			return nil
+		}
+		// PauseStateManaged can still be true when the user changes a Serial or
+		// Parallel strategy to OpenShiftDefault during a pre-start retry. Restore
+		// pools paused by the previous strategy before relinquishing pause-state
+		// management to OpenShift.
+		if err := t.unpauseNonMasterMCPs(ctx, spokeClient); err != nil {
+			return err
+		}
+		workerPoolUpgrade.PauseStateManaged = false
+		if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+			return fmt.Errorf("failed to persist worker MachineConfigPool pause-state ownership: %w", err)
+		}
+		return nil
+	}
+
+	if !workerPoolUpgrade.PauseStateManaged {
+		// Persist ownership before changing the first MCP. Pausing several MCPs is
+		// not atomic, and either an MCP patch or the following ClusterVersion patch
+		// can fail transiently. The persisted flag lets the next reconciliation
+		// recognize a partially or fully controller-paused set and resume safely.
+		workerPoolUpgrade.PauseStateManaged = true
+		if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+			return fmt.Errorf("failed to persist worker MachineConfigPool pause-state ownership: %w", err)
+		}
+	}
+
+	// For other strategies, pause the worker pools except for the ones in PoolsWithControlPlane.
+	nonMasterMCPs, err := ctlrutils.ListNonMasterMCPs(ctx, spokeClient)
+	if err != nil {
+		return fmt.Errorf("failed to list MCPs: %w", err)
+	}
+
+	toPauseMCPs := nonMasterMCPs
+	toUnpauseMCPs := []mcfgv1.MachineConfigPool{}
+	if !action.IsEUS {
+		toPauseMCPs = ctlrutils.ExcludeMCPsByNames(nonMasterMCPs, workerPoolUpgrade.PoolsWithControlPlane)
+		toUnpauseMCPs = ctlrutils.FilterMCPsByNames(nonMasterMCPs, workerPoolUpgrade.PoolsWithControlPlane)
+	}
+	if err := ctlrutils.PauseMCPs(ctx, spokeClient, t.logger, toPauseMCPs); err != nil {
+		return fmt.Errorf("failed to pause MCPs: %w", err)
+	}
+
+	// These pools (PoolsWithControlPlane) are normally already unpaused because initial
+	// validation requires it and they are excluded from toPause. Reasserting the state is
+	// needed when a pre-start configuration change moves a previously paused
+	// pool into PoolsWithControlPlane, and also protects against an external
+	// actor pausing one during a retry.
+	if _, err := ctlrutils.UnpauseMCPs(ctx, spokeClient, t.logger, toUnpauseMCPs); err != nil {
+		return fmt.Errorf("failed to unpause MCPs: %w", err)
+	}
+	return nil
+}
+
+func (t *provisioningRequestReconcilerTask) unpauseNonMasterMCPs(
+	ctx context.Context, spokeClient client.Client,
+) error {
+	nonMaster, err := ctlrutils.ListNonMasterMCPs(ctx, spokeClient)
+	if err != nil {
+		return fmt.Errorf("failed to list MCPs for unpause: %w", err)
+	}
+	if _, err := ctlrutils.UnpauseMCPs(ctx, spokeClient, t.logger, nonMaster); err != nil {
+		return fmt.Errorf("failed to unpause MCPs: %w", err)
+	}
+	return nil
+}
+
+// handleTerminalCVPreStartFailure records a terminal ClusterVersion pre-start
+// failure. Worker MCPs whose pause state is managed by the controller are
+// restored for non-EUS upgrades and for the EUS intermediate hop, where the
+// control plane has not advanced. They remain paused when the EUS target hop
+// fails so the user can investigate safely.
+func (t *provisioningRequestReconcilerTask) handleTerminalCVPreStartFailure(
+	ctx context.Context, spokeClient client.Client,
+	action *ctlrutils.CVUpgradeAction,
+	message string,
+) error {
+	upgradeStatus := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus
+	workerPoolUpgrade := upgradeStatus.WorkerPoolUpgrade
+	intermediateVersion := upgradeStatus.IntermediateVersion
+	shouldRestore := workerPoolUpgrade != nil && workerPoolUpgrade.PauseStateManaged &&
+		(!action.IsEUS || action.IsEUSIntermediate(intermediateVersion))
+
+	if shouldRestore {
+		if err := t.unpauseNonMasterMCPs(ctx, spokeClient); err != nil {
+			return err
+		}
+		workerPoolUpgrade.PauseStateManaged = false
+	}
+
+	return t.updateUpgradeStatus(ctx,
+		provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, message)
 }
 
 // checkCVGraphPreconditions patches channel/upstream, checks RetrievedUpdates,
@@ -1079,16 +1296,13 @@ func (t *provisioningRequestReconcilerTask) ensureMCPsPreconditions(
 func (t *provisioningRequestReconcilerTask) checkCVGraphPreconditions(
 	ctx context.Context, spokeClient client.Client,
 	cv *configv1.ClusterVersion, cvSpec *configv1.ClusterVersionSpec,
+	action *ctlrutils.CVUpgradeAction,
 ) (ctrl.Result, bool, error) {
 	patched, err := ctlrutils.PatchCVChannelUpstream(ctx, spokeClient, t.logger, cv, cvSpec)
 	if err != nil {
 		if errors.IsInvalid(err) || errors.IsBadRequest(err) || errors.IsForbidden(err) {
-			if err := t.updateUpgradeStatus(ctx,
-				provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, err.Error(),
-			); err != nil {
-				return ctrl.Result{}, false, err
-			}
-			return ctrl.Result{}, false, nil
+			return ctrl.Result{}, false, t.handleTerminalCVPreStartFailure(
+				ctx, spokeClient, action, err.Error())
 		}
 		return ctrl.Result{}, false, fmt.Errorf("failed to apply channel/upstream update: %w", err)
 	}
@@ -1117,13 +1331,9 @@ func (t *provisioningRequestReconcilerTask) checkCVGraphPreconditions(
 	// Verify target version is in availableUpdates (only when image is not set).
 	if cvSpec.DesiredUpdate.Image == "" &&
 		!ctlrutils.IsCVUpdateAvailable(cv, cvSpec.DesiredUpdate.Version) {
-		msg := fmt.Sprintf("Target version %s is not available for upgrade", cvSpec.DesiredUpdate.Version)
-		if err := t.updateUpgradeStatus(ctx,
-			provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, msg,
-		); err != nil {
-			return ctrl.Result{}, false, err
-		}
-		return ctrl.Result{}, false, nil
+		return ctrl.Result{}, false, t.handleTerminalCVPreStartFailure(
+			ctx, spokeClient, action,
+			fmt.Sprintf("Target version %s is not available for upgrade", cvSpec.DesiredUpdate.Version))
 	}
 
 	return ctrl.Result{}, true, nil

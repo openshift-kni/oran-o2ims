@@ -9,7 +9,10 @@ package validation
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
+	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("ValidateCVUpgradeData", func() {
@@ -271,5 +274,82 @@ var _ = Describe("ValidateEUSIntermediate", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("ClusterTemplate's spec.release"))
+	})
+})
+
+var _ = Describe("WorkerPoolUpgrade validation", func() {
+	Describe("ValidateWorkerPoolUpgrade", func() {
+		It("should reject OpenShiftDefault for EUS", func() {
+			err := ValidateWorkerPoolUpgrade(true, constants.WorkerPoolUpgradeStrategyOpenShiftDefault, nil)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not applicable to EUS"))
+		})
+
+		It("should reject poolsWithControlPlane with OpenShiftDefault", func() {
+			err := ValidateWorkerPoolUpgrade(
+				false, constants.WorkerPoolUpgradeStrategyOpenShiftDefault, []string{"worker-canary"})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("poolsWithControlPlane is not supported"))
+		})
+
+		It("should accept empty poolsWithControlPlane with OpenShiftDefault", func() {
+			Expect(ValidateWorkerPoolUpgrade(
+				false, constants.WorkerPoolUpgradeStrategyOpenShiftDefault, nil,
+			)).To(Succeed())
+		})
+
+		It("should reject poolsWithControlPlane for EUS", func() {
+			err := ValidateWorkerPoolUpgrade(
+				true, constants.WorkerPoolUpgradeStrategySerial, []string{"worker-canary"})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not supported for EUS"))
+		})
+
+		It("should accept Serial with poolsWithControlPlane for non-EUS", func() {
+			Expect(ValidateWorkerPoolUpgrade(
+				false, constants.WorkerPoolUpgradeStrategySerial, []string{"worker-canary"},
+			)).To(Succeed())
+		})
+
+		It("should reject an unknown strategy", func() {
+			err := ValidateWorkerPoolUpgrade(false, "Custom", nil)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("unsupported workerPoolUpgrade.strategy"))
+		})
+	})
+
+	Describe("ValidatePoolsWithControlPlaneNames", func() {
+		mcps := []mcfgv1.MachineConfigPool{
+			{ObjectMeta: metav1.ObjectMeta{Name: "worker"}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "worker-a"}},
+		}
+
+		It("should accept known worker pool names", func() {
+			Expect(ValidatePoolsWithControlPlaneNames(mcps, []string{"worker-a"})).To(Succeed())
+		})
+
+		It("should reject an empty name", func() {
+			err := ValidatePoolsWithControlPlaneNames(mcps, []string{""})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("empty name"))
+		})
+
+		It("should reject master", func() {
+			err := ValidatePoolsWithControlPlaneNames(mcps, []string{"master"})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("must not include"))
+		})
+
+		It("should reject unknown names", func() {
+			err := ValidatePoolsWithControlPlaneNames(mcps, []string{"missing"})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("unknown MachineConfigPool"))
+		})
+
+		It("should reject duplicates", func() {
+			err := ValidatePoolsWithControlPlaneNames(mcps, []string{"worker", "worker"})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("duplicate"))
+		})
 	})
 })

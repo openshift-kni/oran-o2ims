@@ -16,8 +16,15 @@ spec:
           resourceSelector:
             "resourceselector.clcm.openshift.io/server-type": "R740"
             "resourceselector.clcm.openshift.io/server-colour": "green"
-        - name: worker
+        - name: worker-dell-r740
           role: worker
+          resourcePoolId: dell-r740-pool
+          resourceSelector:
+            "resourceselector.clcm.openshift.io/server-type": "R740"
+            "resourceselector.clcm.openshift.io/server-colour": "blue"
+        - name: worker-dell-xr8620t
+          role: worker
+          resourcePoolId: dell-xr8620t-pool
           resourceSelector:
             "resourceselector.clcm.openshift.io/server-type": "XR8620t"
             "resourceselector.clcm.openshift.io/server-colour": "blue"
@@ -319,6 +326,21 @@ spec:
                     enum:
                     - Multi
                     - ""
+          workerPoolUpgrade:
+            type: object
+            properties:
+              strategy:
+                type: string
+                enum:
+                - OpenShiftDefault
+                - Serial
+                - Parallel
+              poolsWithControlPlane:
+                type: array
+                uniqueItems: true
+                items:
+                  type: string
+                  minLength: 1
         type: object
     required:
       - nodeClusterName

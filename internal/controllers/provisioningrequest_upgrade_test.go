@@ -18,6 +18,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/spokeclient"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
@@ -36,6 +37,7 @@ import (
 	msav1beta1 "open-cluster-management.io/managed-serviceaccount/apis/authentication/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 // testUpgradeSchema is the common upgrade parameter schema used across upgrade tests.
@@ -262,7 +264,8 @@ var _ = Describe("prepareCVSpec", func() {
 			Status: provisioningv1alpha1.ProvisioningRequestStatus{
 				Extensions: provisioningv1alpha1.Extensions{
 					ClusterDetails: &provisioningv1alpha1.ClusterDetails{
-						Name: "test-cluster",
+						Name:                 "test-cluster",
+						ClusterUpgradeStatus: &provisioningv1alpha1.ClusterUpgradeStatus{},
 					},
 				},
 			},
@@ -290,10 +293,15 @@ var _ = Describe("prepareCVSpec", func() {
 				CPUArchitecture: siteconfig.CPUArchitectureX86_64,
 			},
 		}
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(testCI).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).
+			WithStatusSubresource(pr).
+			WithObjects(testCI, pr).
+			Build()
+		persistedPR := &provisioningv1alpha1.ProvisioningRequest{}
+		Expect(c.Get(context.Background(), types.NamespacedName{Name: pr.Name}, persistedPR)).To(Succeed())
 		task = &provisioningRequestReconcilerTask{
 			client: c,
-			object: pr,
+			object: persistedPR,
 			logger: slog.New(slog.DiscardHandler),
 		}
 	})
@@ -317,6 +325,55 @@ var _ = Describe("prepareCVSpec", func() {
 		Expect(cvSpec.DesiredUpdate.Force).To(BeTrue())
 		Expect(cvSpec.Channel).To(Equal("stable-4.22"))
 		Expect(string(cvSpec.Upstream)).To(Equal("https://custom.graph"))
+		// Verify the workerPoolUpgrade strategy is set to OpenShiftDefault by default for non-EUS upgrade if not configured.
+		Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.WorkerPoolUpgrade.Strategy).To(
+			Equal(constants.WorkerPoolUpgradeStrategyOpenShiftDefault))
+	})
+
+	It("should persist workerPoolUpgrade from the merged configuration", func() {
+		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`{"clusterVersion":{},"workerPoolUpgrade":{"strategy":"Serial"}}`),
+		}
+		task.object.Spec.TemplateParameters = runtime.RawExtension{
+			Raw: []byte(`{"upgradeParameters":{"workerPoolUpgrade":{"poolsWithControlPlane":["worker-a"]}}}`),
+		}
+		_, err := task.prepareCVSpec(
+			context.Background(), clusterTemplate, spokeCV(), prepareAction("4.22.0"))
+		Expect(err).ToNot(HaveOccurred())
+		workerPoolUpgrade := task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.WorkerPoolUpgrade
+		Expect(workerPoolUpgrade.Strategy).To(Equal(constants.WorkerPoolUpgradeStrategySerial))
+		Expect(workerPoolUpgrade.PoolsWithControlPlane).To(Equal([]string{"worker-a"}))
+	})
+
+	It("should refresh workerPoolUpgrade status from the current merged configuration", func() {
+		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`{"clusterVersion":{},"workerPoolUpgrade":{"strategy":"Parallel","poolsWithControlPlane":["worker-a"]}}`),
+		}
+		task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus =
+			&provisioningv1alpha1.ClusterUpgradeStatus{
+				WorkerPoolUpgrade: &provisioningv1alpha1.WorkerPoolUpgradeStatus{
+					Strategy:              constants.WorkerPoolUpgradeStrategySerial,
+					PoolsWithControlPlane: []string{"worker-canary"},
+				},
+			}
+
+		_, err := task.prepareCVSpec(
+			context.Background(), clusterTemplate, spokeCV(), prepareAction("4.22.0"))
+		Expect(err).ToNot(HaveOccurred())
+		workerPoolUpgrade := task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.WorkerPoolUpgrade
+		Expect(workerPoolUpgrade.Strategy).To(Equal(constants.WorkerPoolUpgradeStrategyParallel))
+		Expect(workerPoolUpgrade.PoolsWithControlPlane).To(Equal([]string{"worker-a"}))
+	})
+
+	It("should return InputError when workerPoolUpgrade.strategy is unsupported", func() {
+		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`{"clusterVersion":{},"workerPoolUpgrade":{"strategy":"Unsupported"}}`),
+		}
+		_, err := task.prepareCVSpec(
+			context.Background(), clusterTemplate, spokeCV(), prepareAction("4.22.0"))
+		Expect(err).To(HaveOccurred())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("unsupported workerPoolUpgrade.strategy"))
 	})
 
 	It("should return InputError when clusterVersion key is missing", func() {
@@ -358,6 +415,12 @@ var _ = Describe("prepareCVSpec", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cvSpec.DesiredUpdate.Version).To(Equal("4.21.3"))
 		Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.IntermediateVersion).To(Equal("4.21.3"))
+		// Verify the workerPoolUpgrade strategy is set to Parallel by default if not set in the template or PR.
+		Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.WorkerPoolUpgrade.Strategy).To(
+			Equal(constants.WorkerPoolUpgradeStrategyParallel))
+		persistedPR := &provisioningv1alpha1.ProvisioningRequest{}
+		Expect(task.client.Get(context.Background(), types.NamespacedName{Name: task.object.Name}, persistedPR)).To(Succeed())
+		Expect(persistedPR.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.IntermediateVersion).To(Equal("4.21.3"))
 	})
 
 	It("should clear desiredUpdate.image on EUS intermediate hop", func() {
@@ -1234,6 +1297,12 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 		err = c.Get(ctx, types.NamespacedName{Name: "test-pr-upgrade-rbac", Namespace: clusterName}, mw)
 		Expect(k8serrors.IsNotFound(err)).To(BeTrue())
 	}
+	assertUpgradeStatusCleared := func() {
+		ExpectWithOffset(1, task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus).To(BeNil())
+		persistedPR := &provisioningv1alpha1.ProvisioningRequest{}
+		ExpectWithOffset(1, c.Get(ctx, types.NamespacedName{Name: pr.Name}, persistedPR)).To(Succeed())
+		ExpectWithOffset(1, persistedPR.Status.Extensions.ClusterDetails.ClusterUpgradeStatus).To(BeNil())
+	}
 
 	assertUpgradeCondition := func(reason string, msgSubstring string) {
 		condition := meta.FindStatusCondition(task.object.Status.Conditions,
@@ -1254,12 +1323,25 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			IntermediateVersion: "4.21.0",
 		}
 	}
+	setWorkerPoolUpgradeDefaults := func(strategy string, poolsWithControlPlane ...string) {
+		workerPoolUpgrade := map[string]any{"strategy": strategy}
+		if len(poolsWithControlPlane) > 0 {
+			workerPoolUpgrade["poolsWithControlPlane"] = poolsWithControlPlane
+		}
+		raw, err := json.Marshal(map[string]any{
+			"clusterVersion":      map[string]any{"desiredUpdate": map[string]any{}},
+			"intermediateVersion": "4.21.0",
+			"workerPoolUpgrade":   workerPoolUpgrade,
+		})
+		ExpectWithOffset(1, err).ToNot(HaveOccurred())
+		ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{Raw: raw}
+	}
 
-	// newUpdatedWorkerMCP returns a worker MCP with Updated=True.
-	newUpdatedWorkerMCP := func() *mcfgv1.MachineConfigPool {
+	newUpdatedMCP := func(name string) *mcfgv1.MachineConfigPool {
 		return &mcfgv1.MachineConfigPool{
-			ObjectMeta: metav1.ObjectMeta{Name: "worker"},
+			ObjectMeta: metav1.ObjectMeta{Name: name, Generation: 1},
 			Status: mcfgv1.MachineConfigPoolStatus{
+				ObservedGeneration: 1,
 				Conditions: []mcfgv1.MachineConfigPoolCondition{
 					{Type: mcfgv1.MachineConfigPoolUpdated, Status: corev1.ConditionTrue},
 				},
@@ -1272,6 +1354,15 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 		mcp := &mcfgv1.MachineConfigPool{}
 		ExpectWithOffset(1, spokeClient.Get(ctx, types.NamespacedName{Name: mcpName}, mcp)).To(Succeed())
 		ExpectWithOffset(1, mcp.Spec.Paused).To(Equal(expectedPaused))
+	}
+	markMCPUpdated := func(mcpName string) {
+		mcp := &mcfgv1.MachineConfigPool{}
+		ExpectWithOffset(1, spokeClient.Get(ctx, types.NamespacedName{Name: mcpName}, mcp)).To(Succeed())
+		mcp.Status.Conditions = []mcfgv1.MachineConfigPoolCondition{
+			{Type: mcfgv1.MachineConfigPoolUpdated, Status: corev1.ConditionTrue},
+		}
+		mcp.Status.ObservedGeneration = mcp.Generation
+		ExpectWithOffset(1, spokeClient.Update(ctx, mcp)).To(Succeed())
 	}
 
 	// --- Resource Preparation ---
@@ -1645,8 +1736,9 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 				retrievedUpdatesTrue, invalidTrue,
 			}
 			cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.22.0"}}
-			buildSpoke(cv)
+			buildSpoke(cv, newUpdatedMCP("worker-a"))
 			setupWithSpokeReady()
+			setWorkerPoolUpgradeDefaults(constants.WorkerPoolUpgradeStrategyOpenShiftDefault)
 
 			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName, &utils.UpgradeConfig{})
 			Expect(err).ToNot(HaveOccurred())
@@ -1658,6 +1750,106 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
 				Equal(provisioningv1alpha1.StateFailed))
 			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.StartedAt).To(BeNil())
+			assertMCPPaused("worker-a", false)
+		})
+
+		It("should retry worker restoration before reporting a terminal pre-start failure", func() {
+			cv := newBaseCV()
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{retrievedUpdatesTrue}
+			worker := newUpdatedMCP("worker-a")
+			worker.Spec.Paused = true
+
+			setupWithSpokeReady()
+			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus =
+				&provisioningv1alpha1.ClusterUpgradeStatus{
+					StartVersion: "4.21.0",
+					WorkerPoolUpgrade: &provisioningv1alpha1.WorkerPoolUpgradeStatus{
+						Strategy:          constants.WorkerPoolUpgradeStrategySerial,
+						PauseStateManaged: true,
+					},
+				}
+			setWorkerPoolUpgradeDefaults(constants.WorkerPoolUpgradeStrategySerial)
+			spokeClient = fake.NewClientBuilder().WithScheme(scheme).
+				WithObjects(cv, worker).
+				WithInterceptorFuncs(interceptor.Funcs{
+					Patch: func(_ context.Context, _ client.WithWatch, obj client.Object,
+						_ client.Patch, _ ...client.PatchOption,
+					) error {
+						if _, ok := obj.(*mcfgv1.MachineConfigPool); ok {
+							return fmt.Errorf("temporary MCP patch failure")
+						}
+						return nil
+					},
+				}).Build()
+			spokeclient.SetTestSpokeClientCreator(func(
+				apiServerURL, token string, caCert []byte, spokeScheme *runtime.Scheme,
+			) (client.Client, error) {
+				return spokeClient, nil
+			})
+
+			_, proceed, err := task.handleClusterVersionUpgrade(
+				ctx, ct, clusterName, &utils.UpgradeConfig{})
+			Expect(err).To(MatchError(ContainSubstring("temporary MCP patch failure")))
+			Expect(proceed).To(BeFalse())
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.
+				WorkerPoolUpgrade.PauseStateManaged).To(BeTrue())
+			Expect(meta.FindStatusCondition(task.object.Status.Conditions,
+				string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))).To(BeNil())
+		})
+
+		It("[EUS] should set PreconditionChecksFailed and unpause workers when the intermediate upgrade is invalid", func() {
+			cv := newBaseCV()
+			cv.Spec.DesiredUpdate = &configv1.Update{Version: "4.21.0"}
+			cv.Status.History = []configv1.UpdateHistory{
+				{Version: "4.20.0", State: configv1.CompletedUpdate},
+			}
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{
+				retrievedUpdatesTrue, invalidTrue,
+			}
+			cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.21.0"}}
+			worker := newUpdatedMCP("worker")
+			worker.Spec.Paused = true
+			buildSpoke(cv, worker)
+			setupWithSpokeReady()
+			setEUSStartVersion()
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName,
+				&utils.UpgradeConfig{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed),
+				"Invalid value")
+			assertMCPPaused("worker", false)
+		})
+
+		It("[EUS] should set PreconditionChecksFailed and keep workers paused when the target upgrade is invalid", func() {
+			cv := newBaseCV()
+			cv.Spec.DesiredUpdate = &configv1.Update{Version: "4.22.0"}
+			cv.Status.History = []configv1.UpdateHistory{
+				{Version: "4.21.0", State: configv1.CompletedUpdate},
+				{Version: "4.20.0", State: configv1.CompletedUpdate},
+			}
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{
+				retrievedUpdatesTrue, invalidTrue,
+			}
+			cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.22.0"}}
+			worker := newUpdatedMCP("worker")
+			worker.Spec.Paused = true
+			buildSpoke(cv, worker)
+			setupWithSpokeReady()
+			setEUSStartVersion()
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName,
+				&utils.UpgradeConfig{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed),
+				"Invalid value")
+			assertMCPPaused("worker", true)
 		})
 
 		It("should set Pending when ReleaseAccepted=False after trigger", func() {
@@ -1752,6 +1944,29 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			assertSpokeResourcesCleaned()
 		})
 
+		It("[EUS] should reject a pre-existing paused worker without unpausing it", func() {
+			cv := newBaseCV()
+			cv.Status.History = []configv1.UpdateHistory{
+				{Version: "4.20.0", State: configv1.CompletedUpdate},
+			}
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{retrievedUpdatesTrue}
+			pausedWorkerMCP := newUpdatedMCP("worker")
+			pausedWorkerMCP.Spec.Paused = true
+			buildSpoke(cv, pausedWorkerMCP)
+			setupWithSpokeReady()
+			setEUSStartVersion()
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName,
+				&utils.UpgradeConfig{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed),
+				"MachineConfigPools are paused")
+			assertMCPPaused("worker", true)
+		})
+
 		It("[EUS] should set PreconditionChecksFailed when MCPs not updated", func() {
 			cv := newBaseCV()
 			cv.Status.History = []configv1.UpdateHistory{
@@ -1790,14 +2005,15 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{retrievedUpdatesTrue}
 			cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.21.0"}}
 			masterMCP := &mcfgv1.MachineConfigPool{
-				ObjectMeta: metav1.ObjectMeta{Name: "master"},
+				ObjectMeta: metav1.ObjectMeta{Name: "master", Generation: 1},
 				Status: mcfgv1.MachineConfigPoolStatus{
+					ObservedGeneration: 1,
 					Conditions: []mcfgv1.MachineConfigPoolCondition{
 						{Type: mcfgv1.MachineConfigPoolUpdated, Status: corev1.ConditionTrue},
 					},
 				},
 			}
-			buildSpoke(cv, masterMCP, newUpdatedWorkerMCP())
+			buildSpoke(cv, masterMCP, newUpdatedMCP("worker"))
 			setupWithSpokeReady()
 			setEUSStartVersion()
 
@@ -1840,7 +2056,7 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			}
 			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{retrievedUpdatesTrue}
 			cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.21.7"}}
-			buildSpoke(cv, newUpdatedWorkerMCP())
+			buildSpoke(cv, newUpdatedMCP("worker"))
 			setupWithSpokeReady()
 			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{
 				StartVersion: "4.20.0",
@@ -1855,29 +2071,6 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 				"Upgrade to intermediate version 4.21.7 triggered")
 			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.IntermediateVersion).
 				To(Equal("4.21.7"))
-		})
-
-		It("[EUS] should unpause worker MCPs on intermediate version PreconditionChecksFailed", func() {
-			cv := newBaseCV()
-			cv.Status.History = []configv1.UpdateHistory{
-				{Version: "4.20.0", State: configv1.CompletedUpdate},
-			}
-			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{retrievedUpdatesTrue}
-			pausedWorkerMCP := newUpdatedWorkerMCP()
-			pausedWorkerMCP.Spec.Paused = true
-			buildSpoke(cv, pausedWorkerMCP)
-			setupWithSpokeReady()
-			setEUSStartVersion()
-
-			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName,
-				&utils.UpgradeConfig{})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(proceed).To(BeFalse())
-			Expect(result.RequeueAfter).To(BeZero())
-
-			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed),
-				"not available for upgrade")
-			assertMCPPaused("worker", false)
 		})
 
 		It("[EUS] intermediate completed should trigger target version", func() {
@@ -1926,6 +2119,255 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 		})
 	})
 
+	Context("Pre-start workerPoolUpgrade", func() {
+		It("should set PreconditionChecksFailed when OpenShiftDefault strategy is used for EUS", func() {
+			cv := newBaseCV()
+			cv.Status.History = []configv1.UpdateHistory{
+				{Version: "4.20.0", State: configv1.CompletedUpdate},
+			}
+			buildSpoke(cv)
+			setupWithSpokeReady()
+			setEUSStartVersion()
+			setWorkerPoolUpgradeDefaults(constants.WorkerPoolUpgradeStrategyOpenShiftDefault)
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName, &utils.UpgradeConfig{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed),
+				"workerPoolUpgrade.strategy OpenShiftDefault is not applicable to EUS")
+		})
+
+		It("should set PreconditionChecksFailed when poolsWithControlPlane is used for EUS", func() {
+			cv := newBaseCV()
+			cv.Status.History = []configv1.UpdateHistory{
+				{Version: "4.20.0", State: configv1.CompletedUpdate},
+			}
+			buildSpoke(cv)
+			setupWithSpokeReady()
+			setEUSStartVersion()
+			setWorkerPoolUpgradeDefaults(constants.WorkerPoolUpgradeStrategyParallel, "worker-canary")
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName, &utils.UpgradeConfig{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed),
+				"workerPoolUpgrade.poolsWithControlPlane is not supported for EUS upgrades")
+		})
+
+		It("should restore paused workers when updated parameters are invalid after a transient trigger failure", func() {
+			cv := newBaseCV()
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{retrievedUpdatesTrue}
+			cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.22.0"}}
+			worker := newUpdatedMCP("worker-a")
+			patchAttempts := 0
+			spokeClient = fake.NewClientBuilder().WithScheme(scheme).
+				WithObjects(cv, worker).
+				WithInterceptorFuncs(interceptor.Funcs{
+					Patch: func(ctx context.Context, c client.WithWatch, obj client.Object,
+						patch client.Patch, opts ...client.PatchOption,
+					) error {
+						if _, ok := obj.(*configv1.ClusterVersion); ok && patchAttempts == 0 {
+							patchAttempts++
+							return fmt.Errorf("temporary ClusterVersion patch failure")
+						}
+						return c.Patch(ctx, obj, patch, opts...)
+					},
+				}).Build()
+			spokeclient.SetTestSpokeClientCreator(func(
+				apiServerURL, token string, caCert []byte, spokeScheme *runtime.Scheme,
+			) (client.Client, error) {
+				return spokeClient, nil
+			})
+			setupWithSpokeReady()
+			setWorkerPoolUpgradeDefaults(constants.WorkerPoolUpgradeStrategySerial)
+
+			_, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName, &utils.UpgradeConfig{})
+			Expect(err).To(MatchError(ContainSubstring("temporary ClusterVersion patch failure")))
+			Expect(proceed).To(BeFalse())
+			// Verify that the worker MCP has been paused.
+			assertMCPPaused("worker-a", true)
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.
+				WorkerPoolUpgrade.PauseStateManaged).To(BeTrue())
+
+			persistedPR := &provisioningv1alpha1.ProvisioningRequest{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: pr.Name}, persistedPR)).To(Succeed())
+			Expect(persistedPR.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.WorkerPoolUpgrade.Strategy).
+				To(Equal(constants.WorkerPoolUpgradeStrategySerial))
+
+			// Simulate the user updating the ProvisioningRequest before the
+			// ClusterVersion upgrade starts. The retry must restore the pools
+			// paused by the controller and then report the terminal input error.
+			task.object.Spec.TemplateParameters = runtime.RawExtension{
+				Raw: []byte(`{"upgradeParameters":{"workerPoolUpgrade":{"strategy":"Unsupported"}}}`),
+			}
+
+			result, proceed, err := task.handleClusterVersionUpgrade(
+				ctx, ct, clusterName, &utils.UpgradeConfig{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeZero())
+			assertUpgradeCondition(
+				string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed),
+				"unsupported workerPoolUpgrade.strategy")
+			assertMCPPaused("worker-a", false)
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.
+				WorkerPoolUpgrade.PauseStateManaged).To(BeFalse())
+		})
+
+		It("should reject a pre-existing paused MCP before triggering the upgrade", func() {
+			cv := newBaseCV()
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{retrievedUpdatesTrue}
+			cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.22.0"}}
+			worker := newUpdatedMCP("worker-a")
+			worker.Spec.Paused = true
+			buildSpoke(cv, worker)
+			setupWithSpokeReady()
+			setWorkerPoolUpgradeDefaults(constants.WorkerPoolUpgradeStrategySerial)
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName, &utils.UpgradeConfig{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed),
+				"MachineConfigPools are paused")
+			assertMCPPaused("worker-a", true)
+		})
+
+		It("should set PreconditionChecksFailed for unknown poolsWithControlPlane names", func() {
+			cv := newBaseCV()
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{retrievedUpdatesTrue}
+			cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.22.0"}}
+			buildSpoke(cv, newUpdatedMCP("worker-a"))
+			setupWithSpokeReady()
+			setWorkerPoolUpgradeDefaults(constants.WorkerPoolUpgradeStrategySerial, "missing")
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName, &utils.UpgradeConfig{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed),
+				"unknown MachineConfigPool")
+			workerPoolUpgrade := task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.WorkerPoolUpgrade
+			Expect(workerPoolUpgrade).ToNot(BeNil())
+			Expect(workerPoolUpgrade.Strategy).To(Equal(constants.WorkerPoolUpgradeStrategySerial))
+			Expect(workerPoolUpgrade.PoolsWithControlPlane).To(Equal([]string{"missing"}))
+		})
+
+		It("should not repeat initial MCP state checks after the ClusterVersion trigger", func() {
+			cv := newBaseCV()
+			cv.Spec.DesiredUpdate = &configv1.Update{Version: "4.22.0"}
+			// Target version is not in the history yet, so handleCVUpgradePreStart is called again.
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{retrievedUpdatesTrue}
+			cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.22.0"}}
+			worker := newUpdatedMCP("worker-a")
+			worker.Spec.Paused = true
+			buildSpoke(cv, worker)
+			setupWithSpokeReady()
+			setWorkerPoolUpgradeDefaults(constants.WorkerPoolUpgradeStrategySerial)
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName, &utils.UpgradeConfig{})
+			// It should not fail the MCP state checks.
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.Unknown),
+				"upgrade not started yet")
+			assertMCPPaused("worker-a", true)
+		})
+
+		It("should not pause workers before graph preconditions pass", func() {
+			cv := newBaseCV()
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{retrievedUpdatesTrue}
+			buildSpoke(cv, newUpdatedMCP("worker-a"))
+			setupWithSpokeReady()
+			setWorkerPoolUpgradeDefaults(constants.WorkerPoolUpgradeStrategySerial)
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName, &utils.UpgradeConfig{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed),
+				"not available for upgrade")
+			assertMCPPaused("worker-a", false)
+			workerPoolUpgrade := task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.WorkerPoolUpgrade
+			Expect(workerPoolUpgrade).ToNot(BeNil())
+			Expect(workerPoolUpgrade.Strategy).To(Equal(constants.WorkerPoolUpgradeStrategySerial))
+			Expect(workerPoolUpgrade.PoolsWithControlPlane).To(BeEmpty())
+		})
+
+		It("should restore controller-paused workers when a graph precondition fails during a retry", func() {
+			cv := newBaseCV()
+			cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{retrievedUpdatesTrue}
+			worker := newUpdatedMCP("worker-a")
+			worker.Spec.Paused = true
+			buildSpoke(cv, worker)
+			setupWithSpokeReady()
+			setWorkerPoolUpgradeDefaults(constants.WorkerPoolUpgradeStrategySerial)
+			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus =
+				&provisioningv1alpha1.ClusterUpgradeStatus{
+					StartVersion: "4.21.0",
+					WorkerPoolUpgrade: &provisioningv1alpha1.WorkerPoolUpgradeStatus{
+						Strategy:          constants.WorkerPoolUpgradeStrategySerial,
+						PauseStateManaged: true,
+					},
+				}
+
+			result, proceed, err := task.handleClusterVersionUpgrade(
+				ctx, ct, clusterName, &utils.UpgradeConfig{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed),
+				"not available for upgrade")
+			assertMCPPaused("worker-a", false)
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.
+				WorkerPoolUpgrade.PauseStateManaged).To(BeFalse())
+		})
+
+		DescribeTable("should persist the strategy, keep poolsWithControlPlane unpaused, and pause remaining pools",
+			func(strategy string) {
+				cv := newBaseCV()
+				cv.Status.Conditions = []configv1.ClusterOperatorStatusCondition{retrievedUpdatesTrue}
+				cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.22.0"}}
+				buildSpoke(cv, newUpdatedMCP("worker-canary"), newUpdatedMCP("worker-a"), newUpdatedMCP("worker-b"))
+				setupWithSpokeReady()
+				setWorkerPoolUpgradeDefaults(strategy, "worker-canary")
+
+				result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName, &utils.UpgradeConfig{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(proceed).To(BeFalse())
+				Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+
+				assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.Pending),
+					"Upgrade to desired version 4.22.0 triggered")
+				assertMCPPaused("worker-canary", false)
+				assertMCPPaused("worker-a", true)
+				assertMCPPaused("worker-b", true)
+				workerPoolUpgrade := task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.WorkerPoolUpgrade
+				Expect(workerPoolUpgrade.Strategy).To(Equal(strategy))
+				Expect(workerPoolUpgrade.PoolsWithControlPlane).To(Equal([]string{"worker-canary"}))
+
+				persistedPR := &provisioningv1alpha1.ProvisioningRequest{}
+				Expect(c.Get(ctx, types.NamespacedName{Name: pr.Name}, persistedPR)).To(Succeed())
+				persistedWorkerPoolUpgrade := persistedPR.Status.Extensions.ClusterDetails.
+					ClusterUpgradeStatus.WorkerPoolUpgrade
+				Expect(persistedWorkerPoolUpgrade.Strategy).To(Equal(strategy))
+				Expect(persistedWorkerPoolUpgrade.PoolsWithControlPlane).To(
+					Equal([]string{"worker-canary"}))
+			},
+			Entry("with Serial strategy", constants.WorkerPoolUpgradeStrategySerial),
+			Entry("with Parallel strategy", constants.WorkerPoolUpgradeStrategyParallel),
+		)
+	})
+
 	// --- In-Progress (The target version is available in the ClusterVersion's history, not completed) ---
 
 	Context("in-progress", func() {
@@ -1965,7 +2407,8 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			}
 			buildSpoke(cv)
 			setupWithSpokeReady()
-			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{StartedAt: &now}
+			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus =
+				&provisioningv1alpha1.ClusterUpgradeStatus{StartedAt: &now}
 
 			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName, &utils.UpgradeConfig{})
 			Expect(err).ToNot(HaveOccurred())
@@ -2107,7 +2550,7 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 	// --- Completed ---
 
 	Context("completed", func() {
-		It("should set Completed, cleanup, proceed=true, and clear startAt", func() {
+		It("should set Completed, cleanup, proceed=true, and clear upgrade status", func() {
 			cv := newBaseCV()
 			cv.Status.History = []configv1.UpdateHistory{
 				{Version: "4.22.0", State: configv1.CompletedUpdate},
@@ -2115,7 +2558,12 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			buildSpoke(cv)
 			setupWithSpokeReady()
 			now := metav1.Now()
-			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{StartedAt: &now}
+			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{
+				StartedAt: &now,
+				WorkerPoolUpgrade: &provisioningv1alpha1.WorkerPoolUpgradeStatus{
+					Strategy: constants.WorkerPoolUpgradeStrategyOpenShiftDefault,
+				},
+			}
 
 			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName, &utils.UpgradeConfig{})
 			Expect(err).ToNot(HaveOccurred())
@@ -2124,11 +2572,11 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 
 			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.Completed),
 				"Upgrade to version 4.22.0 completed")
-			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus).To(BeNil())
+			assertUpgradeStatusCleared()
 			assertSpokeResourcesCleaned()
 		})
 
-		It("[EUS] should wait for MCPs to finish updating", func() {
+		It("[EUS] should wait for MCPs and complete after they finish updating", func() {
 			cv := newBaseCV()
 			cv.Status.History = []configv1.UpdateHistory{
 				{Version: "4.22.0", State: configv1.CompletedUpdate},
@@ -2145,6 +2593,9 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{
 				StartedAt: &now, StartVersion: "4.20.0",
 				IntermediateVersion: "4.21.0",
+				WorkerPoolUpgrade: &provisioningv1alpha1.WorkerPoolUpgradeStatus{
+					Strategy: constants.WorkerPoolUpgradeStrategyParallel,
+				},
 			}
 
 			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName,
@@ -2154,35 +2605,335 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
 			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.InProgress),
-				"Waiting for worker MachineConfigPools to finish updating")
+				"Waiting for worker pools [worker] to finish updating")
 			assertMCPPaused("worker", false)
-		})
 
-		It("[EUS] should complete when MCPs are updated", func() {
-			cv := newBaseCV()
-			cv.Status.History = []configv1.UpdateHistory{
-				{Version: "4.22.0", State: configv1.CompletedUpdate},
-				{Version: "4.21.0", State: configv1.CompletedUpdate},
-				{Version: "4.20.0", State: configv1.CompletedUpdate},
-			}
-			buildSpoke(cv, newUpdatedWorkerMCP())
-			setupWithSpokeReady()
-			now := metav1.Now()
-			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{
-				StartedAt: &now, StartVersion: "4.20.0",
-				IntermediateVersion: "4.21.0",
-			}
-
-			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName, &utils.UpgradeConfig{})
+			markMCPUpdated("worker")
+			result, proceed, err = task.handleClusterVersionUpgrade(ctx, ct, clusterName, &utils.UpgradeConfig{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(proceed).To(BeTrue())
 			Expect(result.RequeueAfter).To(BeZero())
 
 			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.Completed),
 				"Upgrade to version 4.22.0 completed")
-			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus).To(BeNil())
+			assertUpgradeStatusCleared()
 			assertSpokeResourcesCleaned()
 		})
+
+		DescribeTable("should reconcile multiple worker pools and complete the upgrade",
+			func(strategy string, firstWaitingFor string, workerBInitiallyPaused bool) {
+				cv := newBaseCV()
+				cv.Status.History = []configv1.UpdateHistory{
+					{Version: "4.22.0", State: configv1.CompletedUpdate},
+				}
+				workerA := &mcfgv1.MachineConfigPool{
+					ObjectMeta: metav1.ObjectMeta{Name: "worker-a"},
+					Spec:       mcfgv1.MachineConfigPoolSpec{Paused: true},
+				}
+				workerB := &mcfgv1.MachineConfigPool{
+					ObjectMeta: metav1.ObjectMeta{Name: "worker-b"},
+					Spec:       mcfgv1.MachineConfigPoolSpec{Paused: true},
+				}
+				buildSpoke(cv, workerB, workerA)
+				setupWithSpokeReady()
+				now := metav1.Now()
+				task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus =
+					&provisioningv1alpha1.ClusterUpgradeStatus{
+						StartedAt:    &now,
+						StartVersion: "4.21.0",
+						WorkerPoolUpgrade: &provisioningv1alpha1.WorkerPoolUpgradeStatus{
+							Strategy: strategy,
+						},
+					}
+
+				result, proceed, err := task.handleClusterVersionUpgrade(
+					ctx, ct, clusterName, &utils.UpgradeConfig{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(proceed).To(BeFalse())
+				Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+				assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.InProgress),
+					firstWaitingFor)
+				assertMCPPaused("worker-a", false)
+				assertMCPPaused("worker-b", workerBInitiallyPaused)
+
+				markMCPUpdated("worker-a")
+				result, proceed, err = task.handleClusterVersionUpgrade(
+					ctx, ct, clusterName, &utils.UpgradeConfig{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(proceed).To(BeFalse())
+				Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+				assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.InProgress),
+					"Waiting for worker pools [worker-b] to finish updating")
+				assertMCPPaused("worker-b", false)
+
+				markMCPUpdated("worker-b")
+				result, proceed, err = task.handleClusterVersionUpgrade(
+					ctx, ct, clusterName, &utils.UpgradeConfig{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(proceed).To(BeTrue())
+				Expect(result.RequeueAfter).To(BeZero())
+				assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.Completed),
+					"Upgrade to version 4.22.0 completed")
+				assertUpgradeStatusCleared()
+				assertSpokeResourcesCleaned()
+			},
+			Entry("with Serial strategy", constants.WorkerPoolUpgradeStrategySerial,
+				"Waiting for worker pools [worker-a] to finish updating", true),
+			Entry("with Parallel strategy", constants.WorkerPoolUpgradeStrategyParallel,
+				"Waiting for worker pools [worker-a, worker-b] to finish updating", false),
+		)
+
+		It("should time out a Serial rollout without unpausing later worker pools", func() {
+			cv := newBaseCV()
+			cv.Status.History = []configv1.UpdateHistory{
+				{Version: "4.22.0", State: configv1.CompletedUpdate},
+			}
+			workerC := &mcfgv1.MachineConfigPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "worker-c"},
+			}
+			workerD := &mcfgv1.MachineConfigPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "worker-d"},
+				Spec:       mcfgv1.MachineConfigPoolSpec{Paused: true},
+			}
+			buildSpoke(cv, workerD, newUpdatedMCP("worker-b"), workerC, newUpdatedMCP("worker-a"))
+			setupWithSpokeReady()
+			pastTime := metav1.NewTime(time.Now().Add(-utils.DefaultClusterUpgradeTimeout - time.Minute))
+			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus =
+				&provisioningv1alpha1.ClusterUpgradeStatus{
+					StartedAt:    &pastTime,
+					StartVersion: "4.21.0",
+					WorkerPoolUpgrade: &provisioningv1alpha1.WorkerPoolUpgradeStatus{
+						Strategy: constants.WorkerPoolUpgradeStrategySerial,
+					},
+				}
+
+			result, proceed, err := task.handleClusterVersionUpgrade(
+				ctx, ct, clusterName, &utils.UpgradeConfig{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeZero())
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.TimedOut),
+				"Upgrade timed out")
+			assertMCPPaused("worker-a", false)
+			assertMCPPaused("worker-b", false)
+			assertMCPPaused("worker-c", false)
+			assertMCPPaused("worker-d", true)
+			upgradeStatus := task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus
+			Expect(upgradeStatus).ToNot(BeNil())
+			Expect(upgradeStatus.StartedAt).To(BeNil())
+			Expect(upgradeStatus.WorkerPoolUpgrade.Strategy).To(
+				Equal(constants.WorkerPoolUpgradeStrategySerial))
+			assertSpokeResourcesCleaned()
+		})
+	})
+})
+
+var _ = Describe("reconcileWorkerPoolRollout", func() {
+	var (
+		ctx         context.Context
+		task        *provisioningRequestReconcilerTask
+		spokeClient client.Client
+	)
+
+	newWorkerMCP := func(name string, paused, updated bool) *mcfgv1.MachineConfigPool {
+		updatedStatus := corev1.ConditionFalse
+		if updated {
+			updatedStatus = corev1.ConditionTrue
+		}
+		return &mcfgv1.MachineConfigPool{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Generation: 1},
+			Spec:       mcfgv1.MachineConfigPoolSpec{Paused: paused},
+			Status: mcfgv1.MachineConfigPoolStatus{
+				ObservedGeneration: 1,
+				Conditions: []mcfgv1.MachineConfigPoolCondition{
+					{Type: mcfgv1.MachineConfigPoolUpdated, Status: updatedStatus},
+				},
+			},
+		}
+	}
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		pr := &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-pr"},
+			Status: provisioningv1alpha1.ProvisioningRequestStatus{
+				Extensions: provisioningv1alpha1.Extensions{
+					ClusterDetails: &provisioningv1alpha1.ClusterDetails{
+						ClusterUpgradeStatus: &provisioningv1alpha1.ClusterUpgradeStatus{},
+					},
+				},
+			},
+		}
+		hubClient := fake.NewClientBuilder().WithScheme(scheme).
+			WithObjects(pr).
+			WithStatusSubresource(pr).
+			Build()
+		task = &provisioningRequestReconcilerTask{
+			client: hubClient,
+			object: pr,
+			logger: slog.New(slog.DiscardHandler),
+		}
+	})
+
+	buildSpoke := func(mcps ...*mcfgv1.MachineConfigPool) {
+		objects := make([]client.Object, 0, len(mcps))
+		for _, mcp := range mcps {
+			objects = append(objects, mcp)
+		}
+		spokeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
+	}
+
+	setWorkerPoolUpgrade := func(strategy string, poolsWithControlPlane ...string) {
+		task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.WorkerPoolUpgrade =
+			&provisioningv1alpha1.WorkerPoolUpgradeStatus{
+				Strategy:              strategy,
+				PoolsWithControlPlane: poolsWithControlPlane,
+			}
+	}
+
+	assertMCPPaused := func(name string, expected bool) {
+		mcp := &mcfgv1.MachineConfigPool{}
+		ExpectWithOffset(1, spokeClient.Get(ctx, types.NamespacedName{Name: name}, mcp)).To(Succeed())
+		ExpectWithOffset(1, mcp.Spec.Paused).To(Equal(expected))
+	}
+
+	assertWaitingFor := func(poolNames string) {
+		condition := meta.FindStatusCondition(task.object.Status.Conditions,
+			string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
+		ExpectWithOffset(1, condition).ToNot(BeNil())
+		ExpectWithOffset(1, condition.Reason).To(
+			Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
+		ExpectWithOffset(1, condition.Message).To(Equal(
+			fmt.Sprintf("Cluster version upgrade completed. Waiting for worker pools [%s] to finish updating",
+				poolNames)))
+	}
+
+	markUpdated := func(name string) {
+		mcp := &mcfgv1.MachineConfigPool{}
+		ExpectWithOffset(1, spokeClient.Get(ctx, types.NamespacedName{Name: name}, mcp)).To(Succeed())
+		mcp.Status.Conditions = []mcfgv1.MachineConfigPoolCondition{
+			{Type: mcfgv1.MachineConfigPoolUpdated, Status: corev1.ConditionTrue},
+		}
+		mcp.Status.ObservedGeneration = mcp.Generation
+		ExpectWithOffset(1, spokeClient.Update(ctx, mcp)).To(Succeed())
+	}
+
+	It("should return an error when the persisted worker pool configuration is missing", func() {
+		buildSpoke()
+
+		_, completed, err := task.reconcileWorkerPoolRollout(ctx, spokeClient)
+		Expect(err).To(MatchError(ContainSubstring("workerPoolUpgrade status is missing")))
+		Expect(completed).To(BeFalse())
+	})
+
+	It("should complete immediately for OpenShiftDefault", func() {
+		buildSpoke()
+		setWorkerPoolUpgrade(constants.WorkerPoolUpgradeStrategyOpenShiftDefault)
+
+		result, completed, err := task.reconcileWorkerPoolRollout(ctx, spokeClient)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(completed).To(BeTrue())
+		Expect(result.RequeueAfter).To(BeZero())
+	})
+
+	DescribeTable("should start the expected first worker pool wave",
+		func(strategy string, poolsWithControlPlane []string, workerBPaused bool, waitingFor string) {
+			mcps := []*mcfgv1.MachineConfigPool{
+				newWorkerMCP("worker-b", true, false),
+				newWorkerMCP("worker-a", true, false),
+			}
+			for _, pool := range poolsWithControlPlane {
+				mcps = append(mcps, newWorkerMCP(pool, false, true))
+			}
+			buildSpoke(mcps...)
+			setWorkerPoolUpgrade(strategy, poolsWithControlPlane...)
+
+			result, completed, err := task.reconcileWorkerPoolRollout(ctx, spokeClient)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(completed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+			assertMCPPaused("worker-a", false)
+			assertMCPPaused("worker-b", workerBPaused)
+			for _, pool := range poolsWithControlPlane {
+				assertMCPPaused(pool, false)
+			}
+			assertWaitingFor(waitingFor)
+		},
+		Entry("for Serial without poolsWithControlPlane",
+			constants.WorkerPoolUpgradeStrategySerial, nil, true, "worker-a"),
+		Entry("for Serial with poolsWithControlPlane",
+			constants.WorkerPoolUpgradeStrategySerial, []string{"worker-canary"}, true, "worker-a"),
+		Entry("for Parallel without poolsWithControlPlane",
+			constants.WorkerPoolUpgradeStrategyParallel, nil, false, "worker-a, worker-b"),
+		Entry("for Parallel with poolsWithControlPlane",
+			constants.WorkerPoolUpgradeStrategyParallel, []string{"worker-canary"}, false,
+			"worker-a, worker-b"),
+	)
+
+	It("should wait for every pool upgrading with the control plane before starting a worker wave", func() {
+		buildSpoke(
+			newWorkerMCP("worker-canary-a", false, false),
+			newWorkerMCP("worker-canary-b", false, false),
+			newWorkerMCP("worker-a", true, false),
+		)
+		setWorkerPoolUpgrade(constants.WorkerPoolUpgradeStrategyParallel,
+			"worker-canary-b", "worker-canary-a")
+
+		result, completed, err := task.reconcileWorkerPoolRollout(ctx, spokeClient)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(completed).To(BeFalse())
+		Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+		assertMCPPaused("worker-a", true)
+		assertWaitingFor("worker-canary-b, worker-canary-a")
+	})
+
+	It("should wait for MCO to observe the current generation before advancing a Serial rollout", func() {
+		workerA := newWorkerMCP("worker-a", false, true)
+		workerA.Generation = 2
+		workerA.Status.ObservedGeneration = 1
+		buildSpoke(
+			workerA,
+			newWorkerMCP("worker-b", true, false),
+		)
+		setWorkerPoolUpgrade(constants.WorkerPoolUpgradeStrategySerial)
+
+		result, completed, err := task.reconcileWorkerPoolRollout(ctx, spokeClient)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(completed).To(BeFalse())
+		Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+		assertMCPPaused("worker-a", false)
+		assertMCPPaused("worker-b", true)
+		assertWaitingFor("worker-a")
+	})
+
+	It("should advance Serial worker pools alphabetically and complete after every pool is updated", func() {
+		buildSpoke(
+			newWorkerMCP("worker-b", true, false),
+			newWorkerMCP("worker-a", true, false),
+		)
+		setWorkerPoolUpgrade(constants.WorkerPoolUpgradeStrategySerial)
+
+		result, completed, err := task.reconcileWorkerPoolRollout(ctx, spokeClient)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(completed).To(BeFalse())
+		Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+		assertMCPPaused("worker-a", false)
+		assertMCPPaused("worker-b", true)
+		assertWaitingFor("worker-a")
+
+		markUpdated("worker-a")
+		result, completed, err = task.reconcileWorkerPoolRollout(ctx, spokeClient)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(completed).To(BeFalse())
+		Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+		assertMCPPaused("worker-b", false)
+		assertWaitingFor("worker-b")
+
+		markUpdated("worker-b")
+		result, completed, err = task.reconcileWorkerPoolRollout(ctx, spokeClient)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(completed).To(BeTrue())
+		Expect(result.RequeueAfter).To(BeZero())
 	})
 })
 

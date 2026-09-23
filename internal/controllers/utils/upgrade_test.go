@@ -7,9 +7,15 @@ SPDX-License-Identifier: Apache-2.0
 package utils
 
 import (
+	"context"
+	"log/slog"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	configv1 "github.com/openshift/api/config/v1"
+	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("Upgrade helper functions", func() {
@@ -334,6 +340,97 @@ var _ = Describe("Upgrade helper functions", func() {
 				action := ResolveCVUpgradeAction(cv, "4.22.0", "4.21.0", true)
 				Expect(action.Phase).To(Equal(PhaseCompleted))
 			})
+		})
+	})
+})
+
+var _ = Describe("MachineConfigPool helpers", func() {
+	mcpNames := func(mcps []mcfgv1.MachineConfigPool) []string {
+		names := make([]string, 0, len(mcps))
+		for i := range mcps {
+			names = append(names, mcps[i].Name)
+		}
+		return names
+	}
+
+	DescribeTable("GetNonUpdatedMCPs",
+		func(generation, observedGeneration int64, status corev1.ConditionStatus, expected []string) {
+			mcp := mcfgv1.MachineConfigPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "worker", Generation: generation},
+				Status: mcfgv1.MachineConfigPoolStatus{
+					ObservedGeneration: observedGeneration,
+					Conditions: []mcfgv1.MachineConfigPoolCondition{
+						{Type: mcfgv1.MachineConfigPoolUpdated, Status: status},
+					},
+				},
+			}
+			logger := slog.New(slog.DiscardHandler)
+			Expect(GetNonUpdatedMCPs(context.Background(), logger, []mcfgv1.MachineConfigPool{mcp})).To(
+				Equal(expected))
+		},
+		Entry("when Updated=True is for the current generation",
+			int64(2), int64(2), corev1.ConditionTrue, []string(nil)),
+		Entry("when Updated=True is stale",
+			int64(2), int64(1), corev1.ConditionTrue, []string{"worker"}),
+		Entry("when the current generation has Updated=False",
+			int64(2), int64(2), corev1.ConditionFalse, []string{"worker"}),
+	)
+
+	Describe("ExcludeMCPsByNames", func() {
+		It("should return remaining pools in alphabetical order", func() {
+			mcps := []mcfgv1.MachineConfigPool{
+				{ObjectMeta: metav1.ObjectMeta{Name: "worker-b"}},
+				{ObjectMeta: metav1.ObjectMeta{Name: "worker-a"}},
+				{ObjectMeta: metav1.ObjectMeta{Name: "worker-canary"}},
+			}
+			got := ExcludeMCPsByNames(mcps, []string{"worker-canary"})
+			Expect(mcpNames(got)).To(Equal([]string{"worker-a", "worker-b"}))
+		})
+
+		It("should sort all pools when the exclusion list is empty", func() {
+			mcps := []mcfgv1.MachineConfigPool{
+				{ObjectMeta: metav1.ObjectMeta{Name: "worker-b"}},
+				{ObjectMeta: metav1.ObjectMeta{Name: "worker-a"}},
+			}
+			Expect(mcpNames(ExcludeMCPsByNames(mcps, nil))).To(
+				Equal([]string{"worker-a", "worker-b"}))
+		})
+
+		It("should ignore unknown names", func() {
+			mcps := []mcfgv1.MachineConfigPool{
+				{ObjectMeta: metav1.ObjectMeta{Name: "worker-b"}},
+				{ObjectMeta: metav1.ObjectMeta{Name: "worker-a"}},
+			}
+			Expect(mcpNames(ExcludeMCPsByNames(mcps, []string{"missing"}))).To(
+				Equal([]string{"worker-a", "worker-b"}))
+		})
+	})
+
+	Describe("FilterMCPsByNames", func() {
+		It("should return matching pools in the requested order", func() {
+			mcps := []mcfgv1.MachineConfigPool{
+				{ObjectMeta: metav1.ObjectMeta{Name: "worker-a"}},
+				{ObjectMeta: metav1.ObjectMeta{Name: "worker-b"}},
+				{ObjectMeta: metav1.ObjectMeta{Name: "worker-canary"}},
+			}
+			got := FilterMCPsByNames(mcps, []string{"worker-canary", "worker-a"})
+			Expect(mcpNames(got)).To(Equal([]string{"worker-canary", "worker-a"}))
+		})
+
+		It("should ignore unknown names", func() {
+			mcps := []mcfgv1.MachineConfigPool{
+				{ObjectMeta: metav1.ObjectMeta{Name: "worker-a"}},
+				{ObjectMeta: metav1.ObjectMeta{Name: "worker-b"}},
+			}
+			got := FilterMCPsByNames(mcps, []string{"missing", "worker-b"})
+			Expect(mcpNames(got)).To(Equal([]string{"worker-b"}))
+		})
+
+		It("should return no pools when the requested names are empty", func() {
+			mcps := []mcfgv1.MachineConfigPool{
+				{ObjectMeta: metav1.ObjectMeta{Name: "worker-a"}},
+			}
+			Expect(FilterMCPsByNames(mcps, nil)).To(BeEmpty())
 		})
 	})
 })
