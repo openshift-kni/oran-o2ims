@@ -6,12 +6,9 @@ entries:
       mediatype: image/svg+xml
     name: o-cloud-manager
     schema: olm.package
-    # Channel 'stable' — always points to the latest z-stream
+    # Channel 'stable' — always points to the latest released z-stream
   - entries:
-      - name: o-cloud-manager.v4.22.1
-      # v4.22.2
       - name: o-cloud-manager.v4.22.2
-        replaces: o-cloud-manager.v4.22.1
     name: stable
     package: o-cloud-manager
     schema: olm.channel
