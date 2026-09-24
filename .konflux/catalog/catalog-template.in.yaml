@@ -39,6 +39,10 @@ entries:
       - name: o-cloud-manager.v4.21.7
         replaces: o-cloud-manager.v4.21.6
         skipRange: '>=4.9.0 <4.21.7'
+      # v4.21.8
+      - name: o-cloud-manager.v4.21.8
+        replaces: o-cloud-manager.v4.21.7
+        skipRange: '>=4.9.0 <4.21.8'
     name: stable
     package: o-cloud-manager
     schema: olm.channel
@@ -75,6 +79,10 @@ entries:
       - name: o-cloud-manager.v4.21.7
         replaces: o-cloud-manager.v4.21.6
         skipRange: '>=4.9.0 <4.21.7'
+      # v4.21.8
+      - name: o-cloud-manager.v4.21.8
+        replaces: o-cloud-manager.v4.21.7
+        skipRange: '>=4.9.0 <4.21.8'
     name: "4.21"
     package: o-cloud-manager
     schema: olm.channel
@@ -100,6 +108,9 @@ entries:
   - image: registry.redhat.io/openshift4/o-cloud-manager-operator-bundle@sha256:08546866948a7bb9731a1b9dbb8dbbadfa65bc21e44bf906d50e10501661156d
     schema: olm.bundle
   # v4.21.7 bundle
+  - image: registry.redhat.io/openshift4/o-cloud-manager-operator-bundle@sha256:94d2ee88585ef47f1ea154e74eb96b80e01bb7288c8a2c1f899116b7507630af
+    schema: olm.bundle
+    # v4.21.8 bundle
   # The url for this last entry is updated by telco5g-konflux/scripts/catalog/update-catalog-template.sh automatically
   - image: placeholder.will.be.updated.by.telco5g-konflux.scripts.catalog.update-catalog-template.sh
     schema: olm.bundle
