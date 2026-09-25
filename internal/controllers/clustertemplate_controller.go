@@ -145,6 +145,12 @@ func (r *ClusterTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	ctx = ctlrutils.AddObjectContext(ctx, object)
 	r.Logger.InfoContext(ctx, "Fetched ClusterTemplate successfully")
 
+	// Do not validate or otherwise reconcile a ClusterTemplate being deleted.
+	if !object.DeletionTimestamp.IsZero() {
+		r.Logger.InfoContext(ctx, "ClusterTemplate is being deleted, skipping reconciliation")
+		return result, nil
+	}
+
 	// Create and run the task:
 	task := &clusterTemplateReconcilerTask{
 		logger: r.Logger,

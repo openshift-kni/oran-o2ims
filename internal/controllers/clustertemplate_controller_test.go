@@ -149,6 +149,30 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 		}
 	})
 
+	It("should skip reconciliation while the ClusterTemplate is being deleted", func() {
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      GetClusterTemplateRefName(tName, tVersion),
+				Namespace: ctNamespace,
+			},
+		}
+
+		clusterTemplate := &provisioningv1alpha1.ClusterTemplate{}
+		Expect(c.Get(ctx, req.NamespacedName, clusterTemplate)).To(Succeed())
+		clusterTemplate.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+		clusterTemplate.Finalizers = []string{"test-finalizer"}
+		c = fakeclient.GetFakeClientFromObjects(clusterTemplate)
+		reconciler.Client = c
+
+		result, err := reconciler.Reconcile(ctx, req)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(result).To(Equal(doNotRequeue()))
+
+		updatedClusterTemplate := &provisioningv1alpha1.ClusterTemplate{}
+		Expect(c.Get(ctx, req.NamespacedName, updatedClusterTemplate)).To(Succeed())
+		Expect(updatedClusterTemplate.Status.Conditions).To(BeEmpty())
+	})
+
 	It("should not requeue a valid ClusterTemplate", func() {
 		// Create valid ConfigMaps and ClusterTemplate
 		cms := []*corev1.ConfigMap{

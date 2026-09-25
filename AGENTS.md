@@ -60,6 +60,15 @@ Services follow a consistent initialization pattern in `internal/service/{servic
 
 Shared infrastructure lives in `internal/service/common/` (middleware, DB helpers, server config).
 
+### Reconciler Deletion Handling
+
+Every reconciler that fetches a Kubernetes resource must check its
+`DeletionTimestamp` immediately after fetching it, before performing normal
+reconciliation work or side effects. If deletion has started, skip normal
+reconciliation. Only perform cleanup during deletion when it is part of an
+explicit finalizer. Add a regression test verifying that a deleting resource
+does not trigger normal reconciliation side effects.
+
 REST API code under `generated/` is auto-generated from OpenAPI specs via `//go:generate`. Don't edit generated files — edit the `openapi.yaml` and run `make go-generate`.
 
 ### Provisioning Workflow Phases
