@@ -77,17 +77,17 @@ func (r *FirmwareCatalogReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return result, nil
 	}
 
-	if err := r.validateAndSetStatus(ctx, catalog); err != nil {
+	if err := r.setStatus(ctx, catalog); err != nil {
 		return requeueWithShortInterval(), err
 	}
 
 	return result, nil
 }
 
-// validateAndSetStatus builds image statuses and writes results to status.
-// Field-level validation (component enum, URL pattern) is enforced by CRD markers
-// at admission time, so the controller only records each accepted entry as valid.
-func (r *FirmwareCatalogReconciler) validateAndSetStatus(ctx context.Context, catalog *hwmgmtv1alpha1.FirmwareCatalog) error {
+// setStatus builds image statuses and writes results to the FirmwareCatalog
+// status subresource. It records that each admitted entry passed CRD schema and
+// webhook validation.
+func (r *FirmwareCatalogReconciler) setStatus(ctx context.Context, catalog *hwmgmtv1alpha1.FirmwareCatalog) error {
 	imageStatuses := make([]hwmgmtv1alpha1.ImageValidationStatus, 0, len(catalog.Spec.Images))
 	for _, img := range catalog.Spec.Images {
 		imageStatuses = append(imageStatuses, hwmgmtv1alpha1.ImageValidationStatus{
