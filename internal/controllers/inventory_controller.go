@@ -169,7 +169,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (resul
 	// Do not recreate operand resources while Kubernetes is deleting the Inventory.
 	if !object.DeletionTimestamp.IsZero() {
 		r.Logger.InfoContext(ctx, "Inventory is being deleted, skipping reconciliation")
-		return result, nil
+		return ctrl.Result{}, nil
 	}
 
 	// On the first reconcile, we set the `registerOnRestart` value from an annotation.  This is a one-time operation

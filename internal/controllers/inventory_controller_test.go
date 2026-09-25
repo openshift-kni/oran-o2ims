@@ -195,7 +195,7 @@ var _ = Describe("Inventory Controller", func() {
 				},
 			},
 			func(result ctrl.Result, reconciler *Reconciler) {
-				Expect(result).To(Equal(ctrl.Result{RequeueAfter: 5 * time.Minute}))
+				Expect(result).To(Equal(ctrl.Result{}))
 
 				deployments := &appsv1.DeploymentList{}
 				err := reconciler.Client.List(
