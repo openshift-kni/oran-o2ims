@@ -175,6 +175,39 @@ var _ = Describe("Inventory Controller", func() {
 			validate(result, r)
 		},
 		Entry(
+			"does not recreate operand deployments while being deleted",
+			[]client.Object{
+				&inventoryv1alpha1.Inventory{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "oran-o2ims-sample-1",
+						Namespace:         constants.DefaultNamespace,
+						CreationTimestamp: metav1.Now(),
+						DeletionTimestamp: &metav1.Time{Time: time.Now()},
+						Finalizers:        []string{"test-finalizer"},
+					},
+					Spec: inventoryv1alpha1.InventorySpec{},
+				},
+			},
+			reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: ctlrutils.InventoryNamespace,
+					Name:      "oran-o2ims-sample-1",
+				},
+			},
+			func(result ctrl.Result, reconciler *Reconciler) {
+				Expect(result).To(Equal(ctrl.Result{RequeueAfter: 5 * time.Minute}))
+
+				deployments := &appsv1.DeploymentList{}
+				err := reconciler.Client.List(
+					context.TODO(),
+					deployments,
+					client.InNamespace(ctlrutils.InventoryNamespace),
+				)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(deployments.Items).To(BeEmpty())
+			},
+		),
+		Entry(
 			"Resource server deployment is updated after edit",
 			[]client.Object{
 				&inventoryv1alpha1.Inventory{

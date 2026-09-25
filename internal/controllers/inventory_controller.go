@@ -166,6 +166,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (resul
 	ctx = ctlrutils.AddObjectContext(ctx, object)
 	r.Logger.InfoContext(ctx, "Fetched Inventory successfully")
 
+	// Do not recreate operand resources while Kubernetes is deleting the Inventory.
+	if !object.DeletionTimestamp.IsZero() {
+		r.Logger.InfoContext(ctx, "Inventory is being deleted, skipping reconciliation")
+		return result, nil
+	}
+
 	// On the first reconcile, we set the `registerOnRestart` value from an annotation.  This is a one-time operation
 	// since we don't want to repeat the registration on every reconcile loop if it was previously successful.
 	r.setupOnce.Do(func() { setRegisterOnRestart(ctx, r.Logger, object) })
