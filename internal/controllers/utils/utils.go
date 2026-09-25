@@ -26,6 +26,7 @@ import (
 
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
 
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
@@ -821,6 +822,28 @@ func CreateDefaultInventoryCR(ctx context.Context, c client.Client) error {
 	if err != nil {
 		if !errors.IsAlreadyExists(err) {
 			return fmt.Errorf("failed to create default inventory CR: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// CreateDefaultFirmwareCatalogCR creates the empty singleton FirmwareCatalog CR
+// in the operator namespace so that HardwareProfiles can reference catalog
+// entries as soon as the user populates them. It mirrors the Inventory CR
+// lifecycle: an AlreadyExists error is expected and ignored on restart.
+func CreateDefaultFirmwareCatalogCR(ctx context.Context, c client.Client) error {
+	catalog := hwmgmtv1alpha1.FirmwareCatalog{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      hwmgmtv1alpha1.FirmwareCatalogName,
+			Namespace: GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace),
+		},
+	}
+
+	err := c.Create(ctx, &catalog)
+	if err != nil {
+		if !errors.IsAlreadyExists(err) {
+			return fmt.Errorf("failed to create default firmware catalog CR: %w", err)
 		}
 	}
 

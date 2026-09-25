@@ -308,6 +308,17 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
+	// Create the default (empty) FirmwareCatalog singleton CR
+	err = ctlrutils.CreateDefaultFirmwareCatalogCR(ctx, mgr.GetClient())
+	if err != nil {
+		logger.ErrorContext(
+			ctx,
+			"Failed to create default firmware catalog CR",
+			slog.Any("error", err),
+		)
+		return exit.Error(1)
+	}
+
 	// Wire the TLS security profile watcher — triggers operator restart on profile change.
 	profileWatcher := &tlspkg.SecurityProfileWatcher{
 		Client:                mgr.GetClient(),

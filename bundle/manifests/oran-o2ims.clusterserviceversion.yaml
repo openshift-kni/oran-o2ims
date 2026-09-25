@@ -2011,6 +2011,7 @@ spec:
           resources:
           - firmwarecatalogs
           verbs:
+          - create
           - get
           - list
           - watch

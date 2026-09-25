@@ -68,8 +68,10 @@ There are two approaches for specifying firmware. The recommended approach uses 
 
 A FirmwareCatalog CR holds the set of firmware images available for use by
 HardwareProfiles. A singleton named `firmware-catalog` must exist in the operator's
-namespace. Each entry has a unique name, a component type (`bios`, `bmc`, or `nic`),
-and the firmware URL and version:
+namespace. The operator creates this empty singleton automatically on startup, so
+you do not need to create it yourself — simply edit it to add firmware entries.
+Each entry has a unique name, a component type (`bios`, `bmc`, or `nic`), and the
+firmware URL and version:
 
 ```yaml
 apiVersion: clcm.openshift.io/v1alpha1
