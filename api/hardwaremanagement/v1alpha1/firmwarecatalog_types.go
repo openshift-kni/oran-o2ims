@@ -34,7 +34,9 @@ type FirmwareImage struct {
 
 	// URL points to the firmware image file.
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=2048
 	// +kubebuilder:validation:Pattern=`^(http|https)://.*$`
+	// +kubebuilder:validation:XValidation:rule="isURL(self) && url(self).getScheme() in ['http', 'https'] && url(self).getHostname() != ''",message="url must be a valid HTTP or HTTPS URL with a hostname"
 	URL string `json:"url"`
 
 	// Version is the firmware version string.
