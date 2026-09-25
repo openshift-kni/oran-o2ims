@@ -22,7 +22,7 @@ import (
 func CreateSecretFromLiterals(ctx context.Context, logger *slog.Logger, c client.Client, ownerObject client.Object, namespace, name string, literals map[string][]byte) error {
 	secret := &corev1.Secret{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "ConfigMap",
+			Kind:       "Secret",
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{

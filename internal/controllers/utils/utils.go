@@ -155,10 +155,8 @@ func CreateK8sCR(ctx context.Context, logger *slog.Logger, c client.Client,
 	if err != nil {
 		if errors.IsNotFound(err) {
 			kind := newObject.GetObjectKind().GroupVersionKind().Kind
-			if kind == "" {
-				if gvks, _, schemeErr := c.Scheme().ObjectKinds(newObject); schemeErr == nil && len(gvks) > 0 {
-					kind = gvks[0].Kind
-				}
+			if gvks, _, schemeErr := c.Scheme().ObjectKinds(newObject); schemeErr == nil && len(gvks) > 0 {
+				kind = gvks[0].Kind
 			}
 			logger.InfoContext(ctx,
 				"[CreateK8sCR] CR not found, CREATE it",
