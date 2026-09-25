@@ -295,7 +295,7 @@ func TestHardwareProfileWebhookValidateDelete(t *testing.T) {
 	}
 }
 
-func TestIsEntryReferencedByAnyProfile(t *testing.T) {
+func TestBuildReferencedEntryNames(t *testing.T) {
 	profiles := []HardwareProfile{
 		{
 			Spec: HardwareProfileSpec{
@@ -316,6 +316,8 @@ func TestIsEntryReferencedByAnyProfile(t *testing.T) {
 		},
 	}
 
+	referenced := buildReferencedEntryNames(profiles)
+
 	tests := []struct {
 		name      string
 		entryName string
@@ -331,9 +333,9 @@ func TestIsEntryReferencedByAnyProfile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := isEntryReferencedByAnyProfile(tt.entryName, profiles)
+			_, got := referenced[tt.entryName]
 			if got != tt.want {
-				t.Errorf("isEntryReferencedByAnyProfile(%q) = %v, want %v", tt.entryName, got, tt.want)
+				t.Errorf("buildReferencedEntryNames()[%q] present = %v, want %v", tt.entryName, got, tt.want)
 			}
 		})
 	}

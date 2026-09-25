@@ -68,9 +68,10 @@ func (v *firmwareCatalogValidator) ValidateUpdate(ctx context.Context, oldCatalo
 		return nil, fmt.Errorf("failed to list HardwareProfiles: %w", err)
 	}
 
+	referencedNames := buildReferencedEntryNames(hwProfiles.Items)
 	var referenced []string
 	for _, name := range removed {
-		if isEntryReferencedByAnyProfile(name, hwProfiles.Items) {
+		if _, ok := referencedNames[name]; ok {
 			referenced = append(referenced, name)
 		}
 	}
@@ -92,9 +93,10 @@ func (v *firmwareCatalogValidator) ValidateDelete(ctx context.Context, catalog *
 		return nil, fmt.Errorf("failed to list HardwareProfiles: %w", err)
 	}
 
+	referencedNames := buildReferencedEntryNames(hwProfiles.Items)
 	var referenced []string
 	for _, img := range catalog.Spec.Images {
-		if isEntryReferencedByAnyProfile(img.Name, hwProfiles.Items) {
+		if _, ok := referencedNames[img.Name]; ok {
 			referenced = append(referenced, img.Name)
 		}
 	}
@@ -153,18 +155,19 @@ func findModifiedImmutableFields(old, updated []FirmwareImage) []string {
 	return violations
 }
 
-// isEntryReferencedByAnyProfile checks whether the given catalog entry name is
-// referenced by any HardwareProfile's firmwareImages list. Only the
-// firmwareImages approach references catalog entries by name; the deprecated
-// inline BiosFirmware/BmcFirmware/NicFirmware fields carry their own URL and
-// version and therefore create no dependency on the catalog.
-func isEntryReferencedByAnyProfile(entryName string, profiles []HardwareProfile) bool {
+// buildReferencedEntryNames returns the set of FirmwareCatalog entry names
+// referenced by any HardwareProfile's firmwareImages list, computed in a single
+// pass over all profiles. Callers can then test membership in O(1) instead of
+// rescanning every profile per candidate entry. Only the firmwareImages approach
+// references catalog entries by name; the deprecated inline
+// BiosFirmware/BmcFirmware/NicFirmware fields carry their own URL and version and
+// therefore create no dependency on the catalog.
+func buildReferencedEntryNames(profiles []HardwareProfile) map[string]struct{} {
+	referenced := make(map[string]struct{})
 	for i := range profiles {
 		for _, ref := range profiles[i].Spec.FirmwareImages {
-			if ref == entryName {
-				return true
-			}
+			referenced[ref] = struct{}{}
 		}
 	}
-	return false
+	return referenced
 }
