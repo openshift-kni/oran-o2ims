@@ -88,6 +88,12 @@ func (r *HostFirmwareComponentsReconciler) Reconcile(ctx context.Context, req ct
 	ctx = logging.AppendCtx(ctx, slog.String("startingResourceVersion", hfc.ResourceVersion))
 	r.Logger.InfoContext(ctx, "Fetched HostFirmwareComponents successfully")
 
+	// Do not update the corresponding BareMetalHost while this resource is being deleted.
+	if !hfc.DeletionTimestamp.IsZero() {
+		r.Logger.InfoContext(ctx, "HostFirmwareComponents is being deleted, skipping reconciliation")
+		return hwmgrutils.DoNotRequeue(), nil
+	}
+
 	// Get the corresponding BMH (same name and namespace)
 	bmh := &metal3v1alpha1.BareMetalHost{}
 	bmhKey := client.ObjectKey{Namespace: req.Namespace, Name: req.Name}

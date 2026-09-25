@@ -47,6 +47,7 @@ package controller
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
@@ -139,6 +140,43 @@ var _ = Describe("HostFirmwareComponents Controller", func() {
 			result, err := reconciler.Reconcile(ctx, req)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.Requeue).To(BeFalse())
+		})
+
+		It("should skip reconciliation while HFC is being deleted", func() {
+			bmh := createBMHWithLabels("test-bmh", "test-ns", map[string]string{
+				constants.LabelResourcePoolName: "pool123",
+				ValidationUnavailableLabelKey:   LabelValueMissingFirmwareData,
+			})
+			hfc := createHFC("test-bmh", "test-ns", []metal3v1alpha1.FirmwareComponentStatus{})
+			hfc.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+			hfc.Finalizers = []string{"test-finalizer"}
+
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(bmh, hfc).
+				Build()
+
+			reconciler = &HostFirmwareComponentsReconciler{
+				Client:          fakeClient,
+				NoncachedClient: fakeClient,
+				Scheme:          scheme,
+				Logger:          logger,
+			}
+
+			req := ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      "test-bmh",
+					Namespace: "test-ns",
+				},
+			}
+
+			result, err := reconciler.Reconcile(ctx, req)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+
+			updatedBMH := &metal3v1alpha1.BareMetalHost{}
+			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedBMH)).To(Succeed())
+			Expect(updatedBMH.Labels[ValidationUnavailableLabelKey]).To(Equal(LabelValueMissingFirmwareData))
 		})
 
 		It("should skip reconciliation when corresponding BMH does not exist", func() {
