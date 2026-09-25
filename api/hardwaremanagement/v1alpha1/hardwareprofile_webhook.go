@@ -20,18 +20,43 @@ import (
 
 var hardwareprofilelog = logf.Log.WithName("hardwareprofile-webhook")
 
+// CheckReferencesFunc reports an error when the named HardwareProfile is still
+// referenced by a ClusterTemplate or ProvisioningRequest, which blocks its
+// deletion. It is injected at webhook setup time: the reference check must
+// import the provisioning API group, which itself imports this package, so
+// implementing it here would create an import cycle. The implementation lives
+// in internal/controllers/utils, which can import both API groups.
+//
+// +kubebuilder:object:generate=false
+type CheckReferencesFunc func(ctx context.Context, reader client.Reader, hpName, hpNamespace string) error
+
 // SetupWebhookWithManager will setup the manager to manage the webhooks
-func (r *HardwareProfile) SetupWebhookWithManager(mgr ctrl.Manager) error {
+func (r *HardwareProfile) SetupWebhookWithManager(mgr ctrl.Manager, checkReferences CheckReferencesFunc) error {
 	// nolint:wrapcheck
 	return ctrl.NewWebhookManagedBy(mgr, &HardwareProfile{}).
-		WithValidator(&hardwareProfileValidator{Client: mgr.GetClient()}).
+		WithValidator(&hardwareProfileValidator{
+			Client:          mgr.GetClient(),
+			Reader:          mgr.GetAPIReader(),
+			CheckReferences: checkReferences,
+		}).
 		Complete()
 }
 
-//+kubebuilder:webhook:path=/validate-clcm-openshift-io-v1alpha1-hardwareprofile,mutating=false,failurePolicy=fail,sideEffects=None,groups=clcm.openshift.io,resources=hardwareprofiles,verbs=create;update,versions=v1alpha1,name=hardwareprofiles.clcm.openshift.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/validate-clcm-openshift-io-v1alpha1-hardwareprofile,mutating=false,failurePolicy=fail,sideEffects=None,groups=clcm.openshift.io,resources=hardwareprofiles,verbs=create;delete,versions=v1alpha1,name=hardwareprofiles.clcm.openshift.io,admissionReviewVersions=v1
 
 type hardwareProfileValidator struct {
 	client.Client
+	// Reader is an uncached API reader used when checking whether a
+	// HardwareProfile is still referenced before allowing its deletion. The
+	// cached client can lag the API server, and staleness here fails open: a
+	// newly created ClusterTemplate or ProvisioningRequest that is not yet in
+	// the cache would let a referenced HardwareProfile be deleted. Reading
+	// directly from the API server avoids that window.
+	Reader client.Reader
+	// CheckReferences blocks deletion of a still-referenced HardwareProfile.
+	// See CheckReferencesFunc for why it is injected rather than implemented
+	// in this package.
+	CheckReferences CheckReferencesFunc
 }
 
 var _ admission.Validator[*HardwareProfile] = &hardwareProfileValidator{}
@@ -43,15 +68,26 @@ func (v *hardwareProfileValidator) ValidateCreate(ctx context.Context, hp *Hardw
 	return nil, v.validateFirmware(ctx, hp)
 }
 
-// ValidateUpdate implements admission.Validator
-func (v *hardwareProfileValidator) ValidateUpdate(ctx context.Context, _, newHP *HardwareProfile) (admission.Warnings, error) {
-	hardwareprofilelog.Info("validate update", "name", newHP.Name)
-	return nil, v.validateFirmware(ctx, newHP)
+// ValidateUpdate implements admission.Validator.
+//
+// The HardwareProfile spec is immutable (enforced by the CEL rule on the type),
+// so there is nothing to validate on update. This method is retained only to
+// satisfy the admission.Validator interface.
+func (v *hardwareProfileValidator) ValidateUpdate(_ context.Context, _, newHP *HardwareProfile) (admission.Warnings, error) {
+	hardwareprofilelog.Info("validate update (no-op, spec is immutable)", "name", newHP.Name)
+	return nil, nil
 }
 
-// ValidateDelete implements admission.Validator
-func (v *hardwareProfileValidator) ValidateDelete(_ context.Context, _ *HardwareProfile) (admission.Warnings, error) {
-	return nil, nil
+// ValidateDelete implements admission.Validator. It blocks deletion of a
+// HardwareProfile that is still referenced by a ClusterTemplate or
+// ProvisioningRequest.
+func (v *hardwareProfileValidator) ValidateDelete(ctx context.Context, hp *HardwareProfile) (admission.Warnings, error) {
+	hardwareprofilelog.Info("validate delete", "name", hp.Name)
+
+	if v.CheckReferences == nil {
+		return nil, nil
+	}
+	return nil, v.CheckReferences(ctx, v.Reader, hp.Name, hp.Namespace)
 }
 
 // validateFirmware validates the HardwareProfile firmware configuration.

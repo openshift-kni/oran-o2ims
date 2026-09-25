@@ -2693,7 +2693,7 @@ spec:
       - v1alpha1
       operations:
       - CREATE
-      - UPDATE
+      - DELETE
       resources:
       - hardwareprofiles
     sideEffects: None

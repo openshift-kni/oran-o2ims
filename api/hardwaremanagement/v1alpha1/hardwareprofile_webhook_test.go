@@ -8,11 +8,13 @@ package v1alpha1
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -171,6 +173,9 @@ func TestHardwareProfileWebhookValidateCreate(t *testing.T) {
 	}
 }
 
+// TestHardwareProfileWebhookValidateUpdate verifies that update validation is a
+// no-op: the HardwareProfile spec is immutable (enforced by the CEL rule on the
+// type), so ValidateUpdate always returns nil regardless of the change.
 func TestHardwareProfileWebhookValidateUpdate(t *testing.T) {
 	scheme := runtime.NewScheme()
 	if err := AddToScheme(scheme); err != nil {
@@ -183,55 +188,31 @@ func TestHardwareProfileWebhookValidateUpdate(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		newHP   *HardwareProfile
-		wantErr bool
-		errMsg  string
+		name  string
+		newHP *HardwareProfile
 	}{
 		{
-			name: "valid firmwareImages references",
+			name: "unchanged firmwareImages references",
 			newHP: &HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec: HardwareProfileSpec{
-					FirmwareImages: []string{"bios-entry", "bmc-entry"},
-				},
+				Spec:       HardwareProfileSpec{FirmwareImages: []string{"bios-entry"}},
 			},
 		},
 		{
-			name: "nonexistent firmwareImages entry",
+			name: "nonexistent firmwareImages entry is not re-validated on update",
 			newHP: &HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
 				Spec:       HardwareProfileSpec{FirmwareImages: []string{"missing-entry"}},
 			},
-			wantErr: true,
-			errMsg:  "not found in FirmwareCatalog",
 		},
 		{
-			name: "switch to deprecated inline fields",
-			newHP: &HardwareProfile{
-				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec: HardwareProfileSpec{
-					BiosFirmware: Firmware{Version: "1.0", URL: "https://example.com/bios.bin"},
-				},
-			},
-		},
-		{
-			name: "mutually exclusive approaches rejected",
+			name: "mutually exclusive approaches are not re-validated on update",
 			newHP: &HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
 				Spec: HardwareProfileSpec{
 					BiosFirmware:   Firmware{Version: "1.0", URL: "https://example.com/bios.bin"},
 					FirmwareImages: []string{"bios-entry"},
 				},
-			},
-			wantErr: true,
-			errMsg:  "mutually exclusive",
-		},
-		{
-			name: "removing all firmware references",
-			newHP: &HardwareProfile{
-				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec:       HardwareProfileSpec{},
 			},
 		},
 	}
@@ -244,15 +225,68 @@ func TestHardwareProfileWebhookValidateUpdate(t *testing.T) {
 				Build()
 
 			v := &hardwareProfileValidator{Client: fakeClient}
-			_, err := v.ValidateUpdate(context.Background(), oldHP, tt.newHP)
+			warnings, err := v.ValidateUpdate(context.Background(), oldHP, tt.newHP)
+			if err != nil {
+				t.Errorf("expected no error from no-op ValidateUpdate, got %v", err)
+			}
+			if warnings != nil {
+				t.Errorf("expected no warnings, got %v", warnings)
+			}
+		})
+	}
+}
+
+// TestHardwareProfileWebhookValidateDelete verifies that ValidateDelete delegates
+// to the injected reference checker and propagates its result. The reference
+// checker itself is tested independently in internal/controllers/utils.
+func TestHardwareProfileWebhookValidateDelete(t *testing.T) {
+	hp := &HardwareProfile{
+		ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
+	}
+
+	tests := []struct {
+		name            string
+		checkReferences CheckReferencesFunc
+		wantErr         bool
+		errMsg          string
+	}{
+		{
+			name:            "no references allows deletion",
+			checkReferences: func(_ context.Context, _ client.Reader, _, _ string) error { return nil },
+		},
+		{
+			name: "existing reference blocks deletion",
+			checkReferences: func(_ context.Context, _ client.Reader, hpName, _ string) error {
+				return fmt.Errorf("cannot delete HardwareProfile %q: referenced by ClusterTemplate %q nodeGroup %q",
+					hpName, "ct-a", "master")
+			},
+			wantErr: true,
+			errMsg:  "referenced by ClusterTemplate",
+		},
+		{
+			name: "checker error is propagated",
+			checkReferences: func(_ context.Context, _ client.Reader, _, _ string) error {
+				return fmt.Errorf("failed to list ClusterTemplates: boom")
+			},
+			wantErr: true,
+			errMsg:  "failed to list ClusterTemplates",
+		},
+		{
+			name:            "nil checker is a no-op",
+			checkReferences: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := &hardwareProfileValidator{CheckReferences: tt.checkReferences}
+			_, err := v.ValidateDelete(context.Background(), hp)
 
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error containing %q, got nil", tt.errMsg)
-				} else if tt.errMsg != "" {
-					if !strings.Contains(err.Error(), tt.errMsg) {
-						t.Errorf("expected error containing %q, got %q", tt.errMsg, err.Error())
-					}
+				} else if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("expected error containing %q, got %q", tt.errMsg, err.Error())
 				}
 			} else if err != nil {
 				t.Errorf("unexpected error: %v", err)
