@@ -1428,7 +1428,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 			},
 		}
 		Expect(c.Create(ctx, ct)).To(Succeed())
-		err := generateTemplateID(ctx, c, ct)
+		err := generateTemplateID(ctx, slog.Default(), c, ct)
 		Expect(err).ToNot(HaveOccurred())
 		ct1 := &provisioningv1alpha1.ClusterTemplate{}
 		err = c.Get(ctx, client.ObjectKeyFromObject(ct), ct1)

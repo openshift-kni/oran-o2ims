@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -87,7 +88,7 @@ func GetPullSecretName(clusterInstance *unstructured.Unstructured) (string, erro
 }
 
 // CopyPullSecret copies the pull secrets from the cluster template namespace to the bmh namespace.
-func CopyPullSecret(ctx context.Context, c client.Client, ownerObject client.Object, sourceNamespace, pullSecretName string,
+func CopyPullSecret(ctx context.Context, logger *slog.Logger, c client.Client, ownerObject client.Object, sourceNamespace, pullSecretName string,
 	hwNodes map[string][]NodeInfo) error {
 
 	pullSecret := &corev1.Secret{}
@@ -122,7 +123,7 @@ func CopyPullSecret(ctx context.Context, c client.Client, ownerObject client.Obj
 		Type: corev1.SecretTypeDockerConfigJson,
 	}
 
-	if err := CreateK8sCR(ctx, c, newSecret, ownerObject, UPDATE); err != nil {
+	if err := CreateK8sCR(ctx, logger, c, newSecret, ownerObject, UPDATE); err != nil {
 		return fmt.Errorf("failed to create Kubernetes CR for PullSecret: %w", err)
 	}
 

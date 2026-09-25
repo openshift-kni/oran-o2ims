@@ -1011,7 +1011,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (c
 	}
 
 	t.logger.DebugContext(ctx, "[deployManagerServer] Create/Update/Patch Server", slog.String("name", serverName))
-	if err := ctlrutils.CreateK8sCR(ctx, t.client, newDeployment, t.object, ctlrutils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.logger, t.client, newDeployment, t.object, ctlrutils.UPDATE); err != nil {
 		return "", fmt.Errorf("failed to deploy ManagerServer: %w", err)
 	}
 
@@ -1103,7 +1103,7 @@ func (t *reconcilerTask) createNetworkPolicy(ctx context.Context, serverName str
 		},
 	}
 
-	if err := ctlrutils.CreateK8sCR(ctx, t.client, np, t.object, ctlrutils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.logger, t.client, np, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create NetworkPolicy for %s: %w", serverName, err)
 	}
 
@@ -1125,7 +1125,7 @@ func (t *reconcilerTask) createServiceAccount(ctx context.Context, resourceName 
 	}
 
 	t.logger.DebugContext(ctx, "[createServiceAccount] Create/Update/Patch ServiceAccount: ", slog.String("name", resourceName))
-	if err := ctlrutils.CreateK8sCR(ctx, t.client, newServiceAccount, t.object, ctlrutils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.logger, t.client, newServiceAccount, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create ServiceAccount for deployment: %w", err)
 	}
 
@@ -1166,7 +1166,7 @@ func (t *reconcilerTask) createService(ctx context.Context, resourceName string,
 	}
 
 	t.logger.DebugContext(ctx, "[createService] Create/Update/Patch Service: ", slog.String("name", resourceName))
-	if err := ctlrutils.CreateK8sCR(ctx, t.client, newService, t.object, ctlrutils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.logger, t.client, newService, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Service for deployment: %w", err)
 	}
 
@@ -1290,7 +1290,7 @@ func (t *reconcilerTask) createIngress(ctx context.Context) error {
 	}
 
 	t.logger.DebugContext(ctx, "[createIngress] Create/Update/Patch Ingress: ", slog.String("name", ctlrutils.IngressPortName))
-	if err := ctlrutils.CreateK8sCR(ctx, t.client, newIngress, t.object, ctlrutils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.logger, t.client, newIngress, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Ingress for deployment: %w", err)
 	}
 
