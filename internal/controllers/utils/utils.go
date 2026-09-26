@@ -12,6 +12,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -22,7 +23,6 @@ import (
 
 	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/util/net"
-	ctrl "sigs.k8s.io/controller-runtime"
 
 	ibguv1alpha1 "github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades/v1alpha1"
 
@@ -48,8 +48,6 @@ const (
 	PropertiesString = "properties"
 	requiredString   = "required"
 )
-
-var oranUtilsLog = ctrl.Log.WithName("oranUtilsLog")
 
 func UpdateK8sCRStatus(ctx context.Context, c client.Client, object client.Object) error {
 	cr, ok := object.(*provisioningv1alpha1.ProvisioningRequest)
@@ -111,7 +109,7 @@ func SetCRDOwnerRef(ctx context.Context, c client.Client, object metav1.Object, 
 }
 
 // CreateK8sCR creates/updates/patches an object.
-func CreateK8sCR(ctx context.Context, c client.Client,
+func CreateK8sCR(ctx context.Context, logger *slog.Logger, c client.Client,
 	newObject client.Object, ownerObject client.Object,
 	operation string) (err error) {
 
@@ -156,10 +154,15 @@ func CreateK8sCR(ctx context.Context, c client.Client,
 	// If the CR already exists, patch it or update it.
 	if err != nil {
 		if errors.IsNotFound(err) {
-			oranUtilsLog.Info(
+			kind := newObject.GetObjectKind().GroupVersionKind().Kind
+			if gvks, _, schemeErr := c.Scheme().ObjectKinds(newObject); schemeErr == nil && len(gvks) > 0 {
+				kind = gvks[0].Kind
+			}
+			logger.InfoContext(ctx,
 				"[CreateK8sCR] CR not found, CREATE it",
-				"name", newObject.GetName(),
-				"namespace", newObject.GetNamespace())
+				slog.String("kind", kind),
+				slog.String("name", newObject.GetName()),
+				slog.String("namespace", newObject.GetNamespace()))
 			err = c.Create(ctx, newObject)
 			if err != nil {
 				return fmt.Errorf("failed to create CR %s/%s: %w", newObject.GetNamespace(), newObject.GetName(), err)
@@ -356,7 +359,6 @@ func GetIngressDomain(ctx context.Context, c client.Client) (string, error) {
 	}, ingressController)
 
 	if err != nil {
-		oranUtilsLog.Info(fmt.Sprintf("[getIngressDomain] default ingress controller object not found, error: %s", err))
 		return "", fmt.Errorf("default ingress controller object not found: %w", err)
 	}
 

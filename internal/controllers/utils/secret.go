@@ -9,6 +9,7 @@ package utils
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
@@ -18,10 +19,10 @@ import (
 )
 
 // CreateSecretFromLiterals takes a map of key value pairs and produces a Secret.
-func CreateSecretFromLiterals(ctx context.Context, c client.Client, ownerObject client.Object, namespace, name string, literals map[string][]byte) error {
+func CreateSecretFromLiterals(ctx context.Context, logger *slog.Logger, c client.Client, ownerObject client.Object, namespace, name string, literals map[string][]byte) error {
 	secret := &corev1.Secret{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "ConfigMap",
+			Kind:       "Secret",
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
@@ -31,7 +32,7 @@ func CreateSecretFromLiterals(ctx context.Context, c client.Client, ownerObject 
 		Data: literals,
 	}
 
-	err := CreateK8sCR(ctx, c, secret, ownerObject, UPDATE)
+	err := CreateK8sCR(ctx, logger, c, secret, ownerObject, UPDATE)
 	if err != nil {
 		return fmt.Errorf("failed to create secret %s/%s: %w", namespace, name, err)
 	}

@@ -231,7 +231,7 @@ func (t *provisioningRequestReconcilerTask) updateClusterInstance(ctx context.Co
 	if err != nil {
 		return fmt.Errorf("failed to get pull secret name from cluster instance: %w", err)
 	}
-	if err := ctlrutils.CopyPullSecret(ctx, t.client, t.object, t.ctDetails.namespace, pullSecretName, hwNodes); err != nil {
+	if err := ctlrutils.CopyPullSecret(ctx, t.logger, t.client, t.object, t.ctDetails.namespace, pullSecretName, hwNodes); err != nil {
 		return fmt.Errorf("failed to copy pull secret: %w", err)
 	}
 

@@ -136,7 +136,7 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 	}
 
 	t.logger.DebugContext(ctx, "[deployPostgresServer] Create PVC", slog.String("name", pvcName))
-	if err := ctlrutils.CreateK8sCR(ctx, t.client, pvc, t.object, ""); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.logger, t.client, pvc, t.object, ""); err != nil {
 		return fmt.Errorf("failed to create PVC: %w", err)
 	}
 
@@ -233,7 +233,7 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 	}
 
 	t.logger.DebugContext(ctx, "[deployDatabase] Create/Update/Patch Server", slog.String("name", serverName))
-	if err := ctlrutils.CreateK8sCR(ctx, t.client, newDeployment, t.object, ctlrutils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.logger, t.client, newDeployment, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to deploy database: %w", err)
 	}
 
@@ -254,7 +254,7 @@ func (t *reconcilerTask) createPasswords(ctx context.Context, serverName string)
 
 	if errors.IsNotFound(err) {
 		// Does not already exist; create it.
-		err = ctlrutils.CreateSecretFromLiterals(ctx, t.client, t.object, t.object.Namespace, passwordSecretName, map[string][]byte{
+		err = ctlrutils.CreateSecretFromLiterals(ctx, t.logger, t.client, t.object, t.object.Namespace, passwordSecretName, map[string][]byte{
 			ctlrutils.AdminPasswordEnvName:     []byte(ctlrutils.GetPasswordOrRandom(ctlrutils.AdminPasswordEnvName)),
 			ctlrutils.AlarmsPasswordEnvName:    []byte(ctlrutils.GetPasswordOrRandom(ctlrutils.AlarmsPasswordEnvName)),
 			ctlrutils.ResourcesPasswordEnvName: []byte(ctlrutils.GetPasswordOrRandom(ctlrutils.ResourcesPasswordEnvName)),
@@ -282,7 +282,7 @@ func (t *reconcilerTask) createPasswords(ctx context.Context, serverName string)
 			existing.Data[ctlrutils.ClustersPasswordEnvName] = []byte(ctlrutils.GetPasswordOrRandom(ctlrutils.ClustersPasswordEnvName))
 		}
 
-		err = ctlrutils.CreateK8sCR(ctx, t.client, &existing, t.object, ctlrutils.UPDATE)
+		err = ctlrutils.CreateK8sCR(ctx, t.logger, t.client, &existing, t.object, ctlrutils.UPDATE)
 		if err != nil {
 			return fmt.Errorf("failed to create passwords: %w", err)
 		}
@@ -345,7 +345,7 @@ func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
 	}
 	pgConf += fmt.Sprintf("\nssl_tls13_ciphers = '%s'", ctlrutils.PostgresTLS13Ciphers)
 	pgConf += fmt.Sprintf("\nssl_groups = '%s'", ctlrutils.PostgresSSLGroups)
-	err = ctlrutils.CreateConfigMapFromString(ctx, t.client, t.object,
+	err = ctlrutils.CreateConfigMapFromString(ctx, t.logger, t.client, t.object,
 		t.object.Namespace, configVolumeName, postgres.ConfigFileName, pgConf)
 	if err != nil {
 		t.logger.ErrorContext(
@@ -359,7 +359,7 @@ func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
 	// Create the startup volume
 	t.logger.DebugContext(ctx, "[createDatabase] creating database startup volume")
 	startupVolumeName := fmt.Sprintf("%s-startup", ctlrutils.InventoryDatabaseServerName)
-	err = ctlrutils.CreateConfigMapFromEmbeddedFile(ctx, t.client, t.object,
+	err = ctlrutils.CreateConfigMapFromEmbeddedFile(ctx, t.logger, t.client, t.object,
 		postgres.Artifacts, postgres.StartupFilePath, t.object.Namespace, startupVolumeName, postgres.StartupFileName)
 	if err != nil {
 		t.logger.ErrorContext(

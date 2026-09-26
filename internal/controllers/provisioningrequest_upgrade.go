@@ -260,7 +260,7 @@ func (t *provisioningRequestReconcilerTask) handleIBGUUpgrade(
 		}
 
 		// Create the IBGU
-		if err := ctlrutils.CreateK8sCR(ctx, t.client, ibgu, t.object, ctlrutils.UPDATE); err != nil {
+		if err := ctlrutils.CreateK8sCR(ctx, t.logger, t.client, ibgu, t.object, ctlrutils.UPDATE); err != nil {
 			return nextReconcile, proceed, fmt.Errorf("failed to create IBGU: %w", err)
 		}
 
