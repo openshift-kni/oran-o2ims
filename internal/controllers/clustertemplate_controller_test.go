@@ -784,7 +784,7 @@ baseDomain: example.sno.com`,
 		}
 		Expect(c.Create(ctx, cm)).To(Succeed())
 		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace,
+			ctx, logger, c, configmapName, namespace,
 			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
 			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).ToNot(HaveOccurred())
@@ -793,7 +793,7 @@ baseDomain: example.sno.com`,
 	It("should return validation error message for a missing configmap", func() {
 		// No ConfigMap created
 		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace,
+			ctx, logger, c, configmapName, namespace,
 			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
 			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
@@ -818,7 +818,7 @@ baDomain: example.sno.com`,
 		Expect(c.Create(ctx, cm)).To(Succeed())
 		// Cluster Instance schema error.
 		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace,
+			ctx, logger, c, configmapName, namespace,
 			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
 			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
@@ -840,7 +840,7 @@ baDomain: example.sno.com`,
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
 		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace,
+			ctx, logger, c, configmapName, namespace,
 			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
 			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
@@ -863,7 +863,7 @@ baDomain: example.sno.com`,
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
 		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace,
+			ctx, logger, c, configmapName, namespace,
 			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
 			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
@@ -891,7 +891,7 @@ nodes:
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
 		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace,
+			ctx, logger, c, configmapName, namespace,
 			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
 			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
@@ -920,7 +920,7 @@ nodes:
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
 		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace,
+			ctx, logger, c, configmapName, namespace,
 			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
 			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
@@ -944,7 +944,7 @@ baseDomain: value`,
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
 		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace,
+			ctx, logger, c, configmapName, namespace,
 			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
 			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
@@ -969,7 +969,7 @@ baseDomain: value`,
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
 		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace,
+			ctx, logger, c, configmapName, namespace,
 			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
 			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).To(HaveOccurred())
@@ -993,7 +993,7 @@ baseDomain: value`,
 		Expect(c.Create(ctx, cm)).To(Succeed())
 
 		err := validateConfigmapReference[map[string]any](
-			ctx, c, configmapName, namespace,
+			ctx, logger, c, configmapName, namespace,
 			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
 			ctlrutils.ClusterInstallationTimeoutConfigKey)
 		Expect(err).ToNot(HaveOccurred())
@@ -1171,7 +1171,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 			},
 		}
 		Expect(c.Create(ctx, ct)).To(Succeed())
-		err := generateTemplateID(ctx, c, ct)
+		err := generateTemplateID(ctx, slog.Default(), c, ct)
 		Expect(err).ToNot(HaveOccurred())
 		ct1 := &provisioningv1alpha1.ClusterTemplate{}
 		err = c.Get(ctx, client.ObjectKeyFromObject(ct), ct1)

@@ -10,6 +10,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"log/slog"
 
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 	corev1 "k8s.io/api/core/v1"
@@ -19,7 +20,7 @@ import (
 
 // CreateConfigMapFromEmbeddedFile extracts a file from an embedded file system and builds a ConfigMap.  If the file
 // does not exist or is not accessible then an error is returned.
-func CreateConfigMapFromEmbeddedFile(ctx context.Context, c client.Client, ownerObject client.Object, fs embed.FS, path, namespace, name, key string) error {
+func CreateConfigMapFromEmbeddedFile(ctx context.Context, logger *slog.Logger, c client.Client, ownerObject client.Object, fs embed.FS, path, namespace, name, key string) error {
 	data, err := fs.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("failed to read embedded file %s: %w", path, err)
@@ -39,7 +40,7 @@ func CreateConfigMapFromEmbeddedFile(ctx context.Context, c client.Client, owner
 		},
 	}
 
-	err = CreateK8sCR(ctx, c, configmap, ownerObject, UPDATE)
+	err = CreateK8sCR(ctx, logger, c, configmap, ownerObject, UPDATE)
 	if err != nil {
 		return fmt.Errorf("failed to create configmap '%s/%s': %w", namespace, name, err)
 	}
@@ -48,7 +49,7 @@ func CreateConfigMapFromEmbeddedFile(ctx context.Context, c client.Client, owner
 }
 
 // CreateConfigMapFromString creates a ConfigMap from a string value.
-func CreateConfigMapFromString(ctx context.Context, c client.Client, ownerObject client.Object, namespace, name, key, data string) error {
+func CreateConfigMapFromString(ctx context.Context, logger *slog.Logger, c client.Client, ownerObject client.Object, namespace, name, key, data string) error {
 	configmap := &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ConfigMap",
@@ -63,7 +64,7 @@ func CreateConfigMapFromString(ctx context.Context, c client.Client, ownerObject
 		},
 	}
 
-	err := CreateK8sCR(ctx, c, configmap, ownerObject, UPDATE)
+	err := CreateK8sCR(ctx, logger, c, configmap, ownerObject, UPDATE)
 	if err != nil {
 		return fmt.Errorf("failed to create configmap '%s/%s': %w", namespace, name, err)
 	}
