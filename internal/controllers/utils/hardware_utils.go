@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -87,7 +88,7 @@ func GetPullSecretName(clusterInstance *unstructured.Unstructured) (string, erro
 	return pullSecretName, nil
 }
 
-// CopyPullSecret copies the pull secrets from the cluster template namespace to the bmh namespace.
+// CopyPullSecret copies the pull secret from the cluster template namespace to every BMH namespace.
 func CopyPullSecret(ctx context.Context, logger *slog.Logger, c client.Client, ownerObject client.Object, sourceNamespace, pullSecretName string,
 	hwNodes map[string][]NodeInfo) error {
 
@@ -102,29 +103,39 @@ func CopyPullSecret(ctx context.Context, logger *slog.Logger, c client.Client, o
 			pullSecretName, sourceNamespace)
 	}
 
-	// Extract the namespace from any node (all nodes in the same pool share the same namespace).
-	var targetNamespace string
+	// Node groups can span multiple BMH namespaces. Copy once per namespace.
+	namespaceSet := make(map[string]struct{})
 	for _, nodes := range hwNodes {
-		if len(nodes) > 0 {
-			targetNamespace = nodes[0].HwMgrNodeNs
-			break
+		for _, node := range nodes {
+			if node.HwMgrNodeNs == "" {
+				return fmt.Errorf("failed to determine the target namespace for pull secret copy")
+			}
+			namespaceSet[node.HwMgrNodeNs] = struct{}{}
 		}
 	}
-	if targetNamespace == "" {
+	if len(namespaceSet) == 0 {
 		return fmt.Errorf("failed to determine the target namespace for pull secret copy")
 	}
 
-	newSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      pullSecretName,
-			Namespace: targetNamespace,
-		},
-		Data: pullSecret.Data,
-		Type: corev1.SecretTypeDockerConfigJson,
+	namespaces := make([]string, 0, len(namespaceSet))
+	for namespace := range namespaceSet {
+		namespaces = append(namespaces, namespace)
 	}
+	sort.Strings(namespaces)
 
-	if err := CreateK8sCR(ctx, logger, c, newSecret, ownerObject, UPDATE); err != nil {
-		return fmt.Errorf("failed to create Kubernetes CR for PullSecret: %w", err)
+	for _, targetNamespace := range namespaces {
+		newSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      pullSecretName,
+				Namespace: targetNamespace,
+			},
+			Data: pullSecret.Data,
+			Type: corev1.SecretTypeDockerConfigJson,
+		}
+
+		if err := CreateK8sCR(ctx, logger, c, newSecret, ownerObject, UPDATE); err != nil {
+			return fmt.Errorf("failed to copy pull secret %q to namespace %q: %w", pullSecretName, targetNamespace, err)
+		}
 	}
 
 	return nil

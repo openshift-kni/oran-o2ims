@@ -7,11 +7,62 @@ SPDX-License-Identifier: Apache-2.0
 package utils
 
 import (
+	"context"
+	"log/slog"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/test/fakeclient"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+var _ = Describe("CopyPullSecret", func() {
+	It("copies the secret to every allocated node namespace in one call", func() {
+		ctx := context.Background()
+		secretData := map[string][]byte{corev1.DockerConfigJsonKey: []byte(`{"auths":{}}`)}
+		owner := &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: "request", UID: types.UID("request-uid")},
+		}
+		fakeClient := fakeclient.GetFakeClientFromObjects(
+			&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "pull-secret", Namespace: "template"},
+				Data:       secretData,
+				Type:       corev1.SecretTypeDockerConfigJson,
+			},
+			&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "pull-secret", Namespace: "pool-b"},
+				Data:       map[string][]byte{corev1.DockerConfigJsonKey: []byte(`{"old":true}`)},
+				Type:       corev1.SecretTypeDockerConfigJson,
+			},
+		)
+		hwNodes := map[string][]NodeInfo{
+			"group-a": {
+				{HwMgrNodeNs: "pool-a"},
+				{HwMgrNodeNs: "pool-a"},
+			},
+			"group-b": {
+				{HwMgrNodeNs: "pool-b"},
+				{HwMgrNodeNs: "pool-c"},
+			},
+		}
+
+		Expect(CopyPullSecret(ctx, slog.Default(), fakeClient, owner, "template", "pull-secret", hwNodes)).To(Succeed())
+
+		for _, namespace := range []string{"pool-a", "pool-b", "pool-c"} {
+			copied := &corev1.Secret{}
+			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "pull-secret", Namespace: namespace}, copied)).To(Succeed())
+			Expect(copied.Data).To(Equal(secretData))
+			Expect(copied.Type).To(Equal(corev1.SecretTypeDockerConfigJson))
+			Expect(copied.OwnerReferences).To(HaveLen(1))
+			Expect(copied.OwnerReferences[0].UID).To(Equal(owner.UID))
+		}
+	})
+})
 
 var _ = Describe("MapHardwareReasonToProvisioningReason", func() {
 	Context("when mapping standard hardware management reasons", func() {
