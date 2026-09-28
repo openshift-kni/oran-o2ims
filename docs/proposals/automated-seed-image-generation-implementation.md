@@ -33,7 +33,7 @@ be produced for IBU without building installation media.
 | Spoke access | `internal/service/common/clients/k8s/k8s.go`, `internal/spokeclient/spokeclient.go` | Read the exact ClusterDeployment admin-kubeconfig Secret; stop using MSA access after detachment. |
 | Cleanup and permissions | `internal/controllers/provisioningrequest_controller.go`, RBAC markers, generated `config/rbac/role.yaml` | Scrub seed resources before NAR deletion; regenerate and inspect hub permissions. |
 | User guidance | `docs/user-guide/ibi-based-cluster-provisioning.md`, `docs/samples/` | Add CT, PR, and Secret samples; explain seed-only and seed-plus-ISO outcomes, terminal failures, digest and URL status, and manual PR deletion to reclaim hardware. |
-| ISO toolchain | `Dockerfile`, `config/manager/manager.yaml`, release overlay | Add the required tools to the operator image and run the ISO Job from the same digest. |
+| ISO toolchain | `config/manager/manager.yaml`, `internal/constants/constants.go`, `telco5g-konflux/` release overlay, generated bundle CSV | Supply a pinned Red Hat tools image reference to the controller, include it in `relatedImages`, and use it for the preflight Pod and ISO Job. |
 
 New controller files should remain in `internal/controllers/` alongside the
 existing ProvisioningRequest code:
@@ -114,7 +114,8 @@ the ISO Job's `activeDeadlineSeconds` to that remaining budget.
    configured, ISO credentials, HTTPS trust, release accessibility, mirror
    behavior, and installer extraction. Persist an immutable per-run snapshot
    of the validated config, derived mirror/CA data, and credential copies in
-   the operator namespace; the short-lived preflight Pod uses those copies.
+   the operator namespace; the short-lived preflight Pod runs the pinned Red
+   Hat tools image and uses those copies.
    Persist the immutable release digest before moving to Phase 2. Fail and
    scrub partial snapshots before detachment when a precondition is unmet.
 4. Phase 2 obtains and tests the exact spoke admin kubeconfig, then includes
@@ -131,7 +132,7 @@ the ISO Job's `activeDeadlineSeconds` to that remaining budget.
    which image this run published.
 6. When `liveISO` is absent, proceed to cleanup. Otherwise Phase 4 uses the
    frozen per-run Secrets and mirror/CA ConfigMap, then creates a roughly
-   20 GiB PVC and a Job using the operator image by digest. The Job
+   20 GiB PVC and a Job using the same Red Hat tools image by digest. The Job
    extracts the installer from `ReleaseImageDigest`, builds an
    `ImageBasedInstallationConfig` using the pinned `SeedImage` and generic
    IBI callback Ignition override, builds the ISO,
@@ -213,47 +214,66 @@ Job, and scrub all copies on every terminal, timeout, or deletion path.
 
 ### ISO Job image decision
 
-The merged proposal requires an operator-owned, immutable-digest image with
-`oc`, POSIX shell, `ssh`, `scp`, and `sha256sum`. It does not require that image
-to be distinct from the manager image. In either design, the controller uses
-the Kubernetes API to create a Phase 1 preflight Pod and a Phase 4 ISO Job.
-Those pods run the tools inside their own container; the manager does not run
-`oc` or copy binaries between images. The image packaging choice does not
-change the Job script, credentials, permissions, or workspace. Only the
-container image reference changes.
+The merged proposal calls for an operator-owned, immutable-digest image with
+`oc`, POSIX shell, `ssh`, `scp`, and `sha256sum`. The controller creates a
+Phase 1 preflight Pod and a Phase 4 ISO Job through the Kubernetes API; those
+pods run the tools. The manager never invokes `oc` or copies binaries between
+images. The image choice does not change the Job script, credentials,
+permissions, or workspace.
 
-The original implementation plan kept the production manager image distroless
-and added a dedicated ISO builder image, for example through
-`Dockerfile.iso-builder`. The preflight Pod and ISO Job would use its digest.
-This would require another build and publication target, release pinning and
-`relatedImages` entry, disconnected mirroring, and ongoing scanning and
-updates. The operator image would remain smaller and without shell or CLI
-tools; nodes would pull the ISO image only when an ISO run is scheduled.
+The original implementation plan proposed a custom `Dockerfile.iso-builder`
+and a separately built and published tool image. We then considered changing
+the manager image from distroless to a CLI-capable base and using it for the
+Job. Both approaches leave us responsible for maintaining the tool packages
+and responding to image CVEs: the first adds a build and publication stream,
+while the second puts the tools in every long-running service container.
 
-| Consideration | Dedicated ISO image: original plan | Shared operator image: planned |
+| Approach | Benefit | Cost |
 | --- | --- | --- |
-| Job execution | Job and preflight Pod use a second image digest. | Job and preflight Pod use the operator image digest. |
-| Build and release | Build, publish, scan, pin, and mirror a second artifact. | Update and scan the existing artifact; use its existing publication and mirroring path. |
-| Routine footprint | Manager and service pods stay small and distroless; ISO tools are pulled only where needed. | Every pod using the operator image carries the tools and their dependencies. |
-| Security and maintenance | Manager has fewer available executables; the second image has its own package updates and compatibility checks. | More executables and packages are present in long-running services; one image and one update stream. |
-| Development workflow | Developers build or fetch two images and provide the ISO digest. | Developers build or fetch one image; the Job uses that same digest. |
+| Custom ISO image: original plan | Keeps the manager distroless and limits tools to ISO pods. | Build, publish, scan, patch, and mirror another image ourselves. |
+| Shared operator image: considered | Reuses the existing image publication path. | Changes the manager base and carries the full toolset in every service pod. |
+| Red Hat OpenShift tools image: selected | Red Hat builds and updates the toolset; manager stays distroless; no custom image build. | Add a pinned external image to the bundle and mirror it; qualify each new digest. |
 
-**Decision: use the shared operator image.** Change the final stage of
-`Dockerfile` from distroless to a supported CLI-capable base, copy the manager
-binary, and ensure all required tools work as non-root. The `ose-cli-rhel9`
-base already used by `Dockerfile.must-gather` is a candidate; verify its tool
-contents, supported architectures, and security updates before choosing it.
-The manager and other services already set `/usr/bin/oran-o2ims` as their
-command; the Job overrides the entrypoint with its build script.
+**Decision: use `registry.redhat.io/openshift4/ose-tools-rhel9` for both ISO
+pods.** The Red Hat [OpenShift tools image](https://catalog.redhat.com/en/software/containers/openshift4/ose-tools-rhel9/652809d13aa6bf4a998c7579)
+is built from the [OpenShift tools Dockerfile](https://github.com/openshift/oc/blob/release-4.22/images/tools/Dockerfile).
+On 2026-09-28, the AMD64 `v4.22` image was checked directly for `oc`, shell,
+`ssh`, `scp`, and `sha256sum`; `oc` and `ssh` also ran as a non-root UID.
+Its manifest list covers AMD64, ARM64, s390x, and ppc64le. The simpler
+`ose-cli-rhel9` image checked locally (`v4.22.0`) lacks `ssh` and `scp`; it is
+the base used by `Dockerfile.must-gather`. The tools Dockerfile does not
+explicitly list the OpenSSH client package, so verify both commands for every
+new digest.
+The operator `Dockerfile` remains distroless and no ISO image build target is
+added. `openshift-install` is still extracted from the pinned release image
+at runtime, not baked into the tools image.
 
-The release overlay already pins the manager image by digest in the Deployment
-and `IMAGE` environment variable and lists it in `relatedImages`. Use that
-same digest for the Job and verify it is immutable before creating the Job.
-The Job still needs its own credentials, permissions, workspace, and Phase 1
-tool and installer checks. Disconnected installations mirror the existing
-operator image as they do today. Revisit a dedicated image only if measured
-image footprint or a concrete security requirement warrants the second
-artifact and its release workflow.
+This intentionally replaces the merged proposal's **operator-owned image**
+requirement with a Red Hat-built image that the operator references and
+validates. Add `ISO_TOOLS_IMAGE` to `config/manager/manager.yaml` and read it
+from the controller; the value used by an enabled `liveISO` run must be an
+immutable manifest-list digest. Extend the existing release pin/mapping
+metadata in `telco5g-konflux/` and the resulting bundle `relatedImages`, as
+already done for `POSTGRES_IMAGE`. The preflight Pod and Job use that same
+reference. Disconnected deployments mirror it alongside the other related
+images. Neither a PR nor a ClusterTemplate can override the tool image.
+
+The Red Hat Trusted Artifact Signer operator provides a direct precedent: its
+[v1.4.3 catalog bundle](https://github.com/securesign/fbc/blob/61a9b73502f8afc9f49d66df93770a6e5d92684f/v4.22/rhtas-operator/catalog/rhtas-operator/catalog.json#L2838)
+lists `ose-tools-rhel9` by digest in `relatedImages` as `trillian-netcat`, and
+its [image configuration](https://github.com/securesign/secure-sign-operator/blob/430cd4fef47d291fbefabee833a1590da45c2a94/config/default/images.env#L11)
+sets `RELATED_IMAGE_TRILLIAN_NETCAT` to a tools image digest. This confirms
+the packaging pattern for an external OpenShift tools image. Our required
+commands and execution environment still need their own qualification.
+
+Red Hat owns the image build and package updates, but our release still owns
+digest selection, CVE triage, compatibility checks, and refreshing the pin.
+This is a broad diagnostic image, so its size and package count remain a
+security and download cost. For every selected digest, qualify all required
+commands, non-root execution with a writable workspace, supported
+architectures, release extraction, and disconnected pull behavior. Phase 1
+fails before PVC creation or ACM detachment if the pinned image cannot run the
+required tools or extract `openshift-install`.
 
 Mirror resolution reads hub IDMS, ITMS, ICSP, and additionalTrustedCA data.
 Keep ICSP's `repositoryDigestMirrors` field and `operator.openshift.io` RBAC
@@ -310,15 +330,15 @@ access to an ACM/MCE seed SNO, a registry, and an ISO server.
 | 2. Dispatch and durability | Reconciler fast path, one-shot gate, timeout, active-run webhook, finalizer wiring | ~350 | ~350 | — | 3–5 days |
 | 3. Preflight and input snapshot | Spoke/registry/TLS/release checks, frozen config and credentials, digest pinning, installer Pod | ~500 | ~500 | ~20 | 4–6 days |
 | 4. ACM and LCA | Exact admin client, teardown, SeedGenerator lifecycle, cleanup, RBAC | ~450 | ~400 | ~30 | 4–6 days |
-| 5. Live ISO | Frozen credential mounts, PVC/Job, operator image tools, upload verification | ~900 | ~600 | ~70 | 6–9 days |
+| 5. Live ISO | Frozen credential mounts, PVC/Job, Red Hat tools image, upload verification | ~900 | ~600 | ~50 | 6–9 days |
 | 6. Integration and guidance | Cross-phase tests, user guide, sample manifests, release wiring | ~100 | ~200 | ~200 | 2–3 days |
-| **Total** | | **~2,550** | **~2,350** | **~345** | **21–32 days** |
+| **Total** | | **~2,550** | **~2,350** | **~325** | **21–32 days** |
 
-The midpoint is about **5,200 handwritten lines**, using the existing operator
-image for the ISO Job. A dedicated image would add roughly 50–100 LOC and
+The midpoint is about **5,200 handwritten lines**, using the Red Hat tools
+image for the ISO Job. A custom image would add roughly 50–100 LOC and
 1–2 days of image build and pipeline work. The merged proposal's
 ~2,900-line estimate is likely low because this plan includes the restricted
-schema refactor, preflight Pod, operator image toolchain, restart and
+schema refactor, preflight Pod, external image qualification, restart and
 cleanup tests, and content verification. An upstream LCA change, a new API
 field for path binding, or a custom image build pipeline would add effort.
 The effort estimate includes a short contract check in package 1, but excludes
@@ -356,8 +376,8 @@ trigger inactive until its full path and cleanup are ready.
 - Seed tests: prerequisite failures, LCA failure and transient API errors,
   authoritative digest capture, missing digest failure, seed-only success.
 - ISO tests: both registry credentials, IDMS/ITMS/ICSP and CA paths,
-  installer preflight, Job restart/failure, log redaction, SSH host-key
-  checking, remote and HTTPS digest verification, all credential copies
+  pinned tools image and installer preflight, Job restart/failure, log redaction,
+  SSH host-key checking, remote and HTTPS digest verification, credential copies
   scrubbed on every terminal path.
 - Cluster validation: on the target ACM/MCE and LCA versions, inspect the
   captured seed for absent hub registration/observability artifacts, verify
@@ -380,10 +400,11 @@ need owners and tracking but are outside this repository LOC estimate.
 2. **ISO path binding:** define the remote document-root convention or add a
    trusted template field that makes `remotePath` to `urlBase` mapping
    verifiable. Keep the mandatory HTTPS hash path for different hosts.
-3. **Operator image toolchain:** confirm the final base and required tools work
-   as non-root on supported architectures, and that the released `IMAGE`
-   reference remains the pinned manager digest. Assess the size and security
-   cost of carrying these tools in every service before retaining the
-   single-image design.
+3. **External tools image contract:** select a supported Red Hat tools image
+   version and manifest-list digest for each release. Verify the required
+   commands on supported architectures, non-root execution in the target
+   OpenShift cluster, compatibility with the configured release image, and
+   disconnected mirroring. Define who refreshes the pinned digest when Red Hat
+   publishes security updates.
 4. **ACM teardown proof:** validate Klusterlet and addon deletion against the
    target ACM/MCE version before relying on it to produce a clean seed.
