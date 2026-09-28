@@ -173,6 +173,18 @@ spec:
                         description: ClusterUpgradeStatus holds the state of a cluster
                           upgrade in progress.
                         properties:
+                          accumulatedSuspendedDuration:
+                            description: |-
+                              AccumulatedSuspendedDuration is the total time spent waiting for Custom
+                              worker pool stage authorization during completed suspension intervals.
+                            type: string
+                          clusterVersionCompletedAt:
+                            description: |-
+                              ClusterVersionCompletedAt indicates when the target ClusterVersion update
+                              completed. Depending on the worker pool strategy, the overall upgrade may
+                              continue with worker MachineConfigPool rollout after this time.
+                            format: date-time
+                            type: string
                           intermediateVersion:
                             description: |-
                               IntermediateVersion is the intermediate version selected for
@@ -186,6 +198,13 @@ spec:
                           startedAt:
                             description: StartedAt indicates when the cluster upgrade
                               started.
+                            format: date-time
+                            type: string
+                          timeoutSuspendedAt:
+                            description: |-
+                              TimeoutSuspendedAt indicates when the current wait for Custom worker pool
+                              stage authorization began. Time after this timestamp is excluded from the
+                              cluster upgrade timeout until authorization resumes.
                             format: date-time
                             type: string
                           workerPoolUpgrade:
@@ -204,8 +223,54 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                              stages:
+                                description: Stages is the immutable ordered worker
+                                  MCP rollout plan for a Custom strategy.
+                                items:
+                                  description: WorkerPoolUpgradeStage is one named
+                                    wave in a Custom worker pool rollout.
+                                  properties:
+                                    completedAt:
+                                      description: CompletedAt indicates when every
+                                        pool in this stage reported Updated.
+                                      format: date-time
+                                      type: string
+                                    name:
+                                      description: Name uniquely identifies the stage
+                                        and may be selected in upgradeThrough.
+                                      type: string
+                                    pools:
+                                      description: Pools lists worker MachineConfigPools
+                                        that are unpaused together.
+                                      items:
+                                        type: string
+                                      type: array
+                                    startedAt:
+                                      description: StartedAt indicates when the controller
+                                        first started this stage.
+                                      format: date-time
+                                      type: string
+                                    state:
+                                      description: State is the observed rollout state
+                                        of the stage.
+                                      enum:
+                                      - AwaitingAuthorization
+                                      - Pending
+                                      - InProgress
+                                      - Completed
+                                      type: string
+                                  required:
+                                  - name
+                                  - pools
+                                  type: object
+                                type: array
                               strategy:
                                 description: Strategy is the resolved rollout strategy.
+                                type: string
+                              upgradeThrough:
+                                description: |-
+                                  UpgradeThrough is the last Custom stage currently authorized to run. An
+                                  empty value stops the rollout after the control plane.
                                 type: string
                             type: object
                         type: object

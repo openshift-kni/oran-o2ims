@@ -45,12 +45,15 @@ import (
 )
 
 const (
-	cvUpgradeTimeout  = time.Minute * 2
-	cvUpgradeInterval = time.Second * 3
-	prName            = "88744070-717a-4305-8461-796244098339"
-	clusterName       = "std-du-cluster"
-	upgradeMSAName    = prName + "-upgrade"
-	upgradeMWName     = prName + "-upgrade-rbac"
+	cvUpgradeTimeout     = time.Minute * 2
+	cvUpgradeInterval    = time.Second * 3
+	prName               = "88744070-717a-4305-8461-796244098339"
+	clusterName          = "std-du-cluster"
+	upgradeMSAName       = prName + "-upgrade"
+	upgradeMWName        = prName + "-upgrade-rbac"
+	cvUpgradeResourceDir = "../resources/mno_cv_upgrade"
+	ctName               = "std-du"
+	ctRelease1           = "4.19.3"
 )
 
 // --- Test suite ---
@@ -60,23 +63,21 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 		timeout  = cvUpgradeTimeout
 		interval = cvUpgradeInterval
 
-		ctName     = "std-du"
 		ctVersion1 = "v4-19-3-v1"
-		ctRelease1 = "4.19.3"
 		ctVersion2 = "v4-20-5-v1"
 		ctRelease2 = "4.20.5"
 		ctVersion3 = "v4-21-2-v1"
 		ctRelease3 = "4.21.2"
 		ctVersion4 = "v4-22-4-v1"
 		ctRelease4 = "4.22.4"
+		ctVersion5 = "v4-23-1-v1"
+		ctRelease5 = "4.23.1"
 
 		eusIntermediateVersion = "4.21.7"
 
 		ctNamespace   = "std-ran-v4-19-3"
 		workerR740    = "worker-dell-r740"
 		workerXR8620t = "worker-dell-xr8620t"
-
-		resourceDir = "../resources/mno_cv_upgrade"
 	)
 
 	var (
@@ -88,8 +89,8 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 	testCtx = context.Background()
 
 	cmYamls := []string{
-		filepath.Join(resourceDir, "clusterinstance-defaults-v1.yaml"),
-		filepath.Join(resourceDir, "policytemplate-defaults-v1.yaml"),
+		filepath.Join(cvUpgradeResourceDir, "clusterinstance-defaults-v1.yaml"),
+		filepath.Join(cvUpgradeResourceDir, "policytemplate-defaults-v1.yaml"),
 	}
 
 	BeforeAll(func() {
@@ -111,7 +112,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 		}
 
 		// Create ClusterImageSets for clustertemplate validation
-		for _, cis := range []string{ctRelease1, ctRelease2, ctRelease3, ctRelease4} {
+		for _, cis := range []string{ctRelease1, ctRelease2, ctRelease3, ctRelease4, ctRelease5} {
 			clusterImageSet := &hivev1.ClusterImageSet{
 				ObjectMeta: metav1.ObjectMeta{Name: cis},
 				Spec:       hivev1.ClusterImageSetSpec{ReleaseImage: "quay.io/openshift-release-dev/ocp-release:" + cis + "-x86_64"},
@@ -154,17 +155,19 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 
 		// Create base ClusterTemplate
 		ctV1, err := testutils.LoadYAML[provisioningv1alpha1.ClusterTemplate](
-			filepath.Join(resourceDir, "ct-std-du-v1.yaml"))
+			filepath.Join(cvUpgradeResourceDir, "ct-std-du-v1.yaml"))
 		Expect(err).ToNot(HaveOccurred())
 		Expect(K8SClient.Create(testCtx, ctV1)).To(Succeed())
 
 		// Create upgrade ClusterTemplates
-		createCIDefaultsCM(testCtx, K8SClient, resourceDir, "clusterinstance-defaults-v2", ctRelease1, ctRelease2)
-		createCIDefaultsCM(testCtx, K8SClient, resourceDir, "clusterinstance-defaults-v3", ctRelease1, ctRelease3)
-		createCIDefaultsCM(testCtx, K8SClient, resourceDir, "clusterinstance-defaults-v4", ctRelease1, ctRelease4)
-		createUpgradeCT(testCtx, K8SClient, resourceDir, ctName, ctVersion2, ctRelease2, "clusterinstance-defaults-v2")
-		createUpgradeCT(testCtx, K8SClient, resourceDir, ctName, ctVersion3, ctRelease3, "clusterinstance-defaults-v3")
-		createUpgradeCT(testCtx, K8SClient, resourceDir, ctName, ctVersion4, ctRelease4, "clusterinstance-defaults-v4")
+		createCIDefaultsCM(testCtx, K8SClient, "clusterinstance-defaults-v2", ctRelease2)
+		createCIDefaultsCM(testCtx, K8SClient, "clusterinstance-defaults-v3", ctRelease3)
+		createCIDefaultsCM(testCtx, K8SClient, "clusterinstance-defaults-v4", ctRelease4)
+		createCIDefaultsCM(testCtx, K8SClient, "clusterinstance-defaults-v5", ctRelease5)
+		createUpgradeCT(testCtx, K8SClient, ctVersion2, ctRelease2, "clusterinstance-defaults-v2")
+		createUpgradeCT(testCtx, K8SClient, ctVersion3, ctRelease3, "clusterinstance-defaults-v3")
+		createUpgradeCT(testCtx, K8SClient, ctVersion4, ctRelease4, "clusterinstance-defaults-v4")
+		createUpgradeCT(testCtx, K8SClient, ctVersion5, ctRelease5, "clusterinstance-defaults-v5")
 
 		By("Creating BMHs resources")
 		bmhList := upgradeBMHs(3, 2, 2)
@@ -205,7 +208,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 
 		By("Creating ProvisioningRequest referencing CT v4-19-3-v1")
 		prObj, err := testutils.LoadYAML[provisioningv1alpha1.ProvisioningRequest](
-			filepath.Join(resourceDir, "pr-std.yaml"))
+			filepath.Join(cvUpgradeResourceDir, "pr-std.yaml"))
 		Expect(err).ToNot(HaveOccurred())
 		Expect(K8SClient.Create(testCtx, prObj)).To(Succeed())
 
@@ -295,7 +298,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 		}
 
 		// Delete ClusterTemplates
-		for _, ver := range []string{ctVersion1, ctVersion2, ctVersion3, ctVersion4} {
+		for _, ver := range []string{ctVersion1, ctVersion2, ctVersion3, ctVersion4, ctVersion5} {
 			Expect(client.IgnoreNotFound(K8SClient.Delete(testCtx, &provisioningv1alpha1.ClusterTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      provisioningcontrollers.GetClusterTemplateRefName(ctName, ver),
@@ -314,6 +317,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			"clusterinstance-defaults-v2",
 			"clusterinstance-defaults-v3",
 			"clusterinstance-defaults-v4",
+			"clusterinstance-defaults-v5",
 			"clustertemplate-sample.v1.0.0-extramanifests",
 		} {
 			Expect(client.IgnoreNotFound(K8SClient.Delete(testCtx, &corev1.ConfigMap{
@@ -321,7 +325,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 		}
 
 		// Delete ClusterImageSets
-		for _, cis := range []string{ctRelease1, ctRelease2, ctRelease3, ctRelease4} {
+		for _, cis := range []string{ctRelease1, ctRelease2, ctRelease3, ctRelease4, ctRelease5} {
 			Expect(client.IgnoreNotFound(K8SClient.Delete(testCtx, &hivev1.ClusterImageSet{
 				ObjectMeta: metav1.ObjectMeta{Name: cis}}))).To(Succeed())
 		}
@@ -333,11 +337,11 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			ObjectMeta: metav1.ObjectMeta{Name: clusterName}}))).To(Succeed())
 	})
 
-	// ================================================================
-	// Test 1: y-stream upgrade with failure recovery and successful completion
-	// ================================================================
+	// ===========================================================================================================
+	// Test 1: Parallel worker-pool rollout after y-stream upgrade with failure recovery and successful completion
+	// ===========================================================================================================
 
-	Describe("y-stream upgrade 4.19.3 to 4.20.5 with failure recovery and successful completion", func() {
+	Describe("Parallel worker-pool rollout for y-stream upgrade 4.19.3 to 4.20.5 with failure recovery", func() {
 		It("should fail with version mismatch when PR overrides desiredUpdate.version", func() {
 			updatePR(testCtx, K8SClient, ctVersion2, map[string]any{
 				constants.TemplateParamUpgrade: map[string]any{
@@ -422,7 +426,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			})
 
 			waitForPRUpgradeCondition(testCtx, K8SClient,
-				string(provisioningv1alpha1.CRconditionReasons.Pending),
+				string(provisioningv1alpha1.CRconditionReasons.InProgress),
 				"triggered. Waiting for upgrade to start",
 				provisioningv1alpha1.StateProgressing,
 			)
@@ -458,13 +462,13 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 
 			waitForPRUpgradeCondition(testCtx, K8SClient,
 				string(provisioningv1alpha1.CRconditionReasons.InProgress),
-				"Waiting for worker pools ["+workerR740+", "+workerXR8620t+"] to finish updating",
+				"Parallel worker-pool rollout: waiting for pools ["+workerR740+", "+workerXR8620t+"] to finish updating",
 				provisioningv1alpha1.StateProgressing,
 			)
 			assertSpokeMCPPaused(testCtx, spokeClient, workerR740, false)
 			assertSpokeMCPPaused(testCtx, spokeClient, workerXR8620t, false)
 
-			// Complete worker-dell-r740 and worker-dell-xr8620t pool updates.
+			// Complete both worker pools in the Parallel wave.
 			ensureSpokeMCP(testCtx, spokeClient, workerR740, corev1.ConditionTrue)
 			ensureSpokeMCP(testCtx, spokeClient, workerXR8620t, corev1.ConditionTrue)
 
@@ -477,7 +481,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			// Verify spoke access resources are cleaned up
 			testutils.AssertSpokeAccessCleaned(testCtx, K8SClient, clusterName, upgradeMSAName, upgradeMWName, timeout, interval)
 
-			// Simulate the ACM controller behavior after upgrade - update the ManagedCluster label to the new version
+			// Simulate ACM observing the completed ClusterVersion.
 			mc := &clusterv1.ManagedCluster{}
 			Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: clusterName}, mc)).To(Succeed())
 			patch := client.MergeFrom(mc.DeepCopy())
@@ -486,11 +490,11 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 		})
 	})
 
-	// ================================
-	// Test 2: Upgrade timeout
-	// ================================
+	// ==================================================
+	// Test 2: OpenShiftDefault y-stream upgrade timeout
+	// ==================================================
 
-	Describe("y-stream upgrade timeout when upgrading from 4.20.5 to 4.21.2", func() {
+	Describe("y-stream upgrade timeout with OpenShiftDefault strategy from 4.20.5 to 4.21.2", func() {
 		It("should start upgrade to 4.21.2 and reach InProgress", func() {
 			updatePR(testCtx, K8SClient, ctVersion3, map[string]any{
 				constants.TemplateParamUpgrade: map[string]any{
@@ -545,11 +549,11 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 		})
 	})
 
-	// =================================
-	// Test 3: Terminal failure recovery
-	// =================================
+	// ======================================================
+	// Test 3: Recovery after OpenShiftDefault upgrade timeout
+	// ======================================================
 
-	Describe("Terminal failure recovery from 4.21.2 to 4.20.5", func() {
+	Describe("Recovery after OpenShiftDefault upgrade timeout from 4.21.2 to 4.20.5", func() {
 		It("should recover to fulfilled when switching back to CT matching current ClusterVersion 4.20.5", func() {
 			updatePR(testCtx, K8SClient, ctVersion2, map[string]any{
 				constants.TemplateParamUpgrade: nil,
@@ -566,11 +570,11 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 		})
 	})
 
-	// ============================
-	// Test 4: EUS upgrade timeout
-	// ============================
+	// ==========================================================
+	// Test 4: EUS upgrade timeout with default Parallel strategy
+	// ==========================================================
 
-	Describe("EUS upgrade timeout when upgrading from 4.20.5 to 4.22.4 via 4.21.6", func() {
+	Describe("EUS upgrade timeout with default Parallel strategy from 4.20.5 to 4.22.4 via 4.21.6", func() {
 		It("should start EUS intermediate upgrade and reach InProgress", func() {
 			updateSpokeCV(testCtx, spokeClient, func(cv *configv1.ClusterVersion) {
 				cv.Status.History = []configv1.UpdateHistory{
@@ -599,7 +603,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			testutils.SimulateSpokeAccessReady(testCtx, K8SClient, clusterName, upgradeMSAName, upgradeMWName, timeout, interval)
 
 			waitForPRUpgradeCondition(testCtx, K8SClient,
-				string(provisioningv1alpha1.CRconditionReasons.Pending),
+				string(provisioningv1alpha1.CRconditionReasons.InProgress),
 				"Upgrade to intermediate version 4.21.6 triggered. Waiting for upgrade to start",
 				provisioningv1alpha1.StateProgressing,
 			)
@@ -648,10 +652,10 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 	})
 
 	// ================================================================
-	// Test 5: Terminal failure recovery after EUS timeout
+	// Test 5: Recovery after EUS Parallel upgrade timeout
 	// ================================================================
 
-	Describe("Terminal failure recovery after EUS timeout from 4.22.4 to 4.20.5", func() {
+	Describe("Recovery after EUS Parallel upgrade timeout from 4.22.4 to 4.20.5", func() {
 		It("should recover to fulfilled when switching back to CT matching current ClusterVersion 4.20.5", func() {
 			updatePR(testCtx, K8SClient, ctVersion2, map[string]any{
 				constants.TemplateParamUpgrade: nil,
@@ -668,11 +672,11 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 		})
 	})
 
-	// ===================================================================
-	// Test 6: EUS upgrade with failure recovery and successful completion
-	// ===================================================================
+	// ====================================================================================================
+	// Test 6: Serial worker-pool rollout after EUS upgrade with failure recovery and successful completion
+	// ====================================================================================================
 
-	Describe("EUS upgrade 4.20.5 to 4.22.4 via 4.21.7 with failure recovery and successful completion", func() {
+	Describe("EUS upgrade 4.20.5 to 4.22.4 via 4.21.7 with Serial worker-pool rollout and failure recovery", func() {
 		It("should fail with MCPs not updated", func() {
 			updateSpokeCV(testCtx, spokeClient, func(cv *configv1.ClusterVersion) {
 				cv.Status.History = []configv1.UpdateHistory{
@@ -754,7 +758,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			})
 
 			waitForPRUpgradeCondition(testCtx, K8SClient,
-				string(provisioningv1alpha1.CRconditionReasons.Pending),
+				string(provisioningv1alpha1.CRconditionReasons.InProgress),
 				"Upgrade to intermediate version "+eusIntermediateVersion+" triggered. Waiting for upgrade to start",
 				provisioningv1alpha1.StateProgressing,
 			)
@@ -789,7 +793,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			})
 
 			waitForPRUpgradeCondition(testCtx, K8SClient,
-				string(provisioningv1alpha1.CRconditionReasons.Pending),
+				string(provisioningv1alpha1.CRconditionReasons.InProgress),
 				"Upgrade to desired version "+ctRelease4+" triggered. Waiting for upgrade to start",
 				provisioningv1alpha1.StateProgressing,
 			)
@@ -824,7 +828,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 
 			waitForPRUpgradeCondition(testCtx, K8SClient,
 				string(provisioningv1alpha1.CRconditionReasons.InProgress),
-				"Waiting for worker pools ["+workerR740+"] to finish updating",
+				"Serial worker-pool rollout: waiting for pools ["+workerR740+"] to finish updating",
 				provisioningv1alpha1.StateProgressing,
 			)
 			assertSpokeMCPPaused(testCtx, spokeClient, workerR740, false)
@@ -834,7 +838,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 
 			waitForPRUpgradeCondition(testCtx, K8SClient,
 				string(provisioningv1alpha1.CRconditionReasons.InProgress),
-				"Waiting for worker pools ["+workerXR8620t+"] to finish updating",
+				"Serial worker-pool rollout: updated pools ["+workerR740+"]; waiting for pools ["+workerXR8620t+"] to finish updating",
 				provisioningv1alpha1.StateProgressing,
 			)
 			assertSpokeMCPPaused(testCtx, spokeClient, workerXR8620t, false)
@@ -857,6 +861,179 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			patch := client.MergeFrom(mc.DeepCopy())
 			mc.Labels["openshiftVersion"] = ctRelease4
 			Expect(K8SClient.Patch(testCtx, mc, patch)).To(Succeed())
+		})
+	})
+
+	// ================================================================
+	// Test 7: Custom staged worker-pool rollout with authorization stops
+	// ================================================================
+
+	Describe("Custom staged worker-pool rollout for upgrade 4.22.4 to 4.23.1", func() {
+		customUpgradeParams := func(through string) map[string]any {
+			workerPoolUpgrade := map[string]any{
+				"strategy": constants.WorkerPoolUpgradeStrategyCustom,
+				"stages": []map[string]any{
+					{"name": "canary", "pools": []string{workerR740}},
+					{"name": "remaining", "pools": []string{workerXR8620t}},
+				},
+			}
+			if through != "" {
+				workerPoolUpgrade["upgradeThrough"] = through
+			}
+			return map[string]any{
+				constants.TemplateParamUpgrade: map[string]any{
+					ctlrutils.UpgradeDefaultsClusterVersionKey: map[string]any{
+						"desiredUpdate": map[string]any{"version": ctRelease5},
+						"channel":       "stable-4.23",
+					},
+					ctlrutils.UpgradeWorkerPoolUpgradeKey: workerPoolUpgrade,
+				},
+			}
+		}
+
+		It("should trigger the upgrade with both worker pools paused", func() {
+			// This fake ClusterVersion supplies the target directly; no live update graph is queried.
+			updateSpokeCV(testCtx, spokeClient, func(cv *configv1.ClusterVersion) {
+				cv.Status.AvailableUpdates = []configv1.Release{{Version: ctRelease5}}
+			})
+			ensureSpokeMCP(testCtx, spokeClient, workerR740, corev1.ConditionTrue)
+			ensureSpokeMCP(testCtx, spokeClient, workerXR8620t, corev1.ConditionTrue)
+
+			updatePR(testCtx, K8SClient, ctVersion5, customUpgradeParams(""))
+			testutils.SimulateSpokeAccessReady(testCtx, K8SClient, clusterName, upgradeMSAName, upgradeMWName, timeout, interval)
+
+			waitForPRUpgradeCondition(testCtx, K8SClient,
+				string(provisioningv1alpha1.CRconditionReasons.InProgress),
+				"Upgrade to desired version "+ctRelease5+" triggered. Waiting for upgrade to start",
+				provisioningv1alpha1.StateProgressing,
+			)
+			assertSpokeMCPPaused(testCtx, spokeClient, workerR740, true)
+			assertSpokeMCPPaused(testCtx, spokeClient, workerXR8620t, true)
+
+			setSpokeMCPUpdated(testCtx, spokeClient, workerR740, corev1.ConditionFalse)
+			setSpokeMCPUpdated(testCtx, spokeClient, workerXR8620t, corev1.ConditionFalse)
+			updateSpokeCV(testCtx, spokeClient, func(cv *configv1.ClusterVersion) {
+				cv.Status.History = append([]configv1.UpdateHistory{
+					{Version: ctRelease5, State: configv1.PartialUpdate, StartedTime: metav1.Now()},
+				}, cv.Status.History...)
+				cv.Status.Conditions = setCVCondition(cv.Status.Conditions,
+					configv1.OperatorProgressing, configv1.ConditionTrue,
+					"Working towards "+ctRelease5)
+			})
+			waitForPRUpgradeCondition(testCtx, K8SClient,
+				string(provisioningv1alpha1.CRconditionReasons.InProgress),
+				"Upgrading to desired version "+ctRelease5+": Working towards "+ctRelease5,
+				provisioningv1alpha1.StateProgressing,
+			)
+		})
+
+		It("should stop after the control plane until the canary is authorized", func() {
+			updateSpokeCV(testCtx, spokeClient, func(cv *configv1.ClusterVersion) {
+				cv.Status.History[0].State = configv1.CompletedUpdate
+				cv.Status.Conditions = setCVCondition(cv.Status.Conditions,
+					configv1.OperatorProgressing, configv1.ConditionFalse,
+					"Cluster version is "+ctRelease5)
+			})
+
+			waitForPRUpgradeCondition(testCtx, K8SClient,
+				string(provisioningv1alpha1.CRconditionReasons.AwaitingStageAuthorization),
+				"awaiting authorization for stage \"canary\" (pools ["+workerR740+"])",
+				provisioningv1alpha1.StateProgressing,
+			)
+			assertSpokeMCPPaused(testCtx, spokeClient, workerR740, true)
+			assertSpokeMCPPaused(testCtx, spokeClient, workerXR8620t, true)
+			Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
+			condition := meta.FindStatusCondition(pr.Status.Conditions,
+				string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
+			Expect(condition).ToNot(BeNil())
+			Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+			upgradeStatus := pr.Status.Extensions.ClusterDetails.ClusterUpgradeStatus
+			Expect(upgradeStatus.TimeoutSuspendedAt).ToNot(BeNil())
+			Expect(upgradeStatus.AccumulatedSuspendedDuration).To(BeNil())
+			Expect(upgradeStatus.WorkerPoolUpgrade.Stages[0].State).To(Equal(
+				provisioningv1alpha1.WorkerPoolUpgradeStageStateAwaitingAuthorization))
+			Expect(upgradeStatus.WorkerPoolUpgrade.Stages[1].State).To(Equal(
+				provisioningv1alpha1.WorkerPoolUpgradeStageStateAwaitingAuthorization))
+
+			// ACM can observe the new version before the user authorizes a worker stage.
+			mc := &clusterv1.ManagedCluster{}
+			Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: clusterName}, mc)).To(Succeed())
+			patch := client.MergeFrom(mc.DeepCopy())
+			mc.Labels["openshiftVersion"] = ctRelease5
+			Expect(K8SClient.Patch(testCtx, mc, patch)).To(Succeed())
+		})
+
+		It("should run the canary and stop again before the remaining stage", func() {
+			Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
+			Expect(pr.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.
+				AccumulatedSuspendedDuration).To(BeNil())
+			updatePR(testCtx, K8SClient, "", customUpgradeParams("canary"))
+			waitForPRUpgradeCondition(testCtx, K8SClient,
+				string(provisioningv1alpha1.CRconditionReasons.InProgress),
+				"stage \"canary\" in progress; waiting for pools ["+workerR740+"] to finish updating",
+				provisioningv1alpha1.StateProgressing,
+			)
+			assertSpokeMCPPaused(testCtx, spokeClient, workerR740, false)
+			assertSpokeMCPPaused(testCtx, spokeClient, workerXR8620t, true)
+			Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
+			upgradeStatus := pr.Status.Extensions.ClusterDetails.ClusterUpgradeStatus
+			Expect(upgradeStatus.TimeoutSuspendedAt).To(BeNil())
+			Expect(upgradeStatus.AccumulatedSuspendedDuration.Duration).To(BeNumerically(">", 0))
+			Expect(upgradeStatus.WorkerPoolUpgrade.Stages[0].State).To(Equal(
+				provisioningv1alpha1.WorkerPoolUpgradeStageStateInProgress))
+			Expect(upgradeStatus.WorkerPoolUpgrade.Stages[0].StartedAt).ToNot(BeNil())
+			Expect(upgradeStatus.WorkerPoolUpgrade.Stages[1].State).To(Equal(
+				provisioningv1alpha1.WorkerPoolUpgradeStageStateAwaitingAuthorization))
+			accumulatedAfterCanaryAuthorization := upgradeStatus.AccumulatedSuspendedDuration.Duration
+
+			setSpokeMCPUpdated(testCtx, spokeClient, workerR740, corev1.ConditionTrue)
+			waitForPRUpgradeCondition(testCtx, K8SClient,
+				string(provisioningv1alpha1.CRconditionReasons.AwaitingStageAuthorization),
+				"stage \"canary\" completed; awaiting authorization for stage \"remaining\" (pools ["+workerXR8620t+"])",
+				provisioningv1alpha1.StateProgressing,
+			)
+			assertSpokeMCPPaused(testCtx, spokeClient, workerXR8620t, true)
+			Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
+			upgradeStatus = pr.Status.Extensions.ClusterDetails.ClusterUpgradeStatus
+			Expect(upgradeStatus.TimeoutSuspendedAt).ToNot(BeNil())
+			Expect(upgradeStatus.AccumulatedSuspendedDuration.Duration).To(Equal(accumulatedAfterCanaryAuthorization))
+			Expect(upgradeStatus.WorkerPoolUpgrade.Stages[0].State).To(Equal(
+				provisioningv1alpha1.WorkerPoolUpgradeStageStateCompleted))
+			Expect(upgradeStatus.WorkerPoolUpgrade.Stages[0].CompletedAt).ToNot(BeNil())
+			Expect(upgradeStatus.WorkerPoolUpgrade.Stages[1].State).To(Equal(
+				provisioningv1alpha1.WorkerPoolUpgradeStageStateAwaitingAuthorization))
+		})
+
+		It("should run the remaining stage and complete the upgrade", func() {
+			Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
+			accumulatedBeforeAuthorization := pr.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.
+				AccumulatedSuspendedDuration.Duration
+			updatePR(testCtx, K8SClient, "", customUpgradeParams("remaining"))
+			waitForPRUpgradeCondition(testCtx, K8SClient,
+				string(provisioningv1alpha1.CRconditionReasons.InProgress),
+				"stage \"remaining\" in progress; updated pools ["+workerR740+"]; waiting for pools ["+workerXR8620t+"] to finish updating",
+				provisioningv1alpha1.StateProgressing,
+			)
+			assertSpokeMCPPaused(testCtx, spokeClient, workerXR8620t, false)
+			Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
+			upgradeStatus := pr.Status.Extensions.ClusterDetails.ClusterUpgradeStatus
+			Expect(upgradeStatus.TimeoutSuspendedAt).To(BeNil())
+			Expect(upgradeStatus.AccumulatedSuspendedDuration.Duration).To(BeNumerically(">", accumulatedBeforeAuthorization))
+			Expect(upgradeStatus.WorkerPoolUpgrade.Stages[0].State).To(Equal(
+				provisioningv1alpha1.WorkerPoolUpgradeStageStateCompleted))
+			Expect(upgradeStatus.WorkerPoolUpgrade.Stages[1].State).To(Equal(
+				provisioningv1alpha1.WorkerPoolUpgradeStageStateInProgress))
+			Expect(upgradeStatus.WorkerPoolUpgrade.Stages[1].StartedAt).ToNot(BeNil())
+
+			setSpokeMCPUpdated(testCtx, spokeClient, workerXR8620t, corev1.ConditionTrue)
+			waitForPRUpgradeCondition(testCtx, K8SClient,
+				string(provisioningv1alpha1.CRconditionReasons.Completed),
+				"Upgrade to version "+ctRelease5+" completed",
+				provisioningv1alpha1.StateFulfilled,
+			)
+			Expect(K8SClient.Get(testCtx, types.NamespacedName{Name: prName}, pr)).To(Succeed())
+			Expect(pr.Status.Extensions.ClusterDetails.ClusterUpgradeStatus).To(BeNil())
+			testutils.AssertSpokeAccessCleaned(testCtx, K8SClient, clusterName, upgradeMSAName, upgradeMWName, timeout, interval)
 		})
 	})
 })
@@ -949,12 +1126,12 @@ func updatePR(ctx context.Context, k8SClient client.Client, version string, para
 }
 
 func createUpgradeCT(ctx context.Context, k8SClient client.Client,
-	resourceDir, tName, version, release, ciDefaultsCMName string) {
+	version, release, ciDefaultsCMName string) {
 	baseCT, err := testutils.LoadYAML[provisioningv1alpha1.ClusterTemplate](
-		filepath.Join(resourceDir, "ct-std-du-v1.yaml"))
+		filepath.Join(cvUpgradeResourceDir, "ct-std-du-v1.yaml"))
 	Expect(err).ToNot(HaveOccurred())
 
-	baseCT.Name = provisioningcontrollers.GetClusterTemplateRefName(tName, version)
+	baseCT.Name = provisioningcontrollers.GetClusterTemplateRefName(ctName, version)
 	baseCT.Spec.Version = version
 	baseCT.Spec.Release = release
 	baseCT.Spec.TemplateDefaults.ClusterInstanceDefaults = ciDefaultsCMName
@@ -1037,6 +1214,23 @@ func ensureSpokeMCP(
 	Expect(spokeClient.Update(ctx, mcp)).To(Succeed())
 }
 
+// setSpokeMCPUpdated simulates MCO status changes without changing the pool's pause state.
+func setSpokeMCPUpdated(ctx context.Context, spokeClient client.Client, name string, updated corev1.ConditionStatus) {
+	mcp := &mcfgv1.MachineConfigPool{}
+	Expect(spokeClient.Get(ctx, types.NamespacedName{Name: name}, mcp)).To(Succeed())
+	for i := range mcp.Status.Conditions {
+		if mcp.Status.Conditions[i].Type != mcfgv1.MachineConfigPoolUpdated {
+			continue
+		}
+		mcp.Status.Conditions[i].Status = updated
+		mcp.Status.Conditions[i].LastTransitionTime = metav1.Now()
+		mcp.Status.ObservedGeneration = mcp.Generation
+		Expect(spokeClient.Update(ctx, mcp)).To(Succeed())
+		return
+	}
+	Fail("MachineConfigPool " + name + " has no Updated condition")
+}
+
 func assertSpokeMCPPaused(ctx context.Context, spokeClient client.Client, name string, expectedPaused bool) {
 	mcp := &mcfgv1.MachineConfigPool{}
 	Expect(spokeClient.Get(ctx, types.NamespacedName{Name: name}, mcp)).To(Succeed())
@@ -1044,15 +1238,15 @@ func assertSpokeMCPPaused(ctx context.Context, spokeClient client.Client, name s
 }
 
 func createCIDefaultsCM(ctx context.Context, k8SClient client.Client,
-	resourceDir, name, baseRelease, newRelease string) {
+	name, newRelease string) {
 	baseCM, err := testutils.LoadYAML[corev1.ConfigMap](
-		filepath.Join(resourceDir, "clusterinstance-defaults-v1.yaml"))
+		filepath.Join(cvUpgradeResourceDir, "clusterinstance-defaults-v1.yaml"))
 	Expect(err).ToNot(HaveOccurred())
 
 	baseCM.Name = name
 	ciDefaults := strings.ReplaceAll(
 		baseCM.Data[ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey],
-		baseRelease, newRelease)
+		ctRelease1, newRelease)
 	baseCM.Data[ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey] = ciDefaults
 	Expect(k8SClient.Create(ctx, baseCM)).To(Succeed())
 }

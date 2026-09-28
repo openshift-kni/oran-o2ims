@@ -62,29 +62,31 @@ var CTconditionReasons = struct {
 
 // The following constants define the different reasons that conditions will be set for ProvisioningRequest
 var CRconditionReasons = struct {
-	NotApplied               ConditionReason
-	ClusterNotReady          ConditionReason
-	Completed                ConditionReason
-	Failed                   ConditionReason
-	InProgress               ConditionReason
-	Missing                  ConditionReason
-	OutOfDate                ConditionReason
-	Pending                  ConditionReason
-	PreconditionChecksFailed ConditionReason
-	TimedOut                 ConditionReason
-	Unknown                  ConditionReason
+	NotApplied                 ConditionReason
+	ClusterNotReady            ConditionReason
+	Completed                  ConditionReason
+	Failed                     ConditionReason
+	InProgress                 ConditionReason
+	Missing                    ConditionReason
+	OutOfDate                  ConditionReason
+	Pending                    ConditionReason
+	PreconditionChecksFailed   ConditionReason
+	TimedOut                   ConditionReason
+	Unknown                    ConditionReason
+	AwaitingStageAuthorization ConditionReason
 }{
-	NotApplied:               "NotApplied",
-	ClusterNotReady:          "ClusterNotReady",
-	Completed:                "Completed",
-	Failed:                   "Failed",
-	InProgress:               "InProgress",
-	Missing:                  "Missing",
-	OutOfDate:                "OutOfDate",
-	Pending:                  "Pending",
-	PreconditionChecksFailed: "PreconditionChecksFailed",
-	TimedOut:                 "TimedOut",
-	Unknown:                  "Unknown",
+	NotApplied:                 "NotApplied",
+	ClusterNotReady:            "ClusterNotReady",
+	Completed:                  "Completed",
+	Failed:                     "Failed",
+	InProgress:                 "InProgress",
+	Missing:                    "Missing",
+	OutOfDate:                  "OutOfDate",
+	Pending:                    "Pending",
+	PreconditionChecksFailed:   "PreconditionChecksFailed",
+	TimedOut:                   "TimedOut",
+	Unknown:                    "Unknown",
+	AwaitingStageAuthorization: "AwaitingStageAuthorization",
 }
 
 // FatalPRconditionTypes is a list of ProvisioningRequest conditions
