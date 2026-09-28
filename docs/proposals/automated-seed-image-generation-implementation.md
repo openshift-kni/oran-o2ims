@@ -25,8 +25,8 @@ be produced for IBU without building installation media.
 
 | Area | Current code | Planned change |
 | --- | --- | --- |
-| PR API and conditions | `api/provisioning/v1alpha1/provisioningrequest_types.go`, `conditions.go` | Add `SeedGenerationStatus` under `ClusterDetails`, `ConfigMapKeyRef`, `SeedGenerationCompleted`, and the missing reasons. Keep seed failures out of generic upgrade condition handling. |
-| Schema and admission | `api/provisioning/v1alpha1/provisioningrequest_validation.go`, `provisioningrequest_webhook.go` | Keep restricted raw input validation; reject terminal-run edits. Validate the merged config separately. |
+| PR API and conditions | `api/provisioning/v1alpha1/provisioningrequest_types.go`, `conditions.go` | Add seed status, snapshot UIDs, CA reference, condition and reasons. Isolate seed failures from upgrade conditions. |
+| Schema and admission | `api/provisioning/v1alpha1/provisioningrequest_validation.go`, `provisioningrequest_webhook.go` | Keep restricted raw input validation; reject seed-input edits after run start. Validate the merged config separately. |
 | CT validation | `internal/controllers/clustertemplate_controller.go` | Recognize the third type; validate seed defaults against a full internal schema while preserving CV/IBGU behavior. |
 | Merge and parse | `internal/controllers/provisioningrequest_upgrade.go`, `internal/controllers/utils/constants.go` | Parse `seedGeneration`; use the existing deep merge and full schema for effective config. |
 | Reconcile dispatch | `internal/controllers/provisioningrequest_controller.go`, `provisioningrequest_clusterconfig.go`, `provisioningrequest_setup.go` | Route seed runs before upgrades and ACM-dependent phases; watch or poll the Job. |
@@ -75,13 +75,18 @@ before controller merge; it must not require template-owned fields from a
 partial override. This places full validation at the actual post-merge point
 without changing the accepted two-schema behavior.
 
-Add status fields exactly as specified by the proposal: `StartedAt`,
-`DetachmentStarted`, `ReleaseImageDigest`, `SeedImage`, `ISOURL`, `ISODigest`,
-and `ISOServerCACertRef`. Persist the release digest before ACM removal and
-the seed image digest before starting the ISO Job. Conditions encode the
-current phase. A terminal `Completed`, `Failed`, `TimedOut`, or
+Add the proposal's status fields: `StartedAt`, `DetachmentStarted`,
+`ReleaseImageDigest`, `SeedImage`, `ISOURL`, `ISODigest`, and
+`ISOServerCACertRef`. Also add `InputSnapshotResourceUIDs`, a map of the
+per-run ConfigMap and Secret object UIDs. This implementation-only status
+field pins the exact frozen objects without exposing their contents. Persist
+the release digest and complete input snapshot before ACM removal, and the
+seed image digest before starting the ISO Job. Conditions encode the current
+phase. A terminal `Completed`, `Failed`, `TimedOut`, or
 `PreconditionChecksFailed` state never triggers a second run; a new PR is
-required. The webhook rejects a late `seedGeneration` edit with that guidance.
+required. The webhook rejects changes to the PR's `seedGeneration` input after
+`StartedAt` is set, since the run uses its frozen inputs and a later edit would
+otherwise appear to take effect.
 
 Use the existing `clusterUpgradeTimeout` input, with seed defaults of two
 hours without `liveISO` and three hours with it. Calculate remaining time
@@ -103,24 +108,30 @@ the ISO Job's `activeDeadlineSeconds` to that remaining budget.
    the seed handler runs. In particular, policy configuration currently runs
    before upgrade dispatch. After detachment, skip policy compliance checks
    and leave their last pre-detachment status intact.
-3. Phase 1 validates the effective config, ZTP/version, LCA, OADP, shared
-   `/var/lib/containers`, registry push access, and, when configured, ISO
-   credentials, HTTPS trust, release accessibility, mirror behavior, and
-   installer extraction. Use a short-lived preflight Pod for tools absent
-   from the operator image. Persist the immutable release digest before
-   moving to Phase 2. Fail before detachment when a precondition is unmet.
-4. Phase 2 obtains and tests the exact spoke admin kubeconfig. Persist
-   `DetachmentStarted=true` **before** deleting the first addon CR. Delete
-   every hub `ManagedClusterAddOn` in the spoke namespace, then the spoke
-   `Klusterlet` CR. Wait until agent namespaces, pods, and identity secrets
-   are gone. The seed CT supplies `observability: disabled` at import time.
-5. Phase 3 creates or adopts the spoke `seedgen` Secret and singleton
-   `SeedGenerator` (`seedimage`), monitors LCA conditions with requeue, and
-   records only the digest reported by the successful push. A registry lookup
-   of the mutable tag does not prove which image this run published.
-6. When `liveISO` is absent, proceed to cleanup. Otherwise Phase 4 creates
-   per-run Secrets and mirror/CA ConfigMaps in the operator namespace, a
-   roughly 20 GiB PVC, and a Job using a digest-pinned tool image. The Job
+3. Phase 1 reads the effective config and source credentials into one
+   in-memory input set, then validates that set against ZTP/version, LCA,
+   OADP, shared `/var/lib/containers`, registry push access, and, when
+   configured, ISO credentials, HTTPS trust, release accessibility, mirror
+   behavior, and installer extraction. Persist an immutable per-run snapshot
+   of the validated config, derived mirror/CA data, and credential copies in
+   the operator namespace; the short-lived preflight Pod uses those copies.
+   Persist the immutable release digest before moving to Phase 2. Fail and
+   scrub partial snapshots before detachment when a precondition is unmet.
+4. Phase 2 obtains and tests the exact spoke admin kubeconfig, then includes
+   its bytes in an immutable per-run hub Secret. Require the complete input
+   snapshot before persisting `DetachmentStarted=true` **before** deleting the
+   first addon CR. Delete every hub `ManagedClusterAddOn` in the spoke
+   namespace, then the spoke `Klusterlet` CR. Wait until agent namespaces,
+   pods, and identity secrets are gone. The seed CT supplies
+   `observability: disabled` at import time.
+5. Phase 3 creates or adopts the spoke `seedgen` Secret from the frozen hub
+   credential copy and singleton `SeedGenerator` (`seedimage`), monitors LCA
+   conditions with requeue, and records only the digest reported by the
+   successful push. A registry lookup of the mutable tag does not prove
+   which image this run published.
+6. When `liveISO` is absent, proceed to cleanup. Otherwise Phase 4 uses the
+   frozen per-run Secrets and mirror/CA ConfigMap, then creates a roughly
+   20 GiB PVC and a Job using the operator image by digest. The Job
    extracts the installer from `ReleaseImageDigest`, builds an
    `ImageBasedInstallationConfig` using the pinned `SeedImage` and generic
    IBI callback Ignition override, builds the ISO,
@@ -128,11 +139,12 @@ the ISO Job's `activeDeadlineSeconds` to that remaining budget.
    SSH. It returns only small, structured non-secret results, such as digest
    and resolved URL, through the pod termination message. The controller
    records `ISOURL` only after path and host/content binding checks pass.
-7. Phase 5 deletes credential copies, Job, PVC, preflight Pod, mirror
-   ConfigMap, spoke SeedGenerator, and `seedgen` Secret on success. If an
-   HTTPS CA was provided, materialize `ca-bundle.crt` in a stable ConfigMap
-   and record `ISOServerCACertRef` for downstream consumers. On
-   failure or timeout, scrub credential-bearing resources immediately and
+7. If an HTTPS CA was provided, Phase 5 first materializes `ca-bundle.crt`
+   from the frozen CA bytes in a stable ConfigMap and records
+   `ISOServerCACertRef` for downstream consumers. It then deletes the
+   input/mirror ConfigMap, all credential copies, Job, PVC, preflight Pod,
+   spoke SeedGenerator, and `seedgen` Secret on success. On failure or timeout,
+   scrub credential-bearing resources immediately and
    retain only bounded, redacted diagnostics for a finite TTL. The existing
    PR finalizer performs the same scrub before NAR deletion when the PR is
    deleted mid-run. The cluster remains running and detached until the
@@ -153,11 +165,49 @@ The persisted condition and status decide recovery after a controller restart:
 | Persisted state | Next reconcile |
 | --- | --- |
 | No seed condition, ZTP Done, `seedGeneration` present | Start Phase 1; set `StartedAt` and `Validating`. |
-| `Validating`, `DetachmentStarted=false` | Repeat safe preflight checks; continue only after release pinning succeeds. |
-| `CleaningACMResources`, `DetachmentStarted=true` | Resume deletion and teardown polling; never re-enter normal ACM reconciliation. |
-| `InProgress`, no `SeedImage` digest | Adopt or create LCA resources, then poll SeedGenerator. |
-| `BuildingISO`, `SeedImage` present | Adopt or create the PVC, Secrets, ConfigMap, and Job; inspect Job result. |
+| `Validating`, `DetachmentStarted=false` | Adopt complete Phase 1 copies and repeat preflight against them; discard incomplete owned copies and start Phase 1 again. |
+| `CleaningACMResources`, `DetachmentStarted=false` | Validate and copy the admin kubeconfig, then confirm all frozen inputs before marking detachment and deleting addons. |
+| `CleaningACMResources`, `DetachmentStarted=true` | Use only the snapshot; resume deletion and teardown polling; never re-enter normal ACM reconciliation. |
+| `InProgress`, no `SeedImage` digest | Use the snapshot to adopt or create LCA resources, then poll SeedGenerator. |
+| `BuildingISO`, `SeedImage` present | Use frozen inputs to adopt or create the PVC and Job; inspect Job result. |
 | Terminal condition | Scrub any remaining transient resources; never create a new seed run for this PR. A pre-detachment failure may continue normal cluster reconciliation. |
+
+### Frozen inputs and recovery
+
+Before the detachment marker is written, store the validated effective
+`seedGeneration` configuration, CT release, timeout, pinned release digest,
+resolved mirror mappings, and CA trust in an immutable per-run ConfigMap in
+the operator namespace. Store only the required validated credential bytes in
+immutable per-run Secrets there: seed push auth, effective ISO pull auth, ISO
+upload credentials and trust material when `liveISO` is present, and the spoke
+admin kubeconfig selected by the `ClusterDeployment`. Do not put credential
+bytes in PR status or a ConfigMap. The short-lived preflight Pod and later ISO
+Job mount only the copies they need; the spoke `seedgen` Secret is made from
+the seed-auth copy. Derive the stable ISO-server CA ConfigMap from the frozen
+CA bytes, not from a later read of the source Secret.
+
+Use deterministic names and PR UID ownership checks for this snapshot. Read
+each source object before validating it, and create its copy from those same
+in-memory bytes. A restart before detachment adopts complete, immutable
+Phase 1 copies and re-runs any unfinished preflight against them. Incomplete
+Phase 1 copies are deleted and rebuilt from newly read, revalidated inputs
+while the spoke is still attached. Phase 2 adopts an existing admin-kubeconfig
+copy or validates and creates it before any addon deletion. Confirm the full
+snapshot and, when `liveISO` is present, the persisted release digest before
+writing `DetachmentStarted=true` and the snapshot object UIDs in one status
+update. On restart, require the persisted release digest to match the frozen
+value. After the marker, never re-read CT defaults, PR overrides, source
+Secrets, or hub mirror/CA objects to drive this run. Compare each owned,
+immutable object's UID against status on recovery. Missing or replaced
+snapshot objects fail an active run and trigger credential cleanup; they are
+never filled from changed source data.
+
+Changing a ClusterTemplate or source Secret during an active run therefore
+cannot alter Phase 3, Phase 4, or restart behavior. Reject PR
+`seedGeneration` edits after `StartedAt` so users are not shown accepted
+changes that the running operation will ignore. Creating ISO credential copies
+earlier extends their lifetime; do not mount the upload copy before the ISO
+Job, and scrub all copies on every terminal, timeout, or deletion path.
 
 ## ISO-specific integration
 
@@ -168,9 +218,9 @@ The merged proposal requires an operator-owned, immutable-digest image with
 to be distinct from the manager image. In either design, the controller uses
 the Kubernetes API to create a Phase 1 preflight Pod and a Phase 4 ISO Job.
 Those pods run the tools inside their own container; the manager does not run
-`oc` or copy binaries between images. They use the same script, credentials,
-permissions, and workspace in either design. Only the container image
-reference changes.
+`oc` or copy binaries between images. The image packaging choice does not
+change the Job script, credentials, permissions, or workspace. Only the
+container image reference changes.
 
 The original implementation plan kept the production manager image distroless
 and added a dedicated ISO builder image, for example through
@@ -216,10 +266,10 @@ connected, IDMS, ICSP-only, ITMS-only, and untrusted mirror cases.
 Credentials referenced by `seedAuthSecretRef`, `uploadSecretRef`, and optional
 `pullSecretRef` always resolve in the ClusterTemplate namespace. The fallback
 ISO pull secret merges the hub pull secret with seed registry credentials;
-Phase 1 checks access to both the seed and release registries. Copy only the
-resolved per-run credentials into the Job namespace. Do not put credentials
-in command arguments, condition messages, pod termination messages, or
-unredacted retained logs.
+Phase 1 checks access to both the seed and release registries and freezes the
+effective pull secret with the other per-run credentials in the Job namespace.
+Do not put credentials in command arguments, condition messages, pod
+termination messages, or unredacted retained logs.
 
 The proposal requires the SSH upload path and public HTTPS URL to address
 the same bytes. Before implementing Phase 4, specify a checkable mapping
@@ -257,14 +307,14 @@ access to an ACM/MCE seed SNO, a registry, and an ISO server.
 | Package | Main files and deliverable | Go LOC | Test LOC | Other LOC | Effort |
 | --- | --- | ---: | ---: | ---: | ---: |
 | 1. Contract and API | PR types/conditions, internal schema, CT validation, parse/merge, samples | ~250 | ~300 | ~25 | 2–3 days |
-| 2. Dispatch and durability | Reconciler fast path, one-shot gate, timeout, webhook, finalizer wiring | ~325 | ~325 | — | 3–4 days |
-| 3. Preflight | Spoke/registry/TLS/release checks, digest pinning, installer Pod | ~400 | ~350 | — | 3–5 days |
+| 2. Dispatch and durability | Reconciler fast path, one-shot gate, timeout, active-run webhook, finalizer wiring | ~350 | ~350 | — | 3–5 days |
+| 3. Preflight and input snapshot | Spoke/registry/TLS/release checks, frozen config and credentials, digest pinning, installer Pod | ~500 | ~500 | ~20 | 4–6 days |
 | 4. ACM and LCA | Exact admin client, teardown, SeedGenerator lifecycle, cleanup, RBAC | ~450 | ~400 | ~30 | 4–6 days |
-| 5. Live ISO | Mirror/CA, credential copies, PVC/Job, operator image tools, upload verification | ~900 | ~600 | ~70 | 6–9 days |
+| 5. Live ISO | Frozen credential mounts, PVC/Job, operator image tools, upload verification | ~900 | ~600 | ~70 | 6–9 days |
 | 6. Integration and guidance | Cross-phase tests, user guide, sample manifests, release wiring | ~100 | ~200 | ~200 | 2–3 days |
-| **Total** | | **~2,425** | **~2,175** | **~325** | **20–30 days** |
+| **Total** | | **~2,550** | **~2,350** | **~345** | **21–32 days** |
 
-The midpoint is about **4,900 handwritten lines**, using the existing operator
+The midpoint is about **5,200 handwritten lines**, using the existing operator
 image for the ISO Job. A dedicated image would add roughly 50–100 LOC and
 1–2 days of image build and pipeline work. The merged proposal's
 ~2,900-line estimate is likely low because this plan includes the restricted
@@ -293,7 +343,12 @@ trigger inactive until its full path and cleanup are ready.
   malformed effective config.
 - State tests: equal and both mismatched OCP version directions; restart
   after each create/status write; own-resource adoption; foreign-name
-  collision; one-shot terminal behavior; timeout and deletion cleanup.
+  collision; one-shot terminal behavior; active-run edit rejection; timeout
+  and deletion cleanup.
+- Snapshot tests: CT defaults, PR input, source Secret data, and hub mirror/CA
+  changes after preflight do not alter Phase 3, Phase 4, or restart behavior;
+  a partial pre-detachment snapshot is discarded and revalidated; a missing
+  or altered post-detachment snapshot fails and scrubs credentials.
 - ACM tests: admin kubeconfig selected by ClusterDeployment reference;
   no destructive action when client setup fails; durable detachment marker
   before addon deletion; all addons and Klusterlet removed; no policy
@@ -322,18 +377,13 @@ need owners and tracking but are outside this repository LOC estimate.
    deployed with the target OCP reports an immutable digest produced by its
    push. If it does not, coordinate an LCA API change; a later registry tag
    lookup does not meet the proposal's integrity rule.
-2. **Effective config stability:** a PR override or ClusterTemplate default
-   can change between preflight and ISO upload. Choose a durable way to freeze
-   the effective non-secret configuration at run start, or reject relevant
-   edits once `StartedAt` is set. The proposal explicitly requires rejection
-   after terminal state; active-run immutability needs to be settled too.
-3. **ISO path binding:** define the remote document-root convention or add a
+2. **ISO path binding:** define the remote document-root convention or add a
    trusted template field that makes `remotePath` to `urlBase` mapping
    verifiable. Keep the mandatory HTTPS hash path for different hosts.
-4. **Operator image toolchain:** confirm the final base and required tools work
+3. **Operator image toolchain:** confirm the final base and required tools work
    as non-root on supported architectures, and that the released `IMAGE`
    reference remains the pinned manager digest. Assess the size and security
    cost of carrying these tools in every service before retaining the
    single-image design.
-5. **ACM teardown proof:** validate Klusterlet and addon deletion against the
+4. **ACM teardown proof:** validate Klusterlet and addon deletion against the
    target ACM/MCE version before relying on it to produce a clean seed.
