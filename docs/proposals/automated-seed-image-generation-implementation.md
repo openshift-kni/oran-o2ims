@@ -33,7 +33,7 @@ be produced for IBU without building installation media.
 | Spoke access | `internal/service/common/clients/k8s/k8s.go`, `internal/spokeclient/spokeclient.go` | Read the exact ClusterDeployment admin-kubeconfig Secret; stop using MSA access after detachment. |
 | Cleanup and permissions | `internal/controllers/provisioningrequest_controller.go`, RBAC markers, generated `config/rbac/role.yaml` | Scrub seed resources before NAR deletion; regenerate and inspect hub permissions. |
 | User guidance | `docs/user-guide/ibi-based-cluster-provisioning.md`, `docs/samples/` | Add CT, PR, and Secret samples; explain seed-only and seed-plus-ISO outcomes, terminal failures, digest and URL status, and manual PR deletion to reclaim hardware. |
-| Tool image | `Dockerfile.iso-builder`, `Makefile`, `config/manager/manager.yaml`, `telco5g-konflux/` | Build, publish, pin, and mirror the ISO Job image. |
+| ISO toolchain | `Dockerfile`, `config/manager/manager.yaml`, release overlay | Add the required tools to the operator image and run the ISO Job from the same digest. |
 
 New controller files should remain in `internal/controllers/` alongside the
 existing ProvisioningRequest code:
@@ -161,15 +161,49 @@ The persisted condition and status decide recovery after a controller restart:
 
 ## ISO-specific integration
 
-The current manager image is distroless and has no `oc`, shell, SSH, or SCP.
-Add a separate ISO-builder image definition (for example
-`Dockerfile.iso-builder`) and a build/publication target in `Makefile`.
-Publish and reference it by immutable digest through a manager environment
-variable and bundle `relatedImages`; add the matching release pipeline
-metadata under `telco5g-konflux/`. Phase 1 checks that the image can execute
-the required tools and extract `openshift-install` before allocating the
-workspace PVC. The image build and release wiring are part of this feature,
-not an assumed external dependency.
+### ISO Job image decision
+
+The merged proposal requires an operator-owned, immutable-digest image with
+`oc`, POSIX shell, `ssh`, `scp`, and `sha256sum`. It does not require that image
+to be distinct from the manager image. In either design, the controller uses
+the Kubernetes API to create a Phase 1 preflight Pod and a Phase 4 ISO Job.
+Those pods run the tools inside their own container; the manager does not run
+`oc` or copy binaries between images. They use the same script, credentials,
+permissions, and workspace in either design. Only the container image
+reference changes.
+
+The original implementation plan kept the production manager image distroless
+and added a dedicated ISO builder image, for example through
+`Dockerfile.iso-builder`. The preflight Pod and ISO Job would use its digest.
+This would require another build and publication target, release pinning and
+`relatedImages` entry, disconnected mirroring, and ongoing scanning and
+updates. The operator image would remain smaller and without shell or CLI
+tools; nodes would pull the ISO image only when an ISO run is scheduled.
+
+| Consideration | Dedicated ISO image: original plan | Shared operator image: planned |
+| --- | --- | --- |
+| Job execution | Job and preflight Pod use a second image digest. | Job and preflight Pod use the operator image digest. |
+| Build and release | Build, publish, scan, pin, and mirror a second artifact. | Update and scan the existing artifact; use its existing publication and mirroring path. |
+| Routine footprint | Manager and service pods stay small and distroless; ISO tools are pulled only where needed. | Every pod using the operator image carries the tools and their dependencies. |
+| Security and maintenance | Manager has fewer available executables; the second image has its own package updates and compatibility checks. | More executables and packages are present in long-running services; one image and one update stream. |
+| Development workflow | Developers build or fetch two images and provide the ISO digest. | Developers build or fetch one image; the Job uses that same digest. |
+
+**Decision: use the shared operator image.** Change the final stage of
+`Dockerfile` from distroless to a supported CLI-capable base, copy the manager
+binary, and ensure all required tools work as non-root. The `ose-cli-rhel9`
+base already used by `Dockerfile.must-gather` is a candidate; verify its tool
+contents, supported architectures, and security updates before choosing it.
+The manager and other services already set `/usr/bin/oran-o2ims` as their
+command; the Job overrides the entrypoint with its build script.
+
+The release overlay already pins the manager image by digest in the Deployment
+and `IMAGE` environment variable and lists it in `relatedImages`. Use that
+same digest for the Job and verify it is immutable before creating the Job.
+The Job still needs its own credentials, permissions, workspace, and Phase 1
+tool and installer checks. Disconnected installations mirror the existing
+operator image as they do today. Revisit a dedicated image only if measured
+image footprint or a concrete security requirement warrants the second
+artifact and its release workflow.
 
 Mirror resolution reads hub IDMS, ITMS, ICSP, and additionalTrustedCA data.
 Keep ICSP's `repositoryDigestMirrors` field and `operator.openshift.io` RBAC
@@ -226,13 +260,15 @@ access to an ACM/MCE seed SNO, a registry, and an ISO server.
 | 2. Dispatch and durability | Reconciler fast path, one-shot gate, timeout, webhook, finalizer wiring | ~325 | ~325 | — | 3–4 days |
 | 3. Preflight | Spoke/registry/TLS/release checks, digest pinning, installer Pod | ~400 | ~350 | — | 3–5 days |
 | 4. ACM and LCA | Exact admin client, teardown, SeedGenerator lifecycle, cleanup, RBAC | ~450 | ~400 | ~30 | 4–6 days |
-| 5. Live ISO | Mirror/CA, credential copies, PVC/Job, tool image, upload verification | ~900 | ~600 | ~120 | 6–9 days |
+| 5. Live ISO | Mirror/CA, credential copies, PVC/Job, operator image tools, upload verification | ~900 | ~600 | ~70 | 6–9 days |
 | 6. Integration and guidance | Cross-phase tests, user guide, sample manifests, release wiring | ~100 | ~200 | ~200 | 2–3 days |
-| **Total** | | **~2,425** | **~2,175** | **~375** | **20–30 days** |
+| **Total** | | **~2,425** | **~2,175** | **~325** | **20–30 days** |
 
-The midpoint is about **5,000 handwritten lines**. The merged proposal's
+The midpoint is about **4,900 handwritten lines**, using the existing operator
+image for the ISO Job. A dedicated image would add roughly 50–100 LOC and
+1–2 days of image build and pipeline work. The merged proposal's
 ~2,900-line estimate is likely low because this plan includes the restricted
-schema refactor, preflight Pod, ISO tool image and release wiring, restart and
+schema refactor, preflight Pod, operator image toolchain, restart and
 cleanup tests, and content verification. An upstream LCA change, a new API
 field for path binding, or a custom image build pipeline would add effort.
 The effort estimate includes a short contract check in package 1, but excludes
@@ -294,8 +330,10 @@ need owners and tracking but are outside this repository LOC estimate.
 3. **ISO path binding:** define the remote document-root convention or add a
    trusted template field that makes `remotePath` to `urlBase` mapping
    verifiable. Keep the mandatory HTTPS hash path for different hosts.
-4. **Tool image publication:** select the supported base image and where its
-   immutable digest enters the bundle/release pipeline. Include disconnected
-   mirroring of this image in the deployment plan.
+4. **Operator image toolchain:** confirm the final base and required tools work
+   as non-root on supported architectures, and that the released `IMAGE`
+   reference remains the pinned manager digest. Assess the size and security
+   cost of carrying these tools in every service before retaining the
+   single-image design.
 5. **ACM teardown proof:** validate Klusterlet and addon deletion against the
    target ACM/MCE version before relying on it to produce a clean seed.
