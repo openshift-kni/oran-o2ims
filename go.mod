@@ -48,13 +48,13 @@ require (
 	golang.org/x/sync v0.23.0
 	golang.org/x/term v0.46.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.37.0
-	k8s.io/apiextensions-apiserver v0.37.0
-	k8s.io/apimachinery v0.37.0
-	k8s.io/apiserver v0.37.0
-	k8s.io/client-go v0.37.0
+	k8s.io/api v0.37.1
+	k8s.io/apiextensions-apiserver v0.37.1
+	k8s.io/apimachinery v0.37.1
+	k8s.io/apiserver v0.37.1
+	k8s.io/client-go v0.37.1
 	k8s.io/klog/v2 v2.140.0
-	k8s.io/kubectl v0.37.0
+	k8s.io/kubectl v0.37.1
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3
 	open-cluster-management.io/api v1.3.1-0.20260709055002-403378b57558
 	open-cluster-management.io/governance-policy-propagator v0.20.0
@@ -187,10 +187,10 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gorm.io/gorm v1.31.2 // indirect
-	k8s.io/cli-runtime v0.37.0 // indirect
-	k8s.io/component-base v0.37.0 // indirect
+	k8s.io/cli-runtime v0.37.1 // indirect
+	k8s.io/component-base v0.37.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20260821135717-be32def86098 // indirect
-	k8s.io/streaming v0.37.0 // indirect
+	k8s.io/streaming v0.37.1 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.36.0 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/kustomize/api v0.21.1 // indirect
