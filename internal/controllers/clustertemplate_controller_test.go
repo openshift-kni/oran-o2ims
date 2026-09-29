@@ -2089,6 +2089,50 @@ var _ = Describe("validateUpgradeParametersSchema", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 
+	It("should accept a strict seedGeneration schema with no PR overrides", func() {
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{"seedGeneration":{"type":"object","additionalProperties":false}}}}}`)
+		Expect(validateUpgradeParametersSchema(schema, true)).To(Succeed())
+	})
+
+	It("should accept a seedImage-only PR override", func() {
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{"seedGeneration":{"type":"object","additionalProperties":false,"properties":{"seedImage":{"type":"string"}}}}}}}`)
+		Expect(validateUpgradeParametersSchema(schema, true)).To(Succeed())
+	})
+
+	It("should reject a seedGeneration schema with an open upgradeParameters parent", func() {
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"seedGeneration":{"type":"object","additionalProperties":false}}}}}`)
+		Expect(validateUpgradeParametersSchema(schema, true)).To(MatchError(ContainSubstring("additionalProperties")))
+	})
+
+	It("should reject a seedGeneration schema with parent patternProperties", func() {
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"patternProperties":{".*":{}},"properties":{"seedGeneration":{"type":"object","additionalProperties":false}}}}}`)
+		Expect(validateUpgradeParametersSchema(schema, true)).To(MatchError(ContainSubstring("patternProperties")))
+	})
+
+	It("should reject a seedGeneration schema with a parent reference", func() {
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"$ref":"#/definitions/openUpgrade","properties":{"seedGeneration":{"type":"object","additionalProperties":false}}}}}`)
+		Expect(validateUpgradeParametersSchema(schema, true)).To(MatchError(ContainSubstring("$ref")))
+	})
+
+	It("should reject a seedGeneration schema with a root reference", func() {
+		schema := []byte(`{"type":"object","$ref":"#/definitions/openRoot","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{"seedGeneration":{"type":"object","additionalProperties":false}}}}}`)
+		Expect(validateUpgradeParametersSchema(schema, true)).To(MatchError(ContainSubstring("$ref")))
+	})
+
+	It("should reject a seedGeneration schema that exposes credential references", func() {
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{"seedGeneration":{"type":"object","additionalProperties":false,"properties":{"seedAuthSecretRef":{"type":"object"}}}}}}}`)
+		err := validateUpgradeParametersSchema(schema, true)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("template-owned field"))
+	})
+
+	It("should reject a seedGeneration schema combined with an upgrade schema", func() {
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{"seedGeneration":{"type":"object","additionalProperties":false},"clusterVersion":{"type":"object"}}}}}`)
+		err := validateUpgradeParametersSchema(schema, true)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("exactly one operation type"))
+	})
+
 	It("should reject when upgradeParameters has both clusterVersion and imageBasedGroupUpgrade", func() {
 		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"clusterVersion":{"type":"object"},"imageBasedGroupUpgrade":{"type":"object"}}}}}`)
 		err := validateUpgradeParametersSchema(schema, false)
@@ -2128,6 +2172,49 @@ var _ = Describe("validateUpgradeParametersSchema", func() {
 		err := validateUpgradeParametersSchema(schema, true)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("must define either"))
+	})
+})
+
+var _ = Describe("seed generation ClusterTemplate defaults", func() {
+	var task *clusterTemplateReconcilerTask
+
+	BeforeEach(func() {
+		task = &clusterTemplateReconcilerTask{
+			object: &provisioningv1alpha1.ClusterTemplate{
+				Spec: provisioningv1alpha1.ClusterTemplateSpec{
+					TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
+						UpgradeDefaults: runtime.RawExtension{Raw: []byte(`{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"}}}`)},
+					},
+					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{"seedGeneration":{"type":"object","additionalProperties":false,"properties":{"seedImage":{"type":"string"}}}}}}}`)},
+				},
+			},
+		}
+	})
+
+	It("validates template-owned fields against the effective schema", func() {
+		Expect(task.validateUpgradeDefaults()).To(Succeed())
+	})
+
+	It("rejects missing required template defaults", func() {
+		task.object.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22"}}`)
+		err := task.validateUpgradeDefaults()
+		Expect(err).To(HaveOccurred())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("seedAuthSecretRef"))
+	})
+
+	It("rejects unknown template-owned fields", func() {
+		task.object.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"},"seedimage":"typo"}}`)
+		err := task.validateUpgradeDefaults()
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("seedimage"))
+	})
+
+	It("rejects mixed seed and upgrade defaults", func() {
+		task.object.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{},"clusterVersion":{}}`)
+		err := task.validateUpgradeDefaults()
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("only one operation type"))
 	})
 })
 

@@ -60,6 +60,48 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 		newPr = oldPr.DeepCopy()
 	})
 
+	Describe("unsupported seed generation", func() {
+		BeforeEach(func() {
+			ct := &ClusterTemplate{
+				ObjectMeta: metav1.ObjectMeta{Name: "seed-template.v1", Namespace: "default"},
+				Spec: ClusterTemplateSpec{
+					Name: "seed-template", Version: "v1",
+					TemplateDefaults: TemplateDefaults{
+						UpgradeDefaults: runtime.RawExtension{Raw: []byte(`{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"}}}`)},
+					},
+					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testTemplate)},
+				},
+				Status: ClusterTemplateStatus{Conditions: []metav1.Condition{{
+					Type: string(CTconditionTypes.Validated), Status: metav1.ConditionTrue,
+				}}},
+			}
+			Expect(fakeClient.Create(ctx, ct)).To(Succeed())
+			newPr.Spec.TemplateName = "seed-template"
+			newPr.Spec.TemplateVersion = "v1"
+		})
+
+		It("rejects creation when seed generation comes from template defaults", func() {
+			_, err := validator.ValidateCreate(ctx, newPr)
+			Expect(err).To(MatchError(ContainSubstring(SeedGenerationUnsupportedMessage)))
+		})
+
+		It("rejects creation when seed generation comes from request parameters", func() {
+			ct := &ClusterTemplate{}
+			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "seed-template.v1", Namespace: "default"}, ct)).To(Succeed())
+			ct.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{}`)
+			Expect(fakeClient.Update(ctx, ct)).To(Succeed())
+			newPr.Spec.TemplateParameters.Raw = []byte(`{"upgradeParameters":{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22"}}}`)
+
+			_, err := validator.ValidateCreate(ctx, newPr)
+			Expect(err).To(MatchError(ContainSubstring(SeedGenerationUnsupportedMessage)))
+		})
+
+		It("rejects updates to a seed generation template", func() {
+			_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
+			Expect(err).To(MatchError(ContainSubstring(SeedGenerationUnsupportedMessage)))
+		})
+	})
+
 	Describe("ValidateUpdate", func() {
 		const (
 			testClusterTemplateB = "clustertemplate-b"

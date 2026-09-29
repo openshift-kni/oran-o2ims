@@ -108,7 +108,7 @@ func (v *provisioningRequestValidator) ValidateDelete(ctx context.Context, pr *P
 }
 
 func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Context, oldPr, newPr *ProvisioningRequest) error {
-	clusterTemplate, err := newPr.GetClusterTemplateRef(ctx, v.Client)
+	clusterTemplate, err := v.getSupportedClusterTemplate(ctx, newPr)
 	if err != nil {
 		return err
 	}
@@ -253,4 +253,19 @@ func validatePRClusterName(clusterInstanceInput any) error {
 		return fmt.Errorf("clusterInstanceParameters.clusterName: %w", err)
 	}
 	return nil
+}
+
+func (v *provisioningRequestValidator) getSupportedClusterTemplate(ctx context.Context, pr *ProvisioningRequest) (*ClusterTemplate, error) {
+	clusterTemplate, err := pr.GetClusterTemplateRef(ctx, v.Client)
+	if err != nil {
+		return nil, err
+	}
+	seedGeneration, err := HasSeedGenerationConfig(clusterTemplate, pr)
+	if err != nil {
+		return nil, err
+	}
+	if seedGeneration {
+		return nil, fmt.Errorf("%s (ClusterTemplate %q)", SeedGenerationUnsupportedMessage, clusterTemplate.Name)
+	}
+	return clusterTemplate, nil
 }

@@ -146,11 +146,13 @@ const (
 
 // Default timeout values
 const (
-	DefaultHardwareProvisioningTimeout = 90 * time.Minute
-	DefaultClusterInstallationTimeout  = 90 * time.Minute
-	DefaultClusterConfigurationTimeout = 30 * time.Minute
-	DefaultClusterUpgradeTimeout       = 4 * time.Hour
-	DefaultClusterEUSUpgradeTimeout    = 8 * time.Hour
+	DefaultHardwareProvisioningTimeout  = 90 * time.Minute
+	DefaultClusterInstallationTimeout   = 90 * time.Minute
+	DefaultClusterConfigurationTimeout  = 30 * time.Minute
+	DefaultClusterUpgradeTimeout        = 4 * time.Hour
+	DefaultClusterEUSUpgradeTimeout     = 8 * time.Hour
+	DefaultSeedGenerationTimeout        = 2 * time.Hour
+	DefaultSeedGenerationWithISOTimeout = 3 * time.Hour
 )
 
 // These are optional keys in the respective ConfigMaps defined in ClusterTemplate
@@ -245,6 +247,7 @@ const ClusterVersionName = "version"
 const (
 	UpgradeDefaultsIBGUKey              = "imageBasedGroupUpgrade"
 	UpgradeDefaultsClusterVersionKey    = "clusterVersion"
+	UpgradeDefaultsSeedGenerationKey    = "seedGeneration"
 	UpgradeIntermediateVersionConfigKey = "intermediateVersion"
 	UpgradeWorkerPoolUpgradeKey         = "workerPoolUpgrade"
 )

@@ -34,6 +34,7 @@ var PRconditionTypes = struct {
 	ClusterProvisioned            ConditionType
 	ConfigurationApplied          ConditionType
 	UpgradeCompleted              ConditionType
+	SeedGenerationCompleted       ConditionType
 }{
 	Validated:                     "ProvisioningRequestValidated",
 	NodeAllocationRequestRendered: "NodeAllocationRequestRendered",
@@ -46,6 +47,7 @@ var PRconditionTypes = struct {
 	ClusterProvisioned:            "ClusterProvisioned",
 	ConfigurationApplied:          "ConfigurationApplied",
 	UpgradeCompleted:              "UpgradeCompleted",
+	SeedGenerationCompleted:       "SeedGenerationCompleted",
 }
 
 // ConditionReason is a string representing the condition's reason
@@ -74,6 +76,9 @@ var CRconditionReasons = struct {
 	TimedOut                   ConditionReason
 	Unknown                    ConditionReason
 	AwaitingStageAuthorization ConditionReason
+	Validating                 ConditionReason
+	CleaningACMResources       ConditionReason
+	BuildingISO                ConditionReason
 }{
 	NotApplied:                 "NotApplied",
 	ClusterNotReady:            "ClusterNotReady",
@@ -87,6 +92,9 @@ var CRconditionReasons = struct {
 	TimedOut:                   "TimedOut",
 	Unknown:                    "Unknown",
 	AwaitingStageAuthorization: "AwaitingStageAuthorization",
+	Validating:                 "Validating",
+	CleaningACMResources:       "CleaningACMResources",
+	BuildingISO:                "BuildingISO",
 }
 
 // FatalPRconditionTypes is a list of ProvisioningRequest conditions

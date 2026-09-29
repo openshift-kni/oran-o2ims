@@ -1,0 +1,66 @@
+# SPDX-FileCopyrightText: Red Hat
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Adapt an existing validated SNO ClusterTemplate and its referenced ConfigMaps
+# for your site. This example shows the seed-generation contract only.
+apiVersion: clcm.openshift.io/v1alpha1
+kind: ClusterTemplate
+metadata:
+  name: sno-ran-du-seedgen.v4-Y-Z-1
+  namespace: sno-ran-du-v4-Y-Z
+spec:
+  name: sno-ran-du-seedgen
+  version: v4-Y-Z-1
+  release: 4.Y.Z
+  templateDefaults:
+    hwMgmtDefaults:
+      nodeGroupData:
+      - name: master
+        role: master
+        resourceSelector:
+          resourceselector.clcm.openshift.io/server-type: XR8620t
+    clusterInstanceDefaults: clusterinstance-defaults-v1
+    policyTemplateDefaults: policytemplate-defaults-v1
+    upgradeDefaults:
+      seedGeneration:
+        seedImage: registry.example.com/seed/seed-image:4.Y.Z
+        seedAuthSecretRef:
+          name: seed-registry-credentials
+  templateParameterSchema:
+    type: object
+    additionalProperties: false
+    required:
+    - nodeClusterName
+    - oCloudSiteId
+    - clusterInstanceParameters
+    - policyTemplateParameters
+    properties:
+      nodeClusterName:
+        type: string
+      oCloudSiteId:
+        type: string
+      clusterInstanceParameters:
+        type: object
+        properties:
+          nodeGroups:
+            type: array
+            items:
+              type: object
+              properties:
+                name:
+                  type: string
+      policyTemplateParameters:
+        type: object
+        properties: {}
+      upgradeParameters:
+        type: object
+        additionalProperties: false
+        properties:
+          seedGeneration:
+            type: object
+            additionalProperties: false
+            properties:
+              seedImage:
+                type: string
+                minLength: 1

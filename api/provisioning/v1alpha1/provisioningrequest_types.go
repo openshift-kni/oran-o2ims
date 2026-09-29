@@ -64,6 +64,9 @@ type ClusterDetails struct {
 	// ClusterUpgradeStatus holds the state of a cluster upgrade in progress.
 	ClusterUpgradeStatus *ClusterUpgradeStatus `json:"clusterUpgradeStatus,omitempty"`
 
+	// SeedGenerationStatus holds the state and results of a one-shot seed generation.
+	SeedGenerationStatus *SeedGenerationStatus `json:"seedGenerationStatus,omitempty"`
+
 	// FulfilledNodeCount records the number of nodes at the time the PR last
 	// reached Fulfilled. Used to detect scale-out operations on subsequent
 	// reconciles — if the rendered ClusterInstance has more nodes than this
@@ -101,6 +104,40 @@ type ClusterUpgradeStatus struct {
 	// WorkerPoolUpgrade is the resolved worker MachineConfigPool rollout
 	// configuration prepared from the current upgrade parameters.
 	WorkerPoolUpgrade *WorkerPoolUpgradeStatus `json:"workerPoolUpgrade,omitempty"`
+}
+
+// SeedGenerationStatus records progress and immutable artifacts of one seed run.
+type SeedGenerationStatus struct {
+	// StartedAt is persisted when the seed run begins.
+	StartedAt *metav1.Time `json:"startedAt,omitempty"`
+
+	// DetachmentStarted is persisted before removing any ACM agent resources.
+	DetachmentStarted bool `json:"detachmentStarted,omitempty"`
+
+	// ReleaseImageDigest pins the release used to extract openshift-install.
+	ReleaseImageDigest string `json:"releaseImageDigest,omitempty"`
+
+	// SeedImage is the immutable digest reference reported by SeedGenerator.
+	SeedImage string `json:"seedImage,omitempty"`
+
+	// ISOURL is the verified HTTPS URL of the generated live ISO.
+	ISOURL string `json:"isoURL,omitempty"`
+
+	// ISODigest is the SHA-256 digest of the generated live ISO.
+	ISODigest string `json:"isoDigest,omitempty"`
+
+	// ISOServerCACertRef identifies the durable HTTPS server CA bundle.
+	ISOServerCACertRef *ConfigMapKeyRef `json:"isoServerCACertRef,omitempty"`
+
+	// InputSnapshotResourceUIDs pins the per-run immutable ConfigMaps and Secrets.
+	InputSnapshotResourceUIDs map[string]string `json:"inputSnapshotResourceUIDs,omitempty"`
+}
+
+// ConfigMapKeyRef identifies one key in a namespaced ConfigMap.
+type ConfigMapKeyRef struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Key       string `json:"key"`
 }
 
 // WorkerPoolUpgradeStatus holds the worker MachineConfigPool rollout status

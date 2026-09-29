@@ -289,6 +289,57 @@ spec:
                           was found NonCompliant for the cluster.
                         format: date-time
                         type: string
+                      seedGenerationStatus:
+                        description: SeedGenerationStatus holds the state and results
+                          of a one-shot seed generation.
+                        properties:
+                          detachmentStarted:
+                            description: DetachmentStarted is persisted before removing
+                              any ACM agent resources.
+                            type: boolean
+                          inputSnapshotResourceUIDs:
+                            additionalProperties:
+                              type: string
+                            description: InputSnapshotResourceUIDs pins the per-run
+                              immutable ConfigMaps and Secrets.
+                            type: object
+                          isoDigest:
+                            description: ISODigest is the SHA-256 digest of the generated
+                              live ISO.
+                            type: string
+                          isoServerCACertRef:
+                            description: ISOServerCACertRef identifies the durable
+                              HTTPS server CA bundle.
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                type: string
+                              namespace:
+                                type: string
+                            required:
+                            - key
+                            - name
+                            - namespace
+                            type: object
+                          isoURL:
+                            description: ISOURL is the verified HTTPS URL of the generated
+                              live ISO.
+                            type: string
+                          releaseImageDigest:
+                            description: ReleaseImageDigest pins the release used
+                              to extract openshift-install.
+                            type: string
+                          seedImage:
+                            description: SeedImage is the immutable digest reference
+                              reported by SeedGenerator.
+                            type: string
+                          startedAt:
+                            description: StartedAt is persisted when the seed run
+                              begins.
+                            format: date-time
+                            type: string
+                        type: object
                       ztpStatus:
                         description: Says if ZTP has complete or not.
                         type: string
