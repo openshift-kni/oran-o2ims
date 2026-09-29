@@ -2,6 +2,7 @@
 
 ```yaml
 title: o2ims-v13
+version: "2.0"
 authors:
   - @rauherna
 reviewers:
@@ -9,7 +10,8 @@ reviewers:
 approvers:
   - TBD
 creation-date: 2026-09-21
-last-updated: 2026-09-25
+last-updated: 2026-09-29
+change-history: "#appendix-b-document-version-history"
 ```
 
 **Epic**: [CNF-26925](https://redhat.atlassian.net/browse/CNF-26925)
@@ -33,6 +35,7 @@ last-updated: 2026-09-25
 - [6. Phased Implementation](#6-phased-implementation)
 - [7. Verification Plan](#7-verification-plan)
 - [Appendix A: Spec Reference Mapping](#appendix-a-spec-reference-mapping)
+- [Appendix B: Document Version History](#appendix-b-document-version-history)
 
 ---
 
@@ -89,34 +92,13 @@ oCloudSiteId, notification support).
 | I-1 | OpenAPI spec references v13 | References v11 | Update `info` block |
 | I-2 | Deprecated fields on ResourcePoolInfo | Absent | See below |
 
-**I-2: Deprecated fields — conformance decision required.**
+**I-2: Deprecated fields — leave absent (decided).**
 
 The v11 and v13 specs both mark `oCloudId` and `globalLocationId` on
-ResourcePoolInfo as **mandatory but deprecated**. Our implementation dropped
-them entirely when we introduced `oCloudSiteId` as the replacement.
-
-> **Spec reference (Table 3.2.6.2.3-1, identical in v11 and v13):**
->
-> | Attribute | Type | P | Card. | Notes |
-> |-----------|------|---|-------|-------|
-> | `resourcePoolId` | Identifier | M | 1 | |
-> | `oCloudId` | Identifier | M | 1 | **Deprecated** — may be removed |
-> | `globalLocationId` | Identifier | M | 1 | **Deprecated** — may be removed |
-> | `name` | String | M | 1 | |
-> | `oCloudSiteId` | Identifier | M | 1 | |
-> | `description` | String | M | 1 | |
-> | `location` | String | O | 0..1 | **Deprecated** — may be removed |
-> | `extensions` | KeyValuePairs | O | 0..1 | |
-
-Both values can be derived from existing data: `oCloudId` is the O-Cloud
-instance identifier (already available at the server level), and
-`globalLocationId` can be looked up from the OCloudSite record via
-`resource_pool.o_cloud_site_id` → `o_cloud_site.global_location_id`.
-
-| Option | What it means |
-|--------|--------------|
-| **Strict compliance** | Add both fields to the ResourcePool response as deprecated. Derivation is straightforward (~half a day). Full conformance with the mandatory cardinality. |
-| **Pragmatic (current)** | Leave them absent. Our v2 API never served them, so no consumer expects them. Document the deviation. Risk: a strict conformance test would flag these as missing mandatory fields. |
+ResourcePoolInfo as mandatory but deprecated. Our implementation never
+introduced these fields — we went directly to `oCloudSiteId` as the
+replacement. The team agreed to leave them absent and document the deviation.
+No consumer expects them.
 
 ---
 
@@ -179,31 +161,22 @@ API v1.1.0 level. We need to reach v2.2.0.
 
 | # | Requirement | Since | Current | Action | Breaking? |
 |---|-------------|-------|---------|--------|-----------|
-| M-1 | `objectClass` on AlarmEventRecord | 2.0.0 | Not implemented | See [AlarmEventRecord](#alarmeventrecord), [DB: alarm_event_record](#db-schema-alarm_event_record-m-1-m-11) | Yes (when mandatory) |
-| M-2 | `eventFilter` on AlarmSubscriptionInfo | 2.2.0 (v13) | Uses `filter` enum | See [AlarmSubscriptionInfo](#alarmsubscriptioninfo), [DB: alarm_subscription_info](#db-schema-alarm_subscription_info-m-2-m-12) | No |
+| M-1 | `objectClass` on AlarmEventRecord | 2.0.0 | Not implemented | See [AlarmEventRecord](#alarmeventrecord), [DB: alarm_event_record](#db-schema-alarm_event_record-m-1-m-9) | Yes (when mandatory) |
+| M-2 | `eventFilter` on AlarmSubscriptionInfo | 2.2.0 (v13) | Uses `filter` enum | See [AlarmSubscriptionInfo](#alarmsubscriptioninfo), [DB: alarm_subscription_info](#db-schema-alarm_subscription_info-m-2-m-10) | No |
 | M-3 | PATCH `/alarmSubscriptions/{id}` | 2.2.0 (v13) | Not implemented | See [Missing Endpoints](#missing-endpoints), [AlarmSubscriptionUpdate](#alarmsubscriptionupdate-new-type) | No |
-| M-4 | Purge Alarms Task (`POST /alarms/purge`) | 1.2.0 | Not implemented | See [Missing Endpoints](#missing-endpoints), [PurgeRequest](#purgerequest-new-type), [DB: task_operation](#db-schema-task_operation-m-4-m-5--new-table), [Async Workflow](#purge-alarms-async-workflow-m-4--m-5) | No |
-| M-5 | Task Operations (list + get) | 1.2.0 | Not implemented | See [Missing Endpoints](#missing-endpoints), [TaskOperationInfo](#taskoperationinfo-new-type), [DB: task_operation](#db-schema-task_operation-m-4-m-5--new-table) | No |
-| M-6 | `objectClass` on Alarm Change Notification | 2.0.0 | Not implemented | See [Alarm Change Notification](#alarm-change-notification) | No |
-| M-7 | `objectRef` on Alarm Change Notification | 2.0.0 | Not implemented | See [Alarm Change Notification](#alarm-change-notification) | No |
-| M-8 | `consumerSubscriptionId` in notification | 2.0.0 | Not in payload | See [Alarm Change Notification](#alarm-change-notification) | No |
-| M-9 | API URL path v1 → v2 | 2.0.0 | Currently `/v1/` | Change to `/v2/`. See [Version Management](#version-management-m-9) | **Yes** |
-| M-10 | OpenAPI spec references v13 | v13 | References R003-v06.00 | Update `info` block | No |
-| M-11 | JSON field naming (5 fields) | 2.0.0 | Wrong names/casing | See [AlarmEventRecord](#alarmeventrecord), [Alarm Change Notification](#alarm-change-notification), [DB: alarm_event_record](#db-schema-alarm_event_record-m-1-m-11) | Yes (v2 wire format) |
-| M-12 | `consumerSubscriptionId` UUID→String | Inherited | UUID-only | See [AlarmSubscriptionInfo](#alarmsubscriptioninfo), [DB: alarm_subscription_info](#db-schema-alarm_subscription_info-m-2-m-12) | No |
-
-Only **M-4** and **M-5** involve the spec's async task model (202 +
-TaskOperationOccurrence polling). The remaining gaps are standard
-synchronous REST operations or notification pipeline changes.
+| M-4 | `objectClass` on Alarm Change Notification | 2.0.0 | Not implemented | See [Alarm Change Notification](#alarm-change-notification) | No |
+| M-5 | `objectRef` on Alarm Change Notification | 2.0.0 | Not implemented | See [Alarm Change Notification](#alarm-change-notification) | No |
+| M-6 | `consumerSubscriptionId` in notification | 2.0.0 | Not in payload | See [Alarm Change Notification](#alarm-change-notification) | No |
+| M-7 | API URL path v1 → v2 | 2.0.0 | Currently `/v1/` | Change to `/v2/`. See [Version Management](#version-management-m-7) | **Yes** |
+| M-8 | OpenAPI spec references v13 | v13 | References R003-v06.00 | Update `info` block | No |
+| M-9 | JSON field naming (5 fields) | 2.0.0 | Wrong names/casing | See [AlarmEventRecord](#alarmeventrecord), [Alarm Change Notification](#alarm-change-notification), [DB: alarm_event_record](#db-schema-alarm_event_record-m-1-m-9) | Yes (v2 wire format) |
+| M-10 | `consumerSubscriptionId` UUID→String | Inherited | UUID-only | See [AlarmSubscriptionInfo](#alarmsubscriptioninfo), [DB: alarm_subscription_info](#db-schema-alarm_subscription_info-m-2-m-10) | No |
 
 #### Missing Endpoints
 
 | Resource | URI | Method | Since | Action |
 |----------|-----|--------|-------|--------|
-| Purge Alarms Task | `/alarms/purge` | POST | 1.2.0 | New endpoint with true async (202 + task tracking) |
 | Alarm Subscription Update | `/alarmSubscriptions/{id}` | PATCH | 2.2.0 (v13) | New method + `AlarmSubscriptionUpdate` body |
-| Task Operation List | `/taskOperations` | GET | 1.2.0 | New endpoint (supports purge task polling) |
-| Task Operation Occurrence | `/taskOperations/{id}` | GET | 1.2.0 | New endpoint (supports purge task polling) |
 
 #### AlarmEventRecord
 
@@ -225,9 +198,23 @@ synchronous REST operations or notification pipeline changes.
 
 #### AlarmSubscriptionInfo
 
+> **`filter` vs `eventFilter` — they are semantically different:**
+>
+> | Aspect | `filter` (deprecated) | `eventFilter` (new in 2.2.0) |
+> |--------|----------------------|------------------------------|
+> | Type | String (free-form) | EventFilter (typed enum) |
+> | P | O (Optional) | M (Mandatory) |
+> | Semantics | ETSI attribute-based filtering expression (clause 5.2 of ETSI GS NFV-SOL 013) — ODATA-style query on any attribute | Enum: NEW, CHANGE, CLEAR, ACKNOWLEDGE — filters by notification event type only |
+>
+> Our current `filter` implementation already uses a string enum
+> `[NEW, CHANGE, CLEAR, ACKNOWLEDGE]` — so we accidentally implemented
+> `eventFilter` semantics under the `filter` name. We never implemented
+> the ETSI attribute-based filtering that `filter` was originally intended
+> for. The spec deprecated `filter` (NOTE on Table 3.3.6.2.3-1).
+
 | Field | Change | Since |
 |-------|--------|-------|
-| `eventFilter` | Add new enum field (NEW, CHANGE, CLEAR, ACKNOWLEDGE). Deprecate existing `filter`. | 2.2.0 (v13) |
+| `eventFilter` | Add new enum field (NEW, CHANGE, CLEAR, ACKNOWLEDGE). In v1: optional, `filter` still accepted. In v2: required, `filter` deprecated but accepted for backward compatibility. Reject with 400 if both are provided with conflicting values. | 2.2.0 (v13) |
 | `consumerSubscriptionId` | Change type from UUID to String (spec allows arbitrary strings) | Inherited |
 
 #### AlarmSubscriptionUpdate (new type)
@@ -247,6 +234,13 @@ synchronous REST operations or notification pipeline changes.
 | `consumerSubscriptionId` | String | 0..1 | 2.2.0 (v13) |
 | `eventFilter` | EventFilter | 0..1 | 2.2.0 (v13) |
 | `callback` | Uri | 0..1 | 2.2.0 (v13) |
+
+> **Implementation note:** The spec lists 412 Precondition Failed for ETag
+> mismatch. The current codebase does not use ETags for any endpoint.
+> ETag generation (`If-Match` / `If-None-Match` handling) and atomic update
+> semantics should be addressed during PR 2 implementation. If deferred,
+> document that conditional updates are not yet supported and omit 412 from
+> the initial OpenAPI spec.
 
 #### Alarm Change Notification
 
@@ -273,6 +267,13 @@ synchronous REST operations or notification pipeline changes.
 > | `perceivedSeverity` | Integer | M | 1 | 0=CRITICAL, 1=MAJOR, 2=MINOR, 3=WARNING, 4=INDETERMINATE, 5=CLEARED |
 > | `extensions` | KeyValue | M | 0..N | Vendor/operator extension properties |
 
+> **Implementation note:** Several fields are marked `P=M` (mandatory) with
+> cardinality `0..1`. This is standard O-RAN convention: `P=M` means the JSON
+> key must always be present in the serialized response; cardinality `0..1`
+> means the value may be null (e.g., `alarmClearedTime` is null until the
+> alarm clears). Serialize these fields as `null` when the value is absent,
+> not by omitting the key.
+
 Changes required from our current implementation:
 
 | Field | Change | Since |
@@ -285,35 +286,7 @@ Changes required from our current implementation:
 | `alarmDefinitionId` | Fix casing from `alarmDefinitionID` | 2.0.0 |
 | `probableCauseId` | Fix casing from `probableCauseID` | 2.0.0 |
 
-#### PurgeRequest (new type)
-
-| Field | Type | Card. | Since |
-|-------|------|-------|-------|
-| `alarmRecordId` | String | 0..N | 1.2.0 |
-| `purgeConditions.startWindowTime` | DateTime | 0..1 | 1.2.0 |
-| `purgeConditions.endWindowTime` | DateTime | 1 | 1.2.0 |
-
-| Constraint | Detail |
-|------------|--------|
-| Input validation | At least one of `alarmRecordId` or `purgeConditions` must be provided |
-| Response code | **202 Accepted** with empty body (SHALL — hard requirement per spec Section 3.3.4.7) |
-| Response header | `Location` header pointing to the newly created Task Operation Occurrence |
-| Conflict handling | 409 Conflict if another task operation is ongoing on the affected resources |
-| Async execution | Handler returns 202 immediately. Purge runs in a background goroutine. Task record created as PROCESSING, updated to COMPLETED or FAILED on finish. |
-
-#### TaskOperationInfo (new type)
-
-| Field | Type | Card. | Since |
-|-------|------|-------|-------|
-| `id` | Identifier | 1 | 1.2.0 |
-| `operationState` | Enum (PROCESSING, COMPLETED, FAILED, ROLLED_BACK) | 1 | 1.2.0 |
-| `stateEnteredTime` | DateTime | 1 | 1.2.0 |
-| `startTime` | DateTime | 1 | 1.2.0 |
-| `operation` | Enum (PURGE) | 1 | 1.2.0 |
-| `operationParams` | Object (PurgeRequest) | 0..1 | 1.2.0 |
-| `error` | ProblemDetails | 0..1 | 1.2.0 |
-
-#### DB Schema: alarm_event_record (M-1, M-11)
+#### DB Schema: alarm_event_record (M-1, M-9)
 
 Add `object_class` column. Existing columns for reference:
 
@@ -322,29 +295,17 @@ Add `object_class` column. Existing columns for reference:
 | `object_class` | VARCHAR | NO | **Add** — fully qualified class name |
 
 Existing columns `resource_type_id`, `resource_id`, `alarm_definition_id`,
-`probable_cause_id` remain unchanged in the DB — the JSON key renames (M-11)
+`probable_cause_id` remain unchanged in the DB — the JSON key renames (M-9)
 are handled in the OpenAPI spec and serialization layer, not the schema.
 
-#### DB Schema: alarm_subscription_info (M-2, M-12)
+#### DB Schema: alarm_subscription_info (M-2, M-10)
 
 | Column | Type | Change |
 |--------|------|--------|
 | `event_filter` | VARCHAR | **Add** — enum (NEW, CHANGE, CLEAR, ACKNOWLEDGE) |
-| `consumer_subscription_id` | VARCHAR → TEXT | **Keep as VARCHAR** (already text-compatible; remove UUID validation in OpenAPI/Go) |
+| `consumer_subscription_id` | UUID → TEXT | **Change column type** from UUID to TEXT in migration. Update Go model (`*uuid.UUID` → `*string`) and OpenAPI schema (remove `format: uuid`). |
 
-#### DB Schema: task_operation (M-4, M-5) — new table
-
-| Column | Type | Nullable | Notes |
-|--------|------|----------|-------|
-| `id` | UUID PK | NO | Task operation ID |
-| `operation_state` | VARCHAR | NO | PROCESSING, COMPLETED, FAILED, ROLLED_BACK |
-| `state_entered_time` | TIMESTAMPTZ | NO | When current state was entered |
-| `start_time` | TIMESTAMPTZ | NO | When operation started |
-| `operation` | VARCHAR | NO | Operation type (PURGE) |
-| `operation_params` | JSONB | YES | Input params (PurgeRequest) |
-| `error` | JSONB | YES | Error info if FAILED |
-
-#### Version Management (M-9)
+#### Version Management (M-7)
 
 > **Spec reference (Section 3.1.8, Table 3.1.6.1.6-1):** The API producer
 > SHALL support dedicated URIs for version information. The
@@ -362,133 +323,32 @@ are handled in the OpenAPI spec and serialization layer, not the schema.
 > When a version is no longer supported, it does not appear in the response.
 > The `Version` HTTP header field conveys the API version in responses.
 
+> **Implementation note:** The existing alarms service already returns
+> `apiVersions` and `uriPrefix` from the discovery URIs. The `Version`
+> response header must also be added to all v2 responses. Verify both
+> the discovery endpoints and the header in PR 3.
+
 #### Impacted Files
 
 | File | Change | Req |
 |------|--------|-----|
-| `internal/service/alarms/api/openapi.yaml` | Add `objectClass`, `eventFilter`, PATCH method, purge/task endpoints, v2 paths, field renames | [M-1](#62-gap-assessment), [M-2](#62-gap-assessment), [M-3](#62-gap-assessment), [M-4](#62-gap-assessment), [M-5](#62-gap-assessment), [M-9](#62-gap-assessment), [M-11](#62-gap-assessment) |
+| `internal/service/alarms/api/openapi.yaml` | Add `objectClass`, `eventFilter`, PATCH method, v2 paths, field renames | [M-1](#52-gap-assessment), [M-2](#52-gap-assessment), [M-3](#52-gap-assessment), [M-7](#52-gap-assessment), [M-9](#52-gap-assessment) |
 | `internal/service/alarms/api/generated/alarms.generated.go` | Regenerated from OpenAPI | All |
-| `internal/service/alarms/api/server.go` | New handlers: PatchSubscription, PurgeAlarms, ListTaskOperations, GetTaskOperation; update field handling | [M-1](#62-gap-assessment), [M-3](#62-gap-assessment), [M-4](#62-gap-assessment), [M-5](#62-gap-assessment) |
-| `internal/service/alarms/internal/db/migrations/000002_*` | Add `object_class` column | [M-1](#62-gap-assessment) |
-| `internal/service/alarms/internal/db/migrations/000003_*` | Add `event_filter` column | [M-2](#62-gap-assessment) |
-| `internal/service/alarms/internal/db/migrations/` (new) | New `task_operation` table | [M-4](#62-gap-assessment), [M-5](#62-gap-assessment) |
-| `internal/service/alarms/internal/db/models/alarm_event_record.go` | Add ObjectClass field | [M-1](#62-gap-assessment) |
-| `internal/service/alarms/internal/db/models/alarm_subscription.go` | Add EventFilter field | [M-2](#62-gap-assessment) |
-| `internal/service/alarms/internal/db/models/` (new) | New `task_operation.go` model | [M-4](#62-gap-assessment), [M-5](#62-gap-assessment) |
-| `internal/service/alarms/internal/db/models/converters.go` | Update converters for new fields and v2 naming | [M-1](#62-gap-assessment), [M-11](#62-gap-assessment) |
-| `internal/service/alarms/internal/db/repo/` | New queries: task operations, subscription update, purge | [M-2](#62-gap-assessment), [M-3](#62-gap-assessment), [M-4](#62-gap-assessment), [M-5](#62-gap-assessment) |
-| `internal/alertmanager/converter.go` | Populate objectClass when creating records | [M-1](#62-gap-assessment) |
-| `internal/service/alarms/internal/infrastructure/infrastructure.go` | Expose objectClass in client interface | [M-1](#62-gap-assessment) |
-| `internal/service/alarms/internal/infrastructure/clusterserver.go` | Derive objectClass from resource type | [M-1](#62-gap-assessment) |
-| `internal/service/alarms/internal/infrastructure/resourceserver.go` | Derive objectClass from resource type | [M-1](#62-gap-assessment) |
-| `internal/service/alarms/internal/notifier_provider/` | Add objectClass, objectRef, consumerSubscriptionId to notification payload | [M-6](#62-gap-assessment), [M-7](#62-gap-assessment), [M-8](#62-gap-assessment) |
-| `config/rbac/oran_o2ims_user_roles.yaml` | Update monitoring endpoint paths for v2 | [M-9](#62-gap-assessment) |
-| `config/rbac/oran_o2ims_oauth_role_bindings.yaml` | Update monitoring bindings for v2 | [M-9](#62-gap-assessment) |
-| `internal/service/alarms/cmd/serve.go` | Update base path if hardcoded | [M-9](#62-gap-assessment) |
-
-#### Purge Alarms Async Workflow (M-4 / M-5)
-
-The diagrams below show the four flows for the purge operation:
-
-1. **Happy path**: POST creates a task (PROCESSING), returns 202 immediately,
-   background goroutine purges records and marks task COMPLETED, consumer
-   polls and sees success.
-2. **Error path**: Purge fails mid-execution, task is marked FAILED with a
-   ProblemDetails error body. Consumer polls and sees the failure reason.
-3. **Conflict path**: A second purge is requested while one is already
-   PROCESSING. Server returns 409 per spec Section 3.3.4.7.
-4. **Restart recovery**: The server restarts while a purge goroutine is
-   running. On startup, orphaned PROCESSING tasks are transitioned to FAILED.
-   The consumer sees the failure and can retry.
-
-**Figure 1: Happy path, error path, and conflict path**
-
-```mermaid
-sequenceDiagram
-    participant SMO as Consumer (SMO)
-    participant API as O-Cloud Manager<br/>Alarms Server
-    participant DB as PostgreSQL
-    participant BG as Background<br/>Goroutine
-
-    Note over SMO,BG: Happy Path
-
-    SMO->>+API: POST /alarms/purge<br/>{alarmRecordId: [...]}
-    API->>DB: INSERT task_operation<br/>(state=PROCESSING)
-    API->>BG: Launch goroutine
-    API-->>-SMO: 202 Accepted<br/>Location: /taskOperations/{taskId}
-
-    activate BG
-    BG->>DB: DELETE alarm_event_records<br/>WHERE id IN (...)
-    DB-->>BG: rows deleted
-    BG->>DB: UPDATE task_operation<br/>SET state=COMPLETED
-    deactivate BG
-
-    SMO->>+API: GET /taskOperations/{taskId}
-    API->>DB: SELECT task_operation
-    DB-->>API: state=COMPLETED
-    API-->>-SMO: 200 OK<br/>{operationState: "COMPLETED"}
-
-    Note over SMO,BG: Error Path
-
-    activate BG
-    BG-xDB: DELETE fails
-    BG->>DB: UPDATE task_operation<br/>SET state=FAILED, error={...}
-    deactivate BG
-
-    SMO->>+API: GET /taskOperations/{taskId}
-    API-->>-SMO: 200 OK<br/>{operationState: "FAILED", error: {...}}
-
-    Note over SMO,BG: Conflict Path
-
-    SMO->>+API: POST /alarms/purge<br/>(while another purge runs)
-    API->>DB: Check for PROCESSING tasks
-    DB-->>API: found active task
-    API-->>-SMO: 409 Conflict
-```
-
-**Figure 2: Restart recovery**
-
-```mermaid
-sequenceDiagram
-    participant SMO as Consumer (SMO)
-    participant API as O-Cloud Manager<br/>Alarms Server
-    participant DB as PostgreSQL
-    participant BG as Background<br/>Goroutine
-
-    Note over SMO,BG: Restart Recovery
-
-    SMO->>+API: POST /alarms/purge
-    API->>DB: INSERT task_operation<br/>(state=PROCESSING)
-    API->>BG: Launch goroutine
-    API-->>-SMO: 202 Accepted<br/>Location: /taskOperations/{taskId}
-
-    activate BG
-    Note over API,BG: Server restarts<br/>(SIGTERM, crash, rollout)
-    deactivate BG
-
-    Note over API: Pod starts up
-
-    API->>DB: SELECT task_operation<br/>WHERE state='PROCESSING'
-    DB-->>API: found orphaned task
-    API->>DB: UPDATE task_operation<br/>SET state='FAILED',<br/>error='server restarted<br/>during operation'
-
-    Note over API: Uses advisory lock<br/>so only one replica<br/>runs recovery
-
-    SMO->>+API: GET /taskOperations/{taskId}
-    API->>DB: SELECT task_operation
-    DB-->>API: state=FAILED
-    API-->>-SMO: 200 OK<br/>{operationState: "FAILED",<br/>error: "server restarted"}
-
-    Note over SMO: Consumer can retry<br/>with a new POST /alarms/purge
-```
-
-> **Note on advisory locks:** The startup recovery uses a PostgreSQL advisory
-> lock (`pg_try_advisory_xact_lock`) to ensure only one replica runs the
-> recovery check when multiple pods start simultaneously (e.g., during a
-> rollout). This is the same pattern already used by the resolved alarm
-> cleanup in `alarms_repository.go:DeleteResolvedAlarmEventsBefore` — a
-> non-blocking, transaction-scoped lock that is automatically released when
-> the transaction ends.
+| `internal/service/alarms/api/server.go` | New handler: PatchSubscription; update field handling | [M-1](#52-gap-assessment), [M-3](#52-gap-assessment) |
+| `internal/service/alarms/internal/db/migrations/000002_*` | Add `object_class` column | [M-1](#52-gap-assessment) |
+| `internal/service/alarms/internal/db/migrations/000003_*` | Add `event_filter` column | [M-2](#52-gap-assessment) |
+| `internal/service/alarms/internal/db/models/alarm_event_record.go` | Add ObjectClass field | [M-1](#52-gap-assessment) |
+| `internal/service/alarms/internal/db/models/alarm_subscription.go` | Add EventFilter field | [M-2](#52-gap-assessment) |
+| `internal/service/alarms/internal/db/models/converters.go` | Update converters for new fields and v2 naming | [M-1](#52-gap-assessment), [M-9](#52-gap-assessment) |
+| `internal/service/alarms/internal/db/repo/` | Subscription update and queries | [M-2](#52-gap-assessment), [M-3](#52-gap-assessment) |
+| `internal/alertmanager/converter.go` | Populate objectClass when creating records | [M-1](#52-gap-assessment) |
+| `internal/service/alarms/internal/infrastructure/infrastructure.go` | Expose objectClass in client interface | [M-1](#52-gap-assessment) |
+| `internal/service/alarms/internal/infrastructure/clusterserver.go` | Derive objectClass from resource type | [M-1](#52-gap-assessment) |
+| `internal/service/alarms/internal/infrastructure/resourceserver.go` | Derive objectClass from resource type | [M-1](#52-gap-assessment) |
+| `internal/service/alarms/internal/notifier_provider/` | Add objectClass, objectRef, consumerSubscriptionId to notification payload | [M-4](#52-gap-assessment), [M-5](#52-gap-assessment), [M-6](#52-gap-assessment) |
+| `config/rbac/oran_o2ims_user_roles.yaml` | Update monitoring endpoint paths for v2 | [M-7](#52-gap-assessment) |
+| `config/rbac/oran_o2ims_oauth_role_bindings.yaml` | Update monitoring bindings for v2 | [M-7](#52-gap-assessment) |
+| `internal/service/alarms/cmd/serve.go` | Update base path if hardcoded | [M-7](#52-gap-assessment) |
 
 ---
 
@@ -528,11 +388,10 @@ Add new fields and endpoints while keeping the v1 API path:
 |------|--------|
 | `objectClass` on AlarmEventRecord | Add as optional initially (verify population logic before making mandatory) |
 | `eventFilter` on AlarmSubscriptionInfo | Add alongside existing `filter` |
+| `consumerSubscriptionId` type | Change from UUID to String |
 | PATCH `/alarmSubscriptions/{id}` | New method + `AlarmSubscriptionUpdate` type |
 | Alarm Change Notification | Add `objectRef`, `objectClass`, `consumerSubscriptionId` |
-| Purge Alarms Task | New `POST /alarms/purge` endpoint with true async: 202 immediate return, background goroutine executes purge, task record transitions PROCESSING → COMPLETED/FAILED |
-| Task Operations | New `GET /taskOperations` and `GET /taskOperations/{id}` endpoints + DB table |
-| DB migrations | New columns (`object_class`, `event_filter`) + new `task_operation` table |
+| DB migrations | New columns (`object_class`, `event_filter`) |
 | Test coverage | Unit, envtest, server tests for all new endpoints and fields |
 
 ### PR 3: Monitoring v2 Breaking Changes
@@ -541,7 +400,7 @@ Add new fields and endpoints while keeping the v1 API path:
 |------|--------|
 | API URL path | Bump from `/v1/` to `/v2/` |
 | `objectClass` | Make mandatory on AlarmEventRecord |
-| `filter` deprecation | Deprecate in favor of `eventFilter` |
+| `eventFilter` | Make required in v2. Deprecate `filter` (still accepted for backward compatibility). |
 | RBAC roles | Update monitoring endpoint paths in `oran_o2ims_user_roles.yaml` |
 | OAuth bindings | Update monitoring bindings in `oran_o2ims_oauth_role_bindings.yaml` |
 | OpenAPI spec version | Update to reference v13 |
@@ -577,12 +436,13 @@ Add new fields and endpoints while keeping the v1 API path:
 | PATCH subscription | Update callback, eventFilter, consumerSubscriptionId via PATCH |
 | objectClass in records | Verify objectClass appears in alarm event records after creation |
 | objectClass in notifications | Verify objectClass in Alarm Change Notification payload |
-| Purge by ID | POST `/alarms/purge` with alarm record IDs, verify 202 + Location |
-| Purge by time window | POST `/alarms/purge` with purgeConditions, verify records removed |
-| Task operations | GET task operation shows COMPLETED after purge |
 | eventFilter subscription | Create subscription with eventFilter, verify filtering works |
 | Deprecated filter | Existing `filter` field still works alongside `eventFilter` |
+| consumerSubscriptionId | Verify non-UUID strings are accepted |
 | v2 URL path | All endpoints accessible under `/v2/` after bump |
+| v2 field names | Verify JSON keys use v13 names (objectTypeId, objectId, etc.) |
+| Version header | Verify `Version` response header is present on v2 responses |
+| Version discovery | Verify `apiVersions` and `uriPrefix` in discovery endpoints reflect v2 after the URL bump |
 | Existing flows | Alarm create, acknowledge, clear unaffected by changes |
 | RBAC | Verify monitoring roles grant access to v2 paths |
 
@@ -592,27 +452,33 @@ Add new fields and endpoints while keeping the v1 API path:
 
 | Spec Section | Content | Relevance |
 |--------------|---------|-----------|
-| 3.1.7 | Security (OAuth scope verification) | RBAC changes when paths move to v2 (M-9) |
-| 3.1.8 | Version management | v1/v2 coexistence and API version discovery (M-9) |
+| 3.1.7 | Security (OAuth scope verification) | RBAC changes when paths move to v2 (M-7) |
+| 3.1.8 | Version management | v1/v2 coexistence and API version discovery (M-7) |
 | 3.2 | Inventory API definition | Endpoints, data model, notifications |
 | 3.2.2 (Table 3.2.2-1) | Inventory API version history | v1.0.0 → v2.0.0 changes |
 | 3.2.3 (Table 3.2.3-1) | Inventory REST resources and methods | Mandatory endpoints including performance dictionaries (I-2, out-of-scope note) |
 | 3.2.6.2.3 | ResourcePoolInfo type | Deprecated fields: oCloudId, globalLocationId (I-2) |
 | 3.3 | Monitoring API definition | Endpoints, data model, notifications |
 | 3.3.2 (Table 3.3.2-1) | Monitoring API version history | v1.0.0 → v2.2.0 changes |
-| 3.3.3 (Table 3.3.3-1) | Monitoring REST resources and methods | Mandatory endpoints table (M-3, M-4, M-5) |
+| 3.3.3 (Table 3.3.3-1) | Monitoring REST resources and methods | Mandatory endpoints table (M-3) |
 | 3.3.4.5 | Alarm Subscription Description | PATCH method (M-3, p106-107) |
-| 3.3.4.7 | Purge Alarms Task | POST 202 Accepted (M-4, p110-111) |
-| 3.3.4.8 | Task Operation List | GET collection (M-5, p112-114) |
-| 3.3.4.9 | Task Operation Occurrence | GET individual task (M-5, p115-116) |
-| 3.3.5 | Alarm Change Notification | objectClass, objectRef, consumerSubscriptionId in notification (M-6, M-7, M-8) |
+| 3.3.6.2.8 | AlarmSubscriptionUpdate type | PATCH body (M-3) |
+| 3.3.5 | Alarm Change Notification | objectClass, objectRef, consumerSubscriptionId in notification (M-3, M-5, M-6) |
 | 3.3.6.2.2 | AlarmEventRecord type | objectClass field (M-1) |
 | 3.3.6.2.3 | AlarmSubscriptionInfo type | eventFilter field (M-2) |
-| 3.3.6.2.6 | PurgeRequest type | Purge input: alarmRecordId, purgeConditions (M-4) |
-| 3.3.6.2.7 | TaskOperationInfo type | Task state, operation, error (M-4, M-5) |
-| 3.3.6.2.8 | AlarmSubscriptionUpdate type | PATCH body (M-3) |
 | 3.3.6.3.3.1 | EventFilter enumeration | NEW, CHANGE, CLEAR, ACKNOWLEDGE (M-2) |
 | 3.4 | Provisioning API definition | Endpoints, data model |
 | 3.4.2 (Table 3.4.2-1) | Provisioning API version history | v1.0.0 → v1.2.0 changes |
 | 4 | O-Cloud Alarms dictionary | Out of scope for this feature |
 | Annex (Change History) | CR list v11→v13 | Traceability |
+
+---
+
+## Appendix B: Document Version History
+
+| Version | Item | Comment |
+|---------|------|---------|
+| 1.0 | Initial proposal | Gap analysis across inventory, provisioning, and monitoring interfaces. Included purge/task operations, scope decisions, spec extracts, and impacted files with requirement traceability. |
+| 2.0 | Remove purge/tasks | Purge alarms and task operations removed from scope per Brent's decision. |
+|     | Close I-2 | Deprecated fields on ResourcePoolInfo: leave absent per team consensus. |
+|     | filter vs eventFilter | Added semantic clarification: `filter` is ETSI attribute-based (deprecated), `eventFilter` is typed enum (new). |
