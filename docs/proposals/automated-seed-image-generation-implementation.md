@@ -84,14 +84,18 @@ the release digest and complete input snapshot before ACM removal, and the
 seed image digest before starting the ISO Job. Conditions encode the current
 phase. A terminal `Completed`, `Failed`, `TimedOut`, or
 `PreconditionChecksFailed` state never triggers a second run; a new PR is
-required. The webhook rejects changes to the PR's `seedGeneration` input after
-`StartedAt` is set, since the run uses its frozen inputs and a later edit would
-otherwise appear to take effect.
+required. The webhook rejects changes to the PR's `seedGeneration` and
+`seedGenerationTimeout` inputs after `StartedAt` is set, since the run uses
+its frozen inputs and a later edit would otherwise appear to take effect.
 
-Use the existing `clusterUpgradeTimeout` input, with seed defaults of two
-hours without `liveISO` and three hours with it. Calculate remaining time
-from persisted `StartedAt`, including across controller restarts, and bound
-the ISO Job's `activeDeadlineSeconds` to that remaining budget.
+Use a separate `seedGenerationTimeout` input in ClusterTemplate
+`upgradeDefaults` and optional ProvisioningRequest `upgradeParameters`.
+Do not reuse `clusterUpgradeTimeout`, which remains specific to cluster
+upgrades. The seed defaults are two hours without `liveISO` and three
+hours with it. A positive PR value overrides the template default.
+Calculate remaining time from persisted `StartedAt`, including across
+controller restarts, and bound the ISO Job's `activeDeadlineSeconds`
+to that remaining budget.
 
 ## Reconcile and resource lifecycle
 
@@ -205,10 +209,11 @@ never filled from changed source data.
 
 Changing a ClusterTemplate or source Secret during an active run therefore
 cannot alter Phase 3, Phase 4, or restart behavior. Reject PR
-`seedGeneration` edits after `StartedAt` so users are not shown accepted
-changes that the running operation will ignore. Creating ISO credential copies
-earlier extends their lifetime; do not mount the upload copy before the ISO
-Job, and scrub all copies on every terminal, timeout, or deletion path.
+`seedGeneration` or `seedGenerationTimeout` edits after `StartedAt` so users
+are not shown accepted changes that the running operation will ignore.
+Creating ISO credential copies earlier extends their lifetime; do not mount
+the upload copy before the ISO Job, and scrub all copies on every terminal,
+timeout, or deletion path.
 
 ## ISO-specific integration
 
