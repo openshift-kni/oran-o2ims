@@ -26,7 +26,7 @@ be produced for IBU without building installation media.
 | Area | Current code | Planned change |
 | --- | --- | --- |
 | PR API and conditions | `api/provisioning/v1alpha1/provisioningrequest_types.go`, `conditions.go` | Add seed status, snapshot UIDs, CA reference, condition and reasons. Isolate seed failures from upgrade conditions. |
-| Schema and admission | `api/provisioning/v1alpha1/provisioningrequest_validation.go`, `provisioningrequest_webhook.go` | Keep restricted raw input validation; reject seed-input edits after run start. Validate the merged config separately. |
+| Schema and admission | `internal/validation/seedgeneration.go`, `api/provisioning/v1alpha1/provisioningrequest_validation.go`, `provisioningrequest_webhook.go` | Keep restricted raw input validation; reject seed input and timeout edits after run start. Validate the merged config separately. |
 | CT validation | `internal/controllers/clustertemplate_controller.go` | Recognize the third type; validate seed defaults against a full internal schema while preserving CV/IBGU behavior. |
 | Merge and parse | `internal/controllers/provisioningrequest_upgrade.go`, `internal/controllers/utils/constants.go` | Parse `seedGeneration`; use the existing deep merge and full schema for effective config. |
 | Reconcile dispatch | `internal/controllers/provisioningrequest_controller.go`, `provisioningrequest_clusterconfig.go`, `provisioningrequest_setup.go` | Route seed runs before upgrades and ACM-dependent phases; watch or poll the Job. |
@@ -66,10 +66,10 @@ references, release images, URLs, mirror sources, CA references, or
 The current `validateUpgradeDefaultsAgainstSchema` validates CT defaults
 against the PR-facing schema, and `mergeAndValidateUpgradeData` does the same
 after merging. Both paths need a seed branch that uses one strict internal
-effective-object schema. Put that schema near the existing API JSON schema
-helpers, for example in
-`api/provisioning/v1alpha1/seedgeneration_schema.go`, and call it from CT
-validation and the controller's post-merge validation. The existing
+effective-object schema. Put reusable seed rules and the full schema in
+`internal/validation/seedgeneration.go`, with thin adapters in the API
+package for the webhook and existing callers. Call the shared validator
+from CT validation and the controller's post-merge validation. The existing
 `ProvisioningRequest.ValidateUpgradeInput` runs at admission on raw PR input,
 before controller merge; it must not require template-owned fields from a
 partial override. This places full validation at the actual post-merge point
