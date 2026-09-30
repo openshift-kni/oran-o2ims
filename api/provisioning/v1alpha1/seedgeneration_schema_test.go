@@ -56,7 +56,7 @@ func TestValidateSeedGenerationUpgradeData(t *testing.T) {
 		},
 		{
 			name: "seed and ISO",
-			data: `{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"},"liveISO":{"releaseImage":"quay.io/ocp/release:4.22","installationDisk":"/dev/sda","uploadSecretRef":{"name":"upload"},"urlBase":"https://iso.example.test/images/","imageDigestSources":[{"source":"quay.io/ocp","mirrors":["mirror.example.test/ocp"]}]}},"clusterUpgradeTimeout":"3h"}`,
+			data: `{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"},"liveISO":{"releaseImage":"quay.io/ocp/release:4.22","installationDisk":"/dev/sda","uploadSecretRef":{"name":"upload"},"urlBase":"https://iso.example.test/images/","imageDigestSources":[{"source":"quay.io/ocp","mirrors":["mirror.example.test/ocp"]}]}},"seedGenerationTimeout":"3h"}`,
 		},
 		{
 			name:    "missing seed image",
@@ -95,12 +95,17 @@ func TestValidateSeedGenerationUpgradeData(t *testing.T) {
 		},
 		{
 			name:    "invalid timeout",
-			data:    `{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"}},"clusterUpgradeTimeout":"soon"}`,
+			data:    `{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"}},"seedGenerationTimeout":"soon"}`,
 			wantErr: true,
 		},
 		{
 			name:    "zero timeout",
-			data:    `{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"}},"clusterUpgradeTimeout":"0s"}`,
+			data:    `{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"}},"seedGenerationTimeout":"0s"}`,
+			wantErr: true,
+		},
+		{
+			name:    "upgrade timeout is not a seed timeout",
+			data:    `{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"}},"clusterUpgradeTimeout":"3h"}`,
 			wantErr: true,
 		},
 	}

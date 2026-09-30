@@ -859,6 +859,20 @@ func validateUpgradeParametersSchema(schemaRaw []byte, hasUpgradeDefaults bool) 
 		return err
 	}
 	if hasSeed {
+		for key, property := range props {
+			switch key {
+			case ctlrutils.UpgradeDefaultsSeedGenerationKey:
+			case ctlrutils.SeedGenerationTimeoutConfigKey:
+				field, ok := property.(map[string]any)
+				if !ok || field["type"] != "string" {
+					return fmt.Errorf("%s.%s must have type \"string\"",
+						constants.TemplateParamUpgrade, key)
+				}
+			default:
+				return fmt.Errorf("%s schema cannot expose %q for seed generation",
+					constants.TemplateParamUpgrade, key)
+			}
+		}
 		var rootSchema map[string]any
 		if err := json.Unmarshal(schemaRaw, &rootSchema); err != nil {
 			return fmt.Errorf("failed to decode templateParameterSchema: %w", err)

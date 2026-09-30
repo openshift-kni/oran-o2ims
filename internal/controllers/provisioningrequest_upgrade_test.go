@@ -164,6 +164,22 @@ var _ = Describe("mergeAndValidateUpgradeData", func() {
 		Expect(seed["liveISO"]).To(HaveKey("releaseImage"))
 	})
 
+	It("merges a PR seed generation timeout over the template default", func() {
+		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"seedImage":"quay.io/example/default:4.22","seedAuthSecretRef":{"name":"push-auth"}},"seedGenerationTimeout":"3h"}`)
+		clusterTemplate.Spec.TemplateParameterSchema.Raw = []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{"seedGeneration":{"type":"object","additionalProperties":false},"seedGenerationTimeout":{"type":"string"}}}}}`)
+		task.object.Spec.TemplateParameters.Raw = []byte(`{"upgradeParameters":{"seedGenerationTimeout":"2h"}}`)
+		merged, err := task.mergeAndValidateUpgradeData(clusterTemplate)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(merged[utils.SeedGenerationTimeoutConfigKey]).To(Equal("2h"))
+	})
+
+	It("rejects clusterUpgradeTimeout in merged seed generation data", func() {
+		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"seedImage":"quay.io/example/default:4.22","seedAuthSecretRef":{"name":"push-auth"}},"clusterUpgradeTimeout":"3h"}`)
+		clusterTemplate.Spec.TemplateParameterSchema.Raw = []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{"seedGeneration":{"type":"object","additionalProperties":false}}}}}`)
+		_, err := task.mergeAndValidateUpgradeData(clusterTemplate)
+		Expect(err).To(MatchError(ContainSubstring("clusterUpgradeTimeout")))
+	})
+
 	It("rejects an incomplete merged seed configuration", func() {
 		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"seedImage":"quay.io/example/default:4.22"}}`)
 		clusterTemplate.Spec.TemplateParameterSchema.Raw = []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"seedGeneration":{"type":"object","additionalProperties":false}}}}}`)
@@ -1031,6 +1047,42 @@ var _ = Describe("parseUpgradeConfig", func() {
 	})
 
 	Context("timeout extraction", func() {
+		It("should return seed generation timeout from CT defaults", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{},"seedGenerationTimeout":"3h"}`)
+			cfg, err := parseUpgradeConfig(ct, pr)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cfg.Timeout).To(Equal(3 * time.Hour))
+		})
+
+		It("should prefer PR seed generation timeout over CT defaults", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{},"seedGenerationTimeout":"3h"}`)
+			pr.Spec.TemplateParameters.Raw = []byte(`{"upgradeParameters":{"seedGenerationTimeout":"2h"}}`)
+			cfg, err := parseUpgradeConfig(ct, pr)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cfg.Timeout).To(Equal(2 * time.Hour))
+		})
+
+		It("should reject an invalid seed generation timeout", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{}}`)
+			pr.Spec.TemplateParameters.Raw = []byte(`{"upgradeParameters":{"seedGenerationTimeout":"0s"}}`)
+			_, err := parseUpgradeConfig(ct, pr)
+			Expect(err).To(MatchError(ContainSubstring("invalid seedGenerationTimeout")))
+		})
+
+		It("should reject clusterUpgradeTimeout for seed generation", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{}}`)
+			pr.Spec.TemplateParameters.Raw = []byte(`{"upgradeParameters":{"clusterUpgradeTimeout":"3h"}}`)
+			_, err := parseUpgradeConfig(ct, pr)
+			Expect(err).To(MatchError(ContainSubstring("clusterUpgradeTimeout is not valid")))
+		})
+
+		It("should reject seedGenerationTimeout for cluster upgrades", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"clusterVersion":{}}`)
+			pr.Spec.TemplateParameters.Raw = []byte(`{"upgradeParameters":{"seedGenerationTimeout":"3h"}}`)
+			_, err := parseUpgradeConfig(ct, pr)
+			Expect(err).To(MatchError(ContainSubstring("seedGenerationTimeout is not valid")))
+		})
+
 		It("should return zero timeout when no timeout is set", func() {
 			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
 				Raw: []byte(`{"clusterVersion":{}}`),

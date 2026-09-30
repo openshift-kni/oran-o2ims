@@ -2099,6 +2099,21 @@ var _ = Describe("validateUpgradeParametersSchema", func() {
 		Expect(validateUpgradeParametersSchema(schema, true)).To(Succeed())
 	})
 
+	It("should accept a seedGenerationTimeout PR override", func() {
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{"seedGeneration":{"type":"object","additionalProperties":false},"seedGenerationTimeout":{"type":"string"}}}}}`)
+		Expect(validateUpgradeParametersSchema(schema, true)).To(Succeed())
+	})
+
+	It("should reject clusterUpgradeTimeout for seed generation", func() {
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{"seedGeneration":{"type":"object","additionalProperties":false},"clusterUpgradeTimeout":{"type":"string"}}}}}`)
+		Expect(validateUpgradeParametersSchema(schema, true)).To(MatchError(ContainSubstring("clusterUpgradeTimeout")))
+	})
+
+	It("should reject a non-string seedGenerationTimeout schema", func() {
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{"seedGeneration":{"type":"object","additionalProperties":false},"seedGenerationTimeout":{"type":"integer"}}}}}`)
+		Expect(validateUpgradeParametersSchema(schema, true)).To(MatchError(ContainSubstring(`seedGenerationTimeout must have type "string"`)))
+	})
+
 	It("should reject a seedGeneration schema with an open upgradeParameters parent", func() {
 		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"seedGeneration":{"type":"object","additionalProperties":false}}}}}`)
 		Expect(validateUpgradeParametersSchema(schema, true)).To(MatchError(ContainSubstring("additionalProperties")))
@@ -2193,6 +2208,16 @@ var _ = Describe("seed generation ClusterTemplate defaults", func() {
 
 	It("validates template-owned fields against the effective schema", func() {
 		Expect(task.validateUpgradeDefaults()).To(Succeed())
+	})
+
+	It("accepts a seed generation timeout default", func() {
+		task.object.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"}},"seedGenerationTimeout":"3h"}`)
+		Expect(task.validateUpgradeDefaults()).To(Succeed())
+	})
+
+	It("rejects a cluster upgrade timeout in seed defaults", func() {
+		task.object.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"}},"clusterUpgradeTimeout":"3h"}`)
+		Expect(task.validateUpgradeDefaults()).To(MatchError(ContainSubstring("clusterUpgradeTimeout")))
 	})
 
 	It("rejects missing required template defaults", func() {

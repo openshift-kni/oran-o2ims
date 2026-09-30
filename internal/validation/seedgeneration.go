@@ -103,7 +103,7 @@ const seedGenerationEffectiveSchema = `{
       },
       "required": ["seedImage", "seedAuthSecretRef"]
     },
-    "clusterUpgradeTimeout": {"type": "string", "minLength": 1}
+    "seedGenerationTimeout": {"type": "string", "minLength": 1}
   },
   "required": ["seedGeneration"]
 }`
@@ -119,10 +119,10 @@ func ValidateSeedGenerationUpgradeData(upgradeData map[string]any) error {
 	if err := ValidateJSONSchema(schema, upgradeData); err != nil {
 		return fmt.Errorf("seed generation configuration is invalid: %w", err)
 	}
-	if rawTimeout, ok := upgradeData["clusterUpgradeTimeout"]; ok {
+	if rawTimeout, ok := upgradeData["seedGenerationTimeout"]; ok {
 		timeout, err := time.ParseDuration(rawTimeout.(string))
 		if err != nil || timeout <= 0 {
-			return fmt.Errorf("clusterUpgradeTimeout must be a positive duration")
+			return fmt.Errorf("seedGenerationTimeout must be a positive duration")
 		}
 	}
 	return nil

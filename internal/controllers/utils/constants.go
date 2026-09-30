@@ -155,14 +155,15 @@ const (
 	DefaultSeedGenerationWithISOTimeout = 3 * time.Hour
 )
 
-// These are optional keys in the respective ConfigMaps defined in ClusterTemplate
-// spec.templates, used to configure the timeout values for each operation.
+// These optional keys configure timeout values in ClusterTemplate defaults,
+// ProvisioningRequest parameters, or their respective ConfigMaps.
 // If not specified, the default timeout values will be applied.
 const (
 	HardwareProvisioningTimeoutConfigKey = "hardwareProvisioningTimeout"
 	ClusterInstallationTimeoutConfigKey  = "clusterInstallationTimeout"
 	ClusterConfigurationTimeoutConfigKey = "clusterConfigurationTimeout"
 	ClusterUpgradeTimeoutConfigKey       = "clusterUpgradeTimeout"
+	SeedGenerationTimeoutConfigKey       = "seedGenerationTimeout"
 )
 
 // ClusterInstance template constants
