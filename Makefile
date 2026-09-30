@@ -134,7 +134,7 @@ ENVTEST_K8S_VERSION ?= $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -
 ENVTEST_VERSION ?= $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller-runtime | awk -F'[v.]' '{printf "release-%d.%d", $$2, $$3}')
 
 # E2E_TEST_TIMEOUT is the maximum time the e2e test suite is allowed to run.
-E2E_TEST_TIMEOUT ?= 30m
+E2E_TEST_TIMEOUT ?= 45m
 
 # OCLOUD_MANAGER_NAMESPACE refers to the namespace of the O-Cloud Manager
 OCLOUD_MANAGER_NAMESPACE ?= oran-o2ims

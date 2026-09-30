@@ -16,12 +16,13 @@ feature, which parses test structure without executing tests.
 ## Contents
 
 - [MNO Standard ClusterVersion Upgrade [mno-cv-upgrade]](#mno-standard-clusterversion-upgrade-mno-cv-upgrade)
-  - [y-stream upgrade 4.19.3 to 4.20.5 with failure recovery and successful completion](#y-stream-upgrade-4193-to-4205-with-failure-recovery-and-successful-completion)
-  - [y-stream upgrade timeout when upgrading from 4.20.5 to 4.21.2](#y-stream-upgrade-timeout-when-upgrading-from-4205-to-4212)
-  - [Terminal failure recovery from 4.21.2 to 4.20.5](#terminal-failure-recovery-from-4212-to-4205)
-  - [EUS upgrade timeout when upgrading from 4.20.5 to 4.22.4 via 4.21.6](#eus-upgrade-timeout-when-upgrading-from-4205-to-4224-via-4216)
-  - [Terminal failure recovery after EUS timeout from 4.22.4 to 4.20.5](#terminal-failure-recovery-after-eus-timeout-from-4224-to-4205)
-  - [EUS upgrade 4.20.5 to 4.22.4 via 4.21.7 with failure recovery and successful completion](#eus-upgrade-4205-to-4224-via-4217-with-failure-recovery-and-successful-completion)
+  - [Parallel worker-pool rollout for y-stream upgrade 4.19.3 to 4.20.5 with failure recovery](#parallel-worker-pool-rollout-for-y-stream-upgrade-4193-to-4205-with-failure-recovery)
+  - [y-stream upgrade timeout with OpenShiftDefault strategy from 4.20.5 to 4.21.2](#y-stream-upgrade-timeout-with-openshiftdefault-strategy-from-4205-to-4212)
+  - [Recovery after OpenShiftDefault upgrade timeout from 4.21.2 to 4.20.5](#recovery-after-openshiftdefault-upgrade-timeout-from-4212-to-4205)
+  - [EUS upgrade timeout with default Parallel strategy from 4.20.5 to 4.22.4 via 4.21.6](#eus-upgrade-timeout-with-default-parallel-strategy-from-4205-to-4224-via-4216)
+  - [Recovery after EUS Parallel upgrade timeout from 4.22.4 to 4.20.5](#recovery-after-eus-parallel-upgrade-timeout-from-4224-to-4205)
+  - [EUS upgrade 4.20.5 to 4.22.4 via 4.21.7 with Serial worker-pool rollout and failure recovery](#eus-upgrade-4205-to-4224-via-4217-with-serial-worker-pool-rollout-and-failure-recovery)
+  - [Custom staged worker-pool rollout for upgrade 4.22.4 to 4.23.1](#custom-staged-worker-pool-rollout-for-upgrade-4224-to-4231)
 - [MNO Day2 Hardware Configuration test [mno-day2-hw-updates]](#mno-day2-hardware-configuration-test-mno-day2-hw-updates)
   - [Performs day2 hardware configuration update successfully](#performs-day2-hardware-configuration-update-successfully)
   - [Handles day2 hardware configuration update with BMH error](#handles-day2-hardware-configuration-update-with-bmh-error)
@@ -45,7 +46,7 @@ File: `test/e2e/mno_cv_upgrade_test.go`
 - Setting up spoke client mock at version 4.19.3
 - Deleting created resources
 
-### y-stream upgrade 4.19.3 to 4.20.5 with failure recovery and successful completion
+### Parallel worker-pool rollout for y-stream upgrade 4.19.3 to 4.20.5 with failure recovery
 
 1. should fail with version mismatch when PR overrides desiredUpdate.version
 1. should report CV's Upgradeable=False after fixing version
@@ -55,25 +56,25 @@ File: `test/e2e/mno_cv_upgrade_test.go`
 1. should show InProgress with CV's Progressing message
 1. should complete upgrade after Parallel worker pools roll out
 
-### y-stream upgrade timeout when upgrading from 4.20.5 to 4.21.2
+### y-stream upgrade timeout with OpenShiftDefault strategy from 4.20.5 to 4.21.2
 
 1. should start upgrade to 4.21.2 and reach InProgress
 1. should time out when clusterUpgradeTimeout is set to 5s
 
-### Terminal failure recovery from 4.21.2 to 4.20.5
+### Recovery after OpenShiftDefault upgrade timeout from 4.21.2 to 4.20.5
 
 1. should recover to fulfilled when switching back to CT matching current ClusterVersion 4.20.5
 
-### EUS upgrade timeout when upgrading from 4.20.5 to 4.22.4 via 4.21.6
+### EUS upgrade timeout with default Parallel strategy from 4.20.5 to 4.22.4 via 4.21.6
 
 1. should start EUS intermediate upgrade and reach InProgress
 1. should time out during EUS intermediate upgrade
 
-### Terminal failure recovery after EUS timeout from 4.22.4 to 4.20.5
+### Recovery after EUS Parallel upgrade timeout from 4.22.4 to 4.20.5
 
 1. should recover to fulfilled when switching back to CT matching current ClusterVersion 4.20.5
 
-### EUS upgrade 4.20.5 to 4.22.4 via 4.21.7 with failure recovery and successful completion
+### EUS upgrade 4.20.5 to 4.22.4 via 4.21.7 with Serial worker-pool rollout and failure recovery
 
 1. should fail with MCPs not updated
 1. should fail with invalid intermediateVersion after fixing MCPs
@@ -83,6 +84,13 @@ File: `test/e2e/mno_cv_upgrade_test.go`
 1. should show target upgrade in progress
 1. should roll out worker pools serially after target upgrade completes
 1. should complete EUS upgrade when MCPs are updated
+
+### Custom staged worker-pool rollout for upgrade 4.22.4 to 4.23.1
+
+1. should trigger the upgrade with both worker pools paused
+1. should stop after the control plane until the canary is authorized
+1. should run the canary and stop again before the remaining stage
+1. should run the remaining stage and complete the upgrade
 
 ## MNO Day2 Hardware Configuration test [mno-day2-hw-updates]
 

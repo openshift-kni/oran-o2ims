@@ -19,9 +19,11 @@ import (
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	"github.com/openshift-kni/oran-o2ims/internal/upgrade"
 	upgradevalidation "github.com/openshift-kni/oran-o2ims/internal/validation"
 	"github.com/r3labs/diff/v3"
 	"github.com/xeipuuv/gojsonschema"
+	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -575,4 +577,133 @@ func (r *ProvisioningRequest) ValidateUpgradeInput(clusterTemplate *ClusterTempl
 	}
 
 	return nil
+}
+
+// validateActiveUpgradeUpdate freezes upgrade inputs once the upgrade is active,
+// except for timeout changes and forward Custom stage authorization while waiting
+// between stages.
+func validateActiveUpgradeUpdate(
+	oldPr, newPr *ProvisioningRequest, clusterTemplate *ClusterTemplate,
+) error {
+	upgradeCond := meta.FindStatusCondition(
+		oldPr.Status.Conditions, string(PRconditionTypes.UpgradeCompleted))
+	if upgradeCond == nil ||
+		(upgradeCond.Reason != string(CRconditionReasons.InProgress) &&
+			upgradeCond.Reason != string(CRconditionReasons.Unknown) &&
+			upgradeCond.Reason != string(CRconditionReasons.AwaitingStageAuthorization)) {
+		return nil
+	}
+
+	if oldPr.Spec.TemplateName != newPr.Spec.TemplateName ||
+		oldPr.Spec.TemplateVersion != newPr.Spec.TemplateVersion {
+		return fmt.Errorf("switching ClusterTemplate is not allowed while a cluster upgrade is active")
+	}
+
+	oldUpgradeInput, err := activeUpgradeInput(oldPr.Spec.TemplateParameters.Raw)
+	if err != nil {
+		return err
+	}
+	newUpgradeInput, err := activeUpgradeInput(newPr.Spec.TemplateParameters.Raw)
+	if err != nil {
+		return err
+	}
+	defaultsRaw := clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw
+	oldUpgradeThrough, err := upgrade.RequestedWorkerPoolUpgradeThrough(defaultsRaw, oldPr.Spec.TemplateParameters.Raw)
+	if err != nil {
+		return fmt.Errorf("failed to resolve previous worker-pool stage authorization: %w", err)
+	}
+	newUpgradeThrough, err := upgrade.RequestedWorkerPoolUpgradeThrough(defaultsRaw, newPr.Spec.TemplateParameters.Raw)
+	if err != nil {
+		return fmt.Errorf("failed to resolve requested worker-pool stage authorization: %w", err)
+	}
+	if !equality.Semantic.DeepEqual(oldUpgradeInput, newUpgradeInput) {
+		return fmt.Errorf(
+			"upgradeParameters cannot be changed while a cluster upgrade is active, except for clusterUpgradeTimeout and forward workerPoolUpgrade.upgradeThrough changes while awaiting stage authorization")
+	}
+	if upgradeCond.Reason != string(CRconditionReasons.AwaitingStageAuthorization) {
+		if newUpgradeThrough != oldUpgradeThrough {
+			return fmt.Errorf("workerPoolUpgrade.upgradeThrough can only change while awaiting stage authorization")
+		}
+		return nil
+	}
+
+	upgradeStatus := oldPr.Status.Extensions.ClusterDetails
+	if upgradeStatus == nil || upgradeStatus.ClusterUpgradeStatus == nil ||
+		upgradeStatus.ClusterUpgradeStatus.WorkerPoolUpgrade == nil {
+		return nil
+	}
+	workerStatus := upgradeStatus.ClusterUpgradeStatus.WorkerPoolUpgrade
+	if workerStatus.Strategy != constants.WorkerPoolUpgradeStrategyCustom {
+		return nil
+	}
+	// An accepted PR edit may be newer than status; honor both cursors to reject rapid reversals.
+	currentIndex := workerStatus.StageIndex(workerStatus.UpgradeThrough)
+	oldIndex := workerStatus.StageIndex(oldUpgradeThrough)
+	currentUpgradeThrough := workerStatus.UpgradeThrough
+	if oldIndex > currentIndex {
+		currentIndex = oldIndex
+		currentUpgradeThrough = oldUpgradeThrough
+	}
+	requestedIndex := workerStatus.StageIndex(newUpgradeThrough)
+	if newUpgradeThrough != "" && requestedIndex < 0 {
+		return fmt.Errorf("workerPoolUpgrade.upgradeThrough refers to unknown stage %q", newUpgradeThrough)
+	}
+	if requestedIndex < currentIndex {
+		return fmt.Errorf(
+			"workerPoolUpgrade.upgradeThrough cannot move backwards from %q to %q",
+			currentUpgradeThrough, newUpgradeThrough)
+	}
+	return nil
+}
+
+// activeUpgradeInput removes the two mutable upgrade fields from raw PR input
+// before comparing an old and new request.
+func activeUpgradeInput(raw []byte) (map[string]any, error) {
+	if len(raw) == 0 {
+		return map[string]any{}, nil
+	}
+	params := make(map[string]any)
+	if err := json.Unmarshal(raw, &params); err != nil {
+		return nil, fmt.Errorf("failed to decode templateParameters for active upgrade validation: %w", err)
+	}
+	if params == nil {
+		return nil, fmt.Errorf("templateParameters must be an object")
+	}
+	upgradeValue, found := params[constants.TemplateParamUpgrade]
+	if !found {
+		return map[string]any{}, nil
+	}
+	upgradeParameters, ok := upgradeValue.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("templateParameters.%s must be an object", constants.TemplateParamUpgrade)
+	}
+	if workerValue, found := upgradeParameters["workerPoolUpgrade"]; found {
+		workerPoolUpgrade, ok := workerValue.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("templateParameters.%s.workerPoolUpgrade must be an object", constants.TemplateParamUpgrade)
+		}
+		delete(workerPoolUpgrade, "upgradeThrough")
+		if len(workerPoolUpgrade) == 0 {
+			delete(upgradeParameters, "workerPoolUpgrade")
+		}
+	}
+	delete(upgradeParameters, "clusterUpgradeTimeout")
+	if len(upgradeParameters) == 0 {
+		return map[string]any{}, nil
+	}
+	return upgradeParameters, nil
+}
+
+// StageIndex returns the zero-based index of a named stage, or -1 for an
+// empty or unknown name. An empty name authorizes no worker-pool stage.
+func (s *WorkerPoolUpgradeStatus) StageIndex(name string) int {
+	if s == nil || name == "" {
+		return -1
+	}
+	for i := range s.Stages {
+		if s.Stages[i].Name == name {
+			return i
+		}
+	}
+	return -1
 }

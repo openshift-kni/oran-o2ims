@@ -36,13 +36,6 @@ type UpgradeConfig struct {
 	Timeout     time.Duration
 }
 
-// WorkerPoolUpgrade is the worker MachineConfigPool rollout configuration
-// decoded from upgradeParameters or upgradeDefaults.
-type WorkerPoolUpgrade struct {
-	Strategy              string   `json:"strategy,omitempty"`
-	PoolsWithControlPlane []string `json:"poolsWithControlPlane,omitempty"`
-}
-
 // UpgradePhase represents the current phase of a ClusterVersion upgrade.
 type UpgradePhase int
 

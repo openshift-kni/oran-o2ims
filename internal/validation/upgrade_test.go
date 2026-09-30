@@ -279,77 +279,242 @@ var _ = Describe("ValidateEUSIntermediate", func() {
 
 var _ = Describe("WorkerPoolUpgrade validation", func() {
 	Describe("ValidateWorkerPoolUpgrade", func() {
+		withControlPlane := func(strategy string) WorkerPoolUpgrade {
+			config := WorkerPoolUpgrade{
+				Strategy:              strategy,
+				PoolsWithControlPlane: []string{"worker-canary"},
+			}
+			if strategy == constants.WorkerPoolUpgradeStrategyCustom {
+				config.Stages = []WorkerPoolUpgradeStage{{Name: "rest", Pools: []string{"worker-rest"}}}
+			}
+			return config
+		}
+
 		It("should reject OpenShiftDefault for EUS", func() {
-			err := ValidateWorkerPoolUpgrade(true, constants.WorkerPoolUpgradeStrategyOpenShiftDefault, nil)
+			err := ValidateWorkerPoolUpgrade(true, WorkerPoolUpgrade{
+				Strategy: constants.WorkerPoolUpgradeStrategyOpenShiftDefault,
+			})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("not applicable to EUS"))
 		})
 
 		It("should reject poolsWithControlPlane with OpenShiftDefault", func() {
-			err := ValidateWorkerPoolUpgrade(
-				false, constants.WorkerPoolUpgradeStrategyOpenShiftDefault, []string{"worker-canary"})
+			err := ValidateWorkerPoolUpgrade(false, WorkerPoolUpgrade{
+				Strategy:              constants.WorkerPoolUpgradeStrategyOpenShiftDefault,
+				PoolsWithControlPlane: []string{"worker-canary"},
+			})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("poolsWithControlPlane is not supported"))
 		})
 
 		It("should accept empty poolsWithControlPlane with OpenShiftDefault", func() {
-			Expect(ValidateWorkerPoolUpgrade(
-				false, constants.WorkerPoolUpgradeStrategyOpenShiftDefault, nil,
-			)).To(Succeed())
+			Expect(ValidateWorkerPoolUpgrade(false, WorkerPoolUpgrade{
+				Strategy: constants.WorkerPoolUpgradeStrategyOpenShiftDefault,
+			})).To(Succeed())
 		})
 
-		It("should reject poolsWithControlPlane for EUS", func() {
-			err := ValidateWorkerPoolUpgrade(
-				true, constants.WorkerPoolUpgradeStrategySerial, []string{"worker-canary"})
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("not supported for EUS"))
-		})
+		DescribeTable("rejects poolsWithControlPlane for EUS upgrades",
+			func(strategy string) {
+				Expect(ValidateWorkerPoolUpgrade(true, withControlPlane(strategy))).To(
+					MatchError(ContainSubstring("poolsWithControlPlane is not supported for EUS upgrades")))
+			},
+			Entry("Serial", constants.WorkerPoolUpgradeStrategySerial),
+			Entry("Parallel", constants.WorkerPoolUpgradeStrategyParallel),
+			Entry("Custom", constants.WorkerPoolUpgradeStrategyCustom),
+		)
 
-		It("should accept Serial with poolsWithControlPlane for non-EUS", func() {
-			Expect(ValidateWorkerPoolUpgrade(
-				false, constants.WorkerPoolUpgradeStrategySerial, []string{"worker-canary"},
-			)).To(Succeed())
-		})
+		DescribeTable("accepts poolsWithControlPlane for non-EUS upgrades",
+			func(strategy string) {
+				Expect(ValidateWorkerPoolUpgrade(false, withControlPlane(strategy))).To(Succeed())
+			},
+			Entry("Serial", constants.WorkerPoolUpgradeStrategySerial),
+			Entry("Parallel", constants.WorkerPoolUpgradeStrategyParallel),
+			Entry("Custom", constants.WorkerPoolUpgradeStrategyCustom),
+		)
 
 		It("should reject an unknown strategy", func() {
-			err := ValidateWorkerPoolUpgrade(false, "Custom", nil)
+			err := ValidateWorkerPoolUpgrade(false, WorkerPoolUpgrade{Strategy: "Unknown"})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("unsupported workerPoolUpgrade.strategy"))
 		})
+
+		It("should accept a complete Custom configuration", func() {
+			config := WorkerPoolUpgrade{
+				Strategy: constants.WorkerPoolUpgradeStrategyCustom,
+				Stages: []WorkerPoolUpgradeStage{
+					{Name: "canary", Pools: []string{"worker-a"}},
+					{Name: "rest", Pools: []string{"worker-b", "worker-c"}},
+				},
+				UpgradeThrough: "canary",
+			}
+			Expect(ValidateWorkerPoolUpgrade(false, config)).To(Succeed())
+		})
+
+		DescribeTable("rejects a Custom plan with an invalid stage or pool assignment",
+			func(config WorkerPoolUpgrade, expected string) {
+				err := ValidateWorkerPoolUpgrade(false, config)
+				Expect(err).To(MatchError(expected))
+			},
+			Entry("no stages", WorkerPoolUpgrade{
+				Strategy: constants.WorkerPoolUpgradeStrategyCustom,
+			}, "workerPoolUpgrade.stages must not be empty with strategy Custom"),
+			Entry("empty stage name", WorkerPoolUpgrade{
+				Strategy: constants.WorkerPoolUpgradeStrategyCustom,
+				Stages:   []WorkerPoolUpgradeStage{{Pools: []string{"worker-a"}}},
+			}, "workerPoolUpgrade.stages contains an empty stage name"),
+			Entry("duplicate stage name", WorkerPoolUpgrade{
+				Strategy: constants.WorkerPoolUpgradeStrategyCustom,
+				Stages: []WorkerPoolUpgradeStage{
+					{Name: "same", Pools: []string{"worker-a"}},
+					{Name: "same", Pools: []string{"worker-b"}},
+				},
+			}, "workerPoolUpgrade.stages contains duplicate stage name \"same\""),
+			Entry("stage with no pools", WorkerPoolUpgrade{
+				Strategy: constants.WorkerPoolUpgradeStrategyCustom,
+				Stages:   []WorkerPoolUpgradeStage{{Name: "canary"}},
+			}, "workerPoolUpgrade stage \"canary\" must contain at least one pool"),
+			Entry("empty pool name in a stage", WorkerPoolUpgrade{
+				Strategy: constants.WorkerPoolUpgradeStrategyCustom,
+				Stages:   []WorkerPoolUpgradeStage{{Name: "canary", Pools: []string{""}}},
+			}, "workerPoolUpgrade stage \"canary\" contains an empty pool name"),
+			Entry("master pool in a stage", WorkerPoolUpgrade{
+				Strategy: constants.WorkerPoolUpgradeStrategyCustom,
+				Stages:   []WorkerPoolUpgradeStage{{Name: "canary", Pools: []string{"master"}}},
+			}, "workerPoolUpgrade stage must not include \"master\""),
+			Entry("pool repeated between control plane and stage", WorkerPoolUpgrade{
+				Strategy:              constants.WorkerPoolUpgradeStrategyCustom,
+				PoolsWithControlPlane: []string{"worker-a"},
+				Stages: []WorkerPoolUpgradeStage{
+					{Name: "canary", Pools: []string{"worker-a"}},
+				},
+			}, "workerPoolUpgrade pool \"worker-a\" appears more than once (poolsWithControlPlane and stage \"canary\")"),
+			Entry("pool repeated within one stage", WorkerPoolUpgrade{
+				Strategy: constants.WorkerPoolUpgradeStrategyCustom,
+				Stages: []WorkerPoolUpgradeStage{
+					{Name: "canary", Pools: []string{"worker-a", "worker-a"}},
+				},
+			}, "workerPoolUpgrade pool \"worker-a\" appears more than once in stage \"canary\""),
+			Entry("pool repeated across stages", WorkerPoolUpgrade{
+				Strategy: constants.WorkerPoolUpgradeStrategyCustom,
+				Stages: []WorkerPoolUpgradeStage{
+					{Name: "canary", Pools: []string{"worker-a"}},
+					{Name: "rest", Pools: []string{"worker-a"}},
+				},
+			}, "workerPoolUpgrade pool \"worker-a\" appears more than once (stage \"canary\" and stage \"rest\")"),
+			Entry("duplicate control-plane pool", WorkerPoolUpgrade{
+				Strategy:              constants.WorkerPoolUpgradeStrategyCustom,
+				PoolsWithControlPlane: []string{"worker-a", "worker-a"},
+				Stages: []WorkerPoolUpgradeStage{
+					{Name: "canary", Pools: []string{"worker-b"}},
+				},
+			}, "workerPoolUpgrade.poolsWithControlPlane contains duplicate pool name \"worker-a\""),
+			Entry("empty control-plane pool name", WorkerPoolUpgrade{
+				Strategy:              constants.WorkerPoolUpgradeStrategyCustom,
+				PoolsWithControlPlane: []string{""},
+				Stages: []WorkerPoolUpgradeStage{
+					{Name: "canary", Pools: []string{"worker-b"}},
+				},
+			}, "workerPoolUpgrade.poolsWithControlPlane contains an empty pool name"),
+			Entry("master pool with control plane", WorkerPoolUpgrade{
+				Strategy:              constants.WorkerPoolUpgradeStrategyCustom,
+				PoolsWithControlPlane: []string{"master"},
+				Stages:                []WorkerPoolUpgradeStage{{Name: "canary", Pools: []string{"worker-b"}}},
+			}, "workerPoolUpgrade.poolsWithControlPlane must not include \"master\""),
+			Entry("upgradeThrough names a missing stage", WorkerPoolUpgrade{
+				Strategy: constants.WorkerPoolUpgradeStrategyCustom,
+				Stages: []WorkerPoolUpgradeStage{
+					{Name: "canary", Pools: []string{"worker-a"}},
+				},
+				UpgradeThrough: "missing",
+			}, "workerPoolUpgrade.upgradeThrough refers to unknown stage \"missing\""),
+		)
+
+		DescribeTable("rejects Custom-only fields on preset strategies",
+			func(strategy string, useStages bool) {
+				config := WorkerPoolUpgrade{Strategy: strategy}
+				if useStages {
+					config.Stages = []WorkerPoolUpgradeStage{{Name: "canary", Pools: []string{"worker-a"}}}
+				} else {
+					config.UpgradeThrough = "canary"
+				}
+				Expect(ValidateWorkerPoolUpgrade(false, config)).To(MatchError(
+					"workerPoolUpgrade.stages and workerPoolUpgrade.upgradeThrough are supported only with strategy Custom"))
+			},
+			Entry("OpenShiftDefault with stages", constants.WorkerPoolUpgradeStrategyOpenShiftDefault, true),
+			Entry("OpenShiftDefault with upgradeThrough", constants.WorkerPoolUpgradeStrategyOpenShiftDefault, false),
+			Entry("Serial with stages", constants.WorkerPoolUpgradeStrategySerial, true),
+			Entry("Serial with upgradeThrough", constants.WorkerPoolUpgradeStrategySerial, false),
+			Entry("Parallel with stages", constants.WorkerPoolUpgradeStrategyParallel, true),
+			Entry("Parallel with upgradeThrough", constants.WorkerPoolUpgradeStrategyParallel, false),
+		)
 	})
 
-	Describe("ValidatePoolsWithControlPlaneNames", func() {
+	Describe("ValidateWorkerPoolUpgradeMCPs", func() {
 		mcps := []mcfgv1.MachineConfigPool{
-			{ObjectMeta: metav1.ObjectMeta{Name: "worker"}},
 			{ObjectMeta: metav1.ObjectMeta{Name: "worker-a"}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "worker-b"}},
 		}
 
-		It("should accept known worker pool names", func() {
-			Expect(ValidatePoolsWithControlPlaneNames(mcps, []string{"worker-a"})).To(Succeed())
+		It("should require every worker in the initial Custom plan", func() {
+			config := WorkerPoolUpgrade{
+				Strategy: constants.WorkerPoolUpgradeStrategyCustom,
+				Stages: []WorkerPoolUpgradeStage{
+					{Name: "canary", Pools: []string{"worker-a"}},
+				},
+			}
+			err := ValidateWorkerPoolUpgradeMCPs(mcps, config)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("worker-b"))
 		})
 
-		It("should reject an empty name", func() {
-			err := ValidatePoolsWithControlPlaneNames(mcps, []string{""})
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("empty name"))
+		It("should accept every worker exactly once", func() {
+			config := WorkerPoolUpgrade{
+				Strategy:              constants.WorkerPoolUpgradeStrategyCustom,
+				PoolsWithControlPlane: []string{"worker-a"},
+				Stages: []WorkerPoolUpgradeStage{
+					{Name: "rest", Pools: []string{"worker-b"}},
+				},
+			}
+			Expect(ValidateWorkerPoolUpgradeMCPs(mcps, config)).To(Succeed())
 		})
 
-		It("should reject master", func() {
-			err := ValidatePoolsWithControlPlaneNames(mcps, []string{"master"})
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("must not include"))
-		})
+		DescribeTable("accepts known control-plane pools for preset strategies",
+			func(strategy string) {
+				config := WorkerPoolUpgrade{
+					Strategy:              strategy,
+					PoolsWithControlPlane: []string{"worker-a"},
+				}
+				Expect(ValidateWorkerPoolUpgradeMCPs(mcps, config)).To(Succeed())
+			},
+			Entry("Serial", constants.WorkerPoolUpgradeStrategySerial),
+			Entry("Parallel", constants.WorkerPoolUpgradeStrategyParallel),
+		)
 
-		It("should reject unknown names", func() {
-			err := ValidatePoolsWithControlPlaneNames(mcps, []string{"missing"})
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("unknown MachineConfigPool"))
-		})
+		DescribeTable("rejects unknown poolsWithControlPlane MCPs",
+			func(strategy string) {
+				config := WorkerPoolUpgrade{
+					Strategy:              strategy,
+					PoolsWithControlPlane: []string{"missing"},
+				}
+				if strategy == constants.WorkerPoolUpgradeStrategyCustom {
+					config.Stages = []WorkerPoolUpgradeStage{{Name: "rest", Pools: []string{"worker-a", "worker-b"}}}
+				}
+				Expect(ValidateWorkerPoolUpgradeMCPs(mcps, config)).To(MatchError(
+					"workerPoolUpgrade refers to unknown MachineConfigPool \"missing\""))
+			},
+			Entry("Serial", constants.WorkerPoolUpgradeStrategySerial),
+			Entry("Parallel", constants.WorkerPoolUpgradeStrategyParallel),
+			Entry("Custom", constants.WorkerPoolUpgradeStrategyCustom),
+		)
 
-		It("should reject duplicates", func() {
-			err := ValidatePoolsWithControlPlaneNames(mcps, []string{"worker", "worker"})
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("duplicate"))
+		It("rejects an unknown MCP in a Custom stage", func() {
+			config := WorkerPoolUpgrade{
+				Strategy:              constants.WorkerPoolUpgradeStrategyCustom,
+				PoolsWithControlPlane: []string{"worker-a"},
+				Stages:                []WorkerPoolUpgradeStage{{Name: "rest", Pools: []string{"missing"}}},
+			}
+			Expect(ValidateWorkerPoolUpgradeMCPs(mcps, config)).To(MatchError(
+				"workerPoolUpgrade refers to unknown MachineConfigPool \"missing\""))
 		})
 	})
 })

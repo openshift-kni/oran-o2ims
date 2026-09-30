@@ -335,12 +335,34 @@ spec:
                 - OpenShiftDefault
                 - Serial
                 - Parallel
+                - Custom
               poolsWithControlPlane:
                 type: array
                 uniqueItems: true
                 items:
                   type: string
                   minLength: 1
+              stages:
+                type: array
+                minItems: 1
+                items:
+                  type: object
+                  required:
+                    - name
+                    - pools
+                  properties:
+                    name:
+                      type: string
+                      minLength: 1
+                    pools:
+                      type: array
+                      minItems: 1
+                      uniqueItems: true
+                      items:
+                        type: string
+                        minLength: 1
+              upgradeThrough:
+                type: string
         type: object
     required:
       - nodeClusterName

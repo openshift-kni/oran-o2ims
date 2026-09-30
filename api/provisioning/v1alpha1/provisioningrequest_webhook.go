@@ -135,20 +135,17 @@ func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Contex
 	// Best-effort clusterName validation on the raw PR input. The controller
 	// performs the authoritative check on the merged value after defaults are
 	// applied; this catches obvious issues at admission time.
-	if inputMap, ok := newPrClusterInstanceInput.(map[string]any); ok {
-		if clusterName, ok := inputMap["clusterName"].(string); ok && clusterName != "" {
-			if err := clustervalidation.ValidateClusterNameFormat(clusterName); err != nil {
-				return fmt.Errorf("clusterInstanceParameters.clusterName: %w", err)
-			}
-			if err := clustervalidation.ValidateClusterNameNotReserved(clusterName); err != nil {
-				return fmt.Errorf("clusterInstanceParameters.clusterName: %w", err)
-			}
-		}
+	if err := validatePRClusterName(newPrClusterInstanceInput); err != nil {
+		return err
 	}
 
 	if oldPr == nil {
 		// ProvisioningRequest is being created, no immutable fields to check
 		return nil
+	}
+
+	if err := validateActiveUpgradeUpdate(oldPr, newPr, clusterTemplate); err != nil {
+		return err
 	}
 
 	// Check if hardware provisioning has timed out or failed
@@ -235,5 +232,25 @@ func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Contex
 		}
 	}
 
+	return nil
+}
+
+// validatePRClusterName checks the raw PR input when present. The controller
+// validates the merged value after template defaults are applied.
+func validatePRClusterName(clusterInstanceInput any) error {
+	inputMap, ok := clusterInstanceInput.(map[string]any)
+	if !ok {
+		return nil
+	}
+	clusterName, ok := inputMap["clusterName"].(string)
+	if !ok || clusterName == "" {
+		return nil
+	}
+	if err := clustervalidation.ValidateClusterNameFormat(clusterName); err != nil {
+		return fmt.Errorf("clusterInstanceParameters.clusterName: %w", err)
+	}
+	if err := clustervalidation.ValidateClusterNameNotReserved(clusterName); err != nil {
+		return fmt.Errorf("clusterInstanceParameters.clusterName: %w", err)
+	}
 	return nil
 }

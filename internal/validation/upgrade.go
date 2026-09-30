@@ -16,6 +16,21 @@ import (
 	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
 )
 
+// WorkerPoolUpgrade is the worker MCP rollout configuration decoded from
+// upgradeParameters or upgradeDefaults.
+type WorkerPoolUpgrade struct {
+	Strategy              string                   `json:"strategy,omitempty"`
+	PoolsWithControlPlane []string                 `json:"poolsWithControlPlane,omitempty"`
+	Stages                []WorkerPoolUpgradeStage `json:"stages,omitempty"`
+	UpgradeThrough        string                   `json:"upgradeThrough,omitempty"`
+}
+
+// WorkerPoolUpgradeStage is one ordered wave in a Custom rollout.
+type WorkerPoolUpgradeStage struct {
+	Name  string   `json:"name"`
+	Pools []string `json:"pools"`
+}
+
 // ValidateCVUpgradeData validates the semantic business rules for
 // clusterVersion upgrade parameters. It checks:
 //   - desiredUpdate.version, if set, matches releaseVersion
@@ -97,57 +112,132 @@ func ValidateEUSIntermediate(intermediateVersion, targetVersion string) error {
 	return nil
 }
 
-// ValidateWorkerPoolUpgrade validates strategy-specific worker MCP rollout rules.
-func ValidateWorkerPoolUpgrade(isEUS bool, strategy string, poolsWithControlPlane []string) error {
-	switch strategy {
+// ValidateWorkerPoolUpgrade validates strategy-specific worker MCP rollout rules
+// that do not require access to the spoke cluster.
+func ValidateWorkerPoolUpgrade(isEUS bool, config WorkerPoolUpgrade) error {
+	seenPools := make(map[string]string)
+	for _, pool := range config.PoolsWithControlPlane {
+		if pool == "" {
+			return fmt.Errorf("workerPoolUpgrade.poolsWithControlPlane contains an empty pool name")
+		}
+		if pool == "master" {
+			return fmt.Errorf("workerPoolUpgrade.poolsWithControlPlane must not include %q", pool)
+		}
+		if _, duplicate := seenPools[pool]; duplicate {
+			return fmt.Errorf("workerPoolUpgrade.poolsWithControlPlane contains duplicate pool name %q", pool)
+		}
+		seenPools[pool] = "poolsWithControlPlane"
+	}
+
+	switch config.Strategy {
 	case constants.WorkerPoolUpgradeStrategyOpenShiftDefault:
 		if isEUS {
 			return fmt.Errorf(
 				"workerPoolUpgrade.strategy %s is not applicable to EUS upgrades",
 				constants.WorkerPoolUpgradeStrategyOpenShiftDefault)
 		}
-		if len(poolsWithControlPlane) > 0 {
+		if len(config.PoolsWithControlPlane) > 0 {
 			return fmt.Errorf(
 				"workerPoolUpgrade.poolsWithControlPlane is not supported with strategy %s",
 				constants.WorkerPoolUpgradeStrategyOpenShiftDefault)
 		}
 	case constants.WorkerPoolUpgradeStrategySerial, constants.WorkerPoolUpgradeStrategyParallel:
-		if isEUS && len(poolsWithControlPlane) > 0 {
+		if isEUS && len(config.PoolsWithControlPlane) > 0 {
 			return fmt.Errorf(
 				"workerPoolUpgrade.poolsWithControlPlane is not supported for EUS upgrades")
 		}
+	case constants.WorkerPoolUpgradeStrategyCustom:
+		if isEUS && len(config.PoolsWithControlPlane) > 0 {
+			return fmt.Errorf(
+				"workerPoolUpgrade.poolsWithControlPlane is not supported for EUS upgrades")
+		}
+		if len(config.Stages) == 0 {
+			return fmt.Errorf("workerPoolUpgrade.stages must not be empty with strategy Custom")
+		}
+		seenStages := make(map[string]struct{}, len(config.Stages))
+		for _, stage := range config.Stages {
+			if stage.Name == "" {
+				return fmt.Errorf("workerPoolUpgrade.stages contains an empty stage name")
+			}
+			if _, duplicate := seenStages[stage.Name]; duplicate {
+				return fmt.Errorf("workerPoolUpgrade.stages contains duplicate stage name %q", stage.Name)
+			}
+			seenStages[stage.Name] = struct{}{}
+			if len(stage.Pools) == 0 {
+				return fmt.Errorf("workerPoolUpgrade stage %q must contain at least one pool", stage.Name)
+			}
+			for _, pool := range stage.Pools {
+				if pool == "" {
+					return fmt.Errorf("workerPoolUpgrade stage %q contains an empty pool name", stage.Name)
+				}
+				if pool == "master" {
+					return fmt.Errorf("workerPoolUpgrade stage must not include %q", pool)
+				}
+				stageLabel := fmt.Sprintf("stage %q", stage.Name)
+				if previous, duplicate := seenPools[pool]; duplicate {
+					if previous == stageLabel {
+						return fmt.Errorf("workerPoolUpgrade pool %q appears more than once in %s", pool, stageLabel)
+					}
+					return fmt.Errorf("workerPoolUpgrade pool %q appears more than once (%s and stage %q)",
+						pool, previous, stage.Name)
+				}
+				seenPools[pool] = stageLabel
+			}
+		}
+		if config.UpgradeThrough != "" {
+			if _, found := seenStages[config.UpgradeThrough]; !found {
+				return fmt.Errorf("workerPoolUpgrade.upgradeThrough refers to unknown stage %q", config.UpgradeThrough)
+			}
+		}
 	default:
 		return fmt.Errorf(
-			"unsupported workerPoolUpgrade.strategy %q; must be %s, %s, or %s",
-			strategy,
+			"unsupported workerPoolUpgrade.strategy %q; must be %s, %s, %s, or %s",
+			config.Strategy,
 			constants.WorkerPoolUpgradeStrategyOpenShiftDefault,
 			constants.WorkerPoolUpgradeStrategySerial,
-			constants.WorkerPoolUpgradeStrategyParallel)
+			constants.WorkerPoolUpgradeStrategyParallel,
+			constants.WorkerPoolUpgradeStrategyCustom)
+	}
+
+	if config.Strategy != constants.WorkerPoolUpgradeStrategyCustom &&
+		(len(config.Stages) > 0 || config.UpgradeThrough != "") {
+		return fmt.Errorf("workerPoolUpgrade.stages and workerPoolUpgrade.upgradeThrough are supported only with strategy Custom")
 	}
 	return nil
 }
 
-// ValidatePoolsWithControlPlaneNames checks that each name is a unique live non-master MachineConfigPool.
-func ValidatePoolsWithControlPlaneNames(mcps []mcfgv1.MachineConfigPool, names []string) error {
+// ValidateWorkerPoolUpgradeMCPs checks configured pools against live worker MCPs.
+// Call ValidateWorkerPoolUpgrade first for name, uniqueness, and strategy rules.
+func ValidateWorkerPoolUpgradeMCPs(
+	mcps []mcfgv1.MachineConfigPool, config WorkerPoolUpgrade,
+) error {
 	known := make(map[string]struct{}, len(mcps))
 	for i := range mcps {
 		known[mcps[i].Name] = struct{}{}
 	}
-	seen := make(map[string]struct{}, len(names))
-	for _, name := range names {
-		if name == "" {
-			return fmt.Errorf("workerPoolUpgrade.poolsWithControlPlane contains an empty name")
-		}
-		if name == "master" {
-			return fmt.Errorf("workerPoolUpgrade.poolsWithControlPlane must not include %q", "master")
-		}
-		if _, duplicate := seen[name]; duplicate {
-			return fmt.Errorf("workerPoolUpgrade.poolsWithControlPlane contains duplicate name %q", name)
-		}
+
+	configured := make([]string, 0, len(config.PoolsWithControlPlane))
+	configured = append(configured, config.PoolsWithControlPlane...)
+	for _, stage := range config.Stages {
+		configured = append(configured, stage.Pools...)
+	}
+	seen := make(map[string]struct{}, len(configured))
+	for _, name := range configured {
 		seen[name] = struct{}{}
 		if _, ok := known[name]; !ok {
-			return fmt.Errorf(
-				"workerPoolUpgrade.poolsWithControlPlane refers to unknown MachineConfigPool %q", name)
+			return fmt.Errorf("workerPoolUpgrade refers to unknown MachineConfigPool %q", name)
+		}
+	}
+
+	if config.Strategy == constants.WorkerPoolUpgradeStrategyCustom {
+		var missing []string
+		for i := range mcps {
+			if _, ok := seen[mcps[i].Name]; !ok {
+				missing = append(missing, mcps[i].Name)
+			}
+		}
+		if len(missing) > 0 {
+			return fmt.Errorf("workerPoolUpgrade Custom plan does not include worker MachineConfigPools %v", missing)
 		}
 	}
 	return nil

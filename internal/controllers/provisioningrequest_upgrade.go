@@ -23,6 +23,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils/cincinnati"
 	"github.com/openshift-kni/oran-o2ims/internal/spokeclient"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
+	"github.com/openshift-kni/oran-o2ims/internal/upgrade"
 	upgradevalidation "github.com/openshift-kni/oran-o2ims/internal/validation"
 	configv1 "github.com/openshift/api/config/v1"
 	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
@@ -414,9 +415,7 @@ func (t *provisioningRequestReconcilerTask) prepareCVSpec(
 	if err != nil {
 		return nil, typederrors.NewInputError("%s", err.Error())
 	}
-	if err := upgradevalidation.ValidateWorkerPoolUpgrade(
-		action.IsEUS, workerPoolUpgrade.Strategy, workerPoolUpgrade.PoolsWithControlPlane,
-	); err != nil {
+	if err := upgradevalidation.ValidateWorkerPoolUpgrade(action.IsEUS, workerPoolUpgrade); err != nil {
 		return nil, typederrors.NewInputError("invalid workerPoolUpgrade: %s", err.Error())
 	}
 
@@ -495,11 +494,29 @@ func (t *provisioningRequestReconcilerTask) prepareCVSpec(
 	// Update the upgrade status with the resolved values after validation.
 	pauseStateManaged := upgradeStatus.WorkerPoolUpgrade != nil &&
 		upgradeStatus.WorkerPoolUpgrade.PauseStateManaged
-	upgradeStatus.WorkerPoolUpgrade = &provisioningv1alpha1.WorkerPoolUpgradeStatus{
+
+	stageStatuses := make([]provisioningv1alpha1.WorkerPoolUpgradeStage, 0, len(workerPoolUpgrade.Stages))
+	for _, stage := range workerPoolUpgrade.Stages {
+		stageStatuses = append(stageStatuses, provisioningv1alpha1.WorkerPoolUpgradeStage{
+			Name: stage.Name, Pools: append([]string(nil), stage.Pools...),
+		})
+	}
+	workerStatus := &provisioningv1alpha1.WorkerPoolUpgradeStatus{
 		Strategy:              workerPoolUpgrade.Strategy,
 		PoolsWithControlPlane: append([]string(nil), workerPoolUpgrade.PoolsWithControlPlane...),
+		Stages:                stageStatuses,
+		UpgradeThrough:        workerPoolUpgrade.UpgradeThrough,
 		PauseStateManaged:     pauseStateManaged,
 	}
+	authorizedThrough := workerStatus.StageIndex(workerStatus.UpgradeThrough)
+	for i := range workerStatus.Stages {
+		state := provisioningv1alpha1.WorkerPoolUpgradeStageStateAwaitingAuthorization
+		if i <= authorizedThrough {
+			state = provisioningv1alpha1.WorkerPoolUpgradeStageStatePending
+		}
+		workerStatus.Stages[i].State = state
+	}
+	upgradeStatus.WorkerPoolUpgrade = workerStatus
 	if isIntermediateHop {
 		upgradeStatus.IntermediateVersion = action.UpgradeToVersion
 	}
@@ -517,13 +534,13 @@ func (t *provisioningRequestReconcilerTask) prepareCVSpec(
 // as default when the configuration does not specify a strategy.
 func extractWorkerPoolUpgrade(
 	mergedUpgradeData map[string]any, isEUS bool,
-) (ctlrutils.WorkerPoolUpgrade, error) {
+) (upgradevalidation.WorkerPoolUpgrade, error) {
 	// Set the default strategy.
 	strategy := constants.WorkerPoolUpgradeStrategyOpenShiftDefault
 	if isEUS {
 		strategy = constants.WorkerPoolUpgradeStrategyParallel
 	}
-	workerPoolUpgrade := ctlrutils.WorkerPoolUpgrade{
+	workerPoolUpgrade := upgradevalidation.WorkerPoolUpgrade{
 		Strategy: strategy,
 	}
 
@@ -533,11 +550,11 @@ func extractWorkerPoolUpgrade(
 	}
 	workerPoolUpgradeData, err := json.Marshal(raw)
 	if err != nil {
-		return ctlrutils.WorkerPoolUpgrade{}, fmt.Errorf(
+		return upgradevalidation.WorkerPoolUpgrade{}, fmt.Errorf(
 			"failed to marshal %s: %w", ctlrutils.UpgradeWorkerPoolUpgradeKey, err)
 	}
 	if err := json.Unmarshal(workerPoolUpgradeData, &workerPoolUpgrade); err != nil {
-		return ctlrutils.WorkerPoolUpgrade{}, fmt.Errorf(
+		return upgradevalidation.WorkerPoolUpgrade{}, fmt.Errorf(
 			"invalid %s: %w", ctlrutils.UpgradeWorkerPoolUpgradeKey, err)
 	}
 	return workerPoolUpgrade, nil
@@ -813,7 +830,7 @@ func (t *provisioningRequestReconcilerTask) handleClusterVersionUpgrade(
 				ctx, spokeClient, cv, clusterTemplate, action)
 		case ctlrutils.PhaseCompleted:
 			nextReconcile, err = t.handleCVUpgradeCompleted(
-				ctx, spokeClient, clusterName, msaName, mwName, action)
+				ctx, spokeClient, cv, clusterTemplate, clusterName, msaName, mwName, action)
 			if nextReconcile.RequeueAfter == 0 && err == nil {
 				proceed = true
 			}
@@ -842,10 +859,22 @@ func (t *provisioningRequestReconcilerTask) handleClusterVersionUpgrade(
 // reconciles any controller-managed worker-pool rollout, then cleans up spoke
 // access and marks the overall upgrade completed.
 func (t *provisioningRequestReconcilerTask) handleCVUpgradeCompleted(
-	ctx context.Context, spokeClient client.Client,
+	ctx context.Context, spokeClient client.Client, cv *configv1.ClusterVersion,
+	clusterTemplate *provisioningv1alpha1.ClusterTemplate,
 	clusterName, msaName, mwName string, action *ctlrutils.CVUpgradeAction,
 ) (ctrl.Result, error) {
-	result, completed, err := t.reconcileWorkerPoolRollout(ctx, spokeClient)
+	// Record when CVO completed the target ClusterVersion update.
+	upgradeStatus := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus
+	if upgradeStatus.ClusterVersionCompletedAt == nil {
+		historyEntry := ctlrutils.FindCVHistoryEntry(cv, action.UpgradeToVersion)
+		if historyEntry != nil && historyEntry.CompletionTime != nil {
+			upgradeStatus.ClusterVersionCompletedAt = historyEntry.CompletionTime
+		} else {
+			now := metav1.Now()
+			upgradeStatus.ClusterVersionCompletedAt = &now
+		}
+	}
+	result, completed, err := t.reconcileWorkerPoolRollout(ctx, spokeClient, clusterTemplate)
 	if err != nil || !completed {
 		return result, err
 	}
@@ -866,13 +895,83 @@ func (t *provisioningRequestReconcilerTask) handleCVUpgradeCompleted(
 	return doNotRequeue(), nil
 }
 
-// reconcileWorkerPoolRollout builds the rollout waves for the persisted
-// strategy and reconciles them in order. It starts at most one rollout wave
-// and waits for it to report Updated=True before proceeding to the next wave.
-// PoolsWithControlPlane form a common prerequisite and must be updated before
-// any later wave starts.
+// refreshCustomStageAuthorization reads the latest workerPoolUpgrade.upgradeThrough
+// configuration and persists any forward authorization.
+func (t *provisioningRequestReconcilerTask) refreshCustomStageAuthorization(
+	ctx context.Context, clusterTemplate *provisioningv1alpha1.ClusterTemplate,
+) error {
+	upgradeStatus := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus
+	status := upgradeStatus.WorkerPoolUpgrade
+	requestedThrough, err := upgrade.RequestedWorkerPoolUpgradeThrough(
+		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw,
+		t.object.Spec.TemplateParameters.Raw,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to resolve requested Custom stage authorization: %w", err)
+	}
+	currentIndex := status.StageIndex(status.UpgradeThrough)
+	if status.UpgradeThrough != "" && currentIndex < 0 {
+		t.logger.WarnContext(ctx, "Ignoring Custom stage authorization from unknown persisted stage",
+			slog.String("currentUpgradeThrough", status.UpgradeThrough))
+		return nil
+	}
+	requestedIndex := status.StageIndex(requestedThrough)
+	if requestedThrough != "" && requestedIndex < 0 {
+		t.logger.WarnContext(ctx, "Ignoring Custom stage authorization for unknown stage",
+			slog.String("requestedUpgradeThrough", requestedThrough))
+		return nil
+	}
+	if requestedIndex < currentIndex {
+		t.logger.WarnContext(ctx, "Ignoring backward Custom stage authorization",
+			slog.String("currentUpgradeThrough", status.UpgradeThrough),
+			slog.String("requestedUpgradeThrough", requestedThrough))
+		return nil
+	}
+	if requestedIndex == currentIndex {
+		return nil
+	}
+
+	// Resume the timeout when authorization advances after a user wait.
+	if upgradeStatus.TimeoutSuspendedAt != nil {
+		waitingDuration := metav1.Now().Sub(upgradeStatus.TimeoutSuspendedAt.Time)
+		if waitingDuration > 0 {
+			if upgradeStatus.AccumulatedSuspendedDuration == nil {
+				upgradeStatus.AccumulatedSuspendedDuration = &metav1.Duration{}
+			}
+			upgradeStatus.AccumulatedSuspendedDuration.Duration += waitingDuration
+		}
+		upgradeStatus.TimeoutSuspendedAt = nil
+	}
+
+	status.UpgradeThrough = requestedThrough
+	// Preserve observed progress and mark newly authorized stages Pending;
+	// later stages continue waiting for authorization.
+	for i := range status.Stages {
+		stage := &status.Stages[i]
+		if stage.State == provisioningv1alpha1.WorkerPoolUpgradeStageStateCompleted ||
+			stage.State == provisioningv1alpha1.WorkerPoolUpgradeStageStateInProgress {
+			continue
+		}
+		if i <= requestedIndex {
+			stage.State = provisioningv1alpha1.WorkerPoolUpgradeStageStatePending
+		} else {
+			stage.State = provisioningv1alpha1.WorkerPoolUpgradeStageStateAwaitingAuthorization
+		}
+	}
+
+	// Persist authorization and timeout resumption before unpausing a stage.
+	if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+		return fmt.Errorf("failed to persist workerPoolUpgrade.upgradeThrough: %w", err)
+	}
+	return nil
+}
+
+// reconcileWorkerPoolRollout handles worker MCPs after the ClusterVersion update.
+// It skips the default strategy and delegates Serial, Parallel, and Custom
+// strategies to their rollout handlers, returning whether all worker work is done.
 func (t *provisioningRequestReconcilerTask) reconcileWorkerPoolRollout(
 	ctx context.Context, spokeClient client.Client,
+	clusterTemplate *provisioningv1alpha1.ClusterTemplate,
 ) (ctrl.Result, bool, error) {
 	upgradeStatus := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus
 	if upgradeStatus.WorkerPoolUpgrade == nil {
@@ -891,19 +990,48 @@ func (t *provisioningRequestReconcilerTask) reconcileWorkerPoolRollout(
 		return ctrl.Result{}, false, fmt.Errorf("failed to list MCPs: %w", err)
 	}
 
-	// Verify that the pools with control plane are updated.
-	poolsWithControlPlane := ctlrutils.FilterMCPsByNames(mcps, workerPoolUpgrade.PoolsWithControlPlane)
-	if notUpdated := ctlrutils.GetNonUpdatedMCPs(ctx, t.logger, poolsWithControlPlane); len(notUpdated) > 0 {
+	switch workerPoolUpgrade.Strategy {
+	case constants.WorkerPoolUpgradeStrategySerial, constants.WorkerPoolUpgradeStrategyParallel:
+		return t.reconcileSerialOrParallelWorkerPoolRollout(ctx, spokeClient, mcps)
+	case constants.WorkerPoolUpgradeStrategyCustom:
+		return t.reconcileCustomWorkerPoolRollout(ctx, spokeClient, mcps, clusterTemplate)
+	default:
+		return ctrl.Result{}, false, fmt.Errorf(
+			"unsupported workerPoolUpgrade strategy %q", workerPoolUpgrade.Strategy)
+	}
+}
+
+// waitForControlPlaneWorkerPools blocks later rollout waves until every pool
+// upgrading with the control plane has reported Updated.
+func (t *provisioningRequestReconcilerTask) waitForControlPlaneWorkerPools(
+	ctx context.Context, mcps []mcfgv1.MachineConfigPool,
+) (ctrl.Result, bool, error) {
+	workerPoolUpgrade := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.WorkerPoolUpgrade
+	pools := ctlrutils.FilterMCPsByNames(mcps, workerPoolUpgrade.PoolsWithControlPlane)
+	if notUpdated := ctlrutils.GetNonUpdatedMCPs(ctx, t.logger, pools); len(notUpdated) > 0 {
+		updatedPools, waitingPools := workerPoolWaveProgress(pools, notUpdated)
 		if err := t.updateUpgradeStatus(ctx,
 			provisioningv1alpha1.CRconditionReasons.InProgress,
-			fmt.Sprintf(
-				"Cluster version upgrade completed. Waiting for worker pools [%s] to finish updating",
-				strings.Join(notUpdated, ", ")),
+			workerPoolRolloutProgressMessage(workerPoolUpgrade.Strategy,
+				"pools upgrading with the control plane", updatedPools, waitingPools),
 		); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return requeueWithMediumInterval(), false, nil
 	}
+	return ctrl.Result{}, true, nil
+}
+
+// reconcileSerialOrParallelWorkerPoolRollout runs Serial or Parallel worker waves. It
+// starts at most one new wave per reconciliation and waits for it to report Updated=true
+// before proceeding to the next wave.
+func (t *provisioningRequestReconcilerTask) reconcileSerialOrParallelWorkerPoolRollout(
+	ctx context.Context, spokeClient client.Client, mcps []mcfgv1.MachineConfigPool,
+) (ctrl.Result, bool, error) {
+	if result, ready, err := t.waitForControlPlaneWorkerPools(ctx, mcps); err != nil || !ready {
+		return result, false, err
+	}
+	workerPoolUpgrade := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.WorkerPoolUpgrade
 
 	// Get the remaining pools sorted alphabetically by name.
 	remaining := ctlrutils.ExcludeMCPsByNames(mcps, workerPoolUpgrade.PoolsWithControlPlane)
@@ -914,45 +1042,179 @@ func (t *provisioningRequestReconcilerTask) reconcileWorkerPoolRollout(
 	var waves [][]mcfgv1.MachineConfigPool
 	switch workerPoolUpgrade.Strategy {
 	case constants.WorkerPoolUpgradeStrategySerial:
-		// Pools are upgraded one at a time in serial, so there is one wave per pool.
+		// Pools are upgraded one at a time in serial, so there is one wave per remaining pool.
 		waves = make([][]mcfgv1.MachineConfigPool, 0, len(remaining))
 		for i := range remaining {
 			waves = append(waves, []mcfgv1.MachineConfigPool{remaining[i]})
 		}
 	case constants.WorkerPoolUpgradeStrategyParallel:
-		// Pools are upgraded concurrently, so there is only one wave.
+		// Pools are upgraded in parallel, so there is one wave for all remaining pools.
 		waves = [][]mcfgv1.MachineConfigPool{remaining}
 	default:
 		return ctrl.Result{}, false, fmt.Errorf(
 			"unsupported persisted workerPoolUpgrade strategy %q", workerPoolUpgrade.Strategy)
 	}
 
-	// Unpause the pools in the waves one by one.
+	completedPools := append([]string(nil), workerPoolUpgrade.PoolsWithControlPlane...)
+	// Unpause the pools in the waves one by one. Wait for each wave to report Updated=true
+	// before proceeding to the next wave.
 	for _, wave := range waves {
 		notUpdated := ctlrutils.GetNonUpdatedMCPs(ctx, t.logger, wave)
+		updatedInWave, waitingPools := workerPoolWaveProgress(wave, notUpdated)
 		unpaused, err := ctlrutils.UnpauseMCPs(ctx, spokeClient, t.logger, wave)
 		if err != nil {
 			return ctrl.Result{}, false, fmt.Errorf("failed to unpause MCPs: %w", err)
 		}
 		if unpaused || len(notUpdated) > 0 {
-			if len(notUpdated) == 0 {
-				notUpdated = make([]string, 0, len(wave))
-				for i := range wave {
-					notUpdated = append(notUpdated, wave[i].Name)
-				}
-			}
+			updatedPools := append(append([]string(nil), completedPools...), updatedInWave...)
+			message := workerPoolRolloutProgressMessage(workerPoolUpgrade.Strategy,
+				"", updatedPools, waitingPools)
 			if err := t.updateUpgradeStatus(ctx,
-				provisioningv1alpha1.CRconditionReasons.InProgress,
-				fmt.Sprintf(
-					"Cluster version upgrade completed. Waiting for worker pools [%s] to finish updating",
-					strings.Join(notUpdated, ", ")),
+				provisioningv1alpha1.CRconditionReasons.InProgress, message,
 			); err != nil {
 				return ctrl.Result{}, false, err
 			}
 			return requeueWithMediumInterval(), false, nil
 		}
+		for i := range wave {
+			completedPools = append(completedPools, wave[i].Name)
+		}
 	}
 	return ctrl.Result{}, true, nil
+}
+
+// reconcileCustomWorkerPoolRollout refreshes authorization, waits for pools
+// upgrading with the control plane, then unpauses Custom stages in order through
+// upgradeThrough. It suspends the timeout after all authorized stages finish if
+// another stage still awaits authorization.
+func (t *provisioningRequestReconcilerTask) reconcileCustomWorkerPoolRollout(
+	ctx context.Context, spokeClient client.Client, mcps []mcfgv1.MachineConfigPool,
+	clusterTemplate *provisioningv1alpha1.ClusterTemplate,
+) (ctrl.Result, bool, error) {
+	// Record new authorization if changed and resume the timeout before checking live pools.
+	if err := t.refreshCustomStageAuthorization(ctx, clusterTemplate); err != nil {
+		return ctrl.Result{}, false, err
+	}
+	if result, ready, err := t.waitForControlPlaneWorkerPools(ctx, mcps); err != nil || !ready {
+		return result, false, err
+	}
+
+	upgradeStatus := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus
+	workerPoolUpgrade := upgradeStatus.WorkerPoolUpgrade
+	lastAuthorizedStageIndex := workerPoolUpgrade.StageIndex(workerPoolUpgrade.UpgradeThrough)
+
+	completedPools := append([]string(nil), workerPoolUpgrade.PoolsWithControlPlane...)
+	// Unpause the authorized stages one by one. Wait for each stage to report Updated=true before
+	// proceeding to the next authorized stage.
+	for i := 0; i <= lastAuthorizedStageIndex; i++ {
+		stage := &workerPoolUpgrade.Stages[i]
+		if stage.State != provisioningv1alpha1.WorkerPoolUpgradeStageStateCompleted {
+			if stage.StartedAt == nil {
+				// Record stage start time if not already set.
+				now := metav1.Now()
+				stage.StartedAt = &now
+			}
+			// Mark the stage as in progress.
+			stage.State = provisioningv1alpha1.WorkerPoolUpgradeStageStateInProgress
+
+			wave := ctlrutils.FilterMCPsByNames(mcps, stage.Pools)
+			notUpdated := ctlrutils.GetNonUpdatedMCPs(ctx, t.logger, wave)
+			updatedInWave, waitingPools := workerPoolWaveProgress(wave, notUpdated)
+			unpaused, err := ctlrutils.UnpauseMCPs(ctx, spokeClient, t.logger, wave)
+			if err != nil {
+				return ctrl.Result{}, false, fmt.Errorf("failed to unpause MCPs: %w", err)
+			}
+			if unpaused || len(notUpdated) > 0 {
+				updatedPools := append(append([]string(nil), completedPools...), updatedInWave...)
+				message := workerPoolRolloutProgressMessage(workerPoolUpgrade.Strategy,
+					fmt.Sprintf("stage %q in progress", stage.Name), updatedPools, waitingPools)
+				if err := t.updateUpgradeStatus(ctx,
+					provisioningv1alpha1.CRconditionReasons.InProgress, message,
+				); err != nil {
+					return ctrl.Result{}, false, err
+				}
+				return requeueWithMediumInterval(), false, nil
+			}
+
+			// All pools in the stage have reported Updated=true, so mark the stage as completed with a timestamp.
+			stage.State = provisioningv1alpha1.WorkerPoolUpgradeStageStateCompleted
+			if stage.CompletedAt == nil {
+				now := metav1.Now()
+				stage.CompletedAt = &now
+			}
+		}
+		// Include both previously completed and newly completed stages in the
+		// progress message.
+		completedPools = append(completedPools, stage.Pools...)
+	}
+
+	// All authorized stages have completed, so check if there is a next stage that still needs authorization.
+	nextStageIndex := lastAuthorizedStageIndex + 1
+	if nextStageIndex < len(workerPoolUpgrade.Stages) {
+		now := metav1.Now()
+		// Suspend the timeout if the next stage is awaiting authorization.
+		if upgradeStatus.TimeoutSuspendedAt == nil {
+			upgradeStatus.TimeoutSuspendedAt = &now
+		}
+
+		nextStage := workerPoolUpgrade.Stages[nextStageIndex]
+		message := "ClusterVersion upgrade completed. Custom worker-pool rollout: "
+		if nextStageIndex > 0 {
+			message += fmt.Sprintf("stage %q completed; ", workerPoolUpgrade.Stages[nextStageIndex-1].Name)
+		}
+		message += fmt.Sprintf(
+			"awaiting authorization for stage %q (pools [%s]). Set workerPoolUpgrade.upgradeThrough to %q",
+			nextStage.Name, strings.Join(nextStage.Pools, ", "), nextStage.Name)
+		if nextStageIndex < len(workerPoolUpgrade.Stages)-1 {
+			message += " or a later stage"
+		}
+		message += " to continue"
+		if err := t.updateUpgradeStatus(ctx,
+			provisioningv1alpha1.CRconditionReasons.AwaitingStageAuthorization, message,
+		); err != nil {
+			return ctrl.Result{}, false, err
+		}
+		// PR spec updates trigger reconciliation; keep only a slower fallback poll here.
+		return requeueWithCustomInterval(15 * time.Minute), false, nil
+	}
+
+	return ctrl.Result{}, true, nil
+}
+
+// workerPoolWaveProgress partitions a pre-unpause wave snapshot. Waiting pools
+// are paused or reported not updated; all others count as updated.
+func workerPoolWaveProgress(
+	wave []mcfgv1.MachineConfigPool, notUpdated []string,
+) (updated, waiting []string) {
+	waitingSet := make(map[string]struct{}, len(notUpdated))
+	for _, name := range notUpdated {
+		waitingSet[name] = struct{}{}
+	}
+	for i := range wave {
+		name := wave[i].Name
+		if wave[i].Spec.Paused {
+			waitingSet[name] = struct{}{}
+		}
+		if _, found := waitingSet[name]; found {
+			waiting = append(waiting, name)
+		} else {
+			updated = append(updated, name)
+		}
+	}
+	return updated, waiting
+}
+
+// workerPoolRolloutProgressMessage reports the completed ClusterVersion update,
+// rollout strategy, optional phase, updated pools, and pools still waiting.
+func workerPoolRolloutProgressMessage(strategy, phase string, updatedPools, waitingPools []string) string {
+	message := fmt.Sprintf("ClusterVersion upgrade completed. %s worker-pool rollout:", strategy)
+	if phase != "" {
+		message += " " + phase + ";"
+	}
+	if len(updatedPools) > 0 {
+		message += fmt.Sprintf(" updated pools [%s];", strings.Join(updatedPools, ", "))
+	}
+	return message + fmt.Sprintf(" waiting for pools [%s] to finish updating", strings.Join(waitingPools, ", "))
 }
 
 // handleCVUpgradeInProgress handles the state where the target version has a
@@ -980,19 +1242,20 @@ func (t *provisioningRequestReconcilerTask) handleCVUpgradeInProgress(
 	historyEntry := ctlrutils.FindCVHistoryEntry(cv, action.UpgradeToVersion)
 	if historyEntry != nil && shouldReset &&
 		!t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.StartedAt.Equal(&historyEntry.StartedTime) {
-		t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.StartedAt = &historyEntry.StartedTime
+		upgradeStatus := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus
+		upgradeStatus.StartedAt = &historyEntry.StartedTime
+		upgradeStatus.AccumulatedSuspendedDuration = nil
+		upgradeStatus.TimeoutSuspendedAt = nil
 	}
 
 	var msg string
-	var reason provisioningv1alpha1.ConditionReason
-
+	reason := provisioningv1alpha1.CRconditionReasons.Unknown
 	progressing := ctlrutils.GetCVCondition(cv, configv1.OperatorProgressing)
 	if progressing != nil && progressing.Status == configv1.ConditionTrue {
 		reason = provisioningv1alpha1.CRconditionReasons.InProgress
 		msg = fmt.Sprintf("Upgrading to %s version %s: %s",
 			action.VersionLabel(intermediateVersion), action.UpgradeToVersion, progressing.Message)
 	} else {
-		reason = provisioningv1alpha1.CRconditionReasons.Unknown
 		msg = fmt.Sprintf("Upgrading to %s version %s: CVO stalled",
 			action.VersionLabel(intermediateVersion), action.UpgradeToVersion)
 		failing := ctlrutils.GetCVCondition(cv, ctlrutils.CVConditionFailing)
@@ -1090,7 +1353,7 @@ func (t *provisioningRequestReconcilerTask) handleCVUpgradePreStart(
 		intermediateVersion := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.IntermediateVersion
 		msg := fmt.Sprintf("Upgrade to %s version %s triggered. Waiting for upgrade to start",
 			action.VersionLabel(intermediateVersion), action.UpgradeToVersion)
-		if err := t.updateUpgradeStatus(ctx, provisioningv1alpha1.CRconditionReasons.Pending, msg); err != nil {
+		if err := t.updateUpgradeStatus(ctx, provisioningv1alpha1.CRconditionReasons.InProgress, msg); err != nil {
 			return ctrl.Result{}, err
 		}
 		return requeueWithShortInterval(), nil
@@ -1162,9 +1425,20 @@ func (t *provisioningRequestReconcilerTask) validateMCPsPreconditions(
 		}
 	}
 
-	if err := upgradevalidation.ValidatePoolsWithControlPlaneNames(
-		nonMasterMCPs, workerPoolUpgrade.PoolsWithControlPlane,
-	); err != nil {
+	stages := make([]upgradevalidation.WorkerPoolUpgradeStage, 0, len(workerPoolUpgrade.Stages))
+	for _, stage := range workerPoolUpgrade.Stages {
+		stages = append(stages, upgradevalidation.WorkerPoolUpgradeStage{
+			Name: stage.Name, Pools: append([]string(nil), stage.Pools...),
+		})
+	}
+	workerPoolConfig := upgradevalidation.WorkerPoolUpgrade{
+		Strategy:              workerPoolUpgrade.Strategy,
+		PoolsWithControlPlane: append([]string(nil), workerPoolUpgrade.PoolsWithControlPlane...),
+		Stages:                stages,
+		UpgradeThrough:        workerPoolUpgrade.UpgradeThrough,
+	}
+
+	if err := upgradevalidation.ValidateWorkerPoolUpgradeMCPs(nonMasterMCPs, workerPoolConfig); err != nil {
 		return typederrors.NewInputError("%s", err.Error())
 	}
 
@@ -1374,10 +1648,11 @@ func (t *provisioningRequestReconcilerTask) initUpgradeStatus(
 
 // updateUpgradeStatus persists the UpgradeCompleted condition and provisioning
 // state based on the given reason:
-//   - Terminal success (Completed): condition=True, clears startAt
+//   - Terminal success (Completed): condition=True, clears upgrade status
 //   - Terminal failure (PreconditionChecksFailed, Failed, TimedOut):
-//     condition=False, provisioningState=Failed, clears startAt
-//   - Non-terminal (Pending, InProgress, Unknown):
+//     condition=False, provisioningState=Failed. TimedOut preserves timing and
+//     rollout diagnostics; other failures clear the active timer.
+//   - Non-terminal (Pending, InProgress, Unknown, AwaitingStageAuthorization):
 //     condition=False, provisioningState=InProgress
 func (t *provisioningRequestReconcilerTask) updateUpgradeStatus(
 	ctx context.Context,
@@ -1398,11 +1673,13 @@ func (t *provisioningRequestReconcilerTask) updateUpgradeStatus(
 			slog.String("reason", string(reason)),
 			slog.String("message", message))
 		ctlrutils.SetProvisioningStateFailed(t.object, message)
-		// Clear only StartedAt, preserving StartVersion so EUS detection
-		// remains stable if the user retries. StartVersion is eventually
-		// cleared by cleanupStaleUpgradeState along with the stable terminal
-		// condition when switching to a new CT that matches the current cluster version.
-		t.clearUpgradeStartTime()
+		if reason != provisioningv1alpha1.CRconditionReasons.TimedOut {
+			// On other terminal failures, reset the timeout clock for retries while
+			// retaining StartVersion and the rest of the upgrade status; They are eventually
+			// cleared by cleanupStaleUpgradeState along with the stale terminal
+			// condition when switching to a new CT that matches the current cluster version.
+			t.resetUpgradeTimeoutAccounting()
+		}
 	default:
 		t.logger.InfoContext(ctx, "Upgrade status update",
 			slog.String("reason", string(reason)),
@@ -1438,14 +1715,18 @@ func (t *provisioningRequestReconcilerTask) isCVUpgradeTimedOut(
 		return false, nil
 	}
 
-	startAt := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.StartedAt.Time
-	if !ctlrutils.TimeoutExceeded(startAt, t.timeouts.clusterUpgrade) {
+	upgradeStatus := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus
+	now := time.Now()
+	activeDuration := activeUpgradeDuration(upgradeStatus, now)
+	if activeDuration <= t.timeouts.clusterUpgrade {
 		return false, nil
 	}
 
 	t.logger.InfoContext(ctx, "Upgrade timed out",
 		slog.String("clusterName", clusterName),
-		slog.Time("startAt", startAt),
+		slog.Time("timedOutAt", now),
+		slog.Time("startAt", upgradeStatus.StartedAt.Time),
+		slog.Duration("activeDuration", activeDuration),
 		slog.Duration("timeout", t.timeouts.clusterUpgrade))
 	msaName := t.object.Name + "-upgrade"
 	mwName := t.object.Name + "-upgrade-rbac"
@@ -1464,6 +1745,28 @@ func (t *provisioningRequestReconcilerTask) isCVUpgradeTimedOut(
 		return false, err
 	}
 	return true, nil
+}
+
+// activeUpgradeDuration returns nonnegative time spent actively upgrading,
+// excluding completed authorization waits and any current suspended wait.
+func activeUpgradeDuration(
+	upgradeStatus *provisioningv1alpha1.ClusterUpgradeStatus, now time.Time,
+) time.Duration {
+	if upgradeStatus == nil || upgradeStatus.StartedAt == nil {
+		return 0
+	}
+	end := now
+	if upgradeStatus.TimeoutSuspendedAt != nil {
+		end = upgradeStatus.TimeoutSuspendedAt.Time
+	}
+	duration := end.Sub(upgradeStatus.StartedAt.Time)
+	if upgradeStatus.AccumulatedSuspendedDuration != nil {
+		duration -= upgradeStatus.AccumulatedSuspendedDuration.Duration
+	}
+	if duration < 0 {
+		return 0
+	}
+	return duration
 }
 
 // cleanupStaleUpgradeState removes stale upgrade state. Cleans up spoke
@@ -1490,11 +1793,16 @@ func (t *provisioningRequestReconcilerTask) cleanupStaleUpgradeState(
 	return nil
 }
 
-// clearUpgradeStartTime clears the upgrade start timestamp.
-func (t *provisioningRequestReconcilerTask) clearUpgradeStartTime() {
+// resetUpgradeTimeoutAccounting clears timeout fields after a non-timeout
+// terminal failure so a retry can establish a new start time. Other upgrade
+// status fields, including StartVersion, are left unchanged.
+func (t *provisioningRequestReconcilerTask) resetUpgradeTimeoutAccounting() {
 	if t.object.Status.Extensions.ClusterDetails != nil &&
 		t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus != nil {
-		t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.StartedAt = nil
+		upgradeStatus := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus
+		upgradeStatus.StartedAt = nil
+		upgradeStatus.AccumulatedSuspendedDuration = nil
+		upgradeStatus.TimeoutSuspendedAt = nil
 	}
 }
 

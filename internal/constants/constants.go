@@ -197,6 +197,8 @@ const (
 	WorkerPoolUpgradeStrategySerial = "Serial"
 	// Control-plane is upgraded first, then the worker pools in parallel.
 	WorkerPoolUpgradeStrategyParallel = "Parallel"
+	// Control-plane is upgraded first, then user-defined worker pool stages.
+	WorkerPoolUpgradeStrategyCustom = "Custom"
 )
 
 // ClusterInstance input field names used in ClusterInstanceParameters / ClusterInstance data.

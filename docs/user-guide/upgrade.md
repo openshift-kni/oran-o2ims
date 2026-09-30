@@ -452,12 +452,86 @@ Choose a strategy based on the required rollout:
   worker MachineConfigPools one at a time in alphabetical order.
 - `Parallel` upgrades the control plane first and then upgrades all remaining
   worker MachineConfigPools together.
+- `Custom` upgrades the control plane first, then rolls out the remaining
+  worker MachineConfigPools in ordered, named `stages`. Pools in one stage
+  upgrade together, and `upgradeThrough` controls how far the rollout proceeds.
 
-For a non-EUS Serial or Parallel upgrade, `poolsWithControlPlane` can name
+For a non-EUS Serial, Parallel or Custom upgrade, `poolsWithControlPlane` can name
 worker MachineConfigPools that should remain unpaused and upgrade with the
 control plane. All other worker MachineConfigPools follow the selected strategy
 after the control plane and the named pools have completed upgrading.
 `poolsWithControlPlane` is not supported for EUS upgrades.
+
+For a large cluster whose worker-pool upgrades span multiple maintenance
+windows, `Custom` lets you pause at stage boundaries and authorize the next
+stage when you are ready. The complete plan must be declared before the
+ClusterVersion upgrade starts: every live worker MachineConfigPool must appear
+exactly once across `poolsWithControlPlane` and `stages`, and stage names must
+be unique. The plan is immutable after the upgrade starts. Omit
+`upgradeThrough` (or set it to an empty string) to stop after the control plane
+and any `poolsWithControlPlane`. Set it to a stage name to authorize the plan
+through that stage. An initial value naming the final stage runs the whole plan
+without an authorization stop. After the ClusterVersion upgrade starts,
+`upgradeThrough` can advance after ClusterVersion has completed and
+`UpgradeCompleted` reports `AwaitingStageAuthorization`.
+
+##### Custom staged rollout example
+
+This example declares the full plan but initially stops after the control
+plane:
+
+```yaml
+spec:
+  templateParameters:
+    upgradeParameters:
+      workerPoolUpgrade:
+        strategy: Custom
+        stages:
+          - name: canary
+            pools:
+              - worker-canary
+          - name: remaining
+            pools:
+              - worker-a
+              - worker-b
+        # upgradeThrough is intentionally omitted
+```
+
+After the control-plane upgrade completes, the rollout stops before the canary
+stage. The `UpgradeCompleted` condition shows the next stage and the action
+needed to resume:
+
+```yaml
+status:
+  conditions:
+    - type: UpgradeCompleted
+      status: "False"
+      reason: AwaitingStageAuthorization
+      message: >-
+        ClusterVersion upgrade completed. Custom worker-pool rollout:
+        awaiting authorization for stage "canary" (pools [worker-canary]).
+        Set workerPoolUpgrade.upgradeThrough to "canary" or a later stage to continue
+```
+
+When you are ready to run the canary stage, update `upgradeThrough` in the
+existing ProvisioningRequest. Keep its declared strategy and stages; this
+snippet shows only the field to change:
+
+```yaml
+spec:
+  templateParameters:
+    upgradeParameters:
+      workerPoolUpgrade:
+        upgradeThrough: canary
+```
+
+After the canary completes, the condition reports another authorization stop.
+When you are ready for the next maintenance window, set
+`upgradeThrough: remaining` to run the rest of the declared plan. The
+ProvisioningRequest stays `Progressing` at each stop point and becomes
+`Fulfilled` only after every pool in the full plan is `Updated`.
+
+##### Serial rollout with a control-plane worker pool
 
 The following override is for a non-EUS cluster with multiple worker
 MachineConfigPools. It upgrades `worker-canary` with the control plane, then
@@ -487,11 +561,15 @@ The `clusterUpgradeTimeout` controls how long the controller waits for the upgra
 | EUS-to-EUS | 8 hours |
 
 A single timeout covers the entire upgrade process, including both hops for EUS upgrades. The timeout is tracked from
-`status.clusterDetails.clusterUpgradeStatus.startedAt`.
+`status.clusterDetails.clusterUpgradeStatus.startedAt`. An intentional Custom
+stop at an authorization boundary suspends this clock while the controller
+waits for authorization.
+Advancing `upgradeThrough` resumes the same timeout budget; it does not start a
+new timeout window. Status records the accumulated suspended duration so only
+active upgrade time counts toward the timeout.
 
 The timeout can be configured via `upgradeDefaults` or overridden per ProvisioningRequest via `upgradeParameters`.
-`clusterUpgradeTimeout` is the only parameter update recognized during an in-progress upgrade. Other parameter changes are
-ignored until the upgrade completes or fails.
+`clusterUpgradeTimeout` can be changed at any point during the upgrade.
 
 ### How It Works
 
@@ -539,7 +617,12 @@ The MNO ClusterVersion upgrade follows these steps:
    report current-generation `Updated=True` before continuing. Each
    MachineConfigPool still honors its own `maxUnavailable`. The
    ProvisioningRequest is marked completed only after all worker
-   MachineConfigPools have finished updating.
+   MachineConfigPools have finished updating. For `Custom`, it runs named
+   stages in declared order through `upgradeThrough`, reports intentional stop
+   points and pending pools in status, and records each stage as
+   `AwaitingAuthorization`, `Pending`, `InProgress`, or `Completed` with start
+   and completion timestamps. The ProvisioningRequest remains progressing until
+   the last declared stage is authorized and updated.
 
 ### MNO Monitoring Upgrade Progress
 
@@ -554,6 +637,7 @@ oc get provisioningrequests.clcm.openshift.io <name> \
 |---|---|---|---|
 | False | Pending | Upgrade not yet started or waiting | Spoke client setup in progress, waiting for CVO to retrieve update graph or image payload, `Upgradeable=False` on spoke (minor version upgrade) |
 | False | InProgress | Upgrade is running | CVO updating control plane and worker nodes |
+| False | AwaitingStageAuthorization | Custom rollout is paused between stages | Set `upgradeThrough` to the next stage when ready |
 | False | Unknown | Upgrade stalled | CVO not progressing, possible `Failing` condition on spoke |
 | False | PreconditionChecksFailed | Cannot proceed with upgrade | MachineConfigPools are paused or not updated, OpenShiftDefault or poolsWithControlPlane used on EUS, spoke client setup issue, invalid upgrade configuration |
 | True | Completed | Upgrade finished successfully | — |
@@ -564,7 +648,12 @@ The condition message provides details about the current phase:
 - Spoke client setup: `"Preparing upgrade resources"`
 - Upgrade triggered, waiting for CVO to begin: `"Upgrade to [intermediate/desired] version X.Y.Z triggered. Waiting for upgrade to start"`
 - Upgrade is in progress with CVO Progressing details: `"Upgrading to [intermediate/desired] version X.Y.Z: ..."`
-- Serial / Parallel: waiting for worker pools: `"Cluster version upgrade completed. Waiting for worker pools [<name>, ...] to finish updating"`
+- Waiting for worker pools (all strategies): the message says the cluster
+  version upgrade completed, lists pools in finished rollout waves, and names
+  the pools still updating. Custom also identifies the active stage.
+- Custom paused at an authorization boundary: the message identifies the next
+  stage and pools, and asks for a forward `workerPoolUpgrade.upgradeThrough`
+  update.
 - Upgrade completed: `"Upgrade to version X.Y.Z completed"`
 - Timeout with optional CVO Failing details: `"Upgrade timed out"` or `"Upgrade timed out: ..."`
 
@@ -579,10 +668,21 @@ status:
         startedAt: "2026-07-20T15:30:00Z"
         startVersion: "4.18.25"
         intermediateVersion: "4.19.31"  # present for EUS upgrades
-        workerPoolUpgrade:
-          strategy: Serial
-          poolsWithControlPlane:        # if any
-            - worker-canary
+        workerPoolUpgrade:              # if multiple worker pools
+          strategy: Custom
+          upgradeThrough: canary
+          stages:
+            - name: canary
+              pools:
+                - worker-canary
+              state: Completed
+              startedAt: "2026-07-20T16:00:00Z"
+              completedAt: "2026-07-20T16:45:00Z"
+            - name: remaining
+              pools:
+                - worker-a
+                - worker-b
+              state: AwaitingAuthorization
 ```
 
 The upgrade status is also reflected in the ProvisioningRequest's `provisioningPhase` and `provisioningDetails`. The message from the
@@ -594,7 +694,7 @@ oc get provisioningrequests.clcm.openshift.io
 
 | UpgradeCompleted Reason | provisioningPhase |
 |---|---|
-| Pending, InProgress, Unknown | progressing |
+| Pending, InProgress, AwaitingStageAuthorization, Unknown | progressing |
 | PreconditionChecksFailed, TimedOut | failed |
 | Completed | fulfilled |
 

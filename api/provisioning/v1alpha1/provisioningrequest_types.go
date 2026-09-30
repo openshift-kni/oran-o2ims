@@ -76,6 +76,20 @@ type ClusterUpgradeStatus struct {
 	// StartedAt indicates when the cluster upgrade started.
 	StartedAt *metav1.Time `json:"startedAt,omitempty"`
 
+	// ClusterVersionCompletedAt indicates when the target ClusterVersion update
+	// completed. Depending on the worker pool strategy, the overall upgrade may
+	// continue with worker MachineConfigPool rollout after this time.
+	ClusterVersionCompletedAt *metav1.Time `json:"clusterVersionCompletedAt,omitempty"`
+
+	// AccumulatedSuspendedDuration is the total time spent waiting for Custom
+	// worker pool stage authorization during completed suspension intervals.
+	AccumulatedSuspendedDuration *metav1.Duration `json:"accumulatedSuspendedDuration,omitempty"`
+
+	// TimeoutSuspendedAt indicates when the current wait for Custom worker pool
+	// stage authorization began. Time after this timestamp is excluded from the
+	// cluster upgrade timeout until authorization resumes.
+	TimeoutSuspendedAt *metav1.Time `json:"timeoutSuspendedAt,omitempty"`
+
 	// StartVersion is the current cluster version before the upgrade began.
 	StartVersion string `json:"startVersion,omitempty"`
 
@@ -98,9 +112,45 @@ type WorkerPoolUpgradeStatus struct {
 	// PoolsWithControlPlane lists worker MCPs that upgrade alongside the control plane.
 	PoolsWithControlPlane []string `json:"poolsWithControlPlane,omitempty"`
 
+	// Stages is the immutable ordered worker MCP rollout plan for a Custom strategy.
+	Stages []WorkerPoolUpgradeStage `json:"stages,omitempty"`
+
+	// UpgradeThrough is the last Custom stage currently authorized to run. An
+	// empty value stops the rollout after the control plane.
+	UpgradeThrough string `json:"upgradeThrough,omitempty"`
+
 	// PauseStateManaged indicates that the controller has started managing worker
 	// MCP pause state for the current ClusterVersion upgrade step.
 	PauseStateManaged bool `json:"pauseStateManaged,omitempty"`
+}
+
+// WorkerPoolUpgradeStageState describes the observed rollout state of a Custom stage.
+// +kubebuilder:validation:Enum=AwaitingAuthorization;Pending;InProgress;Completed
+type WorkerPoolUpgradeStageState string
+
+const (
+	WorkerPoolUpgradeStageStateAwaitingAuthorization WorkerPoolUpgradeStageState = "AwaitingAuthorization"
+	WorkerPoolUpgradeStageStatePending               WorkerPoolUpgradeStageState = "Pending"
+	WorkerPoolUpgradeStageStateInProgress            WorkerPoolUpgradeStageState = "InProgress"
+	WorkerPoolUpgradeStageStateCompleted             WorkerPoolUpgradeStageState = "Completed"
+)
+
+// WorkerPoolUpgradeStage is one named wave in a Custom worker pool rollout.
+type WorkerPoolUpgradeStage struct {
+	// Name uniquely identifies the stage and may be selected in upgradeThrough.
+	Name string `json:"name"`
+
+	// Pools lists worker MachineConfigPools that are unpaused together.
+	Pools []string `json:"pools"`
+
+	// State is the observed rollout state of the stage.
+	State WorkerPoolUpgradeStageState `json:"state,omitempty"`
+
+	// StartedAt indicates when the controller first started this stage.
+	StartedAt *metav1.Time `json:"startedAt,omitempty"`
+
+	// CompletedAt indicates when every pool in this stage reported Updated.
+	CompletedAt *metav1.Time `json:"completedAt,omitempty"`
 }
 
 // ResourceProvisioningPhase defines the provisioning phase of an individual infrastructure resource.
