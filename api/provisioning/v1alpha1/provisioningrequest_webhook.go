@@ -127,18 +127,16 @@ func seedGenerationParameters(pr *ProvisioningRequest) (map[string]any, error) {
 	if err := json.Unmarshal(parameters[constants.TemplateParamUpgrade], &upgrade); err != nil {
 		return nil, fmt.Errorf("invalid upgradeParameters: %w", err)
 	}
-	selected := make(map[string]any)
-	for _, key := range []string{"seedGeneration"} {
-		raw, present := upgrade[key]
-		if !present {
-			continue
-		}
-		var value any
-		if err := json.Unmarshal(raw, &value); err != nil {
-			return nil, fmt.Errorf("invalid upgradeParameters.%s: %w", key, err)
-		}
-		selected[key] = value
+	key := constants.UpgradeDefaultsSeedGenerationKey
+	raw, present := upgrade[key]
+	if !present {
+		return map[string]any{}, nil
 	}
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return nil, fmt.Errorf("invalid upgradeParameters.%s: %w", key, err)
+	}
+	selected := map[string]any{key: value}
 	return selected, nil
 }
 

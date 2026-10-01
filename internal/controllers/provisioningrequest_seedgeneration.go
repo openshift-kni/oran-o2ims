@@ -27,20 +27,23 @@ import (
 //+kubebuilder:rbac:groups="",resources=pods;persistentvolumeclaims;secrets;configmaps,verbs=get;list;watch;delete,namespace=system
 
 // IsSeedGenerationRequested checks for the operation independently of the
-// ManagedCluster release. A seed request must never enter the upgrade path.
-func (t *provisioningRequestReconcilerTask) IsSeedGenerationRequested(ctx context.Context) (bool, error) {
+// ManagedCluster release and returns the resolved ClusterTemplate for reuse by
+// upgrade dispatch. A seed request must never enter the upgrade path.
+func (t *provisioningRequestReconcilerTask) IsSeedGenerationRequested(
+	ctx context.Context,
+) (bool, *provisioningv1alpha1.ClusterTemplate, error) {
 	if !ctlrutils.IsClusterZtpDone(t.object) {
-		return false, nil
+		return false, nil, nil
 	}
 	template, err := t.object.GetClusterTemplateRef(ctx, t.client)
 	if err != nil {
-		return false, fmt.Errorf("failed to get ClusterTemplate for seed generation: %w", err)
+		return false, nil, fmt.Errorf("failed to get ClusterTemplate for seed generation: %w", err)
 	}
 	requested, err := provisioningv1alpha1.HasSeedGenerationConfig(template, t.object)
 	if err != nil {
-		return false, fmt.Errorf("failed to inspect seed generation configuration: %w", err)
+		return false, nil, fmt.Errorf("failed to inspect seed generation configuration: %w", err)
 	}
-	return requested, nil
+	return requested, template, nil
 }
 
 func seedGenerationCondition(pr *provisioningv1alpha1.ProvisioningRequest) *metav1.Condition {
@@ -88,8 +91,7 @@ func (t *provisioningRequestReconcilerTask) seedGenerationNeedsFastPath() bool {
 // resources. The admission guard remains active until the workflow can run.
 func (t *provisioningRequestReconcilerTask) startSeedGeneration(ctx context.Context, timeout time.Duration) error {
 	details := t.object.Status.Extensions.ClusterDetails
-	if timeout <= 0 || details == nil ||
-		seedGenerationTerminal(t.object) || seedGenerationCondition(t.object) != nil {
+	if timeout <= 0 || details == nil || seedGenerationCondition(t.object) != nil {
 		return fmt.Errorf("cannot start seed generation from the current state")
 	}
 	if details.SeedGenerationStatus != nil &&

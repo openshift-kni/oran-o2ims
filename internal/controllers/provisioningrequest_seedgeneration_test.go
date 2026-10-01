@@ -129,14 +129,16 @@ func TestSeedGenerationRequestDoesNotDependOnReleaseComparison(t *testing.T) {
 	}
 	c := newSeedTestClient(t, pr, ct)
 	task := seedTestTask(pr, c)
-	requested, err := task.IsSeedGenerationRequested(ctx)
-	if err != nil || requested {
-		t.Fatalf("seed request started before ZTP Done: requested=%t err=%v", requested, err)
+	requested, template, err := task.IsSeedGenerationRequested(ctx)
+	if err != nil || requested || template != nil {
+		t.Fatalf("seed request started before ZTP Done: requested=%t templatePresent=%t err=%v",
+			requested, template != nil, err)
 	}
 	pr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{ZtpStatus: ctlrutils.ClusterZtpDone}
-	requested, err = task.IsSeedGenerationRequested(ctx)
-	if err != nil || !requested {
-		t.Fatalf("seed request was not detected without a ManagedCluster: requested=%t err=%v", requested, err)
+	requested, template, err = task.IsSeedGenerationRequested(ctx)
+	if err != nil || !requested || template == nil {
+		t.Fatalf("seed request was not detected without a ManagedCluster: requested=%t templatePresent=%t err=%v",
+			requested, template != nil, err)
 	}
 }
 

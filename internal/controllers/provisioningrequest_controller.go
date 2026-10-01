@@ -345,7 +345,7 @@ func (t *provisioningRequestReconcilerTask) handlePostProvisioning(ctx context.C
 
 	// Handle upgrades if ZTP is done
 	if ctlrutils.IsClusterZtpDone(t.object) {
-		seedRequested, err := t.IsSeedGenerationRequested(ctx)
+		seedRequested, clusterTemplate, err := t.IsSeedGenerationRequested(ctx)
 		if err != nil {
 			return requeueWithError(err)
 		}
@@ -357,7 +357,7 @@ func (t *provisioningRequestReconcilerTask) handlePostProvisioning(ctx context.C
 				return requeueWithError(errors.New(provisioningv1alpha1.SeedGenerationUnsupportedMessage))
 			}
 		} else {
-			result, err := t.handleClusterUpgrades(ctx, renderedClusterInstance.GetName())
+			result, err := t.handleClusterUpgrades(ctx, renderedClusterInstance.GetName(), clusterTemplate)
 			if err != nil || result.Requeue || result.RequeueAfter > 0 {
 				return result, err
 			}
@@ -479,7 +479,9 @@ func (t *provisioningRequestReconcilerTask) checkOverallProvisioningTimeout(ctx 
 }
 
 // handleClusterUpgrades handles cluster upgrade logic
-func (t *provisioningRequestReconcilerTask) handleClusterUpgrades(ctx context.Context, clusterName string) (ctrl.Result, error) {
+func (t *provisioningRequestReconcilerTask) handleClusterUpgrades(
+	ctx context.Context, clusterName string, clusterTemplate *provisioningv1alpha1.ClusterTemplate,
+) (ctrl.Result, error) {
 	// Block upgrades while a scale operation is in progress. Check
 	// ClusterProvisioned status as the primary signal — it is set to
 	// InProgress for scale-in, scale-out, and swap operations (including
@@ -510,7 +512,7 @@ func (t *provisioningRequestReconcilerTask) handleClusterUpgrades(ctx context.Co
 		}
 	}
 
-	shouldUpgrade, result, err := t.IsUpgradeRequested(ctx, clusterName)
+	shouldUpgrade, result, err := t.isUpgradeRequested(ctx, clusterName, clusterTemplate)
 	if err != nil {
 		return requeueWithError(err)
 	}
@@ -523,7 +525,7 @@ func (t *provisioningRequestReconcilerTask) handleClusterUpgrades(ctx context.Co
 		(ctlrutils.IsClusterUpgradeInitiated(t.object) &&
 			!ctlrutils.IsClusterUpgradeCompleted(t.object) &&
 			!ctlrutils.IsClusterUpgradeInTerminalFailure(t.object)) {
-		upgradeCtrlResult, proceed, err := t.handleUpgrade(ctx, clusterName)
+		upgradeCtrlResult, proceed, err := t.handleUpgradeWithTemplate(ctx, clusterName, clusterTemplate)
 		if upgradeCtrlResult.RequeueAfter > 0 || !proceed || err != nil {
 			// Requeue if the upgrade is in progress or an error occurs.
 			// Stop reconciliation if the upgrade has failed.

@@ -52,7 +52,12 @@ func (t *provisioningRequestReconcilerTask) IsUpgradeRequested(
 	if err != nil {
 		return false, ctrl.Result{}, fmt.Errorf("failed to get ClusterTemplate: %w", err)
 	}
+	return t.isUpgradeRequested(ctx, managedClusterName, template)
+}
 
+func (t *provisioningRequestReconcilerTask) isUpgradeRequested(
+	ctx context.Context, managedClusterName string, template *provisioningv1alpha1.ClusterTemplate,
+) (bool, ctrl.Result, error) {
 	if template.Spec.Release == "" {
 		return false, ctrl.Result{}, nil
 	}
@@ -101,14 +106,20 @@ func (t *provisioningRequestReconcilerTask) IsUpgradeRequested(
 // parameters. Returns a ctrl.Result, a bool indicating whether to proceed with
 // further processing, and an error.
 func (t *provisioningRequestReconcilerTask) handleUpgrade(ctx context.Context, clusterName string) (ctrl.Result, bool, error) {
-	t.logger.InfoContext(
-		ctx,
-		"Start handling upgrade",
-	)
 	clusterTemplate, err := t.object.GetClusterTemplateRef(ctx, t.client)
 	if err != nil {
 		return ctrl.Result{}, false, fmt.Errorf("failed to get clusterTemplate: %w", err)
 	}
+	return t.handleUpgradeWithTemplate(ctx, clusterName, clusterTemplate)
+}
+
+func (t *provisioningRequestReconcilerTask) handleUpgradeWithTemplate(
+	ctx context.Context, clusterName string, clusterTemplate *provisioningv1alpha1.ClusterTemplate,
+) (ctrl.Result, bool, error) {
+	t.logger.InfoContext(
+		ctx,
+		"Start handling upgrade",
+	)
 
 	upgradeCfg, err := parseUpgradeConfig(clusterTemplate, t.object)
 	if err != nil {

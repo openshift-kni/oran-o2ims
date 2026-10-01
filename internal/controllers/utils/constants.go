@@ -248,7 +248,7 @@ const ClusterVersionName = "version"
 const (
 	UpgradeDefaultsIBGUKey              = "imageBasedGroupUpgrade"
 	UpgradeDefaultsClusterVersionKey    = "clusterVersion"
-	UpgradeDefaultsSeedGenerationKey    = "seedGeneration"
+	UpgradeDefaultsSeedGenerationKey    = constants.UpgradeDefaultsSeedGenerationKey
 	UpgradeIntermediateVersionConfigKey = "intermediateVersion"
 	UpgradeWorkerPoolUpgradeKey         = "workerPoolUpgrade"
 )
