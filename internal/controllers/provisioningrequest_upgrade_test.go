@@ -1235,6 +1235,32 @@ var _ = Describe("handleUpgrade", func() {
 			Equal(provisioningv1alpha1.StateFailed))
 	})
 
+	It("should fail seed generation if it reaches upgrade handling while unsupported", func() {
+		ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`{"seedGeneration":{}}`),
+		}
+		setupClient(ct, pr)
+
+		result, proceed, err := task.handleUpgrade(ctx, clusterName)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(proceed).To(BeFalse())
+		Expect(result.RequeueAfter).To(BeZero())
+
+		upgradeCond := meta.FindStatusCondition(task.object.Status.Conditions,
+			string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
+		Expect(upgradeCond).ToNot(BeNil())
+		Expect(upgradeCond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(upgradeCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed)))
+		Expect(upgradeCond.Message).To(Equal(provisioningv1alpha1.SeedGenerationUnsupportedMessage))
+		Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+			Equal(provisioningv1alpha1.StateFailed))
+
+		persisted := &provisioningv1alpha1.ProvisioningRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(pr), persisted)).To(Succeed())
+		Expect(persisted.Status.ProvisioningStatus.ProvisioningPhase).To(
+			Equal(provisioningv1alpha1.StateFailed))
+	})
+
 	It("should return error when ClusterTemplate is missing", func() {
 		pr.Spec.TemplateName = "non-existent"
 		setupClient(pr)

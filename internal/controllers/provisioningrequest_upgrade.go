@@ -129,6 +129,19 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(ctx context.Context, c
 		return t.handleClusterVersionUpgrade(ctx, clusterTemplate, clusterName, upgradeCfg)
 	case ctlrutils.UpgradeDefaultsIBGUKey:
 		return t.handleIBGUUpgrade(ctx, clusterTemplate, clusterName)
+	case ctlrutils.UpgradeDefaultsSeedGenerationKey:
+		msg := provisioningv1alpha1.SeedGenerationUnsupportedMessage
+		ctlrutils.SetProvisioningStateFailed(t.object, msg)
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
+			provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
+			provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
+			metav1.ConditionFalse,
+			msg,
+		)
+		if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+			return ctrl.Result{}, false, fmt.Errorf("failed to update ProvisioningRequest CR status: %w", err)
+		}
+		return ctrl.Result{}, false, nil
 	default:
 		t.logger.ErrorContext(ctx, "Unexpected upgrade type from parseUpgradeConfig",
 			slog.String("upgradeType", upgradeCfg.UpgradeType))
