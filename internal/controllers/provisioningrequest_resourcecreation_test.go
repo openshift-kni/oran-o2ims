@@ -30,6 +30,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -269,6 +270,7 @@ var _ = Describe("createClusterInstanceNamespace", func() {
 
 		c = fakeclient.GetFakeClientFromObjects(pr)
 		task = &provisioningRequestReconcilerTask{
+			logger: slog.Default(),
 			client: c,
 			object: pr,
 		}

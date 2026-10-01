@@ -80,7 +80,7 @@ func (t *provisioningRequestReconcilerTask) createPullSecret(
 		Type: corev1.SecretTypeDockerConfigJson,
 	}
 
-	if err := ctlrutils.CreateK8sCR(ctx, t.client, newClusterInstancePullSecret, t.object, ctlrutils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.logger, t.client, newClusterInstancePullSecret, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Kubernetes CR for ClusterInstancePullSecret: %w", err)
 	}
 
@@ -114,7 +114,7 @@ func (t *provisioningRequestReconcilerTask) createExtraManifestsConfigMap(
 			},
 			Data: configMap.Data,
 		}
-		if err := ctlrutils.CreateK8sCR(ctx, t.client, newExtraManifestsConfigMap, t.object, ctlrutils.UPDATE); err != nil {
+		if err := ctlrutils.CreateK8sCR(ctx, t.logger, t.client, newExtraManifestsConfigMap, t.object, ctlrutils.UPDATE); err != nil {
 			return fmt.Errorf("failed to create extra-manifests ConfigMap: %w", err)
 		}
 	}
@@ -157,7 +157,7 @@ func (t *provisioningRequestReconcilerTask) createClusterInstanceNamespace(
 	labels[provisioningv1alpha1.ProvisioningRequestNameLabel] = t.object.Name
 	namespace.SetLabels(labels)
 
-	err := ctlrutils.CreateK8sCR(ctx, t.client, namespace, t.object, ctlrutils.UPDATE)
+	err := ctlrutils.CreateK8sCR(ctx, t.logger, t.client, namespace, t.object, ctlrutils.UPDATE)
 	if err != nil {
 		return fmt.Errorf("failed to create or update namespace %s: %w", clusterName, err)
 	}
@@ -218,7 +218,7 @@ func (t *provisioningRequestReconcilerTask) createPolicyTemplateConfigMap(
 		Data: finalPolicyTemplateData,
 	}
 
-	if err := ctlrutils.CreateK8sCR(ctx, t.client, policyTemplateConfigMap, t.object, ctlrutils.UPDATE); err != nil {
+	if err := ctlrutils.CreateK8sCR(ctx, t.logger, t.client, policyTemplateConfigMap, t.object, ctlrutils.UPDATE); err != nil {
 		return fmt.Errorf("failed to create Kubernetes CR: %w", err)
 	}
 
