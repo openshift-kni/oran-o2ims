@@ -362,7 +362,7 @@ var _ = Describe("prepareCVSpec", func() {
 				Release: "4.22.0",
 				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					UpgradeDefaults: runtime.RawExtension{
-						Raw: []byte(`{"clusterVersion":{"desiredUpdate":{}}}`),
+						Raw: []byte(`{"clusterVersion": {"cvSpec": {"desiredUpdate": {}}}}`),
 					},
 				},
 				TemplateParameterSchema: runtime.RawExtension{
@@ -401,7 +401,7 @@ var _ = Describe("prepareCVSpec", func() {
 
 	It("should return cvSpec with version, channel, image, and force from upgrade defaults", func() {
 		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-			Raw: []byte(`{"clusterVersion":{"channel":"stable-4.22","upstream":"https://custom.graph","desiredUpdate":{"version":"4.22.0","image":"quay.io/ocp:4.22.0","force":true}}}`),
+			Raw: []byte(`{"clusterVersion": {"cvSpec": {"channel": "stable-4.22", "upstream": "https://custom.graph", "desiredUpdate": {"version": "4.22.0", "image": "quay.io/ocp:4.22.0", "force": true}}}}`),
 		}
 		cvSpec, err := task.prepareCVSpec(context.Background(), clusterTemplate, spokeCV(), prepareAction("4.22.0"))
 		Expect(err).ToNot(HaveOccurred())
@@ -416,12 +416,33 @@ var _ = Describe("prepareCVSpec", func() {
 			Equal(constants.WorkerPoolUpgradeStrategyOpenShiftDefault))
 	})
 
+	DescribeTable("should prepare a ClusterVersion spec without optional cvSpec",
+		func(defaults, parameters string, strategy string) {
+			clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(defaults)
+			task.object.Spec.TemplateParameters.Raw = []byte(parameters)
+
+			cvSpec, err := task.prepareCVSpec(
+				context.Background(), clusterTemplate, spokeCV(), prepareAction("4.22.0"))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cvSpec.DesiredUpdate).ToNot(BeNil())
+			Expect(cvSpec.DesiredUpdate.Version).To(Equal(clusterTemplate.Spec.Release))
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.WorkerPoolUpgrade.Strategy).To(
+				Equal(strategy))
+		},
+		Entry("timeout only in defaults",
+			`{"clusterVersion":{"clusterUpgradeTimeout":"2h"}}`, `{}`,
+			constants.WorkerPoolUpgradeStrategyOpenShiftDefault),
+		Entry("worker pool only in parameters",
+			`{}`, `{"upgradeParameters":{"clusterVersion":{"workerPoolUpgrade":{"strategy":"Serial"}}}}`,
+			constants.WorkerPoolUpgradeStrategySerial),
+	)
+
 	It("should persist workerPoolUpgrade from the merged configuration", func() {
 		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-			Raw: []byte(`{"clusterVersion":{},"workerPoolUpgrade":{"strategy":"Serial"}}`),
+			Raw: []byte(`{"clusterVersion": {"cvSpec": {}, "workerPoolUpgrade": {"strategy": "Serial"}}}`),
 		}
 		task.object.Spec.TemplateParameters = runtime.RawExtension{
-			Raw: []byte(`{"upgradeParameters":{"workerPoolUpgrade":{"poolsWithControlPlane":["worker-a"]}}}`),
+			Raw: []byte(`{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": {"poolsWithControlPlane": ["worker-a"]}}}}`),
 		}
 		_, err := task.prepareCVSpec(
 			context.Background(), clusterTemplate, spokeCV(), prepareAction("4.22.0"))
@@ -433,7 +454,7 @@ var _ = Describe("prepareCVSpec", func() {
 
 	It("should refresh workerPoolUpgrade status from the current merged configuration", func() {
 		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-			Raw: []byte(`{"clusterVersion":{},"workerPoolUpgrade":{"strategy":"Parallel","poolsWithControlPlane":["worker-a"]}}`),
+			Raw: []byte(`{"clusterVersion": {"cvSpec": {}, "workerPoolUpgrade": {"strategy": "Parallel", "poolsWithControlPlane": ["worker-a"]}}}`),
 		}
 		task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus =
 			&provisioningv1alpha1.ClusterUpgradeStatus{
@@ -453,13 +474,13 @@ var _ = Describe("prepareCVSpec", func() {
 
 	It("should return InputError when workerPoolUpgrade.strategy is unsupported", func() {
 		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-			Raw: []byte(`{"clusterVersion":{},"workerPoolUpgrade":{"strategy":"Unsupported"}}`),
+			Raw: []byte(`{"clusterVersion": {"workerPoolUpgrade": {"strategy": "Unsupported"}}}`),
 		}
 		_, err := task.prepareCVSpec(
 			context.Background(), clusterTemplate, spokeCV(), prepareAction("4.22.0"))
 		Expect(err).To(HaveOccurred())
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
-		Expect(err.Error()).To(ContainSubstring("unsupported workerPoolUpgrade.strategy"))
+		Expect(err.Error()).To(ContainSubstring("unsupported clusterVersion.workerPoolUpgrade.strategy"))
 	})
 
 	It("should return InputError when clusterVersion key is missing", func() {
@@ -474,7 +495,7 @@ var _ = Describe("prepareCVSpec", func() {
 
 	It("should return InputError when desiredUpdate version mismatches target", func() {
 		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-			Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.21.0"}}}`),
+			Raw: []byte(`{"clusterVersion": {"cvSpec": {"desiredUpdate": {"version": "4.21.0"}}}}`),
 		}
 		_, err := task.prepareCVSpec(context.Background(), clusterTemplate, spokeCV(), prepareAction("4.22.0"))
 		Expect(err).To(HaveOccurred())
@@ -491,7 +512,7 @@ var _ = Describe("prepareCVSpec", func() {
 
 	It("should use configured intermediateVersion for EUS intermediate upgrade", func() {
 		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-			Raw: []byte(`{"clusterVersion":{"channel":"eus-4.22","desiredUpdate":{"version":"4.22.0"}},"intermediateVersion":"4.21.3"}`),
+			Raw: []byte(`{"clusterVersion": {"intermediateVersion": "4.21.3", "cvSpec": {"channel": "eus-4.22", "desiredUpdate": {"version": "4.22.0"}}}}`),
 		}
 		task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{
 			StartVersion: "4.20.0",
@@ -511,7 +532,7 @@ var _ = Describe("prepareCVSpec", func() {
 
 	It("should clear desiredUpdate.image on EUS intermediate hop", func() {
 		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-			Raw: []byte(`{"clusterVersion":{"channel":"eus-4.22","desiredUpdate":{"version":"4.22.0","image":"quay.io/ocp:4.22.0"}},"intermediateVersion":"4.21.3"}`),
+			Raw: []byte(`{"clusterVersion": {"intermediateVersion": "4.21.3", "cvSpec": {"channel": "eus-4.22", "desiredUpdate": {"version": "4.22.0", "image": "quay.io/ocp:4.22.0"}}}}`),
 		}
 		task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{
 			StartVersion:        "4.20.0",
@@ -526,7 +547,7 @@ var _ = Describe("prepareCVSpec", func() {
 
 	It("should derive the EUS target plan from merged input even during pre-start", func() {
 		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-			Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.22.0"}},"intermediateVersion":"4.21.3","workerPoolUpgrade":{"strategy":"Custom","stages":[{"name":"changed","pools":["worker-a"]}]}}`),
+			Raw: []byte(`{"clusterVersion": {"intermediateVersion": "4.21.3", "workerPoolUpgrade": {"strategy": "Custom", "stages": [{"name": "changed", "pools": ["worker-a"]}]}, "cvSpec": {"desiredUpdate": {"version": "4.22.0"}}}}`),
 		}
 		task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus =
 			&provisioningv1alpha1.ClusterUpgradeStatus{
@@ -568,7 +589,7 @@ var _ = Describe("prepareCVSpec", func() {
 		defer srv.Close()
 
 		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-			Raw: fmt.Appendf(nil, `{"clusterVersion":{"channel":"eus-4.22","upstream":%q,"desiredUpdate":{"version":"4.22.0"}}}`, srv.URL),
+			Raw: fmt.Appendf(nil, `{"clusterVersion":{"cvSpec":{"channel":"eus-4.22","upstream":%q,"desiredUpdate":{"version":"4.22.0"}}}}`, srv.URL),
 		}
 		task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{
 			StartVersion: "4.20.0",
@@ -909,6 +930,7 @@ var _ = Describe("parseUpgradeConfig", func() {
 	BeforeEach(func() {
 		ct = &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-ct"},
+			Spec:       provisioningv1alpha1.ClusterTemplateSpec{Release: "4.22.0"},
 		}
 		pr = &provisioningv1alpha1.ProvisioningRequest{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-pr"},
@@ -944,7 +966,16 @@ var _ = Describe("parseUpgradeConfig", func() {
 		})
 		It("should detect clusterVersion from CT defaults when PR has no upgrade params", func() {
 			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.22.0"}}}`),
+				Raw: []byte(`{"clusterVersion": {"cvSpec": {"desiredUpdate": {"version": "4.22.0"}}}}`),
+			}
+			cfg, err := parseUpgradeConfig(ct, pr)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cfg.UpgradeType).To(Equal(utils.UpgradeDefaultsClusterVersionKey))
+		})
+
+		It("should defer target version validation until ClusterVersion preparation", func() {
+			pr.Spec.TemplateParameters = runtime.RawExtension{
+				Raw: []byte(`{"upgradeParameters":{"clusterVersion":{"cvSpec":{"desiredUpdate":{"version":"4.21.0"}}}}}`),
 			}
 			cfg, err := parseUpgradeConfig(ct, pr)
 			Expect(err).ToNot(HaveOccurred())
@@ -958,11 +989,12 @@ var _ = Describe("parseUpgradeConfig", func() {
 			cfg, err := parseUpgradeConfig(ct, pr)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(cfg.UpgradeType).To(Equal(utils.UpgradeDefaultsIBGUKey))
+			Expect(cfg.Timeout).To(BeZero())
 		})
 
 		It("should detect clusterVersion from PR params when CT defaults is empty", func() {
 			pr.Spec.TemplateParameters = runtime.RawExtension{
-				Raw: []byte(`{"upgradeParameters":{"clusterVersion":{"desiredUpdate":{"version":"4.22.0"}}}}`),
+				Raw: []byte(`{"upgradeParameters": {"clusterVersion": {"cvSpec": {"desiredUpdate": {"version": "4.22.0"}}}}}`),
 			}
 			cfg, err := parseUpgradeConfig(ct, pr)
 			Expect(err).ToNot(HaveOccurred())
@@ -1010,10 +1042,10 @@ var _ = Describe("parseUpgradeConfig", func() {
 
 		It("should return clusterVersion when both CT defaults and PR params have clusterVersion", func() {
 			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{"channel":"stable-4.22"}}`),
+				Raw: []byte(`{"clusterVersion": {"cvSpec": {"channel": "stable-4.22"}}}`),
 			}
 			pr.Spec.TemplateParameters = runtime.RawExtension{
-				Raw: []byte(`{"upgradeParameters":{"clusterVersion":{"desiredUpdate":{"version":"4.22.0"}}}}`),
+				Raw: []byte(`{"upgradeParameters": {"clusterVersion": {"cvSpec": {"desiredUpdate": {"version": "4.22.0"}}}}}`),
 			}
 			cfg, err := parseUpgradeConfig(ct, pr)
 			Expect(err).ToNot(HaveOccurred())
@@ -1091,6 +1123,19 @@ var _ = Describe("parseUpgradeConfig", func() {
 			Expect(err).To(MatchError(ContainSubstring("seedGenerationTimeout is not valid")))
 		})
 
+		It("should reject a top-level clusterUpgradeTimeout in PR parameters", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"clusterVersion":{}}`)
+			pr.Spec.TemplateParameters.Raw = []byte(`{"upgradeParameters":{"clusterUpgradeTimeout":"3h"}}`)
+			_, err := parseUpgradeConfig(ct, pr)
+			Expect(err).To(MatchError(ContainSubstring("clusterUpgradeTimeout must be nested under clusterVersion in upgradeParameters")))
+		})
+
+		It("should reject a top-level clusterUpgradeTimeout in CT defaults", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"clusterVersion":{},"clusterUpgradeTimeout":"3h"}`)
+			_, err := parseUpgradeConfig(ct, pr)
+			Expect(err).To(MatchError(ContainSubstring("clusterUpgradeTimeout must be nested under clusterVersion in upgradeDefaults")))
+		})
+
 		It("should return zero timeout when no timeout is set", func() {
 			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
 				Raw: []byte(`{"clusterVersion":{}}`),
@@ -1105,7 +1150,7 @@ var _ = Describe("parseUpgradeConfig", func() {
 				Raw: []byte(`{"clusterVersion":{}}`),
 			}
 			pr.Spec.TemplateParameters = runtime.RawExtension{
-				Raw: []byte(`{"upgradeParameters":{"clusterUpgradeTimeout":"120m"}}`),
+				Raw: []byte(`{"upgradeParameters": {"clusterVersion": {"clusterUpgradeTimeout": "120m"}}}`),
 			}
 			cfg, err := parseUpgradeConfig(ct, pr)
 			Expect(err).ToNot(HaveOccurred())
@@ -1117,7 +1162,7 @@ var _ = Describe("parseUpgradeConfig", func() {
 				Raw: []byte(`{"clusterVersion":{}}`),
 			}
 			pr.Spec.TemplateParameters = runtime.RawExtension{
-				Raw: []byte(`{"upgradeParameters":{"clusterUpgradeTimeout":"invalid"}}`),
+				Raw: []byte(`{"upgradeParameters": {"clusterVersion": {"clusterUpgradeTimeout": "invalid"}}}`),
 			}
 			_, err := parseUpgradeConfig(ct, pr)
 			Expect(err).To(HaveOccurred())
@@ -1126,7 +1171,7 @@ var _ = Describe("parseUpgradeConfig", func() {
 
 		It("should fall back to CT defaults when PR has no timeout", func() {
 			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{},"clusterUpgradeTimeout":"90m"}`),
+				Raw: []byte(`{"clusterVersion": {"clusterUpgradeTimeout": "90m"}}`),
 			}
 			cfg, err := parseUpgradeConfig(ct, pr)
 			Expect(err).ToNot(HaveOccurred())
@@ -1135,10 +1180,10 @@ var _ = Describe("parseUpgradeConfig", func() {
 
 		It("should prefer PR timeout over CT defaults", func() {
 			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{},"clusterUpgradeTimeout":"90m"}`),
+				Raw: []byte(`{"clusterVersion": {"clusterUpgradeTimeout": "90m"}}`),
 			}
 			pr.Spec.TemplateParameters = runtime.RawExtension{
-				Raw: []byte(`{"upgradeParameters":{"clusterUpgradeTimeout":"120m"}}`),
+				Raw: []byte(`{"upgradeParameters": {"clusterVersion": {"clusterUpgradeTimeout": "120m"}}}`),
 			}
 			cfg, err := parseUpgradeConfig(ct, pr)
 			Expect(err).ToNot(HaveOccurred())
@@ -1147,12 +1192,13 @@ var _ = Describe("parseUpgradeConfig", func() {
 
 		It("should return error when CT default timeout is invalid and PR has no timeout", func() {
 			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{},"clusterUpgradeTimeout":"not-a-duration"}`),
+				Raw: []byte(`{"clusterVersion": {"clusterUpgradeTimeout": "not-a-duration"}}`),
 			}
 			_, err := parseUpgradeConfig(ct, pr)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid clusterUpgradeTimeout"))
 		})
+
 	})
 
 })
@@ -1272,7 +1318,7 @@ var _ = Describe("handleUpgrade", func() {
 
 	It("should dispatch to handleClusterVersionUpgrade for clusterVersion type", func() {
 		ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-			Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.17.0"}}}`),
+			Raw: []byte(`{"clusterVersion": {"cvSpec": {"desiredUpdate": {"version": "4.17.0"}}}}`),
 		}
 		setupClient(
 			ct, pr,
@@ -1358,7 +1404,7 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 				Release: "4.22.0",
 				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					UpgradeDefaults: runtime.RawExtension{
-						Raw: []byte(`{"clusterVersion":{"desiredUpdate":{}},"intermediateVersion":"4.21.0"}`),
+						Raw: []byte(`{"clusterVersion": {"intermediateVersion": "4.21.0", "cvSpec": {"desiredUpdate": {}}}}`),
 					},
 				},
 				TemplateParameterSchema: runtime.RawExtension{
@@ -1533,9 +1579,11 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			workerPoolUpgrade["poolsWithControlPlane"] = poolsWithControlPlane
 		}
 		raw, err := json.Marshal(map[string]any{
-			"clusterVersion":      map[string]any{"desiredUpdate": map[string]any{}},
-			"intermediateVersion": "4.21.0",
-			"workerPoolUpgrade":   workerPoolUpgrade,
+			"clusterVersion": map[string]any{
+				"cvSpec":              map[string]any{"desiredUpdate": map[string]any{}},
+				"intermediateVersion": "4.21.0",
+				"workerPoolUpgrade":   workerPoolUpgrade,
+			},
 		})
 		ExpectWithOffset(1, err).ToNot(HaveOccurred())
 		ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{Raw: raw}
@@ -1757,7 +1805,7 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			buildSpoke(cv)
 
 			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.21.0"}}}`),
+				Raw: []byte(`{"clusterVersion": {"cvSpec": {"desiredUpdate": {"version": "4.21.0"}}}}`),
 			}
 			setupWithSpokeReady()
 
@@ -1785,7 +1833,7 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			buildSpoke(cv)
 
 			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.22.0"}}}`),
+				Raw: []byte(`{"clusterVersion": {"cvSpec": {"desiredUpdate": {"version": "4.22.0"}}}}`),
 			}
 			setupWithSpokeReady()
 
@@ -1814,7 +1862,7 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			buildSpoke(cv)
 
 			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.22.0","force":true}}}`),
+				Raw: []byte(`{"clusterVersion": {"cvSpec": {"desiredUpdate": {"version": "4.22.0", "force": true}}}}`),
 			}
 			setupWithSpokeReady()
 
@@ -1843,7 +1891,7 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 
 			ct.Spec.Release = "4.22.3"
 			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.22.3"}}}`),
+				Raw: []byte(`{"clusterVersion": {"cvSpec": {"desiredUpdate": {"version": "4.22.3"}}}}`),
 			}
 			setupWithSpokeReady()
 
@@ -1862,7 +1910,7 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			buildSpoke(cv)
 
 			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{"channel":"stable-4.22","desiredUpdate":{}}}`),
+				Raw: []byte(`{"clusterVersion": {"cvSpec": {"channel": "stable-4.22", "desiredUpdate": {}}}}`),
 			}
 			setupWithSpokeReady()
 
@@ -2068,7 +2116,7 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			buildSpoke(cv)
 
 			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-				Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.22.0","image":"quay.io/openshift-release/ocp-release:4.22.0"}}}`),
+				Raw: []byte(`{"clusterVersion": {"cvSpec": {"desiredUpdate": {"version": "4.22.0", "image": "quay.io/openshift-release/ocp-release:4.22.0"}}}}`),
 			}
 			setupWithSpokeReady()
 
@@ -2249,7 +2297,7 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 
 			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
 				Raw: fmt.Appendf(nil,
-					`{"clusterVersion":{"channel":"eus-4.22","upstream":%q,"desiredUpdate":{"version":"4.22.0"}}}`,
+					`{"clusterVersion":{"cvSpec":{"channel":"eus-4.22","upstream":%q,"desiredUpdate":{"version":"4.22.0"}}}}`,
 					srv.URL),
 			}
 			cv := newBaseCV()
@@ -2406,7 +2454,7 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			// ClusterVersion upgrade starts. The retry must restore the pools
 			// paused by the controller and then report the terminal input error.
 			task.object.Spec.TemplateParameters = runtime.RawExtension{
-				Raw: []byte(`{"upgradeParameters":{"workerPoolUpgrade":{"strategy":"Unsupported"}}}`),
+				Raw: []byte(`{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": {"strategy": "Unsupported"}}}}`),
 			}
 
 			result, proceed, err := task.handleClusterVersionUpgrade(
@@ -2416,7 +2464,7 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			Expect(result.RequeueAfter).To(BeZero())
 			assertUpgradeCondition(
 				string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed),
-				"unsupported workerPoolUpgrade.strategy")
+				"unsupported clusterVersion.workerPoolUpgrade.strategy")
 			assertMCPPaused("worker-a", false)
 			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.
 				WorkerPoolUpgrade.PauseStateManaged).To(BeFalse())
@@ -2924,12 +2972,12 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			Expect(result.RequeueAfter).To(Equal(15 * time.Minute))
 			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.AwaitingStageAuthorization),
 				`ClusterVersion upgrade completed. Custom worker-pool rollout: awaiting authorization for stage "canary" `+
-					`(pools [worker-a]). Set workerPoolUpgrade.upgradeThrough to "canary" or a later stage to continue`)
+					`(pools [worker-a]). Set clusterVersion.workerPoolUpgrade.upgradeThrough to "canary" or a later stage to continue`)
 			assertMCPPaused("worker-a", true)
 			assertMCPPaused("worker-b", true)
 
 			task.object.Spec.TemplateParameters.Raw = []byte(
-				`{"upgradeParameters":{"workerPoolUpgrade":{"upgradeThrough":"canary"}}}`)
+				`{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": "canary"}}}}`)
 			Expect(c.Update(ctx, task.object)).To(Succeed())
 			result, proceed, err = task.handleClusterVersionUpgrade(ctx, ct, clusterName, &utils.UpgradeConfig{})
 			Expect(err).ToNot(HaveOccurred())
@@ -2949,11 +2997,11 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.AwaitingStageAuthorization),
 				`ClusterVersion upgrade completed. Custom worker-pool rollout: stage "canary" completed; `+
 					`awaiting authorization for stage "rest" (pools [worker-b]). `+
-					`Set workerPoolUpgrade.upgradeThrough to "rest" to continue`)
+					`Set clusterVersion.workerPoolUpgrade.upgradeThrough to "rest" to continue`)
 			assertMCPPaused("worker-b", true)
 
 			task.object.Spec.TemplateParameters.Raw = []byte(
-				`{"upgradeParameters":{"workerPoolUpgrade":{"upgradeThrough":"rest"}}}`)
+				`{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": "rest"}}}}`)
 			Expect(c.Update(ctx, task.object)).To(Succeed())
 			result, proceed, err = task.handleClusterVersionUpgrade(ctx, ct, clusterName, &utils.UpgradeConfig{})
 			Expect(err).ToNot(HaveOccurred())
@@ -3014,10 +3062,10 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.AwaitingStageAuthorization),
 				`ClusterVersion upgrade completed. Custom worker-pool rollout: awaiting authorization for stage "canary" `+
-					`(pools [worker-a]). Set workerPoolUpgrade.upgradeThrough to "canary" or a later stage to continue`)
+					`(pools [worker-a]). Set clusterVersion.workerPoolUpgrade.upgradeThrough to "canary" or a later stage to continue`)
 
 			task.object.Spec.TemplateParameters.Raw = []byte(
-				`{"upgradeParameters":{"workerPoolUpgrade":{"upgradeThrough":"canary"}}}`)
+				`{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": "canary"}}}}`)
 			Expect(c.Update(ctx, task.object)).To(Succeed())
 			result, proceed, err = task.handleClusterVersionUpgrade(ctx, ct, clusterName, upgradeCfg)
 			Expect(err).ToNot(HaveOccurred())
@@ -3354,7 +3402,7 @@ var _ = Describe("reconcileWorkerPoolRollout", func() {
 				Stages:         []provisioningv1alpha1.WorkerPoolUpgradeStage{stage},
 			}
 		task.object.Spec.TemplateParameters.Raw = []byte(
-			`{"upgradeParameters":{"workerPoolUpgrade":{"upgradeThrough":"canary"}}}`)
+			`{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": "canary"}}}}`)
 
 		result, completed, err := task.reconcileWorkerPoolRollout(ctx, spokeClient, clusterTemplate)
 		Expect(err).ToNot(HaveOccurred())
@@ -3381,7 +3429,7 @@ var _ = Describe("reconcileWorkerPoolRollout", func() {
 			},
 		}
 		task.object.Spec.TemplateParameters.Raw = []byte(
-			`{"upgradeParameters":{"workerPoolUpgrade":{"upgradeThrough":"rest"}}}`)
+			`{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": "rest"}}}}`)
 		Expect(task.client.Update(ctx, task.object)).To(Succeed())
 		task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.WorkerPoolUpgrade = workerPoolUpgrade
 
@@ -3457,7 +3505,7 @@ var _ = Describe("reconcileWorkerPoolRollout", func() {
 			string(provisioningv1alpha1.CRconditionReasons.AwaitingStageAuthorization)))
 		Expect(condition.Message).To(Equal(
 			`ClusterVersion upgrade completed. Custom worker-pool rollout: awaiting authorization for stage "canary" ` +
-				`(pools [worker-a, worker-b]). Set workerPoolUpgrade.upgradeThrough to "canary" or a later stage to continue`))
+				`(pools [worker-a, worker-b]). Set clusterVersion.workerPoolUpgrade.upgradeThrough to "canary" or a later stage to continue`))
 		upgradeStatus = task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus
 		workerPoolUpgrade = upgradeStatus.WorkerPoolUpgrade
 		Expect(workerPoolUpgrade.Stages[0].State).To(Equal(
@@ -3467,7 +3515,7 @@ var _ = Describe("reconcileWorkerPoolRollout", func() {
 
 		// Authorize the canary via the PR; the user wait must not consume the active timeout.
 		task.object.Spec.TemplateParameters.Raw = []byte(
-			`{"upgradeParameters":{"workerPoolUpgrade":{"upgradeThrough":"canary"}}}`)
+			`{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": "canary"}}}}`)
 		Expect(task.client.Update(ctx, task.object)).To(Succeed())
 		upgradeStatus = task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus
 		suspendedAt := metav1.NewTime(time.Now().Add(-10 * time.Minute))
@@ -3528,11 +3576,11 @@ var _ = Describe("reconcileWorkerPoolRollout", func() {
 		Expect(condition.Message).To(Equal(
 			`ClusterVersion upgrade completed. Custom worker-pool rollout: stage "canary" completed; ` +
 				`awaiting authorization for stage "rest" (pools [worker-c]). ` +
-				`Set workerPoolUpgrade.upgradeThrough to "rest" to continue`))
+				`Set clusterVersion.workerPoolUpgrade.upgradeThrough to "rest" to continue`))
 		Expect(upgradeStatus.TimeoutSuspendedAt).ToNot(BeNil())
 
 		task.object.Spec.TemplateParameters.Raw = []byte(
-			`{"upgradeParameters":{"workerPoolUpgrade":{"upgradeThrough":"rest"}}}`)
+			`{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": "rest"}}}}`)
 		Expect(task.client.Update(ctx, task.object)).To(Succeed())
 		result, completed, err = task.reconcileWorkerPoolRollout(ctx, spokeClient, clusterTemplate)
 		Expect(err).ToNot(HaveOccurred())
@@ -3606,7 +3654,7 @@ var _ = Describe("refreshCustomStageAuthorization", func() {
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					UpgradeDefaults: runtime.RawExtension{Raw: []byte(
-						`{"clusterVersion":{},"workerPoolUpgrade":{"strategy":"Custom","stages":[{"name":"canary","pools":["worker-a"]},{"name":"rest","pools":["worker-b"]}]}}`)},
+						`{"clusterVersion": {"workerPoolUpgrade": {"strategy": "Custom", "stages": [{"name": "canary", "pools": ["worker-a"]}, {"name": "rest", "pools": ["worker-b"]}]}}}`)},
 				},
 				TemplateParameterSchema: runtime.RawExtension{Raw: []byte(
 					`{"properties":{"upgradeParameters":{"type":"object"}}}`)},
@@ -3624,7 +3672,7 @@ var _ = Describe("refreshCustomStageAuthorization", func() {
 				provisioningv1alpha1.WorkerPoolUpgradeStageStateAwaitingAuthorization
 		}
 		task.object.Spec.TemplateParameters = runtime.RawExtension{Raw: []byte(
-			`{"upgradeParameters":{"workerPoolUpgrade":{"upgradeThrough":"rest"}}}`)}
+			`{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": "rest"}}}}`)}
 
 		err := task.refreshCustomStageAuthorization(ctx, clusterTemplate)
 		Expect(err).ToNot(HaveOccurred())
@@ -3650,7 +3698,7 @@ var _ = Describe("refreshCustomStageAuthorization", func() {
 		task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.
 			WorkerPoolUpgrade.UpgradeThrough = "rest"
 		task.object.Spec.TemplateParameters = runtime.RawExtension{Raw: []byte(
-			`{"upgradeParameters":{"workerPoolUpgrade":{"upgradeThrough":"canary"}}}`)}
+			`{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": "canary"}}}}`)}
 
 		err := task.refreshCustomStageAuthorization(ctx, clusterTemplate)
 		Expect(err).ToNot(HaveOccurred())
@@ -3662,7 +3710,7 @@ var _ = Describe("refreshCustomStageAuthorization", func() {
 		var logs strings.Builder
 		task.logger = slog.New(slog.NewTextHandler(&logs, nil))
 		task.object.Spec.TemplateParameters = runtime.RawExtension{Raw: []byte(
-			`{"upgradeParameters":{"workerPoolUpgrade":{"upgradeThrough":"missing"}}}`)}
+			`{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": "missing"}}}}`)}
 
 		err := task.refreshCustomStageAuthorization(ctx, clusterTemplate)
 		Expect(err).ToNot(HaveOccurred())
@@ -3675,7 +3723,7 @@ var _ = Describe("refreshCustomStageAuthorization", func() {
 		task.logger = slog.New(slog.NewTextHandler(&logs, nil))
 		status.UpgradeThrough = "missing"
 		task.object.Spec.TemplateParameters.Raw = []byte(
-			`{"upgradeParameters":{"workerPoolUpgrade":{"upgradeThrough":"rest"}}}`)
+			`{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": "rest"}}}}`)
 
 		err := task.refreshCustomStageAuthorization(ctx, clusterTemplate)
 		Expect(err).ToNot(HaveOccurred())
@@ -3708,7 +3756,7 @@ var _ = Describe("refreshCustomStageAuthorization", func() {
 		status.UpgradeThrough = "canary"
 		status.Stages[0].State = provisioningv1alpha1.WorkerPoolUpgradeStageStatePending
 		task.object.Spec.TemplateParameters.Raw = []byte(
-			`{"upgradeParameters":{"workerPoolUpgrade":{"upgradeThrough":"missing"}}}`)
+			`{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": "missing"}}}}`)
 		spokeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
 			&mcfgv1.MachineConfigPool{
 				ObjectMeta: metav1.ObjectMeta{Name: "worker-a", Generation: 1},
@@ -3729,7 +3777,7 @@ var _ = Describe("refreshCustomStageAuthorization", func() {
 
 	It("should use the ClusterTemplate default upgradeThrough value when the PR has no override", func() {
 		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{Raw: []byte(
-			`{"workerPoolUpgrade":{"upgradeThrough":"canary"}}`)}
+			`{"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": "canary"}}}`)}
 
 		err := task.refreshCustomStageAuthorization(ctx, clusterTemplate)
 		Expect(err).ToNot(HaveOccurred())
@@ -3738,14 +3786,16 @@ var _ = Describe("refreshCustomStageAuthorization", func() {
 
 	It("should honor an explicitly empty PR upgradeThrough value over the ClusterTemplate default", func() {
 		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{Raw: []byte(
-			`{"workerPoolUpgrade":{"upgradeThrough":"rest"}}`)}
+			`{"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": "rest"}}}`)}
 		task.object.Spec.TemplateParameters = runtime.RawExtension{Raw: []byte(
-			`{"upgradeParameters":{"workerPoolUpgrade":{"upgradeThrough":""}}}`)}
+			`{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": ""}}}}`)}
 
 		// A present empty string overrides the default, just like other scalar PR parameters.
 		merged, err := task.mergeAndValidateUpgradeData(clusterTemplate)
 		Expect(err).ToNot(HaveOccurred())
-		workerPoolUpgrade, ok := merged["workerPoolUpgrade"].(map[string]any)
+		cvConfig, ok := merged["clusterVersion"].(map[string]any)
+		Expect(ok).To(BeTrue())
+		workerPoolUpgrade, ok := cvConfig["workerPoolUpgrade"].(map[string]any)
 		Expect(ok).To(BeTrue())
 		Expect(workerPoolUpgrade["upgradeThrough"]).To(Equal(""))
 

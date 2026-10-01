@@ -401,13 +401,14 @@ spec:
   templateDefaults:
     # ... other default configurations ...
     upgradeDefaults:
-      # clusterUpgradeTimeout: "6h"            # optional; defaults to 4h (standard upgrades) or 8h (EUS upgrades)
-      # intermediateVersion: "4.21.5"          # optional; for EUS upgrades (auto-selected if omitted)
       clusterVersion:
-        channel: "stable-4.22"                 # required for minor version and EUS upgrades
-        # upstream: "https://api.openshift.com/api/upgrades_info/v1/graph"  # optional
-        desiredUpdate:
-          version: "4.22.0"                    # must match spec.release
+        # clusterUpgradeTimeout: "6h"          # optional; defaults to 4h (standard upgrades) or 8h (EUS upgrades)
+        # intermediateVersion: "4.21.5"        # optional; for EUS upgrades (auto-selected if omitted)
+        cvSpec:
+          channel: "stable-4.22"              # required for minor version and EUS upgrades
+          # upstream: "https://api.openshift.com/api/upgrades_info/v1/graph"  # optional
+          desiredUpdate:
+            version: "4.22.0"                 # must match spec.release
   templateParameterSchema:
     type: object
     properties:
@@ -419,13 +420,14 @@ spec:
 **Notes:**
 
 - `upgradeDefaults` must contain either `clusterVersion` or `imageBasedGroupUpgrade`, not both.
-- `desiredUpdate.version` must match the ClusterTemplate's `spec.release`.
+- `clusterVersion.cvSpec.desiredUpdate.version` must match the ClusterTemplate's `spec.release`.
 - An EUS-to-EUS upgrade is detected when both the current and target cluster versions are even-numbered minor releases exactly 2 minor
   versions apart (e.g., 4.20 to 4.22). The upgrade proceeds through an intermediate version (e.g., 4.21.x) before reaching the target.
-  If `intermediateVersion` is specified, it is used directly and must be valid semver with the same major version and exactly one minor
-  version below `desiredUpdate.version`. If `intermediateVersion` is not specified, the controller auto-selects the highest valid
-  intermediate version from the configured `upstream` and `channel`, where the selected version has a valid upgrade path from the current
-  version and to the target version. `channel` is required for auto-selection.
+  If `clusterVersion.intermediateVersion` is specified, it is used directly and must be valid semver with the same major version and
+  exactly one minor version below `clusterVersion.cvSpec.desiredUpdate.version`. If `clusterVersion.intermediateVersion` is not specified,
+  the controller auto-selects the highest valid intermediate version from the configured `clusterVersion.cvSpec.upstream` and
+  `clusterVersion.cvSpec.channel`, where the selected version has a valid upgrade path from the current version to the target version.
+  `clusterVersion.cvSpec.channel` is required for auto-selection.
 
 ### Triggering the Upgrade
 
@@ -484,17 +486,18 @@ plane:
 spec:
   templateParameters:
     upgradeParameters:
-      workerPoolUpgrade:
-        strategy: Custom
-        stages:
-          - name: canary
-            pools:
-              - worker-canary
-          - name: remaining
-            pools:
-              - worker-a
-              - worker-b
-        # upgradeThrough is intentionally omitted
+      clusterVersion:
+        workerPoolUpgrade:
+          strategy: Custom
+          stages:
+            - name: canary
+              pools:
+                - worker-canary
+            - name: remaining
+              pools:
+                - worker-a
+                - worker-b
+          # upgradeThrough is intentionally omitted
 ```
 
 After the control-plane upgrade completes, the rollout stops before the canary
@@ -510,7 +513,7 @@ status:
       message: >-
         ClusterVersion upgrade completed. Custom worker-pool rollout:
         awaiting authorization for stage "canary" (pools [worker-canary]).
-        Set workerPoolUpgrade.upgradeThrough to "canary" or a later stage to continue
+        Set clusterVersion.workerPoolUpgrade.upgradeThrough to "canary" or a later stage to continue
 ```
 
 When you are ready to run the canary stage, update `upgradeThrough` in the
@@ -521,8 +524,9 @@ snippet shows only the field to change:
 spec:
   templateParameters:
     upgradeParameters:
-      workerPoolUpgrade:
-        upgradeThrough: canary
+      clusterVersion:
+        workerPoolUpgrade:
+          upgradeThrough: canary
 ```
 
 After the canary completes, the condition reports another authorization stop.
@@ -541,14 +545,15 @@ upgrades every remaining worker MachineConfigPool serially:
 spec:
   templateParameters:
     upgradeParameters:
-      clusterUpgradeTimeout: "6h"
       clusterVersion:
-        channel: "stable-4.22"
-        upstream: "https://example.com/graph"
-      workerPoolUpgrade:
-        strategy: Serial
-        poolsWithControlPlane:
-          - worker-canary
+        clusterUpgradeTimeout: "6h"
+        cvSpec:
+          channel: "stable-4.22"
+          upstream: "https://example.com/graph"
+        workerPoolUpgrade:
+          strategy: Serial
+          poolsWithControlPlane:
+            - worker-canary
 ```
 
 ### Timeout Configuration
@@ -652,7 +657,7 @@ The condition message provides details about the current phase:
   version upgrade completed, lists pools in finished rollout waves, and names
   the pools still updating. Custom also identifies the active stage.
 - Custom paused at an authorization boundary: the message identifies the next
-  stage and pools, and asks for a forward `workerPoolUpgrade.upgradeThrough`
+  stage and pools, and asks for a forward `clusterVersion.workerPoolUpgrade.upgradeThrough`
   update.
 - Upgrade completed: `"Upgrade to version X.Y.Z completed"`
 - Timeout with optional CVO Failing details: `"Upgrade timed out"` or `"Upgrade timed out: ..."`

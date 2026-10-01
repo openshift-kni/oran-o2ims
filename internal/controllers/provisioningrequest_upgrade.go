@@ -232,13 +232,18 @@ func parseUpgradeConfig(
 }
 
 func parseOperationTimeout(operation string, upgradeParams, defaults map[string]any) (time.Duration, error) {
-	seedOperation := operation == ctlrutils.UpgradeDefaultsSeedGenerationKey
-	key := ctlrutils.ClusterUpgradeTimeoutConfigKey
-	if seedOperation {
-		key = ctlrutils.SeedGenerationTimeoutConfigKey
+	var timeoutKey string
+	switch operation {
+	case ctlrutils.UpgradeDefaultsClusterVersionKey:
+		timeoutKey = ctlrutils.ClusterUpgradeTimeoutConfigKey
+	case ctlrutils.UpgradeDefaultsSeedGenerationKey:
+		timeoutKey = ctlrutils.SeedGenerationTimeoutConfigKey
+	case ctlrutils.UpgradeDefaultsIBGUKey:
+		// IBGU rollout timeouts are defined in its plan, not UpgradeConfig.
+		return 0, nil
+	default:
+		return 0, fmt.Errorf("unsupported upgrade operation %q", operation)
 	}
-	var rawTimeout any
-	var found bool
 	for _, source := range []struct {
 		name   string
 		values map[string]any
@@ -246,39 +251,33 @@ func parseOperationTimeout(operation string, upgradeParams, defaults map[string]
 		{"upgradeParameters", upgradeParams},
 		{"upgradeDefaults", defaults},
 	} {
-		if seedOperation {
+		if operation == ctlrutils.UpgradeDefaultsSeedGenerationKey {
 			if _, ok := source.values[ctlrutils.ClusterUpgradeTimeoutConfigKey]; ok {
 				return 0, fmt.Errorf("%s is not valid for %s in %s",
 					ctlrutils.ClusterUpgradeTimeoutConfigKey, operation, source.name)
 			}
-			if _, ok := source.values[ctlrutils.SeedGenerationTimeoutConfigKey]; ok {
-				return 0, fmt.Errorf("%s must be nested under %s in %s",
-					ctlrutils.SeedGenerationTimeoutConfigKey, ctlrutils.UpgradeDefaultsSeedGenerationKey, source.name)
-			}
-			seedRaw, ok := source.values[ctlrutils.UpgradeDefaultsSeedGenerationKey]
-			if !ok {
-				continue
-			}
-			seed, ok := seedRaw.(map[string]any)
-			if !ok {
-				return 0, fmt.Errorf("%s in %s must be an object",
-					ctlrutils.UpgradeDefaultsSeedGenerationKey, source.name)
-			}
-			rawTimeout, found = seed[key]
 		} else {
 			if _, ok := source.values[ctlrutils.SeedGenerationTimeoutConfigKey]; ok {
 				return 0, fmt.Errorf("%s is not valid for %s in %s",
 					ctlrutils.SeedGenerationTimeoutConfigKey, operation, source.name)
 			}
-			rawTimeout, found = source.values[key]
 		}
-		if found {
-			timeout, err := parseOperationTimeoutValue(key, source.name, rawTimeout)
-			if err != nil {
-				return 0, err
-			}
-			return timeout, nil
+		if _, ok := source.values[timeoutKey]; ok {
+			return 0, fmt.Errorf("%s must be nested under %s in %s", timeoutKey, operation, source.name)
 		}
+		nestedRaw, ok := source.values[operation]
+		if !ok {
+			continue
+		}
+		values, ok := nestedRaw.(map[string]any)
+		if !ok {
+			return 0, fmt.Errorf("%s in %s must be an object", operation, source.name)
+		}
+		rawTimeout, found := values[timeoutKey]
+		if !found {
+			continue
+		}
+		return parseOperationTimeoutValue(timeoutKey, source.name+"."+operation, rawTimeout)
 	}
 	return 0, nil
 }
@@ -484,28 +483,36 @@ func (t *provisioningRequestReconcilerTask) prepareCVSpec(
 		return nil, typederrors.NewInputError("%s", err.Error())
 	}
 
-	// Extract the workerPoolUpgrade data from the merged result
-	workerPoolUpgrade, err := extractWorkerPoolUpgrade(mergedUpgradeData, action.IsEUS)
-	if err != nil {
-		return nil, typederrors.NewInputError("%s", err.Error())
-	}
-	if err := upgradevalidation.ValidateWorkerPoolUpgrade(action.IsEUS, workerPoolUpgrade); err != nil {
-		return nil, typederrors.NewInputError("invalid workerPoolUpgrade: %s", err.Error())
-	}
-
-	// Extract the clusterVersion data from the merged result
-	cvSpecRaw, ok := mergedUpgradeData[ctlrutils.UpgradeDefaultsClusterVersionKey]
+	// Extract the ClusterVersion configuration from the merged result.
+	cvConfigRaw, ok := mergedUpgradeData[ctlrutils.UpgradeDefaultsClusterVersionKey]
 	if !ok {
 		return nil, typederrors.NewInputError("key %q not found in merged upgrade data",
 			ctlrutils.UpgradeDefaultsClusterVersionKey)
 	}
-	cvSpecBytes, err := json.Marshal(cvSpecRaw)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal %s spec: %w", ctlrutils.UpgradeDefaultsClusterVersionKey, err)
+	cvConfig, ok := cvConfigRaw.(map[string]any)
+	if !ok {
+		return nil, typederrors.NewInputError("clusterVersion must be an object")
 	}
+
+	// Extract the workerPoolUpgrade data from the ClusterVersion configuration.
+	workerPoolUpgrade, err := extractWorkerPoolUpgrade(cvConfig, action.IsEUS)
+	if err != nil {
+		return nil, typederrors.NewInputError("%s", err.Error())
+	}
+	if err := upgradevalidation.ValidateWorkerPoolUpgrade(action.IsEUS, workerPoolUpgrade); err != nil {
+		return nil, typederrors.NewInputError("%s", err.Error())
+	}
+
+	// Decode the optional OpenShift ClusterVersion spec.
 	cvSpec := configv1.ClusterVersionSpec{}
-	if err := json.Unmarshal(cvSpecBytes, &cvSpec); err != nil {
-		return nil, typederrors.NewInputError("invalid clusterVersion spec format: %s", err.Error())
+	if cvSpecRaw, found := cvConfig["cvSpec"]; found {
+		cvSpecBytes, err := json.Marshal(cvSpecRaw)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal %s spec: %w", ctlrutils.UpgradeDefaultsClusterVersionKey, err)
+		}
+		if err := json.Unmarshal(cvSpecBytes, &cvSpec); err != nil {
+			return nil, typederrors.NewInputError("invalid clusterVersion.cvSpec format: %s", err.Error())
+		}
 	}
 
 	if cvSpec.DesiredUpdate == nil {
@@ -514,7 +521,7 @@ func (t *provisioningRequestReconcilerTask) prepareCVSpec(
 	// Verify the user provided upgrade version matches the ClusterTemplate release (the final target).
 	if cvSpec.DesiredUpdate.Version != "" && cvSpec.DesiredUpdate.Version != clusterTemplate.Spec.Release {
 		return nil, typederrors.NewInputError(
-			"the clusterVersion desiredUpdate version (%s) does not match the ClusterTemplate spec.release (%s)",
+			"the clusterVersion.cvSpec.desiredUpdate.version (%s) does not match the ClusterTemplate spec.release (%s)",
 			cvSpec.DesiredUpdate.Version, clusterTemplate.Spec.Release)
 	}
 
@@ -531,7 +538,7 @@ func (t *provisioningRequestReconcilerTask) prepareCVSpec(
 		targetVersion := clusterTemplate.Spec.Release
 
 		configIntermediate := ""
-		if iv, ok := mergedUpgradeData[ctlrutils.UpgradeIntermediateVersionConfigKey].(string); ok {
+		if iv, ok := cvConfig[ctlrutils.UpgradeIntermediateVersionConfigKey].(string); ok {
 			configIntermediate = iv
 		}
 
@@ -541,7 +548,7 @@ func (t *provisioningRequestReconcilerTask) prepareCVSpec(
 			if err := upgradevalidation.ValidateEUSIntermediate(
 				configIntermediate, targetVersion,
 			); err != nil {
-				return nil, fmt.Errorf("failed to validate intermediateVersion: %w", err)
+				return nil, fmt.Errorf("failed to validate clusterVersion.intermediateVersion: %w", err)
 			}
 			action.UpgradeToVersion = configIntermediate
 		} else {
@@ -603,11 +610,11 @@ func (t *provisioningRequestReconcilerTask) prepareCVSpec(
 	return &cvSpec, nil
 }
 
-// extractWorkerPoolUpgrade decodes the merged worker-pool rollout configuration,
+// extractWorkerPoolUpgrade decodes the merged ClusterVersion worker-pool rollout configuration,
 // applying OpenShiftDefault for non-EUS upgrades and Parallel for EUS upgrades
 // as default when the configuration does not specify a strategy.
 func extractWorkerPoolUpgrade(
-	mergedUpgradeData map[string]any, isEUS bool,
+	cvConfig map[string]any, isEUS bool,
 ) (upgradevalidation.WorkerPoolUpgrade, error) {
 	// Set the default strategy.
 	strategy := constants.WorkerPoolUpgradeStrategyOpenShiftDefault
@@ -618,7 +625,7 @@ func extractWorkerPoolUpgrade(
 		Strategy: strategy,
 	}
 
-	raw, ok := mergedUpgradeData[ctlrutils.UpgradeWorkerPoolUpgradeKey]
+	raw, ok := cvConfig[ctlrutils.UpgradeWorkerPoolUpgradeKey]
 	if !ok {
 		return workerPoolUpgrade, nil
 	}
@@ -644,7 +651,7 @@ func (t *provisioningRequestReconcilerTask) resolveEUSIntermediateVersion(
 	if cvSpec.Channel == "" {
 		return "", typederrors.NewInputError(
 			"channel is required to auto-select intermediateVersion for EUS-to-EUS upgrades; " +
-				"set clusterVersion.channel in the upgrade configuration or specify intermediateVersion explicitly")
+				"set clusterVersion.cvSpec.channel in the upgrade configuration or specify clusterVersion.intermediateVersion explicitly")
 	}
 
 	upstream := string(cvSpec.Upstream)
@@ -1044,7 +1051,7 @@ func (t *provisioningRequestReconcilerTask) refreshCustomStageAuthorization(
 
 	// Persist authorization and timeout resumption before unpausing a stage.
 	if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
-		return fmt.Errorf("failed to persist workerPoolUpgrade.upgradeThrough: %w", err)
+		return fmt.Errorf("failed to persist clusterVersion.workerPoolUpgrade.upgradeThrough: %w", err)
 	}
 	return nil
 }
@@ -1246,7 +1253,7 @@ func (t *provisioningRequestReconcilerTask) reconcileCustomWorkerPoolRollout(
 			message += fmt.Sprintf("stage %q completed; ", workerPoolUpgrade.Stages[nextStageIndex-1].Name)
 		}
 		message += fmt.Sprintf(
-			"awaiting authorization for stage %q (pools [%s]). Set workerPoolUpgrade.upgradeThrough to %q",
+			"awaiting authorization for stage %q (pools [%s]). Set clusterVersion.workerPoolUpgrade.upgradeThrough to %q",
 			nextStage.Name, strings.Join(nextStage.Pools, ", "), nextStage.Name)
 		if nextStageIndex < len(workerPoolUpgrade.Stages)-1 {
 			message += " or a later stage"

@@ -346,7 +346,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			updatePR(testCtx, K8SClient, ctVersion2, map[string]any{
 				constants.TemplateParamUpgrade: map[string]any{
 					ctlrutils.UpgradeDefaultsClusterVersionKey: map[string]any{
-						"desiredUpdate": map[string]any{"version": ctRelease3},
+						"cvSpec": map[string]any{"desiredUpdate": map[string]any{"version": ctRelease3}},
 					},
 				},
 			})
@@ -363,7 +363,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			updatePR(testCtx, K8SClient, "", map[string]any{
 				constants.TemplateParamUpgrade: map[string]any{
 					ctlrutils.UpgradeDefaultsClusterVersionKey: map[string]any{
-						"desiredUpdate": map[string]any{"version": ctRelease2},
+						"cvSpec": map[string]any{"desiredUpdate": map[string]any{"version": ctRelease2}},
 					},
 				},
 			})
@@ -416,11 +416,13 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			updatePR(testCtx, K8SClient, "", map[string]any{
 				constants.TemplateParamUpgrade: map[string]any{
 					ctlrutils.UpgradeDefaultsClusterVersionKey: map[string]any{
-						"desiredUpdate": map[string]any{"version": ctRelease2},
-						"channel":       "stable-4.20",
-					},
-					ctlrutils.UpgradeWorkerPoolUpgradeKey: map[string]any{
-						"strategy": constants.WorkerPoolUpgradeStrategyParallel,
+						"cvSpec": map[string]any{
+							"desiredUpdate": map[string]any{"version": ctRelease2},
+							"channel":       "stable-4.20",
+						},
+						ctlrutils.UpgradeWorkerPoolUpgradeKey: map[string]any{
+							"strategy": constants.WorkerPoolUpgradeStrategyParallel,
+						},
 					},
 				},
 			})
@@ -499,7 +501,7 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			updatePR(testCtx, K8SClient, ctVersion3, map[string]any{
 				constants.TemplateParamUpgrade: map[string]any{
 					ctlrutils.UpgradeDefaultsClusterVersionKey: map[string]any{
-						"desiredUpdate": map[string]any{"version": ctRelease3},
+						"cvSpec": map[string]any{"desiredUpdate": map[string]any{"version": ctRelease3}},
 					},
 				},
 			})
@@ -533,9 +535,9 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			updatePR(testCtx, K8SClient, "", map[string]any{
 				constants.TemplateParamUpgrade: map[string]any{
 					ctlrutils.UpgradeDefaultsClusterVersionKey: map[string]any{
-						"desiredUpdate": map[string]any{},
+						"cvSpec":                                 map[string]any{"desiredUpdate": map[string]any{}},
+						ctlrutils.ClusterUpgradeTimeoutConfigKey: "5s",
 					},
-					ctlrutils.ClusterUpgradeTimeoutConfigKey: "5s",
 				},
 			})
 
@@ -594,9 +596,9 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			updatePR(testCtx, K8SClient, ctVersion4, map[string]any{
 				constants.TemplateParamUpgrade: map[string]any{
 					ctlrutils.UpgradeDefaultsClusterVersionKey: map[string]any{
-						"desiredUpdate": map[string]any{"version": ctRelease4},
+						"cvSpec": map[string]any{"desiredUpdate": map[string]any{"version": ctRelease4}},
+						ctlrutils.UpgradeIntermediateVersionConfigKey: "4.21.6",
 					},
-					ctlrutils.UpgradeIntermediateVersionConfigKey: "4.21.6",
 				},
 			})
 
@@ -631,10 +633,10 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			updatePR(testCtx, K8SClient, "", map[string]any{
 				constants.TemplateParamUpgrade: map[string]any{
 					ctlrutils.UpgradeDefaultsClusterVersionKey: map[string]any{
-						"desiredUpdate": map[string]any{"version": ctRelease4},
+						"cvSpec": map[string]any{"desiredUpdate": map[string]any{"version": ctRelease4}},
+						ctlrutils.UpgradeIntermediateVersionConfigKey: "4.21.6",
+						ctlrutils.ClusterUpgradeTimeoutConfigKey:      "5s",
 					},
-					ctlrutils.UpgradeIntermediateVersionConfigKey: "4.21.6",
-					ctlrutils.ClusterUpgradeTimeoutConfigKey:      "5s",
 				},
 			})
 
@@ -695,9 +697,9 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			updatePR(testCtx, K8SClient, ctVersion4, map[string]any{
 				constants.TemplateParamUpgrade: map[string]any{
 					ctlrutils.UpgradeDefaultsClusterVersionKey: map[string]any{
-						"desiredUpdate": map[string]any{"version": ctRelease4},
+						"cvSpec": map[string]any{"desiredUpdate": map[string]any{"version": ctRelease4}},
+						ctlrutils.UpgradeIntermediateVersionConfigKey: eusIntermediateVersion,
 					},
-					ctlrutils.UpgradeIntermediateVersionConfigKey: eusIntermediateVersion,
 				},
 			})
 
@@ -717,15 +719,15 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			updatePR(testCtx, K8SClient, "", map[string]any{
 				constants.TemplateParamUpgrade: map[string]any{
 					ctlrutils.UpgradeDefaultsClusterVersionKey: map[string]any{
-						"desiredUpdate": map[string]any{"version": ctRelease4},
+						"cvSpec": map[string]any{"desiredUpdate": map[string]any{"version": ctRelease4}},
+						ctlrutils.UpgradeIntermediateVersionConfigKey: "4.20.3",
 					},
-					ctlrutils.UpgradeIntermediateVersionConfigKey: "4.20.3",
 				},
 			})
 
 			waitForPRUpgradeCondition(testCtx, K8SClient,
 				string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed),
-				"intermediateVersion 4.20.3 must be exactly one minor version below ClusterTemplate's spec.release version "+ctRelease4,
+				"clusterVersion.intermediateVersion 4.20.3 must be exactly one minor version below ClusterTemplate's spec.release version "+ctRelease4,
 				provisioningv1alpha1.StateFailed,
 			)
 		})
@@ -746,13 +748,15 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			updatePR(testCtx, K8SClient, "", map[string]any{
 				constants.TemplateParamUpgrade: map[string]any{
 					ctlrutils.UpgradeDefaultsClusterVersionKey: map[string]any{
-						"channel":       "eus-4.22",
-						"upstream":      srv.URL,
-						"desiredUpdate": map[string]any{"version": ctRelease4},
-					},
-					// Also set the worker pool upgrade strategy to serial
-					ctlrutils.UpgradeWorkerPoolUpgradeKey: map[string]any{
-						"strategy": constants.WorkerPoolUpgradeStrategySerial,
+						"cvSpec": map[string]any{
+							"channel":       "eus-4.22",
+							"upstream":      srv.URL,
+							"desiredUpdate": map[string]any{"version": ctRelease4},
+						},
+						// Also set the worker pool upgrade strategy to serial.
+						ctlrutils.UpgradeWorkerPoolUpgradeKey: map[string]any{
+							"strategy": constants.WorkerPoolUpgradeStrategySerial,
+						},
 					},
 				},
 			})
@@ -883,10 +887,12 @@ var _ = Describe("MNO Standard ClusterVersion Upgrade", Ordered, Label("mno-cv-u
 			return map[string]any{
 				constants.TemplateParamUpgrade: map[string]any{
 					ctlrutils.UpgradeDefaultsClusterVersionKey: map[string]any{
-						"desiredUpdate": map[string]any{"version": ctRelease5},
-						"channel":       "stable-4.23",
+						"cvSpec": map[string]any{
+							"desiredUpdate": map[string]any{"version": ctRelease5},
+							"channel":       "stable-4.23",
+						},
+						ctlrutils.UpgradeWorkerPoolUpgradeKey: workerPoolUpgrade,
 					},
-					ctlrutils.UpgradeWorkerPoolUpgradeKey: workerPoolUpgrade,
 				},
 			}
 		}
