@@ -339,6 +339,13 @@ spec:
                               begins.
                             format: date-time
                             type: string
+                          timeoutSeconds:
+                            description: |-
+                              TimeoutSeconds is the resolved overall timeout fixed at the start of this run.
+                              It remains available after ACM detachment, when template input is no longer read.
+                            format: int64
+                            minimum: 1
+                            type: integer
                         type: object
                       ztpStatus:
                         description: Says if ZTP has complete or not.

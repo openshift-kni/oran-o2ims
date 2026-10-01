@@ -329,7 +329,9 @@ rules:
   - ""
   resources:
   - pods
+  - secrets
   verbs:
+  - delete
   - get
   - list
   - watch
@@ -344,6 +346,15 @@ rules:
   - list
   - patch
   - update
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - delete
+  - get
+  - list
   - watch
 - apiGroups:
   - coordination.k8s.io

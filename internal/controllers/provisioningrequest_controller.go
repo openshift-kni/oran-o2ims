@@ -8,6 +8,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -187,6 +188,12 @@ func (r *ProvisioningRequestReconciler) Reconcile(
 }
 
 func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Result, error) {
+	// Once seed generation starts, normal provisioning may depend on ACM
+	// resources that the seed workflow has removed. Route from persisted status
+	// before any of those reconciliation phases run.
+	if t.seedGenerationNeedsFastPath() {
+		return t.reconcileSeedGeneration(ctx)
+	}
 	if t.shouldStopReconciliation() {
 		t.logger.InfoContext(ctx, "Stopping reconciliation due to fatal failure")
 		return doNotRequeue(), nil
@@ -338,9 +345,22 @@ func (t *provisioningRequestReconcilerTask) handlePostProvisioning(ctx context.C
 
 	// Handle upgrades if ZTP is done
 	if ctlrutils.IsClusterZtpDone(t.object) {
-		result, err := t.handleClusterUpgrades(ctx, renderedClusterInstance.GetName())
-		if err != nil || result.Requeue || result.RequeueAfter > 0 {
-			return result, err
+		seedRequested, err := t.IsSeedGenerationRequested(ctx)
+		if err != nil {
+			return requeueWithError(err)
+		}
+		if seedRequested {
+			// Phase 1 keeps seed requests inadmissible. This guard also protects
+			// against an unexpected request reaching post-provisioning before
+			// the later workflow packages are installed.
+			if !seedGenerationTerminal(t.object) {
+				return requeueWithError(errors.New(provisioningv1alpha1.SeedGenerationUnsupportedMessage))
+			}
+		} else {
+			result, err := t.handleClusterUpgrades(ctx, renderedClusterInstance.GetName())
+			if err != nil || result.Requeue || result.RequeueAfter > 0 {
+				return result, err
+			}
 		}
 	}
 
@@ -1158,6 +1178,12 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 		if err := ctlrutils.UpdateK8sCRStatus(ctx, r.Client, provisioningRequest); err != nil {
 			return false, fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", provisioningRequest.Name, err)
 		}
+	}
+	// Scrub any seed-run artifacts while the PR still has its finalizer and
+	// before deleting the NAR can power down the cluster.
+	seedCleaned, err := r.cleanupSeedGenerationResources(ctx, provisioningRequest)
+	if err != nil || !seedCleaned {
+		return false, err
 	}
 
 	// Set hubAcceptsClient=false on the ManagedCluster to trigger ACM's

@@ -8,6 +8,7 @@ package v1alpha1
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -73,6 +74,9 @@ func (v *provisioningRequestValidator) ValidateUpdate(ctx context.Context, oldPr
 		// ProvisioningRequest is being deleted, this update is triggered by finalizer removal
 		return nil, nil
 	}
+	if err := validateSeedGenerationUpdate(oldPr, newPr); err != nil {
+		return nil, err
+	}
 
 	if err := v.validateCreateOrUpdate(ctx, oldPr, newPr); err != nil {
 		provisioningrequestlog.Error(err, "failed to validate the ProvisioningRequest")
@@ -80,6 +84,62 @@ func (v *provisioningRequestValidator) ValidateUpdate(ctx context.Context, oldPr
 	}
 
 	return nil, nil
+}
+
+// validateSeedGenerationUpdate prevents an active or completed one-shot run
+// from accepting seed input that the controller will never use.
+func validateSeedGenerationUpdate(oldPr, newPr *ProvisioningRequest) error {
+	details := oldPr.Status.Extensions.ClusterDetails
+	if details == nil || details.SeedGenerationStatus == nil || details.SeedGenerationStatus.StartedAt == nil {
+		return nil
+	}
+	if oldPr.Spec.TemplateName != newPr.Spec.TemplateName ||
+		oldPr.Spec.TemplateVersion != newPr.Spec.TemplateVersion {
+		return fmt.Errorf(
+			"switching ClusterTemplate is not allowed after seed generation starts; create a new ProvisioningRequest")
+	}
+	oldSeed, err := seedGenerationParameters(oldPr)
+	if err != nil {
+		return err
+	}
+	newSeed, err := seedGenerationParameters(newPr)
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(oldSeed, newSeed) {
+		return fmt.Errorf("seed generation input cannot change after seed generation starts; create a new ProvisioningRequest")
+	}
+	return nil
+}
+
+func seedGenerationParameters(pr *ProvisioningRequest) (map[string]any, error) {
+	if len(pr.Spec.TemplateParameters.Raw) == 0 {
+		return map[string]any{}, nil
+	}
+	var parameters map[string]json.RawMessage
+	if err := json.Unmarshal(pr.Spec.TemplateParameters.Raw, &parameters); err != nil {
+		return nil, fmt.Errorf("invalid templateParameters: %w", err)
+	}
+	if len(parameters[constants.TemplateParamUpgrade]) == 0 {
+		return map[string]any{}, nil
+	}
+	var upgrade map[string]json.RawMessage
+	if err := json.Unmarshal(parameters[constants.TemplateParamUpgrade], &upgrade); err != nil {
+		return nil, fmt.Errorf("invalid upgradeParameters: %w", err)
+	}
+	selected := make(map[string]any)
+	for _, key := range []string{"seedGeneration"} {
+		raw, present := upgrade[key]
+		if !present {
+			continue
+		}
+		var value any
+		if err := json.Unmarshal(raw, &value); err != nil {
+			return nil, fmt.Errorf("invalid upgradeParameters.%s: %w", key, err)
+		}
+		selected[key] = value
+	}
+	return selected, nil
 }
 
 // ValidateDelete implements admission.Validator
