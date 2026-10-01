@@ -165,6 +165,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -4798,6 +4799,30 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 				validationCondition := meta.FindStatusCondition(updatedCR.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.Validated))
 				Expect(validationCondition).ToNot(BeNil())
 				Expect(validationCondition.Status).To(Equal(metav1.ConditionFalse))
+			})
+		})
+
+		Context("when the template requests unsupported seed generation", func() {
+			BeforeEach(func() {
+				clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"}}}`)
+				Expect(c.Update(ctx, clusterTemplate)).To(Succeed())
+			})
+
+			It("fails validation before provisioning resources are created", func() {
+				renderedClusterInstance, _, _ := validationTask.handlePreProvisioning(ctx)
+				Expect(renderedClusterInstance).To(BeNil())
+
+				updatedCR := &provisioningv1alpha1.ProvisioningRequest{}
+				Expect(c.Get(ctx, types.NamespacedName{Name: provisioningRequest.Name, Namespace: provisioningRequest.Namespace}, updatedCR)).To(Succeed())
+				Expect(updatedCR.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StateFailed))
+				validationCondition := meta.FindStatusCondition(updatedCR.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.Validated))
+				Expect(validationCondition).ToNot(BeNil())
+				Expect(validationCondition.Status).To(Equal(metav1.ConditionFalse))
+				Expect(validationCondition.Message).To(ContainSubstring(provisioningv1alpha1.SeedGenerationUnsupportedMessage))
+
+				nar := &hwmgmtv1alpha1.NodeAllocationRequest{}
+				err := c.Get(ctx, types.NamespacedName{Name: provisioningRequest.Name, Namespace: provisioningRequest.Namespace}, nar)
+				Expect(k8serrors.IsNotFound(err)).To(BeTrue())
 			})
 		})
 

@@ -22,7 +22,6 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/upgrade"
 	upgradevalidation "github.com/openshift-kni/oran-o2ims/internal/validation"
 	"github.com/r3labs/diff/v3"
-	"github.com/xeipuuv/gojsonschema"
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -136,24 +135,11 @@ func DisallowUnknownFieldsInSchema(schema map[string]any) {
 
 // ValidateJsonAgainstJsonSchema validates the input against the schema.
 func ValidateJsonAgainstJsonSchema(schema, input any) error {
-	schemaLoader := gojsonschema.NewGoLoader(schema)
-	inputLoader := gojsonschema.NewGoLoader(input)
-
-	result, err := gojsonschema.Validate(schemaLoader, inputLoader)
-	if err != nil {
-		return fmt.Errorf("failed when validating the input against the schema: %w", err)
+	if err := upgradevalidation.ValidateJSONSchema(schema, input); err != nil {
+		// Preserve the existing error text for callers of this API adapter.
+		return fmt.Errorf("%w", err)
 	}
-
-	if result.Valid() {
-		return nil
-	} else {
-		var errs []string
-		for _, description := range result.Errors() {
-			errs = append(errs, description.String())
-		}
-
-		return fmt.Errorf("invalid input: %s", strings.Join(errs, "; "))
-	}
+	return nil
 }
 
 // validateTemplateInputMatchesSchema validates the input parameters from the ProvisioningRequest

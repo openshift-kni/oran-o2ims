@@ -360,14 +360,20 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeDefaults() error {
 
 	hasCV := schemaPropertyExists(upgradeData, ctlrutils.UpgradeDefaultsClusterVersionKey)
 	hasIBGU := schemaPropertyExists(upgradeData, ctlrutils.UpgradeDefaultsIBGUKey)
+	hasSeed := schemaPropertyExists(upgradeData, ctlrutils.UpgradeDefaultsSeedGenerationKey)
 	if hasCV && hasIBGU {
 		return typederrors.NewInputError(
 			"upgradeDefaults contains both %q and %q keys; only one upgrade type is allowed",
 			ctlrutils.UpgradeDefaultsClusterVersionKey, ctlrutils.UpgradeDefaultsIBGUKey)
 	}
+	if hasSeed && (hasCV || hasIBGU) {
+		return typederrors.NewInputError(
+			"upgradeDefaults contains %q and another operation key; only one operation type is allowed",
+			ctlrutils.UpgradeDefaultsSeedGenerationKey)
+	}
 
-	if hasCV || hasIBGU {
-		if err := t.validateUpgradeDefaultsAgainstSchema(upgradeData, hasCV, hasIBGU); err != nil {
+	if hasCV || hasIBGU || hasSeed {
+		if err := t.validateUpgradeDefaultsAgainstSchema(upgradeData, hasCV, hasIBGU, hasSeed); err != nil {
 			return err
 		}
 	}
@@ -413,7 +419,7 @@ func (t *clusterTemplateReconcilerTask) validateIBGUUpgradeDefaults() error {
 // matches the type defined in the upgradeParameters schema and that defaults conform
 // to that schema.
 func (t *clusterTemplateReconcilerTask) validateUpgradeDefaultsAgainstSchema(
-	upgradeData map[string]any, defaultsHasCV, defaultsHasIBGU bool) error {
+	upgradeData map[string]any, defaultsHasCV, defaultsHasIBGU, defaultsHasSeed bool) error {
 
 	if t.object.Spec.TemplateParameterSchema.Size() == 0 {
 		return typederrors.NewInputError(
@@ -441,6 +447,7 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeDefaultsAgainstSchema(
 
 	schemaHasCV := schemaPropertyExists(props, ctlrutils.UpgradeDefaultsClusterVersionKey)
 	schemaHasIBGU := schemaPropertyExists(props, ctlrutils.UpgradeDefaultsIBGUKey)
+	schemaHasSeed := schemaPropertyExists(props, ctlrutils.UpgradeDefaultsSeedGenerationKey)
 
 	if defaultsHasCV && !schemaHasCV {
 		return typederrors.NewInputError(
@@ -451,6 +458,18 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeDefaultsAgainstSchema(
 		return typederrors.NewInputError(
 			"upgradeDefaults defines %q, but %s schema does not include a matching %q definition",
 			ctlrutils.UpgradeDefaultsIBGUKey, constants.TemplateParamUpgrade, ctlrutils.UpgradeDefaultsIBGUKey)
+	}
+	if defaultsHasSeed && !schemaHasSeed {
+		return typederrors.NewInputError(
+			"upgradeDefaults defines %q, but %s schema does not include a matching %q definition",
+			ctlrutils.UpgradeDefaultsSeedGenerationKey, constants.TemplateParamUpgrade, ctlrutils.UpgradeDefaultsSeedGenerationKey)
+	}
+
+	if defaultsHasSeed {
+		if err := provisioningv1alpha1.ValidateSeedGenerationUpgradeData(upgradeData); err != nil {
+			return typederrors.NewInputError("upgradeDefaults: %s", err.Error())
+		}
+		return nil
 	}
 
 	if err := provisioningv1alpha1.ValidateJsonAgainstJsonSchema(upgradeSchema, upgradeData); err != nil {
@@ -788,7 +807,8 @@ func validateClusterInstanceParametersSchema(cipSchema map[string]any) error {
 
 // validateUpgradeParametersSchema validates the upgradeParameters sub-schema structure.
 // When present, it must have type "object" with a properties section containing
-// exactly one of "clusterVersion" or "imageBasedGroupUpgrade" (both is rejected).
+// at most one operation type (clusterVersion, imageBasedGroupUpgrade, or
+// seedGeneration). When upgradeDefaults is set, one type is required.
 // When upgradeDefaults is set, the sub-schema is required.
 func validateUpgradeParametersSchema(schemaRaw []byte, hasUpgradeDefaults bool) error {
 	upgradeSchema, err := provisioningv1alpha1.ExtractSubSchema(schemaRaw, constants.TemplateParamUpgrade)
@@ -812,6 +832,12 @@ func validateUpgradeParametersSchema(schemaRaw []byte, hasUpgradeDefaults bool) 
 
 	hasCV := schemaPropertyExists(props, ctlrutils.UpgradeDefaultsClusterVersionKey)
 	hasIBGU := schemaPropertyExists(props, ctlrutils.UpgradeDefaultsIBGUKey)
+	hasSeed := schemaPropertyExists(props, ctlrutils.UpgradeDefaultsSeedGenerationKey)
+	if schemaPropertyExists(props, ctlrutils.SeedGenerationTimeoutConfigKey) {
+		return fmt.Errorf("%s.%s must be nested under %s",
+			constants.TemplateParamUpgrade, ctlrutils.SeedGenerationTimeoutConfigKey,
+			ctlrutils.UpgradeDefaultsSeedGenerationKey)
+	}
 
 	if hasCV && hasIBGU {
 		return fmt.Errorf("%q schema must not define both %q and %q; choose exactly one upgrade type",
@@ -819,11 +845,16 @@ func validateUpgradeParametersSchema(schemaRaw []byte, hasUpgradeDefaults bool) 
 			ctlrutils.UpgradeDefaultsClusterVersionKey,
 			ctlrutils.UpgradeDefaultsIBGUKey)
 	}
-	if hasUpgradeDefaults && !hasCV && !hasIBGU {
-		return fmt.Errorf("%q schema must define either %q or %q when upgradeDefaults is set",
+	if hasSeed && (hasCV || hasIBGU) {
+		return fmt.Errorf("%q schema must define exactly one operation type; %q cannot be combined with another type",
+			constants.TemplateParamUpgrade, ctlrutils.UpgradeDefaultsSeedGenerationKey)
+	}
+	if hasUpgradeDefaults && !hasCV && !hasIBGU && !hasSeed {
+		return fmt.Errorf("%q schema must define either %q, %q, or %q when upgradeDefaults is set",
 			constants.TemplateParamUpgrade,
 			ctlrutils.UpgradeDefaultsClusterVersionKey,
-			ctlrutils.UpgradeDefaultsIBGUKey)
+			ctlrutils.UpgradeDefaultsIBGUKey,
+			ctlrutils.UpgradeDefaultsSeedGenerationKey)
 	}
 
 	if err := validateUpgradeTypeProperty(props, ctlrutils.UpgradeDefaultsClusterVersionKey); err != nil {
@@ -831,6 +862,40 @@ func validateUpgradeParametersSchema(schemaRaw []byte, hasUpgradeDefaults bool) 
 	}
 	if err := validateUpgradeTypeProperty(props, ctlrutils.UpgradeDefaultsIBGUKey); err != nil {
 		return err
+	}
+	if hasSeed {
+		for key := range props {
+			if key != ctlrutils.UpgradeDefaultsSeedGenerationKey {
+				return fmt.Errorf("%s schema cannot expose %q for seed generation",
+					constants.TemplateParamUpgrade, key)
+			}
+		}
+		var rootSchema map[string]any
+		if err := json.Unmarshal(schemaRaw, &rootSchema); err != nil {
+			return fmt.Errorf("failed to decode templateParameterSchema: %w", err)
+		}
+		if _, ok := rootSchema["$ref"]; ok {
+			return fmt.Errorf("templateParameterSchema must not use $ref for seed generation")
+		}
+		// A closed seedGeneration subschema is not enough if the enclosing
+		// upgradeParameters object can admit another operation or a reference.
+		if upgradeSchema["additionalProperties"] != false {
+			return fmt.Errorf("%q must set additionalProperties to false for seed generation", constants.TemplateParamUpgrade)
+		}
+		if _, ok := upgradeSchema["patternProperties"]; ok {
+			return fmt.Errorf("%q must not use patternProperties for seed generation", constants.TemplateParamUpgrade)
+		}
+		if _, ok := upgradeSchema["$ref"]; ok {
+			return fmt.Errorf("%q must not use $ref for seed generation", constants.TemplateParamUpgrade)
+		}
+		seedSchema, ok := props[ctlrutils.UpgradeDefaultsSeedGenerationKey].(map[string]any)
+		if !ok {
+			return fmt.Errorf("%s.%s must be an object schema",
+				constants.TemplateParamUpgrade, ctlrutils.UpgradeDefaultsSeedGenerationKey)
+		}
+		if err := provisioningv1alpha1.ValidateSeedGenerationPRSchema(seedSchema); err != nil {
+			return fmt.Errorf("invalid seed generation PR schema: %w", err)
+		}
 	}
 
 	return nil

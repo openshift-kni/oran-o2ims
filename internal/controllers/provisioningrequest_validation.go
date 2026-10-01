@@ -31,6 +31,13 @@ func (t *provisioningRequestReconcilerTask) validateProvisioningRequestCR(ctx co
 	if err != nil {
 		return typederrors.NewInputError("failed to get the ClusterTemplate for ProvisioningRequest %s: %w ", t.object.Name, err)
 	}
+	seedGeneration, err := provisioningv1alpha1.HasSeedGenerationConfig(clusterTemplate, t.object)
+	if err != nil {
+		return typederrors.NewInputError("%s", err.Error())
+	}
+	if seedGeneration {
+		return typederrors.NewInputError("%s", provisioningv1alpha1.SeedGenerationUnsupportedMessage)
+	}
 	t.ctDetails = &clusterTemplateDetails{
 		namespace: clusterTemplate.Namespace,
 		templates: clusterTemplate.Spec.TemplateDefaults,

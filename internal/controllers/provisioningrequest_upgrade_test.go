@@ -152,6 +152,50 @@ var _ = Describe("mergeAndValidateUpgradeData", func() {
 		Expect(result).To(Equal(expected))
 	})
 
+	It("merges a seedImage-only PR override with protected template defaults", func() {
+		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"seedImage":"quay.io/example/default:4.22","seedAuthSecretRef":{"name":"push-auth"},"liveISO":{"releaseImage":"quay.io/ocp/release:4.22","installationDisk":"/dev/sda","uploadSecretRef":{"name":"upload"},"urlBase":"https://iso.example.test/images/"}}}`)
+		clusterTemplate.Spec.TemplateParameterSchema.Raw = []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"seedGeneration":{"type":"object","additionalProperties":false,"properties":{"seedImage":{"type":"string"}}}}}}}`)
+		task.object.Spec.TemplateParameters.Raw = []byte(`{"upgradeParameters":{"seedGeneration":{"seedImage":"quay.io/example/override:4.22"}}}`)
+		merged, err := task.mergeAndValidateUpgradeData(clusterTemplate)
+		Expect(err).ToNot(HaveOccurred())
+		seed := merged[utils.UpgradeDefaultsSeedGenerationKey].(map[string]any)
+		Expect(seed["seedImage"]).To(Equal("quay.io/example/override:4.22"))
+		Expect(seed["seedAuthSecretRef"]).To(Equal(map[string]any{"name": "push-auth"}))
+		Expect(seed["liveISO"]).To(HaveKey("releaseImage"))
+	})
+
+	It("merges a PR seed generation timeout over the template default", func() {
+		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"seedImage":"quay.io/example/default:4.22","seedAuthSecretRef":{"name":"push-auth"},"seedGenerationTimeout":"3h"}}`)
+		clusterTemplate.Spec.TemplateParameterSchema.Raw = []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{"seedGeneration":{"type":"object","additionalProperties":false,"properties":{"seedGenerationTimeout":{"type":"string"}}}}}}}`)
+		task.object.Spec.TemplateParameters.Raw = []byte(`{"upgradeParameters":{"seedGeneration":{"seedGenerationTimeout":"2h"}}}`)
+		merged, err := task.mergeAndValidateUpgradeData(clusterTemplate)
+		Expect(err).ToNot(HaveOccurred())
+		seed := merged[utils.UpgradeDefaultsSeedGenerationKey].(map[string]any)
+		Expect(seed[utils.SeedGenerationTimeoutConfigKey]).To(Equal("2h"))
+	})
+
+	It("rejects clusterUpgradeTimeout in merged seed generation data", func() {
+		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"seedImage":"quay.io/example/default:4.22","seedAuthSecretRef":{"name":"push-auth"}},"clusterUpgradeTimeout":"3h"}`)
+		clusterTemplate.Spec.TemplateParameterSchema.Raw = []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{"seedGeneration":{"type":"object","additionalProperties":false}}}}}`)
+		_, err := task.mergeAndValidateUpgradeData(clusterTemplate)
+		Expect(err).To(MatchError(ContainSubstring("clusterUpgradeTimeout")))
+	})
+
+	It("rejects seedGenerationTimeout at the upgrade level", func() {
+		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"seedImage":"quay.io/example/default:4.22","seedAuthSecretRef":{"name":"push-auth"}},"seedGenerationTimeout":"3h"}`)
+		clusterTemplate.Spec.TemplateParameterSchema.Raw = []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{"seedGeneration":{"type":"object","additionalProperties":false}}}}}`)
+		_, err := task.mergeAndValidateUpgradeData(clusterTemplate)
+		Expect(err).To(MatchError(ContainSubstring("seedGenerationTimeout")))
+	})
+
+	It("rejects an incomplete merged seed configuration", func() {
+		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"seedImage":"quay.io/example/default:4.22"}}`)
+		clusterTemplate.Spec.TemplateParameterSchema.Raw = []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","properties":{"seedGeneration":{"type":"object","additionalProperties":false}}}}}`)
+		_, err := task.mergeAndValidateUpgradeData(clusterTemplate)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("seedAuthSecretRef"))
+	})
+
 	It("should merge PR overrides on top of defaults including plan with rolloutStrategy", func() {
 		task.object.Spec.TemplateParameters = runtime.RawExtension{
 			Raw: []byte(`{"upgradeParameters":{"imageBasedGroupUpgrade":{"ibuSpec":{"seedImageRef":{"image":"new-image"}},"plan":[{"actions":["Prep"],"rolloutStrategy":{"maxConcurrency":1,"timeout":15}},{"actions":["AbortOnFailure"]},{"actions":["Upgrade"],"rolloutStrategy":{"maxConcurrency":1,"timeout":60}},{"actions":["AbortOnFailure"]}]}}}`),
@@ -875,6 +919,29 @@ var _ = Describe("parseUpgradeConfig", func() {
 	})
 
 	Context("upgrade type detection", func() {
+		It("should detect seed generation from CT defaults without PR overrides", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+				Raw: []byte(`{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22"}}`),
+			}
+			cfg, err := parseUpgradeConfig(ct, pr)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cfg.UpgradeType).To(Equal(utils.UpgradeDefaultsSeedGenerationKey))
+		})
+
+		It("should detect seed generation from PR input", func() {
+			pr.Spec.TemplateParameters.Raw = []byte(`{"upgradeParameters":{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22"}}}`)
+			cfg, err := parseUpgradeConfig(ct, pr)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cfg.UpgradeType).To(Equal(utils.UpgradeDefaultsSeedGenerationKey))
+		})
+
+		It("should reject seed generation combined with an upgrade type", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{}}`)
+			pr.Spec.TemplateParameters.Raw = []byte(`{"upgradeParameters":{"imageBasedGroupUpgrade":{}}}`)
+			_, err := parseUpgradeConfig(ct, pr)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("only one upgrade type is allowed"))
+		})
 		It("should detect clusterVersion from CT defaults when PR has no upgrade params", func() {
 			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
 				Raw: []byte(`{"clusterVersion":{"desiredUpdate":{"version":"4.22.0"}}}`),
@@ -988,6 +1055,42 @@ var _ = Describe("parseUpgradeConfig", func() {
 	})
 
 	Context("timeout extraction", func() {
+		It("should return seed generation timeout from CT defaults", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"seedGenerationTimeout":"3h"}}`)
+			cfg, err := parseUpgradeConfig(ct, pr)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cfg.Timeout).To(Equal(3 * time.Hour))
+		})
+
+		It("should prefer PR seed generation timeout over CT defaults", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"seedGenerationTimeout":"3h"}}`)
+			pr.Spec.TemplateParameters.Raw = []byte(`{"upgradeParameters":{"seedGeneration":{"seedGenerationTimeout":"2h"}}}`)
+			cfg, err := parseUpgradeConfig(ct, pr)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cfg.Timeout).To(Equal(2 * time.Hour))
+		})
+
+		It("should reject an invalid seed generation timeout", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{}}`)
+			pr.Spec.TemplateParameters.Raw = []byte(`{"upgradeParameters":{"seedGeneration":{"seedGenerationTimeout":"0s"}}}`)
+			_, err := parseUpgradeConfig(ct, pr)
+			Expect(err).To(MatchError(ContainSubstring("invalid seedGenerationTimeout")))
+		})
+
+		It("should reject clusterUpgradeTimeout for seed generation", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{}}`)
+			pr.Spec.TemplateParameters.Raw = []byte(`{"upgradeParameters":{"clusterUpgradeTimeout":"3h"}}`)
+			_, err := parseUpgradeConfig(ct, pr)
+			Expect(err).To(MatchError(ContainSubstring("clusterUpgradeTimeout is not valid")))
+		})
+
+		It("should reject seedGenerationTimeout for cluster upgrades", func() {
+			ct.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"clusterVersion":{}}`)
+			pr.Spec.TemplateParameters.Raw = []byte(`{"upgradeParameters":{"seedGenerationTimeout":"3h"}}`)
+			_, err := parseUpgradeConfig(ct, pr)
+			Expect(err).To(MatchError(ContainSubstring("seedGenerationTimeout is not valid")))
+		})
+
 		It("should return zero timeout when no timeout is set", func() {
 			ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
 				Raw: []byte(`{"clusterVersion":{}}`),
@@ -1129,6 +1232,32 @@ var _ = Describe("handleUpgrade", func() {
 		Expect(upgradeCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed)))
 		Expect(upgradeCond.Message).To(ContainSubstring("no upgrade configuration found"))
 		Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+			Equal(provisioningv1alpha1.StateFailed))
+	})
+
+	It("should fail seed generation if it reaches upgrade handling while unsupported", func() {
+		ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
+			Raw: []byte(`{"seedGeneration":{}}`),
+		}
+		setupClient(ct, pr)
+
+		result, proceed, err := task.handleUpgrade(ctx, clusterName)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(proceed).To(BeFalse())
+		Expect(result.RequeueAfter).To(BeZero())
+
+		upgradeCond := meta.FindStatusCondition(task.object.Status.Conditions,
+			string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
+		Expect(upgradeCond).ToNot(BeNil())
+		Expect(upgradeCond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(upgradeCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed)))
+		Expect(upgradeCond.Message).To(Equal(provisioningv1alpha1.SeedGenerationUnsupportedMessage))
+		Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
+			Equal(provisioningv1alpha1.StateFailed))
+
+		persisted := &provisioningv1alpha1.ProvisioningRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(pr), persisted)).To(Succeed())
+		Expect(persisted.Status.ProvisioningStatus.ProvisioningPhase).To(
 			Equal(provisioningv1alpha1.StateFailed))
 	})
 

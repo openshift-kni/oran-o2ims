@@ -129,6 +129,19 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(ctx context.Context, c
 		return t.handleClusterVersionUpgrade(ctx, clusterTemplate, clusterName, upgradeCfg)
 	case ctlrutils.UpgradeDefaultsIBGUKey:
 		return t.handleIBGUUpgrade(ctx, clusterTemplate, clusterName)
+	case ctlrutils.UpgradeDefaultsSeedGenerationKey:
+		msg := provisioningv1alpha1.SeedGenerationUnsupportedMessage
+		ctlrutils.SetProvisioningStateFailed(t.object, msg)
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
+			provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
+			provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
+			metav1.ConditionFalse,
+			msg,
+		)
+		if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+			return ctrl.Result{}, false, fmt.Errorf("failed to update ProvisioningRequest CR status: %w", err)
+		}
+		return ctrl.Result{}, false, nil
 	default:
 		t.logger.ErrorContext(ctx, "Unexpected upgrade type from parseUpgradeConfig",
 			slog.String("upgradeType", upgradeCfg.UpgradeType))
@@ -138,15 +151,14 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(ctx context.Context, c
 
 // parseUpgradeConfig inspects the ProvisioningRequest's upgradeParameters and
 // the ClusterTemplate's upgradeDefaults to determine the upgrade type, extract
-// the clusterUpgradeTimeout and intermediateVersion (PR overrides CT). Returns
-// an error if both clusterVersion and imageBasedGroupUpgrade keys are found,
-// or if the timeout value is invalid.
+// the operation-specific timeout (PR overrides CT). Returns an error if
+// multiple operation types are found, or if the timeout is invalid.
 func parseUpgradeConfig(
 	ct *provisioningv1alpha1.ClusterTemplate,
 	pr *provisioningv1alpha1.ProvisioningRequest,
 ) (*ctlrutils.UpgradeConfig, error) {
-	hasCV, hasIBGU := false, false
-	var timeout time.Duration
+	hasCV, hasIBGU, hasSeed := false, false, false
+	var upgradeParams, defaults map[string]any
 
 	// Check ProvisioningRequest upgradeParameters first (takes precedence).
 	if pr.Spec.TemplateParameters.Size() > 0 {
@@ -155,7 +167,7 @@ func parseUpgradeConfig(
 			return nil, fmt.Errorf("failed to parse templateParameters: %w", err)
 		}
 		if upgradeParamsRaw, ok := templateParams[constants.TemplateParamUpgrade]; ok {
-			upgradeParams, ok := upgradeParamsRaw.(map[string]any)
+			upgradeParams, ok = upgradeParamsRaw.(map[string]any)
 			if !ok {
 				return nil, fmt.Errorf("%s is not a map", constants.TemplateParamUpgrade)
 			}
@@ -165,19 +177,14 @@ func parseUpgradeConfig(
 			if _, ok := upgradeParams[ctlrutils.UpgradeDefaultsIBGUKey]; ok {
 				hasIBGU = true
 			}
-			if ts, ok := upgradeParams[ctlrutils.ClusterUpgradeTimeoutConfigKey].(string); ok {
-				d, err := time.ParseDuration(ts)
-				if err != nil {
-					return nil, fmt.Errorf("invalid clusterUpgradeTimeout %q in upgradeParameters: %w", ts, err)
-				}
-				timeout = d
+			if _, ok := upgradeParams[ctlrutils.UpgradeDefaultsSeedGenerationKey]; ok {
+				hasSeed = true
 			}
 		}
 	}
 
 	// Check ClusterTemplate upgradeDefaults.
 	if ct.Spec.TemplateDefaults.UpgradeDefaults.Size() > 0 {
-		var defaults map[string]any
 		if err := json.Unmarshal(ct.Spec.TemplateDefaults.UpgradeDefaults.Raw, &defaults); err != nil {
 			return nil, fmt.Errorf("failed to parse upgradeDefaults: %w", err)
 		}
@@ -187,14 +194,8 @@ func parseUpgradeConfig(
 		if _, ok := defaults[ctlrutils.UpgradeDefaultsIBGUKey]; ok {
 			hasIBGU = true
 		}
-		if timeout == 0 {
-			if ts, ok := defaults[ctlrutils.ClusterUpgradeTimeoutConfigKey].(string); ok {
-				d, err := time.ParseDuration(ts)
-				if err != nil {
-					return nil, fmt.Errorf("invalid clusterUpgradeTimeout %q in upgradeDefaults: %w", ts, err)
-				}
-				timeout = d
-			}
+		if _, ok := defaults[ctlrutils.UpgradeDefaultsSeedGenerationKey]; ok {
+			hasSeed = true
 		}
 	}
 
@@ -203,22 +204,95 @@ func parseUpgradeConfig(
 			"upgrade configuration contains both %q and %q keys; only one upgrade type is allowed",
 			ctlrutils.UpgradeDefaultsClusterVersionKey, ctlrutils.UpgradeDefaultsIBGUKey)
 	}
+	if hasSeed && (hasCV || hasIBGU) {
+		return nil, fmt.Errorf(
+			"upgrade configuration contains %q and another operation key; only one upgrade type is allowed",
+			ctlrutils.UpgradeDefaultsSeedGenerationKey)
+	}
 
-	if hasCV {
-		return &ctlrutils.UpgradeConfig{
-			UpgradeType: ctlrutils.UpgradeDefaultsClusterVersionKey,
-			Timeout:     timeout,
-		}, nil
+	var operation string
+	switch {
+	case hasCV:
+		operation = ctlrutils.UpgradeDefaultsClusterVersionKey
+	case hasIBGU:
+		operation = ctlrutils.UpgradeDefaultsIBGUKey
+	case hasSeed:
+		operation = ctlrutils.UpgradeDefaultsSeedGenerationKey
+	default:
+		return nil, fmt.Errorf(
+			"no upgrade configuration found: upgradeDefaults or upgradeParameters must contain %q, %q, or %q",
+			ctlrutils.UpgradeDefaultsClusterVersionKey, ctlrutils.UpgradeDefaultsIBGUKey,
+			ctlrutils.UpgradeDefaultsSeedGenerationKey)
 	}
-	if hasIBGU {
-		return &ctlrutils.UpgradeConfig{
-			UpgradeType: ctlrutils.UpgradeDefaultsIBGUKey,
-			Timeout:     timeout,
-		}, nil
+	timeout, err := parseOperationTimeout(operation, upgradeParams, defaults)
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf(
-		"no upgrade configuration found: upgradeDefaults or upgradeParameters must contain %q or %q",
-		ctlrutils.UpgradeDefaultsClusterVersionKey, ctlrutils.UpgradeDefaultsIBGUKey)
+	return &ctlrutils.UpgradeConfig{UpgradeType: operation, Timeout: timeout}, nil
+}
+
+func parseOperationTimeout(operation string, upgradeParams, defaults map[string]any) (time.Duration, error) {
+	seedOperation := operation == ctlrutils.UpgradeDefaultsSeedGenerationKey
+	key := ctlrutils.ClusterUpgradeTimeoutConfigKey
+	if seedOperation {
+		key = ctlrutils.SeedGenerationTimeoutConfigKey
+	}
+	var rawTimeout any
+	var found bool
+	for _, source := range []struct {
+		name   string
+		values map[string]any
+	}{
+		{"upgradeParameters", upgradeParams},
+		{"upgradeDefaults", defaults},
+	} {
+		if seedOperation {
+			if _, ok := source.values[ctlrutils.ClusterUpgradeTimeoutConfigKey]; ok {
+				return 0, fmt.Errorf("%s is not valid for %s in %s",
+					ctlrutils.ClusterUpgradeTimeoutConfigKey, operation, source.name)
+			}
+			if _, ok := source.values[ctlrutils.SeedGenerationTimeoutConfigKey]; ok {
+				return 0, fmt.Errorf("%s must be nested under %s in %s",
+					ctlrutils.SeedGenerationTimeoutConfigKey, ctlrutils.UpgradeDefaultsSeedGenerationKey, source.name)
+			}
+			seedRaw, ok := source.values[ctlrutils.UpgradeDefaultsSeedGenerationKey]
+			if !ok {
+				continue
+			}
+			seed, ok := seedRaw.(map[string]any)
+			if !ok {
+				return 0, fmt.Errorf("%s in %s must be an object",
+					ctlrutils.UpgradeDefaultsSeedGenerationKey, source.name)
+			}
+			rawTimeout, found = seed[key]
+		} else {
+			if _, ok := source.values[ctlrutils.SeedGenerationTimeoutConfigKey]; ok {
+				return 0, fmt.Errorf("%s is not valid for %s in %s",
+					ctlrutils.SeedGenerationTimeoutConfigKey, operation, source.name)
+			}
+			rawTimeout, found = source.values[key]
+		}
+		if found {
+			timeout, err := parseOperationTimeoutValue(key, source.name, rawTimeout)
+			if err != nil {
+				return 0, err
+			}
+			return timeout, nil
+		}
+	}
+	return 0, nil
+}
+
+func parseOperationTimeoutValue(key, source string, raw any) (time.Duration, error) {
+	value, ok := raw.(string)
+	if !ok {
+		return 0, fmt.Errorf("%s in %s must be a duration string", key, source)
+	}
+	timeout, err := time.ParseDuration(value)
+	if err != nil || timeout <= 0 {
+		return 0, fmt.Errorf("invalid %s %q in %s: must be a positive duration", key, value, source)
+	}
+	return timeout, nil
 }
 
 // handleIBGUUpgrade handles the upgrade of the cluster through IBGU.
@@ -673,7 +747,16 @@ func (t *provisioningRequestReconcilerTask) mergeAndValidateUpgradeData(
 		return nil, fmt.Errorf("failed to merge upgrade parameters with defaults: %w", err)
 	}
 
-	// Validate the merged data against the upgradeParameters schema
+	// Seed generation uses a complete internal schema after merge. The
+	// templateParameterSchema only describes fields a PR author may override.
+	if _, hasSeed := mergedUpgradeData[ctlrutils.UpgradeDefaultsSeedGenerationKey]; hasSeed {
+		if err := provisioningv1alpha1.ValidateSeedGenerationUpgradeData(mergedUpgradeData); err != nil {
+			return nil, fmt.Errorf("merged seed generation parameters: %w", err)
+		}
+		return mergedUpgradeData, nil
+	}
+
+	// Existing upgrade types validate the merged data against their public schema.
 	upgradeSchema, err := provisioningv1alpha1.ExtractSubSchema(
 		clusterTemplate.Spec.TemplateParameterSchema.Raw, constants.TemplateParamUpgrade)
 	if err != nil {

@@ -60,6 +60,16 @@ Services follow a consistent initialization pattern in `internal/service/{servic
 
 Shared infrastructure lives in `internal/service/common/` (middleware, DB helpers, server config).
 
+### Shared Validation
+
+Put new validation rules used by both admission webhooks and controllers in
+`internal/validation`. Keep API packages focused on resource types and thin
+adapters needed by webhook interfaces. Shared validators should accept only the
+fields they need, such as raw JSON, maps, or validation-owned types; they must
+not import API packages that already import `internal/validation`. Keep the
+business rule and its focused tests together in `internal/validation`, and test
+the webhook and controller call sites separately.
+
 ### Reconciler Deletion Handling
 
 Every reconciler that fetches a Kubernetes resource must check its

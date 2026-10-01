@@ -146,21 +146,24 @@ const (
 
 // Default timeout values
 const (
-	DefaultHardwareProvisioningTimeout = 90 * time.Minute
-	DefaultClusterInstallationTimeout  = 90 * time.Minute
-	DefaultClusterConfigurationTimeout = 30 * time.Minute
-	DefaultClusterUpgradeTimeout       = 4 * time.Hour
-	DefaultClusterEUSUpgradeTimeout    = 8 * time.Hour
+	DefaultHardwareProvisioningTimeout  = 90 * time.Minute
+	DefaultClusterInstallationTimeout   = 90 * time.Minute
+	DefaultClusterConfigurationTimeout  = 30 * time.Minute
+	DefaultClusterUpgradeTimeout        = 4 * time.Hour
+	DefaultClusterEUSUpgradeTimeout     = 8 * time.Hour
+	DefaultSeedGenerationTimeout        = 2 * time.Hour
+	DefaultSeedGenerationWithISOTimeout = 3 * time.Hour
 )
 
-// These are optional keys in the respective ConfigMaps defined in ClusterTemplate
-// spec.templates, used to configure the timeout values for each operation.
+// These optional keys configure timeout values in ClusterTemplate defaults,
+// ProvisioningRequest parameters, or their respective ConfigMaps.
 // If not specified, the default timeout values will be applied.
 const (
 	HardwareProvisioningTimeoutConfigKey = "hardwareProvisioningTimeout"
 	ClusterInstallationTimeoutConfigKey  = "clusterInstallationTimeout"
 	ClusterConfigurationTimeoutConfigKey = "clusterConfigurationTimeout"
 	ClusterUpgradeTimeoutConfigKey       = "clusterUpgradeTimeout"
+	SeedGenerationTimeoutConfigKey       = "seedGenerationTimeout"
 )
 
 // ClusterInstance template constants
@@ -245,6 +248,7 @@ const ClusterVersionName = "version"
 const (
 	UpgradeDefaultsIBGUKey              = "imageBasedGroupUpgrade"
 	UpgradeDefaultsClusterVersionKey    = "clusterVersion"
+	UpgradeDefaultsSeedGenerationKey    = "seedGeneration"
 	UpgradeIntermediateVersionConfigKey = "intermediateVersion"
 	UpgradeWorkerPoolUpgradeKey         = "workerPoolUpgrade"
 )
