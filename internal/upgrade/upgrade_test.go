@@ -16,13 +16,13 @@ func TestRequestedWorkerPoolUpgradeThrough(t *testing.T) {
 		name, defaults, params, expected string
 	}{
 		{"no authorization", `{}`, `{}`, ""},
-		{"template default", `{"workerPoolUpgrade":{"upgradeThrough":"canary"}}`, `{}`, "canary"},
-		{"PR override", `{"workerPoolUpgrade":{"upgradeThrough":"canary"}}`,
-			`{"upgradeParameters":{"workerPoolUpgrade":{"upgradeThrough":"remaining"}}}`, "remaining"},
-		{"explicitly empty PR override", `{"workerPoolUpgrade":{"upgradeThrough":"canary"}}`,
-			`{"upgradeParameters":{"workerPoolUpgrade":{"upgradeThrough":""}}}`, ""},
-		{"omitted PR field retains default", `{"workerPoolUpgrade":{"upgradeThrough":"canary"}}`,
-			`{"upgradeParameters":{"workerPoolUpgrade":{}}}`, "canary"},
+		{"template default", `{"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": "canary"}}}`, `{}`, "canary"},
+		{"PR override", `{"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": "canary"}}}`,
+			`{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": "remaining"}}}}`, "remaining"},
+		{"explicitly empty PR override", `{"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": "canary"}}}`,
+			`{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": ""}}}}`, ""},
+		{"omitted PR field retains default", `{"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": "canary"}}}`,
+			`{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": {}}}}`, "canary"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -43,18 +43,20 @@ func TestRequestedWorkerPoolUpgradeThroughMalformedInput(t *testing.T) {
 	}{
 		{"invalid defaults JSON", `{`, `{}`, "failed to parse ClusterTemplate upgradeDefaults"},
 		{"null defaults", `null`, `{}`, "ClusterTemplate upgradeDefaults must be an object"},
-		{"invalid defaults pool", `{"workerPoolUpgrade":[]}`, `{}`,
-			"ClusterTemplate upgradeDefaults.workerPoolUpgrade must be an object"},
-		{"invalid defaults stage", `{"workerPoolUpgrade":{"upgradeThrough":4}}`, `{}`,
-			"ClusterTemplate upgradeDefaults.workerPoolUpgrade.upgradeThrough must be a string"},
+		{"invalid defaults pool", `{"clusterVersion": {"workerPoolUpgrade": []}}`, `{}`,
+			"ClusterTemplate upgradeDefaults.clusterVersion.workerPoolUpgrade must be an object"},
+		{"invalid defaults stage", `{"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": 4}}}`, `{}`,
+			"ClusterTemplate upgradeDefaults.clusterVersion.workerPoolUpgrade.upgradeThrough must be a string"},
+		{"invalid defaults clusterVersion", `{"clusterVersion":[]}`, `{}`,
+			"ClusterTemplate upgradeDefaults.clusterVersion must be an object"},
 		{"invalid parameters JSON", `{}`, `{`, "failed to parse templateParameters"},
 		{"null parameters", `{}`, `null`, "templateParameters must be an object"},
 		{"invalid upgradeParameters", `{}`, `{"upgradeParameters":null}`,
 			"templateParameters.upgradeParameters must be an object"},
-		{"invalid parameters pool", `{}`, `{"upgradeParameters":{"workerPoolUpgrade":[]}}`,
-			"templateParameters.upgradeParameters.workerPoolUpgrade must be an object"},
-		{"invalid parameters stage", `{}`, `{"upgradeParameters":{"workerPoolUpgrade":{"upgradeThrough":null}}}`,
-			"templateParameters.upgradeParameters.workerPoolUpgrade.upgradeThrough must be a string"},
+		{"invalid parameters pool", `{}`, `{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": []}}}`,
+			"templateParameters.upgradeParameters.clusterVersion.workerPoolUpgrade must be an object"},
+		{"invalid parameters stage", `{}`, `{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": null}}}}`,
+			"templateParameters.upgradeParameters.clusterVersion.workerPoolUpgrade.upgradeThrough must be a string"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -301,68 +301,71 @@ spec:
       upgradeParameters:
         description: upgradeParameters defines the available parameters for cluster upgrade
         properties:
-          clusterUpgradeTimeout:
-            type: string
-          intermediateVersion:
-            type: string
           clusterVersion:
             type: object
             properties:
-              channel:
+              clusterUpgradeTimeout:
                 type: string
-              upstream:
+              intermediateVersion:
                 type: string
-              desiredUpdate:
+              cvSpec:
                 type: object
                 properties:
-                  version:
+                  channel:
                     type: string
-                  image:
+                  upstream:
                     type: string
-                  force:
-                    type: boolean
-                  architecture:
+                  desiredUpdate:
+                    type: object
+                    properties:
+                      version:
+                        type: string
+                      image:
+                        type: string
+                      force:
+                        type: boolean
+                      architecture:
+                        type: string
+                        enum:
+                        - Multi
+                        - ""
+              workerPoolUpgrade:
+                type: object
+                properties:
+                  strategy:
                     type: string
                     enum:
-                    - Multi
-                    - ""
-          workerPoolUpgrade:
-            type: object
-            properties:
-              strategy:
-                type: string
-                enum:
-                - OpenShiftDefault
-                - Serial
-                - Parallel
-                - Custom
-              poolsWithControlPlane:
-                type: array
-                uniqueItems: true
-                items:
-                  type: string
-                  minLength: 1
-              stages:
-                type: array
-                minItems: 1
-                items:
-                  type: object
-                  required:
-                    - name
-                    - pools
-                  properties:
-                    name:
+                    - OpenShiftDefault
+                    - Serial
+                    - Parallel
+                    - Custom
+                  poolsWithControlPlane:
+                    type: array
+                    uniqueItems: true
+                    items:
                       type: string
                       minLength: 1
-                    pools:
-                      type: array
-                      minItems: 1
-                      uniqueItems: true
-                      items:
-                        type: string
-                        minLength: 1
-              upgradeThrough:
-                type: string
+                  stages:
+                    type: array
+                    minItems: 1
+                    items:
+                      type: object
+                      required:
+                        - name
+                        - pools
+                      properties:
+                        name:
+                          type: string
+                          minLength: 1
+                        pools:
+                          type: array
+                          minItems: 1
+                          uniqueItems: true
+                          items:
+                            type: string
+                            minLength: 1
+                  upgradeThrough:
+                    type: string
         type: object
     required:
       - nodeClusterName

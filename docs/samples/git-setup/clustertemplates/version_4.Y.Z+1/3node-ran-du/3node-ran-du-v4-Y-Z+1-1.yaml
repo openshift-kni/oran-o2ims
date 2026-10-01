@@ -22,9 +22,10 @@ spec:
     policyTemplateDefaults: policytemplate-defaults-v1
     upgradeDefaults:
       clusterVersion:
-        channel: "stable-4.Y.Z+1"
-        desiredUpdate:
-          version: "4.Y.Z+1"
+        cvSpec:
+          channel: "stable-4.Y.Z+1"
+          desiredUpdate:
+            version: "4.Y.Z+1"
   templateParameterSchema:
     properties:
       nodeClusterName:
@@ -279,110 +280,121 @@ spec:
       upgradeParameters:
         description: upgradeParameters defines the available upgrade parameters for the cluster upgrade
         properties:
-          clusterUpgradeTimeout:
-            description: defines the timeout for the cluster upgrade
-            type: string
-          intermediateVersion:
-            description: defines the intermediate version for the cluster EUS upgrade
-            type: string
           clusterVersion:
             type: object
             description: defines the ClusterVersion parameters for the upgrade
             properties:
-              channel:
+              clusterUpgradeTimeout:
+                description: >
+                  Timeout for the entire cluster upgrade, including both hops for
+                  EUS upgrades. Must be a valid duration string (e.g., "6h").
+                  Defaults to 4h for standard upgrades or 8h for EUS upgrades
+                  when omitted.
                 type: string
-              upstream:
+              intermediateVersion:
+                description: >
+                  Intermediate OCP version for EUS-to-EUS upgrades. Must be valid
+                  semver with the same major version and exactly one minor version
+                  below desiredUpdate.version. Auto-selected from the configured
+                  channel and upstream when omitted.
                 type: string
-              desiredUpdate:
+              cvSpec:
                 type: object
                 properties:
-                  version:
+                  channel:
                     type: string
-                  image:
+                  upstream:
                     type: string
-                  force:
-                    type: boolean
-                  architecture:
+                  desiredUpdate:
+                    type: object
+                    properties:
+                      version:
+                        type: string
+                      image:
+                        type: string
+                      force:
+                        type: boolean
+                      architecture:
+                        type: string
+                        enum:
+                        - "Multi"
+                        - ""
+              workerPoolUpgrade:
+                type: object
+                description: >
+                  Controls the rollout relationship between the control plane and
+                  worker MachineConfigPools. When omitted, the controller uses
+                  OpenShiftDefault for non-EUS upgrades and Parallel for EUS upgrades.
+                properties:
+                  strategy:
                     type: string
                     enum:
-                    - "Multi"
-                    - ""
-          workerPoolUpgrade:
-            type: object
-            description: >
-              Controls the rollout relationship between the control plane and
-              worker MachineConfigPools. When omitted, the controller uses
-              OpenShiftDefault for non-EUS upgrades and Parallel for EUS upgrades.
-            properties:
-              strategy:
-                type: string
-                enum:
-                - OpenShiftDefault
-                - Serial
-                - Parallel
-                - Custom
-                description: >
-                  Selects how worker MachineConfigPools are rolled out. When the
-                  strategy is omitted, OpenShiftDefault is used for non-EUS
-                  upgrades and Parallel is used for EUS upgrades. The
-                  OpenShiftDefault strategy is supported only for non-EUS upgrades
-                  and uses the default OpenShift behavior, allowing the control
-                  plane and worker MachineConfigPools to upgrade together. The
-                  Serial strategy upgrades the remaining worker MachineConfigPools
-                  one at a time in alphabetical order, starting only after the
-                  control plane and any MachineConfigPools upgrading with it have
-                  completed their upgrades. The Parallel strategy upgrades all
-                  remaining worker MachineConfigPools together, starting only after
-                  the control plane and any MachineConfigPools upgrading with it
-                  have completed their upgrades. Custom follows the ordered stages
-                  through the upgradeThrough cursor.
-              poolsWithControlPlane:
-                type: array
-                uniqueItems: true
-                description: >
-                  Names of worker MachineConfigPools that remain unpaused and
-                  upgrade alongside the control plane. Supported only for non-EUS
-                  Serial, Parallel, and Custom upgrades. When omitted or empty, no
-                  worker MachineConfigPools upgrade with the control plane.
-                items:
-                  type: string
-                  minLength: 1
-              stages:
-                type: array
-                minItems: 1
-                description: >
-                  Complete ordered rollout plan for the Custom strategy. After the
-                  control plane and poolsWithControlPlane finish, stages run in list
-                  order. All worker MachineConfigPools in one stage are upgraded
-                  together. The controller runs only stages authorized by
-                  upgradeThrough and waits before the next stage.
-                items:
-                  type: object
-                  required:
-                    - name
-                    - pools
-                  properties:
-                    name:
-                      description: Unique stage name referenced by upgradeThrough.
+                    - OpenShiftDefault
+                    - Serial
+                    - Parallel
+                    - Custom
+                    description: >
+                      Selects how worker MachineConfigPools are rolled out. When the
+                      strategy is omitted, OpenShiftDefault is used for non-EUS
+                      upgrades and Parallel is used for EUS upgrades. The
+                      OpenShiftDefault strategy is supported only for non-EUS upgrades
+                      and uses the default OpenShift behavior, allowing the control
+                      plane and worker MachineConfigPools to upgrade together. The
+                      Serial strategy upgrades the remaining worker MachineConfigPools
+                      one at a time in alphabetical order, starting only after the
+                      control plane and any MachineConfigPools upgrading with it have
+                      completed their upgrades. The Parallel strategy upgrades all
+                      remaining worker MachineConfigPools together, starting only after
+                      the control plane and any MachineConfigPools upgrading with it
+                      have completed their upgrades. Custom follows the ordered stages
+                      through the upgradeThrough cursor.
+                  poolsWithControlPlane:
+                    type: array
+                    uniqueItems: true
+                    description: >
+                      Names of worker MachineConfigPools that remain unpaused and
+                      upgrade alongside the control plane. Supported only for non-EUS
+                      Serial, Parallel, and Custom upgrades. When omitted or empty, no
+                      worker MachineConfigPools upgrade with the control plane.
+                    items:
                       type: string
                       minLength: 1
-                    pools:
-                      description: Worker MachineConfigPool names upgraded together in this stage.
-                      type: array
-                      minItems: 1
-                      uniqueItems: true
-                      items:
-                        type: string
-                        minLength: 1
-              upgradeThrough:
-                type: string
-                description: >
-                  Name of the last Custom stage authorized to run. If unset or empty,
-                  rollout waits after the control plane and poolsWithControlPlane
-                  complete. Set this field to a stage name to run the ordered plan
-                  through that stage. After the upgrade starts, update it only when
-                  the rollout is waiting for authorization of the next stage, and
-                  only to a later stage.
+                  stages:
+                    type: array
+                    minItems: 1
+                    description: >
+                      Complete ordered rollout plan for the Custom strategy. After the
+                      control plane and poolsWithControlPlane finish, stages run in list
+                      order. All worker MachineConfigPools in one stage are upgraded
+                      together. The controller runs only stages authorized by
+                      upgradeThrough and waits before the next stage.
+                    items:
+                      type: object
+                      required:
+                        - name
+                        - pools
+                      properties:
+                        name:
+                          description: Unique stage name referenced by upgradeThrough.
+                          type: string
+                          minLength: 1
+                        pools:
+                          description: Worker MachineConfigPool names upgraded together in this stage.
+                          type: array
+                          minItems: 1
+                          uniqueItems: true
+                          items:
+                            type: string
+                            minLength: 1
+                  upgradeThrough:
+                    type: string
+                    description: >
+                      Name of the last Custom stage authorized to run. If unset or empty,
+                      rollout waits after the control plane and poolsWithControlPlane
+                      complete. Set this field to a stage name to run the ordered plan
+                      through that stage. After the upgrade starts, update it only when
+                      the rollout is waiting for authorization of the next stage, and
+                      only to a later stage.
         type: object
     required:
       - nodeClusterName

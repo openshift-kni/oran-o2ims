@@ -8,6 +8,7 @@ package v1alpha1
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -833,18 +834,18 @@ func TestValidateActiveUpgradeUpdateEquivalentEmptyInputs(t *testing.T) {
 	}{
 		{
 			name:   "remove empty workerPoolUpgrade",
-			oldRaw: `{"upgradeParameters":{"workerPoolUpgrade":{}}}`,
+			oldRaw: `{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": {}}}}`,
 			newRaw: `{"upgradeParameters":{}}`,
 		},
 		{
 			name:   "add empty workerPoolUpgrade",
 			oldRaw: `{"upgradeParameters":{}}`,
-			newRaw: `{"upgradeParameters":{"workerPoolUpgrade":{}}}`,
+			newRaw: `{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": {}}}}`,
 		},
 		{
 			name:   "add timeout to empty parameters",
 			oldRaw: "",
-			newRaw: `{"upgradeParameters":{"clusterUpgradeTimeout":"3h"}}`,
+			newRaw: `{"upgradeParameters": {"clusterVersion": {"clusterUpgradeTimeout": "3h"}}}`,
 		},
 		{
 			name:   "add empty upgrade parameters to unrelated input",
@@ -886,17 +887,29 @@ var _ = Describe("active upgrade input validation", func() {
 				TemplateName:    "clustertemplate-a",
 				TemplateVersion: "v1.0.1",
 				TemplateParameters: runtime.RawExtension{Raw: []byte(`{
-					"upgradeParameters": {
-						"clusterUpgradeTimeout": "2h",
-						"workerPoolUpgrade": {
-							"strategy": "Custom",
-							"stages": [
-								{"name": "canary", "pools": ["worker-a"]},
-								{"name": "rest", "pools": ["worker-b"]}
-							]
-						}
-					}
-				}`)},
+  "upgradeParameters": {
+    "clusterVersion": {
+      "clusterUpgradeTimeout": "2h",
+      "workerPoolUpgrade": {
+        "strategy": "Custom",
+        "stages": [
+          {
+            "name": "canary",
+            "pools": [
+              "worker-a"
+            ]
+          },
+          {
+            "name": "rest",
+            "pools": [
+              "worker-b"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}`)},
 			},
 			Status: ProvisioningRequestStatus{
 				Conditions: []metav1.Condition{{
@@ -931,8 +944,22 @@ var _ = Describe("active upgrade input validation", func() {
 
 			It("should reject plan changes while active", func() {
 				newPr.Spec.TemplateParameters = runtime.RawExtension{Raw: []byte(`{
-			"upgradeParameters":{"workerPoolUpgrade":{"strategy":"Custom","stages":[{"name":"changed","pools":["worker-a"]}]}}
-		}`)}
+  "upgradeParameters": {
+    "clusterVersion": {
+      "workerPoolUpgrade": {
+        "strategy": "Custom",
+        "stages": [
+          {
+            "name": "changed",
+            "pools": [
+              "worker-a"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}`)}
 				err := validateActiveUpgradeUpdate(oldPr, newPr, clusterTemplate)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("cannot be changed"))
@@ -949,66 +976,93 @@ var _ = Describe("active upgrade input validation", func() {
 				func(changedParameter string) {
 					newPr.Spec.TemplateParameters = runtime.RawExtension{Raw: []byte(`{
 				"upgradeParameters": {
-					"clusterUpgradeTimeout": "2h",
-					"workerPoolUpgrade": {
-						"strategy": "Custom",
-						"stages": [
-							{"name": "canary", "pools": ["worker-a"]},
-							{"name": "rest", "pools": ["worker-b"]}
-						]
-					},
+					"clusterVersion": {
+						"clusterUpgradeTimeout": "2h",
+						"workerPoolUpgrade": {
+							"strategy": "Custom",
+							"stages": [
+								{"name": "canary", "pools": ["worker-a"]},
+								{"name": "rest", "pools": ["worker-b"]}
+							]
+						},
 					` + changedParameter + `
+					}
 				}
 			}`)}
 					err := validateActiveUpgradeUpdate(oldPr, newPr, clusterTemplate)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("upgradeParameters cannot be changed"))
 				},
-				Entry("clusterVersion", `"clusterVersion":{"channel":"stable-4.22"}`),
+				Entry("cvSpec", `"cvSpec":{"channel":"stable-4.22"}`),
 				Entry("intermediateVersion", `"intermediateVersion":"4.21.3"`),
 			)
 
 			It("should allow a timeout update", func() {
 				newPr.Spec.TemplateParameters = runtime.RawExtension{Raw: []byte(`{
-			"upgradeParameters": {
-				"clusterUpgradeTimeout": "3h",
-				"workerPoolUpgrade": {
-					"strategy": "Custom",
-					"stages": [
-						{"name": "canary", "pools": ["worker-a"]},
-						{"name": "rest", "pools": ["worker-b"]}
-					]
-				}
-			}
-		}`)}
+  "upgradeParameters": {
+    "clusterVersion": {
+      "clusterUpgradeTimeout": "3h",
+      "workerPoolUpgrade": {
+        "strategy": "Custom",
+        "stages": [
+          {
+            "name": "canary",
+            "pools": [
+              "worker-a"
+            ]
+          },
+          {
+            "name": "rest",
+            "pools": [
+              "worker-b"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}`)}
 				Expect(validateActiveUpgradeUpdate(oldPr, newPr, clusterTemplate)).To(Succeed())
 			})
 
 			It("should allow forward stage authorization only while awaiting", func() {
 				newPr.Spec.TemplateParameters = runtime.RawExtension{Raw: []byte(`{
-			"upgradeParameters": {
-				"clusterUpgradeTimeout": "2h",
-				"workerPoolUpgrade": {
-					"strategy": "Custom",
-					"stages": [
-						{"name": "canary", "pools": ["worker-a"]},
-						{"name": "rest", "pools": ["worker-b"]}
-					],
-					"upgradeThrough": "canary"
-				}
-			}
-		}`)}
+  "upgradeParameters": {
+    "clusterVersion": {
+      "clusterUpgradeTimeout": "2h",
+      "workerPoolUpgrade": {
+        "strategy": "Custom",
+        "stages": [
+          {
+            "name": "canary",
+            "pools": [
+              "worker-a"
+            ]
+          },
+          {
+            "name": "rest",
+            "pools": [
+              "worker-b"
+            ]
+          }
+        ],
+        "upgradeThrough": "canary"
+      }
+    }
+  }
+}`)}
 				err := validateActiveUpgradeUpdate(oldPr, newPr, clusterTemplate)
 				if reason == CRconditionReasons.AwaitingStageAuthorization {
 					Expect(err).ToNot(HaveOccurred())
 				} else {
-					Expect(err).To(MatchError(ContainSubstring("can only change while awaiting stage authorization")))
+					Expect(err).To(MatchError(ContainSubstring(
+						"clusterVersion.workerPoolUpgrade.upgradeThrough can only change while awaiting stage authorization")))
 				}
 			})
 
 			It("should reject a non-string upgradeThrough", func() {
 				newPr.Spec.TemplateParameters = runtime.RawExtension{Raw: []byte(
-					`{"upgradeParameters":{"workerPoolUpgrade":{"upgradeThrough":1}}}`)}
+					`{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": 1}}}}`)}
 				err := validateActiveUpgradeUpdate(oldPr, newPr, clusterTemplate)
 				Expect(err).To(MatchError(ContainSubstring("workerPoolUpgrade.upgradeThrough must be a string")))
 			})
@@ -1016,7 +1070,7 @@ var _ = Describe("active upgrade input validation", func() {
 			It("should reject a non-string default upgradeThrough", func() {
 				newPr.Spec.TemplateParameters = oldPr.Spec.TemplateParameters
 				clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{Raw: []byte(
-					`{"workerPoolUpgrade":{"upgradeThrough":1}}`)}
+					`{"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": 1}}}`)}
 				err := validateActiveUpgradeUpdate(oldPr, newPr, clusterTemplate)
 				Expect(err).To(MatchError(ContainSubstring("workerPoolUpgrade.upgradeThrough must be a string")))
 			})
@@ -1034,48 +1088,109 @@ var _ = Describe("active upgrade input validation", func() {
 				WorkerPoolUpgrade.UpgradeThrough = "rest"
 			newPr.Spec.TemplateParameters = oldPr.Spec.TemplateParameters
 			err := validateActiveUpgradeUpdate(oldPr, newPr, clusterTemplate)
-			Expect(err).To(MatchError(ContainSubstring("cannot move backwards")))
+			Expect(err).To(MatchError(ContainSubstring(
+				"clusterVersion.workerPoolUpgrade.upgradeThrough cannot move backwards")))
+		})
+
+		It("should report the nested path for an unknown stage", func() {
+			var params map[string]any
+			Expect(json.Unmarshal(oldPr.Spec.TemplateParameters.Raw, &params)).To(Succeed())
+			pool := params["upgradeParameters"].(map[string]any)["clusterVersion"].(map[string]any)["workerPoolUpgrade"].(map[string]any)
+			pool["upgradeThrough"] = "missing"
+			updated, err := json.Marshal(params)
+			Expect(err).ToNot(HaveOccurred())
+			newPr.Spec.TemplateParameters.Raw = updated
+			err = validateActiveUpgradeUpdate(oldPr, newPr, clusterTemplate)
+			Expect(err).To(MatchError(ContainSubstring(
+				"clusterVersion.workerPoolUpgrade.upgradeThrough refers to unknown stage \"missing\"")))
 		})
 
 		It("should reject a rapid backward edit before authorization is persisted", func() {
 			oldPr.Spec.TemplateParameters.Raw = []byte(`{
-				"upgradeParameters":{"clusterUpgradeTimeout":"2h","workerPoolUpgrade":{
-					"strategy":"Custom","stages":[
-						{"name":"canary","pools":["worker-a"]},
-						{"name":"rest","pools":["worker-b"]}
-					],"upgradeThrough":"rest"
-				}}}
-			`)
+  "upgradeParameters": {
+    "clusterVersion": {
+      "clusterUpgradeTimeout": "2h",
+      "workerPoolUpgrade": {
+        "strategy": "Custom",
+        "stages": [
+          {
+            "name": "canary",
+            "pools": [
+              "worker-a"
+            ]
+          },
+          {
+            "name": "rest",
+            "pools": [
+              "worker-b"
+            ]
+          }
+        ],
+        "upgradeThrough": "rest"
+      }
+    }
+  }
+}`)
 			newPr.Spec.TemplateParameters.Raw = []byte(`{
-				"upgradeParameters":{"clusterUpgradeTimeout":"2h","workerPoolUpgrade":{
-					"strategy":"Custom","stages":[
-						{"name":"canary","pools":["worker-a"]},
-						{"name":"rest","pools":["worker-b"]}
-					],"upgradeThrough":"canary"
-				}}}
-			`)
+  "upgradeParameters": {
+    "clusterVersion": {
+      "clusterUpgradeTimeout": "2h",
+      "workerPoolUpgrade": {
+        "strategy": "Custom",
+        "stages": [
+          {
+            "name": "canary",
+            "pools": [
+              "worker-a"
+            ]
+          },
+          {
+            "name": "rest",
+            "pools": [
+              "worker-b"
+            ]
+          }
+        ],
+        "upgradeThrough": "canary"
+      }
+    }
+  }
+}`)
 			err := validateActiveUpgradeUpdate(oldPr, newPr, clusterTemplate)
-			Expect(err).To(MatchError(ContainSubstring("cannot move backwards from \"rest\" to \"canary\"")))
+			Expect(err).To(MatchError(ContainSubstring(
+				"clusterVersion.workerPoolUpgrade.upgradeThrough cannot move backwards from \"rest\" to \"canary\"")))
 		})
 
 		It("should reject an explicitly empty upgradeThrough over a template default", func() {
 			oldPr.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.
 				WorkerPoolUpgrade.UpgradeThrough = "canary"
 			clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{Raw: []byte(
-				`{"workerPoolUpgrade":{"upgradeThrough":"rest"}}`)}
+				`{"clusterVersion": {"workerPoolUpgrade": {"upgradeThrough": "rest"}}}`)}
 			newPr.Spec.TemplateParameters = runtime.RawExtension{Raw: []byte(`{
-			"upgradeParameters": {
-				"clusterUpgradeTimeout": "2h",
-				"workerPoolUpgrade": {
-					"strategy": "Custom",
-					"stages": [
-						{"name": "canary", "pools": ["worker-a"]},
-						{"name": "rest", "pools": ["worker-b"]}
-					],
-					"upgradeThrough": ""
-				}
-			}
-		}`)}
+  "upgradeParameters": {
+    "clusterVersion": {
+      "clusterUpgradeTimeout": "2h",
+      "workerPoolUpgrade": {
+        "strategy": "Custom",
+        "stages": [
+          {
+            "name": "canary",
+            "pools": [
+              "worker-a"
+            ]
+          },
+          {
+            "name": "rest",
+            "pools": [
+              "worker-b"
+            ]
+          }
+        ],
+        "upgradeThrough": ""
+      }
+    }
+  }
+}`)}
 
 			err := validateActiveUpgradeUpdate(oldPr, newPr, clusterTemplate)
 			Expect(err).To(MatchError(ContainSubstring("cannot move backwards")))
@@ -1092,16 +1207,22 @@ var _ = Describe("active upgrade input validation", func() {
 		Entry("null template parameters", `null`, "templateParameters must be an object"),
 		Entry("non-object upgrade parameters", `{"upgradeParameters":null}`,
 			"templateParameters.upgradeParameters must be an object"),
-		Entry("non-object worker pool upgrade", `{"upgradeParameters":{"workerPoolUpgrade":[]}}`,
-			"templateParameters.upgradeParameters.workerPoolUpgrade must be an object"),
+		Entry("non-object worker pool upgrade", `{"upgradeParameters": {"clusterVersion": {"workerPoolUpgrade": []}}}`,
+			"templateParameters.upgradeParameters.clusterVersion.workerPoolUpgrade must be an object"),
 	)
 
 	DescribeTable("should allow plan changes outside an active upgrade",
 		func(reason ConditionReason) {
 			oldPr.Status.Conditions[0].Reason = string(reason)
 			newPr.Spec.TemplateParameters = runtime.RawExtension{Raw: []byte(`{
-				"upgradeParameters":{"workerPoolUpgrade":{"strategy":"Parallel"}}
-			}`)}
+  "upgradeParameters": {
+    "clusterVersion": {
+      "workerPoolUpgrade": {
+        "strategy": "Parallel"
+      }
+    }
+  }
+}`)}
 			Expect(validateActiveUpgradeUpdate(oldPr, newPr, clusterTemplate)).To(Succeed())
 		},
 		Entry("Pending", CRconditionReasons.Pending),
@@ -1111,11 +1232,29 @@ var _ = Describe("active upgrade input validation", func() {
 	It("should allow authorizing the final stage before the upgrade starts", func() {
 		oldPr.Status.Conditions[0].Reason = string(CRconditionReasons.Pending)
 		newPr.Spec.TemplateParameters.Raw = []byte(`{
-			"upgradeParameters":{"workerPoolUpgrade":{"strategy":"Custom","stages":[
-				{"name":"canary","pools":["worker-a"]},
-				{"name":"rest","pools":["worker-b"]}
-			],"upgradeThrough":"rest"}}
-		}`)
+  "upgradeParameters": {
+    "clusterVersion": {
+      "workerPoolUpgrade": {
+        "strategy": "Custom",
+        "stages": [
+          {
+            "name": "canary",
+            "pools": [
+              "worker-a"
+            ]
+          },
+          {
+            "name": "rest",
+            "pools": [
+              "worker-b"
+            ]
+          }
+        ],
+        "upgradeThrough": "rest"
+      }
+    }
+  }
+}`)
 		Expect(validateActiveUpgradeUpdate(oldPr, newPr, clusterTemplate)).To(Succeed())
 	})
 })

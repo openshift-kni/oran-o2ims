@@ -43,6 +43,16 @@ func RequestedWorkerPoolUpgradeThrough(defaultsRaw, paramsRaw []byte) (string, e
 				return "", false, fmt.Errorf("%s must be an object", location)
 			}
 		}
+		cvValue, found := data["clusterVersion"]
+		if !found {
+			return "", false, nil
+		}
+		location += ".clusterVersion"
+		var ok bool
+		data, ok = cvValue.(map[string]any)
+		if !ok {
+			return "", false, fmt.Errorf("%s must be an object", location)
+		}
 		poolValue, found := data["workerPoolUpgrade"]
 		if !found {
 			return "", false, nil

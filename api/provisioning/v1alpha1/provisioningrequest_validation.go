@@ -604,11 +604,11 @@ func validateActiveUpgradeUpdate(
 	}
 	if !equality.Semantic.DeepEqual(oldUpgradeInput, newUpgradeInput) {
 		return fmt.Errorf(
-			"upgradeParameters cannot be changed while a cluster upgrade is active, except for clusterUpgradeTimeout and forward workerPoolUpgrade.upgradeThrough changes while awaiting stage authorization")
+			"upgradeParameters cannot be changed while a cluster upgrade is active, except for clusterVersion.clusterUpgradeTimeout and forward clusterVersion.workerPoolUpgrade.upgradeThrough changes while awaiting stage authorization")
 	}
 	if upgradeCond.Reason != string(CRconditionReasons.AwaitingStageAuthorization) {
 		if newUpgradeThrough != oldUpgradeThrough {
-			return fmt.Errorf("workerPoolUpgrade.upgradeThrough can only change while awaiting stage authorization")
+			return fmt.Errorf("clusterVersion.workerPoolUpgrade.upgradeThrough can only change while awaiting stage authorization")
 		}
 		return nil
 	}
@@ -632,11 +632,11 @@ func validateActiveUpgradeUpdate(
 	}
 	requestedIndex := workerStatus.StageIndex(newUpgradeThrough)
 	if newUpgradeThrough != "" && requestedIndex < 0 {
-		return fmt.Errorf("workerPoolUpgrade.upgradeThrough refers to unknown stage %q", newUpgradeThrough)
+		return fmt.Errorf("clusterVersion.workerPoolUpgrade.upgradeThrough refers to unknown stage %q", newUpgradeThrough)
 	}
 	if requestedIndex < currentIndex {
 		return fmt.Errorf(
-			"workerPoolUpgrade.upgradeThrough cannot move backwards from %q to %q",
+			"clusterVersion.workerPoolUpgrade.upgradeThrough cannot move backwards from %q to %q",
 			currentUpgradeThrough, newUpgradeThrough)
 	}
 	return nil
@@ -663,17 +663,28 @@ func activeUpgradeInput(raw []byte) (map[string]any, error) {
 	if !ok {
 		return nil, fmt.Errorf("templateParameters.%s must be an object", constants.TemplateParamUpgrade)
 	}
-	if workerValue, found := upgradeParameters["workerPoolUpgrade"]; found {
+	cvValue, found := upgradeParameters["clusterVersion"]
+	if !found {
+		return upgradeParameters, nil
+	}
+	cvParameters, ok := cvValue.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("templateParameters.%s.clusterVersion must be an object", constants.TemplateParamUpgrade)
+	}
+	if workerValue, found := cvParameters["workerPoolUpgrade"]; found {
 		workerPoolUpgrade, ok := workerValue.(map[string]any)
 		if !ok {
-			return nil, fmt.Errorf("templateParameters.%s.workerPoolUpgrade must be an object", constants.TemplateParamUpgrade)
+			return nil, fmt.Errorf("templateParameters.%s.clusterVersion.workerPoolUpgrade must be an object", constants.TemplateParamUpgrade)
 		}
 		delete(workerPoolUpgrade, "upgradeThrough")
 		if len(workerPoolUpgrade) == 0 {
-			delete(upgradeParameters, "workerPoolUpgrade")
+			delete(cvParameters, "workerPoolUpgrade")
 		}
 	}
-	delete(upgradeParameters, "clusterUpgradeTimeout")
+	delete(cvParameters, "clusterUpgradeTimeout")
+	if len(cvParameters) == 0 {
+		delete(upgradeParameters, "clusterVersion")
+	}
 	if len(upgradeParameters) == 0 {
 		return map[string]any{}, nil
 	}

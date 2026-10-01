@@ -38,8 +38,7 @@ type WorkerPoolUpgradeStage struct {
 //   - intermediateVersion, if set, is valid semver, same major, and
 //     exactly one minor below releaseVersion
 //
-// upgradeData is the top-level upgrade config map (containing keys like
-// "clusterVersion", "clusterUpgradeTimeout", "intermediateVersion").
+// upgradeData is the top-level upgrade config map containing clusterVersion.
 // releaseVersion is the ClusterTemplate spec.release value.
 // contextLabel identifies the caller context for error messages (e.g.
 // "upgradeDefaults" or "upgradeParameters").
@@ -49,35 +48,37 @@ func ValidateCVUpgradeData(upgradeData map[string]any, releaseVersion, contextLa
 		if !ok {
 			return typederrors.NewInputError("%s %q value must be an object", contextLabel, "clusterVersion")
 		}
-
-		if desiredUpdate, ok := cvMap["desiredUpdate"].(map[string]any); ok {
+		cvSpecRaw, found := cvMap["cvSpec"]
+		cvSpec, ok := cvSpecRaw.(map[string]any)
+		if found && !ok {
+			return typederrors.NewInputError("%s.clusterVersion.cvSpec must be an object", contextLabel)
+		}
+		if desiredUpdate, ok := cvSpec["desiredUpdate"].(map[string]any); ok {
 			if version, ok := desiredUpdate["version"].(string); ok && version != "" {
 				if version != releaseVersion {
 					return typederrors.NewInputError(
-						"the clusterVersion desiredUpdate.version (%s) does not match the ClusterTemplate spec.release (%s)",
+						"the clusterVersion.cvSpec.desiredUpdate.version (%s) does not match the ClusterTemplate spec.release (%s)",
 						version, releaseVersion)
 				}
 			}
 		}
-	}
-
-	if timeoutStr, ok := upgradeData["clusterUpgradeTimeout"].(string); ok {
-		dur, err := time.ParseDuration(timeoutStr)
-		if err != nil {
-			return typederrors.NewInputError(
-				"invalid clusterUpgradeTimeout %q in %s: %s",
-				timeoutStr, contextLabel, err.Error())
+		if timeoutStr, ok := cvMap["clusterUpgradeTimeout"].(string); ok {
+			dur, err := time.ParseDuration(timeoutStr)
+			if err != nil {
+				return typederrors.NewInputError(
+					"invalid clusterVersion.clusterUpgradeTimeout %q in %s: %s",
+					timeoutStr, contextLabel, err.Error())
+			}
+			if dur <= 0 {
+				return typederrors.NewInputError(
+					"invalid clusterVersion.clusterUpgradeTimeout %q in %s: must be a positive duration",
+					timeoutStr, contextLabel)
+			}
 		}
-		if dur <= 0 {
-			return typederrors.NewInputError(
-				"invalid clusterUpgradeTimeout %q in %s: must be a positive duration",
-				timeoutStr, contextLabel)
-		}
-	}
-
-	if intermediateVersionStr, ok := upgradeData["intermediateVersion"].(string); ok && intermediateVersionStr != "" {
-		if err := ValidateEUSIntermediate(intermediateVersionStr, releaseVersion); err != nil {
-			return err
+		if intermediateVersionStr, ok := cvMap["intermediateVersion"].(string); ok && intermediateVersionStr != "" {
+			if err := ValidateEUSIntermediate(intermediateVersionStr, releaseVersion); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -90,23 +91,23 @@ func ValidateEUSIntermediate(intermediateVersion, targetVersion string) error {
 	intermediateVer, err := semver.NewVersion(intermediateVersion)
 	if err != nil {
 		return typederrors.NewInputError(
-			"intermediateVersion %q is not valid semver: %s",
+			"clusterVersion.intermediateVersion %q is not valid semver: %s",
 			intermediateVersion, err.Error())
 	}
 	targetVer, err := semver.NewVersion(targetVersion)
 	if err != nil {
 		return typederrors.NewInputError(
-			"cannot validate intermediateVersion: ClusterTemplate's spec.release %q is not valid semver: %s",
+			"cannot validate clusterVersion.intermediateVersion: ClusterTemplate's spec.release %q is not valid semver: %s",
 			targetVersion, err.Error())
 	}
 	if intermediateVer.Major != targetVer.Major {
 		return typederrors.NewInputError(
-			"intermediateVersion major version (%d) must equal ClusterTemplate's spec.release major version (%d)",
+			"clusterVersion.intermediateVersion major version (%d) must equal ClusterTemplate's spec.release major version (%d)",
 			intermediateVer.Major, targetVer.Major)
 	}
 	if intermediateVer.Minor+1 != targetVer.Minor {
 		return typederrors.NewInputError(
-			"intermediateVersion %s must be exactly one minor version below ClusterTemplate's spec.release version %s",
+			"clusterVersion.intermediateVersion %s must be exactly one minor version below ClusterTemplate's spec.release version %s",
 			intermediateVer, targetVer)
 	}
 	return nil
@@ -118,13 +119,13 @@ func ValidateWorkerPoolUpgrade(isEUS bool, config WorkerPoolUpgrade) error {
 	seenPools := make(map[string]string)
 	for _, pool := range config.PoolsWithControlPlane {
 		if pool == "" {
-			return fmt.Errorf("workerPoolUpgrade.poolsWithControlPlane contains an empty pool name")
+			return fmt.Errorf("clusterVersion.workerPoolUpgrade.poolsWithControlPlane contains an empty pool name")
 		}
 		if pool == "master" {
-			return fmt.Errorf("workerPoolUpgrade.poolsWithControlPlane must not include %q", pool)
+			return fmt.Errorf("clusterVersion.workerPoolUpgrade.poolsWithControlPlane must not include %q", pool)
 		}
 		if _, duplicate := seenPools[pool]; duplicate {
-			return fmt.Errorf("workerPoolUpgrade.poolsWithControlPlane contains duplicate pool name %q", pool)
+			return fmt.Errorf("clusterVersion.workerPoolUpgrade.poolsWithControlPlane contains duplicate pool name %q", pool)
 		}
 		seenPools[pool] = "poolsWithControlPlane"
 	}
@@ -133,52 +134,52 @@ func ValidateWorkerPoolUpgrade(isEUS bool, config WorkerPoolUpgrade) error {
 	case constants.WorkerPoolUpgradeStrategyOpenShiftDefault:
 		if isEUS {
 			return fmt.Errorf(
-				"workerPoolUpgrade.strategy %s is not applicable to EUS upgrades",
+				"clusterVersion.workerPoolUpgrade.strategy %s is not applicable to EUS upgrades",
 				constants.WorkerPoolUpgradeStrategyOpenShiftDefault)
 		}
 		if len(config.PoolsWithControlPlane) > 0 {
 			return fmt.Errorf(
-				"workerPoolUpgrade.poolsWithControlPlane is not supported with strategy %s",
+				"clusterVersion.workerPoolUpgrade.poolsWithControlPlane is not supported with strategy %s",
 				constants.WorkerPoolUpgradeStrategyOpenShiftDefault)
 		}
 	case constants.WorkerPoolUpgradeStrategySerial, constants.WorkerPoolUpgradeStrategyParallel:
 		if isEUS && len(config.PoolsWithControlPlane) > 0 {
 			return fmt.Errorf(
-				"workerPoolUpgrade.poolsWithControlPlane is not supported for EUS upgrades")
+				"clusterVersion.workerPoolUpgrade.poolsWithControlPlane is not supported for EUS upgrades")
 		}
 	case constants.WorkerPoolUpgradeStrategyCustom:
 		if isEUS && len(config.PoolsWithControlPlane) > 0 {
 			return fmt.Errorf(
-				"workerPoolUpgrade.poolsWithControlPlane is not supported for EUS upgrades")
+				"clusterVersion.workerPoolUpgrade.poolsWithControlPlane is not supported for EUS upgrades")
 		}
 		if len(config.Stages) == 0 {
-			return fmt.Errorf("workerPoolUpgrade.stages must not be empty with strategy Custom")
+			return fmt.Errorf("clusterVersion.workerPoolUpgrade.stages must not be empty with strategy Custom")
 		}
 		seenStages := make(map[string]struct{}, len(config.Stages))
 		for _, stage := range config.Stages {
 			if stage.Name == "" {
-				return fmt.Errorf("workerPoolUpgrade.stages contains an empty stage name")
+				return fmt.Errorf("clusterVersion.workerPoolUpgrade.stages contains an empty stage name")
 			}
 			if _, duplicate := seenStages[stage.Name]; duplicate {
-				return fmt.Errorf("workerPoolUpgrade.stages contains duplicate stage name %q", stage.Name)
+				return fmt.Errorf("clusterVersion.workerPoolUpgrade.stages contains duplicate stage name %q", stage.Name)
 			}
 			seenStages[stage.Name] = struct{}{}
 			if len(stage.Pools) == 0 {
-				return fmt.Errorf("workerPoolUpgrade stage %q must contain at least one pool", stage.Name)
+				return fmt.Errorf("clusterVersion.workerPoolUpgrade stage %q must contain at least one pool", stage.Name)
 			}
 			for _, pool := range stage.Pools {
 				if pool == "" {
-					return fmt.Errorf("workerPoolUpgrade stage %q contains an empty pool name", stage.Name)
+					return fmt.Errorf("clusterVersion.workerPoolUpgrade stage %q contains an empty pool name", stage.Name)
 				}
 				if pool == "master" {
-					return fmt.Errorf("workerPoolUpgrade stage must not include %q", pool)
+					return fmt.Errorf("clusterVersion.workerPoolUpgrade stage must not include %q", pool)
 				}
 				stageLabel := fmt.Sprintf("stage %q", stage.Name)
 				if previous, duplicate := seenPools[pool]; duplicate {
 					if previous == stageLabel {
-						return fmt.Errorf("workerPoolUpgrade pool %q appears more than once in %s", pool, stageLabel)
+						return fmt.Errorf("clusterVersion.workerPoolUpgrade pool %q appears more than once in %s", pool, stageLabel)
 					}
-					return fmt.Errorf("workerPoolUpgrade pool %q appears more than once (%s and stage %q)",
+					return fmt.Errorf("clusterVersion.workerPoolUpgrade pool %q appears more than once (%s and stage %q)",
 						pool, previous, stage.Name)
 				}
 				seenPools[pool] = stageLabel
@@ -186,12 +187,12 @@ func ValidateWorkerPoolUpgrade(isEUS bool, config WorkerPoolUpgrade) error {
 		}
 		if config.UpgradeThrough != "" {
 			if _, found := seenStages[config.UpgradeThrough]; !found {
-				return fmt.Errorf("workerPoolUpgrade.upgradeThrough refers to unknown stage %q", config.UpgradeThrough)
+				return fmt.Errorf("clusterVersion.workerPoolUpgrade.upgradeThrough refers to unknown stage %q", config.UpgradeThrough)
 			}
 		}
 	default:
 		return fmt.Errorf(
-			"unsupported workerPoolUpgrade.strategy %q; must be %s, %s, %s, or %s",
+			"unsupported clusterVersion.workerPoolUpgrade.strategy %q; must be %s, %s, %s, or %s",
 			config.Strategy,
 			constants.WorkerPoolUpgradeStrategyOpenShiftDefault,
 			constants.WorkerPoolUpgradeStrategySerial,
@@ -201,7 +202,7 @@ func ValidateWorkerPoolUpgrade(isEUS bool, config WorkerPoolUpgrade) error {
 
 	if config.Strategy != constants.WorkerPoolUpgradeStrategyCustom &&
 		(len(config.Stages) > 0 || config.UpgradeThrough != "") {
-		return fmt.Errorf("workerPoolUpgrade.stages and workerPoolUpgrade.upgradeThrough are supported only with strategy Custom")
+		return fmt.Errorf("clusterVersion.workerPoolUpgrade.stages and clusterVersion.workerPoolUpgrade.upgradeThrough are supported only with strategy Custom")
 	}
 	return nil
 }
@@ -225,7 +226,7 @@ func ValidateWorkerPoolUpgradeMCPs(
 	for _, name := range configured {
 		seen[name] = struct{}{}
 		if _, ok := known[name]; !ok {
-			return fmt.Errorf("workerPoolUpgrade refers to unknown MachineConfigPool %q", name)
+			return fmt.Errorf("clusterVersion.workerPoolUpgrade refers to unknown MachineConfigPool %q", name)
 		}
 	}
 
@@ -237,7 +238,7 @@ func ValidateWorkerPoolUpgradeMCPs(
 			}
 		}
 		if len(missing) > 0 {
-			return fmt.Errorf("workerPoolUpgrade Custom plan does not include worker MachineConfigPools %v", missing)
+			return fmt.Errorf("clusterVersion.workerPoolUpgrade Custom plan does not include worker MachineConfigPools %v", missing)
 		}
 	}
 	return nil

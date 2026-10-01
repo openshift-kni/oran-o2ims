@@ -19,228 +19,130 @@ var _ = Describe("ValidateCVUpgradeData", func() {
 	const release = "4.17.0"
 	const label = "upgradeDefaults"
 
-	It("should return nil when no upgrade keys are present", func() {
-		data := map[string]any{"someOtherKey": "value"}
-		Expect(ValidateCVUpgradeData(data, release, label)).ToNot(HaveOccurred())
+	It("accepts input without clusterVersion", func() {
+		Expect(ValidateCVUpgradeData(map[string]any{"someOtherKey": "value"}, release, label)).ToNot(HaveOccurred())
 	})
 
-	It("should return InputError when clusterVersion is not an object", func() {
-		data := map[string]any{"clusterVersion": "invalid"}
-		err := ValidateCVUpgradeData(data, release, label)
-		Expect(err).To(HaveOccurred())
-		Expect(typederrors.IsInputError(err)).To(BeTrue())
-		Expect(err.Error()).To(ContainSubstring("must be an object"))
-	})
-
-	It("should use the context label in error messages", func() {
-		data := map[string]any{"clusterVersion": "invalid"}
-		err := ValidateCVUpgradeData(data, release, "upgradeParameters")
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("upgradeParameters"))
-	})
-
-	Context("desiredUpdate.version", func() {
-		It("should pass when desiredUpdate.version matches release", func() {
-			data := map[string]any{
-				"clusterVersion": map[string]any{
-					"desiredUpdate": map[string]any{"version": "4.17.0"},
-				},
-			}
-			Expect(ValidateCVUpgradeData(data, release, label)).ToNot(HaveOccurred())
-		})
-
-		It("should reject when desiredUpdate.version does not match release", func() {
-			data := map[string]any{
-				"clusterVersion": map[string]any{
-					"desiredUpdate": map[string]any{"version": "4.18.0"},
-				},
-			}
-			err := ValidateCVUpgradeData(data, release, label)
-			Expect(err).To(HaveOccurred())
-			Expect(typederrors.IsInputError(err)).To(BeTrue())
-			Expect(err.Error()).To(ContainSubstring("does not match the ClusterTemplate spec.release"))
-		})
-
-		It("should pass when desiredUpdate.version is empty", func() {
-			data := map[string]any{
-				"clusterVersion": map[string]any{
-					"desiredUpdate": map[string]any{"version": ""},
-				},
-			}
-			Expect(ValidateCVUpgradeData(data, release, label)).ToNot(HaveOccurred())
-		})
-
-		It("should pass when desiredUpdate is absent", func() {
-			data := map[string]any{
-				"clusterVersion": map[string]any{},
-			}
-			Expect(ValidateCVUpgradeData(data, release, label)).ToNot(HaveOccurred())
-		})
-
-		It("should pass when desiredUpdate has no version key", func() {
-			data := map[string]any{
-				"clusterVersion": map[string]any{
-					"desiredUpdate": map[string]any{"channel": "stable-4.17"},
-				},
-			}
-			Expect(ValidateCVUpgradeData(data, release, label)).ToNot(HaveOccurred())
-		})
-	})
-
-	Context("clusterUpgradeTimeout", func() {
-		It("should pass with a valid duration", func() {
-			data := map[string]any{
-				"clusterVersion":        map[string]any{},
-				"clusterUpgradeTimeout": "2h30m",
-			}
-			Expect(ValidateCVUpgradeData(data, release, label)).ToNot(HaveOccurred())
-		})
-
-		It("should reject an invalid duration", func() {
-			data := map[string]any{
-				"clusterVersion":        map[string]any{},
-				"clusterUpgradeTimeout": "notaduration",
-			}
-			err := ValidateCVUpgradeData(data, release, label)
-			Expect(err).To(HaveOccurred())
-			Expect(typederrors.IsInputError(err)).To(BeTrue())
-			Expect(err.Error()).To(ContainSubstring("invalid clusterUpgradeTimeout"))
-		})
-
-		It("should reject a zero duration", func() {
-			data := map[string]any{
-				"clusterUpgradeTimeout": "0s",
-			}
-			err := ValidateCVUpgradeData(data, release, label)
-			Expect(err).To(HaveOccurred())
-			Expect(typederrors.IsInputError(err)).To(BeTrue())
-			Expect(err.Error()).To(ContainSubstring("must be a positive duration"))
-		})
-
-		It("should reject a negative duration", func() {
-			data := map[string]any{
-				"clusterUpgradeTimeout": "-5m",
-			}
-			err := ValidateCVUpgradeData(data, release, label)
-			Expect(err).To(HaveOccurred())
-			Expect(typederrors.IsInputError(err)).To(BeTrue())
-			Expect(err.Error()).To(ContainSubstring("must be a positive duration"))
-		})
-
-		It("should pass when clusterUpgradeTimeout is not present", func() {
-			data := map[string]any{
-				"clusterVersion": map[string]any{},
-			}
-			Expect(ValidateCVUpgradeData(data, release, label)).ToNot(HaveOccurred())
-		})
-
-		It("should validate clusterUpgradeTimeout without clusterVersion", func() {
-			data := map[string]any{
-				"clusterUpgradeTimeout": "notaduration",
-			}
-			err := ValidateCVUpgradeData(data, release, label)
-			Expect(err).To(HaveOccurred())
-			Expect(typederrors.IsInputError(err)).To(BeTrue())
-			Expect(err.Error()).To(ContainSubstring("invalid clusterUpgradeTimeout"))
-		})
-	})
-
-	Context("intermediateVersion", func() {
-		It("should pass with a valid intermediateVersion one minor below", func() {
-			data := map[string]any{
-				"clusterVersion":      map[string]any{},
-				"intermediateVersion": "4.16.3",
-			}
-			Expect(ValidateCVUpgradeData(data, release, label)).ToNot(HaveOccurred())
-		})
-
-		It("should reject non-semver intermediateVersion", func() {
-			data := map[string]any{
-				"clusterVersion":      map[string]any{},
-				"intermediateVersion": "not-semver",
-			}
-			err := ValidateCVUpgradeData(data, release, label)
-			Expect(err).To(HaveOccurred())
-			Expect(typederrors.IsInputError(err)).To(BeTrue())
-			Expect(err.Error()).To(ContainSubstring("is not valid semver"))
-		})
-
-		It("should reject when major version differs", func() {
-			data := map[string]any{
-				"clusterVersion":      map[string]any{},
-				"intermediateVersion": "3.16.0",
-			}
-			err := ValidateCVUpgradeData(data, release, label)
-			Expect(err).To(HaveOccurred())
-			Expect(typederrors.IsInputError(err)).To(BeTrue())
-			Expect(err.Error()).To(ContainSubstring("major version (3) must equal ClusterTemplate's spec.release major version (4)"))
-		})
-
-		It("should reject when not exactly one minor below", func() {
-			data := map[string]any{
-				"clusterVersion":      map[string]any{},
-				"intermediateVersion": "4.15.0",
-			}
-			err := ValidateCVUpgradeData(data, release, label)
-			Expect(err).To(HaveOccurred())
-			Expect(typederrors.IsInputError(err)).To(BeTrue())
-			Expect(err.Error()).To(ContainSubstring("must be exactly one minor version below"))
-		})
-
-		It("should pass when intermediateVersion is empty", func() {
-			data := map[string]any{
-				"clusterVersion":      map[string]any{},
-				"intermediateVersion": "",
-			}
-			Expect(ValidateCVUpgradeData(data, release, label)).ToNot(HaveOccurred())
-		})
-
-		It("should reject when release is not valid semver", func() {
-			data := map[string]any{
-				"clusterVersion":      map[string]any{},
-				"intermediateVersion": "4.16.0",
-			}
-			err := ValidateCVUpgradeData(data, "not-semver", label)
-			Expect(err).To(HaveOccurred())
-			Expect(typederrors.IsInputError(err)).To(BeTrue())
-			Expect(err.Error()).To(ContainSubstring("spec.release"))
-		})
-
-		It("should validate intermediateVersion without clusterVersion", func() {
-			data := map[string]any{
-				"intermediateVersion": "not-semver",
-			}
-			err := ValidateCVUpgradeData(data, release, label)
-			Expect(err).To(HaveOccurred())
-			Expect(typederrors.IsInputError(err)).To(BeTrue())
-			Expect(err.Error()).To(ContainSubstring("is not valid semver"))
-		})
-	})
-
-	Context("combined rules", func() {
-		It("should validate all rules together for a valid config", func() {
-			data := map[string]any{
-				"clusterVersion": map[string]any{
-					"desiredUpdate": map[string]any{"version": "4.17.0"},
+	It("accepts nested ClusterVersion settings", func() {
+		data := map[string]any{
+			"clusterVersion": map[string]any{
+				"cvSpec": map[string]any{
+					"desiredUpdate": map[string]any{"version": release},
 				},
 				"clusterUpgradeTimeout": "2h30m",
 				"intermediateVersion":   "4.16.3",
-			}
-			Expect(ValidateCVUpgradeData(data, release, label)).ToNot(HaveOccurred())
-		})
-
-		It("should fail on the first violated rule", func() {
-			data := map[string]any{
-				"clusterVersion": map[string]any{
-					"desiredUpdate": map[string]any{"version": "4.18.0"},
-				},
-				"clusterUpgradeTimeout": "invalid",
-			}
-			err := ValidateCVUpgradeData(data, release, label)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("does not match"))
-		})
+				"workerPoolUpgrade":     map[string]any{"strategy": "Serial"},
+			},
+		}
+		Expect(ValidateCVUpgradeData(data, release, label)).ToNot(HaveOccurred())
 	})
+
+	It("allows a partial override with only nested timeout", func() {
+		data := map[string]any{"clusterVersion": map[string]any{"clusterUpgradeTimeout": "2h"}}
+		Expect(ValidateCVUpgradeData(data, release, "upgradeParameters")).ToNot(HaveOccurred())
+	})
+
+	DescribeTable("rejects a non-object clusterVersion with an input error",
+		func(value any, contextLabel string) {
+			err := ValidateCVUpgradeData(map[string]any{"clusterVersion": value}, release, contextLabel)
+			Expect(err).To(HaveOccurred())
+			Expect(typederrors.IsInputError(err)).To(BeTrue())
+			Expect(err.Error()).To(ContainSubstring(contextLabel + ` "clusterVersion" value must be an object`))
+		},
+		Entry("string in defaults", "invalid", label),
+		Entry("nil in parameters", nil, "upgradeParameters"),
+	)
+
+	DescribeTable("rejects a non-object cvSpec with an input error",
+		func(value any) {
+			err := ValidateCVUpgradeData(map[string]any{
+				"clusterVersion": map[string]any{"cvSpec": value},
+			}, release, label)
+			Expect(typederrors.IsInputError(err)).To(BeTrue())
+			Expect(err).To(MatchError(ContainSubstring("upgradeDefaults.clusterVersion.cvSpec must be an object")))
+		},
+		Entry("string", "invalid"),
+		Entry("nil", nil),
+		Entry("array", []any{}),
+	)
+
+	DescribeTable("accepts optional desiredUpdate fields",
+		func(cvConfig map[string]any) {
+			Expect(ValidateCVUpgradeData(map[string]any{"clusterVersion": cvConfig}, release, label)).ToNot(HaveOccurred())
+		},
+		Entry("cvSpec absent", map[string]any{}),
+		Entry("desiredUpdate absent", map[string]any{"cvSpec": map[string]any{}}),
+		Entry("version absent", map[string]any{"cvSpec": map[string]any{"desiredUpdate": map[string]any{}}}),
+		Entry("other desiredUpdate fields without version", map[string]any{"cvSpec": map[string]any{
+			"desiredUpdate": map[string]any{"image": "quay.io/example/update:4.17"},
+		}}),
+		Entry("version empty", map[string]any{"cvSpec": map[string]any{
+			"desiredUpdate": map[string]any{"version": ""},
+		}}),
+	)
+
+	It("rejects a desiredUpdate version that differs from the release", func() {
+		err := ValidateCVUpgradeData(map[string]any{
+			"clusterVersion": map[string]any{
+				"cvSpec": map[string]any{"desiredUpdate": map[string]any{"version": "4.18.0"}},
+			},
+		}, release, label)
+		Expect(err).To(MatchError(ContainSubstring("clusterVersion.cvSpec.desiredUpdate.version")))
+		Expect(err.Error()).To(ContainSubstring("does not match the ClusterTemplate spec.release"))
+	})
+
+	DescribeTable("rejects invalid nested timeouts",
+		func(value, message string) {
+			err := ValidateCVUpgradeData(map[string]any{
+				"clusterVersion": map[string]any{"clusterUpgradeTimeout": value},
+			}, release, label)
+			Expect(typederrors.IsInputError(err)).To(BeTrue())
+			Expect(err.Error()).To(ContainSubstring("clusterVersion.clusterUpgradeTimeout"))
+			Expect(err).To(MatchError(ContainSubstring(message)))
+		},
+		Entry("invalid duration", "notaduration", "invalid clusterVersion.clusterUpgradeTimeout"),
+		Entry("zero duration", "0s", "must be a positive duration"),
+		Entry("negative duration", "-5m", "must be a positive duration"),
+	)
+
+	DescribeTable("validates nested intermediate versions",
+		func(version, message string) {
+			err := ValidateCVUpgradeData(map[string]any{
+				"clusterVersion": map[string]any{"intermediateVersion": version},
+			}, release, label)
+			Expect(typederrors.IsInputError(err)).To(BeTrue())
+			Expect(err.Error()).To(ContainSubstring("clusterVersion.intermediateVersion"))
+			Expect(err).To(MatchError(ContainSubstring(message)))
+		},
+		Entry("invalid semver", "not-semver", "is not valid semver"),
+		Entry("wrong major", "3.16.0", "major version"),
+		Entry("wrong minor", "4.15.0", "exactly one minor version below"),
+	)
+
+	It("accepts an empty intermediateVersion", func() {
+		data := map[string]any{"clusterVersion": map[string]any{"intermediateVersion": ""}}
+		Expect(ValidateCVUpgradeData(data, release, label)).ToNot(HaveOccurred())
+	})
+
+	It("rejects an invalid release when validating intermediateVersion", func() {
+		data := map[string]any{"clusterVersion": map[string]any{"intermediateVersion": "4.16.0"}}
+		err := ValidateCVUpgradeData(data, "not-semver", label)
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
+		Expect(err).To(MatchError(ContainSubstring("spec.release")))
+	})
+
+	It("reports the first semantic error", func() {
+		data := map[string]any{
+			"clusterVersion": map[string]any{
+				"cvSpec":                map[string]any{"desiredUpdate": map[string]any{"version": "4.18.0"}},
+				"clusterUpgradeTimeout": "invalid",
+			},
+		}
+		err := ValidateCVUpgradeData(data, release, label)
+		Expect(err).To(MatchError(ContainSubstring("clusterVersion.cvSpec.desiredUpdate.version")))
+		Expect(err.Error()).To(ContainSubstring("does not match the ClusterTemplate spec.release"))
+	})
+
 })
 
 var _ = Describe("ValidateEUSIntermediate", func() {
@@ -252,6 +154,7 @@ var _ = Describe("ValidateEUSIntermediate", func() {
 		err := ValidateEUSIntermediate("4.20.5", "4.22.0")
 		Expect(err).To(HaveOccurred())
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("clusterVersion.intermediateVersion"))
 		Expect(err.Error()).To(ContainSubstring("exactly one minor version below"))
 	})
 
@@ -259,6 +162,7 @@ var _ = Describe("ValidateEUSIntermediate", func() {
 		err := ValidateEUSIntermediate("99.21.0", "4.22.0")
 		Expect(err).To(HaveOccurred())
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("clusterVersion.intermediateVersion"))
 		Expect(err.Error()).To(ContainSubstring("must equal ClusterTemplate's spec.release major version"))
 	})
 
@@ -266,6 +170,7 @@ var _ = Describe("ValidateEUSIntermediate", func() {
 		err := ValidateEUSIntermediate("invalid", "4.22.0")
 		Expect(err).To(HaveOccurred())
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("clusterVersion.intermediateVersion"))
 		Expect(err.Error()).To(ContainSubstring("is not valid semver"))
 	})
 
@@ -273,6 +178,7 @@ var _ = Describe("ValidateEUSIntermediate", func() {
 		err := ValidateEUSIntermediate("4.21.0", "not-semver")
 		Expect(err).To(HaveOccurred())
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("clusterVersion.intermediateVersion"))
 		Expect(err.Error()).To(ContainSubstring("ClusterTemplate's spec.release"))
 	})
 })
@@ -335,7 +241,7 @@ var _ = Describe("WorkerPoolUpgrade validation", func() {
 		It("should reject an unknown strategy", func() {
 			err := ValidateWorkerPoolUpgrade(false, WorkerPoolUpgrade{Strategy: "Unknown"})
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("unsupported workerPoolUpgrade.strategy"))
+			Expect(err.Error()).To(ContainSubstring("unsupported clusterVersion.workerPoolUpgrade.strategy"))
 		})
 
 		It("should accept a complete Custom configuration", func() {
@@ -357,76 +263,76 @@ var _ = Describe("WorkerPoolUpgrade validation", func() {
 			},
 			Entry("no stages", WorkerPoolUpgrade{
 				Strategy: constants.WorkerPoolUpgradeStrategyCustom,
-			}, "workerPoolUpgrade.stages must not be empty with strategy Custom"),
+			}, "clusterVersion.workerPoolUpgrade.stages must not be empty with strategy Custom"),
 			Entry("empty stage name", WorkerPoolUpgrade{
 				Strategy: constants.WorkerPoolUpgradeStrategyCustom,
 				Stages:   []WorkerPoolUpgradeStage{{Pools: []string{"worker-a"}}},
-			}, "workerPoolUpgrade.stages contains an empty stage name"),
+			}, "clusterVersion.workerPoolUpgrade.stages contains an empty stage name"),
 			Entry("duplicate stage name", WorkerPoolUpgrade{
 				Strategy: constants.WorkerPoolUpgradeStrategyCustom,
 				Stages: []WorkerPoolUpgradeStage{
 					{Name: "same", Pools: []string{"worker-a"}},
 					{Name: "same", Pools: []string{"worker-b"}},
 				},
-			}, "workerPoolUpgrade.stages contains duplicate stage name \"same\""),
+			}, "clusterVersion.workerPoolUpgrade.stages contains duplicate stage name \"same\""),
 			Entry("stage with no pools", WorkerPoolUpgrade{
 				Strategy: constants.WorkerPoolUpgradeStrategyCustom,
 				Stages:   []WorkerPoolUpgradeStage{{Name: "canary"}},
-			}, "workerPoolUpgrade stage \"canary\" must contain at least one pool"),
+			}, "clusterVersion.workerPoolUpgrade stage \"canary\" must contain at least one pool"),
 			Entry("empty pool name in a stage", WorkerPoolUpgrade{
 				Strategy: constants.WorkerPoolUpgradeStrategyCustom,
 				Stages:   []WorkerPoolUpgradeStage{{Name: "canary", Pools: []string{""}}},
-			}, "workerPoolUpgrade stage \"canary\" contains an empty pool name"),
+			}, "clusterVersion.workerPoolUpgrade stage \"canary\" contains an empty pool name"),
 			Entry("master pool in a stage", WorkerPoolUpgrade{
 				Strategy: constants.WorkerPoolUpgradeStrategyCustom,
 				Stages:   []WorkerPoolUpgradeStage{{Name: "canary", Pools: []string{"master"}}},
-			}, "workerPoolUpgrade stage must not include \"master\""),
+			}, "clusterVersion.workerPoolUpgrade stage must not include \"master\""),
 			Entry("pool repeated between control plane and stage", WorkerPoolUpgrade{
 				Strategy:              constants.WorkerPoolUpgradeStrategyCustom,
 				PoolsWithControlPlane: []string{"worker-a"},
 				Stages: []WorkerPoolUpgradeStage{
 					{Name: "canary", Pools: []string{"worker-a"}},
 				},
-			}, "workerPoolUpgrade pool \"worker-a\" appears more than once (poolsWithControlPlane and stage \"canary\")"),
+			}, "clusterVersion.workerPoolUpgrade pool \"worker-a\" appears more than once (poolsWithControlPlane and stage \"canary\")"),
 			Entry("pool repeated within one stage", WorkerPoolUpgrade{
 				Strategy: constants.WorkerPoolUpgradeStrategyCustom,
 				Stages: []WorkerPoolUpgradeStage{
 					{Name: "canary", Pools: []string{"worker-a", "worker-a"}},
 				},
-			}, "workerPoolUpgrade pool \"worker-a\" appears more than once in stage \"canary\""),
+			}, "clusterVersion.workerPoolUpgrade pool \"worker-a\" appears more than once in stage \"canary\""),
 			Entry("pool repeated across stages", WorkerPoolUpgrade{
 				Strategy: constants.WorkerPoolUpgradeStrategyCustom,
 				Stages: []WorkerPoolUpgradeStage{
 					{Name: "canary", Pools: []string{"worker-a"}},
 					{Name: "rest", Pools: []string{"worker-a"}},
 				},
-			}, "workerPoolUpgrade pool \"worker-a\" appears more than once (stage \"canary\" and stage \"rest\")"),
+			}, "clusterVersion.workerPoolUpgrade pool \"worker-a\" appears more than once (stage \"canary\" and stage \"rest\")"),
 			Entry("duplicate control-plane pool", WorkerPoolUpgrade{
 				Strategy:              constants.WorkerPoolUpgradeStrategyCustom,
 				PoolsWithControlPlane: []string{"worker-a", "worker-a"},
 				Stages: []WorkerPoolUpgradeStage{
 					{Name: "canary", Pools: []string{"worker-b"}},
 				},
-			}, "workerPoolUpgrade.poolsWithControlPlane contains duplicate pool name \"worker-a\""),
+			}, "clusterVersion.workerPoolUpgrade.poolsWithControlPlane contains duplicate pool name \"worker-a\""),
 			Entry("empty control-plane pool name", WorkerPoolUpgrade{
 				Strategy:              constants.WorkerPoolUpgradeStrategyCustom,
 				PoolsWithControlPlane: []string{""},
 				Stages: []WorkerPoolUpgradeStage{
 					{Name: "canary", Pools: []string{"worker-b"}},
 				},
-			}, "workerPoolUpgrade.poolsWithControlPlane contains an empty pool name"),
+			}, "clusterVersion.workerPoolUpgrade.poolsWithControlPlane contains an empty pool name"),
 			Entry("master pool with control plane", WorkerPoolUpgrade{
 				Strategy:              constants.WorkerPoolUpgradeStrategyCustom,
 				PoolsWithControlPlane: []string{"master"},
 				Stages:                []WorkerPoolUpgradeStage{{Name: "canary", Pools: []string{"worker-b"}}},
-			}, "workerPoolUpgrade.poolsWithControlPlane must not include \"master\""),
+			}, "clusterVersion.workerPoolUpgrade.poolsWithControlPlane must not include \"master\""),
 			Entry("upgradeThrough names a missing stage", WorkerPoolUpgrade{
 				Strategy: constants.WorkerPoolUpgradeStrategyCustom,
 				Stages: []WorkerPoolUpgradeStage{
 					{Name: "canary", Pools: []string{"worker-a"}},
 				},
 				UpgradeThrough: "missing",
-			}, "workerPoolUpgrade.upgradeThrough refers to unknown stage \"missing\""),
+			}, "clusterVersion.workerPoolUpgrade.upgradeThrough refers to unknown stage \"missing\""),
 		)
 
 		DescribeTable("rejects Custom-only fields on preset strategies",
@@ -438,7 +344,7 @@ var _ = Describe("WorkerPoolUpgrade validation", func() {
 					config.UpgradeThrough = "canary"
 				}
 				Expect(ValidateWorkerPoolUpgrade(false, config)).To(MatchError(
-					"workerPoolUpgrade.stages and workerPoolUpgrade.upgradeThrough are supported only with strategy Custom"))
+					"clusterVersion.workerPoolUpgrade.stages and clusterVersion.workerPoolUpgrade.upgradeThrough are supported only with strategy Custom"))
 			},
 			Entry("OpenShiftDefault with stages", constants.WorkerPoolUpgradeStrategyOpenShiftDefault, true),
 			Entry("OpenShiftDefault with upgradeThrough", constants.WorkerPoolUpgradeStrategyOpenShiftDefault, false),
@@ -500,7 +406,7 @@ var _ = Describe("WorkerPoolUpgrade validation", func() {
 					config.Stages = []WorkerPoolUpgradeStage{{Name: "rest", Pools: []string{"worker-a", "worker-b"}}}
 				}
 				Expect(ValidateWorkerPoolUpgradeMCPs(mcps, config)).To(MatchError(
-					"workerPoolUpgrade refers to unknown MachineConfigPool \"missing\""))
+					"clusterVersion.workerPoolUpgrade refers to unknown MachineConfigPool \"missing\""))
 			},
 			Entry("Serial", constants.WorkerPoolUpgradeStrategySerial),
 			Entry("Parallel", constants.WorkerPoolUpgradeStrategyParallel),
@@ -514,7 +420,7 @@ var _ = Describe("WorkerPoolUpgrade validation", func() {
 				Stages:                []WorkerPoolUpgradeStage{{Name: "rest", Pools: []string{"missing"}}},
 			}
 			Expect(ValidateWorkerPoolUpgradeMCPs(mcps, config)).To(MatchError(
-				"workerPoolUpgrade refers to unknown MachineConfigPool \"missing\""))
+				"clusterVersion.workerPoolUpgrade refers to unknown MachineConfigPool \"missing\""))
 		})
 	})
 })
