@@ -1,0 +1,43 @@
+apiVersion: clcm.openshift.io/v1alpha1
+kind: FirmwareCatalog
+metadata:
+  name: firmware-catalog
+  namespace: oran-o2ims
+spec:
+  images:
+    - name: dell-xr8620t-bios-2.1.0
+      component: bios
+      version: "2.1.0"
+      url: https://example.com:8888/firmware/xr8620t/BIOS_JDR1R_WN64_2.1.0.EXE
+    - name: dell-xr8620t-bmc-7.0.0
+      component: bmc
+      version: "7.0.0"
+      url: https://example.com:8888/firmware/xr8620t/iDRAC-with-Lifecycle-Controller_Firmware_W4NV9_WN64_7.0.0_A00.EXE
+    - name: dell-xr8620t-bios-2.3.5
+      component: bios
+      version: "2.3.5"
+      url: https://example.com:8888/firmware/xr8620t/BIOS_JDR1R_WN64_2.3.5.EXE
+    - name: dell-xr8620t-bmc-7.10.70.10
+      component: bmc
+      version: "7.10.70.10"
+      url: https://example.com:8888/firmware/xr8620t/iDRAC-with-Lifecycle-Controller_Firmware_W4NV9_WN64_7.10.70.10_A00.EXE
+    - name: dell-xr8620t-bios-2.4.0
+      component: bios
+      version: "2.4.0"
+      url: https://example.com:8888/firmware/xr8620t/BIOS_JDR1R_WN64_2.4.0.EXE
+    - name: dell-xr8620t-bmc-7.10.80.00
+      component: bmc
+      version: "7.10.80.00"
+      url: https://example.com:8888/firmware/xr8620t/iDRAC-with-Lifecycle-Controller_Firmware_W4NV9_WN64_7.10.80.00_A00.EXE
+    - name: dell-r740-bios-2.22.2
+      component: bios
+      version: "2.22.2"
+      url: http://example.com:8888/firmware/r740/BIOS_F8GPH_WN64_2.22.2.EXE
+    - name: dell-r740-bmc-7.00.00.173
+      component: bmc
+      version: "7.00.00.173"
+      url: http://example.com:8888/firmware/r740/iDRAC-with-Lifecycle-Controller_Firmware_XTFXJ_WN64_7.00.00.173_A00.EXE
+    - name: dell-r740-nic-16.35.30.06
+      component: nic
+      version: "16.35.30.06"
+      url: https://example.com:8888/firmware/network/dell/mellanox/ConnectX-5/Network_Firmware_XY16R_WN64_16.35.30.06_01.EXE

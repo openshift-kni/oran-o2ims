@@ -24,14 +24,24 @@ var firmwarecataloglog = logf.Log.WithName("firmwarecatalog-webhook")
 func SetupFirmwareCatalogWebhookWithManager(mgr ctrl.Manager) error {
 	// nolint:wrapcheck
 	return ctrl.NewWebhookManagedBy(mgr, &hwmgmtv1alpha1.FirmwareCatalog{}).
-		WithValidator(&firmwareCatalogValidator{Client: mgr.GetClient()}).
+		WithValidator(&firmwareCatalogValidator{
+			Client: mgr.GetClient(),
+			Reader: mgr.GetAPIReader(),
+		}).
 		Complete()
 }
 
-//+kubebuilder:webhook:path=/validate-clcm-openshift-io-v1alpha1-firmwarecatalog,mutating=false,failurePolicy=fail,sideEffects=None,groups=clcm.openshift.io,resources=firmwarecatalogs,verbs=update,versions=v1alpha1,name=firmwarecatalogs.clcm.openshift.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/validate-clcm-openshift-io-v1alpha1-firmwarecatalog,mutating=false,failurePolicy=fail,sideEffects=None,groups=clcm.openshift.io,resources=firmwarecatalogs,verbs=update;delete,versions=v1alpha1,name=firmwarecatalogs.clcm.openshift.io,admissionReviewVersions=v1
 
 type firmwareCatalogValidator struct {
 	client.Client
+	// Reader is an uncached API reader used to list HardwareProfiles when
+	// validating entry removal and catalog deletion. The cached client can
+	// lag behind the API server, and here staleness fails open: a
+	// newly created HardwareProfile that is not yet in the cache would let a
+	// referenced entry be removed. Reading directly from the API server
+	// avoids that window.
+	Reader client.Reader
 }
 
 var _ admission.Validator[*hwmgmtv1alpha1.FirmwareCatalog] = &firmwareCatalogValidator{}
@@ -55,13 +65,14 @@ func (v *firmwareCatalogValidator) ValidateUpdate(ctx context.Context, oldCatalo
 	}
 
 	hwProfiles := &hwmgmtv1alpha1.HardwareProfileList{}
-	if err := v.Client.List(ctx, hwProfiles, client.InNamespace(oldCatalog.Namespace)); err != nil {
+	if err := v.Reader.List(ctx, hwProfiles, client.InNamespace(oldCatalog.Namespace)); err != nil {
 		return nil, fmt.Errorf("failed to list HardwareProfiles: %w", err)
 	}
 
+	referencedNames := buildReferencedEntryNames(hwProfiles.Items)
 	var referenced []string
 	for _, name := range removed {
-		if isEntryReferencedByAnyProfile(name, hwProfiles.Items) {
+		if _, ok := referencedNames[name]; ok {
 			referenced = append(referenced, name)
 		}
 	}
@@ -75,7 +86,27 @@ func (v *firmwareCatalogValidator) ValidateUpdate(ctx context.Context, oldCatalo
 }
 
 // ValidateDelete implements admission.Validator
-func (v *firmwareCatalogValidator) ValidateDelete(_ context.Context, _ *hwmgmtv1alpha1.FirmwareCatalog) (admission.Warnings, error) {
+func (v *firmwareCatalogValidator) ValidateDelete(ctx context.Context, catalog *hwmgmtv1alpha1.FirmwareCatalog) (admission.Warnings, error) {
+	firmwarecataloglog.Info("validate delete", "name", catalog.Name)
+
+	hwProfiles := &hwmgmtv1alpha1.HardwareProfileList{}
+	if err := v.Reader.List(ctx, hwProfiles, client.InNamespace(catalog.Namespace)); err != nil {
+		return nil, fmt.Errorf("failed to list HardwareProfiles: %w", err)
+	}
+
+	referencedNames := buildReferencedEntryNames(hwProfiles.Items)
+	var referenced []string
+	for _, img := range catalog.Spec.Images {
+		if _, ok := referencedNames[img.Name]; ok {
+			referenced = append(referenced, img.Name)
+		}
+	}
+
+	if len(referenced) > 0 {
+		return nil, fmt.Errorf("cannot delete FirmwareCatalog: entries still referenced by HardwareProfiles: %s",
+			strings.Join(referenced, ", "))
+	}
+
 	return nil, nil
 }
 
@@ -125,11 +156,19 @@ func findModifiedImmutableFields(old, updated []hwmgmtv1alpha1.FirmwareImage) []
 	return violations
 }
 
-// isEntryReferencedByAnyProfile checks whether the given catalog entry name is
-// referenced by any HardwareProfile's firmware fields. Those fields are
-// currently structs rather than catalog-entry string references, so this
-// always returns false. Update this check if the fields change to string
-// references.
-func isEntryReferencedByAnyProfile(_ string, _ []hwmgmtv1alpha1.HardwareProfile) bool {
-	return false
+// buildReferencedEntryNames returns the set of FirmwareCatalog entry names
+// referenced by any HardwareProfile's firmwareImages list, computed in a single
+// pass over all profiles. Callers can then test membership in O(1) instead of
+// rescanning every profile per candidate entry. Only the firmwareImages approach
+// references catalog entries by name; the deprecated inline
+// BiosFirmware/BmcFirmware/NicFirmware fields carry their own URL and version and
+// therefore create no dependency on the catalog.
+func buildReferencedEntryNames(profiles []hwmgmtv1alpha1.HardwareProfile) map[string]struct{} {
+	referenced := make(map[string]struct{})
+	for i := range profiles {
+		for _, ref := range profiles[i].Spec.FirmwareImages {
+			referenced[ref] = struct{}{}
+		}
+	}
+	return referenced
 }
