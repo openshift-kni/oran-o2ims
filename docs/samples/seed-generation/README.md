@@ -19,15 +19,17 @@ ProvisioningRequest sample for that later phase; it does not start seed
 generation in Phase 1.
 
 The ClusterTemplate owns the registry credential reference. Its
-`templateParameterSchema` allows a ProvisioningRequest to override `seedImage`
-and `seedGenerationTimeout`. To keep the template's seed image, omit
-`templateParameters.upgradeParameters` from the ProvisioningRequest. A template
-can also add `liveISO` to `upgradeDefaults.seedGeneration` when ISO generation
-is required. Set `upgradeDefaults.seedGenerationTimeout` to override the
-default operation timeout (2h without `liveISO`, 3h with it). The sample
-schema also allows a ProvisioningRequest to override this value via
-`upgradeParameters.seedGenerationTimeout`; `clusterUpgradeTimeout` applies
-only to cluster upgrades.
+`templateParameterSchema` allows a ProvisioningRequest to override
+`upgradeParameters.seedGeneration.seedImage` and
+`upgradeParameters.seedGeneration.seedGenerationTimeout`. To keep the
+template's seed image, omit `templateParameters.upgradeParameters` from the
+ProvisioningRequest. A template can also add `liveISO` to
+`upgradeDefaults.seedGeneration` when ISO generation is required. Set
+`upgradeDefaults.seedGeneration.seedGenerationTimeout` to override the
+default operation timeout (2h without `liveISO`, 3h with it). The
+ProvisioningRequest can override this value at
+`upgradeParameters.seedGeneration.seedGenerationTimeout`;
+`clusterUpgradeTimeout` applies only to cluster upgrades.
 
 The sample references a Secret named `seed-registry-credentials` in the
 ClusterTemplate namespace. The workflow validates that Secret and the spoke

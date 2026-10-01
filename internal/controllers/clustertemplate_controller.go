@@ -833,6 +833,11 @@ func validateUpgradeParametersSchema(schemaRaw []byte, hasUpgradeDefaults bool) 
 	hasCV := schemaPropertyExists(props, ctlrutils.UpgradeDefaultsClusterVersionKey)
 	hasIBGU := schemaPropertyExists(props, ctlrutils.UpgradeDefaultsIBGUKey)
 	hasSeed := schemaPropertyExists(props, ctlrutils.UpgradeDefaultsSeedGenerationKey)
+	if schemaPropertyExists(props, ctlrutils.SeedGenerationTimeoutConfigKey) {
+		return fmt.Errorf("%s.%s must be nested under %s",
+			constants.TemplateParamUpgrade, ctlrutils.SeedGenerationTimeoutConfigKey,
+			ctlrutils.UpgradeDefaultsSeedGenerationKey)
+	}
 
 	if hasCV && hasIBGU {
 		return fmt.Errorf("%q schema must not define both %q and %q; choose exactly one upgrade type",
@@ -859,16 +864,8 @@ func validateUpgradeParametersSchema(schemaRaw []byte, hasUpgradeDefaults bool) 
 		return err
 	}
 	if hasSeed {
-		for key, property := range props {
-			switch key {
-			case ctlrutils.UpgradeDefaultsSeedGenerationKey:
-			case ctlrutils.SeedGenerationTimeoutConfigKey:
-				field, ok := property.(map[string]any)
-				if !ok || field["type"] != "string" {
-					return fmt.Errorf("%s.%s must have type \"string\"",
-						constants.TemplateParamUpgrade, key)
-				}
-			default:
+		for key := range props {
+			if key != ctlrutils.UpgradeDefaultsSeedGenerationKey {
 				return fmt.Errorf("%s schema cannot expose %q for seed generation",
 					constants.TemplateParamUpgrade, key)
 			}

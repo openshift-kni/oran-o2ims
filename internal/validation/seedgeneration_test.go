@@ -37,13 +37,19 @@ func TestHasSeedGenerationConfigRawInput(t *testing.T) {
 func TestSeedGenerationSharedSchema(t *testing.T) {
 	valid := map[string]any{
 		"seedGeneration": map[string]any{
-			"seedImage":         "quay.io/example/seed:4.22",
-			"seedAuthSecretRef": map[string]any{"name": "push-auth"},
+			"seedImage":             "quay.io/example/seed:4.22",
+			"seedAuthSecretRef":     map[string]any{"name": "push-auth"},
+			"seedGenerationTimeout": "2h",
 		},
 	}
 	if err := ValidateSeedGenerationUpgradeData(valid); err != nil {
 		t.Fatalf("valid seed configuration rejected: %v", err)
 	}
+	valid["seedGenerationTimeout"] = "3h"
+	if err := ValidateSeedGenerationUpgradeData(valid); err == nil {
+		t.Fatal("upgrade-level seed generation timeout accepted")
+	}
+	delete(valid, "seedGenerationTimeout")
 	valid["clusterVersion"] = map[string]any{}
 	if err := ValidateSeedGenerationUpgradeData(valid); err == nil {
 		t.Fatal("mixed operation types accepted")

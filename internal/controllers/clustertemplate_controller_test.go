@@ -2100,8 +2100,13 @@ var _ = Describe("validateUpgradeParametersSchema", func() {
 	})
 
 	It("should accept a seedGenerationTimeout PR override", func() {
-		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{"seedGeneration":{"type":"object","additionalProperties":false},"seedGenerationTimeout":{"type":"string"}}}}}`)
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{"seedGeneration":{"type":"object","additionalProperties":false,"properties":{"seedGenerationTimeout":{"type":"string"}}}}}}}`)
 		Expect(validateUpgradeParametersSchema(schema, true)).To(Succeed())
+	})
+
+	It("should reject a top-level seedGenerationTimeout schema", func() {
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{"seedGeneration":{"type":"object","additionalProperties":false},"seedGenerationTimeout":{"type":"string"}}}}}`)
+		Expect(validateUpgradeParametersSchema(schema, true)).To(MatchError(ContainSubstring("must be nested under seedGeneration")))
 	})
 
 	It("should reject clusterUpgradeTimeout for seed generation", func() {
@@ -2110,7 +2115,7 @@ var _ = Describe("validateUpgradeParametersSchema", func() {
 	})
 
 	It("should reject a non-string seedGenerationTimeout schema", func() {
-		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{"seedGeneration":{"type":"object","additionalProperties":false},"seedGenerationTimeout":{"type":"integer"}}}}}`)
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{"seedGeneration":{"type":"object","additionalProperties":false,"properties":{"seedGenerationTimeout":{"type":"integer"}}}}}}}`)
 		Expect(validateUpgradeParametersSchema(schema, true)).To(MatchError(ContainSubstring(`seedGenerationTimeout must have type "string"`)))
 	})
 
@@ -2211,7 +2216,7 @@ var _ = Describe("seed generation ClusterTemplate defaults", func() {
 	})
 
 	It("accepts a seed generation timeout default", func() {
-		task.object.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"}},"seedGenerationTimeout":"3h"}`)
+		task.object.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"},"seedGenerationTimeout":"3h"}}`)
 		Expect(task.validateUpgradeDefaults()).To(Succeed())
 	})
 

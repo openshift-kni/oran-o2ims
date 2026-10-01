@@ -145,7 +145,11 @@ cluster) needs no ISO — omit `liveISO` and the controller stops after the seed
 
 All new attributes go under `upgradeDefaults` / `upgradeParameters` (the existing extensible JSON schema), following the same merge-and-validate pattern used by `clusterVersion` and `imageBasedGroupUpgrade`.
 
-Today two mutually-exclusive upgrade-type keys are recognized — `clusterVersion` and `imageBasedGroupUpgrade` — plus the optional `clusterUpgradeTimeout` and `intermediateVersion` (EUS) keys. `seedGeneration` becomes a third upgrade-type key with its own optional `seedGenerationTimeout` key.
+Today two mutually-exclusive upgrade-type keys are recognized — `clusterVersion`
+and `imageBasedGroupUpgrade` — plus the optional `clusterUpgradeTimeout` and
+`intermediateVersion` (EUS) keys. `seedGeneration` becomes a third upgrade-type
+key, with its optional `seedGenerationTimeout` nested inside the `seedGeneration`
+object.
 Adding it requires updating **both**
 enforcement points that currently require *exactly one of* the two existing types:
 
@@ -170,6 +174,8 @@ upgradeDefaults:
     # docker/podman auth JSON (same format as LCA's seedgen Secret).
     seedAuthSecretRef:
       name: seed-registry-credentials
+    # Optional: timeout for the entire operation (seed generation + ISO build).
+    seedGenerationTimeout: "3h"
     # Optional: custom recert image selected by the trusted template author
     # (LCA default used if omitted); not exposed to PR authors.
     recertImage: ""
@@ -240,8 +246,6 @@ upgradeDefaults:
       # image.config.openshift.io/cluster additionalTrustedCA.
       additionalTrustBundleConfigMapRef:
         name: mirror-registry-ca
-  # Optional: timeout for the entire operation (seed generation + ISO build)
-  seedGenerationTimeout: "3h"
 ```
 
 ### ProvisioningRequest overrides
@@ -1133,7 +1137,7 @@ With reasons: `Validating`, `PreconditionChecksFailed`, `CleaningACMResources`, 
 
 Seed generation uses its own `seedGenerationTimeout` config key (`SeedGenerationTimeoutConfigKey`). The existing `clusterUpgradeTimeout` key remains specific to cluster upgrades and cannot be used for seed generation. The upgrade defaults are `DefaultClusterUpgradeTimeout = 4h` and
 `DefaultClusterEUSUpgradeTimeout = 8h` (`constants.go`); these do not apply to seed generation. The seed-generation defaults are **2 hours** without `liveISO` and **3 hours** with `liveISO` (ISO generation adds ~30-60 minutes for seed image pull, ISO build, and upload). A positive
-`seedGenerationTimeout` value in `upgradeDefaults` or `upgradeParameters` overrides these defaults; the ProvisioningRequest value takes precedence over the ClusterTemplate value when both are set.
+`seedGenerationTimeout` value at `upgradeDefaults.seedGeneration.seedGenerationTimeout` or `upgradeParameters.seedGeneration.seedGenerationTimeout` overrides these defaults; the ProvisioningRequest value takes precedence over the ClusterTemplate value when both are set.
 
 ## Sample: End-to-End ClusterTemplate
 
@@ -1159,6 +1163,7 @@ spec:
         seedImage: my-mirror.example.com/seed-repo/seed-image:4.Y.Z
         seedAuthSecretRef:
           name: seed-registry-credentials
+        seedGenerationTimeout: "3h"
         liveISO:
           releaseImage: my-mirror.example.com/ocp-release:4.Y.Z-x86_64
           installationDisk: /dev/disk/by-path/pci-0000:43:00.0-nvme-1
@@ -1166,7 +1171,6 @@ spec:
           uploadSecretRef:
             name: iso-server-ssh-credentials
           urlBase: https://iso-server.example.com/ibi/
-      seedGenerationTimeout: "3h"
   templateParameterSchema:
     # PR-facing schema: exposes only the PR-overridable field(s). Every
     # template-owned field lives in upgradeDefaults and is validated post-merge
@@ -1185,8 +1189,8 @@ spec:
               seedImage:
                 type: string
                 minLength: 1
-          seedGenerationTimeout:
-            type: string
+              seedGenerationTimeout:
+                type: string
     type: object
 ```
 

@@ -56,7 +56,7 @@ func TestValidateSeedGenerationUpgradeData(t *testing.T) {
 		},
 		{
 			name: "seed and ISO",
-			data: `{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"},"liveISO":{"releaseImage":"quay.io/ocp/release:4.22","installationDisk":"/dev/sda","uploadSecretRef":{"name":"upload"},"urlBase":"https://iso.example.test/images/","imageDigestSources":[{"source":"quay.io/ocp","mirrors":["mirror.example.test/ocp"]}]}},"seedGenerationTimeout":"3h"}`,
+			data: `{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"},"seedGenerationTimeout":"3h","liveISO":{"releaseImage":"quay.io/ocp/release:4.22","installationDisk":"/dev/sda","uploadSecretRef":{"name":"upload"},"urlBase":"https://iso.example.test/images/","imageDigestSources":[{"source":"quay.io/ocp","mirrors":["mirror.example.test/ocp"]}]}}}`,
 		},
 		{
 			name:    "missing seed image",
@@ -95,17 +95,22 @@ func TestValidateSeedGenerationUpgradeData(t *testing.T) {
 		},
 		{
 			name:    "invalid timeout",
-			data:    `{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"}},"seedGenerationTimeout":"soon"}`,
+			data:    `{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"},"seedGenerationTimeout":"soon"}}`,
 			wantErr: true,
 		},
 		{
 			name:    "zero timeout",
-			data:    `{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"}},"seedGenerationTimeout":"0s"}`,
+			data:    `{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"},"seedGenerationTimeout":"0s"}}`,
 			wantErr: true,
 		},
 		{
 			name:    "upgrade timeout is not a seed timeout",
-			data:    `{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"}},"clusterUpgradeTimeout":"3h"}`,
+			data:    `{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"},"clusterUpgradeTimeout":"3h"}}`,
+			wantErr: true,
+		},
+		{
+			name:    "timeout at upgrade level is rejected",
+			data:    `{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"}},"seedGenerationTimeout":"3h"}`,
 			wantErr: true,
 		},
 	}
@@ -133,18 +138,18 @@ func TestSeedGenerationRawPRValidationAllowsPartialOverride(t *testing.T) {
 					"clusterInstanceParameters":{"type":"object","properties":{}},
 					"policyTemplateParameters":{"type":"object","properties":{}},
 					"upgradeParameters":{"type":"object","properties":{
-						"seedGeneration":{"type":"object","additionalProperties":false,"properties":{"seedImage":{"type":"string"}}}
+						"seedGeneration":{"type":"object","additionalProperties":false,"properties":{"seedImage":{"type":"string"},"seedGenerationTimeout":{"type":"string"}}}
 					}}
 				}}`)},
 		},
 	}
 	pr := &ProvisioningRequest{
 		Spec: ProvisioningRequestSpec{
-			TemplateParameters: runtime.RawExtension{Raw: []byte(`{"clusterInstanceParameters":{},"policyTemplateParameters":{},"upgradeParameters":{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22"}}}`)},
+			TemplateParameters: runtime.RawExtension{Raw: []byte(`{"clusterInstanceParameters":{},"policyTemplateParameters":{},"upgradeParameters":{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedGenerationTimeout":"90m"}}}`)},
 		},
 	}
 	if err := pr.ValidateTemplateInputMatchesSchema(ct); err != nil {
-		t.Fatalf("seedImage-only PR override should pass raw admission: %v", err)
+		t.Fatalf("seedImage and timeout PR overrides should pass raw admission: %v", err)
 	}
 
 	pr.Spec.TemplateParameters.Raw = []byte(`{"clusterInstanceParameters":{},"policyTemplateParameters":{},"upgradeParameters":{"seedGeneration":{"seedAuthSecretRef":{"name":"other-secret"}}}}`)
@@ -161,6 +166,7 @@ func TestValidateSeedGenerationPRSchema(t *testing.T) {
 	}{
 		{name: "no overrides", schema: `{"type":"object","additionalProperties":false}`},
 		{name: "seed image override", schema: `{"type":"object","additionalProperties":false,"properties":{"seedImage":{"type":"string"}}}`},
+		{name: "seed timeout override", schema: `{"type":"object","additionalProperties":false,"properties":{"seedGenerationTimeout":{"type":"string"}}}`},
 		{name: "missing strictness", schema: `{"type":"object","properties":{"seedImage":{"type":"string"}}}`, wantErr: true},
 		{name: "pattern properties bypass", schema: `{"type":"object","additionalProperties":false,"patternProperties":{".*":{}},"properties":{"seedImage":{"type":"string"}}}`, wantErr: true},
 		{name: "reference bypass", schema: `{"type":"object","additionalProperties":false,"$ref":"#/definitions/openSeed","properties":{"seedImage":{"type":"string"}}}`, wantErr: true},
@@ -168,6 +174,7 @@ func TestValidateSeedGenerationPRSchema(t *testing.T) {
 		{name: "ISO override", schema: `{"type":"object","additionalProperties":false,"properties":{"liveISO":{"type":"object"}}}`, wantErr: true},
 		{name: "required PR value", schema: `{"type":"object","additionalProperties":false,"required":["seedImage"],"properties":{"seedImage":{"type":"string"}}}`, wantErr: true},
 		{name: "incorrect seed image type", schema: `{"type":"object","additionalProperties":false,"properties":{"seedImage":{"type":"number"}}}`, wantErr: true},
+		{name: "incorrect timeout type", schema: `{"type":"object","additionalProperties":false,"properties":{"seedGenerationTimeout":{"type":"number"}}}`, wantErr: true},
 	}
 
 	for _, tt := range tests {

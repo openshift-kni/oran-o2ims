@@ -219,11 +219,13 @@ func parseUpgradeConfig(
 }
 
 func parseOperationTimeout(operation string, upgradeParams, defaults map[string]any) (time.Duration, error) {
+	seedOperation := operation == ctlrutils.UpgradeDefaultsSeedGenerationKey
 	key := ctlrutils.ClusterUpgradeTimeoutConfigKey
-	otherKey := ctlrutils.SeedGenerationTimeoutConfigKey
-	if operation == ctlrutils.UpgradeDefaultsSeedGenerationKey {
-		key, otherKey = otherKey, key
+	if seedOperation {
+		key = ctlrutils.SeedGenerationTimeoutConfigKey
 	}
+	var rawTimeout any
+	var found bool
 	for _, source := range []struct {
 		name   string
 		values map[string]any
@@ -231,32 +233,53 @@ func parseOperationTimeout(operation string, upgradeParams, defaults map[string]
 		{"upgradeParameters", upgradeParams},
 		{"upgradeDefaults", defaults},
 	} {
-		if _, ok := source.values[otherKey]; ok {
-			return 0, fmt.Errorf("%s is not valid for %s in %s", otherKey, operation, source.name)
+		if seedOperation {
+			if _, ok := source.values[ctlrutils.ClusterUpgradeTimeoutConfigKey]; ok {
+				return 0, fmt.Errorf("%s is not valid for %s in %s",
+					ctlrutils.ClusterUpgradeTimeoutConfigKey, operation, source.name)
+			}
+			if _, ok := source.values[ctlrutils.SeedGenerationTimeoutConfigKey]; ok {
+				return 0, fmt.Errorf("%s must be nested under %s in %s",
+					ctlrutils.SeedGenerationTimeoutConfigKey, ctlrutils.UpgradeDefaultsSeedGenerationKey, source.name)
+			}
+			seedRaw, ok := source.values[ctlrutils.UpgradeDefaultsSeedGenerationKey]
+			if !ok {
+				continue
+			}
+			seed, ok := seedRaw.(map[string]any)
+			if !ok {
+				return 0, fmt.Errorf("%s in %s must be an object",
+					ctlrutils.UpgradeDefaultsSeedGenerationKey, source.name)
+			}
+			rawTimeout, found = seed[key]
+		} else {
+			if _, ok := source.values[ctlrutils.SeedGenerationTimeoutConfigKey]; ok {
+				return 0, fmt.Errorf("%s is not valid for %s in %s",
+					ctlrutils.SeedGenerationTimeoutConfigKey, operation, source.name)
+			}
+			rawTimeout, found = source.values[key]
 		}
-	}
-	for _, source := range []struct {
-		name   string
-		values map[string]any
-	}{
-		{"upgradeParameters", upgradeParams},
-		{"upgradeDefaults", defaults},
-	} {
-		raw, ok := source.values[key]
-		if !ok {
-			continue
+		if found {
+			timeout, err := parseOperationTimeoutValue(key, source.name, rawTimeout)
+			if err != nil {
+				return 0, err
+			}
+			return timeout, nil
 		}
-		value, ok := raw.(string)
-		if !ok {
-			return 0, fmt.Errorf("%s in %s must be a duration string", key, source.name)
-		}
-		timeout, err := time.ParseDuration(value)
-		if err != nil || timeout <= 0 {
-			return 0, fmt.Errorf("invalid %s %q in %s: must be a positive duration", key, value, source.name)
-		}
-		return timeout, nil
 	}
 	return 0, nil
+}
+
+func parseOperationTimeoutValue(key, source string, raw any) (time.Duration, error) {
+	value, ok := raw.(string)
+	if !ok {
+		return 0, fmt.Errorf("%s in %s must be a duration string", key, source)
+	}
+	timeout, err := time.ParseDuration(value)
+	if err != nil || timeout <= 0 {
+		return 0, fmt.Errorf("invalid %s %q in %s: must be a positive duration", key, value, source)
+	}
+	return timeout, nil
 }
 
 // handleIBGUUpgrade handles the upgrade of the cluster through IBGU.

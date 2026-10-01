@@ -27,8 +27,8 @@ spec:
         seedImage: registry.example.com/seed/seed-image:4.Y.Z
         seedAuthSecretRef:
           name: seed-registry-credentials
-      # Optional operation timeout; otherwise 2h, or 3h with liveISO.
-      seedGenerationTimeout: 2h
+        # Optional operation timeout; otherwise 2h, or 3h with liveISO.
+        seedGenerationTimeout: 2h
   templateParameterSchema:
     type: object
     additionalProperties: false
@@ -66,5 +66,5 @@ spec:
               seedImage:
                 type: string
                 minLength: 1
-          seedGenerationTimeout:
-            type: string
+              seedGenerationTimeout:
+                type: string

@@ -47,7 +47,8 @@ func HasSeedGenerationConfig(upgradeDefaultsRaw, templateParametersRaw []byte) (
 
 // The effective schema applies after ClusterTemplate defaults and PR overrides
 // are merged. The PR-facing templateParameterSchema must remain narrower: it
-// can expose seedImage, but cannot expose credentials or execution targets.
+// can expose seedImage and seedGenerationTimeout, but cannot expose
+// credentials or execution targets.
 const seedGenerationEffectiveSchema = `{
   "type": "object",
   "additionalProperties": false,
@@ -57,6 +58,7 @@ const seedGenerationEffectiveSchema = `{
       "additionalProperties": false,
       "properties": {
         "seedImage": {"type": "string", "minLength": 1, "pattern": "^([a-z0-9]+://)?\\S+$"},
+        "seedGenerationTimeout": {"type": "string", "minLength": 1},
         "seedAuthSecretRef": {
           "type": "object", "additionalProperties": false,
           "properties": {"name": {"type": "string", "minLength": 1}},
@@ -102,8 +104,7 @@ const seedGenerationEffectiveSchema = `{
         }
       },
       "required": ["seedImage", "seedAuthSecretRef"]
-    },
-    "seedGenerationTimeout": {"type": "string", "minLength": 1}
+    }
   },
   "required": ["seedGeneration"]
 }`
@@ -119,7 +120,11 @@ func ValidateSeedGenerationUpgradeData(upgradeData map[string]any) error {
 	if err := ValidateJSONSchema(schema, upgradeData); err != nil {
 		return fmt.Errorf("seed generation configuration is invalid: %w", err)
 	}
-	if rawTimeout, ok := upgradeData["seedGenerationTimeout"]; ok {
+	seedGeneration, ok := upgradeData["seedGeneration"].(map[string]any)
+	if !ok {
+		return fmt.Errorf("seedGeneration must be an object")
+	}
+	if rawTimeout, ok := seedGeneration["seedGenerationTimeout"]; ok {
 		timeout, err := time.ParseDuration(rawTimeout.(string))
 		if err != nil || timeout <= 0 {
 			return fmt.Errorf("seedGenerationTimeout must be a positive duration")
@@ -129,8 +134,9 @@ func ValidateSeedGenerationUpgradeData(upgradeData map[string]any) error {
 }
 
 // ValidateSeedGenerationPRSchema keeps dangerous fields out of PR overrides.
-// A trusted template may choose to expose seedImage; every other seed field
-// must come from template defaults.
+// A trusted template may choose to expose seedImage and
+// seedGenerationTimeout; execution targets and credentials must come from
+// template defaults.
 func ValidateSeedGenerationPRSchema(schema map[string]any) error {
 	if schema["type"] != "object" {
 		return fmt.Errorf("upgradeParameters.seedGeneration must have type \"object\"")
@@ -139,7 +145,8 @@ func ValidateSeedGenerationPRSchema(schema map[string]any) error {
 		return fmt.Errorf("upgradeParameters.seedGeneration must set additionalProperties to false")
 	}
 	// Both keywords can admit fields outside properties despite the closed
-	// object declaration. Only seedImage may be selected by a PR author.
+	// object declaration. Only seedImage and seedGenerationTimeout may be
+	// selected by a PR author.
 	if _, ok := schema["patternProperties"]; ok {
 		return fmt.Errorf("upgradeParameters.seedGeneration must not use patternProperties")
 	}
@@ -161,12 +168,19 @@ func ValidateSeedGenerationPRSchema(schema map[string]any) error {
 		return fmt.Errorf("upgradeParameters.seedGeneration properties must be an object")
 	}
 	for key, value := range props {
-		if key != "seedImage" {
+		switch key {
+		case "seedImage":
+			field, ok := value.(map[string]any)
+			if !ok || field["type"] != "string" {
+				return fmt.Errorf("upgradeParameters.seedGeneration.seedImage must have type \"string\"")
+			}
+		case "seedGenerationTimeout":
+			field, ok := value.(map[string]any)
+			if !ok || field["type"] != "string" {
+				return fmt.Errorf("upgradeParameters.seedGeneration.seedGenerationTimeout must have type \"string\"")
+			}
+		default:
 			return fmt.Errorf("upgradeParameters.seedGeneration cannot expose template-owned field %q", key)
-		}
-		field, ok := value.(map[string]any)
-		if !ok || field["type"] != "string" {
-			return fmt.Errorf("upgradeParameters.seedGeneration.seedImage must have type \"string\"")
 		}
 	}
 	return nil
