@@ -286,7 +286,7 @@ var _ = Describe("ProvisioningRequestReconciler Unit Tests", func() {
 
 		Context("when template version is higher than cluster version", func() {
 			It("should return true", func() {
-				upgradeRequested, result, err := task.IsUpgradeRequested(ctx, clusterName)
+				upgradeRequested, result, err := task.IsUpgradeRequested(ctx, clusterName, clusterTemplate)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeZero())
 				Expect(upgradeRequested).To(BeTrue())
@@ -302,7 +302,7 @@ var _ = Describe("ProvisioningRequestReconciler Unit Tests", func() {
 			})
 
 			It("should return true", func() {
-				upgradeRequested, result, err := task.IsUpgradeRequested(ctx, clusterName)
+				upgradeRequested, result, err := task.IsUpgradeRequested(ctx, clusterName, clusterTemplate)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeZero())
 				Expect(upgradeRequested).To(BeTrue())
@@ -316,7 +316,7 @@ var _ = Describe("ProvisioningRequestReconciler Unit Tests", func() {
 			})
 
 			It("should return false", func() {
-				upgradeRequested, result, err := task.IsUpgradeRequested(ctx, clusterName)
+				upgradeRequested, result, err := task.IsUpgradeRequested(ctx, clusterName, clusterTemplate)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeZero())
 				Expect(upgradeRequested).To(BeFalse())
@@ -330,7 +330,7 @@ var _ = Describe("ProvisioningRequestReconciler Unit Tests", func() {
 			})
 
 			It("should return false with no error", func() {
-				upgradeRequested, result, err := task.IsUpgradeRequested(ctx, clusterName)
+				upgradeRequested, result, err := task.IsUpgradeRequested(ctx, clusterName, clusterTemplate)
 				Expect(result).To(BeZero())
 				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeZero())
@@ -345,7 +345,7 @@ var _ = Describe("ProvisioningRequestReconciler Unit Tests", func() {
 			})
 
 			It("should return false", func() {
-				upgradeRequested, result, err := task.IsUpgradeRequested(ctx, clusterName)
+				upgradeRequested, result, err := task.IsUpgradeRequested(ctx, clusterName, clusterTemplate)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(result).To(BeZero())
 				Expect(upgradeRequested).To(BeFalse())
@@ -359,7 +359,7 @@ var _ = Describe("ProvisioningRequestReconciler Unit Tests", func() {
 			})
 
 			It("should return false with requeue requested", func() {
-				upgradeRequested, result, err := task.IsUpgradeRequested(ctx, clusterName)
+				upgradeRequested, result, err := task.IsUpgradeRequested(ctx, clusterName, clusterTemplate)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 				Expect(upgradeRequested).To(BeFalse())
@@ -3310,18 +3310,6 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 				})
 			})
 
-			Context("when ClusterTemplate is missing", func() {
-				BeforeEach(func() {
-					task.object.Spec.TemplateName = "non-existent"
-				})
-
-				It("should return error", func() {
-					_, _, err := task.handleUpgrade(ctx, clusterName)
-					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("failed to get clusterTemplate"))
-				})
-			})
-
 		})
 
 		Describe("IBGU Status Helper Functions", func() {
@@ -3353,7 +3341,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 						Expect(c.Create(ctx, testPR)).To(Succeed())
 
 						task.object = testPR
-						result, proceed, err := task.handleUpgrade(ctx, testProgressing)
+						result, proceed, err := task.handleUpgrade(ctx, testProgressing, clusterTemplate)
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(proceed).To(BeFalse())
@@ -3388,7 +3376,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 						Expect(c.Create(ctx, testPR)).To(Succeed())
 
 						task.object = testPR
-						result, proceed, err := task.handleUpgrade(ctx, testNotProgressing)
+						result, proceed, err := task.handleUpgrade(ctx, testNotProgressing, clusterTemplate)
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(proceed).To(BeTrue()) // Should proceed when not progressing and no failures
@@ -3418,7 +3406,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 						Expect(c.Create(ctx, testPR)).To(Succeed())
 
 						task.object = testPR
-						result, proceed, err := task.handleUpgrade(ctx, testNoCondition)
+						result, proceed, err := task.handleUpgrade(ctx, testNoCondition, clusterTemplate)
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(proceed).To(BeFalse()) // Production code assumes still progressing when no condition
@@ -3464,7 +3452,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 						Expect(c.Create(ctx, testPR)).To(Succeed())
 
 						task.object = testPR
-						result, proceed, err := task.handleUpgrade(ctx, testFailed)
+						result, proceed, err := task.handleUpgrade(ctx, testFailed, clusterTemplate)
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(proceed).To(BeFalse())                                                   // Still progressing, don't proceed
@@ -3515,7 +3503,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 						Expect(c.Create(ctx, testPR)).To(Succeed())
 
 						task.object = testPR
-						result, proceed, err := task.handleUpgrade(ctx, testMixed)
+						result, proceed, err := task.handleUpgrade(ctx, testMixed, clusterTemplate)
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(proceed).To(BeFalse()) // Still progressing, don't proceed
@@ -3554,7 +3542,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 						Expect(c.Create(ctx, testPR)).To(Succeed())
 
 						task.object = testPR
-						result, proceed, err := task.handleUpgrade(ctx, testSuccess)
+						result, proceed, err := task.handleUpgrade(ctx, testSuccess, clusterTemplate)
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(proceed).To(BeFalse()) // Still progressing, don't proceed
@@ -3588,7 +3576,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 						Expect(c.Create(ctx, testPR)).To(Succeed())
 
 						task.object = testPR
-						result, proceed, err := task.handleUpgrade(ctx, testNoClusters)
+						result, proceed, err := task.handleUpgrade(ctx, testNoClusters, clusterTemplate)
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(proceed).To(BeFalse()) // Still progressing, don't proceed
@@ -3675,13 +3663,13 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 			Context("when ZTP is done and upgrade is requested", func() {
 				It("should initiate upgrade flow", func() {
 					// The main reconciliation should detect upgrade is needed and initiate it
-					shouldUpgrade, result, err := integrationTask.IsUpgradeRequested(ctx, "integration-cluster")
+					shouldUpgrade, result, err := integrationTask.IsUpgradeRequested(ctx, "integration-cluster", clusterTemplate)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(result).To(BeZero())
 					Expect(shouldUpgrade).To(BeTrue())
 
 					// Simulate calling handleUpgrade from main flow
-					result, proceed, err := integrationTask.handleUpgrade(ctx, "integration-cluster")
+					result, proceed, err := integrationTask.handleUpgrade(ctx, "integration-cluster", clusterTemplate)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(proceed).To(BeFalse())                                                   // Should not proceed until upgrade completes
 					Expect(result.RequeueAfter).To(Equal(requeueWithMediumInterval().RequeueAfter)) // Should requeue to check IBGU progress
@@ -3728,7 +3716,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 					Expect(utils.IsClusterUpgradeCompleted(integrationCR)).To(BeFalse())
 
 					// handleUpgrade should continue monitoring
-					result, proceed, err := integrationTask.handleUpgrade(ctx, "integration-cluster")
+					result, proceed, err := integrationTask.handleUpgrade(ctx, "integration-cluster", clusterTemplate)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(proceed).To(BeFalse()) // Should not proceed while upgrading
 					Expect(result.RequeueAfter).To(Equal(requeueWithMediumInterval().RequeueAfter))
@@ -3768,7 +3756,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 					Expect(utils.IsClusterUpgradeCompleted(integrationCR)).To(BeTrue())
 
 					// handleUpgrade should complete and clean up
-					result, proceed, err := integrationTask.handleUpgrade(ctx, "integration-cluster")
+					result, proceed, err := integrationTask.handleUpgrade(ctx, "integration-cluster", clusterTemplate)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(proceed).To(BeTrue()) // Should proceed after completion
 					Expect(result.RequeueAfter).To(BeZero())
@@ -3815,7 +3803,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 				})
 
 				It("should handle upgrade failure and stop reconciliation", func() {
-					result, proceed, err := integrationTask.handleUpgrade(ctx, "integration-cluster")
+					result, proceed, err := integrationTask.handleUpgrade(ctx, "integration-cluster", clusterTemplate)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(proceed).To(BeFalse())            // Should not proceed when failed
 					Expect(result.RequeueAfter).To(BeZero()) // Failed upgrades don't requeue

@@ -1267,7 +1267,7 @@ var _ = Describe("handleUpgrade", func() {
 	It("should set PreconditionChecksFailed when no recognized upgrade configuration is found", func() {
 		setupClient(ct, pr)
 
-		result, proceed, err := task.handleUpgrade(ctx, clusterName)
+		result, proceed, err := task.handleUpgrade(ctx, clusterName, ct)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(proceed).To(BeFalse())
 		Expect(result.RequeueAfter).To(BeZero())
@@ -1287,7 +1287,7 @@ var _ = Describe("handleUpgrade", func() {
 		}
 		setupClient(ct, pr)
 
-		result, proceed, err := task.handleUpgrade(ctx, clusterName)
+		result, proceed, err := task.handleUpgrade(ctx, clusterName, ct)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(proceed).To(BeFalse())
 		Expect(result.RequeueAfter).To(BeZero())
@@ -1305,15 +1305,6 @@ var _ = Describe("handleUpgrade", func() {
 		Expect(c.Get(ctx, client.ObjectKeyFromObject(pr), persisted)).To(Succeed())
 		Expect(persisted.Status.ProvisioningStatus.ProvisioningPhase).To(
 			Equal(provisioningv1alpha1.StateFailed))
-	})
-
-	It("should return error when ClusterTemplate is missing", func() {
-		pr.Spec.TemplateName = "non-existent"
-		setupClient(pr)
-
-		_, _, err := task.handleUpgrade(ctx, clusterName)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("failed to get clusterTemplate"))
 	})
 
 	It("should dispatch to handleClusterVersionUpgrade for clusterVersion type", func() {
@@ -1336,7 +1327,7 @@ var _ = Describe("handleUpgrade", func() {
 			},
 		)
 
-		result, proceed, err := task.handleUpgrade(ctx, clusterName)
+		result, proceed, err := task.handleUpgrade(ctx, clusterName, ct)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(proceed).To(BeFalse())
 		Expect(result.RequeueAfter).To(BeNumerically(">", 0))

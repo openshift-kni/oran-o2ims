@@ -512,7 +512,7 @@ func (t *provisioningRequestReconcilerTask) handleClusterUpgrades(
 		}
 	}
 
-	shouldUpgrade, result, err := t.isUpgradeRequested(ctx, clusterName, clusterTemplate)
+	shouldUpgrade, result, err := t.IsUpgradeRequested(ctx, clusterName, clusterTemplate)
 	if err != nil {
 		return requeueWithError(err)
 	}
@@ -525,7 +525,7 @@ func (t *provisioningRequestReconcilerTask) handleClusterUpgrades(
 		(ctlrutils.IsClusterUpgradeInitiated(t.object) &&
 			!ctlrutils.IsClusterUpgradeCompleted(t.object) &&
 			!ctlrutils.IsClusterUpgradeInTerminalFailure(t.object)) {
-		upgradeCtrlResult, proceed, err := t.handleUpgradeWithTemplate(ctx, clusterName, clusterTemplate)
+		upgradeCtrlResult, proceed, err := t.handleUpgrade(ctx, clusterName, clusterTemplate)
 		if upgradeCtrlResult.RequeueAfter > 0 || !proceed || err != nil {
 			// Requeue if the upgrade is in progress or an error occurs.
 			// Stop reconciliation if the upgrade has failed.
