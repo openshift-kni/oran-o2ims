@@ -189,6 +189,9 @@ const (
 	TemplateParamUpgrade         = "upgradeParameters"
 )
 
+// UpgradeDefaultsSeedGenerationKey is the seed generation key nested in upgradeParameters.
+const UpgradeDefaultsSeedGenerationKey = "seedGeneration"
+
 // Worker MachineConfigPool rollout strategies used by cluster upgrades with ClusterVersion.
 const (
 	// Control-plane and worker pools are upgraded together.

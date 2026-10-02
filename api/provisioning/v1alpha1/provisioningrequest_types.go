@@ -111,6 +111,11 @@ type SeedGenerationStatus struct {
 	// StartedAt is persisted when the seed run begins.
 	StartedAt *metav1.Time `json:"startedAt,omitempty"`
 
+	// TimeoutSeconds is the resolved overall timeout fixed at the start of this run.
+	// It remains available after ACM detachment, when template input is no longer read.
+	// +kubebuilder:validation:Minimum=1
+	TimeoutSeconds int64 `json:"timeoutSeconds,omitempty"`
+
 	// DetachmentStarted is persisted before removing any ACM agent resources.
 	DetachmentStarted bool `json:"detachmentStarted,omitempty"`
 

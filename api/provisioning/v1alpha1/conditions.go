@@ -9,6 +9,7 @@ package v1alpha1
 const (
 	ProvisioningRequestFinalizer = "provisioningrequest.clcm.openshift.io/finalizer"
 	ProvisioningRequestNameLabel = "provisioningrequest.clcm.openshift.io/name"
+	ProvisioningRequestUIDLabel  = "provisioningrequest.clcm.openshift.io/uid"
 )
 
 // ConditionType is a string representing the condition's type
