@@ -244,6 +244,18 @@ must-gather-build: ## Build the must-gather image.
 must-gather-push: must-gather-build ## Push the must-gather image.
 	$(CONTAINER_TOOL) push $(MUST_GATHER_IMG)
 
+.PHONY: test-must-gather
+test-must-gather: must-gather-build ## Build the must-gather image and run the Secret redaction test inside it.
+	@echo "Running must-gather Secret redaction test inside $(MUST_GATHER_IMG)..."
+	$(CONTAINER_TOOL) run \
+		--rm \
+		-v $(PROJECT_DIR)/must-gather/tests:/tests:ro,Z \
+		-e GATHER_SCRIPT=/usr/bin/gather \
+		--entrypoint bash \
+		$(MUST_GATHER_IMG) \
+		/tests/redact_secret_test.sh
+	@echo "Must-gather Secret redaction test completed successfully."
+
 # PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
 # architectures. (i.e. make docker-buildx IMG=myregistry/mypoperator:0.0.1). To use this option you need to:
 # - be able to use docker buildx. More info: https://docs.docker.com/build/buildx/
