@@ -146,6 +146,10 @@ namespaced Role. When reviewing or modifying RBAC:
   source of truth, not any individual controller's markers. A permission
   that appears missing from one controller may be granted by another
   controller's markers in a different file.
+- **Follow least privilege.** Grant only the API groups, resources, verbs,
+  and namespace scope required by the code. Tie each grant to a specific
+  API operation or controller watch, avoid wildcard or convenience grants,
+  and account for client behavior such as cached `LIST`/`WATCH` reads.
 - After any RBAC marker change, run `make manifests` and inspect the
   generated role to verify the effective permissions.
 - Use `namespace=system` only for namespaced resources. Cluster-scoped
