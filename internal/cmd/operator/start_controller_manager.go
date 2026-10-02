@@ -308,6 +308,17 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		return exit.Error(1)
 	}
 
+	// Create the default (empty) FirmwareCatalog singleton CR
+	err = ctlrutils.CreateDefaultFirmwareCatalogCR(ctx, mgr.GetClient())
+	if err != nil {
+		logger.ErrorContext(
+			ctx,
+			"Failed to create default firmware catalog CR",
+			slog.Any("error", err),
+		)
+		return exit.Error(1)
+	}
+
 	// Wire the TLS security profile watcher — triggers operator restart on profile change.
 	profileWatcher := &tlspkg.SecurityProfileWatcher{
 		Client:                mgr.GetClient(),
@@ -451,6 +462,15 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 				ctx,
 				"Unable to create webhook",
 				slog.String("webhook", "FirmwareCatalog"),
+				slog.Any("error", err),
+			)
+			return exit.Error(1)
+		}
+		if err = (&hwmgmtv1alpha1.HardwareProfile{}).SetupWebhookWithManager(mgr, ctlrutils.CheckHardwareProfileReferences); err != nil {
+			logger.ErrorContext(
+				ctx,
+				"Unable to create webhook",
+				slog.String("webhook", "HardwareProfile"),
 				slog.Any("error", err),
 			)
 			return exit.Error(1)
