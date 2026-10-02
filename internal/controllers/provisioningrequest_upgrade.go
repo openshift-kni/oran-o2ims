@@ -39,23 +39,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// IsUpgradeRequested determines if a cluster upgrade is requested by comparing whether the ClusterTemplate release version
-// is higher than the ManagedCluster's OpenShift release version.
+// IsUpgradeRequested determines if a cluster upgrade is requested by comparing
+// the ClusterTemplate release version with the ManagedCluster's OpenShift
+// release version. The caller provides the resolved template so post-provisioning
+// seed and upgrade dispatch can share the lookup.
 // Returns:
 //   - bool: true if an upgrade is requested (template version > managed cluster version), false otherwise
 //   - ctrl.Result: requeue result with 30s delay if openshiftVersion label is not yet available, empty otherwise
-//   - error: any error encountered during processing (ClusterTemplate fetch, ManagedCluster fetch, or version parsing)
+//   - error: any error encountered during processing (ManagedCluster fetch or version parsing)
 func (t *provisioningRequestReconcilerTask) IsUpgradeRequested(
-	ctx context.Context, managedClusterName string,
-) (bool, ctrl.Result, error) {
-	template, err := t.object.GetClusterTemplateRef(ctx, t.client)
-	if err != nil {
-		return false, ctrl.Result{}, fmt.Errorf("failed to get ClusterTemplate: %w", err)
-	}
-	return t.isUpgradeRequested(ctx, managedClusterName, template)
-}
-
-func (t *provisioningRequestReconcilerTask) isUpgradeRequested(
 	ctx context.Context, managedClusterName string, template *provisioningv1alpha1.ClusterTemplate,
 ) (bool, ctrl.Result, error) {
 	if template.Spec.Release == "" {
@@ -102,18 +94,10 @@ func (t *provisioningRequestReconcilerTask) isUpgradeRequested(
 }
 
 // handleUpgrade dispatches to the appropriate upgrade handler based on the
-// upgrade type detected from the ClusterTemplate defaults and ProvisioningRequest
-// parameters. Returns a ctrl.Result, a bool indicating whether to proceed with
-// further processing, and an error.
-func (t *provisioningRequestReconcilerTask) handleUpgrade(ctx context.Context, clusterName string) (ctrl.Result, bool, error) {
-	clusterTemplate, err := t.object.GetClusterTemplateRef(ctx, t.client)
-	if err != nil {
-		return ctrl.Result{}, false, fmt.Errorf("failed to get clusterTemplate: %w", err)
-	}
-	return t.handleUpgradeWithTemplate(ctx, clusterName, clusterTemplate)
-}
-
-func (t *provisioningRequestReconcilerTask) handleUpgradeWithTemplate(
+// upgrade type detected from the supplied ClusterTemplate defaults and
+// ProvisioningRequest parameters. Returns a ctrl.Result, a bool indicating
+// whether to proceed with further processing, and an error.
+func (t *provisioningRequestReconcilerTask) handleUpgrade(
 	ctx context.Context, clusterName string, clusterTemplate *provisioningv1alpha1.ClusterTemplate,
 ) (ctrl.Result, bool, error) {
 	t.logger.InfoContext(
