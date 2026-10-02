@@ -147,6 +147,7 @@ func GetClusterKubeConfigFromSecret(ctx context.Context, hubClient client.Client
 func GetSchemeForCluster() *runtime.Scheme {
 	scheme := runtime.NewScheme()
 	utilruntime.Must(corev1.AddToScheme(scheme))
+	utilruntime.Must(appsv1.AddToScheme(scheme))
 	utilruntime.Must(monitoringv1.AddToScheme(scheme))
 	utilruntime.Must(machineconfigv1.Install(scheme))
 

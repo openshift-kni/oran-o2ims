@@ -191,7 +191,7 @@ func (t *provisioningRequestReconcilerTask) run(ctx context.Context) (ctrl.Resul
 	// Once seed generation starts, normal provisioning may depend on ACM
 	// resources that the seed workflow has removed. Route from persisted status
 	// before any of those reconciliation phases run.
-	if t.seedGenerationNeedsFastPath() {
+	if t.seedGenerationNeedsFastPath() || seedGenerationFailureNeedsCleanup(t.object) {
 		return t.reconcileSeedGeneration(ctx)
 	}
 	if t.shouldStopReconciliation() {
