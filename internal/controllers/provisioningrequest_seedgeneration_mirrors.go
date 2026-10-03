@@ -298,10 +298,10 @@ func (t *provisioningRequestReconcilerTask) seedGenerationRegistryTrust(
 	}
 	trustedCAs := make(map[string]string, len(configMap.Data)+len(configMap.BinaryData))
 	for registry, bundle := range configMap.Data {
-		trustedCAs[normalizeRegistryHost(registry)] = bundle
+		trustedCAs[normalizeSeedGenerationRegistryTrustHost(registry)] = bundle
 	}
 	for registry, bundle := range configMap.BinaryData {
-		trustedCAs[normalizeRegistryHost(registry)] = string(bundle)
+		trustedCAs[normalizeSeedGenerationRegistryTrustHost(registry)] = string(bundle)
 	}
 	for registry, bundle := range trustedCAs {
 		if !validRegistryCertificateHost(registry) {
@@ -312,6 +312,10 @@ func (t *provisioningRequestReconcilerTask) seedGenerationRegistryTrust(
 		}
 	}
 	return trustedCAs, nil
+}
+
+func normalizeSeedGenerationRegistryTrustHost(registry string) string {
+	return normalizeRegistryHost(strings.Replace(registry, "..", ":", 1))
 }
 
 func validRegistryCertificateHost(value string) bool {

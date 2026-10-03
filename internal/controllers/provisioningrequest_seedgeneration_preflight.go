@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -53,6 +54,44 @@ const (
 var errIncompleteSeedGenerationSnapshot = errors.New("incomplete seed generation input snapshot")
 var errSeedGenerationSnapshotNotFound = errors.New("seed generation input snapshot not found")
 var errSeedGenerationSnapshotLost = errors.New("seed generation input snapshot was lost after it was pinned")
+
+type seedGenerationTransientError struct {
+	cause error
+}
+
+func (e *seedGenerationTransientError) Error() string { return e.cause.Error() }
+func (e *seedGenerationTransientError) Unwrap() error { return e.cause }
+
+func markSeedGenerationTransient(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &seedGenerationTransientError{cause: err}
+}
+
+func seedGenerationHTTPError(status int, format string, args ...any) error {
+	err := fmt.Errorf(format, args...)
+	if status == http.StatusRequestTimeout || status == http.StatusTooManyRequests || status >= http.StatusInternalServerError {
+		return markSeedGenerationTransient(err)
+	}
+	return err
+}
+
+func isSeedGenerationTransientError(err error) bool {
+	var transientErr *seedGenerationTransientError
+	if errors.As(err, &transientErr) || apierrors.IsConflict(err) || apierrors.IsInternalError(err) ||
+		apierrors.IsServiceUnavailable(err) || apierrors.IsServerTimeout(err) || apierrors.IsTimeout(err) ||
+		apierrors.IsTooManyRequests(err) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) ||
+		errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return dnsErr.IsTimeout || dnsErr.IsTemporary
+	}
+	var networkErr net.Error
+	return errors.As(err, &networkErr)
+}
 
 // seedGenerationInputDocument contains only non-secret inputs. Credential
 // bytes are stored in separate immutable Secret objects named in this document.
@@ -884,7 +923,8 @@ func registryToken(ctx context.Context, httpClient *http.Client, challenge map[s
 	}
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return "", fmt.Errorf("registry token request returned HTTP %d", response.StatusCode)
+		return "", seedGenerationHTTPError(response.StatusCode,
+			"registry token request returned HTTP %d", response.StatusCode)
 	}
 	var tokenResponse struct {
 		Token       string `json:"token"`
@@ -981,7 +1021,8 @@ func validateRegistryPushAccessWithClient(ctx context.Context, image string, aut
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusAccepted && response.StatusCode != http.StatusCreated {
-		return fmt.Errorf("registry %s did not grant push access (HTTP %d)", registry, response.StatusCode)
+		return seedGenerationHTTPError(response.StatusCode,
+			"registry %s did not grant push access (HTTP %d)", registry, response.StatusCode)
 	}
 	if response.StatusCode == http.StatusAccepted {
 		location := response.Header.Get("Location")

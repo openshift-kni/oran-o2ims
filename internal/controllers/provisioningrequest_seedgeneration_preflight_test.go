@@ -12,17 +12,79 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"syscall"
 	"testing"
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+func TestSeedGenerationTransientErrorClassification(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "API conflict",
+			err: apierrors.NewConflict(schema.GroupResource{Resource: "configmaps"}, "snapshot",
+				errors.New("resource version changed")),
+			want: true,
+		},
+		{name: "API unavailable", err: apierrors.NewServiceUnavailable("try again"), want: true},
+		{name: "connection refused", err: &net.OpError{Op: "dial", Net: "tcp", Err: syscall.ECONNREFUSED}, want: true},
+		{name: "deadline exceeded", err: context.DeadlineExceeded, want: true},
+		{name: "registry server error", err: seedGenerationHTTPError(http.StatusServiceUnavailable, "registry unavailable"), want: true},
+		{name: "invalid input", err: errors.New("invalid seed generation configuration"), want: false},
+		{name: "forbidden", err: apierrors.NewForbidden(schema.GroupResource{Resource: "secrets"}, "pull-secret", errors.New("denied")), want: false},
+		{name: "registry unauthorized", err: seedGenerationHTTPError(http.StatusUnauthorized, "registry unauthorized"), want: false},
+		{name: "permanent DNS failure", err: &net.DNSError{Err: "no such host", Name: "invalid.example", IsNotFound: true}, want: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isSeedGenerationTransientError(tc.err); got != tc.want {
+				t.Fatalf("isSeedGenerationTransientError(%v) = %t, want %t", tc.err, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestHandleSeedGenerationPreflightError(t *testing.T) {
+	ctx := context.Background()
+	transientPR := &provisioningv1alpha1.ProvisioningRequest{ObjectMeta: metav1.ObjectMeta{Name: "transient-pr"}}
+	transientTask := seedTestTask(transientPR, newSeedTestClient(t, transientPR.DeepCopy()))
+	_, err := transientTask.handleSeedGenerationPreflightError(ctx, "preflight failed", apierrors.NewConflict(
+		schema.GroupResource{Resource: "configmaps"}, "snapshot", errors.New("resource version changed")))
+	if err == nil {
+		t.Fatal("transient preflight error did not request retry")
+	}
+	if condition := seedGenerationCondition(transientPR); condition != nil {
+		t.Fatalf("transient error was recorded as terminal: %+v", condition)
+	}
+
+	invalidPR := &provisioningv1alpha1.ProvisioningRequest{ObjectMeta: metav1.ObjectMeta{Name: "invalid-pr"}}
+	invalidClient := newSeedTestClient(t, invalidPR.DeepCopy())
+	if err := invalidClient.Get(ctx, client.ObjectKeyFromObject(invalidPR), invalidPR); err != nil {
+		t.Fatalf("failed to get invalid test ProvisioningRequest: %v", err)
+	}
+	invalidTask := seedTestTask(invalidPR, invalidClient)
+	_, err = invalidTask.handleSeedGenerationPreflightError(ctx, "preflight failed", errors.New("invalid input"))
+	if err != nil {
+		t.Fatalf("terminal input error failed to persist status: %v", err)
+	}
+	if condition := seedGenerationCondition(invalidPR); condition == nil ||
+		condition.Reason != string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed) {
+		t.Fatalf("invalid input was not recorded as a terminal precondition failure: %+v", condition)
+	}
+}
 
 func TestMakeSeedGenerationSnapshotObjects(t *testing.T) {
 	pr := &provisioningv1alpha1.ProvisioningRequest{ObjectMeta: metav1.ObjectMeta{
