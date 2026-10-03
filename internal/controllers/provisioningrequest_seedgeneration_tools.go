@@ -373,8 +373,14 @@ func makeSeedGenerationPreflightPod(
 		{Name: "tmp", MountPath: "/tmp"},
 	}
 	if len(snapshot.Document.RegistryTrustedCAKeys) > 0 {
-		items := make([]corev1.KeyToPath, 0, len(snapshot.Document.RegistryTrustedCAKeys))
-		for registry, key := range snapshot.Document.RegistryTrustedCAKeys {
+		registries := make([]string, 0, len(snapshot.Document.RegistryTrustedCAKeys))
+		for registry := range snapshot.Document.RegistryTrustedCAKeys {
+			registries = append(registries, registry)
+		}
+		slices.Sort(registries)
+		items := make([]corev1.KeyToPath, 0, len(registries))
+		for _, registry := range registries {
+			key := snapshot.Document.RegistryTrustedCAKeys[registry]
 			items = append(items, corev1.KeyToPath{Key: key, Path: registry + "/ca.crt"})
 		}
 		volumes = append(volumes, corev1.Volume{

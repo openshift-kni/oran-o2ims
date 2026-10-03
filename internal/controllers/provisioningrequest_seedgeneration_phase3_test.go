@@ -9,6 +9,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -243,7 +244,11 @@ func TestSeedGenerationPreflightPodSecurityValidation(t *testing.T) {
 		Secrets: map[string]*corev1.Secret{
 			"pullSecret": {ObjectMeta: metav1.ObjectMeta{Name: "pull-secret"}},
 		},
-		Document: &seedGenerationInputDocument{RegistryTrustedCAKeys: map[string]string{"quay.io": "registry-ca-0"}},
+		Document: &seedGenerationInputDocument{RegistryTrustedCAKeys: map[string]string{
+			"z-mirror.example.com:5000": "registry-ca-2",
+			"a-mirror.example.com":      "registry-ca-0",
+			"m-mirror.example.com":      "registry-ca-1",
+		}},
 	}
 	pod := makeSeedGenerationPreflightPod(pr, snapshot, "quay.io/tools:latest", "release-info", "check-release", "release-image")
 	if len(pod.Spec.Volumes) != 4 || len(pod.Spec.Containers) != 1 {
@@ -251,6 +256,17 @@ func TestSeedGenerationPreflightPodSecurityValidation(t *testing.T) {
 	}
 	if err := validateSeedGenerationPreflightPodSpec(pod, pod.DeepCopy()); err != nil {
 		t.Fatalf("generated preflight Pod failed validation: %v", err)
+	}
+	wantRegistryItems := []corev1.KeyToPath{
+		{Key: "registry-ca-0", Path: "a-mirror.example.com/ca.crt"},
+		{Key: "registry-ca-1", Path: "m-mirror.example.com/ca.crt"},
+		{Key: "registry-ca-2", Path: "z-mirror.example.com:5000/ca.crt"},
+	}
+	for range 10 {
+		pod := makeSeedGenerationPreflightPod(pr, snapshot, "quay.io/tools:latest", "release-info", "check-release", "release-image")
+		if items := pod.Spec.Volumes[3].ConfigMap.Items; !reflect.DeepEqual(items, wantRegistryItems) {
+			t.Fatalf("registry CA items are not stable and sorted: got %+v, want %+v", items, wantRegistryItems)
+		}
 	}
 
 	invalid := []struct {
@@ -305,6 +321,24 @@ func TestSeedGenerationPreflightPodSecurityValidation(t *testing.T) {
 				t.Fatalf("failure reason=%q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestNormalizeSeedGenerationRegistryTrustHost(t *testing.T) {
+	for _, tc := range []struct {
+		encoded string
+		want    string
+		valid   bool
+	}{
+		{encoded: "mirror.example.com", want: "mirror.example.com", valid: true},
+		{encoded: "mirror.example.com..5000", want: "mirror.example.com:5000", valid: true},
+		{encoded: "mirror.example.com..5000..6000", want: "mirror.example.com:5000..6000", valid: false},
+	} {
+		got := normalizeSeedGenerationRegistryTrustHost(tc.encoded)
+		if got != tc.want || validRegistryCertificateHost(got) != tc.valid {
+			t.Errorf("normalize(%q) = %q, valid=%t; want %q, valid=%t",
+				tc.encoded, got, validRegistryCertificateHost(got), tc.want, tc.valid)
+		}
 	}
 }
 

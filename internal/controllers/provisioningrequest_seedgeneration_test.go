@@ -78,6 +78,23 @@ func TestSeedGenerationOneShotRouting(t *testing.T) {
 	}
 }
 
+func TestSeedGenerationFailureCleanupResumesNormalReconciliation(t *testing.T) {
+	pr := &provisioningv1alpha1.ProvisioningRequest{ObjectMeta: metav1.ObjectMeta{
+		Name: "seed-pr", UID: types.UID("pr-uid"),
+	}}
+	ctlrutils.SetStatusCondition(&pr.Status.Conditions, provisioningv1alpha1.PRconditionTypes.SeedGenerationCompleted,
+		provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, metav1.ConditionFalse, "preflight failed")
+	task := seedTestTask(pr, newSeedTestClient(t))
+
+	handled, result, err := task.reconcileSeedGenerationFailureCleanup(context.Background())
+	if err != nil {
+		t.Fatalf("cleanup failed: %v", err)
+	}
+	if handled || result.Requeue || result.RequeueAfter != 0 {
+		t.Fatalf("completed cleanup stopped normal reconciliation: handled=%t result=%+v", handled, result)
+	}
+}
+
 func TestSeedGenerationTimeoutResolution(t *testing.T) {
 	for _, tc := range []struct {
 		name   string

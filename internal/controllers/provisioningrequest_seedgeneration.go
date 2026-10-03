@@ -87,6 +87,35 @@ func seedGenerationFailureNeedsCleanup(pr *provisioningv1alpha1.ProvisioningRequ
 			condition.Reason == string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed))
 }
 
+func (t *provisioningRequestReconcilerTask) reconcileSeedGenerationFailureCleanup(
+	ctx context.Context,
+) (bool, ctrl.Result, error) {
+	if !seedGenerationFailureNeedsCleanup(t.object) {
+		return false, ctrl.Result{}, nil
+	}
+	pending, err := t.cleanupSeedGenerationPreflightResources(ctx)
+	if err != nil {
+		result, retryErr := requeueWithError(fmt.Errorf("failed to clean up seed generation preflight resources: %w", err))
+		return true, result, retryErr
+	}
+	if pending {
+		return true, requeueWithShortInterval(), nil
+	}
+	return false, ctrl.Result{}, nil
+}
+
+func (t *provisioningRequestReconcilerTask) handleSeedGenerationPreflightError(
+	ctx context.Context,
+	operation string,
+	err error,
+) (ctrl.Result, error) {
+	if isSeedGenerationTransientError(err) {
+		return requeueWithError(fmt.Errorf("%s: %w", operation, err))
+	}
+	return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
+		fmt.Sprintf("%s: %v", operation, err))
+}
+
 func (t *provisioningRequestReconcilerTask) seedGenerationNeedsFastPath() bool {
 	details := t.object.Status.Extensions.ClusterDetails
 	if details != nil && details.SeedGenerationStatus != nil && details.SeedGenerationStatus.DetachmentStarted {
@@ -212,21 +241,18 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGeneration(ctx context.
 
 func (t *provisioningRequestReconcilerTask) reconcileSeedGenerationPreflight(ctx context.Context) (ctrl.Result, error) {
 	if err := t.validateSeedGenerationSpokePrerequisites(ctx); err != nil {
-		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
-			fmt.Sprintf("seed generation spoke preflight failed: %v", err))
+		return t.handleSeedGenerationPreflightError(ctx, "seed generation spoke preflight failed", err)
 	}
 	snapshot, retry, err := t.ensureSeedGenerationInputSnapshot(ctx, nil)
 	if err != nil {
-		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
-			fmt.Sprintf("seed generation preflight failed: %v", err))
+		return t.handleSeedGenerationPreflightError(ctx, "seed generation preflight failed", err)
 	}
 	if retry {
 		return requeueWithShortInterval(), nil
 	}
 	complete, retry, err := t.ensureSeedGenerationToolsPreflight(ctx, snapshot)
 	if err != nil {
-		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
-			fmt.Sprintf("seed generation tools preflight failed: %v", err))
+		return t.handleSeedGenerationPreflightError(ctx, "seed generation tools preflight failed", err)
 	}
 	if retry || !complete {
 		return requeueWithShortInterval(), nil
