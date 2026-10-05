@@ -4,14 +4,15 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
-// Package upgrade contains shared upgrade-parameter handling used by admission
+// Package provisioning contains shared helpers used by admission
 // and controller reconciliation.
-package upgrade
+package provisioning
 
 import (
 	"encoding/json"
 	"fmt"
 
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 )
 
@@ -84,4 +85,18 @@ func RequestedWorkerPoolUpgradeThrough(defaultsRaw, paramsRaw []byte) (string, e
 		through = override
 	}
 	return through, nil
+}
+
+// StageIndex returns the zero-based index of a named stage, or -1 for an
+// empty or unknown name. An empty name authorizes no worker-pool stage.
+func StageIndex(s *provisioningv1alpha1.WorkerPoolUpgradeStatus, name string) int {
+	if s == nil || name == "" {
+		return -1
+	}
+	for i := range s.Stages {
+		if s.Stages[i].Name == name {
+			return i
+		}
+	}
+	return -1
 }

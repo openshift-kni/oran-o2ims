@@ -11,6 +11,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/openshift-kni/oran-o2ims/internal/provisioning"
+	"github.com/openshift-kni/oran-o2ims/internal/validation"
+
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -39,14 +42,14 @@ func (t *provisioningRequestReconcilerTask) IsSeedGenerationRequested(
 	if !ctlrutils.IsClusterZtpDone(t.object) {
 		return false, nil, nil
 	}
-	template, err := t.object.GetClusterTemplateRef(ctx, t.client)
+	template, err := provisioning.GetClusterTemplateRef(ctx, t.client, t.object)
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to get ClusterTemplate for seed generation: %w", err)
 	}
 	if template.DeletionTimestamp != nil {
 		return false, nil, fmt.Errorf("cluster template %s/%s is being deleted", template.Namespace, template.Name)
 	}
-	requested, err := provisioningv1alpha1.HasSeedGenerationConfig(template, t.object)
+	requested, err := validation.HasSeedGenerationConfig(template.Spec.TemplateDefaults.UpgradeDefaults.Raw, t.object.Spec.TemplateParameters.Raw)
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to inspect seed generation configuration: %w", err)
 	}

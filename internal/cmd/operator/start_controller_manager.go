@@ -13,6 +13,8 @@ import (
 	"log/slog"
 	"strings"
 
+	webhookprovisioningv1 "github.com/openshift-kni/oran-o2ims/internal/webhook/provisioning/v1alpha1"
+
 	openshiftv1 "github.com/openshift/api/config/v1"
 	openshiftoperatorv1 "github.com/openshift/api/operator/v1"
 	tlspkg "github.com/openshift/controller-runtime-common/pkg/tls"
@@ -437,7 +439,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	}
 
 	if c.enableWebhooks {
-		if err = (&provisioningv1alpha1.ProvisioningRequest{}).SetupWebhookWithManager(mgr); err != nil {
+		if err = webhookprovisioningv1.SetupProvisioningRequestWebhookWithManager(mgr); err != nil {
 			logger.ErrorContext(
 				ctx,
 				"Unable to create webhook",

@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openshift-kni/oran-o2ims/internal/provisioning"
+
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -401,7 +403,7 @@ func (t *provisioningRequestReconcilerTask) updateOCloudNodeClusterId(ctx contex
 // These labels are useful in the proper functioning of the resource server.
 func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx context.Context, mcl *clusterv1.ManagedCluster) error {
 	// Get the ClusterTemplate used by the current ProvisioningRequest.
-	oranct, err := t.object.GetClusterTemplateRef(ctx, t.client)
+	oranct, err := provisioning.GetClusterTemplateRef(ctx, t.client, t.object)
 	if err != nil {
 		return fmt.Errorf("failed to get ClusterTemplate: %w", err)
 	}

@@ -15,6 +15,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openshift-kni/oran-o2ims/internal/validation"
+
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -864,7 +866,7 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec(
 		})
 	}
 
-	siteIDRaw, err := provisioningv1alpha1.ExtractMatchingInput(
+	siteIDRaw, err := validation.ExtractMatchingInput(
 		t.object.Spec.TemplateParameters.Raw, constants.TemplateParamOCloudSiteId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get %s from templateParameters: %w", constants.TemplateParamOCloudSiteId, err)
@@ -874,7 +876,7 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec(
 		return nil, fmt.Errorf("%s is not a string", constants.TemplateParamOCloudSiteId)
 	}
 
-	clusterIdRaw, err := provisioningv1alpha1.ExtractMatchingInput(
+	clusterIdRaw, err := validation.ExtractMatchingInput(
 		t.object.Spec.TemplateParameters.Raw, constants.TemplateParamNodeClusterName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get %s from templateParameters: %w", constants.TemplateParamNodeClusterName, err)

@@ -15,6 +15,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/openshift-kni/oran-o2ims/internal/validation"
+
 	certificatesv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -1269,11 +1271,11 @@ func (t *provisioningRequestReconcilerTask) handleClusterInstanceUpgrade(
 	existingCI *unstructured.Unstructured, renderedCI *unstructured.Unstructured) error {
 
 	// Check if there is a clusterImageSetNameRef change (indicating an upgrade)
-	changedFields, _, err := provisioningv1alpha1.FindClusterInstanceImmutableFieldUpdates(
+	changedFields, _, err := validation.FindClusterInstanceImmutableFieldUpdates(
 		existingCI.Object["spec"].(map[string]any),
 		renderedCI.Object["spec"].(map[string]any),
-		ctlrutils.IgnoredClusterInstanceFields,
-		provisioningv1alpha1.AllowedClusterInstanceFields)
+		validation.IgnoredClusterInstanceFields,
+		validation.AllowedClusterInstanceFields)
 	if err != nil {
 		return fmt.Errorf(
 			"failed to find field updates for ClusterInstance (%s): %w", existingCI.GetName(), err)

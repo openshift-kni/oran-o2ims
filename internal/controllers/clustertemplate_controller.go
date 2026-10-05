@@ -41,7 +41,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
-	upgradevalidation "github.com/openshift-kni/oran-o2ims/internal/validation"
+	"github.com/openshift-kni/oran-o2ims/internal/validation"
 )
 
 // ClusterTemplateReconciler reconciles a ClusterTemplate object
@@ -379,7 +379,7 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeDefaults() error {
 	}
 
 	if hasCV {
-		if err := upgradevalidation.ValidateCVUpgradeData(upgradeData, t.object.Spec.Release, "upgradeDefaults"); err != nil {
+		if err := validation.ValidateCVUpgradeData(upgradeData, t.object.Spec.Release, "upgradeDefaults"); err != nil {
 			return fmt.Errorf("clusterVersion upgrade validation failed: %w", err)
 		}
 	} else if hasIBGU {
@@ -427,10 +427,10 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeDefaultsAgainstSchema(
 			constants.TemplateParamUpgrade)
 	}
 
-	upgradeSchema, err := provisioningv1alpha1.ExtractSubSchema(
+	upgradeSchema, err := validation.ExtractSubSchema(
 		t.object.Spec.TemplateParameterSchema.Raw, constants.TemplateParamUpgrade)
 	if err != nil {
-		if provisioningv1alpha1.IsErrSubSchemaNotFound(err) {
+		if validation.IsErrSubSchemaNotFound(err) {
 			return typederrors.NewInputError(
 				"templateParameterSchema must define %q when upgradeDefaults is set",
 				constants.TemplateParamUpgrade)
@@ -466,13 +466,13 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeDefaultsAgainstSchema(
 	}
 
 	if defaultsHasSeed {
-		if err := provisioningv1alpha1.ValidateSeedGenerationUpgradeData(upgradeData); err != nil {
-			return typederrors.NewInputError("upgradeDefaults: %s", err.Error())
+		if err := validation.ValidateSeedGenerationUpgradeData(upgradeData); err != nil {
+			return typederrors.NewInputError("invalid seed generation upgrade data in upgradeDefaults: %s", err.Error())
 		}
 		return nil
 	}
 
-	if err := provisioningv1alpha1.ValidateJsonAgainstJsonSchema(upgradeSchema, upgradeData); err != nil {
+	if err := validation.ValidateJSONSchema(upgradeSchema, upgradeData); err != nil {
 		return typederrors.NewInputError(
 			"upgradeDefaults does not conform to the %s schema: %s",
 			constants.TemplateParamUpgrade, err.Error())
@@ -600,7 +600,7 @@ func validateClusterInstanceDefaultsFormat(
 			constants.ClusterInstanceNodesKey, constants.ClusterInstanceNodeGroupsKey)
 	}
 
-	cipSchema, err := provisioningv1alpha1.ExtractSubSchema(
+	cipSchema, err := validation.ExtractSubSchema(
 		schemaRaw, constants.TemplateParamClusterInstance)
 	if err != nil {
 		return "", fmt.Errorf("failed to extract %q schema for defaults validation: %w",
@@ -707,9 +707,9 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 	for _, param := range mandatoryParams {
 		expectedName := param[0]
 		expectedType := param[1]
-		aSubschema, err := provisioningv1alpha1.ExtractSubSchema(object.Spec.TemplateParameterSchema.Raw, expectedName)
+		aSubschema, err := validation.ExtractSubSchema(object.Spec.TemplateParameterSchema.Raw, expectedName)
 		if err != nil {
-			if provisioningv1alpha1.IsErrSubSchemaNotFound(err) {
+			if validation.IsErrSubSchemaNotFound(err) {
 				missingParameter = append(missingParameter, expectedName)
 				continue
 			}
@@ -764,7 +764,7 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 	// Require hardware provisioning: the CT must have hwMgmtDefaults.nodeGroupData OR
 	// the templateParameterSchema must expose hwMgmtParameters (allowing the PR to supply it).
 	hasHwMgmt := len(object.Spec.TemplateDefaults.HwMgmtDefaults.NodeGroupData) > 0 ||
-		provisioningv1alpha1.SchemaDefinesHwMgmtParameters(object)
+		ctlrutils.SchemaDefinesHwMgmtParameters(object)
 	if !hasHwMgmt {
 		return typederrors.NewInputError(
 			"ClusterTemplate must define hardware provisioning via hwMgmtDefaults.nodeGroupData " +
@@ -811,9 +811,9 @@ func validateClusterInstanceParametersSchema(cipSchema map[string]any) error {
 // seedGeneration). When upgradeDefaults is set, one type is required.
 // When upgradeDefaults is set, the sub-schema is required.
 func validateUpgradeParametersSchema(schemaRaw []byte, hasUpgradeDefaults bool) error {
-	upgradeSchema, err := provisioningv1alpha1.ExtractSubSchema(schemaRaw, constants.TemplateParamUpgrade)
+	upgradeSchema, err := validation.ExtractSubSchema(schemaRaw, constants.TemplateParamUpgrade)
 	if err != nil {
-		if !provisioningv1alpha1.IsErrSubSchemaNotFound(err) {
+		if !validation.IsErrSubSchemaNotFound(err) {
 			return fmt.Errorf("failed to extract %q schema: %w", constants.TemplateParamUpgrade, err)
 		}
 		if hasUpgradeDefaults {
@@ -893,7 +893,7 @@ func validateUpgradeParametersSchema(schemaRaw []byte, hasUpgradeDefaults bool) 
 			return fmt.Errorf("%s.%s must be an object schema",
 				constants.TemplateParamUpgrade, ctlrutils.UpgradeDefaultsSeedGenerationKey)
 		}
-		if err := provisioningv1alpha1.ValidateSeedGenerationPRSchema(seedSchema); err != nil {
+		if err := validation.ValidateSeedGenerationPRSchema(seedSchema); err != nil {
 			return fmt.Errorf("invalid seed generation PR schema: %w", err)
 		}
 	}

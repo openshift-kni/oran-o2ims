@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openshift-kni/oran-o2ims/internal/validation"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
@@ -1297,7 +1299,7 @@ var _ = Describe("handleUpgrade", func() {
 		Expect(upgradeCond).ToNot(BeNil())
 		Expect(upgradeCond.Status).To(Equal(metav1.ConditionFalse))
 		Expect(upgradeCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed)))
-		Expect(upgradeCond.Message).To(Equal(provisioningv1alpha1.SeedGenerationUnsupportedMessage))
+		Expect(upgradeCond.Message).To(Equal(validation.SeedGenerationUnsupportedMessage))
 		Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
 			Equal(provisioningv1alpha1.StateFailed))
 

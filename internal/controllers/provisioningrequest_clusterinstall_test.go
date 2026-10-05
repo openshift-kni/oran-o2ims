@@ -52,6 +52,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/openshift-kni/oran-o2ims/internal/validation"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -175,7 +177,7 @@ var _ = Describe("handleRenderClusterInstance", func() {
 			},
 		}
 
-		clusterInstanceInputParams, err := provisioningv1alpha1.ExtractMatchingInput(
+		clusterInstanceInputParams, err := validation.ExtractMatchingInput(
 			cr.Spec.TemplateParameters.Raw, constants.TemplateParamClusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		mergedClusterInstanceData, err := task.getMergedClusterInstanceData(
@@ -317,7 +319,7 @@ var _ = Describe("handleClusterInstallation", func() {
 			},
 		}
 
-		clusterInstanceInputParams, err := provisioningv1alpha1.ExtractMatchingInput(
+		clusterInstanceInputParams, err := validation.ExtractMatchingInput(
 			cr.Spec.TemplateParameters.Raw, constants.TemplateParamClusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		mergedClusterInstanceData, err := task.getMergedClusterInstanceData(
@@ -419,7 +421,7 @@ var _ = Describe("cpuArchitecture propagation into rendered ClusterInstance", fu
 	// prInput returns the clusterInstanceParameters supplied by the sample
 	// ProvisioningRequest.
 	prInput := func() map[string]any {
-		input, err := provisioningv1alpha1.ExtractMatchingInput(
+		input, err := validation.ExtractMatchingInput(
 			[]byte(testutils.TestFullTemplateParameters), constants.TemplateParamClusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		return input.(map[string]any)

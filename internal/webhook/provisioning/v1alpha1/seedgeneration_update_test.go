@@ -11,18 +11,19 @@ import (
 	"strings"
 	"testing"
 
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
 func TestValidateSeedGenerationUpdate(t *testing.T) {
-	old := &ProvisioningRequest{Spec: ProvisioningRequestSpec{
+	old := &provisioningv1alpha1.ProvisioningRequest{Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 		TemplateName:    "seed-template",
 		TemplateVersion: "v1",
 	}}
 	old.Spec.TemplateParameters = runtime.RawExtension{Raw: []byte(`{"upgradeParameters":{"seedGeneration":{"seedImage":"quay.io/example/seed:a","seedGenerationTimeout":"2h"}}}`)}
 	started := metav1.Now()
-	old.Status.Extensions.ClusterDetails = &ClusterDetails{SeedGenerationStatus: &SeedGenerationStatus{StartedAt: &started}}
+	old.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{SeedGenerationStatus: &provisioningv1alpha1.SeedGenerationStatus{StartedAt: &started}}
 
 	for _, tc := range []struct {
 		name    string
@@ -50,10 +51,10 @@ func TestValidateSeedGenerationUpdate(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		name   string
-		mutate func(*ProvisioningRequest)
+		mutate func(*provisioningv1alpha1.ProvisioningRequest)
 	}{
-		{"changed template name", func(pr *ProvisioningRequest) { pr.Spec.TemplateName = "other-template" }},
-		{"changed template version", func(pr *ProvisioningRequest) { pr.Spec.TemplateVersion = "v2" }},
+		{"changed template name", func(pr *provisioningv1alpha1.ProvisioningRequest) { pr.Spec.TemplateName = "other-template" }},
+		{"changed template version", func(pr *provisioningv1alpha1.ProvisioningRequest) { pr.Spec.TemplateVersion = "v2" }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			updated := old.DeepCopy()

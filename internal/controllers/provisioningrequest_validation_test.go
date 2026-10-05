@@ -46,6 +46,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/openshift-kni/oran-o2ims/internal/validation"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -653,7 +655,7 @@ var _ = Describe("getMergedClusterInstanceData", func() {
 	}
 
 	extractClusterInstanceInput := func(t *provisioningRequestReconcilerTask) map[string]any {
-		input, err := provisioningv1alpha1.ExtractMatchingInput(
+		input, err := validation.ExtractMatchingInput(
 			t.object.Spec.TemplateParameters.Raw, constants.TemplateParamClusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		return input.(map[string]any)

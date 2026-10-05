@@ -9,21 +9,89 @@ package v1alpha1
 import (
 	"context"
 
+	"github.com/openshift-kni/oran-o2ims/internal/validation"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
+const testTemplate = `{
+	"properties": {
+	  "nodeClusterName": {
+		"type": "string"
+	  },
+	  "oCloudSiteId": {
+		"type": "string"
+	  },
+	  "policyTemplateParameters": {
+		"description": "policyTemplateParameters.",
+		"properties": {
+		  "sriov-network-vlan-1": {
+			"type": "string"
+		  },
+		  "install-plan-approval": {
+			"type": "string",
+			"default": "Automatic"
+		  }
+		}
+	  },
+	  "clusterInstanceParameters": {
+		"description": "clusterInstanceParameters.",
+		"properties": {
+		  "additionalNTPSources": {
+			"description": "AdditionalNTPSources.",
+			"items": {
+			  "type": "string"
+			},
+			"type": "array"
+		  }
+		}
+	  },
+	  "hwMgmtParameters": {
+		"description": "hwMgmtParameters allows overriding hardware management defaults.",
+		"type": "object",
+		"properties": {
+		  "hardwareProvisioningTimeout": {
+			"type": "string"
+		  },
+		  "nodeGroupData": {
+			"type": "array",
+			"items": {
+			  "type": "object",
+			  "required": ["name"],
+			  "properties": {
+				"name": {"type": "string"},
+				"role": {"type": "string"},
+				"hwProfile": {"type": "string"},
+				"resourcePoolId": {"type": "string"},
+				"resourceSelector": {"type": "object", "additionalProperties": {"type": "string"}}
+			  }
+			}
+		  }
+		}
+	  }
+	},
+	"required": [
+	  "nodeClusterName",
+	  "oCloudSiteId",
+	  "policyTemplateParameters",
+	  "clusterInstanceParameters"
+	],
+	"type": "object"
+  }`
+
 var _ = Describe("ProvisioningRequestValidator", func() {
 	var (
 		ctx        context.Context
 		validator  *provisioningRequestValidator
-		oldPr      *ProvisioningRequest
-		newPr      *ProvisioningRequest
+		oldPr      *provisioningv1alpha1.ProvisioningRequest
+		newPr      *provisioningv1alpha1.ProvisioningRequest
 		fakeClient client.Client
 	)
 
@@ -31,19 +99,19 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 		ctx = context.TODO()
 		fakeClient = fake.NewClientBuilder().WithScheme(s).
 			WithStatusSubresource(
-				&ClusterTemplate{},
-				&ProvisioningRequest{},
+				&provisioningv1alpha1.ClusterTemplate{},
+				&provisioningv1alpha1.ProvisioningRequest{},
 			).Build()
 
 		validator = &provisioningRequestValidator{
 			Client: fakeClient,
 		}
 
-		oldPr = &ProvisioningRequest{
+		oldPr = &provisioningv1alpha1.ProvisioningRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "123e4567-e89b-12d3-a456-426614174000",
 			},
-			Spec: ProvisioningRequestSpec{
+			Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 				Name:            "cluster-1",
 				TemplateName:    "clustertemplate-a",
 				TemplateVersion: "v1.0.1",
@@ -62,17 +130,17 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 
 	Describe("unsupported seed generation", func() {
 		BeforeEach(func() {
-			ct := &ClusterTemplate{
+			ct := &provisioningv1alpha1.ClusterTemplate{
 				ObjectMeta: metav1.ObjectMeta{Name: "seed-template.v1", Namespace: "default"},
-				Spec: ClusterTemplateSpec{
+				Spec: provisioningv1alpha1.ClusterTemplateSpec{
 					Name: "seed-template", Version: "v1",
-					TemplateDefaults: TemplateDefaults{
+					TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 						UpgradeDefaults: runtime.RawExtension{Raw: []byte(`{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"}}}`)},
 					},
 					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testTemplate)},
 				},
-				Status: ClusterTemplateStatus{Conditions: []metav1.Condition{{
-					Type: string(CTconditionTypes.Validated), Status: metav1.ConditionTrue,
+				Status: provisioningv1alpha1.ClusterTemplateStatus{Conditions: []metav1.Condition{{
+					Type: string(provisioningv1alpha1.CTconditionTypes.Validated), Status: metav1.ConditionTrue,
 				}}},
 			}
 			Expect(fakeClient.Create(ctx, ct)).To(Succeed())
@@ -82,23 +150,23 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 
 		It("rejects creation when seed generation comes from template defaults", func() {
 			_, err := validator.ValidateCreate(ctx, newPr)
-			Expect(err).To(MatchError(ContainSubstring(SeedGenerationUnsupportedMessage)))
+			Expect(err).To(MatchError(ContainSubstring(validation.SeedGenerationUnsupportedMessage)))
 		})
 
 		It("rejects creation when seed generation comes from request parameters", func() {
-			ct := &ClusterTemplate{}
+			ct := &provisioningv1alpha1.ClusterTemplate{}
 			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "seed-template.v1", Namespace: "default"}, ct)).To(Succeed())
 			ct.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{}`)
 			Expect(fakeClient.Update(ctx, ct)).To(Succeed())
 			newPr.Spec.TemplateParameters.Raw = []byte(`{"upgradeParameters":{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22"}}}`)
 
 			_, err := validator.ValidateCreate(ctx, newPr)
-			Expect(err).To(MatchError(ContainSubstring(SeedGenerationUnsupportedMessage)))
+			Expect(err).To(MatchError(ContainSubstring(validation.SeedGenerationUnsupportedMessage)))
 		})
 
 		It("rejects updates to a seed generation template", func() {
 			_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
-			Expect(err).To(MatchError(ContainSubstring(SeedGenerationUnsupportedMessage)))
+			Expect(err).To(MatchError(ContainSubstring(validation.SeedGenerationUnsupportedMessage)))
 		})
 	})
 
@@ -110,25 +178,25 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 
 		BeforeEach(func() {
 			// Create a new ClusterTemplate
-			newCt := &ClusterTemplate{
+			newCt := &provisioningv1alpha1.ClusterTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      testClusterTemplateB + "." + testVersionB,
 					Namespace: "default",
 				},
-				Spec: ClusterTemplateSpec{
+				Spec: provisioningv1alpha1.ClusterTemplateSpec{
 					Name:       testClusterTemplateB,
 					Version:    testVersionB,
 					TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
-					TemplateDefaults: TemplateDefaults{
+					TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 						ClusterInstanceDefaults: "clusterinstance-defaults-v1",
 						PolicyTemplateDefaults:  "policytemplate-defaults-v1",
 					},
 					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testTemplate)},
 				},
-				Status: ClusterTemplateStatus{
+				Status: provisioningv1alpha1.ClusterTemplateStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   string(CTconditionTypes.Validated),
+							Type:   string(provisioningv1alpha1.CTconditionTypes.Validated),
 							Status: metav1.ConditionTrue,
 						},
 					},
@@ -144,13 +212,13 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 			})
 
 			It("should allow the change when the ProvisioningRequest is fulfilled", func() {
-				newPr.Status.ProvisioningStatus.ProvisioningPhase = StateFulfilled
+				newPr.Status.ProvisioningStatus.ProvisioningPhase = provisioningv1alpha1.StateFulfilled
 				_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should allow the change when the ProvisioningRequest is failed", func() {
-				newPr.Status.ProvisioningStatus.ProvisioningPhase = StateFailed
+				newPr.Status.ProvisioningStatus.ProvisioningPhase = provisioningv1alpha1.StateFailed
 				_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
 				Expect(err).ToNot(HaveOccurred())
 			})
@@ -233,25 +301,25 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				"type": "object"
 			}`
 
-				ct := &ClusterTemplate{
+				ct := &provisioningv1alpha1.ClusterTemplate{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "clustertemplate-a.v1.0.1",
 						Namespace: "default",
 					},
-					Spec: ClusterTemplateSpec{
+					Spec: provisioningv1alpha1.ClusterTemplateSpec{
 						Name:       "clustertemplate-a",
 						Version:    "v1.0.1",
 						TemplateID: "test-template-id",
-						TemplateDefaults: TemplateDefaults{
+						TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 							ClusterInstanceDefaults: "defaults-v1",
 							PolicyTemplateDefaults:  "policy-defaults-v1",
 						},
 						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testSchema)},
 					},
-					Status: ClusterTemplateStatus{
+					Status: provisioningv1alpha1.ClusterTemplateStatus{
 						Conditions: []metav1.Condition{
 							{
-								Type:   string(CTconditionTypes.Validated),
+								Type:   string(provisioningv1alpha1.CTconditionTypes.Validated),
 								Status: metav1.ConditionTrue,
 							},
 						},
@@ -260,11 +328,11 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				Expect(fakeClient.Create(ctx, ct)).To(Succeed())
 
 				// Base ProvisioningRequest with ClusterInstance parameters
-				oldPr = &ProvisioningRequest{
+				oldPr = &provisioningv1alpha1.ProvisioningRequest{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "123e4567-e89b-12d3-a456-426614174000",
 					},
-					Spec: ProvisioningRequestSpec{
+					Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 						Name:            "cluster-1",
 						TemplateName:    "clustertemplate-a",
 						TemplateVersion: "v1.0.1",
@@ -302,9 +370,9 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				BeforeEach(func() {
 					newPr.Status.Conditions = []metav1.Condition{
 						{
-							Type:   string(PRconditionTypes.ClusterProvisioned),
+							Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
 							Status: metav1.ConditionFalse,
-							Reason: string(CRconditionReasons.InProgress),
+							Reason: string(provisioningv1alpha1.CRconditionReasons.InProgress),
 						},
 					}
 				})
@@ -530,9 +598,9 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				BeforeEach(func() {
 					newPr.Status.Conditions = []metav1.Condition{
 						{
-							Type:   string(PRconditionTypes.ClusterProvisioned),
+							Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
 							Status: metav1.ConditionTrue,
-							Reason: string(CRconditionReasons.Completed),
+							Reason: string(provisioningv1alpha1.CRconditionReasons.Completed),
 						},
 					}
 				})
@@ -1018,9 +1086,9 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 			}`)
 
 					newPr.Status.Conditions = append(newPr.Status.Conditions, metav1.Condition{
-						Type:   string(PRconditionTypes.UpgradeCompleted),
+						Type:   string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted),
 						Status: metav1.ConditionFalse,
-						Reason: string(CRconditionReasons.InProgress),
+						Reason: string(provisioningv1alpha1.CRconditionReasons.InProgress),
 					})
 
 					// Add a second worker node
@@ -1065,9 +1133,9 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				It("should allow all changes when condition is Unknown", func() {
 					newPr.Status.Conditions = []metav1.Condition{
 						{
-							Type:   string(PRconditionTypes.ClusterProvisioned),
+							Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
 							Status: metav1.ConditionUnknown,
-							Reason: string(CRconditionReasons.Unknown),
+							Reason: string(provisioningv1alpha1.CRconditionReasons.Unknown),
 						},
 					}
 
@@ -1094,9 +1162,9 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				It("should allow all changes when condition is Failed", func() {
 					newPr.Status.Conditions = []metav1.Condition{
 						{
-							Type:   string(PRconditionTypes.ClusterProvisioned),
+							Type:   string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned),
 							Status: metav1.ConditionFalse,
-							Reason: string(CRconditionReasons.Failed),
+							Reason: string(provisioningv1alpha1.CRconditionReasons.Failed),
 						},
 					}
 
@@ -1125,25 +1193,25 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 		Context("When HardwareProvisioned condition is TimedOut or Failed", func() {
 			BeforeEach(func() {
 				// Create ClusterTemplate for validation
-				ct := &ClusterTemplate{
+				ct := &provisioningv1alpha1.ClusterTemplate{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "clustertemplate-a.v1.0.1",
 						Namespace: "default",
 					},
-					Spec: ClusterTemplateSpec{
+					Spec: provisioningv1alpha1.ClusterTemplateSpec{
 						Name:       "clustertemplate-a",
 						Version:    "v1.0.1",
 						TemplateID: "test-template-id",
-						TemplateDefaults: TemplateDefaults{
+						TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 							ClusterInstanceDefaults: "defaults-v1",
 							PolicyTemplateDefaults:  "policy-defaults-v1",
 						},
 						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testTemplate)},
 					},
-					Status: ClusterTemplateStatus{
+					Status: provisioningv1alpha1.ClusterTemplateStatus{
 						Conditions: []metav1.Condition{
 							{
-								Type:   string(CTconditionTypes.Validated),
+								Type:   string(provisioningv1alpha1.CTconditionTypes.Validated),
 								Status: metav1.ConditionTrue,
 							},
 						},
@@ -1152,32 +1220,32 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				Expect(fakeClient.Create(ctx, ct)).To(Succeed())
 
 				// Create ClusterTemplate-b that will be used by tests
-				newCt := &ClusterTemplate{
+				newCt := &provisioningv1alpha1.ClusterTemplate{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      testClusterTemplateB + "." + testVersionB,
 						Namespace: "default",
 					},
-					Spec: ClusterTemplateSpec{
+					Spec: provisioningv1alpha1.ClusterTemplateSpec{
 						Name:       testClusterTemplateB,
 						Version:    testVersionB,
 						TemplateID: "test-template-id-b",
-						TemplateDefaults: TemplateDefaults{
+						TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 							ClusterInstanceDefaults: "defaults-v1",
 							PolicyTemplateDefaults:  "policy-defaults-v1",
 						},
 						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testTemplate)},
 					},
-					Status: ClusterTemplateStatus{
+					Status: provisioningv1alpha1.ClusterTemplateStatus{
 						Conditions: []metav1.Condition{
 							{
-								Type:   string(CTconditionTypes.Validated),
+								Type:   string(provisioningv1alpha1.CTconditionTypes.Validated),
 								Status: metav1.ConditionTrue,
 							},
 						},
 					},
 				}
 				// Create only if it doesn't exist (to avoid conflicts between tests)
-				existing := &ClusterTemplate{}
+				existing := &provisioningv1alpha1.ClusterTemplate{}
 				if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(newCt), existing); err != nil {
 					Expect(fakeClient.Create(ctx, newCt)).To(Succeed())
 				}
@@ -1185,9 +1253,9 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				// Set HardwareProvisioned condition to TimedOut
 				newPr.Status.Conditions = []metav1.Condition{
 					{
-						Type:   string(PRconditionTypes.HardwareProvisioned),
+						Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
 						Status: metav1.ConditionFalse,
-						Reason: string(CRconditionReasons.TimedOut),
+						Reason: string(provisioningv1alpha1.CRconditionReasons.TimedOut),
 					},
 				}
 			})
@@ -1233,9 +1301,9 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				// Set HardwareProvisioned condition to Failed
 				newPr.Status.Conditions = []metav1.Condition{
 					{
-						Type:   string(PRconditionTypes.HardwareProvisioned),
+						Type:   string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned),
 						Status: metav1.ConditionFalse,
-						Reason: string(CRconditionReasons.Failed),
+						Reason: string(provisioningv1alpha1.CRconditionReasons.Failed),
 					},
 				}
 
@@ -1254,26 +1322,26 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 	Describe("ValidateCreate - HwProfile Validation", func() {
 		Context("when HwMgmtDefaults is empty in ClusterTemplate", func() {
 			It("should skip hwProfile validation", func() {
-				ct := &ClusterTemplate{
+				ct := &provisioningv1alpha1.ClusterTemplate{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "clustertemplate-a.v1.0.1",
 						Namespace: "default",
 					},
-					Spec: ClusterTemplateSpec{
+					Spec: provisioningv1alpha1.ClusterTemplateSpec{
 						Name:       "clustertemplate-a",
 						Version:    "v1.0.1",
 						TemplateID: "test-template-id",
-						TemplateDefaults: TemplateDefaults{
+						TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 							ClusterInstanceDefaults: "defaults-v1",
 							PolicyTemplateDefaults:  "policy-defaults-v1",
-							HwMgmtDefaults:          HwMgmtDefaults{}, // empty = hw provisioning skipped
+							HwMgmtDefaults:          provisioningv1alpha1.HwMgmtDefaults{},
 						},
 						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testTemplate)},
 					},
-					Status: ClusterTemplateStatus{
+					Status: provisioningv1alpha1.ClusterTemplateStatus{
 						Conditions: []metav1.Condition{
 							{
-								Type:   string(CTconditionTypes.Validated),
+								Type:   string(provisioningv1alpha1.CTconditionTypes.Validated),
 								Status: metav1.ConditionTrue,
 							},
 						},
@@ -1281,11 +1349,11 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				}
 				Expect(fakeClient.Create(ctx, ct)).To(Succeed())
 
-				pr := &ProvisioningRequest{
+				pr := &provisioningv1alpha1.ProvisioningRequest{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "123e4567-e89b-12d3-a456-426614174000",
 					},
-					Spec: ProvisioningRequestSpec{
+					Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 						Name:            "cluster-1",
 						TemplateName:    "clustertemplate-a",
 						TemplateVersion: "v1.0.1",
@@ -1304,22 +1372,22 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 		})
 
 		Context("when HwMgmtDefaults has nodeGroupData", func() {
-			var ct *ClusterTemplate
+			var ct *provisioningv1alpha1.ClusterTemplate
 
 			BeforeEach(func() {
-				ct = &ClusterTemplate{
+				ct = &provisioningv1alpha1.ClusterTemplate{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "clustertemplate-hw.v1.0.0",
 						Namespace: "default",
 					},
-					Spec: ClusterTemplateSpec{
+					Spec: provisioningv1alpha1.ClusterTemplateSpec{
 						Name:       "clustertemplate-hw",
 						Version:    "v1.0.0",
 						TemplateID: "test-hw-template-id",
-						TemplateDefaults: TemplateDefaults{
+						TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 							ClusterInstanceDefaults: "defaults-v1",
 							PolicyTemplateDefaults:  "policy-defaults-v1",
-							HwMgmtDefaults: HwMgmtDefaults{
+							HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 								NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 									{Name: "controller", Role: "master"},
 								},
@@ -1327,10 +1395,10 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 						},
 						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testTemplate)},
 					},
-					Status: ClusterTemplateStatus{
+					Status: provisioningv1alpha1.ClusterTemplateStatus{
 						Conditions: []metav1.Condition{
 							{
-								Type:   string(CTconditionTypes.Validated),
+								Type:   string(provisioningv1alpha1.CTconditionTypes.Validated),
 								Status: metav1.ConditionTrue,
 							},
 						},
@@ -1340,11 +1408,11 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 			})
 
 			It("should reject a PR referencing a non-existent HardwareProfile", func() {
-				pr := &ProvisioningRequest{
+				pr := &provisioningv1alpha1.ProvisioningRequest{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "123e4567-e89b-12d3-a456-426614174001",
 					},
-					Spec: ProvisioningRequestSpec{
+					Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 						Name:            "cluster-hw-1",
 						TemplateName:    "clustertemplate-hw",
 						TemplateVersion: "v1.0.0",
@@ -1376,11 +1444,11 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				}
 				Expect(fakeClient.Create(ctx, hwProfile)).To(Succeed())
 
-				pr := &ProvisioningRequest{
+				pr := &provisioningv1alpha1.ProvisioningRequest{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "123e4567-e89b-12d3-a456-426614174002",
 					},
-					Spec: ProvisioningRequestSpec{
+					Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 						Name:            "cluster-hw-2",
 						TemplateName:    "clustertemplate-hw",
 						TemplateVersion: "v1.0.0",
@@ -1403,11 +1471,11 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 			})
 
 			It("should skip hwProfile validation when PR has no hwMgmtParameters at all", func() {
-				pr := &ProvisioningRequest{
+				pr := &provisioningv1alpha1.ProvisioningRequest{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "123e4567-e89b-12d3-a456-426614174004",
 					},
-					Spec: ProvisioningRequestSpec{
+					Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 						Name:            "cluster-hw-4",
 						TemplateName:    "clustertemplate-hw",
 						TemplateVersion: "v1.0.0",
@@ -1425,11 +1493,11 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 			})
 
 			It("should skip validation when hwMgmtParameters has no nodeGroupData", func() {
-				pr := &ProvisioningRequest{
+				pr := &provisioningv1alpha1.ProvisioningRequest{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "123e4567-e89b-12d3-a456-426614174005",
 					},
-					Spec: ProvisioningRequestSpec{
+					Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 						Name:            "cluster-hw-5",
 						TemplateName:    "clustertemplate-hw",
 						TemplateVersion: "v1.0.0",
@@ -1450,11 +1518,11 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 			})
 
 			It("should reject when hwMgmtParameters is not an object", func() {
-				pr := &ProvisioningRequest{
+				pr := &provisioningv1alpha1.ProvisioningRequest{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "123e4567-e89b-12d3-a456-426614174007",
 					},
-					Spec: ProvisioningRequestSpec{
+					Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 						Name:            "cluster-hw-7",
 						TemplateName:    "clustertemplate-hw",
 						TemplateVersion: "v1.0.0",
@@ -1474,11 +1542,11 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 			})
 
 			It("should skip validation when nodeGroupData is not an array", func() {
-				pr := &ProvisioningRequest{
+				pr := &provisioningv1alpha1.ProvisioningRequest{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "123e4567-e89b-12d3-a456-426614174008",
 					},
-					Spec: ProvisioningRequestSpec{
+					Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 						Name:            "cluster-hw-8",
 						TemplateName:    "clustertemplate-hw",
 						TemplateVersion: "v1.0.0",
@@ -1499,11 +1567,11 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 			})
 
 			It("should skip validation when nodeGroupData entry has no hwProfile", func() {
-				pr := &ProvisioningRequest{
+				pr := &provisioningv1alpha1.ProvisioningRequest{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "123e4567-e89b-12d3-a456-426614174006",
 					},
-					Spec: ProvisioningRequestSpec{
+					Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 						Name:            "cluster-hw-6",
 						TemplateName:    "clustertemplate-hw",
 						TemplateVersion: "v1.0.0",
@@ -1526,11 +1594,11 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 			})
 
 			It("should skip validation when PR has no hwMgmtParameters", func() {
-				pr := &ProvisioningRequest{
+				pr := &provisioningv1alpha1.ProvisioningRequest{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "123e4567-e89b-12d3-a456-426614174003",
 					},
-					Spec: ProvisioningRequestSpec{
+					Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 						Name:            "cluster-hw-3",
 						TemplateName:    "clustertemplate-hw",
 						TemplateVersion: "v1.0.0",
@@ -1549,68 +1617,21 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 		})
 	})
 
-	Describe("SchemaDefinesHwMgmtParameters", func() {
-		It("should return true when schema defines hwMgmtParameters", func() {
-			ct := &ClusterTemplate{
-				Spec: ClusterTemplateSpec{
-					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testTemplate)},
-				},
-			}
-			Expect(SchemaDefinesHwMgmtParameters(ct)).To(BeTrue())
-		})
-
-		It("should return false when schema has no hwMgmtParameters", func() {
-			ct := &ClusterTemplate{
-				Spec: ClusterTemplateSpec{
-					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`{
-						"properties": {
-							"nodeClusterName": {"type": "string"}
-						}
-					}`)},
-				},
-			}
-			Expect(SchemaDefinesHwMgmtParameters(ct)).To(BeFalse())
-		})
-
-		It("should return false when schema is nil", func() {
-			ct := &ClusterTemplate{}
-			Expect(SchemaDefinesHwMgmtParameters(ct)).To(BeFalse())
-		})
-
-		It("should return false when schema is invalid JSON", func() {
-			ct := &ClusterTemplate{
-				Spec: ClusterTemplateSpec{
-					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`not json`)},
-				},
-			}
-			Expect(SchemaDefinesHwMgmtParameters(ct)).To(BeFalse())
-		})
-
-		It("should return false when schema has no properties key", func() {
-			ct := &ClusterTemplate{
-				Spec: ClusterTemplateSpec{
-					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`{"type": "object"}`)},
-				},
-			}
-			Expect(SchemaDefinesHwMgmtParameters(ct)).To(BeFalse())
-		})
-	})
-
 	Describe("ValidateTemplateInputMatchesSchema - hwMgmt stripping", func() {
 		It("should not reject partial hwMgmtParameters overrides", func() {
-			ct := &ClusterTemplate{
+			ct := &provisioningv1alpha1.ClusterTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "ct-hwmgmt-test.v1",
 					Namespace: "default",
 				},
-				Spec: ClusterTemplateSpec{
+				Spec: provisioningv1alpha1.ClusterTemplateSpec{
 					Name:       "ct-hwmgmt-test",
 					Version:    "v1",
 					TemplateID: "test-id",
-					TemplateDefaults: TemplateDefaults{
+					TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 						ClusterInstanceDefaults: "defaults-v1",
 						PolicyTemplateDefaults:  "policy-defaults-v1",
-						HwMgmtDefaults: HwMgmtDefaults{
+						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 								{Name: "controller", Role: "master"},
 							},
@@ -1618,18 +1639,18 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 					},
 					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testTemplate)},
 				},
-				Status: ClusterTemplateStatus{
+				Status: provisioningv1alpha1.ClusterTemplateStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   string(CTconditionTypes.Validated),
+							Type:   string(provisioningv1alpha1.CTconditionTypes.Validated),
 							Status: metav1.ConditionTrue,
 						},
 					},
 				},
 			}
 
-			pr := &ProvisioningRequest{
-				Spec: ProvisioningRequestSpec{
+			pr := &provisioningv1alpha1.ProvisioningRequest{
+				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 					TemplateParameters: runtime.RawExtension{Raw: []byte(`{
 						"nodeClusterName": "test",
 						"oCloudSiteId": "site-1",
@@ -1645,18 +1666,18 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 			}
 
 			// Should not fail — hwMgmtParameters properties are stripped before schema validation
-			err := pr.ValidateTemplateInputMatchesSchema(ct)
+			err := validation.ValidateTemplateInputMatchesSchema(ct.Name, ct.Spec.TemplateParameterSchema.Raw, pr.Spec.TemplateParameters.Raw)
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 
 	Describe("ValidateDelete", func() {
 		It("should return a warning about deletion time", func() {
-			pr := &ProvisioningRequest{
+			pr := &provisioningv1alpha1.ProvisioningRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "123e4567-e89b-12d3-a456-426614174000",
 				},
-				Spec: ProvisioningRequestSpec{
+				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 					Name: "cluster-1",
 				},
 			}
@@ -1669,18 +1690,18 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 		})
 
 		It("should block deletion when hardware configuration is in progress", func() {
-			pr := &ProvisioningRequest{
+			pr := &provisioningv1alpha1.ProvisioningRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "123e4567-e89b-12d3-a456-426614174001",
 				},
-				Spec: ProvisioningRequestSpec{
+				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 					Name: "cluster-2",
 				},
 			}
 			Expect(fakeClient.Create(ctx, pr)).To(Succeed())
 
 			pr.Status.ProvisioningStatus.ProvisioningDetails = HardwareConfigInProgress
-			pr.Status.ProvisioningStatus.ProvisioningPhase = StateProgressing
+			pr.Status.ProvisioningStatus.ProvisioningPhase = provisioningv1alpha1.StateProgressing
 			Expect(fakeClient.Status().Update(ctx, pr)).To(Succeed())
 
 			_, err := validator.ValidateDelete(ctx, pr)
@@ -1757,26 +1778,26 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 }`
 
 		BeforeEach(func() {
-			ct := &ClusterTemplate{
+			ct := &provisioningv1alpha1.ClusterTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "clustertemplate-upgrade.v1.0.0",
 					Namespace: "default",
 				},
-				Spec: ClusterTemplateSpec{
+				Spec: provisioningv1alpha1.ClusterTemplateSpec{
 					Name:       "clustertemplate-upgrade",
 					Version:    "v1.0.0",
 					Release:    "4.17.0",
 					TemplateID: "upgrade-template-id",
-					TemplateDefaults: TemplateDefaults{
+					TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 						ClusterInstanceDefaults: "defaults-v1",
 						PolicyTemplateDefaults:  "policy-defaults-v1",
 					},
 					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(upgradeTemplateSchema)},
 				},
-				Status: ClusterTemplateStatus{
+				Status: provisioningv1alpha1.ClusterTemplateStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   string(CTconditionTypes.Validated),
+							Type:   string(provisioningv1alpha1.CTconditionTypes.Validated),
 							Status: metav1.ConditionTrue,
 						},
 					},
@@ -1786,11 +1807,11 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 		})
 
 		It("should reject upgradeParameters where desiredUpdate.version does not match release", func() {
-			pr := &ProvisioningRequest{
+			pr := &provisioningv1alpha1.ProvisioningRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "123e4567-e89b-12d3-a456-426614174010",
 				},
-				Spec: ProvisioningRequestSpec{
+				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 					Name:            "cluster-upgrade-1",
 					TemplateName:    "clustertemplate-upgrade",
 					TemplateVersion: "v1.0.0",
@@ -1824,11 +1845,11 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 		})
 
 		It("should reject upgradeParameters with invalid intermediateVersion", func() {
-			pr := &ProvisioningRequest{
+			pr := &provisioningv1alpha1.ProvisioningRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "123e4567-e89b-12d3-a456-426614174011",
 				},
-				Spec: ProvisioningRequestSpec{
+				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 					Name:            "cluster-upgrade-2",
 					TemplateName:    "clustertemplate-upgrade",
 					TemplateVersion: "v1.0.0",
@@ -1858,11 +1879,11 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 		})
 
 		It("should reject upgradeParameters with wrong intermediateVersion minor", func() {
-			pr := &ProvisioningRequest{
+			pr := &provisioningv1alpha1.ProvisioningRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "123e4567-e89b-12d3-a456-426614174012",
 				},
-				Spec: ProvisioningRequestSpec{
+				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 					Name:            "cluster-upgrade-3",
 					TemplateName:    "clustertemplate-upgrade",
 					TemplateVersion: "v1.0.0",
@@ -1892,11 +1913,11 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 		})
 
 		It("should reject upgradeParameters with invalid clusterUpgradeTimeout", func() {
-			pr := &ProvisioningRequest{
+			pr := &provisioningv1alpha1.ProvisioningRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "123e4567-e89b-12d3-a456-426614174013",
 				},
-				Spec: ProvisioningRequestSpec{
+				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 					Name:            "cluster-upgrade-4",
 					TemplateName:    "clustertemplate-upgrade",
 					TemplateVersion: "v1.0.0",
@@ -1926,11 +1947,11 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 		})
 
 		It("should accept valid upgradeParameters", func() {
-			pr := &ProvisioningRequest{
+			pr := &provisioningv1alpha1.ProvisioningRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "123e4567-e89b-12d3-a456-426614174014",
 				},
-				Spec: ProvisioningRequestSpec{
+				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 					Name:            "cluster-upgrade-5",
 					TemplateName:    "clustertemplate-upgrade",
 					TemplateVersion: "v1.0.0",
@@ -1965,11 +1986,11 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 		})
 
 		It("should accept ProvisioningRequests with no upgradeParameters", func() {
-			pr := &ProvisioningRequest{
+			pr := &provisioningv1alpha1.ProvisioningRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "123e4567-e89b-12d3-a456-426614174015",
 				},
-				Spec: ProvisioningRequestSpec{
+				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 					Name:            "cluster-upgrade-6",
 					TemplateName:    "clustertemplate-upgrade",
 					TemplateVersion: "v1.0.0",
@@ -1987,11 +2008,11 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 		})
 
 		It("should accept a partial clusterVersion override with only a timeout", func() {
-			pr := &ProvisioningRequest{
+			pr := &provisioningv1alpha1.ProvisioningRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "123e4567-e89b-12d3-a456-426614174016",
 				},
-				Spec: ProvisioningRequestSpec{
+				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 					Name:            "cluster-upgrade-7",
 					TemplateName:    "clustertemplate-upgrade",
 					TemplateVersion: "v1.0.0",
@@ -2020,11 +2041,11 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 		})
 
 		It("should reject zero clusterUpgradeTimeout", func() {
-			pr := &ProvisioningRequest{
+			pr := &provisioningv1alpha1.ProvisioningRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "123e4567-e89b-12d3-a456-426614174018",
 				},
-				Spec: ProvisioningRequestSpec{
+				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
 					Name:            "cluster-upgrade-9",
 					TemplateName:    "clustertemplate-upgrade",
 					TemplateVersion: "v1.0.0",

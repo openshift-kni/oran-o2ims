@@ -4,11 +4,15 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 */
 
-package upgrade
+package provisioning
 
 import (
 	"strings"
 	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 )
 
 func TestRequestedWorkerPoolUpgradeThrough(t *testing.T) {
@@ -67,3 +71,23 @@ func TestRequestedWorkerPoolUpgradeThroughMalformedInput(t *testing.T) {
 		})
 	}
 }
+
+var _ = Describe("WorkerPoolUpgradeStatus.StageIndex", func() {
+	It("returns no authorized stage for a missing status", func() {
+		var status *provisioningv1alpha1.WorkerPoolUpgradeStatus
+		Expect(StageIndex(status, "canary")).To(Equal(-1))
+	})
+
+	DescribeTable("StageIndex",
+		func(name string, expected int) {
+			status := &provisioningv1alpha1.WorkerPoolUpgradeStatus{Stages: []provisioningv1alpha1.WorkerPoolUpgradeStage{
+				{Name: "canary"}, {Name: "remaining"},
+			}}
+			Expect(StageIndex(status, name)).To(Equal(expected))
+		},
+		Entry("no stage authorized", "", -1),
+		Entry("first stage", "canary", 0),
+		Entry("last stage", "remaining", 1),
+		Entry("unknown stage", "missing", -1),
+	)
+})

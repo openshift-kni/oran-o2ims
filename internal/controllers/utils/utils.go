@@ -21,6 +21,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/openshift-kni/oran-o2ims/internal/validation"
+
 	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/util/net"
 
@@ -554,7 +556,7 @@ func GetDefaultsFromConfigMap(ctx context.Context, c client.Client, configMapNam
 		)
 	}
 	// Get the schema to check the default values against it.
-	subSchema, err := provisioningv1alpha1.ExtractSubSchema(schema, schemaKey)
+	subSchema, err := validation.ExtractSubSchema(schema, schemaKey)
 	if err != nil {
 		return nil, fmt.Errorf("could not extract subSchema: %w", err)
 	}

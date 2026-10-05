@@ -176,25 +176,6 @@ const (
 // HwMgmtNodeGroupDataKey is the node group list in hwMgmtDefaults / hwMgmtParameters data.
 const HwMgmtNodeGroupDataKey = "nodeGroupData"
 
-var (
-	// IgnoredClusterInstanceFields contains path patterns for fields that should be ignored
-	// when comparing a rendered ClusterInstance spec (already in flat nodes format) with an
-	// existing one, for example during upgrade handling.
-	// The wildcard "*" is used to match any index in a list.
-	IgnoredClusterInstanceFields = [][]string{
-		// Node-level ignored fields
-		{constants.ClusterInstanceNodesKey, "*", "bmcAddress"},
-		{constants.ClusterInstanceNodesKey, "*", "bmcCredentialsName"},
-		{constants.ClusterInstanceNodesKey, "*", "bootMACAddress"},
-		{constants.ClusterInstanceNodesKey, "*", "hostRef"},
-		{constants.ClusterInstanceNodesKey, "*", "nodeNetwork", "interfaces", "*", "macAddress"},
-		// The interface labels are not part of the ClusterInstance.
-		{constants.ClusterInstanceNodesKey, "*", "nodeNetwork", "interfaces", "*", "label"},
-		// modified for upgrade
-		{"suppressedManifests"},
-	}
-)
-
 // PolicyTemplate constants
 const (
 	PolicyTemplateDefaultsConfigmapKey = "policytemplate-defaults"

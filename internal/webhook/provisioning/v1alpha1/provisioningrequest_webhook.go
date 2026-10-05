@@ -13,6 +13,9 @@ import (
 	"reflect"
 	"strings"
 
+	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/provisioning"
+
 	"github.com/google/uuid"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -22,7 +25,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	clustervalidation "github.com/openshift-kni/oran-o2ims/internal/validation"
+	"github.com/openshift-kni/oran-o2ims/internal/validation"
 )
 
 const HardwareConfigInProgress = "Hardware configuring is in progress"
@@ -30,10 +33,10 @@ const HardwareConfigInProgress = "Hardware configuring is in progress"
 // log is for logging in this package.
 var provisioningrequestlog = logf.Log.WithName("provisioningrequest-webhook")
 
-// SetupWebhookWithManager will setup the manager to manage the webhooks
-func (r *ProvisioningRequest) SetupWebhookWithManager(mgr ctrl.Manager) error {
+// SetupProvisioningRequestWebhookWithManager registers the ProvisioningRequest webhook.
+func SetupProvisioningRequestWebhookWithManager(mgr ctrl.Manager) error {
 	// nolint:wrapcheck
-	return ctrl.NewWebhookManagedBy(mgr, &ProvisioningRequest{}).
+	return ctrl.NewWebhookManagedBy(mgr, &provisioningv1alpha1.ProvisioningRequest{}).
 		WithValidator(&provisioningRequestValidator{Client: mgr.GetClient()}).
 		Complete()
 }
@@ -47,10 +50,10 @@ type provisioningRequestValidator struct {
 	client.Client
 }
 
-var _ admission.Validator[*ProvisioningRequest] = &provisioningRequestValidator{}
+var _ admission.Validator[*provisioningv1alpha1.ProvisioningRequest] = &provisioningRequestValidator{}
 
 // ValidateCreate implements admission.Validator
-func (v *provisioningRequestValidator) ValidateCreate(ctx context.Context, pr *ProvisioningRequest) (admission.Warnings, error) {
+func (v *provisioningRequestValidator) ValidateCreate(ctx context.Context, pr *provisioningv1alpha1.ProvisioningRequest) (admission.Warnings, error) {
 	provisioningrequestlog.Info("validate create", "name", pr.Spec.Name)
 
 	// Validate that metadata.name is a valid UUID
@@ -67,7 +70,7 @@ func (v *provisioningRequestValidator) ValidateCreate(ctx context.Context, pr *P
 }
 
 // ValidateUpdate implements admission.Validator
-func (v *provisioningRequestValidator) ValidateUpdate(ctx context.Context, oldPr, newPr *ProvisioningRequest) (admission.Warnings, error) {
+func (v *provisioningRequestValidator) ValidateUpdate(ctx context.Context, oldPr, newPr *provisioningv1alpha1.ProvisioningRequest) (admission.Warnings, error) {
 	provisioningrequestlog.Info("validate update", "name", oldPr.Name)
 
 	if !newPr.DeletionTimestamp.IsZero() {
@@ -88,7 +91,7 @@ func (v *provisioningRequestValidator) ValidateUpdate(ctx context.Context, oldPr
 
 // validateSeedGenerationUpdate prevents an active or completed one-shot run
 // from accepting seed input that the controller will never use.
-func validateSeedGenerationUpdate(oldPr, newPr *ProvisioningRequest) error {
+func validateSeedGenerationUpdate(oldPr, newPr *provisioningv1alpha1.ProvisioningRequest) error {
 	details := oldPr.Status.Extensions.ClusterDetails
 	if details == nil || details.SeedGenerationStatus == nil || details.SeedGenerationStatus.StartedAt == nil {
 		return nil
@@ -112,7 +115,7 @@ func validateSeedGenerationUpdate(oldPr, newPr *ProvisioningRequest) error {
 	return nil
 }
 
-func seedGenerationParameters(pr *ProvisioningRequest) (map[string]any, error) {
+func seedGenerationParameters(pr *provisioningv1alpha1.ProvisioningRequest) (map[string]any, error) {
 	if len(pr.Spec.TemplateParameters.Raw) == 0 {
 		return map[string]any{}, nil
 	}
@@ -141,10 +144,10 @@ func seedGenerationParameters(pr *ProvisioningRequest) (map[string]any, error) {
 }
 
 // ValidateDelete implements admission.Validator
-func (v *provisioningRequestValidator) ValidateDelete(ctx context.Context, pr *ProvisioningRequest) (admission.Warnings, error) {
+func (v *provisioningRequestValidator) ValidateDelete(ctx context.Context, pr *provisioningv1alpha1.ProvisioningRequest) (admission.Warnings, error) {
 
 	// Re-fetch the object to ensure status is available
-	fetched := &ProvisioningRequest{}
+	fetched := &provisioningv1alpha1.ProvisioningRequest{}
 	key := client.ObjectKey{Name: pr.Name, Namespace: pr.Namespace}
 	if err := v.Client.Get(ctx, key, fetched); err != nil {
 		return nil, fmt.Errorf("failed to get latest ProvisioningRequest: %w", err)
@@ -153,7 +156,7 @@ func (v *provisioningRequestValidator) ValidateDelete(ctx context.Context, pr *P
 	provisioningrequestlog.Info("validate delete", "name", fetched.Name)
 
 	if fetched.Status.ProvisioningStatus.ProvisioningDetails == HardwareConfigInProgress &&
-		fetched.Status.ProvisioningStatus.ProvisioningPhase == StateProgressing {
+		fetched.Status.ProvisioningStatus.ProvisioningPhase == provisioningv1alpha1.StateProgressing {
 		return nil, fmt.Errorf("deleting a ProvisioningRequest is disallowed while post-install hardware configuration is in progress")
 	}
 
@@ -165,28 +168,30 @@ func (v *provisioningRequestValidator) ValidateDelete(ctx context.Context, pr *P
 	return warnings, nil
 }
 
-func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Context, oldPr, newPr *ProvisioningRequest) error {
+func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Context, oldPr, newPr *provisioningv1alpha1.ProvisioningRequest) error {
 	clusterTemplate, err := v.getSupportedClusterTemplate(ctx, newPr)
 	if err != nil {
 		return err
 	}
 
-	if err := newPr.ValidateTemplateInputMatchesSchema(clusterTemplate); err != nil {
+	if err := validation.ValidateTemplateInputMatchesSchema(clusterTemplate.Name, clusterTemplate.Spec.TemplateParameterSchema.Raw, newPr.Spec.TemplateParameters.Raw); err != nil {
+		//nolint:wrapcheck // Preserve the admission error returned before the move.
 		return err
 	}
 
-	if err := newPr.ValidateHwMgmtHwProfiles(ctx, v.Client, clusterTemplate); err != nil {
+	if err := validateHwMgmtHwProfiles(ctx, v.Client, newPr); err != nil {
 		return err
 	}
 
-	if err := newPr.ValidateUpgradeInput(clusterTemplate); err != nil {
+	if err := validateUpgradeInput(newPr, clusterTemplate); err != nil {
 		return err
 	}
 
 	// We only validate the ClusterInstance input here, not the PolicyTemplate input since
 	// its schema is not just for ProvisioningRequest.
-	newPrClusterInstanceInput, err := newPr.ValidateClusterInstanceInputMatchesSchema(clusterTemplate)
+	newPrClusterInstanceInput, err := validation.ValidateClusterInstanceInputMatchesSchema(clusterTemplate.Name, clusterTemplate.Spec.TemplateParameterSchema.Raw, newPr.Spec.TemplateParameters.Raw)
 	if err != nil {
+		//nolint:wrapcheck // Preserve the admission error returned before the move.
 		return err
 	}
 
@@ -209,11 +214,11 @@ func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Contex
 	// Check if hardware provisioning has timed out or failed
 	// If so, reject any spec updates - user must delete and recreate the PR
 	hwProvisionedCond := meta.FindStatusCondition(
-		newPr.Status.Conditions, string(PRconditionTypes.HardwareProvisioned))
+		newPr.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareProvisioned))
 	if hwProvisionedCond != nil &&
 		hwProvisionedCond.Status == "False" &&
-		(hwProvisionedCond.Reason == string(CRconditionReasons.TimedOut) ||
-			hwProvisionedCond.Reason == string(CRconditionReasons.Failed)) {
+		(hwProvisionedCond.Reason == string(provisioningv1alpha1.CRconditionReasons.TimedOut) ||
+			hwProvisionedCond.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed)) {
 		// Compare specs to see if there's an actual spec change
 		if !reflect.DeepEqual(oldPr.Spec, newPr.Spec) {
 			return fmt.Errorf("hardware provisioning has timed out or failed. " +
@@ -223,17 +228,17 @@ func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Contex
 	}
 
 	crProvisionedCond := meta.FindStatusCondition(
-		newPr.Status.Conditions, string(PRconditionTypes.ClusterProvisioned))
+		newPr.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.ClusterProvisioned))
 	if crProvisionedCond == nil ||
-		crProvisionedCond.Reason == string(CRconditionReasons.Unknown) ||
-		crProvisionedCond.Reason == string(CRconditionReasons.Failed) {
+		crProvisionedCond.Reason == string(provisioningv1alpha1.CRconditionReasons.Unknown) ||
+		crProvisionedCond.Reason == string(provisioningv1alpha1.CRconditionReasons.Failed) {
 		return nil
 	}
 
 	// Validate updates for ClusterInstance input. Once cluster has started installation,
 	// updates are disallowed. After cluster installation is completed, only permissible
 	// fields can be updated.
-	oldPrClusterInstanceInput, err := ExtractMatchingInput(
+	oldPrClusterInstanceInput, err := validation.ExtractMatchingInput(
 		oldPr.Spec.TemplateParameters.Raw, constants.TemplateParamClusterInstance)
 	if err != nil {
 		return fmt.Errorf(
@@ -243,10 +248,10 @@ func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Contex
 	var disallowedFields, scalingNodes []string
 
 	// State-based validation with explicit logic
-	if crProvisionedCond.Reason == string(CRconditionReasons.InProgress) {
+	if crProvisionedCond.Reason == string(provisioningv1alpha1.CRconditionReasons.InProgress) {
 		// Block all changes during active cluster installation
 		// This includes field updates and node scaling to prevent interference with ongoing installation
-		disallowedFields, scalingNodes, err = FindClusterInstanceImmutableFieldUpdates(
+		disallowedFields, scalingNodes, err = validation.FindClusterInstanceImmutableFieldUpdates(
 			oldPrClusterInstanceInput.(map[string]any), newPrClusterInstanceInput.(map[string]any), [][]string{}, [][]string{})
 		if err != nil {
 			return fmt.Errorf("failed to find immutable field updates for ClusterInstance (%s): %w", newPr.Name, err)
@@ -259,12 +264,12 @@ func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Contex
 				"disallowed during cluster installation, detected changes in fields: %s", strings.Join(disallowedFields, ", "))
 		}
 
-	} else if crProvisionedCond.Reason == string(CRconditionReasons.Completed) {
+	} else if crProvisionedCond.Reason == string(provisioningv1alpha1.CRconditionReasons.Completed) {
 		// Allow specific fields and node scaling after installation completes
 		// This enables Day 2 operations like annotation/label updates and cluster scaling
-		disallowedFields, scalingNodes, err = FindClusterInstanceImmutableFieldUpdates(
+		disallowedFields, scalingNodes, err = validation.FindClusterInstanceImmutableFieldUpdates(
 			oldPrClusterInstanceInput.(map[string]any), newPrClusterInstanceInput.(map[string]any),
-			[][]string{}, AllowedClusterInstanceFields)
+			[][]string{}, validation.AllowedClusterInstanceFields)
 		if err != nil {
 			return fmt.Errorf("failed to find immutable field updates for ClusterInstance (%s): %w", newPr.Name, err)
 		}
@@ -275,7 +280,7 @@ func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Contex
 			// scaling during Pending, Unknown, Failed, TimedOut, and
 			// PreconditionChecksFailed states when the cluster may not be healthy.
 			upgradeCond := meta.FindStatusCondition(
-				newPr.Status.Conditions, string(PRconditionTypes.UpgradeCompleted))
+				newPr.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
 			if upgradeCond != nil && upgradeCond.Status != metav1.ConditionTrue {
 				return fmt.Errorf("node scaling is not supported while a cluster upgrade is in progress or incomplete")
 			}
@@ -304,26 +309,27 @@ func validatePRClusterName(clusterInstanceInput any) error {
 	if !ok || clusterName == "" {
 		return nil
 	}
-	if err := clustervalidation.ValidateClusterNameFormat(clusterName); err != nil {
+	if err := validation.ValidateClusterNameFormat(clusterName); err != nil {
 		return fmt.Errorf("clusterInstanceParameters.clusterName: %w", err)
 	}
-	if err := clustervalidation.ValidateClusterNameNotReserved(clusterName); err != nil {
+	if err := validation.ValidateClusterNameNotReserved(clusterName); err != nil {
 		return fmt.Errorf("clusterInstanceParameters.clusterName: %w", err)
 	}
 	return nil
 }
 
-func (v *provisioningRequestValidator) getSupportedClusterTemplate(ctx context.Context, pr *ProvisioningRequest) (*ClusterTemplate, error) {
-	clusterTemplate, err := pr.GetClusterTemplateRef(ctx, v.Client)
+func (v *provisioningRequestValidator) getSupportedClusterTemplate(ctx context.Context, pr *provisioningv1alpha1.ProvisioningRequest) (*provisioningv1alpha1.ClusterTemplate, error) {
+	clusterTemplate, err := provisioning.GetClusterTemplateRef(ctx, v.Client, pr)
 	if err != nil {
+		//nolint:wrapcheck // Preserve the admission error returned before the move.
 		return nil, err
 	}
-	seedGeneration, err := HasSeedGenerationConfig(clusterTemplate, pr)
+	seedGeneration, err := validation.HasSeedGenerationConfig(clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw, pr.Spec.TemplateParameters.Raw)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to inspect seed generation input: %w", err)
 	}
 	if seedGeneration {
-		return nil, fmt.Errorf("%s (ClusterTemplate %q)", SeedGenerationUnsupportedMessage, clusterTemplate.Name)
+		return nil, fmt.Errorf("%s (ClusterTemplate %q)", validation.SeedGenerationUnsupportedMessage, clusterTemplate.Name)
 	}
 	return clusterTemplate, nil
 }
