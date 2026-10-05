@@ -353,9 +353,9 @@ func (t *provisioningRequestReconcilerTask) handlePostProvisioning(ctx context.C
 			return requeueWithError(err)
 		}
 		if seedRequested {
-			// Phase 1 keeps seed requests inadmissible. This guard also protects
-			// against an unexpected request reaching post-provisioning before
-			// the later workflow packages are installed.
+			// Reject a seed request here unless seed generation has already
+			// reached a terminal state. This prevents unsupported requests from
+			// proceeding through normal post-provisioning.
 			if !seedGenerationTerminal(t.object) {
 				return requeueWithError(errors.New(provisioningv1alpha1.SeedGenerationUnsupportedMessage))
 			}

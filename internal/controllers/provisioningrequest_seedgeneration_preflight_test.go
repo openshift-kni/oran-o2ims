@@ -267,3 +267,28 @@ func TestValidateRegistryPushAccess(t *testing.T) {
 		t.Fatalf("push authorization=%t, upload cancellation=%t", pushAuthorized, uploadCancelled)
 	}
 }
+
+func TestSeedGenerationImageReferenceParsing(t *testing.T) {
+	for _, tc := range []struct {
+		image     string
+		registry  string
+		repo      string
+		wantError bool
+	}{
+		{image: "busybox:latest", registry: "docker.io", repo: "library/busybox"},
+		{image: "docker://quay.io/team/image:4.22", registry: "quay.io", repo: "team/image"},
+		{image: "oci://localhost:5000/team/image", registry: "localhost:5000", repo: "team/image"},
+		{image: "team/image:tag", registry: "docker.io", repo: "team/image"},
+		{image: "invalid?image", wantError: true},
+		{image: "https://quay.io/team/image", wantError: true},
+	} {
+		registry, repository, err := imageRepositoryFromPullSpec(tc.image)
+		if (err != nil) != tc.wantError {
+			t.Errorf("image=%q registry=%q repository=%q err=%v", tc.image, registry, repository, err)
+			continue
+		}
+		if err == nil && (registry != tc.registry || repository != tc.repo) {
+			t.Errorf("image=%q resolved to %s/%s, want %s/%s", tc.image, registry, repository, tc.registry, tc.repo)
+		}
+	}
+}

@@ -224,3 +224,28 @@ func TestSeedGenerationFinalizerCleanupUsesUID(t *testing.T) {
 		t.Fatalf("cleanup did not complete: clean=%t err=%v", clean, err)
 	}
 }
+
+func TestReconcileSeedGenerationPreflightFailsWhenSpokeIsNotReady(t *testing.T) {
+	ctx := context.Background()
+	started := metav1.Now()
+	pr := &provisioningv1alpha1.ProvisioningRequest{ObjectMeta: metav1.ObjectMeta{
+		Name: "seed-pr", UID: types.UID("pr-uid"),
+	}}
+	pr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
+		Name: "spoke",
+		SeedGenerationStatus: &provisioningv1alpha1.SeedGenerationStatus{
+			StartedAt: &started, TimeoutSeconds: 3600,
+		},
+	}
+	ctlrutils.SetStatusCondition(&pr.Status.Conditions,
+		provisioningv1alpha1.PRconditionTypes.SeedGenerationCompleted,
+		provisioningv1alpha1.CRconditionReasons.Validating, metav1.ConditionFalse, "validating")
+	c := newSeedTestClient(t, pr)
+	task := seedTestTask(pr, c)
+	if _, err := task.reconcileSeedGeneration(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !seedGenerationTerminal(pr) || seedGenerationCondition(pr).Reason != string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed) {
+		t.Fatalf("unready spoke did not fail preflight: %+v", pr.Status.Conditions)
+	}
+}

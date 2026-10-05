@@ -131,8 +131,8 @@ func (t *provisioningRequestReconcilerTask) seedGenerationNeedsFastPath() bool {
 	return seedGenerationCondition(t.object) != nil
 }
 
-// startSeedGeneration persists the clock and timeout before any phase creates
-// resources. The admission guard remains active until the workflow can run.
+// startSeedGeneration persists the clock and timeout before resource creation
+// begins. The admission guard remains active until the workflow can run.
 func (t *provisioningRequestReconcilerTask) startSeedGeneration(ctx context.Context, timeout time.Duration) error {
 	details := t.object.Status.Extensions.ClusterDetails
 	if timeout <= 0 || details == nil || seedGenerationCondition(t.object) != nil {
@@ -198,7 +198,7 @@ func seedGenerationTimeout(config map[string]any) (time.Duration, error) {
 }
 
 // reconcileSeedGeneration is the early route for an already started run. It
-// completes and freezes all preflight inputs before later phases may detach
+// completes and freezes all preflight inputs before subsequent steps detach
 // the spoke or create seed artifacts.
 func (t *provisioningRequestReconcilerTask) reconcileSeedGeneration(ctx context.Context) (ctrl.Result, error) {
 	if seedGenerationTerminal(t.object) {
