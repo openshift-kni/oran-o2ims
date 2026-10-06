@@ -1334,140 +1334,140 @@ type ClientInterface interface {
 	//
 	// Returns the complete list of API versions implemented by the service.
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/api_versions (the `GetAllVersions` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/api_versions (the `GetAllVersions` operationId).
 	GetAllVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetCloudInfo Get O-Cloud info
 	//
 	// Returns the details of the O-Cloud instance.
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2 (the `GetCloudInfo` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2 (the `GetCloudInfo` operationId).
 	GetCloudInfo(ctx context.Context, params *GetCloudInfoParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAlarmDictionaries Get alarm dictionaries
 	//
 	// Returns the list of alarm dictionaries.
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/alarmDictionaries (the `GetAlarmDictionaries` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/alarmDictionaries (the `GetAlarmDictionaries` operationId).
 	GetAlarmDictionaries(ctx context.Context, params *GetAlarmDictionariesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAlarmDictionary Get an alarm dictionary
 	//
 	// Returns the details of an alarm dictionary.
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/alarmDictionaries/{alarmDictionaryId} (the `GetAlarmDictionary` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/alarmDictionaries/{alarmDictionaryId} (the `GetAlarmDictionary` operationId).
 	GetAlarmDictionary(ctx context.Context, alarmDictionaryId externalRef0.AlarmDictionaryId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetMinorVersions Get minor API versions
 	//
 	// Returns the list of minor API versions implemented for this major version of the API.
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/api_versions (the `GetMinorVersions` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/api_versions (the `GetMinorVersions` operationId).
 	GetMinorVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetDeploymentManagers Get deployment managers
 	//
 	// Returns the list of deployment managers.
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/deploymentManagers (the `GetDeploymentManagers` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/deploymentManagers (the `GetDeploymentManagers` operationId).
 	GetDeploymentManagers(ctx context.Context, params *GetDeploymentManagersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetDeploymentManager Get deployment manager
 	//
 	// Returns the details of a deployment manager.
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/deploymentManagers/{deploymentManagerId} (the `GetDeploymentManager` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/deploymentManagers/{deploymentManagerId} (the `GetDeploymentManager` operationId).
 	GetDeploymentManager(ctx context.Context, deploymentManagerId DeploymentManagerId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetInternalResourceById Get a resource by ID
 	//
 	// Internal endpoint to get a resource directly by ID without needing to know the resource pool.
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/internal/resources/{resourceId} (the `GetInternalResourceById` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/internal/resources/{resourceId} (the `GetInternalResourceById` operationId).
 	GetInternalResourceById(ctx context.Context, resourceId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetLocations Get locations
 	//
 	// Returns the list of locations where O-Cloud Sites can be available.
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/locations (the `GetLocations` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/locations (the `GetLocations` operationId).
 	GetLocations(ctx context.Context, params *GetLocationsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetLocation Get a location
 	//
 	// Returns the details of a location.
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/locations/{globalLocationId} (the `GetLocation` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/locations/{globalLocationId} (the `GetLocation` operationId).
 	GetLocation(ctx context.Context, globalLocationId GlobalLocationId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetOCloudSites Get O-Cloud sites
 	//
 	// Returns the list of O-Cloud sites.
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/oCloudSites (the `GetOCloudSites` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/oCloudSites (the `GetOCloudSites` operationId).
 	GetOCloudSites(ctx context.Context, params *GetOCloudSitesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetOCloudSite Get an O-Cloud site
 	//
 	// Returns the details of an O-Cloud site.
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/oCloudSites/{oCloudSiteId} (the `GetOCloudSite` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/oCloudSites/{oCloudSiteId} (the `GetOCloudSite` operationId).
 	GetOCloudSite(ctx context.Context, oCloudSiteId OCloudSiteId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetResourcePools Get resource pools
 	//
 	// Returns the list of resource pools.
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/resourcePools (the `GetResourcePools` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/resourcePools (the `GetResourcePools` operationId).
 	GetResourcePools(ctx context.Context, params *GetResourcePoolsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetResourcePool Get a resource pool
 	//
 	// Returns the details of a resource pool.
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId} (the `GetResourcePool` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/resourcePools/{resourcePoolId} (the `GetResourcePool` operationId).
 	GetResourcePool(ctx context.Context, resourcePoolId ResourcePoolId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetResources Get resources in a resource pool
 	//
 	// Returns the details of resources in a resource pool.
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources (the `GetResources` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources (the `GetResources` operationId).
 	GetResources(ctx context.Context, resourcePoolId ResourcePoolId, params *GetResourcesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetResource Get a resource in a resource pool
 	//
 	// Returns the details of a resource in a resource pool.
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources/{resourceId} (the `GetResource` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources/{resourceId} (the `GetResource` operationId).
 	GetResource(ctx context.Context, resourcePoolId ResourcePoolId, resourceId ResourceId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetResourceTypes Get resource types
 	//
 	// Returns the list of resource types.
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/resourceTypes (the `GetResourceTypes` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/resourceTypes (the `GetResourceTypes` operationId).
 	GetResourceTypes(ctx context.Context, params *GetResourceTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetResourceType Get a resource type
 	//
 	// Returns the details of a resource type.
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/resourceTypes/{resourceTypeId} (the `GetResourceType` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/resourceTypes/{resourceTypeId} (the `GetResourceType` operationId).
 	GetResourceType(ctx context.Context, resourceTypeId ResourceTypeId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetResourceTypeAlarmDictionary Get an alarm dictionary for a resource type
 	//
 	// Returns the alarm dictionary for a resource type.
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/resourceTypes/{resourceTypeId}/alarmDictionary (the `GetResourceTypeAlarmDictionary` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/resourceTypes/{resourceTypeId}/alarmDictionary (the `GetResourceTypeAlarmDictionary` operationId).
 	GetResourceTypeAlarmDictionary(ctx context.Context, resourceTypeId ResourceTypeId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetSubscriptions Get subscriptions
 	//
 	// Returns the list of inventory subscriptions.
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/subscriptions (the `GetSubscriptions` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/subscriptions (the `GetSubscriptions` operationId).
 	GetSubscriptions(ctx context.Context, params *GetSubscriptionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateSubscriptionWithBody Create subscriptions
@@ -1476,7 +1476,7 @@ type ClientInterface interface {
 	//
 	// Takes any type of body and a specified content type.
 	//
-	// Corresponds with POST /o2ims-infrastructureInventory/v2/subscriptions (the `CreateSubscription` operationId).
+	// Corresponds with POST /O2ims_infrastructureInventory/v2/subscriptions (the `CreateSubscription` operationId).
 	CreateSubscriptionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateSubscription Create subscriptions
@@ -1485,21 +1485,21 @@ type ClientInterface interface {
 	//
 	// Takes a body of the `application/json` content type.
 	//
-	// Corresponds with POST /o2ims-infrastructureInventory/v2/subscriptions (the `CreateSubscription` operationId).
+	// Corresponds with POST /O2ims_infrastructureInventory/v2/subscriptions (the `CreateSubscription` operationId).
 	CreateSubscription(ctx context.Context, body CreateSubscriptionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteSubscription Delete subscription
 	//
 	// Deletes a subscription.
 	//
-	// Corresponds with DELETE /o2ims-infrastructureInventory/v2/subscriptions/{subscriptionId} (the `DeleteSubscription` operationId).
+	// Corresponds with DELETE /O2ims_infrastructureInventory/v2/subscriptions/{subscriptionId} (the `DeleteSubscription` operationId).
 	DeleteSubscription(ctx context.Context, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetSubscription Get subscription
 	//
 	// Returns the details of a subscription.
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/subscriptions/{subscriptionId} (the `GetSubscription` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/subscriptions/{subscriptionId} (the `GetSubscription` operationId).
 	GetSubscription(ctx context.Context, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
@@ -1507,7 +1507,7 @@ type ClientInterface interface {
 //
 // Returns the complete list of API versions implemented by the service.
 //
-// Corresponds with GET /o2ims-infrastructureInventory/api_versions (the `GetAllVersions` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/api_versions (the `GetAllVersions` operationId).
 func (c *Client) GetAllVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetAllVersionsRequest(c.Server)
 	if err != nil {
@@ -1524,7 +1524,7 @@ func (c *Client) GetAllVersions(ctx context.Context, reqEditors ...RequestEditor
 //
 // Returns the details of the O-Cloud instance.
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2 (the `GetCloudInfo` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2 (the `GetCloudInfo` operationId).
 func (c *Client) GetCloudInfo(ctx context.Context, params *GetCloudInfoParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetCloudInfoRequest(c.Server, params)
 	if err != nil {
@@ -1541,7 +1541,7 @@ func (c *Client) GetCloudInfo(ctx context.Context, params *GetCloudInfoParams, r
 //
 // Returns the list of alarm dictionaries.
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/alarmDictionaries (the `GetAlarmDictionaries` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/alarmDictionaries (the `GetAlarmDictionaries` operationId).
 func (c *Client) GetAlarmDictionaries(ctx context.Context, params *GetAlarmDictionariesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetAlarmDictionariesRequest(c.Server, params)
 	if err != nil {
@@ -1558,7 +1558,7 @@ func (c *Client) GetAlarmDictionaries(ctx context.Context, params *GetAlarmDicti
 //
 // Returns the details of an alarm dictionary.
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/alarmDictionaries/{alarmDictionaryId} (the `GetAlarmDictionary` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/alarmDictionaries/{alarmDictionaryId} (the `GetAlarmDictionary` operationId).
 func (c *Client) GetAlarmDictionary(ctx context.Context, alarmDictionaryId externalRef0.AlarmDictionaryId, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetAlarmDictionaryRequest(c.Server, alarmDictionaryId)
 	if err != nil {
@@ -1575,7 +1575,7 @@ func (c *Client) GetAlarmDictionary(ctx context.Context, alarmDictionaryId exter
 //
 // Returns the list of minor API versions implemented for this major version of the API.
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/api_versions (the `GetMinorVersions` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/api_versions (the `GetMinorVersions` operationId).
 func (c *Client) GetMinorVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetMinorVersionsRequest(c.Server)
 	if err != nil {
@@ -1592,7 +1592,7 @@ func (c *Client) GetMinorVersions(ctx context.Context, reqEditors ...RequestEdit
 //
 // Returns the list of deployment managers.
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/deploymentManagers (the `GetDeploymentManagers` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/deploymentManagers (the `GetDeploymentManagers` operationId).
 func (c *Client) GetDeploymentManagers(ctx context.Context, params *GetDeploymentManagersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetDeploymentManagersRequest(c.Server, params)
 	if err != nil {
@@ -1609,7 +1609,7 @@ func (c *Client) GetDeploymentManagers(ctx context.Context, params *GetDeploymen
 //
 // Returns the details of a deployment manager.
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/deploymentManagers/{deploymentManagerId} (the `GetDeploymentManager` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/deploymentManagers/{deploymentManagerId} (the `GetDeploymentManager` operationId).
 func (c *Client) GetDeploymentManager(ctx context.Context, deploymentManagerId DeploymentManagerId, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetDeploymentManagerRequest(c.Server, deploymentManagerId)
 	if err != nil {
@@ -1626,7 +1626,7 @@ func (c *Client) GetDeploymentManager(ctx context.Context, deploymentManagerId D
 //
 // Internal endpoint to get a resource directly by ID without needing to know the resource pool.
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/internal/resources/{resourceId} (the `GetInternalResourceById` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/internal/resources/{resourceId} (the `GetInternalResourceById` operationId).
 func (c *Client) GetInternalResourceById(ctx context.Context, resourceId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetInternalResourceByIdRequest(c.Server, resourceId)
 	if err != nil {
@@ -1643,7 +1643,7 @@ func (c *Client) GetInternalResourceById(ctx context.Context, resourceId openapi
 //
 // Returns the list of locations where O-Cloud Sites can be available.
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/locations (the `GetLocations` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/locations (the `GetLocations` operationId).
 func (c *Client) GetLocations(ctx context.Context, params *GetLocationsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetLocationsRequest(c.Server, params)
 	if err != nil {
@@ -1660,7 +1660,7 @@ func (c *Client) GetLocations(ctx context.Context, params *GetLocationsParams, r
 //
 // Returns the details of a location.
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/locations/{globalLocationId} (the `GetLocation` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/locations/{globalLocationId} (the `GetLocation` operationId).
 func (c *Client) GetLocation(ctx context.Context, globalLocationId GlobalLocationId, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetLocationRequest(c.Server, globalLocationId)
 	if err != nil {
@@ -1677,7 +1677,7 @@ func (c *Client) GetLocation(ctx context.Context, globalLocationId GlobalLocatio
 //
 // Returns the list of O-Cloud sites.
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/oCloudSites (the `GetOCloudSites` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/oCloudSites (the `GetOCloudSites` operationId).
 func (c *Client) GetOCloudSites(ctx context.Context, params *GetOCloudSitesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetOCloudSitesRequest(c.Server, params)
 	if err != nil {
@@ -1694,7 +1694,7 @@ func (c *Client) GetOCloudSites(ctx context.Context, params *GetOCloudSitesParam
 //
 // Returns the details of an O-Cloud site.
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/oCloudSites/{oCloudSiteId} (the `GetOCloudSite` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/oCloudSites/{oCloudSiteId} (the `GetOCloudSite` operationId).
 func (c *Client) GetOCloudSite(ctx context.Context, oCloudSiteId OCloudSiteId, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetOCloudSiteRequest(c.Server, oCloudSiteId)
 	if err != nil {
@@ -1711,7 +1711,7 @@ func (c *Client) GetOCloudSite(ctx context.Context, oCloudSiteId OCloudSiteId, r
 //
 // Returns the list of resource pools.
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/resourcePools (the `GetResourcePools` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/resourcePools (the `GetResourcePools` operationId).
 func (c *Client) GetResourcePools(ctx context.Context, params *GetResourcePoolsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetResourcePoolsRequest(c.Server, params)
 	if err != nil {
@@ -1728,7 +1728,7 @@ func (c *Client) GetResourcePools(ctx context.Context, params *GetResourcePoolsP
 //
 // Returns the details of a resource pool.
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId} (the `GetResourcePool` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/resourcePools/{resourcePoolId} (the `GetResourcePool` operationId).
 func (c *Client) GetResourcePool(ctx context.Context, resourcePoolId ResourcePoolId, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetResourcePoolRequest(c.Server, resourcePoolId)
 	if err != nil {
@@ -1745,7 +1745,7 @@ func (c *Client) GetResourcePool(ctx context.Context, resourcePoolId ResourcePoo
 //
 // Returns the details of resources in a resource pool.
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources (the `GetResources` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources (the `GetResources` operationId).
 func (c *Client) GetResources(ctx context.Context, resourcePoolId ResourcePoolId, params *GetResourcesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetResourcesRequest(c.Server, resourcePoolId, params)
 	if err != nil {
@@ -1762,7 +1762,7 @@ func (c *Client) GetResources(ctx context.Context, resourcePoolId ResourcePoolId
 //
 // Returns the details of a resource in a resource pool.
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources/{resourceId} (the `GetResource` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources/{resourceId} (the `GetResource` operationId).
 func (c *Client) GetResource(ctx context.Context, resourcePoolId ResourcePoolId, resourceId ResourceId, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetResourceRequest(c.Server, resourcePoolId, resourceId)
 	if err != nil {
@@ -1779,7 +1779,7 @@ func (c *Client) GetResource(ctx context.Context, resourcePoolId ResourcePoolId,
 //
 // Returns the list of resource types.
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/resourceTypes (the `GetResourceTypes` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/resourceTypes (the `GetResourceTypes` operationId).
 func (c *Client) GetResourceTypes(ctx context.Context, params *GetResourceTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetResourceTypesRequest(c.Server, params)
 	if err != nil {
@@ -1796,7 +1796,7 @@ func (c *Client) GetResourceTypes(ctx context.Context, params *GetResourceTypesP
 //
 // Returns the details of a resource type.
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/resourceTypes/{resourceTypeId} (the `GetResourceType` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/resourceTypes/{resourceTypeId} (the `GetResourceType` operationId).
 func (c *Client) GetResourceType(ctx context.Context, resourceTypeId ResourceTypeId, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetResourceTypeRequest(c.Server, resourceTypeId)
 	if err != nil {
@@ -1813,7 +1813,7 @@ func (c *Client) GetResourceType(ctx context.Context, resourceTypeId ResourceTyp
 //
 // Returns the alarm dictionary for a resource type.
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/resourceTypes/{resourceTypeId}/alarmDictionary (the `GetResourceTypeAlarmDictionary` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/resourceTypes/{resourceTypeId}/alarmDictionary (the `GetResourceTypeAlarmDictionary` operationId).
 func (c *Client) GetResourceTypeAlarmDictionary(ctx context.Context, resourceTypeId ResourceTypeId, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetResourceTypeAlarmDictionaryRequest(c.Server, resourceTypeId)
 	if err != nil {
@@ -1830,7 +1830,7 @@ func (c *Client) GetResourceTypeAlarmDictionary(ctx context.Context, resourceTyp
 //
 // Returns the list of inventory subscriptions.
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/subscriptions (the `GetSubscriptions` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/subscriptions (the `GetSubscriptions` operationId).
 func (c *Client) GetSubscriptions(ctx context.Context, params *GetSubscriptionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetSubscriptionsRequest(c.Server, params)
 	if err != nil {
@@ -1849,7 +1849,7 @@ func (c *Client) GetSubscriptions(ctx context.Context, params *GetSubscriptionsP
 //
 // Takes any type of body and a specified content type.
 //
-// Corresponds with POST /o2ims-infrastructureInventory/v2/subscriptions (the `CreateSubscription` operationId).
+// Corresponds with POST /O2ims_infrastructureInventory/v2/subscriptions (the `CreateSubscription` operationId).
 func (c *Client) CreateSubscriptionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateSubscriptionRequestWithBody(c.Server, contentType, body)
 	if err != nil {
@@ -1868,7 +1868,7 @@ func (c *Client) CreateSubscriptionWithBody(ctx context.Context, contentType str
 //
 // Takes a body of the `application/json` content type.
 //
-// Corresponds with POST /o2ims-infrastructureInventory/v2/subscriptions (the `CreateSubscription` operationId).
+// Corresponds with POST /O2ims_infrastructureInventory/v2/subscriptions (the `CreateSubscription` operationId).
 func (c *Client) CreateSubscription(ctx context.Context, body CreateSubscriptionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateSubscriptionRequest(c.Server, body)
 	if err != nil {
@@ -1885,7 +1885,7 @@ func (c *Client) CreateSubscription(ctx context.Context, body CreateSubscription
 //
 // Deletes a subscription.
 //
-// Corresponds with DELETE /o2ims-infrastructureInventory/v2/subscriptions/{subscriptionId} (the `DeleteSubscription` operationId).
+// Corresponds with DELETE /O2ims_infrastructureInventory/v2/subscriptions/{subscriptionId} (the `DeleteSubscription` operationId).
 func (c *Client) DeleteSubscription(ctx context.Context, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteSubscriptionRequest(c.Server, subscriptionId)
 	if err != nil {
@@ -1902,7 +1902,7 @@ func (c *Client) DeleteSubscription(ctx context.Context, subscriptionId Subscrip
 //
 // Returns the details of a subscription.
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/subscriptions/{subscriptionId} (the `GetSubscription` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/subscriptions/{subscriptionId} (the `GetSubscription` operationId).
 func (c *Client) GetSubscription(ctx context.Context, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetSubscriptionRequest(c.Server, subscriptionId)
 	if err != nil {
@@ -1924,7 +1924,7 @@ func NewGetAllVersionsRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/api_versions")
+	operationPath := fmt.Sprintf("/O2ims_infrastructureInventory/api_versions")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1951,7 +1951,7 @@ func NewGetCloudInfoRequest(server string, params *GetCloudInfoParams) (*http.Re
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v2")
+	operationPath := fmt.Sprintf("/O2ims_infrastructureInventory/v2")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2029,7 +2029,7 @@ func NewGetAlarmDictionariesRequest(server string, params *GetAlarmDictionariesP
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v2/alarmDictionaries")
+	operationPath := fmt.Sprintf("/O2ims_infrastructureInventory/v2/alarmDictionaries")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2126,7 +2126,7 @@ func NewGetAlarmDictionaryRequest(server string, alarmDictionaryId externalRef0.
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v2/alarmDictionaries/%s", pathParam0)
+	operationPath := fmt.Sprintf("/O2ims_infrastructureInventory/v2/alarmDictionaries/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2153,7 +2153,7 @@ func NewGetMinorVersionsRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v2/api_versions")
+	operationPath := fmt.Sprintf("/O2ims_infrastructureInventory/v2/api_versions")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2180,7 +2180,7 @@ func NewGetDeploymentManagersRequest(server string, params *GetDeploymentManager
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v2/deploymentManagers")
+	operationPath := fmt.Sprintf("/O2ims_infrastructureInventory/v2/deploymentManagers")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2277,7 +2277,7 @@ func NewGetDeploymentManagerRequest(server string, deploymentManagerId Deploymen
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v2/deploymentManagers/%s", pathParam0)
+	operationPath := fmt.Sprintf("/O2ims_infrastructureInventory/v2/deploymentManagers/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2311,7 +2311,7 @@ func NewGetInternalResourceByIdRequest(server string, resourceId openapi_types.U
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v2/internal/resources/%s", pathParam0)
+	operationPath := fmt.Sprintf("/O2ims_infrastructureInventory/v2/internal/resources/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2338,7 +2338,7 @@ func NewGetLocationsRequest(server string, params *GetLocationsParams) (*http.Re
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v2/locations")
+	operationPath := fmt.Sprintf("/O2ims_infrastructureInventory/v2/locations")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2435,7 +2435,7 @@ func NewGetLocationRequest(server string, globalLocationId GlobalLocationId) (*h
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v2/locations/%s", pathParam0)
+	operationPath := fmt.Sprintf("/O2ims_infrastructureInventory/v2/locations/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2462,7 +2462,7 @@ func NewGetOCloudSitesRequest(server string, params *GetOCloudSitesParams) (*htt
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v2/oCloudSites")
+	operationPath := fmt.Sprintf("/O2ims_infrastructureInventory/v2/oCloudSites")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2559,7 +2559,7 @@ func NewGetOCloudSiteRequest(server string, oCloudSiteId OCloudSiteId) (*http.Re
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v2/oCloudSites/%s", pathParam0)
+	operationPath := fmt.Sprintf("/O2ims_infrastructureInventory/v2/oCloudSites/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2586,7 +2586,7 @@ func NewGetResourcePoolsRequest(server string, params *GetResourcePoolsParams) (
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v2/resourcePools")
+	operationPath := fmt.Sprintf("/O2ims_infrastructureInventory/v2/resourcePools")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2683,7 +2683,7 @@ func NewGetResourcePoolRequest(server string, resourcePoolId ResourcePoolId) (*h
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v2/resourcePools/%s", pathParam0)
+	operationPath := fmt.Sprintf("/O2ims_infrastructureInventory/v2/resourcePools/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2717,7 +2717,7 @@ func NewGetResourcesRequest(server string, resourcePoolId ResourcePoolId, params
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v2/resourcePools/%s/resources", pathParam0)
+	operationPath := fmt.Sprintf("/O2ims_infrastructureInventory/v2/resourcePools/%s/resources", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2821,7 +2821,7 @@ func NewGetResourceRequest(server string, resourcePoolId ResourcePoolId, resourc
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v2/resourcePools/%s/resources/%s", pathParam0, pathParam1)
+	operationPath := fmt.Sprintf("/O2ims_infrastructureInventory/v2/resourcePools/%s/resources/%s", pathParam0, pathParam1)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2848,7 +2848,7 @@ func NewGetResourceTypesRequest(server string, params *GetResourceTypesParams) (
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v2/resourceTypes")
+	operationPath := fmt.Sprintf("/O2ims_infrastructureInventory/v2/resourceTypes")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2945,7 +2945,7 @@ func NewGetResourceTypeRequest(server string, resourceTypeId ResourceTypeId) (*h
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v2/resourceTypes/%s", pathParam0)
+	operationPath := fmt.Sprintf("/O2ims_infrastructureInventory/v2/resourceTypes/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2979,7 +2979,7 @@ func NewGetResourceTypeAlarmDictionaryRequest(server string, resourceTypeId Reso
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v2/resourceTypes/%s/alarmDictionary", pathParam0)
+	operationPath := fmt.Sprintf("/O2ims_infrastructureInventory/v2/resourceTypes/%s/alarmDictionary", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3006,7 +3006,7 @@ func NewGetSubscriptionsRequest(server string, params *GetSubscriptionsParams) (
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v2/subscriptions")
+	operationPath := fmt.Sprintf("/O2ims_infrastructureInventory/v2/subscriptions")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3107,7 +3107,7 @@ func NewCreateSubscriptionRequestWithBody(server string, contentType string, bod
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v2/subscriptions")
+	operationPath := fmt.Sprintf("/O2ims_infrastructureInventory/v2/subscriptions")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3143,7 +3143,7 @@ func NewDeleteSubscriptionRequest(server string, subscriptionId SubscriptionId) 
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v2/subscriptions/%s", pathParam0)
+	operationPath := fmt.Sprintf("/O2ims_infrastructureInventory/v2/subscriptions/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3177,7 +3177,7 @@ func NewGetSubscriptionRequest(server string, subscriptionId SubscriptionId) (*h
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureInventory/v2/subscriptions/%s", pathParam0)
+	operationPath := fmt.Sprintf("/O2ims_infrastructureInventory/v2/subscriptions/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3245,7 +3245,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/api_versions (the `GetAllVersions` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/api_versions (the `GetAllVersions` operationId).
 	GetAllVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAllVersionsResponse, error)
 
 	// GetCloudInfoWithResponse Get O-Cloud info
@@ -3254,7 +3254,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2 (the `GetCloudInfo` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2 (the `GetCloudInfo` operationId).
 	GetCloudInfoWithResponse(ctx context.Context, params *GetCloudInfoParams, reqEditors ...RequestEditorFn) (*GetCloudInfoResponse, error)
 
 	// GetAlarmDictionariesWithResponse Get alarm dictionaries
@@ -3263,7 +3263,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/alarmDictionaries (the `GetAlarmDictionaries` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/alarmDictionaries (the `GetAlarmDictionaries` operationId).
 	GetAlarmDictionariesWithResponse(ctx context.Context, params *GetAlarmDictionariesParams, reqEditors ...RequestEditorFn) (*GetAlarmDictionariesResponse, error)
 
 	// GetAlarmDictionaryWithResponse Get an alarm dictionary
@@ -3272,7 +3272,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/alarmDictionaries/{alarmDictionaryId} (the `GetAlarmDictionary` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/alarmDictionaries/{alarmDictionaryId} (the `GetAlarmDictionary` operationId).
 	GetAlarmDictionaryWithResponse(ctx context.Context, alarmDictionaryId externalRef0.AlarmDictionaryId, reqEditors ...RequestEditorFn) (*GetAlarmDictionaryResponse, error)
 
 	// GetMinorVersionsWithResponse Get minor API versions
@@ -3281,7 +3281,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/api_versions (the `GetMinorVersions` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/api_versions (the `GetMinorVersions` operationId).
 	GetMinorVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMinorVersionsResponse, error)
 
 	// GetDeploymentManagersWithResponse Get deployment managers
@@ -3290,7 +3290,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/deploymentManagers (the `GetDeploymentManagers` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/deploymentManagers (the `GetDeploymentManagers` operationId).
 	GetDeploymentManagersWithResponse(ctx context.Context, params *GetDeploymentManagersParams, reqEditors ...RequestEditorFn) (*GetDeploymentManagersResponse, error)
 
 	// GetDeploymentManagerWithResponse Get deployment manager
@@ -3299,7 +3299,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/deploymentManagers/{deploymentManagerId} (the `GetDeploymentManager` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/deploymentManagers/{deploymentManagerId} (the `GetDeploymentManager` operationId).
 	GetDeploymentManagerWithResponse(ctx context.Context, deploymentManagerId DeploymentManagerId, reqEditors ...RequestEditorFn) (*GetDeploymentManagerResponse, error)
 
 	// GetInternalResourceByIdWithResponse Get a resource by ID
@@ -3308,7 +3308,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/internal/resources/{resourceId} (the `GetInternalResourceById` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/internal/resources/{resourceId} (the `GetInternalResourceById` operationId).
 	GetInternalResourceByIdWithResponse(ctx context.Context, resourceId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetInternalResourceByIdResponse, error)
 
 	// GetLocationsWithResponse Get locations
@@ -3317,7 +3317,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/locations (the `GetLocations` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/locations (the `GetLocations` operationId).
 	GetLocationsWithResponse(ctx context.Context, params *GetLocationsParams, reqEditors ...RequestEditorFn) (*GetLocationsResponse, error)
 
 	// GetLocationWithResponse Get a location
@@ -3326,7 +3326,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/locations/{globalLocationId} (the `GetLocation` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/locations/{globalLocationId} (the `GetLocation` operationId).
 	GetLocationWithResponse(ctx context.Context, globalLocationId GlobalLocationId, reqEditors ...RequestEditorFn) (*GetLocationResponse, error)
 
 	// GetOCloudSitesWithResponse Get O-Cloud sites
@@ -3335,7 +3335,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/oCloudSites (the `GetOCloudSites` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/oCloudSites (the `GetOCloudSites` operationId).
 	GetOCloudSitesWithResponse(ctx context.Context, params *GetOCloudSitesParams, reqEditors ...RequestEditorFn) (*GetOCloudSitesResponse, error)
 
 	// GetOCloudSiteWithResponse Get an O-Cloud site
@@ -3344,7 +3344,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/oCloudSites/{oCloudSiteId} (the `GetOCloudSite` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/oCloudSites/{oCloudSiteId} (the `GetOCloudSite` operationId).
 	GetOCloudSiteWithResponse(ctx context.Context, oCloudSiteId OCloudSiteId, reqEditors ...RequestEditorFn) (*GetOCloudSiteResponse, error)
 
 	// GetResourcePoolsWithResponse Get resource pools
@@ -3353,7 +3353,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/resourcePools (the `GetResourcePools` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/resourcePools (the `GetResourcePools` operationId).
 	GetResourcePoolsWithResponse(ctx context.Context, params *GetResourcePoolsParams, reqEditors ...RequestEditorFn) (*GetResourcePoolsResponse, error)
 
 	// GetResourcePoolWithResponse Get a resource pool
@@ -3362,7 +3362,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId} (the `GetResourcePool` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/resourcePools/{resourcePoolId} (the `GetResourcePool` operationId).
 	GetResourcePoolWithResponse(ctx context.Context, resourcePoolId ResourcePoolId, reqEditors ...RequestEditorFn) (*GetResourcePoolResponse, error)
 
 	// GetResourcesWithResponse Get resources in a resource pool
@@ -3371,7 +3371,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources (the `GetResources` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources (the `GetResources` operationId).
 	GetResourcesWithResponse(ctx context.Context, resourcePoolId ResourcePoolId, params *GetResourcesParams, reqEditors ...RequestEditorFn) (*GetResourcesResponse, error)
 
 	// GetResourceWithResponse Get a resource in a resource pool
@@ -3380,7 +3380,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources/{resourceId} (the `GetResource` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources/{resourceId} (the `GetResource` operationId).
 	GetResourceWithResponse(ctx context.Context, resourcePoolId ResourcePoolId, resourceId ResourceId, reqEditors ...RequestEditorFn) (*GetResourceResponse, error)
 
 	// GetResourceTypesWithResponse Get resource types
@@ -3389,7 +3389,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/resourceTypes (the `GetResourceTypes` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/resourceTypes (the `GetResourceTypes` operationId).
 	GetResourceTypesWithResponse(ctx context.Context, params *GetResourceTypesParams, reqEditors ...RequestEditorFn) (*GetResourceTypesResponse, error)
 
 	// GetResourceTypeWithResponse Get a resource type
@@ -3398,7 +3398,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/resourceTypes/{resourceTypeId} (the `GetResourceType` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/resourceTypes/{resourceTypeId} (the `GetResourceType` operationId).
 	GetResourceTypeWithResponse(ctx context.Context, resourceTypeId ResourceTypeId, reqEditors ...RequestEditorFn) (*GetResourceTypeResponse, error)
 
 	// GetResourceTypeAlarmDictionaryWithResponse Get an alarm dictionary for a resource type
@@ -3407,7 +3407,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/resourceTypes/{resourceTypeId}/alarmDictionary (the `GetResourceTypeAlarmDictionary` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/resourceTypes/{resourceTypeId}/alarmDictionary (the `GetResourceTypeAlarmDictionary` operationId).
 	GetResourceTypeAlarmDictionaryWithResponse(ctx context.Context, resourceTypeId ResourceTypeId, reqEditors ...RequestEditorFn) (*GetResourceTypeAlarmDictionaryResponse, error)
 
 	// GetSubscriptionsWithResponse Get subscriptions
@@ -3416,7 +3416,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/subscriptions (the `GetSubscriptions` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/subscriptions (the `GetSubscriptions` operationId).
 	GetSubscriptionsWithResponse(ctx context.Context, params *GetSubscriptionsParams, reqEditors ...RequestEditorFn) (*GetSubscriptionsResponse, error)
 
 	// CreateSubscriptionWithBodyWithResponse Create subscriptions
@@ -3425,7 +3425,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with POST /o2ims-infrastructureInventory/v2/subscriptions (the `CreateSubscription` operationId).
+	// Corresponds with POST /O2ims_infrastructureInventory/v2/subscriptions (the `CreateSubscription` operationId).
 	CreateSubscriptionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSubscriptionResponse, error)
 
 	// CreateSubscriptionWithResponse Create subscriptions
@@ -3434,7 +3434,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with POST /o2ims-infrastructureInventory/v2/subscriptions (the `CreateSubscription` operationId).
+	// Corresponds with POST /O2ims_infrastructureInventory/v2/subscriptions (the `CreateSubscription` operationId).
 	CreateSubscriptionWithResponse(ctx context.Context, body CreateSubscriptionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSubscriptionResponse, error)
 
 	// DeleteSubscriptionWithResponse Delete subscription
@@ -3443,7 +3443,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with DELETE /o2ims-infrastructureInventory/v2/subscriptions/{subscriptionId} (the `DeleteSubscription` operationId).
+	// Corresponds with DELETE /O2ims_infrastructureInventory/v2/subscriptions/{subscriptionId} (the `DeleteSubscription` operationId).
 	DeleteSubscriptionWithResponse(ctx context.Context, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*DeleteSubscriptionResponse, error)
 
 	// GetSubscriptionWithResponse Get subscription
@@ -3452,7 +3452,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureInventory/v2/subscriptions/{subscriptionId} (the `GetSubscription` operationId).
+	// Corresponds with GET /O2ims_infrastructureInventory/v2/subscriptions/{subscriptionId} (the `GetSubscription` operationId).
 	GetSubscriptionWithResponse(ctx context.Context, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*GetSubscriptionResponse, error)
 }
 
@@ -5098,7 +5098,7 @@ func (r GetSubscriptionResponse) ContentType() string {
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureInventory/api_versions (the `GetAllVersions` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/api_versions (the `GetAllVersions` operationId).
 func (c *ClientWithResponses) GetAllVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAllVersionsResponse, error) {
 	rsp, err := c.GetAllVersions(ctx, reqEditors...)
 	if err != nil {
@@ -5113,7 +5113,7 @@ func (c *ClientWithResponses) GetAllVersionsWithResponse(ctx context.Context, re
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2 (the `GetCloudInfo` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2 (the `GetCloudInfo` operationId).
 func (c *ClientWithResponses) GetCloudInfoWithResponse(ctx context.Context, params *GetCloudInfoParams, reqEditors ...RequestEditorFn) (*GetCloudInfoResponse, error) {
 	rsp, err := c.GetCloudInfo(ctx, params, reqEditors...)
 	if err != nil {
@@ -5128,7 +5128,7 @@ func (c *ClientWithResponses) GetCloudInfoWithResponse(ctx context.Context, para
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/alarmDictionaries (the `GetAlarmDictionaries` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/alarmDictionaries (the `GetAlarmDictionaries` operationId).
 func (c *ClientWithResponses) GetAlarmDictionariesWithResponse(ctx context.Context, params *GetAlarmDictionariesParams, reqEditors ...RequestEditorFn) (*GetAlarmDictionariesResponse, error) {
 	rsp, err := c.GetAlarmDictionaries(ctx, params, reqEditors...)
 	if err != nil {
@@ -5143,7 +5143,7 @@ func (c *ClientWithResponses) GetAlarmDictionariesWithResponse(ctx context.Conte
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/alarmDictionaries/{alarmDictionaryId} (the `GetAlarmDictionary` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/alarmDictionaries/{alarmDictionaryId} (the `GetAlarmDictionary` operationId).
 func (c *ClientWithResponses) GetAlarmDictionaryWithResponse(ctx context.Context, alarmDictionaryId externalRef0.AlarmDictionaryId, reqEditors ...RequestEditorFn) (*GetAlarmDictionaryResponse, error) {
 	rsp, err := c.GetAlarmDictionary(ctx, alarmDictionaryId, reqEditors...)
 	if err != nil {
@@ -5158,7 +5158,7 @@ func (c *ClientWithResponses) GetAlarmDictionaryWithResponse(ctx context.Context
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/api_versions (the `GetMinorVersions` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/api_versions (the `GetMinorVersions` operationId).
 func (c *ClientWithResponses) GetMinorVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMinorVersionsResponse, error) {
 	rsp, err := c.GetMinorVersions(ctx, reqEditors...)
 	if err != nil {
@@ -5173,7 +5173,7 @@ func (c *ClientWithResponses) GetMinorVersionsWithResponse(ctx context.Context, 
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/deploymentManagers (the `GetDeploymentManagers` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/deploymentManagers (the `GetDeploymentManagers` operationId).
 func (c *ClientWithResponses) GetDeploymentManagersWithResponse(ctx context.Context, params *GetDeploymentManagersParams, reqEditors ...RequestEditorFn) (*GetDeploymentManagersResponse, error) {
 	rsp, err := c.GetDeploymentManagers(ctx, params, reqEditors...)
 	if err != nil {
@@ -5188,7 +5188,7 @@ func (c *ClientWithResponses) GetDeploymentManagersWithResponse(ctx context.Cont
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/deploymentManagers/{deploymentManagerId} (the `GetDeploymentManager` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/deploymentManagers/{deploymentManagerId} (the `GetDeploymentManager` operationId).
 func (c *ClientWithResponses) GetDeploymentManagerWithResponse(ctx context.Context, deploymentManagerId DeploymentManagerId, reqEditors ...RequestEditorFn) (*GetDeploymentManagerResponse, error) {
 	rsp, err := c.GetDeploymentManager(ctx, deploymentManagerId, reqEditors...)
 	if err != nil {
@@ -5203,7 +5203,7 @@ func (c *ClientWithResponses) GetDeploymentManagerWithResponse(ctx context.Conte
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/internal/resources/{resourceId} (the `GetInternalResourceById` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/internal/resources/{resourceId} (the `GetInternalResourceById` operationId).
 func (c *ClientWithResponses) GetInternalResourceByIdWithResponse(ctx context.Context, resourceId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetInternalResourceByIdResponse, error) {
 	rsp, err := c.GetInternalResourceById(ctx, resourceId, reqEditors...)
 	if err != nil {
@@ -5218,7 +5218,7 @@ func (c *ClientWithResponses) GetInternalResourceByIdWithResponse(ctx context.Co
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/locations (the `GetLocations` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/locations (the `GetLocations` operationId).
 func (c *ClientWithResponses) GetLocationsWithResponse(ctx context.Context, params *GetLocationsParams, reqEditors ...RequestEditorFn) (*GetLocationsResponse, error) {
 	rsp, err := c.GetLocations(ctx, params, reqEditors...)
 	if err != nil {
@@ -5233,7 +5233,7 @@ func (c *ClientWithResponses) GetLocationsWithResponse(ctx context.Context, para
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/locations/{globalLocationId} (the `GetLocation` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/locations/{globalLocationId} (the `GetLocation` operationId).
 func (c *ClientWithResponses) GetLocationWithResponse(ctx context.Context, globalLocationId GlobalLocationId, reqEditors ...RequestEditorFn) (*GetLocationResponse, error) {
 	rsp, err := c.GetLocation(ctx, globalLocationId, reqEditors...)
 	if err != nil {
@@ -5248,7 +5248,7 @@ func (c *ClientWithResponses) GetLocationWithResponse(ctx context.Context, globa
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/oCloudSites (the `GetOCloudSites` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/oCloudSites (the `GetOCloudSites` operationId).
 func (c *ClientWithResponses) GetOCloudSitesWithResponse(ctx context.Context, params *GetOCloudSitesParams, reqEditors ...RequestEditorFn) (*GetOCloudSitesResponse, error) {
 	rsp, err := c.GetOCloudSites(ctx, params, reqEditors...)
 	if err != nil {
@@ -5263,7 +5263,7 @@ func (c *ClientWithResponses) GetOCloudSitesWithResponse(ctx context.Context, pa
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/oCloudSites/{oCloudSiteId} (the `GetOCloudSite` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/oCloudSites/{oCloudSiteId} (the `GetOCloudSite` operationId).
 func (c *ClientWithResponses) GetOCloudSiteWithResponse(ctx context.Context, oCloudSiteId OCloudSiteId, reqEditors ...RequestEditorFn) (*GetOCloudSiteResponse, error) {
 	rsp, err := c.GetOCloudSite(ctx, oCloudSiteId, reqEditors...)
 	if err != nil {
@@ -5278,7 +5278,7 @@ func (c *ClientWithResponses) GetOCloudSiteWithResponse(ctx context.Context, oCl
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/resourcePools (the `GetResourcePools` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/resourcePools (the `GetResourcePools` operationId).
 func (c *ClientWithResponses) GetResourcePoolsWithResponse(ctx context.Context, params *GetResourcePoolsParams, reqEditors ...RequestEditorFn) (*GetResourcePoolsResponse, error) {
 	rsp, err := c.GetResourcePools(ctx, params, reqEditors...)
 	if err != nil {
@@ -5293,7 +5293,7 @@ func (c *ClientWithResponses) GetResourcePoolsWithResponse(ctx context.Context, 
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId} (the `GetResourcePool` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/resourcePools/{resourcePoolId} (the `GetResourcePool` operationId).
 func (c *ClientWithResponses) GetResourcePoolWithResponse(ctx context.Context, resourcePoolId ResourcePoolId, reqEditors ...RequestEditorFn) (*GetResourcePoolResponse, error) {
 	rsp, err := c.GetResourcePool(ctx, resourcePoolId, reqEditors...)
 	if err != nil {
@@ -5308,7 +5308,7 @@ func (c *ClientWithResponses) GetResourcePoolWithResponse(ctx context.Context, r
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources (the `GetResources` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources (the `GetResources` operationId).
 func (c *ClientWithResponses) GetResourcesWithResponse(ctx context.Context, resourcePoolId ResourcePoolId, params *GetResourcesParams, reqEditors ...RequestEditorFn) (*GetResourcesResponse, error) {
 	rsp, err := c.GetResources(ctx, resourcePoolId, params, reqEditors...)
 	if err != nil {
@@ -5323,7 +5323,7 @@ func (c *ClientWithResponses) GetResourcesWithResponse(ctx context.Context, reso
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources/{resourceId} (the `GetResource` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources/{resourceId} (the `GetResource` operationId).
 func (c *ClientWithResponses) GetResourceWithResponse(ctx context.Context, resourcePoolId ResourcePoolId, resourceId ResourceId, reqEditors ...RequestEditorFn) (*GetResourceResponse, error) {
 	rsp, err := c.GetResource(ctx, resourcePoolId, resourceId, reqEditors...)
 	if err != nil {
@@ -5338,7 +5338,7 @@ func (c *ClientWithResponses) GetResourceWithResponse(ctx context.Context, resou
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/resourceTypes (the `GetResourceTypes` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/resourceTypes (the `GetResourceTypes` operationId).
 func (c *ClientWithResponses) GetResourceTypesWithResponse(ctx context.Context, params *GetResourceTypesParams, reqEditors ...RequestEditorFn) (*GetResourceTypesResponse, error) {
 	rsp, err := c.GetResourceTypes(ctx, params, reqEditors...)
 	if err != nil {
@@ -5353,7 +5353,7 @@ func (c *ClientWithResponses) GetResourceTypesWithResponse(ctx context.Context, 
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/resourceTypes/{resourceTypeId} (the `GetResourceType` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/resourceTypes/{resourceTypeId} (the `GetResourceType` operationId).
 func (c *ClientWithResponses) GetResourceTypeWithResponse(ctx context.Context, resourceTypeId ResourceTypeId, reqEditors ...RequestEditorFn) (*GetResourceTypeResponse, error) {
 	rsp, err := c.GetResourceType(ctx, resourceTypeId, reqEditors...)
 	if err != nil {
@@ -5368,7 +5368,7 @@ func (c *ClientWithResponses) GetResourceTypeWithResponse(ctx context.Context, r
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/resourceTypes/{resourceTypeId}/alarmDictionary (the `GetResourceTypeAlarmDictionary` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/resourceTypes/{resourceTypeId}/alarmDictionary (the `GetResourceTypeAlarmDictionary` operationId).
 func (c *ClientWithResponses) GetResourceTypeAlarmDictionaryWithResponse(ctx context.Context, resourceTypeId ResourceTypeId, reqEditors ...RequestEditorFn) (*GetResourceTypeAlarmDictionaryResponse, error) {
 	rsp, err := c.GetResourceTypeAlarmDictionary(ctx, resourceTypeId, reqEditors...)
 	if err != nil {
@@ -5383,7 +5383,7 @@ func (c *ClientWithResponses) GetResourceTypeAlarmDictionaryWithResponse(ctx con
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/subscriptions (the `GetSubscriptions` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/subscriptions (the `GetSubscriptions` operationId).
 func (c *ClientWithResponses) GetSubscriptionsWithResponse(ctx context.Context, params *GetSubscriptionsParams, reqEditors ...RequestEditorFn) (*GetSubscriptionsResponse, error) {
 	rsp, err := c.GetSubscriptions(ctx, params, reqEditors...)
 	if err != nil {
@@ -5398,7 +5398,7 @@ func (c *ClientWithResponses) GetSubscriptionsWithResponse(ctx context.Context, 
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
-// Corresponds with POST /o2ims-infrastructureInventory/v2/subscriptions (the `CreateSubscription` operationId).
+// Corresponds with POST /O2ims_infrastructureInventory/v2/subscriptions (the `CreateSubscription` operationId).
 func (c *ClientWithResponses) CreateSubscriptionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSubscriptionResponse, error) {
 	rsp, err := c.CreateSubscriptionWithBody(ctx, contentType, body, reqEditors...)
 	if err != nil {
@@ -5413,7 +5413,7 @@ func (c *ClientWithResponses) CreateSubscriptionWithBodyWithResponse(ctx context
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
-// Corresponds with POST /o2ims-infrastructureInventory/v2/subscriptions (the `CreateSubscription` operationId).
+// Corresponds with POST /O2ims_infrastructureInventory/v2/subscriptions (the `CreateSubscription` operationId).
 func (c *ClientWithResponses) CreateSubscriptionWithResponse(ctx context.Context, body CreateSubscriptionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSubscriptionResponse, error) {
 	rsp, err := c.CreateSubscription(ctx, body, reqEditors...)
 	if err != nil {
@@ -5428,7 +5428,7 @@ func (c *ClientWithResponses) CreateSubscriptionWithResponse(ctx context.Context
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with DELETE /o2ims-infrastructureInventory/v2/subscriptions/{subscriptionId} (the `DeleteSubscription` operationId).
+// Corresponds with DELETE /O2ims_infrastructureInventory/v2/subscriptions/{subscriptionId} (the `DeleteSubscription` operationId).
 func (c *ClientWithResponses) DeleteSubscriptionWithResponse(ctx context.Context, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*DeleteSubscriptionResponse, error) {
 	rsp, err := c.DeleteSubscription(ctx, subscriptionId, reqEditors...)
 	if err != nil {
@@ -5443,7 +5443,7 @@ func (c *ClientWithResponses) DeleteSubscriptionWithResponse(ctx context.Context
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureInventory/v2/subscriptions/{subscriptionId} (the `GetSubscription` operationId).
+// Corresponds with GET /O2ims_infrastructureInventory/v2/subscriptions/{subscriptionId} (the `GetSubscription` operationId).
 func (c *ClientWithResponses) GetSubscriptionWithResponse(ctx context.Context, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*GetSubscriptionResponse, error) {
 	rsp, err := c.GetSubscription(ctx, subscriptionId, reqEditors...)
 	if err != nil {
@@ -6833,60 +6833,60 @@ var swaggerSpec = []string{
 	"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",
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

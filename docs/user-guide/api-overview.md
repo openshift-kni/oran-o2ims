@@ -27,11 +27,11 @@ different path prefixes routing to different backend services:
 
 | Path Prefix | Service | Description |
 |-------------|---------|-------------|
-| `/o2ims-infrastructureInventory` | resource-server | Locations, sites, pools, resources, resource types |
-| `/o2ims-infrastructureCluster` | cluster-server | Node clusters, cluster resources, cluster resource types |
-| `/o2ims-infrastructureProvisioning` | provisioning-server | Provisioning requests |
-| `/o2ims-infrastructureMonitoring` | alarms-server | Alarms and alarm definitions |
-| `/o2ims-infrastructureArtifacts` | artifacts-server | Artifact management |
+| `/O2ims_infrastructureInventory` | resource-server | Locations, sites, pools, resources, resource types |
+| `/O2ims_infrastructureCluster` | cluster-server | Node clusters, cluster resources, cluster resource types |
+| `/O2ims_infrastructureProvisioning` | provisioning-server | Provisioning requests |
+| `/O2ims_infrastructureMonitoring` | alarms-server | Alarms and alarm definitions |
+| `/O2ims_infrastructureArtifacts` | artifacts-server | Artifact management |
 
 Get the API hostname from the ingress routes:
 
@@ -89,7 +89,7 @@ Use the `fields` parameter to return only specific fields:
 ```bash
 # Return only the name field
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v2/resourcePools?fields=name" | jq
+  "https://${API_URI}/O2ims_infrastructureInventory/v2/resourcePools?fields=name" | jq
 ```
 
 Use dot-separated paths for nested fields:
@@ -97,7 +97,7 @@ Use dot-separated paths for nested fields:
 ```bash
 # Return name and a specific extension field
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v2/resourcePools?fields=name,extensions/purpose" | jq
+  "https://${API_URI}/O2ims_infrastructureInventory/v2/resourcePools?fields=name,extensions/purpose" | jq
 ```
 
 ### Field Exclusion
@@ -109,7 +109,7 @@ included via the `fields` parameter:
 ```bash
 # Return everything except extensions
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v2/resourcePools?exclude_fields=extensions" | jq
+  "https://${API_URI}/O2ims_infrastructureInventory/v2/resourcePools?exclude_fields=extensions" | jq
 ```
 
 ### Filtering
@@ -136,23 +136,23 @@ Examples:
 ```bash
 # Filter by exact name
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v2/resourcePools?filter=(eq,name,pool-east-compute)" | jq
+  "https://${API_URI}/O2ims_infrastructureInventory/v2/resourcePools?filter=(eq,name,pool-east-compute)" | jq
 
 # Exclude a specific name
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v2/deploymentManagers?filter=(neq,name,local-cluster)" | jq
+  "https://${API_URI}/O2ims_infrastructureInventory/v2/deploymentManagers?filter=(neq,name,local-cluster)" | jq
 
 # Filter by extension field
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v2/resourcePools?filter=(eq,extensions/purpose,ran-du)" | jq
+  "https://${API_URI}/O2ims_infrastructureInventory/v2/resourcePools?filter=(eq,extensions/purpose,ran-du)" | jq
 
 # Multiple filters (AND)
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureInventory/v2/locations?filter=(eq,extensions/region,us-east);(eq,extensions/tier,primary)" | jq
+  "https://${API_URI}/O2ims_infrastructureInventory/v2/locations?filter=(eq,extensions/region,us-east);(eq,extensions/tier,primary)" | jq
 
 # Values with spaces must be quoted
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureCluster/v1/nodeClusters?filter=(eq,name,'my cluster')" | jq
+  "https://${API_URI}/O2ims_infrastructureCluster/v1/nodeClusters?filter=(eq,name,'my cluster')" | jq
 ```
 
 ## Error Responses
