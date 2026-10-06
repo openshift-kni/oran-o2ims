@@ -8,10 +8,13 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/openshift-kni/oran-o2ims/internal/validation"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -29,9 +32,27 @@ import (
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 )
 
+// SchemaDefinesHwMgmtParameters checks whether the ClusterTemplate's
+// templateParameterSchema defines the hwMgmtParameters property.
+func SchemaDefinesHwMgmtParameters(clusterTemplate *provisioningv1alpha1.ClusterTemplate) bool {
+	if clusterTemplate.Spec.TemplateParameterSchema.Raw == nil {
+		return false
+	}
+	var schema map[string]any
+	if err := json.Unmarshal(clusterTemplate.Spec.TemplateParameterSchema.Raw, &schema); err != nil {
+		return false
+	}
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		return false
+	}
+	_, defined := properties[constants.TemplateParamHwMgmt]
+	return defined
+}
+
 // ExtractSchemaRequired extracts the required field of a subschema
 func ExtractSchemaRequired(mainSchema []byte) (required []string, err error) {
-	requireListAny, err := provisioningv1alpha1.ExtractMatchingInput(mainSchema, requiredString)
+	requireListAny, err := validation.ExtractMatchingInput(mainSchema, requiredString)
 	if err != nil {
 		return required, fmt.Errorf("could not extract the 'required' section of schema: %w", err)
 	}
@@ -314,9 +335,9 @@ func ValidateConfigmapSchemaAgainstClusterInstanceCRD(
 	// Remove the `required` property as the default ConfigMaps contains only a subset of the ClusterInstance spec.
 	removeRequiredFromSchema(openAPIV3SchemaSpec)
 	// Disallow unknown properties in the ClusterInstance CRD schema.
-	provisioningv1alpha1.DisallowUnknownFieldsInSchema(openAPIV3SchemaSpec)
+	validation.DisallowUnknownFieldsInSchema(openAPIV3SchemaSpec)
 
-	err = provisioningv1alpha1.ValidateJsonAgainstJsonSchema(openAPIV3SchemaSpec, data)
+	err = validation.ValidateJSONSchema(openAPIV3SchemaSpec, data)
 	if err != nil {
 		return fmt.Errorf("the ConfigMap does not match the ClusterInstance schema: %w", err)
 	}

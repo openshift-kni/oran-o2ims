@@ -14,12 +14,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openshift-kni/oran-o2ims/internal/provisioning"
+
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
-	clustervalidation "github.com/openshift-kni/oran-o2ims/internal/validation"
+	"github.com/openshift-kni/oran-o2ims/internal/validation"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -27,16 +29,16 @@ import (
 // validateProvisioningRequestCR validates the ProvisioningRequest CR
 func (t *provisioningRequestReconcilerTask) validateProvisioningRequestCR(ctx context.Context) error {
 	// Check the referenced cluster template is present and valid
-	clusterTemplate, err := t.object.GetClusterTemplateRef(ctx, t.client)
+	clusterTemplate, err := provisioning.GetClusterTemplateRef(ctx, t.client, t.object)
 	if err != nil {
 		return typederrors.NewInputError("failed to get the ClusterTemplate for ProvisioningRequest %s: %w ", t.object.Name, err)
 	}
-	seedGeneration, err := provisioningv1alpha1.HasSeedGenerationConfig(clusterTemplate, t.object)
+	seedGeneration, err := validation.HasSeedGenerationConfig(clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw, t.object.Spec.TemplateParameters.Raw)
 	if err != nil {
-		return typederrors.NewInputError("%s", err.Error())
+		return typederrors.NewInputError("failed to inspect seed generation input: %s", err.Error())
 	}
 	if seedGeneration {
-		return typederrors.NewInputError("%s", provisioningv1alpha1.SeedGenerationUnsupportedMessage)
+		return typederrors.NewInputError("%s", validation.SeedGenerationUnsupportedMessage)
 	}
 	t.ctDetails = &clusterTemplateDetails{
 		namespace: clusterTemplate.Namespace,
@@ -47,7 +49,7 @@ func (t *provisioningRequestReconcilerTask) validateProvisioningRequestCR(ctx co
 		return fmt.Errorf("failed to load timeouts: %w", err)
 	}
 
-	if err = t.object.ValidateTemplateInputMatchesSchema(clusterTemplate); err != nil {
+	if err = validation.ValidateTemplateInputMatchesSchema(clusterTemplate.Name, clusterTemplate.Spec.TemplateParameterSchema.Raw, t.object.Spec.TemplateParameters.Raw); err != nil {
 		return typederrors.NewInputError("%s", err.Error())
 	}
 
@@ -124,7 +126,7 @@ func (t *provisioningRequestReconcilerTask) validateAndLoadTimeouts(
 func (t *provisioningRequestReconcilerTask) validateClusterInstanceInputMatchesSchema(
 	ctx context.Context, clusterTemplate *provisioningv1alpha1.ClusterTemplate) error {
 
-	clusterInstanceMatchingInput, err := t.object.ValidateClusterInstanceInputMatchesSchema(clusterTemplate)
+	clusterInstanceMatchingInput, err := validation.ValidateClusterInstanceInputMatchesSchema(clusterTemplate.Name, clusterTemplate.Spec.TemplateParameterSchema.Raw, t.object.Spec.TemplateParameters.Raw)
 	if err != nil {
 		return typederrors.NewInputError(
 			"the provided %s does not match the schema from ClusterTemplate (%s): %w",
@@ -153,15 +155,15 @@ func (t *provisioningRequestReconcilerTask) validateClusterName(ctx context.Cont
 		return typederrors.NewInputError("clusterName is required and must be a non-empty string")
 	}
 
-	if err := clustervalidation.ValidateClusterNameFormat(clusterName); err != nil {
+	if err := validation.ValidateClusterNameFormat(clusterName); err != nil {
 		return fmt.Errorf("invalid clusterName format: %w", err)
 	}
 
-	if err := clustervalidation.ValidateClusterNameNotReserved(clusterName); err != nil {
+	if err := validation.ValidateClusterNameNotReserved(clusterName); err != nil {
 		return fmt.Errorf("reserved clusterName: %w", err)
 	}
 
-	if err := clustervalidation.ValidateClusterNameOwnership(ctx, t.client, clusterName, t.object.Name,
+	if err := validation.ValidateClusterNameOwnership(ctx, t.client, clusterName, t.object.Name,
 		provisioningv1alpha1.ProvisioningRequestNameLabel); err != nil {
 		return fmt.Errorf("clusterName ownership check failed: %w", err)
 	}
@@ -176,14 +178,14 @@ func (t *provisioningRequestReconcilerTask) validatePolicyTemplateInputMatchesSc
 	ctx context.Context, clusterTemplate *provisioningv1alpha1.ClusterTemplate) error {
 
 	// Get the subschema for PolicyTemplateParameters
-	policyTemplateSubSchema, err := provisioningv1alpha1.ExtractSubSchema(
+	policyTemplateSubSchema, err := validation.ExtractSubSchema(
 		clusterTemplate.Spec.TemplateParameterSchema.Raw, constants.TemplateParamPolicyConfig)
 	if err != nil {
 		return typederrors.NewInputError(
 			"failed to extract %s subschema: %s", constants.TemplateParamPolicyConfig, err.Error())
 	}
 	// Get the matching input for PolicyTemplateParameters
-	policyTemplateMatchingInput, err := provisioningv1alpha1.ExtractMatchingInput(
+	policyTemplateMatchingInput, err := validation.ExtractMatchingInput(
 		t.object.Spec.TemplateParameters.Raw, constants.TemplateParamPolicyConfig)
 	if err != nil {
 		return typederrors.NewInputError(
@@ -215,7 +217,7 @@ func (t *provisioningRequestReconcilerTask) validatePolicyTemplateInputMatchesSc
 		slog.String("name", t.object.Name))
 
 	// Validate the merged PolicyTemplate input data matches the schema
-	err = provisioningv1alpha1.ValidateJsonAgainstJsonSchema(
+	err = validation.ValidateJSONSchema(
 		policyTemplateSubSchema, mergedPolicyTemplateData)
 	if err != nil {
 		return typederrors.NewInputError(
@@ -243,24 +245,24 @@ func (t *provisioningRequestReconcilerTask) validateAndMergeHwMgmtInput(
 	// Extract hwMgmtParameters from ProvisioningRequest if present.
 	// ExtractMatchingInput returns an error both for unmarshal failures and missing keys.
 	// Missing key is expected (no overrides); unmarshal failure is a real input error.
-	hwMgmtParams, extractErr := provisioningv1alpha1.ExtractMatchingInput(
+	hwMgmtParams, extractErr := validation.ExtractMatchingInput(
 		t.object.Spec.TemplateParameters.Raw, constants.TemplateParamHwMgmt)
 	if extractErr != nil && strings.Contains(extractErr.Error(), "failed to unmarshal") {
 		return typederrors.NewInputError("failed to extract %s from templateParameters: %s",
 			constants.TemplateParamHwMgmt, extractErr.Error())
 	}
 	if hwMgmtParams != nil {
-		if !provisioningv1alpha1.SchemaDefinesHwMgmtParameters(clusterTemplate) {
+		if !ctlrutils.SchemaDefinesHwMgmtParameters(clusterTemplate) {
 			return typederrors.NewInputError(
 				"templateParameters.%s is not defined in ClusterTemplate %q spec.templateParameterSchema",
 				constants.TemplateParamHwMgmt, clusterTemplate.Name)
 		}
 
 		// Validate the raw hwMgmtParameters input against the CT's hwMgmt subschema
-		hwMgmtSubSchema, err := provisioningv1alpha1.ExtractSubSchema(
+		hwMgmtSubSchema, err := validation.ExtractSubSchema(
 			clusterTemplate.Spec.TemplateParameterSchema.Raw, constants.TemplateParamHwMgmt)
 		if err == nil {
-			if err := provisioningv1alpha1.ValidateJsonAgainstJsonSchema(hwMgmtSubSchema, hwMgmtParams); err != nil {
+			if err := validation.ValidateJSONSchema(hwMgmtSubSchema, hwMgmtParams); err != nil {
 				return typederrors.NewInputError(
 					"templateParameters.%s does not match the schema defined in ClusterTemplate (%s): %s",
 					constants.TemplateParamHwMgmt, clusterTemplate.Name, err.Error())

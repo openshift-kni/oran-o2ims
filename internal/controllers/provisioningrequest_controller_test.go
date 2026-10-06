@@ -163,6 +163,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/openshift-kni/oran-o2ims/internal/validation"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -4806,7 +4808,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 				validationCondition := meta.FindStatusCondition(updatedCR.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.Validated))
 				Expect(validationCondition).ToNot(BeNil())
 				Expect(validationCondition.Status).To(Equal(metav1.ConditionFalse))
-				Expect(validationCondition.Message).To(ContainSubstring(provisioningv1alpha1.SeedGenerationUnsupportedMessage))
+				Expect(validationCondition.Message).To(ContainSubstring(validation.SeedGenerationUnsupportedMessage))
 
 				nar := &hwmgmtv1alpha1.NodeAllocationRequest{}
 				err := c.Get(ctx, types.NamespacedName{Name: provisioningRequest.Name, Namespace: provisioningRequest.Namespace}, nar)

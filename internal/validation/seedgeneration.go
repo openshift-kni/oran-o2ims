@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+const SeedGenerationUnsupportedMessage = "seed generation is not supported by this controller version"
+
 // HasSeedGenerationConfig reports whether the template defaults or request
 // parameters select seed generation. Check both because defaults can request it
 // without any ProvisioningRequest override.

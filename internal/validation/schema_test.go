@@ -1,0 +1,740 @@
+/*
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
+package validation
+
+import (
+	"errors"
+	"fmt"
+	"reflect"
+	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"sigs.k8s.io/yaml"
+)
+
+var testSchema = `
+properties:
+  additionalNTPSources:
+    items:
+      type: string
+    type: array
+  apiVIPs:
+    items:
+      type: string
+    maxItems: 2
+    type: array
+  baseDomain:
+    type: string
+  clusterName:
+    description: ClusterName is the name of the cluster.
+    type: string
+  extraLabels:
+    additionalProperties:
+      additionalProperties:
+        type: string
+      type: object
+    type: object
+  extraAnnotations:
+    additionalProperties:
+      additionalProperties:
+        type: string
+      type: object
+    type: object
+  ingressVIPs:
+    items:
+      type: string
+    maxItems: 2
+    type: array
+  machineNetwork:
+    description: MachineNetwork is the list of IP address pools for machines.
+    items:
+      description: MachineNetworkEntry is a single IP address block for
+        node IP blocks.
+      properties:
+        cidr:
+          type: string
+      required:
+      - cidr
+      type: object
+    type: array
+  nodes:
+    items:
+      description: NodeSpec
+      properties:
+        extraAnnotations:
+          additionalProperties:
+            additionalProperties:
+              type: string
+            type: object
+          description: Additional node-level annotations to be applied
+            to the rendered templates
+          type: object
+        hostName:
+          description: Hostname is the desired hostname for the host
+          type: string
+        nodeLabels:
+          additionalProperties:
+            type: string
+          type: object
+        nodeNetwork:
+          properties:
+            config:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+            interfaces:
+              items:
+                properties:
+                  macAddress:
+                    type: string
+                  name:
+                    type: string
+                type: object
+              minItems: 1
+              type: array
+          type: object
+      required:
+      - hostName
+      type: object
+    type: array
+  serviceNetwork:
+    items:
+      properties:
+        cidr:
+          type: string
+      required:
+      - cidr
+      type: object
+    type: array
+  sshPublicKey:
+    type: string
+required:
+- clusterName
+- nodes
+type: object
+`
+
+var _ = Describe("DisallowUnknownFieldsInSchema", func() {
+	var schemaMap map[string]any
+
+	BeforeEach(func() {
+		err := yaml.Unmarshal([]byte(testSchema), &schemaMap)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should add 'additionalProperties': false to all objects with 'properties'", func() {
+		var expected = `
+additionalProperties: false
+properties:
+  additionalNTPSources:
+    items:
+      type: string
+    type: array
+  apiVIPs:
+    items:
+      type: string
+    maxItems: 2
+    type: array
+  baseDomain:
+    type: string
+  clusterName:
+    description: ClusterName is the name of the cluster.
+    type: string
+  extraLabels:
+    additionalProperties:
+      additionalProperties:
+        type: string
+      type: object
+    type: object
+  extraAnnotations:
+    additionalProperties:
+      additionalProperties:
+        type: string
+      type: object
+    type: object
+  ingressVIPs:
+    items:
+      type: string
+    maxItems: 2
+    type: array
+  machineNetwork:
+    description: MachineNetwork is the list of IP address pools for machines.
+    items:
+      description: MachineNetworkEntry is a single IP address block for
+        node IP blocks.
+      additionalProperties: false
+      properties:
+        cidr:
+          type: string
+      required:
+      - cidr
+      type: object
+    type: array
+  nodes:
+    items:
+      description: NodeSpec
+      additionalProperties: false
+      properties:
+        extraAnnotations:
+          additionalProperties:
+            additionalProperties:
+              type: string
+            type: object
+          description: Additional node-level annotations to be applied
+            to the rendered templates
+          type: object
+        hostName:
+          description: Hostname is the desired hostname for the host
+          type: string
+        nodeLabels:
+          additionalProperties:
+            type: string
+          type: object
+        nodeNetwork:
+          additionalProperties: false
+          properties:
+            config:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+            interfaces:
+              items:
+                additionalProperties: false
+                properties:
+                  macAddress:
+                    type: string
+                  name:
+                    type: string
+                type: object
+              minItems: 1
+              type: array
+          type: object
+      required:
+      - hostName
+      type: object
+    type: array
+  serviceNetwork:
+    items:
+      additionalProperties: false
+      properties:
+        cidr:
+          type: string
+      required:
+      - cidr
+      type: object
+    type: array
+  sshPublicKey:
+    type: string
+required:
+- clusterName
+- nodes
+type: object
+`
+		// Call the function
+		DisallowUnknownFieldsInSchema(schemaMap)
+
+		var expectedSchema map[string]any
+		err := yaml.Unmarshal([]byte(expected), &expectedSchema)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(schemaMap).To(Equal(expectedSchema))
+	})
+})
+
+var _ = Describe("validateJsonAgainstJsonSchema", func() {
+
+	var schemaMap map[string]any
+
+	BeforeEach(func() {
+		err := yaml.Unmarshal([]byte(testSchema), &schemaMap)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("Return error if required field is missing", func() {
+		// The required field nodes[0].hostName is missing.
+		input := `
+clusterName: sno1
+machineNetwork:
+  - cidr: 192.0.2.0/24
+serviceNetwork:
+  - cidr: 172.30.0.0/16
+nodes:
+  - nodeNetwork:
+      interfaces:
+        - macAddress: 00:00:00:01:20:30
+        - macAddress: 00:00:00:01:20:31
+      config:
+        dns-resolver:
+          config:
+            server:
+              - 192.0.2.22
+        routes:
+          config:
+            - next-hop-address: 192.0.2.254
+        interfaces:
+          - ipv6:
+              enabled: false
+            ipv4:
+              enabled: true
+              address:
+                - ip: 192.0.2.12
+                  prefix-length: 24
+`
+		inputMap := make(map[string]any)
+		err := yaml.Unmarshal([]byte(input), &inputMap)
+		Expect(err).ToNot(HaveOccurred())
+
+		err = ValidateJSONSchema(schemaMap, inputMap)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(
+			ContainSubstring("invalid input: nodes.0: hostName is required"))
+	})
+
+	It("Return error if field is of different type", func() {
+		// ExtraLabels - ManagedCluster is a map instead of list.
+		input := `
+clusterName: sno1
+machineNetwork:
+  - cidr: 192.0.2.0/24
+serviceNetwork:
+  - cidr: 172.30.0.0/16
+extraLabels:
+  ManagedCluster:
+    - label1
+    - label2
+nodes:
+  - hostName: sno1.example.com
+    nodeNetwork:
+      interfaces:
+        - macAddress: 00:00:00:01:20:30
+        - macAddress: 00:00:00:01:20:31
+      config:
+        dns-resolver:
+          config:
+            server:
+              - 192.0.2.22
+        routes:
+          config:
+            - next-hop-address: 192.0.2.254
+        interfaces:
+          - ipv6:
+              enabled: false
+            ipv4:
+              enabled: true
+              address:
+                - ip: 192.0.2.12
+                  prefix-length: 24
+`
+
+		inputMap := make(map[string]any)
+		err := yaml.Unmarshal([]byte(input), &inputMap)
+		Expect(err).ToNot(HaveOccurred())
+
+		err = ValidateJSONSchema(schemaMap, inputMap)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(
+			ContainSubstring("invalid input: extraLabels.ManagedCluster: Invalid type. Expected: object, given: array"))
+	})
+
+	It("Returns success if optional field with required fields is missing", func() {
+		// The optional field serviceNetwork has required field - cidr, but it's missing completely.
+		input := `
+clusterName: sno1
+machineNetwork:
+  - cidr: 192.0.2.0/24
+nodes:
+  - hostName: sno1.example.com
+    nodeNetwork:
+      interfaces:
+        - macAddress: 00:00:00:01:20:30
+        - macAddress: 00:00:00:01:20:31
+      config:
+        dns-resolver:
+          config:
+            server:
+              - 192.0.2.22
+        routes:
+          config:
+            - next-hop-address: 192.0.2.254
+        interfaces:
+          - ipv6:
+              enabled: false
+            ipv4:
+              enabled: true
+              address:
+                - ip: 192.0.2.12
+                  prefix-length: 24
+`
+
+		inputMap := make(map[string]any)
+		err := yaml.Unmarshal([]byte(input), &inputMap)
+		Expect(err).ToNot(HaveOccurred())
+
+		err = ValidateJSONSchema(schemaMap, inputMap)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("Return error if unknown field is provided", func() {
+		// clusterType is not in the schema
+		input := `
+clusterType: SNO
+clusterName: sno1
+nodes:
+  - hostName: sno1.example.com
+    nodeNetwork:
+      interfaces:
+        - macAddress: 00:00:00:01:20:30
+        - macAddress: 00:00:00:01:20:31
+      config:
+        dns-resolver:
+          config:
+            server:
+              - 192.0.2.22
+        routes:
+          config:
+            - next-hop-address: 192.0.2.254
+        interfaces:
+          - ipv6:
+              enabled: false
+            ipv4:
+              enabled: true
+              address:
+                - ip: 192.0.2.12
+                  prefix-length: 24
+`
+
+		schemaMap["additionalProperties"] = false
+		inputMap := make(map[string]any)
+		err := yaml.Unmarshal([]byte(input), &inputMap)
+		Expect(err).ToNot(HaveOccurred())
+
+		err = ValidateJSONSchema(schemaMap, inputMap)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(
+			ContainSubstring("Additional property clusterType is not allowed"))
+	})
+
+	// When the ClusterTemplate schema does not declare cpuArchitecture,
+	// additionalProperties:false rejects a ProvisioningRequest that sets it -
+	// the original bug that blocked ARM (aarch64) deployments.
+	It("rejects cpuArchitecture when the schema does not declare it", func() {
+		DisallowUnknownFieldsInSchema(schemaMap)
+		input := `
+clusterName: sno1
+cpuArchitecture: aarch64
+machineNetwork:
+  - cidr: 192.0.2.0/24
+nodes:
+  - hostName: sno1.example.com
+`
+		inputMap := make(map[string]any)
+		Expect(yaml.Unmarshal([]byte(input), &inputMap)).To(Succeed())
+
+		err := ValidateJSONSchema(schemaMap, inputMap)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(
+			ContainSubstring("Additional property cpuArchitecture is not allowed"))
+	})
+
+	// Declaring cpuArchitecture as a cluster-level property (as the reference
+	// schemas now do) lets the field pass validation.
+	It("accepts cpuArchitecture once the schema declares it", func() {
+		props := schemaMap["properties"].(map[string]any)
+		props["cpuArchitecture"] = map[string]any{
+			"type": "string",
+			"enum": []any{"x86_64", "aarch64", "multi"},
+		}
+		DisallowUnknownFieldsInSchema(schemaMap)
+		input := `
+clusterName: sno1
+cpuArchitecture: aarch64
+machineNetwork:
+  - cidr: 192.0.2.0/24
+nodes:
+  - hostName: sno1.example.com
+`
+		inputMap := make(map[string]any)
+		Expect(yaml.Unmarshal([]byte(input), &inputMap)).To(Succeed())
+
+		Expect(ValidateJSONSchema(schemaMap, inputMap)).To(Succeed())
+	})
+})
+
+func TestSeedGenerationRawPRValidationAllowsPartialOverride(t *testing.T) {
+	templateSchemaRaw := []byte(`{
+				"type":"object","additionalProperties":false,
+				"properties":{
+					"clusterInstanceParameters":{"type":"object","properties":{}},
+					"policyTemplateParameters":{"type":"object","properties":{}},
+					"upgradeParameters":{"type":"object","properties":{
+						"seedGeneration":{"type":"object","additionalProperties":false,"properties":{"seedImage":{"type":"string"},"seedGenerationTimeout":{"type":"string"}}}
+					}}
+				}}`)
+	templateParametersRaw := []byte(`{"clusterInstanceParameters":{},"policyTemplateParameters":{},"upgradeParameters":{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedGenerationTimeout":"90m"}}}`)
+	if err := ValidateTemplateInputMatchesSchema("", templateSchemaRaw, templateParametersRaw); err != nil {
+		t.Fatalf("seedImage and timeout PR overrides should pass raw admission: %v", err)
+	}
+
+	templateParametersRaw = []byte(`{"clusterInstanceParameters":{},"policyTemplateParameters":{},"upgradeParameters":{"seedGeneration":{"seedAuthSecretRef":{"name":"other-secret"}}}}`)
+	if err := ValidateTemplateInputMatchesSchema("", templateSchemaRaw, templateParametersRaw); err == nil {
+		t.Fatal("template-owned credential reference should be rejected at raw admission")
+	}
+}
+
+const testTemplate = `{
+	"properties": {
+	  "nodeClusterName": {
+		"type": "string"
+	  },
+	  "oCloudSiteId": {
+		"type": "string"
+	  },
+	  "policyTemplateParameters": {
+		"description": "policyTemplateParameters.",
+		"properties": {
+		  "sriov-network-vlan-1": {
+			"type": "string"
+		  },
+		  "install-plan-approval": {
+			"type": "string",
+			"default": "Automatic"
+		  }
+		}
+	  },
+	  "clusterInstanceParameters": {
+		"description": "clusterInstanceParameters.",
+		"properties": {
+		  "additionalNTPSources": {
+			"description": "AdditionalNTPSources.",
+			"items": {
+			  "type": "string"
+			},
+			"type": "array"
+		  }
+		}
+	  },
+	  "hwMgmtParameters": {
+		"description": "hwMgmtParameters allows overriding hardware management defaults.",
+		"type": "object",
+		"properties": {
+		  "hardwareProvisioningTimeout": {
+			"type": "string"
+		  },
+		  "nodeGroupData": {
+			"type": "array",
+			"items": {
+			  "type": "object",
+			  "required": ["name"],
+			  "properties": {
+				"name": {"type": "string"},
+				"role": {"type": "string"},
+				"hwProfile": {"type": "string"},
+				"resourcePoolId": {"type": "string"},
+				"resourceSelector": {"type": "object", "additionalProperties": {"type": "string"}}
+			  }
+			}
+		  }
+		}
+	  }
+	},
+	"required": [
+	  "nodeClusterName",
+	  "oCloudSiteId",
+	  "policyTemplateParameters",
+	  "clusterInstanceParameters"
+	],
+	"type": "object"
+  }`
+
+func TestExtractSubSchema(t *testing.T) {
+	type args struct {
+		mainSchema []byte
+		node       string
+	}
+	tests := []struct {
+		name          string
+		args          args
+		wantSubSchema map[string]any
+		wantErr       bool
+	}{
+		{
+			name: "ok",
+			args: args{
+				mainSchema: []byte(testTemplate),
+				node:       "clusterInstanceParameters",
+			},
+			wantSubSchema: map[string]any{
+				"description": "clusterInstanceParameters.",
+				"properties": map[string]any{
+					"additionalNTPSources": map[string]any{
+						"description": "AdditionalNTPSources.",
+						"items":       map[string]any{"type": "string"},
+						"type":        "array",
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty schema",
+			args: args{
+				mainSchema: []byte{},
+				node:       "anything",
+			},
+			wantSubSchema: nil,
+			wantErr:       false,
+		},
+		{
+			name: "invalid JSON",
+			args: args{
+				mainSchema: []byte(`not json`),
+				node:       "anything",
+			},
+			wantSubSchema: nil,
+			wantErr:       true,
+		},
+		{
+			name: "missing properties section",
+			args: args{
+				mainSchema: []byte(`{"type": "object"}`),
+				node:       "anything",
+			},
+			wantSubSchema: nil,
+			wantErr:       true,
+		},
+		{
+			name: "subSchema not found",
+			args: args{
+				mainSchema: []byte(testTemplate),
+				node:       "nonExistentKey",
+			},
+			wantSubSchema: nil,
+			wantErr:       true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotSubSchema, err := ExtractSubSchema(tt.args.mainSchema, tt.args.node)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ExtractSubSchema() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(gotSubSchema, tt.wantSubSchema) {
+				t.Errorf("ExtractSubSchema() = %v, want %v", gotSubSchema, tt.wantSubSchema)
+			}
+		})
+	}
+}
+
+func TestIsErrSubSchemaNotFound(t *testing.T) {
+	if !IsErrSubSchemaNotFound(ErrSubSchemaNotFound) {
+		t.Error("expected true for ErrSubSchemaNotFound")
+	}
+	if !IsErrSubSchemaNotFound(fmt.Errorf("wrapped: %w", ErrSubSchemaNotFound)) {
+		t.Error("expected true for wrapped ErrSubSchemaNotFound")
+	}
+	if !IsErrSubSchemaNotFound(fmt.Errorf("wrapped: %w", fmt.Errorf("wrapped: %w", ErrSubSchemaNotFound))) {
+		t.Error("expected true for wrapped wrapped ErrSubSchemaNotFound")
+	}
+	if IsErrSubSchemaNotFound(fmt.Errorf("some other error")) {
+		t.Error("expected false for unrelated error")
+	}
+	if IsErrSubSchemaNotFound(errors.New(ErrSubSchemaNotFound.Error())) {
+		t.Error("expected false for not an ErrSubSchemaNotFound error")
+	}
+	if IsErrSubSchemaNotFound(nil) {
+		t.Error("expected false for nil")
+	}
+}
+
+func TestExtractMatchingInput(t *testing.T) {
+	type args struct {
+		input        []byte
+		subSchemaKey string
+	}
+	tests := []struct {
+		name              string
+		args              args
+		wantMatchingInput any
+		wantErr           bool
+	}{
+		{
+			name: "ok - valid map input",
+			args: args{
+				input: []byte(`{
+					  "clusterInstanceParameters": {
+						  "additionalNTPSources": ["1.1.1.1"]
+					  }
+				  }`),
+				subSchemaKey: "clusterInstanceParameters",
+			},
+			wantMatchingInput: map[string]any{
+				"additionalNTPSources": []any{"1.1.1.1"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "ok - valid string input",
+			args: args{
+				input: []byte(`{
+	"required": [
+	  "nodeClusterName",
+	  "oCloudSiteId",
+	  "policyTemplateParameters",
+	  "clusterInstanceParameters"
+	]
+  }`),
+				subSchemaKey: "required",
+			},
+			wantMatchingInput: []any{"nodeClusterName", "oCloudSiteId", "policyTemplateParameters", "clusterInstanceParameters"},
+			wantErr:           false,
+		},
+		{
+			name: "ok - valid string input",
+			args: args{
+				input: []byte(`{
+					  "oCloudSiteId": "local-123"
+				  }`),
+				subSchemaKey: "oCloudSiteId",
+			},
+			wantMatchingInput: "local-123",
+			wantErr:           false,
+		},
+		{
+			name: "error - missing subSchemaKey",
+			args: args{
+				input: []byte(`{
+					  "clusterInstanceParameters": {
+						  "additionalNTPSources": ["1.1.1.1"]
+					  }
+				  }`),
+				subSchemaKey: "oCloudSiteId",
+			},
+			wantMatchingInput: nil,
+			wantErr:           true,
+		},
+		{
+			name: "error - invalid JSON",
+			args: args{
+				input:        []byte(`{invalid JSON}`),
+				subSchemaKey: "clusterInstance",
+			},
+			wantMatchingInput: nil,
+			wantErr:           true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotMatchingInput, err := ExtractMatchingInput(tt.args.input, tt.args.subSchemaKey)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ExtractMatchingInput() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(gotMatchingInput, tt.wantMatchingInput) {
+				t.Errorf("ExtractMatchingInput() = %s, want %s", gotMatchingInput, tt.wantMatchingInput)
+			}
+		})
+	}
+}

@@ -21,10 +21,10 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils/cincinnati"
+	"github.com/openshift-kni/oran-o2ims/internal/provisioning"
 	"github.com/openshift-kni/oran-o2ims/internal/spokeclient"
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
-	"github.com/openshift-kni/oran-o2ims/internal/upgrade"
-	upgradevalidation "github.com/openshift-kni/oran-o2ims/internal/validation"
+	"github.com/openshift-kni/oran-o2ims/internal/validation"
 	configv1 "github.com/openshift/api/config/v1"
 	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
@@ -125,7 +125,7 @@ func (t *provisioningRequestReconcilerTask) handleUpgrade(
 	case ctlrutils.UpgradeDefaultsIBGUKey:
 		return t.handleIBGUUpgrade(ctx, clusterTemplate, clusterName)
 	case ctlrutils.UpgradeDefaultsSeedGenerationKey:
-		msg := provisioningv1alpha1.SeedGenerationUnsupportedMessage
+		msg := validation.SeedGenerationUnsupportedMessage
 		ctlrutils.SetProvisioningStateFailed(t.object, msg)
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
@@ -494,7 +494,7 @@ func (t *provisioningRequestReconcilerTask) prepareCVSpec(
 	if err != nil {
 		return nil, typederrors.NewInputError("%s", err.Error())
 	}
-	if err := upgradevalidation.ValidateWorkerPoolUpgrade(action.IsEUS, workerPoolUpgrade); err != nil {
+	if err := validation.ValidateWorkerPoolUpgrade(action.IsEUS, workerPoolUpgrade); err != nil {
 		return nil, typederrors.NewInputError("%s", err.Error())
 	}
 
@@ -540,7 +540,7 @@ func (t *provisioningRequestReconcilerTask) prepareCVSpec(
 		// Update action.UpgradeToVersion to the resolved version so the
 		// upgrade continues in the same reconciliation.
 		if configIntermediate != "" {
-			if err := upgradevalidation.ValidateEUSIntermediate(
+			if err := validation.ValidateEUSIntermediate(
 				configIntermediate, targetVersion,
 			); err != nil {
 				return nil, fmt.Errorf("failed to validate clusterVersion.intermediateVersion: %w", err)
@@ -584,7 +584,7 @@ func (t *provisioningRequestReconcilerTask) prepareCVSpec(
 		UpgradeThrough:        workerPoolUpgrade.UpgradeThrough,
 		PauseStateManaged:     pauseStateManaged,
 	}
-	authorizedThrough := workerStatus.StageIndex(workerStatus.UpgradeThrough)
+	authorizedThrough := provisioning.StageIndex(workerStatus, workerStatus.UpgradeThrough)
 	for i := range workerStatus.Stages {
 		state := provisioningv1alpha1.WorkerPoolUpgradeStageStateAwaitingAuthorization
 		if i <= authorizedThrough {
@@ -610,13 +610,13 @@ func (t *provisioningRequestReconcilerTask) prepareCVSpec(
 // as default when the configuration does not specify a strategy.
 func extractWorkerPoolUpgrade(
 	cvConfig map[string]any, isEUS bool,
-) (upgradevalidation.WorkerPoolUpgrade, error) {
+) (validation.WorkerPoolUpgrade, error) {
 	// Set the default strategy.
 	strategy := constants.WorkerPoolUpgradeStrategyOpenShiftDefault
 	if isEUS {
 		strategy = constants.WorkerPoolUpgradeStrategyParallel
 	}
-	workerPoolUpgrade := upgradevalidation.WorkerPoolUpgrade{
+	workerPoolUpgrade := validation.WorkerPoolUpgrade{
 		Strategy: strategy,
 	}
 
@@ -626,11 +626,11 @@ func extractWorkerPoolUpgrade(
 	}
 	workerPoolUpgradeData, err := json.Marshal(raw)
 	if err != nil {
-		return upgradevalidation.WorkerPoolUpgrade{}, fmt.Errorf(
+		return validation.WorkerPoolUpgrade{}, fmt.Errorf(
 			"failed to marshal %s: %w", ctlrutils.UpgradeWorkerPoolUpgradeKey, err)
 	}
 	if err := json.Unmarshal(workerPoolUpgradeData, &workerPoolUpgrade); err != nil {
-		return upgradevalidation.WorkerPoolUpgrade{}, fmt.Errorf(
+		return validation.WorkerPoolUpgrade{}, fmt.Errorf(
 			"invalid %s: %w", ctlrutils.UpgradeWorkerPoolUpgradeKey, err)
 	}
 	return workerPoolUpgrade, nil
@@ -752,19 +752,19 @@ func (t *provisioningRequestReconcilerTask) mergeAndValidateUpgradeData(
 	// Seed generation uses a complete internal schema after merge. The
 	// templateParameterSchema only describes fields a PR author may override.
 	if _, hasSeed := mergedUpgradeData[ctlrutils.UpgradeDefaultsSeedGenerationKey]; hasSeed {
-		if err := provisioningv1alpha1.ValidateSeedGenerationUpgradeData(mergedUpgradeData); err != nil {
-			return nil, fmt.Errorf("merged seed generation parameters: %w", err)
+		if err := validation.ValidateSeedGenerationUpgradeData(mergedUpgradeData); err != nil {
+			return nil, fmt.Errorf("merged seed generation parameters are invalid: %w", err)
 		}
 		return mergedUpgradeData, nil
 	}
 
 	// Existing upgrade types validate the merged data against their public schema.
-	upgradeSchema, err := provisioningv1alpha1.ExtractSubSchema(
+	upgradeSchema, err := validation.ExtractSubSchema(
 		clusterTemplate.Spec.TemplateParameterSchema.Raw, constants.TemplateParamUpgrade)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract %s schema: %w", constants.TemplateParamUpgrade, err)
 	}
-	if err := provisioningv1alpha1.ValidateJsonAgainstJsonSchema(upgradeSchema, mergedUpgradeData); err != nil {
+	if err := validation.ValidateJSONSchema(upgradeSchema, mergedUpgradeData); err != nil {
 		return nil, fmt.Errorf(
 			"merged upgrade parameters do not match the schema defined in ClusterTemplate (%s) spec.templateParameterSchema.%s: %s",
 			clusterTemplate.Name, constants.TemplateParamUpgrade, err.Error())
@@ -987,20 +987,20 @@ func (t *provisioningRequestReconcilerTask) refreshCustomStageAuthorization(
 ) error {
 	upgradeStatus := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus
 	status := upgradeStatus.WorkerPoolUpgrade
-	requestedThrough, err := upgrade.RequestedWorkerPoolUpgradeThrough(
+	requestedThrough, err := provisioning.RequestedWorkerPoolUpgradeThrough(
 		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw,
 		t.object.Spec.TemplateParameters.Raw,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to resolve requested Custom stage authorization: %w", err)
 	}
-	currentIndex := status.StageIndex(status.UpgradeThrough)
+	currentIndex := provisioning.StageIndex(status, status.UpgradeThrough)
 	if status.UpgradeThrough != "" && currentIndex < 0 {
 		t.logger.WarnContext(ctx, "Ignoring Custom stage authorization from unknown persisted stage",
 			slog.String("currentUpgradeThrough", status.UpgradeThrough))
 		return nil
 	}
-	requestedIndex := status.StageIndex(requestedThrough)
+	requestedIndex := provisioning.StageIndex(status, requestedThrough)
 	if requestedThrough != "" && requestedIndex < 0 {
 		t.logger.WarnContext(ctx, "Ignoring Custom stage authorization for unknown stage",
 			slog.String("requestedUpgradeThrough", requestedThrough))
@@ -1186,7 +1186,7 @@ func (t *provisioningRequestReconcilerTask) reconcileCustomWorkerPoolRollout(
 
 	upgradeStatus := t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus
 	workerPoolUpgrade := upgradeStatus.WorkerPoolUpgrade
-	lastAuthorizedStageIndex := workerPoolUpgrade.StageIndex(workerPoolUpgrade.UpgradeThrough)
+	lastAuthorizedStageIndex := provisioning.StageIndex(workerPoolUpgrade, workerPoolUpgrade.UpgradeThrough)
 
 	completedPools := append([]string(nil), workerPoolUpgrade.PoolsWithControlPlane...)
 	// Unpause the authorized stages one by one. Wait for each stage to report Updated=true before
@@ -1510,20 +1510,20 @@ func (t *provisioningRequestReconcilerTask) validateMCPsPreconditions(
 		}
 	}
 
-	stages := make([]upgradevalidation.WorkerPoolUpgradeStage, 0, len(workerPoolUpgrade.Stages))
+	stages := make([]validation.WorkerPoolUpgradeStage, 0, len(workerPoolUpgrade.Stages))
 	for _, stage := range workerPoolUpgrade.Stages {
-		stages = append(stages, upgradevalidation.WorkerPoolUpgradeStage{
+		stages = append(stages, validation.WorkerPoolUpgradeStage{
 			Name: stage.Name, Pools: append([]string(nil), stage.Pools...),
 		})
 	}
-	workerPoolConfig := upgradevalidation.WorkerPoolUpgrade{
+	workerPoolConfig := validation.WorkerPoolUpgrade{
 		Strategy:              workerPoolUpgrade.Strategy,
 		PoolsWithControlPlane: append([]string(nil), workerPoolUpgrade.PoolsWithControlPlane...),
 		Stages:                stages,
 		UpgradeThrough:        workerPoolUpgrade.UpgradeThrough,
 	}
 
-	if err := upgradevalidation.ValidateWorkerPoolUpgradeMCPs(nonMasterMCPs, workerPoolConfig); err != nil {
+	if err := validation.ValidateWorkerPoolUpgradeMCPs(nonMasterMCPs, workerPoolConfig); err != nil {
 		return typederrors.NewInputError("%s", err.Error())
 	}
 

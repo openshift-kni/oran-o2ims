@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openshift-kni/oran-o2ims/internal/validation"
+
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -357,7 +359,7 @@ func (t *provisioningRequestReconcilerTask) handlePostProvisioning(ctx context.C
 			// reached a terminal state. This prevents unsupported requests from
 			// proceeding through normal post-provisioning.
 			if !seedGenerationTerminal(t.object) {
-				return requeueWithError(errors.New(provisioningv1alpha1.SeedGenerationUnsupportedMessage))
+				return requeueWithError(errors.New(validation.SeedGenerationUnsupportedMessage))
 			}
 		} else {
 			result, err := t.handleClusterUpgrades(ctx, renderedClusterInstance.GetName(), clusterTemplate)

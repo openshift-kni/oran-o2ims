@@ -28,6 +28,7 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	"github.com/openshift-kni/oran-o2ims/internal/provisioning"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -268,7 +269,7 @@ func (t *provisioningRequestReconcilerTask) ensureSeedGenerationInputSnapshot(
 	if snapshot == nil {
 		if clusterTemplate == nil {
 			var err error
-			clusterTemplate, err = t.object.GetClusterTemplateRef(ctx, t.client)
+			clusterTemplate, err = provisioning.GetClusterTemplateRef(ctx, t.client, t.object)
 			if err != nil {
 				return nil, false, fmt.Errorf("failed to get ClusterTemplate for seed generation inputs: %w", err)
 			}
