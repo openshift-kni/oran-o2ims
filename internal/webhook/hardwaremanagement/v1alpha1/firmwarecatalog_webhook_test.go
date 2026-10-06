@@ -11,6 +11,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -21,19 +22,19 @@ var _ = Describe("FirmwareCatalogValidator", func() {
 		ctx        context.Context
 		validator  *firmwareCatalogValidator
 		fakeClient client.Client
-		oldCatalog *FirmwareCatalog
-		newCatalog *FirmwareCatalog
+		oldCatalog *hwmgmtv1alpha1.FirmwareCatalog
+		newCatalog *hwmgmtv1alpha1.FirmwareCatalog
 	)
 
 	BeforeEach(func() {
 		ctx = context.TODO()
-		oldCatalog = &FirmwareCatalog{
+		oldCatalog = &hwmgmtv1alpha1.FirmwareCatalog{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "firmware-catalog",
 				Namespace: "oran-o2ims",
 			},
-			Spec: FirmwareCatalogSpec{
-				Images: []FirmwareImage{
+			Spec: hwmgmtv1alpha1.FirmwareCatalogSpec{
+				Images: []hwmgmtv1alpha1.FirmwareImage{
 					{
 						Name:      "dell-bios-2.3.5",
 						Component: "bios",
@@ -76,7 +77,7 @@ var _ = Describe("FirmwareCatalogValidator", func() {
 		Context("when no entries are removed", func() {
 			It("should allow adding new entries", func() {
 				setupValidator()
-				newCatalog.Spec.Images = append(newCatalog.Spec.Images, FirmwareImage{
+				newCatalog.Spec.Images = append(newCatalog.Spec.Images, hwmgmtv1alpha1.FirmwareImage{
 					Name:      "broadcom-nic-25.2",
 					Component: "nic",
 					URL:       "https://example.com/nic.bin",
@@ -92,7 +93,7 @@ var _ = Describe("FirmwareCatalogValidator", func() {
 		Context("when an unreferenced entry is removed", func() {
 			It("should allow the removal", func() {
 				setupValidator()
-				newCatalog.Spec.Images = []FirmwareImage{oldCatalog.Spec.Images[0]}
+				newCatalog.Spec.Images = []hwmgmtv1alpha1.FirmwareImage{oldCatalog.Spec.Images[0]}
 
 				warnings, err := validator.ValidateUpdate(ctx, oldCatalog, newCatalog)
 				Expect(err).ToNot(HaveOccurred())
@@ -188,7 +189,7 @@ var _ = Describe("FirmwareCatalogValidator", func() {
 		})
 
 		It("should detect removed entries", func() {
-			removed := findRemovedEntries(oldCatalog.Spec.Images, []FirmwareImage{oldCatalog.Spec.Images[0]})
+			removed := findRemovedEntries(oldCatalog.Spec.Images, []hwmgmtv1alpha1.FirmwareImage{oldCatalog.Spec.Images[0]})
 			Expect(removed).To(ConsistOf("dell-bmc-7.10"))
 		})
 
