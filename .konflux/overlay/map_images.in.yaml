@@ -6,4 +6,6 @@
 - key: postgres_image
   staging: registry.stage.redhat.io/rhel9/postgresql-18
   production: registry.redhat.io/rhel9/postgresql-18
-
+- key: seed_generation_tools_image
+  staging: registry.stage.redhat.io/openshift4/ose-tools-rhel9
+  production: registry.redhat.io/openshift4/ose-tools-rhel9

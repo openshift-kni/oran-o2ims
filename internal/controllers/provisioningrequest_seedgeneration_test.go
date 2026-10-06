@@ -78,6 +78,23 @@ func TestSeedGenerationOneShotRouting(t *testing.T) {
 	}
 }
 
+func TestSeedGenerationFailureCleanupResumesNormalReconciliation(t *testing.T) {
+	pr := &provisioningv1alpha1.ProvisioningRequest{ObjectMeta: metav1.ObjectMeta{
+		Name: "seed-pr", UID: types.UID("pr-uid"),
+	}}
+	ctlrutils.SetStatusCondition(&pr.Status.Conditions, provisioningv1alpha1.PRconditionTypes.SeedGenerationCompleted,
+		provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, metav1.ConditionFalse, "preflight failed")
+	task := seedTestTask(pr, newSeedTestClient(t))
+
+	handled, result, err := task.reconcileSeedGenerationFailureCleanup(context.Background())
+	if err != nil {
+		t.Fatalf("cleanup failed: %v", err)
+	}
+	if handled || result.Requeue || result.RequeueAfter != 0 {
+		t.Fatalf("completed cleanup stopped normal reconciliation: handled=%t result=%+v", handled, result)
+	}
+}
+
 func TestSeedGenerationTimeoutResolution(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -205,5 +222,30 @@ func TestSeedGenerationFinalizerCleanupUsesUID(t *testing.T) {
 	clean, err = r.cleanupSeedGenerationResources(ctx, pr)
 	if err != nil || !clean {
 		t.Fatalf("cleanup did not complete: clean=%t err=%v", clean, err)
+	}
+}
+
+func TestReconcileSeedGenerationPreflightFailsWhenSpokeIsNotReady(t *testing.T) {
+	ctx := context.Background()
+	started := metav1.Now()
+	pr := &provisioningv1alpha1.ProvisioningRequest{ObjectMeta: metav1.ObjectMeta{
+		Name: "seed-pr", UID: types.UID("pr-uid"),
+	}}
+	pr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
+		Name: "spoke",
+		SeedGenerationStatus: &provisioningv1alpha1.SeedGenerationStatus{
+			StartedAt: &started, TimeoutSeconds: 3600,
+		},
+	}
+	ctlrutils.SetStatusCondition(&pr.Status.Conditions,
+		provisioningv1alpha1.PRconditionTypes.SeedGenerationCompleted,
+		provisioningv1alpha1.CRconditionReasons.Validating, metav1.ConditionFalse, "validating")
+	c := newSeedTestClient(t, pr)
+	task := seedTestTask(pr, c)
+	if _, err := task.reconcileSeedGeneration(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !seedGenerationTerminal(pr) || seedGenerationCondition(pr).Reason != string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed) {
+		t.Fatalf("unready spoke did not fail preflight: %+v", pr.Status.Conditions)
 	}
 }

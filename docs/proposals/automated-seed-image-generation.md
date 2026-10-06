@@ -109,9 +109,11 @@ The manual seed generation workflow has several pain points:
 
 ## Non-Goals
 
-- Installing or managing the prerequisite operators (LCA, OADP) or the
+- Installing or managing the prerequisite operator (LCA) or the
   `var-lib-containers` MachineConfig — these remain the cluster template
   author's responsibility; the controller only validates their presence.
+- Requiring or checking OADP. OADP is expected to become optional for IBU, so
+  its presence is not a seed-generation precondition.
 - Validating hardware-specific seed prerequisites the hub cannot inspect
   (CPU topology alignment, FIPS, proxy, IP-version match with target SNOs);
   see [Challenge 5](#5-seed-sno-prerequisites).
@@ -134,9 +136,9 @@ The seed SNO cluster must be provisioned with the following already in place:
 - **`var-lib-containers` partition**: The ClusterTemplate's `clusterInstanceDefaults` must include the MachineConfig that creates a separate `/var/lib/containers` partition. This is a **seed-generation** prerequisite on the seed cluster:
   LCA validates a shared `/var/lib/containers` before it will generate the seed, independent of whether the resulting seed is later consumed by IBI or IBU. (The matching *target*-side shared partition is what is IBU-specific — for the dual-stateroot
   pivot during upgrade — and is out of scope for this proposal, which only produces the seed and, optionally, the IBI live ISO.)
-- **OADP Operator**: Required by LCA for backup/restore operations during seed generation.
-
-These are the responsibility of the cluster template author. The controller validates their presence but does not install them.
+These are the responsibility of the cluster template author. The controller
+validates LCA and the shared partition but does not install them. OADP is not
+validated or required because its use is becoming optional for IBU.
 
 Live ISO generation (Phase 4) is **IBI-only and optional**: it is driven by the `liveISO` block and produces the bootable installation ISO that IBI needs to install bare-metal targets. A seed intended only for IBU (in-place upgrade of an existing
 cluster) needs no ISO — omit `liveISO` and the controller stops after the seed image is pushed.
@@ -604,7 +606,6 @@ The workflow is a multi-phase state machine tracked via a new `SeedGenerationCom
 - Verify the spoke cluster is fully provisioned (ZTP Done)
 - Verify the spoke has the `var-lib-containers` partition (check for the MachineConfig via spoke client)
 - Verify the LCA operator is installed and Available on the spoke (check the `openshift-lifecycle-agent` namespace for the LCA operator Deployment via spoke client)
-- Verify the OADP operator is installed on the spoke
 - If `liveISO` is configured:
   - Verify the `uploadSecretRef` Secret exists and contains the required keys (`host`, `username`, `privateKey`, `remotePath`, `knownHosts`). A missing or empty `knownHosts` is a `PreconditionChecksFailed` — the upload fails closed rather than falling back to trust-on-first-use
   - If `caCert` is present in the upload Secret, validate that it is a well-formed PEM certificate bundle
@@ -1157,7 +1158,7 @@ spec:
         - name: controller
           role: master
     clusterInstanceDefaults: clusterinstance-defaults-v1  # includes var-lib-containers MC
-    policyTemplateDefaults: policytemplate-defaults-v1    # includes LCA + OADP operators
+    policyTemplateDefaults: policytemplate-defaults-v1    # includes the LCA operator
     upgradeDefaults:
       seedGeneration:
         seedImage: my-mirror.example.com/seed-repo/seed-image:4.Y.Z
@@ -1249,7 +1250,11 @@ hardware. This mirrors the manual workflow, which also never re-attaches the see
 
 **Challenge**: The seed SNO has hardware-specific prerequisites (CPU topology alignment, FIPS, proxy, IP version match with target SNOs) that cannot be fully validated by the hub controller.
 
-**Mitigation**: The controller validates what it can (OCP version, `var-lib-containers` partition, LCA operator presence, OADP operator presence, registry credentials). Hardware prerequisites are the cluster template author's responsibility — they must ensure the ClusterTemplate's
+**Mitigation**: The controller validates what it can (OCP version,
+`var-lib-containers` partition, LCA operator presence, and registry
+credentials). OADP is not a precondition because it is expected to become
+optional for IBU. Hardware prerequisites are the cluster template author's
+responsibility — they must ensure the ClusterTemplate's
 `clusterInstanceDefaults` and `policyTemplateDefaults` produce a seed SNO that meets the documented prerequisites.
 
 ### 6. Spoke access after ACM removal

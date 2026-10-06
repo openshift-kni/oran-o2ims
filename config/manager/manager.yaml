@@ -75,6 +75,8 @@ spec:
           value: controller:latest
         - name: POSTGRES_IMAGE
           value: registry.redhat.io/rhel9/postgresql-18:9.8-1785715946
+        - name: RELATED_IMAGE_SEED_GENERATION_TOOLS_IMAGE
+          value: registry.redhat.io/openshift4/ose-tools-rhel9:v4.22
         - name: OCLOUD_MANAGER_NAMESPACE
           valueFrom:
             fieldRef:
@@ -129,4 +131,3 @@ spec:
         secret:
           defaultMode: 420
           secretName: controller-manager-metrics-tls
-
