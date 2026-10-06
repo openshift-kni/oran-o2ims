@@ -60,28 +60,28 @@ rules:
   verbs:
   - create
 - nonResourceURLs:
-  - /o2ims-infrastructureCluster/v1/nodeClusterTypes
-  - /o2ims-infrastructureCluster/v1/nodeClusters
-  - /o2ims-infrastructureCluster/v1/alarmDictionaries
+  - /O2ims_infrastructureCluster/v1/nodeClusterTypes
+  - /O2ims_infrastructureCluster/v1/nodeClusters
+  - /O2ims_infrastructureCluster/v1/alarmDictionaries
   verbs:
   - get
   - list
 - nonResourceURLs:
-  - /o2ims-infrastructureCluster/v1/nodeClusterTypes/*
-  - /o2ims-infrastructureCluster/v1/nodeClusters/*
-  - /o2ims-infrastructureCluster/v1/alarmDictionaries/*
+  - /O2ims_infrastructureCluster/v1/nodeClusterTypes/*
+  - /O2ims_infrastructureCluster/v1/nodeClusters/*
+  - /O2ims_infrastructureCluster/v1/alarmDictionaries/*
   verbs:
   - get
 - nonResourceURLs:
-  - /o2ims-infrastructureInventory/v2/resourceTypes
+  - /O2ims_infrastructureInventory/v2/resourceTypes
   verbs:
   - get
   - list
 - nonResourceURLs:
-  - /o2ims-infrastructureInventory/v2/resourceTypes/*
+  - /O2ims_infrastructureInventory/v2/resourceTypes/*
   verbs:
   - get
 - nonResourceURLs:
-  - /o2ims-infrastructureInventory/v2/internal/resources/*
+  - /O2ims_infrastructureInventory/v2/internal/resources/*
   verbs:
   - get

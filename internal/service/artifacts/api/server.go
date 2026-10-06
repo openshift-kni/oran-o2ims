@@ -72,7 +72,7 @@ func (a *ArtifactsServer) GetMinorVersions(ctx context.Context, request api.GetM
 }
 
 // Get managed infrastructure templates
-// (GET /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates)
+// (GET /O2ims_infrastructureArtifacts/v1/managedInfrastructureTemplates)
 func (r *ArtifactsServer) GetManagedInfrastructureTemplates(
 	ctx context.Context,
 	request api.GetManagedInfrastructureTemplatesRequestObject) (api.GetManagedInfrastructureTemplatesResponseObject, error) {
@@ -106,7 +106,7 @@ func (r *ArtifactsServer) GetManagedInfrastructureTemplates(
 }
 
 // Get managed infrastructure templates
-// (GET /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates/{managedInfrastructureTemplateId})
+// (GET /O2ims_infrastructureArtifacts/v1/managedInfrastructureTemplates/{managedInfrastructureTemplateId})
 func (r *ArtifactsServer) GetManagedInfrastructureTemplate(
 	ctx context.Context, request api.GetManagedInfrastructureTemplateRequestObject) (api.GetManagedInfrastructureTemplateResponseObject, error) {
 	ctx = logging.AppendCtx(ctx, slog.String("managedInfrastructureTemplateId", request.ManagedInfrastructureTemplateId))
@@ -136,7 +136,7 @@ func (r *ArtifactsServer) GetManagedInfrastructureTemplate(
 }
 
 // Get managed infrastructure template defaults
-// (GET /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates/{managedInfrastructureTemplateId}/defaults)
+// (GET /O2ims_infrastructureArtifacts/v1/managedInfrastructureTemplates/{managedInfrastructureTemplateId}/defaults)
 func (r *ArtifactsServer) GetManagedInfrastructureTemplateDefaults(
 	ctx context.Context,
 	request api.GetManagedInfrastructureTemplateDefaultsRequestObject) (api.GetManagedInfrastructureTemplateDefaultsResponseObject, error) {

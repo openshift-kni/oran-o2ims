@@ -7,16 +7,16 @@ metadata:
   name: oran-o2ims-subscriber-role
 rules:
 - nonResourceURLs:
-  - /o2ims-infrastructureMonitoring/v1/alarmSubscriptions
-  - /o2ims-infrastructureInventory/v2/subscriptions
-  - /o2ims-infrastructureCluster/v1/subscriptions
+  - /O2ims_infrastructureMonitoring/v1/alarmSubscriptions
+  - /O2ims_infrastructureInventory/v2/subscriptions
+  - /O2ims_infrastructureCluster/v1/subscriptions
   verbs:
   - get
   - create
 - nonResourceURLs:
-  - /o2ims-infrastructureMonitoring/v1/alarmSubscriptions/*
-  - /o2ims-infrastructureInventory/v2/subscriptions/*
-  - /o2ims-infrastructureCluster/v1/subscriptions/*
+  - /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/*
+  - /O2ims_infrastructureInventory/v2/subscriptions/*
+  - /O2ims_infrastructureCluster/v1/subscriptions/*
   verbs:
   - get
   - delete

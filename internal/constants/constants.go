@@ -8,11 +8,11 @@ package constants
 
 // O2 IMS API path prefixes
 const (
-	O2IMSInventoryAPIPath    = "/o2ims-infrastructureInventory"
-	O2IMSClusterAPIPath      = "/o2ims-infrastructureCluster"
-	O2IMSMonitoringAPIPath   = "/o2ims-infrastructureMonitoring"
-	O2IMSArtifactsAPIPath    = "/o2ims-infrastructureArtifacts"
-	O2IMSProvisioningAPIPath = "/o2ims-infrastructureProvisioning"
+	O2IMSInventoryAPIPath    = "/O2ims_infrastructureInventory"
+	O2IMSClusterAPIPath      = "/O2ims_infrastructureCluster"
+	O2IMSMonitoringAPIPath   = "/O2ims_infrastructureMonitoring"
+	O2IMSArtifactsAPIPath    = "/O2ims_infrastructureArtifacts"
+	O2IMSProvisioningAPIPath = "/O2ims_infrastructureProvisioning"
 )
 
 // Hardware Manager API path prefixes

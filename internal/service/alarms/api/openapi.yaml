@@ -32,7 +32,7 @@ security:
   - role:o2ims-admin
 
 paths:
-  /o2ims-infrastructureMonitoring/api_versions:
+  /O2ims_infrastructureMonitoring/api_versions:
     get:
       operationId: getAllVersions
       summary: Get API versions
@@ -77,7 +77,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /o2ims-infrastructureMonitoring/v1/api_versions:
+  /O2ims_infrastructureMonitoring/v1/api_versions:
     get:
       operationId: getMinorVersions
       summary: Get minor API versions
@@ -122,7 +122,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /o2ims-infrastructureMonitoring/v1/alarms:
+  /O2ims_infrastructureMonitoring/v1/alarms:
     get:
       operationId: GetAlarms
       summary: Retrieve the list of alarms
@@ -171,7 +171,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId}:
+  /O2ims_infrastructureMonitoring/v1/alarms/{alarmEventRecordId}:
     get:
       operationId: GetAlarm
       summary: Retrieve exactly one alarm
@@ -300,7 +300,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration:
+  /O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration:
     get:
       operationId: GetServiceConfiguration
       summary: Retrieve the alarm service configuration
@@ -449,7 +449,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /o2ims-infrastructureMonitoring/v1/alarmSubscriptions:
+  /O2ims_infrastructureMonitoring/v1/alarmSubscriptions:
     get:
       operationId: GetSubscriptions
       summary: Retrieve the list of alarm subscriptions
@@ -568,7 +568,7 @@ paths:
                 '500':
                   description: Internal server error
 
-  /o2ims-infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId}:
+  /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId}:
     get:
       operationId: GetSubscription
       summary: Retrieve exactly one subscription
@@ -983,7 +983,7 @@ components:
         objectRef:
           type: string
           description: The URL to the AlarmEventRecord object.
-          example: hostname.com/o2ims-infrastructureMonitoring/v1/alarms/bf3f8f2e-6f37-4882-96ad-c0b9cef6fc04
+          example: hostname.com/O2ims_infrastructureMonitoring/v1/alarms/bf3f8f2e-6f37-4882-96ad-c0b9cef6fc04
         alarmEventRecordId:
           type: string
           format: uuid

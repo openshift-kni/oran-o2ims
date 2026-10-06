@@ -837,98 +837,98 @@ type ClientInterface interface {
 	//
 	// Returns the complete list of API versions implemented by the service.
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/api_versions (the `GetAllVersions` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/api_versions (the `GetAllVersions` operationId).
 	GetAllVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAlarmDictionaries Get alarm dictionaries
 	//
 	// Returns the list of alarm dictionaries.
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/alarmDictionaries (the `GetAlarmDictionaries` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/alarmDictionaries (the `GetAlarmDictionaries` operationId).
 	GetAlarmDictionaries(ctx context.Context, params *GetAlarmDictionariesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAlarmDictionary Get an alarm dictionary
 	//
 	// Returns the details of an alarm dictionary.
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/alarmDictionaries/{alarmDictionaryId} (the `GetAlarmDictionary` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/alarmDictionaries/{alarmDictionaryId} (the `GetAlarmDictionary` operationId).
 	GetAlarmDictionary(ctx context.Context, alarmDictionaryId externalRef0.AlarmDictionaryId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetMinorVersions Get minor API versions
 	//
 	// Returns the list of minor API versions implemented for this major version of the API.
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/api_versions (the `GetMinorVersions` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/api_versions (the `GetMinorVersions` operationId).
 	GetMinorVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetClusterResourceTypes Get cluster resource types
 	//
 	// Returns the list of cluster resource types.
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/clusterResourceTypes (the `GetClusterResourceTypes` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/clusterResourceTypes (the `GetClusterResourceTypes` operationId).
 	GetClusterResourceTypes(ctx context.Context, params *GetClusterResourceTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetClusterResourceType Get a node cluster type
 	//
 	// Returns the details of a node cluster type.
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/clusterResourceTypes/{clusterResourceTypeId} (the `GetClusterResourceType` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/clusterResourceTypes/{clusterResourceTypeId} (the `GetClusterResourceType` operationId).
 	GetClusterResourceType(ctx context.Context, clusterResourceTypeId ClusterResourceTypeId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetClusterResources Get cluster resources
 	//
 	// Returns the list of cluster resources.
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/clusterResources (the `GetClusterResources` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/clusterResources (the `GetClusterResources` operationId).
 	GetClusterResources(ctx context.Context, params *GetClusterResourcesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetClusterResource Get a cluster resource
 	//
 	// Returns the details of a cluster resource.
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/clusterResources/{clusterResourceId} (the `GetClusterResource` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/clusterResources/{clusterResourceId} (the `GetClusterResource` operationId).
 	GetClusterResource(ctx context.Context, clusterResourceId ClusterResourceId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetNodeClusterTypes Get node cluster types
 	//
 	// Returns the list of node cluster types.
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/nodeClusterTypes (the `GetNodeClusterTypes` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/nodeClusterTypes (the `GetNodeClusterTypes` operationId).
 	GetNodeClusterTypes(ctx context.Context, params *GetNodeClusterTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetNodeClusterType Get a node cluster type
 	//
 	// Returns the details of a node cluster type.
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId} (the `GetNodeClusterType` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId} (the `GetNodeClusterType` operationId).
 	GetNodeClusterType(ctx context.Context, nodeClusterTypeId NodeClusterTypeId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetNodeClusterTypeAlarmDictionary Get an alarm dictionary for a node cluster type
 	//
 	// Returns the alarm dictionary for a node cluster type.
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId}/alarmDictionary (the `GetNodeClusterTypeAlarmDictionary` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId}/alarmDictionary (the `GetNodeClusterTypeAlarmDictionary` operationId).
 	GetNodeClusterTypeAlarmDictionary(ctx context.Context, nodeClusterTypeId NodeClusterTypeId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetNodeClusters Get node clusters
 	//
 	// Returns the list of node clusters.
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/nodeClusters (the `GetNodeClusters` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/nodeClusters (the `GetNodeClusters` operationId).
 	GetNodeClusters(ctx context.Context, params *GetNodeClustersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetNodeCluster Get a node cluster
 	//
 	// Returns the details of a node cluster.
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/nodeClusters/{nodeClusterId} (the `GetNodeCluster` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/nodeClusters/{nodeClusterId} (the `GetNodeCluster` operationId).
 	GetNodeCluster(ctx context.Context, nodeClusterId NodeClusterId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetSubscriptions Get subscriptions
 	//
 	// Returns the list of cluster subscriptions.
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/subscriptions (the `GetSubscriptions` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/subscriptions (the `GetSubscriptions` operationId).
 	GetSubscriptions(ctx context.Context, params *GetSubscriptionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateSubscriptionWithBody Create subscriptions
@@ -937,7 +937,7 @@ type ClientInterface interface {
 	//
 	// Takes any type of body and a specified content type.
 	//
-	// Corresponds with POST /o2ims-infrastructureCluster/v1/subscriptions (the `CreateSubscription` operationId).
+	// Corresponds with POST /O2ims_infrastructureCluster/v1/subscriptions (the `CreateSubscription` operationId).
 	CreateSubscriptionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateSubscription Create subscriptions
@@ -946,21 +946,21 @@ type ClientInterface interface {
 	//
 	// Takes a body of the `application/json` content type.
 	//
-	// Corresponds with POST /o2ims-infrastructureCluster/v1/subscriptions (the `CreateSubscription` operationId).
+	// Corresponds with POST /O2ims_infrastructureCluster/v1/subscriptions (the `CreateSubscription` operationId).
 	CreateSubscription(ctx context.Context, body CreateSubscriptionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteSubscription Delete subscription
 	//
 	// Deletes a subscription.
 	//
-	// Corresponds with DELETE /o2ims-infrastructureCluster/v1/subscriptions/{subscriptionId} (the `DeleteSubscription` operationId).
+	// Corresponds with DELETE /O2ims_infrastructureCluster/v1/subscriptions/{subscriptionId} (the `DeleteSubscription` operationId).
 	DeleteSubscription(ctx context.Context, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetSubscription Get subscription
 	//
 	// Returns the details of a subscription.
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/subscriptions/{subscriptionId} (the `GetSubscription` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/subscriptions/{subscriptionId} (the `GetSubscription` operationId).
 	GetSubscription(ctx context.Context, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
@@ -968,7 +968,7 @@ type ClientInterface interface {
 //
 // Returns the complete list of API versions implemented by the service.
 //
-// Corresponds with GET /o2ims-infrastructureCluster/api_versions (the `GetAllVersions` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/api_versions (the `GetAllVersions` operationId).
 func (c *Client) GetAllVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetAllVersionsRequest(c.Server)
 	if err != nil {
@@ -985,7 +985,7 @@ func (c *Client) GetAllVersions(ctx context.Context, reqEditors ...RequestEditor
 //
 // Returns the list of alarm dictionaries.
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/alarmDictionaries (the `GetAlarmDictionaries` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/alarmDictionaries (the `GetAlarmDictionaries` operationId).
 func (c *Client) GetAlarmDictionaries(ctx context.Context, params *GetAlarmDictionariesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetAlarmDictionariesRequest(c.Server, params)
 	if err != nil {
@@ -1002,7 +1002,7 @@ func (c *Client) GetAlarmDictionaries(ctx context.Context, params *GetAlarmDicti
 //
 // Returns the details of an alarm dictionary.
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/alarmDictionaries/{alarmDictionaryId} (the `GetAlarmDictionary` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/alarmDictionaries/{alarmDictionaryId} (the `GetAlarmDictionary` operationId).
 func (c *Client) GetAlarmDictionary(ctx context.Context, alarmDictionaryId externalRef0.AlarmDictionaryId, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetAlarmDictionaryRequest(c.Server, alarmDictionaryId)
 	if err != nil {
@@ -1019,7 +1019,7 @@ func (c *Client) GetAlarmDictionary(ctx context.Context, alarmDictionaryId exter
 //
 // Returns the list of minor API versions implemented for this major version of the API.
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/api_versions (the `GetMinorVersions` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/api_versions (the `GetMinorVersions` operationId).
 func (c *Client) GetMinorVersions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetMinorVersionsRequest(c.Server)
 	if err != nil {
@@ -1036,7 +1036,7 @@ func (c *Client) GetMinorVersions(ctx context.Context, reqEditors ...RequestEdit
 //
 // Returns the list of cluster resource types.
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/clusterResourceTypes (the `GetClusterResourceTypes` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/clusterResourceTypes (the `GetClusterResourceTypes` operationId).
 func (c *Client) GetClusterResourceTypes(ctx context.Context, params *GetClusterResourceTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetClusterResourceTypesRequest(c.Server, params)
 	if err != nil {
@@ -1053,7 +1053,7 @@ func (c *Client) GetClusterResourceTypes(ctx context.Context, params *GetCluster
 //
 // Returns the details of a node cluster type.
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/clusterResourceTypes/{clusterResourceTypeId} (the `GetClusterResourceType` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/clusterResourceTypes/{clusterResourceTypeId} (the `GetClusterResourceType` operationId).
 func (c *Client) GetClusterResourceType(ctx context.Context, clusterResourceTypeId ClusterResourceTypeId, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetClusterResourceTypeRequest(c.Server, clusterResourceTypeId)
 	if err != nil {
@@ -1070,7 +1070,7 @@ func (c *Client) GetClusterResourceType(ctx context.Context, clusterResourceType
 //
 // Returns the list of cluster resources.
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/clusterResources (the `GetClusterResources` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/clusterResources (the `GetClusterResources` operationId).
 func (c *Client) GetClusterResources(ctx context.Context, params *GetClusterResourcesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetClusterResourcesRequest(c.Server, params)
 	if err != nil {
@@ -1087,7 +1087,7 @@ func (c *Client) GetClusterResources(ctx context.Context, params *GetClusterReso
 //
 // Returns the details of a cluster resource.
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/clusterResources/{clusterResourceId} (the `GetClusterResource` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/clusterResources/{clusterResourceId} (the `GetClusterResource` operationId).
 func (c *Client) GetClusterResource(ctx context.Context, clusterResourceId ClusterResourceId, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetClusterResourceRequest(c.Server, clusterResourceId)
 	if err != nil {
@@ -1104,7 +1104,7 @@ func (c *Client) GetClusterResource(ctx context.Context, clusterResourceId Clust
 //
 // Returns the list of node cluster types.
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/nodeClusterTypes (the `GetNodeClusterTypes` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/nodeClusterTypes (the `GetNodeClusterTypes` operationId).
 func (c *Client) GetNodeClusterTypes(ctx context.Context, params *GetNodeClusterTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetNodeClusterTypesRequest(c.Server, params)
 	if err != nil {
@@ -1121,7 +1121,7 @@ func (c *Client) GetNodeClusterTypes(ctx context.Context, params *GetNodeCluster
 //
 // Returns the details of a node cluster type.
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId} (the `GetNodeClusterType` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId} (the `GetNodeClusterType` operationId).
 func (c *Client) GetNodeClusterType(ctx context.Context, nodeClusterTypeId NodeClusterTypeId, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetNodeClusterTypeRequest(c.Server, nodeClusterTypeId)
 	if err != nil {
@@ -1138,7 +1138,7 @@ func (c *Client) GetNodeClusterType(ctx context.Context, nodeClusterTypeId NodeC
 //
 // Returns the alarm dictionary for a node cluster type.
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId}/alarmDictionary (the `GetNodeClusterTypeAlarmDictionary` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId}/alarmDictionary (the `GetNodeClusterTypeAlarmDictionary` operationId).
 func (c *Client) GetNodeClusterTypeAlarmDictionary(ctx context.Context, nodeClusterTypeId NodeClusterTypeId, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetNodeClusterTypeAlarmDictionaryRequest(c.Server, nodeClusterTypeId)
 	if err != nil {
@@ -1155,7 +1155,7 @@ func (c *Client) GetNodeClusterTypeAlarmDictionary(ctx context.Context, nodeClus
 //
 // Returns the list of node clusters.
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/nodeClusters (the `GetNodeClusters` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/nodeClusters (the `GetNodeClusters` operationId).
 func (c *Client) GetNodeClusters(ctx context.Context, params *GetNodeClustersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetNodeClustersRequest(c.Server, params)
 	if err != nil {
@@ -1172,7 +1172,7 @@ func (c *Client) GetNodeClusters(ctx context.Context, params *GetNodeClustersPar
 //
 // Returns the details of a node cluster.
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/nodeClusters/{nodeClusterId} (the `GetNodeCluster` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/nodeClusters/{nodeClusterId} (the `GetNodeCluster` operationId).
 func (c *Client) GetNodeCluster(ctx context.Context, nodeClusterId NodeClusterId, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetNodeClusterRequest(c.Server, nodeClusterId)
 	if err != nil {
@@ -1189,7 +1189,7 @@ func (c *Client) GetNodeCluster(ctx context.Context, nodeClusterId NodeClusterId
 //
 // Returns the list of cluster subscriptions.
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/subscriptions (the `GetSubscriptions` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/subscriptions (the `GetSubscriptions` operationId).
 func (c *Client) GetSubscriptions(ctx context.Context, params *GetSubscriptionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetSubscriptionsRequest(c.Server, params)
 	if err != nil {
@@ -1208,7 +1208,7 @@ func (c *Client) GetSubscriptions(ctx context.Context, params *GetSubscriptionsP
 //
 // Takes any type of body and a specified content type.
 //
-// Corresponds with POST /o2ims-infrastructureCluster/v1/subscriptions (the `CreateSubscription` operationId).
+// Corresponds with POST /O2ims_infrastructureCluster/v1/subscriptions (the `CreateSubscription` operationId).
 func (c *Client) CreateSubscriptionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateSubscriptionRequestWithBody(c.Server, contentType, body)
 	if err != nil {
@@ -1227,7 +1227,7 @@ func (c *Client) CreateSubscriptionWithBody(ctx context.Context, contentType str
 //
 // Takes a body of the `application/json` content type.
 //
-// Corresponds with POST /o2ims-infrastructureCluster/v1/subscriptions (the `CreateSubscription` operationId).
+// Corresponds with POST /O2ims_infrastructureCluster/v1/subscriptions (the `CreateSubscription` operationId).
 func (c *Client) CreateSubscription(ctx context.Context, body CreateSubscriptionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateSubscriptionRequest(c.Server, body)
 	if err != nil {
@@ -1244,7 +1244,7 @@ func (c *Client) CreateSubscription(ctx context.Context, body CreateSubscription
 //
 // Deletes a subscription.
 //
-// Corresponds with DELETE /o2ims-infrastructureCluster/v1/subscriptions/{subscriptionId} (the `DeleteSubscription` operationId).
+// Corresponds with DELETE /O2ims_infrastructureCluster/v1/subscriptions/{subscriptionId} (the `DeleteSubscription` operationId).
 func (c *Client) DeleteSubscription(ctx context.Context, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteSubscriptionRequest(c.Server, subscriptionId)
 	if err != nil {
@@ -1261,7 +1261,7 @@ func (c *Client) DeleteSubscription(ctx context.Context, subscriptionId Subscrip
 //
 // Returns the details of a subscription.
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/subscriptions/{subscriptionId} (the `GetSubscription` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/subscriptions/{subscriptionId} (the `GetSubscription` operationId).
 func (c *Client) GetSubscription(ctx context.Context, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetSubscriptionRequest(c.Server, subscriptionId)
 	if err != nil {
@@ -1283,7 +1283,7 @@ func NewGetAllVersionsRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/api_versions")
+	operationPath := fmt.Sprintf("/O2ims_infrastructureCluster/api_versions")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1310,7 +1310,7 @@ func NewGetAlarmDictionariesRequest(server string, params *GetAlarmDictionariesP
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/alarmDictionaries")
+	operationPath := fmt.Sprintf("/O2ims_infrastructureCluster/v1/alarmDictionaries")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1407,7 +1407,7 @@ func NewGetAlarmDictionaryRequest(server string, alarmDictionaryId externalRef0.
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/alarmDictionaries/%s", pathParam0)
+	operationPath := fmt.Sprintf("/O2ims_infrastructureCluster/v1/alarmDictionaries/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1434,7 +1434,7 @@ func NewGetMinorVersionsRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/api_versions")
+	operationPath := fmt.Sprintf("/O2ims_infrastructureCluster/v1/api_versions")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1461,7 +1461,7 @@ func NewGetClusterResourceTypesRequest(server string, params *GetClusterResource
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/clusterResourceTypes")
+	operationPath := fmt.Sprintf("/O2ims_infrastructureCluster/v1/clusterResourceTypes")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1558,7 +1558,7 @@ func NewGetClusterResourceTypeRequest(server string, clusterResourceTypeId Clust
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/clusterResourceTypes/%s", pathParam0)
+	operationPath := fmt.Sprintf("/O2ims_infrastructureCluster/v1/clusterResourceTypes/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1585,7 +1585,7 @@ func NewGetClusterResourcesRequest(server string, params *GetClusterResourcesPar
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/clusterResources")
+	operationPath := fmt.Sprintf("/O2ims_infrastructureCluster/v1/clusterResources")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1682,7 +1682,7 @@ func NewGetClusterResourceRequest(server string, clusterResourceId ClusterResour
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/clusterResources/%s", pathParam0)
+	operationPath := fmt.Sprintf("/O2ims_infrastructureCluster/v1/clusterResources/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1709,7 +1709,7 @@ func NewGetNodeClusterTypesRequest(server string, params *GetNodeClusterTypesPar
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/nodeClusterTypes")
+	operationPath := fmt.Sprintf("/O2ims_infrastructureCluster/v1/nodeClusterTypes")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1806,7 +1806,7 @@ func NewGetNodeClusterTypeRequest(server string, nodeClusterTypeId NodeClusterTy
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/nodeClusterTypes/%s", pathParam0)
+	operationPath := fmt.Sprintf("/O2ims_infrastructureCluster/v1/nodeClusterTypes/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1840,7 +1840,7 @@ func NewGetNodeClusterTypeAlarmDictionaryRequest(server string, nodeClusterTypeI
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/nodeClusterTypes/%s/alarmDictionary", pathParam0)
+	operationPath := fmt.Sprintf("/O2ims_infrastructureCluster/v1/nodeClusterTypes/%s/alarmDictionary", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1867,7 +1867,7 @@ func NewGetNodeClustersRequest(server string, params *GetNodeClustersParams) (*h
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/nodeClusters")
+	operationPath := fmt.Sprintf("/O2ims_infrastructureCluster/v1/nodeClusters")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1964,7 +1964,7 @@ func NewGetNodeClusterRequest(server string, nodeClusterId NodeClusterId) (*http
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/nodeClusters/%s", pathParam0)
+	operationPath := fmt.Sprintf("/O2ims_infrastructureCluster/v1/nodeClusters/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1991,7 +1991,7 @@ func NewGetSubscriptionsRequest(server string, params *GetSubscriptionsParams) (
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/subscriptions")
+	operationPath := fmt.Sprintf("/O2ims_infrastructureCluster/v1/subscriptions")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2092,7 +2092,7 @@ func NewCreateSubscriptionRequestWithBody(server string, contentType string, bod
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/subscriptions")
+	operationPath := fmt.Sprintf("/O2ims_infrastructureCluster/v1/subscriptions")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2128,7 +2128,7 @@ func NewDeleteSubscriptionRequest(server string, subscriptionId SubscriptionId) 
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/subscriptions/%s", pathParam0)
+	operationPath := fmt.Sprintf("/O2ims_infrastructureCluster/v1/subscriptions/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2162,7 +2162,7 @@ func NewGetSubscriptionRequest(server string, subscriptionId SubscriptionId) (*h
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/o2ims-infrastructureCluster/v1/subscriptions/%s", pathParam0)
+	operationPath := fmt.Sprintf("/O2ims_infrastructureCluster/v1/subscriptions/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2230,7 +2230,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/api_versions (the `GetAllVersions` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/api_versions (the `GetAllVersions` operationId).
 	GetAllVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAllVersionsResponse, error)
 
 	// GetAlarmDictionariesWithResponse Get alarm dictionaries
@@ -2239,7 +2239,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/alarmDictionaries (the `GetAlarmDictionaries` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/alarmDictionaries (the `GetAlarmDictionaries` operationId).
 	GetAlarmDictionariesWithResponse(ctx context.Context, params *GetAlarmDictionariesParams, reqEditors ...RequestEditorFn) (*GetAlarmDictionariesResponse, error)
 
 	// GetAlarmDictionaryWithResponse Get an alarm dictionary
@@ -2248,7 +2248,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/alarmDictionaries/{alarmDictionaryId} (the `GetAlarmDictionary` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/alarmDictionaries/{alarmDictionaryId} (the `GetAlarmDictionary` operationId).
 	GetAlarmDictionaryWithResponse(ctx context.Context, alarmDictionaryId externalRef0.AlarmDictionaryId, reqEditors ...RequestEditorFn) (*GetAlarmDictionaryResponse, error)
 
 	// GetMinorVersionsWithResponse Get minor API versions
@@ -2257,7 +2257,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/api_versions (the `GetMinorVersions` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/api_versions (the `GetMinorVersions` operationId).
 	GetMinorVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMinorVersionsResponse, error)
 
 	// GetClusterResourceTypesWithResponse Get cluster resource types
@@ -2266,7 +2266,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/clusterResourceTypes (the `GetClusterResourceTypes` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/clusterResourceTypes (the `GetClusterResourceTypes` operationId).
 	GetClusterResourceTypesWithResponse(ctx context.Context, params *GetClusterResourceTypesParams, reqEditors ...RequestEditorFn) (*GetClusterResourceTypesResponse, error)
 
 	// GetClusterResourceTypeWithResponse Get a node cluster type
@@ -2275,7 +2275,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/clusterResourceTypes/{clusterResourceTypeId} (the `GetClusterResourceType` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/clusterResourceTypes/{clusterResourceTypeId} (the `GetClusterResourceType` operationId).
 	GetClusterResourceTypeWithResponse(ctx context.Context, clusterResourceTypeId ClusterResourceTypeId, reqEditors ...RequestEditorFn) (*GetClusterResourceTypeResponse, error)
 
 	// GetClusterResourcesWithResponse Get cluster resources
@@ -2284,7 +2284,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/clusterResources (the `GetClusterResources` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/clusterResources (the `GetClusterResources` operationId).
 	GetClusterResourcesWithResponse(ctx context.Context, params *GetClusterResourcesParams, reqEditors ...RequestEditorFn) (*GetClusterResourcesResponse, error)
 
 	// GetClusterResourceWithResponse Get a cluster resource
@@ -2293,7 +2293,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/clusterResources/{clusterResourceId} (the `GetClusterResource` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/clusterResources/{clusterResourceId} (the `GetClusterResource` operationId).
 	GetClusterResourceWithResponse(ctx context.Context, clusterResourceId ClusterResourceId, reqEditors ...RequestEditorFn) (*GetClusterResourceResponse, error)
 
 	// GetNodeClusterTypesWithResponse Get node cluster types
@@ -2302,7 +2302,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/nodeClusterTypes (the `GetNodeClusterTypes` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/nodeClusterTypes (the `GetNodeClusterTypes` operationId).
 	GetNodeClusterTypesWithResponse(ctx context.Context, params *GetNodeClusterTypesParams, reqEditors ...RequestEditorFn) (*GetNodeClusterTypesResponse, error)
 
 	// GetNodeClusterTypeWithResponse Get a node cluster type
@@ -2311,7 +2311,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId} (the `GetNodeClusterType` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId} (the `GetNodeClusterType` operationId).
 	GetNodeClusterTypeWithResponse(ctx context.Context, nodeClusterTypeId NodeClusterTypeId, reqEditors ...RequestEditorFn) (*GetNodeClusterTypeResponse, error)
 
 	// GetNodeClusterTypeAlarmDictionaryWithResponse Get an alarm dictionary for a node cluster type
@@ -2320,7 +2320,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId}/alarmDictionary (the `GetNodeClusterTypeAlarmDictionary` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId}/alarmDictionary (the `GetNodeClusterTypeAlarmDictionary` operationId).
 	GetNodeClusterTypeAlarmDictionaryWithResponse(ctx context.Context, nodeClusterTypeId NodeClusterTypeId, reqEditors ...RequestEditorFn) (*GetNodeClusterTypeAlarmDictionaryResponse, error)
 
 	// GetNodeClustersWithResponse Get node clusters
@@ -2329,7 +2329,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/nodeClusters (the `GetNodeClusters` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/nodeClusters (the `GetNodeClusters` operationId).
 	GetNodeClustersWithResponse(ctx context.Context, params *GetNodeClustersParams, reqEditors ...RequestEditorFn) (*GetNodeClustersResponse, error)
 
 	// GetNodeClusterWithResponse Get a node cluster
@@ -2338,7 +2338,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/nodeClusters/{nodeClusterId} (the `GetNodeCluster` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/nodeClusters/{nodeClusterId} (the `GetNodeCluster` operationId).
 	GetNodeClusterWithResponse(ctx context.Context, nodeClusterId NodeClusterId, reqEditors ...RequestEditorFn) (*GetNodeClusterResponse, error)
 
 	// GetSubscriptionsWithResponse Get subscriptions
@@ -2347,7 +2347,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/subscriptions (the `GetSubscriptions` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/subscriptions (the `GetSubscriptions` operationId).
 	GetSubscriptionsWithResponse(ctx context.Context, params *GetSubscriptionsParams, reqEditors ...RequestEditorFn) (*GetSubscriptionsResponse, error)
 
 	// CreateSubscriptionWithBodyWithResponse Create subscriptions
@@ -2356,7 +2356,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with POST /o2ims-infrastructureCluster/v1/subscriptions (the `CreateSubscription` operationId).
+	// Corresponds with POST /O2ims_infrastructureCluster/v1/subscriptions (the `CreateSubscription` operationId).
 	CreateSubscriptionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSubscriptionResponse, error)
 
 	// CreateSubscriptionWithResponse Create subscriptions
@@ -2365,7 +2365,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with POST /o2ims-infrastructureCluster/v1/subscriptions (the `CreateSubscription` operationId).
+	// Corresponds with POST /O2ims_infrastructureCluster/v1/subscriptions (the `CreateSubscription` operationId).
 	CreateSubscriptionWithResponse(ctx context.Context, body CreateSubscriptionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSubscriptionResponse, error)
 
 	// DeleteSubscriptionWithResponse Delete subscription
@@ -2374,7 +2374,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with DELETE /o2ims-infrastructureCluster/v1/subscriptions/{subscriptionId} (the `DeleteSubscription` operationId).
+	// Corresponds with DELETE /O2ims_infrastructureCluster/v1/subscriptions/{subscriptionId} (the `DeleteSubscription` operationId).
 	DeleteSubscriptionWithResponse(ctx context.Context, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*DeleteSubscriptionResponse, error)
 
 	// GetSubscriptionWithResponse Get subscription
@@ -2383,7 +2383,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /o2ims-infrastructureCluster/v1/subscriptions/{subscriptionId} (the `GetSubscription` operationId).
+	// Corresponds with GET /O2ims_infrastructureCluster/v1/subscriptions/{subscriptionId} (the `GetSubscription` operationId).
 	GetSubscriptionWithResponse(ctx context.Context, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*GetSubscriptionResponse, error)
 }
 
@@ -3608,7 +3608,7 @@ func (r GetSubscriptionResponse) ContentType() string {
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureCluster/api_versions (the `GetAllVersions` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/api_versions (the `GetAllVersions` operationId).
 func (c *ClientWithResponses) GetAllVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAllVersionsResponse, error) {
 	rsp, err := c.GetAllVersions(ctx, reqEditors...)
 	if err != nil {
@@ -3623,7 +3623,7 @@ func (c *ClientWithResponses) GetAllVersionsWithResponse(ctx context.Context, re
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/alarmDictionaries (the `GetAlarmDictionaries` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/alarmDictionaries (the `GetAlarmDictionaries` operationId).
 func (c *ClientWithResponses) GetAlarmDictionariesWithResponse(ctx context.Context, params *GetAlarmDictionariesParams, reqEditors ...RequestEditorFn) (*GetAlarmDictionariesResponse, error) {
 	rsp, err := c.GetAlarmDictionaries(ctx, params, reqEditors...)
 	if err != nil {
@@ -3638,7 +3638,7 @@ func (c *ClientWithResponses) GetAlarmDictionariesWithResponse(ctx context.Conte
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/alarmDictionaries/{alarmDictionaryId} (the `GetAlarmDictionary` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/alarmDictionaries/{alarmDictionaryId} (the `GetAlarmDictionary` operationId).
 func (c *ClientWithResponses) GetAlarmDictionaryWithResponse(ctx context.Context, alarmDictionaryId externalRef0.AlarmDictionaryId, reqEditors ...RequestEditorFn) (*GetAlarmDictionaryResponse, error) {
 	rsp, err := c.GetAlarmDictionary(ctx, alarmDictionaryId, reqEditors...)
 	if err != nil {
@@ -3653,7 +3653,7 @@ func (c *ClientWithResponses) GetAlarmDictionaryWithResponse(ctx context.Context
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/api_versions (the `GetMinorVersions` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/api_versions (the `GetMinorVersions` operationId).
 func (c *ClientWithResponses) GetMinorVersionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMinorVersionsResponse, error) {
 	rsp, err := c.GetMinorVersions(ctx, reqEditors...)
 	if err != nil {
@@ -3668,7 +3668,7 @@ func (c *ClientWithResponses) GetMinorVersionsWithResponse(ctx context.Context, 
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/clusterResourceTypes (the `GetClusterResourceTypes` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/clusterResourceTypes (the `GetClusterResourceTypes` operationId).
 func (c *ClientWithResponses) GetClusterResourceTypesWithResponse(ctx context.Context, params *GetClusterResourceTypesParams, reqEditors ...RequestEditorFn) (*GetClusterResourceTypesResponse, error) {
 	rsp, err := c.GetClusterResourceTypes(ctx, params, reqEditors...)
 	if err != nil {
@@ -3683,7 +3683,7 @@ func (c *ClientWithResponses) GetClusterResourceTypesWithResponse(ctx context.Co
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/clusterResourceTypes/{clusterResourceTypeId} (the `GetClusterResourceType` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/clusterResourceTypes/{clusterResourceTypeId} (the `GetClusterResourceType` operationId).
 func (c *ClientWithResponses) GetClusterResourceTypeWithResponse(ctx context.Context, clusterResourceTypeId ClusterResourceTypeId, reqEditors ...RequestEditorFn) (*GetClusterResourceTypeResponse, error) {
 	rsp, err := c.GetClusterResourceType(ctx, clusterResourceTypeId, reqEditors...)
 	if err != nil {
@@ -3698,7 +3698,7 @@ func (c *ClientWithResponses) GetClusterResourceTypeWithResponse(ctx context.Con
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/clusterResources (the `GetClusterResources` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/clusterResources (the `GetClusterResources` operationId).
 func (c *ClientWithResponses) GetClusterResourcesWithResponse(ctx context.Context, params *GetClusterResourcesParams, reqEditors ...RequestEditorFn) (*GetClusterResourcesResponse, error) {
 	rsp, err := c.GetClusterResources(ctx, params, reqEditors...)
 	if err != nil {
@@ -3713,7 +3713,7 @@ func (c *ClientWithResponses) GetClusterResourcesWithResponse(ctx context.Contex
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/clusterResources/{clusterResourceId} (the `GetClusterResource` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/clusterResources/{clusterResourceId} (the `GetClusterResource` operationId).
 func (c *ClientWithResponses) GetClusterResourceWithResponse(ctx context.Context, clusterResourceId ClusterResourceId, reqEditors ...RequestEditorFn) (*GetClusterResourceResponse, error) {
 	rsp, err := c.GetClusterResource(ctx, clusterResourceId, reqEditors...)
 	if err != nil {
@@ -3728,7 +3728,7 @@ func (c *ClientWithResponses) GetClusterResourceWithResponse(ctx context.Context
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/nodeClusterTypes (the `GetNodeClusterTypes` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/nodeClusterTypes (the `GetNodeClusterTypes` operationId).
 func (c *ClientWithResponses) GetNodeClusterTypesWithResponse(ctx context.Context, params *GetNodeClusterTypesParams, reqEditors ...RequestEditorFn) (*GetNodeClusterTypesResponse, error) {
 	rsp, err := c.GetNodeClusterTypes(ctx, params, reqEditors...)
 	if err != nil {
@@ -3743,7 +3743,7 @@ func (c *ClientWithResponses) GetNodeClusterTypesWithResponse(ctx context.Contex
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId} (the `GetNodeClusterType` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId} (the `GetNodeClusterType` operationId).
 func (c *ClientWithResponses) GetNodeClusterTypeWithResponse(ctx context.Context, nodeClusterTypeId NodeClusterTypeId, reqEditors ...RequestEditorFn) (*GetNodeClusterTypeResponse, error) {
 	rsp, err := c.GetNodeClusterType(ctx, nodeClusterTypeId, reqEditors...)
 	if err != nil {
@@ -3758,7 +3758,7 @@ func (c *ClientWithResponses) GetNodeClusterTypeWithResponse(ctx context.Context
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId}/alarmDictionary (the `GetNodeClusterTypeAlarmDictionary` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId}/alarmDictionary (the `GetNodeClusterTypeAlarmDictionary` operationId).
 func (c *ClientWithResponses) GetNodeClusterTypeAlarmDictionaryWithResponse(ctx context.Context, nodeClusterTypeId NodeClusterTypeId, reqEditors ...RequestEditorFn) (*GetNodeClusterTypeAlarmDictionaryResponse, error) {
 	rsp, err := c.GetNodeClusterTypeAlarmDictionary(ctx, nodeClusterTypeId, reqEditors...)
 	if err != nil {
@@ -3773,7 +3773,7 @@ func (c *ClientWithResponses) GetNodeClusterTypeAlarmDictionaryWithResponse(ctx 
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/nodeClusters (the `GetNodeClusters` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/nodeClusters (the `GetNodeClusters` operationId).
 func (c *ClientWithResponses) GetNodeClustersWithResponse(ctx context.Context, params *GetNodeClustersParams, reqEditors ...RequestEditorFn) (*GetNodeClustersResponse, error) {
 	rsp, err := c.GetNodeClusters(ctx, params, reqEditors...)
 	if err != nil {
@@ -3788,7 +3788,7 @@ func (c *ClientWithResponses) GetNodeClustersWithResponse(ctx context.Context, p
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/nodeClusters/{nodeClusterId} (the `GetNodeCluster` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/nodeClusters/{nodeClusterId} (the `GetNodeCluster` operationId).
 func (c *ClientWithResponses) GetNodeClusterWithResponse(ctx context.Context, nodeClusterId NodeClusterId, reqEditors ...RequestEditorFn) (*GetNodeClusterResponse, error) {
 	rsp, err := c.GetNodeCluster(ctx, nodeClusterId, reqEditors...)
 	if err != nil {
@@ -3803,7 +3803,7 @@ func (c *ClientWithResponses) GetNodeClusterWithResponse(ctx context.Context, no
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/subscriptions (the `GetSubscriptions` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/subscriptions (the `GetSubscriptions` operationId).
 func (c *ClientWithResponses) GetSubscriptionsWithResponse(ctx context.Context, params *GetSubscriptionsParams, reqEditors ...RequestEditorFn) (*GetSubscriptionsResponse, error) {
 	rsp, err := c.GetSubscriptions(ctx, params, reqEditors...)
 	if err != nil {
@@ -3818,7 +3818,7 @@ func (c *ClientWithResponses) GetSubscriptionsWithResponse(ctx context.Context, 
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
-// Corresponds with POST /o2ims-infrastructureCluster/v1/subscriptions (the `CreateSubscription` operationId).
+// Corresponds with POST /O2ims_infrastructureCluster/v1/subscriptions (the `CreateSubscription` operationId).
 func (c *ClientWithResponses) CreateSubscriptionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSubscriptionResponse, error) {
 	rsp, err := c.CreateSubscriptionWithBody(ctx, contentType, body, reqEditors...)
 	if err != nil {
@@ -3833,7 +3833,7 @@ func (c *ClientWithResponses) CreateSubscriptionWithBodyWithResponse(ctx context
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
-// Corresponds with POST /o2ims-infrastructureCluster/v1/subscriptions (the `CreateSubscription` operationId).
+// Corresponds with POST /O2ims_infrastructureCluster/v1/subscriptions (the `CreateSubscription` operationId).
 func (c *ClientWithResponses) CreateSubscriptionWithResponse(ctx context.Context, body CreateSubscriptionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSubscriptionResponse, error) {
 	rsp, err := c.CreateSubscription(ctx, body, reqEditors...)
 	if err != nil {
@@ -3848,7 +3848,7 @@ func (c *ClientWithResponses) CreateSubscriptionWithResponse(ctx context.Context
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with DELETE /o2ims-infrastructureCluster/v1/subscriptions/{subscriptionId} (the `DeleteSubscription` operationId).
+// Corresponds with DELETE /O2ims_infrastructureCluster/v1/subscriptions/{subscriptionId} (the `DeleteSubscription` operationId).
 func (c *ClientWithResponses) DeleteSubscriptionWithResponse(ctx context.Context, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*DeleteSubscriptionResponse, error) {
 	rsp, err := c.DeleteSubscription(ctx, subscriptionId, reqEditors...)
 	if err != nil {
@@ -3863,7 +3863,7 @@ func (c *ClientWithResponses) DeleteSubscriptionWithResponse(ctx context.Context
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /o2ims-infrastructureCluster/v1/subscriptions/{subscriptionId} (the `GetSubscription` operationId).
+// Corresponds with GET /O2ims_infrastructureCluster/v1/subscriptions/{subscriptionId} (the `GetSubscription` operationId).
 func (c *ClientWithResponses) GetSubscriptionWithResponse(ctx context.Context, subscriptionId SubscriptionId, reqEditors ...RequestEditorFn) (*GetSubscriptionResponse, error) {
 	rsp, err := c.GetSubscription(ctx, subscriptionId, reqEditors...)
 	if err != nil {
@@ -4840,100 +4840,100 @@ func ParseGetSubscriptionResponse(rsp *http.Response) (*GetSubscriptionResponse,
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"4/Xj/wYAAP//",
+	"7F15Uxy5kv8qit6NGPttH9BgBjMxscED/Kbj2YbleBsbbsKoq7JoDVVSWVKBezx89w0ddav6xIztV/PP",
+	"mG4dqVTmL3+ZUlV/6XgsihkFKkXn4EsnxhxHIIHrv7wwERL4OQiWcA9GvvrQB+FxEkvCaOegc0XJpwQQ",
+	"8YFKEhDgiAUII9sTcdu1P6adbgc+4ygOoXPQ2dn3vcnezqQ32Q62erv+0Ovt70+C3qu93d29vZ+3INja",
+	"7nQ7RE0RYzntdDsUR6pnXaZuh8OnhHDwOweSJ9DtCG8KEVbCBoxHWHYOOklCVEs5i9UgQnJCbzuPj93q",
+	"eJezeJN1IjVBbbHbeO/1q59f9XaC11u9XZi86k32A9zbD/ZhuBO8fu0FW0st1gq34YJZFDH6EcfkI4uB",
+	"qv/jEPPomHhqrZjPll8/Rbor8rO+T7fRdaG+wrrDNwRCX9TXezklAl2dj9CnBPgMZX6BlAggpEByiiXC",
+	"YYiUB4XwGWEpOZkkEgTCHBChXpj44CNCkZyCMpGYUaGsY0xvbm7GFIfhx0DPbz9IFaHnLGoibdcpLtmH",
+	"ACehWnOAQwGqfRKGeKL0btSzlBLgs5azSRFHLIowEqA0IMFHIRFS7b0WCHEIgAP1QCDJkB0KBZxF6ZqT",
+	"UOoVn2BvWu2EiEDYfqjW2kWMIzXZp0R/nU2jvhQFISYzJEIspiD66A3jY2oNrluUQglw47GESj67QSKZ",
+	"mLFYYL6BzxKoIIyKGzPLQbYxdgSr9F/zlgM7nG03pv87BbW7RBQshAj6k0SJAB9RZhfwQMIQTSCVzdcq",
+	"MSo39kGE0Wy1IYJ7oIhomWfaruBzHBKPyHCWm1giCL1VTcb0xgh9kwtUdUmt6fqaGoyvrIuSAS5lXsET",
+	"2JVdZ8GTnt+qbkEau1G9rMUgTP0NzMyaV8N+LGtjCoLUTGa0zIA4yIRTbWkb7P76ux5K4PVdvwDMvSny",
+	"OJHACdZ7eMSoxIQKxCiorYoYByTKDbuVbYKIeCxkVPSRNoFKc20CYyqTOATkmfGVh2CKWAwcS8a7mY3k",
+	"hqO2syjEPQ4TZQyXU8j6IQ/TMZ2oxrN0kwMWhuxBTWC0IvQe/4lO0z5/oneAtQTr/PfnmP7Zy/4r/HON",
+	"/9RYylypvFEjo3dYelMQFmGsRrx0R9RHWgmNcqEb+HRj/nKPRQSCTwkOlQ/NGc6MdSsXjXXLASsHkFNM",
+	"m8ZLx4KbFcZi3CmnGYvQRXJpswnynqJRX+HCNYYgxNwFFsZatMZ8rOoC87HNWNQaRcNYPgOBKJOpcTTI",
+	"ZseyRtEslxppkV3Ysazy54+1SP9/Ko+8zHqVgoXqpPBODVAYxwKq/YtNfgdP1mPJmKZdbfvGeIKK4SQR",
+	"DoLSs0uigvgwpovjhwLZX1/AJwegd0/+52UWQi5ztSgKoQbG/DaJVNqXLdCCVVVWLcSnmwIAsijGHMSY",
+	"elPw7rL9MDvIFjp/P5VIu5XCXLPH6QQCiSSOGZcoSkJJFISnQFzVohYgnT9T5ZhWddkQirV8RE6Bo5uT",
+	"ixu1tzdXF3UFE+pU8EX36uJlOUxbJac+oiIjFt3UDNQEIsaa1Sg6RwF8tYwJIJFwzhLqW7Mh9DYE9Clh",
+	"EkR/TOevu8hIrDmbOIRuolmaot447UazgZ/yVj9V1pPtQBZZG+KwtivFR7qakBgriFCUCIki5bcoYNww",
+	"VJMvSR2YfaKIgVqSbuSwvTy2ambjWjlR+VNhpehvmPp/q7hXtoFKRWq3l9THL03uVd36xQzN8NbFFC0T",
+	"JJfjZSM/0zxrPj+jzIcjM84KpQ3VK52+KuHeq+Fw+9Xebm9/svWqt7u9h3uTwNvpecNXWxNvbxe2MXZn",
+	"9WVZNsvoC2OtWLYprs1dslm7bFEXarNFimSSLWiFFRa7VReH8f6OvzXBPfwKoLcbbAe9Cezv9oKdnd3J",
+	"cHt7b88L3IurCLPJyh7Txjo3tBo7mmJ6C++ZWomHzQqrCx5RM7RyZTxhiVSsntB7oJLxGfL0EIoT5GN0",
+	"OzFX0UUSMHVNRkUSAb9YoNssbKKYs3tiwVm5cjpCmpIWFaO1vWD5ynhzAU+U8Je6RVWE0wIfyZDQRJkD",
+	"tIV6yNMktou2UQ9FzCfBrIuGqId8UBhrdp4mUefgw1Z3uzu8zkQhVMIt8KosLj0coqRmZZIhDjEHAVQa",
+	"7CuOossWcjlNGGZ1DoF7A67O36b0wbRU+RgRKfFLLTCNCU69qsZD9OL45O3J5cnLPhrZQkvMiJKejSlz",
+	"6dnHEmt4EMiHgFBTzPNCrNjbTn/Y38sqADmh1AObkKdptppeEUstu1DcJI5DYoaKOWH8VH9zIbHUGeiA",
+	"cRQzIQsfGweuKa7SqqGIScTyOtpCL47OTw4vT14qqrKNXrw7PR69+b+XepnlLKespTFdrKa5ipmnjbT1",
+	"mGotc0OaCEWZ5ZQUZD7VCqoM+AQaKuiE8YJNzdPQmC5pSIs1VN7xDRX0WMTvD1UUaIKoa4eij8rnFEuB",
+	"NrKdUNarCtOYSxJgJX961uOoI44ySBIpxURpxxfiJXqYEq1Ovcn2kIYINMGKmaWxkUiIxBJRK/sAc45n",
+	"nfrx0XIROpWzojaVrEhMPVgON5c8uRotnFfbtvmuoKX+clKUJqvO/VsSYYo4YB9PQkCFL1MncR8U1mbJ",
+	"Cbg2DN/kDTg8KxpMVRoVPgSYzISKGDylBR+9UGFDKdrH3Cd/gP8S5XaHXtzBLDMbnSxjEjLlUloGg/Yk",
+	"N+cxzbiBMeyCgjPTbsCnCKIJ8FNH4Eur4Uwnp5X9EgXpQkLvtLvfgmpaMeeF5mt4XXX297ai4dog9/7w",
+	"OfbvMMCcrmU+2eCnEY5jvb5lrLECaK6jYr3gsp105xyzZj2XQD03gVsG+ZDuWmOp655Mz3Pz1SBmQ+d2",
+	"rvPH9PD60nI7WexkztFceppv4ZnhOqzcZcDv81x1OcNVHVJhlwjXS2GBhCgONZmx/YtQUJCwHrWXiJAE",
+	"qHy/avkjlaw0ufUbhIUgt9SRCT5MWXo5QNE7KUxqtnRCaPfymAhzjYAweryC+0n4LNNFzOxpMIpATpk+",
+	"i/QLw6q/ayGF3QNHp0chS3x0QUzZcQnW8Q/OkthBy05j477mXFfXW251U3NvwmNRzImtgVdDTBrf9NUk",
+	"26awF0/N2IQ770xDcO2KDykwTnMJxJY+dWWWUSF54sma/W7KNDfE4pok3zsCNy1oFdxdrBT6BOCxRuBd",
+	"orQ5Wjyntk4HjvbXIFPVwq0LW+fTqyZk6zprpo5o4vTdBXFteVJWjG1uQvYEHlia4Mfxw+ZlreqNpZEW",
+	"uuTqnHgTt2z2iFWJV7HwvHKFu17ar+QNOAwn2Ltzh7UgCcMZ+pTg0FjI1flIxS2cE5mYMw/8hKc5mYep",
+	"+UwIhNEZM2FRKXNMR6lUuj5ULNxXDx2mUsbiYDAQEevbT/sei9Tfg/vtAfMU8/iYrfIjmwjg95pm1jnI",
+	"kvV7B0Rmq2SBqVELpCvYfgJplbk4an8ZsG667HSUnpmqye1kRqU+07Xrwvkvh5hxRRwZz84Hzbg51Sxu",
+	"PBrTUr1dKYt4oO8qcQgYhy4igb7jFFryrGbM/FdOgeqDSSuX8v5UhgZcEqtru6RKW7bPWxGhJGBeepqs",
+	"epz2NAXtr3PcWN0oBcanNJw1X4ct5VKp27gc1nHF7fBs9C/gYlkPRvemceo7h2cjl/Pe50Pm6x/2t/pb",
+	"TjxaTVCxnKQp87WyiAUi45gUx8/E/lBYjV3C43WBAf8nh6Bz0PmPQf4IwsAeCQ7m69vBjhNOzjgE5HNZ",
+	"c4PTIYnER0IDjg0vTzhkoDW4H66vVX09HQJCyQoobq/LZ936dW2qFodZ0G+6lv3W7lEEEuvThTuY9exZ",
+	"JSZcZAkJFoJ5ROXXkbmCGCRh3stCHodQO6HjMYaaLrSA5qC2iVz5CpXMJZfsEMOey2pKyjwv0acUfsLT",
+	"VNVoJsRC2qa/IOz74HftSabfNcebJLsvYU41O4fHxyfHnW7HHMSof+kDmtHJccGTcxTD5X1zAdmZAUkV",
+	"7RLX6Xou7gSU+BwTAX5+LKm+P+MkwnyG/gkzRKhVs7YZlD/TsFwuYCWeQxgKAoeM3gLP6ed9tu9lyfO7",
+	"N5j6CDtL84ym99xSCBjTSu980YQqxliIZ1hjeuHGrb5FrQRSbMYHrMZ8UOYwxXEMFHwrigAqzM06JQUE",
+	"AXhSdEvidM1VXV0cJ1GMPWW8mAPOsErMhISoIZLpRbzFQhozXmTC1W1DFocQocVaVc2C/XnTv3fS4Wwn",
+	"xZRxaW4lZqdaqltTUQaw+neDQ6bWq+iHPiawshKBdE+lvEQyBVYqCs70BWhME/XvirNdXZ6+O7wcHSk3",
+	"O3x/dfjW6WQRpvgWIqByRCXwALurgRmIZc21Gen2piBlUxMlrb26yDEVEZFqw7MjqxMqiZylycf5ycXl",
+	"+ejocnT6/kDfJyvwCjR6d4EuDFcSprMBTf38RUSkMeDT4ejdRaVgk6pAf+dcdTUmxXdFQqyRfMHmkOxp",
+	"BsbLT0SI9KaJ2bkS9ytd144t8NzBDL04++fLDH3GtGbHmQIzrf+CSB/6JUlKo9shMvhEo+NVj5xUuGMC",
+	"/HNQgepQCyPmeMJtQnxdeVXSpp0VV8WEI2y695eoldeBv+iJdVCoRzoHFDctp+KSTR7htpHrVRhItpur",
+	"MZD8gT03Aykzm7U5W2Uohzks8eyhSltHtQhctWbzmMaolF7Y8P1A5JSoSJelF6tE3myGC73QRtL/rwrB",
+	"r3qb6a7gpRY08u1Q7qbkEvNiRz7ousL08xgm0D1Qn/HsZopItHDYlHcqaUtRUkzRRFGClGH6WtEqgpv6",
+	"k1ftLFggHxSK+xCSe+D2ARoilF/7iSebKmIa3xsuyPXOD98j08KQTVDhoUQrDwxLEVNsEmtrFjHwdO3F",
+	"E7R+xHwIFcMY09LndjVuGf/CkIdQG/S+8aBnzMzlptr8rH8UNtXAhH6Mlog6lmB9h1D0U8NmSegry9Ze",
+	"pkij2WCcabBmynre7JHlpeNn+XnsBjRagJwlh850s1qMrCVyy0bNM84mIUTHIDEJzTsPytEvS70Ps+e5",
+	"59ThF9yZ6BzSGaJJNLH3srNBCk+Ld9U2Fa4F5vhpLJ1xm0iRKA61enBaOqgt2NfLct3gnSYRpr3sfAI+",
+	"xyGmtnaYwrX2GSLS/Nw+LGscTGutXJY7YpSClz7A4WOJJ1gAkiQCH7FEumAyrbe7RLw6HxXu0eoIRHKg",
+	"0KadStosIRrTkUQRnqGZ9uQg4SZNLJAhEiAfsplqbIATZ/lTYpk0nBX/dnl5hkwD5DG/cJturirrN7El",
+	"kaFTNzof7FZ3USSRxr3y0KZ6g0YyBQb92J6pv+hH8wtCSdYsYlc/CQ+xNNQ74Yro6gw7ZB4OyR/GDtEo",
+	"MIGXCJ3f00Jyrp88HHc0+zyYhJjejTtdy3xSB7BxGYdCVw7SEnUDF5BOFlA1Hux5jPuaBDA0Orl8g87f",
+	"HKGd1/t76MPOtdO2asojAgH1WMLxrS6YW0KkJrIyijGtbIjPvCTz0CxzT4d+Af3bvnlY/7fLd29fqnSc",
+	"lk0R5c8SmduBeeVeX7XvjimRhfiNhUiirOpS0XTTGUxqggUd9j0WLXSCSkSwHpGhzrXrhrEAL+FEmhBg",
+	"IJPhRE6HDZexD89GKFFmdnqYyCkaGk5prokQRZc8DnrjcChQELIHfUQTsgd7Z061OcqbqA+Fx2IzM2ch",
+	"HLAhiYTeMuCKQCpqg871n+ichSokFdrZU49Joe1F9pFpr6yS3QG94mFByXcw80KG70qnXRxwGIkB45iq",
+	"XZDMY+FAhSbi9zwDpwM9VqkObfSln5mBzxI4xeEx80QTGdY1b5TFUHRRCic/97fQi1NPMiX/cGu4+7LT",
+	"7SQl0UvxR/RZj2PaZ/x24LMHGjLs/zfxf/1597UB9IA5/PFspK3fKGxUKr+j4j2ekHhAhfZo+4zRYYy9",
+	"KaChPvEoy/Xw8NDH+mstje0rBm9HRyfvL056w/5WfyqjsICknXkSKGPTBCQ9pdg2pxTdjmULnYPOjj17",
+	"ibGcao07jxTsgAPFMO4LhyG3IOvKOdfP/QlbZLUPQ6bEV2kuO3jJIn7hENAe9GntmdKqLWN3/gHyMAyz",
+	"sxh9f1W/ckaLMtzass8+SaDSHNzEod3kwe/CZJH5A1xrH88IY6mVFz8kngdCmNNnNlHk2pxC1jWQrl4t",
+	"8bHb2Z0rt4Wy/9pY/govdCzh79hPL/gZuba/DbmuqMIHxskf4BvBdr4Nwd4wPiG+D3obX30r26hxUTFw",
+	"c78AAeeM90uxSp9dplHqQzEaYD8itBwgbCC5frzudiwfM75YcmUVTPGtUMOlh2+dazXnXDi53x6UMymb",
+	"dCyEldSXKuUlkl7rdABHdZpu6WVwH9w7kTcZzH2/1mN3nf7lV1OtN0awWWd9s0Nt7UZYuln9NC/x1ioL",
+	"qwDtfJtokbZF2udA2q8BtHWLLsBt6eP1IHfwpVb8elwKhk1iJOa+K3EBFM+eBoirtbuNIW1TJFsFuRar",
+	"sUWvHwW9drd2vw2pLvN6I/jpAdMDNtWYgCXU7/+b8lqHD26Gt6smzSmTiQhlvDljzoqwEf6d8cYLmDUA",
+	"fqeG/abT6BbxWr72PSNI3XHXzo8dj8CuBiLOV3g3pclHrtnaTPmZM2XXg/dPkho320ILty3cfq/psduq",
+	"C4jLS3C2NuwOvjjfR7B6qtz0fr5l4Hh1NHa+Q+Gr5sdO/FozITZvq3Koq0WsNiVuU+LnSonrPvik+LoZ",
+	"pV2SzbZM9q9msl+HxbYEtiWwPxSBfVruWueta3FW95sMF2HupnT1manqRjTVpaEWllqW2rLUZ2OpVRfc",
+	"DEgrb8BZjaTWCHMTS31fnaVlqc/MUqvv03oSlure/zYetDT1e6WpdYt+WngdfKm9cuwr1larTr8q6tZf",
+	"j/ZViWoNo9p6aotMLVNt66nLY2nl4udsKWytvcAh0L8QuCbKbnr385lB9yte9HTptoXhFoZbGP5rb3o2",
+	"4duTwfP6VYQlCght8eCvLB48feGgrRm0NYMfpmbwdOWCMr3duEywGFc3IarPWBl4sqpACzstE22Z6F9W",
+	"ENgMKIsvsl/vYlVphAZ0vCjN0tLOZ6adpZ/YeBLeWdv0NgC0vPP7ANSmN1o5gFZUYCvF2fLn1/bnp10/",
+	"egL6xemYOtHSBZamS8lhzYvGQMi/M3/2ZEywjAnl15lJnsBjDZi2v+Lcc/DH/Ki7X/vVlxZ1WtT5DlCn",
+	"GWGMqy8NMquSucGX8o8UPRp8CsH12+/H+nOB8EKAMi0rALUan6v8eFITB5qDCfZnUJoxofW9NuX7kbDC",
+	"eF3J1ufykdXqW4t8vpLBfS2Hf35uMa/E1XKNFu9avPuGM7J5XGkFicwsekEGzPL37B4MBvrt3lMm5MH+",
+	"1pb50T476eJfmHGcx9r3+paOeB+7qw1VvCBeH8/U/pYZs+HJSDtk7aHLdYZ0iOp8R8kqYzvqjXboshU8",
+	"Xj/+fwAAAP//",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

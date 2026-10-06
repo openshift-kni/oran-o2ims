@@ -241,7 +241,7 @@ var _ = Describe("KubernetesAuthenticatorConfig", func() {
 		auth, err := config.New()
 		Expect(err).ToNot(HaveOccurred())
 
-		req := httptest.NewRequest(http.MethodGet, "/o2ims-infrastructureMonitoring/v1/alarms", nil)
+		req := httptest.NewRequest(http.MethodGet, "/O2ims_infrastructureMonitoring/v1/alarms", nil)
 		req.Header.Set("Authorization", "Bearer scoped-token")
 
 		resp, ok, err := auth.AuthenticateRequest(req)

@@ -277,11 +277,11 @@ var _ = Describe("Authenticator", func() {
 
 		It("records correct method and path labels", func() {
 			req.Method = http.MethodPost
-			req.URL.Path = "/o2ims-infrastructureInventory/v1/alarmSubscriptions"
+			req.URL.Path = "/O2ims_infrastructureInventory/v1/alarmSubscriptions"
 			k8sAuthenticator.Error = errors.New("invalid token")
 			handler = Authenticator(&oauthAuthenticator, &k8sAuthenticator)(next)
 			handler.ServeHTTP(recorder, &req)
-			Expect(getCounterValue(metrics.AuthFailures, "test-service", "authentication", "POST", "/o2ims-infrastructureInventory/v1/alarmSubscriptions")).To(Equal(float64(1)))
+			Expect(getCounterValue(metrics.AuthFailures, "test-service", "authentication", "POST", "/O2ims_infrastructureInventory/v1/alarmSubscriptions")).To(Equal(float64(1)))
 		})
 	})
 })
