@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"strings"
 
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -19,10 +20,10 @@ import (
 
 var firmwarecataloglog = logf.Log.WithName("firmwarecatalog-webhook")
 
-// SetupWebhookWithManager will setup the manager to manage the webhooks
-func (r *FirmwareCatalog) SetupWebhookWithManager(mgr ctrl.Manager) error {
+// SetupFirmwareCatalogWebhookWithManager registers the FirmwareCatalog validation webhook.
+func SetupFirmwareCatalogWebhookWithManager(mgr ctrl.Manager) error {
 	// nolint:wrapcheck
-	return ctrl.NewWebhookManagedBy(mgr, &FirmwareCatalog{}).
+	return ctrl.NewWebhookManagedBy(mgr, &hwmgmtv1alpha1.FirmwareCatalog{}).
 		WithValidator(&firmwareCatalogValidator{Client: mgr.GetClient()}).
 		Complete()
 }
@@ -33,15 +34,15 @@ type firmwareCatalogValidator struct {
 	client.Client
 }
 
-var _ admission.Validator[*FirmwareCatalog] = &firmwareCatalogValidator{}
+var _ admission.Validator[*hwmgmtv1alpha1.FirmwareCatalog] = &firmwareCatalogValidator{}
 
 // ValidateCreate implements admission.Validator
-func (v *firmwareCatalogValidator) ValidateCreate(_ context.Context, _ *FirmwareCatalog) (admission.Warnings, error) {
+func (v *firmwareCatalogValidator) ValidateCreate(_ context.Context, _ *hwmgmtv1alpha1.FirmwareCatalog) (admission.Warnings, error) {
 	return nil, nil
 }
 
 // ValidateUpdate implements admission.Validator
-func (v *firmwareCatalogValidator) ValidateUpdate(ctx context.Context, oldCatalog, newCatalog *FirmwareCatalog) (admission.Warnings, error) {
+func (v *firmwareCatalogValidator) ValidateUpdate(ctx context.Context, oldCatalog, newCatalog *hwmgmtv1alpha1.FirmwareCatalog) (admission.Warnings, error) {
 	firmwarecataloglog.Info("validate update", "name", oldCatalog.Name)
 
 	if modified := findModifiedImmutableFields(oldCatalog.Spec.Images, newCatalog.Spec.Images); len(modified) > 0 {
@@ -53,7 +54,7 @@ func (v *firmwareCatalogValidator) ValidateUpdate(ctx context.Context, oldCatalo
 		return nil, nil
 	}
 
-	hwProfiles := &HardwareProfileList{}
+	hwProfiles := &hwmgmtv1alpha1.HardwareProfileList{}
 	if err := v.Client.List(ctx, hwProfiles, client.InNamespace(oldCatalog.Namespace)); err != nil {
 		return nil, fmt.Errorf("failed to list HardwareProfiles: %w", err)
 	}
@@ -74,12 +75,12 @@ func (v *firmwareCatalogValidator) ValidateUpdate(ctx context.Context, oldCatalo
 }
 
 // ValidateDelete implements admission.Validator
-func (v *firmwareCatalogValidator) ValidateDelete(_ context.Context, _ *FirmwareCatalog) (admission.Warnings, error) {
+func (v *firmwareCatalogValidator) ValidateDelete(_ context.Context, _ *hwmgmtv1alpha1.FirmwareCatalog) (admission.Warnings, error) {
 	return nil, nil
 }
 
 // findRemovedEntries returns the names of entries present in old but absent from updated.
-func findRemovedEntries(old, updated []FirmwareImage) []string {
+func findRemovedEntries(old, updated []hwmgmtv1alpha1.FirmwareImage) []string {
 	newNames := make(map[string]struct{}, len(updated))
 	for _, img := range updated {
 		newNames[img.Name] = struct{}{}
@@ -96,8 +97,8 @@ func findRemovedEntries(old, updated []FirmwareImage) []string {
 
 // findModifiedImmutableFields compares entries that exist in both old and updated lists
 // and returns descriptions of any immutable field changes (component, url, version, vendor).
-func findModifiedImmutableFields(old, updated []FirmwareImage) []string {
-	oldByName := make(map[string]FirmwareImage, len(old))
+func findModifiedImmutableFields(old, updated []hwmgmtv1alpha1.FirmwareImage) []string {
+	oldByName := make(map[string]hwmgmtv1alpha1.FirmwareImage, len(old))
 	for _, img := range old {
 		oldByName[img.Name] = img
 	}
@@ -129,6 +130,6 @@ func findModifiedImmutableFields(old, updated []FirmwareImage) []string {
 // currently structs rather than catalog-entry string references, so this
 // always returns false. Update this check if the fields change to string
 // references.
-func isEntryReferencedByAnyProfile(_ string, _ []HardwareProfile) bool {
+func isEntryReferencedByAnyProfile(_ string, _ []hwmgmtv1alpha1.HardwareProfile) bool {
 	return false
 }

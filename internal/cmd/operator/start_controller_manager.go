@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"strings"
 
+	webhookhardwaremanagementv1 "github.com/openshift-kni/oran-o2ims/internal/webhook/hardwaremanagement/v1alpha1"
 	webhookprovisioningv1 "github.com/openshift-kni/oran-o2ims/internal/webhook/provisioning/v1alpha1"
 
 	openshiftv1 "github.com/openshift/api/config/v1"
@@ -448,7 +449,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			)
 			return exit.Error(1)
 		}
-		if err = (&hwmgmtv1alpha1.FirmwareCatalog{}).SetupWebhookWithManager(mgr); err != nil {
+		if err = webhookhardwaremanagementv1.SetupFirmwareCatalogWebhookWithManager(mgr); err != nil {
 			logger.ErrorContext(
 				ctx,
 				"Unable to create webhook",
