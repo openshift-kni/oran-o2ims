@@ -1032,7 +1032,7 @@ metadata:
     support: Red Hat
   labels:
     operatorframework.io/arch.amd64: supported
-  name: oran-o2ims.v5.0.0
+  name: oran-o2ims.v5.1.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -2457,7 +2457,7 @@ spec:
                 - --metrics-tls-cert-dir=/secrets/tls/metrics
                 env:
                 - name: IMAGE
-                  value: quay.io/openshift-kni/oran-o2ims-operator:5.0.0
+                  value: quay.io/openshift-kni/oran-o2ims-operator:5.1.0
                 - name: POSTGRES_IMAGE
                   value: registry.redhat.io/rhel9/postgresql-18:9.8-1785715946
                 - name: RELATED_IMAGE_SEED_GENERATION_TOOLS_IMAGE
@@ -2468,7 +2468,7 @@ spec:
                       fieldPath: metadata.namespace
                 - name: IMAGE_PULL_POLICY
                   value: IfNotPresent
-                image: quay.io/openshift-kni/oran-o2ims-operator:5.0.0
+                image: quay.io/openshift-kni/oran-o2ims-operator:5.1.0
                 imagePullPolicy: IfNotPresent
                 livenessProbe:
                   httpGet:
@@ -2684,7 +2684,7 @@ spec:
   - image: registry.redhat.io/openshift4/ose-tools-rhel9:v4.22
     name: seed-generation-tools-image
   replaces: oran-o2ims.v0.0.0
-  version: 5.0.0
+  version: 5.1.0
   webhookdefinitions:
   - admissionReviewVersions:
     - v1
