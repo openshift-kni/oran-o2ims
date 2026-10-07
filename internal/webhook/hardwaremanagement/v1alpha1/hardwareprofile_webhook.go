@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"strings"
 
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -24,17 +25,16 @@ var hardwareprofilelog = logf.Log.WithName("hardwareprofile-webhook")
 // CheckReferencesFunc reports an error when the named HardwareProfile is still
 // referenced by a ClusterTemplate or ProvisioningRequest, which blocks its
 // deletion. It is injected at webhook setup time: the reference check must
-// import the provisioning API group, which itself imports this package, so
-// implementing it here would create an import cycle. The implementation lives
-// in internal/controllers/utils, which can import both API groups.
-//
-// +kubebuilder:object:generate=false
+// import the provisioning API group, which itself imports the hardware
+// management API group, so implementing it here would create an import cycle.
+// The implementation lives in internal/controllers/utils, which can import both
+// API groups.
 type CheckReferencesFunc func(ctx context.Context, reader client.Reader, hpName, hpNamespace string) error
 
-// SetupWebhookWithManager will setup the manager to manage the webhooks
-func (r *HardwareProfile) SetupWebhookWithManager(mgr ctrl.Manager, checkReferences CheckReferencesFunc) error {
+// SetupHardwareProfileWebhookWithManager registers the HardwareProfile validation webhook.
+func SetupHardwareProfileWebhookWithManager(mgr ctrl.Manager, checkReferences CheckReferencesFunc) error {
 	// nolint:wrapcheck
-	return ctrl.NewWebhookManagedBy(mgr, &HardwareProfile{}).
+	return ctrl.NewWebhookManagedBy(mgr, &hwmgmtv1alpha1.HardwareProfile{}).
 		WithValidator(&hardwareProfileValidator{
 			Client:          mgr.GetClient(),
 			Reader:          mgr.GetAPIReader(),
@@ -60,10 +60,10 @@ type hardwareProfileValidator struct {
 	CheckReferences CheckReferencesFunc
 }
 
-var _ admission.Validator[*HardwareProfile] = &hardwareProfileValidator{}
+var _ admission.Validator[*hwmgmtv1alpha1.HardwareProfile] = &hardwareProfileValidator{}
 
 // ValidateCreate implements admission.Validator
-func (v *hardwareProfileValidator) ValidateCreate(ctx context.Context, hp *HardwareProfile) (admission.Warnings, error) {
+func (v *hardwareProfileValidator) ValidateCreate(ctx context.Context, hp *hwmgmtv1alpha1.HardwareProfile) (admission.Warnings, error) {
 	hardwareprofilelog.Info("validate create", "name", hp.Name)
 
 	return nil, v.validateFirmware(ctx, hp)
@@ -74,7 +74,7 @@ func (v *hardwareProfileValidator) ValidateCreate(ctx context.Context, hp *Hardw
 // The HardwareProfile spec is immutable (enforced by the CEL rule on the type),
 // so there is nothing to validate on update. This method is retained only to
 // satisfy the admission.Validator interface.
-func (v *hardwareProfileValidator) ValidateUpdate(_ context.Context, _, newHP *HardwareProfile) (admission.Warnings, error) {
+func (v *hardwareProfileValidator) ValidateUpdate(_ context.Context, _, newHP *hwmgmtv1alpha1.HardwareProfile) (admission.Warnings, error) {
 	hardwareprofilelog.Info("validate update (no-op, spec is immutable)", "name", newHP.Name)
 	return nil, nil
 }
@@ -82,7 +82,7 @@ func (v *hardwareProfileValidator) ValidateUpdate(_ context.Context, _, newHP *H
 // ValidateDelete implements admission.Validator. It blocks deletion of a
 // HardwareProfile that is still referenced by a ClusterTemplate or
 // ProvisioningRequest.
-func (v *hardwareProfileValidator) ValidateDelete(ctx context.Context, hp *HardwareProfile) (admission.Warnings, error) {
+func (v *hardwareProfileValidator) ValidateDelete(ctx context.Context, hp *hwmgmtv1alpha1.HardwareProfile) (admission.Warnings, error) {
 	hardwareprofilelog.Info("validate delete", "name", hp.Name)
 
 	if v.CheckReferences == nil {
@@ -104,7 +104,7 @@ func (v *hardwareProfileValidator) ValidateDelete(ctx context.Context, hp *Hardw
 // entry may resolve to component "bios" and at most one to component "bmc".
 // The deprecated inline fields carry their own URL/version and require no
 // catalog validation.
-func (v *hardwareProfileValidator) validateFirmware(ctx context.Context, hp *HardwareProfile) error {
+func (v *hardwareProfileValidator) validateFirmware(ctx context.Context, hp *hwmgmtv1alpha1.HardwareProfile) error {
 	hasInline := hasInlineFirmware(hp)
 	hasImages := len(hp.Spec.FirmwareImages) > 0
 
@@ -125,10 +125,10 @@ func (v *hardwareProfileValidator) validateFirmware(ctx context.Context, hp *Har
 // validateFirmwareImages checks that every entry in spec.firmwareImages exists
 // in the singleton FirmwareCatalog and that the resolved component types are
 // consistent (at most one bios, at most one bmc; multiple nic allowed).
-func (v *hardwareProfileValidator) validateFirmwareImages(ctx context.Context, hp *HardwareProfile) error {
-	catalog := &FirmwareCatalog{}
+func (v *hardwareProfileValidator) validateFirmwareImages(ctx context.Context, hp *hwmgmtv1alpha1.HardwareProfile) error {
+	catalog := &hwmgmtv1alpha1.FirmwareCatalog{}
 	if err := v.Reader.Get(ctx, types.NamespacedName{
-		Name: FirmwareCatalogName, Namespace: hp.Namespace,
+		Name: hwmgmtv1alpha1.FirmwareCatalogName, Namespace: hp.Namespace,
 	}, catalog); err != nil {
 		if apierrors.IsNotFound(err) {
 			// The singleton FirmwareCatalog only exists in the operator
@@ -137,12 +137,12 @@ func (v *hardwareProfileValidator) validateFirmwareImages(ctx context.Context, h
 			// HardwareProfile elsewhere know why it was rejected.
 			return fmt.Errorf("FirmwareCatalog %q not found in namespace %q; "+
 				"HardwareProfiles using firmwareImages must be created in the operator namespace",
-				FirmwareCatalogName, hp.Namespace)
+				hwmgmtv1alpha1.FirmwareCatalogName, hp.Namespace)
 		}
 		return fmt.Errorf("failed to get FirmwareCatalog: %w", err)
 	}
 
-	imageMap := make(map[string]FirmwareImage, len(catalog.Spec.Images))
+	imageMap := make(map[string]hwmgmtv1alpha1.FirmwareImage, len(catalog.Spec.Images))
 	for _, img := range catalog.Spec.Images {
 		imageMap[img.Name] = img
 	}
@@ -164,11 +164,11 @@ func (v *hardwareProfileValidator) validateFirmwareImages(ctx context.Context, h
 			continue
 		}
 		switch img.Component {
-		case ComponentBIOS:
+		case hwmgmtv1alpha1.ComponentBIOS:
 			biosCount++
-		case ComponentBMC:
+		case hwmgmtv1alpha1.ComponentBMC:
 			bmcCount++
-		case ComponentNIC:
+		case hwmgmtv1alpha1.ComponentNIC:
 			// Multiple NIC entries are allowed.
 		default:
 			errs = append(errs, fmt.Sprintf("firmwareImages entry %q has unsupported component %q", name, img.Component))
@@ -176,10 +176,10 @@ func (v *hardwareProfileValidator) validateFirmwareImages(ctx context.Context, h
 	}
 
 	if biosCount > 1 {
-		errs = append(errs, fmt.Sprintf("at most one firmwareImages entry with component %q is allowed, found %d", ComponentBIOS, biosCount))
+		errs = append(errs, fmt.Sprintf("at most one firmwareImages entry with component %q is allowed, found %d", hwmgmtv1alpha1.ComponentBIOS, biosCount))
 	}
 	if bmcCount > 1 {
-		errs = append(errs, fmt.Sprintf("at most one firmwareImages entry with component %q is allowed, found %d", ComponentBMC, bmcCount))
+		errs = append(errs, fmt.Sprintf("at most one firmwareImages entry with component %q is allowed, found %d", hwmgmtv1alpha1.ComponentBMC, bmcCount))
 	}
 
 	if len(errs) > 0 {
@@ -191,6 +191,6 @@ func (v *hardwareProfileValidator) validateFirmwareImages(ctx context.Context, h
 
 // hasInlineFirmware reports whether any of the deprecated inline firmware
 // fields are populated.
-func hasInlineFirmware(hp *HardwareProfile) bool {
+func hasInlineFirmware(hp *hwmgmtv1alpha1.HardwareProfile) bool {
 	return !hp.Spec.BiosFirmware.IsEmpty() || !hp.Spec.BmcFirmware.IsEmpty() || len(hp.Spec.NicFirmware) > 0
 }

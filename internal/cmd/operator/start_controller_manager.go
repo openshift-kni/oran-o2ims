@@ -469,7 +469,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 			)
 			return exit.Error(1)
 		}
-		if err = (&hwmgmtv1alpha1.HardwareProfile{}).SetupWebhookWithManager(mgr, ctlrutils.CheckHardwareProfileReferences); err != nil {
+		if err = webhookhardwaremanagementv1.SetupHardwareProfileWebhookWithManager(mgr, ctlrutils.CheckHardwareProfileReferences); err != nil {
 			logger.ErrorContext(
 				ctx,
 				"Unable to create webhook",

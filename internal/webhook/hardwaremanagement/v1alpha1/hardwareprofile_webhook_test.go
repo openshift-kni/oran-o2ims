@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -21,14 +22,14 @@ import (
 // testCatalog returns a FirmwareCatalog with one bios, one bmc, one nic entry,
 // plus a second bios entry and an unsupported-component entry used by the
 // negative test cases.
-func testCatalog() *FirmwareCatalog {
-	return &FirmwareCatalog{
+func testCatalog() *hwmgmtv1alpha1.FirmwareCatalog {
+	return &hwmgmtv1alpha1.FirmwareCatalog{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      FirmwareCatalogName,
+			Name:      hwmgmtv1alpha1.FirmwareCatalogName,
 			Namespace: "test-ns",
 		},
-		Spec: FirmwareCatalogSpec{
-			Images: []FirmwareImage{
+		Spec: hwmgmtv1alpha1.FirmwareCatalogSpec{
+			Images: []hwmgmtv1alpha1.FirmwareImage{
 				{Name: "bios-entry", Component: "bios", URL: "https://example.com/bios.bin", Version: "1.0"},
 				{Name: "bios-entry-2", Component: "bios", URL: "https://example.com/bios2.bin", Version: "1.1"},
 				{Name: "bmc-entry", Component: "bmc", URL: "https://example.com/bmc.bin", Version: "2.0"},
@@ -41,58 +42,58 @@ func testCatalog() *FirmwareCatalog {
 
 func TestHardwareProfileWebhookValidateCreate(t *testing.T) {
 	scheme := runtime.NewScheme()
-	if err := AddToScheme(scheme); err != nil {
+	if err := hwmgmtv1alpha1.AddToScheme(scheme); err != nil {
 		t.Fatalf("failed to add scheme: %v", err)
 	}
 
 	tests := []struct {
 		name      string
-		hp        *HardwareProfile
+		hp        *hwmgmtv1alpha1.HardwareProfile
 		noCatalog bool
 		wantErr   bool
 		errMsg    string
 	}{
 		{
 			name: "valid firmwareImages with single BIOS entry",
-			hp: &HardwareProfile{
+			hp: &hwmgmtv1alpha1.HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec:       HardwareProfileSpec{FirmwareImages: []string{"bios-entry"}},
+				Spec:       hwmgmtv1alpha1.HardwareProfileSpec{FirmwareImages: []string{"bios-entry"}},
 			},
 		},
 		{
 			name: "valid firmwareImages with bios, bmc and nic",
-			hp: &HardwareProfile{
+			hp: &hwmgmtv1alpha1.HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec: HardwareProfileSpec{
+				Spec: hwmgmtv1alpha1.HardwareProfileSpec{
 					FirmwareImages: []string{"bios-entry", "bmc-entry", "nic-entry"},
 				},
 			},
 		},
 		{
 			name: "empty firmware fields allowed",
-			hp: &HardwareProfile{
+			hp: &hwmgmtv1alpha1.HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec:       HardwareProfileSpec{},
+				Spec:       hwmgmtv1alpha1.HardwareProfileSpec{},
 			},
 		},
 		{
 			name: "deprecated inline fields require no catalog",
-			hp: &HardwareProfile{
+			hp: &hwmgmtv1alpha1.HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec: HardwareProfileSpec{
-					BiosFirmware: Firmware{Version: "1.0", URL: "https://example.com/bios.bin"},
-					BmcFirmware:  Firmware{Version: "2.0", URL: "https://example.com/bmc.bin"},
-					NicFirmware:  []Nic{{Version: "3.0", URL: "https://example.com/nic.bin"}},
+				Spec: hwmgmtv1alpha1.HardwareProfileSpec{
+					BiosFirmware: hwmgmtv1alpha1.Firmware{Version: "1.0", URL: "https://example.com/bios.bin"},
+					BmcFirmware:  hwmgmtv1alpha1.Firmware{Version: "2.0", URL: "https://example.com/bmc.bin"},
+					NicFirmware:  []hwmgmtv1alpha1.Nic{{Version: "3.0", URL: "https://example.com/nic.bin"}},
 				},
 			},
 			noCatalog: true,
 		},
 		{
 			name: "mutually exclusive approaches rejected",
-			hp: &HardwareProfile{
+			hp: &hwmgmtv1alpha1.HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec: HardwareProfileSpec{
-					BiosFirmware:   Firmware{Version: "1.0", URL: "https://example.com/bios.bin"},
+				Spec: hwmgmtv1alpha1.HardwareProfileSpec{
+					BiosFirmware:   hwmgmtv1alpha1.Firmware{Version: "1.0", URL: "https://example.com/bios.bin"},
 					FirmwareImages: []string{"bios-entry"},
 				},
 			},
@@ -101,45 +102,45 @@ func TestHardwareProfileWebhookValidateCreate(t *testing.T) {
 		},
 		{
 			name: "nonexistent firmwareImages entry",
-			hp: &HardwareProfile{
+			hp: &hwmgmtv1alpha1.HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec:       HardwareProfileSpec{FirmwareImages: []string{"missing-entry"}},
+				Spec:       hwmgmtv1alpha1.HardwareProfileSpec{FirmwareImages: []string{"missing-entry"}},
 			},
 			wantErr: true,
 			errMsg:  "not found in FirmwareCatalog",
 		},
 		{
 			name: "more than one BIOS entry rejected",
-			hp: &HardwareProfile{
+			hp: &hwmgmtv1alpha1.HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec:       HardwareProfileSpec{FirmwareImages: []string{"bios-entry", "bios-entry-2"}},
+				Spec:       hwmgmtv1alpha1.HardwareProfileSpec{FirmwareImages: []string{"bios-entry", "bios-entry-2"}},
 			},
 			wantErr: true,
 			errMsg:  "at most one",
 		},
 		{
 			name: "unsupported component rejected",
-			hp: &HardwareProfile{
+			hp: &hwmgmtv1alpha1.HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec:       HardwareProfileSpec{FirmwareImages: []string{"gpu-entry"}},
+				Spec:       hwmgmtv1alpha1.HardwareProfileSpec{FirmwareImages: []string{"gpu-entry"}},
 			},
 			wantErr: true,
 			errMsg:  "unsupported component",
 		},
 		{
 			name: "duplicate firmwareImages entry rejected",
-			hp: &HardwareProfile{
+			hp: &hwmgmtv1alpha1.HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec:       HardwareProfileSpec{FirmwareImages: []string{"nic-entry", "nic-entry"}},
+				Spec:       hwmgmtv1alpha1.HardwareProfileSpec{FirmwareImages: []string{"nic-entry", "nic-entry"}},
 			},
 			wantErr: true,
 			errMsg:  `firmwareImages contains duplicate entry "nic-entry"`,
 		},
 		{
 			name: "missing FirmwareCatalog reports operator-namespace requirement",
-			hp: &HardwareProfile{
+			hp: &hwmgmtv1alpha1.HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec:       HardwareProfileSpec{FirmwareImages: []string{"bios-entry"}},
+				Spec:       hwmgmtv1alpha1.HardwareProfileSpec{FirmwareImages: []string{"bios-entry"}},
 			},
 			noCatalog: true,
 			wantErr:   true,
@@ -178,39 +179,39 @@ func TestHardwareProfileWebhookValidateCreate(t *testing.T) {
 // type), so ValidateUpdate always returns nil regardless of the change.
 func TestHardwareProfileWebhookValidateUpdate(t *testing.T) {
 	scheme := runtime.NewScheme()
-	if err := AddToScheme(scheme); err != nil {
+	if err := hwmgmtv1alpha1.AddToScheme(scheme); err != nil {
 		t.Fatalf("failed to add scheme: %v", err)
 	}
 
-	oldHP := &HardwareProfile{
+	oldHP := &hwmgmtv1alpha1.HardwareProfile{
 		ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-		Spec:       HardwareProfileSpec{FirmwareImages: []string{"bios-entry"}},
+		Spec:       hwmgmtv1alpha1.HardwareProfileSpec{FirmwareImages: []string{"bios-entry"}},
 	}
 
 	tests := []struct {
 		name  string
-		newHP *HardwareProfile
+		newHP *hwmgmtv1alpha1.HardwareProfile
 	}{
 		{
 			name: "unchanged firmwareImages references",
-			newHP: &HardwareProfile{
+			newHP: &hwmgmtv1alpha1.HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec:       HardwareProfileSpec{FirmwareImages: []string{"bios-entry"}},
+				Spec:       hwmgmtv1alpha1.HardwareProfileSpec{FirmwareImages: []string{"bios-entry"}},
 			},
 		},
 		{
 			name: "nonexistent firmwareImages entry is not re-validated on update",
-			newHP: &HardwareProfile{
+			newHP: &hwmgmtv1alpha1.HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec:       HardwareProfileSpec{FirmwareImages: []string{"missing-entry"}},
+				Spec:       hwmgmtv1alpha1.HardwareProfileSpec{FirmwareImages: []string{"missing-entry"}},
 			},
 		},
 		{
 			name: "mutually exclusive approaches are not re-validated on update",
-			newHP: &HardwareProfile{
+			newHP: &hwmgmtv1alpha1.HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
-				Spec: HardwareProfileSpec{
-					BiosFirmware:   Firmware{Version: "1.0", URL: "https://example.com/bios.bin"},
+				Spec: hwmgmtv1alpha1.HardwareProfileSpec{
+					BiosFirmware:   hwmgmtv1alpha1.Firmware{Version: "1.0", URL: "https://example.com/bios.bin"},
 					FirmwareImages: []string{"bios-entry"},
 				},
 			},
@@ -240,7 +241,7 @@ func TestHardwareProfileWebhookValidateUpdate(t *testing.T) {
 // to the injected reference checker and propagates its result. The reference
 // checker itself is tested independently in internal/controllers/utils.
 func TestHardwareProfileWebhookValidateDelete(t *testing.T) {
-	hp := &HardwareProfile{
+	hp := &hwmgmtv1alpha1.HardwareProfile{
 		ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test-ns"},
 	}
 
