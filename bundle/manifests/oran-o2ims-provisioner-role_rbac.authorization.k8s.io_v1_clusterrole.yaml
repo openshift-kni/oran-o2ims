@@ -7,25 +7,25 @@ metadata:
   name: oran-o2ims-provisioner-role
 rules:
 - nonResourceURLs:
-  - /o2ims-infrastructureArtifacts/*
-  - /o2ims-infrastructureArtifacts/api_versions
-  - /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates
-  - /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates/*
-  - /o2ims-infrastructureProvisioning/*
-  - /o2ims-infrastructureProvisioning/api_versions
+  - /O2ims_infrastructureArtifacts/*
+  - /O2ims_infrastructureArtifacts/api_versions
+  - /O2ims_infrastructureArtifacts/v1/managedInfrastructureTemplates
+  - /O2ims_infrastructureArtifacts/v1/managedInfrastructureTemplates/*
+  - /O2ims_infrastructureProvisioning/*
+  - /O2ims_infrastructureProvisioning/api_versions
   verbs:
   - get
 - nonResourceURLs:
-  - /o2ims-infrastructureProvisioning/v1/provisioningRequests
+  - /O2ims_infrastructureProvisioning/v1/provisioningRequests
   verbs:
   - get
   - create
 - nonResourceURLs:
-  - /o2ims-infrastructureProvisioning/v1/provisioningRequests/*
+  - /O2ims_infrastructureProvisioning/v1/provisioningRequests/*
   verbs:
   - get
   - delete
 - nonResourceURLs:
-  - /o2ims-infrastructureProvisioning/v1/provisioningRequests/*
+  - /O2ims_infrastructureProvisioning/v1/provisioningRequests/*
   verbs:
   - update

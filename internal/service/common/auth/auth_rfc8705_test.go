@@ -74,7 +74,7 @@ var _ = Describe("WithClientVerification", func() {
 		// exercise spoofing and defensive-strip behavior.  Use Set so the header keys are canonicalized.
 		request = http.Request{
 			Method: http.MethodGet,
-			URL:    &url.URL{Path: "/o2ims-infrastructureInventory/v1/resourcePools"},
+			URL:    &url.URL{Path: "/O2ims_infrastructureInventory/v1/resourcePools"},
 			Header: http.Header{},
 		}
 		request.Header.Set(sslClientVerifiedHeaderKey, "0")
@@ -247,30 +247,30 @@ var _ = Describe("WithClientVerification", func() {
 			request.Header.Del(sslClientVerifiedHeaderKey)
 			request.Header.Del(sslClientDERHeaderKey)
 			_, _, _ = tokenAuthenticator.AuthenticateRequest(&request)
-			Expect(getCounterValue(metrics.AuthFailures, "test-service", "certificate_binding", "GET", "/o2ims-infrastructureInventory/v1/resourcePools")).To(Equal(float64(1)))
+			Expect(getCounterValue(metrics.AuthFailures, "test-service", "certificate_binding", "GET", "/O2ims_infrastructureInventory/v1/resourcePools")).To(Equal(float64(1)))
 		})
 
 		It("increments certificate_binding counter on fingerprint mismatch", func() {
 			noopAuthenticator.Response.User.GetExtra()[fingerprintKey] = []string{"other"}
 			_, _, _ = tokenAuthenticator.AuthenticateRequest(&request)
-			Expect(getCounterValue(metrics.AuthFailures, "test-service", "certificate_binding", "GET", "/o2ims-infrastructureInventory/v1/resourcePools")).To(Equal(float64(1)))
+			Expect(getCounterValue(metrics.AuthFailures, "test-service", "certificate_binding", "GET", "/O2ims_infrastructureInventory/v1/resourcePools")).To(Equal(float64(1)))
 		})
 
 		It("increments certificate_binding counter on empty fingerprint", func() {
 			noopAuthenticator.Response.User.GetExtra()[fingerprintKey] = []string{""}
 			_, _, _ = tokenAuthenticator.AuthenticateRequest(&request)
-			Expect(getCounterValue(metrics.AuthFailures, "test-service", "certificate_binding", "GET", "/o2ims-infrastructureInventory/v1/resourcePools")).To(Equal(float64(1)))
+			Expect(getCounterValue(metrics.AuthFailures, "test-service", "certificate_binding", "GET", "/O2ims_infrastructureInventory/v1/resourcePools")).To(Equal(float64(1)))
 		})
 
 		It("increments certificate_binding counter on multiple fingerprints", func() {
 			noopAuthenticator.Response.User.GetExtra()[fingerprintKey] = []string{"foo", "bar"}
 			_, _, _ = tokenAuthenticator.AuthenticateRequest(&request)
-			Expect(getCounterValue(metrics.AuthFailures, "test-service", "certificate_binding", "GET", "/o2ims-infrastructureInventory/v1/resourcePools")).To(Equal(float64(1)))
+			Expect(getCounterValue(metrics.AuthFailures, "test-service", "certificate_binding", "GET", "/O2ims_infrastructureInventory/v1/resourcePools")).To(Equal(float64(1)))
 		})
 
 		It("does not increment counter on success", func() {
 			_, _, _ = tokenAuthenticator.AuthenticateRequest(&request)
-			Expect(getCounterValue(metrics.AuthFailures, "test-service", "certificate_binding", "GET", "/o2ims-infrastructureInventory/v1/resourcePools")).To(Equal(float64(0)))
+			Expect(getCounterValue(metrics.AuthFailures, "test-service", "certificate_binding", "GET", "/O2ims_infrastructureInventory/v1/resourcePools")).To(Equal(float64(0)))
 		})
 	})
 })

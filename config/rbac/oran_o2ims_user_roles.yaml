@@ -6,47 +6,47 @@ metadata:
     role: reader-role
 rules:
 - nonResourceURLs:
-  - /o2ims-infrastructureInventory/api_versions
-  - /o2ims-infrastructureInventory/v2
-  - /o2ims-infrastructureInventory/v2/api_versions
-  - /o2ims-infrastructureInventory/v2/resourceTypes
-  - /o2ims-infrastructureInventory/v2/resourceTypes/*
-  - /o2ims-infrastructureInventory/v2/resourcePools
-  - /o2ims-infrastructureInventory/v2/resourcePools/*
-  - /o2ims-infrastructureInventory/v2/alarmDictionaries
-  - /o2ims-infrastructureInventory/v2/alarmDictionaries/*
-  - /o2ims-infrastructureInventory/v2/locations
-  - /o2ims-infrastructureInventory/v2/locations/*
-  - /o2ims-infrastructureInventory/v2/oCloudSites
-  - /o2ims-infrastructureInventory/v2/oCloudSites/*
-  - /o2ims-infrastructureMonitoring/*
-  - /o2ims-infrastructureMonitoring/api_versions
-  - /o2ims-infrastructureCluster/*
-  - /o2ims-infrastructureCluster/api_versions
-  - /o2ims-infrastructureArtifacts/*
-  - /o2ims-infrastructureArtifacts/api_versions
-  - /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates
-  - /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates/*
-  - /o2ims-infrastructureProvisioning/*
-  - /o2ims-infrastructureProvisioning/api_versions
+  - /O2ims_infrastructureInventory/api_versions
+  - /O2ims_infrastructureInventory/v2
+  - /O2ims_infrastructureInventory/v2/api_versions
+  - /O2ims_infrastructureInventory/v2/resourceTypes
+  - /O2ims_infrastructureInventory/v2/resourceTypes/*
+  - /O2ims_infrastructureInventory/v2/resourcePools
+  - /O2ims_infrastructureInventory/v2/resourcePools/*
+  - /O2ims_infrastructureInventory/v2/alarmDictionaries
+  - /O2ims_infrastructureInventory/v2/alarmDictionaries/*
+  - /O2ims_infrastructureInventory/v2/locations
+  - /O2ims_infrastructureInventory/v2/locations/*
+  - /O2ims_infrastructureInventory/v2/oCloudSites
+  - /O2ims_infrastructureInventory/v2/oCloudSites/*
+  - /O2ims_infrastructureMonitoring/*
+  - /O2ims_infrastructureMonitoring/api_versions
+  - /O2ims_infrastructureCluster/*
+  - /O2ims_infrastructureCluster/api_versions
+  - /O2ims_infrastructureArtifacts/*
+  - /O2ims_infrastructureArtifacts/api_versions
+  - /O2ims_infrastructureArtifacts/v1/managedInfrastructureTemplates
+  - /O2ims_infrastructureArtifacts/v1/managedInfrastructureTemplates/*
+  - /O2ims_infrastructureProvisioning/*
+  - /O2ims_infrastructureProvisioning/api_versions
   verbs:
   - get
 - nonResourceURLs:
-  - /o2ims-infrastructureMonitoring/v1/alarmSubscriptions
-  - /o2ims-infrastructureInventory/v2/subscriptions
-  - /o2ims-infrastructureCluster/v1/subscriptions
-  - /o2ims-infrastructureProvisioning/v1/provisioningRequests
+  - /O2ims_infrastructureMonitoring/v1/alarmSubscriptions
+  - /O2ims_infrastructureInventory/v2/subscriptions
+  - /O2ims_infrastructureCluster/v1/subscriptions
+  - /O2ims_infrastructureProvisioning/v1/provisioningRequests
   verbs:
   - get
 - nonResourceURLs:
-  - /o2ims-infrastructureMonitoring/v1/alarmSubscriptions/*
-  - /o2ims-infrastructureInventory/v2/subscriptions/*
-  - /o2ims-infrastructureCluster/v1/subscriptions/*
-  - /o2ims-infrastructureProvisioning/v1/provisioningRequests/*
+  - /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/*
+  - /O2ims_infrastructureInventory/v2/subscriptions/*
+  - /O2ims_infrastructureCluster/v1/subscriptions/*
+  - /O2ims_infrastructureProvisioning/v1/provisioningRequests/*
   verbs:
   - get
 - nonResourceURLs:
-  - /o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration
+  - /O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration
   verbs:
   - get
 ---
@@ -58,11 +58,11 @@ metadata:
     role: maintainer-role
 rules:
 - nonResourceURLs:
-  - /o2ims-infrastructureMonitoring/v1/alarms/*
+  - /O2ims_infrastructureMonitoring/v1/alarms/*
   verbs:
   - patch
 - nonResourceURLs:
-  - /o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration
+  - /O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration
   verbs:
   - get
   - patch
@@ -76,16 +76,16 @@ metadata:
     role: subscriber-role
 rules:
 - nonResourceURLs:
-  - /o2ims-infrastructureMonitoring/v1/alarmSubscriptions
-  - /o2ims-infrastructureInventory/v2/subscriptions
-  - /o2ims-infrastructureCluster/v1/subscriptions
+  - /O2ims_infrastructureMonitoring/v1/alarmSubscriptions
+  - /O2ims_infrastructureInventory/v2/subscriptions
+  - /O2ims_infrastructureCluster/v1/subscriptions
   verbs:
   - get
   - create
 - nonResourceURLs:
-  - /o2ims-infrastructureMonitoring/v1/alarmSubscriptions/*
-  - /o2ims-infrastructureInventory/v2/subscriptions/*
-  - /o2ims-infrastructureCluster/v1/subscriptions/*
+  - /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/*
+  - /O2ims_infrastructureInventory/v2/subscriptions/*
+  - /O2ims_infrastructureCluster/v1/subscriptions/*
   verbs:
   - get
   - delete
@@ -98,26 +98,26 @@ metadata:
     role: provisioner-role
 rules:
 - nonResourceURLs:
-  - /o2ims-infrastructureArtifacts/*
-  - /o2ims-infrastructureArtifacts/api_versions
-  - /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates
-  - /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates/*
-  - /o2ims-infrastructureProvisioning/*
-  - /o2ims-infrastructureProvisioning/api_versions
+  - /O2ims_infrastructureArtifacts/*
+  - /O2ims_infrastructureArtifacts/api_versions
+  - /O2ims_infrastructureArtifacts/v1/managedInfrastructureTemplates
+  - /O2ims_infrastructureArtifacts/v1/managedInfrastructureTemplates/*
+  - /O2ims_infrastructureProvisioning/*
+  - /O2ims_infrastructureProvisioning/api_versions
   verbs:
   - get
 - nonResourceURLs:
-  - /o2ims-infrastructureProvisioning/v1/provisioningRequests
+  - /O2ims_infrastructureProvisioning/v1/provisioningRequests
   verbs:
   - get
   - create
 - nonResourceURLs:
-  - /o2ims-infrastructureProvisioning/v1/provisioningRequests/*
+  - /O2ims_infrastructureProvisioning/v1/provisioningRequests/*
   verbs:
   - get
   - delete
 - nonResourceURLs:
-  - /o2ims-infrastructureProvisioning/v1/provisioningRequests/*
+  - /O2ims_infrastructureProvisioning/v1/provisioningRequests/*
   verbs:
   - update
 ---
@@ -129,8 +129,8 @@ metadata:
     role: deployer-role
 rules:
 - nonResourceURLs:
-  - /o2ims-infrastructureInventory/v2/deploymentManagers
-  - /o2ims-infrastructureInventory/v2/deploymentManagers/*
+  - /O2ims_infrastructureInventory/v2/deploymentManagers
+  - /O2ims_infrastructureInventory/v2/deploymentManagers/*
   verbs:
   - get
 ---

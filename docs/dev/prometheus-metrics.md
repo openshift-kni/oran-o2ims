@@ -360,16 +360,16 @@ Label values:
   (no path parameters) can reach the auth middleware — the oapi-codegen
   generated wrappers reject non-UUID values with 400 before the
   middleware chain runs. Examples:
-  - `/o2ims-infrastructureInventory/v2/resourcePools/{id}/resources/{id}`
-  - `/o2ims-infrastructureMonitoring/v1/alarms` (collection, no UUID)
+  - `/O2ims_infrastructureInventory/v2/resourcePools/{id}/resources/{id}`
+  - `/O2ims_infrastructureMonitoring/v1/alarms` (collection, no UUID)
 
 Example scrape output:
 
 ```text
-o2ims_auth_failures_total{service="alarms-server",type="authentication",method="GET",path="/o2ims-infrastructureMonitoring/v1/alarms"} 12
-o2ims_auth_failures_total{service="cluster-server",type="authorization",method="POST",path="/o2ims-infrastructureCluster/v1/nodeClusters/{id}"} 3
-o2ims_auth_failures_total{service="resource-server",type="certificate_binding",method="GET",path="/o2ims-infrastructureInventory/v2/resourcePools/{id}"} 1
-o2ims_auth_failures_total{service="resource-server",type="authentication",method="GET",path="/o2ims-infrastructureInventory/v2/resourcePools"} 7
+o2ims_auth_failures_total{service="alarms-server",type="authentication",method="GET",path="/O2ims_infrastructureMonitoring/v1/alarms"} 12
+o2ims_auth_failures_total{service="cluster-server",type="authorization",method="POST",path="/O2ims_infrastructureCluster/v1/nodeClusters/{id}"} 3
+o2ims_auth_failures_total{service="resource-server",type="certificate_binding",method="GET",path="/O2ims_infrastructureInventory/v2/resourcePools/{id}"} 1
+o2ims_auth_failures_total{service="resource-server",type="authentication",method="GET",path="/O2ims_infrastructureInventory/v2/resourcePools"} 7
 ```
 
 Standard Go runtime metrics and default process metrics are also served since
@@ -460,7 +460,7 @@ oc -n openshift-monitoring exec -c prometheus prometheus-k8s-0 -- \
   sh -c 'for i in $(seq 1 200); do
     wget -qO- \
       --ca-certificate=/etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt \
-      https://resource-server.oran-o2ims.svc:8443/o2ims-infrastructureInventory/v2/resourcePools 2>/dev/null
+      https://resource-server.oran-o2ims.svc:8443/O2ims_infrastructureInventory/v2/resourcePools 2>/dev/null
     sleep 2
   done'
 ```
@@ -692,7 +692,7 @@ paths; other services (alarms, cluster, provisioning, artifacts) use v1:
 oc -n openshift-monitoring exec -c prometheus prometheus-k8s-0 -- \
   wget -qO- \
   --ca-certificate=/etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt \
-  https://resource-server.oran-o2ims.svc:8443/o2ims-infrastructureInventory/v2/resourcePools 2>&1 || true
+  https://resource-server.oran-o2ims.svc:8443/O2ims_infrastructureInventory/v2/resourcePools 2>&1 || true
 ```
 
 Then re-query with PromQL — the counter should now appear with
