@@ -35,7 +35,7 @@ matches the O-Cloud Manager release branch deployed on your hub cluster:
 |---|---|
 | release-4.21 | `4.21` or `4.21.0` |
 | release-4.22 | `4.22` or `4.22.0` |
-| main (5.0) | `5.0`, `5.0.0`, or `latest` |
+| main (5.1) | `5.1`, `5.1.0`, or `latest` |
 
 To determine the installed ACM version for the ACM must-gather image:
 
@@ -49,13 +49,13 @@ oc get multiclusterhubs.operator.open-cluster-management.io -A \
 Run the must-gather using the O-Cloud Manager must-gather image:
 
 ```shell
-oc adm must-gather --image=quay.io/openshift-kni/oran-o2ims-operator-must-gather:5.0.0
+oc adm must-gather --image=quay.io/openshift-kni/oran-o2ims-operator-must-gather:5.1.0
 ```
 
 To specify a custom output directory:
 
 ```shell
-oc adm must-gather --image=quay.io/openshift-kni/oran-o2ims-operator-must-gather:5.0.0 --dest-dir=must-gather/tmp
+oc adm must-gather --image=quay.io/openshift-kni/oran-o2ims-operator-must-gather:5.1.0 --dest-dir=must-gather/tmp
 ```
 
 To include ACM resources and logs (e.g., ClusterInstance, SiteConfig), combine
@@ -64,7 +64,7 @@ version (e.g., `v2.14`):
 
 ```shell
 oc adm must-gather \
-  --image=quay.io/openshift-kni/oran-o2ims-operator-must-gather:5.0.0 \
+  --image=quay.io/openshift-kni/oran-o2ims-operator-must-gather:5.1.0 \
   --image=registry.redhat.io/rhacm2/acm-must-gather-rhel9:v<ACM-version>
 ```
 
@@ -72,7 +72,7 @@ To also include the standard OpenShift must-gather:
 
 ```shell
 oc adm must-gather \
-  --image=quay.io/openshift-kni/oran-o2ims-operator-must-gather:5.0.0 \
+  --image=quay.io/openshift-kni/oran-o2ims-operator-must-gather:5.1.0 \
   --image=registry.redhat.io/rhacm2/acm-must-gather-rhel9:v<ACM-version> \
   --image=quay.io/openshift/origin-must-gather
 ```
