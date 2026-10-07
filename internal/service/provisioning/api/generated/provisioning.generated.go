@@ -273,25 +273,25 @@ type UpdateProvisioningRequestJSONRequestBody = ProvisioningRequestData
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// Get API versions
-	// (GET /o2ims-infrastructureProvisioning/api_versions)
+	// (GET /O2ims_infrastructureProvisioning/api_versions)
 	GetAllVersions(w http.ResponseWriter, r *http.Request)
 	// Get minor API versions
-	// (GET /o2ims-infrastructureProvisioning/v1/api_versions)
+	// (GET /O2ims_infrastructureProvisioning/v1/api_versions)
 	GetMinorVersions(w http.ResponseWriter, r *http.Request)
 	// Get provisioning requests
-	// (GET /o2ims-infrastructureProvisioning/v1/provisioningRequests)
+	// (GET /O2ims_infrastructureProvisioning/v1/provisioningRequests)
 	GetProvisioningRequests(w http.ResponseWriter, r *http.Request, params GetProvisioningRequestsParams)
 	// Create a provisioning request
-	// (POST /o2ims-infrastructureProvisioning/v1/provisioningRequests)
+	// (POST /O2ims_infrastructureProvisioning/v1/provisioningRequests)
 	CreateProvisioningRequest(w http.ResponseWriter, r *http.Request)
 	// Delete a provisioning request
-	// (DELETE /o2ims-infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId})
+	// (DELETE /O2ims_infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId})
 	DeleteProvisioningRequest(w http.ResponseWriter, r *http.Request, provisioningRequestId ProvisioningRequestId)
 	// Get the provisioning request
-	// (GET /o2ims-infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId})
+	// (GET /O2ims_infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId})
 	GetProvisioningRequest(w http.ResponseWriter, r *http.Request, provisioningRequestId ProvisioningRequestId)
 	// Update a provisioning request
-	// (PUT /o2ims-infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId})
+	// (PUT /O2ims_infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId})
 	UpdateProvisioningRequest(w http.ResponseWriter, r *http.Request, provisioningRequestId ProvisioningRequestId)
 }
 
@@ -658,13 +658,13 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureProvisioning/api_versions", wrapper.GetAllVersions)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureProvisioning/v1/api_versions", wrapper.GetMinorVersions)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureProvisioning/v1/provisioningRequests", wrapper.GetProvisioningRequests)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/o2ims-infrastructureProvisioning/v1/provisioningRequests", wrapper.CreateProvisioningRequest)
-	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/o2ims-infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId}", wrapper.DeleteProvisioningRequest)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId}", wrapper.GetProvisioningRequest)
-	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/o2ims-infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId}", wrapper.UpdateProvisioningRequest)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureProvisioning/api_versions", wrapper.GetAllVersions)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureProvisioning/v1/api_versions", wrapper.GetMinorVersions)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureProvisioning/v1/provisioningRequests", wrapper.GetProvisioningRequests)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/O2ims_infrastructureProvisioning/v1/provisioningRequests", wrapper.CreateProvisioningRequest)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/O2ims_infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId}", wrapper.DeleteProvisioningRequest)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId}", wrapper.GetProvisioningRequest)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/O2ims_infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId}", wrapper.UpdateProvisioningRequest)
 
 	return m
 }
@@ -1299,25 +1299,25 @@ func (response UpdateProvisioningRequest500ApplicationProblemPlusJSONResponse) V
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Get API versions
-	// (GET /o2ims-infrastructureProvisioning/api_versions)
+	// (GET /O2ims_infrastructureProvisioning/api_versions)
 	GetAllVersions(ctx context.Context, request GetAllVersionsRequestObject) (GetAllVersionsResponseObject, error)
 	// Get minor API versions
-	// (GET /o2ims-infrastructureProvisioning/v1/api_versions)
+	// (GET /O2ims_infrastructureProvisioning/v1/api_versions)
 	GetMinorVersions(ctx context.Context, request GetMinorVersionsRequestObject) (GetMinorVersionsResponseObject, error)
 	// Get provisioning requests
-	// (GET /o2ims-infrastructureProvisioning/v1/provisioningRequests)
+	// (GET /O2ims_infrastructureProvisioning/v1/provisioningRequests)
 	GetProvisioningRequests(ctx context.Context, request GetProvisioningRequestsRequestObject) (GetProvisioningRequestsResponseObject, error)
 	// Create a provisioning request
-	// (POST /o2ims-infrastructureProvisioning/v1/provisioningRequests)
+	// (POST /O2ims_infrastructureProvisioning/v1/provisioningRequests)
 	CreateProvisioningRequest(ctx context.Context, request CreateProvisioningRequestRequestObject) (CreateProvisioningRequestResponseObject, error)
 	// Delete a provisioning request
-	// (DELETE /o2ims-infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId})
+	// (DELETE /O2ims_infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId})
 	DeleteProvisioningRequest(ctx context.Context, request DeleteProvisioningRequestRequestObject) (DeleteProvisioningRequestResponseObject, error)
 	// Get the provisioning request
-	// (GET /o2ims-infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId})
+	// (GET /O2ims_infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId})
 	GetProvisioningRequest(ctx context.Context, request GetProvisioningRequestRequestObject) (GetProvisioningRequestResponseObject, error)
 	// Update a provisioning request
-	// (PUT /o2ims-infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId})
+	// (PUT /O2ims_infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId})
 	UpdateProvisioningRequest(ctx context.Context, request UpdateProvisioningRequestRequestObject) (UpdateProvisioningRequestResponseObject, error)
 }
 
@@ -1584,34 +1584,34 @@ var swaggerSpec = []string{
 	"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",
-	"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",
-	"k+/W3v1ywJYj283/2aMuwN313f8FAAD//w==",
+	"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",
+	"eyffrb375YAtR7ab/7NHXYC767v/CwAA//8=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -1177,73 +1177,73 @@ type CreateSubscriptionJSONRequestBody = Subscription
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// Get API versions
-	// (GET /o2ims-infrastructureInventory/api_versions)
+	// (GET /O2ims_infrastructureInventory/api_versions)
 	GetAllVersions(w http.ResponseWriter, r *http.Request)
 	// Get O-Cloud info
-	// (GET /o2ims-infrastructureInventory/v2)
+	// (GET /O2ims_infrastructureInventory/v2)
 	GetCloudInfo(w http.ResponseWriter, r *http.Request, params GetCloudInfoParams)
 	// Get alarm dictionaries
-	// (GET /o2ims-infrastructureInventory/v2/alarmDictionaries)
+	// (GET /O2ims_infrastructureInventory/v2/alarmDictionaries)
 	GetAlarmDictionaries(w http.ResponseWriter, r *http.Request, params GetAlarmDictionariesParams)
 	// Get an alarm dictionary
-	// (GET /o2ims-infrastructureInventory/v2/alarmDictionaries/{alarmDictionaryId})
+	// (GET /O2ims_infrastructureInventory/v2/alarmDictionaries/{alarmDictionaryId})
 	GetAlarmDictionary(w http.ResponseWriter, r *http.Request, alarmDictionaryId externalRef0.AlarmDictionaryId)
 	// Get minor API versions
-	// (GET /o2ims-infrastructureInventory/v2/api_versions)
+	// (GET /O2ims_infrastructureInventory/v2/api_versions)
 	GetMinorVersions(w http.ResponseWriter, r *http.Request)
 	// Get deployment managers
-	// (GET /o2ims-infrastructureInventory/v2/deploymentManagers)
+	// (GET /O2ims_infrastructureInventory/v2/deploymentManagers)
 	GetDeploymentManagers(w http.ResponseWriter, r *http.Request, params GetDeploymentManagersParams)
 	// Get deployment manager
-	// (GET /o2ims-infrastructureInventory/v2/deploymentManagers/{deploymentManagerId})
+	// (GET /O2ims_infrastructureInventory/v2/deploymentManagers/{deploymentManagerId})
 	GetDeploymentManager(w http.ResponseWriter, r *http.Request, deploymentManagerId DeploymentManagerId)
 	// Get a resource by ID
-	// (GET /o2ims-infrastructureInventory/v2/internal/resources/{resourceId})
+	// (GET /O2ims_infrastructureInventory/v2/internal/resources/{resourceId})
 	GetInternalResourceById(w http.ResponseWriter, r *http.Request, resourceId openapi_types.UUID)
 	// Get locations
-	// (GET /o2ims-infrastructureInventory/v2/locations)
+	// (GET /O2ims_infrastructureInventory/v2/locations)
 	GetLocations(w http.ResponseWriter, r *http.Request, params GetLocationsParams)
 	// Get a location
-	// (GET /o2ims-infrastructureInventory/v2/locations/{globalLocationId})
+	// (GET /O2ims_infrastructureInventory/v2/locations/{globalLocationId})
 	GetLocation(w http.ResponseWriter, r *http.Request, globalLocationId GlobalLocationId)
 	// Get O-Cloud sites
-	// (GET /o2ims-infrastructureInventory/v2/oCloudSites)
+	// (GET /O2ims_infrastructureInventory/v2/oCloudSites)
 	GetOCloudSites(w http.ResponseWriter, r *http.Request, params GetOCloudSitesParams)
 	// Get an O-Cloud site
-	// (GET /o2ims-infrastructureInventory/v2/oCloudSites/{oCloudSiteId})
+	// (GET /O2ims_infrastructureInventory/v2/oCloudSites/{oCloudSiteId})
 	GetOCloudSite(w http.ResponseWriter, r *http.Request, oCloudSiteId OCloudSiteId)
 	// Get resource pools
-	// (GET /o2ims-infrastructureInventory/v2/resourcePools)
+	// (GET /O2ims_infrastructureInventory/v2/resourcePools)
 	GetResourcePools(w http.ResponseWriter, r *http.Request, params GetResourcePoolsParams)
 	// Get a resource pool
-	// (GET /o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId})
+	// (GET /O2ims_infrastructureInventory/v2/resourcePools/{resourcePoolId})
 	GetResourcePool(w http.ResponseWriter, r *http.Request, resourcePoolId ResourcePoolId)
 	// Get resources in a resource pool
-	// (GET /o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources)
+	// (GET /O2ims_infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources)
 	GetResources(w http.ResponseWriter, r *http.Request, resourcePoolId ResourcePoolId, params GetResourcesParams)
 	// Get a resource in a resource pool
-	// (GET /o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources/{resourceId})
+	// (GET /O2ims_infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources/{resourceId})
 	GetResource(w http.ResponseWriter, r *http.Request, resourcePoolId ResourcePoolId, resourceId ResourceId)
 	// Get resource types
-	// (GET /o2ims-infrastructureInventory/v2/resourceTypes)
+	// (GET /O2ims_infrastructureInventory/v2/resourceTypes)
 	GetResourceTypes(w http.ResponseWriter, r *http.Request, params GetResourceTypesParams)
 	// Get a resource type
-	// (GET /o2ims-infrastructureInventory/v2/resourceTypes/{resourceTypeId})
+	// (GET /O2ims_infrastructureInventory/v2/resourceTypes/{resourceTypeId})
 	GetResourceType(w http.ResponseWriter, r *http.Request, resourceTypeId ResourceTypeId)
 	// Get an alarm dictionary for a resource type
-	// (GET /o2ims-infrastructureInventory/v2/resourceTypes/{resourceTypeId}/alarmDictionary)
+	// (GET /O2ims_infrastructureInventory/v2/resourceTypes/{resourceTypeId}/alarmDictionary)
 	GetResourceTypeAlarmDictionary(w http.ResponseWriter, r *http.Request, resourceTypeId ResourceTypeId)
 	// Get subscriptions
-	// (GET /o2ims-infrastructureInventory/v2/subscriptions)
+	// (GET /O2ims_infrastructureInventory/v2/subscriptions)
 	GetSubscriptions(w http.ResponseWriter, r *http.Request, params GetSubscriptionsParams)
 	// Create subscriptions
-	// (POST /o2ims-infrastructureInventory/v2/subscriptions)
+	// (POST /O2ims_infrastructureInventory/v2/subscriptions)
 	CreateSubscription(w http.ResponseWriter, r *http.Request)
 	// Delete subscription
-	// (DELETE /o2ims-infrastructureInventory/v2/subscriptions/{subscriptionId})
+	// (DELETE /O2ims_infrastructureInventory/v2/subscriptions/{subscriptionId})
 	DeleteSubscription(w http.ResponseWriter, r *http.Request, subscriptionId SubscriptionId)
 	// Get subscription
-	// (GET /o2ims-infrastructureInventory/v2/subscriptions/{subscriptionId})
+	// (GET /O2ims_infrastructureInventory/v2/subscriptions/{subscriptionId})
 	GetSubscription(w http.ResponseWriter, r *http.Request, subscriptionId SubscriptionId)
 }
 
@@ -2489,29 +2489,29 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureInventory/api_versions", wrapper.GetAllVersions)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureInventory/v2", wrapper.GetCloudInfo)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureInventory/v2/alarmDictionaries", wrapper.GetAlarmDictionaries)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureInventory/v2/alarmDictionaries/{alarmDictionaryId}", wrapper.GetAlarmDictionary)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureInventory/v2/api_versions", wrapper.GetMinorVersions)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureInventory/v2/deploymentManagers", wrapper.GetDeploymentManagers)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureInventory/v2/deploymentManagers/{deploymentManagerId}", wrapper.GetDeploymentManager)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureInventory/v2/internal/resources/{resourceId}", wrapper.GetInternalResourceById)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureInventory/v2/locations", wrapper.GetLocations)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureInventory/v2/locations/{globalLocationId}", wrapper.GetLocation)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureInventory/v2/oCloudSites", wrapper.GetOCloudSites)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureInventory/v2/oCloudSites/{oCloudSiteId}", wrapper.GetOCloudSite)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureInventory/v2/resourcePools", wrapper.GetResourcePools)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId}", wrapper.GetResourcePool)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources", wrapper.GetResources)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources/{resourceId}", wrapper.GetResource)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureInventory/v2/resourceTypes", wrapper.GetResourceTypes)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureInventory/v2/resourceTypes/{resourceTypeId}", wrapper.GetResourceType)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureInventory/v2/resourceTypes/{resourceTypeId}/alarmDictionary", wrapper.GetResourceTypeAlarmDictionary)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureInventory/v2/subscriptions", wrapper.GetSubscriptions)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/o2ims-infrastructureInventory/v2/subscriptions", wrapper.CreateSubscription)
-	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/o2ims-infrastructureInventory/v2/subscriptions/{subscriptionId}", wrapper.DeleteSubscription)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureInventory/v2/subscriptions/{subscriptionId}", wrapper.GetSubscription)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureInventory/api_versions", wrapper.GetAllVersions)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureInventory/v2", wrapper.GetCloudInfo)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureInventory/v2/alarmDictionaries", wrapper.GetAlarmDictionaries)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureInventory/v2/alarmDictionaries/{alarmDictionaryId}", wrapper.GetAlarmDictionary)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureInventory/v2/api_versions", wrapper.GetMinorVersions)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureInventory/v2/deploymentManagers", wrapper.GetDeploymentManagers)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureInventory/v2/deploymentManagers/{deploymentManagerId}", wrapper.GetDeploymentManager)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureInventory/v2/internal/resources/{resourceId}", wrapper.GetInternalResourceById)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureInventory/v2/locations", wrapper.GetLocations)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureInventory/v2/locations/{globalLocationId}", wrapper.GetLocation)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureInventory/v2/oCloudSites", wrapper.GetOCloudSites)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureInventory/v2/oCloudSites/{oCloudSiteId}", wrapper.GetOCloudSite)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureInventory/v2/resourcePools", wrapper.GetResourcePools)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureInventory/v2/resourcePools/{resourcePoolId}", wrapper.GetResourcePool)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources", wrapper.GetResources)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources/{resourceId}", wrapper.GetResource)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureInventory/v2/resourceTypes", wrapper.GetResourceTypes)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureInventory/v2/resourceTypes/{resourceTypeId}", wrapper.GetResourceType)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureInventory/v2/resourceTypes/{resourceTypeId}/alarmDictionary", wrapper.GetResourceTypeAlarmDictionary)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureInventory/v2/subscriptions", wrapper.GetSubscriptions)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/O2ims_infrastructureInventory/v2/subscriptions", wrapper.CreateSubscription)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/O2ims_infrastructureInventory/v2/subscriptions/{subscriptionId}", wrapper.DeleteSubscription)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureInventory/v2/subscriptions/{subscriptionId}", wrapper.GetSubscription)
 
 	return m
 }
@@ -4419,73 +4419,73 @@ func (response GetSubscription500ApplicationProblemPlusJSONResponse) VisitGetSub
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Get API versions
-	// (GET /o2ims-infrastructureInventory/api_versions)
+	// (GET /O2ims_infrastructureInventory/api_versions)
 	GetAllVersions(ctx context.Context, request GetAllVersionsRequestObject) (GetAllVersionsResponseObject, error)
 	// Get O-Cloud info
-	// (GET /o2ims-infrastructureInventory/v2)
+	// (GET /O2ims_infrastructureInventory/v2)
 	GetCloudInfo(ctx context.Context, request GetCloudInfoRequestObject) (GetCloudInfoResponseObject, error)
 	// Get alarm dictionaries
-	// (GET /o2ims-infrastructureInventory/v2/alarmDictionaries)
+	// (GET /O2ims_infrastructureInventory/v2/alarmDictionaries)
 	GetAlarmDictionaries(ctx context.Context, request GetAlarmDictionariesRequestObject) (GetAlarmDictionariesResponseObject, error)
 	// Get an alarm dictionary
-	// (GET /o2ims-infrastructureInventory/v2/alarmDictionaries/{alarmDictionaryId})
+	// (GET /O2ims_infrastructureInventory/v2/alarmDictionaries/{alarmDictionaryId})
 	GetAlarmDictionary(ctx context.Context, request GetAlarmDictionaryRequestObject) (GetAlarmDictionaryResponseObject, error)
 	// Get minor API versions
-	// (GET /o2ims-infrastructureInventory/v2/api_versions)
+	// (GET /O2ims_infrastructureInventory/v2/api_versions)
 	GetMinorVersions(ctx context.Context, request GetMinorVersionsRequestObject) (GetMinorVersionsResponseObject, error)
 	// Get deployment managers
-	// (GET /o2ims-infrastructureInventory/v2/deploymentManagers)
+	// (GET /O2ims_infrastructureInventory/v2/deploymentManagers)
 	GetDeploymentManagers(ctx context.Context, request GetDeploymentManagersRequestObject) (GetDeploymentManagersResponseObject, error)
 	// Get deployment manager
-	// (GET /o2ims-infrastructureInventory/v2/deploymentManagers/{deploymentManagerId})
+	// (GET /O2ims_infrastructureInventory/v2/deploymentManagers/{deploymentManagerId})
 	GetDeploymentManager(ctx context.Context, request GetDeploymentManagerRequestObject) (GetDeploymentManagerResponseObject, error)
 	// Get a resource by ID
-	// (GET /o2ims-infrastructureInventory/v2/internal/resources/{resourceId})
+	// (GET /O2ims_infrastructureInventory/v2/internal/resources/{resourceId})
 	GetInternalResourceById(ctx context.Context, request GetInternalResourceByIdRequestObject) (GetInternalResourceByIdResponseObject, error)
 	// Get locations
-	// (GET /o2ims-infrastructureInventory/v2/locations)
+	// (GET /O2ims_infrastructureInventory/v2/locations)
 	GetLocations(ctx context.Context, request GetLocationsRequestObject) (GetLocationsResponseObject, error)
 	// Get a location
-	// (GET /o2ims-infrastructureInventory/v2/locations/{globalLocationId})
+	// (GET /O2ims_infrastructureInventory/v2/locations/{globalLocationId})
 	GetLocation(ctx context.Context, request GetLocationRequestObject) (GetLocationResponseObject, error)
 	// Get O-Cloud sites
-	// (GET /o2ims-infrastructureInventory/v2/oCloudSites)
+	// (GET /O2ims_infrastructureInventory/v2/oCloudSites)
 	GetOCloudSites(ctx context.Context, request GetOCloudSitesRequestObject) (GetOCloudSitesResponseObject, error)
 	// Get an O-Cloud site
-	// (GET /o2ims-infrastructureInventory/v2/oCloudSites/{oCloudSiteId})
+	// (GET /O2ims_infrastructureInventory/v2/oCloudSites/{oCloudSiteId})
 	GetOCloudSite(ctx context.Context, request GetOCloudSiteRequestObject) (GetOCloudSiteResponseObject, error)
 	// Get resource pools
-	// (GET /o2ims-infrastructureInventory/v2/resourcePools)
+	// (GET /O2ims_infrastructureInventory/v2/resourcePools)
 	GetResourcePools(ctx context.Context, request GetResourcePoolsRequestObject) (GetResourcePoolsResponseObject, error)
 	// Get a resource pool
-	// (GET /o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId})
+	// (GET /O2ims_infrastructureInventory/v2/resourcePools/{resourcePoolId})
 	GetResourcePool(ctx context.Context, request GetResourcePoolRequestObject) (GetResourcePoolResponseObject, error)
 	// Get resources in a resource pool
-	// (GET /o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources)
+	// (GET /O2ims_infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources)
 	GetResources(ctx context.Context, request GetResourcesRequestObject) (GetResourcesResponseObject, error)
 	// Get a resource in a resource pool
-	// (GET /o2ims-infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources/{resourceId})
+	// (GET /O2ims_infrastructureInventory/v2/resourcePools/{resourcePoolId}/resources/{resourceId})
 	GetResource(ctx context.Context, request GetResourceRequestObject) (GetResourceResponseObject, error)
 	// Get resource types
-	// (GET /o2ims-infrastructureInventory/v2/resourceTypes)
+	// (GET /O2ims_infrastructureInventory/v2/resourceTypes)
 	GetResourceTypes(ctx context.Context, request GetResourceTypesRequestObject) (GetResourceTypesResponseObject, error)
 	// Get a resource type
-	// (GET /o2ims-infrastructureInventory/v2/resourceTypes/{resourceTypeId})
+	// (GET /O2ims_infrastructureInventory/v2/resourceTypes/{resourceTypeId})
 	GetResourceType(ctx context.Context, request GetResourceTypeRequestObject) (GetResourceTypeResponseObject, error)
 	// Get an alarm dictionary for a resource type
-	// (GET /o2ims-infrastructureInventory/v2/resourceTypes/{resourceTypeId}/alarmDictionary)
+	// (GET /O2ims_infrastructureInventory/v2/resourceTypes/{resourceTypeId}/alarmDictionary)
 	GetResourceTypeAlarmDictionary(ctx context.Context, request GetResourceTypeAlarmDictionaryRequestObject) (GetResourceTypeAlarmDictionaryResponseObject, error)
 	// Get subscriptions
-	// (GET /o2ims-infrastructureInventory/v2/subscriptions)
+	// (GET /O2ims_infrastructureInventory/v2/subscriptions)
 	GetSubscriptions(ctx context.Context, request GetSubscriptionsRequestObject) (GetSubscriptionsResponseObject, error)
 	// Create subscriptions
-	// (POST /o2ims-infrastructureInventory/v2/subscriptions)
+	// (POST /O2ims_infrastructureInventory/v2/subscriptions)
 	CreateSubscription(ctx context.Context, request CreateSubscriptionRequestObject) (CreateSubscriptionResponseObject, error)
 	// Delete subscription
-	// (DELETE /o2ims-infrastructureInventory/v2/subscriptions/{subscriptionId})
+	// (DELETE /O2ims_infrastructureInventory/v2/subscriptions/{subscriptionId})
 	DeleteSubscription(ctx context.Context, request DeleteSubscriptionRequestObject) (DeleteSubscriptionResponseObject, error)
 	// Get subscription
-	// (GET /o2ims-infrastructureInventory/v2/subscriptions/{subscriptionId})
+	// (GET /O2ims_infrastructureInventory/v2/subscriptions/{subscriptionId})
 	GetSubscription(ctx context.Context, request GetSubscriptionRequestObject) (GetSubscriptionResponseObject, error)
 }
 
@@ -5206,60 +5206,60 @@ var swaggerSpec = []string{
 	"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",
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

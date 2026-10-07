@@ -55,8 +55,8 @@ oc apply -f config/testing/client-service-account-rbac.yaml
 export MY_TOKEN=$(oc create token -n oran-o2ims test-client --duration=24h)
 
 # Get API endpoint
-export API_URI=$(oc get route -n oran-o2ims -o jsonpath='{.items[?(@.spec.path=="/o2ims-infrastructureMonitoring")].spec.host}')
-export BASE_URL="https://${API_URI}/o2ims-infrastructureMonitoring/v1"
+export API_URI=$(oc get route -n oran-o2ims -o jsonpath='{.items[?(@.spec.path=="/O2ims_infrastructureMonitoring")].spec.host}')
+export BASE_URL="https://${API_URI}/O2ims_infrastructureMonitoring/v1"
 ```
 
 > [!NOTE]

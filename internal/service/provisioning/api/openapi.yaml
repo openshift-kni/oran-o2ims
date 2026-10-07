@@ -46,7 +46,7 @@ security:
   - role:o2ims-admin
 
 paths:
-  /o2ims-infrastructureProvisioning/api_versions:
+  /O2ims_infrastructureProvisioning/api_versions:
     get:
       operationId: getAllVersions
       summary: Get API versions
@@ -91,7 +91,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /o2ims-infrastructureProvisioning/v1/api_versions:
+  /O2ims_infrastructureProvisioning/v1/api_versions:
     get:
       operationId: getMinorVersions
       summary: Get minor API versions
@@ -136,7 +136,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /o2ims-infrastructureProvisioning/v1/provisioningRequests:
+  /O2ims_infrastructureProvisioning/v1/provisioningRequests:
     get:
       operationId: getProvisioningRequests
       summary: Get provisioning requests
@@ -251,7 +251,7 @@ paths:
               schema:
                 $ref: "../../common/api/openapi.yaml#/components/schemas/ProblemDetails"
 
-  /o2ims-infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId}:
+  /O2ims_infrastructureProvisioning/v1/provisioningRequests/{provisioningRequestId}:
     get:
       operationId: getProvisioningRequest
       summary: Get the provisioning request
