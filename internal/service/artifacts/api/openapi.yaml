@@ -46,7 +46,7 @@ security:
   - role:o2ims-admin
 
 paths:
-  /o2ims-infrastructureArtifacts/api_versions:
+  /O2ims_infrastructureArtifacts/api_versions:
     get:
       operationId: getAllVersions
       summary: Get API versions
@@ -91,7 +91,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /o2ims-infrastructureArtifacts/v1/api_versions:
+  /O2ims_infrastructureArtifacts/v1/api_versions:
     get:
       operationId: getMinorVersions
       summary: Get minor API versions
@@ -136,7 +136,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates:
+  /O2ims_infrastructureArtifacts/v1/managedInfrastructureTemplates:
     get:
       operationId: getManagedInfrastructureTemplates
       summary: Get managed infrastructure templates
@@ -189,7 +189,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates/{managedInfrastructureTemplateId}:
+  /O2ims_infrastructureArtifacts/v1/managedInfrastructureTemplates/{managedInfrastructureTemplateId}:
     get:
       operationId: getManagedInfrastructureTemplate
       summary: Get managed infrastructure templates
@@ -243,7 +243,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /o2ims-infrastructureArtifacts/v1/managedInfrastructureTemplates/{managedInfrastructureTemplateId}/defaults:
+  /O2ims_infrastructureArtifacts/v1/managedInfrastructureTemplates/{managedInfrastructureTemplateId}/defaults:
     get:
       operationId: getManagedInfrastructureTemplateDefaults
       summary: Get managed infrastructure template defaults

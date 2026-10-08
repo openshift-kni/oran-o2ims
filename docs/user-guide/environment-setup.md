@@ -97,11 +97,11 @@ Several routes were created in the same namespace too. The `HOST` column is the 
 ```console
 $ oc get route -n oran-o2ims
 NAME                       HOST/PORT                                    PATH                                SERVICES              PORT   TERMINATION          WILDCARD
-oran-o2ims-ingress-8v8lp   o2ims.apps.hubcluster2.hub.dev.vz.bos2.lab   /o2ims-infrastructureArtifacts      artifacts-server      api    reencrypt/Redirect   None
-oran-o2ims-ingress-92sf5   o2ims.apps.hubcluster2.hub.dev.vz.bos2.lab   /o2ims-infrastructureCluster        cluster-server        api    reencrypt/Redirect   None
-oran-o2ims-ingress-gfm9r   o2ims.apps.hubcluster2.hub.dev.vz.bos2.lab   /o2ims-infrastructureProvisioning   provisioning-server   api    reencrypt/Redirect   None
-oran-o2ims-ingress-n6p9w   o2ims.apps.hubcluster2.hub.dev.vz.bos2.lab   /o2ims-infrastructureInventory      resource-server       api    reencrypt/Redirect   None
-oran-o2ims-ingress-n9d7w   o2ims.apps.hubcluster2.hub.dev.vz.bos2.lab   /o2ims-infrastructureMonitoring     alarms-server         api    reencrypt/Redirect   None
+oran-o2ims-ingress-8v8lp   o2ims.apps.hubcluster2.hub.dev.vz.bos2.lab   /O2ims_infrastructureArtifacts      artifacts-server      api    reencrypt/Redirect   None
+oran-o2ims-ingress-92sf5   o2ims.apps.hubcluster2.hub.dev.vz.bos2.lab   /O2ims_infrastructureCluster        cluster-server        api    reencrypt/Redirect   None
+oran-o2ims-ingress-gfm9r   o2ims.apps.hubcluster2.hub.dev.vz.bos2.lab   /O2ims_infrastructureProvisioning   provisioning-server   api    reencrypt/Redirect   None
+oran-o2ims-ingress-n6p9w   o2ims.apps.hubcluster2.hub.dev.vz.bos2.lab   /O2ims_infrastructureInventory      resource-server       api    reencrypt/Redirect   None
+oran-o2ims-ingress-n9d7w   o2ims.apps.hubcluster2.hub.dev.vz.bos2.lab   /O2ims_infrastructureMonitoring     alarms-server         api    reencrypt/Redirect   None
 ```
 
 The operator by default creates a default inventory CR in the oran-o2ims namespace:
@@ -414,6 +414,6 @@ environment, in which case it can be replaced with `-k`.
    ```console
    MY_CLUSTER=your.domain.com
    curl --cert /path/to/client.crt --key /path/to/client.key --cacert /path/to/ca-bundle.crt -q \
-     https://o2ims.apps.${MY_CLUSTER}/o2ims-infrastructureInventory/v2/api_version \
+     https://o2ims.apps.${MY_CLUSTER}/O2ims_infrastructureInventory/v2/api_version \
      -H "Authorization: Bearer ${MY_TOKEN}"
    ```

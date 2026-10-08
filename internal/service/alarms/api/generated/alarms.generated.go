@@ -174,7 +174,7 @@ type AlarmEventNotification struct {
 
 	// ObjectRef The URL to the AlarmEventRecord object.
 	//
-	// Example: hostname.com/o2ims-infrastructureMonitoring/v1/alarms/bf3f8f2e-6f37-4882-96ad-c0b9cef6fc04
+	// Example: hostname.com/O2ims_infrastructureMonitoring/v1/alarms/bf3f8f2e-6f37-4882-96ad-c0b9cef6fc04
 	ObjectRef *string `json:"objectRef,omitempty"`
 
 	// PerceivedSeverity This is an enumerated set of values which identify the perceived severity of the alarm.
@@ -584,12 +584,6 @@ type GetAlarmsParams struct {
 	Filter *externalRef0.Filter `form:"filter,omitempty" json:"filter,omitempty"`
 }
 
-// AmNotificationJSONRequestBody defines body for AmNotification for application/json ContentType.
-type AmNotificationJSONRequestBody = AlertmanagerNotification
-
-// HwNotificationJSONRequestBody defines body for HwNotification for application/json ContentType.
-type HwNotificationJSONRequestBody = HardwareAlert
-
 // PatchAlarmServiceConfigurationApplicationMergePatchPlusJSONRequestBody defines body for PatchAlarmServiceConfiguration for application/merge-patch+json ContentType.
 type PatchAlarmServiceConfigurationApplicationMergePatchPlusJSONRequestBody = AlarmServiceConfigurationPatch
 
@@ -602,53 +596,59 @@ type CreateSubscriptionJSONRequestBody = AlarmSubscriptionInfo
 // PatchAlarmApplicationMergePatchPlusJSONRequestBody defines body for PatchAlarm for application/merge-patch+json ContentType.
 type PatchAlarmApplicationMergePatchPlusJSONRequestBody = AlarmEventRecordModifications
 
+// AmNotificationJSONRequestBody defines body for AmNotification for application/json ContentType.
+type AmNotificationJSONRequestBody = AlertmanagerNotification
+
+// HwNotificationJSONRequestBody defines body for HwNotification for application/json ContentType.
+type HwNotificationJSONRequestBody = HardwareAlert
+
 // OnAlarmEventJSONRequestBody defines body for OnAlarmEvent for application/json ContentType.
 type OnAlarmEventJSONRequestBody = AlarmEventNotification
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// GetAllVersions Get API versions
+	// (GET /O2ims_infrastructureMonitoring/api_versions)
+	GetAllVersions(w http.ResponseWriter, r *http.Request)
+	// GetServiceConfiguration Retrieve the alarm service configuration
+	// (GET /O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration)
+	GetServiceConfiguration(w http.ResponseWriter, r *http.Request)
+	// PatchAlarmServiceConfiguration Modify individual fields of the Alarm Service Configuration.
+	// (PATCH /O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration)
+	PatchAlarmServiceConfiguration(w http.ResponseWriter, r *http.Request)
+	// UpdateAlarmServiceConfiguration Modify all fields of the Alarm Service Configuration.
+	// (PUT /O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration)
+	UpdateAlarmServiceConfiguration(w http.ResponseWriter, r *http.Request)
+	// GetSubscriptions Retrieve the list of alarm subscriptions
+	// (GET /O2ims_infrastructureMonitoring/v1/alarmSubscriptions)
+	GetSubscriptions(w http.ResponseWriter, r *http.Request, params GetSubscriptionsParams)
+	// CreateSubscription Create a new alarm subscription
+	// (POST /O2ims_infrastructureMonitoring/v1/alarmSubscriptions)
+	CreateSubscription(w http.ResponseWriter, r *http.Request)
+	// DeleteSubscription Delete exactly one subscription
+	// (DELETE /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId})
+	DeleteSubscription(w http.ResponseWriter, r *http.Request, alarmSubscriptionId openapi_types.UUID)
+	// GetSubscription Retrieve exactly one subscription
+	// (GET /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId})
+	GetSubscription(w http.ResponseWriter, r *http.Request, alarmSubscriptionId openapi_types.UUID)
+	// GetAlarms Retrieve the list of alarms
+	// (GET /O2ims_infrastructureMonitoring/v1/alarms)
+	GetAlarms(w http.ResponseWriter, r *http.Request, params GetAlarmsParams)
+	// GetAlarm Retrieve exactly one alarm
+	// (GET /O2ims_infrastructureMonitoring/v1/alarms/{alarmEventRecordId})
+	GetAlarm(w http.ResponseWriter, r *http.Request, alarmEventRecordId openapi_types.UUID)
+	// PatchAlarm Modify an individual alarm record
+	// (PATCH /O2ims_infrastructureMonitoring/v1/alarms/{alarmEventRecordId})
+	PatchAlarm(w http.ResponseWriter, r *http.Request, alarmEventRecordId openapi_types.UUID)
+	// GetMinorVersions Get minor API versions
+	// (GET /O2ims_infrastructureMonitoring/v1/api_versions)
+	GetMinorVersions(w http.ResponseWriter, r *http.Request)
 	// AmNotification Receive Alertmanager notifications
 	// (POST /internal/v1/caas-alerts/alertmanager)
 	AmNotification(w http.ResponseWriter, r *http.Request)
 	// HwNotification Receive hardware alerts
 	// (POST /internal/v1/hardware-alerts/{hwVendorName})
 	HwNotification(w http.ResponseWriter, r *http.Request, hwVendorName string)
-	// GetAllVersions Get API versions
-	// (GET /o2ims-infrastructureMonitoring/api_versions)
-	GetAllVersions(w http.ResponseWriter, r *http.Request)
-	// GetServiceConfiguration Retrieve the alarm service configuration
-	// (GET /o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration)
-	GetServiceConfiguration(w http.ResponseWriter, r *http.Request)
-	// PatchAlarmServiceConfiguration Modify individual fields of the Alarm Service Configuration.
-	// (PATCH /o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration)
-	PatchAlarmServiceConfiguration(w http.ResponseWriter, r *http.Request)
-	// UpdateAlarmServiceConfiguration Modify all fields of the Alarm Service Configuration.
-	// (PUT /o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration)
-	UpdateAlarmServiceConfiguration(w http.ResponseWriter, r *http.Request)
-	// GetSubscriptions Retrieve the list of alarm subscriptions
-	// (GET /o2ims-infrastructureMonitoring/v1/alarmSubscriptions)
-	GetSubscriptions(w http.ResponseWriter, r *http.Request, params GetSubscriptionsParams)
-	// CreateSubscription Create a new alarm subscription
-	// (POST /o2ims-infrastructureMonitoring/v1/alarmSubscriptions)
-	CreateSubscription(w http.ResponseWriter, r *http.Request)
-	// DeleteSubscription Delete exactly one subscription
-	// (DELETE /o2ims-infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId})
-	DeleteSubscription(w http.ResponseWriter, r *http.Request, alarmSubscriptionId openapi_types.UUID)
-	// GetSubscription Retrieve exactly one subscription
-	// (GET /o2ims-infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId})
-	GetSubscription(w http.ResponseWriter, r *http.Request, alarmSubscriptionId openapi_types.UUID)
-	// GetAlarms Retrieve the list of alarms
-	// (GET /o2ims-infrastructureMonitoring/v1/alarms)
-	GetAlarms(w http.ResponseWriter, r *http.Request, params GetAlarmsParams)
-	// GetAlarm Retrieve exactly one alarm
-	// (GET /o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId})
-	GetAlarm(w http.ResponseWriter, r *http.Request, alarmEventRecordId openapi_types.UUID)
-	// PatchAlarm Modify an individual alarm record
-	// (PATCH /o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId})
-	PatchAlarm(w http.ResponseWriter, r *http.Request, alarmEventRecordId openapi_types.UUID)
-	// GetMinorVersions Get minor API versions
-	// (GET /o2ims-infrastructureMonitoring/v1/api_versions)
-	GetMinorVersions(w http.ResponseWriter, r *http.Request)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -659,46 +659,6 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
-
-// AmNotification operation middleware
-func (siw *ServerInterfaceWrapper) AmNotification(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.AmNotification(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// HwNotification operation middleware
-func (siw *ServerInterfaceWrapper) HwNotification(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "hwVendorName" -------------
-	var hwVendorName string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "hwVendorName", r.PathValue("hwVendorName"), &hwVendorName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hwVendorName", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.HwNotification(w, r, hwVendorName)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
 
 // GetAllVersions operation middleware
 func (siw *ServerInterfaceWrapper) GetAllVersions(w http.ResponseWriter, r *http.Request) {
@@ -1032,6 +992,46 @@ func (siw *ServerInterfaceWrapper) GetMinorVersions(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// AmNotification operation middleware
+func (siw *ServerInterfaceWrapper) AmNotification(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AmNotification(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// HwNotification operation middleware
+func (siw *ServerInterfaceWrapper) HwNotification(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "hwVendorName" -------------
+	var hwVendorName string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "hwVendorName", r.PathValue("hwVendorName"), &hwVendorName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hwVendorName", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.HwNotification(w, r, hwVendorName)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -1152,18 +1152,18 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureMonitoring/api_versions", wrapper.GetAllVersions)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration", wrapper.GetServiceConfiguration)
-	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration", wrapper.PatchAlarmServiceConfiguration)
-	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration", wrapper.UpdateAlarmServiceConfiguration)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarmSubscriptions", wrapper.GetSubscriptions)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarmSubscriptions", wrapper.CreateSubscription)
-	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId}", wrapper.DeleteSubscription)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId}", wrapper.GetSubscription)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarms", wrapper.GetAlarms)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId}", wrapper.GetAlarm)
-	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId}", wrapper.PatchAlarm)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/o2ims-infrastructureMonitoring/v1/api_versions", wrapper.GetMinorVersions)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/api_versions", wrapper.GetAllVersions)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration", wrapper.GetServiceConfiguration)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration", wrapper.PatchAlarmServiceConfiguration)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration", wrapper.UpdateAlarmServiceConfiguration)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v1/alarmSubscriptions", wrapper.GetSubscriptions)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v1/alarmSubscriptions", wrapper.CreateSubscription)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId}", wrapper.DeleteSubscription)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId}", wrapper.GetSubscription)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v1/alarms", wrapper.GetAlarms)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v1/alarms/{alarmEventRecordId}", wrapper.GetAlarm)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v1/alarms/{alarmEventRecordId}", wrapper.PatchAlarm)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v1/api_versions", wrapper.GetMinorVersions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/internal/v1/caas-alerts/alertmanager", wrapper.AmNotification)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/internal/v1/hardware-alerts/{hwVendorName}", wrapper.HwNotification)
 
@@ -1203,71 +1203,6 @@ func OnAlarmEventCallbackHandler(si CallbackReceiverInterface, errHandler func(w
 		h = mw(h)
 	}
 	return h
-}
-
-type AmNotificationRequestObject struct {
-	Body *AmNotificationJSONRequestBody
-}
-
-type AmNotificationResponseObject interface {
-	VisitAmNotificationResponse(w http.ResponseWriter) error
-}
-
-type AmNotification200Response struct {
-}
-
-func (response AmNotification200Response) VisitAmNotificationResponse(w http.ResponseWriter) error {
-	w.WriteHeader(200)
-	return nil
-}
-
-type AmNotification400Response struct {
-}
-
-func (response AmNotification400Response) VisitAmNotificationResponse(w http.ResponseWriter) error {
-	w.WriteHeader(400)
-	return nil
-}
-
-type AmNotification500Response struct {
-}
-
-func (response AmNotification500Response) VisitAmNotificationResponse(w http.ResponseWriter) error {
-	w.WriteHeader(500)
-	return nil
-}
-
-type HwNotificationRequestObject struct {
-	HwVendorName string `json:"hwVendorName"`
-	Body         *HwNotificationJSONRequestBody
-}
-
-type HwNotificationResponseObject interface {
-	VisitHwNotificationResponse(w http.ResponseWriter) error
-}
-
-type HwNotification200Response struct {
-}
-
-func (response HwNotification200Response) VisitHwNotificationResponse(w http.ResponseWriter) error {
-	w.WriteHeader(200)
-	return nil
-}
-
-type HwNotification400Response struct {
-}
-
-func (response HwNotification400Response) VisitHwNotificationResponse(w http.ResponseWriter) error {
-	w.WriteHeader(400)
-	return nil
-}
-
-type HwNotification500Response struct {
-}
-
-func (response HwNotification500Response) VisitHwNotificationResponse(w http.ResponseWriter) error {
-	w.WriteHeader(500)
-	return nil
 }
 
 type GetAllVersionsRequestObject struct {
@@ -2324,50 +2259,115 @@ func (response GetMinorVersions500ApplicationProblemPlusJSONResponse) VisitGetMi
 	return err
 }
 
+type AmNotificationRequestObject struct {
+	Body *AmNotificationJSONRequestBody
+}
+
+type AmNotificationResponseObject interface {
+	VisitAmNotificationResponse(w http.ResponseWriter) error
+}
+
+type AmNotification200Response struct {
+}
+
+func (response AmNotification200Response) VisitAmNotificationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(200)
+	return nil
+}
+
+type AmNotification400Response struct {
+}
+
+func (response AmNotification400Response) VisitAmNotificationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type AmNotification500Response struct {
+}
+
+func (response AmNotification500Response) VisitAmNotificationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(500)
+	return nil
+}
+
+type HwNotificationRequestObject struct {
+	HwVendorName string `json:"hwVendorName"`
+	Body         *HwNotificationJSONRequestBody
+}
+
+type HwNotificationResponseObject interface {
+	VisitHwNotificationResponse(w http.ResponseWriter) error
+}
+
+type HwNotification200Response struct {
+}
+
+func (response HwNotification200Response) VisitHwNotificationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(200)
+	return nil
+}
+
+type HwNotification400Response struct {
+}
+
+func (response HwNotification400Response) VisitHwNotificationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type HwNotification500Response struct {
+}
+
+func (response HwNotification500Response) VisitHwNotificationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(500)
+	return nil
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// GetAllVersions Get API versions
+	// (GET /O2ims_infrastructureMonitoring/api_versions)
+	GetAllVersions(ctx context.Context, request GetAllVersionsRequestObject) (GetAllVersionsResponseObject, error)
+	// GetServiceConfiguration Retrieve the alarm service configuration
+	// (GET /O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration)
+	GetServiceConfiguration(ctx context.Context, request GetServiceConfigurationRequestObject) (GetServiceConfigurationResponseObject, error)
+	// PatchAlarmServiceConfiguration Modify individual fields of the Alarm Service Configuration.
+	// (PATCH /O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration)
+	PatchAlarmServiceConfiguration(ctx context.Context, request PatchAlarmServiceConfigurationRequestObject) (PatchAlarmServiceConfigurationResponseObject, error)
+	// UpdateAlarmServiceConfiguration Modify all fields of the Alarm Service Configuration.
+	// (PUT /O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration)
+	UpdateAlarmServiceConfiguration(ctx context.Context, request UpdateAlarmServiceConfigurationRequestObject) (UpdateAlarmServiceConfigurationResponseObject, error)
+	// GetSubscriptions Retrieve the list of alarm subscriptions
+	// (GET /O2ims_infrastructureMonitoring/v1/alarmSubscriptions)
+	GetSubscriptions(ctx context.Context, request GetSubscriptionsRequestObject) (GetSubscriptionsResponseObject, error)
+	// CreateSubscription Create a new alarm subscription
+	// (POST /O2ims_infrastructureMonitoring/v1/alarmSubscriptions)
+	CreateSubscription(ctx context.Context, request CreateSubscriptionRequestObject) (CreateSubscriptionResponseObject, error)
+	// DeleteSubscription Delete exactly one subscription
+	// (DELETE /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId})
+	DeleteSubscription(ctx context.Context, request DeleteSubscriptionRequestObject) (DeleteSubscriptionResponseObject, error)
+	// GetSubscription Retrieve exactly one subscription
+	// (GET /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId})
+	GetSubscription(ctx context.Context, request GetSubscriptionRequestObject) (GetSubscriptionResponseObject, error)
+	// GetAlarms Retrieve the list of alarms
+	// (GET /O2ims_infrastructureMonitoring/v1/alarms)
+	GetAlarms(ctx context.Context, request GetAlarmsRequestObject) (GetAlarmsResponseObject, error)
+	// GetAlarm Retrieve exactly one alarm
+	// (GET /O2ims_infrastructureMonitoring/v1/alarms/{alarmEventRecordId})
+	GetAlarm(ctx context.Context, request GetAlarmRequestObject) (GetAlarmResponseObject, error)
+	// PatchAlarm Modify an individual alarm record
+	// (PATCH /O2ims_infrastructureMonitoring/v1/alarms/{alarmEventRecordId})
+	PatchAlarm(ctx context.Context, request PatchAlarmRequestObject) (PatchAlarmResponseObject, error)
+	// GetMinorVersions Get minor API versions
+	// (GET /O2ims_infrastructureMonitoring/v1/api_versions)
+	GetMinorVersions(ctx context.Context, request GetMinorVersionsRequestObject) (GetMinorVersionsResponseObject, error)
 	// AmNotification Receive Alertmanager notifications
 	// (POST /internal/v1/caas-alerts/alertmanager)
 	AmNotification(ctx context.Context, request AmNotificationRequestObject) (AmNotificationResponseObject, error)
 	// HwNotification Receive hardware alerts
 	// (POST /internal/v1/hardware-alerts/{hwVendorName})
 	HwNotification(ctx context.Context, request HwNotificationRequestObject) (HwNotificationResponseObject, error)
-	// GetAllVersions Get API versions
-	// (GET /o2ims-infrastructureMonitoring/api_versions)
-	GetAllVersions(ctx context.Context, request GetAllVersionsRequestObject) (GetAllVersionsResponseObject, error)
-	// GetServiceConfiguration Retrieve the alarm service configuration
-	// (GET /o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration)
-	GetServiceConfiguration(ctx context.Context, request GetServiceConfigurationRequestObject) (GetServiceConfigurationResponseObject, error)
-	// PatchAlarmServiceConfiguration Modify individual fields of the Alarm Service Configuration.
-	// (PATCH /o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration)
-	PatchAlarmServiceConfiguration(ctx context.Context, request PatchAlarmServiceConfigurationRequestObject) (PatchAlarmServiceConfigurationResponseObject, error)
-	// UpdateAlarmServiceConfiguration Modify all fields of the Alarm Service Configuration.
-	// (PUT /o2ims-infrastructureMonitoring/v1/alarmServiceConfiguration)
-	UpdateAlarmServiceConfiguration(ctx context.Context, request UpdateAlarmServiceConfigurationRequestObject) (UpdateAlarmServiceConfigurationResponseObject, error)
-	// GetSubscriptions Retrieve the list of alarm subscriptions
-	// (GET /o2ims-infrastructureMonitoring/v1/alarmSubscriptions)
-	GetSubscriptions(ctx context.Context, request GetSubscriptionsRequestObject) (GetSubscriptionsResponseObject, error)
-	// CreateSubscription Create a new alarm subscription
-	// (POST /o2ims-infrastructureMonitoring/v1/alarmSubscriptions)
-	CreateSubscription(ctx context.Context, request CreateSubscriptionRequestObject) (CreateSubscriptionResponseObject, error)
-	// DeleteSubscription Delete exactly one subscription
-	// (DELETE /o2ims-infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId})
-	DeleteSubscription(ctx context.Context, request DeleteSubscriptionRequestObject) (DeleteSubscriptionResponseObject, error)
-	// GetSubscription Retrieve exactly one subscription
-	// (GET /o2ims-infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId})
-	GetSubscription(ctx context.Context, request GetSubscriptionRequestObject) (GetSubscriptionResponseObject, error)
-	// GetAlarms Retrieve the list of alarms
-	// (GET /o2ims-infrastructureMonitoring/v1/alarms)
-	GetAlarms(ctx context.Context, request GetAlarmsRequestObject) (GetAlarmsResponseObject, error)
-	// GetAlarm Retrieve exactly one alarm
-	// (GET /o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId})
-	GetAlarm(ctx context.Context, request GetAlarmRequestObject) (GetAlarmResponseObject, error)
-	// PatchAlarm Modify an individual alarm record
-	// (PATCH /o2ims-infrastructureMonitoring/v1/alarms/{alarmEventRecordId})
-	PatchAlarm(ctx context.Context, request PatchAlarmRequestObject) (PatchAlarmResponseObject, error)
-	// GetMinorVersions Get minor API versions
-	// (GET /o2ims-infrastructureMonitoring/v1/api_versions)
-	GetMinorVersions(ctx context.Context, request GetMinorVersionsRequestObject) (GetMinorVersionsResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -2407,70 +2407,6 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
-}
-
-// AmNotification operation middleware
-func (sh *strictHandler) AmNotification(w http.ResponseWriter, r *http.Request) {
-	var request AmNotificationRequestObject
-
-	var body AmNotificationJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.AmNotification(ctx, request.(AmNotificationRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "AmNotification")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(AmNotificationResponseObject); ok {
-		if err := validResponse.VisitAmNotificationResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// HwNotification operation middleware
-func (sh *strictHandler) HwNotification(w http.ResponseWriter, r *http.Request, hwVendorName string) {
-	var request HwNotificationRequestObject
-
-	request.HwVendorName = hwVendorName
-
-	var body HwNotificationJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.HwNotification(ctx, request.(HwNotificationRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "HwNotification")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(HwNotificationResponseObject); ok {
-		if err := validResponse.VisitHwNotificationResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
 }
 
 // GetAllVersions operation middleware
@@ -2801,105 +2737,169 @@ func (sh *strictHandler) GetMinorVersions(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// AmNotification operation middleware
+func (sh *strictHandler) AmNotification(w http.ResponseWriter, r *http.Request) {
+	var request AmNotificationRequestObject
+
+	var body AmNotificationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AmNotification(ctx, request.(AmNotificationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AmNotification")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AmNotificationResponseObject); ok {
+		if err := validResponse.VisitAmNotificationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// HwNotification operation middleware
+func (sh *strictHandler) HwNotification(w http.ResponseWriter, r *http.Request, hwVendorName string) {
+	var request HwNotificationRequestObject
+
+	request.HwVendorName = hwVendorName
+
+	var body HwNotificationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.HwNotification(ctx, request.(HwNotificationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "HwNotification")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(HwNotificationResponseObject); ok {
+		if err := validResponse.VisitHwNotificationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,
