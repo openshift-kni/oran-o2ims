@@ -372,8 +372,8 @@ First, acquire an authorization token as described in [Testing API endpoints on 
 Then, get API endpoint URLs.
 
 ```console
-export API_URI=$(oc get route -n oran-o2ims -o jsonpath='{.items[?(@.spec.path=="/o2ims-infrastructureArtifacts")].spec.host}')
-export BASE_URL="https://${API_URI}/o2ims-infrastructureArtifacts/v1"
+export API_URI=$(oc get route -n oran-o2ims -o jsonpath='{.items[?(@.spec.path=="/O2ims_infrastructureArtifacts")].spec.host}')
+export BASE_URL="https://${API_URI}/O2ims_infrastructureArtifacts/v1"
 ```
 
 #### List all templates

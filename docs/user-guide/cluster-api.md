@@ -15,7 +15,7 @@ For authentication and common query parameters (filtering, field selection),
 see [API Overview](./api-overview.md).
 
 All cluster API endpoints use the base path
-`/o2ims-infrastructureCluster/v1`.
+`/O2ims_infrastructureCluster/v1`.
 
 - [Node Clusters](#node-clusters)
 - [Node Cluster Types](#node-cluster-types)
@@ -33,7 +33,7 @@ Each ManagedCluster on the hub corresponds to a node cluster in the API.
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureCluster/v1/nodeClusters" | jq
+  "https://${API_URI}/O2ims_infrastructureCluster/v1/nodeClusters" | jq
 ```
 
 Example response:
@@ -59,7 +59,7 @@ Example response:
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureCluster/v1/nodeClusters/{nodeClusterId}" | jq
+  "https://${API_URI}/O2ims_infrastructureCluster/v1/nodeClusters/{nodeClusterId}" | jq
 ```
 
 ### Filter Node Clusters
@@ -67,11 +67,11 @@ curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
 ```bash
 # Find clusters by name
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureCluster/v1/nodeClusters?filter=(eq,name,my-sno-cluster)" | jq
+  "https://${API_URI}/O2ims_infrastructureCluster/v1/nodeClusters?filter=(eq,name,my-sno-cluster)" | jq
 
 # Exclude the local hub cluster
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureCluster/v1/nodeClusters?filter=(neq,name,local-cluster)" | jq
+  "https://${API_URI}/O2ims_infrastructureCluster/v1/nodeClusters?filter=(neq,name,local-cluster)" | jq
 ```
 
 ## Node Cluster Types
@@ -83,14 +83,14 @@ configuration (platform, version) corresponds to a node cluster type.
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureCluster/v1/nodeClusterTypes" | jq
+  "https://${API_URI}/O2ims_infrastructureCluster/v1/nodeClusterTypes" | jq
 ```
 
 ### Get a Specific Node Cluster Type
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId}" | jq
+  "https://${API_URI}/O2ims_infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId}" | jq
 ```
 
 ### Get the Alarm Dictionary for a Node Cluster Type
@@ -100,7 +100,7 @@ alerts that can be raised for clusters of that type:
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId}/alarmDictionary" | jq
+  "https://${API_URI}/O2ims_infrastructureCluster/v1/nodeClusterTypes/{nodeClusterTypeId}/alarmDictionary" | jq
 ```
 
 ## Cluster Resources
@@ -118,14 +118,14 @@ data is collected from assisted-service Agent CRs on the hub.
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureCluster/v1/clusterResources" | jq
+  "https://${API_URI}/O2ims_infrastructureCluster/v1/clusterResources" | jq
 ```
 
 ### Get a Specific Cluster Resource
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureCluster/v1/clusterResources/{clusterResourceId}" | jq
+  "https://${API_URI}/O2ims_infrastructureCluster/v1/clusterResources/{clusterResourceId}" | jq
 ```
 
 ## Cluster Resource Types
@@ -136,14 +136,14 @@ Cluster resource types categorize the nodes within managed clusters.
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureCluster/v1/clusterResourceTypes" | jq
+  "https://${API_URI}/O2ims_infrastructureCluster/v1/clusterResourceTypes" | jq
 ```
 
 ### Get a Specific Cluster Resource Type
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureCluster/v1/clusterResourceTypes/{clusterResourceTypeId}" | jq
+  "https://${API_URI}/O2ims_infrastructureCluster/v1/clusterResourceTypes/{clusterResourceTypeId}" | jq
 ```
 
 ## Subscriptions
@@ -157,14 +157,14 @@ modified, or deleted.
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureCluster/v1/subscriptions" | jq
+  "https://${API_URI}/O2ims_infrastructureCluster/v1/subscriptions" | jq
 ```
 
 ### Get a Specific Subscription
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureCluster/v1/subscriptions/{subscriptionId}" | jq
+  "https://${API_URI}/O2ims_infrastructureCluster/v1/subscriptions/{subscriptionId}" | jq
 ```
 
 ### Create a Subscription
@@ -178,7 +178,7 @@ curl -ks -X POST \
     "filter": "",
     "callback": "https://smo.example.com/v1/o2ims_cluster_observer"
   }' \
-  "https://${API_URI}/o2ims-infrastructureCluster/v1/subscriptions" | jq
+  "https://${API_URI}/O2ims_infrastructureCluster/v1/subscriptions" | jq
 ```
 
 ### Delete a Subscription
@@ -186,7 +186,7 @@ curl -ks -X POST \
 ```bash
 curl -ks -X DELETE \
   -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureCluster/v1/subscriptions/{subscriptionId}" | jq
+  "https://${API_URI}/O2ims_infrastructureCluster/v1/subscriptions/{subscriptionId}" | jq
 ```
 
 ## Alarm Dictionaries
@@ -199,12 +199,12 @@ clusters.
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureCluster/v1/alarmDictionaries" | jq
+  "https://${API_URI}/O2ims_infrastructureCluster/v1/alarmDictionaries" | jq
 ```
 
 ### Get a Specific Alarm Dictionary
 
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
-  "https://${API_URI}/o2ims-infrastructureCluster/v1/alarmDictionaries/{alarmDictionaryId}" | jq
+  "https://${API_URI}/O2ims_infrastructureCluster/v1/alarmDictionaries/{alarmDictionaryId}" | jq
 ```
