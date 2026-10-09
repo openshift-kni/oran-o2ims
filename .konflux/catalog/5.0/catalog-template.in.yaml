@@ -8,17 +8,7 @@ entries:
     schema: olm.package
     # Channel entries for 'stable' channel
   - entries:
-      - name: o-cloud-manager.v4.22.0
-        replaces: ""
-        skipRange: '>=4.21.0 <4.22.0'
-      - name: o-cloud-manager.v4.22.1
-        replaces: o-cloud-manager.v4.22.0
-        skipRange: '>=4.21.0 <4.22.1'
-      - name: o-cloud-manager.v4.22.2
-        replaces: o-cloud-manager.v4.22.1
-        skipRange: '>=4.21.0 <4.22.2'
       - name: o-cloud-manager.v5.0.0
-        replaces: o-cloud-manager.v4.22.2
         skipRange: '>=4.22.0 <5.0.0'
     name: stable
     package: o-cloud-manager
