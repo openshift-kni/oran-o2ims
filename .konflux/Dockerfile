@@ -1,5 +1,5 @@
 # Build stage
-FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_golang_1.24@sha256:c798eefc5d0e7958c8de1444566d8f1d360144f633106adcb30a5886ff70932b AS builder
+FROM registry.redhat.io/openshift/golang-builder:golang-builder-v1.24-rhel9@sha256:591fb59df75567a00d3c0ded6ffead14984344c59b410107e009b7d6fb3deee9 AS builder
 
 WORKDIR /app
 COPY . .
