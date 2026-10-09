@@ -50,18 +50,12 @@ entries:
     schema: olm.channel
   # v4.22.0 bundle
   - image: registry.redhat.io/openshift4/o-cloud-manager-operator-bundle@sha256:fef1f183eb8cdc6330ed039fa6bb40432c0496dd4d2e146fd056c03310564da8
-    name: o-cloud-manager.v4.22.0
-    package: o-cloud-manager
     schema: olm.bundle
   # v4.22.1 bundle
   - image: registry.redhat.io/openshift4/o-cloud-manager-operator-bundle@sha256:50fe6d65b219314a92f2850d5ea6b57c9c25aefb59249516061fdfa699f96ca8
-    name: o-cloud-manager.v4.22.1
-    package: o-cloud-manager
     schema: olm.bundle
   # v4.22.2 bundle
   - image: registry.redhat.io/openshift4/o-cloud-manager-operator-bundle@sha256:a123814742d8049987d6b9aecd9d6d591f05f4731d7730274c2cbf2abeba17ef
-    name: o-cloud-manager.v4.22.2
-    package: o-cloud-manager
     schema: olm.bundle
   # v5.0.0 bundle
   # The url for this last entry is updated by telco5g-konflux/scripts/catalog/update-catalog-template.sh automatically
