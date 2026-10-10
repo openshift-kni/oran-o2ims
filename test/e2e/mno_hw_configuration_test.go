@@ -161,7 +161,16 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			}
 		}
 
-		By("Creating ClusterTemplate, HardwareProfiles, and supporting resources")
+		By("Creating FirmwareCatalog, ClusterTemplate, HardwareProfiles, and supporting resources")
+		fwCatalog, err := testutils.LoadYAML[hwmgmtv1alpha1.FirmwareCatalog](
+			"../resources/mno_hw_configuration/firmware-catalog.yaml")
+		Expect(err).ToNot(HaveOccurred())
+		existing := &hwmgmtv1alpha1.FirmwareCatalog{}
+		if err := K8SClient.Get(testCtx, client.ObjectKeyFromObject(fwCatalog), existing); err == nil {
+			Expect(K8SClient.Delete(testCtx, existing)).To(Succeed())
+		}
+		Expect(K8SClient.Create(testCtx, fwCatalog)).To(Succeed())
+
 		for _, yaml := range cmYamls {
 			cm, err := testutils.LoadYAML[corev1.ConfigMap](yaml)
 			Expect(err).ToNot(HaveOccurred())
@@ -462,6 +471,13 @@ var _ = Describe("MNO Day2 Hardware Configuration test", Ordered, Label("mno-day
 			if err := K8SClient.Get(testCtx, types.NamespacedName{Name: hwProfile.Name, Namespace: hwProfile.Namespace}, hwProfile); err == nil {
 				_ = K8SClient.Delete(testCtx, hwProfile)
 			}
+		}
+
+		fwCatalogCleanup, err := testutils.LoadYAML[hwmgmtv1alpha1.FirmwareCatalog](
+			"../resources/mno_hw_configuration/firmware-catalog.yaml")
+		Expect(err).ToNot(HaveOccurred())
+		if err := K8SClient.Get(testCtx, types.NamespacedName{Name: fwCatalogCleanup.Name, Namespace: fwCatalogCleanup.Namespace}, fwCatalogCleanup); err == nil {
+			_ = K8SClient.Delete(testCtx, fwCatalogCleanup)
 		}
 
 		cis := &hivev1.ClusterImageSet{}
@@ -1101,22 +1117,60 @@ func completeBMHServicing(ctx context.Context, node *hwmgmtv1alpha1.AllocatedNod
 		Name: node.Spec.HwProfile, Namespace: constants.DefaultNamespace,
 	}, hwProfile)).To(Succeed())
 
+	catalog := &hwmgmtv1alpha1.FirmwareCatalog{}
+	Expect(K8SClient.Get(ctx, types.NamespacedName{
+		Name: hwmgmtv1alpha1.FirmwareCatalogName, Namespace: constants.DefaultNamespace,
+	}, catalog)).To(Succeed())
+	imageMap := make(map[string]hwmgmtv1alpha1.FirmwareImage, len(catalog.Spec.Images))
+	for _, img := range catalog.Spec.Images {
+		imageMap[img.Name] = img
+	}
+
+	// Build the expected HostFirmwareComponents status from the profile's
+	// firmware, supporting both the recommended firmwareImages approach (names
+	// resolved via the catalog) and the deprecated inline fields.
 	newComponents := []metal3v1alpha1.FirmwareComponentStatus{}
-	if hwProfile.Spec.BiosFirmware.Version != "" {
-		newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
-			Component: "bios", CurrentVersion: hwProfile.Spec.BiosFirmware.Version,
-		})
-	}
-	if hwProfile.Spec.BmcFirmware.Version != "" {
-		newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
-			Component: "bmc", CurrentVersion: hwProfile.Spec.BmcFirmware.Version,
-		})
-	}
-	for i, nic := range hwProfile.Spec.NicFirmware {
-		if nic.Version != "" {
+	if len(hwProfile.Spec.FirmwareImages) > 0 {
+		nicIdx := 0
+		for _, name := range hwProfile.Spec.FirmwareImages {
+			img, ok := imageMap[name]
+			Expect(ok).To(BeTrue(), "FirmwareCatalog missing entry %q referenced by HardwareProfile firmwareImages", name)
+			if img.Version == "" {
+				continue
+			}
+			switch img.Component {
+			case hwmgmtv1alpha1.ComponentBIOS:
+				newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
+					Component: "bios", CurrentVersion: img.Version,
+				})
+			case hwmgmtv1alpha1.ComponentBMC:
+				newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
+					Component: "bmc", CurrentVersion: img.Version,
+				})
+			case hwmgmtv1alpha1.ComponentNIC:
+				newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
+					Component: fmt.Sprintf("nic:%d", nicIdx), CurrentVersion: img.Version,
+				})
+				nicIdx++
+			}
+		}
+	} else {
+		if hwProfile.Spec.BiosFirmware.Version != "" {
 			newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
-				Component: fmt.Sprintf("nic:%d", i), CurrentVersion: nic.Version,
+				Component: "bios", CurrentVersion: hwProfile.Spec.BiosFirmware.Version,
 			})
+		}
+		if hwProfile.Spec.BmcFirmware.Version != "" {
+			newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
+				Component: "bmc", CurrentVersion: hwProfile.Spec.BmcFirmware.Version,
+			})
+		}
+		for i, nic := range hwProfile.Spec.NicFirmware {
+			if nic.Version != "" {
+				newComponents = append(newComponents, metal3v1alpha1.FirmwareComponentStatus{
+					Component: fmt.Sprintf("nic:%d", i), CurrentVersion: nic.Version,
+				})
+			}
 		}
 	}
 	hfc := &metal3v1alpha1.HostFirmwareComponents{}
