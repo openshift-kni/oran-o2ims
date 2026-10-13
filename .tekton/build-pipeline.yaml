@@ -384,7 +384,7 @@ spec:
             value: roxctl-scan
           - name: bundle
             value: >-
-              quay.io/konflux-ci/tekton-catalog/task-roxctl-scan:0.1@sha256:e398b9ddfc422639c2e245285577b01b8c25cc141a2563e1d85449d96b619752
+              quay.io/konflux-ci/tekton-catalog/task-roxctl-scan:0.1@sha256:423a729c49ba1f2585003b67346d6631eef65fcadc17a76d6b385bcdb1e84493
           - name: kind
             value: task
         resolver: bundles
