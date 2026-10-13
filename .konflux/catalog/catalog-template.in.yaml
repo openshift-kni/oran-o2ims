@@ -8,9 +8,7 @@ entries:
     schema: olm.package
     # Channel 'stable' — always points to the latest released z-stream
   - entries:
-      - name: o-cloud-manager.v4.22.2
       - name: o-cloud-manager.v4.22.3
-        replaces: o-cloud-manager.v4.22.2
     name: stable
     package: o-cloud-manager
     schema: olm.channel
