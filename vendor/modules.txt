@@ -1535,7 +1535,7 @@ open-cluster-management.io/api/work/v1
 # open-cluster-management.io/governance-policy-propagator v0.20.0
 ## explicit; go 1.26.0
 open-cluster-management.io/governance-policy-propagator/api/v1
-# open-cluster-management.io/managed-serviceaccount v0.11.0
+# open-cluster-management.io/managed-serviceaccount v0.12.0
 ## explicit; go 1.26.0
 open-cluster-management.io/managed-serviceaccount/apis/authentication/v1beta1
 # sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.36.0
