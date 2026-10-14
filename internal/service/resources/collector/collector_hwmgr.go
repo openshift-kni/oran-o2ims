@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	metal3v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
@@ -47,12 +49,22 @@ const (
 // HardwareDataSource collects hardware inventory data (BMHs, HardwareData,
 // AllocatedNodes) via K8s watches using three separate Reflectors.
 type HardwareDataSource struct {
-	dataSourceID      uuid.UUID
-	generationID      atomic.Int32
-	cloudID           uuid.UUID
-	globalCloudID     uuid.UUID
-	hubClient         client.WithWatch
-	AsyncChangeEvents chan<- *async.AsyncChangeEvent
+	dataSourceID               uuid.UUID
+	generationID               atomic.Int32
+	cloudID                    uuid.UUID
+	globalCloudID              uuid.UUID
+	hubClient                  client.WithWatch
+	AsyncChangeEvents          chan<- *async.AsyncChangeEvent
+	gpuInventoryReader         redfishGPUInventoryReader
+	gpuInventoryResourceReader gpuInventoryResourceReader
+	gpuInventoryMu             sync.Mutex
+	gpuInventoryCache          map[string]gpuInventoryCacheEntry
+	gpuInventoryInFlight       map[gpuInventoryQueryKey]*gpuInventoryCall
+	gpuInventoryQueue          workqueue.TypedInterface[uuid.UUID]
+	gpuInventoryJobs           map[uuid.UUID]gpuInventoryWorkItem
+	gpuInventoryJobVersions    map[uuid.UUID]uint64
+	gpuInventoryJobVersion     atomic.Uint64
+	gpuInventoryWorkersOnce    sync.Once
 }
 
 // Defines the UUID namespace values used to generate name based UUID values for inventory objects.
@@ -63,19 +75,22 @@ const (
 )
 
 const (
-	vendorExtension           = "vendor"
-	modelExtension            = "model"
-	memoryExtension           = "memory"
-	processorsExtension       = "processors"
-	adminStateExtension       = "adminState"
-	operationalStateExtension = "operationalState"
-	usageStateExtension       = "usageState"
-	powerStateExtension       = "powerState"
-	hwProfileExtension        = "hwProfile"
-	labelsExtension           = "labels"
-	allocatedExtension        = "allocated"
-	nicsExtension             = "nics"
-	storageExtension          = "storage"
+	vendorExtension             = "vendor"
+	modelExtension              = "model"
+	memoryExtension             = "memory"
+	processorsExtension         = "processors"
+	adminStateExtension         = "adminState"
+	operationalStateExtension   = "operationalState"
+	usageStateExtension         = "usageState"
+	powerStateExtension         = "powerState"
+	hwProfileExtension          = "hwProfile"
+	labelsExtension             = "labels"
+	allocatedExtension          = "allocated"
+	nicsExtension               = "nics"
+	storageExtension            = "storage"
+	gpusExtension               = "gpus"
+	gpuInventoryStatusExtension = "gpuInventoryStatus"
+	gpuInventoryStatusPending   = "pending"
 )
 
 // NewHardwareDataSource creates a hardware inventory data source that watches
@@ -86,9 +101,15 @@ func NewHardwareDataSource(hubClient client.WithWatch, cloudID, globalCloudID uu
 	}
 
 	return &HardwareDataSource{
-		cloudID:       cloudID,
-		globalCloudID: globalCloudID,
-		hubClient:     hubClient,
+		cloudID:                 cloudID,
+		globalCloudID:           globalCloudID,
+		hubClient:               hubClient,
+		gpuInventoryReader:      newRedfishGPUInventoryClient(hubClient),
+		gpuInventoryCache:       make(map[string]gpuInventoryCacheEntry),
+		gpuInventoryInFlight:    make(map[gpuInventoryQueryKey]*gpuInventoryCall),
+		gpuInventoryQueue:       workqueue.NewTyped[uuid.UUID](),
+		gpuInventoryJobs:        make(map[uuid.UUID]gpuInventoryWorkItem),
+		gpuInventoryJobVersions: make(map[uuid.UUID]uint64),
 	}, nil
 }
 
@@ -127,6 +148,8 @@ func (d *HardwareDataSource) IncrGenerationID() int {
 
 // Watch starts watchers for BMH, HardwareData, and AllocatedNode CRs.
 func (d *HardwareDataSource) Watch(ctx context.Context) error {
+	d.startGPUInventoryWorkers(ctx)
+
 	stopCh := make(chan struct{})
 	go func() {
 		<-ctx.Done()
@@ -277,11 +300,13 @@ func (d *HardwareDataSource) handleBMHEvent(ctx context.Context, bmh *metal3v1al
 	resourceID := uuid.MustParse(string(bmh.UID))
 
 	if eventType == async.Deleted {
+		d.cancelGPUInventory(resourceID)
 		return d.sendDeleteEvent(ctx, resourceID)
 	}
 
 	if !hwmgrcontroller.IncludeInInventory(bmh) {
 		slog.DebugContext(ctx, "BMH not included in inventory, treating as deletion")
+		d.cancelGPUInventory(resourceID)
 		return d.sendDeleteEvent(ctx, resourceID)
 	}
 
@@ -380,6 +405,7 @@ func (d *HardwareDataSource) buildAndSendResource(ctx context.Context, bmh *meta
 
 	// Convert to models
 	resource := d.convertResource(&resourceInfo)
+	queueGPUInventory := d.prepareGPUInventory(ctx, bmh, resource)
 	resourceType, err := d.MakeResourceType(resource)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("failed to make resource type: %w", err)
@@ -403,6 +429,9 @@ func (d *HardwareDataSource) buildAndSendResource(ctx context.Context, bmh *meta
 		DataSourceID: d.dataSourceID,
 		EventType:    async.Updated,
 		Object:       *resource}:
+	}
+	if queueGPUInventory {
+		d.enqueueGPUInventory(bmh, resource.ResourceID)
 	}
 
 	return resource.ResourceID, nil
@@ -477,6 +506,8 @@ func (d *HardwareDataSource) BuildResourcesForPool(ctx context.Context, poolName
 	}
 
 	var results []ResourceWithType
+	var gpuInventoryJobs []gpuInventoryWorkItem
+	var gpuInventoryResourceIDs []uuid.UUID
 	for i := range bmhList.Items {
 		bmh := &bmhList.Items[i]
 		bmhCtx := logging.AppendCtx(ctx, slog.String("bmh", bmh.Name))
@@ -503,6 +534,7 @@ func (d *HardwareDataSource) BuildResourcesForPool(ctx context.Context, poolName
 		node := d.findAllocatedNodeForBMH(bmhCtx, bmh)
 		resourceInfo := hwmgrcontroller.GetResourceInfo(bmh, node, &hwdata, poolNameToUID)
 		resource := d.convertResource(&resourceInfo)
+		queueGPUInventory := d.prepareGPUInventory(bmhCtx, bmh, resource)
 		resourceType, err := d.MakeResourceType(resource)
 		if err != nil {
 			slog.WarnContext(bmhCtx, "failed to make resource type during pool rebuild",
@@ -514,6 +546,13 @@ func (d *HardwareDataSource) BuildResourcesForPool(ctx context.Context, poolName
 			Resource:     *resource,
 			ResourceType: *resourceType,
 		})
+		if queueGPUInventory {
+			gpuInventoryJobs = append(gpuInventoryJobs, gpuInventoryWorkItem{bmh: bmh.DeepCopy()})
+			gpuInventoryResourceIDs = append(gpuInventoryResourceIDs, resource.ResourceID)
+		}
+	}
+	for i := range gpuInventoryJobs {
+		d.enqueueGPUInventory(gpuInventoryJobs[i].bmh, gpuInventoryResourceIDs[i])
 	}
 
 	return results, nil
