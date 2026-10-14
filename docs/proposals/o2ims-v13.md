@@ -198,23 +198,21 @@ API v1.1.0 level. We need to reach v2.2.0.
 
 #### AlarmSubscriptionInfo
 
-> **`filter` vs `eventFilter` — they are semantically different:**
+> **`filter` is removed in v2, not deprecated:**
 >
-> | Aspect | `filter` (deprecated) | `eventFilter` (new in 2.2.0) |
-> |--------|----------------------|------------------------------|
-> | Type | String (free-form) | EventFilter (typed enum) |
-> | P | O (Optional) | M (Mandatory) |
-> | Semantics | ETSI attribute-based filtering expression (clause 5.2 of ETSI GS NFV-SOL 013) — ODATA-style query on any attribute | Enum: NEW, CHANGE, CLEAR, ACKNOWLEDGE — filters by notification event type only |
->
-> Our current `filter` implementation already uses a string enum
-> `[NEW, CHANGE, CLEAR, ACKNOWLEDGE]` — so we accidentally implemented
-> `eventFilter` semantics under the `filter` name. We never implemented
-> the ETSI attribute-based filtering that `filter` was originally intended
-> for. The spec deprecated `filter` (NOTE on Table 3.3.6.2.3-1).
+> The spec marks `filter` as deprecated (NOTE on Table 3.3.6.2.3-1) and
+> introduces `eventFilter` as a typed enum replacement. Our current `filter`
+> implementation already uses a string enum `[NEW, CHANGE, CLEAR, ACKNOWLEDGE]`
+> — we accidentally implemented `eventFilter` semantics under the `filter`
+> name, and never implemented the ETSI attribute-based filtering that `filter`
+> was originally intended for. Since there is nothing to preserve and the
+> v1 → v2 bump is already breaking, `filter` is removed entirely in v2.
+> In v1 (PR 2), `eventFilter` is added alongside `filter` to keep the
+> change non-breaking; in v2 (PR 3), `filter` is removed.
 
 | Field | Change | Since |
 |-------|--------|-------|
-| `eventFilter` | Add new enum field (NEW, CHANGE, CLEAR, ACKNOWLEDGE). In v1: optional, `filter` still accepted. In v2: required, `filter` deprecated but accepted for backward compatibility. Reject with 400 if both are provided with conflicting values. | 2.2.0 (v13) |
+| `eventFilter` | Add new typed enum field (NEW, CHANGE, CLEAR, ACKNOWLEDGE). In v1 (PR 2): added alongside `filter`. In v2 (PR 3): `filter` removed entirely. | 2.2.0 (v13) |
 | `consumerSubscriptionId` | Change type from UUID to String (spec allows arbitrary strings) | Inherited |
 
 #### AlarmSubscriptionUpdate (new type)
@@ -387,7 +385,7 @@ Add new fields and endpoints while keeping the v1 API path:
 | Item | Change |
 |------|--------|
 | `objectClass` on AlarmEventRecord | Add as optional initially (verify population logic before making mandatory) |
-| `eventFilter` on AlarmSubscriptionInfo | Add alongside existing `filter` |
+| `eventFilter` on AlarmSubscriptionInfo | Add `eventFilter` alongside existing `filter` (non-breaking) |
 | `consumerSubscriptionId` type | Change from UUID to String |
 | PATCH `/alarmSubscriptions/{id}` | New method + `AlarmSubscriptionUpdate` type |
 | Alarm Change Notification | Add `objectRef`, `objectClass`, `consumerSubscriptionId` |
@@ -400,7 +398,8 @@ Add new fields and endpoints while keeping the v1 API path:
 |------|--------|
 | API URL path | Bump from `/v1/` to `/v2/` |
 | `objectClass` | Make mandatory on AlarmEventRecord |
-| `eventFilter` | Make required in v2. Deprecate `filter` (still accepted for backward compatibility). |
+| `eventFilter` | Make required in v2. Remove `filter` entirely. |
+| `filter` removal | Drop `filter` field from schema, model, and DB. |
 | RBAC roles | Update monitoring endpoint paths in `oran_o2ims_user_roles.yaml` |
 | OAuth bindings | Update monitoring bindings in `oran_o2ims_oauth_role_bindings.yaml` |
 | OpenAPI spec version | Update to reference v13 |
@@ -411,7 +410,7 @@ Add new fields and endpoints while keeping the v1 API path:
 | Order | Reason |
 |-------|--------|
 | Inventory/Provisioning first | Trivial changes; clears the backlog early |
-| Monitoring non-breaking before breaking | New fields/endpoints are available before the URL path changes. `objectClass` population is verified before making it mandatory. Consumers can adopt `eventFilter` and PATCH while still on v1. |
+| Monitoring non-breaking before breaking | New fields/endpoints available before the URL path changes. `objectClass` verified before making it mandatory. `eventFilter` added alongside `filter` in v1; `filter` removed in PR 3 with the v2 bump. |
 | Breaking changes last | Clean cutover after all features are in place |
 
 ---
@@ -437,7 +436,7 @@ Add new fields and endpoints while keeping the v1 API path:
 | objectClass in records | Verify objectClass appears in alarm event records after creation |
 | objectClass in notifications | Verify objectClass in Alarm Change Notification payload |
 | eventFilter subscription | Create subscription with eventFilter, verify filtering works |
-| Deprecated filter | Existing `filter` field still works alongside `eventFilter` |
+| filter removed in v2 | Verify `filter` field is absent from v2 schema and rejected by the server |
 | consumerSubscriptionId | Verify non-UUID strings are accepted |
 | v2 URL path | All endpoints accessible under `/v2/` after bump |
 | v2 field names | Verify JSON keys use v13 names (objectTypeId, objectId, etc.) |
