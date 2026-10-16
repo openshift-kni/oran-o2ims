@@ -104,7 +104,7 @@ configured at startup via `GetServerTLSConfig()`. This means:
 - The certificate SAN matches `<service-name>.<namespace>.svc`.
 - The TLS minimum version and cipher suites are dynamically inherited from
   the cluster's API Server TLS profile (propagated as environment variables
-  `TLS_PROFILE_MIN_VERSION` and `TLS_PROFILE_CIPHERS`).
+  `TLS_PROFILE_MIN_VERSION`, `TLS_PROFILE_CIPHERS`, and `TLS_PROFILE_GROUPS`).
 - Certificate rotation is handled transparently via dynamic cert loading
   (no pod restart needed).
 

@@ -11,6 +11,7 @@ import (
 	"log/slog"
 
 	"github.com/go-logr/logr"
+	tlspkg "github.com/openshift/controller-runtime-common/pkg/tls"
 	"github.com/spf13/cobra"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -143,10 +144,8 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 
 	tlsOpts := []func(*tls.Config){}
 	if !c.enableHTTP2 {
-		tlsOpts = append(tlsOpts, func(c *tls.Config) {
-			logger.InfoContext(ctx, "disabling http/2")
-			c.NextProtos = []string{"http/1.1"}
-		})
+		logger.InfoContext(ctx, "disabling http/2")
+		tlsOpts = append(tlsOpts, tlspkg.SetNextProtos(tlspkg.HTTP1NextProtos...))
 	}
 	tlsProfile := ctlrutils.NewTLSProfileFromEnv()
 	tlsOpts = append(tlsOpts, ctlrutils.NewTLSConfiguratorFromProfile(tlsProfile))

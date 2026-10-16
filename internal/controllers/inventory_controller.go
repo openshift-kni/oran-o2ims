@@ -89,6 +89,7 @@ type Reconciler struct {
 	TLSProfileHash string
 	TLSMinVersion  string
 	TLSCiphers     string
+	TLSGroups      string
 	setupOnce      sync.Once
 }
 
@@ -101,6 +102,7 @@ type reconcilerTask struct {
 	tlsProfileHash string
 	tlsMinVersion  string
 	tlsCiphers     string
+	tlsGroups      string
 	client         client.Client
 	object         *inventoryv1alpha1.Inventory
 }
@@ -184,6 +186,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (resul
 		tlsProfileHash: r.TLSProfileHash,
 		tlsMinVersion:  r.TLSMinVersion,
 		tlsCiphers:     r.TLSCiphers,
+		tlsGroups:      r.TLSGroups,
 		object:         object,
 	}
 	result, err = task.run(ctx)
@@ -902,6 +905,10 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (c
 		{
 			Name:  ctlrutils.TLSProfileCiphersEnvName,
 			Value: t.tlsCiphers,
+		},
+		{
+			Name:  ctlrutils.TLSProfileGroupsEnvName,
+			Value: t.tlsGroups,
 		},
 	}...)
 
