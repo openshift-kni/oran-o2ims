@@ -344,7 +344,12 @@ func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
 		}
 	}
 	pgConf += fmt.Sprintf("\nssl_tls13_ciphers = '%s'", ctlrutils.PostgresTLS13Ciphers)
-	pgConf += fmt.Sprintf("\nssl_groups = '%s'", ctlrutils.PostgresSSLGroups)
+	if t.tlsGroups != "" {
+		pgGroups := ctlrutils.TLSGroupsToPostgres(ctlrutils.ParseTLSGroups(t.tlsGroups))
+		if pgGroups != "" {
+			pgConf += fmt.Sprintf("\nssl_groups = '%s'", pgGroups)
+		}
+	}
 	err = ctlrutils.CreateConfigMapFromString(ctx, t.logger, t.client, t.object,
 		t.object.Namespace, configVolumeName, postgres.ConfigFileName, pgConf)
 	if err != nil {
