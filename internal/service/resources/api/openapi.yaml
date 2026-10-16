@@ -24,7 +24,7 @@ info:
     url: https://www.apache.org/licenses/LICENSE-2.0.html
 
 externalDocs:
-  description: O-RAN O2ims Interface Specification 11.0 (2025.11.28)
+  description: O-RAN O2ims Interface Specification 13.00 (2026-07-10) (O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v13.00)
   url: https://specifications.o-ran.org/specifications
 
 servers:
@@ -1634,7 +1634,7 @@ components:
       description: |
         Information about a location where O-Cloud Sites can be available.
 
-        NOTE: Per O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v11.00 3.2.6.2.16, at least one of 'coordinate', 
+        NOTE: Per O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v13.00 3.2.6.2.16, at least one of 'coordinate',
         'civicAddress', or 'address' shall be provided when creating location data.
       type: object
       properties:
