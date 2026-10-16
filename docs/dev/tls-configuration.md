@@ -148,8 +148,9 @@ Key design decisions:
     PostgreSQL's `ssl_ciphers` only accepts TLS 1.2 names)
   - `ssl_tls13_ciphers` — statically set to exclude `TLS_AES_128_CCM_SHA256`
     (not in the OpenShift Modern profile's allowed list)
-  - `ssl_groups` — statically set to `X25519MLKEM768:X25519:prime256v1`
-    to enable ML-KEM post-quantum key exchange
+  - `ssl_groups` — dynamically derived from the cluster profile's `Groups`
+    field via `TLSGroupsToPostgres()`, which maps IANA group names to
+    OpenSSL names (the only difference is `secp256r1` → `prime256v1`)
 
   The `tls-profile-hash` annotation triggers a rolling restart when the
   profile changes. These native PostgreSQL 18 settings replace the
@@ -472,11 +473,11 @@ Key observations:
 
 - **All endpoints pass API MinVersion and Cipher Compliance** — the offered
   minimum TLS version and cipher suites match the cluster profile requirements.
-- **Curve preferences** for Go-based endpoints are propagated from the
-  cluster TLS profile via the `TLS_PROFILE_GROUPS` environment variable.
-  The `controller-runtime-common` library's `NewTLSConfigFromProfile`
-  wires the profile's `Groups` field into `tls.Config.CurvePreferences`.
-  PostgreSQL uses a separate static `ssl_groups` setting (see below).
+- **Curve preferences** are propagated from the cluster TLS profile.
+  Go-based endpoints receive the `TLS_PROFILE_GROUPS` environment variable
+  and apply it via `NewTLSConfigFromProfile` → `tls.Config.CurvePreferences`.
+  PostgreSQL derives `ssl_groups` from the same profile via
+  `TLSGroupsToPostgres()`, translating IANA names to OpenSSL names.
 - **Go-based endpoints** achieve compliance via Go's native TLS implementation.
   ML-KEM (`X25519MLKEM768`) support comes from Go's `crypto/tls` (available
   since Go 1.24; this project requires Go 1.26).

@@ -222,17 +222,9 @@ func TLSCiphersToPostgres(ciphers []string) string {
 	return strings.Join(pgCiphers, ":")
 }
 
-// PostgreSQL TLS 1.3 and key-exchange defaults for PG18+ native controls.
-// These are the OpenShift-approved values that satisfy tls-scanner compliance.
-const (
-	// PostgresTLS13Ciphers is the ssl_tls13_ciphers value: all standard TLS 1.3
-	// ciphers except TLS_AES_128_CCM_SHA256 (not in the OpenShift Modern profile).
-	PostgresTLS13Ciphers = "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256"
-
-	// PostgresSSLGroups is the ssl_groups value: ML-KEM for PQC key exchange
-	// alongside classical fallbacks.
-	PostgresSSLGroups = "X25519MLKEM768:X25519:prime256v1"
-)
+// PostgresTLS13Ciphers is the ssl_tls13_ciphers value: all standard TLS 1.3
+// ciphers except TLS_AES_128_CCM_SHA256 (not in the OpenShift Modern profile).
+const PostgresTLS13Ciphers = "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256"
 
 var validTLSVersions = map[string]bool{
 	string(configv1.VersionTLS10): true,
@@ -253,4 +245,33 @@ func TLSGroupsToString(groups []configv1.TLSGroup) string {
 		s[i] = string(g)
 	}
 	return strings.Join(s, ",")
+}
+
+// ParseTLSGroups converts a comma-separated groups string (from the env var)
+// back to a typed slice.
+func ParseTLSGroups(s string) []configv1.TLSGroup {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	groups := make([]configv1.TLSGroup, len(parts))
+	for i, p := range parts {
+		groups[i] = configv1.TLSGroup(p)
+	}
+	return groups
+}
+
+// TLSGroupsToPostgres converts the TLS profile Groups to the colon-separated
+// format expected by PostgreSQL's ssl_groups setting. The only name difference
+// is secp256r1 (IANA/Go) → prime256v1 (OpenSSL).
+func TLSGroupsToPostgres(groups []configv1.TLSGroup) string {
+	pgNames := make([]string, 0, len(groups))
+	for _, g := range groups {
+		name := string(g)
+		if name == string(configv1.TLSGroupSecP256r1) {
+			name = "prime256v1"
+		}
+		pgNames = append(pgNames, name)
+	}
+	return strings.Join(pgNames, ":")
 }
