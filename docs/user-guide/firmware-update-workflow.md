@@ -9,6 +9,8 @@ SPDX-License-Identifier: Apache-2.0
 - [Firmware Update Workflow](#firmware-update-workflow)
   - [Overview](#overview)
   - [HardwareProfile](#hardwareprofile)
+    - [FirmwareCatalog](#firmwarecatalog)
+    - [Firmware Reference Approaches](#firmware-reference-approaches)
   - [Day-0: Firmware During Initial Provisioning](#day-0-firmware-during-initial-provisioning)
     - [Workflow](#workflow)
     - [CR Relationship](#cr-relationship)
@@ -50,18 +52,68 @@ All fields are optional — specify only what you need to manage:
 
 - **`spec.bios.attributes`** — BIOS settings to apply (e.g., `SriovGlobalEnable`,
   `WorkloadProfile`, `AcPwrRcvryUserDelay`).
-- **`spec.biosFirmware`** — Target BIOS firmware version and download URL.
-- **`spec.bmcFirmware`** — Target BMC/iDRAC firmware version and download URL.
-- **`spec.nicFirmware`** — Target NIC firmware versions and download URLs.
+- **`spec.firmwareImages`** — List of FirmwareCatalog entry names (recommended).
+  Each entry is looked up in the singleton FirmwareCatalog to resolve
+  component type, URL, and version automatically.
+- **`spec.biosFirmware`** *(deprecated)* — Inline BIOS firmware with `version` and `url`.
+- **`spec.bmcFirmware`** *(deprecated)* — Inline BMC firmware with `version` and `url`.
+- **`spec.nicFirmware`** *(deprecated)* — Inline NIC firmware list with `version` and `url`
+  per entry.
 
-Example:
+There are two approaches for specifying firmware. The recommended approach uses the
+`firmwareImages` field together with the `FirmwareCatalog` (see
+[Firmware Reference Approaches](#firmware-reference-approaches) below).
+
+### FirmwareCatalog
+
+A FirmwareCatalog CR holds the set of firmware images available for use by
+HardwareProfiles. A singleton named `firmware-catalog` must exist in the operator's
+namespace. Each entry has a unique name, a component type (`bios`, `bmc`, or `nic`),
+and the firmware URL and version:
+
+```yaml
+apiVersion: clcm.openshift.io/v1alpha1
+kind: FirmwareCatalog
+metadata:
+  name: firmware-catalog
+  namespace: <operator-namespace>
+spec:
+  images:
+    - name: dell-xr8620t-bios-2.3.5
+      component: bios
+      version: "2.3.5"
+      url: https://example.com:8888/firmware/xr8620t/BIOS_JDR1R_WN64_2.3.5.EXE
+    - name: dell-xr8620t-bmc-7.10.70.10
+      component: bmc
+      version: "7.10.70.10"
+      url: https://example.com:8888/firmware/xr8620t/iDRAC-with-Lifecycle-Controller_Firmware_W4NV9_WN64_7.10.70.10_A00.EXE
+    - name: dell-r740-nic-16.35.30.06
+      component: nic
+      version: "16.35.30.06"
+      url: https://example.com:8888/firmware/network/dell/mellanox/ConnectX-5/Network_Firmware_XY16R_WN64_16.35.30.06_01.EXE
+```
+
+Catalog entries are immutable once created. To roll out new firmware, add a new entry
+with a new name and create a new HardwareProfile referencing it.
+
+### Firmware Reference Approaches
+
+HardwareProfiles support two mutually exclusive approaches for specifying firmware.
+The two approaches cannot be mixed within a single HardwareProfile.
+
+#### Recommended: Catalog references via `firmwareImages`
+
+The `firmwareImages` field takes a list of FirmwareCatalog entry names. The controller
+looks up each entry in the catalog to resolve its component type, URL, and version
+automatically. The user does not need to classify entries by component type — the
+catalog is the single source of truth.
 
 ```yaml
 apiVersion: clcm.openshift.io/v1alpha1
 kind: HardwareProfile
 metadata:
   name: dell-xr8620t-bios-2.3.5-bmc-7.10.70.10
-  namespace: oran-o2ims
+  namespace: <operator-namespace>
 spec:
   bios:
     attributes:
@@ -69,13 +121,58 @@ spec:
       WorkloadProfile: TelcoOptimizedProfile
       SriovGlobalEnable: Enabled
       AcPwrRcvryUserDelay: 120
+  firmwareImages:
+    - dell-xr8620t-bios-2.3.5
+    - dell-xr8620t-bmc-7.10.70.10
+    - dell-r740-nic-16.35.30.06
+```
+
+A validating webhook verifies at creation and update time that every entry in
+`firmwareImages` exists in the FirmwareCatalog. Additionally, the webhook enforces
+that at most one entry has component type `bios` and at most one has component type
+`bmc` (multiple `nic` entries are allowed).
+
+#### Deprecated: Inline firmware fields
+
+> [!WARNING]
+> The inline firmware fields `biosFirmware`, `bmcFirmware`, and `nicFirmware` are
+> **deprecated** and will be removed in a future release. New HardwareProfiles should
+> use `firmwareImages` with FirmwareCatalog entries instead.
+
+The legacy approach specifies firmware URL and version directly in the HardwareProfile,
+without requiring a FirmwareCatalog:
+
+```yaml
+apiVersion: clcm.openshift.io/v1alpha1
+kind: HardwareProfile
+metadata:
+  name: dell-xr8620t-legacy-example
+  namespace: <operator-namespace>
+spec:
+  bios:
+    attributes:
+      SysProfile: Custom
+      WorkloadProfile: TelcoOptimizedProfile
+      SriovGlobalEnable: Enabled
   biosFirmware:
-    version: 2.3.5
+    version: "2.3.5"
     url: https://example.com:8888/firmware/xr8620t/BIOS_JDR1R_WN64_2.3.5.EXE
   bmcFirmware:
-    version: 7.10.70.10
+    version: "7.10.70.10"
     url: https://example.com:8888/firmware/xr8620t/iDRAC-with-Lifecycle-Controller_Firmware_W4NV9_WN64_7.10.70.10_A00.EXE
+  nicFirmware:
+    - version: "16.35.30.06"
+      url: https://example.com:8888/firmware/network/dell/mellanox/ConnectX-5/Network_Firmware_XY16R_WN64_16.35.30.06_01.EXE
 ```
+
+This approach is retained for backward compatibility. Existing HardwareProfiles
+using these fields continue to work unchanged.
+
+#### Mutual exclusivity
+
+If `firmwareImages` is non-empty, the old `biosFirmware`, `bmcFirmware`, and
+`nicFirmware` fields must all be empty, and vice versa. The validating webhook
+rejects HardwareProfiles that mix both approaches.
 
 The HardwareProfile can be specified in two places:
 
@@ -108,9 +205,10 @@ When a ProvisioningRequest is created, the following sequence occurs:
    state against the host's current state:
    - **BIOS settings:** Compares `spec.bios.attributes` against the host's
      `HostFirmwareSettings` status. If any setting differs, BIOS update is needed.
-   - **Firmware versions:** Compares `spec.biosFirmware.version`,
-     `spec.bmcFirmware.version`, and `spec.nicFirmware[].version` against the host's
-     `HostFirmwareComponents` status. If any version differs, firmware update is needed.
+   - **Firmware versions:** Resolves the desired firmware versions (from `firmwareImages`
+     via the FirmwareCatalog, or from the inline `biosFirmware`/`bmcFirmware`/`nicFirmware`
+     fields) and compares them against the host's `HostFirmwareComponents` status.
+     If any version differs, firmware update is needed.
 
 5. **Metal3 CR updates** — If updates are needed, the hardware manager:
    - Updates the `HostFirmwareSettings` CR with the desired BIOS attributes.
