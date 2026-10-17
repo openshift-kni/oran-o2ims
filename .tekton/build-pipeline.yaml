@@ -208,7 +208,7 @@ spec:
             value: prefetch-dependencies-oci-ta
           - name: bundle
             value: >-
-              quay.io/konflux-ci/tekton-catalog/task-prefetch-dependencies-oci-ta:0.10.3@sha256:0c386f2c26b46b978280c5c54caac26bcd524975f8f7cc06bb080ba00eae3ad4
+              quay.io/konflux-ci/tekton-catalog/task-prefetch-dependencies-oci-ta:0.11.0@sha256:7ffdaab6322c4bed64297eb79f767d92609a3e24bd123b14dc73536c038bf5b7
           - name: kind
             value: task
         resolver: bundles
@@ -245,8 +245,6 @@ spec:
           value: $(params.privileged-nested)
         - name: SOURCE_ARTIFACT
           value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
-        - name: CACHI2_ARTIFACT
-          value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
         - name: IMAGE_APPEND_PLATFORM
           value: $(params.image-append-platform)
         - name: LABELS
@@ -280,6 +278,8 @@ spec:
         - name: BUILD_ARGS_FILES
           value:
             - $(params.build-args-file)
+        - name: PREFETCH_ARTIFACT
+          value: $(tasks.prefetch-dependencies.results.PREFETCH_ARTIFACT)
       runAfter:
         - prefetch-dependencies
       taskRef:
@@ -288,7 +288,7 @@ spec:
             value: buildah-remote-oci-ta
           - name: bundle
             value: >-
-              quay.io/konflux-ci/tekton-catalog/task-buildah-remote-oci-ta:0.13.0@sha256:04dbc0e479ebc2d7c94a4e1cde84aaf3f6ab84b3e1bbae012a4554219a297618
+              quay.io/konflux-ci/tekton-catalog/task-buildah-remote-oci-ta:0.14.0@sha256:3c31a010d90b807c21c6bed676295bd2089b6886139a5b8160fd31f2dcfc8109
           - name: kind
             value: task
         resolver: bundles
@@ -323,8 +323,8 @@ spec:
           value: "$(tasks.build-image-index.results.IMAGE_DIGEST)"
         - name: SOURCE_ARTIFACT
           value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
-        - name: CACHI2_ARTIFACT
-          value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
+        - name: PREFETCH_ARTIFACT
+          value: $(tasks.prefetch-dependencies.results.PREFETCH_ARTIFACT)
       runAfter:
         - build-image-index
       taskRef:
@@ -333,7 +333,7 @@ spec:
             value: source-build-oci-ta
           - name: bundle
             value: >-
-              quay.io/konflux-ci/tekton-catalog/task-source-build-oci-ta:0.3.2@sha256:45091b5022754d452b4de60c7d7f4c6e03626efff55f96e9af937400fe3506eb
+              quay.io/konflux-ci/tekton-catalog/task-source-build-oci-ta:0.4.0@sha256:7a387194cf725b36acf92fd006ba97f0a9853d01f74273496b99146496b56ef7
           - name: kind
             value: task
         resolver: bundles
@@ -384,7 +384,7 @@ spec:
             value: roxctl-scan
           - name: bundle
             value: >-
-              quay.io/konflux-ci/tekton-catalog/task-roxctl-scan:0.1@sha256:2fafbf5439702731ad24a09bed677c371fda1f8a7ecf5ed53f7b7f3c71079980
+              quay.io/konflux-ci/tekton-catalog/task-roxctl-scan:0.1.1@sha256:2fafbf5439702731ad24a09bed677c371fda1f8a7ecf5ed53f7b7f3c71079980
           - name: kind
             value: task
         resolver: bundles
@@ -497,7 +497,7 @@ spec:
         - name: SOURCE_ARTIFACT
           value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
         - name: CACHI2_ARTIFACT
-          value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
+          value: $(tasks.prefetch-dependencies.results.PREFETCH_ARTIFACT)
         - name: TARGET_DIRS
           value: $(params.sast-target-dirs)
       runAfter:
