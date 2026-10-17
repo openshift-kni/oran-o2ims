@@ -26,8 +26,8 @@ info:
     url: https://www.redhat.com
 
 externalDocs:
-  description: O-RAN O2ims Interface Specification
-  url: TBD
+  description: O-RAN O2ims Interface Specification 13.00 (2026-07-10) (O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v13.00)
+  url: https://specifications.o-ran.org/specifications
 
 servers:
 - url: http://localhost:8000

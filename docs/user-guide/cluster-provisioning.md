@@ -22,6 +22,8 @@ SPDX-License-Identifier: Apache-2.0
 
 The O-Cloud Manager provides orchestration of the complete lifecycle of cluster provisioning via the `ProvisioningRequest` CR, starting from hardware provisioning and cluster installation to cluster configuration.
 
+> **Specification conformance**: The Provisioning API conforms to the O-RAN O2 IMS Interface Specification v13 (`O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v13.00`, 2026-07-10).
+
 The operator leverages several key components to achieve this:
 
 - [Metal3 Baremetal Operator](https://github.com/metal3-io/baremetal-operator): Manages the `BaremetalHost`, `HostFirmwareSettings` and `HostFirmwareComponents` CRs, provisioning bare‑metal hosts and applying hardware settings.
