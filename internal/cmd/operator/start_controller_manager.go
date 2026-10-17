@@ -230,12 +230,9 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 	// - https://github.com/advisories/GHSA-4374-p667-p6c8
 	tlsOpts := []func(*tls.Config){}
 	if !c.enableHTTP2 {
-		tlsOpts = append(tlsOpts, func(c *tls.Config) {
-			logger.InfoContext(ctx, "disabling http/2")
-			c.NextProtos = []string{"http/1.1"}
-		})
+		logger.InfoContext(ctx, "disabling http/2")
+		tlsOpts = append(tlsOpts, tlspkg.SetNextProtos(tlspkg.HTTP1NextProtos...))
 	}
-	// Profile configurator is appended last so http/2 disabling (NextProtos) is not overridden.
 	tlsOpts = append(tlsOpts, ctlrutils.NewTLSConfiguratorFromProfile(tlsProfile))
 
 	operatorNamespace := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
@@ -336,6 +333,7 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 		TLSProfileHash: ctlrutils.TLSProfileHash(tlsProfile),
 		TLSMinVersion:  string(tlsProfile.MinTLSVersion),
 		TLSCiphers:     strings.Join(tlsProfile.Ciphers, ","),
+		TLSGroups:      ctlrutils.TLSGroupsToString(tlsProfile.Groups),
 	}).SetupWithManager(mgr); err != nil {
 		logger.ErrorContext(
 			ctx,

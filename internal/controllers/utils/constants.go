@@ -198,6 +198,7 @@ const (
 const (
 	TLSProfileMinVersionEnvName = "TLS_PROFILE_MIN_VERSION"
 	TLSProfileCiphersEnvName    = "TLS_PROFILE_CIPHERS"
+	TLSProfileGroupsEnvName     = "TLS_PROFILE_GROUPS"
 )
 
 // Label specific to ACM child policies.
