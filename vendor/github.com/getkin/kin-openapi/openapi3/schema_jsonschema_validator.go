@@ -5,15 +5,19 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
+	"github.com/santhosh-tekuri/jsonschema/v6/kind"
 )
 
 // jsonSchemaValidator wraps the santhosh-tekuri/jsonschema validator
 type jsonSchemaValidator struct {
-	compiler *jsonschema.Compiler
-	schema   *jsonschema.Schema
+	compiler        *jsonschema.Compiler
+	schema          *jsonschema.Schema
+	hasInternalRefs bool
 }
 
 // newJSONSchemaValidator creates a new validator using JSON Schema 2020-12
@@ -24,13 +28,17 @@ func newJSONSchemaValidator(schema *Schema, settings *schemaValidationSettings) 
 		return nil, fmt.Errorf("failed to marshal schema: %w", err)
 	}
 
-	var schemaMap map[string]any
-	if err := json.Unmarshal(schemaBytes, &schemaMap); err != nil {
+	var schemaDocument any
+	if err := json.Unmarshal(schemaBytes, &schemaDocument); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal schema: %w", err)
 	}
 
-	// OpenAPI 3.1 specific transformations
-	transformOpenAPIToJSONSchema(schemaMap)
+	// Boolean schemas are valid JSON Schema resources as well.
+	schemaMap, _ := schemaDocument.(map[string]any)
+	hasInternalRefs := containsInternalSchemaRef(schemaDocument)
+	if err := addInternalSchemaRefs(schemaMap, schema); err != nil {
+		return nil, fmt.Errorf("failed to prepare schema references: %w", err)
+	}
 
 	// Create compiler
 	compiler := jsonschema.NewCompiler()
@@ -41,7 +49,7 @@ func newJSONSchemaValidator(schema *Schema, settings *schemaValidationSettings) 
 
 	// Add the schema
 	schemaURL := "https://example.com/schema.json"
-	if err := compiler.AddResource(schemaURL, schemaMap); err != nil {
+	if err := compiler.AddResource(schemaURL, schemaDocument); err != nil {
 		return nil, fmt.Errorf("failed to add schema resource: %w", err)
 	}
 
@@ -52,9 +60,97 @@ func newJSONSchemaValidator(schema *Schema, settings *schemaValidationSettings) 
 	}
 
 	return &jsonSchemaValidator{
-		compiler: compiler,
-		schema:   compiledSchema,
+		compiler:        compiler,
+		schema:          compiledSchema,
+		hasInternalRefs: hasInternalRefs,
 	}, nil
+}
+
+func containsInternalSchemaRef(node any) bool {
+	switch node := node.(type) {
+	case map[string]any:
+		if ref, ok := node["$ref"].(string); ok && strings.HasPrefix(ref, "#/components/schemas/") {
+			return true
+		}
+		for _, value := range node {
+			if containsInternalSchemaRef(value) {
+				return true
+			}
+		}
+	case []any:
+		if slices.ContainsFunc(node, containsInternalSchemaRef) {
+			return true
+		}
+	}
+	return false
+}
+
+// addInternalSchemaRefs preserves document-relative references present on a
+// resolved Schema. VisitJSON receives a subtree rather than the containing
+// OpenAPI document, so copy each resolved target into local $defs and rewrite
+// its reference. This also handles references to a nested property or item.
+func addInternalSchemaRefs(schemaMap map[string]any, schema *Schema) error {
+	if schemaMap == nil || schema == nil {
+		return nil
+	}
+	refs := make(map[string]any)
+	// Recursive schemas reference an already-visited target, which WalkSubtree would not report.
+	err := NewSchemaRef("", schema).walkSubtreeRefs(func(_ string, ref *SchemaRef) error {
+		if ref.Ref == "" || !strings.HasPrefix(ref.Ref, "#/components/schemas/") || ref.Value == nil {
+			return nil
+		}
+		if _, ok := refs[ref.Ref]; ok {
+			return nil
+		}
+		var target any
+		bytes, err := json.Marshal(ref.Value)
+		if err != nil {
+			return err
+		}
+		if err := json.Unmarshal(bytes, &target); err != nil {
+			return err
+		}
+		refs[ref.Ref] = target
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if len(refs) == 0 {
+		return nil
+	}
+	defs := make(map[string]any, len(refs))
+	ids := make(map[string]string, len(refs))
+	for ref := range refs {
+		ids[ref] = fmt.Sprintf("ref%d", len(ids))
+	}
+	rewriteInternalSchemaRefs(schemaMap, refs, ids, defs)
+	if len(defs) > 0 {
+		schemaMap["$defs"] = defs
+		rewriteInternalSchemaRefs(defs, refs, ids, defs)
+	}
+	return nil
+}
+
+func rewriteInternalSchemaRefs(node any, refs map[string]any, ids map[string]string, defs map[string]any) {
+	switch node := node.(type) {
+	case map[string]any:
+		if ref, ok := node["$ref"].(string); ok {
+			if id, exists := ids[ref]; exists {
+				node["$ref"] = "#/$defs/" + id
+				if _, added := defs[id]; !added {
+					defs[id] = refs[ref]
+				}
+			}
+		}
+		for _, value := range node {
+			rewriteInternalSchemaRefs(value, refs, ids, defs)
+		}
+	case []any:
+		for _, value := range node {
+			rewriteInternalSchemaRefs(value, refs, ids, defs)
+		}
+	}
 }
 
 func registerFormatValidators(compiler *jsonschema.Compiler, schemaMap map[string]any, settings *schemaValidationSettings) {
@@ -139,117 +235,34 @@ func validateNumberFormat(format string, settings *schemaValidationSettings, val
 	return f.Validate(value)
 }
 
-// transformOpenAPIToJSONSchema converts OpenAPI 3.0/3.1 specific keywords to JSON Schema format
-func transformOpenAPIToJSONSchema(schema map[string]any) {
-	// Handle nullable - in OpenAPI 3.0, nullable is a boolean flag
-	// In OpenAPI 3.1 / JSON Schema 2020-12, we use type arrays
-	if nullable, ok := schema["nullable"].(bool); ok && nullable {
-		if typeVal, ok := schema["type"].(string); ok {
-			// Convert to type array with null
-			schema["type"] = []string{typeVal, "null"}
-		} else if _, hasType := schema["type"]; !hasType {
-			// nullable: true without type - add "null" to allow null values
-			schema["type"] = []string{"null"}
-		}
-		delete(schema, "nullable")
-	}
-
-	// Handle exclusiveMinimum/exclusiveMaximum
-	// In OpenAPI 3.0, these are booleans alongside minimum/maximum
-	// In JSON Schema 2020-12, they are numeric values
-	if exclusiveMin, ok := schema["exclusiveMinimum"].(bool); ok {
-		if exclusiveMin {
-			if schemaMin, ok := schema["minimum"].(float64); ok {
-				schema["exclusiveMinimum"] = schemaMin
-				delete(schema, "minimum")
-			} else {
-				delete(schema, "exclusiveMinimum")
-			}
-		} else {
-			// exclusiveMinimum: false means inclusive, which is the JSON Schema default
-			delete(schema, "exclusiveMinimum")
-		}
-	}
-	if exclusiveMax, ok := schema["exclusiveMaximum"].(bool); ok {
-		if exclusiveMax {
-			if schemaMax, ok := schema["maximum"].(float64); ok {
-				schema["exclusiveMaximum"] = schemaMax
-				delete(schema, "maximum")
-			} else {
-				delete(schema, "exclusiveMaximum")
-			}
-		} else {
-			// exclusiveMaximum: false means inclusive, which is the JSON Schema default
-			delete(schema, "exclusiveMaximum")
-		}
-	}
-
-	// Remove OpenAPI-specific keywords that aren't in JSON Schema
-	delete(schema, "discriminator")
-	delete(schema, "xml")
-	delete(schema, "externalDocs")
-	delete(schema, "example") // Use "examples" in 2020-12
-
-	// Recursively transform nested schemas (single schema fields)
-	for _, key := range []string{
-		"additionalProperties", "items", "not",
-		// OpenAPI 3.1 / JSON Schema 2020-12 fields
-		"contains", "propertyNames", "unevaluatedItems", "unevaluatedProperties",
-		"if", "then", "else", "contentSchema",
-	} {
-		if val, ok := schema[key]; ok {
-			if nestedSchema, ok := val.(map[string]any); ok {
-				transformOpenAPIToJSONSchema(nestedSchema)
-			}
-		}
-	}
-
-	// Transform schema arrays (oneOf, anyOf, allOf, prefixItems)
-	for _, key := range []string{"oneOf", "anyOf", "allOf", "prefixItems"} {
-		if val, ok := schema[key].([]any); ok {
-			for _, item := range val {
-				if nestedSchema, ok := item.(map[string]any); ok {
-					transformOpenAPIToJSONSchema(nestedSchema)
-				}
-			}
-		}
-	}
-
-	// Transform schema maps (properties, patternProperties, dependentSchemas, $defs)
-	for _, key := range []string{"properties", "patternProperties", "dependentSchemas", "$defs"} {
-		if props, ok := schema[key].(map[string]any); ok {
-			for _, propVal := range props {
-				if propSchema, ok := propVal.(map[string]any); ok {
-					transformOpenAPIToJSONSchema(propSchema)
-				}
-			}
-		}
-	}
-}
-
 // validate validates a value against the compiled JSON Schema
-func (v *jsonSchemaValidator) validate(value any) error {
+func (v *jsonSchemaValidator) validate(settings *schemaValidationSettings, value any) error {
 	if err := v.schema.Validate(value); err != nil {
 		// Convert jsonschema error to SchemaError
-		return convertJSONSchemaError(err)
+		return convertJSONSchemaError(settings, err, value)
 	}
 	return nil
 }
 
-// convertJSONSchemaError converts a jsonschema validation error to OpenAPI SchemaError format
-func convertJSONSchemaError(err error) error {
+// convertJSONSchemaError converts a jsonschema validation error to OpenAPI SchemaError format.
+// root is the validated value, from which the failing value is looked up.
+func convertJSONSchemaError(settings *schemaValidationSettings, err error, root any) error {
 	// TODO: Go 1.26
 	// if err, ok := errors.AsType[*jsonschema.ValidationError](err); ok {
-	// 	return formatValidationError(err, "")
+	// 	return formatValidationError(settings, err, "", root)
 	var validationErr *jsonschema.ValidationError
 	if errors.As(err, &validationErr) {
-		return formatValidationError(validationErr, "")
+		return formatValidationError(settings, validationErr, "", root)
 	}
 	return err
 }
 
-// formatValidationError recursively formats validation errors
-func formatValidationError(verr *jsonschema.ValidationError, parentPath string) error {
+// formatValidationError recursively formats validation errors into SchemaErrors
+// that carry the same structure as the ones of the built-in validator: the path
+// of the failing value (JSONPointer), the failing keyword (SchemaField) and the
+// failing value (Value). The jsonschema error itself stays reachable with
+// errors.As.
+func formatValidationError(settings *schemaValidationSettings, verr *jsonschema.ValidationError, parentPath string, root any) error {
 	// Build the path from InstanceLocation slice
 	path := "/" + strings.Join(verr.InstanceLocation, "/")
 	if parentPath != "" && path != "/" {
@@ -265,34 +278,125 @@ func formatValidationError(verr *jsonschema.ValidationError, parentPath string) 
 	}
 	msg.WriteString(verr.Error())
 
+	// A wrapper with a single chain of causes (the schema itself, a $ref) is
+	// about the value its innermost cause is about.
+	failing := verr
+	for len(failing.Causes) == 1 && isWrapperErrorKind(failing.ErrorKind) {
+		failing = failing.Causes[0]
+	}
+
+	value, _ := valueAt(root, failing.InstanceLocation)
+	schemaErr := settings.newSchemaError(nil, value).
+		withReason(msg.String()).
+		withCause(verr)
+	for _, key := range slices.Backward(failing.InstanceLocation) {
+		schemaErr.withPathKey(key)
+	}
+	if keywords := failing.ErrorKind.KeywordPath(); len(keywords) > 0 {
+		schemaErr.withField(keywords[len(keywords)-1])
+	}
+
 	// If there are sub-errors, format them too
 	if len(verr.Causes) > 0 {
 		var subErrors MultiError
 		for _, cause := range verr.Causes {
-			if subErr := formatValidationError(cause, path); subErr != nil {
+			if subErr := formatValidationError(settings, cause, path, root); subErr != nil {
 				subErrors = append(subErrors, subErr)
 			}
 		}
 		if len(subErrors) > 0 {
-			return &SchemaError{
-				Reason: msg.String(),
-				Origin: fmt.Errorf("validation failed due to: %w", subErrors),
-			}
+			schemaErr.withOrigin(fmt.Errorf("validation failed due to: %w", subErrors))
 		}
 	}
 
-	return &SchemaError{
-		Reason: msg.String(),
+	return schemaErr
+}
+
+// isWrapperErrorKind reports whether k only groups the errors of its causes.
+func isWrapperErrorKind(k jsonschema.ErrorKind) bool {
+	switch k.(type) {
+	case *kind.Schema, *kind.Group, *kind.Reference:
+		return true
 	}
+	return false
+}
+
+// valueAt is the value at location (unescaped JSON pointer tokens) inside root.
+func valueAt(root any, location []string) (any, bool) {
+	value := root
+	for _, token := range location {
+		switch v := value.(type) {
+		case map[string]any:
+			next, ok := v[token]
+			if !ok {
+				return nil, false
+			}
+			value = next
+		case []any:
+			i, err := strconv.Atoi(token)
+			if err != nil || i < 0 || i >= len(v) {
+				return nil, false
+			}
+			value = v[i]
+		default:
+			return nil, false
+		}
+	}
+	return value, true
 }
 
 // useJSONSchema2020 validates using the JSON Schema 2020-12 validator
 func (schema *Schema) useJSONSchema2020(settings *schemaValidationSettings, value any) error {
+	usesJSONSchema2020Features := schemaUsesJSONSchema2020Features(schema)
 	validator, err := newJSONSchemaValidator(schema, settings)
 	if err != nil {
-		// Fall back to built-in validator if compilation fails
+		if !usesJSONSchema2020Features {
+			return schema.visitJSON(settings, value)
+		}
+		// A resolved OpenAPI component reference can be registered above. If a
+		// reference still cannot be resolved, do not silently drop its constraints.
+		// Keep the existing fallback for other compiler limitations (for example,
+		// regex syntax accepted by OpenAPI but rejected by Go's regexp package).
+		if strings.Contains(err.Error(), "json-pointer") && strings.Contains(err.Error(), "not found") {
+			return err
+		}
+		return schema.visitJSON(settings, value)
+	}
+	if validator.hasInternalRefs && !usesJSONSchema2020Features {
 		return schema.visitJSON(settings, value)
 	}
 
-	return validator.validate(value)
+	return validator.validate(settings, value)
+}
+
+// schemaUsesJSONSchema2020Features checks the keywords that guard the legacy
+// fallback. Annotations such as examples must not turn an ordinary reference
+// into a compilation error instead of a fallback.
+func schemaUsesJSONSchema2020Features(schema *Schema) bool {
+	if schema == nil {
+		return false
+	}
+	// WalkSubtree follows resolved refs and guards against cycles. Stop at the
+	// first validation keyword rather than serializing the schema just to inspect it.
+	err := NewSchemaRef("", schema).WalkSubtree(func(_ string, ref *SchemaRef) error {
+		if schemaHasJSONSchema2020FallbackGuardKeyword(ref.Value) {
+			return errJSONSchema2020FeatureFound
+		}
+		return nil
+	})
+	return errors.Is(err, errJSONSchema2020FeatureFound)
+}
+
+var errJSONSchema2020FeatureFound = errors.New("json schema 2020 validation keyword found")
+
+func schemaHasJSONSchema2020FallbackGuardKeyword(schema *Schema) bool {
+	return schema.Const != nil ||
+		len(schema.PrefixItems) != 0 || schema.Contains != nil ||
+		len(schema.PatternProperties) != 0 ||
+		len(schema.DependentSchemas) != 0 || schema.PropertyNames != nil ||
+		schema.UnevaluatedItems.Has != nil || schema.UnevaluatedItems.Schema != nil ||
+		schema.UnevaluatedProperties.Has != nil || schema.UnevaluatedProperties.Schema != nil ||
+		schema.If != nil || schema.Then != nil || schema.Else != nil ||
+		len(schema.DependentRequired) != 0 || len(schema.Defs) != 0 ||
+		schema.ContentSchema != nil
 }

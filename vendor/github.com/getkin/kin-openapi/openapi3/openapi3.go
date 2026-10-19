@@ -75,7 +75,7 @@ func (doc *T) OpenAPIMajorMinor() string {
 		return "3.0"
 	case "3.1", "3.1.0", "3.1.1", "3.1.2":
 		return "3.1"
-	case "3.2", "3.2.0":
+	case "3.2", "3.2.0", "3.2.1":
 		return "3.2"
 	default:
 		return ""
@@ -384,6 +384,9 @@ func (doc *T) Validate(ctx context.Context, opts ...ValidationOption) error {
 		}
 	}
 
+	if err := me.emit(doc.validateSecurityRequirements(ctx)); err != nil {
+		return err
+	}
 	return me.finalize(validateExtensions(ctx, doc.Extensions, doc.Origin))
 }
 
