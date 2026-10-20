@@ -48,6 +48,9 @@ github.com/coreos/go-semver/semver
 # github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 ## explicit
 github.com/davecgh/go-spew/spew
+# github.com/distribution/reference v0.6.0
+## explicit; go 1.20
+github.com/distribution/reference
 # github.com/dprotaso/go-yit v0.0.0-20240618133044-5a0af90af097
 ## explicit; go 1.13
 github.com/dprotaso/go-yit
@@ -377,6 +380,9 @@ github.com/onsi/gomega/matchers/support/goraph/edge
 github.com/onsi/gomega/matchers/support/goraph/node
 github.com/onsi/gomega/matchers/support/goraph/util
 github.com/onsi/gomega/types
+# github.com/opencontainers/go-digest v1.0.0
+## explicit; go 1.13
+github.com/opencontainers/go-digest
 # github.com/openshift-kni/cluster-group-upgrades-operator v0.0.0-20260521142641-57d77ffe2627
 ## explicit; go 1.25.0
 github.com/openshift-kni/cluster-group-upgrades-operator/pkg/api/imagebasedgroupupgrades

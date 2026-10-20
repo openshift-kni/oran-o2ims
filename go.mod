@@ -10,6 +10,7 @@ replace (
 
 require (
 	github.com/coreos/go-semver v0.3.1
+	github.com/distribution/reference v0.6.0
 	github.com/getkin/kin-openapi v0.149.0
 	github.com/go-logr/logr v1.4.4
 	github.com/golang-migrate/migrate/v4 v4.20.1
@@ -134,6 +135,7 @@ require (
 	github.com/oasdiff/yaml v0.1.1 // indirect
 	github.com/oasdiff/yaml3 v0.0.14 // indirect
 	github.com/oklog/ulid/v2 v2.1.2 // indirect
+	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/openshift-kni/lifecycle-agent v0.0.0-20250227204303-42df68297836 // indirect
 	github.com/openshift/assisted-service/models v0.0.0 // indirect
 	github.com/openshift/library-go v0.0.0-20260318142011-72bf34f474bc // indirect

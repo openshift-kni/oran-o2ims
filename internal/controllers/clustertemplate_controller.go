@@ -466,7 +466,11 @@ func (t *clusterTemplateReconcilerTask) validateUpgradeDefaultsAgainstSchema(
 	}
 
 	if defaultsHasSeed {
-		if err := validation.ValidateSeedGenerationUpgradeData(upgradeData); err != nil {
+		var templateParameterSchema map[string]any
+		if err := json.Unmarshal(t.object.Spec.TemplateParameterSchema.Raw, &templateParameterSchema); err != nil {
+			return fmt.Errorf("failed to decode templateParameterSchema: %w", err)
+		}
+		if err := validation.ValidateSeedGenerationTemplateDefaults(upgradeData, templateParameterSchema); err != nil {
 			return typederrors.NewInputError("invalid seed generation upgrade data in upgradeDefaults: %s", err.Error())
 		}
 		return nil

@@ -11,6 +11,25 @@ import (
 	"testing"
 )
 
+func TestValidateSeedGenerationSupported(t *testing.T) {
+	for _, tc := range []struct {
+		name, defaults, parameters string
+		wantError                  bool
+	}{
+		{"seed only", `{"seedGeneration":{}}`, `{}`, false},
+		{"ISO in template", `{"seedGeneration":{"liveISO":{}}}`, `{}`, true},
+		{"ISO in request", `{}`, `{"upgradeParameters":{"seedGeneration":{"liveISO":{}}}}`, true},
+		{"ordinary cluster upgrade", `{"clusterVersion":{"version":"4.22.0"}}`, `{}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateSeedGenerationSupported([]byte(tc.defaults), []byte(tc.parameters))
+			if (err != nil) != tc.wantError {
+				t.Fatalf("error=%v, wantError=%t", err, tc.wantError)
+			}
+		})
+	}
+}
+
 func TestSeedGenerationSharedSchema(t *testing.T) {
 	valid := map[string]any{
 		"seedGeneration": map[string]any{
@@ -39,9 +58,45 @@ func TestSeedGenerationSharedSchema(t *testing.T) {
 	if err := ValidateSeedGenerationPRSchema(restrictedSchema); err != nil {
 		t.Fatalf("seed image override schema rejected: %v", err)
 	}
-	restrictedSchema["properties"].(map[string]any)["seedAuthSecretRef"] = map[string]any{"type": "object"}
+	var secretRefSchema map[string]any
+	if err := json.Unmarshal([]byte(`{"type":"object","additionalProperties":false,"required":["name"],"properties":{"name":{"type":"string","minLength":1}}}`), &secretRefSchema); err != nil {
+		t.Fatal(err)
+	}
+	restrictedSchema["properties"].(map[string]any)["seedAuthSecretRef"] = secretRefSchema
+	if err := ValidateSeedGenerationPRSchema(restrictedSchema); err != nil {
+		t.Fatalf("Secret reference override schema rejected: %v", err)
+	}
+	secretRefSchema["properties"].(map[string]any)["namespace"] = map[string]any{"type": "string"}
 	if err := ValidateSeedGenerationPRSchema(restrictedSchema); err == nil {
-		t.Fatal("credential override schema accepted")
+		t.Fatal("Secret namespace override schema accepted")
+	}
+}
+
+func TestValidateSeedGenerationTemplateDefaults(t *testing.T) {
+	var templateParameterSchema map[string]any
+	if err := json.Unmarshal([]byte(`{"type":"object","additionalProperties":false,"required":["upgradeParameters"],"properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"required":["seedGeneration"],"properties":{"seedGeneration":{"type":"object","additionalProperties":false,"required":["seedImage","seedAuthSecretRef"],"properties":{"seedImage":{"type":"string"},"seedAuthSecretRef":{"type":"object","additionalProperties":false,"required":["name"],"properties":{"name":{"type":"string","minLength":1}}}}}}}}}`), &templateParameterSchema); err != nil {
+		t.Fatal(err)
+	}
+	defaults := map[string]any{
+		"seedGeneration": map[string]any{
+			"seedGenerationTimeout": "3h",
+		},
+	}
+	if err := ValidateSeedGenerationTemplateDefaults(defaults, templateParameterSchema); err != nil {
+		t.Fatalf("template defaults without seedImage or Secret reference rejected when PR schema requires them: %v", err)
+	}
+
+	upgradeSchema := templateParameterSchema["properties"].(map[string]any)["upgradeParameters"].(map[string]any)
+	seedSchema := upgradeSchema["properties"].(map[string]any)["seedGeneration"].(map[string]any)
+	delete(seedSchema["properties"].(map[string]any), "seedImage")
+	if err := ValidateSeedGenerationTemplateDefaults(defaults, templateParameterSchema); err == nil {
+		t.Fatal("template defaults without seedImage accepted when PR schema does not expose it")
+	}
+
+	seedSchema["properties"].(map[string]any)["seedImage"] = map[string]any{"type": "string"}
+	seedSchema["required"] = []any{"seedAuthSecretRef"}
+	if err := ValidateSeedGenerationTemplateDefaults(defaults, templateParameterSchema); err == nil {
+		t.Fatal("template defaults without seedImage accepted when the PR schema does not require it")
 	}
 }
 
@@ -89,6 +144,21 @@ func TestValidateSeedGenerationUpgradeData(t *testing.T) {
 		{
 			name:    "missing seed image",
 			data:    `{"seedGeneration":{"seedAuthSecretRef":{"name":"push-auth"}}}`,
+			wantErr: true,
+		},
+		{
+			name:    "invalid image tag",
+			data:    `{"seedGeneration":{"seedImage":"quay.io/example/seed:bad!tag","seedAuthSecretRef":{"name":"push-auth"}}}`,
+			wantErr: true,
+		},
+		{
+			name:    "transport prefix is not a pull specification",
+			data:    `{"seedGeneration":{"seedImage":"docker://quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"}}}`,
+			wantErr: true,
+		},
+		{
+			name:    "digest cannot be a push destination",
+			data:    `{"seedGeneration":{"seedImage":"quay.io/example/seed@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","seedAuthSecretRef":{"name":"push-auth"}}}`,
 			wantErr: true,
 		},
 		{
@@ -169,9 +239,10 @@ func TestValidateSeedGenerationPRSchema(t *testing.T) {
 		{name: "missing strictness", schema: `{"type":"object","properties":{"seedImage":{"type":"string"}}}`, wantErr: true},
 		{name: "pattern properties bypass", schema: `{"type":"object","additionalProperties":false,"patternProperties":{".*":{}},"properties":{"seedImage":{"type":"string"}}}`, wantErr: true},
 		{name: "reference bypass", schema: `{"type":"object","additionalProperties":false,"$ref":"#/definitions/openSeed","properties":{"seedImage":{"type":"string"}}}`, wantErr: true},
-		{name: "credential override", schema: `{"type":"object","additionalProperties":false,"properties":{"seedAuthSecretRef":{"type":"object"}}}`, wantErr: true},
+		{name: "Secret name override", schema: `{"type":"object","additionalProperties":false,"properties":{"seedAuthSecretRef":{"type":"object","additionalProperties":false,"required":["name"],"properties":{"name":{"type":"string","minLength":1}}}}}`},
+		{name: "Secret namespace override", schema: `{"type":"object","additionalProperties":false,"properties":{"seedAuthSecretRef":{"type":"object","additionalProperties":false,"required":["name"],"properties":{"name":{"type":"string","minLength":1},"namespace":{"type":"string"}}}}}`, wantErr: true},
 		{name: "ISO override", schema: `{"type":"object","additionalProperties":false,"properties":{"liveISO":{"type":"object"}}}`, wantErr: true},
-		{name: "required PR value", schema: `{"type":"object","additionalProperties":false,"required":["seedImage"],"properties":{"seedImage":{"type":"string"}}}`, wantErr: true},
+		{name: "required PR value", schema: `{"type":"object","additionalProperties":false,"required":["seedImage"],"properties":{"seedImage":{"type":"string"}}}`},
 		{name: "incorrect seed image type", schema: `{"type":"object","additionalProperties":false,"properties":{"seedImage":{"type":"number"}}}`, wantErr: true},
 		{name: "incorrect timeout type", schema: `{"type":"object","additionalProperties":false,"properties":{"seedGenerationTimeout":{"type":"number"}}}`, wantErr: true},
 	}

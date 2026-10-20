@@ -25,15 +25,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/distribution/reference"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/provisioning"
+	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
+	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/clientcmd"
 	k8sptr "k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -54,7 +59,8 @@ const (
 
 var errIncompleteSeedGenerationSnapshot = errors.New("incomplete seed generation input snapshot")
 var errSeedGenerationSnapshotNotFound = errors.New("seed generation input snapshot not found")
-var errSeedGenerationSnapshotLost = errors.New("seed generation input snapshot was lost after it was pinned")
+var errSeedGenerationSnapshotUnavailable = markSeedGenerationTransient(
+	errors.New("pinned seed generation input snapshot is incomplete or unavailable"))
 
 type seedGenerationTransientError struct {
 	cause error
@@ -86,9 +92,15 @@ func isSeedGenerationTransientError(err error) bool {
 		errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 		return true
 	}
+	// url.Error implements net.Error even when the cause is a permanent TLS
+	// or request configuration error. Classify the underlying error instead.
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return isSeedGenerationTransientError(urlErr.Err)
+	}
 	var dnsErr *net.DNSError
 	if errors.As(err, &dnsErr) {
-		return dnsErr.IsTimeout || dnsErr.IsTemporary
+		return true
 	}
 	var networkErr net.Error
 	return errors.As(err, &networkErr)
@@ -130,10 +142,11 @@ func seedGenerationSnapshotNamespace() string {
 
 func seedGenerationSnapshotNames(pr *provisioningv1alpha1.ProvisioningRequest) map[string]string {
 	return map[string]string{
-		"config":     seedGenerationResourceName(pr, "inputs"),
-		"seedAuth":   seedGenerationResourceName(pr, "seed-auth"),
-		"pullSecret": seedGenerationResourceName(pr, "pull-secret"),
-		"upload":     seedGenerationResourceName(pr, "upload"),
+		"config":          seedGenerationResourceName(pr, "inputs"),
+		"seedAuth":        seedGenerationResourceName(pr, "seed-auth"),
+		"spokeKubeconfig": seedGenerationResourceName(pr, "spoke-kubeconfig"),
+		"pullSecret":      seedGenerationResourceName(pr, "pull-secret"),
+		"upload":          seedGenerationResourceName(pr, "upload"),
 	}
 }
 
@@ -252,15 +265,9 @@ func (t *provisioningRequestReconcilerTask) ensureSeedGenerationInputSnapshot(
 	}
 	snapshot, err := t.loadSeedGenerationInputSnapshot(ctx)
 	if errors.Is(err, errIncompleteSeedGenerationSnapshot) {
-		if len(statusUIDs) > 0 || t.object.Status.Extensions.ClusterDetails.SeedGenerationStatus.DetachmentStarted {
-			return nil, false, fmt.Errorf("%w: %w", errSeedGenerationSnapshotLost, err)
-		}
 		return nil, true, nil
 	}
 	if errors.Is(err, errSeedGenerationSnapshotNotFound) {
-		if len(statusUIDs) > 0 || t.object.Status.Extensions.ClusterDetails.SeedGenerationStatus.DetachmentStarted {
-			return nil, false, errSeedGenerationSnapshotLost
-		}
 		snapshot, err = nil, nil
 	}
 	if err != nil {
@@ -352,6 +359,9 @@ func makeSeedGenerationSnapshotObjects(
 	if _, ok := secretNames["seedAuth"]; !ok {
 		return nil, nil, fmt.Errorf("seed generation snapshot is missing seedAuth credentials")
 	}
+	if _, ok := secretNames["spokeKubeconfig"]; !ok {
+		return nil, nil, fmt.Errorf("seed generation snapshot is missing the spoke admin kubeconfig")
+	}
 	document.CredentialSecretNames = secretNames
 	if document.ImageDigestSources == nil {
 		document.ImageDigestSources = []seedGenerationImageDigestSource{}
@@ -432,6 +442,9 @@ func (t *provisioningRequestReconcilerTask) loadSeedGenerationInputSnapshot(
 		return nil, fmt.Errorf("failed to list seed generation input Secrets: %w", err)
 	}
 	if len(configMaps.Items) == 0 && len(secrets.Items) == 0 {
+		if seedGenerationSnapshotFrozen(pr) {
+			return nil, errSeedGenerationSnapshotUnavailable
+		}
 		return nil, errSeedGenerationSnapshotNotFound
 	}
 	if err := validateSeedGenerationSnapshotObjectsNotDeleting(configMaps.Items, secrets.Items); err != nil {
@@ -492,6 +505,9 @@ func (t *provisioningRequestReconcilerTask) resolveSeedGenerationSnapshotCredent
 	if _, ok := document.CredentialSecretNames["seedAuth"]; !ok {
 		return nil, t.removeIncompleteSeedGenerationSnapshot(ctx, []corev1.ConfigMap{*configMap}, secretItems)
 	}
+	if _, ok := document.CredentialSecretNames["spokeKubeconfig"]; !ok {
+		return nil, t.removeIncompleteSeedGenerationSnapshot(ctx, []corev1.ConfigMap{*configMap}, secretItems)
+	}
 	secretByName := make(map[string]*corev1.Secret, len(secretItems))
 	for i := range secretItems {
 		secretByName[secretItems[i].Name] = secretItems[i].DeepCopy()
@@ -519,12 +535,25 @@ func (t *provisioningRequestReconcilerTask) resolveSeedGenerationSnapshotCredent
 	return resolvedSecrets, nil
 }
 
+func seedGenerationSnapshotFrozen(pr *provisioningv1alpha1.ProvisioningRequest) bool {
+	details := pr.Status.Extensions.ClusterDetails
+	return len(seedGenerationSnapshotStatusUIDs(pr)) > 0 ||
+		(details != nil && details.SeedGenerationStatus != nil && details.SeedGenerationStatus.DetachmentStarted)
+}
+
 func (t *provisioningRequestReconcilerTask) removeIncompleteSeedGenerationSnapshot(
 	ctx context.Context,
 	configMaps []corev1.ConfigMap,
 	secrets []corev1.Secret,
 ) error {
 	pr := t.object
+	// A cached list can be temporarily incomplete. Once pinned, never delete
+	// the remaining credentials: they may be our only access to the spoke.
+	// Retry within the persisted run deadline instead of inferring data loss
+	// from a single cached read.
+	if seedGenerationSnapshotFrozen(pr) {
+		return errSeedGenerationSnapshotUnavailable
+	}
 	for i := range configMaps {
 		resource := &configMaps[i]
 		if err := validateSeedGenerationSnapshotOwner(resource, pr, seedGenerationSnapshotConfigKind,
@@ -593,15 +622,9 @@ func (t *provisioningRequestReconcilerTask) createSeedGenerationInputSnapshot(
 		}
 		created = append(created, secret)
 	}
-	snapshot, err := t.loadSeedGenerationInputSnapshot(ctx)
-	if err != nil && !errors.Is(err, errSeedGenerationSnapshotNotFound) {
-		return nil, t.rollbackSeedGenerationSnapshot(ctx, created, err)
-	}
-	if snapshot == nil || err != nil {
-		return nil, t.rollbackSeedGenerationSnapshot(ctx, created,
-			fmt.Errorf("seed generation input snapshot was not visible after creation"))
-	}
-	return snapshot, nil
+	// Create responses already contain server-assigned UIDs. A cached read
+	// immediately after writing may see only part of the snapshot.
+	return &seedGenerationInputSnapshot{Document: document, ConfigMap: configMap, Secrets: secrets}, nil
 }
 
 func (t *provisioningRequestReconcilerTask) rollbackSeedGenerationSnapshot(
@@ -668,31 +691,15 @@ func (t *provisioningRequestReconcilerTask) resolveSeedGenerationInputSnapshot(
 	document := seedGenerationSnapshotInputDocument(clusterTemplate, seedGeneration)
 	credentials := make(map[string]map[string][]byte)
 
-	seedImage, err := seedGenerationString(seedGeneration, "seedImage")
+	adminKubeconfig, err := t.getSeedGenerationAdminKubeconfig(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	seedRegistry, err := registryHostFromImage(seedImage)
-	if err != nil {
-		return nil, nil, fmt.Errorf("invalid seedImage registry: %w", err)
-	}
-	seedAuthRef, err := seedGenerationSecretReference(seedGeneration, "seedAuthSecretRef")
+	credentials["spokeKubeconfig"] = map[string][]byte{"kubeconfig": adminKubeconfig}
+
+	seedAuth, err := t.resolveSeedGenerationRegistryCredentials(ctx, clusterTemplate, seedGeneration)
 	if err != nil {
 		return nil, nil, err
-	}
-	seedAuthSource, err := t.getTemplateSecret(ctx, clusterTemplate, seedAuthRef, "seedAuthSecretRef")
-	if err != nil {
-		return nil, nil, err
-	}
-	seedAuth := seedAuthSource.Data[seedGenerationAuthSecretKey]
-	if len(seedAuth) == 0 {
-		return nil, nil, fmt.Errorf("secret %s/%s is missing non-empty %q data", clusterTemplate.Namespace, seedAuthRef, seedGenerationAuthSecretKey)
-	}
-	if err := validateDockerAuthForRegistry(seedAuth, seedRegistry); err != nil {
-		return nil, nil, fmt.Errorf("invalid seed registry credentials for %s: %w", seedRegistry, err)
-	}
-	if err := validateRegistryPushAccess(ctx, seedImage, seedAuth); err != nil {
-		return nil, nil, fmt.Errorf("seed image registry push preflight failed: %w", err)
 	}
 	credentials["seedAuth"] = map[string][]byte{seedGenerationAuthSecretKey: append([]byte(nil), seedAuth...)}
 
@@ -708,6 +715,160 @@ func (t *provisioningRequestReconcilerTask) resolveSeedGenerationInputSnapshot(
 		return nil, nil, err
 	}
 	return document, credentials, nil
+}
+
+func (t *provisioningRequestReconcilerTask) resolveSeedGenerationRegistryCredentials(
+	ctx context.Context,
+	clusterTemplate *provisioningv1alpha1.ClusterTemplate,
+	seedGeneration map[string]any,
+) ([]byte, error) {
+	seedImage, err := seedGenerationString(seedGeneration, "seedImage")
+	if err != nil {
+		return nil, err
+	}
+	registry, repository, err := imageRepositoryFromPullSpec(seedImage)
+	if err != nil {
+		return nil, fmt.Errorf("invalid seedImage: %w", err)
+	}
+	seedAuthRef, err := seedGenerationSecretReference(seedGeneration, "seedAuthSecretRef")
+	if err != nil {
+		return nil, err
+	}
+	seedAuthSource, err := t.getTemplateSecret(ctx, clusterTemplate, seedAuthRef, "seedAuthSecretRef")
+	if err != nil {
+		return nil, err
+	}
+	seedAuth := seedAuthSource.Data[seedGenerationAuthSecretKey]
+	if len(seedAuth) == 0 {
+		return nil, fmt.Errorf("secret %s/%s is missing non-empty %q data",
+			clusterTemplate.Namespace, seedAuthRef, seedGenerationAuthSecretKey)
+	}
+	if err := validateDockerAuthForImage(seedAuth, seedImage); err != nil {
+		return nil, fmt.Errorf("invalid seed registry credentials for image repository %s/%s: %w",
+			registry, repository, err)
+	}
+	pushAccess := t.seedGenerationRegistryPushAccess
+	if pushAccess == nil {
+		trustedCAs, err := t.seedGenerationRegistryTrust(ctx, clusterTemplate, nil)
+		if err != nil {
+			return nil, err
+		}
+		pushAccess = func(ctx context.Context, image string, auth []byte) error {
+			return validateRegistryPushAccessWithCA(ctx, image, auth, []byte(trustedCAs[registry]))
+		}
+	}
+	if err := pushAccess(ctx, seedImage, seedAuth); err != nil {
+		return nil, fmt.Errorf("seed image registry push preflight failed: %w", err)
+	}
+	return append([]byte(nil), seedAuth...), nil
+}
+
+func (t *provisioningRequestReconcilerTask) validateSeedGenerationRegistryPreflight(
+	ctx context.Context,
+	clusterTemplate *provisioningv1alpha1.ClusterTemplate,
+	seedGeneration map[string]any,
+) error {
+	condition := meta.FindStatusCondition(t.object.Status.Conditions,
+		string(provisioningv1alpha1.PRconditionTypes.SeedGenerationRegistryValidated))
+	if condition != nil && condition.Status == metav1.ConditionTrue &&
+		condition.ObservedGeneration == t.object.Generation {
+		return nil
+	}
+
+	_, err := t.resolveSeedGenerationRegistryCredentials(ctx, clusterTemplate, seedGeneration)
+	if err != nil {
+		status := metav1.ConditionFalse
+		reason := provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed
+		if isSeedGenerationTransientError(err) {
+			status = metav1.ConditionUnknown
+			reason = provisioningv1alpha1.CRconditionReasons.InProgress
+		}
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
+			provisioningv1alpha1.PRconditionTypes.SeedGenerationRegistryValidated,
+			reason, status, err.Error())
+		condition = meta.FindStatusCondition(t.object.Status.Conditions,
+			string(provisioningv1alpha1.PRconditionTypes.SeedGenerationRegistryValidated))
+		condition.ObservedGeneration = t.object.Generation
+		if isSeedGenerationTransientError(err) {
+			return markSeedGenerationTransient(fmt.Errorf("seed generation registry preflight could not complete: %w", err))
+		}
+		return typederrors.NewInputError("seed generation registry preflight failed: %w", err)
+	}
+
+	ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
+		provisioningv1alpha1.PRconditionTypes.SeedGenerationRegistryValidated,
+		provisioningv1alpha1.CRconditionReasons.Completed,
+		metav1.ConditionTrue,
+		"Seed image registry push access was validated")
+	condition = meta.FindStatusCondition(t.object.Status.Conditions,
+		string(provisioningv1alpha1.PRconditionTypes.SeedGenerationRegistryValidated))
+	condition.ObservedGeneration = t.object.Generation
+	return nil
+}
+
+// getSeedGenerationAdminKubeconfig follows the exact ClusterDeployment
+// reference. The generic kubeconfig-secret label can match a non-admin
+// credential and is not suitable after ACM teardown.
+func (t *provisioningRequestReconcilerTask) getSeedGenerationAdminKubeconfig(ctx context.Context) ([]byte, error) {
+	clusterDeployment, err := t.getSeedGenerationClusterDeployment(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if clusterDeployment.Spec.ClusterMetadata == nil ||
+		clusterDeployment.Spec.ClusterMetadata.AdminKubeconfigSecretRef.Name == "" {
+		return nil, fmt.Errorf("spoke ClusterDeployment %s/%s does not reference an admin kubeconfig Secret",
+			clusterDeployment.Namespace, clusterDeployment.Name)
+	}
+	secretKey := client.ObjectKey{
+		Name:      clusterDeployment.Spec.ClusterMetadata.AdminKubeconfigSecretRef.Name,
+		Namespace: clusterDeployment.Namespace,
+	}
+	kubeconfigSecret := &corev1.Secret{}
+	if err := t.client.Get(ctx, secretKey, kubeconfigSecret); err != nil {
+		return nil, fmt.Errorf("failed to get spoke admin kubeconfig Secret %s/%s: %w", secretKey.Namespace, secretKey.Name, err)
+	}
+	if kubeconfigSecret.DeletionTimestamp != nil {
+		return nil, fmt.Errorf("spoke admin kubeconfig Secret %s/%s is being deleted", secretKey.Namespace, secretKey.Name)
+	}
+	kubeconfig := kubeconfigSecret.Data["kubeconfig"]
+	if len(kubeconfig) == 0 {
+		return nil, fmt.Errorf("spoke admin kubeconfig Secret %s/%s is missing non-empty kubeconfig data",
+			secretKey.Namespace, secretKey.Name)
+	}
+	restConfig, err := clientcmd.RESTConfigFromKubeConfig(kubeconfig)
+	if err != nil {
+		return nil, fmt.Errorf("spoke admin kubeconfig Secret %s/%s is malformed: %w", secretKey.Namespace, secretKey.Name, err)
+	}
+	if restConfig.BearerToken != "" || len(restConfig.CertData) == 0 || len(restConfig.KeyData) == 0 {
+		return nil, fmt.Errorf("spoke admin kubeconfig Secret %s/%s must use a client certificate", secretKey.Namespace, secretKey.Name)
+	}
+	certificate, err := tls.X509KeyPair(restConfig.CertData, restConfig.KeyData)
+	if err != nil || len(certificate.Certificate) == 0 {
+		return nil, fmt.Errorf("spoke admin kubeconfig Secret %s/%s has an invalid client certificate and key", secretKey.Namespace, secretKey.Name)
+	}
+	leaf, err := x509.ParseCertificate(certificate.Certificate[0])
+	if err != nil || leaf.Subject.CommonName != "system:admin" {
+		return nil, fmt.Errorf("spoke admin kubeconfig Secret %s/%s must authenticate as system:admin", secretKey.Namespace, secretKey.Name)
+	}
+	return append([]byte(nil), kubeconfig...), nil
+}
+
+func (t *provisioningRequestReconcilerTask) getSeedGenerationClusterDeployment(
+	ctx context.Context,
+) (*hivev1.ClusterDeployment, error) {
+	details := t.object.Status.Extensions.ClusterDetails
+	if details == nil || details.Name == "" {
+		return nil, fmt.Errorf("provisioning request has no spoke cluster name")
+	}
+	clusterDeployment := &hivev1.ClusterDeployment{}
+	clusterKey := client.ObjectKey{Name: details.Name, Namespace: details.Name}
+	if err := t.client.Get(ctx, clusterKey, clusterDeployment); err != nil {
+		return nil, fmt.Errorf("failed to get spoke ClusterDeployment %s/%s: %w", clusterKey.Namespace, clusterKey.Name, err)
+	}
+	if clusterDeployment.DeletionTimestamp != nil {
+		return nil, fmt.Errorf("spoke ClusterDeployment %s/%s is being deleted", clusterDeployment.Namespace, clusterDeployment.Name)
+	}
+	return clusterDeployment, nil
 }
 
 func seedGenerationString(config map[string]any, key string) (string, error) {
@@ -743,66 +904,12 @@ func (t *provisioningRequestReconcilerTask) getTemplateSecret(
 	return secret, nil
 }
 
-func registryHostFromImage(image string) (string, error) {
-	image = strings.TrimSpace(image)
-	if strings.Contains(image, "://") {
-		parsed, err := url.Parse(image)
-		if err != nil || parsed.Host == "" || (parsed.Scheme != "docker" && parsed.Scheme != "oci") {
-			return "", fmt.Errorf("unsupported image reference %q", image)
-		}
-		image = strings.TrimPrefix(image, parsed.Scheme+"://")
-	}
-	if image == "" || strings.ContainsAny(image, " \t\r\n") {
-		return "", fmt.Errorf("invalid image reference")
-	}
-	first, _, hasPath := strings.Cut(image, "/")
-	if !hasPath {
-		return dockerHubRegistry, nil
-	}
-	if first == "localhost" || strings.ContainsAny(first, ".:") {
-		return normalizeRegistryHost(first), nil
-	}
-	return "docker.io", nil
-}
-
 func imageRepositoryFromPullSpec(image string) (string, string, error) {
-	image = strings.TrimSpace(image)
-	if image == "" || strings.ContainsAny(image, " \t\r\n?#") {
-		return "", "", fmt.Errorf("image reference is empty or contains invalid characters")
+	parsed, err := reference.ParseNormalizedNamed(image)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid image reference: %w", err)
 	}
-	if strings.Contains(image, "://") {
-		parsed, err := url.Parse(image)
-		if err != nil || parsed.Host == "" || (parsed.Scheme != "docker" && parsed.Scheme != "oci") {
-			return "", "", fmt.Errorf("unsupported image reference %q", image)
-		}
-		image = strings.TrimPrefix(image, parsed.Scheme+"://")
-	}
-	first, remainder, hasPath := strings.Cut(image, "/")
-	if !hasPath {
-		return dockerHubRegistry, "library/" + stripImageTag(first), nil
-	}
-	if first == "localhost" || strings.ContainsAny(first, ".:") {
-		registry := normalizeRegistryHost(first)
-		repository := stripImageTag(remainder)
-		if registry == "" || repository == "" {
-			return "", "", fmt.Errorf("image reference has an empty registry or repository")
-		}
-		return registry, repository, nil
-	}
-	return dockerHubRegistry, stripImageTag(image), nil
-}
-
-func stripImageTag(image string) string {
-	lastSlash := strings.LastIndexByte(image, '/')
-	lastColon := strings.LastIndexByte(image, ':')
-	lastDigest := strings.LastIndexByte(image, '@')
-	if lastDigest > lastSlash {
-		return image[:lastDigest]
-	}
-	if lastColon > lastSlash {
-		return image[:lastColon]
-	}
-	return image
+	return normalizeRegistryHost(reference.Domain(parsed)), reference.Path(parsed), nil
 }
 
 func normalizeRegistryHost(registry string) string {
@@ -825,62 +932,124 @@ type dockerAuthFile struct {
 	Auths map[string]json.RawMessage `json:"auths"`
 }
 
-func validateDockerAuthForRegistry(data []byte, registry string) error {
-	_, err := credentialsForRegistry(data, registry)
+func validateDockerAuthForImage(data []byte, image string) error {
+	registry, repository, err := imageRepositoryFromPullSpec(image)
+	if err != nil {
+		return err
+	}
+	_, err = credentialsForRepository(data, registry, repository)
 	return err
 }
 
 type registryCredentials struct {
-	username string
-	password string
-	token    string
+	username      string
+	password      string
+	token         string
+	identityToken string
 }
 
-func credentialsForRegistry(data []byte, registry string) (registryCredentials, error) {
+type registryAuthScope struct {
+	host string
+	path string
+}
+
+func normalizeRegistryAuthScope(key string) (registryAuthScope, error) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return registryAuthScope{}, fmt.Errorf("registry auth entry has an empty key")
+	}
+	var host, path string
+	if strings.Contains(key, "://") {
+		parsed, err := url.Parse(key)
+		if err != nil || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return registryAuthScope{}, fmt.Errorf("registry auth entry has an invalid key")
+		}
+		host = parsed.Host
+		path = parsed.EscapedPath()
+	} else {
+		host, path, _ = strings.Cut(key, "/")
+	}
+	path = strings.Trim(path, "/")
+	if path == "v1" {
+		path = ""
+	}
+	return registryAuthScope{host: normalizeRegistryHost(host), path: path}, nil
+}
+
+func registryAuthScopeMatches(scope registryAuthScope, registry, repository string) bool {
+	if scope.host != normalizeRegistryHost(registry) {
+		return false
+	}
+	if scope.path == "" {
+		return true
+	}
+	return repository == scope.path || strings.HasPrefix(repository, scope.path+"/")
+}
+
+func credentialsForRepository(data []byte, registry, repository string) (registryCredentials, error) {
 	var config dockerAuthFile
 	if err := json.Unmarshal(data, &config); err != nil {
 		return registryCredentials{}, fmt.Errorf("credential data is not valid Docker auth JSON")
 	}
-	for key, raw := range config.Auths {
-		if normalizeRegistryHost(key) != normalizeRegistryHost(registry) {
+	keys := make([]string, 0, len(config.Auths))
+	for key := range config.Auths {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	var matchingKeys []string
+	var matchingScopes []registryAuthScope
+	for _, key := range keys {
+		scope, err := normalizeRegistryAuthScope(key)
+		if err != nil || !registryAuthScopeMatches(scope, registry, repository) {
 			continue
 		}
-		var auth struct {
-			Auth          string `json:"auth"`
-			Username      string `json:"username"`
-			Password      string `json:"password"`
-			IdentityToken string `json:"identitytoken"`
-			RegistryToken string `json:"registrytoken"`
-		}
-		if err := json.Unmarshal(raw, &auth); err != nil {
-			return registryCredentials{}, fmt.Errorf("registry auth entry is invalid")
-		}
-		if auth.Auth != "" && (auth.Username == "" || auth.Password == "") {
-			decoded, err := base64.StdEncoding.DecodeString(auth.Auth)
-			if err != nil {
-				decoded, err = base64.RawStdEncoding.DecodeString(auth.Auth)
-			}
-			if err != nil {
-				return registryCredentials{}, fmt.Errorf("registry auth entry has invalid encoded credentials")
-			}
-			username, password, ok := strings.Cut(string(decoded), ":")
-			if !ok || username == "" || password == "" {
-				return registryCredentials{}, fmt.Errorf("registry auth entry has invalid encoded credentials")
-			}
-			auth.Username, auth.Password = username, password
-		}
-		if auth.RegistryToken != "" {
-			return registryCredentials{token: auth.RegistryToken}, nil
-		}
-		if auth.IdentityToken != "" {
-			return registryCredentials{token: auth.IdentityToken}, nil
-		}
-		if auth.Username != "" && auth.Password != "" {
-			return registryCredentials{username: auth.Username, password: auth.Password}, nil
-		}
-		return registryCredentials{}, fmt.Errorf("registry auth entry contains no usable credentials")
+		matchingKeys = append(matchingKeys, key)
+		matchingScopes = append(matchingScopes, scope)
 	}
-	return registryCredentials{}, fmt.Errorf("credential data has no auth entry for registry %s", registry)
+	if len(matchingKeys) == 0 {
+		return registryCredentials{}, fmt.Errorf("credential data has no auth entry for image repository %s/%s", registry, repository)
+	}
+	selected := 0
+	for i := 1; i < len(matchingKeys); i++ {
+		if len(matchingScopes[i].path) > len(matchingScopes[selected].path) {
+			selected = i
+		}
+	}
+	raw := config.Auths[matchingKeys[selected]]
+	var auth struct {
+		Auth          string `json:"auth"`
+		Username      string `json:"username"`
+		Password      string `json:"password"`
+		IdentityToken string `json:"identitytoken"`
+		RegistryToken string `json:"registrytoken"`
+	}
+	if err := json.Unmarshal(raw, &auth); err != nil {
+		return registryCredentials{}, fmt.Errorf("registry auth entry is invalid")
+	}
+	if auth.RegistryToken != "" {
+		return registryCredentials{token: auth.RegistryToken}, nil
+	}
+	if auth.IdentityToken != "" {
+		return registryCredentials{identityToken: auth.IdentityToken}, nil
+	}
+	if auth.Auth != "" && (auth.Username == "" || auth.Password == "") {
+		decoded, err := base64.StdEncoding.DecodeString(auth.Auth)
+		if err != nil {
+			decoded, err = base64.RawStdEncoding.DecodeString(auth.Auth)
+		}
+		if err != nil {
+			return registryCredentials{}, fmt.Errorf("registry auth entry has invalid encoded credentials")
+		}
+		username, password, ok := strings.Cut(string(decoded), ":")
+		if !ok || username == "" || password == "" {
+			return registryCredentials{}, fmt.Errorf("registry auth entry has invalid encoded credentials")
+		}
+		auth.Username, auth.Password = username, password
+	}
+	if auth.Username != "" && auth.Password != "" {
+		return registryCredentials{username: auth.Username, password: auth.Password}, nil
+	}
+	return registryCredentials{}, fmt.Errorf("registry auth entry contains no usable credentials")
 }
 
 var registryChallengeParam = regexp.MustCompile(`([A-Za-z][A-Za-z0-9_-]*)="([^"]*)"`)
@@ -908,15 +1077,28 @@ func registryToken(ctx context.Context, httpClient *http.Client, challenge map[s
 		query.Set("service", service)
 	}
 	query.Set("scope", scope)
-	parsed.RawQuery = query.Encode()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
+	method := http.MethodGet
+	var body io.Reader
+	if creds.identityToken != "" {
+		// Docker identity tokens are refresh tokens. They belong in the
+		// authorization server's OAuth exchange, never in a registry header.
+		method = http.MethodPost
+		form := url.Values{
+			"grant_type": {"refresh_token"}, "refresh_token": {creds.identityToken},
+			"client_id": {"oran-o2ims"}, "service": {challenge["service"]}, "scope": {scope},
+		}
+		body = strings.NewReader(form.Encode())
+	} else {
+		parsed.RawQuery = query.Encode()
+	}
+	req, err := http.NewRequestWithContext(ctx, method, parsed.String(), body)
 	if err != nil {
 		return "", fmt.Errorf("failed to create registry token request")
 	}
-	if creds.username != "" {
+	if creds.identityToken != "" {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	} else if creds.username != "" {
 		req.SetBasicAuth(creds.username, creds.password)
-	} else if creds.token != "" {
-		req.Header.Set("Authorization", "Bearer "+creds.token)
 	}
 	response, err := httpClient.Do(req)
 	if err != nil {
@@ -948,8 +1130,20 @@ func registryToken(ctx context.Context, httpClient *http.Client, challenge map[s
 // uploading a blob. It creates and then cancels an empty upload session so
 // credentials are proven to have repository push permission.
 func validateRegistryPushAccess(ctx context.Context, image string, authJSON []byte) error {
+	return validateRegistryPushAccessWithCA(ctx, image, authJSON, nil)
+}
+
+func validateRegistryPushAccessWithCA(ctx context.Context, image string, authJSON, ca []byte) error {
+	roots, err := seedGenerationRootCAs(ca)
+	if err != nil {
+		return err
+	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}
+	defer transport.CloseIdleConnections()
 	client := &http.Client{
-		Timeout: 20 * time.Second,
+		Transport: transport,
+		Timeout:   20 * time.Second,
 		CheckRedirect: func(_ *http.Request, via []*http.Request) error {
 			if len(via) == 0 || len(via) > 5 {
 				return http.ErrUseLastResponse
@@ -965,7 +1159,7 @@ func validateRegistryPushAccessWithClient(ctx context.Context, image string, aut
 	if err != nil {
 		return err
 	}
-	creds, err := credentialsForRegistry(authJSON, registry)
+	creds, err := credentialsForRepository(authJSON, registry, repository)
 	if err != nil {
 		return err
 	}
@@ -981,6 +1175,9 @@ func validateRegistryPushAccessWithClient(ctx context.Context, image string, aut
 	if err != nil {
 		return fmt.Errorf("failed to create registry access request")
 	}
+	if creds.token != "" {
+		upload.Header.Set("Authorization", "Bearer "+creds.token)
+	}
 	response, err := client.Do(upload)
 	if err != nil {
 		return fmt.Errorf("registry %s is not reachable: %w", registry, err)
@@ -988,6 +1185,9 @@ func validateRegistryPushAccessWithClient(ctx context.Context, image string, aut
 	if response.StatusCode == http.StatusUnauthorized {
 		challengeHeader := response.Header.Get("WWW-Authenticate")
 		response.Body.Close()
+		if creds.token != "" {
+			return fmt.Errorf("registry %s rejected the configured registry token", registry)
+		}
 		scheme, challenge, err := parseRegistryChallenge(challengeHeader)
 		if err != nil {
 			return fmt.Errorf("registry %s rejected authentication: %w", registry, err)
