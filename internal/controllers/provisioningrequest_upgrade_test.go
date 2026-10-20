@@ -16,8 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openshift-kni/oran-o2ims/internal/validation"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
@@ -164,6 +162,18 @@ var _ = Describe("mergeAndValidateUpgradeData", func() {
 		Expect(seed["seedImage"]).To(Equal("quay.io/example/override:4.22"))
 		Expect(seed["seedAuthSecretRef"]).To(Equal(map[string]any{"name": "push-auth"}))
 		Expect(seed["liveISO"]).To(HaveKey("releaseImage"))
+	})
+
+	It("merges PR seed image and Secret reference with template timeout defaults", func() {
+		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"seedGenerationTimeout":"3h"}}`)
+		clusterTemplate.Spec.TemplateParameterSchema.Raw = []byte(`{"type":"object","required":["upgradeParameters"],"properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"required":["seedGeneration"],"properties":{"seedGeneration":{"type":"object","additionalProperties":false,"required":["seedImage","seedAuthSecretRef"],"properties":{"seedImage":{"type":"string","minLength":1},"seedAuthSecretRef":{"type":"object","additionalProperties":false,"required":["name"],"properties":{"name":{"type":"string","minLength":1}}}}}}}}}`)
+		task.object.Spec.TemplateParameters.Raw = []byte(`{"upgradeParameters":{"seedGeneration":{"seedImage":"quay.io/example/override:4.22","seedAuthSecretRef":{"name":"pr-push-auth"}}}}`)
+		merged, err := task.mergeAndValidateUpgradeData(clusterTemplate)
+		Expect(err).ToNot(HaveOccurred())
+		seed := merged[utils.UpgradeDefaultsSeedGenerationKey].(map[string]any)
+		Expect(seed["seedImage"]).To(Equal("quay.io/example/override:4.22"))
+		Expect(seed["seedAuthSecretRef"]).To(Equal(map[string]any{"name": "pr-push-auth"}))
+		Expect(seed[utils.SeedGenerationTimeoutConfigKey]).To(Equal("3h"))
 	})
 
 	It("merges a PR seed generation timeout over the template default", func() {
@@ -1283,30 +1293,28 @@ var _ = Describe("handleUpgrade", func() {
 			Equal(provisioningv1alpha1.StateFailed))
 	})
 
-	It("should fail seed generation if it reaches upgrade handling while unsupported", func() {
+	It("should start seed generation when its config reaches upgrade handling", func() {
 		ct.Spec.TemplateDefaults.UpgradeDefaults = runtime.RawExtension{
-			Raw: []byte(`{"seedGeneration":{}}`),
+			Raw: []byte(`{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"}}}`),
 		}
+		pr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{}
 		setupClient(ct, pr)
 
 		result, proceed, err := task.handleUpgrade(ctx, clusterName, ct)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(proceed).To(BeFalse())
-		Expect(result.RequeueAfter).To(BeZero())
+		Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
-		upgradeCond := meta.FindStatusCondition(task.object.Status.Conditions,
-			string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
-		Expect(upgradeCond).ToNot(BeNil())
-		Expect(upgradeCond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(upgradeCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed)))
-		Expect(upgradeCond.Message).To(Equal(validation.SeedGenerationUnsupportedMessage))
-		Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
-			Equal(provisioningv1alpha1.StateFailed))
+		seedCondition := meta.FindStatusCondition(task.object.Status.Conditions,
+			string(provisioningv1alpha1.PRconditionTypes.SeedGenerationCompleted))
+		Expect(seedCondition).ToNot(BeNil())
+		Expect(seedCondition.Status).To(Equal(metav1.ConditionFalse))
+		Expect(seedCondition.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.Validating)))
+		Expect(task.object.Status.Extensions.ClusterDetails.SeedGenerationStatus.StartedAt).ToNot(BeNil())
 
 		persisted := &provisioningv1alpha1.ProvisioningRequest{}
 		Expect(c.Get(ctx, client.ObjectKeyFromObject(pr), persisted)).To(Succeed())
-		Expect(persisted.Status.ProvisioningStatus.ProvisioningPhase).To(
-			Equal(provisioningv1alpha1.StateFailed))
+		Expect(persisted.Status.Extensions.ClusterDetails.SeedGenerationStatus.StartedAt).ToNot(BeNil())
 	})
 
 	It("should dispatch to handleClusterVersionUpgrade for clusterVersion type", func() {

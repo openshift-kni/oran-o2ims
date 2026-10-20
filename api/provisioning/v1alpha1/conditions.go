@@ -24,31 +24,33 @@ var CTconditionTypes = struct {
 
 // The following constants define the different types of conditions that will be set for ProvisioningRequest
 var PRconditionTypes = struct {
-	Validated                     ConditionType
-	NodeAllocationRequestRendered ConditionType
-	HardwareProvisioned           ConditionType
-	HardwareNodeConfigApplied     ConditionType
-	HardwareConfigured            ConditionType
-	ClusterInstanceRendered       ConditionType
-	ClusterResourcesCreated       ConditionType
-	ClusterInstanceProcessed      ConditionType
-	ClusterProvisioned            ConditionType
-	ConfigurationApplied          ConditionType
-	UpgradeCompleted              ConditionType
-	SeedGenerationCompleted       ConditionType
+	Validated                       ConditionType
+	NodeAllocationRequestRendered   ConditionType
+	HardwareProvisioned             ConditionType
+	HardwareNodeConfigApplied       ConditionType
+	HardwareConfigured              ConditionType
+	ClusterInstanceRendered         ConditionType
+	ClusterResourcesCreated         ConditionType
+	ClusterInstanceProcessed        ConditionType
+	ClusterProvisioned              ConditionType
+	ConfigurationApplied            ConditionType
+	UpgradeCompleted                ConditionType
+	SeedGenerationRegistryValidated ConditionType
+	SeedGenerationCompleted         ConditionType
 }{
-	Validated:                     "ProvisioningRequestValidated",
-	NodeAllocationRequestRendered: "NodeAllocationRequestRendered",
-	HardwareProvisioned:           "HardwareProvisioned",
-	HardwareNodeConfigApplied:     "HardwareNodeConfigApplied",
-	HardwareConfigured:            "HardwareConfigured",
-	ClusterInstanceRendered:       "ClusterInstanceRendered",
-	ClusterResourcesCreated:       "ClusterResourcesCreated",
-	ClusterInstanceProcessed:      "ClusterInstanceProcessed",
-	ClusterProvisioned:            "ClusterProvisioned",
-	ConfigurationApplied:          "ConfigurationApplied",
-	UpgradeCompleted:              "UpgradeCompleted",
-	SeedGenerationCompleted:       "SeedGenerationCompleted",
+	Validated:                       "ProvisioningRequestValidated",
+	NodeAllocationRequestRendered:   "NodeAllocationRequestRendered",
+	HardwareProvisioned:             "HardwareProvisioned",
+	HardwareNodeConfigApplied:       "HardwareNodeConfigApplied",
+	HardwareConfigured:              "HardwareConfigured",
+	ClusterInstanceRendered:         "ClusterInstanceRendered",
+	ClusterResourcesCreated:         "ClusterResourcesCreated",
+	ClusterInstanceProcessed:        "ClusterInstanceProcessed",
+	ClusterProvisioned:              "ClusterProvisioned",
+	ConfigurationApplied:            "ConfigurationApplied",
+	UpgradeCompleted:                "UpgradeCompleted",
+	SeedGenerationRegistryValidated: "SeedGenerationRegistryValidated",
+	SeedGenerationCompleted:         "SeedGenerationCompleted",
 }
 
 // ConditionReason is a string representing the condition's reason

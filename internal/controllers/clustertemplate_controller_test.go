@@ -2139,11 +2139,9 @@ var _ = Describe("validateUpgradeParametersSchema", func() {
 		Expect(validateUpgradeParametersSchema(schema, true)).To(MatchError(ContainSubstring("$ref")))
 	})
 
-	It("should reject a seedGeneration schema that exposes credential references", func() {
-		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{"seedGeneration":{"type":"object","additionalProperties":false,"properties":{"seedAuthSecretRef":{"type":"object"}}}}}}}`)
-		err := validateUpgradeParametersSchema(schema, true)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("template-owned field"))
+	It("should allow a seedGeneration schema that exposes a Secret name reference", func() {
+		schema := []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{"seedGeneration":{"type":"object","additionalProperties":false,"properties":{"seedAuthSecretRef":{"type":"object","additionalProperties":false,"required":["name"],"properties":{"name":{"type":"string","minLength":1}}}}}}}}}`)
+		Expect(validateUpgradeParametersSchema(schema, true)).To(Succeed())
 	})
 
 	It("should reject a seedGeneration schema combined with an upgrade schema", func() {
@@ -2213,6 +2211,20 @@ var _ = Describe("seed generation ClusterTemplate defaults", func() {
 
 	It("validates template-owned fields against the effective schema", func() {
 		Expect(task.validateUpgradeDefaults()).To(Succeed())
+	})
+
+	It("accepts seed image and Secret reference supplied by the ProvisioningRequest", func() {
+		task.object.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"seedGenerationTimeout":"3h"}}`)
+		task.object.Spec.TemplateParameterSchema.Raw = []byte(`{"type":"object","required":["upgradeParameters"],"properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"required":["seedGeneration"],"properties":{"seedGeneration":{"type":"object","additionalProperties":false,"required":["seedImage","seedAuthSecretRef"],"properties":{"seedImage":{"type":"string","minLength":1},"seedAuthSecretRef":{"type":"object","additionalProperties":false,"required":["name"],"properties":{"name":{"type":"string","minLength":1}}}}}}}}}`)
+		Expect(task.validateUpgradeDefaults()).To(Succeed())
+	})
+
+	It("rejects omitted seed image when the PR schema does not expose it", func() {
+		task.object.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"seedAuthSecretRef":{"name":"push-auth"}}}`)
+		task.object.Spec.TemplateParameterSchema.Raw = []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{"seedGeneration":{"type":"object","additionalProperties":false,"properties":{"seedGenerationTimeout":{"type":"string"}}}}}}}`)
+		err := task.validateUpgradeDefaults()
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("seedImage is missing from upgradeDefaults"))
 	})
 
 	It("accepts a seed generation timeout default", func() {

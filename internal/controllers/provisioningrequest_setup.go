@@ -47,23 +47,7 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 		For(
 			&provisioningv1alpha1.ProvisioningRequest{},
 			builder.WithPredicates(predicate.Funcs{
-				UpdateFunc: func(e event.UpdateEvent) bool {
-					// Trigger on generation changes (spec updates)
-					if e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration() {
-						return true
-					}
-
-					// Check skip-cleanup annotation by presence (value is always empty)
-					oldAnnotations := e.ObjectOld.GetAnnotations()
-					newAnnotations := e.ObjectNew.GetAnnotations()
-					_, oldHasSkipCleanup := oldAnnotations[ctlrutils.SkipCleanupAnnotation]
-					_, newHasSkipCleanup := newAnnotations[ctlrutils.SkipCleanupAnnotation]
-					if oldHasSkipCleanup != newHasSkipCleanup {
-						return true
-					}
-
-					return false
-				},
+				UpdateFunc:  provisioningRequestUpdatePredicate,
 				CreateFunc:  func(e event.CreateEvent) bool { return true },
 				GenericFunc: func(e event.GenericEvent) bool { return false },
 				DeleteFunc:  func(e event.DeleteEvent) bool { return true },
@@ -185,6 +169,27 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 				DeleteFunc:  func(de event.DeleteEvent) bool { return false },
 			})).
 		Complete(r)
+}
+
+func provisioningRequestUpdatePredicate(e event.UpdateEvent) bool {
+	if !e.ObjectOld.GetDeletionTimestamp().Equal(e.ObjectNew.GetDeletionTimestamp()) {
+		return true
+	}
+	// Trigger on generation changes (spec updates).
+	if e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration() {
+		return true
+	}
+
+	oldAnnotations := e.ObjectOld.GetAnnotations()
+	newAnnotations := e.ObjectNew.GetAnnotations()
+	// The skip-cleanup annotation is a presence flag with an empty value.
+	_, oldHasSkipCleanup := oldAnnotations[ctlrutils.SkipCleanupAnnotation]
+	_, newHasSkipCleanup := newAnnotations[ctlrutils.SkipCleanupAnnotation]
+	if oldHasSkipCleanup != newHasSkipCleanup {
+		return true
+	}
+
+	return false
 }
 
 // enqueueProvisioningRequestForNAR maps NodeAllocationRequest status changes to
