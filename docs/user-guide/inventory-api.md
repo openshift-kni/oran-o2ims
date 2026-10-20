@@ -135,11 +135,6 @@ Resource pools group related resources (servers) within an O-Cloud Site.
 They are defined via `ResourcePool` CRs (see
 [Server Onboarding](./server-onboarding.md#resourcepool-crs)).
 
-> **Specification deviation (I-2)**: The deprecated `ResourcePoolInfo` fields
-> `oCloudId` and `globalLocationId` are intentionally absent. The
-> implementation uses `oCloudSiteId` instead, which identifies the O-Cloud
-> Site a resource pool belongs to.
-
 ### List Resource Pools
 
 ```bash
