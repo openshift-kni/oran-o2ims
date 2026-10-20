@@ -18,6 +18,10 @@ see [API Overview](./api-overview.md).
 All inventory API endpoints use the base path
 `/O2ims_infrastructureInventory/v2`.
 
+> **Specification conformance**: The Inventory API conforms to the O-RAN O2
+> IMS Interface Specification v13
+> (`O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v13.00`, 2026-07-10).
+
 - [O-Cloud Information](#o-cloud-information)
 - [Locations](#locations)
 - [O-Cloud Sites](#o-cloud-sites)
