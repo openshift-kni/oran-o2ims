@@ -27,11 +27,8 @@ import (
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
-// Cached List calls start cluster-scoped informers even when a namespace is
-// specified, so these resources need cluster-scope list/watch permissions.
-// Keep the mutation and direct-read permissions scoped to the operator namespace.
-//+kubebuilder:rbac:groups=batch,resources=jobs,verbs=list;watch
-//+kubebuilder:rbac:groups="",resources=pods;persistentvolumeclaims,verbs=list;watch
+// The manager scopes Job, Pod, and PVC informers to the operator namespace,
+// so cached reads and cleanup use the namespaced permissions below.
 //+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;delete,namespace=system
 //+kubebuilder:rbac:groups="",resources=pods;persistentvolumeclaims;secrets;configmaps,verbs=get;list;watch;delete,namespace=system
 //+kubebuilder:rbac:groups="",resources=pods,verbs=create,namespace=system
