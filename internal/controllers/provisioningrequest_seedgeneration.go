@@ -289,13 +289,12 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGeneration(ctx context.
 	if status.DetachmentStarted {
 		return t.reconcileSeedGenerationSnapshot(ctx, status)
 	}
-	if !status.DetachmentStarted && condition != nil &&
+	if condition != nil &&
 		condition.Status == metav1.ConditionFalse &&
 		condition.Reason == string(provisioningv1alpha1.CRconditionReasons.Validating) {
 		return t.reconcileSeedGenerationPreflight(ctx)
 	}
-	condition = seedGenerationCondition(t.object)
-	if !status.DetachmentStarted && condition != nil && condition.Status == metav1.ConditionFalse &&
+	if condition != nil && condition.Status == metav1.ConditionFalse &&
 		condition.Reason == string(provisioningv1alpha1.CRconditionReasons.InProgress) {
 		return t.reconcileSeedGenerationSnapshot(ctx, status)
 	}
@@ -404,7 +403,7 @@ func (t *provisioningRequestReconcilerTask) cleanupSeedGenerationRunResources(ct
 	if err != nil {
 		return false, err
 	}
-	return detachedPending || snapshotPending, nil
+	return snapshotPending, nil
 }
 
 func (t *provisioningRequestReconcilerTask) cleanupSeedGenerationPreflightResources(ctx context.Context) (bool, error) {

@@ -174,6 +174,75 @@ func TestReconcileSeedGeneratorDoesNotRecreateMissingLCAObjects(t *testing.T) {
 	g.Expect(pr.ResourceVersion).To(gomega.Equal(version))
 }
 
+func TestReconcileSeedGenerationRejectsInvalidSnapshotSeedImage(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		seed map[string]any
+	}{
+		{"missing", map[string]any{}},
+		{"null", map[string]any{"seedImage": nil}},
+		{"number", map[string]any{"seedImage": 42}},
+		{"empty", map[string]any{"seedImage": ""}},
+		{"whitespace", map[string]any{"seedImage": " \t\n"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := gomega.NewWithT(t)
+			ctx := context.Background()
+			pr := seedDetachmentTestRequest()
+			status := pr.Status.Extensions.ClusterDetails.SeedGenerationStatus
+			startedAt := metav1.Now()
+			status.StartedAt, status.TimeoutSeconds, status.AgentDetachmentCompleted = &startedAt, 3600, true
+			setSeedGenerationProgress(pr, provisioningv1alpha1.CRconditionReasons.InProgress, "Preparing LCA seed generation")
+			// Emulate an immutable snapshot containing malformed input, rather
+			// than relying on validation when the snapshot was first created.
+			document := &seedGenerationInputDocument{
+				ClusterTemplateName: "seed-template", ClusterTemplateNamespace: "templates", SeedGeneration: tc.seed,
+			}
+			config, secrets, err := makeSeedGenerationSnapshotObjects(pr, document, map[string]map[string][]byte{
+				"seedAuth": {"seedAuth": []byte(`{"auths":{}}`)}, "spokeKubeconfig": {"kubeconfig": []byte("test")},
+			})
+			g.Expect(err).ToNot(gomega.HaveOccurred())
+			config.UID = "config-uid"
+			secrets["seedAuth"].UID, secrets["spokeKubeconfig"].UID = "auth-uid", "kubeconfig-uid"
+			status.InputSnapshotResourceUIDs = seedGenerationInputUIDs(&seedGenerationInputSnapshot{ConfigMap: config, Secrets: secrets})
+			hub := newSeedTestClient(t, pr, config, secrets["seedAuth"], secrets["spokeKubeconfig"])
+			spoke := interceptor.NewClient(newSeedLifecycleSpokeClient(t), interceptor.Funcs{
+				Create: func(context.Context, client.WithWatch, client.Object, ...client.CreateOption) error {
+					t.Fatal("malformed seed image input must not create spoke resources")
+					return nil
+				},
+			})
+			task := seedTestTask(pr, hub)
+			task.seedGenerationSpokeClientBuilder = func([]byte) (client.Client, error) { return spoke, nil }
+			_, err = task.reconcileSeedGeneration(ctx)
+			g.Expect(err).ToNot(gomega.HaveOccurred())
+			g.Expect(hub.Get(ctx, client.ObjectKeyFromObject(pr), pr)).ToNot(gomega.HaveOccurred())
+			g.Expect(pr.Status.ProvisioningStatus.ProvisioningPhase).To(gomega.Equal(provisioningv1alpha1.StateFailed))
+			g.Expect(seedGenerationCondition(pr).Reason).To(gomega.Equal(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed)))
+			g.Expect(seedGenerationCondition(pr).Message).To(gomega.ContainSubstring("seedImage must be a non-empty string"))
+			g.Expect(pr.Status.ProvisioningStatus.ProvisioningDetails).To(gomega.Equal(seedGenerationCondition(pr).Message))
+			g.Expect(pr.Status.Extensions.ClusterDetails.SeedGenerationStatus.SeedGeneratorSubmitted).To(gomega.BeFalse())
+		})
+	}
+}
+
+func TestDesiredSeedGeneratorRejectsMissingSnapshotDocument(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		snapshot *seedGenerationInputSnapshot
+	}{
+		{"missing snapshot", nil},
+		{"missing document", &seedGenerationInputSnapshot{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := gomega.NewWithT(t)
+			seed, err := desiredSeedGenerator(seedDetachmentTestRequest(), tc.snapshot)
+			g.Expect(err).To(gomega.MatchError("seed generation snapshot configuration document is missing"))
+			g.Expect(seed).To(gomega.BeNil())
+		})
+	}
+}
+
 func TestObserveSeedGeneratorUpdatesBothProgressMessages(t *testing.T) {
 	for _, tc := range []struct {
 		name             string
@@ -254,7 +323,8 @@ func TestReconcileSeedGeneratorReportsSpokeAPIOutageAndRecovery(t *testing.T) {
 				setSeedGenerationProgress(pr, provisioningv1alpha1.CRconditionReasons.InProgress, "Preparing LCA seed generation")
 				hub := newSeedTestClient(t, pr)
 				snapshot := seedGenerationLifecycleTestSnapshot()
-				seed := desiredSeedGenerator(pr, snapshot)
+				seed, err := desiredSeedGenerator(pr, snapshot)
+				g.Expect(err).ToNot(gomega.HaveOccurred())
 				seed.Object["status"] = map[string]any{"conditions": []any{map[string]any{
 					"type": seedGenerationLCAInProgress, "status": "True", "reason": "InProgress", "message": "Launching imager container",
 				}}}
@@ -269,7 +339,7 @@ func TestReconcileSeedGeneratorReportsSpokeAPIOutageAndRecovery(t *testing.T) {
 				})
 				task := seedTestTask(pr, hub)
 				task.seedGenerationSpokeClientBuilder = func([]byte) (client.Client, error) { return spoke, nil }
-				_, err := task.reconcileSeedGenerator(ctx, snapshot)
+				_, err = task.reconcileSeedGenerator(ctx, snapshot)
 				g.Expect(err).To(gomega.HaveOccurred())
 				g.Expect(hub.Get(ctx, client.ObjectKeyFromObject(pr), pr)).ToNot(gomega.HaveOccurred())
 				if submitted {

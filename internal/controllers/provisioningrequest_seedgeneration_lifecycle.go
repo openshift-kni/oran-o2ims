@@ -89,6 +89,10 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerator(
 	ctx context.Context,
 	snapshot *seedGenerationInputSnapshot,
 ) (ctrl.Result, error) {
+	desired, err := desiredSeedGenerator(t.object, snapshot)
+	if err != nil {
+		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, err.Error())
+	}
 	spokeClient, err := t.verifiedSeedGenerationSpokeClient(ctx, snapshot)
 	if err != nil {
 		return t.handleSeedGeneratorObservationError(ctx, "failed to create spoke client for LCA", err)
@@ -164,7 +168,7 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerator(
 		}
 	}
 
-	seedGenerator = desiredSeedGenerator(t.object, snapshot)
+	seedGenerator = desired
 	// Persist intent before Create. If the response is lost, or LCA removes
 	// the CR before the next reconcile, it must never be submitted twice.
 	t.object.Status.Extensions.ClusterDetails.SeedGenerationStatus.SeedGeneratorSubmitted = true
@@ -174,27 +178,31 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerator(
 		return requeueWithError(fmt.Errorf("failed to record SeedGenerator submission intent: %w", err))
 	}
 	if err := spokeClient.Create(ctx, seedGenerator); err != nil {
-		if apierrors.IsAlreadyExists(err) || apierrors.IsConflict(err) {
-			return requeueWithShortInterval(), nil
-		}
-		if apierrors.IsTooManyRequests(err) {
-			// The API rejected this request before creating the CR. Persist the
-			// cleared guard so the next reconcile can retry the submission.
-			t.object.Status.Extensions.ClusterDetails.SeedGenerationStatus.SeedGeneratorSubmitted = false
-			setSeedGenerationProgress(t.object, provisioningv1alpha1.CRconditionReasons.InProgress,
-				"Waiting to retry SeedGenerator submission after API throttling")
-			if statusErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); statusErr != nil {
-				return requeueWithError(fmt.Errorf("failed to record rejected SeedGenerator submission: %w", statusErr))
-			}
-		}
-		// A definitive admission rejection cannot have created the CR.
-		// Transport errors are ambiguous and leave the one-shot guard set.
-		if apierrors.IsInvalid(err) || apierrors.IsForbidden(err) || apierrors.IsUnauthorized(err) {
-			t.object.Status.Extensions.ClusterDetails.SeedGenerationStatus.SeedGeneratorSubmitted = false
-		}
-		return t.handleSeedGenerationLifecycleError(ctx, "failed to create spoke SeedGenerator", err)
+		return t.handleSeedGeneratorSubmissionError(ctx, err)
 	}
 	return requeueWithShortInterval(), nil
+}
+
+func (t *provisioningRequestReconcilerTask) handleSeedGeneratorSubmissionError(ctx context.Context, err error) (ctrl.Result, error) {
+	if apierrors.IsAlreadyExists(err) || apierrors.IsConflict(err) {
+		return requeueWithShortInterval(), nil
+	}
+	if apierrors.IsTooManyRequests(err) {
+		// The API rejected this request before creating the CR. Persist the
+		// cleared guard so the next reconcile can retry the submission.
+		t.object.Status.Extensions.ClusterDetails.SeedGenerationStatus.SeedGeneratorSubmitted = false
+		setSeedGenerationProgress(t.object, provisioningv1alpha1.CRconditionReasons.InProgress,
+			"Waiting to retry SeedGenerator submission after API throttling")
+		if statusErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); statusErr != nil {
+			return requeueWithError(fmt.Errorf("failed to record rejected SeedGenerator submission: %w", statusErr))
+		}
+	}
+	// A definitive admission rejection cannot have created the CR.
+	// Transport errors are ambiguous and leave the one-shot guard set.
+	if apierrors.IsInvalid(err) || apierrors.IsForbidden(err) || apierrors.IsUnauthorized(err) {
+		t.object.Status.Extensions.ClusterDetails.SeedGenerationStatus.SeedGeneratorSubmitted = false
+	}
+	return t.handleSeedGenerationLifecycleError(ctx, "failed to create spoke SeedGenerator", err)
 }
 
 func (t *provisioningRequestReconcilerTask) handleSeedGeneratorObservationError(
@@ -219,12 +227,16 @@ func (t *provisioningRequestReconcilerTask) waitForSeedGeneratorStatus(ctx conte
 	return requeueWithMediumInterval(), nil
 }
 
-func desiredSeedGenerator(pr *provisioningv1alpha1.ProvisioningRequest, snapshot *seedGenerationInputSnapshot) *unstructured.Unstructured {
+func desiredSeedGenerator(pr *provisioningv1alpha1.ProvisioningRequest, snapshot *seedGenerationInputSnapshot) (*unstructured.Unstructured, error) {
+	spec, err := seedGenerationSeedGeneratorSpec(snapshot)
+	if err != nil {
+		return nil, err
+	}
 	desired := newSeedGenerationSeedGenerator()
 	desired.SetName(seedGenerationLCASeedCRName)
 	desired.SetLabels(seedGenerationLCAOwnershipLabels(pr))
-	desired.Object["spec"] = seedGenerationSeedGeneratorSpec(snapshot)
-	return desired
+	desired.Object["spec"] = spec
+	return desired, nil
 }
 
 func validateSeedGeneratorSpec(seedGenerator *unstructured.Unstructured, snapshot *seedGenerationInputSnapshot) error {
@@ -240,13 +252,20 @@ func validateSeedGeneratorSpec(seedGenerator *unstructured.Unstructured, snapsho
 	return nil
 }
 
-func seedGenerationSeedGeneratorSpec(snapshot *seedGenerationInputSnapshot) map[string]any {
+func seedGenerationSeedGeneratorSpec(snapshot *seedGenerationInputSnapshot) (map[string]any, error) {
+	if snapshot == nil || snapshot.Document == nil {
+		return nil, fmt.Errorf("seed generation snapshot configuration document is missing")
+	}
 	seed := snapshot.Document.SeedGeneration
-	spec := map[string]any{"seedImage": seed["seedImage"].(string)}
+	seedImage, ok := seed["seedImage"].(string)
+	if !ok || strings.TrimSpace(seedImage) == "" {
+		return nil, fmt.Errorf("seed generation snapshot seedImage must be a non-empty string")
+	}
+	spec := map[string]any{"seedImage": seedImage}
 	if recertImage := seedGenerationRecertImage(snapshot); recertImage != "" {
 		spec["recertImage"] = recertImage
 	}
-	return spec
+	return spec, nil
 }
 
 func seedGenerationRecertImage(snapshot *seedGenerationInputSnapshot) string {
