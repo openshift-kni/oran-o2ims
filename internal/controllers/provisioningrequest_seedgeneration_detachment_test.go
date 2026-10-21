@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/onsi/gomega"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
@@ -306,7 +307,7 @@ func TestSeedGenerationDetachmentProgressIsStable(t *testing.T) {
 }
 
 func TestSeedGenerationDetachmentRejectsChangedIdentities(t *testing.T) {
-	for _, changed := range []string{"spoke", "hub", "agent", "additional klusterlet"} {
+	for _, changed := range []string{"spoke", "hub", "missing agent identity", "additional klusterlet"} {
 		t.Run(changed, func(t *testing.T) {
 			pr := seedDetachmentTestRequest()
 			cluster := &clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{Name: "spoke-a", UID: "managed-cluster-uid"}}
@@ -314,8 +315,8 @@ func TestSeedGenerationDetachmentRejectsChangedIdentities(t *testing.T) {
 			if changed == "hub" {
 				cluster.UID = "replacement-uid"
 			}
-			if changed == "agent" {
-				work.Spec.AgentID = "other-agent"
+			if changed == "missing agent identity" {
+				pr.Status.Extensions.ClusterDetails.SeedGenerationStatus.KlusterletUID = ""
 			}
 			if changed == "spoke" {
 				pr.Status.Extensions.ClusterDetails.SeedGenerationStatus.ClusterID = "other-cluster"
@@ -338,5 +339,105 @@ func TestSeedGenerationDetachmentRejectsChangedIdentities(t *testing.T) {
 				t.Fatalf("foreign work removed: %v", err)
 			}
 		})
+	}
+}
+
+func TestSeedGenerationWaitsForForeignAppliedManifestWorks(t *testing.T) {
+	for _, tc := range []struct {
+		name, manifestWorkName, agentID string
+	}{
+		{"import work", "spoke-a-klusterlet", "previous-agent"},
+		{"non-import work", "policies", "previous-agent"},
+		{"missing work agent", "policies", ""},
+	} {
+		for _, outcome := range []string{"removed", "timeout"} {
+			t.Run(tc.name+"/"+outcome, func(t *testing.T) {
+				g := gomega.NewWithT(t)
+				ctx := context.Background()
+				pr := seedDetachmentTestRequest()
+				startedAt := metav1.NewTime(time.Now().Truncate(time.Second))
+				status := pr.Status.Extensions.ClusterDetails.SeedGenerationStatus
+				status.StartedAt, status.TimeoutSeconds = &startedAt, 3600
+				setSeedGenerationProgress(pr, provisioningv1alpha1.CRconditionReasons.CleaningACMResources, "Removing ACM agents from the spoke")
+				snapshot, hub := seedRecoveryTestSnapshot(t, pr)
+				cluster := &clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{Name: "spoke-a", UID: "managed-cluster-uid"}}
+				g.Expect(hub.Create(ctx, cluster)).ToNot(gomega.HaveOccurred())
+				// Put an owned record first so an implementation that deletes as it
+				// checks ownership would be caught before reaching the foreign one.
+				owned := &workv1.AppliedManifestWork{ObjectMeta: metav1.ObjectMeta{Name: "a-owned-import", UID: "owned-uid"},
+					Spec: workv1.AppliedManifestWorkSpec{AgentID: "klusterlet-uid", ManifestWorkName: "spoke-a-klusterlet-crds"}}
+				foreign := &workv1.AppliedManifestWork{ObjectMeta: metav1.ObjectMeta{Name: "z-foreign-work", UID: "foreign-uid"},
+					Spec: workv1.AppliedManifestWorkSpec{AgentID: tc.agentID, ManifestWorkName: tc.manifestWorkName}}
+				baseSpoke := newSeedLifecycleSpokeClient(t, owned, foreign)
+				blocked := true
+				spoke := interceptor.NewClient(baseSpoke, interceptor.Funcs{
+					Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+						if blocked {
+							t.Fatal("foreign work must block LCA submission")
+						}
+						return c.Create(ctx, obj, opts...)
+					},
+					Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+						if blocked {
+							t.Fatal("no spoke resource should be deleted while a foreign work remains")
+						}
+						return c.Delete(ctx, obj, opts...)
+					},
+				})
+				reconcile := func() {
+					t.Helper()
+					// Rebuild from persisted state to exercise recovery after restart.
+					g.Expect(hub.Get(ctx, client.ObjectKeyFromObject(pr), pr)).ToNot(gomega.HaveOccurred())
+					task := seedTestTask(pr, hub)
+					task.seedGenerationSpokeClientBuilder = func([]byte) (client.Client, error) { return spoke, nil }
+					result, err := task.reconcileSeedGeneration(ctx)
+					g.Expect(err).ToNot(gomega.HaveOccurred())
+					g.Expect(result.RequeueAfter).To(gomega.BeNumerically(">", 0))
+					g.Expect(hub.Get(ctx, client.ObjectKeyFromObject(pr), pr)).ToNot(gomega.HaveOccurred())
+				}
+				reconcile()
+				g.Expect(seedGenerationTerminal(pr)).To(gomega.BeFalse())
+				g.Expect(pr.Status.ProvisioningStatus.ProvisioningPhase).To(gomega.Equal(provisioningv1alpha1.StateProgressing))
+				g.Expect(seedGenerationCondition(pr).Reason).To(gomega.Equal(string(provisioningv1alpha1.CRconditionReasons.CleaningACMResources)))
+				message := seedGenerationCondition(pr).Message
+				g.Expect(message).To(gomega.ContainSubstring("Waiting for AppliedManifestWork z-foreign-work owned by a different ACM agent"))
+				g.Expect(pr.Status.ProvisioningStatus.ProvisioningDetails).To(gomega.Equal(message))
+				g.Expect(pr.Status.Extensions.ClusterDetails.SeedGenerationStatus.AgentDetachmentCompleted).To(gomega.BeFalse())
+				g.Expect(pr.Status.Extensions.ClusterDetails.SeedGenerationStatus.SeedGeneratorSubmitted).To(gomega.BeFalse())
+				version := pr.ResourceVersion
+				reconcile()
+				g.Expect(pr.ResourceVersion).To(gomega.Equal(version))
+				status = pr.Status.Extensions.ClusterDetails.SeedGenerationStatus
+				g.Expect(status.StartedAt.Equal(&startedAt)).To(gomega.BeTrue())
+				g.Expect(status.TimeoutSeconds).To(gomega.Equal(int64(3600)))
+				g.Expect(status.InputSnapshotResourceUIDs).To(gomega.Equal(seedGenerationInputUIDs(snapshot)))
+				g.Expect(baseSpoke.Get(ctx, client.ObjectKeyFromObject(owned), &workv1.AppliedManifestWork{})).ToNot(gomega.HaveOccurred())
+				g.Expect(baseSpoke.Get(ctx, client.ObjectKeyFromObject(foreign), &workv1.AppliedManifestWork{})).ToNot(gomega.HaveOccurred())
+
+				if outcome == "removed" {
+					// External cleanup resolves the conflict; the controller never
+					// deletes or adopts the foreign work itself.
+					g.Expect(baseSpoke.Delete(ctx, foreign)).ToNot(gomega.HaveOccurred())
+					blocked = false
+					reconcile()
+					g.Expect(apierrors.IsNotFound(baseSpoke.Get(ctx, client.ObjectKeyFromObject(owned), &workv1.AppliedManifestWork{}))).To(gomega.BeTrue())
+					reconcile()
+					g.Expect(pr.Status.Extensions.ClusterDetails.SeedGenerationStatus.AgentDetachmentCompleted).To(gomega.BeTrue())
+					g.Expect(pr.Status.Extensions.ClusterDetails.SeedGenerationStatus.SeedGeneratorSubmitted).To(gomega.BeTrue())
+					g.Expect(baseSpoke.Get(ctx, client.ObjectKey{Name: seedGenerationLCASeedCRName}, newSeedGenerationSeedGenerator())).ToNot(gomega.HaveOccurred())
+				} else {
+					status.StartedAt = &metav1.Time{Time: time.Now().Add(-2 * time.Hour)}
+					g.Expect(hub.Status().Update(ctx, pr)).ToNot(gomega.HaveOccurred())
+					reconcile()
+					g.Expect(seedGenerationTerminal(pr)).To(gomega.BeTrue())
+					g.Expect(seedGenerationCondition(pr).Reason).To(gomega.Equal(string(provisioningv1alpha1.CRconditionReasons.TimedOut)))
+					g.Expect(seedGenerationCondition(pr).Message).To(gomega.ContainSubstring(message))
+					g.Expect(pr.Status.ProvisioningStatus.ProvisioningPhase).To(gomega.Equal(provisioningv1alpha1.StateFailed))
+					g.Expect(baseSpoke.Get(ctx, client.ObjectKeyFromObject(owned), &workv1.AppliedManifestWork{})).ToNot(gomega.HaveOccurred())
+					g.Expect(baseSpoke.Get(ctx, client.ObjectKeyFromObject(foreign), &workv1.AppliedManifestWork{})).ToNot(gomega.HaveOccurred())
+					g.Expect(pr.Status.Extensions.ClusterDetails.SeedGenerationStatus.SeedGeneratorSubmitted).To(gomega.BeFalse())
+				}
+			})
+		}
 	}
 }

@@ -100,11 +100,8 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerationAgentDetachme
 		}
 	}
 	pending, err = t.cleanupSeedGenerationAppliedWorks(ctx, spokeClient)
-	if err != nil {
+	if err != nil || pending {
 		return pending, err
-	}
-	if pending {
-		return t.waitForSeedGenerationDetachment(ctx, "Waiting for AppliedManifestWork cleanup on the spoke")
 	}
 	if crd.Name != "" {
 		// Normally the import work's owner reference removes the CRD. Handle
@@ -340,6 +337,10 @@ func seedGenerationReadOnlyConfigs(work *workv1.ManifestWork, mapper meta.RESTMa
 }
 
 func (t *provisioningRequestReconcilerTask) cleanupSeedGenerationAppliedWorks(ctx context.Context, spokeClient client.Client) (bool, error) {
+	status := t.object.Status.Extensions.ClusterDetails.SeedGenerationStatus
+	if status.KlusterletUID == "" {
+		return false, fmt.Errorf("seed generation has no pinned ACM agent identity")
+	}
 	works := &workv1.AppliedManifestWorkList{}
 	if err := spokeClient.List(ctx, works); err != nil {
 		if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
@@ -347,11 +348,15 @@ func (t *provisioningRequestReconcilerTask) cleanupSeedGenerationAppliedWorks(ct
 		}
 		return false, fmt.Errorf("failed to list spoke AppliedManifestWorks: %w", err)
 	}
-	status := t.object.Status.Extensions.ClusterDetails.SeedGenerationStatus
 	clusterName := t.object.Status.Extensions.ClusterDetails.Name
+	// A foreign work may be left over from an earlier agent. Wait within the
+	// run deadline for it to disappear, without deleting any work records or
+	// assuming ACM will garbage-collect it. Check non-import works as well.
 	for _, work := range works.Items {
-		if status.KlusterletUID == "" || work.Spec.AgentID != status.KlusterletUID {
-			return false, fmt.Errorf("appliedManifestWork %s belongs to a different ACM agent", work.Name)
+		if work.Spec.AgentID != status.KlusterletUID {
+			return t.waitForSeedGenerationDetachment(ctx,
+				fmt.Sprintf("Waiting for AppliedManifestWork %s owned by a different ACM agent (%q); expected agent %q",
+					work.Name, work.Spec.AgentID, status.KlusterletUID))
 		}
 	}
 	for i := range works.Items {
@@ -359,7 +364,7 @@ func (t *provisioningRequestReconcilerTask) cleanupSeedGenerationAppliedWorks(ct
 		// The Klusterlet operator removes its own work finalizers before
 		// stopping the agent. Never force-remove an unfinished finalizer.
 		if len(work.Finalizers) > 0 {
-			return true, nil
+			return t.waitForSeedGenerationDetachment(ctx, "Waiting for AppliedManifestWork cleanup on the spoke")
 		}
 		propagation := metav1.DeletePropagationOrphan
 		if work.Spec.ManifestWorkName == clusterName+"-klusterlet" || work.Spec.ManifestWorkName == clusterName+"-klusterlet-crds" {
@@ -371,7 +376,10 @@ func (t *provisioningRequestReconcilerTask) cleanupSeedGenerationAppliedWorks(ct
 			return false, err
 		}
 	}
-	return len(works.Items) > 0, nil
+	if len(works.Items) > 0 {
+		return t.waitForSeedGenerationDetachment(ctx, "Waiting for AppliedManifestWork cleanup on the spoke")
+	}
+	return false, nil
 }
 
 func cleanupSeedGenerationObservabilitySecrets(ctx context.Context, spokeClient client.Client) (bool, error) {

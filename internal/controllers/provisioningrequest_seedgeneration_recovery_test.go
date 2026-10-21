@@ -329,7 +329,11 @@ func TestSeedGenerationCleanupWaitsForLCARestore(t *testing.T) {
 	task.seedGenerationSpokeClientBuilder = func([]byte) (client.Client, error) { return spoke, nil }
 	for _, state := range []string{"absent", "active", "finished"} {
 		if state == "active" {
-			if err := spoke.Create(ctx, desiredSeedGenerator(pr, snapshot)); err != nil {
+			seed, err := desiredSeedGenerator(pr, snapshot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := spoke.Create(ctx, seed); err != nil {
 				t.Fatal(err)
 			}
 		}
