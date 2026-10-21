@@ -387,10 +387,10 @@ hwMgmtDefaults:
   # Passed through to ImageClusterInstall.spec.preProvisioning.
   ibiPreProvisioning:
     # Required: HTTPS URL of the live IBI ISO reachable from the BMC network.
-    # Must be an immutable, per-run URL (see "Restricting ISOURL"), not a
-    # mutable "latest" path — here the seed workflow's per-run path
-    # (ProvisioningRequest UID + filename).
-    isoURL: https://iso-server.example.com/ibi/example-pr/sha256-abc123/rhcos-ibi.iso
+    # Must be an immutable URL for this generation run (see "Restricting
+    # ISOURL"). This path is illustrative; the final layout will be
+    # defined during ISO generation implementation.
+    isoURL: https://iso-server.example.com/ibi/example-generation-run/rhcos-ibi.iso
     # Required: expected SHA-256 digest, verified before boot to pin the exact
     # artifact (admission rejects a config that omits it). Matches
     # SeedGenerationStatus.ISODigest from seed generation.
@@ -1054,10 +1054,11 @@ as the Ironic `boot_iso` while clearing the checksum fields — nothing in the b
 path re-binds what the BMC pulls. If the content changes after the check, the BMC
 can boot different bytes than were verified. The design therefore **requires
 `ISOURL` to be an immutable, per-run reference** (a per-run URL whose bytes are
-never rewritten), not a mutable "latest" URL. The seed-generation workflow
-satisfies this, uploading to a **unique per-run path**
-(ProvisioningRequest UID + filename), written once and never
-overwritten. Immutability is a **producer-side contract** (a generic webhook
+never rewritten), not a mutable "latest" URL. The planned ISO-generation
+workflow must publish to a **unique URL for each generation run**, written
+once and never overwritten. The exact path layout will be defined when ISO
+generation is implemented; the example URLs in this proposal are illustrative.
+Immutability is a **producer-side contract** (a generic webhook
 cannot prove a URL immutable) that closes the TOCTOU window, while the mandatory
 `ISODigest` pre-fetch confirms identity at check time. A deployment that cannot
 guarantee an immutable, allowlisted URL therefore cannot offer automated IBI
@@ -1289,8 +1290,9 @@ spec:
           resourceSelector:
             resourceselector.clcm.openshift.io/server-type: XR8620t
       ibiPreProvisioning:
-        # Immutable per-run URL (see "Restricting ISOURL").
-        isoURL: https://iso-server.example.com/ibi/example-pr/sha256-abc123/rhcos-ibi.iso
+        # Illustrative immutable per-run URL (see "Restricting ISOURL").
+        # The final path layout will be defined during ISO implementation.
+        isoURL: https://iso-server.example.com/ibi/example-generation-run/rhcos-ibi.iso
         isoDigest: sha256:0000000000000000000000000000000000000000000000000000000000000000
         isoServerCACertRef:
           name: iso-server-ca-cert

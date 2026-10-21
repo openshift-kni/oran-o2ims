@@ -890,10 +890,10 @@ The controller creates a Kubernetes Job on the hub cluster that builds the live 
    is reachable — a HEAD/`Content-Length` check confirms reachability and TLS
    trust but cannot detect a stale ISO, a truncated upload with a matching size,
    or a same-size substitution:
-   - **Unique per-run remote path.** Uploads target the `remotePath` from
-     `uploadSecretRef` disambiguated by the ProvisioningRequest name and seed
-     image digest, so a new build never overwrites or is confused with an older
-     ISO at a shared URL.
+   - **Unique per-run remote path.** Uploads must use a unique path for each
+     generation run beneath the configured upload location. The published ISO
+     must never be overwritten by a later run. The exact path layout will be
+     defined during ISO generation implementation.
    - **Mandatory SSH content identity.** The controller fetches the digest over
      the already-trusted SSH channel (`sha256sum` on the remote `remotePath`)
      and compares it to the local digest; a mismatch or an inability to obtain
@@ -904,8 +904,7 @@ The controller creates a Kubernetes Job on the hub cluster that builds the live 
      (`uploadSecretRef.host` + `remotePath`) and the HTTPS origin
      (`liveISO.urlBase`) must be two views of the **same backing store**.
      `liveISO.urlBase` is the only URL input; both the SSH target and the
-     effective ISO URL are computed from it plus the per-run suffix
-     (ProvisioningRequest UID + filename), so no
+     effective ISO URL are computed from it plus the same per-run suffix, so no
      independently supplied full URL can drift from `remotePath`. Before
      recording `ISOURL` the controller validates the binding on two axes:
      - **Path.** The path component of the computed ISO URL must equal the

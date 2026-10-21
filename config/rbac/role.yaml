@@ -29,14 +29,6 @@ rules:
   - update
   - watch
 - apiGroups:
-  - ""
-  resources:
-  - persistentvolumeclaims
-  - pods
-  verbs:
-  - list
-  - watch
-- apiGroups:
   - addon.open-cluster-management.io
   resources:
   - managedclusteraddons
@@ -103,13 +95,6 @@ rules:
   - subjectaccessreviews
   verbs:
   - create
-- apiGroups:
-  - batch
-  resources:
-  - jobs
-  verbs:
-  - list
-  - watch
 - apiGroups:
   - clcm.openshift.io
   resources:
