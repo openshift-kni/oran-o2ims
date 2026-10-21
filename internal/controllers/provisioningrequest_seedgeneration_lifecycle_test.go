@@ -412,6 +412,84 @@ func TestObserveSeedGeneratorRecordsConfiguredImageReference(t *testing.T) {
 	}
 }
 
+func TestReconcileSeedGenerationRecordsLCAFailureAndCleansUp(t *testing.T) {
+	g := gomega.NewWithT(t)
+	ctx := context.Background()
+	pr := seedDetachmentTestRequest()
+	status := pr.Status.Extensions.ClusterDetails.SeedGenerationStatus
+	startedAt := metav1.Now()
+	status.StartedAt, status.TimeoutSeconds = &startedAt, 3600
+	status.AgentDetachmentCompleted, status.SeedGeneratorSubmitted = true, true
+	setSeedGenerationProgress(pr, provisioningv1alpha1.CRconditionReasons.InProgress, "LCA seed generation is in progress")
+	snapshot, hub := seedRecoveryTestSnapshot(t, pr)
+	seed, err := desiredSeedGenerator(pr, snapshot)
+	g.Expect(err).ToNot(gomega.HaveOccurred())
+	seed.SetUID("seed-generator-uid")
+	lcaMessage := "failed to push seed image: access denied"
+	seed.Object["status"] = map[string]any{"conditions": []any{
+		map[string]any{"type": seedGenerationLCAInProgress, "status": "True", "reason": "InProgress", "message": "Pushing seed image"},
+		map[string]any{"type": seedGenerationLCACompleted, "status": "False", "reason": "Failed", "message": lcaMessage},
+	}}
+	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+		Name: seedGenerationLCASeedSecretName, Namespace: seedGenerationLCAOperatorNamespace,
+		UID: "seed-secret-uid", Labels: seedGenerationLCAOwnershipLabels(pr),
+	}, Data: cloneByteMap(snapshot.Secrets["seedAuth"].Data)}
+	assertPersistedFailure := func() {
+		t.Helper()
+		stored := &provisioningv1alpha1.ProvisioningRequest{}
+		g.Expect(hub.Get(ctx, client.ObjectKeyFromObject(pr), stored)).ToNot(gomega.HaveOccurred())
+		condition := seedGenerationCondition(stored)
+		g.Expect(condition).ToNot(gomega.BeNil())
+		g.Expect(condition.Status).To(gomega.Equal(metav1.ConditionFalse))
+		g.Expect(condition.Reason).To(gomega.Equal(string(provisioningv1alpha1.CRconditionReasons.Failed)))
+		g.Expect(condition.Message).To(gomega.Equal("LCA seed generation failed: " + lcaMessage))
+		g.Expect(stored.Status.ProvisioningStatus.ProvisioningPhase).To(gomega.Equal(provisioningv1alpha1.StateFailed))
+		g.Expect(stored.Status.ProvisioningStatus.ProvisioningDetails).To(gomega.Equal(condition.Message))
+		g.Expect(stored.Status.Extensions.ClusterDetails.SeedGenerationStatus.SeedGeneratorSubmitted).To(gomega.BeTrue())
+		g.Expect(stored.Status.Extensions.ClusterDetails.SeedGenerationStatus.SeedGeneratorFinished).To(gomega.BeTrue())
+		g.Expect(stored.Status.Extensions.ClusterDetails.SeedGenerationStatus.SeedImage).To(gomega.BeEmpty())
+	}
+	spoke := interceptor.NewClient(newSeedLifecycleSpokeClient(t, seed, secret), interceptor.Funcs{
+		Create: func(context.Context, client.WithWatch, client.Object, ...client.CreateOption) error {
+			t.Fatal("failed seed generation must not submit another run or recreate its credentials")
+			return nil
+		},
+		Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+			// The failure and termination checkpoint must be durable before
+			// cleanup removes LCA's resources and its original error message.
+			assertPersistedFailure()
+			return c.Delete(ctx, obj, opts...)
+		},
+	})
+	reconcile := func(wantPending bool) {
+		t.Helper()
+		// Reload state and reconstruct the task to model a controller restart.
+		g.Expect(hub.Get(ctx, client.ObjectKeyFromObject(pr), pr)).ToNot(gomega.HaveOccurred())
+		task := seedTestTask(pr, hub)
+		task.seedGenerationSpokeClientBuilder = func([]byte) (client.Client, error) { return spoke, nil }
+		result, err := task.reconcileSeedGeneration(ctx)
+		g.Expect(err).ToNot(gomega.HaveOccurred())
+		g.Expect(result.IsZero()).To(gomega.Equal(!wantPending))
+		assertPersistedFailure()
+	}
+	reconcile(true)
+	g.Expect(apierrors.IsNotFound(spoke.Get(ctx, client.ObjectKeyFromObject(seed), newSeedGenerationSeedGenerator()))).To(gomega.BeTrue())
+	g.Expect(apierrors.IsNotFound(spoke.Get(ctx, client.ObjectKeyFromObject(secret), &corev1.Secret{}))).To(gomega.BeTrue())
+	// Keep the snapshot until spoke cleanup has been confirmed on a retry.
+	g.Expect(hub.Get(ctx, client.ObjectKeyFromObject(snapshot.ConfigMap), &corev1.ConfigMap{})).ToNot(gomega.HaveOccurred())
+	for _, credential := range snapshot.Secrets {
+		g.Expect(hub.Get(ctx, client.ObjectKeyFromObject(credential), &corev1.Secret{})).ToNot(gomega.HaveOccurred())
+	}
+	reconcile(true)
+	g.Expect(pr.Status.Extensions.ClusterDetails.SeedGenerationStatus.DetachedCleanupCompleted).To(gomega.BeTrue())
+	g.Expect(apierrors.IsNotFound(hub.Get(ctx, client.ObjectKeyFromObject(snapshot.ConfigMap), &corev1.ConfigMap{}))).To(gomega.BeTrue())
+	for _, credential := range snapshot.Secrets {
+		g.Expect(apierrors.IsNotFound(hub.Get(ctx, client.ObjectKeyFromObject(credential), &corev1.Secret{}))).To(gomega.BeTrue())
+	}
+	// Once cleanup is complete, missing LCA resources must not restart the run.
+	reconcile(false)
+}
+
 func seedGenerationLifecycleTestSnapshot() *seedGenerationInputSnapshot {
 	return &seedGenerationInputSnapshot{
 		Document: &seedGenerationInputDocument{SeedGeneration: map[string]any{
