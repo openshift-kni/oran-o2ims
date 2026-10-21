@@ -135,6 +135,16 @@ This project has not reached GA, so there are no production databases to migrate
 When adding a new CRD, also add a corresponding `gather_resource` call in
 `must-gather/gather` so the resource is collected in support archives.
 
+When adding an `Owns` or `Watches` on a CRD that our operator bundle
+does not install, verify whether the providing operator is present in
+the [TLS scan CI environment](https://github.com/openshift/release/tree/master/ci-operator/config/openshift-kni/oran-o2ims)
+(which installs only ACM and our bundle). If not, warn the developer
+that a stub CRD must be added to the
+[CI prereq stub script](https://github.com/openshift/release/tree/master/ci-operator/step-registry/oran-o2ims/install-prereq-crds).
+A missing CRD causes the controller-manager's informer cache sync to
+time out, crash-looping the manager. See
+[docs/dev/external-dependencies.md](docs/dev/external-dependencies.md).
+
 ### RBAC and kubebuilder Markers
 
 RBAC permissions are defined via `//+kubebuilder:rbac` markers scattered
