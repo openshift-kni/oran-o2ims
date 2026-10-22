@@ -43,16 +43,25 @@ Test Cases Overview for provisioningrequest_clusterinstall_test.go:
      * Missing interface MAC address information in nodeInfo
      * Proper setting of hostRef fields (name and namespace)
    - Validates that unstructured.Unstructured objects are modified correctly
+
+5. checkNodesAndMCPsReady tests:
+   - Checks requested node readiness and intended MachineConfigPool membership
+   - Waits for desired worker pool counts and pool-wide configuration convergence
+   - Covers default and custom worker pools
 */
 
 package controllers
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 
+	"github.com/openshift-kni/oran-o2ims/internal/spokeclient"
 	"github.com/openshift-kni/oran-o2ims/internal/validation"
+	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
+	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -62,7 +71,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	addonv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
+	workv1 "open-cluster-management.io/api/work/v1"
+	msav1beta1 "open-cluster-management.io/managed-serviceaccount/apis/authentication/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
@@ -1392,5 +1407,370 @@ var _ = Describe("handleScaleInAbort", func() {
 		updatedNAR := &hwmgmtv1alpha1.NodeAllocationRequest{}
 		Expect(c.Get(ctx, client.ObjectKeyFromObject(nar), updatedNAR)).To(Succeed())
 		Expect(updatedNAR.GetAnnotations()).ToNot(HaveKey(hwmgrcontroller.ScaleInNodesAnnotation))
+	})
+})
+
+var _ = Describe("checkNodesAndMCPsReady", func() {
+	const (
+		clusterName     = "readiness-cluster"
+		customPoolName  = "worker-custom"
+		customRoleLabel = "node-role.kubernetes.io/" + customPoolName
+	)
+	var (
+		ctx        context.Context
+		task       *provisioningRequestReconcilerTask
+		ci         *unstructured.Unstructured
+		pool       *mcfgv1.MachineConfigPool
+		spoke      client.Client
+		workerNode *corev1.Node
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		spokeclient.ClearCache()
+		DeferCleanup(spokeclient.ClearCache)
+		pool = &mcfgv1.MachineConfigPool{
+			ObjectMeta: metav1.ObjectMeta{Name: customPoolName, Generation: 1},
+			Spec: mcfgv1.MachineConfigPoolSpec{
+				NodeSelector: &metav1.LabelSelector{MatchLabels: map[string]string{
+					customRoleLabel: "",
+				}},
+				Configuration: mcfgv1.MachineConfigPoolStatusConfiguration{
+					ObjectReference: corev1.ObjectReference{Name: "rendered-worker-custom"},
+				},
+			},
+			Status: mcfgv1.MachineConfigPoolStatus{
+				ObservedGeneration: 1,
+				MachineCount:       2, ReadyMachineCount: 2, UpdatedMachineCount: 2,
+				Configuration: mcfgv1.MachineConfigPoolStatusConfiguration{
+					ObjectReference: corev1.ObjectReference{Name: "rendered-worker-custom"},
+				},
+				Conditions: []mcfgv1.MachineConfigPoolCondition{
+					{Type: mcfgv1.MachineConfigPoolUpdated, Status: corev1.ConditionTrue},
+					{Type: mcfgv1.MachineConfigPoolUpdating, Status: corev1.ConditionFalse},
+					{Type: mcfgv1.MachineConfigPoolDegraded, Status: corev1.ConditionFalse},
+				},
+			},
+		}
+		clusterInstance := &siteconfig.ClusterInstance{
+			TypeMeta:   metav1.TypeMeta{APIVersion: siteconfig.GroupVersion.String(), Kind: "ClusterInstance"},
+			ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+			Spec: siteconfig.ClusterInstanceSpec{Nodes: []siteconfig.NodeSpec{
+				{HostName: "master-1", Role: "master"},
+				{HostName: "worker-1", Role: "worker"},
+				{HostName: "worker-2", Role: "worker"},
+			}},
+		}
+		var err error
+		ci, err = utils.ConvertToUnstructured(*clusterInstance)
+		Expect(err).ToNot(HaveOccurred())
+		pr := &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: "readiness-pr"},
+		}
+		hub := fakeclient.GetFakeClientFromObjects(
+			&addonv1alpha1.ManagedClusterAddOn{ObjectMeta: metav1.ObjectMeta{
+				Name: "managed-serviceaccount", Namespace: clusterName,
+			}},
+			&msav1beta1.ManagedServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{Name: pr.Name + "-scaleout", Namespace: clusterName},
+				Status: msav1beta1.ManagedServiceAccountStatus{
+					TokenSecretRef: &msav1beta1.SecretRef{Name: "readiness-token"},
+				},
+			},
+			&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "readiness-token", Namespace: clusterName},
+				Data:       map[string][]byte{"token": []byte("test-token"), "ca.crt": []byte("test-ca")},
+			},
+			&workv1.ManifestWork{
+				ObjectMeta: metav1.ObjectMeta{Name: pr.Name + "-scaleout-rbac", Namespace: clusterName},
+				Status: workv1.ManifestWorkStatus{Conditions: []metav1.Condition{
+					{Type: workv1.WorkAvailable, Status: metav1.ConditionTrue},
+				}},
+			},
+			&clusterv1.ManagedCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName},
+				Spec: clusterv1.ManagedClusterSpec{ManagedClusterClientConfigs: []clusterv1.ClientConfig{
+					{URL: "https://readiness.example.com"},
+				}},
+			})
+		task = &provisioningRequestReconcilerTask{
+			logger: logger, client: hub, object: pr,
+			clusterInput: &clusterInput{hostToGroupName: map[string]string{
+				"master-1": "controller", "worker-1": pool.Name, "worker-2": pool.Name,
+			}},
+		}
+		objects := []client.Object{pool}
+		for _, name := range []string{"master-1", "worker-1", "worker-2"} {
+			node := &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   name,
+					Labels: map[string]string{"node-role.kubernetes.io/worker": "", customRoleLabel: ""},
+				},
+				Status: corev1.NodeStatus{Conditions: []corev1.NodeCondition{
+					{Type: corev1.NodeReady, Status: corev1.ConditionTrue},
+				}},
+			}
+			objects = append(objects, node)
+			if name == "master-1" {
+				node.Labels = map[string]string{"node-role.kubernetes.io/master": ""}
+			}
+			if name == "worker-2" {
+				workerNode = node
+			}
+		}
+		spoke = fake.NewClientBuilder().WithScheme(scaleOutSpokeScheme).WithObjects(objects...).Build()
+		DeferCleanup(spokeclient.SetTestSpokeClientCreator(func(_ string, _ string, _ []byte, _ *runtime.Scheme) (client.Client, error) {
+			return spoke, nil
+		}))
+	})
+
+	It("waits for worker membership, expected pool count, and pool convergence", func() {
+		pool.Status.MachineCount = 1
+		pool.Status.ReadyMachineCount = 1
+		pool.Status.UpdatedMachineCount = 1
+		Expect(spoke.Update(ctx, pool)).To(Succeed())
+		delete(workerNode.Labels, customRoleLabel)
+		Expect(spoke.Update(ctx, workerNode)).To(Succeed())
+
+		ready, err := task.checkNodesAndMCPsReady(ctx, ci)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeFalse())
+
+		// The worker label may appear before the MCP notices the added node.
+		workerNode.Labels[customRoleLabel] = ""
+		Expect(spoke.Update(ctx, workerNode)).To(Succeed())
+		ready, err = task.checkNodesAndMCPsReady(ctx, ci)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeFalse())
+
+		pool.Status.MachineCount = 2
+		pool.Status.Conditions[0].Status = corev1.ConditionFalse
+		pool.Status.Conditions[1].Status = corev1.ConditionTrue
+		Expect(spoke.Update(ctx, pool)).To(Succeed())
+		ready, err = task.checkNodesAndMCPsReady(ctx, ci)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeFalse())
+
+		pool.Status.ReadyMachineCount = 2
+		pool.Status.UpdatedMachineCount = 2
+		pool.Status.Conditions[0].Status = corev1.ConditionTrue
+		pool.Status.Conditions[1].Status = corev1.ConditionFalse
+		Expect(spoke.Update(ctx, pool)).To(Succeed())
+		ready, err = task.checkNodesAndMCPsReady(ctx, ci)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeTrue())
+	})
+
+	It("supports the default worker group without ClusterInstance nodeLabels", func() {
+		Expect(spoke.Delete(ctx, pool)).To(Succeed())
+		pool.Name = "worker"
+		pool.ResourceVersion = ""
+		pool.Spec.NodeSelector.MatchLabels = map[string]string{"node-role.kubernetes.io/worker": ""}
+		Expect(spoke.Create(ctx, pool)).To(Succeed())
+		task.clusterInput.hostToGroupName["worker-1"] = "worker"
+		task.clusterInput.hostToGroupName["worker-2"] = "worker"
+		for _, hostname := range []string{"worker-1", "worker-2"} {
+			node := &corev1.Node{}
+			Expect(spoke.Get(ctx, client.ObjectKey{Name: hostname}, node)).To(Succeed())
+			delete(node.Labels, customRoleLabel)
+			Expect(spoke.Update(ctx, node)).To(Succeed())
+		}
+		ready, err := task.checkNodesAndMCPsReady(ctx, ci)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeTrue())
+	})
+
+	DescribeTable("waits for pool convergence", func(mutate func(*mcfgv1.MachineConfigPool)) {
+		mutate(pool)
+		Expect(spoke.Update(ctx, pool)).To(Succeed())
+		ready, err := task.checkNodesAndMCPsReady(ctx, ci)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeFalse())
+	},
+		Entry("unobserved generation", func(p *mcfgv1.MachineConfigPool) { p.Status.ObservedGeneration = 0 }),
+		Entry("old machine count", func(p *mcfgv1.MachineConfigPool) { p.Status.MachineCount = 1 }),
+		Entry("not all machines ready", func(p *mcfgv1.MachineConfigPool) { p.Status.ReadyMachineCount = 1 }),
+		Entry("not all machines updated", func(p *mcfgv1.MachineConfigPool) { p.Status.UpdatedMachineCount = 1 }),
+		Entry("unavailable machine", func(p *mcfgv1.MachineConfigPool) { p.Status.UnavailableMachineCount = 1 }),
+		Entry("degraded machine", func(p *mcfgv1.MachineConfigPool) { p.Status.DegradedMachineCount = 1 }),
+		Entry("missing conditions", func(p *mcfgv1.MachineConfigPool) { p.Status.Conditions = nil }),
+		Entry("not Updated", func(p *mcfgv1.MachineConfigPool) { p.Status.Conditions[0].Status = corev1.ConditionFalse }),
+		Entry("Updating", func(p *mcfgv1.MachineConfigPool) { p.Status.Conditions[1].Status = corev1.ConditionTrue }),
+		Entry("Degraded", func(p *mcfgv1.MachineConfigPool) { p.Status.Conditions[2].Status = corev1.ConditionTrue }),
+		Entry("old rendered config", func(p *mcfgv1.MachineConfigPool) { p.Status.Configuration.Name = "old-config" }),
+	)
+
+	It("checks the requested node's custom role even when pool counts look ready", func() {
+		delete(workerNode.Labels, customRoleLabel)
+		Expect(spoke.Update(ctx, workerNode)).To(Succeed())
+		ready, err := task.checkNodesAndMCPsReady(ctx, ci)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeFalse())
+	})
+
+	It("waits for a missing pool node selector to be configured even when pool counts look ready", func() {
+		selector := pool.Spec.NodeSelector
+		pool.Spec.NodeSelector = nil
+		Expect(spoke.Update(ctx, pool)).To(Succeed())
+
+		ready, err := task.checkNodesAndMCPsReady(ctx, ci)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeFalse())
+
+		pool.Spec.NodeSelector = selector
+		Expect(spoke.Update(ctx, pool)).To(Succeed())
+		ready, err = task.checkNodesAndMCPsReady(ctx, ci)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeTrue())
+	})
+
+	It("accepts Ready workers matching a converged pool without daemon annotations", func() {
+		Expect(workerNode.Annotations).To(BeEmpty())
+		ready, err := task.checkNodesAndMCPsReady(ctx, ci)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeTrue())
+	})
+
+	It("waits for a missing requested node", func() {
+		Expect(spoke.Delete(ctx, workerNode)).To(Succeed())
+		ready, err := task.checkNodesAndMCPsReady(ctx, ci)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeFalse())
+	})
+
+	DescribeTable("waits for a requested node without Ready=True", func(conditions []corev1.NodeCondition) {
+		workerNode.Status.Conditions = conditions
+		Expect(spoke.Status().Update(ctx, workerNode)).To(Succeed())
+		ready, err := task.checkNodesAndMCPsReady(ctx, ci)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeFalse())
+	},
+		Entry("Ready=False", []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionFalse}}),
+		Entry("Ready=Unknown", []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionUnknown}}),
+		Entry("no conditions", []corev1.NodeCondition{}),
+		Entry("only other conditions", []corev1.NodeCondition{{Type: corev1.NodeMemoryPressure, Status: corev1.ConditionFalse}}),
+	)
+
+	It("ignores an unrelated spoke node that is not Ready", func() {
+		unrelatedNode := &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: "unrelated-node"},
+			Status: corev1.NodeStatus{Conditions: []corev1.NodeCondition{
+				{Type: corev1.NodeReady, Status: corev1.ConditionFalse},
+			}},
+		}
+		Expect(spoke.Create(ctx, unrelatedNode)).To(Succeed())
+		ready, err := task.checkNodesAndMCPsReady(ctx, ci)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeTrue())
+	})
+
+	It("returns node list failures for retry", func() {
+		spoke = interceptor.NewClient(spoke.(client.WithWatch), interceptor.Funcs{
+			List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+				if _, ok := list.(*corev1.NodeList); ok {
+					return errors.New("node list failed")
+				}
+				return c.List(ctx, list, opts...)
+			},
+		})
+		ready, err := task.checkNodesAndMCPsReady(ctx, ci)
+		Expect(err).To(MatchError(ContainSubstring("node list failed")))
+		Expect(ready).To(BeFalse())
+	})
+
+	DescribeTable("keeps the existing all-nodes-Ready requirement", func(hostname string) {
+		node := &corev1.Node{}
+		Expect(spoke.Get(ctx, client.ObjectKey{Name: hostname}, node)).To(Succeed())
+		node.Status.Conditions[0].Status = corev1.ConditionFalse
+		Expect(spoke.Status().Update(ctx, node)).To(Succeed())
+		ready, err := task.checkNodesAndMCPsReady(ctx, ci)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeFalse())
+	},
+		Entry("an existing worker is not Ready", "worker-1"),
+		Entry("an existing master is not Ready", "master-1"),
+	)
+
+	It("waits when a requested node is being deleted", func() {
+		workerNode.Finalizers = []string{"test.example.com/hold"}
+		Expect(spoke.Update(ctx, workerNode)).To(Succeed())
+		Expect(spoke.Delete(ctx, workerNode)).To(Succeed())
+		ready, err := task.checkNodesAndMCPsReady(ctx, ci)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeFalse())
+	})
+
+	It("waits for a missing pool", func() {
+		Expect(spoke.Delete(ctx, pool)).To(Succeed())
+		ready, err := task.checkNodesAndMCPsReady(ctx, ci)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeFalse())
+	})
+
+	It("waits when the target pool is being deleted", func() {
+		pool.Finalizers = []string{"test.example.com/hold"}
+		Expect(spoke.Update(ctx, pool)).To(Succeed())
+		Expect(spoke.Delete(ctx, pool)).To(Succeed())
+		ready, err := task.checkNodesAndMCPsReady(ctx, ci)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeFalse())
+	})
+
+	It("returns MCP read failures for retry", func() {
+		spoke = interceptor.NewClient(spoke.(client.WithWatch), interceptor.Funcs{
+			Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+				if _, ok := obj.(*mcfgv1.MachineConfigPool); ok {
+					return errors.New("MCP read failed")
+				}
+				return c.Get(ctx, key, obj, opts...)
+			},
+		})
+		ready, err := task.checkNodesAndMCPsReady(ctx, ci)
+		Expect(err).To(MatchError(ContainSubstring("MCP read failed")))
+		Expect(ready).To(BeFalse())
+	})
+
+	It("keeps the existing join check for flat nodes input", func() {
+		task.clusterInput.hostToGroupName = nil
+		Expect(spoke.Delete(ctx, pool)).To(Succeed())
+		ready, err := task.checkNodesAndMCPsReady(ctx, ci)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeTrue())
+	})
+
+	It("counts default and custom worker groups separately", func() {
+		defaultPool := pool.DeepCopy()
+		defaultPool.Name = "worker"
+		defaultPool.ResourceVersion = ""
+		defaultPool.Spec.NodeSelector.MatchLabels = map[string]string{"node-role.kubernetes.io/worker": ""}
+		defaultPool.Spec.Configuration.Name = "rendered-worker"
+		defaultPool.Status.Configuration.Name = "rendered-worker"
+		defaultPool.Status.MachineCount = 1
+		defaultPool.Status.ReadyMachineCount = 1
+		defaultPool.Status.UpdatedMachineCount = 1
+		Expect(spoke.Create(ctx, defaultPool)).To(Succeed())
+		defaultWorker := workerNode.DeepCopy()
+		defaultWorker.Name = "default-worker"
+		defaultWorker.ResourceVersion = ""
+		delete(defaultWorker.Labels, customRoleLabel)
+		Expect(spoke.Create(ctx, defaultWorker)).To(Succeed())
+		task.clusterInput.hostToGroupName[defaultWorker.Name] = defaultPool.Name
+		nodes, _, err := unstructured.NestedSlice(ci.Object, "spec", "nodes")
+		Expect(err).ToNot(HaveOccurred())
+		nodes = append(nodes, map[string]any{"hostName": defaultWorker.Name, "role": "worker"})
+		Expect(unstructured.SetNestedSlice(ci.Object, nodes, "spec", "nodes")).To(Succeed())
+
+		ready, err := task.checkNodesAndMCPsReady(ctx, ci)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeTrue())
+
+		// A healthy custom pool cannot compensate for a stale default worker pool.
+		defaultPool.Status.MachineCount = 0
+		defaultPool.Status.ReadyMachineCount = 0
+		defaultPool.Status.UpdatedMachineCount = 0
+		Expect(spoke.Update(ctx, defaultPool)).To(Succeed())
+		ready, err = task.checkNodesAndMCPsReady(ctx, ci)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeFalse())
 	})
 })

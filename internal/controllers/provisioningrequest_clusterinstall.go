@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/openshift-kni/oran-o2ims/internal/validation"
+	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
 
 	certificatesv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -23,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -772,7 +774,8 @@ func (t *provisioningRequestReconcilerTask) handleClusterInstallation(ctx contex
 			slog.Int("fulfilledNodeCount", fulfilledCount),
 			slog.Int("renderedNodeCount", renderedNodeCount))
 
-		message := fmt.Sprintf("Scale-out: waiting for new node to join the cluster (%d → %d nodes)",
+		message := fmt.Sprintf(
+			"Scale-out: waiting for new node(s) to join the cluster (%d → %d nodes) and worker pools to finish updating",
 			fulfilledCount, renderedNodeCount)
 
 		if ctlrutils.IsClusterProvisionCompleted(t.object) {
@@ -810,18 +813,18 @@ func (t *provisioningRequestReconcilerTask) handleClusterInstallation(ctx contex
 				slog.Any("error", err))
 		}
 
-		// Check if all rendered nodes have joined the spoke cluster. If so,
+		// Check if all rendered nodes and their worker pools are ready. If so,
 		// update fulfilledNodeCount and let the normal finalization flow run.
-		allJoined, checkErr := t.checkAllNodesJoined(ctx, clusterInstance)
+		allReady, checkErr := t.checkNodesAndMCPsReady(ctx, clusterInstance)
 		if checkErr != nil {
-			t.logger.WarnContext(ctx, "Failed to check spoke node status, will retry",
+			t.logger.WarnContext(ctx, "Failed to check spoke node and MCP readiness, will retry",
 				slog.Any("error", checkErr))
 		}
-		t.logger.InfoContext(ctx, "Scale-out node join check",
-			slog.Bool("allJoined", allJoined))
+		t.logger.InfoContext(ctx, "Scale-out readiness check",
+			slog.Bool("allReady", allReady))
 
-		if allJoined {
-			t.logger.InfoContext(ctx, "All scale-out nodes have joined the cluster")
+		if allReady {
+			t.logger.InfoContext(ctx, "All scale-out nodes and worker pools are ready")
 			t.object.Status.Extensions.ClusterDetails.FulfilledNodeCount = renderedNodeCount
 			ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 				provisioningv1alpha1.PRconditionTypes.ClusterProvisioned,
@@ -1401,10 +1404,15 @@ var scaleOutCSRRBACRules = []rbacv1.PolicyRule{
 		Resources: []string{"nodes"},
 		Verbs:     []string{"get", "list"},
 	},
+	{
+		APIGroups: []string{"machineconfiguration.openshift.io"},
+		Resources: []string{"machineconfigpools"},
+		Verbs:     []string{"get"},
+	},
 }
 
-// scaleOutSpokeScheme is the scheme used by the spoke client for CSR operations.
-var scaleOutSpokeScheme = spokeclient.NewSpokeScheme(certificatesv1.AddToScheme, corev1.AddToScheme)
+// scaleOutSpokeScheme supports CSR approval and node/MCP readiness checks.
+var scaleOutSpokeScheme = spokeclient.NewSpokeScheme(certificatesv1.AddToScheme, corev1.AddToScheme, mcfgv1.Install)
 
 // approveScaleOutCSRs is a WORKAROUND for ACM-38075 where the Assisted Service
 // Agent controller's tryApproveDay2CSRs() does not fire for scale-out worker
@@ -1521,10 +1529,10 @@ func extractNodeHostnameFromCSR(csr *certificatesv1.CertificateSigningRequest) (
 	return cn[len(nodePrefix):], nil
 }
 
-// checkAllNodesJoined verifies that all hostnames in the rendered ClusterInstance
-// exist as Ready nodes on the spoke cluster. Returns true only if every rendered
-// hostname has a corresponding node in Ready state.
-func (t *provisioningRequestReconcilerTask) checkAllNodesJoined(
+// checkNodesAndMCPsReady verifies that every rendered ClusterInstance hostname
+// exists as a Ready node on the spoke cluster. For nodeGroups input, it also
+// verifies worker membership and waits for all desired worker MCPs to converge.
+func (t *provisioningRequestReconcilerTask) checkNodesAndMCPsReady(
 	ctx context.Context, clusterInstance *unstructured.Unstructured) (bool, error) {
 
 	clusterName := clusterInstance.GetName()
@@ -1549,22 +1557,116 @@ func (t *provisioningRequestReconcilerTask) checkAllNodesJoined(
 		return false, fmt.Errorf("failed to list nodes on spoke cluster: %w", err)
 	}
 
-	readyNodes := make(map[string]bool, len(nodeList.Items))
-	for _, node := range nodeList.Items {
-		if isNodeReady(&node) {
-			readyNodes[node.Name] = true
+	readyNodes := make(map[string]*corev1.Node, len(nodeList.Items))
+	for i := range nodeList.Items {
+		node := &nodeList.Items[i]
+		if isNodeReady(node) && node.DeletionTimestamp.IsZero() {
+			readyNodes[node.Name] = node
 		}
 	}
 
 	// Check that every rendered hostname exists as a Ready spoke node
 	renderedHostnames := getNodeRolesByHostname(clusterInstance)
 	for hostname := range renderedHostnames {
-		if !readyNodes[hostname] {
+		if readyNodes[hostname] == nil {
 			return false, nil
 		}
 	}
 
+	return t.checkMCPsReady(ctx, spokeClient, readyNodes, renderedHostnames)
+}
+
+// checkMCPsReady verifies membership and convergence for worker MCPs only,
+// using the desired hostname-to-group mapping. Control-plane MCP convergence
+// is outside the scope of worker scale-out. Legacy flat nodes input has no
+// group mapping and keeps its node readiness check only.
+func (t *provisioningRequestReconcilerTask) checkMCPsReady(
+	ctx context.Context, spokeClient client.Client, readyNodes map[string]*corev1.Node,
+	nodeRoles map[string]string,
+) (bool, error) {
+	if t.clusterInput == nil || len(t.clusterInput.hostToGroupName) == 0 {
+		return true, nil
+	}
+
+	workerHostsByGroup := make(map[string][]string)
+	for hostname, groupName := range t.clusterInput.hostToGroupName {
+		if nodeRoles[hostname] == "worker" {
+			workerHostsByGroup[groupName] = append(workerHostsByGroup[groupName], hostname)
+		}
+	}
+
+	for groupName, hostnames := range workerHostsByGroup {
+		expectedCount := len(hostnames)
+		pool := &mcfgv1.MachineConfigPool{}
+		if err := spokeClient.Get(ctx, client.ObjectKey{Name: groupName}, pool); err != nil {
+			if errors.IsNotFound(err) {
+				t.logger.WarnContext(ctx, "Expected MachineConfigPool not found, will retry",
+					slog.String("mcpName", groupName))
+				return false, nil
+			}
+			return false, fmt.Errorf("failed to get MachineConfigPool %s: %w", groupName, err)
+		}
+		if !pool.DeletionTimestamp.IsZero() {
+			return false, nil
+		}
+		if pool.Spec.NodeSelector == nil {
+			t.logger.WarnContext(ctx, "Expected MachineConfigPool has no node selector, will retry",
+				slog.String("mcpName", groupName))
+			return false, nil
+		}
+		selector, err := metav1.LabelSelectorAsSelector(pool.Spec.NodeSelector)
+		if err != nil {
+			return false, fmt.Errorf("invalid node selector for MachineConfigPool %s: %w", groupName, err)
+		}
+		for _, hostname := range hostnames {
+			node := readyNodes[hostname]
+			if node == nil || !selector.Matches(labels.Set(node.Labels)) {
+				t.logger.DebugContext(ctx, "Waiting for node to match MachineConfigPool",
+					slog.String("hostname", hostname), slog.String("mcpName", groupName))
+				return false, nil
+			}
+		}
+		// Once the requested hosts match the pool, wait for the whole pool to
+		// converge. MCP status accounts for applying configuration to its nodes.
+		if !isMCPReady(pool, expectedCount) {
+			t.logger.DebugContext(ctx, "Waiting for MachineConfigPool",
+				slog.String("mcpName", groupName), slog.Int("expectedCount", expectedCount),
+				slog.Int("machineCount", int(pool.Status.MachineCount)),
+				slog.Int("readyMachineCount", int(pool.Status.ReadyMachineCount)),
+				slog.Int("updatedMachineCount", int(pool.Status.UpdatedMachineCount)))
+			return false, nil
+		}
+	}
 	return true, nil
+}
+
+func isMCPReady(pool *mcfgv1.MachineConfigPool, expectedCount int) bool {
+	if pool.Status.ObservedGeneration != pool.Generation ||
+		int(pool.Status.MachineCount) != expectedCount ||
+		int(pool.Status.ReadyMachineCount) != expectedCount ||
+		int(pool.Status.UpdatedMachineCount) != expectedCount ||
+		pool.Status.UnavailableMachineCount != 0 || pool.Status.DegradedMachineCount != 0 ||
+		pool.Spec.Configuration.Name == "" || pool.Status.Configuration.Name != pool.Spec.Configuration.Name {
+		return false
+	}
+	conditions := map[mcfgv1.MachineConfigPoolConditionType]corev1.ConditionStatus{
+		mcfgv1.MachineConfigPoolUpdated:  corev1.ConditionTrue,
+		mcfgv1.MachineConfigPoolUpdating: corev1.ConditionFalse,
+		mcfgv1.MachineConfigPoolDegraded: corev1.ConditionFalse,
+	}
+	for conditionType, expectedStatus := range conditions {
+		found := false
+		for _, condition := range pool.Status.Conditions {
+			if condition.Type == conditionType && condition.Status == expectedStatus {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
 
 // isNodeReady returns true if the node has a Ready condition with status True.
