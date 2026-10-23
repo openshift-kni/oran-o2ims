@@ -54,13 +54,43 @@ var _ = Describe("UpdateNodeAllocationRequestObservedStatus", func() {
 	})
 
 	It("should update both ObservedGeneration and ObservedConfigTransactionId", func() {
-		err := UpdateNodeAllocationRequestObservedStatus(ctx, c, nar)
+		current := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(nar), current)).To(Succeed())
+
+		err := UpdateNodeAllocationRequestObservedStatus(ctx, c, nar,
+			current.ObjectMeta.Generation, current.Spec.ConfigTransactionId)
 		Expect(err).ToNot(HaveOccurred())
 
 		updated := &hwmgmtv1alpha1.NodeAllocationRequest{}
 		Expect(c.Get(ctx, client.ObjectKeyFromObject(nar), updated)).To(Succeed())
 		Expect(updated.Status.ObservedGeneration).To(Equal(updated.ObjectMeta.Generation))
 		Expect(updated.Status.ObservedConfigTransactionId).To(Equal(int64(4)))
+	})
+
+	It("does not acknowledge when the ConfigTransactionId advanced after the check", func() {
+		// Simulate a Day-2 arriving between the caller's validation and the ack: the caller
+		// validated transaction id 2, but the live spec is now 4. The helper must refuse to
+		// acknowledge the unhandled transaction.
+		err := UpdateNodeAllocationRequestObservedStatus(ctx, c, nar,
+			nar.ObjectMeta.Generation, 2)
+		Expect(err).To(MatchError(ErrNodeAllocationRequestSpecChanged))
+
+		updated := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(nar), updated)).To(Succeed())
+		// Observed status is left untouched (the BeforeEach seed values).
+		Expect(updated.Status.ObservedConfigTransactionId).To(Equal(int64(2)))
+		Expect(updated.Status.ObservedGeneration).To(Equal(int64(3)))
+	})
+
+	It("does not acknowledge when the generation advanced after the check", func() {
+		err := UpdateNodeAllocationRequestObservedStatus(ctx, c, nar,
+			nar.ObjectMeta.Generation+1, nar.Spec.ConfigTransactionId)
+		Expect(err).To(MatchError(ErrNodeAllocationRequestSpecChanged))
+
+		updated := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(nar), updated)).To(Succeed())
+		Expect(updated.Status.ObservedConfigTransactionId).To(Equal(int64(2)))
+		Expect(updated.Status.ObservedGeneration).To(Equal(int64(3)))
 	})
 })
 
