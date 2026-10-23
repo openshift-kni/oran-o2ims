@@ -8,6 +8,7 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -58,12 +59,31 @@ func GetNodeAllocationRequest(ctx context.Context, client client.Reader, key cli
 	return nil
 }
 
-// UpdateNodeAllocationRequestObservedStatus acknowledges all spec changes by updating
-// both ObservedGeneration and ObservedConfigTransactionId in a single status update.
+// ErrNodeAllocationRequestSpecChanged indicates that the NodeAllocationRequest spec
+// advanced (a new generation or ConfigTransactionId) between the time a reconcile
+// validated it and the time the observed status was about to be acknowledged. Callers
+// should requeue and let the normal reconcile flow handle the new spec rather than
+// acknowledging a transaction this reconcile never processed.
+var ErrNodeAllocationRequestSpecChanged = errors.New("NodeAllocationRequest spec changed before observed status could be acknowledged")
+
+// UpdateNodeAllocationRequestObservedStatus acknowledges the spec state that the
+// caller validated by updating both ObservedGeneration and ObservedConfigTransactionId
+// in a single status update.
+//
+// It only acknowledges expectedGeneration/expectedConfigTransactionId, and re-verifies
+// the freshly fetched object still matches both before writing. If the spec advanced in
+// the meantime (a Day-2 configuration arrived after the caller's check, or after a
+// Status().Update conflict forced a re-fetch), it returns ErrNodeAllocationRequestSpecChanged
+// without acknowledging anything. This prevents a race where the hardware manager would
+// mark a new, unhandled transaction as observed — which would let the ProvisioningRequest
+// controller's hardwareConfigInProgress gate proceed before the configuration is applied,
+// and could silently drop the Day-2 work entirely.
 func UpdateNodeAllocationRequestObservedStatus(
 	ctx context.Context,
 	c client.Client,
-	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) error {
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
+	expectedGeneration int64,
+	expectedConfigTransactionId int64) error {
 
 	// nolint: wrapcheck
 	err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
@@ -71,14 +91,25 @@ func UpdateNodeAllocationRequestObservedStatus(
 		if err := c.Get(ctx, client.ObjectKeyFromObject(nodeAllocationRequest), newNodeAllocationRequest); err != nil {
 			return err
 		}
-		newNodeAllocationRequest.Status.ObservedGeneration = newNodeAllocationRequest.ObjectMeta.Generation
-		newNodeAllocationRequest.Status.ObservedConfigTransactionId = newNodeAllocationRequest.Spec.ConfigTransactionId
+		// Do not acknowledge a transaction this reconcile has not handled. If the spec
+		// advanced since the caller validated it, bail out so the reconcile restarts and
+		// routes the new spec through the normal flow. This is not a conflict error, so
+		// RetryOnConflictOrRetriable does not retry it.
+		if newNodeAllocationRequest.ObjectMeta.Generation != expectedGeneration ||
+			newNodeAllocationRequest.Spec.ConfigTransactionId != expectedConfigTransactionId {
+			return ErrNodeAllocationRequestSpecChanged
+		}
+		newNodeAllocationRequest.Status.ObservedGeneration = expectedGeneration
+		newNodeAllocationRequest.Status.ObservedConfigTransactionId = expectedConfigTransactionId
 		if err := c.Status().Update(ctx, newNodeAllocationRequest); err != nil {
 			return err
 		}
 		return nil
 	})
 
+	if errors.Is(err, ErrNodeAllocationRequestSpecChanged) {
+		return ErrNodeAllocationRequestSpecChanged
+	}
 	if err != nil {
 		return fmt.Errorf("failed to update NodeAllocationRequest observed generation and transaction id: %w", err)
 	}

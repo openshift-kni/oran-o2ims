@@ -697,6 +697,22 @@ var _ = Describe("handleNodeAllocationRequestNoop", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(observed(nar)).To(Equal(int64(0)))
 	})
+
+	It("requeues without acknowledging when a Day-2 races in after the check", func() {
+		// The live NAR already carries a newer Day-2 transaction (id 2), but the handler
+		// is invoked with the stale pre-Day-2 view (id 1) it validated. It must not
+		// acknowledge the unhandled transaction; it must requeue so the SpecChanged path
+		// processes it.
+		nar := provisionedNAR(2, 0, nil)
+		staleView := nar.DeepCopy()
+		staleView.Spec.ConfigTransactionId = 1
+
+		result, err := reconciler.handleNodeAllocationRequestNoop(ctx, staleView)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+		// The live observed id is left untouched; the unhandled transaction is not acked.
+		Expect(observed(nar)).To(Equal(int64(0)))
+	})
 })
 
 var _ = Describe("handleScaleInAnnotations", func() {

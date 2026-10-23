@@ -317,7 +317,15 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestNoop(
 			string(hwmgmtv1alpha1.Configured)) == nil {
 		r.Logger.InfoContext(ctx, "Acknowledging legacy baseline config transaction",
 			slog.Int64("specConfigTransactionId", nodeAllocationRequest.Spec.ConfigTransactionId))
-		if err := hwmgrutils.UpdateNodeAllocationRequestObservedStatus(ctx, r.Client, nodeAllocationRequest); err != nil {
+		err := hwmgrutils.UpdateNodeAllocationRequestObservedStatus(ctx, r.Client, nodeAllocationRequest,
+			nodeAllocationRequest.ObjectMeta.Generation, nodeAllocationRequest.Spec.ConfigTransactionId)
+		if errors.Is(err, hwmgrutils.ErrNodeAllocationRequestSpecChanged) {
+			// A Day-2 configuration arrived between the no-op check and the ack; requeue so
+			// the SpecChanged path handles it instead of acknowledging an unprocessed spec.
+			r.Logger.InfoContext(ctx, "NodeAllocationRequest spec changed before baseline ack, requeuing")
+			return hwmgrutils.RequeueWithShortInterval(), nil
+		}
+		if err != nil {
 			return hwmgrutils.RequeueWithShortInterval(),
 				fmt.Errorf("failed to acknowledge legacy baseline config transaction: %w", err)
 		}
@@ -642,7 +650,15 @@ func (r *NodeAllocationRequestReconciler) handleNewNodeAllocationRequestCreate(
 	// installation indefinitely. A genuine Day-2 change bumps the generation (and
 	// ConfigTransactionId), re-entering the SpecChanged flow, so this does not mask real
 	// configuration work.
-	if err := hwmgrutils.UpdateNodeAllocationRequestObservedStatus(ctx, r.Client, nodeAllocationRequest); err != nil {
+	err := hwmgrutils.UpdateNodeAllocationRequestObservedStatus(ctx, r.Client, nodeAllocationRequest,
+		nodeAllocationRequest.ObjectMeta.Generation, nodeAllocationRequest.Spec.ConfigTransactionId)
+	if errors.Is(err, hwmgrutils.ErrNodeAllocationRequestSpecChanged) {
+		// The spec advanced during create; requeue so the next reconcile acknowledges the
+		// current baseline instead of a stale one.
+		r.Logger.InfoContext(ctx, "NodeAllocationRequest spec changed during create ack, requeuing")
+		return hwmgrutils.RequeueWithShortInterval(), nil
+	}
+	if err != nil {
 		return hwmgrutils.RequeueWithShortInterval(), fmt.Errorf("failed to update observed status: %w", err)
 	}
 
@@ -739,7 +755,16 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 				return ctrl.Result{}, fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, updateErr)
 			}
 		} else {
-			if err := hwmgrutils.UpdateNodeAllocationRequestObservedStatus(ctx, r.Client, nodeAllocationRequest); err != nil {
+			err := hwmgrutils.UpdateNodeAllocationRequestObservedStatus(ctx, r.Client, nodeAllocationRequest,
+				nodeAllocationRequest.ObjectMeta.Generation, nodeAllocationRequest.Spec.ConfigTransactionId)
+			if errors.Is(err, hwmgrutils.ErrNodeAllocationRequestSpecChanged) {
+				// A real spec change (e.g. an HW profile Day-2) arrived after the no-change
+				// check; requeue so it is re-evaluated and processed rather than acknowledged
+				// as a no-op.
+				r.Logger.InfoContext(ctx, "NodeAllocationRequest spec changed before spec-change ack, requeuing")
+				return hwmgrutils.RequeueWithShortInterval(), nil
+			}
+			if err != nil {
 				return hwmgrutils.RequeueWithShortInterval(),
 					fmt.Errorf("failed to acknowledge spec change: %w", err)
 			}
