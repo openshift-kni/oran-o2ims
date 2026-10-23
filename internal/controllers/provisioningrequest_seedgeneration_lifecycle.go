@@ -9,7 +9,9 @@ package controllers
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
@@ -197,12 +199,22 @@ func (t *provisioningRequestReconcilerTask) handleSeedGeneratorSubmissionError(c
 			return requeueWithError(fmt.Errorf("failed to record rejected SeedGenerator submission: %w", statusErr))
 		}
 	}
-	// A definitive admission rejection cannot have created the CR.
-	// Transport errors are ambiguous and leave the one-shot guard set.
-	if apierrors.IsInvalid(err) || apierrors.IsForbidden(err) || apierrors.IsUnauthorized(err) {
+	// A definitive API rejection cannot have created the CR. Transport and
+	// server errors are ambiguous and leave the one-shot guard set.
+	if seedGeneratorCreateDefinitelyRejected(err) {
 		t.object.Status.Extensions.ClusterDetails.SeedGenerationStatus.SeedGeneratorSubmitted = false
 	}
 	return t.handleSeedGenerationLifecycleError(ctx, "failed to create spoke SeedGenerator", err)
+}
+
+func seedGeneratorCreateDefinitelyRejected(err error) bool {
+	var apiStatus apierrors.APIStatus
+	if !errors.As(err, &apiStatus) {
+		return false
+	}
+	code := apiStatus.Status().Code
+	return code >= http.StatusBadRequest && code < http.StatusInternalServerError &&
+		code != http.StatusRequestTimeout && code != http.StatusConflict && code != http.StatusTooManyRequests
 }
 
 func (t *provisioningRequestReconcilerTask) handleSeedGeneratorObservationError(

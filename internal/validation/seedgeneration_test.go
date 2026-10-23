@@ -100,6 +100,44 @@ func TestValidateSeedGenerationTemplateDefaults(t *testing.T) {
 	}
 }
 
+func TestTemplateOwnedSeedGenerationWithoutPRSchemaEntry(t *testing.T) {
+	upgradeSchema := map[string]any{
+		"type": "object", "additionalProperties": false, "properties": map[string]any{},
+	}
+	prSchema := map[string]any{
+		"type": "object", "properties": map[string]any{"upgradeParameters": upgradeSchema},
+	}
+	defaults := map[string]any{"seedGeneration": map[string]any{
+		"seedImage": "quay.io/example/seed:4.22", "seedAuthSecretRef": map[string]any{"name": "push-auth"},
+	}}
+	if err := ValidateSeedGenerationTemplateDefaults(defaults, prSchema); err != nil {
+		t.Fatalf("complete template-owned defaults rejected: %v", err)
+	}
+	delete(defaults["seedGeneration"].(map[string]any), "seedAuthSecretRef")
+	if err := ValidateSeedGenerationTemplateDefaults(defaults, prSchema); err == nil {
+		t.Fatal("incomplete template defaults accepted without a required PR field")
+	}
+	defaults["seedGeneration"].(map[string]any)["seedAuthSecretRef"] = map[string]any{"name": "push-auth"}
+	upgradeSchema["properties"].(map[string]any)["clusterVersion"] = map[string]any{"type": "object"}
+	if err := ValidateSeedGenerationTemplateDefaults(defaults, prSchema); err == nil {
+		t.Fatal("template-owned seed generation accepted a PR schema for another operation")
+	}
+	delete(upgradeSchema["properties"].(map[string]any), "clusterVersion")
+	delete(upgradeSchema, "additionalProperties")
+	if err := ValidateSeedGenerationTemplateDefaults(defaults, prSchema); err == nil {
+		t.Fatal("template-owned seed generation accepted an open upgradeParameters schema")
+	}
+	delete(prSchema["properties"].(map[string]any), "upgradeParameters")
+	prSchema["additionalProperties"] = false
+	if err := ValidateSeedGenerationTemplateDefaults(defaults, prSchema); err != nil {
+		t.Fatalf("complete defaults without an upgradeParameters schema were rejected: %v", err)
+	}
+	delete(prSchema, "additionalProperties")
+	if err := ValidateSeedGenerationTemplateDefaults(defaults, prSchema); err == nil {
+		t.Fatal("template-owned seed generation accepted an open root schema without upgradeParameters")
+	}
+}
+
 func TestHasSeedGenerationConfig(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -224,6 +262,27 @@ func TestValidateSeedGenerationUpgradeData(t *testing.T) {
 				t.Errorf("ValidateSeedGenerationUpgradeData() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestSeedGenerationEffectiveSchemaRejectsTransportPrefixes(t *testing.T) {
+	var effectiveSchema map[string]any
+	if err := json.Unmarshal([]byte(seedGenerationEffectiveSchema), &effectiveSchema); err != nil {
+		t.Fatal(err)
+	}
+	data := map[string]any{"seedGeneration": map[string]any{
+		"seedAuthSecretRef": map[string]any{"name": "push-auth"},
+	}}
+	seed := data["seedGeneration"].(map[string]any)
+	for _, image := range []string{"docker://quay.io/example/seed:4.22", "oci://quay.io/example/seed:4.22"} {
+		seed["seedImage"] = image
+		if err := ValidateJSONSchema(effectiveSchema, data); err == nil {
+			t.Fatalf("effective schema accepted transport-prefixed image %q", image)
+		}
+	}
+	seed["seedImage"] = "quay.io/example/seed:4.22"
+	if err := ValidateJSONSchema(effectiveSchema, data); err != nil {
+		t.Fatalf("effective schema rejected plain image reference: %v", err)
 	}
 }
 

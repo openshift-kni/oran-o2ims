@@ -14,6 +14,11 @@ import (
 	"github.com/distribution/reference"
 )
 
+const (
+	seedImageField       = "seedImage"
+	seedRegistryRefField = "seedAuthSecretRef"
+)
+
 // HasSeedGenerationConfig reports whether the template defaults or request
 // parameters select seed generation. Check both because defaults can request it
 // without any ProvisioningRequest override.
@@ -90,7 +95,7 @@ const seedGenerationEffectiveSchema = `{
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "seedImage": {"type": "string", "minLength": 1, "pattern": "^([a-z0-9]+://)?\\S+$"},
+        "seedImage": {"type": "string", "minLength": 1, "pattern": "^\\S+$", "not": {"pattern": "://"}},
         "seedGenerationTimeout": {"type": "string", "minLength": 1},
         "seedAuthSecretRef": {
           "type": "object", "additionalProperties": false,
@@ -146,12 +151,25 @@ const seedGenerationEffectiveSchema = `{
 // It deliberately does not use the PR-facing schema, which only describes
 // fields that a ProvisioningRequest author is allowed to override.
 func ValidateSeedGenerationUpgradeData(upgradeData map[string]any) error {
-	return validateSeedGenerationUpgradeData(upgradeData, []any{"seedImage", "seedAuthSecretRef"})
+	return validateSeedGenerationUpgradeData(upgradeData, []any{seedImageField, seedRegistryRefField})
+}
+
+// SeedGenerationDefaultsComplete reports whether both required fields are
+// present. Their values are validated separately against the effective schema.
+func SeedGenerationDefaultsComplete(upgradeData map[string]any) bool {
+	seedGeneration, ok := upgradeData["seedGeneration"].(map[string]any)
+	if !ok {
+		return false
+	}
+	_, hasImage := seedGeneration[seedImageField]
+	_, hasAuth := seedGeneration[seedRegistryRefField]
+	return hasImage && hasAuth
 }
 
 // ValidateSeedGenerationTemplateDefaults validates template-owned seed
-// generation defaults. seedImage and seedAuthSecretRef may be omitted when
-// the PR schema exposes and requires them. Secret data itself is never PR input.
+// generation defaults. Missing required values must be exposed and required
+// by the PR schema. When both values are present, the template may omit the
+// seedGeneration PR schema entry entirely.
 func ValidateSeedGenerationTemplateDefaults(
 	upgradeData, templateParameterSchema map[string]any,
 ) error {
@@ -162,7 +180,26 @@ func ValidateSeedGenerationTemplateDefaults(
 	if !ok {
 		return fmt.Errorf("templateParameterSchema must have a properties section")
 	}
-	upgradeSchema, ok := templateProperties["upgradeParameters"].(map[string]any)
+	seedGeneration := upgradeData["seedGeneration"].(map[string]any)
+	upgradeSchemaRaw, exposed := templateProperties["upgradeParameters"]
+	if !exposed {
+		for _, key := range []string{seedImageField, seedRegistryRefField} {
+			if _, hasDefault := seedGeneration[key]; !hasDefault {
+				return fmt.Errorf("%s is missing from upgradeDefaults and is not exposed for ProvisioningRequest input", key)
+			}
+		}
+		if templateParameterSchema["additionalProperties"] != false {
+			return fmt.Errorf("templateParameterSchema must set additionalProperties to false when upgradeParameters is omitted")
+		}
+		if _, ok := templateParameterSchema["patternProperties"]; ok {
+			return fmt.Errorf("templateParameterSchema must not use patternProperties when upgradeParameters is omitted")
+		}
+		if _, ok := templateParameterSchema["$ref"]; ok {
+			return fmt.Errorf("templateParameterSchema must not use $ref for seed generation")
+		}
+		return nil
+	}
+	upgradeSchema, ok := upgradeSchemaRaw.(map[string]any)
 	if !ok {
 		return fmt.Errorf("templateParameterSchema must define upgradeParameters as an object schema")
 	}
@@ -170,7 +207,31 @@ func ValidateSeedGenerationTemplateDefaults(
 	if !ok {
 		return fmt.Errorf("upgradeParameters schema must have a properties section")
 	}
-	seedGenerationPRSchema, ok := upgradeProperties["seedGeneration"].(map[string]any)
+	seedGenerationPRSchemaRaw, exposed := upgradeProperties["seedGeneration"]
+	if !exposed {
+		for _, key := range []string{seedImageField, seedRegistryRefField} {
+			if _, hasDefault := seedGeneration[key]; !hasDefault {
+				return fmt.Errorf("%s is missing from upgradeDefaults and is not exposed for ProvisioningRequest input", key)
+			}
+		}
+		if len(upgradeProperties) != 0 {
+			return fmt.Errorf("upgradeParameters schema cannot expose another operation when seed generation is template-owned")
+		}
+		if upgradeSchema["additionalProperties"] != false {
+			return fmt.Errorf("upgradeParameters must set additionalProperties to false for seed generation")
+		}
+		if _, ok := upgradeSchema["patternProperties"]; ok {
+			return fmt.Errorf("upgradeParameters must not use patternProperties for seed generation")
+		}
+		if _, ok := upgradeSchema["$ref"]; ok {
+			return fmt.Errorf("upgradeParameters must not use $ref for seed generation")
+		}
+		if _, ok := templateParameterSchema["$ref"]; ok {
+			return fmt.Errorf("templateParameterSchema must not use $ref for seed generation")
+		}
+		return nil
+	}
+	seedGenerationPRSchema, ok := seedGenerationPRSchemaRaw.(map[string]any)
 	if !ok {
 		return fmt.Errorf("upgradeParameters schema must define seedGeneration as an object schema")
 	}
@@ -178,10 +239,9 @@ func ValidateSeedGenerationTemplateDefaults(
 		return fmt.Errorf("invalid seed generation PR schema: %w", err)
 	}
 
-	seedGeneration := upgradeData["seedGeneration"].(map[string]any)
 	properties, _ := seedGenerationPRSchema["properties"].(map[string]any)
 	missingPRFields := false
-	for _, key := range []string{"seedImage", "seedAuthSecretRef"} {
+	for _, key := range []string{seedImageField, seedRegistryRefField} {
 		if _, hasDefault := seedGeneration[key]; hasDefault {
 			continue
 		}
@@ -219,7 +279,7 @@ func validateSeedGenerationUpgradeData(upgradeData map[string]any, requiredField
 	if !ok {
 		return fmt.Errorf("seedGeneration must be an object")
 	}
-	if image, exists := seedGeneration["seedImage"]; exists {
+	if image, exists := seedGeneration[seedImageField]; exists {
 		parsed, err := reference.ParseNormalizedNamed(image.(string))
 		if err != nil {
 			return fmt.Errorf("invalid seedImage: %w", err)
@@ -275,7 +335,7 @@ func ValidateSeedGenerationPRSchema(schema map[string]any) error {
 	}
 	for key, value := range props {
 		switch key {
-		case "seedImage":
+		case seedImageField:
 			field, ok := value.(map[string]any)
 			if !ok || field["type"] != "string" {
 				return fmt.Errorf("upgradeParameters.seedGeneration.seedImage must have type \"string\"")
@@ -285,7 +345,7 @@ func ValidateSeedGenerationPRSchema(schema map[string]any) error {
 			if !ok || field["type"] != "string" {
 				return fmt.Errorf("upgradeParameters.seedGeneration.seedGenerationTimeout must have type \"string\"")
 			}
-		case "seedAuthSecretRef":
+		case seedRegistryRefField:
 			if err := validateSeedAuthSecretRefPRSchema(value); err != nil {
 				return err
 			}
@@ -302,7 +362,7 @@ func ValidateSeedGenerationPRSchema(schema map[string]any) error {
 			return fmt.Errorf("upgradeParameters.seedGeneration required field %q must be defined in properties", field)
 		}
 		switch field {
-		case "seedImage", "seedGenerationTimeout", "seedAuthSecretRef":
+		case seedImageField, "seedGenerationTimeout", seedRegistryRefField:
 		default:
 			return fmt.Errorf("upgradeParameters.seedGeneration cannot require field %q", field)
 		}
