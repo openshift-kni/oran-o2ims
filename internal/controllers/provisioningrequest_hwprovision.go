@@ -778,6 +778,43 @@ func isConfigTransactionObserved(observedID, expectedGeneration int64) bool {
 	return observedID == expectedGeneration
 }
 
+// hardwareConfigInProgress reports whether a hardware configuration transaction
+// scheduled on the NodeAllocationRequest is still in flight, so the reconciler
+// must not advance to downstream phases (cluster installation, policy
+// configuration, or — critically — IBU upgrade Prep).
+//
+// It returns true in two windows:
+//   - configured is non-nil and false: the hardware manager has published a
+//     Configured condition that is not yet True (e.g. a Day-2 firmware update is
+//     applying and power-cycling the node).
+//   - configured is nil but a new ConfigTransactionId has been scheduled and not
+//     yet observed by the hardware manager: the brief window after a Day-2 firmware
+//     update is requested but before a Configured condition exists. waitForHardwareData
+//     reports configured==nil here, which must not be treated as "no configuration in
+//     progress" — doing so lets the upgrade phase create the IBGU while the firmware
+//     flash reboots the node and kills IBU Prep (OCPBUGS-132825).
+//
+// The scheduled-but-unobserved check compares the NAR's own Spec.ConfigTransactionId
+// against Status.ObservedConfigTransactionId rather than the ProvisioningRequest
+// generation. ConfigTransactionId is seeded from the generation but is incremented
+// independently on swap scale-in (see createOrUpdateNodeAllocationRequest), so it
+// can diverge from the generation; the spec-vs-observed comparison is the source of
+// truth for whether the hardware manager has caught up, matching the stale-status
+// guard in checkNodeAllocationRequestStatus.
+//
+// This gate depends on the hardware manager acknowledging the baseline
+// ConfigTransactionId when it first creates the NAR (handleNewNodeAllocationRequestCreate
+// -> UpdateNodeAllocationRequestObservedStatus). Without that Day-0 ack, the seeded
+// baseline transaction would read as perpetually unobserved here and deadlock cluster
+// installation.
+func hardwareConfigInProgress(nar *hwmgmtv1alpha1.NodeAllocationRequest, configured *bool) bool {
+	if configured != nil && !*configured {
+		return true
+	}
+	return nar.Spec.ConfigTransactionId != 0 &&
+		nar.Status.ObservedConfigTransactionId != nar.Spec.ConfigTransactionId
+}
+
 // buildNodeAllocationRequestSpec builds the NodeAllocationRequest from the pre-merged hwMgmt data and cluster instance
 func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec(
 	clusterInstance *unstructured.Unstructured) (*hwmgmtv1alpha1.NodeAllocationRequest, error) {

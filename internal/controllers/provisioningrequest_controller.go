@@ -690,7 +690,13 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 			slog.String("nodeAllocationRequestID", nodeAllocationRequestID))
 		return requeueWithMediumInterval(), false, nil
 	}
-	if configured != nil && !*configured {
+	// Block downstream phases while a hardware configuration transaction scheduled
+	// on the NodeAllocationRequest is still in flight — including the window after a
+	// Day-2 firmware update is scheduled but before a Configured condition exists,
+	// where waitForHardwareData reports configured==nil. Proceeding there would let
+	// the upgrade phase create the IBGU while the firmware flash power-cycles the node
+	// and kills IBU Prep (OCPBUGS-132825).
+	if hardwareConfigInProgress(nodeAllocationRequestResponse, configured) {
 		t.logger.InfoContext(ctx, "Waiting for NodeAllocationRequest to be configured",
 			slog.String("nodeAllocationRequestID", nodeAllocationRequestID))
 		return requeueWithMediumInterval(), false, nil
