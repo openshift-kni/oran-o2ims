@@ -1529,6 +1529,108 @@ var _ = Describe("waitForHardwareData", func() {
 		Expect(configured).To(BeNil())
 		Expect(timedOutOrFailed).To(BeFalse())
 	})
+
+	It("gates downstream phases when a Day-2 config is scheduled but not yet observed and no Configured condition exists (OCPBUGS-132825)", func() {
+		// Reproduces the exact decision the ProvisioningRequestController makes at
+		// handleNodeAllocationRequestProvisioning: the NAR is provisioned, but a Day-2
+		// firmware update has been scheduled (Spec.ConfigTransactionId bumped) and the
+		// hardware manager has not yet observed it or attached a Configured condition,
+		// so the derived `configured` is nil. The gate must still block so the upgrade
+		// phase does not create the IBGU while the firmware flash power-cycles the node.
+		scheduledButUnobservedMock := &hwmgmtv1alpha1.NodeAllocationRequest{
+			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+				ConfigTransactionId: 2,
+			},
+			Status: hwmgmtv1alpha1.NodeAllocationRequestStatus{
+				Conditions: []metav1.Condition{
+					{Type: "Provisioned", Status: metav1.ConditionTrue, Reason: "Completed", Message: "Hardware provisioned", LastTransitionTime: metav1.Now()},
+				},
+				ObservedConfigTransactionId: 1,
+			},
+		}
+
+		// waitForHardwareData derives `configured` from these two checks; call them
+		// directly to avoid the cluster-instance BMC update side effects that follow
+		// once provisioning is complete.
+		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, scheduledButUnobservedMock, hwmgmtv1alpha1.Provisioned)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(provisioned).To(BeTrue())
+		Expect(timedOutOrFailed).To(BeFalse())
+
+		configured, timedOutOrFailed, err := task.checkNodeAllocationRequestConfigStatus(ctx, scheduledButUnobservedMock)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(configured).To(BeNil())
+		Expect(timedOutOrFailed).To(BeFalse())
+
+		// With configured==nil, the gate must rely on the scheduled-but-unobserved
+		// transaction to keep blocking.
+		Expect(hardwareConfigInProgress(scheduledButUnobservedMock, configured)).To(BeTrue())
+	})
+})
+
+var _ = Describe("hardwareConfigInProgress", func() {
+	// Regression coverage for OCPBUGS-132825: a combined Day-2 firmware update +
+	// IBU request must not advance past the hardware phase (which would create the
+	// IBGU and start IBU Prep) while the firmware configuration transaction is
+	// still in flight — including the window before a Configured condition exists,
+	// where waitForHardwareData reports configured==nil.
+	nar := func(specTxn, observedTxn int64) *hwmgmtv1alpha1.NodeAllocationRequest {
+		return &hwmgmtv1alpha1.NodeAllocationRequest{
+			Spec:   hwmgmtv1alpha1.NodeAllocationRequestSpec{ConfigTransactionId: specTxn},
+			Status: hwmgmtv1alpha1.NodeAllocationRequestStatus{ObservedConfigTransactionId: observedTxn},
+		}
+	}
+	boolp := func(b bool) *bool { return &b }
+
+	It("blocks when a Configured condition exists but is not yet True", func() {
+		// Day-2 firmware update applying/rebooting: configured==false.
+		Expect(hardwareConfigInProgress(nar(2, 2), boolp(false))).To(BeTrue())
+	})
+
+	It("blocks when a new config transaction is scheduled but not yet observed (configured==nil)", func() {
+		// The nil-hole: firmware update just scheduled (ConfigTransactionId bumped to 2),
+		// hardware manager has not observed it or attached a Configured condition.
+		Expect(hardwareConfigInProgress(nar(2, 1), nil)).To(BeTrue())
+	})
+
+	It("blocks when the transaction has never been observed (observed==0, configured==nil)", func() {
+		Expect(hardwareConfigInProgress(nar(2, 0), nil)).To(BeTrue())
+	})
+
+	It("blocks when a swap-bumped transaction is scheduled but not yet observed", func() {
+		// Swap scale-in bumps ConfigTransactionId independently of the generation
+		// (see createOrUpdateNodeAllocationRequest), so Spec.ConfigTransactionId can
+		// exceed the generation. The gate must track the NAR's own spec-vs-observed
+		// transaction, not the generation — otherwise a generation-based comparison
+		// would wrongly treat this in-flight swap as complete.
+		Expect(hardwareConfigInProgress(nar(3, 2), nil)).To(BeTrue())
+	})
+
+	It("proceeds once the config transaction is observed and Configured is True", func() {
+		Expect(hardwareConfigInProgress(nar(2, 2), boolp(true))).To(BeFalse())
+	})
+
+	It("proceeds once a swap-bumped transaction is observed even though it differs from the generation", func() {
+		// Spec and observed transactions agree (3==3) while the generation remains 2;
+		// a generation-based comparison would wrongly keep blocking here.
+		Expect(hardwareConfigInProgress(nar(3, 3), boolp(true))).To(BeFalse())
+	})
+
+	It("proceeds when no config transaction was scheduled (configured==nil, ConfigTransactionId==0)", func() {
+		// Normal provisioning that never requested a Day-2 hardware config.
+		Expect(hardwareConfigInProgress(nar(0, 0), nil)).To(BeFalse())
+	})
+
+	It("proceeds for a Day-0 baseline the hardware manager has acknowledged (configured==nil, observed==spec)", func() {
+		// Day-0 provisioning seeds ConfigTransactionId from the generation (>=1) and never emits
+		// a Configured condition. Once the hardware manager acknowledges the baseline on NAR
+		// create (ObservedConfigTransactionId==Spec.ConfigTransactionId), the gate must let
+		// cluster installation proceed rather than block forever. A generation-nonzero
+		// transaction with no Configured condition must not be read as an in-flight Day-2
+		// configuration (OCPBUGS-132825 Day-0 deadlock). The hardware-manager side of this
+		// contract is covered by the handleNewNodeAllocationRequestCreate test.
+		Expect(hardwareConfigInProgress(nar(1, 1), nil)).To(BeFalse())
+	})
 })
 
 var _ = Describe("applyNodeConfiguration", func() {
