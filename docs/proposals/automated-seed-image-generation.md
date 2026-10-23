@@ -293,6 +293,11 @@ template defaults:
   so "does the effective document have everything it needs" is answered
   after the merge, never against raw PR input.
 
+When both required values are supplied by the template, its PR-facing schema
+may omit `seedGeneration`. If `upgradeParameters` remains in the schema, it
+must be closed and expose no other operation. The template may also omit
+`upgradeParameters` entirely when the root schema is closed.
+
 Splitting the schemas also removes an admission ordering hazard. The webhook
 calls `ValidateTemplateInputMatchesSchema` on the raw `spec.templateParameters`
 *before* `ValidateUpgradeInput` runs, without merging
@@ -343,6 +348,10 @@ PR authors, and it follows the same `templateParameterSchema` pattern as
 `imageBasedGroupUpgrade`. A template that omits a default must mark that PR
 field and its parent objects as required.
 
+`seedImage` is a plain container image reference. Transport prefixes such as
+`docker://` and `oci://` are rejected because LCA uses the value as its image
+build tag and push destination.
+
 **PR-facing schema.** Lists only the fields a PR may override, with
 `additionalProperties: false` at every object level so unknown or mistyped
 keys — and every field not exposed by the template — are rejected rather than
@@ -363,7 +372,8 @@ properties:
         type: string
         description: Full pull-spec for the seed container image to publish
         minLength: 1
-        pattern: "^([a-z0-9]+://)?[\\S]+$"
+        pattern: "^\\S+$"
+        not: { pattern: "://" }
       seedAuthSecretRef:
         type: object
         additionalProperties: false
@@ -394,7 +404,11 @@ properties:
     type: object
     additionalProperties: false
     properties:
-      seedImage: { type: string, minLength: 1, pattern: "^([a-z0-9]+://)?[\\S]+$" }
+      seedImage:
+        type: string
+        minLength: 1
+        pattern: "^\\S+$"
+        not: { pattern: "://" }
       seedAuthSecretRef:
         type: object
         additionalProperties: false

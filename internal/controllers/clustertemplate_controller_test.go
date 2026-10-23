@@ -1740,6 +1740,54 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 	}
 }
 
+func TestValidateTemplateParameterSchemaWithTemplateOwnedSeed(t *testing.T) {
+	ct := &provisioningv1alpha1.ClusterTemplate{
+		Spec: provisioningv1alpha1.ClusterTemplateSpec{
+			TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
+				HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
+					NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{{Name: "master", Role: "master"}},
+				},
+				UpgradeDefaults: runtime.RawExtension{Raw: []byte(`{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"}}}`)},
+			},
+			TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`{
+				"type":"object",
+				"required":["nodeClusterName","oCloudSiteId","clusterInstanceParameters","policyTemplateParameters"],
+				"properties":{
+					"nodeClusterName":{"type":"string"},
+					"oCloudSiteId":{"type":"string"},
+					"clusterInstanceParameters":{"type":"object","properties":{"nodeGroups":{"type":"array"}}},
+					"policyTemplateParameters":{"type":"object","properties":{}},
+					"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{}}
+				}
+			}`)},
+		},
+	}
+	if err := validateTemplateParameterSchema(ct); err != nil {
+		t.Fatalf("complete template-owned seed defaults were rejected: %v", err)
+	}
+	var templateSchema map[string]any
+	if err := json.Unmarshal(ct.Spec.TemplateParameterSchema.Raw, &templateSchema); err != nil {
+		t.Fatal(err)
+	}
+	delete(templateSchema["properties"].(map[string]any), "upgradeParameters")
+	templateSchema["additionalProperties"] = false
+	var err error
+	ct.Spec.TemplateParameterSchema.Raw, err = json.Marshal(templateSchema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateTemplateParameterSchema(ct); err != nil {
+		t.Fatalf("complete defaults without an upgradeParameters schema were rejected: %v", err)
+	}
+	if err := (&clusterTemplateReconcilerTask{object: ct}).validateUpgradeDefaults(); err != nil {
+		t.Fatalf("complete defaults failed controller validation without an upgradeParameters schema: %v", err)
+	}
+	ct.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22"}}`)
+	if err := validateTemplateParameterSchema(ct); err == nil {
+		t.Fatal("incomplete template-owned seed defaults were accepted without a PR operation schema")
+	}
+}
+
 func Test_validateClusterInstanceParametersSchema(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -2211,6 +2259,17 @@ var _ = Describe("seed generation ClusterTemplate defaults", func() {
 
 	It("validates template-owned fields against the effective schema", func() {
 		Expect(task.validateUpgradeDefaults()).To(Succeed())
+	})
+
+	It("accepts complete seed defaults without a PR seedGeneration schema entry", func() {
+		task.object.Spec.TemplateParameterSchema.Raw = []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{}}}}`)
+		Expect(task.validateUpgradeDefaults()).To(Succeed())
+	})
+
+	It("rejects incomplete seed defaults without a PR seedGeneration schema entry", func() {
+		task.object.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22"}}`)
+		task.object.Spec.TemplateParameterSchema.Raw = []byte(`{"type":"object","properties":{"upgradeParameters":{"type":"object","additionalProperties":false,"properties":{}}}}`)
+		Expect(task.validateUpgradeDefaults()).To(MatchError(ContainSubstring("seedAuthSecretRef is missing from upgradeDefaults")))
 	})
 
 	It("accepts seed image and Secret reference supplied by the ProvisioningRequest", func() {

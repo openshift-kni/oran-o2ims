@@ -18,6 +18,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -267,6 +268,53 @@ func TestSeedGenerationRetriesThrottledSubmission(t *testing.T) {
 	}
 }
 
+func TestSeedGenerationDefinitiveSubmissionRejectionClearsGuard(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{"bad request", apierrors.NewBadRequest("rejected")},
+		{"not found", apierrors.NewNotFound(schema.GroupResource{Group: "lca.openshift.io", Resource: "seedgenerators"}, seedGenerationLCASeedCRName)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			pr := seedDetachmentTestRequest()
+			snapshot, hub := seedRecoveryTestSnapshot(t, pr)
+			baseSpoke := newSeedLifecycleSpokeClient(t)
+			createAttempted := false
+			spoke := interceptor.NewClient(baseSpoke, interceptor.Funcs{
+				Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+					if obj.GetName() == seedGenerationLCASeedCRName {
+						createAttempted = true
+						return tc.err
+					}
+					return c.Create(ctx, obj, opts...)
+				},
+			})
+			task := seedTestTask(pr, hub)
+			task.seedGenerationSpokeClientBuilder = func([]byte) (client.Client, error) { return spoke, nil }
+			if _, err := task.reconcileSeedGenerator(ctx, snapshot); err != nil {
+				t.Fatalf("failed to handle definitive create rejection: %v", err)
+			}
+			if !createAttempted {
+				t.Fatal("SeedGenerator create was not attempted")
+			}
+			if err := hub.Get(ctx, client.ObjectKeyFromObject(pr), pr); err != nil {
+				t.Fatal(err)
+			}
+			if pr.Status.Extensions.ClusterDetails.SeedGenerationStatus.SeedGeneratorSubmitted {
+				t.Fatal("definitive create rejection left the submission guard set")
+			}
+			if !seedGenerationTerminal(pr) {
+				t.Fatal("definitive create rejection did not fail the run")
+			}
+			if pending, err := task.cleanupSeedGenerationDetachedResources(ctx); err != nil || pending {
+				t.Fatalf("cleanup waited for a SeedGenerator that was never created: pending=%t err=%v", pending, err)
+			}
+		})
+	}
+}
+
 func TestSeedGenerationSubmissionResponseLossDoesNotCreateAnotherRun(t *testing.T) {
 	ctx := context.Background()
 	pr := seedDetachmentTestRequest()
@@ -310,6 +358,9 @@ func TestSeedGenerationSubmissionResponseLossDoesNotCreateAnotherRun(t *testing.
 	}
 	if err := hub.Get(ctx, client.ObjectKeyFromObject(pr), pr); err != nil {
 		t.Fatal(err)
+	}
+	if !pr.Status.Extensions.ClusterDetails.SeedGenerationStatus.SeedGeneratorSubmitted {
+		t.Fatal("ambiguous create response cleared the submission guard")
 	}
 	if _, err := task.reconcileSeedGenerator(ctx, seedGenerationLifecycleTestSnapshot()); err != nil {
 		t.Fatal(err)
