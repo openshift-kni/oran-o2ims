@@ -106,7 +106,7 @@ type ClusterUpgradeStatus struct {
 	WorkerPoolUpgrade *WorkerPoolUpgradeStatus `json:"workerPoolUpgrade,omitempty"`
 }
 
-// SeedGenerationStatus records progress and immutable artifacts of one seed run.
+// SeedGenerationStatus records progress and artifacts of one seed run.
 type SeedGenerationStatus struct {
 	// StartedAt is persisted when the seed run begins.
 	StartedAt *metav1.Time `json:"startedAt,omitempty"`
@@ -119,10 +119,36 @@ type SeedGenerationStatus struct {
 	// DetachmentStarted is persisted before removing any ACM agent resources.
 	DetachmentStarted bool `json:"detachmentStarted,omitempty"`
 
+	// ClusterID pins the spoke identity verified before detachment.
+	ClusterID string `json:"clusterID,omitempty"`
+
+	// ManagedClusterUID pins the hub resource verified before detachment.
+	ManagedClusterUID string `json:"managedClusterUID,omitempty"`
+
+	// KlusterletUID identifies AppliedManifestWorks belonging to the detached agent.
+	KlusterletUID string `json:"klusterletUID,omitempty"`
+
+	// AgentDetachmentCompleted records that ACM agents and residual resources
+	// have been removed, before the SeedGenerator is submitted.
+	AgentDetachmentCompleted bool `json:"agentDetachmentCompleted,omitempty"`
+
+	// DetachedCleanupCompleted is persisted before removing the input snapshot.
+	DetachedCleanupCompleted bool `json:"detachedCleanupCompleted,omitempty"`
+
+	// SeedGeneratorSubmitted is persisted before attempting to create the CR.
+	// A missing SeedGenerator after this point can mean LCA temporarily removed
+	// it while building the image, so reconciliation must not recreate it blindly.
+	SeedGeneratorSubmitted bool `json:"seedGeneratorSubmitted,omitempty"`
+
+	// SeedGeneratorFinished records an observed terminal LCA condition before
+	// cleanup deletes the CR. Absence alone does not prove LCA has stopped.
+	SeedGeneratorFinished bool `json:"seedGeneratorFinished,omitempty"`
+
 	// ReleaseImageDigest pins the release used to extract openshift-install.
 	ReleaseImageDigest string `json:"releaseImageDigest,omitempty"`
 
-	// SeedImage is the immutable digest reference reported by SeedGenerator.
+	// SeedImage is the configured seed image reference after LCA reports that
+	// image generation and push have completed successfully.
 	SeedImage string `json:"seedImage,omitempty"`
 
 	// ISOURL is the verified HTTPS URL of the generated live ISO.

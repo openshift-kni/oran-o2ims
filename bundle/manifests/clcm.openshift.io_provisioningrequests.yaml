@@ -293,6 +293,19 @@ spec:
                         description: SeedGenerationStatus holds the state and results
                           of a one-shot seed generation.
                         properties:
+                          agentDetachmentCompleted:
+                            description: |-
+                              AgentDetachmentCompleted records that ACM agents and residual resources
+                              have been removed, before the SeedGenerator is submitted.
+                            type: boolean
+                          clusterID:
+                            description: ClusterID pins the spoke identity verified
+                              before detachment.
+                            type: string
+                          detachedCleanupCompleted:
+                            description: DetachedCleanupCompleted is persisted before
+                              removing the input snapshot.
+                            type: boolean
                           detachmentStarted:
                             description: DetachmentStarted is persisted before removing
                               any ACM agent resources.
@@ -326,13 +339,33 @@ spec:
                             description: ISOURL is the verified HTTPS URL of the generated
                               live ISO.
                             type: string
+                          klusterletUID:
+                            description: KlusterletUID identifies AppliedManifestWorks
+                              belonging to the detached agent.
+                            type: string
+                          managedClusterUID:
+                            description: ManagedClusterUID pins the hub resource verified
+                              before detachment.
+                            type: string
                           releaseImageDigest:
                             description: ReleaseImageDigest pins the release used
                               to extract openshift-install.
                             type: string
+                          seedGeneratorFinished:
+                            description: |-
+                              SeedGeneratorFinished records an observed terminal LCA condition before
+                              cleanup deletes the CR. Absence alone does not prove LCA has stopped.
+                            type: boolean
+                          seedGeneratorSubmitted:
+                            description: |-
+                              SeedGeneratorSubmitted is persisted before attempting to create the CR.
+                              A missing SeedGenerator after this point can mean LCA temporarily removed
+                              it while building the image, so reconciliation must not recreate it blindly.
+                            type: boolean
                           seedImage:
-                            description: SeedImage is the immutable digest reference
-                              reported by SeedGenerator.
+                            description: |-
+                              SeedImage is the configured seed image reference after LCA reports that
+                              image generation and push have completed successfully.
                             type: string
                           startedAt:
                             description: StartedAt is persisted when the seed run

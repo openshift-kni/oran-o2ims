@@ -21,3 +21,5 @@ spec:
     upgradeParameters:
       seedGeneration:
         seedImage: registry.example.com/seed/seed-image:4.Y.Z-factory-a
+        seedAuthSecretRef:
+          name: seed-registry-credentials

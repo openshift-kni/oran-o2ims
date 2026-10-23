@@ -169,9 +169,13 @@ func (v *provisioningRequestValidator) ValidateDelete(ctx context.Context, pr *p
 }
 
 func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Context, oldPr, newPr *provisioningv1alpha1.ProvisioningRequest) error {
-	clusterTemplate, err := v.getSupportedClusterTemplate(ctx, newPr)
+	clusterTemplate, err := v.getClusterTemplate(ctx, newPr)
 	if err != nil {
 		return err
+	}
+	if err := validation.ValidateSeedGenerationSupported(
+		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw, newPr.Spec.TemplateParameters.Raw); err != nil {
+		return fmt.Errorf("unsupported seed generation configuration: %w", err)
 	}
 
 	if err := validation.ValidateTemplateInputMatchesSchema(clusterTemplate.Name, clusterTemplate.Spec.TemplateParameterSchema.Raw, newPr.Spec.TemplateParameters.Raw); err != nil {
@@ -318,18 +322,13 @@ func validatePRClusterName(clusterInstanceInput any) error {
 	return nil
 }
 
-func (v *provisioningRequestValidator) getSupportedClusterTemplate(ctx context.Context, pr *provisioningv1alpha1.ProvisioningRequest) (*provisioningv1alpha1.ClusterTemplate, error) {
+func (v *provisioningRequestValidator) getClusterTemplate(
+	ctx context.Context, pr *provisioningv1alpha1.ProvisioningRequest,
+) (*provisioningv1alpha1.ClusterTemplate, error) {
 	clusterTemplate, err := provisioning.GetClusterTemplateRef(ctx, v.Client, pr)
 	if err != nil {
 		//nolint:wrapcheck // Preserve the admission error returned before the move.
 		return nil, err
-	}
-	seedGeneration, err := validation.HasSeedGenerationConfig(clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw, pr.Spec.TemplateParameters.Raw)
-	if err != nil {
-		return nil, fmt.Errorf("failed to inspect seed generation input: %w", err)
-	}
-	if seedGeneration {
-		return nil, fmt.Errorf("%s (ClusterTemplate %q)", validation.SeedGenerationUnsupportedMessage, clusterTemplate.Name)
 	}
 	return clusterTemplate, nil
 }
