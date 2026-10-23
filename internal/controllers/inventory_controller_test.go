@@ -515,12 +515,14 @@ var _ = Describe("Inventory Controller", func() {
 				Expect(pgConf).ToNot(ContainSubstring("ssl_min_protocol_version"))
 				Expect(pgConf).ToNot(ContainSubstring("ssl_ciphers"))
 				Expect(pgConf).To(ContainSubstring("ssl_tls13_ciphers"))
-				Expect(pgConf).To(ContainSubstring("ssl_groups"))
+				Expect(pgConf).ToNot(ContainSubstring("ssl_groups"),
+					"ssl_groups should not be set when TLSGroups is empty")
 
 				// --- Phase 2: Mixed cipher list (Intermediate-style with TLS 1.2 + 1.3 ciphers) ---
 				reconciler.TLSMinVersion = "VersionTLS12"
 				reconciler.TLSProfileHash = "intermediate-hash"
 				reconciler.TLSCiphers = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-RSA-AES256-GCM-SHA384"
+				reconciler.TLSGroups = "X25519MLKEM768,X25519,secp256r1,secp384r1"
 				_, err = reconciler.Reconcile(context.TODO(), req)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -534,7 +536,7 @@ var _ = Describe("Inventory Controller", func() {
 					"ssl_tls13_ciphers = 'TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256'"))
 				Expect(pgConf).ToNot(ContainSubstring("TLS_AES_128_CCM_SHA256"))
 				Expect(pgConf).To(ContainSubstring(
-					"ssl_groups = 'X25519MLKEM768:X25519:prime256v1'"))
+					"ssl_groups = 'X25519MLKEM768:X25519:prime256v1:secp384r1'"))
 
 				deployment := &appsv1.Deployment{}
 				err = reconciler.Client.Get(context.TODO(), pgDeployKey, deployment)
@@ -546,6 +548,7 @@ var _ = Describe("Inventory Controller", func() {
 				reconciler.TLSMinVersion = "VersionTLS13"
 				reconciler.TLSProfileHash = "modern-hash"
 				reconciler.TLSCiphers = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256"
+				reconciler.TLSGroups = "X25519MLKEM768,X25519,secp256r1,secp384r1"
 				_, err = reconciler.Reconcile(context.TODO(), req)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -556,13 +559,53 @@ var _ = Describe("Inventory Controller", func() {
 				Expect(pgConf).ToNot(ContainSubstring("ssl_ciphers ="),
 					"Modern profile has no TLS 1.2 ciphers; ssl_ciphers should not be set")
 				Expect(pgConf).To(ContainSubstring("ssl_tls13_ciphers"))
-				Expect(pgConf).To(ContainSubstring("ssl_groups"))
+				Expect(pgConf).To(ContainSubstring(
+					"ssl_groups = 'X25519MLKEM768:X25519:prime256v1:secp384r1'"))
 
 				err = reconciler.Client.Get(context.TODO(), pgDeployKey, deployment)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(deployment.Spec.Template.Annotations).To(
 					HaveKeyWithValue("ocloud.openshift.io/tls-profile-hash", "modern-hash"),
 					"annotation should update on profile change to trigger rolling restart")
+
+				// --- Phase 4: Group-only change (same ciphers, different groups) ---
+				reconciler.TLSProfileHash = "modern-groups-changed-hash"
+				reconciler.TLSGroups = "X25519,secp256r1"
+				_, err = reconciler.Reconcile(context.TODO(), req)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = reconciler.Client.Get(context.TODO(), pgConfKey, cm)
+				Expect(err).ToNot(HaveOccurred())
+				pgConf = cm.Data["postgresql.conf"]
+				Expect(pgConf).To(ContainSubstring(
+					"ssl_groups = 'X25519:prime256v1'"),
+					"ssl_groups should reflect the new group list")
+				Expect(pgConf).ToNot(ContainSubstring("X25519MLKEM768"),
+					"ML-KEM should not be present after group-only change")
+
+				err = reconciler.Client.Get(context.TODO(), pgDeployKey, deployment)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(deployment.Spec.Template.Annotations).To(
+					HaveKeyWithValue("ocloud.openshift.io/tls-profile-hash", "modern-groups-changed-hash"),
+					"annotation should update on group-only change")
+
+				// Verify TLS_PROFILE_GROUPS propagated to a Go service deployment
+				svcDeployKey := types.NamespacedName{
+					Name:      ctlrutils.InventoryResourceServerName,
+					Namespace: ctlrutils.InventoryNamespace,
+				}
+				svcDeploy := &appsv1.Deployment{}
+				err = reconciler.Client.Get(context.TODO(), svcDeployKey, svcDeploy)
+				Expect(err).ToNot(HaveOccurred())
+				var groupsEnvValue string
+				for _, env := range svcDeploy.Spec.Template.Spec.Containers[0].Env {
+					if env.Name == ctlrutils.TLSProfileGroupsEnvName {
+						groupsEnvValue = env.Value
+						break
+					}
+				}
+				Expect(groupsEnvValue).To(Equal("X25519,secp256r1"),
+					"TLS_PROFILE_GROUPS should reflect the updated groups on Go service pods")
 			},
 		),
 	)
