@@ -10,6 +10,18 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	// FirmwareCatalogName is the well-known name of the singleton FirmwareCatalog CR.
+	FirmwareCatalogName = "firmware-catalog"
+
+	// ComponentBIOS is the component type for BIOS firmware.
+	ComponentBIOS = "bios"
+	// ComponentBMC is the component type for BMC firmware.
+	ComponentBMC = "bmc"
+	// ComponentNIC is the component type for NIC firmware.
+	ComponentNIC = "nic"
+)
+
 // FirmwareImage defines a firmware image entry in the catalog.
 type FirmwareImage struct {
 	// Name is a unique identifier for this firmware image within the catalog.
@@ -22,7 +34,9 @@ type FirmwareImage struct {
 
 	// URL points to the firmware image file.
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=2048
 	// +kubebuilder:validation:Pattern=`^(http|https)://.*$`
+	// +kubebuilder:validation:XValidation:rule="isURL(self) && url(self).getScheme() in ['http', 'https'] && url(self).getHostname() != ''",message="url must be a valid HTTP or HTTPS URL with a hostname"
 	URL string `json:"url"`
 
 	// Version is the firmware version string.
