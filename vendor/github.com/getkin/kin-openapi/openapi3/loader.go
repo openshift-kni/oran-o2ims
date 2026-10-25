@@ -15,11 +15,6 @@ import (
 	"strings"
 )
 
-// IncludeOrigin specifies whether to include the origin of the OpenAPI elements.
-// Deprecated: set Loader.IncludeOrigin instead. This global is read by NewLoader
-// for backward compatibility but is not safe for concurrent use.
-var IncludeOrigin = false
-
 func failedToResolveRefFragmentPart(value, what string) error {
 	return fmt.Errorf("failed to resolve %q in fragment in URI: %q", what, value)
 }
@@ -32,8 +27,6 @@ type Loader struct {
 	IsExternalRefsAllowed bool
 
 	// IncludeOrigin enables recording the file/line/column of each OpenAPI element.
-	// Prefer this over the package-level IncludeOrigin global, which is not safe for
-	// concurrent use.
 	IncludeOrigin bool
 
 	// ReadFromURIFunc overrides how the loader reads a referenced file or URL.
@@ -79,8 +72,7 @@ type Loader struct {
 // NewLoader returns an empty Loader
 func NewLoader() *Loader {
 	return &Loader{
-		Context:       context.Background(),
-		IncludeOrigin: IncludeOrigin,
+		Context: context.Background(),
 	}
 }
 
@@ -637,12 +629,14 @@ func drillIntoField(cursor any, fieldName string) (any, error) {
 		return elementValue.Interface(), nil
 
 	case reflect.Slice:
-		i, err := strconv.ParseUint(fieldName, 10, 32)
+		if strings.HasPrefix(fieldName, "+") || strings.HasPrefix(fieldName, "-") {
+			return nil, fmt.Errorf("invalid slice index %q", fieldName)
+		}
+		index, err := strconv.Atoi(fieldName)
 		if err != nil {
 			return nil, err
 		}
-		index := int(i)
-		if 0 > index || index >= val.Len() {
+		if index >= val.Len() {
 			return nil, errors.New("slice index out of bounds")
 		}
 		return val.Index(index).Interface(), nil
@@ -1297,6 +1291,10 @@ func applyExampleRefMetadata(value *Example, component *ExampleRef, isOpenAPI31O
 
 func (loader *Loader) resolveExampleRef(doc *T, component *ExampleRef, documentPath *url.URL) (err error) {
 	isOpenAPI31OrLater := doc.IsOpenAPI31OrLater()
+
+	if component.isEmpty() {
+		return errMUSTExample
+	}
 
 	if ref := component.Ref; ref != "" {
 		if component.Value != nil {
