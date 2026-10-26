@@ -26,8 +26,12 @@ and namespace cannot be supplied by the PR.
 Set `upgradeDefaults.seedGeneration.seedGenerationTimeout` to override the
 default operation timeout of 2h. The ProvisioningRequest can override this
 value at `upgradeParameters.seedGeneration.seedGenerationTimeout`;
-`clusterUpgradeTimeout` applies only to cluster upgrades. Live ISO generation
-is not supported by this seed-only workflow yet; omit `liveISO`.
+`clusterUpgradeTimeout` applies only to cluster upgrades. This sample shows
+seed-only generation and omits `liveISO`. To build and publish a live ISO after
+seed generation, add `liveISO` to the ClusterTemplate defaults and follow
+[Configure a live ISO upload destination](../../user-guide/seed-generation-live-iso-upload.md).
+That guide also covers the optional `liveISO.sshKey` public key for SSH access
+to the pre-provisioning host as `core`, including log monitoring.
 
 Initial ProvisioningRequest validation checks that the referenced registry
 credentials match the `seedImage` repository and can start a push upload before

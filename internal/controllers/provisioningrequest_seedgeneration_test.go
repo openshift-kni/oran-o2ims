@@ -14,6 +14,7 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -249,19 +250,31 @@ func TestSeedGenerationFinalizerCleanupUsesUID(t *testing.T) {
 	ctx := context.Background()
 	pr := &provisioningv1alpha1.ProvisioningRequest{ObjectMeta: metav1.ObjectMeta{Name: "seed-pr", UID: types.UID("current-uid")}}
 	pr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
-		SeedGenerationStatus: &provisioningv1alpha1.SeedGenerationStatus{},
+		SeedGenerationStatus: &provisioningv1alpha1.SeedGenerationStatus{
+			ISOFailureDiagnosticsExpiresAt: &metav1.Time{Time: time.Now().Add(time.Hour)},
+		},
 	}
 	labels := map[string]string{
 		provisioningv1alpha1.ProvisioningRequestNameLabel: pr.Name,
 		provisioningv1alpha1.ProvisioningRequestUIDLabel:  string(pr.UID),
 	}
 	owned := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "owned", Namespace: constants.DefaultNamespace, Labels: labels}}
+	diagnostics := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+		Name: seedGenerationISODiagnosticsName(pr), Namespace: constants.DefaultNamespace,
+		Labels:          seedGenerationISOResourceLabels(pr, seedGenerationISODiagnosticsKind),
+		OwnerReferences: []metav1.OwnerReference{seedGenerationSnapshotOwnerReference(pr)},
+	}}
+	workspace := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{
+		Name: seedGenerationISOPVCName(pr), Namespace: constants.DefaultNamespace,
+		Labels:          seedGenerationISOResourceLabels(pr, seedGenerationISOPVCKind),
+		OwnerReferences: []metav1.OwnerReference{seedGenerationSnapshotOwnerReference(pr)},
+	}}
 	foreignLabels := map[string]string{
 		provisioningv1alpha1.ProvisioningRequestNameLabel: pr.Name,
 		provisioningv1alpha1.ProvisioningRequestUIDLabel:  "old-uid",
 	}
 	foreign := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "foreign", Namespace: constants.DefaultNamespace, Labels: foreignLabels}}
-	c := newSeedTestClient(t, pr, owned, foreign)
+	c := newSeedTestClient(t, pr, owned, foreign, diagnostics, workspace)
 	r := &ProvisioningRequestReconciler{Client: c, Logger: slog.New(slog.DiscardHandler)}
 	// The finalizer must stop here, before touching ManagedCluster or NAR.
 	clean, err := r.handleProvisioningRequestDeletion(ctx, pr)
@@ -271,9 +284,21 @@ func TestSeedGenerationFinalizerCleanupUsesUID(t *testing.T) {
 	if err := c.Get(ctx, client.ObjectKeyFromObject(foreign), &corev1.Secret{}); err != nil {
 		t.Fatalf("foreign resource was removed: %v", err)
 	}
-	clean, err = r.cleanupSeedGenerationResources(ctx, pr)
-	if err != nil || !clean {
+	// Cleanup waits for ISO resources to disappear before discarding credentials.
+	for attempt := 0; attempt < 3 && !clean; attempt++ {
+		clean, err = r.cleanupSeedGenerationResources(ctx, pr)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !clean {
 		t.Fatalf("cleanup did not complete: clean=%t err=%v", clean, err)
+	}
+	if err := c.Get(ctx, client.ObjectKeyFromObject(diagnostics), &corev1.ConfigMap{}); !apierrors.IsNotFound(err) {
+		t.Errorf("diagnostics survived ProvisioningRequest deletion cleanup: %v", err)
+	}
+	if err := c.Get(ctx, client.ObjectKeyFromObject(workspace), &corev1.PersistentVolumeClaim{}); !apierrors.IsNotFound(err) {
+		t.Errorf("workspace PVC survived ProvisioningRequest deletion cleanup: %v", err)
 	}
 }
 

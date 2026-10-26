@@ -2479,6 +2479,8 @@ spec:
                   value: registry.redhat.io/rhel9/postgresql-18:9.8-1785715946
                 - name: RELATED_IMAGE_SEED_GENERATION_TOOLS_IMAGE
                   value: registry.redhat.io/openshift4/ose-tools-rhel9:v4.22
+                - name: SEED_GENERATION_SSH_TMP_DIR
+                  value: /tmp/seedgen
                 - name: OCLOUD_MANAGER_NAMESPACE
                   valueFrom:
                     fieldRef:
@@ -2523,6 +2525,8 @@ spec:
                   readOnly: true
                 - mountPath: /secrets/tls/metrics
                   name: metrics-tls
+                - mountPath: /tmp/seedgen
+                  name: seedgen-tmp
               securityContext:
                 runAsNonRoot: true
                 seccompProfile:
@@ -2538,6 +2542,10 @@ spec:
                 secret:
                   defaultMode: 420
                   secretName: controller-manager-metrics-tls
+              - emptyDir:
+                  medium: Memory
+                  sizeLimit: 2Mi
+                name: seedgen-tmp
       permissions:
       - rules:
         - apiGroups:
@@ -2580,6 +2588,7 @@ spec:
           - ""
           resources:
           - pods
+          - secrets
           verbs:
           - create
           - delete
@@ -2592,15 +2601,6 @@ spec:
           - pods/log
           verbs:
           - get
-        - apiGroups:
-          - ""
-          resources:
-          - secrets
-          verbs:
-          - delete
-          - get
-          - list
-          - watch
         - apiGroups:
           - apps
           resources:
@@ -2618,6 +2618,7 @@ spec:
           resources:
           - jobs
           verbs:
+          - create
           - delete
           - get
           - list

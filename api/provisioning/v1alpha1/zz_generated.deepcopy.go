@@ -450,6 +450,23 @@ func (in *SeedGenerationStatus) DeepCopyInto(out *SeedGenerationStatus) {
 		in, out := &in.StartedAt, &out.StartedAt
 		*out = (*in).DeepCopy()
 	}
+	if in.ISOJobSubmittedAt != nil {
+		in, out := &in.ISOJobSubmittedAt, &out.ISOJobSubmittedAt
+		*out = (*in).DeepCopy()
+	}
+	if in.ISOUploadCleanupDeadline != nil {
+		in, out := &in.ISOUploadCleanupDeadline, &out.ISOUploadCleanupDeadline
+		*out = (*in).DeepCopy()
+	}
+	if in.ISOFailureDiagnosticsRef != nil {
+		in, out := &in.ISOFailureDiagnosticsRef, &out.ISOFailureDiagnosticsRef
+		*out = new(ConfigMapKeyRef)
+		**out = **in
+	}
+	if in.ISOFailureDiagnosticsExpiresAt != nil {
+		in, out := &in.ISOFailureDiagnosticsExpiresAt, &out.ISOFailureDiagnosticsExpiresAt
+		*out = (*in).DeepCopy()
+	}
 	if in.ISOServerCACertRef != nil {
 		in, out := &in.ISOServerCACertRef, &out.ISOServerCACertRef
 		*out = new(ConfigMapKeyRef)

@@ -49,6 +49,7 @@ type seedGenerationReleaseInfo struct {
 type seedGenerationPodLogReader func(context.Context, string, string) ([]byte, error)
 
 var readSeedGenerationPodLogs seedGenerationPodLogReader = readSeedGenerationPodLogsFromAPI
+var readSeedGenerationISOPodLogs seedGenerationPodLogReader = readSeedGenerationISOPodLogsFromAPI
 
 // ensureSeedGenerationToolsPreflight validates the release payload and proves
 // the related tools image can extract the matching openshift-install binary.
@@ -72,7 +73,7 @@ func (t *provisioningRequestReconcilerTask) ensureSeedGenerationToolsPreflight(
 	if snapshot.Document.ResolvedReleaseImage == "" {
 		return false, false, fmt.Errorf("frozen resolved release image is missing")
 	}
-	toolsImage, err := seedGenerationToolsImage()
+	toolsImage, err := validateSeedGenerationToolsImage(snapshot.Document.ToolsImage)
 	if err != nil {
 		return false, false, err
 	}
@@ -131,7 +132,11 @@ func (t *provisioningRequestReconcilerTask) ensureSeedGenerationToolsPreflight(
 }
 
 func seedGenerationToolsImage() (string, error) {
-	image := strings.TrimSpace(os.Getenv(seedGenerationToolsImageEnv))
+	return validateSeedGenerationToolsImage(os.Getenv(seedGenerationToolsImageEnv))
+}
+
+func validateSeedGenerationToolsImage(rawImage string) (string, error) {
+	image := strings.TrimSpace(rawImage)
 	if _, _, err := imageRepositoryFromPullSpec(image); err != nil {
 		return "", fmt.Errorf("%s must contain a valid image reference: %w", seedGenerationToolsImageEnv, err)
 	}
@@ -151,7 +156,7 @@ func seedGenerationToolsImage() (string, error) {
 func seedGenerationReleaseInfoCommand() string {
 	return `set -eu
 if ! oc adm release info --registry-config=/var/run/seedgen/auth/config.json --idms-file=/var/run/seedgen/config/idms.yaml -o json "$1" >/tmp/release-info.json 2>/tmp/oc.stderr; then
-	cat /tmp/oc.stderr >&2
+	echo 'Failed to read release metadata with the frozen registry inputs' >&2
 	exit 1
 fi
 cat /tmp/release-info.json`
@@ -159,9 +164,12 @@ cat /tmp/release-info.json`
 
 func seedGenerationInstallerCommand() string {
 	return `set -eu
+for binary in bash ssh scp sha256sum curl oc cat cp chmod mkdir cut mv rm ln rmdir python3; do
+	command -v "$binary" >/dev/null 2>&1 || { echo "required tool is missing: $binary" >&2; exit 1; }
+done
 mkdir -p /tmp/seedgen-installer
 if ! oc adm release extract --registry-config=/var/run/seedgen/auth/config.json --idms-file=/var/run/seedgen/config/idms.yaml --command=openshift-install --to=/tmp/seedgen-installer "$1" >/tmp/release-extract.log 2>&1; then
-	cat /tmp/release-extract.log >&2
+	echo 'Failed to extract the installer with the frozen registry inputs' >&2
 	exit 1
 fi
 test -x /tmp/seedgen-installer/openshift-install`
@@ -315,7 +323,7 @@ func validateSeedGenerationPreflightContainerSecurity(securityContext *corev1.Se
 	if securityContext == nil || securityContext.AllowPrivilegeEscalation == nil ||
 		*securityContext.AllowPrivilegeEscalation || securityContext.ReadOnlyRootFilesystem == nil ||
 		!*securityContext.ReadOnlyRootFilesystem || securityContext.Capabilities == nil ||
-		len(securityContext.Capabilities.Add) != 0 || !slices.Contains(securityContext.Capabilities.Drop, corev1.Capability("ALL")) {
+		len(securityContext.Capabilities.Add) != 0 || !slices.Contains(securityContext.Capabilities.Drop, controllerDropAllCaps) {
 		return fmt.Errorf("container security context does not meet the expected preflight restrictions")
 	}
 	return nil
@@ -365,12 +373,12 @@ func makeSeedGenerationPreflightPod(
 				Optional:    k8sptr.To(false),
 			}},
 		},
-		{Name: "tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		{Name: controllerTempVolumeName, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 	}
 	mounts := []corev1.VolumeMount{
 		{Name: "snapshot-config", MountPath: "/var/run/seedgen/config", ReadOnly: true},
 		{Name: "pull-secret", MountPath: "/var/run/seedgen/auth", ReadOnly: true},
-		{Name: "tmp", MountPath: "/tmp"},
+		{Name: controllerTempVolumeName, MountPath: controllerTempMountPath},
 	}
 	if len(snapshot.Document.RegistryTrustedCAKeys) > 0 {
 		registries := make([]string, 0, len(snapshot.Document.RegistryTrustedCAKeys))
@@ -418,13 +426,13 @@ func makeSeedGenerationPreflightPod(
 				ImagePullPolicy: corev1.PullIfNotPresent,
 				Command:         []string{"/bin/sh", "-c"},
 				Args:            []string{command, "seedgen", argument},
-				WorkingDir:      "/tmp",
-				Env:             []corev1.EnvVar{{Name: "HOME", Value: "/tmp"}},
+				WorkingDir:      controllerTempMountPath,
+				Env:             []corev1.EnvVar{{Name: "HOME", Value: controllerTempMountPath}},
 				VolumeMounts:    mounts,
 				SecurityContext: &corev1.SecurityContext{
 					AllowPrivilegeEscalation: k8sptr.To(false),
 					ReadOnlyRootFilesystem:   k8sptr.To(true),
-					Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+					Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{controllerDropAllCaps}},
 				},
 			}},
 		},
@@ -432,6 +440,14 @@ func makeSeedGenerationPreflightPod(
 }
 
 func readSeedGenerationPodLogsFromAPI(ctx context.Context, namespace, name string) ([]byte, error) {
+	return readSeedGenerationContainerLogsFromAPI(ctx, namespace, name, seedGenerationPreflightContainer)
+}
+
+func readSeedGenerationISOPodLogsFromAPI(ctx context.Context, namespace, name string) ([]byte, error) {
+	return readSeedGenerationContainerLogsFromAPI(ctx, namespace, name, seedGenerationISOContainer)
+}
+
+func readSeedGenerationContainerLogsFromAPI(ctx context.Context, namespace, name, container string) ([]byte, error) {
 	config, err := clientconfig.GetConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Kubernetes client config: %w", err)
@@ -442,7 +458,7 @@ func readSeedGenerationPodLogsFromAPI(ctx context.Context, namespace, name strin
 	}
 	limit := int64(seedGenerationPreflightLogLimit)
 	request := clientset.CoreV1().Pods(namespace).GetLogs(name, &corev1.PodLogOptions{
-		Container:  seedGenerationPreflightContainer,
+		Container:  container,
 		LimitBytes: &limit,
 	})
 	stream, err := request.Stream(ctx)
@@ -494,6 +510,8 @@ func (t *provisioningRequestReconcilerTask) cleanupSeedGenerationPreflightPods(c
 		provisioningv1alpha1.ProvisioningRequestNameLabel: t.object.Name,
 		provisioningv1alpha1.ProvisioningRequestUIDLabel:  string(t.object.UID),
 		seedGenerationRunLabel:                            "true",
+		seedGenerationSnapshotLabel:                       "true",
+		seedGenerationSnapshotKindLabel:                   seedGenerationSnapshotToolKind,
 	}
 	if err := t.client.List(ctx, pods, client.InNamespace(seedGenerationSnapshotNamespace()), selector); err != nil {
 		return false, fmt.Errorf("failed to list seed generation preflight Pods: %w", err)

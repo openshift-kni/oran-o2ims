@@ -75,7 +75,7 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
 		},
 		corev1.Volume{
-			Name:         "tmp",
+			Name:         controllerTempVolumeName,
 			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
 		},
 		corev1.Volume{
@@ -102,8 +102,8 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 			MountPath: "/var/lib/pgsql",
 		},
 		corev1.VolumeMount{
-			Name:      "tmp",
-			MountPath: "/tmp",
+			Name:      controllerTempVolumeName,
+			MountPath: controllerTempMountPath,
 		},
 		corev1.VolumeMount{
 			Name:      "run",
@@ -201,7 +201,7 @@ func (t *reconcilerTask) deployPostgresServer(ctx context.Context, serverName st
 							AllowPrivilegeEscalation: k8sptr.To(false),
 							ReadOnlyRootFilesystem:   k8sptr.To(true),
 							Capabilities: &corev1.Capabilities{
-								Drop: []corev1.Capability{"ALL"},
+								Drop: []corev1.Capability{controllerDropAllCaps},
 							},
 						},
 						Image:           postgresImage,

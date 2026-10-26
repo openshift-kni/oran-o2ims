@@ -53,10 +53,6 @@ func (t *provisioningRequestReconcilerTask) validateProvisioningRequestCR(ctx co
 		return typederrors.NewInputError("failed to inspect seed generation input: %s", err.Error())
 	}
 	if seedGeneration {
-		if err := validation.ValidateSeedGenerationSupported(
-			clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw, t.object.Spec.TemplateParameters.Raw); err != nil {
-			return typederrors.NewInputError("invalid seed generation configuration: %w", err)
-		}
 		upgradeData, err := t.mergeAndValidateUpgradeData(clusterTemplate)
 		if err != nil {
 			return typederrors.NewInputError("invalid seed generation configuration: %w", err)
@@ -71,6 +67,8 @@ func (t *provisioningRequestReconcilerTask) validateProvisioningRequestCR(ctx co
 	} else {
 		meta.RemoveStatusCondition(&t.object.Status.Conditions,
 			string(provisioningv1alpha1.PRconditionTypes.SeedGenerationRegistryValidated))
+		meta.RemoveStatusCondition(&t.object.Status.Conditions,
+			string(provisioningv1alpha1.PRconditionTypes.SeedGenerationISOUploadValidated))
 	}
 
 	if err = t.validateClusterInstanceInputMatchesSchema(ctx, clusterTemplate); err != nil {

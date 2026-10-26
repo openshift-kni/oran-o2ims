@@ -105,7 +105,8 @@ The manual seed generation workflow has several pain points:
   generation begins.
 - Support disconnected environments as the primary use case, auto-deriving
   mirror mappings and registry trust from the hub (local mirrors, private CA)
-  so the template author supplies only the required `releaseImage`.
+  so the template author does not need to duplicate the installed cluster's
+  release image or mirror configuration.
 
 ## Non-Goals
 
@@ -188,13 +189,12 @@ upgradeDefaults:
     # controller builds a live installation ISO after seed generation
     # and uploads it to an external HTTPS server.
     liveISO:
-      # Required: the OCP release image to extract openshift-install from.
-      # In disconnected environments this may be the canonical release
-      # pull-spec (redirected to the mirror by the hub-derived mappings)
-      # or a direct mirror pull-spec.
-      releaseImage: my-mirror.example.com/ocp-release:4.Y.Z-x86_64
-      # Required: disk device path on the target servers
-      installationDisk: /dev/disk/by-path/pci-0000:43:00.0-nvme-1
+      # Optional: defaults to the installed ClusterInstance's
+      # ClusterImageSet.spec.releaseImage. Set this for a different mirror.
+      # releaseImage: my-mirror.example.com/ocp-release:4.Y.Z-x86_64
+      # Optional: defaults to the single seed node's
+      # rootDeviceHints.deviceName. Set this if target servers use another disk.
+      # installationDisk: /dev/disk/by-path/pci-0000:43:00.0-nvme-1
       # Optional: SSH public key baked into the ISO for debugging access
       sshKey: "ssh-rsa AAAA..."
       # Required: reference to a Secret containing SSH credentials for
@@ -289,7 +289,8 @@ template defaults:
   `templateParameterSchema` — validates the merged object (defaults ⊕ PR
   input) in the post-merge `ValidateUpgradeInput` path. It carries the full
   `seedGeneration` shape and the required-field rules
-  (`required: [seedImage, seedAuthSecretRef]`, the `liveISO` required set),
+  (`required: [seedImage, seedAuthSecretRef]`, and `liveISO` requiring only
+  `uploadSecretRef` and `urlBase`),
   so "does the effective document have everything it needs" is answered
   after the merge, never against raw PR input.
 
@@ -430,10 +431,9 @@ properties:
             type: string
             minLength: 1
             description: >
-              OCP release image to extract openshift-install from — the
-              canonical release pull-spec (redirected by the hub-derived mirror
-              mappings) or a direct mirror pull-spec.
-          installationDisk: { type: string, minLength: 1, description: Disk device path on the target servers }
+              Optional OCP release image override. Defaults to the installed
+              ClusterInstance's ClusterImageSet.spec.releaseImage.
+          installationDisk: { type: string, minLength: 1, description: Optional target disk override; defaults to the seed ClusterInstance node's rootDeviceHints.deviceName }
           sshKey: { type: string, description: SSH public key for debugging access }
           uploadSecretRef:
             type: object
@@ -474,7 +474,7 @@ properties:
               omitted.
             properties: { name: { type: string } }
             required: [name]
-        required: [releaseImage, installationDisk, uploadSecretRef, urlBase]
+        required: [uploadSecretRef, urlBase]
     required: [seedImage, seedAuthSecretRef]
 ```
 
@@ -649,6 +649,12 @@ credentials or registry permissions are caught before detaching ACM agents.
 - Verify the spoke has the `var-lib-containers` partition (check for the MachineConfig via spoke client)
 - Verify the LCA operator is installed and Available on the spoke (check the `openshift-lifecycle-agent` namespace for the LCA operator Deployment via spoke client)
 - If `liveISO` is configured:
+  - Resolve `releaseImage` from the installed ClusterInstance's referenced
+    ClusterImageSet when no override is configured. Resolve `installationDisk`
+    from its single node's `rootDeviceHints.deviceName` when no target disk is
+    configured; fail before ACM detachment if a unique device path is unavailable.
+    Freeze both resolved values with the other inputs so later resource changes
+    cannot alter the ISO build after a controller restart.
   - Verify the `uploadSecretRef` Secret exists and contains the required keys (`host`, `username`, `privateKey`, `remotePath`, `knownHosts`). A missing or empty `knownHosts` is a `PreconditionChecksFailed` — the upload fails closed rather than falling back to trust-on-first-use
   - If `caCert` is present in the upload Secret, validate that it is a well-formed PEM certificate bundle
   - Verify HTTPS connectivity to the ISO server: perform a TLS handshake against the `urlBase` host using the `caCert` from the upload Secret (or the system trust store if `caCert` is not provided). Report `PreconditionChecksFailed` if the certificate cannot be verified — this catches
@@ -838,7 +844,9 @@ The controller creates a Kubernetes Job on the hub cluster that builds the live 
 2. **Extract `openshift-install`**: Run `oc adm release extract --command=openshift-install --idms-file=<derived idms.yaml> <pinned releaseImage digest>` to obtain the binary matching the OCP version from `ClusterTemplate.spec.release`, using the derived registry trust. This uses the **immutable
    `repo@sha256:<digest>` reference read from `SeedGenerationStatus.ReleaseImageDigest`** (resolved and persisted in Phase 1), not the configured tag, so the installer is extracted from exactly the release that was validated.
    If that field is empty when `liveISO` is configured (e.g. status was lost), the Job fails terminally rather than re-resolving the tag. The `releaseImage` field is
-   required; in disconnected environments it may be given either as the canonical release pull-spec (redirected to the mirror by the derived mappings) or as a direct mirror pull-spec. There is no default public release image fallback.
+   resolved from the installed ClusterInstance's ClusterImageSet unless the
+   template supplies an override. In disconnected environments an override
+   may name a direct mirror pull-spec. There is no public-registry fallback.
 
 3. **Generate `ImageBasedInstallationConfig`**: Build the configuration from the `liveISO` parameters and the resolved mirror config:
 
@@ -986,8 +994,8 @@ The controller creates a Kubernetes Job on the hub cluster that builds the live 
   fixed byte budget well under the limit) with known credential patterns
   redacted for the message. For deeper debugging it **deletes the original
   log-bearing artifacts** (the failed pod and its raw logs are not kept) and
-  retains only a **redacted** copy of the pod logs under a diagnostic-retention
-  **TTL** (see Phase 5), which the condition message points the operator at.
+  retains only a **redacted** copy of the pod logs in a ConfigMap for a fixed
+  **24-hour TTL**. The condition message points the operator at the ConfigMap.
 
 **Hub RBAC contract for the controller.** The operator's hub service account
 needs an explicit set of permissions in the O-Cloud Manager namespace beyond
@@ -1099,7 +1107,7 @@ On failure (at any phase):
    the controller suppresses ACM-dependent reconciliation for this terminal
    failure exactly as it does on success; a pre-detachment failure leaves the
    still-attached cluster reconciling normally. Remaining scrubbed
-   diagnostics are removed on PR deletion (finalizer) or when the bounded
+   diagnostics are removed on PR deletion (finalizer) or when the 24-hour
    retention TTL elapses, whichever comes first.
 
 ## New Status Fields
@@ -1231,8 +1239,6 @@ spec:
           name: seed-registry-credentials
         seedGenerationTimeout: "3h"
         liveISO:
-          releaseImage: my-mirror.example.com/ocp-release:4.Y.Z-x86_64
-          installationDisk: /dev/disk/by-path/pci-0000:43:00.0-nvme-1
           sshKey: "ssh-rsa AAAA..."
           uploadSecretRef:
             name: iso-server-ssh-credentials
@@ -1353,9 +1359,30 @@ not by any artifact that outlives it. The controller's only new access requireme
 
 **Challenge**: The `openshift-install image-based create image` command pulls the full seed image and generates an ISO, requiring ~15-20GB of workspace storage. Ephemeral storage on hub nodes is typically insufficient and risks pod eviction.
 
-**Mitigation**: The controller creates a dedicated PVC (~20GB) for the ISO build workspace, mounted into the Job pod, using `liveISO.storageClass` or the cluster default if omitted. It is cleaned up in Phase 5 after successful upload. On failure it is retained for debugging under the **same
-bounded diagnostic-retention TTL** described in the failure workflow (reclaimed when the TTL elapses or on PR deletion, whichever comes first) — **not** indefinitely, since a ~20GB workspace per failed request would otherwise accumulate and exhaust hub storage. Operators must ensure the hub has a
-StorageClass with sufficient capacity.
+**Mitigation**: The controller creates a dedicated PVC (~20GB) for the ISO build workspace, mounted into the Job pod, using
+`liveISO.storageClass` or the cluster default if omitted. It deletes the PVC after either success or failure. The ISO may
+contain the install pull secret, so the failure path does not retain the workspace PVC. Failure diagnostics are redacted
+and retained separately in a ConfigMap for a fixed **24-hour TTL** (reclaimed sooner on PR deletion). Command logs, the
+copied SSH key, and the CA bundle stay on the pod's temporary volume. The installer configuration is symlinked from its
+mounted Secret instead of copied to the PVC. Logs are redacted inside the build Pod before they are written to stdout,
+so hub log collectors cannot capture raw command output containing credentials. The controller also redacts retained
+failure diagnostics and uses allowlisted termination stages for failure details. Pending PVCs do not block Job creation:
+StorageClasses using `WaitForFirstConsumer` bind after the consuming Pod is scheduled.
+Operators must ensure the hub has a StorageClass with sufficient capacity.
+
+The SSH preflight creates a private temporary probe under the shared `seedgen` parent, removes the probe, and leaves
+creation of the final per-run directory to the build Job. New serving directories use mode `0755`; the uploaded ISO uses
+`0644` so a separate HTTP server user can read it. The SSH user must have permission to create these directories, and the
+configured base directory must already be accessible to the HTTP server. The exact upload Secret bytes are validated
+again when freezing inputs, even if an earlier ProvisioningRequest preflight condition succeeded.
+
+Each run exclusively creates `seedgen/<PR-UID>` and writes a private `.oran-seedgen-owner` marker before writing an ISO.
+Failure, timeout, and PR deletion stop the Job and wait for its Pods to disappear before removing incomplete remote
+files with the frozen SSH credentials. Cleanup only removes the expected ISO and temporary file when the ownership
+marker matches, or removes an empty directory. It preserves foreign files and successfully published ISOs. Cleanup has
+a persisted five-minute retry budget; if the server remains unreachable or ownership cannot be established, a warning
+identifies the run directory for manual cleanup and permits PR deletion to proceed. Frozen credentials are discarded
+only after this cleanup step completes or its budget expires.
 
 ### 8. Disconnected environment registry configuration
 
@@ -1363,7 +1390,11 @@ StorageClass with sufficient capacity.
 
 **Mitigation**: The controller **auto-derives the mirror configuration from the hub** (Phase 4, step 1) — mirror mappings from the hub's `ImageDigestMirrorSet`/`ImageContentSourcePolicy` and registry trust from its image-config `additionalTrustedCA` — and injects it into both
 `oc adm release extract` (`--idms-file` + CA trust) and the `ImageBasedInstallationConfig` (`imageDigestSources` + `additionalTrustBundle`). Because the hub already operates in the same disconnected environment as the seed and target clusters, this avoids duplicating and drifting mirror config
-in the ClusterTemplate; optional `liveISO.imageDigestSources` / `liveISO.additionalTrustBundleConfigMapRef` overrides cover targeting a different mirror. `releaseImage` is required (no public-registry fallback) and the pull secret must include credentials for all mirrors involved; Phase 1
+in the ClusterTemplate; optional `liveISO.imageDigestSources` /
+`liveISO.additionalTrustBundleConfigMapRef` overrides cover targeting a
+different mirror. The installed ClusterInstance's ClusterImageSet provides the
+release image by default, with no public-registry fallback. The pull secret
+must include credentials for all mirrors involved; Phase 1
 validates that `releaseImage` is reachable and `oc adm release extract` can
 authenticate using the resolved mirror config. The `seedImage` in the
 `ImageBasedInstallationConfig` is the configured reference recorded in
@@ -1428,8 +1459,13 @@ A hub-side Job keeps the entire workflow within the ProvisioningRequest lifecycl
 
 ### F. Default to public release image registry
 
-Use `quay.io/openshift-release-dev/ocp-release:<version>-<arch>` as the default `releaseImage` when not specified. Rejected because the exact release pull-spec (version and architecture) cannot be inferred reliably, and a silent default risks pulling the wrong image. `releaseImage`
-stays required and explicit; the *mirror redirection* for it (and its trust) is handled automatically via the hub-derived `imageDigestSources`/`additionalTrustBundle`, so the template author supplies the release reference but not the mirror plumbing.
+Use `quay.io/openshift-release-dev/ocp-release:<version>-<arch>` as the default
+`releaseImage` when not specified. Rejected because a guessed public pull-spec
+may not be the image used to install the seed cluster, especially with mirrors
+or digest references. Instead, the controller reads the installed
+ClusterInstance's ClusterImageSet and freezes its `spec.releaseImage`. A
+template may override it explicitly when the ISO build needs another mirror
+pull-spec.
 
 ## Implementation Constants
 

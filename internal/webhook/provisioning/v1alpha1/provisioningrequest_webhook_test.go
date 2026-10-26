@@ -153,13 +153,13 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("rejects ISO generation from defaults before cluster provisioning", func() {
+		It("accepts ISO generation from template defaults", func() {
 			ct := &provisioningv1alpha1.ClusterTemplate{}
 			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "seed-template.v1", Namespace: "default"}, ct)).To(Succeed())
-			ct.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"liveISO":{}}}`)
+			ct.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"},"liveISO":{"releaseImage":"quay.io/ocp/release:4.22","installationDisk":"/dev/sda","uploadSecretRef":{"name":"upload"},"urlBase":"https://iso.example.test/images/"}}}`)
 			Expect(fakeClient.Update(ctx, ct)).To(Succeed())
 			_, err := validator.ValidateCreate(ctx, newPr)
-			Expect(err).To(MatchError(ContainSubstring("liveISO is not supported")))
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("accepts a seed image override in request parameters", func() {

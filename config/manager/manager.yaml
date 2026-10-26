@@ -77,6 +77,9 @@ spec:
           value: registry.redhat.io/rhel9/postgresql-18:9.8-1785715946
         - name: RELATED_IMAGE_SEED_GENERATION_TOOLS_IMAGE
           value: registry.redhat.io/openshift4/ose-tools-rhel9:v4.22
+        # Only SSH host-key verification needs this writable temporary directory.
+        - name: SEED_GENERATION_SSH_TMP_DIR
+          value: /tmp/seedgen
         - name: OCLOUD_MANAGER_NAMESPACE
           valueFrom:
             fieldRef:
@@ -124,6 +127,8 @@ spec:
         volumeMounts:
         - name: metrics-tls
           mountPath: /secrets/tls/metrics
+        - name: seedgen-tmp
+          mountPath: /tmp/seedgen
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
       volumes:
@@ -131,3 +136,7 @@ spec:
         secret:
           defaultMode: 420
           secretName: controller-manager-metrics-tls
+      - name: seedgen-tmp
+        emptyDir:
+          medium: Memory
+          sizeLimit: 2Mi

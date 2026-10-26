@@ -362,6 +362,7 @@ rules:
   - ""
   resources:
   - pods
+  - secrets
   verbs:
   - create
   - delete
@@ -374,15 +375,6 @@ rules:
   - pods/log
   verbs:
   - get
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - delete
-  - get
-  - list
-  - watch
 - apiGroups:
   - apps
   resources:
@@ -400,6 +392,7 @@ rules:
   resources:
   - jobs
   verbs:
+  - create
   - delete
   - get
   - list

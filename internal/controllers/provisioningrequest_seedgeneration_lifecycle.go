@@ -65,6 +65,19 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerationDetached(
 	ctx context.Context,
 	snapshot *seedGenerationInputSnapshot,
 ) (ctrl.Result, error) {
+	status := t.object.Status.Extensions.ClusterDetails.SeedGenerationStatus
+	if status.SeedGeneratorFinished {
+		if _, hasISO := snapshot.Document.SeedGeneration["liveISO"]; hasISO {
+			pending, err := t.cleanupSeedGenerationDetachedResourcesAndRecordCompletion(ctx)
+			if err != nil {
+				return t.handleSeedGenerationLifecycleError(ctx, "failed to clean up spoke seed generation resources", err)
+			}
+			if pending {
+				return requeueWithShortInterval(), nil
+			}
+			return t.reconcileSeedGenerationISO(ctx, snapshot)
+		}
+	}
 	pending, err := t.reconcileSeedGenerationAgentDetachment(ctx, snapshot)
 	if err != nil {
 		return t.handleSeedGenerationLifecycleError(ctx, "failed to detach ACM agents", err)
@@ -310,6 +323,14 @@ func (t *provisioningRequestReconcilerTask) observeSeedGenerator(
 				"persisted seed image reference does not match the frozen seed generation configuration")
 		}
 		status.SeedImage = seedImage
+		if _, hasISO := snapshot.Document.SeedGeneration["liveISO"]; hasISO {
+			setSeedGenerationProgress(t.object, provisioningv1alpha1.CRconditionReasons.BuildingISO,
+				"Seed image generation and push completed; preparing the live ISO build")
+			if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+				return requeueWithError(fmt.Errorf("failed to record seed image completion before ISO generation: %w", err))
+			}
+			return requeueWithShortInterval(), nil
+		}
 		message := "Seed image generation and push completed"
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.SeedGenerationCompleted,
