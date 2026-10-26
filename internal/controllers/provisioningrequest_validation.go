@@ -23,6 +23,7 @@ import (
 	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 	"github.com/openshift-kni/oran-o2ims/internal/validation"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -32,13 +33,6 @@ func (t *provisioningRequestReconcilerTask) validateProvisioningRequestCR(ctx co
 	clusterTemplate, err := provisioning.GetClusterTemplateRef(ctx, t.client, t.object)
 	if err != nil {
 		return typederrors.NewInputError("failed to get the ClusterTemplate for ProvisioningRequest %s: %w ", t.object.Name, err)
-	}
-	seedGeneration, err := validation.HasSeedGenerationConfig(clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw, t.object.Spec.TemplateParameters.Raw)
-	if err != nil {
-		return typederrors.NewInputError("failed to inspect seed generation input: %s", err.Error())
-	}
-	if seedGeneration {
-		return typederrors.NewInputError("%s", validation.SeedGenerationUnsupportedMessage)
 	}
 	t.ctDetails = &clusterTemplateDetails{
 		namespace: clusterTemplate.Namespace,
@@ -51,6 +45,32 @@ func (t *provisioningRequestReconcilerTask) validateProvisioningRequestCR(ctx co
 
 	if err = validation.ValidateTemplateInputMatchesSchema(clusterTemplate.Name, clusterTemplate.Spec.TemplateParameterSchema.Raw, t.object.Spec.TemplateParameters.Raw); err != nil {
 		return typederrors.NewInputError("%s", err.Error())
+	}
+
+	seedGeneration, err := validation.HasSeedGenerationConfig(
+		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw, t.object.Spec.TemplateParameters.Raw)
+	if err != nil {
+		return typederrors.NewInputError("failed to inspect seed generation input: %s", err.Error())
+	}
+	if seedGeneration {
+		if err := validation.ValidateSeedGenerationSupported(
+			clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw, t.object.Spec.TemplateParameters.Raw); err != nil {
+			return typederrors.NewInputError("invalid seed generation configuration: %w", err)
+		}
+		upgradeData, err := t.mergeAndValidateUpgradeData(clusterTemplate)
+		if err != nil {
+			return typederrors.NewInputError("invalid seed generation configuration: %w", err)
+		}
+		seedGenerationConfig, ok := upgradeData[ctlrutils.UpgradeDefaultsSeedGenerationKey].(map[string]any)
+		if !ok {
+			return typederrors.NewInputError("invalid seed generation configuration: effective seedGeneration configuration is missing")
+		}
+		if err := t.validateSeedGenerationRegistryPreflight(ctx, clusterTemplate, seedGenerationConfig); err != nil {
+			return err
+		}
+	} else {
+		meta.RemoveStatusCondition(&t.object.Status.Conditions,
+			string(provisioningv1alpha1.PRconditionTypes.SeedGenerationRegistryValidated))
 	}
 
 	if err = t.validateClusterInstanceInputMatchesSchema(ctx, clusterTemplate); err != nil {

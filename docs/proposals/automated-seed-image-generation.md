@@ -168,10 +168,13 @@ A new top-level key in `upgradeDefaults`, mutually exclusive with `clusterVersio
 # In ClusterTemplate spec.templateDefaults.upgradeDefaults
 upgradeDefaults:
   seedGeneration:
-    # Required: full pull-spec for the seed image to be published
+    # Required in the effective config. May be supplied by a PR when the
+    # ClusterTemplate does not provide a default.
     seedImage: quay.io/my-org/seed-image:4.Y.Z
-    # Required: reference to a Secret (in the ClusterTemplate namespace)
-    # containing registry credentials for pushing the seed image.
+    # Required in the effective config. May be supplied by a PR when the
+    # ClusterTemplate does not provide a default. PR schemas may expose only
+    # the Secret name; it always resolves in this ClusterTemplate namespace.
+    # The Secret contains registry credentials for pushing the seed image.
     # The Secret must have a 'seedAuth' key with base64-encoded
     # docker/podman auth JSON (same format as LCA's seedgen Secret).
     seedAuthSecretRef:
@@ -258,23 +261,30 @@ Per-PR overrides are supplied via `templateParameters.upgradeParameters.seedGene
 # In ProvisioningRequest spec.templateParameters
 upgradeParameters:
   seedGeneration:
-    # Override the seed image tag for this specific generation
+    # These may override ClusterTemplate defaults; the template schema can
+    # require them when the corresponding default is omitted.
     seedImage: quay.io/my-org/seed-image:4.Y.Z-custom
+    seedAuthSecretRef:
+      name: seed-registry-credentials
 ```
 
 **PR input and the merged object are validated by two separate schemas.**
-A PR override is intentionally partial — the example above supplies only
-`seedImage`, relying on the ClusterTemplate defaults for
-`seedAuthSecretRef`, `liveISO`, and the rest:
+The ClusterTemplate chooses which fields to expose. It can provide defaults
+for `seedImage` and `seedAuthSecretRef`, allowing PRs to omit or override
+them, or omit either default and require the corresponding PR value in its
+schema. A PR can select a Secret by name only; that name resolves in the
+ClusterTemplate namespace. Other operation details such as `liveISO` remain
+template defaults:
 
 - The **PR-facing schema** (`templateParameterSchema.upgradeParameters.seedGeneration`,
   defined below) lists only the fields a PR may override and sets
   `additionalProperties: false`. Admission validates the **raw**
-  `spec.templateParameters` against it, so a PR that supplies any
-  template-owned field is rejected structurally by the schema — there is no
-  separate deny-list to keep in sync. Because this schema requires no
-  template-owned field, a partial (`seedImage`-only) override is never
-  rejected for fields the defaults provide.
+  `spec.templateParameters` against it, so fields not exposed by the
+  ClusterTemplate schema are rejected structurally — there is no separate
+  deny-list to keep in sync. When a default is present, its corresponding PR
+  field can remain optional. When a default is absent, the schema must expose
+  and require that field, and also require the parent `upgradeParameters` and
+  `seedGeneration` objects.
 - The **effective-object schema** — internal to the controller, not part of
   `templateParameterSchema` — validates the merged object (defaults ⊕ PR
   input) in the post-merge `ValidateUpgradeInput` path. It carries the full
@@ -283,17 +293,21 @@ A PR override is intentionally partial — the example above supplies only
   so "does the effective document have everything it needs" is answered
   after the merge, never against raw PR input.
 
+When both required values are supplied by the template, its PR-facing schema
+may omit `seedGeneration`. If `upgradeParameters` remains in the schema, it
+must be closed and expose no other operation. The template may also omit
+`upgradeParameters` entirely when the root schema is closed.
+
 Splitting the schemas also removes an admission ordering hazard. The webhook
 calls `ValidateTemplateInputMatchesSchema` on the raw `spec.templateParameters`
 *before* `ValidateUpgradeInput` runs, without merging
-`TemplateDefaults.UpgradeDefaults`. Because the PR-facing schema requires
-nothing template-owned, a `seedImage`-only override passes that first gate,
-and the controller's post-merge check owns full-shape validation. A test must
-submit a `seedImage`-only override against defaults that provide the rest.
+`TemplateDefaults.UpgradeDefaults`. The PR-facing schema can validate required
+fields directly when defaults are absent; the controller's post-merge check
+then validates the complete effective object.
 
-**Why the template-owned fields stay out of the PR-facing schema.** Three
+**Why most template-owned fields stay out of the PR-facing schema.** Two
 classes of `seedGeneration` field are dangerous in the hands of a
-less-trusted PR author, so none of them appears there:
+less-trusted PR author, so they remain template-owned:
 
 - **Outbound targets** that drive hub-side network egress while credentials
   are mounted: `liveISO.urlBase`, `liveISO.releaseImage`,
@@ -309,36 +323,40 @@ less-trusted PR author, so none of them appears there:
   operator to enforce a digest or registry allowlist for that trusted input;
   deployments that impose such a policy may enforce it through their normal
   platform or admission controls.
-- **Credential references** that select which hub Secret/ConfigMap the
-  workflow reads and mounts into the ISO-build Job: `seedAuthSecretRef`,
-  `liveISO.uploadSecretRef`, `liveISO.pullSecretRef`. Overriding these lets
-  a caller point the workflow at *any* Secret the controller's service
-  account can read, exfiltrating those credentials into an ISO/Job the
-  caller influences.
+- **Other credential references** that select which hub Secret/ConfigMap the
+  workflow reads and mounts into the ISO-build Job:
+  `liveISO.uploadSecretRef` and `liveISO.pullSecretRef`. These remain
+  template-owned. `seedAuthSecretRef` is the exception: a template may expose
+  it as a closed object containing only `name`, resolved in the
+  ClusterTemplate namespace. Doing so delegates selection of a Secret in that
+  namespace to PR authors, so template owners should expose it only where that
+  trust is appropriate.
 
-The default posture is that **every** `seedGeneration` field is
-template-owned: set by trusted authors in `upgradeDefaults` and absent from
-the PR-facing schema, so `additionalProperties: false` rejects any override
-attempt. The one field a deployment may choose to expose — when it trusts its
-PR authors — is the benign `seedImage` tag, by adding it to the PR-facing
-schema as shown below. A deployment that opts in any richer override must not
-trust the value: it must validate that Secret/ConfigMap references resolve to
-an allowlisted set, that URL schemes are `https`, and that resolved
-destinations pass an egress allowlist rejecting private and link-local
-addresses after DNS resolution. Requiring `https` alone is **not** sufficient
-SSRF protection.
+The default posture keeps outbound targets, executable image references, and
+ISO credential references template-owned. A template may opt in to
+`seedImage` and the name-only `seedAuthSecretRef` by adding them to its
+PR-facing schema. Other richer overrides still require destination and
+credential controls: Secret/ConfigMap references must resolve to an
+allowlisted set, URL schemes must be `https`, and resolved destinations must
+pass an egress allowlist rejecting private and link-local addresses after DNS
+resolution. Requiring `https` alone is **not** sufficient SSRF protection.
 
 ### Schema: PR-facing and effective-object
 
 Two schemas validate `seedGeneration`; only the PR-facing one is exposed to
 PR authors, and it follows the same `templateParameterSchema` pattern as
-`imageBasedGroupUpgrade`.
+`imageBasedGroupUpgrade`. A template that omits a default must mark that PR
+field and its parent objects as required.
+
+`seedImage` is a plain container image reference. Transport prefixes such as
+`docker://` and `oci://` are rejected because LCA uses the value as its image
+build tag and push destination.
 
 **PR-facing schema.** Lists only the fields a PR may override, with
 `additionalProperties: false` at every object level so unknown or mistyped
-keys — and every template-owned field — are rejected rather than silently
-ignored. The strictest posture exposes nothing; the example below opts in the
-benign `seedImage` tag:
+keys — and every field not exposed by the template — are rejected rather than
+silently ignored. The example below opts in `seedImage` and the name-only
+`seedAuthSecretRef`; it exposes no namespace or Secret data:
 
 ```yaml
 # templateParameterSchema.upgradeParameters
@@ -354,8 +372,17 @@ properties:
         type: string
         description: Full pull-spec for the seed container image to publish
         minLength: 1
-        pattern: "^([a-z0-9]+://)?[\\S]+$"
-    # No template-owned field (seedAuthSecretRef, recertImage, liveISO.*,
+        pattern: "^\\S+$"
+        not: { pattern: "://" }
+      seedAuthSecretRef:
+        type: object
+        additionalProperties: false
+        properties:
+          name:
+            type: string
+            minLength: 1
+        required: [name]
+    # No other template-owned field (recertImage, liveISO.*,
     # uploadSecretRef, pullSecretRef, urlBase, imageDigestSources,
     # additionalTrustBundleConfigMapRef) appears here, so additionalProperties:
     # false rejects any attempt to set one from a PR.
@@ -377,7 +404,11 @@ properties:
     type: object
     additionalProperties: false
     properties:
-      seedImage: { type: string, minLength: 1, pattern: "^([a-z0-9]+://)?[\\S]+$" }
+      seedImage:
+        type: string
+        minLength: 1
+        pattern: "^\\S+$"
+        not: { pattern: "://" }
       seedAuthSecretRef:
         type: object
         additionalProperties: false
@@ -595,14 +626,25 @@ the operator deletes the ProvisioningRequest to reclaim the hardware. Note that
 lca-cli's own cleanup does **not** strip klusterlet/registration identity, so the
 controller must remove it explicitly rather than defer to LCA's seed preparation.
 
-The workflow is a multi-phase state machine tracked via a new `SeedGenerationCompleted` condition and `SeedGenerationStatus` in the PR status.
+The workflow is a multi-phase state machine tracked via a new
+`SeedGenerationCompleted` condition and `SeedGenerationStatus` in the PR
+status. Before hardware or cluster resources are created, initial
+ProvisioningRequest validation verifies that the `seedAuthSecretRef`
+credentials match the `seedImage` repository and can start a push upload. The
+check is repeated during seed-generation preflight after ZTP Done, so changed
+credentials or registry permissions are caught before detaching ACM agents.
 
 ### Phase 1: Validation
 
 - Verify `seedGeneration` configuration is present and valid
-- Verify the `seedAuthSecretRef` Secret exists in the ClusterTemplate namespace and contains the `seedAuth` key
-- **Validate registry access**: Decode the `seedAuth` credentials and perform a token exchange against the target registry (extracted from the `seedImage` pull-spec) to confirm the credentials are valid and have push access. This catches misconfigured credentials or unreachable
-  registries before the lengthy seed generation process begins. Report a `PreconditionChecksFailed` condition with a specific message on failure (e.g., "registry authentication failed for quay.io/my-org/seed-image", "registry quay.io is not reachable").
+- Recheck that the `seedAuthSecretRef` Secret still exists in the ClusterTemplate
+  namespace and contains the `seedAuth` key
+- **Recheck registry push access**: Match Docker auth entries against both the
+  registry host and repository path, then perform the registry upload
+  handshake. This catches changed credentials or permissions before detaching
+  ACM agents. Report a `PreconditionChecksFailed` condition with a specific
+  message on failure (e.g., "registry authentication failed for
+  quay.io/my-org/seed-image", "registry quay.io is not reachable").
 - Verify the spoke cluster is fully provisioned (ZTP Done)
 - Verify the spoke has the `var-lib-containers` partition (check for the MachineConfig via spoke client)
 - Verify the LCA operator is installed and Available on the spoke (check the `openshift-lifecycle-agent` namespace for the LCA operator Deployment via spoke client)
@@ -694,46 +736,78 @@ Remove all ACM agent state from the spoke so it doesn't contaminate the seed ima
    spoke is never left partially detached without a working access path. This
    needs only a hub-side `get` on the admin-kubeconfig Secret in the cluster's
    namespace (see the hub RBAC contract) — no spoke-side RBAC at all.
+   Before detachment, also require the spoke's `ClusterVersion.spec.clusterID`
+   to match both the `ClusterDeployment.spec.clusterMetadata.clusterID` and the
+   hub `ManagedCluster`'s `id.k8s.io` claim. Missing or mismatched identity
+   fails preflight before any hub add-ons or spoke agents are removed.
+   Persist the cluster ID, ManagedCluster UID, and Klusterlet UID in status.
+   Require one node, the template's release, and one non-hosted Klusterlet.
+   Recheck the pinned cluster ID before each subsequent spoke mutation and
+   use UID preconditions for deletes.
 2. **Record detachment intent**: Persist
    `SeedGenerationStatus.DetachmentStarted = true` (and flush the status
    update) **before** step 3 performs the first destructive ACM removal. This
    marker must be durable before, not after, any irreversible teardown so that
    a controller restart mid-detachment still treats the spoke as (partially)
    detached — see [Challenge 4](#4-seed-cluster-afterlife-and-pr-terminal-state).
-3. **Delete hub-side addon CRs**: Delete all `ManagedClusterAddOn` resources from the spoke's namespace on the hub (including `managed-serviceaccount`). This tells the ACM addon framework to stop reconciling them.
-4. **Delete the klusterlet**: Delete the `Klusterlet` CR on the spoke (via the admin-kubeconfig client). The klusterlet operator tears down the registration and work agents and their namespaces (`open-cluster-management-agent*`) — including the identity secrets
-   (`bootstrap-hub-kubeconfig`, `hub-kubeconfig-secret`) that would otherwise be captured in the seed. Deleting only the klusterlet Deployment is **not** sufficient: those secrets persist in etcd and on disk.
-5. **Wait for teardown**: Poll the spoke until the klusterlet and addon agent namespaces/pods are gone.
+3. **Prevent ACM recreation**: Add a `NoSelect` taint, set
+   `observability: disabled`, and disable automatic import on the pinned
+   ManagedCluster. Set `klusterletaddonconfig-pause: "true"` on the cluster's
+   `KlusterletAddonConfig` resources. Legacy add-ons with a `Manual` install
+   strategy are recreated from these configurations independently of Placement
+   and its taints.
+4. **Delete hub-side addon CRs**: Delete all `ManagedClusterAddOn` resources
+   in the cluster namespace. Wait for their finalizers and pre-delete hooks
+   while the work agent is still available.
+5. **Pause import works and delete the Klusterlet**: Explicitly configure the
+   import ManifestWorks as `ReadOnly`, resolving each resource identifier from
+   spoke API discovery. Older import controllers do not do this when automatic
+   import is disabled. Wait for the work agent to acknowledge the updated
+   generation, then delete the pinned `Klusterlet` CR using the admin
+   kubeconfig. Its operator removes the registration and work agents, their
+   identity secrets, and its AppliedManifestWork finalizers.
+6. **Remove remaining work records**: After Klusterlet teardown finishes,
+   delete AppliedManifestWorks belonging to its pinned agent UID. Delete the
+   import works with background propagation to collect their agent resources;
+   orphan non-import works so the configured workloads remain. Never strip
+   finalizers or remove work records belonging to a different agent. Wait for
+   the Klusterlet CRD and agent/addon namespaces to disappear.
+7. **Remove observability remnants**: After add-on hooks finish, remove known
+   ACM alertmanager entries from monitoring ConfigMaps and associated
+   hub-specific Secrets in the two monitoring namespaces. Preserve unrelated
+   monitoring configuration and Secrets.
+8. **Record completion**: Persist `AgentDetachmentCompleted` before submitting
+   LCA work. Reconciliation then resumes without repeating ACM teardown.
 
 - **Condition**: `SeedGenerationCompleted = False / Reason: CleaningACMResources`
+  The message identifies the pending step and, for add-on removal, the remaining
+  add-on names. A timeout retains the last progress message.
 
 ### Phase 3: Trigger Seed Generation
 
 Using the admin-kubeconfig spoke client established in Phase 2:
 
 1. **Create the seedgen Secret**: Deliver the `seedgen` Secret to the `openshift-lifecycle-agent` namespace on the spoke, reading credentials from the hub Secret referenced by `seedAuthSecretRef`.
-2. **Create the SeedGenerator CR**: Apply the singleton `seedimage` SeedGenerator CR with the configured `seedImage` (and optionally `recertImage`).
+2. **Create the SeedGenerator CR**: Persist `SeedGeneratorSubmitted` before
+   creating the singleton `seedimage` CR with the configured `seedImage` and
+   optional `recertImage`. Preflight rejects an existing singleton or seedgen
+   Secret. This durable intent prevents resubmission after a lost response or
+   controller restart. LCA temporarily removes its CR and Secret while the
+   image builder runs and restores them afterward, so absence after submission
+   means wait. A crash between persisting intent and sending Create, or an
+   ambiguous transport error, may require a new ProvisioningRequest after
+   timeout; the controller cannot safely infer that no run started.
 3. **Monitor progress**: Poll the SeedGenerator CR status conditions. The LCA orchestrates the full seed image lifecycle:
    - System validation
    - Cluster operator shutdown
    - Seed image generation via lca-cli (`lca_image_builder` container)
    - Image push to registry
    - Cluster operator recovery
-4. **Capture the pushed digest**: On completion, record the pushed seed image
-   digest in `SeedGenerationStatus.SeedImage` as an immutable
-   `<repository>@sha256:<digest>` reference. The configured
-   `seedGeneration.seedImage` is a **mutable tag** that could be overwritten
-   between this push and the Phase 4 ISO build, so all downstream consumption
-   pins the digest rather than re-resolving the tag. The digest is taken
-   **only** from the authoritative output of the push itself — the digest the
-   SeedGenerator/LCA reports for the image it just pushed, produced atomically
-   with the push and thus provably this run's image. The controller does **not**
-   fall back to a post-hoc registry tag lookup (manifest `HEAD`/`GET`): resolving
-   the tag after the fact cannot prove the returned image is this run's (another
-   writer can move the tag before or during the lookup), defeating the very
-   integrity guarantee the pin exists for. If the SeedGenerator/LCA surfaces no
-   immutable digest, the workflow **fails closed** with a terminal `Failed`
-   rather than building an ISO from an unverifiable tag.
+4. **Record the published image reference**: After LCA reports successful
+   completion, store the configured `seedGeneration.seedImage` reference in
+   `SeedGenerationStatus.SeedImage`. This can be the configured image tag; later
+   steps reuse the same reference. No LCA digest field or separate registry
+   lookup is required.
 
 - **Condition**: `SeedGenerationCompleted = False / Reason: InProgress`
 - **Status message**: Reflects the SeedGenerator's condition messages (e.g., `SeedGenInProgress=True` → "Generating seed image", `SeedGenCompleted=True` → generation finished)
@@ -773,7 +847,7 @@ The controller creates a Kubernetes Job on the hub cluster that builds the live 
    kind: ImageBasedInstallationConfig
    metadata:
      name: ibi-config
-   seedImage: <SeedGenerationStatus.SeedImage>   # immutable repo@sha256:... digest, not the mutable tag
+   seedImage: <SeedGenerationStatus.SeedImage>   # configured image reference used for the push
    seedVersion: <ClusterTemplate.spec.release>
    installationDisk: <liveISO.installationDisk>
    sshKey: <liveISO.sshKey>       # if provided
@@ -830,10 +904,10 @@ The controller creates a Kubernetes Job on the hub cluster that builds the live 
    is reachable — a HEAD/`Content-Length` check confirms reachability and TLS
    trust but cannot detect a stale ISO, a truncated upload with a matching size,
    or a same-size substitution:
-   - **Unique per-run remote path.** Uploads target the `remotePath` from
-     `uploadSecretRef` disambiguated by the ProvisioningRequest name and seed
-     image digest, so a new build never overwrites or is confused with an older
-     ISO at a shared URL.
+   - **Unique per-run remote path.** Uploads must use a unique path for each
+     generation run beneath the configured upload location. The published ISO
+     must never be overwritten by a later run. The exact path layout will be
+     defined during ISO generation implementation.
    - **Mandatory SSH content identity.** The controller fetches the digest over
      the already-trusted SSH channel (`sha256sum` on the remote `remotePath`)
      and compares it to the local digest; a mismatch or an inability to obtain
@@ -844,8 +918,7 @@ The controller creates a Kubernetes Job on the hub cluster that builds the live 
      (`uploadSecretRef.host` + `remotePath`) and the HTTPS origin
      (`liveISO.urlBase`) must be two views of the **same backing store**.
      `liveISO.urlBase` is the only URL input; both the SSH target and the
-     effective ISO URL are computed from it plus the per-run suffix
-     (ProvisioningRequest name + seed image digest + filename), so no
+     effective ISO URL are computed from it plus the same per-run suffix, so no
      independently supplied full URL can drift from `remotePath`. Before
      recording `ISOURL` the controller validates the binding on two axes:
      - **Path.** The path component of the computed ISO URL must equal the
@@ -974,7 +1047,7 @@ The seed cluster is a disposable factory, so there is no ACM restoration. Once t
 
 On success (seed generation complete, and ISO generation complete if configured):
 
-1. **Record results**: Store the seed image digest reference in `SeedGenerationStatus.SeedImage` and, if ISO was built, the resolved per-run URL in `SeedGenerationStatus.ISOURL` and the verified digest in `SeedGenerationStatus.ISODigest`.
+1. **Record results**: Store the configured seed image reference in `SeedGenerationStatus.SeedImage` and, if ISO was built, the resolved per-run URL in `SeedGenerationStatus.ISOURL` and the verified digest in `SeedGenerationStatus.ISODigest`.
 2. **Clean up workflow artifacts**: On the spoke, delete the SeedGenerator CR and the transient `seedgen` Secret (using the admin-kubeconfig client from Phase 2). No standalone credential was minted, so there is nothing else to
    revoke on the spoke — the admin kubeconfig is a hub Secret the controller only read and never copied to the spoke.
    Delete the ISO generation Job, its build workspace PVC, the per-run credential Secret copies created in the Job namespace, and associated resources from the hub.
@@ -998,32 +1071,26 @@ On failure (at any phase):
    `PreconditionChecksFailed` leaves the still-attached cluster reconciling
    normally, while `Failed` marks a detached cluster whose ACM-dependent
    checks are suppressed.
-3. **Scrub credential-bearing artifacts immediately, before any diagnostic
-   retention.** The failure path must not leave secrets sitting on hub
-   storage or the spoke. On both hub and spoke the controller, on failure:
-   - **Hub**: deletes **every** per-run credential copy created in the Job
-     namespace — the `seedAuthSecretRef` copy, the pull-secret copy, and the
-     per-run `uploadSecretRef` copy (which holds the SSH **private key** and
-     `knownHosts`, the most sensitive of the three) — plus the `idms.yaml`/CA-trust
-     ConfigMap and any Secret projections mounted into the Job pod, and deletes
-     the pod's mounted volumes, all on the same immediate failure path. Every
-     per-run Secret the controller generates is covered by this scrub and by a
-     test. Only *scrubbed* diagnostics are retained: the bounded, redacted log
-     tail (already in the condition) and, if kept, credential-redacted pod logs.
-     The build workspace PVC (which may hold the seed image / partial ISO but not
-     the input Secrets) may be retained under a **bounded diagnostic-retention
-     policy** (a TTL after which it is reclaimed), not indefinitely until the PR
-     is deleted.
-   - **Spoke**: deletes the transient `seedgen` Secret and the SeedGenerator
-     CR. Nothing was minted, so there is no spoke-side ServiceAccount, token, or
-     RBAC to revoke — the admin kubeconfig is a hub Secret the controller only
-     read, never copied to the spoke, and nothing about it is baked into the
-     seed. The only sensitive item placed on the spoke is the `seedgen` Secret
-     (registry push credentials); a hub-side finalizer plus a bounded operation
-     **deadline** force-run this cleanup even for a stuck or abandoned run while
-     the spoke is still reachable. If the spoke is genuinely unreachable at
-     cleanup time (e.g. the controller was down and the spoke was independently
-     torn down), the `seedgen` Secret is the item to purge manually.
+3. **Clean up without racing LCA recovery.** Before LCA submission, remove
+   per-run artifacts immediately. After submission, retain the frozen snapshot
+   and spoke access until LCA reports a terminal condition: deleting its CR
+   does not cancel the host image-builder process, which can restore the CR
+   and registry Secret later. A missing CR is not evidence of completion.
+   Persist `SeedGeneratorFinished` before deleting owned LCA resources, then
+   persist `DetachedCleanupCompleted` before deleting the hub snapshot. This
+   allows cleanup to resume after a restart without requiring deleted inputs.
+   - **Hub**: Remove per-run credential copies, ConfigMaps, and preflight Pods
+     once spoke cleanup is complete. Never delete the source Secrets.
+   - **Spoke**: Remove only the owned transient `seedgen` Secret and
+     SeedGenerator CR, after verifying the pinned cluster identity. No
+     ServiceAccount or RBAC was created by this workflow.
+   - **Timeout**: Mark the run timed out, but continue waiting for LCA recovery
+     before scrubbing its resources. A timeout cannot cancel LCA's host process.
+   - **PR deletion**: Normal deletion removes hub artifacts and proceeds to
+     node deprovisioning and wiping through the NAR, without requiring the
+     spoke API to remain available. When `skip-cleanup` retains the node,
+     require spoke credential cleanup before removing the snapshot.
+
 4. The spoke cluster remains running (detached) for manual intervention. ACM
    is **not** restored automatically; the operator can re-import the cluster
    manually for debugging or delete the ProvisioningRequest to tear it down.
@@ -1073,11 +1140,9 @@ type SeedGenerationStatus struct {
     // Phase 4 fails terminally if this is empty when liveISO is configured.
     ReleaseImageDigest string `json:"releaseImageDigest,omitempty"`
 
-    // SeedImage is the published seed image as an immutable
-    // <repository>@sha256:<digest> reference, captured from the
-    // SeedGenerator status in Phase 3 and populated on success. The digest
-    // (not the mutable configured tag) is what Phase 4 builds the ISO from
-    // and what downstream consumers pin to.
+    // SeedImage is the configured seed image reference, recorded after the
+    // SeedGenerator reports successful completion. It is the reference later
+    // steps use when consuming the generated seed image.
     SeedImage string `json:"seedImage,omitempty"`
 
     // ISOURL is the HTTPS URL where the live installation ISO is accessible
@@ -1173,10 +1238,11 @@ spec:
             name: iso-server-ssh-credentials
           urlBase: https://iso-server.example.com/ibi/
   templateParameterSchema:
-    # PR-facing schema: exposes only the PR-overridable field(s). Every
-    # template-owned field lives in upgradeDefaults and is validated post-merge
-    # by the controller's effective-object schema — see "Schema: PR-facing and
-    # effective-object". additionalProperties: false rejects any other override.
+    # PR-facing schema: exposes only fields selected for PR overrides.
+    # Fields omitted from defaults must also be required here. The controller's
+    # effective-object schema validates the merged result — see "Schema:
+    # PR-facing and effective-object". additionalProperties: false rejects
+    # every other override.
     properties:
       # ... standard provisioning parameters ...
       upgradeParameters:
@@ -1190,6 +1256,14 @@ spec:
               seedImage:
                 type: string
                 minLength: 1
+              seedAuthSecretRef:
+                type: object
+                additionalProperties: false
+                properties:
+                  name:
+                    type: string
+                    minLength: 1
+                required: [name]
               seedGenerationTimeout:
                 type: string
     type: object
@@ -1204,15 +1278,14 @@ spec:
 **Mitigation**: The controller removes hub-side addon CRs (stopping reconciliation) and deletes the spoke `Klusterlet` CR, letting the klusterlet operator tear down the agent namespaces and their identity secrets (`bootstrap-hub-kubeconfig`, `hub-kubeconfig-secret`). lca-cli's own
 cleanup does **not** strip klusterlet/registration identity, so this explicit removal is required; lca-cli still handles the remaining cluster-specific artifacts (certificates, node identity) as part of recert.
 
-Observability is handled **preventively rather than by post-hoc cleanup**. RHACM's `multicluster-observability-operator` automatically deploys the
-observability-addon (metrics-collector plus the observability-endpoint-operator) to each managed cluster; that addon creates hub-specific secrets such as
-`hub-alertmanager-router-ca-*` and `observability-alertmanager-accessor-*` in the spoke's `openshift-monitoring` and `openshift-user-workload-monitoring`
-namespaces — exactly the hub-coupled artifact that must not be baked into a portable seed. Because the seed cluster is disposable and purpose-built, the seed
-`ClusterTemplate` sets the `observability: disabled` label on the `ManagedCluster` (via `clusterInstanceDefaults`) from the moment it is imported, so the
-observability-operator never deploys the addon and those secrets are never created. This is preferable to enumerating and deleting them during teardown, whose
-exact set drifts across RHACM/MCE versions — preventing creation is more robust than racing a fragile hardcoded deletion list before capture. A residual secret
-sweep is needed only if a cluster that *already* had observability deployed is later repurposed as a seed (not the standard flow); it is a fallback in
-[Open Question 4](#open-questions), not the default path.
+Set `observability: disabled` at import time for purpose-built seed clusters
+where possible. The controller also sets it during detachment because a
+cluster may already have observability installed. Add-on pre-delete hooks run
+before agent removal. Lab testing demonstrated that hub-specific Secrets can
+remain in `openshift-monitoring` and `openshift-user-workload-monitoring`, so
+the controller additionally removes known ACM alertmanager entries and
+associated Secrets after the hooks finish. This sweep preserves unrelated
+configuration and must be checked when upgrading ACM/MCE.
 
 ### 2. Spoke client availability during seed generation
 
@@ -1291,8 +1364,11 @@ StorageClass with sufficient capacity.
 **Mitigation**: The controller **auto-derives the mirror configuration from the hub** (Phase 4, step 1) — mirror mappings from the hub's `ImageDigestMirrorSet`/`ImageContentSourcePolicy` and registry trust from its image-config `additionalTrustedCA` — and injects it into both
 `oc adm release extract` (`--idms-file` + CA trust) and the `ImageBasedInstallationConfig` (`imageDigestSources` + `additionalTrustBundle`). Because the hub already operates in the same disconnected environment as the seed and target clusters, this avoids duplicating and drifting mirror config
 in the ClusterTemplate; optional `liveISO.imageDigestSources` / `liveISO.additionalTrustBundleConfigMapRef` overrides cover targeting a different mirror. `releaseImage` is required (no public-registry fallback) and the pull secret must include credentials for all mirrors involved; Phase 1
-validates that `releaseImage` is reachable and `oc adm release extract` can authenticate using the resolved mirror config. The `seedImage` in the `ImageBasedInstallationConfig` is the immutable `repo@sha256:<digest>` captured in Phase 3, not the mutable tag, so the ISO is built from exactly
-the generated image.
+validates that `releaseImage` is reachable and `oc adm release extract` can
+authenticate using the resolved mirror config. The `seedImage` in the
+`ImageBasedInstallationConfig` is the configured reference recorded in
+`SeedGenerationStatus.SeedImage`, the same reference LCA used to publish the
+generated image.
 
 ### 9. HTTPS ISO server certificate management
 
@@ -1393,9 +1469,11 @@ Roughly 4 working sessions to implement:
 
 ## Open Questions
 
-1. **Is deleting the `Klusterlet` CR + all `ManagedClusterAddOn` CRs sufficient to fully remove ACM agent state?** Option B relies on the klusterlet operator's own teardown (triggered by deleting the `Klusterlet` CR) rather than a hardcoded list of Deployments/DaemonSets. This should
-   be validated against the specific ACM/MCE version — in particular that the agent namespaces and identity secrets are fully removed so the captured seed carries no stale hub-registration state. (Confirmed: lca-cli does **not** strip klusterlet identity, so the controller cannot
-   defer this.)
+1. **Is deleting the Klusterlet and add-ons sufficient?** Resolved by lab
+   testing and inspection of ACM teardown: AppliedManifestWorks can remain
+   after Klusterlet cleanup removes their finalizers. The controller must
+   remove those records with the appropriate propagation, wait for the
+   Klusterlet CRD and namespaces, and handle observability remnants.
 
 2. **What container image should the ISO generation Job use?** Resolved: an
    immutable-digest image containing `oc`, shell, `ssh`, `scp`,
@@ -1404,8 +1482,7 @@ Roughly 4 working sessions to implement:
 
 3. **Should ISO upload support mechanisms beyond SCP?** The initial implementation uses SCP/SFTP for simplicity (matching the existing manual workflow). Future iterations could add S3-compatible upload, HTTP PUT, or NFS mount as alternative upload mechanisms if there is demand.
 
-4. **Is a residual observability-secret sweep ever required?** The standard flow prevents observability contamination up front by setting the
-   `observability: disabled` label on the `ManagedCluster` at import time (see [Challenge 1](#1-incomplete-acm-cleanup-contaminates-the-seed-image)), so the
-   observability-addon and its `hub-alertmanager-router-ca-*` / `observability-alertmanager-accessor-*` secrets are never deployed. The only scenario that would
-   still leave those secrets behind is repurposing a cluster that *already* had observability deployed as a seed cluster. If that scenario needs to be supported,
-   a bounded spoke-side sweep of those namespaces would be added — accepting the corresponding RBAC widening — rather than relaxing the preventive default.
+4. **Is a residual observability-secret sweep required?** Yes. Lab testing
+   found hub alertmanager CA Secrets remaining after add-on removal. The
+   workflow includes a targeted sweep after add-on hooks and agent teardown,
+   as described in [Challenge 1](#1-incomplete-acm-cleanup-contaminates-the-seed-image).

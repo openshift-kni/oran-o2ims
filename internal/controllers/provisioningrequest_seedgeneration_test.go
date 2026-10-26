@@ -15,7 +15,9 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -23,18 +25,25 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	hivev1 "github.com/openshift/hive/apis/hive/v1"
+	addonv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
+	workv1 "open-cluster-management.io/api/work/v1"
 )
 
 func newSeedTestClient(t *testing.T, objects ...client.Object) client.Client {
 	t.Helper()
 	scheme := runtime.NewScheme()
 	for _, add := range []func(*runtime.Scheme) error{
-		provisioningv1alpha1.AddToScheme, corev1.AddToScheme, batchv1.AddToScheme,
+		provisioningv1alpha1.AddToScheme, corev1.AddToScheme, batchv1.AddToScheme, hivev1.AddToScheme, clusterv1.AddToScheme, addonv1alpha1.AddToScheme, workv1.AddToScheme,
 	} {
 		if err := add(scheme); err != nil {
 			t.Fatal(err)
 		}
 	}
+	addonGV := schema.FromAPIVersionAndKind(seedGenerationAddonConfigAPIVersion, "KlusterletAddonConfig")
+	scheme.AddKnownTypeWithName(addonGV, &unstructured.Unstructured{})
+	scheme.AddKnownTypeWithName(addonGV.GroupVersion().WithKind("KlusterletAddonConfigList"), &unstructured.UnstructuredList{})
 	return fake.NewClientBuilder().WithScheme(scheme).
 		WithStatusSubresource(&provisioningv1alpha1.ProvisioningRequest{}).
 		WithObjects(objects...).Build()
@@ -176,10 +185,17 @@ func TestSeedGenerationStartAndTimeout(t *testing.T) {
 	if status == nil || status.StartedAt == nil || status.TimeoutSeconds != 5400 {
 		t.Fatalf("run state was not persisted: %+v", status)
 	}
+	if condition := seedGenerationCondition(fetched); condition == nil ||
+		condition.Message != "Seed generation validation is in progress" ||
+		fetched.Status.ProvisioningStatus.ProvisioningDetails != condition.Message {
+		t.Fatal("validation progress was not persisted in both status fields")
+	}
 	if err := task.startSeedGeneration(ctx, time.Hour); err == nil {
 		t.Fatal("second start accepted")
 	}
 	status.StartedAt = &metav1.Time{Time: time.Now().Add(-2 * time.Hour)}
+	blocked := "Waiting for ACM add-on removal: config-policy-controller"
+	seedGenerationCondition(fetched).Message = blocked
 	if err := c.Status().Update(ctx, fetched); err != nil {
 		t.Fatal(err)
 	}
@@ -190,6 +206,42 @@ func TestSeedGenerationStartAndTimeout(t *testing.T) {
 	}
 	if !seedGenerationTerminal(fetched) || seedGenerationCondition(fetched).Reason != string(provisioningv1alpha1.CRconditionReasons.TimedOut) {
 		t.Fatalf("timeout did not become terminal: %+v", fetched.Status.Conditions)
+	}
+	if seedGenerationCondition(fetched).Message != "Seed generation timed out after 1h30m0s: "+blocked {
+		t.Fatalf("timeout lost the blocking step: %s", seedGenerationCondition(fetched).Message)
+	}
+}
+
+func TestStartOrResumeSeedGenerationStartsFromTemplateDefaults(t *testing.T) {
+	ctx := context.Background()
+	pr := &provisioningv1alpha1.ProvisioningRequest{
+		ObjectMeta: metav1.ObjectMeta{Name: "seed-pr"},
+		Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+			TemplateParameters: runtime.RawExtension{Raw: []byte(`{}`)},
+		},
+	}
+	pr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{ZtpStatus: ctlrutils.ClusterZtpDone}
+	ct := &provisioningv1alpha1.ClusterTemplate{
+		ObjectMeta: metav1.ObjectMeta{Name: "seed.v1", Namespace: "templates"},
+		Spec: provisioningv1alpha1.ClusterTemplateSpec{
+			TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
+				UpgradeDefaults: runtime.RawExtension{Raw: []byte(`{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22","seedAuthSecretRef":{"name":"push-auth"}}}`)},
+			},
+		},
+	}
+	c := newSeedTestClient(t, pr, ct)
+	task := seedTestTask(pr, c)
+	result, err := task.startOrResumeSeedGeneration(ctx, ct)
+	if err != nil || result.RequeueAfter <= 0 {
+		t.Fatalf("seed request was not started: result=%+v err=%v", result, err)
+	}
+	condition := seedGenerationCondition(pr)
+	if condition == nil || condition.Reason != string(provisioningv1alpha1.CRconditionReasons.Validating) {
+		t.Fatalf("seed generation did not enter validation: condition=%+v", condition)
+	}
+	status := pr.Status.Extensions.ClusterDetails.SeedGenerationStatus
+	if status == nil || status.StartedAt == nil || status.TimeoutSeconds != int64((2*time.Hour)/time.Second) {
+		t.Fatalf("seed generation start was not persisted with the default timeout: %+v", status)
 	}
 }
 

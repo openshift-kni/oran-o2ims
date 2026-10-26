@@ -8,13 +8,10 @@ package controllers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
-
-	"github.com/openshift-kni/oran-o2ims/internal/validation"
 
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -44,12 +41,14 @@ type ProvisioningRequestReconciler struct {
 }
 
 type provisioningRequestReconcilerTask struct {
-	logger       *slog.Logger
-	client       client.Client
-	object       *provisioningv1alpha1.ProvisioningRequest
-	clusterInput *clusterInput
-	ctDetails    *clusterTemplateDetails
-	timeouts     *timeouts
+	logger                           *slog.Logger
+	client                           client.Client
+	object                           *provisioningv1alpha1.ProvisioningRequest
+	clusterInput                     *clusterInput
+	ctDetails                        *clusterTemplateDetails
+	timeouts                         *timeouts
+	seedGenerationSpokeClientBuilder func([]byte) (client.Client, error)
+	seedGenerationRegistryPushAccess func(context.Context, string, []byte) error
 }
 
 // clusterInput holds the merged input data for a cluster
@@ -112,6 +111,8 @@ func GetClusterTemplateRefName(name, version string) string {
 //+kubebuilder:rbac:groups=authentication.open-cluster-management.io,resources=managedserviceaccounts,verbs=get;list;watch;create;delete
 //+kubebuilder:rbac:groups=work.open-cluster-management.io,resources=manifestworks,verbs=get;list;watch;create;delete
 //+kubebuilder:rbac:groups=addon.open-cluster-management.io,resources=managedclusteraddons,verbs=get;list;watch
+//+kubebuilder:rbac:groups=addon.open-cluster-management.io,resources=managedclusteraddons,verbs=delete
+//+kubebuilder:rbac:groups=hive.openshift.io,resources=clusterdeployments,verbs=list;watch
 //+kubebuilder:rbac:groups="config.openshift.io",resources=proxies,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -355,12 +356,7 @@ func (t *provisioningRequestReconcilerTask) handlePostProvisioning(ctx context.C
 			return requeueWithError(err)
 		}
 		if seedRequested {
-			// Reject a seed request here unless seed generation has already
-			// reached a terminal state. This prevents unsupported requests from
-			// proceeding through normal post-provisioning.
-			if !seedGenerationTerminal(t.object) {
-				return requeueWithError(errors.New(validation.SeedGenerationUnsupportedMessage))
-			}
+			return t.startOrResumeSeedGeneration(ctx, clusterTemplate)
 		} else {
 			result, err := t.handleClusterUpgrades(ctx, renderedClusterInstance.GetName(), clusterTemplate)
 			if err != nil || result.Requeue || result.RequeueAfter > 0 {
@@ -922,15 +918,25 @@ func (t *provisioningRequestReconcilerTask) handleValidation(ctx context.Context
 	if err != nil {
 		validationFailureMsg := "Failed to validate the ProvisioningRequest"
 		validationFailureMsgWithError := validationFailureMsg + ": " + err.Error()
-		ctlrutils.LogError(ctx, t.logger, validationFailureMsg, err, slog.String("name", t.object.Name))
-		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
-			provisioningv1alpha1.PRconditionTypes.Validated,
-			provisioningv1alpha1.CRconditionReasons.Failed,
-			metav1.ConditionFalse,
-			validationFailureMsgWithError,
-		)
-		// Update provisioning status to failed to ensure consistency with the Validation condition Failed status
-		ctlrutils.SetProvisioningStateFailed(t.object, validationFailureMsgWithError)
+		if isSeedGenerationTransientError(err) {
+			t.logger.WarnContext(ctx, validationFailureMsg, slog.Any("error", err), slog.String("name", t.object.Name))
+			ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
+				provisioningv1alpha1.PRconditionTypes.Validated,
+				provisioningv1alpha1.CRconditionReasons.InProgress,
+				metav1.ConditionUnknown,
+				validationFailureMsgWithError,
+			)
+		} else {
+			ctlrutils.LogError(ctx, t.logger, validationFailureMsg, err, slog.String("name", t.object.Name))
+			ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
+				provisioningv1alpha1.PRconditionTypes.Validated,
+				provisioningv1alpha1.CRconditionReasons.Failed,
+				metav1.ConditionFalse,
+				validationFailureMsgWithError,
+			)
+			// Update provisioning status to failed to ensure consistency with the Validation condition Failed status
+			ctlrutils.SetProvisioningStateFailed(t.object, validationFailureMsgWithError)
+		}
 	} else {
 		t.logger.InfoContext(ctx, "Validated the ProvisioningRequest CR",
 			slog.String("name", t.object.Name))
@@ -1186,8 +1192,8 @@ func (r *ProvisioningRequestReconciler) handleProvisioningRequestDeletion(
 			return false, fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", provisioningRequest.Name, err)
 		}
 	}
-	// Scrub any seed-run artifacts while the PR still has its finalizer and
-	// before deleting the NAR can power down the cluster.
+	// Remove hub seed-run artifacts before deprovisioning. Spoke cleanup is
+	// required only when skip-cleanup retains the running cluster.
 	seedCleaned, err := r.cleanupSeedGenerationResources(ctx, provisioningRequest)
 	if err != nil || !seedCleaned {
 		return false, err

@@ -128,7 +128,7 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 		newPr = oldPr.DeepCopy()
 	})
 
-	Describe("unsupported seed generation", func() {
+	Describe("seed generation", func() {
 		BeforeEach(func() {
 			ct := &provisioningv1alpha1.ClusterTemplate{
 				ObjectMeta: metav1.ObjectMeta{Name: "seed-template.v1", Namespace: "default"},
@@ -148,25 +148,36 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 			newPr.Spec.TemplateVersion = "v1"
 		})
 
-		It("rejects creation when seed generation comes from template defaults", func() {
+		It("accepts creation when seed generation comes from template defaults", func() {
 			_, err := validator.ValidateCreate(ctx, newPr)
-			Expect(err).To(MatchError(ContainSubstring(validation.SeedGenerationUnsupportedMessage)))
+			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("rejects creation when seed generation comes from request parameters", func() {
+		It("rejects ISO generation from defaults before cluster provisioning", func() {
 			ct := &provisioningv1alpha1.ClusterTemplate{}
 			Expect(fakeClient.Get(ctx, client.ObjectKey{Name: "seed-template.v1", Namespace: "default"}, ct)).To(Succeed())
-			ct.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{}`)
+			ct.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"seedGeneration":{"liveISO":{}}}`)
 			Expect(fakeClient.Update(ctx, ct)).To(Succeed())
-			newPr.Spec.TemplateParameters.Raw = []byte(`{"upgradeParameters":{"seedGeneration":{"seedImage":"quay.io/example/seed:4.22"}}}`)
-
 			_, err := validator.ValidateCreate(ctx, newPr)
-			Expect(err).To(MatchError(ContainSubstring(validation.SeedGenerationUnsupportedMessage)))
+			Expect(err).To(MatchError(ContainSubstring("liveISO is not supported")))
 		})
 
-		It("rejects updates to a seed generation template", func() {
+		It("accepts a seed image override in request parameters", func() {
+			newPr.Spec.TemplateParameters.Raw = []byte(`{
+				"nodeClusterName":"exampleCluster",
+				"oCloudSiteId":"local-123",
+				"clusterInstanceParameters":{"additionalNTPSources":["1.1.1.1"]},
+				"policyTemplateParameters":{"sriov-network-vlan-1":"140"},
+				"upgradeParameters":{"seedGeneration":{"seedImage":"quay.io/example/seed:override"}}
+			}`)
+
+			_, err := validator.ValidateCreate(ctx, newPr)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("accepts an update selecting a seed generation template before the run starts", func() {
 			_, err := validator.ValidateUpdate(ctx, oldPr, newPr)
-			Expect(err).To(MatchError(ContainSubstring(validation.SeedGenerationUnsupportedMessage)))
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 

@@ -9,6 +9,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/openshift-kni/oran-o2ims/internal/provisioning"
@@ -26,6 +27,8 @@ import (
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 )
 
+// The manager scopes Job, Pod, and PVC informers to the operator namespace,
+// so cached reads and cleanup use the namespaced permissions below.
 //+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;delete,namespace=system
 //+kubebuilder:rbac:groups="",resources=pods;persistentvolumeclaims;secrets;configmaps,verbs=get;list;watch;delete,namespace=system
 //+kubebuilder:rbac:groups="",resources=pods,verbs=create,namespace=system
@@ -59,6 +62,34 @@ func (t *provisioningRequestReconcilerTask) IsSeedGenerationRequested(
 func seedGenerationCondition(pr *provisioningv1alpha1.ProvisioningRequest) *metav1.Condition {
 	return meta.FindStatusCondition(pr.Status.Conditions,
 		string(provisioningv1alpha1.PRconditionTypes.SeedGenerationCompleted))
+}
+
+// setSeedGenerationProgress keeps the condition and the summary in sync. Callers
+// persisting a run-state change can include progress in the same status update.
+func setSeedGenerationProgress(pr *provisioningv1alpha1.ProvisioningRequest, reason provisioningv1alpha1.ConditionReason, message string) bool {
+	condition := seedGenerationCondition(pr)
+	if condition != nil && condition.Status == metav1.ConditionFalse && condition.Reason == string(reason) &&
+		condition.Message == message && pr.Status.ProvisioningStatus.ProvisioningPhase == provisioningv1alpha1.StateProgressing &&
+		pr.Status.ProvisioningStatus.ProvisioningDetails == message {
+		return false
+	}
+	ctlrutils.SetStatusCondition(&pr.Status.Conditions,
+		provisioningv1alpha1.PRconditionTypes.SeedGenerationCompleted, reason, metav1.ConditionFalse, message)
+	ctlrutils.SetProvisioningStateInProgress(pr, message)
+	return true
+}
+
+func (t *provisioningRequestReconcilerTask) updateSeedGenerationProgress(
+	ctx context.Context, reason provisioningv1alpha1.ConditionReason, message string,
+) error {
+	if !setSeedGenerationProgress(t.object, reason, message) {
+		return nil
+	}
+	if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+		return fmt.Errorf("failed to record seed generation progress: %w", err)
+	}
+	t.logger.InfoContext(ctx, "Seed generation progress updated", slog.String("reason", string(reason)), slog.String("details", message))
+	return nil
 }
 
 func seedGenerationTerminal(pr *provisioningv1alpha1.ProvisioningRequest) bool {
@@ -135,7 +166,7 @@ func (t *provisioningRequestReconcilerTask) seedGenerationNeedsFastPath() bool {
 }
 
 // startSeedGeneration persists the clock and timeout before resource creation
-// begins. The admission guard remains active until the workflow can run.
+// begins so reconciliation can resume from the seed-generation fast path.
 func (t *provisioningRequestReconcilerTask) startSeedGeneration(ctx context.Context, timeout time.Duration) error {
 	details := t.object.Status.Extensions.ClusterDetails
 	if timeout <= 0 || details == nil || seedGenerationCondition(t.object) != nil {
@@ -157,15 +188,39 @@ func (t *provisioningRequestReconcilerTask) startSeedGeneration(ctx context.Cont
 		StartedAt:      &now,
 		TimeoutSeconds: seconds,
 	}
-	ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
-		provisioningv1alpha1.PRconditionTypes.SeedGenerationCompleted,
-		provisioningv1alpha1.CRconditionReasons.Validating, metav1.ConditionFalse,
+	setSeedGenerationProgress(t.object, provisioningv1alpha1.CRconditionReasons.Validating,
 		"Seed generation validation is in progress")
-	ctlrutils.SetProvisioningStateInProgress(t.object, "Seed generation is in progress")
 	if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 		return fmt.Errorf("failed to record seed generation start: %w", err)
 	}
 	return nil
+}
+
+// startOrResumeSeedGeneration starts a one-shot run from the merged trusted
+// template defaults and request overrides, then advances its state machine.
+func (t *provisioningRequestReconcilerTask) startOrResumeSeedGeneration(
+	ctx context.Context, clusterTemplate *provisioningv1alpha1.ClusterTemplate,
+) (ctrl.Result, error) {
+	if seedGenerationTerminal(t.object) {
+		return doNotRequeue(), nil
+	}
+	if seedGenerationCondition(t.object) == nil {
+		config, err := t.mergeAndValidateUpgradeData(clusterTemplate)
+		if err != nil {
+			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
+				fmt.Sprintf("invalid seed generation configuration: %v", err))
+		}
+		timeout, err := seedGenerationTimeout(config)
+		if err != nil {
+			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
+				fmt.Sprintf("invalid seed generation timeout: %v", err))
+		}
+		if err := t.startSeedGeneration(ctx, timeout); err != nil {
+			return requeueWithError(fmt.Errorf("failed to start seed generation: %w", err))
+		}
+		return requeueWithShortInterval(), nil
+	}
+	return t.reconcileSeedGeneration(ctx)
 }
 
 // seedGenerationTimeout resolves the operation-specific default or an
@@ -205,14 +260,12 @@ func seedGenerationTimeout(config map[string]any) (time.Duration, error) {
 // the spoke or create seed artifacts.
 func (t *provisioningRequestReconcilerTask) reconcileSeedGeneration(ctx context.Context) (ctrl.Result, error) {
 	if seedGenerationTerminal(t.object) {
-		if seedGenerationFailureNeedsCleanup(t.object) {
-			pending, err := t.cleanupSeedGenerationPreflightResources(ctx)
-			if err != nil {
-				return requeueWithError(fmt.Errorf("failed to clean up seed generation preflight resources: %w", err))
-			}
-			if pending {
-				return requeueWithShortInterval(), nil
-			}
+		pending, err := t.cleanupSeedGenerationRunResources(ctx)
+		if err != nil {
+			return requeueWithError(fmt.Errorf("failed to clean up seed generation resources: %w", err))
+		}
+		if pending {
+			return requeueWithShortInterval(), nil
 		}
 		return doNotRequeue(), nil
 	}
@@ -225,17 +278,23 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGeneration(ctx context.
 	status := details.SeedGenerationStatus
 	deadline := status.StartedAt.Add(time.Duration(status.TimeoutSeconds) * time.Second)
 	if !time.Now().Before(deadline) {
+		message := fmt.Sprintf("Seed generation timed out after %s", time.Duration(status.TimeoutSeconds)*time.Second)
+		if condition := seedGenerationCondition(t.object); condition != nil && condition.Message != "" {
+			message += ": " + condition.Message
+		}
 		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.TimedOut,
-			fmt.Sprintf("Seed generation timed out after %s", time.Duration(status.TimeoutSeconds)*time.Second))
+			message)
 	}
 	condition := seedGenerationCondition(t.object)
-	if !status.DetachmentStarted && condition != nil &&
+	if status.DetachmentStarted {
+		return t.reconcileSeedGenerationSnapshot(ctx, status)
+	}
+	if condition != nil &&
 		condition.Status == metav1.ConditionFalse &&
 		condition.Reason == string(provisioningv1alpha1.CRconditionReasons.Validating) {
 		return t.reconcileSeedGenerationPreflight(ctx)
 	}
-	condition = seedGenerationCondition(t.object)
-	if !status.DetachmentStarted && condition != nil && condition.Status == metav1.ConditionFalse &&
+	if condition != nil && condition.Status == metav1.ConditionFalse &&
 		condition.Reason == string(provisioningv1alpha1.CRconditionReasons.InProgress) {
 		return t.reconcileSeedGenerationSnapshot(ctx, status)
 	}
@@ -243,15 +302,19 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGeneration(ctx context.
 }
 
 func (t *provisioningRequestReconcilerTask) reconcileSeedGenerationPreflight(ctx context.Context) (ctrl.Result, error) {
-	if err := t.validateSeedGenerationSpokePrerequisites(ctx); err != nil {
-		return t.handleSeedGenerationPreflightError(ctx, "seed generation spoke preflight failed", err)
-	}
 	snapshot, retry, err := t.ensureSeedGenerationInputSnapshot(ctx, nil)
 	if err != nil {
 		return t.handleSeedGenerationPreflightError(ctx, "seed generation preflight failed", err)
 	}
 	if retry {
 		return requeueWithShortInterval(), nil
+	}
+	if _, hasISO := snapshot.Document.SeedGeneration["liveISO"]; hasISO {
+		return t.handleSeedGenerationPreflightError(ctx, "seed generation preflight failed",
+			fmt.Errorf("liveISO is not supported by this controller version"))
+	}
+	if err := t.validateSeedGenerationSpokePrerequisites(ctx, snapshot); err != nil {
+		return t.handleSeedGenerationPreflightError(ctx, "seed generation spoke preflight failed", err)
 	}
 	complete, retry, err := t.ensureSeedGenerationToolsPreflight(ctx, snapshot)
 	if err != nil {
@@ -262,12 +325,9 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerationPreflight(ctx
 	}
 	if current := seedGenerationCondition(t.object); current != nil &&
 		current.Reason == string(provisioningv1alpha1.CRconditionReasons.Validating) {
-		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
-			provisioningv1alpha1.PRconditionTypes.SeedGenerationCompleted,
-			provisioningv1alpha1.CRconditionReasons.InProgress, metav1.ConditionFalse,
-			"Seed generation inputs are validated and frozen")
-		if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
-			return requeueWithError(fmt.Errorf("failed to record seed generation preflight completion: %w", err))
+		if err := t.updateSeedGenerationProgress(ctx, provisioningv1alpha1.CRconditionReasons.InProgress,
+			"Seed generation inputs are validated and frozen"); err != nil {
+			return requeueWithError(err)
 		}
 	}
 	return requeueWithMediumInterval(), nil
@@ -283,8 +343,7 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerationSnapshot(
 	}
 	snapshot, err := t.loadSeedGenerationInputSnapshot(ctx)
 	if err != nil {
-		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
-			fmt.Sprintf("failed to adopt frozen seed generation inputs: %v", err))
+		return t.handleSeedGenerationPreflightError(ctx, "failed to adopt frozen seed generation inputs", err)
 	}
 	if _, hasISO := snapshot.Document.SeedGeneration["liveISO"]; hasISO && status.ReleaseImageDigest == "" {
 		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
@@ -292,13 +351,26 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerationSnapshot(
 	}
 	pending, err := t.cleanupSeedGenerationPreflightPods(ctx)
 	if err != nil {
-		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
-			fmt.Sprintf("failed to clean up seed generation preflight Pods: %v", err))
+		return t.handleSeedGenerationPreflightError(ctx, "failed to clean up seed generation preflight Pods", err)
 	}
 	if pending {
 		return requeueWithShortInterval(), nil
 	}
-	return requeueWithMediumInterval(), nil
+	if !status.DetachmentStarted {
+		if status.ClusterID == "" || status.ManagedClusterUID == "" || status.KlusterletUID == "" {
+			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
+				"seed generation cluster identity was not pinned during preflight")
+		}
+		status.DetachmentStarted = true
+		setSeedGenerationProgress(t.object, provisioningv1alpha1.CRconditionReasons.CleaningACMResources,
+			"Removing ACM agents from the spoke")
+		if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+			status.DetachmentStarted = false
+			return requeueWithError(fmt.Errorf("failed to record ACM detachment intent: %w", err))
+		}
+		return requeueWithShortInterval(), nil
+	}
+	return t.reconcileSeedGenerationDetached(ctx, snapshot)
 }
 
 func (t *provisioningRequestReconcilerTask) failSeedGeneration(
@@ -309,7 +381,7 @@ func (t *provisioningRequestReconcilerTask) failSeedGeneration(
 	if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 		return requeueWithError(fmt.Errorf("failed to record seed generation failure: %w", err))
 	}
-	pending, err := t.cleanupSeedGenerationPreflightResources(ctx)
+	pending, err := t.cleanupSeedGenerationRunResources(ctx)
 	if err != nil {
 		return requeueWithError(fmt.Errorf("failed to clean up seed generation preflight resources after failure: %w", err))
 	}
@@ -317,6 +389,21 @@ func (t *provisioningRequestReconcilerTask) failSeedGeneration(
 		return requeueWithShortInterval(), nil
 	}
 	return doNotRequeue(), nil
+}
+
+func (t *provisioningRequestReconcilerTask) cleanupSeedGenerationRunResources(ctx context.Context) (bool, error) {
+	detachedPending, err := t.cleanupSeedGenerationDetachedResourcesAndRecordCompletion(ctx)
+	if err != nil {
+		return false, err
+	}
+	if detachedPending {
+		return true, nil
+	}
+	snapshotPending, err := t.cleanupSeedGenerationPreflightResources(ctx)
+	if err != nil {
+		return false, err
+	}
+	return snapshotPending, nil
 }
 
 func (t *provisioningRequestReconcilerTask) cleanupSeedGenerationPreflightResources(ctx context.Context) (bool, error) {
@@ -376,6 +463,20 @@ func (r *ProvisioningRequestReconciler) cleanupSeedGenerationResources(
 	}
 	if pr.UID == "" {
 		return false, fmt.Errorf("cannot clean seed resources for ProvisioningRequest %s without a UID", pr.Name)
+	}
+	_, skipCleanup := pr.Annotations[ctlrutils.SkipCleanupAnnotation]
+	// Normal deletion wipes the node through the NAR. Spoke availability must
+	// not block that deprovisioning. If the caller retains the node, scrub our
+	// credentials before giving up the only kubeconfig we have for it.
+	if skipCleanup && details != nil && details.SeedGenerationStatus != nil && details.SeedGenerationStatus.DetachmentStarted {
+		task := &provisioningRequestReconcilerTask{logger: r.Logger, client: r.Client, object: pr}
+		pending, err := task.cleanupSeedGenerationDetachedResourcesAndRecordCompletion(ctx)
+		if err != nil {
+			return false, fmt.Errorf("failed to clean up spoke seed generation resources: %w", err)
+		}
+		if pending {
+			return false, nil
+		}
 	}
 	namespace := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
 	labels := client.MatchingLabels{
