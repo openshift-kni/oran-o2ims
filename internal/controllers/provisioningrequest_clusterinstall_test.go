@@ -1467,6 +1467,14 @@ var _ = Describe("checkNodesAndMCPsReady", func() {
 		pr := &provisioningv1alpha1.ProvisioningRequest{
 			ObjectMeta: metav1.ObjectMeta{Name: "readiness-pr"},
 		}
+		rbacWork, err := spokeclient.BuildRBACManifestWork(pr.Name+"-scaleout-rbac", clusterName,
+			pr.Name+"-scaleout", "open-cluster-management-agent-addon", scaleOutCSRRBACRules)
+		Expect(err).ToNot(HaveOccurred())
+		rbacWork.Generation = 1
+		rbacWork.Status.Conditions = []metav1.Condition{
+			{Type: workv1.WorkApplied, Status: metav1.ConditionTrue, ObservedGeneration: 1},
+			{Type: workv1.WorkAvailable, Status: metav1.ConditionTrue, ObservedGeneration: 1},
+		}
 		hub := fakeclient.GetFakeClientFromObjects(
 			&addonv1alpha1.ManagedClusterAddOn{ObjectMeta: metav1.ObjectMeta{
 				Name: "managed-serviceaccount", Namespace: clusterName,
@@ -1481,12 +1489,7 @@ var _ = Describe("checkNodesAndMCPsReady", func() {
 				ObjectMeta: metav1.ObjectMeta{Name: "readiness-token", Namespace: clusterName},
 				Data:       map[string][]byte{"token": []byte("test-token"), "ca.crt": []byte("test-ca")},
 			},
-			&workv1.ManifestWork{
-				ObjectMeta: metav1.ObjectMeta{Name: pr.Name + "-scaleout-rbac", Namespace: clusterName},
-				Status: workv1.ManifestWorkStatus{Conditions: []metav1.Condition{
-					{Type: workv1.WorkAvailable, Status: metav1.ConditionTrue},
-				}},
-			},
+			rbacWork,
 			&clusterv1.ManagedCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName},
 				Spec: clusterv1.ManagedClusterSpec{ManagedClusterClientConfigs: []clusterv1.ClientConfig{

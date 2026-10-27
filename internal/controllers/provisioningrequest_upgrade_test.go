@@ -1443,6 +1443,14 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 	// setupWithSpokeReady creates a hub client with all resources needed for
 	// the spoke client to be ready.
 	setupWithSpokeReady := func(extraObjs ...client.Object) {
+		rbacWork, err := spokeclient.BuildRBACManifestWork("test-pr-upgrade-rbac", clusterName,
+			"test-pr-upgrade", "open-cluster-management-agent-addon", upgradeRBACRules)
+		Expect(err).ToNot(HaveOccurred())
+		rbacWork.Generation = 1
+		rbacWork.Status.Conditions = []metav1.Condition{
+			{Type: workv1.WorkApplied, Status: metav1.ConditionTrue, ObservedGeneration: 1},
+			{Type: workv1.WorkAvailable, Status: metav1.ConditionTrue, ObservedGeneration: 1},
+		}
 		objs := []client.Object{
 			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: clusterName}},
 			&siteconfig.ClusterInstance{
@@ -1469,20 +1477,7 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 				},
 				Data: map[string][]byte{"token": []byte("t"), "ca.crt": []byte("c")},
 			},
-			&workv1.ManifestWork{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-pr-upgrade-rbac", Namespace: clusterName,
-				},
-				Status: workv1.ManifestWorkStatus{
-					Conditions: []metav1.Condition{
-						{
-							Type:               workv1.WorkAvailable,
-							Status:             metav1.ConditionTrue,
-							LastTransitionTime: metav1.Now(),
-						},
-					},
-				},
-			},
+			rbacWork,
 			&clusterv1.ManagedCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   clusterName,

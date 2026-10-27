@@ -30,6 +30,7 @@ import (
 	workv1 "open-cluster-management.io/api/work/v1"
 	msav1beta1 "open-cluster-management.io/managed-serviceaccount/apis/authentication/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 const (
@@ -126,9 +127,11 @@ func buildSpokeClientset(apiServerURL, token string, caCert []byte) (kubernetes.
 	return cs, nil
 }
 
-// EnsureSpokeClient returns a scoped spoke client or creates one through the
-// full MSA + ManifestWork lifecycle. On cache hit it checks token freshness;
-// on cache miss it runs the full setup.
+// EnsureSpokeClient returns a scoped spoke client, driving the MSA +
+// ManifestWork lifecycle as needed. Every call reconciles the RBAC
+// ManifestWork and waits for its current generation to be applied and
+// available on the spoke. Cached clients are reused while the MSA token is
+// unchanged and rebuilt when it rotates.
 //
 // Returns:
 //   - (clients, true, nil): spoke client is ready to use
@@ -140,7 +143,7 @@ func buildSpokeClientset(apiServerURL, token string, caCert []byte) (kubernetes.
 //   - mwName: name for the RBAC ManifestWork (e.g. "<pr-name>-upgrade-rbac")
 //   - rules: RBAC PolicyRules to deliver to the spoke via ManifestWork
 //   - spokeScheme: scheme for the spoke client (determines which types it can work with)
-//   - needClientset: whether to build a kubernetes.Interface from the same token
+//   - buildClientset: whether to build a kubernetes.Interface from the same token
 func EnsureSpokeClient(
 	ctx context.Context,
 	hubClient client.Client,
@@ -150,22 +153,6 @@ func EnsureSpokeClient(
 	spokeScheme *runtime.Scheme,
 	buildClientset bool,
 ) (Clients, bool, error) {
-	spokeClientsMu.RLock()
-	entry, cached := spokeClients[msaName]
-	spokeClientsMu.RUnlock()
-
-	if cached {
-		clients, needsFullSetup, err := refreshCachedSpokeClient(
-			ctx, hubClient, logger, clusterName, msaName, entry, spokeScheme, buildClientset)
-		if err != nil {
-			return Clients{}, false, err
-		}
-		if !needsFullSetup {
-			return clients, true, nil
-		}
-	}
-
-	// Cache miss path: full lifecycle setup.
 	// 1. Check that the managed-serviceaccount addon is available.
 	addon := &addonv1alpha1.ManagedClusterAddOn{}
 	if err := hubClient.Get(ctx, types.NamespacedName{
@@ -205,6 +192,7 @@ func EnsureSpokeClient(
 
 	// 3. Wait for token sync — not an error, just not ready yet.
 	if msa.Status.TokenSecretRef == nil || msa.Status.TokenSecretRef.Name == "" {
+		evictCachedSpokeClient(msaName)
 		logger.InfoContext(ctx, "Waiting for ManagedServiceAccount token to be synced",
 			slog.String("clusterName", clusterName), slog.String("msaName", msaName))
 		return Clients{}, false, nil
@@ -215,36 +203,34 @@ func EnsureSpokeClient(
 	if err := hubClient.Get(ctx, types.NamespacedName{
 		Name: msa.Status.TokenSecretRef.Name, Namespace: clusterName,
 	}, tokenSecret); err != nil {
+		if errors.IsNotFound(err) {
+			// The token the cached client holds is gone; rebuild once it is reissued.
+			evictCachedSpokeClient(msaName)
+		}
 		return Clients{}, false, fmt.Errorf("failed to read token secret: %w", err)
 	}
 
-	// 5. Create RBAC ManifestWork if not present.
+	// 5. Ensure the RBAC ManifestWork is up to date and ready on the spoke.
 	saNamespace := addon.Status.Namespace
 	if saNamespace == "" {
 		saNamespace = defaultAddonInstallNamespace
 	}
-	mw := &workv1.ManifestWork{}
-	if err := hubClient.Get(ctx, types.NamespacedName{
-		Name: mwName, Namespace: clusterName,
-	}, mw); err != nil {
-		if !errors.IsNotFound(err) {
-			return Clients{}, false, fmt.Errorf("failed to get RBAC ManifestWork: %w", err)
-		}
-		mw, err = BuildRBACManifestWork(mwName, clusterName, msaName, saNamespace, rules)
-		if err != nil {
-			return Clients{}, false, fmt.Errorf("failed to build RBAC ManifestWork: %w", err)
-		}
-		if err := hubClient.Create(ctx, mw); err != nil {
-			return Clients{}, false, fmt.Errorf("failed to create RBAC ManifestWork: %w", err)
-		}
+	ready, err := ensureRBACManifestWork(ctx, hubClient, logger, clusterName, msaName, mwName, saNamespace, rules)
+	if err != nil || !ready {
+		return Clients{}, false, err
 	}
 
-	// 6. Wait for resources to be applied.
-	availableCondition := apimeta.FindStatusCondition(mw.Status.Conditions, workv1.WorkAvailable)
-	if availableCondition == nil || availableCondition.Status != metav1.ConditionTrue {
-		logger.InfoContext(ctx, "Waiting for RBAC ManifestWork resources to be available on spoke",
-			slog.String("clusterName", clusterName), slog.String("mwName", mwName))
-		return Clients{}, false, nil
+	// 6. Reuse the cached clients while they are backed by the current token.
+	spokeClientsMu.RLock()
+	entry, cached := spokeClients[msaName]
+	spokeClientsMu.RUnlock()
+	if cached && entry.tokenResourceVersion == tokenSecret.ResourceVersion &&
+		(!buildClientset || entry.clients.Clientset != nil) {
+		return entry.clients, true, nil
+	}
+	if cached && entry.tokenResourceVersion != tokenSecret.ResourceVersion {
+		logger.InfoContext(ctx, "Spoke client token rotated, rebuilding client",
+			slog.String("clusterName", clusterName))
 	}
 
 	// 7. Build spoke clients from the scoped token.
@@ -280,66 +266,71 @@ func EnsureSpokeClient(
 	return clients, true, nil
 }
 
-// refreshCachedSpokeClient checks whether a cached spoke client is still valid.
-// Returns:
-//   - (clients, false, nil): cached clients are still valid or were rebuilt from rotated token
-//   - (zero, true, nil): cache invalidated (token secret gone) — caller should fall through to full setup
-//   - (zero, false, err): transient API error — caller should requeue without re-running full setup
-func refreshCachedSpokeClient(
-	ctx context.Context,
-	hubClient client.Client,
-	logger *slog.Logger,
-	clusterName, msaName string,
-	entry *spokeClientEntry,
-	spokeScheme *runtime.Scheme,
-	needClientset bool,
-) (Clients, bool, error) {
-	tokenSecret, err := getTokenSecret(ctx, hubClient, msaName, clusterName)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			spokeClientsMu.Lock()
-			delete(spokeClients, msaName)
-			spokeClientsMu.Unlock()
-			logger.InfoContext(ctx, "Spoke client token secret missing, re-creating spoke access",
-				slog.String("clusterName", clusterName))
-			return Clients{}, true, nil
-		}
-		return Clients{}, false, fmt.Errorf("failed to refresh spoke client token: %w", err)
-	}
-
-	if tokenSecret.ResourceVersion == entry.tokenResourceVersion {
-		return entry.clients, false, nil
-	}
-
-	logger.InfoContext(ctx, "Spoke client token rotated, rebuilding client",
-		slog.String("clusterName", clusterName))
-	token, caCert, err := extractTokenData(tokenSecret, clusterName)
-	if err != nil {
-		return Clients{}, false, err
-	}
-	apiServerURL, err := getAPIServerURL(ctx, hubClient, clusterName)
-	if err != nil {
-		return Clients{}, false, fmt.Errorf("failed to get API server URL during token rotation: %w", err)
-	}
-	c, err := newSpokeClientFunc(apiServerURL, string(token), caCert, spokeScheme)
-	if err != nil {
-		return Clients{}, false, fmt.Errorf("failed to rebuild spoke client after token rotation: %w", err)
-	}
-	clients := Clients{Client: c}
-	if needClientset {
-		cs, err := newSpokeClientsetFunc(apiServerURL, string(token), caCert)
-		if err != nil {
-			return Clients{}, false, fmt.Errorf("failed to rebuild spoke client after token rotation: %w", err)
-		}
-		clients.Clientset = cs
-	}
+// evictCachedSpokeClient drops any cached client for the MSA so that the next
+// successful setup rebuilds it from a freshly issued token. Call it when the
+// token backing the cached client is gone.
+func evictCachedSpokeClient(msaName string) {
 	spokeClientsMu.Lock()
-	spokeClients[msaName] = &spokeClientEntry{
-		clients:              clients,
-		tokenResourceVersion: tokenSecret.ResourceVersion,
-	}
+	delete(spokeClients, msaName)
 	spokeClientsMu.Unlock()
-	return clients, false, nil
+}
+
+// ensureRBACManifestWork creates or patches the ManifestWork to match the desired
+// RBAC rules and service account binding. It returns true only when the current
+// generation is applied and its resources are available on the spoke.
+func ensureRBACManifestWork(
+	ctx context.Context, hubClient client.Client, logger *slog.Logger,
+	clusterName, msaName, mwName, saNamespace string, rules []rbacv1.PolicyRule,
+) (bool, error) {
+	desired, err := BuildRBACManifestWork(mwName, clusterName, msaName, saNamespace, rules)
+	if err != nil {
+		return false, fmt.Errorf("failed to build RBAC ManifestWork: %w", err)
+	}
+	// A ManifestWork that is being deleted needs both guards below, and they do
+	// different jobs: leaving the workload untouched in the mutate function
+	// keeps CreateOrPatch from issuing a write, and the check after it reports
+	// not-ready so the caller waits for the delete to finish and the work to be
+	// recreated on a later call.
+	mw := &workv1.ManifestWork{ObjectMeta: metav1.ObjectMeta{Name: mwName, Namespace: clusterName}}
+	result, err := controllerutil.CreateOrPatch(ctx, hubClient, mw, func() error {
+		if !mw.DeletionTimestamp.IsZero() {
+			return nil
+		}
+		mw.Spec.Workload = desired.Spec.Workload
+		return nil
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to reconcile RBAC ManifestWork: %w", err)
+	}
+	if !mw.DeletionTimestamp.IsZero() {
+		return false, nil
+	}
+	if result != controllerutil.OperationResultNone {
+		logger.InfoContext(ctx, "Reconciled RBAC ManifestWork",
+			slog.String("clusterName", clusterName), slog.String("mwName", mwName), slog.String("operation", string(result)))
+	}
+
+	// Readiness is decided solely by the conditions observing the generation we
+	// just wrote. A create leaves the status empty and a spec change bumps the
+	// generation past what the conditions observed, so both report not-ready
+	// here without needing to be special-cased on the write result.
+	//
+	// This relies on the OCM work agent stamping observedGeneration on the
+	// Applied and Available conditions with the ManifestWork's generation. It
+	// has done so since at least ACM 2.14 and the prerequisites require ACM
+	// 2.15 or newer, so the supported floor is covered. An agent that left
+	// observedGeneration unset would never match and spoke access would stay
+	// not-ready for good, so confirm the behavior still holds when moving to a
+	// new ACM release.
+	for _, conditionType := range []string{workv1.WorkApplied, workv1.WorkAvailable} {
+		condition := apimeta.FindStatusCondition(mw.Status.Conditions, conditionType)
+		if condition == nil || condition.Status != metav1.ConditionTrue || condition.ObservedGeneration != mw.Generation {
+			logger.InfoContext(ctx, "Waiting for current RBAC ManifestWork to be applied and available on spoke",
+				slog.String("clusterName", clusterName), slog.String("mwName", mwName))
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // CleanupSpokeAccess deletes the ManagedServiceAccount and RBAC ManifestWork,
@@ -363,35 +354,9 @@ func CleanupSpokeAccess(
 		return fmt.Errorf("failed to delete RBAC ManifestWork: %w", err)
 	}
 
-	spokeClientsMu.Lock()
-	delete(spokeClients, msaName)
-	spokeClientsMu.Unlock()
+	evictCachedSpokeClient(msaName)
 
 	return nil
-}
-
-// getTokenSecret reads the token Secret for the given MSA.
-func getTokenSecret(
-	ctx context.Context,
-	hubClient client.Client,
-	msaName, clusterName string,
-) (*corev1.Secret, error) {
-	msa := &msav1beta1.ManagedServiceAccount{}
-	if err := hubClient.Get(ctx, types.NamespacedName{
-		Name: msaName, Namespace: clusterName,
-	}, msa); err != nil {
-		return nil, fmt.Errorf("failed to get ManagedServiceAccount: %w", err)
-	}
-	if msa.Status.TokenSecretRef == nil || msa.Status.TokenSecretRef.Name == "" {
-		return nil, fmt.Errorf("token secret not synced")
-	}
-	secret := &corev1.Secret{}
-	if err := hubClient.Get(ctx, types.NamespacedName{
-		Name: msa.Status.TokenSecretRef.Name, Namespace: clusterName,
-	}, secret); err != nil {
-		return nil, fmt.Errorf("failed to read token secret: %w", err)
-	}
-	return secret, nil
 }
 
 // extractTokenData validates and extracts the token and CA certificate from

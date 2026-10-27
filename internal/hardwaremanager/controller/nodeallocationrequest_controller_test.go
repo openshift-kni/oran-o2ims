@@ -29,6 +29,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,8 +51,16 @@ import (
 
 // spokeAccessReadyObjects returns hub objects that make EnsureSpokeClient
 // report ready for the given MSA and ManifestWork names on test-cluster.
-func spokeAccessReadyObjects(msaName, mwName string) []client.Object {
+func spokeAccessReadyObjects(msaName, mwName string, rules []rbacv1.PolicyRule) []client.Object {
 	tokenName := msaName + "-token"
+	rbacWork, err := spokeclient.BuildRBACManifestWork(mwName, "test-cluster", msaName,
+		"open-cluster-management-agent-addon", rules)
+	Expect(err).ToNot(HaveOccurred())
+	rbacWork.Generation = 1
+	rbacWork.Status.Conditions = []metav1.Condition{
+		{Type: workv1.WorkApplied, Status: metav1.ConditionTrue, ObservedGeneration: 1},
+		{Type: workv1.WorkAvailable, Status: metav1.ConditionTrue, ObservedGeneration: 1},
+	}
 	return []client.Object{
 		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"}},
 		&addonv1alpha1.ManagedClusterAddOn{
@@ -69,16 +78,7 @@ func spokeAccessReadyObjects(msaName, mwName string) []client.Object {
 			},
 			Data: map[string][]byte{"token": []byte("t"), "ca.crt": []byte("c")},
 		},
-		&workv1.ManifestWork{
-			ObjectMeta: metav1.ObjectMeta{Name: mwName, Namespace: "test-cluster"},
-			Status: workv1.ManifestWorkStatus{
-				Conditions: []metav1.Condition{{
-					Type:               workv1.WorkAvailable,
-					Status:             metav1.ConditionTrue,
-					LastTransitionTime: metav1.Now(),
-				}},
-			},
-		},
+		rbacWork,
 		&clusterv1.ManagedCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 			Spec: clusterv1.ManagedClusterSpec{
@@ -804,7 +804,7 @@ var _ = Describe("handleScaleInAnnotations", func() {
 		}
 
 		objs := append([]client.Object{pr, nar, allocated},
-			spokeAccessReadyObjects("test-nar"+scaleInMSASuffix, "test-nar"+scaleInMWSuffix)...)
+			spokeAccessReadyObjects("test-nar"+scaleInMSASuffix, "test-nar"+scaleInMWSuffix, scaleInRBACRules)...)
 		c := fake.NewClientBuilder().
 			WithScheme(fakeClient.Scheme()).
 			WithObjects(objs...).
@@ -1165,7 +1165,7 @@ var _ = Describe("handleHardwareProfileChanges", func() {
 				string(hwmgmtv1alpha1.Configured), nodeReason, nodeStatus, nodeReason)
 
 			objs := append([]client.Object{nar, node, prWithCluster()},
-				spokeAccessReadyObjects(narName+hwConfigMSASuffix, narName+hwConfigMWSuffix)...)
+				spokeAccessReadyObjects(narName+hwConfigMSASuffix, narName+hwConfigMWSuffix, hwConfigRBACRules)...)
 			reconciler = newReconciler(hubScheme(), objs...)
 
 			_, err := reconciler.handleHardwareProfileChanges(ctx, nar)
