@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package envtest
 
 import (
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -38,6 +39,7 @@ var _ = Describe("Seed generation status persistence", Label("envtest"), func() 
 			SeedImage: "quay.io/example/seed:4.22", ReleaseImageDigest: "quay.io/example/release@sha256:digest",
 			ISOURL: "https://example.test/seed.iso", ISODigest: "sha256:digest",
 			ISOJobSubmitted: true, ISOJobSubmittedAt: &started, ISOJobUID: "iso-job-uid",
+			ISOJobSpecHash:           "v1:sha256:" + strings.Repeat("a", 64),
 			ISOUploadCleanupDeadline: &started, ISOUploadCleanupCompleted: true,
 			ISOFailureDiagnosticsExpiresAt: &started,
 			ISOFailureDiagnosticsRef:       &provisioningv1alpha1.ConfigMapKeyRef{Name: "diagnostics", Namespace: "oran-o2ims", Key: "build.log"},

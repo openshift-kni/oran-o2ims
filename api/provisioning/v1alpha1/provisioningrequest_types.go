@@ -161,6 +161,13 @@ type SeedGenerationStatus struct {
 	// ISOJobSubmittedAt records when the controller persisted the ISO Job intent.
 	ISOJobSubmittedAt *metav1.Time `json:"isoJobSubmittedAt,omitempty"`
 
+	// ISOJobSpecHash fingerprints the controller-managed Job template settings.
+	// It is versioned and persisted with submission intent so operator updates
+	// validate the original Job independently of the current embedded script.
+	// +kubebuilder:validation:Pattern=`^v[1-9][0-9]*:sha256:[a-f0-9]{64}$`
+	// +kubebuilder:validation:MaxLength=96
+	ISOJobSpecHash string `json:"isoJobSpecHash,omitempty"`
+
 	// ISOJobUID pins the Job adopted by this seed generation run.
 	ISOJobUID string `json:"isoJobUID,omitempty"`
 

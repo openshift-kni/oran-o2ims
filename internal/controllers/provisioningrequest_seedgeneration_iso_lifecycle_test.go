@@ -37,9 +37,6 @@ func seedGenerationISOObservationFixture(t *testing.T) (
 	status.SeedImage = snapshot.Document.SeedGeneration["seedImage"].(string)
 	status.ReleaseImageDigest = "example.test/release@sha256:" + strings.Repeat("a", 64)
 	setSeedGenerationProgress(task.object, provisioningv1alpha1.CRconditionReasons.BuildingISO, "Waiting for the live ISO build Job")
-	if err := task.client.Status().Update(context.Background(), task.object); err != nil {
-		t.Fatal(err)
-	}
 	artifact, err := seedGenerationISOArtifactForRun(task.object,
 		snapshot.Document.SeedGeneration["liveISO"].(map[string]any), snapshot.Secrets["upload"])
 	if err != nil {
@@ -50,6 +47,13 @@ func seedGenerationISOObservationFixture(t *testing.T) (
 		t.Fatal(err)
 	}
 	job.UID = "iso-job-uid"
+	status.ISOJobSpecHash, err = seedGenerationISOJobSpecHashV1(job)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := task.client.Status().Update(context.Background(), task.object); err != nil {
+		t.Fatal(err)
+	}
 	claim, err := makeSeedGenerationISOPVC(task.object, snapshot)
 	if err != nil {
 		t.Fatal(err)
@@ -142,6 +146,16 @@ func TestSeedGenerationISORejectsMismatchedJobs(t *testing.T) {
 			mutate: func(_ *provisioningv1alpha1.SeedGenerationStatus, job *batchv1.Job) {
 				job.Spec.Template.Spec.Containers[0].Image = "example.test/other-tools:v1"
 			}},
+		{name: "changed script", message: "fingerprint does not match",
+			mutate: func(_ *provisioningv1alpha1.SeedGenerationStatus, job *batchv1.Job) {
+				job.Spec.Template.Spec.Containers[0].Args[0] += "\necho modified\n"
+			}},
+		{name: "missing fingerprint", message: "fingerprint is missing",
+			mutate: func(status *provisioningv1alpha1.SeedGenerationStatus, _ *batchv1.Job) { status.ISOJobSpecHash = "" }},
+		{name: "unsupported fingerprint version", message: "fingerprint version is unsupported",
+			mutate: func(status *provisioningv1alpha1.SeedGenerationStatus, _ *batchv1.Job) {
+				status.ISOJobSpecHash = "v2:sha256:" + strings.Repeat("a", 64)
+			}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			g, ctx := NewWithT(t), context.Background()
@@ -214,6 +228,7 @@ func TestSeedGenerationISOJobCreateRejectionRetriesOnlyDefiniteRejections(t *tes
 			checkpoint := persisted.Status.Extensions.ClusterDetails.SeedGenerationStatus
 			g.Expect(checkpoint.ISOJobSubmitted).To(Equal(!tc.canRetry))
 			g.Expect(checkpoint.ISOJobSubmittedAt == nil).To(Equal(tc.canRetry))
+			g.Expect(checkpoint.ISOJobSpecHash == "").To(Equal(tc.canRetry))
 			g.Expect(seedGenerationTerminal(persisted)).To(BeFalse())
 			restarted := seedTestTask(persisted, task.client)
 			restarted.seedGenerationISONow = task.seedGenerationISONow
@@ -256,7 +271,14 @@ func TestSeedGenerationISOJobCreationPinsUID(t *testing.T) {
 	g.Expect(task.client.Status().Update(ctx, task.object)).To(Succeed())
 	task.client = interceptor.NewClient(task.client.(client.WithWatch), interceptor.Funcs{
 		Create: func(ctx context.Context, c client.WithWatch, object client.Object, opts ...client.CreateOption) error {
-			if _, isJob := object.(*batchv1.Job); isJob {
+			if job, isJob := object.(*batchv1.Job); isJob {
+				persisted := &provisioningv1alpha1.ProvisioningRequest{}
+				g.Expect(c.Get(ctx, client.ObjectKeyFromObject(task.object), persisted)).To(Succeed())
+				checkpoint := persisted.Status.Extensions.ClusterDetails.SeedGenerationStatus
+				g.Expect(checkpoint.ISOJobSubmitted).To(BeTrue())
+				jobHash, err := seedGenerationISOJobSpecHashV1(job)
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(checkpoint.ISOJobSpecHash).To(Equal(jobHash), "fingerprint must be durable before Job creation")
 				object.SetUID("created-job-uid")
 			}
 			return c.Create(ctx, object, opts...)

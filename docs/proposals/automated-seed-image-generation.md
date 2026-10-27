@@ -560,6 +560,16 @@ automatically.
 
 #### Idempotent resource handling
 
+Before creating the live ISO Job, persist its submission intent and
+`SeedGenerationStatus.ISOJobSpecHash`. This versioned fingerprint captures
+the original controller-managed template settings, including the embedded
+build script. Observe existing Jobs against that persisted contract instead
+of rebuilding the expected template from the current operator binary, so
+operator updates can resume both adopted Jobs and Jobs whose UID has not yet
+been recorded. Ownership, identity, and execution policy are checked
+separately. Keep the v1 fingerprint encoding stable when adding new contract
+versions. A missing submitted Job is still never recreated.
+
 Because a reconcile can be interrupted after a resource is created but before
 its status is flushed, every create in the state machine is **create-or-adopt**,
 not blind create. Deterministic names alone are not enough: a restart re-issuing

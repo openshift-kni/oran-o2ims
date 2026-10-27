@@ -461,14 +461,21 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerationISO(
 			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed,
 				fmt.Sprintf("live ISO Job configuration is invalid: %v", err))
 		}
+		jobHash, err := seedGenerationISOJobSpecHashV1(job)
+		if err != nil {
+			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed,
+				fmt.Sprintf("failed to fingerprint live ISO Job: %v", err))
+		}
 		now := metav1.NewTime(t.seedGenerationISOCurrentTime())
 		status.ISOJobSubmitted = true
 		status.ISOJobSubmittedAt = &now
+		status.ISOJobSpecHash = jobHash
 		setSeedGenerationProgress(t.object, provisioningv1alpha1.CRconditionReasons.BuildingISO,
 			"Live ISO build Job has been submitted")
 		if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 			status.ISOJobSubmitted = false
 			status.ISOJobSubmittedAt = nil
+			status.ISOJobSpecHash = ""
 			return requeueWithError(fmt.Errorf("failed to record live ISO Job submission intent: %w", err))
 		}
 		// Updating the resource can replace its nested status objects. Refresh
@@ -482,6 +489,7 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerationISO(
 				// through the Job adoption window.
 				status.ISOJobSubmitted = false
 				status.ISOJobSubmittedAt = nil
+				status.ISOJobSpecHash = ""
 				setSeedGenerationProgress(t.object, provisioningv1alpha1.CRconditionReasons.BuildingISO,
 					"Retrying live ISO build Job creation after API rejection")
 				if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
@@ -533,19 +541,13 @@ func (t *provisioningRequestReconcilerTask) observeSeedGenerationISOJob(
 		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed,
 			"live ISO build Job exists without persisted submission intent")
 	}
+	if err := validateSeedGenerationISOJob(job, t.object); err != nil {
+		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed,
+			fmt.Sprintf("live ISO build Job does not match frozen inputs: %v", err))
+	}
 	expectedSnapshot, err := t.loadSeedGenerationInputSnapshot(ctx)
 	if err != nil {
 		return t.handleSeedGenerationLifecycleError(ctx, "failed to load live ISO inputs", err)
-	}
-	expected, err := makeSeedGenerationISOJob(t.object, expectedSnapshot, artifact,
-		status.ReleaseImageDigest, max(int64(1), status.TimeoutSeconds))
-	if err != nil {
-		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed,
-			fmt.Sprintf("live ISO build Job inputs are invalid: %v", err))
-	}
-	if err := validateSeedGenerationISOJob(job, expected); err != nil {
-		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed,
-			fmt.Sprintf("live ISO build Job does not match frozen inputs: %v", err))
 	}
 	if status.ISOJobUID == "" {
 		status.ISOJobUID = string(job.UID)
@@ -584,75 +586,64 @@ func (t *provisioningRequestReconcilerTask) observeSeedGenerationISOJob(
 	return t.completeSeedGenerationISO(ctx, expectedSnapshot, result)
 }
 
-func validateSeedGenerationISOJob(actual, expected *batchv1.Job) error {
-	if err := validateSeedGenerationISOJobIdentity(actual, expected); err != nil {
+func validateSeedGenerationISOJob(actual *batchv1.Job, pr *provisioningv1alpha1.ProvisioningRequest) error {
+	if pr.Status.Extensions.ClusterDetails == nil || pr.Status.Extensions.ClusterDetails.SeedGenerationStatus == nil {
+		return fmt.Errorf("persisted live ISO Job run state is missing")
+	}
+	status := pr.Status.Extensions.ClusterDetails.SeedGenerationStatus
+	if err := validateSeedGenerationISOJobIdentity(actual, pr); err != nil {
 		return err
 	}
-	if err := validateSeedGenerationISOJobPodSpec(actual, expected); err != nil {
+	if status.ISOJobSpecHash == "" {
+		return fmt.Errorf("persisted live ISO Job fingerprint is missing")
+	}
+	if !strings.HasPrefix(status.ISOJobSpecHash, "v1:sha256:") {
+		return fmt.Errorf("persisted live ISO Job fingerprint version is unsupported")
+	}
+	actualHash, err := seedGenerationISOJobSpecHashV1(actual)
+	if err != nil {
 		return err
 	}
-	if err := validateSeedGenerationISOJobContainer(actual, expected); err != nil {
-		return err
+	if actualHash != status.ISOJobSpecHash {
+		return fmt.Errorf("job template fingerprint does not match submission intent")
 	}
-	return validateSeedGenerationISOJobExecutionPolicy(actual, expected)
+	return validateSeedGenerationISOJobExecutionPolicy(actual, status.TimeoutSeconds)
 }
 
-func validateSeedGenerationISOJobIdentity(actual, expected *batchv1.Job) error {
-	if actual.Name != expected.Name || actual.Namespace != expected.Namespace {
+func validateSeedGenerationISOJobIdentity(actual *batchv1.Job, pr *provisioningv1alpha1.ProvisioningRequest) error {
+	if actual.Name != seedGenerationISOJobName(pr) || actual.Namespace != seedGenerationSnapshotNamespace() {
 		return fmt.Errorf("job identity does not match")
 	}
-	for key, value := range expected.Spec.Template.Labels {
+	// Require the stable identity labels, independently of extra labels a
+	// newer Job builder may add to newly submitted templates.
+	labels := map[string]string{
+		provisioningv1alpha1.ProvisioningRequestNameLabel: pr.Name,
+		provisioningv1alpha1.ProvisioningRequestUIDLabel:  string(pr.UID),
+		seedGenerationISOResourceLabel:                    "true",
+		seedGenerationISOResourceKindLabel:                seedGenerationISOPodKind,
+		seedGenerationISOJobLabel:                         actual.Name,
+	}
+	for key, value := range labels {
 		if actual.Spec.Template.Labels[key] != value {
 			return fmt.Errorf("job pod label %s does not match", key)
 		}
 	}
-	if len(actual.Spec.Template.Spec.Containers) != 1 || len(expected.Spec.Template.Spec.Containers) != 1 {
+	if len(actual.Spec.Template.Spec.Containers) != 1 {
 		return fmt.Errorf("job must have one container")
 	}
 	return nil
 }
 
-func validateSeedGenerationISOJobPodSpec(actual, expected *batchv1.Job) error {
-	got, want := actual.Spec.Template.Spec, expected.Spec.Template.Spec
-	if got.RestartPolicy != corev1.RestartPolicyNever || got.AutomountServiceAccountToken == nil || *got.AutomountServiceAccountToken {
+func validateSeedGenerationISOJobExecutionPolicy(actual *batchv1.Job, timeoutSeconds int64) error {
+	pod := actual.Spec.Template.Spec
+	if pod.RestartPolicy != corev1.RestartPolicyNever || pod.AutomountServiceAccountToken == nil || *pod.AutomountServiceAccountToken {
 		return fmt.Errorf("pod restart or service account token settings do not match")
 	}
-	if got.ServiceAccountName != want.ServiceAccountName || got.HostNetwork != want.HostNetwork ||
-		got.HostPID != want.HostPID || got.HostIPC != want.HostIPC {
-		return fmt.Errorf("pod service account or host namespace settings do not match")
-	}
-	if !reflect.DeepEqual(got.ImagePullSecrets, want.ImagePullSecrets) || !reflect.DeepEqual(got.SecurityContext, want.SecurityContext) {
-		return fmt.Errorf("pod security settings do not match")
-	}
-	if !reflect.DeepEqual(got.Volumes, want.Volumes) {
-		return fmt.Errorf("pod security settings or volumes do not match")
-	}
-	return nil
-}
-
-func validateSeedGenerationISOJobContainer(actual, expected *batchv1.Job) error {
-	got, want := actual.Spec.Template.Spec, expected.Spec.Template.Spec
-	actualContainer, expectedContainer := got.Containers[0], want.Containers[0]
-	if actualContainer.Name != expectedContainer.Name || actualContainer.Image != expectedContainer.Image ||
-		!reflect.DeepEqual(actualContainer.Command, expectedContainer.Command) ||
-		!reflect.DeepEqual(actualContainer.Args, expectedContainer.Args) ||
-		!reflect.DeepEqual(actualContainer.Env, expectedContainer.Env) ||
-		!reflect.DeepEqual(actualContainer.VolumeMounts, expectedContainer.VolumeMounts) ||
-		!reflect.DeepEqual(actualContainer.SecurityContext, expectedContainer.SecurityContext) ||
-		actualContainer.TerminationMessagePath != expectedContainer.TerminationMessagePath ||
-		actualContainer.TerminationMessagePolicy != expectedContainer.TerminationMessagePolicy {
-		return fmt.Errorf("container image, command, environment, or mounts do not match")
-	}
-	return nil
-}
-
-func validateSeedGenerationISOJobExecutionPolicy(actual, expected *batchv1.Job) error {
 	if actual.Spec.BackoffLimit == nil || *actual.Spec.BackoffLimit != 0 ||
 		actual.Spec.Completions == nil || *actual.Spec.Completions != 1 ||
 		actual.Spec.Parallelism == nil || *actual.Spec.Parallelism != 1 ||
 		actual.Spec.ActiveDeadlineSeconds == nil || *actual.Spec.ActiveDeadlineSeconds <= 0 ||
-		*actual.Spec.ActiveDeadlineSeconds > *expected.Spec.ActiveDeadlineSeconds ||
-		!reflect.DeepEqual(actual.Spec.TTLSecondsAfterFinished, expected.Spec.TTLSecondsAfterFinished) {
+		*actual.Spec.ActiveDeadlineSeconds > timeoutSeconds || actual.Spec.TTLSecondsAfterFinished != nil {
 		return fmt.Errorf("job retry, deadline, or completion settings do not match")
 	}
 	return nil

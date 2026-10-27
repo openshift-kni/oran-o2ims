@@ -213,3 +213,16 @@ The controller validates the upload Secret, SSH access, and HTTPS TLS before
 starting hardware provisioning. After the build, it verifies the published
 ISO bytes over HTTPS and records `isoURL` and `isoDigest` in
 `status.extensions.clusterDetails.seedGenerationStatus`.
+
+Before submitting the build Job, the controller records a versioned fingerprint
+of its template in `seedGenerationStatus.isoJobSpecHash`. Operator updates
+validate an existing Job against that saved fingerprint, so changes to the
+operator's embedded build script affect new Jobs without invalidating an
+active build. Ownership, Job identity, and execution safeguards are still
+checked on every observation.
+
+If retaining redacted failure diagnostics encounters a transient API error,
+the controller keeps the Job and Pods available while it retries. Cleanup
+continues once the diagnostics reference has been persisted. Permanent
+ownership or content conflicts use best-effort cleanup and report that the
+logs could not be retained.

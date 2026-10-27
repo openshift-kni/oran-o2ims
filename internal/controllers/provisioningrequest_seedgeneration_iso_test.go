@@ -117,13 +117,21 @@ func TestValidateSeedGenerationISOJobRejectsUnsafeChanges(t *testing.T) {
 	digest := "quay.io/openshift-release-dev/ocp-release@sha256:" + strings.Repeat("b", 64)
 	expected, err := makeSeedGenerationISOJob(pr, snapshot, artifact, digest, 3600)
 	g.Expect(err).ToNot(HaveOccurred())
-	g.Expect(validateSeedGenerationISOJob(expected, expected)).To(Succeed())
+	jobHash, err := seedGenerationISOJobSpecHashV1(expected)
+	g.Expect(err).ToNot(HaveOccurred())
+	pr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
+		SeedGenerationStatus: &provisioningv1alpha1.SeedGenerationStatus{TimeoutSeconds: 3600, ISOJobSpecHash: jobHash},
+	}
+	g.Expect(validateSeedGenerationISOJob(expected, pr)).To(Succeed())
 
 	cases := []struct {
 		name   string
 		mutate func(*batchv1.Job)
 	}{
 		{name: "host network", mutate: func(job *batchv1.Job) { job.Spec.Template.Spec.HostNetwork = true }},
+		{name: "additional init container", mutate: func(job *batchv1.Job) {
+			job.Spec.Template.Spec.InitContainers = []corev1.Container{{Name: "injected", Image: "example.test/injected"}}
+		}},
 		{name: "service account token", mutate: func(job *batchv1.Job) { job.Spec.Template.Spec.AutomountServiceAccountToken = nil }},
 		{name: "pod security context", mutate: func(job *batchv1.Job) { job.Spec.Template.Spec.SecurityContext.RunAsNonRoot = nil }},
 		{name: "container privilege escalation", mutate: func(job *batchv1.Job) {
@@ -137,7 +145,7 @@ func TestValidateSeedGenerationISOJobRejectsUnsafeChanges(t *testing.T) {
 			g := NewWithT(t)
 			actual := expected.DeepCopy()
 			tc.mutate(actual)
-			g.Expect(validateSeedGenerationISOJob(actual, expected)).To(HaveOccurred())
+			g.Expect(validateSeedGenerationISOJob(actual, pr)).To(HaveOccurred())
 		})
 	}
 }

@@ -246,6 +246,10 @@ func TestSeedGenerationISOJobCompletesDespiteFailedDuplicate(t *testing.T) {
 		t.Fatal(err)
 	}
 	job.UID = "iso-job-uid"
+	status.ISOJobSpecHash, err = seedGenerationISOJobSpecHashV1(job)
+	if err != nil {
+		t.Fatal(err)
+	}
 	job.Status = batchv1.JobStatus{Succeeded: 1, Failed: 1}
 	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
 		Name: "succeeded", Namespace: job.Namespace, Labels: seedGenerationISOPodLabels(task.object, job),

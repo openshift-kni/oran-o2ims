@@ -340,6 +340,14 @@ spec:
                             - name
                             - namespace
                             type: object
+                          isoJobSpecHash:
+                            description: |-
+                              ISOJobSpecHash fingerprints the controller-managed Job template settings.
+                              It is versioned and persisted with submission intent so operator updates
+                              validate the original Job independently of the current embedded script.
+                            maxLength: 96
+                            pattern: ^v[1-9][0-9]*:sha256:[a-f0-9]{64}$
+                            type: string
                           isoJobSubmitted:
                             description: |-
                               ISOJobSubmitted is persisted before creating the one-shot live ISO Job.

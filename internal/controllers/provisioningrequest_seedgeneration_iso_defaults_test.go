@@ -52,6 +52,13 @@ func TestSeedGenerationISOJobAPIDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	jobHash, err := seedGenerationISOJobSpecHashV1(expected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pr.Status.Extensions.ClusterDetails = &provisioningv1alpha1.ClusterDetails{
+		SeedGenerationStatus: &provisioningv1alpha1.SeedGenerationStatus{TimeoutSeconds: 3600, ISOJobSpecHash: jobHash},
+	}
 	ctx := context.Background()
 	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: expected.Namespace}}
 	if err := c.Create(ctx, namespace); err != nil {
@@ -67,11 +74,11 @@ func TestSeedGenerationISOJobAPIDefaults(t *testing.T) {
 	if actual.Spec.Template.Labels[batchv1.JobNameLabel] != actual.Name || actual.Spec.Template.Labels[batchv1.ControllerUidLabel] != string(actual.UID) {
 		t.Fatalf("API did not add expected Job labels: %v", actual.Spec.Template.Labels)
 	}
-	if err := validateSeedGenerationISOJob(actual, expected); err != nil {
+	if err := validateSeedGenerationISOJob(actual, pr); err != nil {
 		t.Fatalf("rejected Job persisted by API: %v", err)
 	}
 	actual.Spec.Template.Labels[seedGenerationISOResourceKindLabel] = "foreign"
-	if err := validateSeedGenerationISOJob(actual, expected); err == nil {
+	if err := validateSeedGenerationISOJob(actual, pr); err == nil {
 		t.Fatal("accepted a changed ownership label")
 	}
 }

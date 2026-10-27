@@ -110,6 +110,17 @@ func (t *provisioningRequestReconcilerTask) failSeedGenerationISOJob(
 					summary = seedGenerationISODiagnosticsTail(retained, seedGenerationISODiagnosticsMessageLimit)
 					ref, err := t.createSeedGenerationISODiagnostics(ctx, retained)
 					if err != nil {
+						if isSeedGenerationTransientError(err) {
+							progress := "Live ISO build failed; waiting to retain redacted diagnostics before cleanup"
+							if reason == provisioningv1alpha1.CRconditionReasons.TimedOut {
+								progress = "Live ISO build timed out; waiting to retain redacted diagnostics before cleanup"
+							}
+							if statusErr := t.updateSeedGenerationProgress(ctx, provisioningv1alpha1.CRconditionReasons.BuildingISO,
+								progress); statusErr != nil {
+								return requeueWithError(statusErr)
+							}
+							return requeueWithError(fmt.Errorf("failed to retain redacted live ISO diagnostics: %w", err))
+						}
 						t.logger.WarnContext(ctx, "Unable to retain redacted live ISO build diagnostics", slog.Any("error", err))
 					} else {
 						status.ISOFailureDiagnosticsRef = ref
