@@ -21,6 +21,7 @@ enforces the cluster-wide TLS security profile defined in
 - [TLS Scanner](#tls-scanner)
   - [Building and Pushing the Image](#building-and-pushing-the-image)
   - [Running the Scanner](#running-the-scanner)
+  - [Validating Curve Groups](#validating-curve-groups)
   - [Results (Default Intermediate Profile)](#results-default-intermediate-profile)
   - [CI](#ci)
 
@@ -538,7 +539,7 @@ Ensure the image repository has public read access so cluster nodes can pull it.
 
 ### Running the Scanner
 
-Deploy the scanner against the `oran-o2ims` namespace:
+Deploy and run the scanner against the `oran-o2ims` namespace:
 
 ```bash
 cd /path/to/tls-scanner
@@ -546,19 +547,48 @@ export KUBECONFIG=/path/to/kubeconfig
 export SCANNER_IMAGE="quay.io/<your-username>/tls-scanner:1.0"
 export NAMESPACE="oran-o2ims"
 export NAMESPACE_FILTER="oran-o2ims"
-export EXPECTED_GROUPS="X25519MLKEM768,X25519,secp256r1,secp384r1"
 ./deploy.sh --verbose deploy
 ```
 
-The `EXPECTED_GROUPS` variable enables the scanner's group/curve
-compliance check — it verifies that all endpoints offer the specified
-TLS named groups. The scanner auto-detects STARTTLS for PostgreSQL
-without additional configuration.
+The scanner discovers all pods in the namespace, probes their listening
+ports for TLS, and produces results in `./artifacts/` (CSV and JSON
+formats). It auto-detects STARTTLS for PostgreSQL without additional
+configuration.
 
-The scanner discovers all pods in the namespace, probes their listening ports
-for TLS, and produces results in `./artifacts/` (CSV and JSON formats).
+### Validating Curve Groups
 
-After the scan completes, clean up cluster resources:
+To verify that all endpoints offer the expected TLS named groups, run
+the scanner binary with `--expected-groups`. This check is not
+supported by `deploy.sh` — run it while the scanner RBAC from the
+previous `deploy.sh deploy` is still active (before cleanup):
+
+```bash
+oc run tls-scanner-groups --rm -i --restart=Never \
+  --image=quay.io/<your-username>/tls-scanner:1.0 -n oran-o2ims \
+  --overrides='{
+    "spec":{
+      "serviceAccountName": "default",
+      "securityContext":{
+        "runAsNonRoot":true,
+        "seccompProfile":{"type":"RuntimeDefault"}
+      }
+    }
+  }' \
+  --command -- /usr/local/bin/tls-scanner \
+    --all-pods \
+    --namespace-filter oran-o2ims \
+    --expected-groups X25519MLKEM768,X25519,secp256r1,secp384r1 \
+    --junit-file /tmp/junit_groups.xml \
+    --json-file /tmp/results.json \
+    --artifact-dir /tmp
+```
+
+The scanner exits with code 0 if all scannable endpoints offer the
+expected groups, or non-zero if any endpoint is missing a required
+group. Ports that cannot be scanned (e.g., non-TLS health probes)
+are skipped.
+
+After validation, clean up cluster resources:
 
 ```bash
 ./deploy.sh cleanup
