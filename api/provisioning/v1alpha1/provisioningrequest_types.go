@@ -154,6 +154,8 @@ type SeedGenerationStatus struct {
 	// ISOJobSubmitted is persisted before creating the one-shot live ISO Job.
 	// A submitted Job that disappears is never recreated because it may already
 	// have uploaded an artifact.
+	// A crash after persisting this intent but before Job creation succeeds also
+	// fails the run after the adoption window if no Job appears.
 	ISOJobSubmitted bool `json:"isoJobSubmitted,omitempty"`
 
 	// ISOJobSubmittedAt records when the controller persisted the ISO Job intent.

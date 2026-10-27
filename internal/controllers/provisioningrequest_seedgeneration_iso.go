@@ -269,7 +269,9 @@ func makeSeedGenerationISOJob(
 		{
 			Name: "upload-credentials",
 			VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
-				SecretName:  uploadSecret.Name,
+				SecretName: uploadSecret.Name,
+				// Keep the projection readable by OpenShift's arbitrary nonroot UID.
+				// The script copies the key to tmpfs and restricts it to mode 0600.
 				DefaultMode: k8sptr.To[int32](420),
 				Optional:    k8sptr.To(false),
 			}},
@@ -283,7 +285,12 @@ func makeSeedGenerationISOJob(
 				Optional:             k8sptr.To(false),
 			}},
 		},
-		{Name: controllerTempVolumeName, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		{
+			Name: controllerTempVolumeName,
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{
+				Medium: corev1.StorageMediumMemory, SizeLimit: k8sptr.To(resource.MustParse("64Mi")),
+			}},
+		},
 	}
 	mounts := []corev1.VolumeMount{
 		{Name: "workspace", MountPath: "/workspace"},
@@ -325,7 +332,8 @@ func makeSeedGenerationISOJob(
 	}
 	env := []corev1.EnvVar{
 		{Name: "HOME", Value: "/tmp/seedgen/home"},
-		{Name: "TMPDIR", Value: "/tmp/seedgen/tmp"},
+		{Name: "TMPDIR", Value: "/workspace/tmp"},
+		{Name: "XDG_CACHE_HOME", Value: "/workspace/cache"},
 		{Name: "ISO_URL", Value: artifact.URL},
 		{Name: "ISO_RELEASE_IMAGE", Value: releaseImage},
 		{Name: "ISO_PR_UID", Value: string(pr.UID)},
@@ -397,6 +405,13 @@ func seedGenerationISOJobScript() string {
 	return seedGenerationISOJobCommand
 }
 
+func (t *provisioningRequestReconcilerTask) seedGenerationISOCurrentTime() time.Time {
+	if t.seedGenerationISONow != nil {
+		return t.seedGenerationISONow()
+	}
+	return time.Now()
+}
+
 func (t *provisioningRequestReconcilerTask) reconcileSeedGenerationISO(
 	ctx context.Context,
 	snapshot *seedGenerationInputSnapshot,
@@ -417,7 +432,7 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerationISO(
 	}
 	artifact, err := seedGenerationISOArtifactForRun(t.object, liveISO, upload)
 	if err != nil {
-		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
+		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed,
 			fmt.Sprintf("live ISO publication inputs are invalid: %v", err))
 	}
 	if !status.ISOJobSubmitted {
@@ -432,7 +447,7 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerationISO(
 			}
 			return requeueWithMediumInterval(), nil
 		}
-		remaining := time.Until(status.StartedAt.Add(time.Duration(status.TimeoutSeconds) * time.Second))
+		remaining := status.StartedAt.Add(time.Duration(status.TimeoutSeconds) * time.Second).Sub(t.seedGenerationISOCurrentTime())
 		if remaining <= 0 {
 			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.TimedOut,
 				"Seed generation timed out while preparing the live ISO workspace")
@@ -443,10 +458,10 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerationISO(
 		}
 		job, err := makeSeedGenerationISOJob(t.object, snapshot, artifact, status.ReleaseImageDigest, activeDeadline)
 		if err != nil {
-			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
+			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed,
 				fmt.Sprintf("live ISO Job configuration is invalid: %v", err))
 		}
-		now := metav1.Now()
+		now := metav1.NewTime(t.seedGenerationISOCurrentTime())
 		status.ISOJobSubmitted = true
 		status.ISOJobSubmittedAt = &now
 		setSeedGenerationProgress(t.object, provisioningv1alpha1.CRconditionReasons.BuildingISO,
@@ -456,7 +471,24 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerationISO(
 			status.ISOJobSubmittedAt = nil
 			return requeueWithError(fmt.Errorf("failed to record live ISO Job submission intent: %w", err))
 		}
+		// Updating the resource can replace its nested status objects. Refresh
+		// the pointer before recording rejection or the created Job's UID.
+		status = t.object.Status.Extensions.ClusterDetails.SeedGenerationStatus
 		if err := t.client.Create(ctx, job); err != nil && !apierrors.IsAlreadyExists(err) {
+			if apierrors.IsInvalid(err) || apierrors.IsForbidden(err) || apierrors.IsBadRequest(err) ||
+				apierrors.IsTooManyRequests(err) {
+				// These responses confirm that the Job was not created. Clear the
+				// checkpoint so reconciliation retries Create instead of waiting
+				// through the Job adoption window.
+				status.ISOJobSubmitted = false
+				status.ISOJobSubmittedAt = nil
+				setSeedGenerationProgress(t.object, provisioningv1alpha1.CRconditionReasons.BuildingISO,
+					"Retrying live ISO build Job creation after API rejection")
+				if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
+					return requeueWithError(fmt.Errorf("failed to clear live ISO Job submission intent: %w", updateErr))
+				}
+				return requeueWithError(fmt.Errorf("failed to create live ISO build Job: %w", err))
+			}
 			return t.handleSeedGenerationLifecycleError(ctx, "failed to create live ISO build Job", err)
 		}
 		if job.UID != "" {
@@ -481,38 +513,38 @@ func (t *provisioningRequestReconcilerTask) observeSeedGenerationISOJob(
 		if !apierrors.IsNotFound(err) {
 			return requeueWithError(fmt.Errorf("failed to get live ISO build Job %s: %w", key.Name, err))
 		}
-		if status.ISOJobSubmittedAt != nil && time.Since(status.ISOJobSubmittedAt.Time) < seedGenerationISOJobAdoptionWindow {
+		if status.ISOJobSubmittedAt != nil && t.seedGenerationISOCurrentTime().Sub(status.ISOJobSubmittedAt.Time) < seedGenerationISOJobAdoptionWindow {
 			return requeueWithShortInterval(), nil
 		}
 		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed,
 			"submitted live ISO build Job is missing; it will not be resubmitted")
 	}
 	if err := validateSeedGenerationISOResourceOwner(job, t.object, seedGenerationISOJobKind); err != nil {
-		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, err.Error())
+		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed, err.Error())
 	}
 	if job.DeletionTimestamp != nil {
 		return requeueWithShortInterval(), nil
 	}
 	if status.ISOJobUID != "" && status.ISOJobUID != string(job.UID) {
-		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
+		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed,
 			"live ISO build Job UID does not match the persisted run state")
 	}
 	if !status.ISOJobSubmitted {
-		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
+		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed,
 			"live ISO build Job exists without persisted submission intent")
 	}
 	expectedSnapshot, err := t.loadSeedGenerationInputSnapshot(ctx)
 	if err != nil {
-		return t.handleSeedGenerationPreflightError(ctx, "failed to load live ISO inputs", err)
+		return t.handleSeedGenerationLifecycleError(ctx, "failed to load live ISO inputs", err)
 	}
 	expected, err := makeSeedGenerationISOJob(t.object, expectedSnapshot, artifact,
 		status.ReleaseImageDigest, max(int64(1), status.TimeoutSeconds))
 	if err != nil {
-		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
+		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed,
 			fmt.Sprintf("live ISO build Job inputs are invalid: %v", err))
 	}
 	if err := validateSeedGenerationISOJob(job, expected); err != nil {
-		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
+		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed,
 			fmt.Sprintf("live ISO build Job does not match frozen inputs: %v", err))
 	}
 	if status.ISOJobUID == "" {

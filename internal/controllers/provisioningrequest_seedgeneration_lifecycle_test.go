@@ -218,7 +218,7 @@ func TestReconcileSeedGenerationRejectsInvalidSnapshotSeedImage(t *testing.T) {
 			g.Expect(err).ToNot(gomega.HaveOccurred())
 			g.Expect(hub.Get(ctx, client.ObjectKeyFromObject(pr), pr)).ToNot(gomega.HaveOccurred())
 			g.Expect(pr.Status.ProvisioningStatus.ProvisioningPhase).To(gomega.Equal(provisioningv1alpha1.StateFailed))
-			g.Expect(seedGenerationCondition(pr).Reason).To(gomega.Equal(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed)))
+			g.Expect(seedGenerationCondition(pr).Reason).To(gomega.Equal(string(provisioningv1alpha1.CRconditionReasons.Failed)))
 			g.Expect(seedGenerationCondition(pr).Message).To(gomega.ContainSubstring("seedImage must be a non-empty string"))
 			g.Expect(pr.Status.ProvisioningStatus.ProvisioningDetails).To(gomega.Equal(seedGenerationCondition(pr).Message))
 			g.Expect(pr.Status.Extensions.ClusterDetails.SeedGenerationStatus.SeedGeneratorSubmitted).To(gomega.BeFalse())

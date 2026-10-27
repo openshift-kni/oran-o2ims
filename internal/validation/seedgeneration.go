@@ -85,8 +85,8 @@ const seedGenerationEffectiveSchema = `{
               "properties": {"name": {"type": "string", "minLength": 1}},
               "required": ["name"]
             },
-			"urlBase": {"type": "string", "minLength": 1, "pattern": "^https://\\S+$"},
-			"baseISOURL": {"type": "string", "minLength": 1, "pattern": "^https://\\S+$"},
+            "urlBase": {"type": "string", "minLength": 1, "pattern": "^https://\\S+$"},
+            "baseISOURL": {"type": "string", "minLength": 1, "pattern": "^https://\\S+$"},
             "pullSecretRef": {
               "type": "object", "additionalProperties": false,
               "properties": {"name": {"type": "string", "minLength": 1}},

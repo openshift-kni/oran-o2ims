@@ -117,7 +117,7 @@ trap 'exit 130' INT
 for binary in ssh scp sha256sum curl oc cat cp chmod mkdir cut mv rm ln rmdir python3; do
     command -v "$binary" >/dev/null 2>&1 || { echo "required tool is missing: $binary" >&2; exit 1; }
 done
-mkdir -p "$LOCAL_TEMP/home" "$LOCAL_TEMP/tmp" /workspace/tools /workspace/build
+mkdir -p "$LOCAL_TEMP/home" "$LOCAL_TEMP/tmp" /workspace/tmp /workspace/cache /workspace/tools /workspace/build
 # Jobs can start duplicate Pods. Keep the lock's file descriptor open in this
 # shell so no second attempt can change the workspace until cleanup finishes.
 exec 9>/workspace/.oran-seedgen-build.lock

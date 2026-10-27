@@ -212,6 +212,9 @@ func seedGenerationISOFailureMessage(message string) string {
 	return ""
 }
 
+// Redaction removes known snapshot credentials and recognizable secret patterns.
+// It cannot guarantee removal of unknown credentials in arbitrary tool output;
+// retained diagnostics must still be treated as potentially sensitive.
 func redactSeedGenerationISODiagnostics(logs []byte, snapshot *seedGenerationInputSnapshot) []byte {
 	redacted := string(logs)
 	var credentials []string

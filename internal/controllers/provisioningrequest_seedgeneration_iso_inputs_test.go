@@ -115,6 +115,7 @@ func TestSeedGenerationISOArtifactRejectsUnsafeTargets(t *testing.T) {
 func TestSeedGenerationISOConfigUsesFrozenCredentialsAndMirrors(t *testing.T) {
 	g := NewWithT(t)
 	_, snapshot := seedGenerationISOInputFixture()
+	snapshot.Secrets["upload"].Data["caCert"] = []byte("UPLOAD-SERVER-CA\n")
 	data, err := seedGenerationISOConfig(snapshot)
 	g.Expect(err).ToNot(HaveOccurred())
 	var config map[string]any

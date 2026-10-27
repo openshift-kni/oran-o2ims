@@ -50,6 +50,14 @@ separate from the account that manages the web server and its TLS private key.
 The controller runs SSH commands on the server, so a forced-command or
 SFTP-only account will not work with this workflow.
 
+The generated ISO contains the effective installation pull secret. Restrict
+HTTPS downloads to the hub build Job and authorized provisioning consumers,
+such as BMCs or provisioning services, using firewall rules or network access
+controls. This workflow does not configure HTTP download authentication. The
+run UID and ISO URL are visible in ProvisioningRequest status and do not
+provide access control. Disable directory listing and remove generated ISOs
+when they are no longer needed.
+
 ## Create an upload key and authorize it
 
 Run these commands on a trusted administration host. Keep the private key

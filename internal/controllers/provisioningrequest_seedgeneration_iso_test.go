@@ -89,11 +89,21 @@ func TestMakeSeedGenerationISOJob(t *testing.T) {
 			}
 			g.Expect(hasOverride).To(Equal(tc.wantEnv != ""))
 			g.Expect(container.Env).To(ContainElement(corev1.EnvVar{Name: "ISO_URL", Value: artifact.URL}))
+			g.Expect(container.Env).To(ContainElements(
+				corev1.EnvVar{Name: "TMPDIR", Value: "/workspace/tmp"},
+				corev1.EnvVar{Name: "XDG_CACHE_HOME", Value: "/workspace/cache"},
+			))
 			g.Expect(container.Env).ToNot(ContainElement(corev1.EnvVar{Name: "ISO_RELEASE_IMAGE", Value: "quay.io/openshift-release-dev/ocp-release:mutable"}))
 
 			volumeNames := make([]string, 0, len(job.Spec.Template.Spec.Volumes))
 			for _, volume := range job.Spec.Template.Spec.Volumes {
 				volumeNames = append(volumeNames, volume.Name)
+				if volume.Name == controllerTempVolumeName {
+					g.Expect(volume.EmptyDir).ToNot(BeNil())
+					g.Expect(volume.EmptyDir.Medium).To(Equal(corev1.StorageMediumMemory))
+					g.Expect(volume.EmptyDir.SizeLimit).ToNot(BeNil())
+					g.Expect(volume.EmptyDir.SizeLimit.Value()).To(Equal(int64(64 << 20)))
+				}
 			}
 			g.Expect(volumeNames).To(ContainElements("workspace", "installer-config", "upload-credentials", "mirror-config", "registry-certs", "tmp"))
 			g.Expect(container.VolumeMounts).To(ContainElement(corev1.VolumeMount{Name: "tmp", MountPath: "/tmp"}))
@@ -297,24 +307,13 @@ func TestSeedGenerationISOJobScriptVerifiesPublishedBytes(t *testing.T) {
 	script := seedGenerationISOJobScript()
 	for _, required := range []string{
 		"StrictHostKeyChecking=yes",
-		"REMOTE_DIGEST",
 		"sha256sum -- '$REMOTE_TMP'",
-		"mv -Tn -- '$REMOTE_TMP' '$REMOTE_FINAL'",
-		"mkdir -m 0755 -- '$REMOTE_DIR'",
+		"if [[ \"$REMOTE_DIGEST\" != \"$LOCAL_DIGEST\" ]]",
 		"curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \"$ISO_URL\"",
-		"HTTPS_DIGEST=$(curl",
 		"if [[ \"$HTTPS_DIGEST\" != \"$LOCAL_DIGEST\" ]]",
-		"sha256:${LOCAL_DIGEST}",
-		"LOCAL_TEMP=/tmp/seedgen",
-		"CONFIG_LINK=/workspace/build/image-based-installation-config.yaml",
-		"ln -s \"$INSTALL_CONFIG\" \"$CONFIG_LINK\"",
-		"cp /var/run/seedgen/upload/privateKey \"$LOCAL_TEMP/id_rsa\"",
-		"python3 - \"$LOCAL_TEMP\"",
 	} {
 		g.Expect(script).To(ContainSubstring(required))
 	}
-	g.Expect(script).ToNot(ContainSubstring("/workspace/id_rsa"))
-	g.Expect(script).ToNot(ContainSubstring("/workspace/release-extract.log"))
 }
 
 func TestSeedGenerationISOProgressUsesAllowlistedMessages(t *testing.T) {

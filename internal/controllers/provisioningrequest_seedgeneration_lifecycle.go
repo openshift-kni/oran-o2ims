@@ -106,7 +106,7 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerator(
 ) (ctrl.Result, error) {
 	desired, err := desiredSeedGenerator(t.object, snapshot)
 	if err != nil {
-		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, err.Error())
+		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed, err.Error())
 	}
 	spokeClient, err := t.verifiedSeedGenerationSpokeClient(ctx, snapshot)
 	if err != nil {
@@ -117,10 +117,10 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerator(
 	err = spokeClient.Get(ctx, key, seedGenerator)
 	if err == nil {
 		if err := validateSeedGenerationLCAOwnership(seedGenerator, t.object); err != nil {
-			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, err.Error())
+			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed, err.Error())
 		}
 		if err := validateSeedGeneratorSpec(seedGenerator, snapshot); err != nil {
-			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, err.Error())
+			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed, err.Error())
 		}
 		if seedGenerator.GetDeletionTimestamp() != nil {
 			return t.waitForSeedGeneratorStatus(ctx)
@@ -149,7 +149,7 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerator(
 	case apierrors.IsNotFound(err):
 		credentials := snapshot.Secrets["seedAuth"]
 		if credentials == nil || len(credentials.Data[seedGenerationSeedAuthKey]) == 0 {
-			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
+			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed,
 				"seed generation snapshot is missing seedAuth credentials")
 		}
 		seedSecret = &corev1.Secret{
@@ -171,14 +171,14 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerator(
 		return t.handleSeedGenerationLifecycleError(ctx, "failed to get spoke seedgen Secret", err)
 	default:
 		if err := validateSeedGenerationLCAOwnership(seedSecret, t.object); err != nil {
-			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, err.Error())
+			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed, err.Error())
 		}
 		if seedSecret.DeletionTimestamp != nil {
 			return requeueWithShortInterval(), nil
 		}
 		credentials := snapshot.Secrets["seedAuth"]
 		if credentials == nil || !bytes.Equal(seedSecret.Data[seedGenerationSeedAuthKey], credentials.Data[seedGenerationSeedAuthKey]) {
-			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
+			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed,
 				"existing spoke seedgen Secret does not match the frozen seedAuth credentials")
 		}
 	}

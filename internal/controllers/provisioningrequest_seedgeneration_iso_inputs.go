@@ -201,9 +201,6 @@ func seedGenerationISOConfig(snapshot *seedGenerationInputSnapshot) ([]byte, err
 	for _, registry := range registries {
 		config.AdditionalTrustBundle += strings.TrimSpace(document.RegistryTrustedCAs[registry]) + "\n"
 	}
-	if upload := snapshot.Secrets["upload"]; upload != nil && len(upload.Data["caCert"]) > 0 {
-		config.AdditionalTrustBundle += strings.TrimSpace(string(upload.Data["caCert"])) + "\n"
-	}
 	data, err := yaml.Marshal(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode ISO installation configuration: %w", err)
