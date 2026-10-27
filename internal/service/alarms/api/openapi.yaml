@@ -750,6 +750,11 @@ components:
           example: 91d5d140-ef52-4167-b6dc-975ad1897f23
         perceivedSeverity:
           $ref: '#/components/schemas/PerceivedSeverity'
+        objectClass:
+          type: string
+          description: |
+            The fully qualified name of the class of the object (Resource or NodeCluster) which caused the alarm.
+          example: oran.o2ims.cluster.NodeCluster
         extensions:
           type: object
           additionalProperties: {}
@@ -984,6 +989,11 @@ components:
           type: string
           description: The URL to the AlarmEventRecord object.
           example: hostname.com/O2ims_infrastructureMonitoring/v1/alarms/bf3f8f2e-6f37-4882-96ad-c0b9cef6fc04
+        objectClass:
+          type: string
+          description: |
+            The fully qualified name of the class of the object (Resource or NodeCluster) which caused the alarm.
+          example: oran.o2ims.cluster.NodeCluster
         alarmEventRecordId:
           type: string
           format: uuid
@@ -1039,6 +1049,7 @@ components:
       required:
       - globalCloudID
       - notificationEventType
+      - objectClass
       - alarmEventRecordId
       - resourceTypeID
       - resourceID

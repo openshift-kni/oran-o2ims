@@ -140,7 +140,7 @@ func (ar *AlarmsRepository) UpsertAlarmEventCaaSRecord(ctx context.Context, tx p
 	query.Expression.Columns = svcutils.GetColumns(records[0], []string{
 		"AlarmRaisedTime", "AlarmClearedTime", "AlarmAcknowledgedTime",
 		"AlarmAcknowledged", "PerceivedSeverity", "Extensions",
-		"ObjectID", "ObjectTypeID", "AlarmStatus",
+		"ObjectID", "ObjectTypeID", "ObjectClass", "AlarmStatus",
 		"Fingerprint", "AlarmDefinitionID", "ProbableCauseID",
 		"GenerationID", "AlarmSource",
 	})
@@ -151,7 +151,7 @@ func (ar *AlarmsRepository) UpsertAlarmEventCaaSRecord(ctx context.Context, tx p
 		values = append(values, im.Values(psql.Arg(
 			record.AlarmRaisedTime, record.AlarmClearedTime, record.AlarmAcknowledgedTime,
 			record.AlarmAcknowledged, record.PerceivedSeverity, record.Extensions,
-			record.ObjectID, record.ObjectTypeID, record.AlarmStatus,
+			record.ObjectID, record.ObjectTypeID, record.ObjectClass, record.AlarmStatus,
 			record.Fingerprint, record.AlarmDefinitionID, record.ProbableCauseID,
 			generationID, record.AlarmSource,
 		)))
@@ -167,6 +167,7 @@ func (ar *AlarmsRepository) UpsertAlarmEventCaaSRecord(ctx context.Context, tx p
 		im.SetExcluded(dbTags["PerceivedSeverity"]),
 		im.SetExcluded(dbTags["ObjectID"]),
 		im.SetExcluded(dbTags["ObjectTypeID"]),
+		im.SetExcluded(dbTags["ObjectClass"]),
 		im.SetExcluded(dbTags["AlarmDefinitionID"]),
 		im.SetExcluded(dbTags["ProbableCauseID"]),
 		im.SetExcluded(dbTags["GenerationID"]),

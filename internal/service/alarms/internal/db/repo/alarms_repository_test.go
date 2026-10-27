@@ -266,11 +266,13 @@ var _ = Describe("AlarmsRepository", func() {
 		When("upserting a single record", func() {
 			It("successfully upserts alarm event records", func() {
 				id := uuid.New()
+				objectClass := "oran.o2ims.cluster.NodeCluster"
 				records := []models.AlarmEventRecord{
 					{
 						AlarmRaisedTime:   time.Now(),
 						PerceivedSeverity: api.WARNING,
 						ObjectID:          &id,
+						ObjectClass:       &objectClass,
 						Fingerprint:       "9a9e2d82a78cf2b9",
 						AlarmSource:       models.AlarmSourceCaaS,
 					},
@@ -278,12 +280,17 @@ var _ = Describe("AlarmsRepository", func() {
 				// Expect transaction begin
 				mock.ExpectBegin()
 
-				mock.ExpectExec(fmt.Sprintf("INSERT INTO %s", models.AlarmEventRecord{}.TableName())).
+				// object_class is included in the insert columns/args (R2 persistence)
+				// and in the ON CONFLICT DO UPDATE SET excluded list.
+				// Spot-check that object_class is present both in the INSERT column list and in the
+				// ON CONFLICT DO UPDATE SET clause (R2 persistence), so a dropped object_class column
+				// would fail the match rather than slip through a table-name-only prefix.
+				mock.ExpectExec(`(?s)INSERT INTO alarm_event_record.*object_class.*ON CONFLICT.*object_class`).
 					WithArgs(
 						records[0].AlarmRaisedTime, records[0].AlarmClearedTime,
 						records[0].AlarmAcknowledgedTime, records[0].AlarmAcknowledged,
 						records[0].PerceivedSeverity, records[0].Extensions,
-						records[0].ObjectID, records[0].ObjectTypeID,
+						records[0].ObjectID, records[0].ObjectTypeID, records[0].ObjectClass,
 						records[0].AlarmStatus, records[0].Fingerprint,
 						records[0].AlarmDefinitionID, records[0].ProbableCauseID, int64(0), records[0].AlarmSource,
 					).
@@ -327,18 +334,21 @@ var _ = Describe("AlarmsRepository", func() {
 				// Expect transaction begin
 				mock.ExpectBegin()
 
-				mock.ExpectExec(fmt.Sprintf("INSERT INTO %s", models.AlarmEventRecord{}.TableName())).
+				// Spot-check that object_class is present both in the INSERT column list and in the
+				// ON CONFLICT DO UPDATE SET clause (R2 persistence), so a dropped object_class column
+				// would fail the match rather than slip through a table-name-only prefix.
+				mock.ExpectExec(`(?s)INSERT INTO alarm_event_record.*object_class.*ON CONFLICT.*object_class`).
 					WithArgs(
 						records[0].AlarmRaisedTime, records[0].AlarmClearedTime,
 						records[0].AlarmAcknowledgedTime, records[0].AlarmAcknowledged,
 						records[0].PerceivedSeverity, records[0].Extensions,
-						records[0].ObjectID, records[0].ObjectTypeID,
+						records[0].ObjectID, records[0].ObjectTypeID, records[0].ObjectClass,
 						records[0].AlarmStatus, records[0].Fingerprint,
 						records[0].AlarmDefinitionID, records[0].ProbableCauseID, int64(0), records[0].AlarmSource,
 						records[1].AlarmRaisedTime, records[1].AlarmClearedTime,
 						records[1].AlarmAcknowledgedTime, records[1].AlarmAcknowledged,
 						records[1].PerceivedSeverity, records[1].Extensions,
-						records[1].ObjectID, records[1].ObjectTypeID,
+						records[1].ObjectID, records[1].ObjectTypeID, records[1].ObjectClass,
 						records[1].AlarmStatus, records[1].Fingerprint,
 						records[1].AlarmDefinitionID, records[1].ProbableCauseID, int64(0), records[1].AlarmSource,
 					).

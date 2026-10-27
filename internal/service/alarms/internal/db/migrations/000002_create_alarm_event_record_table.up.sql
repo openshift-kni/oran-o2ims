@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS alarm_event_record (
     -- O-RAN additional data to create AlarmEventNotification
     object_id UUID, -- Same as manager_cluster_id for caas alerts. Note: nullable to capture if ACM is sending us cluster ID
     object_type_id UUID, -- Derived from manager_cluster_id. Note: nullable to capture if ACM is sending us cluster ID
+    object_class TEXT, -- Fully qualified name of the class of the object (Resource or NodeCluster) that caused the alarm, derived from the alarm source. Nullable for legacy rows.
     notification_event_type VARCHAR(20) DEFAULT 'NEW' NOT NULL, -- Same as alarm_subscription_info.filter used to quickly filter and return notification
 
     -- Internal
@@ -120,6 +121,7 @@ BEGIN
         ELSIF NOT NEW.alarm_acknowledged THEN
             IF (NEW.object_id IS DISTINCT FROM OLD.object_id OR
                 NEW.object_type_id IS DISTINCT FROM OLD.object_type_id OR
+                NEW.object_class IS DISTINCT FROM OLD.object_class OR
                 NEW.alarm_definition_id IS DISTINCT FROM OLD.alarm_definition_id OR
                 NEW.probable_cause_id IS DISTINCT FROM OLD.probable_cause_id)
             THEN

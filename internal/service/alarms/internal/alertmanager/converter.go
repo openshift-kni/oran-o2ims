@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure"
@@ -77,11 +78,17 @@ func ConvertAmToAlarmEventRecordModels(ctx context.Context, alerts *[]api.Alert,
 			// For hardware alerts, object is the resource ID from instance_uuid
 			record.ObjectID = getResourceID(labels)
 			record.AlarmSource = models.AlarmSourceHardware
+			// objectClass is derived from the alarm source, independent of objectID/objectTypeID.
+			oc := constants.ObjectClassResource
+			record.ObjectClass = &oc
 			infrastructureClient = resourceServer
 		} else {
 			// For CaaS alerts, object is the cluster ID from managed_cluster
 			record.ObjectID = getClusterID(labels)
 			record.AlarmSource = models.AlarmSourceCaaS
+			// objectClass is derived from the alarm source, independent of objectID/objectTypeID.
+			oc := constants.ObjectClassCluster
+			record.ObjectClass = &oc
 			infrastructureClient = clusterServer
 		}
 
