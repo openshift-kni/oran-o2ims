@@ -32,12 +32,28 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// getNAR retrieves the NodeAllocationRequest CR for this ProvisioningRequest.
-// The NAR name matches the ProvisioningRequest name (1:1 relationship).
+// getNAR retrieves the NodeAllocationRequest CR for this ProvisioningRequest
+// through the cached client. The NAR name matches the ProvisioningRequest name
+// (1:1 relationship).
 func (t *provisioningRequestReconcilerTask) getNAR(ctx context.Context) (*hwmgmtv1alpha1.NodeAllocationRequest, error) {
+	return t.getNARWithReader(ctx, t.client)
+}
+
+// noncachedReader returns a reader that bypasses the informer cache when one is
+// configured, falling back to the cached client otherwise (e.g. in unit tests
+// that construct the task without a noncached client).
+func (t *provisioningRequestReconcilerTask) noncachedReader() client.Reader {
+	if t.noncachedClient != nil {
+		return t.noncachedClient
+	}
+	return t.client
+}
+
+// getNARWithReader retrieves the NodeAllocationRequest CR using the supplied reader.
+func (t *provisioningRequestReconcilerTask) getNARWithReader(ctx context.Context, reader client.Reader) (*hwmgmtv1alpha1.NodeAllocationRequest, error) {
 	narNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
 	nar := &hwmgmtv1alpha1.NodeAllocationRequest{}
-	if err := t.client.Get(ctx, types.NamespacedName{Name: t.object.Name, Namespace: narNS}, nar); err != nil {
+	if err := reader.Get(ctx, types.NamespacedName{Name: t.object.Name, Namespace: narNS}, nar); err != nil {
 		return nil, fmt.Errorf("failed to get NodeAllocationRequest %s/%s: %w", narNS, t.object.Name, err)
 	}
 	return nar, nil

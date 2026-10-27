@@ -37,12 +37,18 @@ import (
 // ProvisioningRequestReconciler reconciles a ProvisioningRequest object
 type ProvisioningRequestReconciler struct {
 	client.Client
-	Logger *slog.Logger
+	// NoncachedClient reads directly from the API server, bypassing the informer
+	// cache. It is used where a read must reflect a write this reconcile just issued
+	// (e.g. the hardware-config in-flight gate reads the NodeAllocationRequest right
+	// after patching its spec, and the cache may still hold the pre-patch object).
+	NoncachedClient client.Reader
+	Logger          *slog.Logger
 }
 
 type provisioningRequestReconcilerTask struct {
 	logger                           *slog.Logger
 	client                           client.Client
+	noncachedClient                  client.Reader
 	object                           *provisioningv1alpha1.ProvisioningRequest
 	clusterInput                     *clusterInput
 	ctDetails                        *clusterTemplateDetails
@@ -179,12 +185,13 @@ func (r *ProvisioningRequestReconciler) Reconcile(
 
 	// Create and run the task:
 	task := &provisioningRequestReconcilerTask{
-		logger:       r.Logger,
-		client:       r.Client,
-		object:       object,
-		clusterInput: &clusterInput{},
-		ctDetails:    &clusterTemplateDetails{},
-		timeouts:     &timeouts{},
+		logger:          r.Logger,
+		client:          r.Client,
+		noncachedClient: r.NoncachedClient,
+		object:          object,
+		clusterInput:    &clusterInput{},
+		ctDetails:       &clusterTemplateDetails{},
+		timeouts:        &timeouts{},
 	}
 	result, err = task.run(ctx)
 	return
@@ -664,7 +671,11 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 		return requeueWithShortInterval(), false, fmt.Errorf("missing nodeAllocationRequest identifier")
 	}
 
-	nodeAllocationRequestResponse, exists, err := t.getNodeAllocationRequestResponse(ctx)
+	// Read the NAR uncached: createOrUpdateNodeAllocationRequest may have just patched
+	// its spec (bumping ConfigTransactionId and generation), and the downstream
+	// hardware-config in-flight gate below must not observe the pre-patch object from
+	// the informer cache (OCPBUGS-132825).
+	nodeAllocationRequestResponse, exists, err := t.getNodeAllocationRequestResponseUncached(ctx)
 	if err != nil {
 		t.logger.WarnContext(ctx, "NodeAllocationRequest response error, will retry", slog.Any("error", err))
 		return requeueWithMediumInterval(), false, err
@@ -1450,11 +1461,26 @@ func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(
 	return nil
 }
 
-// getNodeAllocationRequestResponse retrieves the NodeAllocationRequest CR by PR name.
-// It returns the NodeAllocationRequest, a boolean indicating whether it exists,
-// and any error encountered.
+// getNodeAllocationRequestResponse retrieves the NodeAllocationRequest CR by PR name
+// through the cached client. It returns the NodeAllocationRequest, a boolean indicating
+// whether it exists, and any error encountered.
 func (t *provisioningRequestReconcilerTask) getNodeAllocationRequestResponse(ctx context.Context) (*hwmgmtv1alpha1.NodeAllocationRequest, bool, error) {
-	nar, err := t.getNAR(ctx)
+	return t.getNodeAllocationRequestResponseWithReader(ctx, t.client)
+}
+
+// getNodeAllocationRequestResponseUncached retrieves the NodeAllocationRequest CR
+// directly from the API server, bypassing the informer cache. Use this when the read
+// must reflect a spec write issued earlier in the same reconcile — for example the
+// hardware-config in-flight gate, which reads the NAR right after
+// createOrUpdateNodeAllocationRequest patches its spec. A cached read there can return
+// the pre-patch object and let downstream phases proceed while a configuration
+// transaction is still in flight (OCPBUGS-132825).
+func (t *provisioningRequestReconcilerTask) getNodeAllocationRequestResponseUncached(ctx context.Context) (*hwmgmtv1alpha1.NodeAllocationRequest, bool, error) {
+	return t.getNodeAllocationRequestResponseWithReader(ctx, t.noncachedReader())
+}
+
+func (t *provisioningRequestReconcilerTask) getNodeAllocationRequestResponseWithReader(ctx context.Context, reader client.Reader) (*hwmgmtv1alpha1.NodeAllocationRequest, bool, error) {
+	nar, err := t.getNARWithReader(ctx, reader)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			return nil, false, nil
