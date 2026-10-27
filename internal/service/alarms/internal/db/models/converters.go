@@ -9,6 +9,7 @@ package models
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/oapi-codegen/nullable"
@@ -52,25 +53,39 @@ func ConvertAlarmEventRecordModelToApi(aerModel AlarmEventRecord) api.AlarmEvent
 	return record
 }
 
+// timePtrToNullable converts an optional time to a Nullable that serializes as a value or
+// explicit null (never omitted), matching the M/0..1 notification time fields (C4).
+func timePtrToNullable(t *time.Time) nullable.Nullable[time.Time] {
+	if t == nil {
+		return nullable.NewNullNullable[time.Time]()
+	}
+	return nullable.NewNullableWithValue(*t)
+}
+
 // ConvertAlarmEventRecordModelToAlarmEventNotification converts an AlarmEventRecord to api AlarmEventNotification
 func ConvertAlarmEventRecordModelToAlarmEventNotification(aerModel AlarmEventRecord, globalCloudID uuid.UUID) api.AlarmEventNotification {
+	// objectRef is built root-relative: O2IMSMonitoringBaseURL is a path prefix (no host), so
+	// consumers that require an absolute URL must prepend the O-Cloud base URL. The absence of a
+	// configurable public base URL is a known interoperability limitation (C5(d)).
 	or := fmt.Sprintf("%s%s/%v", constants.O2IMSMonitoringBaseURL, constants.AlarmsPath, aerModel.AlarmEventRecordID.String())
 	notification := api.AlarmEventNotification{
-		AlarmAcknowledgeTime:  aerModel.AlarmAcknowledgedTime,
 		AlarmAcknowledged:     aerModel.AlarmAcknowledged,
+		AlarmAcknowledgeTime:  timePtrToNullable(aerModel.AlarmAcknowledgedTime),
+		AlarmChangedTime:      timePtrToNullable(aerModel.AlarmChangedTime),
+		AlarmClearedTime:      timePtrToNullable(aerModel.AlarmClearedTime),
 		AlarmEventRecordId:    aerModel.AlarmEventRecordID,
 		AlarmRaisedTime:       aerModel.AlarmRaisedTime,
 		Extensions:            aerModel.Extensions,
 		GlobalCloudID:         globalCloudID,
 		NotificationEventType: AlarmFilterToEventType(aerModel.NotificationEventType),
-		ObjectRef:             &or,
-		PerceivedSeverity:     aerModel.PerceivedSeverity,
+		ObjectRef:             nullable.NewNullableWithValue(or),
+		// consumerSubscriptionId is per-subscriber: the base notification serializes it as an
+		// explicit null and Transform overrides it for subscribers that provided one (C4).
+		ConsumerSubscriptionId: nullable.NewNullNullable[string](),
+		PerceivedSeverity:      aerModel.PerceivedSeverity,
 	}
 
 	// Handle all pointer fields together
-	if aerModel.AlarmChangedTime != nil {
-		notification.AlarmChangedTime = *aerModel.AlarmChangedTime
-	}
 	if aerModel.AlarmDefinitionID != nil {
 		notification.AlarmDefinitionID = *aerModel.AlarmDefinitionID
 	}

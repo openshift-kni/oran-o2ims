@@ -1075,6 +1075,7 @@ components:
           example: da4698ba-c8a7-429d-ae16-484f15f282c5
         consumerSubscriptionId:
           type: string
+          nullable: true
           description: The value provided by the consumer in the subscription.
           example: 3ddc1128-a14d-46de-80da-6414b192ce9f
         notificationEventType:
@@ -1089,8 +1090,13 @@ components:
           example: 0
         objectRef:
           type: string
-          description: The URL to the AlarmEventRecord object.
-          example: hostname.com/O2ims_infrastructureMonitoring/v1/alarms/bf3f8f2e-6f37-4882-96ad-c0b9cef6fc04
+          nullable: true
+          description: |
+            A reference to the AlarmEventRecord object. This is emitted as a root-relative
+            path (the trailing segment is the alarmEventRecordId). Consumers that require an
+            absolute URL must prepend the O-Cloud base URL; the absence of a configurable
+            public base URL is a known interoperability limitation.
+          example: /O2ims_infrastructureMonitoring/v1/alarms/bf3f8f2e-6f37-4882-96ad-c0b9cef6fc04
         objectClass:
           type: string
           description: |
@@ -1129,12 +1135,20 @@ components:
         alarmChangedTime:
           type: string
           format: date-time
+          nullable: true
           description: Date/Time stamp value when any value of the AlarmEventRecord has been modified.
           example: 2042-07-21T21:32:28Z
+        alarmClearedTime:
+          type: string
+          format: date-time
+          nullable: true
+          description: Date/Time stamp value when the alarm condition is cleared.
+          example: 2042-07-21T20:32:28Z
         alarmAcknowledgeTime:
           type: string
           format: date-time
-          description: Date/Time stamp value when any value of the AlarmEventRecord has been modified.
+          nullable: true
+          description: Date/Time stamp value when the alarm condition is acknowledged.
           example: 2042-07-21T22:32:28Z
         alarmAcknowledged:
           type: boolean
@@ -1150,7 +1164,9 @@ components:
             operator to extend the information provided about the O-Cloud Alarm.
       required:
       - globalCloudID
+      - consumerSubscriptionId
       - notificationEventType
+      - objectRef
       - objectClass
       - alarmEventRecordId
       - resourceTypeID
@@ -1159,6 +1175,8 @@ components:
       - probableCauseID
       - alarmRaisedTime
       - alarmChangedTime
+      - alarmClearedTime
+      - alarmAcknowledgeTime
       - alarmAcknowledged
       - perceivedSeverity
       - extensions

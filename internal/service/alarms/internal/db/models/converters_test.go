@@ -7,7 +7,9 @@ SPDX-License-Identifier: Apache-2.0
 package models_test
 
 import (
+	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/oapi-codegen/nullable"
@@ -48,7 +50,12 @@ func TestConvertAlarmEventRecordModelToAlarmEventNotification_ObjectClass(t *tes
 	}, globalCloudID)
 	g.Expect(notification.ObjectClass).To(Equal(objectClass))
 
-	// Absent objectClass leaves the required field as the zero value
+	// Absent objectClass leaves the required field as the zero value. This is a legacy-row
+	// edge case that is unreachable with current code: the alertmanager converter always
+	// classifies an alert as hardware or cluster (isHardwareAlert is total) and sets
+	// objectClass accordingly, so object_class is never NULL for rows this code writes.
+	// An empty string is accepted here rather than a sentinel because, pre-GA, there are no
+	// legacy rows with a NULL object_class to migrate.
 	notificationNil := models.ConvertAlarmEventRecordModelToAlarmEventNotification(models.AlarmEventRecord{
 		AlarmEventRecordID: uuid.New(),
 	}, globalCloudID)
@@ -122,4 +129,54 @@ func TestConvertAlertSubToNotificationSub_EffectiveFilter(t *testing.T) {
 	// (c) both NULL -> nil (match-all)
 	none := models.ConvertAlertSubToNotificationSub(&models.AlarmSubscription{})
 	g.Expect(none.Filter).To(BeNil())
+}
+
+func TestConvertAlarmEventRecordModelToAlarmEventNotification_NullSerialization(t *testing.T) {
+	g := NewWithT(t)
+	globalCloudID := uuid.New()
+	recordID := uuid.New()
+
+	// All optional times absent -> fields serialize as explicit null (not omitted); objectRef
+	// is built root-relative; consumerSubscriptionId is null in the base notification.
+	notification := models.ConvertAlarmEventRecordModelToAlarmEventNotification(models.AlarmEventRecord{
+		AlarmEventRecordID: recordID,
+	}, globalCloudID)
+
+	g.Expect(notification.AlarmAcknowledgeTime.IsSpecified()).To(BeTrue())
+	g.Expect(notification.AlarmAcknowledgeTime.IsNull()).To(BeTrue())
+	g.Expect(notification.AlarmChangedTime.IsNull()).To(BeTrue())
+	g.Expect(notification.AlarmClearedTime.IsNull()).To(BeTrue())
+	g.Expect(notification.ConsumerSubscriptionId.IsNull()).To(BeTrue())
+	g.Expect(notification.ObjectRef.IsNull()).To(BeFalse())
+
+	// objectRef is root-relative, trailing segment is the alarmEventRecordId (C5(d)).
+	g.Expect(notification.ObjectRef.MustGet()).To(Equal("/O2ims_infrastructureMonitoring/v1/alarms/" + recordID.String()))
+
+	// JSON marshaling keeps the keys present with explicit null.
+	data, err := json.Marshal(notification)
+	g.Expect(err).ToNot(HaveOccurred())
+	js := string(data)
+	g.Expect(js).To(ContainSubstring(`"alarmAcknowledgeTime":null`))
+	g.Expect(js).To(ContainSubstring(`"alarmChangedTime":null`))
+	g.Expect(js).To(ContainSubstring(`"alarmClearedTime":null`))
+	g.Expect(js).To(ContainSubstring(`"consumerSubscriptionId":null`))
+}
+
+func TestConvertAlarmEventRecordModelToAlarmEventNotification_TimeValues(t *testing.T) {
+	g := NewWithT(t)
+	globalCloudID := uuid.New()
+	changed := time.Date(2042, 7, 21, 21, 32, 28, 0, time.UTC)
+	cleared := time.Date(2042, 7, 21, 20, 32, 28, 0, time.UTC)
+	acked := time.Date(2042, 7, 21, 22, 32, 28, 0, time.UTC)
+
+	notification := models.ConvertAlarmEventRecordModelToAlarmEventNotification(models.AlarmEventRecord{
+		AlarmEventRecordID:    uuid.New(),
+		AlarmChangedTime:      &changed,
+		AlarmClearedTime:      &cleared,
+		AlarmAcknowledgedTime: &acked,
+	}, globalCloudID)
+
+	g.Expect(notification.AlarmChangedTime.MustGet()).To(Equal(changed))
+	g.Expect(notification.AlarmClearedTime.MustGet()).To(Equal(cleared))
+	g.Expect(notification.AlarmAcknowledgeTime.MustGet()).To(Equal(acked))
 }

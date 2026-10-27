@@ -12,6 +12,7 @@ import (
 	"log/slog"
 
 	"github.com/google/uuid"
+	"github.com/oapi-codegen/nullable"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
@@ -104,9 +105,11 @@ func (s *SubscriptionStorageProvider) Transform(subscription *notifier.Subscript
 		return nil, fmt.Errorf("notification payload is not of type AlarmEventNotification")
 	}
 
-	// Shallow copy to ensure each subscriber gets a copy of the payload with its own id
+	// Shallow copy to ensure each subscriber gets a copy of the payload with its own id.
+	// The nil guard above ensures ConsumerSubscriptionID is set; serialize it as a value
+	// (the base notification already carries an explicit null for subscribers without one).
 	clone := payload
-	clone.ConsumerSubscriptionId = subscription.ConsumerSubscriptionID
+	clone.ConsumerSubscriptionId = nullable.NewNullableWithValue(*subscription.ConsumerSubscriptionID)
 	result := *notification
 	result.Payload = clone
 	return &result, nil

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/oapi-codegen/nullable"
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	mockrepo "github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/notifier_provider"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
@@ -90,4 +92,30 @@ func TestGetSubscription_NotFound(t *testing.T) {
 	provider := notifier_provider.NewSubscriptionStorageProvider(repo)
 	_, err := provider.GetSubscription(context.Background(), id)
 	g.Expect(err).To(MatchError(svcutils.ErrNotFound))
+}
+
+// TestTransform verifies consumerSubscriptionId is serialized as a value for subscribers
+// that provided one, and left as the base notification's explicit null otherwise (C4).
+func TestTransform(t *testing.T) {
+	g := NewWithT(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	provider := notifier_provider.NewSubscriptionStorageProvider(mockrepo.NewMockAlarmRepositoryInterface(ctrl))
+
+	base := &notifier.Notification{Payload: api.AlarmEventNotification{
+		ConsumerSubscriptionId: nullable.NewNullNullable[string](),
+	}}
+
+	// With a consumer id -> value is set on the clone.
+	consumer := "consumer-123"
+	out, err := provider.Transform(&notifier.SubscriptionInfo{ConsumerSubscriptionID: &consumer}, base)
+	g.Expect(err).ToNot(HaveOccurred())
+	payload := out.Payload.(api.AlarmEventNotification)
+	g.Expect(payload.ConsumerSubscriptionId.IsNull()).To(BeFalse())
+	g.Expect(payload.ConsumerSubscriptionId.MustGet()).To(Equal(consumer))
+
+	// Without a consumer id -> the original notification (explicit null) is returned unchanged.
+	out, err = provider.Transform(&notifier.SubscriptionInfo{ConsumerSubscriptionID: nil}, base)
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(out).To(BeIdenticalTo(base))
 }
