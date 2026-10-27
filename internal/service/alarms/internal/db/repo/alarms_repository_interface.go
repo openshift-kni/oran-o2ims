@@ -30,6 +30,7 @@ type AlarmRepositoryInterface interface {
 	DeleteAlarmSubscription(ctx context.Context, id uuid.UUID) (int64, error)
 	CreateAlarmSubscription(ctx context.Context, record models.AlarmSubscription) (*models.AlarmSubscription, error)
 	GetAlarmSubscription(ctx context.Context, id uuid.UUID) (*models.AlarmSubscription, error)
+	PatchAlarmSubscription(ctx context.Context, id uuid.UUID, fields map[string]any) (*models.AlarmSubscription, error)
 	UpsertAlarmEventCaaSRecord(ctx context.Context, tx pgx.Tx, records []models.AlarmEventRecord, generationID int64) error
 	ResolveStaleAlarmEventCaaSRecord(ctx context.Context, tx pgx.Tx, generationID int64) error
 	UpdateSubscriptionEventCursor(ctx context.Context, subscription models.AlarmSubscription) error

@@ -8,15 +8,23 @@ package notifier
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
+	"time"
 
 	"github.com/google/uuid"
+
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
 // DefaultBufferedChannelSize defines the default size for buffered channels used across the notifier.
 const DefaultBufferedChannelSize = 100
+
+// DefaultSubscriptionRefreshRetryDelay is the default delay before the notifier retries applying a
+// subscription update whose authoritative re-read failed with a transient (non-NotFound) error.
+const DefaultSubscriptionRefreshRetryDelay = 5 * time.Second
 
 // CompletionChannelSize defines the buffer size of the completion channel.  We keep this small to ensure that we don't
 // process a large number of notifications without first updating the subscription cursor so workers will block until
@@ -54,16 +62,23 @@ type NotificationProvider interface {
 // subscriptions on its behalf.
 type SubscriptionProvider interface {
 	GetSubscriptions(ctx context.Context) ([]SubscriptionInfo, error)
+	// GetSubscription returns a single subscription by id. It must preserve
+	// svcutils.ErrNotFound (wrapped with %w) so callers can detect deletion.
+	GetSubscription(ctx context.Context, id uuid.UUID) (*SubscriptionInfo, error)
 	Matches(subscription *SubscriptionInfo, notification *Notification) bool
 	UpdateSubscription(ctx context.Context, subscription *SubscriptionInfo) error
 	Transform(subscription *SubscriptionInfo, notification *Notification) (*Notification, error)
 }
 
-// SubscriptionEvent defines the information sent to the notifier when a subscription is added/removed
+// SubscriptionEvent defines the information sent to the notifier when a subscription is added/removed/updated
 type SubscriptionEvent struct {
 	// Removed defines whether the subscription has been removed or added
 	Removed bool
-	// Subscription is the subscription being added/removed
+	// Updated defines whether an existing subscription has been modified in place (e.g. via PATCH).
+	// When set, only Subscription.SubscriptionID is required; the notifier re-reads the latest
+	// persisted values from the SubscriptionProvider.
+	Updated bool
+	// Subscription is the subscription being added/removed/updated
 	Subscription *SubscriptionInfo
 }
 
@@ -88,6 +103,14 @@ type Notifier struct {
 	// workers is the list of workers started to service subscriptions.  It is mapped by
 	// subscription uuid value.
 	workers map[uuid.UUID]*SubscriptionWorker
+	// pendingUpdates tracks subscriptions whose update event arrived before their creation
+	// event (a create/PATCH race). The flag is consumed when the creation event is handled,
+	// triggering an immediate re-read so the new worker reflects the latest persisted values
+	// instead of the stale creation-time snapshot.
+	pendingUpdates map[uuid.UUID]struct{}
+	// subscriptionRefreshRetryDelay is the delay before retrying a subscription update whose
+	// authoritative re-read failed with a transient (non-NotFound) error.
+	subscriptionRefreshRetryDelay time.Duration
 	// notificationProvider is a plugable interface which provides persistence handling for notifications
 	notificationProvider NotificationProvider
 	// subscriptionProvider is a plugable interface which provides persistence handling for subscriptions
@@ -108,6 +131,8 @@ func NewNotifier(subscriptionProvider SubscriptionProvider, notificationProvider
 		subscriptionChannel:            subscriptionChannel,
 		subscriptionJobCompleteChannel: subscriberJobCompleteChannel,
 		workers:                        make(map[uuid.UUID]*SubscriptionWorker),
+		pendingUpdates:                 make(map[uuid.UUID]struct{}),
+		subscriptionRefreshRetryDelay:  DefaultSubscriptionRefreshRetryDelay,
 	}
 }
 
@@ -297,10 +322,27 @@ func (n *Notifier) releaseNotifications(ctx context.Context, events []*Notificat
 // handleSubscriptionEvent handles an incoming subscription change event
 func (n *Notifier) handleSubscriptionEvent(ctx context.Context, event *SubscriptionEvent) error {
 	subscriptionID := event.Subscription.SubscriptionID
-	slog.InfoContext(ctx, "Handling subscription event", slog.Bool("removed", event.Removed), slog.Any("subscription", event.Subscription))
+	slog.InfoContext(ctx, "Handling subscription event", slog.Bool("removed", event.Removed), slog.Bool("updated", event.Updated), slog.Any("subscription", event.Subscription))
+
+	if event.Updated {
+		// An existing subscription was modified in place (e.g. via PATCH).
+		if _, found := n.workers[subscriptionID]; !found {
+			// The creation event for this subscription has not been processed yet (a
+			// create/PATCH race where the update event was queued ahead of creation).
+			// Defer the update so the creation handler re-reads the latest persisted
+			// values instead of installing the stale creation-time snapshot.
+			slog.DebugContext(ctx, "subscription worker not found for update; deferring until creation", slog.String("subscriptionID", subscriptionID.String()))
+			n.pendingUpdates[subscriptionID] = struct{}{}
+			return nil
+		}
+		return n.refreshSubscriptionWorker(ctx, subscriptionID)
+	}
 
 	if event.Removed {
 		// The subscription has been removed.  Cleanup any associated data.
+		// Drop any update that was deferred waiting for creation; the subscription is gone.
+		delete(n.pendingUpdates, subscriptionID)
+
 		worker, found := n.workers[subscriptionID]
 		if !found {
 			slog.DebugContext(ctx, "subscription worker not found", slog.String("subscriptionID", subscriptionID.String()))
@@ -320,10 +362,74 @@ func (n *Notifier) handleSubscriptionEvent(ctx context.Context, event *Subscript
 
 		n.workers[subscriptionID] = worker
 		go worker.Run()
+
+		if _, pending := n.pendingUpdates[subscriptionID]; pending {
+			// An update event for this subscription arrived before this creation event.
+			// Apply the latest persisted values now that the worker exists so it does not
+			// run with the stale creation-time snapshot.
+			delete(n.pendingUpdates, subscriptionID)
+			if err := n.refreshSubscriptionWorker(ctx, subscriptionID); err != nil {
+				return err
+			}
+		}
 	}
 
 	slog.InfoContext(ctx, "subscription event handled", slog.Int("workers", len(n.workers)))
 	return nil
+}
+
+// refreshSubscriptionWorker re-reads the authoritative persisted subscription and applies the
+// latest values to the live worker in place, preserving its cursor, queue, in-flight work, and
+// client. If the subscription was deleted it tears the worker down; on a transient read error it
+// re-queues the update so the worker eventually converges on the persisted values once the
+// datastore recovers, rather than continuing to notify with stale settings.
+func (n *Notifier) refreshSubscriptionWorker(ctx context.Context, subscriptionID uuid.UUID) error {
+	worker, found := n.workers[subscriptionID]
+	if !found {
+		// The DB is authoritative; a missing worker means nothing to update.
+		slog.DebugContext(ctx, "subscription worker not found for update; ignoring", slog.String("subscriptionID", subscriptionID.String()))
+		return nil
+	}
+
+	latest, err := n.subscriptionProvider.GetSubscription(ctx, subscriptionID)
+	if errors.Is(err, svcutils.ErrNotFound) {
+		// The subscription was deleted between the PATCH and this event; tear the worker down.
+		slog.DebugContext(ctx, "subscription removed before update applied; shutting down worker", slog.String("subscriptionID", subscriptionID.String()))
+		worker.Shutdown()
+		delete(n.workers, subscriptionID)
+		n.releaseNotifications(ctx, worker.GetNotifications())
+		return nil
+	}
+	if err != nil {
+		// Transient failure re-reading the subscription; re-queue the update so the worker
+		// eventually converges on the persisted values once the datastore recovers.
+		slog.ErrorContext(ctx, "failed to re-read subscription for update; scheduling retry", slog.String("subscriptionID", subscriptionID.String()), slog.Any("error", err))
+		n.scheduleSubscriptionUpdateRetry(ctx, subscriptionID)
+		return nil
+	}
+
+	// The effective filter/callback/consumer id already come through the
+	// provider's converter, so no recomputation is needed here.
+	worker.UpdateSubscription(latest)
+	slog.InfoContext(ctx, "subscription worker updated in place", slog.String("subscriptionID", subscriptionID.String()))
+	return nil
+}
+
+// scheduleSubscriptionUpdateRetry re-queues an update event for the given subscription after a
+// short delay so the notifier eventually converges on the persisted subscription once a transient
+// datastore error clears. It is non-blocking and abandons the retry if the context is cancelled.
+func (n *Notifier) scheduleSubscriptionUpdateRetry(ctx context.Context, subscriptionID uuid.UUID) {
+	go func() {
+		select {
+		case <-time.After(n.subscriptionRefreshRetryDelay):
+		case <-ctx.Done():
+			return
+		}
+		n.SubscriptionEvent(ctx, &SubscriptionEvent{
+			Updated:      true,
+			Subscription: &SubscriptionInfo{SubscriptionID: subscriptionID},
+		})
+	}()
 }
 
 // handleSubscriptionJobCompleteEvent handles a job completion event, removes the subscriber from the event job,

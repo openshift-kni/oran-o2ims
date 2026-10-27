@@ -20,3 +20,7 @@ rules:
   verbs:
   - get
   - delete
+- nonResourceURLs:
+  - /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/*
+  verbs:
+  - patch

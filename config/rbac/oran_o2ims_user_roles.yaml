@@ -89,6 +89,13 @@ rules:
   verbs:
   - get
   - delete
+# Dedicated patch rule for modifying an individual alarm subscription (RFC 7396 merge-patch).
+# Only the Monitoring alarmSubscriptions path supports PATCH; admin-role inherits this via the
+# subscriber-role aggregation label, while reader-role intentionally does not include patch.
+- nonResourceURLs:
+  - /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/*
+  verbs:
+  - patch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole

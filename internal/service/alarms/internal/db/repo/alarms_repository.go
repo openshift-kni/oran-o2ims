@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strconv"
 	"time"
 
@@ -124,6 +125,59 @@ func (ar *AlarmsRepository) CreateAlarmSubscription(ctx context.Context, record 
 // GetAlarmSubscription grabs a row of alarm_subscription using a primary key
 func (ar *AlarmsRepository) GetAlarmSubscription(ctx context.Context, id uuid.UUID) (*models.AlarmSubscription, error) {
 	return svcutils.Find[models.AlarmSubscription](ctx, ar.Db, id)
+}
+
+// patchableAlarmSubscriptionFields is the allowlist of model field names a
+// merge-patch is permitted to modify. Immutable or internal columns
+// (subscription_id, event_cursor, created_at, updated_at) are deliberately
+// excluded so the repository rejects them independently of the handler.
+var patchableAlarmSubscriptionFields = map[string]struct{}{
+	"Callback":               {},
+	"ConsumerSubscriptionID": {},
+	"EventFilter":            {},
+}
+
+// PatchAlarmSubscription applies an RFC 7396 merge-patch to an alarm subscription.
+// fields is keyed by model field name (e.g. "Callback", "EventFilter",
+// "ConsumerSubscriptionID"); a nil value sets the corresponding column to SQL NULL.
+// Only the present fields are written (SETs merge over the existing row). Fields
+// outside patchableAlarmSubscriptionFields (e.g. "EventCursor") are rejected, so
+// event_cursor is never modified. An unknown id yields svcutils.ErrNotFound.
+func (ar *AlarmsRepository) PatchAlarmSubscription(ctx context.Context, id uuid.UUID, fields map[string]any) (*models.AlarmSubscription, error) {
+	m := models.AlarmSubscription{}
+	all := svcutils.GetAllDBTagsFromStruct(m)
+
+	// Deterministic column order for stable SQL (and testability).
+	names := make([]string, 0, len(fields))
+	for name := range fields {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	mods := []bob.Mod[*dialect.UpdateQuery]{
+		um.Table(m.TableName()),
+		um.Where(psql.Quote(m.PrimaryKey()).EQ(psql.Arg(id))),
+		um.Returning(all.Columns()...),
+	}
+	for _, name := range names {
+		if _, patchable := patchableAlarmSubscriptionFields[name]; !patchable {
+			return nil, fmt.Errorf("field %q is not patchable on an alarm subscription", name)
+		}
+		column, ok := all[name]
+		if !ok {
+			return nil, fmt.Errorf("unknown alarm subscription patch field %q", name)
+		}
+		// A nil value emits SET col = NULL; a concrete value emits SET col = ?.
+		mods = append(mods, um.SetCol(column).ToArg(fields[name]))
+	}
+
+	query := psql.Update(mods...)
+	sql, params, err := query.Build(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build alarm subscription patch query: %w", err)
+	}
+
+	return svcutils.ExecuteCollectExactlyOneRow[models.AlarmSubscription](ctx, ar.Db, sql, params)
 }
 
 // UpsertAlarmEventCaaSRecord insert and updating an AlarmEventRecord.

@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/google/uuid"
+
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	a "github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
@@ -52,6 +54,18 @@ func (s *SubscriptionStorageProvider) GetSubscriptions(ctx context.Context) ([]n
 
 	slog.InfoContext(ctx, "Found subscriptions to notify", slog.Int("count", len(subscriptions)))
 	return subscriptions, nil
+}
+
+// GetSubscription returns a single alarm subscription by id as a generic SubscriptionInfo.
+// The returned Filter is the effective filter (event_filter else filter) via the converter.
+// svcutils.ErrNotFound is preserved (wrapped with %w) so the notifier can detect deletion.
+func (s *SubscriptionStorageProvider) GetSubscription(ctx context.Context, id uuid.UUID) (*notifier.SubscriptionInfo, error) {
+	record, err := s.repository.GetAlarmSubscription(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get subscription %s: %w", id, err)
+	}
+
+	return models.ConvertAlertSubToNotificationSub(record), nil
 }
 
 func (s *SubscriptionStorageProvider) Matches(subscription *notifier.SubscriptionInfo, notification *notifier.Notification) bool {

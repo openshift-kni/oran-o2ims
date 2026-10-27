@@ -5,6 +5,7 @@
 //
 //	mockgen -source=alarms_repository_interface.go -destination=generated/mock_repo.generated.go -package=generated
 //
+
 // Package generated is a generated GoMock package.
 package generated
 
@@ -23,6 +24,7 @@ import (
 type MockAlarmRepositoryInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockAlarmRepositoryInterfaceMockRecorder
+	isgomock struct{}
 }
 
 // MockAlarmRepositoryInterfaceMockRecorder is the mock recorder for MockAlarmRepositoryInterface.
@@ -220,6 +222,21 @@ func (m *MockAlarmRepositoryInterface) PatchAlarmEventRecordACK(ctx context.Cont
 func (mr *MockAlarmRepositoryInterfaceMockRecorder) PatchAlarmEventRecordACK(ctx, id, record any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PatchAlarmEventRecordACK", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).PatchAlarmEventRecordACK), ctx, id, record)
+}
+
+// PatchAlarmSubscription mocks base method.
+func (m *MockAlarmRepositoryInterface) PatchAlarmSubscription(ctx context.Context, id uuid.UUID, fields map[string]any) (*models.AlarmSubscription, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PatchAlarmSubscription", ctx, id, fields)
+	ret0, _ := ret[0].(*models.AlarmSubscription)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PatchAlarmSubscription indicates an expected call of PatchAlarmSubscription.
+func (mr *MockAlarmRepositoryInterfaceMockRecorder) PatchAlarmSubscription(ctx, id, fields any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PatchAlarmSubscription", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).PatchAlarmSubscription), ctx, id, fields)
 }
 
 // ResolveStaleAlarmEventCaaSRecord mocks base method.

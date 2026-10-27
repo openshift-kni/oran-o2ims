@@ -16,6 +16,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	commonapi "github.com/openshift-kni/oran-o2ims/api/common"
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
 type stubClientProvider struct {
@@ -30,11 +31,23 @@ type stubSubscriptionProvider struct {
 	subscriptions []SubscriptionInfo
 	matchAll      bool
 	updated       []*SubscriptionInfo
-	mu            sync.Mutex
+	// getFunc, when set, backs GetSubscription (by id). When nil, GetSubscription
+	// returns svcutils.ErrNotFound.
+	getFunc func(id uuid.UUID) (*SubscriptionInfo, error)
+	mu      sync.Mutex
 }
 
 func (s *stubSubscriptionProvider) GetSubscriptions(_ context.Context) ([]SubscriptionInfo, error) {
 	return s.subscriptions, nil
+}
+
+func (s *stubSubscriptionProvider) GetSubscription(_ context.Context, id uuid.UUID) (*SubscriptionInfo, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.getFunc != nil {
+		return s.getFunc(id)
+	}
+	return nil, svcutils.ErrNotFound
 }
 
 func (s *stubSubscriptionProvider) Matches(_ *SubscriptionInfo, _ *Notification) bool {
@@ -163,6 +176,201 @@ var _ = Describe("handleSubscriptionEvent", func() {
 			},
 		})
 		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("updates an existing worker in place on an update event", func() {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		defer server.Close()
+
+		stub := &stubSubscriptionProvider{}
+		n := NewNotifier(stub, &stubNotificationProvider{}, &stubClientProvider{client: server.Client()})
+
+		subID := uuid.New()
+		ctx := context.Background()
+		Expect(n.handleSubscriptionEvent(ctx, &SubscriptionEvent{
+			Subscription: &SubscriptionInfo{SubscriptionID: subID, Callback: server.URL + "/old"},
+		})).ToNot(HaveOccurred())
+		Expect(n.workers).To(HaveKey(subID))
+
+		// The provider returns the latest persisted values on re-read.
+		newFilter := "CHANGE"
+		newConsumer := "consumer-xyz"
+		stub.getFunc = func(id uuid.UUID) (*SubscriptionInfo, error) {
+			return &SubscriptionInfo{
+				SubscriptionID:         id,
+				Callback:               server.URL + "/new",
+				Filter:                 &newFilter,
+				ConsumerSubscriptionID: &newConsumer,
+			}, nil
+		}
+
+		err := n.handleSubscriptionEvent(ctx, &SubscriptionEvent{
+			Updated:      true,
+			Subscription: &SubscriptionInfo{SubscriptionID: subID},
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(n.workers).To(HaveKey(subID))
+
+		worker := n.workers[subID]
+		worker.workMutex.Lock()
+		gotCallback := worker.subscription.Callback
+		gotFilter := worker.subscription.Filter
+		gotConsumer := worker.subscription.ConsumerSubscriptionID
+		worker.workMutex.Unlock()
+		Expect(gotCallback).To(Equal(server.URL + "/new"))
+		Expect(gotFilter).ToNot(BeNil())
+		Expect(*gotFilter).To(Equal(newFilter))
+		Expect(gotConsumer).ToNot(BeNil())
+		Expect(*gotConsumer).To(Equal(newConsumer))
+		worker.Shutdown()
+	})
+
+	It("tears down the worker when the subscription was deleted before the update applies", func() {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		defer server.Close()
+
+		stub := &stubSubscriptionProvider{}
+		n := NewNotifier(stub, &stubNotificationProvider{}, &stubClientProvider{client: server.Client()})
+
+		subID := uuid.New()
+		ctx := context.Background()
+		_ = n.handleSubscriptionEvent(ctx, &SubscriptionEvent{
+			Subscription: &SubscriptionInfo{SubscriptionID: subID, Callback: server.URL + "/cb"},
+		})
+		Expect(n.workers).To(HaveKey(subID))
+
+		// GetSubscription reports the subscription is gone -> worker is shut down and removed.
+		stub.getFunc = func(uuid.UUID) (*SubscriptionInfo, error) { return nil, svcutils.ErrNotFound }
+
+		err := n.handleSubscriptionEvent(ctx, &SubscriptionEvent{
+			Updated:      true,
+			Subscription: &SubscriptionInfo{SubscriptionID: subID},
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(n.workers).ToNot(HaveKey(subID))
+	})
+
+	It("defers an update event that arrives before the worker exists", func() {
+		n := NewNotifier(
+			&stubSubscriptionProvider{},
+			&stubNotificationProvider{},
+			&stubClientProvider{client: http.DefaultClient},
+		)
+
+		subID := uuid.New()
+		err := n.handleSubscriptionEvent(context.Background(), &SubscriptionEvent{
+			Updated:      true,
+			Subscription: &SubscriptionInfo{SubscriptionID: subID},
+		})
+		Expect(err).ToNot(HaveOccurred())
+		// The update is recorded as pending so the later creation event can apply it.
+		Expect(n.pendingUpdates).To(HaveKey(subID))
+		Expect(n.workers).ToNot(HaveKey(subID))
+	})
+
+	It("applies an update that arrived before the creation event", func() {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		defer server.Close()
+
+		stub := &stubSubscriptionProvider{}
+		n := NewNotifier(stub, &stubNotificationProvider{}, &stubClientProvider{client: server.Client()})
+
+		subID := uuid.New()
+		ctx := context.Background()
+
+		// The update event is processed before the creation event (a create/PATCH race).
+		Expect(n.handleSubscriptionEvent(ctx, &SubscriptionEvent{
+			Updated:      true,
+			Subscription: &SubscriptionInfo{SubscriptionID: subID},
+		})).ToNot(HaveOccurred())
+		Expect(n.workers).ToNot(HaveKey(subID))
+
+		// The PATCH persisted new values before the creation event is handled.
+		newCallback := server.URL + "/patched"
+		newFilter := "CHANGE"
+		stub.getFunc = func(id uuid.UUID) (*SubscriptionInfo, error) {
+			return &SubscriptionInfo{SubscriptionID: id, Callback: newCallback, Filter: &newFilter}, nil
+		}
+
+		// The creation event carries the stale creation-time snapshot...
+		Expect(n.handleSubscriptionEvent(ctx, &SubscriptionEvent{
+			Subscription: &SubscriptionInfo{SubscriptionID: subID, Callback: server.URL + "/original"},
+		})).ToNot(HaveOccurred())
+		Expect(n.workers).To(HaveKey(subID))
+		// ...and the deferred update is consumed.
+		Expect(n.pendingUpdates).ToNot(HaveKey(subID))
+
+		// The worker reflects the patched values, not the stale creation-time snapshot.
+		worker := n.workers[subID]
+		worker.workMutex.Lock()
+		gotCallback := worker.subscription.Callback
+		gotFilter := worker.subscription.Filter
+		worker.workMutex.Unlock()
+		Expect(gotCallback).To(Equal(newCallback))
+		Expect(gotFilter).ToNot(BeNil())
+		Expect(*gotFilter).To(Equal(newFilter))
+		worker.Shutdown()
+	})
+
+	It("retries a failed update re-read until the worker converges", func() {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		defer server.Close()
+
+		stub := &stubSubscriptionProvider{}
+		n := NewNotifier(stub, &stubNotificationProvider{}, &stubClientProvider{client: server.Client()})
+		n.subscriptionRefreshRetryDelay = 20 * time.Millisecond
+
+		subID := uuid.New()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		// Create the worker synchronously so we can hold a stable reference without racing
+		// the worker map once the notifier loop is running.
+		Expect(n.handleSubscriptionEvent(ctx, &SubscriptionEvent{
+			Subscription: &SubscriptionInfo{SubscriptionID: subID, Callback: server.URL + "/original"},
+		})).ToNot(HaveOccurred())
+		worker := n.workers[subID]
+
+		// The first re-read fails (transient DB error); subsequent re-reads succeed.
+		newCallback := server.URL + "/patched"
+		calls := 0
+		stub.getFunc = func(id uuid.UUID) (*SubscriptionInfo, error) {
+			calls++
+			if calls == 1 {
+				return nil, fmt.Errorf("transient db error")
+			}
+			return &SubscriptionInfo{SubscriptionID: id, Callback: newCallback}, nil
+		}
+
+		done := make(chan struct{})
+		go func() {
+			_ = n.Run(ctx)
+			close(done)
+		}()
+
+		n.SubscriptionEvent(ctx, &SubscriptionEvent{
+			Updated:      true,
+			Subscription: &SubscriptionInfo{SubscriptionID: subID},
+		})
+
+		// The first attempt fails and is retried; the worker eventually converges on the
+		// persisted callback once the re-read succeeds.
+		Eventually(func() string {
+			worker.workMutex.Lock()
+			defer worker.workMutex.Unlock()
+			return worker.subscription.Callback
+		}, 5*time.Second, 20*time.Millisecond).Should(Equal(newCallback))
+
+		cancel()
+		Eventually(done, 2*time.Second).Should(BeClosed())
 	})
 })
 
