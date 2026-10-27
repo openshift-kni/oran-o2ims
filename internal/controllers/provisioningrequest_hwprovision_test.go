@@ -1701,6 +1701,76 @@ var _ = Describe("hardwareConfigInProgress", func() {
 	})
 })
 
+var _ = Describe("getNodeAllocationRequestResponse read source", func() {
+	// Regression coverage for OCPBUGS-132825: the hardware-config in-flight gate reads
+	// the NAR right after createOrUpdateNodeAllocationRequest patches its spec. That read
+	// must bypass the informer cache (getNodeAllocationRequestResponseUncached), otherwise
+	// it can observe the pre-patch object and let downstream phases proceed while a
+	// configuration transaction is still in flight. These tests seed the cached and
+	// uncached readers with divergent NAR state to prove each accessor reads its own source.
+	var (
+		ctx          context.Context
+		crName       = "cluster-1"
+		narNS        = constants.DefaultNamespace
+		cr           *provisioningv1alpha1.ProvisioningRequest
+		cachedNAR    *hwmgmtv1alpha1.NodeAllocationRequest
+		uncachedNAR  *hwmgmtv1alpha1.NodeAllocationRequest
+		cachedClient client.Client
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		cr = &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: crName},
+		}
+		// Cached reader holds the stale, pre-patch NAR (transaction already observed).
+		cachedNAR = &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: crName, Namespace: narNS},
+			Spec:       hwmgmtv1alpha1.NodeAllocationRequestSpec{ConfigTransactionId: 2},
+			Status:     hwmgmtv1alpha1.NodeAllocationRequestStatus{ObservedConfigTransactionId: 2},
+		}
+		// Uncached reader holds the fresh, post-patch NAR (transaction still in flight).
+		uncachedNAR = &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: crName, Namespace: narNS},
+			Spec:       hwmgmtv1alpha1.NodeAllocationRequestSpec{ConfigTransactionId: 3},
+			Status:     hwmgmtv1alpha1.NodeAllocationRequestStatus{ObservedConfigTransactionId: 2},
+		}
+		cachedClient = fakeclient.GetFakeClientFromObjects([]client.Object{cachedNAR}...)
+	})
+
+	It("reads the uncached source for the in-flight gate and the cached source otherwise", func() {
+		task := &provisioningRequestReconcilerTask{
+			logger:          logger,
+			client:          cachedClient,
+			noncachedClient: fakeclient.GetFakeClientFromObjects([]client.Object{uncachedNAR}...),
+			object:          cr,
+		}
+
+		cached, exists, err := task.getNodeAllocationRequestResponse(ctx)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(exists).To(BeTrue())
+		Expect(cached.Spec.ConfigTransactionId).To(Equal(int64(2)))
+
+		uncached, exists, err := task.getNodeAllocationRequestResponseUncached(ctx)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(exists).To(BeTrue())
+		Expect(uncached.Spec.ConfigTransactionId).To(Equal(int64(3)))
+	})
+
+	It("falls back to the cached client when no uncached reader is configured", func() {
+		task := &provisioningRequestReconcilerTask{
+			logger: logger,
+			client: cachedClient,
+			object: cr,
+		}
+
+		uncached, exists, err := task.getNodeAllocationRequestResponseUncached(ctx)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(exists).To(BeTrue())
+		Expect(uncached.Spec.ConfigTransactionId).To(Equal(int64(2)))
+	})
+})
+
 var _ = Describe("applyNodeConfiguration", func() {
 	var (
 		ctx         context.Context
