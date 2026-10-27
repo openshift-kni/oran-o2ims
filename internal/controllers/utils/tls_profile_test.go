@@ -385,6 +385,15 @@ var _ = Describe("TLS Profile", func() {
 		It("should return empty string for nil input", func() {
 			Expect(TLSGroupsToPostgres(nil)).To(BeEmpty())
 		})
+
+		It("should filter out unrecognized groups", func() {
+			groups := []configv1.TLSGroup{
+				configv1.TLSGroupX25519,
+				"BOGUS_GROUP_THAT_DOES_NOT_EXIST",
+				configv1.TLSGroupSecP256r1,
+			}
+			Expect(TLSGroupsToPostgres(groups)).To(Equal("X25519:prime256v1"))
+		})
 	})
 
 	Describe("TLSProfileHash with Groups", func() {

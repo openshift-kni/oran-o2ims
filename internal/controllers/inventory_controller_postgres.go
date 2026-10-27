@@ -344,9 +344,13 @@ func (t *reconcilerTask) createDatabase(ctx context.Context) (err error) {
 		}
 	}
 	pgConf += fmt.Sprintf("\nssl_tls13_ciphers = '%s'", ctlrutils.PostgresTLS13Ciphers)
+	// When the profile has no groups (e.g., a Custom profile that omits them),
+	// ssl_groups is not set and PostgreSQL uses its compiled-in defaults.
 	if t.tlsGroups != "" {
 		pgGroups := ctlrutils.TLSGroupsToPostgres(ctlrutils.ParseTLSGroups(t.tlsGroups))
-		pgConf += fmt.Sprintf("\nssl_groups = '%s'", pgGroups)
+		if pgGroups != "" {
+			pgConf += fmt.Sprintf("\nssl_groups = '%s'", pgGroups)
+		}
 	}
 	err = ctlrutils.CreateConfigMapFromString(ctx, t.logger, t.client, t.object,
 		t.object.Namespace, configVolumeName, postgres.ConfigFileName, pgConf)

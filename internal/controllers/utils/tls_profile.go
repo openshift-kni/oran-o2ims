@@ -18,6 +18,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	tlspkg "github.com/openshift/controller-runtime-common/pkg/tls"
+	libgocrypto "github.com/openshift/library-go/pkg/crypto"
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -252,11 +253,16 @@ func ParseTLSGroups(s string) []configv1.TLSGroup {
 }
 
 // TLSGroupsToPostgres converts the TLS profile Groups to the colon-separated
-// format expected by PostgreSQL's ssl_groups setting. The only name difference
+// format expected by PostgreSQL's ssl_groups setting. Groups not recognized by
+// library-go are filtered out to prevent PostgreSQL from rejecting the entire
+// ssl_groups setting at startup. The only name difference for recognized groups
 // is secp256r1 (IANA/Go) → prime256v1 (OpenSSL).
 func TLSGroupsToPostgres(groups []configv1.TLSGroup) string {
 	pgNames := make([]string, 0, len(groups))
 	for _, g := range groups {
+		if _, ok := libgocrypto.TLSGroupToCurveID(g); !ok {
+			continue
+		}
 		name := string(g)
 		if name == string(configv1.TLSGroupSecP256r1) {
 			name = "prime256v1"
