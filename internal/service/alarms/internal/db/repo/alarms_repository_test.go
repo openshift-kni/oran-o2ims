@@ -571,6 +571,56 @@ var _ = Describe("AlarmsRepository", func() {
 			Expect(result.ConsumerSubscriptionID).To(Equal(subscription.ConsumerSubscriptionID))
 			Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
 		})
+
+		It("includes event_filter in the insert when set", func() {
+			// When eventFilter has a value, event_filter and its enum arg appear in the
+			// generated INSERT (args are ordered by sorted struct field name: Callback,
+			// ConsumerSubscriptionID, EventCursor, EventFilter, Filter).
+			f := api.AlarmSubscriptionInfoFilterNEW
+			ef := api.AlarmSubscriptionInfoEventFilterCHANGE
+			subscription := models.AlarmSubscription{
+				Callback:    "http://test.com/callback",
+				Filter:      &f,
+				EventFilter: &ef,
+				EventCursor: int64(0),
+			}
+
+			// Spot-check that event_filter is present in the INSERT column list so a dropped
+			// event_filter column would fail the match rather than slip through a table-name prefix.
+			mock.ExpectQuery(`(?s)INSERT INTO alarm_subscription_info.*event_filter`).
+				WithArgs(
+					subscription.Callback, subscription.EventCursor, subscription.EventFilter, subscription.Filter,
+				).
+				WillReturnRows(pgxmock.NewRows([]string{"updated_at", "subscription_id", "filter", "event_filter", "callback", "event_cursor", "created_at"}).
+					AddRow(time.Now(), uuid.New(), &f, &ef, subscription.Callback, int64(0), time.Now()))
+
+			result, err := repo.CreateAlarmSubscription(ctx, subscription)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.EventFilter).ToNot(BeNil())
+			Expect(*result.EventFilter).To(Equal(ef))
+			Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
+		})
+
+		It("omits event_filter from the insert when nil", func() {
+			// An omitted/null eventFilter yields a nil model pointer, which GetColumnsAndValues
+			// skips, so event_filter is absent from the INSERT and the column defaults to SQL NULL.
+			subscription := models.AlarmSubscription{
+				Callback:    "http://test.com/callback2",
+				EventCursor: int64(0),
+			}
+
+			mock.ExpectQuery(fmt.Sprintf("INSERT INTO %s", models.AlarmSubscription{}.TableName())).
+				WithArgs(
+					subscription.Callback, subscription.EventCursor,
+				).
+				WillReturnRows(pgxmock.NewRows([]string{"updated_at", "subscription_id", "event_filter", "callback", "event_cursor", "created_at"}).
+					AddRow(time.Now(), uuid.New(), nil, subscription.Callback, int64(0), time.Now()))
+
+			result, err := repo.CreateAlarmSubscription(ctx, subscription)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.EventFilter).To(BeNil())
+			Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
+		})
 	})
 
 	Describe("DeleteResolvedAlarmEventsBefore", func() {

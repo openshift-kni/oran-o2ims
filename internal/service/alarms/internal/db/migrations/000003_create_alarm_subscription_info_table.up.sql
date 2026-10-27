@@ -8,6 +8,9 @@ CREATE TABLE IF NOT EXISTS alarm_subscription_info (
     -- filter set nullable as false, but description says that if not set, all alarms are included
     -- setting as NULL based on description and model definition in O-RAN.WG6.O2IMS-INTERFACE-R004-v07.00
     filter VARCHAR(20) NULL, -- Can be ['NEW', 'CHANGE', 'CLEAR', 'ACKNOWLEDGE'], NULL means all
+    -- event_filter is the typed equivalent of filter. When non-NULL it takes precedence over filter;
+    -- when NULL the effective filter falls back to filter. Stored independently (dual-column) through PR 2.
+    event_filter VARCHAR(20) NULL, -- Can be ['NEW', 'CHANGE', 'CLEAR', 'ACKNOWLEDGE'], NULL means fall back to filter
     callback TEXT NOT NULL, -- URL or endpoint for sending notifications
 
     -- Internal
@@ -17,6 +20,7 @@ CREATE TABLE IF NOT EXISTS alarm_subscription_info (
 
     -- check does not fail with NULL
     CONSTRAINT chk_filter CHECK (filter IN ('NEW', 'CHANGE', 'CLEAR', 'ACKNOWLEDGE')),
+    CONSTRAINT chk_event_filter CHECK (event_filter IN ('NEW', 'CHANGE', 'CLEAR', 'ACKNOWLEDGE')),
     CONSTRAINT unique_callback UNIQUE (callback)
 );
 

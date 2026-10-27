@@ -11,6 +11,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/oapi-codegen/nullable"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
@@ -114,16 +115,32 @@ func ConvertSubscriptionModelToApi(subscriptionModel AlarmSubscription) api.Alar
 		apiModel.Filter = subscriptionModel.Filter
 	}
 
+	// eventFilter is M/0..1: always serialize the key, as a value or explicit null.
+	if subscriptionModel.EventFilter != nil {
+		apiModel.EventFilter = nullable.NewNullableWithValue(*subscriptionModel.EventFilter)
+	} else {
+		apiModel.EventFilter = nullable.NewNullNullable[api.AlarmSubscriptionInfoEventFilter]()
+	}
+
 	return apiModel
 }
 
 // ConvertSubscriptionAPIToModel converts an AlarmSubscription API model to a DB model
 func ConvertSubscriptionAPIToModel(subscriptionAPI *api.AlarmSubscriptionInfo) AlarmSubscription {
-	return AlarmSubscription{
+	model := AlarmSubscription{
 		Callback:               subscriptionAPI.Callback,
 		ConsumerSubscriptionID: subscriptionAPI.ConsumerSubscriptionId,
 		Filter:                 subscriptionAPI.Filter,
 	}
+
+	// Only persist event_filter when a concrete value is provided; an omitted or
+	// explicit-null eventFilter leaves the column NULL (never call Get() unguarded).
+	if subscriptionAPI.EventFilter.IsSpecified() && !subscriptionAPI.EventFilter.IsNull() {
+		v, _ := subscriptionAPI.EventFilter.Get()
+		model.EventFilter = &v
+	}
+
+	return model
 }
 
 // AlarmFilterToEventType map text to int e.g NEW -> 0
@@ -151,7 +168,13 @@ func ConvertAlertSubToNotificationSub(as *AlarmSubscription) *notifier.Subscript
 		EventCursor:            int(as.EventCursor),
 	}
 
-	if as.Filter != nil {
+	// Effective filter: event_filter takes precedence over filter; if neither is set
+	// the subscription matches all events (C3). The notifier SubscriptionInfo exposes a
+	// single Filter field, so the precedence is resolved here rather than in Matches().
+	switch {
+	case as.EventFilter != nil:
+		info.Filter = (*string)(as.EventFilter)
+	case as.Filter != nil:
 		info.Filter = (*string)(as.Filter)
 	}
 	return &info

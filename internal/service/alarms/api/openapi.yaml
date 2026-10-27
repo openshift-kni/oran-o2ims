@@ -836,6 +836,16 @@ components:
             It can be filtered by criteria based on the type of notification of fields of the
             AlarmEventRecord.
           example: NEW
+        eventFilter:
+          type: string
+          enum: [ NEW, CHANGE, CLEAR, ACKNOWLEDGE ]
+          nullable: true
+          description: |
+            Typed criteria for events which will be filtered by the subscription notification service.
+            It carries the same exclusion semantics as filter (the notification event type to exclude).
+            When set it takes precedence over filter; when null or absent the service falls back to filter.
+            A null value explicitly clears a previously set eventFilter.
+          example: NEW
         callback:
           type: string
           format: uri
