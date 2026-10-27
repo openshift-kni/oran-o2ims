@@ -33,8 +33,11 @@ type Notification struct {
 // SubscriptionInfo defines a generic subscription object.  The intent is to abstract away the differences between the
 // alarm and resource server subscription models.
 type SubscriptionInfo struct {
-	SubscriptionID         uuid.UUID
-	ConsumerSubscriptionID *uuid.UUID
+	SubscriptionID uuid.UUID
+	// ConsumerSubscriptionID is the consumer-provided subscription identifier.
+	// It is a free-form string (not restricted to UUID) so that it can carry
+	// non-UUID values from all subscription sources (M-10).
+	ConsumerSubscriptionID *string
 	Callback               string
 	Filter                 *string
 	EventCursor            int

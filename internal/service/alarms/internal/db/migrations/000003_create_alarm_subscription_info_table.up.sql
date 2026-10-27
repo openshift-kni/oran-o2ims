@@ -3,8 +3,8 @@
 CREATE TABLE IF NOT EXISTS alarm_subscription_info (
     -- O-RAN
     subscription_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- Unique identifier for each subscription
-    -- consumerSubscriptionID does not explicitly set UUID in format (likely someone forgot to add it), however, inventory subscription does, so we will use UUID
-    consumer_subscription_id UUID NULL, -- Optional ID for the consumer's subscription identifier
+    -- consumerSubscriptionID does not explicitly set UUID in format, so it is stored as free-form text (not restricted to UUID values)
+    consumer_subscription_id TEXT NULL, -- Optional ID for the consumer's subscription identifier
     -- filter set nullable as false, but description says that if not set, all alarms are included
     -- setting as NULL based on description and model definition in O-RAN.WG6.O2IMS-INTERFACE-R004-v07.00
     filter VARCHAR(20) NULL, -- Can be ['NEW', 'CHANGE', 'CLEAR', 'ACKNOWLEDGE'], NULL means all
@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS alarm_subscription_info (
     -- Internal
     event_cursor BIGINT NOT NULL DEFAULT 0, -- Tracks the latest event for the subscriber. This used with alarm_event_record.alarm_sequence_number
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, -- Record creation timestamp
-    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP -- Record last update timestamp
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, -- Record last update timestamp
 
     -- check does not fail with NULL
     CONSTRAINT chk_filter CHECK (filter IN ('NEW', 'CHANGE', 'CLEAR', 'ACKNOWLEDGE')),

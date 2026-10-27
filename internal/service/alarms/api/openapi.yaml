@@ -825,7 +825,6 @@ components:
           example: 16d5fc54-cee0-4532-9826-2369f8240e1b
         consumerSubscriptionId:
           type: string
-          format: uuid
           description: Identifier for the consumer of events sent due to the Subscription.
           example: 16d5fc54-cee0-4532-9826-2369f8240e1b
         filter:
@@ -972,7 +971,6 @@ components:
           example: da4698ba-c8a7-429d-ae16-484f15f282c5
         consumerSubscriptionId:
           type: string
-          format: uuid
           description: The value provided by the consumer in the subscription.
           example: 3ddc1128-a14d-46de-80da-6414b192ce9f
         notificationEventType:

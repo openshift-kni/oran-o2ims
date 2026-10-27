@@ -227,7 +227,7 @@ var _ = Describe("AlarmsRepository", func() {
 		When("subscription exists", func() {
 			It("retrieves a specific alarm subscription", func() {
 				id := uuid.New()
-				conId := uuid.New()
+				conId := uuid.NewString()
 				callback := "http://example.com/callback"
 
 				mock.ExpectQuery(fmt.Sprintf("SELECT (.+) FROM %s WHERE", models.AlarmSubscription{}.TableName())).
@@ -510,7 +510,7 @@ var _ = Describe("AlarmsRepository", func() {
 		When("records exist", func() {
 			It("returns all alarms subscription", func() {
 				id1, id2 := uuid.New(), uuid.New()
-				conID1, conID2 := uuid.New(), uuid.New()
+				conID1, conID2 := uuid.NewString(), uuid.NewString()
 				f := api.AlarmSubscriptionInfoFilterNEW
 				mock.ExpectQuery(fmt.Sprintf("SELECT (.+) FROM %s WHERE \\(1=1\\)", models.AlarmSubscription{}.TableName())).
 					WillReturnRows(
@@ -551,7 +551,7 @@ var _ = Describe("AlarmsRepository", func() {
 	Describe("CreateAlarmSubscription", func() {
 		It("creates new subscription successfully", func() {
 			f := api.AlarmSubscriptionInfoFilterACKNOWLEDGE
-			id := uuid.New()
+			id := uuid.NewString()
 			subscription := models.AlarmSubscription{
 				ConsumerSubscriptionID: &id,
 				Callback:               "http://test.com/callback",

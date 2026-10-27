@@ -125,7 +125,7 @@ func (a *AlarmsServer) GetSubscriptions(ctx context.Context, request api.GetSubs
 // CreateSubscription handles an API request to create an Alarm Subscription
 func (a *AlarmsServer) CreateSubscription(ctx context.Context, request api.CreateSubscriptionRequestObject) (api.CreateSubscriptionResponseObject, error) {
 	if request.Body.ConsumerSubscriptionId != nil {
-		ctx = logging.AppendCtx(ctx, slog.String("consumerSubscriptionId", request.Body.ConsumerSubscriptionId.String()))
+		ctx = logging.AppendCtx(ctx, slog.String("consumerSubscriptionId", *request.Body.ConsumerSubscriptionId))
 	}
 
 	// Block API if GlobalCloudID is not set

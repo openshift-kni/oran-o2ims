@@ -31,7 +31,7 @@ var _ = Describe("NotificationTransformer", func() {
 	})
 
 	It("returns error when payload is not InventoryChangeNotification", func() {
-		id := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+		id := "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 		sub := &notifier.SubscriptionInfo{ConsumerSubscriptionID: &id}
 		n := &notifier.Notification{Payload: "wrong"}
 		_, err := t.Transform(sub, n)
@@ -39,9 +39,10 @@ var _ = Describe("NotificationTransformer", func() {
 		Expect(err.Error()).To(ContainSubstring("not of type InventoryChangeNotification"))
 	})
 
-	It("clones payload and sets consumer subscription id", func() {
-		consID := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
-		sub := &notifier.SubscriptionInfo{ConsumerSubscriptionID: &consID}
+	It("clones payload and parses a UUID consumer subscription id back to a UUID", func() {
+		consIDStr := "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+		consID := uuid.MustParse(consIDStr)
+		sub := &notifier.SubscriptionInfo{SubscriptionID: uuid.New(), ConsumerSubscriptionID: &consIDStr}
 		nid := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
 		payload := generated.InventoryChangeNotification{
 			NotificationEventType: 0,
@@ -56,6 +57,31 @@ var _ = Describe("NotificationTransformer", func() {
 		Expect(ok).To(BeTrue())
 		Expect(typed.ConsumerSubscriptionId).ToNot(BeNil())
 		Expect(*typed.ConsumerSubscriptionId).To(Equal(consID))
+		Expect(typed.NotificationId).To(Equal(nid))
+	})
+
+	It("delivers the notification without consumer subscription id when it is not a valid UUID", func() {
+		// consumerSubscriptionId is optional; a non-UUID value must not drop the
+		// notification. The notification is still delivered, but with a nil id.
+		//
+		// TODO: Transform emits a WARN when consumerSubscriptionId fails to parse as a
+		// UUID. Asserting that log line is deferred until a shared slog-capture test
+		// helper exists; swapping slog.Default() here would race with parallel specs.
+		invalid := "not-a-uuid"
+		sub := &notifier.SubscriptionInfo{SubscriptionID: uuid.New(), ConsumerSubscriptionID: &invalid}
+		nid := uuid.MustParse("dddddddd-dddd-dddd-dddd-dddddddddddd")
+		payload := generated.InventoryChangeNotification{
+			NotificationEventType: 0,
+			NotificationId:        nid,
+		}
+		n := &notifier.Notification{Payload: payload}
+
+		out, err := t.Transform(sub, n)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(out).ToNot(BeIdenticalTo(n))
+		typed, ok := out.Payload.(generated.InventoryChangeNotification)
+		Expect(ok).To(BeTrue())
+		Expect(typed.ConsumerSubscriptionId).To(BeNil())
 		Expect(typed.NotificationId).To(Equal(nid))
 	})
 })
