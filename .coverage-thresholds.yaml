@@ -23,8 +23,10 @@ packages:
   internal/search: 38
   internal/service/alarms/api: 2
   internal/service/alarms/internal/alertmanager: 42
+  internal/service/alarms/internal/db/models: 50
   internal/service/alarms/internal/db/repo: 40
   internal/service/alarms/internal/infrastructure: 30
+  internal/service/alarms/internal/notifier_provider: 39
   internal/service/alarms/internal/serviceconfig: 60
   internal/service/artifacts/api: 10
   internal/service/cluster/api: 11
@@ -38,6 +40,7 @@ packages:
   internal/service/common/metrics: 75
   internal/service/common/db: 1
   internal/service/common/notifier: 71
+  internal/service/common/repo: 5
   internal/service/common/utils: 12
   internal/service/provisioning/api: 66
   internal/service/resources/api: 87
