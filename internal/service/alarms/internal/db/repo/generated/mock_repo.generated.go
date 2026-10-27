@@ -5,7 +5,6 @@
 //
 //	mockgen -source=alarms_repository_interface.go -destination=generated/mock_repo.generated.go -package=generated
 //
-
 // Package generated is a generated GoMock package.
 package generated
 
@@ -24,7 +23,6 @@ import (
 type MockAlarmRepositoryInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockAlarmRepositoryInterfaceMockRecorder
-	isgomock struct{}
 }
 
 // MockAlarmRepositoryInterfaceMockRecorder is the mock recorder for MockAlarmRepositoryInterface.
