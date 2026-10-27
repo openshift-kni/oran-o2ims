@@ -288,12 +288,11 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestStatus(
 	var timedOutOrFailed bool
 	var err error
 
-	// Single gate on the hardware manager catching up to the scheduled configuration
-	// transaction. When a Day-2 configuration is scheduled (Spec.ConfigTransactionId
-	// bumped) but the hardware manager has not yet observed it
-	// (ObservedConfigTransactionId != Spec.ConfigTransactionId), report the configuration
-	// as not-yet-complete (status=false) and requeue. This is the source of truth for
-	// "is a hardware configuration transaction still in flight", covering two windows:
+	// Single gate on the hardware manager catching up to the scheduled configuration.
+	// When a Day-2 configuration is scheduled but the hardware manager has not yet
+	// observed it, report the configuration as not-yet-complete (status=false) and
+	// requeue. This is the source of truth for "is a hardware configuration still in
+	// flight", covering two windows:
 	//
 	//   - The NAR still carries a Configured condition from a previous attempt (Failed,
 	//     TimedOut, or a prior True) that must not be consumed before the hardware manager
@@ -304,22 +303,33 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestStatus(
 	//     the downstream gate blocking, so the upgrade phase does not create the IBGU while
 	//     the firmware flash power-cycles the node and kills IBU Prep (OCPBUGS-132825).
 	//
-	// The comparison is the NAR's own Spec.ConfigTransactionId vs ObservedConfigTransactionId,
-	// not the ProvisioningRequest generation. ConfigTransactionId is seeded from the
-	// generation but is incremented independently on swap scale-in (see
-	// createOrUpdateNodeAllocationRequest), so it can diverge; the spec-vs-observed
-	// comparison is what reflects whether the hardware manager has caught up.
+	// Two independent "has the hardware manager caught up" signals are checked, both on
+	// the NAR's own status (not the ProvisioningRequest generation):
 	//
-	// This depends on the hardware manager acknowledging the baseline ConfigTransactionId
-	// when it first creates the NAR (handleNewNodeAllocationRequestCreate ->
-	// UpdateNodeAllocationRequestObservedStatus). Without that Day-0 ack, the seeded
-	// baseline would read as perpetually unobserved and deadlock cluster installation.
-	if condition == hwmgmtv1alpha1.Configured &&
-		nodeAllocationRequestResponse.Spec.ConfigTransactionId != 0 &&
-		nodeAllocationRequestResponse.Status.ObservedConfigTransactionId != nodeAllocationRequestResponse.Spec.ConfigTransactionId {
-		t.logger.InfoContext(ctx, "Hardware manager has not observed the scheduled config transaction",
+	//   - Spec.ConfigTransactionId vs Status.ObservedConfigTransactionId. ConfigTransactionId
+	//     is seeded from the generation but incremented independently on swap scale-in (see
+	//     createOrUpdateNodeAllocationRequest), so it can diverge.
+	//   - ObjectMeta.Generation vs Status.ObservedGeneration. Because ConfigTransactionId is
+	//     seeded from the PR generation yet also bumped independently on swap, a swap can leave
+	//     Spec.ConfigTransactionId at a value a later generation re-renders to the same number
+	//     (e.g. swap bumps 1->2 and is observed, then a generation-2 HW-profile render sets it
+	//     back to 2). The transaction check alone then sees spec==observed and passes while the
+	//     new generation is still unprocessed. The generation comparison closes that gap.
+	//
+	// Both depend on the hardware manager acknowledging the baseline generation and
+	// ConfigTransactionId when it first creates the NAR (handleNewNodeAllocationRequestCreate ->
+	// UpdateNodeAllocationRequestObservedStatus) and on every terminal Configured write
+	// (UpdateNodeAllocationRequestStatusCondition). Without those acks the seeded baseline
+	// would read as perpetually unobserved and deadlock cluster installation.
+	transactionInFlight := nodeAllocationRequestResponse.Spec.ConfigTransactionId != 0 &&
+		nodeAllocationRequestResponse.Status.ObservedConfigTransactionId != nodeAllocationRequestResponse.Spec.ConfigTransactionId
+	generationUnobserved := nodeAllocationRequestResponse.Status.ObservedGeneration != nodeAllocationRequestResponse.ObjectMeta.Generation
+	if condition == hwmgmtv1alpha1.Configured && (transactionInFlight || generationUnobserved) {
+		t.logger.InfoContext(ctx, "Hardware manager has not observed the scheduled configuration",
 			slog.Int64("specTransaction", nodeAllocationRequestResponse.Spec.ConfigTransactionId),
-			slog.Int64("observedTransaction", nodeAllocationRequestResponse.Status.ObservedConfigTransactionId))
+			slog.Int64("observedTransaction", nodeAllocationRequestResponse.Status.ObservedConfigTransactionId),
+			slog.Int64("generation", nodeAllocationRequestResponse.ObjectMeta.Generation),
+			slog.Int64("observedGeneration", nodeAllocationRequestResponse.Status.ObservedGeneration))
 		return false, false, nil
 	}
 
