@@ -1642,6 +1642,38 @@ var _ = Describe("waitForHardwareData", func() {
 		Expect(timedOutOrFailed).To(BeFalse())
 		Expect(hardwareConfigInProgress(configured)).To(BeFalse())
 	})
+
+	It("gates downstream phases when the generation is unobserved even if the transaction id collides", func() {
+		// Collision case: a swap scale-in bumps ConfigTransactionId (e.g. 1->2) and the
+		// hardware manager observes it (ObservedConfigTransactionId==2). A later Day-2
+		// HW-profile change bumps the generation and re-renders ConfigTransactionId from the
+		// PR generation back to the same value (2), so Spec.ConfigTransactionId ==
+		// ObservedConfigTransactionId and the transaction check alone would pass. The
+		// generation comparison (Generation != ObservedGeneration) must still block so the
+		// upgrade phase does not start IBU Prep while the firmware change is unprocessed
+		// (OCPBUGS-132825).
+		collisionMock := &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{Generation: 3},
+			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+				ConfigTransactionId: 2,
+			},
+			Status: hwmgmtv1alpha1.NodeAllocationRequestStatus{
+				Conditions: []metav1.Condition{
+					{Type: "Provisioned", Status: metav1.ConditionTrue, Reason: "Completed", Message: "Hardware provisioned", LastTransitionTime: metav1.Now()},
+					{Type: "Configured", Status: metav1.ConditionTrue, Reason: "ConfigApplied", Message: "Previous config applied", LastTransitionTime: metav1.Now()},
+				},
+				ObservedConfigTransactionId: 2,
+				ObservedGeneration:          2,
+			},
+		}
+
+		configured, timedOutOrFailed, err := task.checkNodeAllocationRequestConfigStatus(ctx, collisionMock)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(configured).ToNot(BeNil())
+		Expect(*configured).To(BeFalse())
+		Expect(timedOutOrFailed).To(BeFalse())
+		Expect(hardwareConfigInProgress(configured)).To(BeTrue())
+	})
 })
 
 var _ = Describe("hardwareConfigInProgress", func() {
