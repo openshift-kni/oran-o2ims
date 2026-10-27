@@ -281,7 +281,7 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGeneration(ctx context.
 	}
 	status := details.SeedGenerationStatus
 	deadline := status.StartedAt.Add(time.Duration(status.TimeoutSeconds) * time.Second)
-	if !time.Now().Before(deadline) {
+	if !t.seedGenerationISOCurrentTime().Before(deadline) {
 		message := fmt.Sprintf("Seed generation timed out after %s", time.Duration(status.TimeoutSeconds)*time.Second)
 		if condition := seedGenerationCondition(t.object); condition != nil && condition.Message != "" {
 			message += ": " + condition.Message

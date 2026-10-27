@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
@@ -172,6 +173,7 @@ func TestSeedGenerationISODiagnosticsTransientErrorsPreserveBuildResources(t *te
 					persisted := &provisioningv1alpha1.ProvisioningRequest{}
 					g.Expect(task.client.Get(ctx, client.ObjectKeyFromObject(task.object), persisted)).To(Succeed())
 					restarted := seedTestTask(persisted, task.client)
+					restarted.seedGenerationISONow = task.seedGenerationISONow
 					var err error
 					if timedOut {
 						_, err = restarted.failSeedGenerationISOTimeout(ctx, "Live ISO build timed out")
@@ -207,6 +209,116 @@ func TestSeedGenerationISODiagnosticsTransientErrorsPreserveBuildResources(t *te
 			})
 		}
 	}
+}
+
+func TestSeedGenerationISODiagnosticsRetriesStopAtRunDeadline(t *testing.T) {
+	for _, operation := range []string{"get", "create"} {
+		for _, expiry := range []struct {
+			name   string
+			offset time.Duration
+		}{
+			{name: "at deadline"},
+			{name: "after deadline", offset: time.Second},
+		} {
+			t.Run(operation+"/"+expiry.name, func(t *testing.T) {
+				g, ctx := NewWithT(t), context.Background()
+				task, _, job, pod := seedGenerationISOFailureFixture(t)
+				g.Expect(job.Status.Conditions).To(BeEmpty(), "the retry bound must not require a Job terminal condition")
+				snapshot, err := task.loadSeedGenerationInputSnapshot(ctx)
+				g.Expect(err).ToNot(HaveOccurred())
+				status := task.object.Status.Extensions.ClusterDetails.SeedGenerationStatus
+				deadline := status.StartedAt.Add(time.Duration(status.TimeoutSeconds) * time.Second)
+				diagnosticsName := seedGenerationISODiagnosticsName(task.object)
+				attempts, deletes := 0, 0
+				task.client = interceptor.NewClient(task.client.(client.WithWatch), interceptor.Funcs{
+					Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, object client.Object, opts ...client.GetOption) error {
+						if _, isConfig := object.(*corev1.ConfigMap); isConfig && key.Name == diagnosticsName && operation == "get" {
+							attempts++
+							return apierrors.NewServiceUnavailable("persistent diagnostics API failure")
+						}
+						return c.Get(ctx, key, object, opts...)
+					},
+					Create: func(ctx context.Context, c client.WithWatch, object client.Object, opts ...client.CreateOption) error {
+						if _, isConfig := object.(*corev1.ConfigMap); isConfig && object.GetName() == diagnosticsName && operation == "create" {
+							attempts++
+							return apierrors.NewInternalError(errors.New("diagnostics admission webhook unavailable"))
+						}
+						return c.Create(ctx, object, opts...)
+					},
+					Delete: func(ctx context.Context, c client.WithWatch, object client.Object, opts ...client.DeleteOption) error {
+						deletes++
+						persisted := &provisioningv1alpha1.ProvisioningRequest{}
+						g.Expect(c.Get(ctx, client.ObjectKeyFromObject(task.object), persisted)).To(Succeed())
+						g.Expect(seedGenerationCondition(persisted).Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.TimedOut)),
+							"the timeout must be persisted before cleanup")
+						return c.Delete(ctx, object, opts...)
+					},
+				})
+				for _, offset := range []time.Duration{-2 * time.Second, -time.Second, expiry.offset} {
+					persisted := &provisioningv1alpha1.ProvisioningRequest{}
+					g.Expect(task.client.Get(ctx, client.ObjectKeyFromObject(task.object), persisted)).To(Succeed())
+					restarted := seedTestTask(persisted, task.client)
+					restarted.seedGenerationISONow = func() time.Time { return deadline.Add(offset) }
+					_, err := restarted.reconcileSeedGeneration(ctx)
+					g.Expect(task.client.Get(ctx, client.ObjectKeyFromObject(task.object), persisted)).To(Succeed())
+					if offset < 0 {
+						g.Expect(err).To(MatchError(ContainSubstring("failed to retain redacted live ISO diagnostics")))
+						g.Expect(seedGenerationTerminal(persisted)).To(BeFalse())
+						g.Expect(deletes).To(BeZero())
+						g.Expect(task.client.Get(ctx, client.ObjectKeyFromObject(job), &batchv1.Job{})).To(Succeed())
+						g.Expect(task.client.Get(ctx, client.ObjectKeyFromObject(pod), &corev1.Pod{})).To(Succeed())
+						g.Expect(task.client.Get(ctx, client.ObjectKeyFromObject(snapshot.ConfigMap), &corev1.ConfigMap{})).To(Succeed())
+						for _, secret := range snapshot.Secrets {
+							g.Expect(task.client.Get(ctx, client.ObjectKeyFromObject(secret), &corev1.Secret{})).To(Succeed())
+						}
+						continue
+					}
+					g.Expect(err).ToNot(HaveOccurred())
+					g.Expect(seedGenerationCondition(persisted).Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.TimedOut)))
+					g.Expect(seedGenerationCondition(persisted).Message).To(ContainSubstring("redacted build logs could not be retained"))
+					g.Expect(persisted.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StateFailed))
+					g.Expect(persisted.Status.Extensions.ClusterDetails.SeedGenerationStatus.ISOFailureDiagnosticsRef).To(BeNil())
+					g.Expect(deletes).To(BeNumerically(">", 0))
+					g.Expect(apierrors.IsNotFound(task.client.Get(ctx, client.ObjectKeyFromObject(job), &batchv1.Job{}))).To(BeTrue())
+					g.Expect(apierrors.IsNotFound(task.client.Get(ctx, client.ObjectKeyFromObject(pod), &corev1.Pod{}))).To(BeTrue())
+				}
+				g.Expect(attempts).To(Equal(3), "retention is attempted once more at expiry")
+				for range 4 {
+					persisted := &provisioningv1alpha1.ProvisioningRequest{}
+					g.Expect(task.client.Get(ctx, client.ObjectKeyFromObject(task.object), persisted)).To(Succeed())
+					_, err := seedTestTask(persisted, task.client).reconcileSeedGeneration(ctx)
+					g.Expect(err).ToNot(HaveOccurred())
+				}
+				g.Expect(attempts).To(Equal(3), "terminal cleanup must not retry diagnostics")
+				g.Expect(apierrors.IsNotFound(task.client.Get(ctx, client.ObjectKeyFromObject(snapshot.ConfigMap), &corev1.ConfigMap{}))).To(BeTrue())
+				for _, secret := range snapshot.Secrets {
+					g.Expect(apierrors.IsNotFound(task.client.Get(ctx, client.ObjectKeyFromObject(secret), &corev1.Secret{}))).To(BeTrue())
+				}
+				g.Expect(apierrors.IsNotFound(task.client.Get(ctx, client.ObjectKey{
+					Name: seedGenerationISOPVCName(task.object), Namespace: job.Namespace,
+				}, &corev1.PersistentVolumeClaim{}))).To(BeTrue())
+			})
+		}
+	}
+}
+
+func TestSeedGenerationISODiagnosticsRetainedAtRunDeadline(t *testing.T) {
+	g, ctx := NewWithT(t), context.Background()
+	task, _, _, _ := seedGenerationISOFailureFixture(t)
+	status := task.object.Status.Extensions.ClusterDetails.SeedGenerationStatus
+	deadline := status.StartedAt.Add(time.Duration(status.TimeoutSeconds) * time.Second)
+	task.seedGenerationISONow = func() time.Time { return deadline }
+	_, err := task.reconcileSeedGeneration(ctx)
+	g.Expect(err).ToNot(HaveOccurred())
+	persisted := &provisioningv1alpha1.ProvisioningRequest{}
+	g.Expect(task.client.Get(ctx, client.ObjectKeyFromObject(task.object), persisted)).To(Succeed())
+	g.Expect(seedGenerationCondition(persisted).Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.TimedOut)))
+	ref := persisted.Status.Extensions.ClusterDetails.SeedGenerationStatus.ISOFailureDiagnosticsRef
+	g.Expect(ref).ToNot(BeNil())
+	retained := &corev1.ConfigMap{}
+	g.Expect(task.client.Get(ctx, client.ObjectKey{Name: ref.Name, Namespace: ref.Namespace}, retained)).To(Succeed())
+	g.Expect(retained.Data[ref.Key]).To(ContainSubstring("useful build failure"))
+	g.Expect(retained.Data[ref.Key]).ToNot(ContainSubstring("ssh-private-key"))
 }
 
 func TestSeedGenerationISODiagnosticsPermanentErrorsAllowCleanup(t *testing.T) {

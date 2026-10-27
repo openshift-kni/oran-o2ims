@@ -222,7 +222,10 @@ active build. Ownership, Job identity, and execution safeguards are still
 checked on every observation.
 
 If retaining redacted failure diagnostics encounters a transient API error,
-the controller keeps the Job and Pods available while it retries. Cleanup
-continues once the diagnostics reference has been persisted. Permanent
-ownership or content conflicts use best-effort cleanup and report that the
-logs could not be retained.
+the controller keeps the Job and Pods available while it retries, up to the
+persisted overall seed-generation deadline. Cleanup continues once the
+diagnostics reference has been persisted. At the deadline, the controller
+makes a final best-effort retention attempt, marks the run `TimedOut`, and
+proceeds with cleanup even if diagnostics could not be retained. Permanent
+ownership or content conflicts also use best-effort cleanup and report that
+the logs could not be retained.
