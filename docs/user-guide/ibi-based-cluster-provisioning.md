@@ -163,10 +163,10 @@ Registry and optional ISO-upload preflight failures are recorded as validation
 conditions during reconciliation on the accepted ProvisioningRequest, before
 hardware allocation. A post-install preflight failure is reported before ACM
 detachment, so the seed cluster remains attached to ACM. After detachment begins, a
-failed or timed-out operation leaves the cluster detached; it does not restore ACM
-agents automatically. A timeout does not stop an LCA host process that is already
-running. Inspect the condition and provisioning details before deciding how to
-proceed.
+failed or timed-out operation may leave the cluster attached, partially detached,
+or detached; the controller does not restore ACM agents automatically. A timeout
+does not stop an LCA host process that is already running. Inspect the condition
+and provisioning details before deciding how to proceed.
 
 After saving the image reference and optional ISO URL and digest, delete the factory
 ProvisioningRequest to reclaim its hardware:
@@ -175,13 +175,16 @@ ProvisioningRequest to reclaim its hardware:
 oc delete provisioningrequest "$PR_NAME"
 ```
 
-Normal ProvisioningRequest deletion cleans the seed-generation resources and lets
-the hardware manager deprovision and wipe the allocated server without requiring
-the detached spoke to be reachable. Automated seed generation does not require or
-use the `clcm.openshift.io/skip-cleanup` annotation to run. If the annotation is
-present when deleting an automated seed-generation ProvisioningRequest, it still
-retains the hardware and makes deletion wait for LCA to finish and spoke credentials
-to be scrubbed. Leave it unset when the goal is to reclaim the server.
+If automated seed generation fails or times out after detachment begins, normal
+ProvisioningRequest deletion skips detached-spoke cleanup, so the `SeedGenerator`
+and `seedgen` Secret can remain on the spoke until the allocated server is wiped.
+Deletion cleans hub-side run resources and lets the hardware manager deprovision
+and wipe the allocated server without requiring the detached spoke to be reachable.
+Automated seed generation does not require or use the
+`clcm.openshift.io/skip-cleanup` annotation to run. If the annotation is present
+when deleting an automated seed-generation ProvisioningRequest, it retains the
+hardware and makes deletion wait for LCA to finish and spoke credentials to be
+scrubbed. Leave it unset when the goal is to reclaim the server.
 
 The generated live ISO can then be used to pre-provision target servers, followed by
 a separate ProvisioningRequest that uses an IBI ClusterTemplate for site deployment.
@@ -503,8 +506,8 @@ resource selector labels work.
 
 With servers pre-provisioned using the factory live ISO, cluster provisioning at the
 site skips the OS installation and image pull steps, significantly reducing
-deployment time. The generated ISO can come from either the automated workflow above
-or the manual alternative below.
+deployment time. The generated ISO can come from either the automated workflow or
+the manual alternative described above.
 
 ### Cluster Provisioning
 
