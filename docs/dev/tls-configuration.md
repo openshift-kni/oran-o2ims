@@ -21,7 +21,9 @@ enforces the cluster-wide TLS security profile defined in
 - [TLS Scanner](#tls-scanner)
   - [Building and Pushing the Image](#building-and-pushing-the-image)
   - [Running the Scanner](#running-the-scanner)
+  - [Validating Curve Groups](#validating-curve-groups)
   - [Results (Default Intermediate Profile)](#results-default-intermediate-profile)
+  - [CI](#ci)
 
 ## Motivation
 
@@ -73,8 +75,15 @@ path from the
 5. **Explicitly set** `MinVersion` and `CipherSuites` on every `tls.Config`
    rather than relying on Go defaults.
 6. **Propagate** profile settings from the operator to HTTP server pods via
-   environment variables (`TLS_PROFILE_MIN_VERSION`, `TLS_PROFILE_CIPHERS`),
-   avoiding the need for server pods to have direct API Server read access.
+   environment variables (`TLS_PROFILE_MIN_VERSION`, `TLS_PROFILE_CIPHERS`,
+   `TLS_PROFILE_GROUPS`), avoiding the need for server pods to have direct
+   API Server read access.
+7. **Apply curve preferences** from the profile's `Groups` field to
+   `tls.Config.CurvePreferences` via `controller-runtime-common`'s
+   `NewTLSConfigFromProfile`. Built-in profiles (Intermediate, Modern, Old)
+   include default groups (`X25519MLKEM768`, `X25519`, `secp256r1`,
+   `secp384r1`) on all clusters — the `TLSGroupPreferences` feature gate
+   only controls whether admins can set *custom* groups via the APIServer CR.
 
 The **API Server profile** is the correct source for all our components
 because our pods are backend workloads behind the OpenShift Router (reencrypt
@@ -98,12 +107,12 @@ flowchart TB
     end
 
     subgraph http_pods["HTTP Server Pods"]
-        EnvRead["reads TLS_PROFILE_* env vars"]
+        EnvRead["reads TLS_PROFILE_{MIN_VERSION,CIPHERS,GROUPS}"]
         Serve["serve.go (GetServerTLSConfig)"]
     end
 
     subgraph hw_mgr_pod["Hardware Manager Pod"]
-        HWEnvRead["reads TLS_PROFILE_* env vars"]
+        HWEnvRead["reads TLS_PROFILE_{MIN_VERSION,CIPHERS,GROUPS}"]
         HWMgr["controller-runtime metrics server (TLSOpts)"]
     end
 
@@ -140,9 +149,20 @@ Key design decisions:
     `TLSCiphersToPostgres()` (TLS 1.3 cipher names are excluded because
     PostgreSQL's `ssl_ciphers` only accepts TLS 1.2 names)
   - `ssl_tls13_ciphers` — statically set to exclude `TLS_AES_128_CCM_SHA256`
-    (not in the OpenShift Modern profile's allowed list)
-  - `ssl_groups` — statically set to `X25519MLKEM768:X25519:prime256v1`
-    to enable ML-KEM post-quantum key exchange
+    (not in the OpenShift Modern profile's allowed list). This is static
+    because the APIServer CR does not allow customizing TLS 1.3 cipher
+    suites — the platform manages them internally, so they cannot change
+    via the cluster profile
+  - `ssl_groups` — dynamically derived from the cluster profile's `Groups`
+    field via `TLSGroupsToPostgres()`, which maps IANA group names to
+    OpenSSL names (the only difference is `secp256r1` → `prime256v1`)
+
+  | Setting | Source | Reason |
+  |---|---|---|
+  | `ssl_min_protocol_version` | Dynamic — from profile | Admin can change min version |
+  | `ssl_ciphers` | Dynamic — TLS 1.2 ciphers from profile | Admin can customize via Custom profile |
+  | `ssl_tls13_ciphers` | Static | APIServer rejects TLS 1.3 cipher customization |
+  | `ssl_groups` | Dynamic — from profile Groups | Built-in profiles define default groups |
 
   The `tls-profile-hash` annotation triggers a rolling restart when the
   profile changes. These native PostgreSQL 18 settings replace the
@@ -197,6 +217,26 @@ All HTTP server pods (`resource-server`, `cluster-server`,
 `provisioning-server`, `artifacts-server`) and the `hardwaremanager-server`
 should be in `Running` state.
 
+These tests assume:
+
+- The APIServer has **no explicit `tlsSecurityProfile` set** (the default
+  Intermediate profile: TLS 1.2 minimum, ECDHE cipher suites, groups
+  `X25519MLKEM768,X25519,secp256r1,secp384r1`):
+
+  ```bash
+  oc get apiserver cluster -o jsonpath='{.spec.tlsSecurityProfile}'
+  # Should return empty (no explicit profile)
+  ```
+
+- The **`TLSAdherence` feature gate is enabled**. This is GA on OCP 4.22+
+  and enabled by default. The TLS scanner uses it to read the cluster's
+  configured TLS profile and assess compliance. Verify with:
+
+  ```bash
+  oc get featuregate cluster -o jsonpath='{.status.featureGates}' \
+    | python3 -m json.tool | grep TLSAdherence
+  ```
+
 ### Test 1: Default Profile Verification
 
 With no explicit `tlsSecurityProfile` set on the APIServer (defaults to
@@ -223,9 +263,10 @@ oc get pod -n oran-o2ims -l app=resource-server \
   | grep -A1 TLS_PROFILE
 ```
 
-Expected: `TLS_PROFILE_MIN_VERSION=VersionTLS12` and
+Expected: `TLS_PROFILE_MIN_VERSION=VersionTLS12`,
 `TLS_PROFILE_CIPHERS` containing Intermediate profile ciphers
-(e.g. `ECDHE-RSA-AES128-GCM-SHA256,ECDHE-RSA-AES256-GCM-SHA384,...`).
+(e.g. `ECDHE-RSA-AES128-GCM-SHA256,ECDHE-RSA-AES256-GCM-SHA384,...`),
+and `TLS_PROFILE_GROUPS=X25519MLKEM768,X25519,secp256r1,secp384r1`.
 
 **1.3 Verify TLS 1.1 is rejected and TLS 1.2/1.3 are accepted:**
 
@@ -261,6 +302,66 @@ Expected results:
 | TLS 1.2 | `Cipher is ECDHE-RSA-AES128-GCM-SHA256` — **accepted** |
 | TLS 1.3 | `Cipher is TLS_AES_128_GCM_SHA256` — **accepted** |
 
+**1.4 Verify curve preferences are enforced:**
+
+Verify which groups the profile allows by checking the env var on a
+server pod:
+
+```bash
+oc get pod -n oran-o2ims -l app=resource-server \
+  -o jsonpath='{.items[0].spec.containers[0].env}' | python3 -m json.tool \
+  | grep -A1 TLS_PROFILE_GROUPS
+```
+
+The Intermediate profile allows `X25519MLKEM768`, `X25519`, `secp256r1`,
+and `secp384r1`. Confirm the groups match the expected list:
+
+```bash
+oc get apiserver cluster -o jsonpath='{.spec.tlsSecurityProfile.type}'
+# Empty or "Intermediate" — built-in profiles define groups in the
+# openshift/api Go constants (configv1.TLSProfiles map). The operator
+# resolves them and propagates via TLS_PROFILE_GROUPS.
+```
+
+Verify that only the profile's groups are accepted and that `P-521`
+(not in the profile) is rejected:
+
+```bash
+HOST=resource-server.oran-o2ims.svc.cluster.local:8443
+oc run tls-curves-test --rm -i --restart=Never \
+  --image=registry.access.redhat.com/ubi9/ubi:latest -n oran-o2ims \
+  --overrides='{
+    "spec":{
+      "securityContext":{
+        "runAsNonRoot":true,
+        "seccompProfile":{"type":"RuntimeDefault"}
+      }
+    }
+  }' \
+  -- bash -c "
+    echo '=== X25519 (expect PASS) ==='
+    echo | openssl s_client -connect $HOST -tls1_3 -groups X25519 2>&1 | grep -E 'Temp Key|Cipher is'
+    echo '=== P-256 (expect PASS) ==='
+    echo | openssl s_client -connect $HOST -tls1_3 -groups P-256 2>&1 | grep -E 'Temp Key|Cipher is'
+    echo '=== P-384 (expect PASS) ==='
+    echo | openssl s_client -connect $HOST -tls1_3 -groups P-384 2>&1 | grep -E 'Temp Key|Cipher is'
+    echo '=== P-521 (expect FAIL — not in profile) ==='
+    echo | openssl s_client -connect $HOST -tls1_3 -groups P-521 2>&1 | grep -E 'Cipher is|alert|error'
+    echo '=== X25519MLKEM768 (expect PASS — PQC) ==='
+    echo | openssl s_client -connect $HOST -tls1_3 -groups X25519MLKEM768 2>&1 | grep -E 'Cipher is'
+  "
+```
+
+Expected results:
+
+| Group | In profile? | Expected result |
+|-------|-------------|-----------------|
+| X25519 | Yes | `Temp Key: X25519, 253 bits` — **accepted** |
+| P-256 | Yes | `Temp Key: ECDH, prime256v1, 256 bits` — **accepted** |
+| P-384 | Yes | `Temp Key: ECDH, secp384r1, 384 bits` — **accepted** |
+| P-521 | No | `handshake failure` — **rejected** |
+| X25519MLKEM768 | Yes | `Cipher is TLS_AES_128_GCM_SHA256` — **accepted** |
+
 ### Test 2: Profile Change and Enforcement
 
 This test verifies the full lifecycle: profile change → operator restart →
@@ -279,11 +380,14 @@ oc patch apiserver cluster --type=merge \
   -p '{"spec":{"tlsSecurityProfile":{"type":"Modern","modern":{}}}}'
 ```
 
-**2.3 Wait for the operator to restart and pods to roll (30-40 seconds):**
+**2.3 Wait for the cluster to stabilize:**
+
+Changing the TLS profile affects the entire cluster — the OpenShift API
+server, ingress controller, and other platform components also roll to
+apply the new profile. Wait for full stabilization before verifying:
 
 ```bash
-# Watch for new pod creation timestamps
-oc get pods -n oran-o2ims -w
+oc adm wait-for-stable-cluster --timeout=30m
 ```
 
 **2.4 Verify the operator loaded the Modern profile:**
@@ -366,7 +470,11 @@ oc patch apiserver cluster --type=json \
   -p '[{"op":"remove","path":"/spec/tlsSecurityProfile"}]'
 ```
 
-Wait 30-40 seconds for the rollout, then verify TLS 1.2 is accepted again.
+Wait for the cluster to stabilize, then verify TLS 1.2 is accepted again:
+
+```bash
+oc adm wait-for-stable-cluster --timeout=30m
+```
 
 ### Success Criteria
 
@@ -374,14 +482,15 @@ The feature is working correctly when:
 
 1. The operator log shows the correct `minVersion` matching the cluster's
    configured profile.
-2. Server pods contain `TLS_PROFILE_MIN_VERSION` and `TLS_PROFILE_CIPHERS`
-   environment variables matching the active profile.
+2. Server pods contain `TLS_PROFILE_MIN_VERSION`, `TLS_PROFILE_CIPHERS`,
+   and `TLS_PROFILE_GROUPS` environment variables matching the active profile.
 3. Protocol versions below the profile minimum are rejected at the TLS
    handshake level.
 4. Only cipher suites listed in the profile are accepted for TLS 1.2
    connections.
 5. Changing the APIServer's `tlsSecurityProfile` triggers operator restart
-   and rolling restart of all server pods within ~30 seconds.
+   and rolling restart of all server pods. The cluster stabilizes after
+   platform components (API server, ingress) also finish rolling.
 6. After revert, the previous TLS behavior is restored.
 
 ## TLS Scanner
@@ -402,6 +511,19 @@ This is particularly valuable for CNF-21985 validation because it provides an
 automated, authoritative check that all our endpoints match the cluster's TLS
 policy — rather than relying on manual `openssl s_client` probes.
 
+### Scanner Prerequisites
+
+The scanner results below assume the default Intermediate TLS profile.
+Verify no explicit profile is set:
+
+```bash
+oc get apiserver cluster -o jsonpath='{.spec.tlsSecurityProfile}'
+# Should return empty (no explicit profile = Intermediate default)
+```
+
+If a different profile is active, the expected cipher suites and
+compliance results will differ accordingly.
+
 ### Building and Pushing the Image
 
 Clone the tls-scanner repository and build/push the image to a registry
@@ -417,7 +539,7 @@ Ensure the image repository has public read access so cluster nodes can pull it.
 
 ### Running the Scanner
 
-Deploy the scanner against the `oran-o2ims` namespace:
+Deploy and run the scanner against the `oran-o2ims` namespace:
 
 ```bash
 cd /path/to/tls-scanner
@@ -425,20 +547,48 @@ export KUBECONFIG=/path/to/kubeconfig
 export SCANNER_IMAGE="quay.io/<your-username>/tls-scanner:1.0"
 export NAMESPACE="oran-o2ims"
 export NAMESPACE_FILTER="oran-o2ims"
-export STARTTLS_PORTS="postgres=5432"
 ./deploy.sh --verbose deploy
 ```
 
-The `STARTTLS_PORTS` variable enables the scanner's
-[STARTTLS support](https://github.com/openshift/tls-scanner#command-line-options)
-for PostgreSQL. Without it, the scanner cannot negotiate PostgreSQL's in-band
-TLS handshake (`SSLRequest` wire protocol) and will report `NO_TLS` for port
-5432.
+The scanner discovers all pods in the namespace, probes their listening
+ports for TLS, and produces results in `./artifacts/` (CSV and JSON
+formats). It auto-detects STARTTLS for PostgreSQL without additional
+configuration.
 
-The scanner discovers all pods in the namespace, probes their listening ports
-for TLS, and produces results in `./artifacts/` (CSV and JSON formats).
+### Validating Curve Groups
 
-After the scan completes, clean up cluster resources:
+To verify that all endpoints offer the expected TLS named groups, run
+the scanner binary with `--expected-groups`. This check is not
+supported by `deploy.sh` — run it while the scanner RBAC from the
+previous `deploy.sh deploy` is still active (before cleanup):
+
+```bash
+oc run tls-scanner-groups --rm -i --restart=Never \
+  --image=quay.io/<your-username>/tls-scanner:1.0 -n oran-o2ims \
+  --overrides='{
+    "spec":{
+      "serviceAccountName": "default",
+      "securityContext":{
+        "runAsNonRoot":true,
+        "seccompProfile":{"type":"RuntimeDefault"}
+      }
+    }
+  }' \
+  --command -- /usr/local/bin/tls-scanner \
+    --all-pods \
+    --namespace-filter oran-o2ims \
+    --expected-groups X25519MLKEM768,X25519,secp256r1,secp384r1 \
+    --junit-file /tmp/junit_groups.xml \
+    --json-file /tmp/results.json \
+    --artifact-dir /tmp
+```
+
+The scanner exits with code 0 if all scannable endpoints offer the
+expected groups, or non-zero if any endpoint is missing a required
+group. Ports that cannot be scanned (e.g., non-TLS health probes)
+are skipped.
+
+After validation, clean up cluster resources:
 
 ```bash
 ./deploy.sh cleanup
@@ -449,21 +599,27 @@ After the scan completes, clean up cluster resources:
 With the cluster running the default Intermediate profile
 (`spec.tlsSecurityProfile` unset on APIServer), the scanner reports:
 
-| Pod | Port | STARTTLS | TLS Versions | PQC Ready | API MinVersion Compliance | API Cipher Compliance |
-|-----|------|----------|-------------|-----------|---------------------------|----------------------|
-| artifacts-server | 8443 | N/A | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
-| cluster-server | 8443 | N/A | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
-| hardwaremanager-server | 8443 | N/A | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
-| oran-o2ims-controller-manager | 6443 | N/A | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
-| oran-o2ims-controller-manager | 9443 | N/A | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
-| provisioning-server | 8443 | N/A | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
-| resource-server | 8443 | N/A | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
-| postgres-server | 5432 | postgres | TLSv1.2, TLSv1.3 | Yes (ML-KEM X25519MLKEM768) | true | true |
+| Pod | Port | STARTTLS | TLS Versions | PQC Ready | KEMs | API MinVersion | API Cipher |
+|-----|------|----------|-------------|-----------|------|----------------|------------|
+| alarms-server | 8443 | N/A | TLSv1.2, TLSv1.3 | Yes | X25519MLKEM768 | true | true |
+| artifacts-server | 8443 | N/A | TLSv1.2, TLSv1.3 | Yes | X25519MLKEM768 | true | true |
+| cluster-server | 8443 | N/A | TLSv1.2, TLSv1.3 | Yes | X25519MLKEM768 | true | true |
+| hardwaremanager-server | 8443 | N/A | TLSv1.2, TLSv1.3 | Yes | X25519MLKEM768 | true | true |
+| oran-o2ims-controller-manager | 6443 | N/A | TLSv1.2, TLSv1.3 | Yes | X25519MLKEM768 | true | true |
+| oran-o2ims-controller-manager | 9443 | N/A | TLSv1.2, TLSv1.3 | Yes | X25519MLKEM768 | true | true |
+| provisioning-server | 8443 | N/A | TLSv1.2, TLSv1.3 | Yes | X25519MLKEM768 | true | true |
+| resource-server | 8443 | N/A | TLSv1.2, TLSv1.3 | Yes | X25519MLKEM768 | true | true |
+| postgres-server | 5432 | postgres | TLSv1.2, TLSv1.3 | Yes | X25519MLKEM768 | true | true |
 
 Key observations:
 
 - **All endpoints pass API MinVersion and Cipher Compliance** — the offered
   minimum TLS version and cipher suites match the cluster profile requirements.
+- **Curve preferences** are propagated from the cluster TLS profile.
+  Go-based endpoints receive the `TLS_PROFILE_GROUPS` environment variable
+  and apply it via `NewTLSConfigFromProfile` → `tls.Config.CurvePreferences`.
+  PostgreSQL derives `ssl_groups` from the same profile via
+  `TLSGroupsToPostgres()`, translating IANA names to OpenSSL names.
 - **Go-based endpoints** achieve compliance via Go's native TLS implementation.
   ML-KEM (`X25519MLKEM768`) support comes from Go's `crypto/tls` (available
   since Go 1.24; this project requires Go 1.26).
@@ -482,3 +638,23 @@ Key observations:
   all confirmed "not offered".
 - Scanner readiness note: *"Endpoint offers TLS 1.3 and ML-KEM — ready for
   Modern profile"*.
+
+### CI
+
+The TLS scanner runs in CI as both a periodic job and an on-demand
+presubmit. The jobs are defined in
+[openshift/release](https://github.com/openshift/release) under
+`ci-operator/config/openshift-kni/oran-o2ims/`.
+
+**Periodic jobs** run weekly across all branches. Monitor them at:
+[Prow periodic jobs for oran-o2ims](https://prow.ci.openshift.org/?type=periodic&job=*oran*)
+
+**On-demand** from any PR in the oran-o2ims repo, comment:
+
+```text
+/test install-bundle-tls-scan
+```
+
+This provisions a cluster, installs ACM and the operator bundle from the
+PR branch, waits for all TLS-serving pods, and runs the scanner. Results
+appear as a Prow check on the PR with JUnit test cases per endpoint.

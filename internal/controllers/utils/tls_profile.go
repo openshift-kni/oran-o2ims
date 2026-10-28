@@ -18,6 +18,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	tlspkg "github.com/openshift/controller-runtime-common/pkg/tls"
+	libgocrypto "github.com/openshift/library-go/pkg/crypto"
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -37,8 +38,8 @@ func FetchAPIServerTLSProfile(ctx context.Context, k8sClient client.Client) (con
 func NewTLSConfiguratorFromProfile(profile configv1.TLSProfileSpec) func(*tls.Config) {
 	configurator, unsupported := tlspkg.NewTLSConfigFromProfile(profile)
 	if len(unsupported) > 0 {
-		slog.Warn("Unsupported cipher suites in TLS profile (skipped)",
-			slog.Any("ciphers", unsupported))
+		slog.Warn("Unsupported cipher suites or groups in TLS profile (skipped)",
+			slog.Any("unsupported", unsupported))
 	}
 	return configurator
 }
@@ -125,7 +126,7 @@ func NewOutboundTLSConfig(profile configv1.TLSProfileSpec, config *tls.Config) (
 // TLS profile settings change. If the cluster admin changes the TLS profile, this hash
 // changes and it is intended to be used with pod template annotation to trigger a rolling restart.
 func TLSProfileHash(profile configv1.TLSProfileSpec) string {
-	data := fmt.Sprintf("%s|%s", profile.MinTLSVersion, strings.Join(profile.Ciphers, ","))
+	data := fmt.Sprintf("%s|%s|%s", profile.MinTLSVersion, strings.Join(profile.Ciphers, ","), TLSGroupsToString(profile.Groups))
 	sum := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(sum[:])[:16]
 }
@@ -160,14 +161,17 @@ func NewTLSProfileFromEnv() configv1.TLSProfileSpec {
 		return *configv1.TLSProfiles[configv1.TLSProfileIntermediateType]
 	}
 
-	// Full cipher list is available in the TLS_PROFILE_CIPHERS env var on the pod spec
+	groups := ParseTLSGroups(os.Getenv(TLSProfileGroupsEnvName))
+
 	slog.Info("TLS profile loaded from environment",
 		slog.String("minVersion", minVersion),
-		slog.Int("cipherCount", len(ciphers)))
+		slog.Int("cipherCount", len(ciphers)),
+		slog.Int("groupCount", len(groups)))
 
 	return configv1.TLSProfileSpec{
 		MinTLSVersion: configv1.TLSProtocolVersion(minVersion),
 		Ciphers:       ciphers,
+		Groups:        groups,
 	}
 }
 
@@ -209,17 +213,9 @@ func TLSCiphersToPostgres(ciphers []string) string {
 	return strings.Join(pgCiphers, ":")
 }
 
-// PostgreSQL TLS 1.3 and key-exchange defaults for PG18+ native controls.
-// These are the OpenShift-approved values that satisfy tls-scanner compliance.
-const (
-	// PostgresTLS13Ciphers is the ssl_tls13_ciphers value: all standard TLS 1.3
-	// ciphers except TLS_AES_128_CCM_SHA256 (not in the OpenShift Modern profile).
-	PostgresTLS13Ciphers = "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256"
-
-	// PostgresSSLGroups is the ssl_groups value: ML-KEM for PQC key exchange
-	// alongside classical fallbacks.
-	PostgresSSLGroups = "X25519MLKEM768:X25519:prime256v1"
-)
+// PostgresTLS13Ciphers is the ssl_tls13_ciphers value: all standard TLS 1.3
+// ciphers except TLS_AES_128_CCM_SHA256 (not in the OpenShift Modern profile).
+const PostgresTLS13Ciphers = "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256"
 
 var validTLSVersions = map[string]bool{
 	string(configv1.VersionTLS10): true,
@@ -230,4 +226,48 @@ var validTLSVersions = map[string]bool{
 
 func isValidTLSVersion(v string) bool {
 	return validTLSVersions[v]
+}
+
+// TLSGroupsToString converts the TLS profile Groups to a comma-separated string
+// suitable for environment variable injection.
+func TLSGroupsToString(groups []configv1.TLSGroup) string {
+	s := make([]string, len(groups))
+	for i, g := range groups {
+		s[i] = string(g)
+	}
+	return strings.Join(s, ",")
+}
+
+// ParseTLSGroups converts a comma-separated groups string (from the env var)
+// back to a typed slice.
+func ParseTLSGroups(s string) []configv1.TLSGroup {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	groups := make([]configv1.TLSGroup, len(parts))
+	for i, p := range parts {
+		groups[i] = configv1.TLSGroup(p)
+	}
+	return groups
+}
+
+// TLSGroupsToPostgres converts the TLS profile Groups to the colon-separated
+// format expected by PostgreSQL's ssl_groups setting. Groups not recognized by
+// library-go are filtered out to prevent PostgreSQL from rejecting the entire
+// ssl_groups setting at startup. The only name difference for recognized groups
+// is secp256r1 (IANA/Go) → prime256v1 (OpenSSL).
+func TLSGroupsToPostgres(groups []configv1.TLSGroup) string {
+	pgNames := make([]string, 0, len(groups))
+	for _, g := range groups {
+		if _, ok := libgocrypto.TLSGroupToCurveID(g); !ok {
+			continue
+		}
+		name := string(g)
+		if name == string(configv1.TLSGroupSecP256r1) {
+			name = "prime256v1"
+		}
+		pgNames = append(pgNames, name)
+	}
+	return strings.Join(pgNames, ":")
 }

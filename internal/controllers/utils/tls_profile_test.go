@@ -116,6 +116,41 @@ var _ = Describe("TLS Profile", func() {
 			Expect(cfg.MinVersion).To(Equal(uint16(tls.VersionTLS12)))
 		})
 
+		It("should set CurvePreferences matching the profile Groups", func() {
+			profile := configv1.TLSProfileSpec{
+				MinTLSVersion: configv1.VersionTLS12,
+				Ciphers:       []string{"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"},
+				Groups: []configv1.TLSGroup{
+					configv1.TLSGroupX25519MLKEM768,
+					configv1.TLSGroupX25519,
+					configv1.TLSGroupSecP256r1,
+				},
+			}
+			configurator := NewTLSConfiguratorFromProfile(profile)
+
+			cfg := &tls.Config{}
+			configurator(cfg)
+
+			Expect(cfg.CurvePreferences).To(Equal([]tls.CurveID{
+				tls.X25519MLKEM768,
+				tls.X25519,
+				tls.CurveP256,
+			}))
+		})
+
+		It("should leave CurvePreferences nil when profile has no Groups", func() {
+			profile := configv1.TLSProfileSpec{
+				MinTLSVersion: configv1.VersionTLS12,
+				Ciphers:       []string{"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"},
+			}
+			configurator := NewTLSConfiguratorFromProfile(profile)
+
+			cfg := &tls.Config{}
+			configurator(cfg)
+
+			Expect(cfg.CurvePreferences).To(BeNil())
+		})
+
 		It("should skip unsupported ciphers and still return a working configurator", func() {
 			profile := configv1.TLSProfileSpec{
 				MinTLSVersion: configv1.VersionTLS12,
@@ -289,6 +324,121 @@ var _ = Describe("TLS Profile", func() {
 			Expect(result).To(ContainSubstring("ECDHE-RSA-AES128-GCM-SHA256"))
 			Expect(result).To(ContainSubstring("ECDHE-RSA-CHACHA20-POLY1305"))
 			Expect(result).ToNot(ContainSubstring("TLS_AES"))
+		})
+	})
+
+	Describe("TLSGroupsToString", func() {
+		It("should join groups with commas", func() {
+			groups := []configv1.TLSGroup{
+				configv1.TLSGroupX25519MLKEM768,
+				configv1.TLSGroupX25519,
+				configv1.TLSGroupSecP256r1,
+			}
+			Expect(TLSGroupsToString(groups)).To(Equal("X25519MLKEM768,X25519,secp256r1"))
+		})
+
+		It("should return empty string for nil input", func() {
+			Expect(TLSGroupsToString(nil)).To(BeEmpty())
+		})
+	})
+
+	Describe("ParseTLSGroups", func() {
+		It("should parse comma-separated string into TLSGroup slice", func() {
+			groups := ParseTLSGroups("X25519MLKEM768,X25519,secp256r1")
+			Expect(groups).To(HaveLen(3))
+			Expect(groups[0]).To(Equal(configv1.TLSGroupX25519MLKEM768))
+			Expect(groups[1]).To(Equal(configv1.TLSGroupX25519))
+			Expect(groups[2]).To(Equal(configv1.TLSGroupSecP256r1))
+		})
+
+		It("should return nil for empty string", func() {
+			Expect(ParseTLSGroups("")).To(BeNil())
+		})
+	})
+
+	Describe("TLSGroupsToPostgres", func() {
+		It("should convert IANA names to OpenSSL names with colon separator", func() {
+			groups := []configv1.TLSGroup{
+				configv1.TLSGroupX25519MLKEM768,
+				configv1.TLSGroupX25519,
+				configv1.TLSGroupSecP256r1,
+				configv1.TLSGroupSecP384r1,
+			}
+			Expect(TLSGroupsToPostgres(groups)).To(Equal(
+				"X25519MLKEM768:X25519:prime256v1:secp384r1"))
+		})
+
+		It("should map secp256r1 to prime256v1", func() {
+			groups := []configv1.TLSGroup{configv1.TLSGroupSecP256r1}
+			Expect(TLSGroupsToPostgres(groups)).To(Equal("prime256v1"))
+		})
+
+		It("should not change names that are identical in OpenSSL", func() {
+			groups := []configv1.TLSGroup{
+				configv1.TLSGroupX25519,
+				configv1.TLSGroupSecP384r1,
+				configv1.TLSGroupSecP521r1,
+			}
+			Expect(TLSGroupsToPostgres(groups)).To(Equal("X25519:secp384r1:secp521r1"))
+		})
+
+		It("should return empty string for nil input", func() {
+			Expect(TLSGroupsToPostgres(nil)).To(BeEmpty())
+		})
+
+		It("should filter out unrecognized groups", func() {
+			groups := []configv1.TLSGroup{
+				configv1.TLSGroupX25519,
+				"BOGUS_GROUP_THAT_DOES_NOT_EXIST",
+				configv1.TLSGroupSecP256r1,
+			}
+			Expect(TLSGroupsToPostgres(groups)).To(Equal("X25519:prime256v1"))
+		})
+	})
+
+	Describe("TLSProfileHash with Groups", func() {
+		It("should produce different hashes when only Groups differ", func() {
+			a := configv1.TLSProfileSpec{
+				MinTLSVersion: configv1.VersionTLS12,
+				Ciphers:       []string{"ECDHE-RSA-AES128-GCM-SHA256"},
+			}
+			b := configv1.TLSProfileSpec{
+				MinTLSVersion: configv1.VersionTLS12,
+				Ciphers:       []string{"ECDHE-RSA-AES128-GCM-SHA256"},
+				Groups: []configv1.TLSGroup{
+					configv1.TLSGroupX25519MLKEM768,
+				},
+			}
+			Expect(TLSProfileHash(a)).ToNot(Equal(TLSProfileHash(b)))
+		})
+
+		It("should produce the same hash when Groups is nil vs empty", func() {
+			a := configv1.TLSProfileSpec{MinTLSVersion: configv1.VersionTLS12}
+			b := configv1.TLSProfileSpec{
+				MinTLSVersion: configv1.VersionTLS12,
+				Groups:        []configv1.TLSGroup{},
+			}
+			Expect(TLSProfileHash(a)).To(Equal(TLSProfileHash(b)))
+		})
+	})
+
+	Describe("NewTLSProfileFromEnv with Groups", func() {
+		It("should parse TLS_PROFILE_GROUPS from environment", func() {
+			GinkgoT().Setenv(TLSProfileMinVersionEnvName, "VersionTLS12")
+			GinkgoT().Setenv(TLSProfileCiphersEnvName, "ECDHE-RSA-AES128-GCM-SHA256")
+			GinkgoT().Setenv(TLSProfileGroupsEnvName, "X25519MLKEM768,X25519,secp256r1")
+			profile := NewTLSProfileFromEnv()
+			Expect(profile.Groups).To(HaveLen(3))
+			Expect(profile.Groups[0]).To(Equal(configv1.TLSGroupX25519MLKEM768))
+			Expect(profile.Groups[2]).To(Equal(configv1.TLSGroupSecP256r1))
+		})
+
+		It("should leave Groups nil when env var is empty", func() {
+			GinkgoT().Setenv(TLSProfileMinVersionEnvName, "VersionTLS12")
+			GinkgoT().Setenv(TLSProfileCiphersEnvName, "ECDHE-RSA-AES128-GCM-SHA256")
+			GinkgoT().Setenv(TLSProfileGroupsEnvName, "")
+			profile := NewTLSProfileFromEnv()
+			Expect(profile.Groups).To(BeNil())
 		})
 	})
 
