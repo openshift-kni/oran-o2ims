@@ -135,13 +135,13 @@ that at most one entry has component type `bios` and at most one has component t
 `bmc` (multiple `nic` entries are allowed).
 
 > [!NOTE]
-> A HardwareProfile that uses `firmwareImages` must be created in the operator's
-> namespace. The singleton `firmware-catalog` is resolved from the HardwareProfile's
-> own namespace and is only auto-created in the operator's namespace, so a
-> `firmwareImages`-based HardwareProfile created in a namespace that has no
-> `firmware-catalog` is rejected at admission. The deprecated inline fields
-> (`biosFirmware`, `bmcFirmware`, `nicFirmware`) carry no such restriction because they
-> do not reference the catalog.
+> `firmwareImages`-based HardwareProfiles must be created in the operator namespace
+> (the namespace where the O-Cloud Manager is deployed and the singleton
+> `firmware-catalog` is auto-created). The singleton `firmware-catalog` is resolved
+> from the HardwareProfile's own namespace, so a `firmwareImages`-based HardwareProfile
+> created in a namespace that has no `firmware-catalog` is rejected at admission. The
+> deprecated inline fields (`biosFirmware`, `bmcFirmware`, `nicFirmware`) carry no such
+> restriction because they do not reference the catalog.
 
 #### Deprecated: Inline firmware fields
 
