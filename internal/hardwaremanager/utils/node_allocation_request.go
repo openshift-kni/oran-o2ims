@@ -76,7 +76,7 @@ var ErrNodeAllocationRequestSpecChanged = errors.New("NodeAllocationRequest spec
 // Status().Update conflict forced a re-fetch), it returns ErrNodeAllocationRequestSpecChanged
 // without acknowledging anything. This prevents a race where the hardware manager would
 // mark a new, unhandled transaction as observed — which would let the ProvisioningRequest
-// controller's hardwareConfigInProgress gate proceed before the configuration is applied,
+// controller's hardware-config in-flight gate proceed before the configuration is applied,
 // and could silently drop the Day-2 work entirely.
 func UpdateNodeAllocationRequestObservedStatus(
 	ctx context.Context,

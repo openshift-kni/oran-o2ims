@@ -134,13 +134,19 @@ func (t *provisioningRequestReconcilerTask) createOrUpdateNodeAllocationRequest(
 	// NAR exists — compare spec and update if changed.
 	// Carry over fields not driven by the rendered NAR to avoid false-positive change detection.
 	nodeAllocationRequest.Spec.ClusterProvisioned = existingNAR.Spec.ClusterProvisioned
-	renderedConfigTransactionId := nodeAllocationRequest.Spec.ConfigTransactionId
 	nodeAllocationRequest.Spec.ConfigTransactionId = existingNAR.Spec.ConfigTransactionId
 
 	specChanged := !equality.Semantic.DeepEqual(existingNAR.Spec, nodeAllocationRequest.Spec)
 
 	if specChanged {
-		nodeAllocationRequest.Spec.ConfigTransactionId = renderedConfigTransactionId
+		// ConfigTransactionId is a monotonic counter, not the ProvisioningRequest
+		// generation. Seeding it from t.object.Generation here would make this update
+		// path a second, independent writer alongside the swap scale-in bump below,
+		// which can collide on a value or even move the id backwards. Always advancing
+		// from the existing value keeps it strictly increasing, so the transaction
+		// comparison in checkNodeAllocationRequestStatus is the single, reliable signal
+		// that the hardware manager has observed the latest spec.
+		nodeAllocationRequest.Spec.ConfigTransactionId = existingNAR.Spec.ConfigTransactionId + 1
 		patch := client.MergeFrom(existingNAR.DeepCopy())
 		existingNAR.Spec = nodeAllocationRequest.Spec
 		if err := t.client.Patch(ctx, existingNAR, patch); err != nil {
@@ -319,33 +325,21 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestStatus(
 	//     the downstream gate blocking, so the upgrade phase does not create the IBGU while
 	//     the firmware flash power-cycles the node and kills IBU Prep (OCPBUGS-132825).
 	//
-	// Two independent "has the hardware manager caught up" signals are checked, both on
-	// the NAR's own status (not the ProvisioningRequest generation):
-	//
-	//   - Spec.ConfigTransactionId vs Status.ObservedConfigTransactionId. ConfigTransactionId
-	//     is seeded from the generation but incremented independently on swap scale-in (see
-	//     createOrUpdateNodeAllocationRequest), so it can diverge.
-	//   - ObjectMeta.Generation vs Status.ObservedGeneration. Because ConfigTransactionId is
-	//     seeded from the PR generation yet also bumped independently on swap, a swap can leave
-	//     Spec.ConfigTransactionId at a value a later generation re-renders to the same number
-	//     (e.g. swap bumps 1->2 and is observed, then a generation-2 HW-profile render sets it
-	//     back to 2). The transaction check alone then sees spec==observed and passes while the
-	//     new generation is still unprocessed. The generation comparison closes that gap.
-	//
-	// Both depend on the hardware manager acknowledging the baseline generation and
+	// The in-flight signal is Spec.ConfigTransactionId vs Status.ObservedConfigTransactionId,
+	// both on the NAR's own status (not the ProvisioningRequest generation). ConfigTransactionId
+	// is a monotonic counter advanced on every spec change and on swap scale-in (see
+	// createOrUpdateNodeAllocationRequest), so a single transaction comparison reliably detects
+	// any unobserved spec. This depends on the hardware manager acknowledging the baseline
 	// ConfigTransactionId when it first creates the NAR (handleNewNodeAllocationRequestCreate ->
 	// UpdateNodeAllocationRequestObservedStatus) and on every terminal Configured write
 	// (UpdateNodeAllocationRequestStatusCondition). Without those acks the seeded baseline
 	// would read as perpetually unobserved and deadlock cluster installation.
 	transactionInFlight := nodeAllocationRequestResponse.Spec.ConfigTransactionId != 0 &&
 		nodeAllocationRequestResponse.Status.ObservedConfigTransactionId != nodeAllocationRequestResponse.Spec.ConfigTransactionId
-	generationUnobserved := nodeAllocationRequestResponse.Status.ObservedGeneration != nodeAllocationRequestResponse.ObjectMeta.Generation
-	if condition == hwmgmtv1alpha1.Configured && (transactionInFlight || generationUnobserved) {
+	if condition == hwmgmtv1alpha1.Configured && transactionInFlight {
 		t.logger.InfoContext(ctx, "Hardware manager has not observed the scheduled configuration",
 			slog.Int64("specTransaction", nodeAllocationRequestResponse.Spec.ConfigTransactionId),
-			slog.Int64("observedTransaction", nodeAllocationRequestResponse.Status.ObservedConfigTransactionId),
-			slog.Int64("generation", nodeAllocationRequestResponse.ObjectMeta.Generation),
-			slog.Int64("observedGeneration", nodeAllocationRequestResponse.Status.ObservedGeneration))
+			slog.Int64("observedTransaction", nodeAllocationRequestResponse.Status.ObservedConfigTransactionId))
 		// Surface the in-flight transaction on the ProvisioningRequest as HardwareConfigured
 		// in-progress. The NAR's own Configured condition must not be propagated here: it may
 		// still carry a stale True/Failed/TimedOut from a previous transaction (which would
@@ -826,24 +820,6 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 	}
 
 	return status == metav1.ConditionTrue, timedOutOrFailed, err
-}
-
-// hardwareConfigInProgress reports whether a hardware configuration transaction
-// is still in flight, so the reconciler must not advance to downstream phases
-// (cluster installation, policy configuration, or — critically — IBU upgrade Prep).
-//
-// configured is the tri-state result derived from checkNodeAllocationRequestConfigStatus:
-//   - non-nil and false: a configuration transaction is in progress. This covers both a
-//     Configured condition that is not yet True (e.g. a Day-2 firmware update applying
-//     and power-cycling the node) and the window after a Day-2 firmware update is
-//     scheduled but before a Configured condition exists — the spec-vs-observed gate in
-//     checkNodeAllocationRequestStatus reports both as status=false. Proceeding in the
-//     latter window would let the upgrade phase create the IBGU while the firmware flash
-//     reboots the node and kills IBU Prep (OCPBUGS-132825).
-//   - non-nil and true: the configuration completed successfully.
-//   - nil: no configuration is scheduled or in progress; it is safe to proceed.
-func hardwareConfigInProgress(configured *bool) bool {
-	return configured != nil && !*configured
 }
 
 // buildNodeAllocationRequestSpec builds the NodeAllocationRequest from the pre-merged hwMgmt data and cluster instance

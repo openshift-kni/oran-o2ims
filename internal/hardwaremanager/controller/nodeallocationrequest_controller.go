@@ -297,7 +297,7 @@ func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 // on create (handleNewNodeAllocationRequestCreate): such a NAR has a settled
 // generation, has never been configured, and yet carries a nonzero
 // Spec.ConfigTransactionId with ObservedConfigTransactionId == 0. The
-// ProvisioningRequest controller's hardwareConfigInProgress gate treats that
+// ProvisioningRequest controller's hardware-config in-flight gate treats that
 // unacknowledged baseline as an in-flight configuration and would block downstream
 // phases indefinitely after an operator upgrade.
 //
@@ -645,10 +645,10 @@ func (r *NodeAllocationRequestReconciler) handleNewNodeAllocationRequestCreate(
 	// The baseline ConfigTransactionId is seeded equal to the generation when the NAR spec
 	// is built, and Day-0 provisioning never emits a Configured condition (that is a Day-2
 	// concern). Acknowledging ObservedConfigTransactionId here establishes the baseline so
-	// the ProvisioningRequest controller's hardwareConfigInProgress gate does not mistake an
+	// the ProvisioningRequest controller's hardware-config in-flight gate does not mistake an
 	// unobserved baseline transaction for an in-flight Day-2 configuration and block cluster
-	// installation indefinitely. A genuine Day-2 change bumps the generation (and
-	// ConfigTransactionId), re-entering the SpecChanged flow, so this does not mask real
+	// installation indefinitely. A genuine Day-2 change advances ConfigTransactionId as a
+	// monotonic counter, re-entering the SpecChanged flow, so this does not mask real
 	// configuration work.
 	err := hwmgrutils.UpdateNodeAllocationRequestObservedStatus(ctx, r.Client, nodeAllocationRequest,
 		nodeAllocationRequest.ObjectMeta.Generation, nodeAllocationRequest.Spec.ConfigTransactionId)
