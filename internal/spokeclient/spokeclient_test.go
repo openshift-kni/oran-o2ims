@@ -9,6 +9,7 @@ package spokeclient
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"testing"
 
@@ -30,6 +31,7 @@ import (
 	msav1beta1 "open-cluster-management.io/managed-serviceaccount/apis/authentication/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 var testScheme = fakeclient.Scheme
@@ -98,15 +100,13 @@ var _ = Describe("EnsureSpokeClient", func() {
 				TokenSecretRef: &msav1beta1.SecretRef{Name: "test-pr-upgrade-token"},
 			},
 		}
-		mw = &workv1.ManifestWork{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-pr-upgrade-rbac", Namespace: clusterName,
-			},
-			Status: workv1.ManifestWorkStatus{
-				Conditions: []metav1.Condition{{
-					Type: workv1.WorkAvailable, Status: metav1.ConditionTrue, LastTransitionTime: metav1.Now(),
-				}},
-			},
+		var err error
+		mw, err = BuildRBACManifestWork("test-pr-upgrade-rbac", clusterName, msa.Name, defaultAddonInstallNamespace, testRules)
+		Expect(err).ToNot(HaveOccurred())
+		mw.Generation = 1
+		mw.Status.Conditions = []metav1.Condition{
+			{Type: workv1.WorkApplied, Status: metav1.ConditionTrue, ObservedGeneration: 1},
+			{Type: workv1.WorkAvailable, Status: metav1.ConditionTrue, ObservedGeneration: 1},
 		}
 
 		SetTestSpokeClientCreator(func(apiServerURL, token string, caCert []byte, spokeScheme *runtime.Scheme) (client.Client, error) {
@@ -122,6 +122,35 @@ var _ = Describe("EnsureSpokeClient", func() {
 		newSpokeClientsetFunc = buildSpokeClientset
 	})
 
+	// bumpGenerationOnPatch stands in for the API server incrementing
+	// metadata.generation when a patch changes the spec. The fake client does
+	// no generation tracking of its own, and EnsureSpokeClient decides
+	// readiness by comparing conditions against the current generation.
+	bumpGenerationOnPatch := interceptor.Funcs{
+		Patch: func(ctx context.Context, c client.WithWatch, obj client.Object,
+			patch client.Patch, opts ...client.PatchOption) error {
+			if err := c.Patch(ctx, obj, patch, opts...); err != nil {
+				return fmt.Errorf("patch failed: %w", err)
+			}
+			obj.SetGeneration(obj.GetGeneration() + 1)
+			if err := c.Update(ctx, obj); err != nil {
+				return fmt.Errorf("generation bump failed: %w", err)
+			}
+			return nil
+		},
+	}
+
+	// cacheSpokeClientForTest seeds the cache with a client built from a token
+	// at the given resourceVersion.
+	cacheSpokeClientForTest := func(tokenResourceVersion string) {
+		spokeClientsMu.Lock()
+		defer spokeClientsMu.Unlock()
+		spokeClients["test-pr-upgrade"] = &spokeClientEntry{
+			clients:              Clients{Client: fake.NewClientBuilder().WithScheme(testScheme).Build()},
+			tokenResourceVersion: tokenResourceVersion,
+		}
+	}
+
 	It("should return InputError when managed-serviceaccount addon is not found", func() {
 		c := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(ns).Build()
 
@@ -131,6 +160,46 @@ var _ = Describe("EnsureSpokeClient", func() {
 		Expect(ready).To(BeFalse())
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("managed-serviceaccount addon is not available"))
+	})
+
+	// The addon agent mints and rotates the MSA token, so a cached client only
+	// outlives it until the current token expires. The dependency is reported
+	// rather than masked, even though it costs the cached fast path.
+	It("should return InputError when the addon is unavailable even with a cached client", func() {
+		c := fake.NewClientBuilder().WithScheme(testScheme).
+			WithObjects(ns, addon, tokenSecret, mc, msa, mw).Build()
+
+		_, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
+			msa.Name, mw.Name, testRules, NewSpokeScheme(), RuntimeClientOnly)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeTrue(), "the cached entry must be seeded before the addon goes away")
+
+		Expect(c.Delete(ctx, addon)).To(Succeed())
+		_, ready, err = EnsureSpokeClient(ctx, c, testLogger, clusterName,
+			msa.Name, mw.Name, testRules, NewSpokeScheme(), RuntimeClientOnly)
+		Expect(ready).To(BeFalse())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("managed-serviceaccount addon is not available"))
+	})
+
+	It("should surface non-NotFound addon errors as retryable errors", func() {
+		c := fake.NewClientBuilder().WithScheme(testScheme).
+			WithObjects(ns, addon, tokenSecret, mc, msa, mw).
+			WithInterceptorFuncs(interceptor.Funcs{
+				Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey,
+					obj client.Object, opts ...client.GetOption) error {
+					if _, ok := obj.(*addonv1alpha1.ManagedClusterAddOn); ok {
+						return fmt.Errorf("test addon read failure")
+					}
+					return c.Get(ctx, key, obj, opts...)
+				},
+			}).Build()
+
+		_, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
+			msa.Name, mw.Name, testRules, NewSpokeScheme(), RuntimeClientOnly)
+		Expect(err).To(MatchError(ContainSubstring("test addon read failure")))
+		Expect(typederrors.IsInputError(err)).To(BeFalse())
+		Expect(ready).To(BeFalse())
 	})
 
 	It("should return not ready when token is not yet synced", func() {
@@ -153,6 +222,16 @@ var _ = Describe("EnsureSpokeClient", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(ready).To(BeFalse())
 	})
+
+	DescribeTable("waits for successful RBAC application even when resources are available", func(status metav1.ConditionStatus) {
+		mw.Status.Conditions[0].Status = status
+		c := fake.NewClientBuilder().WithScheme(testScheme).
+			WithObjects(ns, addon, tokenSecret, mc, msa, mw).Build()
+		_, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
+			msa.Name, mw.Name, testRules, NewSpokeScheme(), RuntimeClientOnly)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeFalse())
+	}, Entry("Applied=False", metav1.ConditionFalse), Entry("Applied=Unknown", metav1.ConditionUnknown))
 
 	It("should use addon status.namespace for ClusterRoleBinding subject namespace", func() {
 		customNamespace := "custom-addon-ns"
@@ -197,16 +276,18 @@ var _ = Describe("EnsureSpokeClient", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(ready).To(BeFalse())
 
-		// Simulate ManifestWork controller setting Available=True.
+		// Simulate ManifestWork controller reporting the current work applied and available.
 		mw := &workv1.ManifestWork{}
 		Expect(c.Get(ctx, types.NamespacedName{
 			Name: "test-pr-upgrade-rbac", Namespace: clusterName,
 		}, mw)).To(Succeed())
 		Expect(mw.Spec.Workload.Manifests).To(HaveLen(2))
 		mw.Status.Conditions = []metav1.Condition{
+			{Type: workv1.WorkApplied, Status: metav1.ConditionTrue, ObservedGeneration: mw.Generation},
 			{
 				Type:               workv1.WorkAvailable,
 				Status:             metav1.ConditionTrue,
+				ObservedGeneration: mw.Generation,
 				LastTransitionTime: metav1.Now(),
 			},
 		}
@@ -288,6 +369,168 @@ var _ = Describe("EnsureSpokeClient", func() {
 		Expect(err.Error()).To(ContainSubstring("missing the 'token' key"))
 	})
 
+	DescribeTable("reconciles changed RBAC and waits for current-generation status", func(cacheClient bool) {
+		mw.Labels = map[string]string{"preserved": "label"}
+		mw.Annotations = map[string]string{"preserved": "annotation"}
+		mw.Spec.DeleteOption = &workv1.DeleteOption{PropagationPolicy: workv1.DeletePropagationPolicyTypeOrphan}
+		c := fake.NewClientBuilder().WithScheme(testScheme).
+			WithObjects(ns, addon, tokenSecret, mc, msa, mw).
+			WithStatusSubresource(&workv1.ManifestWork{}).
+			WithInterceptorFuncs(bumpGenerationOnPatch).Build()
+
+		var original Clients
+		if cacheClient {
+			var ready bool
+			var err error
+			original, ready, err = EnsureSpokeClient(ctx, c, testLogger, clusterName,
+				msa.Name, mw.Name, testRules, NewSpokeScheme(), RuntimeClientOnly)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ready).To(BeTrue())
+		}
+
+		// Replace the old rules, including removing permissions no longer requested.
+		newRules := []rbacv1.PolicyRule{{
+			APIGroups: []string{"machineconfiguration.openshift.io"},
+			Resources: []string{"machineconfigpools"}, Verbs: []string{"get"},
+		}}
+		clients, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
+			msa.Name, mw.Name, newRules, NewSpokeScheme(), RuntimeClientOnly)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeFalse())
+		Expect(clients.Client).To(BeNil())
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(mw), mw)).To(Succeed())
+		role := &rbacv1.ClusterRole{}
+		Expect(json.Unmarshal(mw.Spec.Workload.Manifests[0].Raw, role)).To(Succeed())
+		Expect(role.Rules).To(Equal(newRules))
+		Expect(mw.Labels).To(HaveKeyWithValue("preserved", "label"))
+		Expect(mw.Annotations).To(HaveKeyWithValue("preserved", "annotation"))
+		Expect(mw.Spec.DeleteOption.PropagationPolicy).To(Equal(workv1.DeletePropagationPolicyTypeOrphan))
+
+		// The patch bumped the generation, so the conditions the work agent
+		// reported for the previous one no longer count.
+		Expect(mw.Generation).To(BeNumerically(">", 1))
+		_, ready, err = EnsureSpokeClient(ctx, c, testLogger, clusterName,
+			msa.Name, mw.Name, newRules, NewSpokeScheme(), RuntimeClientOnly)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeFalse())
+
+		// Applied for this generation is insufficient while Available is stale.
+		mw.Status.Conditions[0].ObservedGeneration = mw.Generation
+		Expect(c.Status().Update(ctx, mw)).To(Succeed())
+		_, ready, err = EnsureSpokeClient(ctx, c, testLogger, clusterName,
+			msa.Name, mw.Name, newRules, NewSpokeScheme(), RuntimeClientOnly)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeFalse())
+
+		mw.Status.Conditions[1].ObservedGeneration = mw.Generation
+		Expect(c.Status().Update(ctx, mw)).To(Succeed())
+		clients, ready, err = EnsureSpokeClient(ctx, c, testLogger, clusterName,
+			msa.Name, mw.Name, newRules, NewSpokeScheme(), RuntimeClientOnly)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeTrue())
+		Expect(clients.Client).ToNot(BeNil())
+		if cacheClient {
+			Expect(clients.Client).To(Equal(original.Client))
+		}
+	}, Entry("after an operator restart", false), Entry("with a cached client", true))
+
+	It("does not patch unchanged RBAC even when manifest JSON is formatted differently", func() {
+		for i := range mw.Spec.Workload.Manifests {
+			var manifest map[string]any
+			Expect(json.Unmarshal(mw.Spec.Workload.Manifests[i].Raw, &manifest)).To(Succeed())
+			raw, err := json.MarshalIndent(manifest, "", "  ")
+			Expect(err).ToNot(HaveOccurred())
+			mw.Spec.Workload.Manifests[i].Raw = raw
+		}
+		patchCount := 0
+		c := fake.NewClientBuilder().WithScheme(testScheme).
+			WithObjects(ns, addon, tokenSecret, mc, msa, mw).
+			WithInterceptorFuncs(interceptor.Funcs{
+				Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+					patchCount++
+					return c.Patch(ctx, obj, patch, opts...)
+				},
+			}).Build()
+		for range 2 {
+			_, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
+				msa.Name, mw.Name, testRules, NewSpokeScheme(), RuntimeClientOnly)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ready).To(BeTrue())
+		}
+		Expect(patchCount).To(BeZero())
+	})
+
+	It("updates the binding when the addon service account namespace changes", func() {
+		addon.Status.Namespace = "new-addon-namespace"
+		c := fake.NewClientBuilder().WithScheme(testScheme).
+			WithObjects(ns, addon, tokenSecret, mc, msa, mw).
+			WithInterceptorFuncs(bumpGenerationOnPatch).Build()
+		_, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
+			msa.Name, mw.Name, testRules, NewSpokeScheme(), RuntimeClientOnly)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeFalse(), "the rewritten binding is not yet reported applied")
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(mw), mw)).To(Succeed())
+		binding := &rbacv1.ClusterRoleBinding{}
+		Expect(json.Unmarshal(mw.Spec.Workload.Manifests[1].Raw, binding)).To(Succeed())
+		Expect(binding.Subjects).To(ConsistOf(rbacv1.Subject{
+			Kind: "ServiceAccount", Name: msa.Name, Namespace: addon.Status.Namespace,
+		}))
+	})
+
+	It("recreates a missing ManifestWork even when the client is cached", func() {
+		c := fake.NewClientBuilder().WithScheme(testScheme).
+			WithObjects(ns, addon, tokenSecret, mc, msa, mw).Build()
+		_, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
+			msa.Name, mw.Name, testRules, NewSpokeScheme(), RuntimeClientOnly)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeTrue())
+		Expect(c.Delete(ctx, mw)).To(Succeed())
+		_, ready, err = EnsureSpokeClient(ctx, c, testLogger, clusterName,
+			msa.Name, mw.Name, testRules, NewSpokeScheme(), RuntimeClientOnly)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeFalse())
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(mw), mw)).To(Succeed())
+		Expect(mw.Spec.Workload.Manifests).To(HaveLen(2))
+	})
+
+	It("does not patch or use a deleting RBAC ManifestWork", func() {
+		mw.Spec.Workload.Manifests = nil // Would otherwise require a patch.
+		now := metav1.Now()
+		mw.SetDeletionTimestamp(&now)
+		mw.SetFinalizers([]string{"test-finalizer"})
+		patchCount := 0
+		c := fake.NewClientBuilder().WithScheme(testScheme).
+			WithObjects(ns, addon, tokenSecret, mc, msa, mw).
+			WithInterceptorFuncs(interceptor.Funcs{
+				Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+					patchCount++
+					return c.Patch(ctx, obj, patch, opts...)
+				},
+			}).Build()
+		clients, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
+			msa.Name, mw.Name, testRules, NewSpokeScheme(), RuntimeClientOnly)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeFalse())
+		Expect(clients.Client).To(BeNil())
+		Expect(patchCount).To(BeZero())
+	})
+
+	It("returns ManifestWork patch failures for retry", func() {
+		mw.Spec.Workload.Manifests = nil
+		c := fake.NewClientBuilder().WithScheme(testScheme).
+			WithObjects(ns, addon, tokenSecret, mc, msa, mw).
+			WithInterceptorFuncs(interceptor.Funcs{
+				Patch: func(context.Context, client.WithWatch, client.Object, client.Patch, ...client.PatchOption) error {
+					return fmt.Errorf("test patch failure")
+				},
+			}).Build()
+		clients, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
+			msa.Name, mw.Name, testRules, NewSpokeScheme(), RuntimeClientOnly)
+		Expect(err).To(MatchError(ContainSubstring("failed to reconcile RBAC ManifestWork: test patch failure")))
+		Expect(ready).To(BeFalse())
+		Expect(clients.Client).To(BeNil())
+	})
+
 	It("should return cached client when token resourceVersion is unchanged", func() {
 		fakeSpokeClient := fake.NewClientBuilder().WithScheme(testScheme).Build()
 		fakeSpokeClientset := kubefake.NewSimpleClientset()
@@ -299,7 +542,7 @@ var _ = Describe("EnsureSpokeClient", func() {
 		spokeClientsMu.Unlock()
 
 		c := fake.NewClientBuilder().WithScheme(testScheme).
-			WithObjects(ns, msa, tokenSecret).Build()
+			WithObjects(ns, addon, msa, tokenSecret, mw).Build()
 
 		result, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
 			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme(), WithClientset)
@@ -320,7 +563,7 @@ var _ = Describe("EnsureSpokeClient", func() {
 		spokeClientsMu.Unlock()
 
 		c := fake.NewClientBuilder().WithScheme(testScheme).
-			WithObjects(ns, msa, tokenSecret, mc).Build()
+			WithObjects(ns, addon, msa, tokenSecret, mc, mw).Build()
 
 		result, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
 			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme(), WithClientset)
@@ -337,25 +580,60 @@ var _ = Describe("EnsureSpokeClient", func() {
 		Expect(entry.clients.Clientset).ToNot(Equal(oldClientset))
 	})
 
-	It("should clear cache and re-setup when token secret is missing", func() {
-		spokeClientsMu.Lock()
-		spokeClients["test-pr-upgrade"] = &spokeClientEntry{
-			clients:              Clients{Client: fake.NewClientBuilder().WithScheme(testScheme).Build()},
-			tokenResourceVersion: "99",
-		}
-		spokeClientsMu.Unlock()
+	It("should clear cache and re-setup when the token secret is missing", func() {
+		cacheSpokeClientForTest("99")
 
-		c := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(ns).Build()
+		// The MSA still references a token secret that no longer exists.
+		c := fake.NewClientBuilder().WithScheme(testScheme).
+			WithObjects(ns, addon, mc, msa, mw).Build()
 
 		_, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
 			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme(), RuntimeClientOnly)
-		Expect(err).To(HaveOccurred())
+		Expect(err).To(MatchError(ContainSubstring("failed to read token secret")))
 		Expect(ready).To(BeFalse())
 
 		spokeClientsMu.RLock()
 		_, ok := spokeClients["test-pr-upgrade"]
 		spokeClientsMu.RUnlock()
 		Expect(ok).To(BeFalse())
+	})
+
+	It("should clear cache and wait when the MSA token is no longer synced", func() {
+		cacheSpokeClientForTest("99")
+
+		msa.Status.TokenSecretRef = nil
+		c := fake.NewClientBuilder().WithScheme(testScheme).
+			WithObjects(ns, addon, mc, msa, mw).Build()
+
+		_, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
+			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme(), RuntimeClientOnly)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeFalse())
+
+		spokeClientsMu.RLock()
+		_, ok := spokeClients["test-pr-upgrade"]
+		spokeClientsMu.RUnlock()
+		Expect(ok).To(BeFalse())
+	})
+
+	It("should rebuild a cached runtime-only client when a clientset is requested", func() {
+		cachedClient := fake.NewClientBuilder().WithScheme(testScheme).Build()
+		spokeClientsMu.Lock()
+		spokeClients["test-pr-upgrade"] = &spokeClientEntry{
+			clients:              Clients{Client: cachedClient},
+			tokenResourceVersion: "100",
+		}
+		spokeClientsMu.Unlock()
+
+		c := fake.NewClientBuilder().WithScheme(testScheme).
+			WithObjects(ns, addon, mc, msa, tokenSecret, mw).Build()
+
+		result, ready, err := EnsureSpokeClient(ctx, c, testLogger, clusterName,
+			"test-pr-upgrade", "test-pr-upgrade-rbac", testRules, NewSpokeScheme(), WithClientset)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ready).To(BeTrue())
+		Expect(result.Client).ToNot(Equal(cachedClient))
+		Expect(result.Clientset).ToNot(BeNil())
 	})
 })
 
