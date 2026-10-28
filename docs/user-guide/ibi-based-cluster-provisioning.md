@@ -159,12 +159,14 @@ to extract `openshift-install` for the ISO build.
 
 #### Understand failures and clean up the seed cluster
 
-Failures found during admission are rejected before hardware provisioning. A
-post-install preflight failure is reported before ACM detachment, so the seed cluster
-remains attached to ACM. After detachment begins, a failed or timed-out operation
-leaves the cluster detached; it does not restore ACM agents automatically. A timeout
-does not stop an LCA host process that is already running. Inspect the condition and
-provisioning details before deciding how to proceed.
+Registry and optional ISO-upload preflight failures are recorded as validation
+conditions during reconciliation on the accepted ProvisioningRequest, before
+hardware allocation. A post-install preflight failure is reported before ACM
+detachment, so the seed cluster remains attached to ACM. After detachment begins, a
+failed or timed-out operation leaves the cluster detached; it does not restore ACM
+agents automatically. A timeout does not stop an LCA host process that is already
+running. Inspect the condition and provisioning details before deciding how to
+proceed.
 
 After saving the image reference and optional ISO URL and digest, delete the factory
 ProvisioningRequest to reclaim its hardware:
