@@ -565,7 +565,7 @@ var _ = Describe("handleNewNodeAllocationRequestCreate", func() {
 	// Spec.ConfigTransactionId from the generation (>=1) and never emits a Configured
 	// condition. If the hardware manager acknowledged only ObservedGeneration on create,
 	// ObservedConfigTransactionId stayed 0 forever, so the ProvisioningRequest controller's
-	// hardwareConfigInProgress gate mistook the unobserved baseline for an in-flight Day-2
+	// hardware-config in-flight gate mistook the unobserved baseline for an in-flight Day-2
 	// configuration and blocked cluster installation indefinitely. The create handler must
 	// acknowledge the baseline config transaction so the gate can proceed.
 	It("acknowledges the baseline config transaction so Day-0 provisioning is not gated", func() {
@@ -665,8 +665,8 @@ var _ = Describe("handleNodeAllocationRequestNoop", func() {
 	// Regression coverage for the upgrade half of OCPBUGS-132825: a NAR created before the
 	// controller acknowledged the baseline ConfigTransactionId on create carries a nonzero
 	// Spec.ConfigTransactionId with ObservedConfigTransactionId == 0 and no Configured
-	// condition. Without acknowledging it on the Noop path, hardwareConfigInProgress would
-	// block downstream phases forever after an operator upgrade.
+	// condition. Without acknowledging it on the Noop path, the hardware-config in-flight gate
+	// would block downstream phases forever after an operator upgrade.
 	It("acknowledges a legacy unobserved baseline transaction", func() {
 		nar := provisionedNAR(1, 0, nil)
 		_, err := reconciler.handleNodeAllocationRequestNoop(ctx, nar)

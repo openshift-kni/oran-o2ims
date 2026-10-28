@@ -704,11 +704,13 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 	// Block downstream phases while a hardware configuration transaction scheduled
 	// on the NodeAllocationRequest is still in flight — including the window after a
 	// Day-2 firmware update is scheduled but before a Configured condition exists.
-	// checkNodeAllocationRequestConfigStatus reports that window as configured==false
-	// (not nil) via the spec-vs-observed gate. Proceeding there would let the upgrade
-	// phase create the IBGU while the firmware flash power-cycles the node and kills
-	// IBU Prep (OCPBUGS-132825).
-	if hardwareConfigInProgress(configured) {
+	// configured is the tri-state result from checkNodeAllocationRequestConfigStatus:
+	// nil means nothing is scheduled (safe to proceed), non-nil true means the
+	// configuration completed, and non-nil false means a transaction is in progress —
+	// which the spec-vs-observed gate also reports for that pre-condition window.
+	// Proceeding on non-nil false would let the upgrade phase create the IBGU while
+	// the firmware flash power-cycles the node and kills IBU Prep (OCPBUGS-132825).
+	if configured != nil && !*configured {
 		t.logger.InfoContext(ctx, "Waiting for NodeAllocationRequest to be configured",
 			slog.String("nodeAllocationRequestID", nodeAllocationRequestID))
 		return requeueWithMediumInterval(), false, nil
