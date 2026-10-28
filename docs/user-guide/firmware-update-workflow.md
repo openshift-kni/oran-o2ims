@@ -134,6 +134,14 @@ A validating webhook verifies at creation time that every entry in
 that at most one entry has component type `bios` and at most one has component type
 `bmc` (multiple `nic` entries are allowed).
 
+> [!NOTE]
+> A HardwareProfile that uses `firmwareImages` must be created in the operator's
+> namespace. The singleton `firmware-catalog` is resolved from the HardwareProfile's
+> own namespace, and it only exists in the operator's namespace, so a
+> `firmwareImages`-based HardwareProfile created elsewhere is rejected at admission.
+> The deprecated inline fields (`biosFirmware`, `bmcFirmware`, `nicFirmware`) carry no
+> such restriction because they do not reference the catalog.
+
 #### Deprecated: Inline firmware fields
 
 > [!WARNING]
