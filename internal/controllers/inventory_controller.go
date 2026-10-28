@@ -957,7 +957,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (c
 							AllowPrivilegeEscalation: k8sptr.To(false),
 							ReadOnlyRootFilesystem:   k8sptr.To(true),
 							Capabilities: &corev1.Capabilities{
-								Drop: []corev1.Capability{"ALL"},
+								Drop: []corev1.Capability{controllerDropAllCaps},
 							},
 						},
 						Ports: []corev1.ContainerPort{
@@ -991,7 +991,7 @@ func (t *reconcilerTask) deployServer(ctx context.Context, serverName string) (c
 					AllowPrivilegeEscalation: k8sptr.To(false),
 					ReadOnlyRootFilesystem:   k8sptr.To(true),
 					Capabilities: &corev1.Capabilities{
-						Drop: []corev1.Capability{"ALL"},
+						Drop: []corev1.Capability{controllerDropAllCaps},
 					},
 				},
 				Resources: corev1.ResourceRequirements{

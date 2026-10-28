@@ -173,11 +173,6 @@ func (v *provisioningRequestValidator) validateCreateOrUpdate(ctx context.Contex
 	if err != nil {
 		return err
 	}
-	if err := validation.ValidateSeedGenerationSupported(
-		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw, newPr.Spec.TemplateParameters.Raw); err != nil {
-		return fmt.Errorf("unsupported seed generation configuration: %w", err)
-	}
-
 	if err := validation.ValidateTemplateInputMatchesSchema(clusterTemplate.Name, clusterTemplate.Spec.TemplateParameterSchema.Raw, newPr.Spec.TemplateParameters.Raw); err != nil {
 		//nolint:wrapcheck // Preserve the admission error returned before the move.
 		return err

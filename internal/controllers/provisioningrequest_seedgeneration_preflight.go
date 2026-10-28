@@ -52,6 +52,7 @@ const (
 	seedGenerationSnapshotToolKind   = "tooling"
 	seedGenerationAuthSecretKey      = "seedAuth"
 	seedGenerationSnapshotMirrorFile = "idms.yaml"
+	seedGenerationISOConfigKey       = "image-based-installation-config.yaml"
 	seedGenerationRunLabel           = "clcm.openshift.io/seed-generation"
 	seedGenerationTLSTimeout         = 10 * time.Second
 	dockerHubRegistry                = "docker.io"
@@ -114,6 +115,7 @@ type seedGenerationInputDocument struct {
 	ClusterTemplateUID       types.UID                         `json:"clusterTemplateUID,omitempty"`
 	Release                  string                            `json:"release"`
 	SeedGeneration           map[string]any                    `json:"seedGeneration"`
+	ToolsImage               string                            `json:"toolsImage,omitempty"`
 	ResolvedReleaseImage     string                            `json:"resolvedReleaseImage,omitempty"`
 	ImageDigestSources       []seedGenerationImageDigestSource `json:"imageDigestSources,omitempty"`
 	RegistryTrustedCAs       map[string]string                 `json:"registryTrustedCAs,omitempty"`
@@ -714,6 +716,26 @@ func (t *provisioningRequestReconcilerTask) resolveSeedGenerationInputSnapshot(
 	if err := t.resolveISOInputs(ctx, clusterTemplate, liveISOConfig, document, seedAuth, credentials); err != nil {
 		return nil, nil, err
 	}
+	toolsImage, err := seedGenerationToolsImage()
+	if err != nil {
+		return nil, nil, err
+	}
+	document.ToolsImage = toolsImage
+	pullSecret := credentials["pullSecret"]
+	if len(pullSecret[corev1.DockerConfigJsonKey]) == 0 {
+		return nil, nil, fmt.Errorf("frozen ISO pull credentials are missing")
+	}
+	isoConfig, err := seedGenerationISOConfig(&seedGenerationInputSnapshot{
+		Document: document,
+		Secrets: map[string]*corev1.Secret{
+			"pullSecret": {Data: map[string][]byte{corev1.DockerConfigJsonKey: pullSecret[corev1.DockerConfigJsonKey]}},
+			"upload":     {Data: credentials["upload"]},
+		},
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	pullSecret[seedGenerationISOConfigKey] = isoConfig
 	return document, credentials, nil
 }
 
@@ -772,7 +794,7 @@ func (t *provisioningRequestReconcilerTask) validateSeedGenerationRegistryPrefli
 		string(provisioningv1alpha1.PRconditionTypes.SeedGenerationRegistryValidated))
 	if condition != nil && condition.Status == metav1.ConditionTrue &&
 		condition.ObservedGeneration == t.object.Generation {
-		return nil
+		return t.validateSeedGenerationISOUploadPreflight(ctx, clusterTemplate, seedGeneration)
 	}
 
 	_, err := t.resolveSeedGenerationRegistryCredentials(ctx, clusterTemplate, seedGeneration)
@@ -802,6 +824,66 @@ func (t *provisioningRequestReconcilerTask) validateSeedGenerationRegistryPrefli
 		"Seed image registry push access was validated")
 	condition = meta.FindStatusCondition(t.object.Status.Conditions,
 		string(provisioningv1alpha1.PRconditionTypes.SeedGenerationRegistryValidated))
+	condition.ObservedGeneration = t.object.Generation
+	return t.validateSeedGenerationISOUploadPreflight(ctx, clusterTemplate, seedGeneration)
+}
+
+func (t *provisioningRequestReconcilerTask) validateSeedGenerationISOUploadPreflight(
+	ctx context.Context,
+	clusterTemplate *provisioningv1alpha1.ClusterTemplate,
+	seedGeneration map[string]any,
+) error {
+	rawLiveISO, hasISO := seedGeneration["liveISO"]
+	if !hasISO {
+		meta.RemoveStatusCondition(&t.object.Status.Conditions,
+			string(provisioningv1alpha1.PRconditionTypes.SeedGenerationISOUploadValidated))
+		return nil
+	}
+	condition := meta.FindStatusCondition(t.object.Status.Conditions,
+		string(provisioningv1alpha1.PRconditionTypes.SeedGenerationISOUploadValidated))
+	if condition != nil && condition.Status == metav1.ConditionTrue &&
+		condition.ObservedGeneration == t.object.Generation {
+		return nil
+	}
+	check := func() error {
+		liveISO, ok := rawLiveISO.(map[string]any)
+		if !ok {
+			return fmt.Errorf("liveISO must be an object")
+		}
+		uploadSecretName, err := seedGenerationSecretReference(liveISO, "uploadSecretRef")
+		if err != nil {
+			return err
+		}
+		uploadSecret, err := t.getTemplateSecret(ctx, clusterTemplate, uploadSecretName, "liveISO.uploadSecretRef")
+		if err != nil {
+			return err
+		}
+		return t.validateSeedGenerationISOUploadInputs(ctx, liveISO, uploadSecret)
+	}
+	if err := check(); err != nil {
+		status := metav1.ConditionFalse
+		reason := provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed
+		if isSeedGenerationTransientError(err) {
+			status = metav1.ConditionUnknown
+			reason = provisioningv1alpha1.CRconditionReasons.InProgress
+		}
+		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
+			provisioningv1alpha1.PRconditionTypes.SeedGenerationISOUploadValidated,
+			reason, status, err.Error())
+		condition = meta.FindStatusCondition(t.object.Status.Conditions,
+			string(provisioningv1alpha1.PRconditionTypes.SeedGenerationISOUploadValidated))
+		condition.ObservedGeneration = t.object.Generation
+		if isSeedGenerationTransientError(err) {
+			return markSeedGenerationTransient(fmt.Errorf("live ISO upload preflight could not complete: %w", err))
+		}
+		return typederrors.NewInputError("live ISO upload preflight failed: %w", err)
+	}
+	ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
+		provisioningv1alpha1.PRconditionTypes.SeedGenerationISOUploadValidated,
+		provisioningv1alpha1.CRconditionReasons.Completed, metav1.ConditionTrue,
+		"Live ISO upload credentials, paths, and TLS endpoints were validated")
+	condition = meta.FindStatusCondition(t.object.Status.Conditions,
+		string(provisioningv1alpha1.PRconditionTypes.SeedGenerationISOUploadValidated))
 	condition.ObservedGeneration = t.object.Generation
 	return nil
 }
@@ -1285,7 +1367,7 @@ func (t *provisioningRequestReconcilerTask) resolveISOInputs(
 	seedAuth []byte,
 	credentials map[string]map[string][]byte,
 ) error {
-	releaseImage, err := seedGenerationString(liveISO, "releaseImage")
+	releaseImage, err := t.resolveISOInstallInputs(ctx, liveISO, document)
 	if err != nil {
 		return err
 	}
@@ -1308,26 +1390,8 @@ func (t *provisioningRequestReconcilerTask) resolveISOInputs(
 	if err != nil {
 		return err
 	}
-	for _, key := range []string{"host", "username", "privateKey", "remotePath", "knownHosts"} {
-		if strings.TrimSpace(string(uploadSource.Data[key])) == "" {
-			return fmt.Errorf("upload Secret %s/%s is missing non-empty %q data",
-				clusterTemplate.Namespace, uploadSecretName, key)
-		}
-	}
-	if !strings.HasPrefix(string(uploadSource.Data["remotePath"]), "/") {
-		return fmt.Errorf("upload Secret %s/%s remotePath must be absolute", clusterTemplate.Namespace, uploadSecretName)
-	}
-	if caCert := uploadSource.Data["caCert"]; len(caCert) > 0 {
-		if _, err := seedGenerationRootCAs(caCert); err != nil {
-			return fmt.Errorf("upload Secret %s/%s caCert is invalid: %w", clusterTemplate.Namespace, uploadSecretName, err)
-		}
-	}
-	urlBase, err := seedGenerationString(liveISO, "urlBase")
-	if err != nil {
-		return err
-	}
-	if err := validateSeedGenerationHTTPS(ctx, urlBase, uploadSource.Data["caCert"]); err != nil {
-		return fmt.Errorf("liveISO.urlBase TLS preflight failed: %w", err)
+	if err := t.validateSeedGenerationISOUploadInputs(ctx, liveISO, uploadSource); err != nil {
+		return fmt.Errorf("frozen live ISO upload credentials failed validation: %w", err)
 	}
 	uploadData := make(map[string][]byte, 6)
 	for _, key := range []string{"host", "username", "privateKey", "remotePath", "knownHosts", "caCert"} {
@@ -1377,6 +1441,49 @@ func (t *provisioningRequestReconcilerTask) resolveISOInputs(
 	return nil
 }
 
+// resolveISOInstallInputs fills optional ISO values from the ClusterInstance
+// that installed the seed cluster. Keep the resolved values in the immutable
+// snapshot so restarts never re-read a changed ClusterImageSet or node spec.
+func (t *provisioningRequestReconcilerTask) resolveISOInstallInputs(
+	ctx context.Context, liveISO map[string]any, document *seedGenerationInputDocument,
+) (string, error) {
+	frozenLiveISO, ok := document.SeedGeneration["liveISO"].(map[string]any)
+	if !ok {
+		return "", fmt.Errorf("frozen liveISO configuration is missing")
+	}
+	_, hasReleaseImage := liveISO["releaseImage"]
+	_, hasInstallationDisk := liveISO["installationDisk"]
+	if !hasReleaseImage || !hasInstallationDisk {
+		clusterInstance, err := t.getExistingClusterInstance(ctx)
+		if err != nil {
+			return "", fmt.Errorf("cannot derive live ISO installation inputs: %w", err)
+		}
+		if !hasReleaseImage {
+			imageSetName := clusterInstance.Spec.ClusterImageSetNameRef
+			if imageSetName == "" {
+				return "", fmt.Errorf("liveISO.releaseImage is unset and ClusterInstance %s/%s has no clusterImageSetNameRef",
+					clusterInstance.Namespace, clusterInstance.Name)
+			}
+			imageSet := &hivev1.ClusterImageSet{}
+			if err := t.client.Get(ctx, client.ObjectKey{Name: imageSetName}, imageSet); err != nil {
+				return "", fmt.Errorf("cannot derive liveISO.releaseImage from ClusterImageSet %s: %w", imageSetName, err)
+			}
+			if strings.TrimSpace(imageSet.Spec.ReleaseImage) == "" {
+				return "", fmt.Errorf("clusterImageSet %s has no releaseImage; set liveISO.releaseImage explicitly", imageSetName)
+			}
+			frozenLiveISO["releaseImage"] = imageSet.Spec.ReleaseImage
+		}
+		if !hasInstallationDisk {
+			if len(clusterInstance.Spec.Nodes) != 1 || clusterInstance.Spec.Nodes[0].RootDeviceHints == nil ||
+				strings.TrimSpace(clusterInstance.Spec.Nodes[0].RootDeviceHints.DeviceName) == "" {
+				return "", fmt.Errorf("cannot derive liveISO.installationDisk from a single ClusterInstance node's rootDeviceHints.deviceName; set it explicitly for the target servers")
+			}
+			frozenLiveISO["installationDisk"] = clusterInstance.Spec.Nodes[0].RootDeviceHints.DeviceName
+		}
+	}
+	return seedGenerationString(frozenLiveISO, "releaseImage")
+}
+
 func seedGenerationRootCAs(caCert []byte) (*x509.CertPool, error) {
 	roots, err := x509.SystemCertPool()
 	if err != nil {
@@ -1395,7 +1502,7 @@ func validateSeedGenerationHTTPS(ctx context.Context, rawURL string, caCert []by
 	parsed, err := url.Parse(rawURL)
 	if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil ||
 		parsed.RawQuery != "" || parsed.Fragment != "" {
-		return fmt.Errorf("urlBase must be an HTTPS URL with a host and no user info, query, or fragment")
+		return fmt.Errorf("the URL must use HTTPS with a host and no user info, query, or fragment")
 	}
 	roots, err := seedGenerationRootCAs(caCert)
 	if err != nil {

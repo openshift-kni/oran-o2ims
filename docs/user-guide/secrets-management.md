@@ -44,6 +44,9 @@ contain sensitive credentials and must not be committed to Git in cleartext:
   [BMC Credentials Secret](./server-onboarding.md#bmc-credentials-secret)).
 - **Cluster pull secrets** — the registry pull secret (`pull-secret.yaml`)
   referenced by the cluster templates.
+- **Live ISO upload Secrets** — the SSH private key and HTTPS trust data used
+  to publish generated installation ISOs (see
+  [Configure a live ISO upload destination](seed-generation-live-iso-upload.md)).
 - **Preprovisioning network-data Secrets** — where used, the nmstate network
   configuration built into the discovery ISO (see
   [Preprovisioning Network Data Secret](./server-onboarding.md#preprovisioning-network-data-secret)).

@@ -29,9 +29,10 @@ import (
 
 // The manager scopes Job, Pod, and PVC informers to the operator namespace,
 // so cached reads and cleanup use the namespaced permissions below.
-//+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;delete,namespace=system
+//+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;delete,namespace=system
 //+kubebuilder:rbac:groups="",resources=pods;persistentvolumeclaims;secrets;configmaps,verbs=get;list;watch;delete,namespace=system
 //+kubebuilder:rbac:groups="",resources=pods,verbs=create,namespace=system
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=create,namespace=system
 //+kubebuilder:rbac:groups="",resources=pods/log,verbs=get,namespace=system
 //+kubebuilder:rbac:groups=config.openshift.io,resources=images;imagedigestmirrorsets;imagetagmirrorsets,verbs=list;watch
 //+kubebuilder:rbac:groups=operator.openshift.io,resources=imagecontentsourcepolicies,verbs=list;watch
@@ -267,6 +268,9 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGeneration(ctx context.
 		if pending {
 			return requeueWithShortInterval(), nil
 		}
+		if delay := t.seedGenerationISOFailureRetentionDelay(); delay > 0 {
+			return ctrl.Result{RequeueAfter: delay}, nil
+		}
 		return doNotRequeue(), nil
 	}
 	details := t.object.Status.Extensions.ClusterDetails
@@ -277,13 +281,12 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGeneration(ctx context.
 	}
 	status := details.SeedGenerationStatus
 	deadline := status.StartedAt.Add(time.Duration(status.TimeoutSeconds) * time.Second)
-	if !time.Now().Before(deadline) {
+	if !t.seedGenerationISOCurrentTime().Before(deadline) {
 		message := fmt.Sprintf("Seed generation timed out after %s", time.Duration(status.TimeoutSeconds)*time.Second)
 		if condition := seedGenerationCondition(t.object); condition != nil && condition.Message != "" {
 			message += ": " + condition.Message
 		}
-		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.TimedOut,
-			message)
+		return t.failSeedGenerationISOTimeout(ctx, message)
 	}
 	condition := seedGenerationCondition(t.object)
 	if status.DetachmentStarted {
@@ -308,10 +311,6 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerationPreflight(ctx
 	}
 	if retry {
 		return requeueWithShortInterval(), nil
-	}
-	if _, hasISO := snapshot.Document.SeedGeneration["liveISO"]; hasISO {
-		return t.handleSeedGenerationPreflightError(ctx, "seed generation preflight failed",
-			fmt.Errorf("liveISO is not supported by this controller version"))
 	}
 	if err := t.validateSeedGenerationSpokePrerequisites(ctx, snapshot); err != nil {
 		return t.handleSeedGenerationPreflightError(ctx, "seed generation spoke preflight failed", err)
@@ -388,6 +387,9 @@ func (t *provisioningRequestReconcilerTask) failSeedGeneration(
 	if pending {
 		return requeueWithShortInterval(), nil
 	}
+	if delay := t.seedGenerationISOFailureRetentionDelay(); delay > 0 {
+		return ctrl.Result{RequeueAfter: delay}, nil
+	}
 	return doNotRequeue(), nil
 }
 
@@ -397,6 +399,13 @@ func (t *provisioningRequestReconcilerTask) cleanupSeedGenerationRunResources(ct
 		return false, err
 	}
 	if detachedPending {
+		return true, nil
+	}
+	isoPending, err := t.cleanupSeedGenerationISOResources(ctx, t.seedGenerationISOCompleted(), true)
+	if err != nil {
+		return false, err
+	}
+	if isoPending {
 		return true, nil
 	}
 	snapshotPending, err := t.cleanupSeedGenerationPreflightResources(ctx)
@@ -463,6 +472,10 @@ func (r *ProvisioningRequestReconciler) cleanupSeedGenerationResources(
 	}
 	if pr.UID == "" {
 		return false, fmt.Errorf("cannot clean seed resources for ProvisioningRequest %s without a UID", pr.Name)
+	}
+	task := &provisioningRequestReconcilerTask{logger: r.Logger, client: r.Client, object: pr}
+	if pending, err := task.cleanupSeedGenerationISOResources(ctx, false, false); err != nil || pending {
+		return false, err
 	}
 	_, skipCleanup := pr.Annotations[ctlrutils.SkipCleanupAnnotation]
 	// Normal deletion wipes the node through the NAR. Spoke availability must

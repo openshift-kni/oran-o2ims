@@ -26,6 +26,14 @@ spec:
       seedGeneration:
         # Optional operation timeout; defaults to 2h for seed-only generation.
         seedGenerationTimeout: 2h
+        # Optional live ISO settings. Configure the upload Secret and URL before
+        # uncommenting this block. sshKey is a public key for core SSH access
+        # to inspect the pre-provisioning host and its logs.
+        # liveISO:
+        #   uploadSecretRef:
+        #     name: iso-server-credentials
+        #   urlBase: https://iso.example.com/ibi/
+        #   sshKey: "ssh-ed25519 AAAA... user@example"
   templateParameterSchema:
     type: object
     additionalProperties: false

@@ -49,6 +49,7 @@ type provisioningRequestReconcilerTask struct {
 	timeouts                         *timeouts
 	seedGenerationSpokeClientBuilder func([]byte) (client.Client, error)
 	seedGenerationRegistryPushAccess func(context.Context, string, []byte) error
+	seedGenerationISONow             func() time.Time
 }
 
 // clusterInput holds the merged input data for a cluster

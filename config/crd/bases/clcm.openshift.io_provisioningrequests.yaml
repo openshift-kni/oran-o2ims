@@ -320,6 +320,51 @@ spec:
                             description: ISODigest is the SHA-256 digest of the generated
                               live ISO.
                             type: string
+                          isoFailureDiagnosticsExpiresAt:
+                            description: ISOFailureDiagnosticsExpiresAt bounds retention
+                              of redacted ISO build diagnostics.
+                            format: date-time
+                            type: string
+                          isoFailureDiagnosticsRef:
+                            description: ISOFailureDiagnosticsRef points to the redacted
+                              ISO build log retained after a failed Job.
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                type: string
+                              namespace:
+                                type: string
+                            required:
+                            - key
+                            - name
+                            - namespace
+                            type: object
+                          isoJobSpecHash:
+                            description: |-
+                              ISOJobSpecHash fingerprints the controller-managed Job template settings.
+                              It is versioned and persisted with submission intent so operator updates
+                              validate the original Job independently of the current embedded script.
+                            maxLength: 96
+                            pattern: ^v[1-9][0-9]*:sha256:[a-f0-9]{64}$
+                            type: string
+                          isoJobSubmitted:
+                            description: |-
+                              ISOJobSubmitted is persisted before creating the one-shot live ISO Job.
+                              A submitted Job that disappears is never recreated because it may already
+                              have uploaded an artifact.
+                              A crash after persisting this intent but before Job creation succeeds also
+                              fails the run after the adoption window if no Job appears.
+                            type: boolean
+                          isoJobSubmittedAt:
+                            description: ISOJobSubmittedAt records when the controller
+                              persisted the ISO Job intent.
+                            format: date-time
+                            type: string
+                          isoJobUID:
+                            description: ISOJobUID pins the Job adopted by this seed
+                              generation run.
+                            type: string
                           isoServerCACertRef:
                             description: ISOServerCACertRef identifies the durable
                               HTTPS server CA bundle.
@@ -338,6 +383,17 @@ spec:
                           isoURL:
                             description: ISOURL is the verified HTTPS URL of the generated
                               live ISO.
+                            type: string
+                          isoUploadCleanupCompleted:
+                            description: |-
+                              ISOUploadCleanupCompleted records remote cleanup or expiry of its bounded
+                              retry budget. On expiry the condition directs the user to manual cleanup.
+                            type: boolean
+                          isoUploadCleanupDeadline:
+                            description: |-
+                              ISOUploadCleanupDeadline bounds retries while removing an interrupted
+                              remote upload before the frozen credentials are discarded.
+                            format: date-time
                             type: string
                           klusterletUID:
                             description: KlusterletUID identifies AppliedManifestWorks

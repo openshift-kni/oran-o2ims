@@ -65,6 +65,19 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerationDetached(
 	ctx context.Context,
 	snapshot *seedGenerationInputSnapshot,
 ) (ctrl.Result, error) {
+	status := t.object.Status.Extensions.ClusterDetails.SeedGenerationStatus
+	if status.SeedGeneratorFinished {
+		if _, hasISO := snapshot.Document.SeedGeneration["liveISO"]; hasISO {
+			pending, err := t.cleanupSeedGenerationDetachedResourcesAndRecordCompletion(ctx)
+			if err != nil {
+				return t.handleSeedGenerationLifecycleError(ctx, "failed to clean up spoke seed generation resources", err)
+			}
+			if pending {
+				return requeueWithShortInterval(), nil
+			}
+			return t.reconcileSeedGenerationISO(ctx, snapshot)
+		}
+	}
 	pending, err := t.reconcileSeedGenerationAgentDetachment(ctx, snapshot)
 	if err != nil {
 		return t.handleSeedGenerationLifecycleError(ctx, "failed to detach ACM agents", err)
@@ -93,7 +106,7 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerator(
 ) (ctrl.Result, error) {
 	desired, err := desiredSeedGenerator(t.object, snapshot)
 	if err != nil {
-		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, err.Error())
+		return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed, err.Error())
 	}
 	spokeClient, err := t.verifiedSeedGenerationSpokeClient(ctx, snapshot)
 	if err != nil {
@@ -104,10 +117,10 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerator(
 	err = spokeClient.Get(ctx, key, seedGenerator)
 	if err == nil {
 		if err := validateSeedGenerationLCAOwnership(seedGenerator, t.object); err != nil {
-			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, err.Error())
+			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed, err.Error())
 		}
 		if err := validateSeedGeneratorSpec(seedGenerator, snapshot); err != nil {
-			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, err.Error())
+			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed, err.Error())
 		}
 		if seedGenerator.GetDeletionTimestamp() != nil {
 			return t.waitForSeedGeneratorStatus(ctx)
@@ -136,7 +149,7 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerator(
 	case apierrors.IsNotFound(err):
 		credentials := snapshot.Secrets["seedAuth"]
 		if credentials == nil || len(credentials.Data[seedGenerationSeedAuthKey]) == 0 {
-			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
+			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed,
 				"seed generation snapshot is missing seedAuth credentials")
 		}
 		seedSecret = &corev1.Secret{
@@ -158,14 +171,14 @@ func (t *provisioningRequestReconcilerTask) reconcileSeedGenerator(
 		return t.handleSeedGenerationLifecycleError(ctx, "failed to get spoke seedgen Secret", err)
 	default:
 		if err := validateSeedGenerationLCAOwnership(seedSecret, t.object); err != nil {
-			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, err.Error())
+			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed, err.Error())
 		}
 		if seedSecret.DeletionTimestamp != nil {
 			return requeueWithShortInterval(), nil
 		}
 		credentials := snapshot.Secrets["seedAuth"]
 		if credentials == nil || !bytes.Equal(seedSecret.Data[seedGenerationSeedAuthKey], credentials.Data[seedGenerationSeedAuthKey]) {
-			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
+			return t.failSeedGeneration(ctx, provisioningv1alpha1.CRconditionReasons.Failed,
 				"existing spoke seedgen Secret does not match the frozen seedAuth credentials")
 		}
 	}
@@ -310,6 +323,14 @@ func (t *provisioningRequestReconcilerTask) observeSeedGenerator(
 				"persisted seed image reference does not match the frozen seed generation configuration")
 		}
 		status.SeedImage = seedImage
+		if _, hasISO := snapshot.Document.SeedGeneration["liveISO"]; hasISO {
+			setSeedGenerationProgress(t.object, provisioningv1alpha1.CRconditionReasons.BuildingISO,
+				"Seed image generation and push completed; preparing the live ISO build")
+			if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+				return requeueWithError(fmt.Errorf("failed to record seed image completion before ISO generation: %w", err))
+			}
+			return requeueWithShortInterval(), nil
+		}
 		message := "Seed image generation and push completed"
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.SeedGenerationCompleted,

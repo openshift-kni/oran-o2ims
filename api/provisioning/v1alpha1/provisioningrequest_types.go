@@ -151,11 +151,45 @@ type SeedGenerationStatus struct {
 	// image generation and push have completed successfully.
 	SeedImage string `json:"seedImage,omitempty"`
 
+	// ISOJobSubmitted is persisted before creating the one-shot live ISO Job.
+	// A submitted Job that disappears is never recreated because it may already
+	// have uploaded an artifact.
+	// A crash after persisting this intent but before Job creation succeeds also
+	// fails the run after the adoption window if no Job appears.
+	ISOJobSubmitted bool `json:"isoJobSubmitted,omitempty"`
+
+	// ISOJobSubmittedAt records when the controller persisted the ISO Job intent.
+	ISOJobSubmittedAt *metav1.Time `json:"isoJobSubmittedAt,omitempty"`
+
+	// ISOJobSpecHash fingerprints the controller-managed Job template settings.
+	// It is versioned and persisted with submission intent so operator updates
+	// validate the original Job independently of the current embedded script.
+	// +kubebuilder:validation:Pattern=`^v[1-9][0-9]*:sha256:[a-f0-9]{64}$`
+	// +kubebuilder:validation:MaxLength=96
+	ISOJobSpecHash string `json:"isoJobSpecHash,omitempty"`
+
+	// ISOJobUID pins the Job adopted by this seed generation run.
+	ISOJobUID string `json:"isoJobUID,omitempty"`
+
+	// ISOUploadCleanupDeadline bounds retries while removing an interrupted
+	// remote upload before the frozen credentials are discarded.
+	ISOUploadCleanupDeadline *metav1.Time `json:"isoUploadCleanupDeadline,omitempty"`
+
+	// ISOUploadCleanupCompleted records remote cleanup or expiry of its bounded
+	// retry budget. On expiry the condition directs the user to manual cleanup.
+	ISOUploadCleanupCompleted bool `json:"isoUploadCleanupCompleted,omitempty"`
+
 	// ISOURL is the verified HTTPS URL of the generated live ISO.
 	ISOURL string `json:"isoURL,omitempty"`
 
 	// ISODigest is the SHA-256 digest of the generated live ISO.
 	ISODigest string `json:"isoDigest,omitempty"`
+
+	// ISOFailureDiagnosticsRef points to the redacted ISO build log retained after a failed Job.
+	ISOFailureDiagnosticsRef *ConfigMapKeyRef `json:"isoFailureDiagnosticsRef,omitempty"`
+
+	// ISOFailureDiagnosticsExpiresAt bounds retention of redacted ISO build diagnostics.
+	ISOFailureDiagnosticsExpiresAt *metav1.Time `json:"isoFailureDiagnosticsExpiresAt,omitempty"`
 
 	// ISOServerCACertRef identifies the durable HTTPS server CA bundle.
 	ISOServerCACertRef *ConfigMapKeyRef `json:"isoServerCACertRef,omitempty"`

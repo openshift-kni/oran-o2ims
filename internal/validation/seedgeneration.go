@@ -9,6 +9,8 @@ package validation
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/distribution/reference"
@@ -52,37 +54,6 @@ func HasSeedGenerationConfig(upgradeDefaultsRaw, templateParametersRaw []byte) (
 	return ok, nil
 }
 
-// ValidateSeedGenerationSupported rejects unfinished workflow options before
-// provisioning starts, including options supplied entirely by the template.
-func ValidateSeedGenerationSupported(upgradeDefaultsRaw, templateParametersRaw []byte) error {
-	var defaults map[string]json.RawMessage
-	if len(upgradeDefaultsRaw) > 0 {
-		if err := json.Unmarshal(upgradeDefaultsRaw, &defaults); err != nil {
-			return fmt.Errorf("invalid upgradeDefaults: %w", err)
-		}
-	}
-	var parameters struct {
-		UpgradeParameters map[string]json.RawMessage `json:"upgradeParameters"`
-	}
-	if len(templateParametersRaw) > 0 {
-		if err := json.Unmarshal(templateParametersRaw, &parameters); err != nil {
-			return fmt.Errorf("invalid templateParameters: %w", err)
-		}
-	}
-	for _, input := range []map[string]json.RawMessage{defaults, parameters.UpgradeParameters} {
-		if raw, ok := input["seedGeneration"]; ok {
-			var seed map[string]json.RawMessage
-			if err := json.Unmarshal(raw, &seed); err != nil {
-				return fmt.Errorf("invalid seedGeneration configuration: %w", err)
-			}
-			if _, ok := seed["liveISO"]; ok {
-				return fmt.Errorf("liveISO is not supported by this controller version")
-			}
-		}
-	}
-	return nil
-}
-
 // The effective schema applies after ClusterTemplate defaults and PR overrides
 // are merged. The PR-facing templateParameterSchema must remain narrower: it
 // can expose seedImage and seedGenerationTimeout, but cannot expose
@@ -115,6 +86,7 @@ const seedGenerationEffectiveSchema = `{
               "required": ["name"]
             },
             "urlBase": {"type": "string", "minLength": 1, "pattern": "^https://\\S+$"},
+            "baseISOURL": {"type": "string", "minLength": 1, "pattern": "^https://\\S+$"},
             "pullSecretRef": {
               "type": "object", "additionalProperties": false,
               "properties": {"name": {"type": "string", "minLength": 1}},
@@ -138,7 +110,7 @@ const seedGenerationEffectiveSchema = `{
               "required": ["name"]
             }
           },
-          "required": ["releaseImage", "installationDisk", "uploadSecretRef", "urlBase"]
+          "required": ["uploadSecretRef", "urlBase"]
         }
       },
       "required": ["seedImage", "seedAuthSecretRef"]
@@ -294,7 +266,22 @@ func validateSeedGenerationUpgradeData(upgradeData map[string]any, requiredField
 			return fmt.Errorf("seedGenerationTimeout must be a positive duration")
 		}
 	}
+	if liveISO, ok := seedGeneration["liveISO"].(map[string]any); ok {
+		if rawBaseISOURL, exists := liveISO["baseISOURL"]; exists {
+			baseISOURL, ok := rawBaseISOURL.(string)
+			if !ok || !validSeedGenerationHTTPSURL(baseISOURL) {
+				return fmt.Errorf("liveISO.baseISOURL must be an HTTPS URL with a host and no user info, query, or fragment")
+			}
+		}
+	}
 	return nil
+}
+
+func validSeedGenerationHTTPSURL(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	return err == nil && parsed.Scheme == "https" && parsed.Hostname() != "" &&
+		parsed.User == nil && parsed.RawQuery == "" && !parsed.ForceQuery &&
+		parsed.Fragment == "" && !strings.Contains(rawURL, "#")
 }
 
 // ValidateSeedGenerationPRSchema limits PR overrides to the image, timeout,
