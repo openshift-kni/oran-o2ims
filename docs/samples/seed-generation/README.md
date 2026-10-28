@@ -8,10 +8,16 @@ SPDX-License-Identifier: Apache-2.0
 
 The [ClusterTemplate](cluster-template.yaml) and
 [ProvisioningRequest](provisioning-request.yaml) show a seed-only run. The
-ClusterTemplate also includes a commented `liveISO` block. Enable that block
-to build and publish an ISO after the seed image push; `liveISO` is
-template-owned and is not added to the ProvisioningRequest. The same
-ProvisioningRequest structure works for both flows.
+ClusterTemplate uses `upgradeDefaults.seedGeneration: {}` because this sample
+schema requires the ProvisioningRequest to supply `seedImage` and
+`seedAuthSecretRef`. To build and publish an ISO after the seed image push,
+replace that empty object with the commented mapping in the ClusterTemplate;
+`liveISO` is template-owned and is not added to the ProvisioningRequest. The
+same ProvisioningRequest structure works for both flows.
+
+If a ClusterTemplate supplies both `seedImage` and `seedAuthSecretRef` as
+defaults, it can omit `upgradeParameters` from the ProvisioningRequest schema,
+and the request should omit `templateParameters.upgradeParameters`.
 
 Replace `4.Y.Z`, the cluster names, resource selectors, and the UUID with values
 for your site. Start from a validated SNO ClusterTemplate and its referenced
@@ -64,11 +70,20 @@ key.
 
 ## Create and monitor the request
 
-Create the ProvisioningRequest with the seed-generation configuration in place.
-The controller starts the operation after the cluster reaches ZTP Done; no
-post-install patch is needed. Initial admission validates the seed image
-destination and push credentials, plus the optional ISO upload endpoint, before
-hardware is allocated.
+Create the ProvisioningRequest using the input shape permitted by its
+ClusterTemplate schema. In this sample, the image and registry Secret reference
+are ProvisioningRequest inputs, so they must be present from the start. If the
+ClusterTemplate supplies both as defaults, omit `templateParameters.upgradeParameters`
+from the request. The controller starts seed generation after the cluster reaches
+ZTP Done; no post-install patch is needed.
+
+The registry and optional ISO upload preflight checks run asynchronously during
+controller reconciliation, after the API server accepts the ProvisioningRequest
+and before hardware is allocated. A successful `oc create` therefore does not
+mean those checks have passed. Inspect `ProvisioningRequestValidated` and
+`SeedGenerationRegistryValidated` in status, and also
+`SeedGenerationISOUploadValidated` when the template configures a live ISO. The
+controller proceeds to hardware provisioning after validation succeeds.
 
 Use the condition and provisioning summary to follow progress:
 

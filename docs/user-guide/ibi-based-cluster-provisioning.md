@@ -78,8 +78,12 @@ controller does not reattach it.
 2. Configure `upgradeDefaults.seedGeneration` in the ClusterTemplate. Set the seed
    image destination and reference a registry credential Secret that can push to
    that repository. The Secret must be in the ClusterTemplate namespace and contain
-   the `seedAuth` key. The ClusterTemplate schema controls whether the image and
-   Secret reference are defaults or ProvisioningRequest overrides. See the
+   the `seedAuth` key. You can provide `seedImage` and `seedAuthSecretRef` as
+   ClusterTemplate defaults or as ProvisioningRequest overrides. If either value
+   is not provided by the template, the schema must expose and require
+   `upgradeParameters.seedGeneration` and each missing value. If the template
+   provides both values, its schema can omit `upgradeParameters`, and the request
+   must omit `templateParameters.upgradeParameters`. See the
    [seed-generation samples](../samples/seed-generation/README.md).
    The overall `seedGenerationTimeout` defaults to 2h for seed-only generation and
    3h when `liveISO` is configured. You can set it under `seedGeneration` or expose
@@ -108,17 +112,24 @@ trusts its certificate.
 
 #### Create the ProvisioningRequest
 
-Create the ProvisioningRequest with `templateParameters.upgradeParameters.seedGeneration`
-present from the start. The seed-generation operation is mutually exclusive with a
-cluster upgrade request. Configure `seedImage` and `seedAuthSecretRef` in the
-ProvisioningRequest only if the ClusterTemplate schema exposes those fields; the
-live ISO destination and credentials remain owned by the ClusterTemplate.
+Create the ProvisioningRequest using the input shape permitted by its
+ClusterTemplate schema. If the image or registry Secret reference is a request
+input, include `templateParameters.upgradeParameters.seedGeneration` from the
+start. If the ClusterTemplate supplies both values, omit `upgradeParameters`.
+The seed-generation operation is mutually exclusive with a cluster upgrade
+request. The live ISO destination and credentials remain owned by the
+ClusterTemplate.
 
-ProvisioningRequest admission validates the registry destination and credentials,
-and validates the optional ISO upload endpoint before hardware is allocated. After
-the cluster reaches ZTP Done, the controller freezes the effective inputs, repeats
-the relevant preflight checks, detaches ACM, and starts LCA seed generation. The
-optional ISO build starts after the seed image push completes.
+Registry and optional ISO upload preflight checks run asynchronously during
+ProvisioningRequest controller reconciliation, after the API server accepts the
+request and before hardware is allocated. A successful `oc create` does not mean
+the credentials or endpoints have passed preflight. Check the
+`ProvisioningRequestValidated` and `SeedGenerationRegistryValidated` conditions
+in status, and `SeedGenerationISOUploadValidated` when a live ISO is configured.
+After validation succeeds and the cluster reaches ZTP Done, the controller
+freezes the effective inputs, repeats the relevant preflight checks, detaches
+ACM, and starts LCA seed generation. The optional ISO build starts after the seed
+image push completes.
 
 #### Monitor the operation and collect the outputs
 
@@ -185,9 +196,12 @@ This repository includes sample resources for IBI-based provisioning:
 ## Manual Factory Preparation (Alternative)
 
 Use this procedure when you are generating the seed image and live ISO outside the
-automated ProvisioningRequest workflow. Do not follow the manual detach and LCA steps
-below for a ProvisioningRequest that already has `upgradeParameters.seedGeneration`;
-the controller owns those steps in the automated flow.
+automated ProvisioningRequest workflow. Use a ClusterTemplate without
+`upgradeDefaults.seedGeneration` and a ProvisioningRequest without
+`templateParameters.upgradeParameters.seedGeneration`. Either setting selects the
+automated workflow, which starts after ZTP Done and is managed by the controller.
+Do not follow the manual detach and LCA steps below for a request using either
+configuration source.
 
 These steps are performed once per hardware/software configuration to produce a
 reusable live installation ISO.
