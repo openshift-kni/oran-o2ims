@@ -1673,6 +1673,53 @@ var _ = Describe("waitForHardwareData", func() {
 		Expect(*configured).To(BeFalse())
 		Expect(timedOutOrFailed).To(BeFalse())
 		Expect(hardwareConfigInProgress(configured)).To(BeTrue())
+
+		// The stale Configured=True from the previous transaction must not be surfaced on the
+		// ProvisioningRequest as complete. The gate reports the configuration as in-progress.
+		var updatedCR provisioningv1alpha1.ProvisioningRequest
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(cr), &updatedCR)).To(Succeed())
+		condition := meta.FindStatusCondition(updatedCR.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured))
+		Expect(condition).ToNot(BeNil())
+		Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+		Expect(condition.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
+	})
+
+	It("surfaces HardwareConfigured as in-progress while a Day-2 config transaction is in flight", func() {
+		// Regression for OCPBUGS-132825 e2e gap: during a Day-2 hardware configuration the
+		// hardware manager sets the NAR Configured condition to InProgress but does not
+		// acknowledge the transaction (ObservedConfigTransactionId) until it reaches a terminal
+		// state, so the spec-vs-observed gate stays active for the whole in-flight window. The
+		// gate must still propagate an in-progress HardwareConfigured condition onto the
+		// ProvisioningRequest so the status is observable; previously it returned early and the
+		// PR never reached InProgress.
+		inFlightMock := &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{Generation: 3},
+			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+				ConfigTransactionId: 3,
+			},
+			Status: hwmgmtv1alpha1.NodeAllocationRequestStatus{
+				Conditions: []metav1.Condition{
+					{Type: "Provisioned", Status: metav1.ConditionTrue, Reason: "Completed", Message: "Hardware provisioned", LastTransitionTime: metav1.Now()},
+					{Type: "Configured", Status: metav1.ConditionFalse, Reason: "InProgress", Message: "Applying configuration", LastTransitionTime: metav1.Now()},
+				},
+				ObservedConfigTransactionId: 2,
+				ObservedGeneration:          2,
+			},
+		}
+
+		configured, timedOutOrFailed, err := task.checkNodeAllocationRequestConfigStatus(ctx, inFlightMock)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(configured).ToNot(BeNil())
+		Expect(*configured).To(BeFalse())
+		Expect(timedOutOrFailed).To(BeFalse())
+		Expect(hardwareConfigInProgress(configured)).To(BeTrue())
+
+		var updatedCR provisioningv1alpha1.ProvisioningRequest
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(cr), &updatedCR)).To(Succeed())
+		condition := meta.FindStatusCondition(updatedCR.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured))
+		Expect(condition).ToNot(BeNil())
+		Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+		Expect(condition.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
 	})
 })
 

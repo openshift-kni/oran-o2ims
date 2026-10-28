@@ -346,6 +346,15 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestStatus(
 			slog.Int64("observedTransaction", nodeAllocationRequestResponse.Status.ObservedConfigTransactionId),
 			slog.Int64("generation", nodeAllocationRequestResponse.ObjectMeta.Generation),
 			slog.Int64("observedGeneration", nodeAllocationRequestResponse.Status.ObservedGeneration))
+		// Surface the in-flight transaction on the ProvisioningRequest as HardwareConfigured
+		// in-progress. The NAR's own Configured condition must not be propagated here: it may
+		// still carry a stale True/Failed/TimedOut from a previous transaction (which would
+		// wrongly surface as complete), or not exist yet. Reporting in-progress keeps the PR
+		// status observable while the hardware manager catches up, and the returned status=false
+		// still keeps downstream phases gated (OCPBUGS-132825).
+		if err := t.setHardwareConfigInProgress(ctx); err != nil {
+			return false, false, err
+		}
 		return false, false, nil
 	}
 
@@ -711,6 +720,25 @@ func (t *provisioningRequestReconcilerTask) processExistingHardwareCondition(
 	}
 
 	return status, reason, message, timedOutOrFailed
+}
+
+// setHardwareConfigInProgress marks the ProvisioningRequest's HardwareConfigured condition
+// as in-progress and persists the status. It is used by the spec-vs-observed gate in
+// checkNodeAllocationRequestStatus while a configuration transaction is in flight but not yet
+// observed by the hardware manager — a window where the NAR's own Configured condition cannot
+// be trusted (it may be a stale completion from a previous transaction, or not exist yet).
+func (t *provisioningRequestReconcilerTask) setHardwareConfigInProgress(ctx context.Context) error {
+	message := fmt.Sprintf("Hardware %s is in progress", ctlrutils.GetStatusMessage(hwmgmtv1alpha1.Configured))
+	ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
+		provisioningv1alpha1.PRconditionTypes.HardwareConfigured,
+		provisioningv1alpha1.CRconditionReasons.InProgress,
+		metav1.ConditionFalse,
+		message)
+	ctlrutils.SetProvisioningStateInProgress(t.object, message)
+	if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+		return fmt.Errorf("failed to update Hardware %s status: %w", ctlrutils.GetStatusMessage(hwmgmtv1alpha1.Configured), err)
+	}
+	return nil
 }
 
 // updateHardwareStatus updates the hardware status for the ProvisioningRequest.
