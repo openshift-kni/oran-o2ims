@@ -24,8 +24,9 @@ spec:
     policyTemplateDefaults: policytemplate-defaults-v1
     upgradeDefaults:
       seedGeneration:
-        # Optional operation timeout; defaults to 2h for seed-only generation.
-        seedGenerationTimeout: 2h
+        # Optional overall timeout; defaults to 2h for seed-only generation
+        # and 3h when liveISO is configured.
+        # seedGenerationTimeout: 3h
         # Optional live ISO settings. Configure the upload Secret and URL before
         # uncommenting this block. sshKey is a public key for core SSH access
         # to inspect the pre-provisioning host and its logs.

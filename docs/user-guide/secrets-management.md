@@ -47,6 +47,8 @@ contain sensitive credentials and must not be committed to Git in cleartext:
 - **Live ISO upload Secrets** — the SSH private key and HTTPS trust data used
   to publish generated installation ISOs (see
   [Configure a live ISO upload destination](seed-generation-live-iso-upload.md)).
+  The seed image registry auth Secret used by automated seed generation is
+  sensitive as well; it grants push access to the configured image repository.
 - **Preprovisioning network-data Secrets** — where used, the nmstate network
   configuration built into the discovery ISO (see
   [Preprovisioning Network Data Secret](./server-onboarding.md#preprovisioning-network-data-secret)).
@@ -91,7 +93,10 @@ the value from the repository's history.
 
 > [!WARNING]
 > The `Secret` manifests included under
-> [git-setup](../samples/git-setup/) (for example, the `pull-secret.yaml`
+> [git-setup](../samples/git-setup/) and
+> [seed-generation](../samples/seed-generation/) directories (for example, the
+> `seed-auth-secret.example.yaml` and `iso-upload-secret.example.yaml` files,
+> plus the `pull-secret.yaml`
 > files and the `bmc-secret-*` / `network-data-*` Secrets in the sample
 > inventory) are **illustrative placeholders only**. They show the required
 > shape and fields of each resource. Do not treat them as a pattern for

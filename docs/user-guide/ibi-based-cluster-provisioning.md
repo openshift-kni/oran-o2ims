@@ -14,7 +14,7 @@ This document provides a walkthrough for provisioning single-node OpenShift (SNO
 
 ### Management Cluster Requirements
 
-* OpenShift cluster with Advanced Cluster Management (ACM) 2.14 or later
+* OpenShift cluster with Advanced Cluster Management (ACM) 2.15 or later
 * Red Hat OpenShift GitOps Operator
 * SiteConfig Operator enabled
 * Image-Based Install Operator enabled in the MultiClusterEngine — this is required
@@ -44,17 +44,135 @@ For additional details, see the [Red Hat OpenShift Image-Based Installation docu
 
 ## IBI Workflow Overview
 
-The IBI workflow is split into two stages that are typically performed by different
-teams in different environments:
+The IBI workflow has two stages that are typically performed by different teams in
+different environments:
 
-**Factory preparation** — Done once per hardware/software configuration in a lab or
-factory environment. Produces a reusable live ISO, then uses it to pre-provision
-servers before they are shipped to deployment sites. The seed image and live ISO are
-reusable across multiple servers with the same hardware configuration.
+**Factory preparation** — Done once per hardware and software configuration. You can
+use the automated seed-generation workflow in O-Cloud Manager or follow the manual
+process below. The automated workflow creates a seed image and, when configured, a
+live ISO. The artifacts can be reused across servers with the same hardware
+configuration.
 
 **Site deployment** — Done per cluster at the deployment site. Since servers arrive
 pre-provisioned, cluster provisioning skips the OS installation and image pull steps,
 enabling rapid deployment via ProvisioningRequest CRs.
+
+### Automated seed image and live ISO generation
+
+The automated factory workflow uses a ProvisioningRequest to install a seed cluster,
+then generates and publishes a seed image and optionally a live ISO. It starts after
+the cluster reaches ZTP Done; include the seed-generation settings in the initial
+ProvisioningRequest. You do not need to patch a fulfilled request to start the run.
+
+The workflow is one-shot. After preflight succeeds, the controller removes the seed
+cluster's ACM agents and related resources so they do not contaminate the seed image.
+The seed cluster remains running but detached from ACM after the operation. The
+controller does not reattach it.
+
+#### Prepare the ClusterTemplate and credentials
+
+1. Start from a validated SNO ClusterTemplate that installs the LifeCycle Agent (LCA)
+   Operator and configures the shared `/var/lib/containers` partition required by
+   LCA. These settings belong in the seed cluster template. OADP is not required
+   for seed generation.
+2. Configure `upgradeDefaults.seedGeneration` in the ClusterTemplate. Set the seed
+   image destination and reference a registry credential Secret that can push to
+   that repository. The Secret must be in the ClusterTemplate namespace and contain
+   the `seedAuth` key. The ClusterTemplate schema controls whether the image and
+   Secret reference are defaults or ProvisioningRequest overrides. See the
+   [seed-generation samples](../samples/seed-generation/README.md).
+   The overall `seedGenerationTimeout` defaults to 2h for seed-only generation and
+   3h when `liveISO` is configured. You can set it under `seedGeneration` or expose
+   it as an optional ProvisioningRequest override in the ClusterTemplate schema.
+3. To build and publish a live ISO, add the template-owned `liveISO` block to
+   `upgradeDefaults.seedGeneration`. Configure `urlBase` and `uploadSecretRef`; the
+   upload Secret must be in the ClusterTemplate namespace. Its HTTPS URL must be
+   reachable from the hub build Job and from the target BMCs. See
+   [Configure a live ISO upload destination](./seed-generation-live-iso-upload.md)
+   for the Secret fields, SSH host-key pinning, HTTPS trust, and path layout.
+   If you set `liveISO.pullSecretRef`, it must reference a Secret in the
+   ClusterTemplate namespace that allows pulling both the seed image and the
+   OpenShift release image. If omitted, the controller combines the hub pull
+   Secret with the seed registry credentials.
+4. Optionally set `liveISO.sshKey` to a public key for SSH access to a server
+   booted from the generated ISO. The key is installed for the `core` user and is
+   separate from the upload Secret's private key.
+
+The controller derives the release image from the installed cluster and the
+installation disk from the seed node's rendered `rootDeviceHints`. If either value
+cannot be derived, preflight fails; set `liveISO.releaseImage` or
+`liveISO.installationDisk` in the ClusterTemplate to provide it or override the
+derived value. For disconnected ISO builds, configure the optional
+`liveISO.baseISOURL` with a mirrored RHCOS ISO URL and ensure the build environment
+trusts its certificate.
+
+#### Create the ProvisioningRequest
+
+Create the ProvisioningRequest with `templateParameters.upgradeParameters.seedGeneration`
+present from the start. The seed-generation operation is mutually exclusive with a
+cluster upgrade request. Configure `seedImage` and `seedAuthSecretRef` in the
+ProvisioningRequest only if the ClusterTemplate schema exposes those fields; the
+live ISO destination and credentials remain owned by the ClusterTemplate.
+
+ProvisioningRequest admission validates the registry destination and credentials,
+and validates the optional ISO upload endpoint before hardware is allocated. After
+the cluster reaches ZTP Done, the controller freezes the effective inputs, repeats
+the relevant preflight checks, detaches ACM, and starts LCA seed generation. The
+optional ISO build starts after the seed image push completes.
+
+#### Monitor the operation and collect the outputs
+
+Watch the ProvisioningRequest phase and summary while the seed image and optional
+ISO are being generated:
+
+```console
+PR_NAME=your-provisioningrequest-name
+oc get provisioningrequest "$PR_NAME" \
+  -o custom-columns=PHASE:.status.provisioningStatus.provisioningPhase,DETAIL:.status.provisioningStatus.provisioningDetails
+```
+
+Inspect the `SeedGenerationCompleted` condition for the current reason and detailed
+message. The `seedGenerationStatus` object contains persisted progress and final
+outputs:
+
+```console
+oc get provisioningrequest "$PR_NAME" -o yaml
+```
+
+On success, record `status.extensions.clusterDetails.seedGenerationStatus.seedImage`.
+This is the configured image reference used for the successful push. When a live ISO
+was requested, record `isoURL` and `isoDigest` from the same status object. The URL
+identifies the verified HTTPS response; the digest is its SHA-256 checksum. The
+status also includes `releaseImageDigest`, which identifies the pinned release used
+to extract `openshift-install` for the ISO build.
+
+#### Understand failures and clean up the seed cluster
+
+Failures found during admission are rejected before hardware provisioning. A
+post-install preflight failure is reported before ACM detachment, so the seed cluster
+remains attached to ACM. After detachment begins, a failed or timed-out operation
+leaves the cluster detached; it does not restore ACM agents automatically. A timeout
+does not stop an LCA host process that is already running. Inspect the condition and
+provisioning details before deciding how to proceed.
+
+After saving the image reference and optional ISO URL and digest, delete the factory
+ProvisioningRequest to reclaim its hardware:
+
+```console
+oc delete provisioningrequest "$PR_NAME"
+```
+
+Normal ProvisioningRequest deletion cleans the seed-generation resources and lets
+the hardware manager deprovision and wipe the allocated server without requiring
+the detached spoke to be reachable. Automated seed generation does not require or
+use the `clcm.openshift.io/skip-cleanup` annotation to run. If the annotation is
+present when deleting an automated seed-generation ProvisioningRequest, it still
+retains the hardware and makes deletion wait for LCA to finish and spoke credentials
+to be scrubbed. Leave it unset when the goal is to reclaim the server.
+
+The generated live ISO can then be used to pre-provision target servers, followed by
+a separate ProvisioningRequest that uses an IBI ClusterTemplate for site deployment.
+The factory seed cluster and the target cluster are different provisioning runs.
 
 ## Available Sample Resources
 
@@ -62,8 +180,14 @@ This repository includes sample resources for IBI-based provisioning:
 
 * [IBI Cluster Instance Defaults](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/clusterinstance-defaults-ibi.yaml): References the IBI templates, `ibi-cluster-templates-v1` and `ibi-node-templates-v1`, from the SiteConfig Operator
 * [IBI ClusterTemplate](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-ibi-v4-Y-Z-1.yaml): Uses the IBI-specific cluster instance defaults
+* [Automated seed-generation samples](../samples/seed-generation/README.md): Shows seed-only and optional live ISO configuration for a factory ProvisioningRequest
 
-## Factory Preparation
+## Manual Factory Preparation (Alternative)
+
+Use this procedure when you are generating the seed image and live ISO outside the
+automated ProvisioningRequest workflow. Do not follow the manual detach and LCA steps
+below for a ProvisioningRequest that already has `upgradeParameters.seedGeneration`;
+the controller owns those steps in the automated flow.
 
 These steps are performed once per hardware/software configuration to produce a
 reusable live installation ISO.
@@ -128,10 +252,13 @@ This ensures that a separate partition is created and the `/var/lib/containers` 
 > The `device` path in the MachineConfig (e.g., `/dev/disk/by-path/pci-0000:43:00.0-nvme-1`)
 > is hardware-specific and must be updated to match the storage device on your server.
 
-**1b.** Annotate the ProvisioningRequest to prevent cleanup when it is deleted in
-the next step. This annotation prevents the hardware manager from powering
-off the host and clearing its provisioning state, which is necessary because you
-need the running cluster to generate the seed image.
+**1b.** For this manual seed-generation procedure, annotate the ProvisioningRequest
+before deleting it in the next step. This keeps the host powered on and preserves
+its provisioning state so you can generate the seed image on the running cluster.
+The automated seed-generation workflow does not use this annotation to detach the
+cluster or start generation; the controller manages those steps while the
+ProvisioningRequest remains present. If the annotation is set on an automated
+request, it still affects later deletion as described above.
 
 ```console
 oc annotate provisioningrequest <UUID> clcm.openshift.io/skip-cleanup=""
@@ -358,8 +485,10 @@ resource selector labels work.
 
 ## Site Deployment
 
-With servers pre-provisioned in the factory, cluster provisioning at the site skips the
-OS installation and image pull steps, significantly reducing deployment time.
+With servers pre-provisioned using the factory live ISO, cluster provisioning at the
+site skips the OS installation and image pull steps, significantly reducing
+deployment time. The generated ISO can come from either the automated workflow above
+or the manual alternative below.
 
 ### Cluster Provisioning
 
@@ -401,6 +530,9 @@ Monitor provisioning progress with standard commands:
 # Watch ProvisioningRequest status
 oc get provisioningrequest <UUID> -w
 
+# View the seed-generation condition and artifact outputs
+oc get provisioningrequest <UUID> -o yaml
+
 # Monitor ClusterInstance
 oc get clusterinstance -A
 
@@ -421,6 +553,11 @@ oc delete provisioningrequest <UUID>
 
 The O-Cloud Manager automatically cleans up all IBI-specific resources, including
 powering off the host and setting disk wipe mode.
+
+This command applies to the ProvisioningRequest that installed the target cluster.
+To reclaim the separate factory server after seed generation, delete the factory
+ProvisioningRequest as described in
+[Understand failures and clean up the seed cluster](#understand-failures-and-clean-up-the-seed-cluster).
 
 ### Re-using Deprovisioned IBI Servers
 
