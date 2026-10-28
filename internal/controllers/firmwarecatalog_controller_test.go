@@ -9,6 +9,7 @@ package controllers
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -136,6 +137,32 @@ var _ = Describe("FirmwareCatalogReconciler", func() {
 				condition := meta.FindStatusCondition(fetched.Status.Conditions, string(hwmgmtv1alpha1.Validation))
 				Expect(condition).ToNot(BeNil())
 				Expect(condition.Status).To(Equal(metav1.ConditionTrue))
+			})
+		})
+
+		Context("when the FirmwareCatalog is being deleted", func() {
+			It("should skip validation and not write status", func() {
+				catalog.Spec.Images = []hwmgmtv1alpha1.FirmwareImage{
+					{
+						Name:      "dell-bios-2.3.5",
+						Component: "bios",
+						URL:       "https://example.com/bios.exe",
+						Version:   "2.3.5",
+						Vendor:    "Dell",
+					},
+				}
+				catalog.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+				catalog.Finalizers = []string{"test-finalizer"}
+				setupReconciler(catalog)
+
+				result, err := reconcile()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(result.Requeue).To(BeFalse())
+
+				fetched := fetchCatalog()
+				Expect(fetched.Status.Conditions).To(BeEmpty())
+				Expect(fetched.Status.ImageStatuses).To(BeEmpty())
+				Expect(fetched.Status.ObservedGeneration).To(BeZero())
 			})
 		})
 	})
