@@ -18,7 +18,6 @@ import (
 type AlarmSubscription struct {
 	SubscriptionID         uuid.UUID                                   `db:"subscription_id"`
 	ConsumerSubscriptionID *string                                     `db:"consumer_subscription_id"`
-	Filter                 *generated.AlarmSubscriptionInfoFilter      `db:"filter"`
 	EventFilter            *generated.AlarmSubscriptionInfoEventFilter `db:"event_filter"`
 	Callback               string                                      `db:"callback"`
 

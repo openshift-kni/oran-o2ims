@@ -881,6 +881,7 @@ components:
 
     AlarmSubscriptionInfo:
       type: object
+      additionalProperties: false
       properties:
         alarmSubscriptionId:
           type: string
@@ -892,24 +893,16 @@ components:
           type: string
           description: Identifier for the consumer of events sent due to the Subscription.
           example: 16d5fc54-cee0-4532-9826-2369f8240e1b
-        filter:
-          type: string
-          enum: [ NEW, CHANGE, CLEAR, ACKNOWLEDGE ]
-          description: |
-            Criteria for events which do not need to be reported or will be filtered by the subscription
-            notification service. Therefore, if a filter is not provided then all events are reported.
-            It can be filtered by criteria based on the type of notification of fields of the
-            AlarmEventRecord.
-          example: NEW
         eventFilter:
           type: string
           enum: [ NEW, CHANGE, CLEAR, ACKNOWLEDGE ]
           nullable: true
           description: |
             Typed criteria for events which will be filtered by the subscription notification service.
-            It carries the same exclusion semantics as filter (the notification event type to exclude).
-            When set it takes precedence over filter; when null or absent the service falls back to filter.
-            A null value explicitly clears a previously set eventFilter.
+            It carries exclusion semantics: an event whose notificationEventType equals eventFilter is
+            not delivered. A null eventFilter excludes no event types, so all events are eligible for
+            delivery. This key is required on create and is always present in responses, serialized as a
+            value or an explicit null.
           example: NEW
         callback:
           type: string
@@ -917,6 +910,7 @@ components:
           description: The fully qualified URI to a consumer procedure which can process a Post of the AlarmEventNotification.
       required:
       - callback
+      - eventFilter
 
     AlarmSubscriptionUpdate:
       type: object
@@ -939,7 +933,8 @@ components:
           nullable: true
           description: |
             Typed criteria for events which will be filtered by the subscription notification service.
-            A null value clears the eventFilter so the effective filter falls back to filter.
+            Omitting this field leaves the current value unchanged. A null value clears the eventFilter,
+            so no event types are excluded and all events are eligible for delivery. A value replaces it.
         consumerSubscriptionId:
           type: string
           nullable: true

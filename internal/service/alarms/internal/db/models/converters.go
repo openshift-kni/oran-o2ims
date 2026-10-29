@@ -126,10 +126,6 @@ func ConvertSubscriptionModelToApi(subscriptionModel AlarmSubscription) api.Alar
 		ConsumerSubscriptionId: subscriptionModel.ConsumerSubscriptionID,
 	}
 
-	if subscriptionModel.Filter != nil {
-		apiModel.Filter = subscriptionModel.Filter
-	}
-
 	// eventFilter is M/0..1: always serialize the key, as a value or explicit null.
 	if subscriptionModel.EventFilter != nil {
 		apiModel.EventFilter = nullable.NewNullableWithValue(*subscriptionModel.EventFilter)
@@ -145,7 +141,6 @@ func ConvertSubscriptionAPIToModel(subscriptionAPI *api.AlarmSubscriptionInfo) A
 	model := AlarmSubscription{
 		Callback:               subscriptionAPI.Callback,
 		ConsumerSubscriptionID: subscriptionAPI.ConsumerSubscriptionId,
-		Filter:                 subscriptionAPI.Filter,
 	}
 
 	// Only persist event_filter when a concrete value is provided; an omitted or
@@ -183,14 +178,11 @@ func ConvertAlertSubToNotificationSub(as *AlarmSubscription) *notifier.Subscript
 		EventCursor:            int(as.EventCursor),
 	}
 
-	// Effective filter: event_filter takes precedence over filter; if neither is set
-	// the subscription matches all events (C3). The notifier SubscriptionInfo exposes a
-	// single Filter field, so the precedence is resolved here rather than in Matches().
-	switch {
-	case as.EventFilter != nil:
+	// Effective filter: a set event_filter excludes its event type; a NULL event_filter
+	// matches all events (C3). The notifier SubscriptionInfo exposes a single generic Filter
+	// field, so the effective eventFilter is mapped onto it here.
+	if as.EventFilter != nil {
 		info.Filter = (*string)(as.EventFilter)
-	case as.Filter != nil:
-		info.Filter = (*string)(as.Filter)
 	}
 	return &info
 }
