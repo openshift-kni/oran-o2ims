@@ -210,6 +210,49 @@ var _ = Describe("Redfish GPU inventory", func() {
 		Expect(inventory.Devices).To(BeEmpty())
 	})
 
+	It("scopes chassis discovery to the chassis linked from the selected system", func() {
+		serviceWideChassisTraversed := false
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/redfish/v1/":
+				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"},"Chassis":{"@odata.id":"/redfish/v1/Chassis"}}`))
+			case "/redfish/v1/Systems/1":
+				_, _ = w.Write([]byte(`{"Id":"1","Links":{"Chassis":[{"@odata.id":"/redfish/v1/Chassis/1"}]}}`))
+			case "/redfish/v1/Chassis/1":
+				_, _ = w.Write([]byte(`{"Id":"1","PCIeDevices":[{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/NIC1"}]}`))
+			case "/redfish/v1/Chassis/1/PCIeDevices/NIC1":
+				_, _ = w.Write([]byte(`{"Id":"NIC1","Model":"Ethernet Adapter","PCIeFunctions":[{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/NIC1/PCIeFunctions/0"}]}`))
+			case "/redfish/v1/Chassis/1/PCIeDevices/NIC1/PCIeFunctions/0":
+				_, _ = w.Write([]byte(`{"DeviceClass":"NetworkController"}`))
+			// The service-wide chassis collection belongs to another system and
+			// must not be traversed for this host. A GPU lives in chassis 2.
+			case "/redfish/v1/Chassis":
+				serviceWideChassisTraversed = true
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Chassis/2"}]}`))
+			case "/redfish/v1/Chassis/2":
+				serviceWideChassisTraversed = true
+				_, _ = w.Write([]byte(`{"Id":"2","PCIeDevices":[{"@odata.id":"/redfish/v1/Chassis/2/PCIeDevices/GPU2"}]}`))
+			case "/redfish/v1/Chassis/2/PCIeDevices/GPU2":
+				serviceWideChassisTraversed = true
+				_, _ = w.Write([]byte(`{"Id":"GPU2","Manufacturer":"NVIDIA","Model":"H100","SerialNumber":"GPU-SN-2","PCIeFunctions":[{"@odata.id":"/redfish/v1/Chassis/2/PCIeDevices/GPU2/PCIeFunctions/0"}],"Status":{"State":"Enabled","Health":"OK"}}`))
+			case "/redfish/v1/Chassis/2/PCIeDevices/GPU2/PCIeFunctions/0":
+				serviceWideChassisTraversed = true
+				_, _ = w.Write([]byte(`{"DeviceClass":"ProcessingAccelerators"}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		reader.httpClient = redfishTestHTTPClient(handler)
+		bmh.Spec.BMC.Address = "redfish+http://bmc.example/redfish/v1/Systems/1"
+
+		inventory, err := reader.GetGPUInventory(ctx, bmh)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(serviceWideChassisTraversed).To(BeFalse())
+		Expect(inventory.Status).To(Equal(gpuInventoryStatusComplete))
+		Expect(inventory.Devices).To(BeEmpty())
+	})
+
 	It("uses OpenBMC GPU Processor records and avoids duplicate PCIe entries", func() {
 		fallbackRequests := 0
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

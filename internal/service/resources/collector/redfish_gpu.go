@@ -672,7 +672,8 @@ type redfishObject struct {
 	PCIeFunctions       redfishLinkList `json:"PCIeFunctions"`
 	Chassis             redfishLink     `json:"Chassis"`
 	Links               struct {
-		PCIeDevice redfishLink `json:"PCIeDevice"`
+		PCIeDevice redfishLink     `json:"PCIeDevice"`
+		Chassis    redfishLinkList `json:"Chassis"`
 	} `json:"Links"`
 	Status struct {
 		State  string `json:"State"`
@@ -767,7 +768,15 @@ func (s *redfishSession) discoverGPUInventory(ctx context.Context, directSystemP
 	}
 
 	if !processorGPUFound {
-		devices, found, chassisPartial := s.discoverChassisGPUs(ctx, root.Chassis.ODataID)
+		// Prefer the chassis associated with the systems we are inventorying so a
+		// multi-system Redfish service does not attribute another host's GPUs to
+		// this one. Fall back to the service-wide chassis collection only when no
+		// system exposes a chassis association (common on single-system BMCs).
+		chassisLinks := chassisLinksForSystems(systems)
+		if chassisLinks.isEmpty() {
+			chassisLinks = redfishLinkList{collection: root.Chassis}
+		}
+		devices, found, chassisPartial := s.discoverChassisGPUs(ctx, chassisLinks)
 		endpointFound = endpointFound || found
 		partial = partial || chassisPartial
 		for _, device := range devices {
@@ -866,12 +875,36 @@ func (s *redfishSession) discoverSystemGPUs(ctx context.Context, system redfishO
 	return devices, endpointFound, partial
 }
 
-func (s *redfishSession) discoverChassisGPUs(ctx context.Context, chassisPath string) ([]hwmgrcontroller.GPUInfo, bool, bool) {
-	if chassisPath == "" {
+// chassisLinksForSystems collects the chassis referenced by the given systems'
+// Links.Chassis, deduplicated by @odata.id. The result scopes chassis discovery
+// to the chassis associated with the systems being inventoried.
+func chassisLinksForSystems(systems []redfishObject) redfishLinkList {
+	seen := make(map[string]struct{})
+	var list redfishLinkList
+	appendLink := func(link redfishLink) {
+		if link.ODataID == "" {
+			return
+		}
+		if _, ok := seen[link.ODataID]; ok {
+			return
+		}
+		seen[link.ODataID] = struct{}{}
+		list.links = append(list.links, link)
+	}
+	for _, system := range systems {
+		appendLink(system.Links.Chassis.collection)
+		for _, link := range system.Links.Chassis.links {
+			appendLink(link)
+		}
+	}
+	return list
+}
+
+func (s *redfishSession) discoverChassisGPUs(ctx context.Context, chassisLinks redfishLinkList) ([]hwmgrcontroller.GPUInfo, bool, bool) {
+	if chassisLinks.isEmpty() {
 		return nil, false, false
 	}
-	chassis, err := s.list(ctx, chassisPath)
-	partial := err != nil
+	chassis, partial := s.resolveLinkList(ctx, chassisLinks)
 	devices := make([]hwmgrcontroller.GPUInfo, 0)
 	endpointFound := false
 	for _, item := range chassis {
