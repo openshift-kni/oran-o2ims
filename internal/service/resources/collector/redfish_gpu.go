@@ -787,7 +787,7 @@ func (s *redfishSession) discoverGPUInventory(ctx context.Context, directSystemP
 	// service manages exactly one system, so that collection unambiguously
 	// belongs to this host.
 	chassisLinks := chassisLinksForSystems(systems)
-	if chassisLinks.isEmpty() && s.serviceHasSingleSystem(ctx, root, systems, systemsComplete) {
+	if chassisLinks.isEmpty() && s.serviceHasSingleSystem(ctx, root, systems, systemsComplete, directSystemPath != "") {
 		chassisLinks = redfishLinkList{collection: root.Chassis}
 	}
 	chassisDevices, chassisFound, chassisPartial := s.discoverChassisGPUs(ctx, chassisLinks)
@@ -813,14 +813,18 @@ func (s *redfishSession) discoverGPUInventory(ctx context.Context, directSystemP
 
 // serviceHasSingleSystem reports whether the Redfish service manages exactly one
 // system, which is the only case where the service-wide chassis collection can
-// be attributed to this host without risking another system's GPUs. When the
-// full system set is already known (the collection was listed successfully), its
-// length is authoritative. When a single system was targeted directly, the
-// Systems collection count is consulted; any uncertainty returns false so the
-// fallback is skipped.
-func (s *redfishSession) serviceHasSingleSystem(ctx context.Context, root redfishObject, systems []redfishObject, systemsComplete bool) bool {
-	if systemsComplete {
-		return len(systems) == 1
+// be attributed to this host without risking another system's GPUs. Any
+// uncertainty returns false so the fallback is skipped.
+//
+// When the whole Systems collection was enumerated (directSystem is false), the
+// result is trusted only if that listing succeeded (systemsComplete); a failed
+// or partial listing must not enable the fallback. When a single system was
+// targeted directly, the collection was never enumerated, so the Systems
+// collection count is consulted and must be authoritative: an explicit
+// Members@odata.count, or a single member with no further pages.
+func (s *redfishSession) serviceHasSingleSystem(ctx context.Context, root redfishObject, systems []redfishObject, systemsComplete, directSystem bool) bool {
+	if !directSystem {
+		return systemsComplete && len(systems) == 1
 	}
 	if root.Systems.ODataID == "" {
 		return false
@@ -829,11 +833,15 @@ func (s *redfishSession) serviceHasSingleSystem(ctx context.Context, root redfis
 	if err := s.get(ctx, root.Systems.ODataID, &collection); err != nil {
 		return false
 	}
-	count := collection.MembersCount
-	if count == 0 {
-		count = len(collection.Members)
+	if collection.MembersCount > 0 {
+		return collection.MembersCount == 1
 	}
-	return count == 1
+	// Without an authoritative count, a single member only proves a single-system
+	// service when the collection is not paginated.
+	if collection.MembersNextLink != "" {
+		return false
+	}
+	return len(collection.Members) == 1
 }
 
 func (s *redfishSession) discoverProcessorGPUs(

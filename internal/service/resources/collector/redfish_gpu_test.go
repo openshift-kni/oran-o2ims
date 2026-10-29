@@ -325,6 +325,68 @@ var _ = Describe("Redfish GPU inventory", func() {
 		Expect(inventory.Devices[0].Model).To(Equal("H100"))
 	})
 
+	It("does not fall back to the service-wide chassis when the Systems collection is paginated", func() {
+		serviceWideChassisTraversed := false
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/redfish/v1/":
+				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"},"Chassis":{"@odata.id":"/redfish/v1/Chassis"}}`))
+			case "/redfish/v1/Systems/1":
+				_, _ = w.Write([]byte(`{"Id":"1"}`))
+			case "/redfish/v1/Systems":
+				// One member on this page, but a next link proves more systems exist
+				// and there is no authoritative Members@odata.count.
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Systems/1"}],"Members@odata.nextLink":"/redfish/v1/Systems?$skip=1"}`))
+			case "/redfish/v1/Chassis":
+				serviceWideChassisTraversed = true
+				_, _ = w.Write([]byte(`{"Members":[]}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		reader.httpClient = redfishTestHTTPClient(handler)
+		bmh.Spec.BMC.Address = "redfish+http://bmc.example/redfish/v1/Systems/1"
+
+		inventory, err := reader.GetGPUInventory(ctx, bmh)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(serviceWideChassisTraversed).To(BeFalse())
+		Expect(inventory.Devices).To(BeEmpty())
+		Expect(inventory.Status).To(Equal(gpuInventoryStatusUnsupported))
+	})
+
+	It("does not fall back to the service-wide chassis when the Systems listing fails", func() {
+		serviceWideChassisTraversed := false
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/redfish/v1/":
+				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"},"Chassis":{"@odata.id":"/redfish/v1/Chassis"}}`))
+			case "/redfish/v1/Systems":
+				// The collection enumeration fails, so the full system set is unknown.
+				http.Error(w, "unavailable", http.StatusServiceUnavailable)
+			case "/redfish/v1/Chassis":
+				serviceWideChassisTraversed = true
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Chassis/1"}]}`))
+			case "/redfish/v1/Chassis/1":
+				serviceWideChassisTraversed = true
+				_, _ = w.Write([]byte(`{"Id":"1","PCIeDevices":[{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/GPU1"}]}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		reader.httpClient = redfishTestHTTPClient(handler)
+		// No system path in the address, so the collector enumerates the Systems
+		// collection rather than targeting a single system directly.
+		bmh.Spec.BMC.Address = "redfish+http://bmc.example"
+
+		inventory, err := reader.GetGPUInventory(ctx, bmh)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(serviceWideChassisTraversed).To(BeFalse())
+		Expect(inventory.Devices).To(BeEmpty())
+		Expect(inventory.Status).To(Equal(gpuInventoryStatusPartial))
+	})
+
 	It("deduplicates a GPU exposed through both Processor and PCIe views, preferring Processor details", func() {
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
