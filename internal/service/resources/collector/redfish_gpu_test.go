@@ -253,8 +253,7 @@ var _ = Describe("Redfish GPU inventory", func() {
 		Expect(inventory.Devices).To(BeEmpty())
 	})
 
-	It("uses OpenBMC GPU Processor records and avoids duplicate PCIe entries", func() {
-		fallbackRequests := 0
+	It("deduplicates a GPU exposed through both Processor and PCIe views, preferring Processor details", func() {
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			switch r.URL.Path {
@@ -272,8 +271,16 @@ var _ = Describe("Redfish GPU inventory", func() {
 				_, _ = w.Write([]byte(`{"Id":"CPU0","ProcessorType":"CPU","Model":"CPU model"}`))
 			case "/redfish/v1/Systems/1/Processors/GPU_PCIE_A":
 				_, _ = w.Write([]byte(`{"@odata.id":"/redfish/v1/Systems/1/Processors/GPU_PCIE_A","Id":"GPU_PCIE_A","Manufacturer":"Nvidia","Model":"RTXPRO4500BlackwellDC","PartNumber":"2C3A-895-A1","ProcessorType":"GPU","SerialNumber":"1790326076967","Status":{"Health":"OK","State":"Enabled"},"Version":"98.03.B1.00.01"}`))
-			case "/redfish/v1/Systems/1/PCIeDevices", "/redfish/v1/Chassis":
-				fallbackRequests++
+			// The same physical GPU is also advertised as a PCIe device with the
+			// same serial but sparser details. It must be deduplicated against the
+			// Processor record even though that record was found first.
+			case "/redfish/v1/Systems/1/PCIeDevices":
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU1"}]}`))
+			case "/redfish/v1/Systems/1/PCIeDevices/GPU1":
+				_, _ = w.Write([]byte(`{"Id":"GPU1","Manufacturer":"Nvidia","Model":"RTX PRO 4500","SerialNumber":"1790326076967","PCIeFunctions":[{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU1/PCIeFunctions/0"}],"Status":{"State":"Enabled","Health":"OK"}}`))
+			case "/redfish/v1/Systems/1/PCIeDevices/GPU1/PCIeFunctions/0":
+				_, _ = w.Write([]byte(`{"DeviceClass":"ProcessingAccelerators"}`))
+			case "/redfish/v1/Chassis":
 				_, _ = w.Write([]byte(`{"Members":[]}`))
 			default:
 				http.NotFound(w, r)
@@ -297,7 +304,41 @@ var _ = Describe("Redfish GPU inventory", func() {
 			SerialNumber:    "1790326076967",
 			State:           "Enabled",
 		}))
-		Expect(fallbackRequests).To(BeZero())
+	})
+
+	It("merges GPUs exposed through different views on the same system", func() {
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/redfish/v1/":
+				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"}}`))
+			case "/redfish/v1/Systems/1":
+				_, _ = w.Write([]byte(`{"Processors":{"@odata.id":"/redfish/v1/Systems/1/Processors"},"GraphicsControllers":{"@odata.id":"/redfish/v1/Systems/1/GraphicsControllers"}}`))
+			case "/redfish/v1/Systems/1/Processors":
+				if r.URL.Query().Has("$filter") || r.URL.Query().Has("$expand") {
+					http.Error(w, "query options are not supported", http.StatusNotImplemented)
+					return
+				}
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Systems/1/Processors/GPU_A"}]}`))
+			case "/redfish/v1/Systems/1/Processors/GPU_A":
+				_, _ = w.Write([]byte(`{"Id":"GPU_A","ProcessorType":"GPU","Manufacturer":"NVIDIA","Model":"H100","SerialNumber":"GPU-SN-A","Status":{"State":"Enabled","Health":"OK"}}`))
+			case "/redfish/v1/Systems/1/GraphicsControllers":
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Systems/1/GraphicsControllers/GPU_B"}]}`))
+			case "/redfish/v1/Systems/1/GraphicsControllers/GPU_B":
+				_, _ = w.Write([]byte(`{"Id":"GPU_B","Manufacturer":"NVIDIA","Model":"L40S","SerialNumber":"GPU-SN-B","Status":{"State":"Enabled","Health":"OK"}}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		reader.httpClient = redfishTestHTTPClient(handler)
+		bmh.Spec.BMC.Address = "redfish+http://bmc.example/redfish/v1/Systems/1"
+
+		inventory, err := reader.GetGPUInventory(ctx, bmh)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(inventory.Status).To(Equal(gpuInventoryStatusComplete))
+		Expect(inventory.Devices).To(HaveLen(2))
+		models := []string{inventory.Devices[0].Model, inventory.Devices[1].Model}
+		Expect(models).To(ConsistOf("H100", "L40S"))
 	})
 
 	It("uses filtered and expanded processor members when the BMC supports them", func() {
