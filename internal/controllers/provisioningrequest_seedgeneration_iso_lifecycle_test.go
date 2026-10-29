@@ -15,6 +15,7 @@ import (
 	. "github.com/onsi/gomega"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -67,6 +68,82 @@ func seedGenerationISOObservationFixture(t *testing.T) (
 		return []byte("removed"), nil
 	}
 	return task, snapshot, artifact, job
+}
+
+func TestSeedGenerationRunResumesISOAndCleanupPhasesAfterRestart(t *testing.T) {
+	g, ctx := NewWithT(t), context.Background()
+	task, snapshot, artifact, job := seedGenerationISOObservationFixture(t)
+	pr := task.object
+	status := pr.Status.Extensions.ClusterDetails.SeedGenerationStatus
+	status.DetachmentStarted = true
+	status.AgentDetachmentCompleted = true
+	status.SeedGeneratorFinished = true
+	status.DetachedCleanupCompleted = true
+	setSeedGenerationProgress(pr, provisioningv1alpha1.CRconditionReasons.BuildingISO,
+		"Live ISO build Job has been submitted")
+	g.Expect(task.client.Status().Update(ctx, pr)).To(Succeed())
+	g.Expect(task.client.Create(ctx, job)).To(Succeed())
+
+	// Reconcile through the main ProvisioningRequest state machine while the
+	// ISO Job is pending, then reload the persisted state as after a restart.
+	result, err := task.reconcileSeedGeneration(ctx)
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(result.IsZero()).To(BeFalse())
+	g.Expect(seedGenerationTerminal(pr)).To(BeFalse())
+
+	persisted := &provisioningv1alpha1.ProvisioningRequest{}
+	g.Expect(task.client.Get(ctx, client.ObjectKeyFromObject(pr), persisted)).To(Succeed())
+	restarted := seedTestTask(persisted, task.client)
+	restarted.seedGenerationISONow = task.seedGenerationISONow
+
+	const digest = "sha256:" + "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	job.Status = batchv1.JobStatus{Succeeded: 1}
+	g.Expect(restarted.client.Status().Update(ctx, job)).To(Succeed())
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+		Name: "iso-builder", Namespace: job.Namespace,
+		Labels:          seedGenerationISOPodLabels(pr, job),
+		OwnerReferences: []metav1.OwnerReference{seedGenerationISOJobOwnerReference(job)},
+	}, Status: corev1.PodStatus{Phase: corev1.PodSucceeded,
+		ContainerStatuses: []corev1.ContainerStatus{{Name: seedGenerationISOContainer,
+			State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+				Message: artifact.URL + "\n" + digest,
+			}}}},
+	}}
+	g.Expect(restarted.client.Create(ctx, pod)).To(Succeed())
+
+	// A second manager restart must resume the same Job, publish its verified
+	// outputs, and then clean the run resources without clearing those outputs.
+	persisted = &provisioningv1alpha1.ProvisioningRequest{}
+	g.Expect(restarted.client.Get(ctx, client.ObjectKeyFromObject(pr), persisted)).To(Succeed())
+	restarted = seedTestTask(persisted, task.client)
+	restarted.seedGenerationISONow = task.seedGenerationISONow
+	_, err = restarted.reconcileSeedGeneration(ctx)
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(seedGenerationCondition(persisted).Status).To(Equal(metav1.ConditionTrue))
+	g.Expect(seedGenerationCondition(persisted).Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.Completed)))
+	g.Expect(persisted.Status.Extensions.ClusterDetails.SeedGenerationStatus.ISOURL).To(Equal(artifact.URL))
+	g.Expect(persisted.Status.Extensions.ClusterDetails.SeedGenerationStatus.ISODigest).To(Equal(digest))
+	g.Expect(persisted.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StateFulfilled))
+
+	for range 5 {
+		persisted = &provisioningv1alpha1.ProvisioningRequest{}
+		g.Expect(task.client.Get(ctx, client.ObjectKeyFromObject(pr), persisted)).To(Succeed())
+		restarted = seedTestTask(persisted, task.client)
+		restarted.seedGenerationISONow = task.seedGenerationISONow
+		result, err = restarted.reconcileSeedGeneration(ctx)
+		g.Expect(err).ToNot(HaveOccurred())
+		if result.IsZero() {
+			break
+		}
+	}
+	g.Expect(result.IsZero()).To(BeTrue(), "terminal cleanup should finish after deleting owned run resources")
+
+	for _, object := range []client.Object{snapshot.ConfigMap, snapshot.Secrets["upload"], snapshot.Secrets["pullSecret"], snapshot.Secrets["seedAuth"], snapshot.Secrets["spokeKubeconfig"]} {
+		err := task.client.Get(ctx, client.ObjectKeyFromObject(object), object.DeepCopyObject().(client.Object))
+		g.Expect(apierrors.IsNotFound(err)).To(BeTrue(), "snapshot resource %s should be cleaned", object.GetName())
+	}
+	g.Expect(persisted.Status.Extensions.ClusterDetails.SeedGenerationStatus.ISOURL).To(Equal(artifact.URL))
+	g.Expect(persisted.Status.Extensions.ClusterDetails.SeedGenerationStatus.ISODigest).To(Equal(digest))
 }
 
 func TestSeedGenerationISOMissingSubmittedJobIsNeverRecreated(t *testing.T) {

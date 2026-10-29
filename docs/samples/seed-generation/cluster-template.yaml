@@ -23,17 +23,22 @@ spec:
     clusterInstanceDefaults: clusterinstance-defaults-v1
     policyTemplateDefaults: policytemplate-defaults-v1
     upgradeDefaults:
-      seedGeneration:
-        # Optional operation timeout; defaults to 2h for seed-only generation.
-        seedGenerationTimeout: 2h
-        # Optional live ISO settings. Configure the upload Secret and URL before
-        # uncommenting this block. sshKey is a public key for core SSH access
-        # to inspect the pre-provisioning host and its logs.
-        # liveISO:
-        #   uploadSecretRef:
-        #     name: iso-server-credentials
-        #   urlBase: https://iso.example.com/ibi/
-        #   sshKey: "ssh-ed25519 AAAA... user@example"
+      # The schema below requires the ProvisioningRequest to supply the seed
+      # image and registry Secret reference. Replace this empty object with the
+      # mapping in the comments to configure a live ISO.
+      seedGeneration: {}
+      # seedGeneration:
+      #   # Optional overall timeout; defaults to 2h for seed-only generation
+      #   # and 3h when liveISO is configured.
+      #   seedGenerationTimeout: 3h
+      #   # Configure the upload Secret and URL before enabling liveISO.
+      #   # sshKey is a public key for core SSH access to inspect the
+      #   # pre-provisioning host and its logs.
+      #   liveISO:
+      #     uploadSecretRef:
+      #       name: iso-server-credentials
+      #     urlBase: https://iso.example.com/ibi/
+      #     sshKey: "ssh-ed25519 AAAA... user@example"
   templateParameterSchema:
     type: object
     additionalProperties: false

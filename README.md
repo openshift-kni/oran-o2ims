@@ -72,6 +72,11 @@ The typical workflow for deploying and managing clusters with the O-Cloud Manage
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow, testing requirements,
 and pull request guidelines.
 
+### Maintainer Guides
+
+- [Seed-generation tools image](./docs/dev/seed-generation-tools-image.md) — image
+  qualification, related image metadata, and digest refresh ownership
+
 ## Submodules
 
 This repo uses submodules to pull in konflux scripts from another repo. The `hack/update_deps.sh` script, which is called from various Makefile targets,

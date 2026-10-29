@@ -4,67 +4,132 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# Seed-generation API sample
+# Seed-generation samples
 
-These [ClusterTemplate](cluster-template.yaml) and
-[ProvisioningRequest](provisioning-request.yaml) examples show the seed-only
-configuration contract. Adapt the existing SNO ClusterTemplate, ConfigMaps,
-hardware selectors, and provisioning inputs for your site. Replace `4.Y.Z`
-with the installed OpenShift release and use a new ProvisioningRequest UUID.
+The [ClusterTemplate](cluster-template.yaml) and
+[ProvisioningRequest](provisioning-request.yaml) show a seed-only run. The
+ClusterTemplate uses `upgradeDefaults.seedGeneration: {}` because this sample
+schema requires the ProvisioningRequest to supply `seedImage` and
+`seedAuthSecretRef`. To build and publish an ISO after the seed image push,
+replace that empty object with the commented mapping in the ClusterTemplate;
+`liveISO` is template-owned and is not added to the ProvisioningRequest. The
+same ProvisioningRequest structure works for both flows.
 
-Create the ProvisioningRequest with seed-generation configuration in place.
-The controller starts the workflow after the cluster reaches ZTP Done, so the
-request does not need a post-install patch to trigger seed generation.
+If a ClusterTemplate supplies both `seedImage` and `seedAuthSecretRef` as
+defaults, it can omit `upgradeParameters` from the ProvisioningRequest schema,
+and the request should omit `templateParameters.upgradeParameters`.
 
-The sample ClusterTemplate leaves `seedImage` and `seedAuthSecretRef` out of
-`upgradeDefaults`, so its schema requires the ProvisioningRequest to provide
-both. A ClusterTemplate may instead set either as a default and expose it as
-an optional PR override. The PR-facing schema accepts only the Secret `name`;
-the controller resolves it in the ClusterTemplate namespace. The Secret data
-and namespace cannot be supplied by the PR.
+Replace `4.Y.Z`, the cluster names, resource selectors, and the UUID with values
+for your site. Start from a validated SNO ClusterTemplate and its referenced
+ConfigMaps rather than applying these standalone examples unchanged.
 
-Set `upgradeDefaults.seedGeneration.seedGenerationTimeout` to override the
-default operation timeout of 2h. The ProvisioningRequest can override this
-value at `upgradeParameters.seedGeneration.seedGenerationTimeout`;
-`clusterUpgradeTimeout` applies only to cluster upgrades. This sample shows
-seed-only generation and omits `liveISO`. To build and publish a live ISO after
-seed generation, add `liveISO` to the ClusterTemplate defaults and follow
-[Configure a live ISO upload destination](../../user-guide/seed-generation-live-iso-upload.md).
-That guide also covers the optional `liveISO.sshKey` public key for SSH access
-to the pre-provisioning host as `core`, including log monitoring.
+## Prerequisites
 
-Initial ProvisioningRequest validation checks that the referenced registry
-credentials match the `seedImage` repository and can start a push upload before
-hardware or cluster provisioning begins. The workflow repeats that check and
-validates the spoke prerequisites before detaching ACM agents. Seed generation
-starts after ZTP Done; there is no need to patch the request after installation.
+The seed cluster template must install the LifeCycle Agent (LCA) Operator and
+create the shared `/var/lib/containers` partition required by LCA. OADP is not
+required. The image and credential Secret must refer to the same registry
+repository, and the Secret must contain a `seedAuth` key with the registry auth
+JSON used by LCA.
 
-## Deployment and progress
+The overall `seedGenerationTimeout` defaults to 2h for seed-only generation and
+3h when `liveISO` is configured. Set it under `upgradeDefaults.seedGeneration`
+in the ClusterTemplate, or expose it through the ProvisioningRequest schema if
+operators need to override it per run.
 
-Install the matching operator and regenerated ProvisioningRequest CRD together.
-The workflow persists identity, submission, and cleanup checkpoints in status;
-an older CRD can prune these fields and prevent reliable recovery.
+The files [seed-auth-secret.example.yaml](seed-auth-secret.example.yaml) and
+[iso-upload-secret.example.yaml](iso-upload-secret.example.yaml) show the
+required Secret shapes. They contain placeholders only. Do not apply them as
+written and do not commit real credentials. Create or synchronize the Secrets
+with your site's approved secret-management process. The seed registry Secret
+and ISO upload Secret must be in the ClusterTemplate namespace.
 
-Use `SeedGenerationCompleted` conditions and
-`status.extensions.clusterDetails.seedGenerationStatus` to follow progress:
+For example, create the seed registry Secret from a path-scoped auth JSON file
+kept outside Git:
 
-1. Validate repository-scoped push credentials before hardware provisioning.
-   Registry trust includes the hub's additional trusted CAs.
-2. After ZTP Done, freeze inputs and verify the cluster identity, single-node
-   topology, installed release, containers partition, and LCA availability.
-3. Disable ACM placement, observability, and automatic import; wait for add-on
-   hooks, remove the Klusterlet and its work records, and clean up monitoring
-   remnants. `agentDetachmentCompleted` marks completion of this step.
-4. Submit LCA and monitor generation and push. LCA can temporarily remove its
-   SeedGenerator and Secret during the build. `seedGeneratorSubmitted` prevents
-   the controller from creating another run while they are absent.
-5. On success, report the configured image reference in `seedImage`, mark the
-   PR fulfilled, and remove transient resources. The source cluster stays
-   detached from ACM.
+```console
+CT_NAMESPACE=sno-ran-du-v4-Y-Z
+oc -n "$CT_NAMESPACE" create secret generic seed-registry-credentials --from-file=seedAuth=registry-auth.json
+```
 
-Normal PR deletion cleans hub artifacts and deprovisions/wipes the node; it
-must not depend on a reachable spoke. With `skip-cleanup`, the node is retained,
-so deletion waits for LCA to finish and for spoke credentials to be scrubbed.
-A timeout does not cancel LCA's host process. If a submission response is lost,
-the controller waits rather than risking a duplicate build; recovery may
-require deleting and recreating the PR.
+The registry auth entry must cover the repository path used by `seedImage` and
+allow image pushes. The sample request uses `registry.example.com/seed` for
+both. The upload guide provides the corresponding command for its SSH and
+HTTPS credential Secret.
+
+For live ISO settings, configure `urlBase` and `uploadSecretRef` in the
+ClusterTemplate. The upload Secret's `knownHosts` value must pin the SSH server
+key, and the HTTPS destination must be reachable from the hub build Job and the
+target BMCs. See [Configure a live ISO upload destination](../../user-guide/seed-generation-live-iso-upload.md)
+for key generation, host-key verification, certificate trust, and server path
+requirements.
+
+The ClusterTemplate includes an optional `liveISO.sshKey` example. It is a
+public key installed for the `core` user on a server booted from the ISO, for
+debugging and log access. It is unrelated to the upload Secret's SSH private
+key.
+
+## Create and monitor the request
+
+Create the ProvisioningRequest using the input shape permitted by its
+ClusterTemplate schema. In this sample, the image and registry Secret reference
+are ProvisioningRequest inputs, so they must be present from the start. If the
+ClusterTemplate supplies both as defaults, omit `templateParameters.upgradeParameters`
+from the request. The controller starts seed generation after the cluster reaches
+ZTP Done; no post-install patch is needed.
+
+The registry and optional ISO upload preflight checks run asynchronously during
+controller reconciliation, after the API server accepts the ProvisioningRequest
+and before hardware is allocated. A successful `oc create` therefore does not
+mean those checks have passed. Inspect `ProvisioningRequestValidated` and
+`SeedGenerationRegistryValidated` in status, and also
+`SeedGenerationISOUploadValidated` when the template configures a live ISO. The
+controller proceeds to hardware provisioning after validation succeeds.
+
+Use the condition and provisioning summary to follow progress:
+
+```console
+PR_NAME=your-provisioningrequest-name
+oc get provisioningrequest "$PR_NAME" \
+  -o custom-columns=PHASE:.status.provisioningStatus.provisioningPhase,DETAIL:.status.provisioningStatus.provisioningDetails
+oc get provisioningrequest "$PR_NAME" -o yaml
+```
+
+The `SeedGenerationCompleted` condition and
+`status.provisioningStatus.provisioningDetails` describe validation, frozen
+inputs, ACM cleanup, LCA progress, and optional ISO build/upload. The condition
+becomes `True` with reason `Completed` when the requested artifacts are ready.
+Failure reasons include `PreconditionChecksFailed`, `Failed`, and `TimedOut`.
+
+On success, collect the status outputs before deleting the request:
+
+* `status.extensions.clusterDetails.seedGenerationStatus.seedImage` is the
+  configured image reference whose push completed successfully.
+* `status.extensions.clusterDetails.seedGenerationStatus.releaseImageDigest`
+  pins the release used to extract `openshift-install` for the ISO build.
+* When `liveISO` is configured, `isoURL` is the verified HTTPS artifact URL and
+  `isoDigest` is its SHA-256 digest.
+
+For example, retrieve the generated ISO URL and checksum with:
+
+```console
+oc get provisioningrequest "$PR_NAME" -o jsonpath='{.status.extensions.clusterDetails.seedGenerationStatus.isoURL}{"\n"}'
+oc get provisioningrequest "$PR_NAME" -o jsonpath='{.status.extensions.clusterDetails.seedGenerationStatus.isoDigest}{"\n"}'
+```
+
+## Lifecycle and cleanup
+
+Seed generation is a one-shot operation. Inputs are frozen before detachment.
+If preflight fails before ACM detachment, the cluster remains attached. Once
+detachment begins, the controller does not restore ACM agents, including after
+a failure or timeout; the seed cluster remains detached for inspection until
+you delete the ProvisioningRequest. A timeout does not stop an LCA host process
+that is already running.
+
+Deleting the factory ProvisioningRequest cleans run-owned hub resources and
+allows the hardware manager to deprovision and wipe the allocated server. This
+is the normal way to reclaim the factory hardware after saving the artifact
+outputs. The `clcm.openshift.io/skip-cleanup` annotation retains the node and
+changes finalizer cleanup. With that annotation, deletion waits for LCA to
+finish and for the spoke credentials to be scrubbed. Do not set it when the goal
+is to reclaim the hardware. See the [IBI provisioning guide](../../user-guide/ibi-based-cluster-provisioning.md#automated-seed-image-and-live-iso-generation)
+for the full workflow and failure behavior.
