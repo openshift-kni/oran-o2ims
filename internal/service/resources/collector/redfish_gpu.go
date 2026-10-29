@@ -750,15 +750,15 @@ func (s *redfishSession) discoverGPUInventory(ctx context.Context, directSystemP
 
 	inventory := &hwmgrcontroller.GPUInventory{Devices: make([]hwmgrcontroller.GPUInfo, 0)}
 	seen := make(map[string]struct{})
-	processorGPUs, processorGPUFound, endpointFound, processorPartial := s.discoverProcessorGPUs(ctx, systems, inventory, seen)
+	// Collect every discovery view rather than stopping after one. A GPU present
+	// under Processors does not guarantee that every GPU is represented there, so
+	// a system can expose distinct GPUs through Processors, GraphicsControllers,
+	// PCIe, and chassis. addGPU deduplicates matching physical devices by serial
+	// (falling back to ID), and the Processor view is read first so its richer
+	// model/firmware details win for devices seen in more than one view.
+	endpointFound, processorPartial := s.discoverProcessorGPUs(ctx, systems, inventory, seen)
 	partial = partial || processorPartial
-	for i, system := range systems {
-		// Some BMCs expose the same GPU as both a Processor and a PCIe device.
-		// Prefer the Processor record because it commonly has the GPU model and
-		// firmware version that the PCIe device omits.
-		if processorGPUs[i] {
-			continue
-		}
+	for _, system := range systems {
 		devices, found, systemPartial := s.discoverSystemGPUs(ctx, system)
 		endpointFound = endpointFound || found
 		partial = partial || systemPartial
@@ -767,21 +767,19 @@ func (s *redfishSession) discoverGPUInventory(ctx context.Context, directSystemP
 		}
 	}
 
-	if !processorGPUFound {
-		// Prefer the chassis associated with the systems we are inventorying so a
-		// multi-system Redfish service does not attribute another host's GPUs to
-		// this one. Fall back to the service-wide chassis collection only when no
-		// system exposes a chassis association (common on single-system BMCs).
-		chassisLinks := chassisLinksForSystems(systems)
-		if chassisLinks.isEmpty() {
-			chassisLinks = redfishLinkList{collection: root.Chassis}
-		}
-		devices, found, chassisPartial := s.discoverChassisGPUs(ctx, chassisLinks)
-		endpointFound = endpointFound || found
-		partial = partial || chassisPartial
-		for _, device := range devices {
-			addGPU(inventory, seen, device)
-		}
+	// Prefer the chassis associated with the systems we are inventorying so a
+	// multi-system Redfish service does not attribute another host's GPUs to
+	// this one. Fall back to the service-wide chassis collection only when no
+	// system exposes a chassis association (common on single-system BMCs).
+	chassisLinks := chassisLinksForSystems(systems)
+	if chassisLinks.isEmpty() {
+		chassisLinks = redfishLinkList{collection: root.Chassis}
+	}
+	chassisDevices, chassisFound, chassisPartial := s.discoverChassisGPUs(ctx, chassisLinks)
+	endpointFound = endpointFound || chassisFound
+	partial = partial || chassisPartial
+	for _, device := range chassisDevices {
+		addGPU(inventory, seen, device)
 	}
 
 	switch {
@@ -803,12 +801,10 @@ func (s *redfishSession) discoverProcessorGPUs(
 	systems []redfishObject,
 	inventory *hwmgrcontroller.GPUInventory,
 	seen map[string]struct{},
-) ([]bool, bool, bool, bool) {
-	processorGPUs := make([]bool, len(systems))
-	processorGPUFound := false
+) (bool, bool) {
 	endpointFound := false
 	partial := false
-	for i, system := range systems {
+	for _, system := range systems {
 		if system.Processors.ODataID == "" {
 			continue
 		}
@@ -821,12 +817,10 @@ func (s *redfishSession) discoverProcessorGPUs(
 			if !strings.EqualFold(processor.ProcessorType, "GPU") {
 				continue
 			}
-			processorGPUs[i] = true
-			processorGPUFound = true
 			addGPU(inventory, seen, gpuInfoFromProcessor(processor))
 		}
 	}
-	return processorGPUs, processorGPUFound, endpointFound, partial
+	return endpointFound, partial
 }
 
 func (s *redfishSession) discoverSystemGPUs(ctx context.Context, system redfishObject) ([]hwmgrcontroller.GPUInfo, bool, bool) {
