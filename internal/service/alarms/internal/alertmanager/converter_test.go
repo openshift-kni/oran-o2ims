@@ -317,8 +317,7 @@ var _ = Describe("Alertmanager Functions", func() {
 			Expect(records).To(HaveLen(1))
 			record := records[0]
 			Expect(record.AlarmSource).To(Equal(models.AlarmSourceHardware))
-			Expect(record.ObjectClass).ToNot(BeNil())
-			Expect(*record.ObjectClass).To(Equal(constants.ObjectClassResource))
+			Expect(record.ObjectClass).To(Equal(constants.ObjectClassResource))
 		})
 
 		It("should derive the cluster objectClass FQN for CaaS alerts", func() {
@@ -350,8 +349,7 @@ var _ = Describe("Alertmanager Functions", func() {
 			Expect(records).To(HaveLen(1))
 			record := records[0]
 			Expect(record.AlarmSource).To(Equal(models.AlarmSourceCaaS))
-			Expect(record.ObjectClass).ToNot(BeNil())
-			Expect(*record.ObjectClass).To(Equal(constants.ObjectClassCluster))
+			Expect(record.ObjectClass).To(Equal(constants.ObjectClassCluster))
 		})
 
 		It("should set the cluster objectClass FQN even when no usable identifier is present", func() {
@@ -383,8 +381,7 @@ var _ = Describe("Alertmanager Functions", func() {
 			Expect(records).To(HaveLen(1))
 			record := records[0]
 			Expect(record.ObjectID).To(BeNil())
-			Expect(record.ObjectClass).ToNot(BeNil())
-			Expect(*record.ObjectClass).To(Equal(constants.ObjectClassCluster))
+			Expect(record.ObjectClass).To(Equal(constants.ObjectClassCluster))
 		})
 
 		DescribeTable("severity mapping",

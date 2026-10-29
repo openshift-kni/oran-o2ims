@@ -24,30 +24,29 @@ import (
 // ConvertAlarmEventRecordModelToApi converts an AlarmEventRecord DB model to an API model
 func ConvertAlarmEventRecordModelToApi(aerModel AlarmEventRecord) api.AlarmEventRecord {
 	record := api.AlarmEventRecord{
-		AlarmAcknowledged:     aerModel.AlarmAcknowledged,
-		AlarmAcknowledgedTime: aerModel.AlarmAcknowledgedTime,
-		AlarmChangedTime:      aerModel.AlarmChangedTime,
-		AlarmClearedTime:      aerModel.AlarmClearedTime,
-		AlarmEventRecordId:    aerModel.AlarmEventRecordID,
-		AlarmRaisedTime:       aerModel.AlarmRaisedTime,
-		PerceivedSeverity:     aerModel.PerceivedSeverity,
-		Extensions:            aerModel.Extensions,
+		AlarmAcknowledged:    aerModel.AlarmAcknowledged,
+		AlarmAcknowledgeTime: aerModel.AlarmAcknowledgedTime,
+		AlarmChangedTime:     aerModel.AlarmChangedTime,
+		AlarmClearedTime:     aerModel.AlarmClearedTime,
+		AlarmEventRecordId:   aerModel.AlarmEventRecordID,
+		AlarmRaisedTime:      aerModel.AlarmRaisedTime,
+		PerceivedSeverity:    aerModel.PerceivedSeverity,
+		Extensions:           aerModel.Extensions,
+		// objectClass is a mandatory, non-blank field enforced at the DB boundary.
+		ObjectClass: aerModel.ObjectClass,
 	}
 
 	if aerModel.AlarmDefinitionID != nil {
-		record.AlarmDefinitionID = *aerModel.AlarmDefinitionID
+		record.AlarmDefinitionId = *aerModel.AlarmDefinitionID
 	}
 	if aerModel.ProbableCauseID != nil {
-		record.ProbableCauseID = *aerModel.ProbableCauseID
+		record.ProbableCauseId = *aerModel.ProbableCauseID
 	}
 	if aerModel.ObjectTypeID != nil {
-		record.ResourceTypeID = *aerModel.ObjectTypeID
+		record.ObjectTypeId = *aerModel.ObjectTypeID
 	}
 	if aerModel.ObjectID != nil {
-		record.ResourceID = *aerModel.ObjectID
-	}
-	if aerModel.ObjectClass != nil {
-		record.ObjectClass = aerModel.ObjectClass
+		record.ObjectId = *aerModel.ObjectID
 	}
 
 	return record
@@ -76,7 +75,7 @@ func ConvertAlarmEventRecordModelToAlarmEventNotification(aerModel AlarmEventRec
 		AlarmEventRecordId:    aerModel.AlarmEventRecordID,
 		AlarmRaisedTime:       aerModel.AlarmRaisedTime,
 		Extensions:            aerModel.Extensions,
-		GlobalCloudID:         globalCloudID,
+		GlobalCloudId:         globalCloudID,
 		NotificationEventType: AlarmFilterToEventType(aerModel.NotificationEventType),
 		ObjectRef:             nullable.NewNullableWithValue(or),
 		// consumerSubscriptionId is per-subscriber: the base notification serializes it as an
@@ -87,20 +86,19 @@ func ConvertAlarmEventRecordModelToAlarmEventNotification(aerModel AlarmEventRec
 
 	// Handle all pointer fields together
 	if aerModel.AlarmDefinitionID != nil {
-		notification.AlarmDefinitionID = *aerModel.AlarmDefinitionID
+		notification.AlarmDefinitionId = *aerModel.AlarmDefinitionID
 	}
 	if aerModel.ProbableCauseID != nil {
-		notification.ProbableCauseID = *aerModel.ProbableCauseID
+		notification.ProbableCauseId = *aerModel.ProbableCauseID
 	}
 	if aerModel.ObjectID != nil {
-		notification.ResourceID = *aerModel.ObjectID
+		notification.ObjectId = *aerModel.ObjectID
 	}
 	if aerModel.ObjectTypeID != nil {
-		notification.ResourceTypeID = *aerModel.ObjectTypeID
+		notification.ObjectTypeId = *aerModel.ObjectTypeID
 	}
-	if aerModel.ObjectClass != nil {
-		notification.ObjectClass = *aerModel.ObjectClass
-	}
+	// objectClass is a mandatory, non-blank field enforced at the DB boundary.
+	notification.ObjectClass = aerModel.ObjectClass
 
 	return notification
 }

@@ -15,8 +15,8 @@ CREATE TABLE IF NOT EXISTS alarm_event_record (
     -- O-RAN additional data to create AlarmEventNotification
     object_id UUID, -- Same as manager_cluster_id for caas alerts. Note: nullable to capture if ACM is sending us cluster ID
     object_type_id UUID, -- Derived from manager_cluster_id. Note: nullable to capture if ACM is sending us cluster ID
-    object_class TEXT, -- Fully qualified name of the class of the object (Resource or NodeCluster) that caused the alarm, derived from the alarm source. Nullable for legacy rows.
-    notification_event_type VARCHAR(20) DEFAULT 'NEW' NOT NULL, -- Same as alarm_subscription_info.filter used to quickly filter and return notification
+    object_class TEXT NOT NULL, -- Fully qualified, non-blank name of the class of the object (Resource or NodeCluster) that caused the alarm, derived from the alarm source.
+    notification_event_type VARCHAR(20) DEFAULT 'NEW' NOT NULL, -- The notification event type (NEW/CHANGE/CLEAR/ACKNOWLEDGE) used to quickly filter and return notifications
 
     -- Internal
     alarm_status VARCHAR(20) DEFAULT 'firing' NOT NULL, -- Status of the alarm (either 'firing' or 'resolved'). This is also used to archive it later.
@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS alarm_event_record (
     CONSTRAINT unique_fingerprint_alarm_raised_time UNIQUE (fingerprint, alarm_raised_time), -- Unique constraint to prevent duplicate caas alert with the same fingerprint and time
     CONSTRAINT chk_status CHECK (alarm_status IN ('firing', 'resolved')), -- Check constraint to enforce status as either 'firing' or 'resolved'
     CONSTRAINT chk_perceived_severity CHECK (perceived_severity IN (0, 1, 2, 3, 4, 5)),  -- Check constraint to restrict perceived_severity to valid integer values. See generated ENUMs in server for more.
-    CONSTRAINT chk_notification_event_type CHECK (notification_event_type IN ('NEW', 'CHANGE', 'CLEAR', 'ACKNOWLEDGE')) -- Validate notification_event_type (same as alarm_subscription_info.filter)
+    CONSTRAINT chk_notification_event_type CHECK (notification_event_type IN ('NEW', 'CHANGE', 'CLEAR', 'ACKNOWLEDGE')), -- Validate the notification event type
+    CONSTRAINT chk_object_class_nonblank CHECK (object_class ~ '\S') -- Enforce a non-blank objectClass: require at least one non-whitespace character so all-whitespace values (spaces, tabs, newlines) are rejected. Note: \S matches whitespace as recognized by the target PostgreSQL locale, so non-ASCII whitespace handling depends on that locale.
 );
 
 
