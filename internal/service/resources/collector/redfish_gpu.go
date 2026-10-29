@@ -41,8 +41,12 @@ const (
 	redfishInventoryTimeout = 30 * time.Second
 	redfishRequestTimeout   = 5 * time.Second
 	redfishMaxResponseBytes = 4 << 20
-	redfishMaxConcurrent    = 4
-	redfishWorkerCount      = 4
+	// redfishWorkerCount is the number of hosts whose GPU inventory can be
+	// collected concurrently. redfishMaxConcurrent caps the in-flight Redfish
+	// HTTP requests; keep it at least as large as redfishWorkerCount so the
+	// request semaphore does not throttle the workers.
+	redfishMaxConcurrent = 16
+	redfishWorkerCount   = 16
 
 	gpuInventoryStatusComplete    = "complete"
 	gpuInventoryStatusPartial     = "partial"
