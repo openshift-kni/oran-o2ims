@@ -4,13 +4,20 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# Configure a live ISO upload destination
+# Configure an IBI live ISO upload destination
 
-The seed-generation workflow can build a live installation ISO after it pushes
+The seed-generation workflow can build an IBI live installation ISO after it pushes
 the seed image. It uploads the ISO over SSH and publishes an HTTPS URL in the
 ProvisioningRequest status. This guide configures the upload credentials and
 the matching ClusterTemplate settings. The HTTPS server and its writable
 directory must already exist.
+
+For an optional server implementation, see the
+[IBI live ISO server example](ibi-live-iso-server-example.md). This unsupported example
+uses separate accounts for the rootless httpd container and SSH uploads. Its
+[upload-key](ibi-live-iso-server-example.md#create-and-authorize-the-upload-key) and
+[upload-Secret](ibi-live-iso-server-example.md#create-the-upload-secret) sections
+show the concrete commands for that directory layout.
 
 ## Match the SSH directory to the HTTPS URL
 
