@@ -480,7 +480,7 @@ func (a *AlarmsServer) PatchAlarm(ctx context.Context, request api.PatchAlarmReq
 		return nil, fmt.Errorf("failed to patch Alarm Event Record: %w", err)
 	}
 
-	slog.DebugContext(ctx, "Alarm acknowledged/cleared", slog.Bool("alarmAcknowledged", updated.AlarmAcknowledged), slog.Any("alarmAcknowledgedTime", updated.AlarmAcknowledgedTime),
+	slog.DebugContext(ctx, "Alarm acknowledged/cleared", slog.Bool("alarmAcknowledged", updated.AlarmAcknowledged), slog.Any("alarmAcknowledgeTime", updated.AlarmAcknowledgedTime),
 		slog.Any("alarmClearedTime", updated.AlarmClearedTime), slog.Any("perceivedSeverity", updated.PerceivedSeverity), slog.Any("alarmChangedTime", updated.AlarmChangedTime))
 
 	return api.PatchAlarm200JSONResponse{AlarmAcknowledged: request.Body.AlarmAcknowledged, PerceivedSeverity: request.Body.PerceivedSeverity}, nil

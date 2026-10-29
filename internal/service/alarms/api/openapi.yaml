@@ -764,13 +764,13 @@ components:
             Identifier of an entry in the AlarmEventRecord.
             Locally unique within the scope of an O-Cloud instance.
           example: 752c4e22-057d-4162-997b-ca3e2fd4ff53
-        alarmDefinitionID:
+        alarmDefinitionId:
           type: string
           format: uuid
           description: |
             A reference to the Alarm Definition record in the Alarm Dictionary associated with the referenced Resource Type.
           example: 5369fe06-adeb-4966-b8ff-47a6f4d4cec5
-        probableCauseID:
+        probableCauseId:
           type: string
           format: uuid
           description: A reference to the ProbableCause of the Alarm.
@@ -793,7 +793,7 @@ components:
           description: |
             This field is populated with a Date/Time stamp value when the alarm condition is cleared.
           example: 2042-07-21T20:32:28Z
-        alarmAcknowledgedTime:
+        alarmAcknowledgeTime:
           type: string
           format: date-time
           description: This field is populated with a Date/Time stamp value when the alarm condition is acknowledged.
@@ -803,12 +803,12 @@ components:
           description: |
             When a system acknowledges an alarm, it is then set to TRUE.
           example: true
-        resourceTypeID:
+        objectTypeId:
           type: string
           format: uuid
           description: A reference to the type of resource which caused the alarm.
           example: 91d5d140-ef52-4167-b6dc-975ad1897f23
-        resourceID:
+        objectId:
           type: string
           format: uuid
           description: A reference to the resource which caused the alarm.
@@ -817,8 +817,10 @@ components:
           $ref: '#/components/schemas/PerceivedSeverity'
         objectClass:
           type: string
+          minLength: 1
           description: |
             The fully qualified name of the class of the object (Resource or NodeCluster) which caused the alarm.
+            This is a mandatory, non-blank value.
           example: oran.o2ims.cluster.NodeCluster
         extensions:
           type: object
@@ -828,14 +830,15 @@ components:
             operator to extend the information provided about the O-Cloud Alarm.
       required:
       - alarmEventRecordId
-      - alarmDefinitionID
-      - probableCauseID
+      - alarmDefinitionId
+      - probableCauseId
       - alarmRaisedTime
       - alarmAcknowledged
       - perceivedSeverity
       - extensions
-      - resourceTypeID
-      - resourceID
+      - objectTypeId
+      - objectId
+      - objectClass
 
     AlarmEventRecordModifications:
       type: object
@@ -1063,7 +1066,7 @@ components:
       type: object
       description: Alarm Event Notification sent to subscribers
       properties:
-        globalCloudID:
+        globalCloudId:
           type: string
           format: uuid
           description: The global cloud identifier assigned by the SMO.e
@@ -1102,22 +1105,22 @@ components:
           format: uuid
           description: The URL to the AlarmEventRecord object.
           example: 5f768e89-2ae1-477d-9978-173056154d5d
-        resourceTypeID:
+        objectTypeId:
           type: string
           format: uuid
           description: A reference to the type of resource which caused the alarm.
           example: 91d5d140-ef52-4167-b6dc-975ad1897f23
-        resourceID:
+        objectId:
           type: string
           format: uuid
           description: A reference to the resource instance which caused the alarm.
           example: 3bff173d-a9d5-4157-858f-f934f6fdec45
-        alarmDefinitionID:
+        alarmDefinitionId:
           type: string
           format: uuid
           description: A reference to the Alarm Definition record in the Alarm Dictionary associated with the referenced ResourceType.
           example: a3a505c7-84dc-4cff-baf8-36f33b3e70fc
-        probableCauseID:
+        probableCauseId:
           type: string
           format: uuid
           description: A reference to the ProbableCause of the Alarm.
@@ -1158,16 +1161,16 @@ components:
             These are unspecified (not standardized) properties (keys) which are tailored by the vendor or
             operator to extend the information provided about the O-Cloud Alarm.
       required:
-      - globalCloudID
+      - globalCloudId
       - consumerSubscriptionId
       - notificationEventType
       - objectRef
       - objectClass
       - alarmEventRecordId
-      - resourceTypeID
-      - resourceID
-      - alarmDefinitionID
-      - probableCauseID
+      - objectTypeId
+      - objectId
+      - alarmDefinitionId
+      - probableCauseId
       - alarmRaisedTime
       - alarmChangedTime
       - alarmClearedTime

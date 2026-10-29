@@ -273,7 +273,7 @@ var _ = Describe("AlarmsRepository", func() {
 						AlarmRaisedTime:   time.Now(),
 						PerceivedSeverity: api.WARNING,
 						ObjectID:          &id,
-						ObjectClass:       &objectClass,
+						ObjectClass:       objectClass,
 						Fingerprint:       "9a9e2d82a78cf2b9",
 						AlarmSource:       models.AlarmSourceCaaS,
 					},
