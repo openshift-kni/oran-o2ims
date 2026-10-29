@@ -516,7 +516,7 @@ var _ = Describe("AlarmsServer", func() {
 
 		patch := func(body string) *httptest.ResponseRecorder {
 			req := httptest.NewRequest(http.MethodPatch,
-				"/O2ims_infrastructureMonitoring/v1/alarmSubscriptions/"+uuid.New().String(),
+				"/O2ims_infrastructureMonitoring/v2/alarmSubscriptions/"+uuid.New().String(),
 				bytes.NewBufferString(body))
 			req.Header.Set("Content-Type", "application/merge-patch+json")
 			rr := httptest.NewRecorder()
@@ -558,7 +558,7 @@ var _ = Describe("AlarmsServer", func() {
 
 		post := func(body string) *httptest.ResponseRecorder {
 			req := httptest.NewRequest(http.MethodPost,
-				"/O2ims_infrastructureMonitoring/v1/alarmSubscriptions",
+				"/O2ims_infrastructureMonitoring/v2/alarmSubscriptions",
 				bytes.NewBufferString(body))
 			req.Header.Set("Content-Type", "application/json")
 			rr := httptest.NewRecorder()

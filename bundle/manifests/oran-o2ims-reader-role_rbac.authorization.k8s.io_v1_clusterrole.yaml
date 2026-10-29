@@ -33,20 +33,20 @@ rules:
   verbs:
   - get
 - nonResourceURLs:
-  - /O2ims_infrastructureMonitoring/v1/alarmSubscriptions
+  - /O2ims_infrastructureMonitoring/v2/alarmSubscriptions
   - /O2ims_infrastructureInventory/v2/subscriptions
   - /O2ims_infrastructureCluster/v1/subscriptions
   - /O2ims_infrastructureProvisioning/v1/provisioningRequests
   verbs:
   - get
 - nonResourceURLs:
-  - /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/*
+  - /O2ims_infrastructureMonitoring/v2/alarmSubscriptions/*
   - /O2ims_infrastructureInventory/v2/subscriptions/*
   - /O2ims_infrastructureCluster/v1/subscriptions/*
   - /O2ims_infrastructureProvisioning/v1/provisioningRequests/*
   verbs:
   - get
 - nonResourceURLs:
-  - /O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration
+  - /O2ims_infrastructureMonitoring/v2/alarmServiceConfiguration
   verbs:
   - get

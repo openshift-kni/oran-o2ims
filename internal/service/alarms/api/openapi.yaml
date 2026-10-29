@@ -1,15 +1,22 @@
 openapi: 3.0.3
 info:
   title: O2IMS Infrastructure Monitoring Alarms API
-  version: 1.0.0
-  description: API for O2IMS Infrastructure Monitoring Alarms
+  version: 2.2.0
+  description: |
+    API for O2IMS Infrastructure Monitoring Alarms.
+
+    All responses served under the versioned /O2ims_infrastructureMonitoring/v2 paths and
+    the unversioned /O2ims_infrastructureMonitoring/api_versions discovery endpoint carry a
+    `Version: 2.2.0` HTTP response header (on both successful and handled-error responses).
+    The header is set by the server's path-scoped middleware; it is not part of any response
+    body schema.
   contact:
     name: Red Hat
     url: https://www.redhat.com
 
 externalDocs:
-  description: O-RAN apis from O-RAN.WG6.O2IMS-INTERFACE-R003-v06.00 (June 2024)
-  url: https://specifications.o-ran.org/download?id=674
+  description: O-RAN O2ims Interface Specification (O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v13.00), available from the O-RAN specifications catalog
+  url: https://www.o-ran.org/specifications
 
 servers:
 - url: http://localhost:8000
@@ -77,7 +84,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /O2ims_infrastructureMonitoring/v1/api_versions:
+  /O2ims_infrastructureMonitoring/v2/api_versions:
     get:
       operationId: getMinorVersions
       summary: Get minor API versions
@@ -122,7 +129,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /O2ims_infrastructureMonitoring/v1/alarms:
+  /O2ims_infrastructureMonitoring/v2/alarms:
     get:
       operationId: GetAlarms
       summary: Retrieve the list of alarms
@@ -171,7 +178,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /O2ims_infrastructureMonitoring/v1/alarms/{alarmEventRecordId}:
+  /O2ims_infrastructureMonitoring/v2/alarms/{alarmEventRecordId}:
     get:
       operationId: GetAlarm
       summary: Retrieve exactly one alarm
@@ -300,7 +307,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration:
+  /O2ims_infrastructureMonitoring/v2/alarmServiceConfiguration:
     get:
       operationId: GetServiceConfiguration
       summary: Retrieve the alarm service configuration
@@ -449,7 +456,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /O2ims_infrastructureMonitoring/v1/alarmSubscriptions:
+  /O2ims_infrastructureMonitoring/v2/alarmSubscriptions:
     get:
       operationId: GetSubscriptions
       summary: Retrieve the list of alarm subscriptions
@@ -568,7 +575,7 @@ paths:
                 '500':
                   description: Internal server error
 
-  /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId}:
+  /O2ims_infrastructureMonitoring/v2/alarmSubscriptions/{alarmSubscriptionId}:
     get:
       operationId: GetSubscription
       summary: Retrieve exactly one subscription
@@ -1094,7 +1101,7 @@ components:
             path (the trailing segment is the alarmEventRecordId). Consumers that require an
             absolute URL must prepend the O-Cloud base URL; the absence of a configurable
             public base URL is a known interoperability limitation.
-          example: /O2ims_infrastructureMonitoring/v1/alarms/bf3f8f2e-6f37-4882-96ad-c0b9cef6fc04
+          example: /O2ims_infrastructureMonitoring/v2/alarms/bf3f8f2e-6f37-4882-96ad-c0b9cef6fc04
         objectClass:
           type: string
           description: |

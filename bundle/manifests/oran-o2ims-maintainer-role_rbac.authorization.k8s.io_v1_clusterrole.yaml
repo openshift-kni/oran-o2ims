@@ -7,11 +7,11 @@ metadata:
   name: oran-o2ims-maintainer-role
 rules:
 - nonResourceURLs:
-  - /O2ims_infrastructureMonitoring/v1/alarms/*
+  - /O2ims_infrastructureMonitoring/v2/alarms/*
   verbs:
   - patch
 - nonResourceURLs:
-  - /O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration
+  - /O2ims_infrastructureMonitoring/v2/alarmServiceConfiguration
   verbs:
   - get
   - patch
