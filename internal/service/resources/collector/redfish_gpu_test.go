@@ -253,6 +253,78 @@ var _ = Describe("Redfish GPU inventory", func() {
 		Expect(inventory.Devices).To(BeEmpty())
 	})
 
+	It("does not fall back to the service-wide chassis on a multi-system service", func() {
+		serviceWideChassisTraversed := false
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/redfish/v1/":
+				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"},"Chassis":{"@odata.id":"/redfish/v1/Chassis"}}`))
+			case "/redfish/v1/Systems/1":
+				// No Links.Chassis and no system-level GPU views.
+				_, _ = w.Write([]byte(`{"Id":"1"}`))
+			case "/redfish/v1/Systems":
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Systems/1"},{"@odata.id":"/redfish/v1/Systems/2"}],"Members@odata.count":2}`))
+			// A GPU lives in the service-wide chassis but belongs to another system
+			// and must not be attributed to this host.
+			case "/redfish/v1/Chassis":
+				serviceWideChassisTraversed = true
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Chassis/2"}]}`))
+			case "/redfish/v1/Chassis/2":
+				serviceWideChassisTraversed = true
+				_, _ = w.Write([]byte(`{"Id":"2","PCIeDevices":[{"@odata.id":"/redfish/v1/Chassis/2/PCIeDevices/GPU2"}]}`))
+			case "/redfish/v1/Chassis/2/PCIeDevices/GPU2":
+				serviceWideChassisTraversed = true
+				_, _ = w.Write([]byte(`{"Id":"GPU2","Model":"H100","SerialNumber":"GPU-SN-2","PCIeFunctions":[{"@odata.id":"/redfish/v1/Chassis/2/PCIeDevices/GPU2/PCIeFunctions/0"}],"Status":{"State":"Enabled","Health":"OK"}}`))
+			case "/redfish/v1/Chassis/2/PCIeDevices/GPU2/PCIeFunctions/0":
+				serviceWideChassisTraversed = true
+				_, _ = w.Write([]byte(`{"DeviceClass":"ProcessingAccelerators"}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		reader.httpClient = redfishTestHTTPClient(handler)
+		bmh.Spec.BMC.Address = "redfish+http://bmc.example/redfish/v1/Systems/1"
+
+		inventory, err := reader.GetGPUInventory(ctx, bmh)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(serviceWideChassisTraversed).To(BeFalse())
+		Expect(inventory.Devices).To(BeEmpty())
+		Expect(inventory.Status).To(Equal(gpuInventoryStatusUnsupported))
+	})
+
+	It("falls back to the service-wide chassis on a single-system service", func() {
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/redfish/v1/":
+				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"},"Chassis":{"@odata.id":"/redfish/v1/Chassis"}}`))
+			case "/redfish/v1/Systems/1":
+				_, _ = w.Write([]byte(`{"Id":"1"}`))
+			case "/redfish/v1/Systems":
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Systems/1"}],"Members@odata.count":1}`))
+			case "/redfish/v1/Chassis":
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Chassis/1"}]}`))
+			case "/redfish/v1/Chassis/1":
+				_, _ = w.Write([]byte(`{"Id":"1","PCIeDevices":[{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/GPU1"}]}`))
+			case "/redfish/v1/Chassis/1/PCIeDevices/GPU1":
+				_, _ = w.Write([]byte(`{"Id":"GPU1","Manufacturer":"NVIDIA","Model":"H100","SerialNumber":"GPU-SN-1","PCIeFunctions":[{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/GPU1/PCIeFunctions/0"}],"Status":{"State":"Enabled","Health":"OK"}}`))
+			case "/redfish/v1/Chassis/1/PCIeDevices/GPU1/PCIeFunctions/0":
+				_, _ = w.Write([]byte(`{"DeviceClass":"ProcessingAccelerators"}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		reader.httpClient = redfishTestHTTPClient(handler)
+		bmh.Spec.BMC.Address = "redfish+http://bmc.example/redfish/v1/Systems/1"
+
+		inventory, err := reader.GetGPUInventory(ctx, bmh)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(inventory.Status).To(Equal(gpuInventoryStatusComplete))
+		Expect(inventory.Devices).To(HaveLen(1))
+		Expect(inventory.Devices[0].Model).To(Equal("H100"))
+	})
+
 	It("deduplicates a GPU exposed through both Processor and PCIe views, preferring Processor details", func() {
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
