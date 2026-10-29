@@ -159,15 +159,15 @@ func ConvertSubscriptionAPIToModel(subscriptionAPI *api.AlarmSubscriptionInfo) A
 }
 
 // AlarmFilterToEventType map text to int e.g NEW -> 0
-func AlarmFilterToEventType(filter api.AlarmSubscriptionInfoFilter) api.AlarmEventNotificationNotificationEventType {
+func AlarmFilterToEventType(filter api.AlarmSubscriptionInfoEventFilter) api.AlarmEventNotificationNotificationEventType {
 	switch filter {
-	case api.AlarmSubscriptionInfoFilterNEW:
+	case api.AlarmSubscriptionInfoEventFilterNEW:
 		return api.AlarmEventNotificationNotificationEventTypeNEW
-	case api.AlarmSubscriptionInfoFilterCHANGE:
+	case api.AlarmSubscriptionInfoEventFilterCHANGE:
 		return api.AlarmEventNotificationNotificationEventTypeCHANGE
-	case api.AlarmSubscriptionInfoFilterCLEAR:
+	case api.AlarmSubscriptionInfoEventFilterCLEAR:
 		return api.AlarmEventNotificationNotificationEventTypeCLEAR
-	case api.AlarmSubscriptionInfoFilterACKNOWLEDGE:
+	case api.AlarmSubscriptionInfoEventFilterACKNOWLEDGE:
 		return api.AlarmEventNotificationNotificationEventTypeACKNOWLEDGE
 	default:
 		return api.AlarmEventNotificationNotificationEventTypeNEW

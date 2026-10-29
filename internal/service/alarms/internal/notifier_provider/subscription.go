@@ -78,7 +78,7 @@ func (s *SubscriptionStorageProvider) Matches(subscription *notifier.Subscriptio
 	if subscription.Filter == nil {
 		return true
 	}
-	filter := generated.AlarmSubscriptionInfoFilter(*subscription.Filter)
+	filter := generated.AlarmSubscriptionInfoEventFilter(*subscription.Filter)
 	return models.AlarmFilterToEventType(filter) != payload.NotificationEventType
 }
 
