@@ -113,21 +113,59 @@ the [rootless Podman setup instructions](https://github.com/podman-container-too
 and your distribution's account-management guidance.
 Do not assign ranges already used by another account.
 
-Allow SSH on port 22 from the hub and administration hosts. Allow HTTPS on
-port 10443 from the hub and authorized ISO consumers. For example, with
-firewalld, replace these documentation ranges with the approved IPv4 source
-networks for your environment:
+### Configure SSH access separately
+
+Allow SSH on port 22 from the hub and administration hosts. Preserve existing
+administrator SSH access and keep the current session open while configuring
+the firewall. Configure and verify SSH independently of the HTTPS rules below.
+
+For firewalld, identify the zone handling the server's incoming connections
+with `sudo firewall-cmd --get-active-zones`. Replace `public` and the
+documentation source ranges below with the appropriate zone and approved hub
+and administration networks. These commands add rules to both the runtime and
+permanent configurations without reloading the firewall:
 
 ```bash
-for network in 192.0.2.0/24 198.51.100.0/24; do
-    sudo firewall-cmd --permanent --add-rich-rule="rule family=\"ipv4\" source address=\"$network\" port port=\"10443\" protocol=\"tcp\" accept"
+FIREWALL_ZONE=public
+SSH_FAMILY=ipv4
+SSH_SOURCES=(192.0.2.0/24)
+
+for network in "${SSH_SOURCES[@]}"; do
+    rule="rule family=\"$SSH_FAMILY\" source address=\"$network\" port port=\"22\" protocol=\"tcp\" accept"
+    sudo firewall-cmd --zone="$FIREWALL_ZONE" --add-rich-rule="$rule"
+    sudo firewall-cmd --zone="$FIREWALL_ZONE" --permanent --add-rich-rule="$rule"
 done
-sudo firewall-cmd --reload
 ```
 
-Apply the rules to the appropriate firewalld zone and configure any required
-IPv6 rules separately. Check that broader existing rules do not expose this
-port to unintended clients. The example does not publish an HTTP port.
+If SSH clients use IPv6, repeat this example with `SSH_FAMILY=ipv6` and the
+approved IPv6 sources in `SSH_SOURCES`, for example `(2001:db8:1::/64)`.
+
+Confirm a new SSH login from an approved administration host before closing
+the original session or continuing. Keep existing administrator SSH rules in
+place; this example adds access rather than replacing the host's SSH policy.
+
+### Allow HTTPS downloads
+
+Allow HTTPS on port 10443 from the hub and authorized ISO consumers. Use a
+separate source list for these clients; ISO consumers do not need SSH access.
+Using the firewalld zone selected above, replace the documentation ranges
+with your approved HTTPS source networks:
+
+```bash
+HTTPS_FAMILY=ipv4
+HTTPS_SOURCES=(192.0.2.0/24 198.51.100.0/24)
+
+for network in "${HTTPS_SOURCES[@]}"; do
+    rule="rule family=\"$HTTPS_FAMILY\" source address=\"$network\" port port=\"10443\" protocol=\"tcp\" accept"
+    sudo firewall-cmd --zone="$FIREWALL_ZONE" --add-rich-rule="$rule"
+    sudo firewall-cmd --zone="$FIREWALL_ZONE" --permanent --add-rich-rule="$rule"
+done
+```
+
+If HTTPS clients use IPv6, repeat this example with `HTTPS_FAMILY=ipv6` and
+the approved IPv6 sources in `HTTPS_SOURCES`, for example `(2001:db8:2::/64)`.
+Check that broader existing rules do not expose HTTPS to unintended clients.
+The example does not publish an HTTP port.
 
 ## Prepare the server files as ibiserver
 
