@@ -161,6 +161,55 @@ var _ = Describe("Redfish GPU inventory", func() {
 		Expect(inventory.Devices[0].PCIAddress).To(Equal("0000:01:00.0"))
 	})
 
+	It("discovers GPUs when the ComputerSystem PCIe properties are arrays of links", func() {
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/redfish/v1/":
+				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"}}`))
+			case "/redfish/v1/Systems/1":
+				_, _ = w.Write([]byte(`{"Id":"1","PCIeDevices":[{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU1"}]}`))
+			case "/redfish/v1/Systems/1/PCIeDevices/GPU1":
+				_, _ = w.Write([]byte(`{"Id":"GPU1","Manufacturer":"NVIDIA","Model":"H100","SerialNumber":"GPU-SN-1","PCIeFunctions":[{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU1/PCIeFunctions/0"}],"Slot":{"Location":{"PartLocation":{"ServiceLabel":"RISER_SLOT_1"}}},"Status":{"State":"Enabled","Health":"OK"}}`))
+			case "/redfish/v1/Systems/1/PCIeDevices/GPU1/PCIeFunctions/0":
+				_, _ = w.Write([]byte(`{"DeviceClass":"ProcessingAccelerators","BusNumber":"0x01","DeviceNumber":"0x00","FunctionNumber":"0x0","SegmentNumber":"0x0"}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		reader.httpClient = redfishTestHTTPClient(handler)
+		bmh.Spec.BMC.Address = "redfish+http://bmc.example/redfish/v1/Systems/1"
+
+		inventory, err := reader.GetGPUInventory(ctx, bmh)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(inventory.Status).To(Equal(gpuInventoryStatusComplete))
+		Expect(inventory.Devices).To(HaveLen(1))
+		Expect(inventory.Devices[0].Model).To(Equal("H100"))
+		Expect(inventory.Devices[0].Location).To(Equal("RISER_SLOT_1"))
+		Expect(inventory.Devices[0].PCIAddress).To(Equal("0000:01:00.0"))
+	})
+
+	It("reports a successful empty inventory when the ComputerSystem PCIe arrays are empty", func() {
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/redfish/v1/":
+				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"}}`))
+			case "/redfish/v1/Systems/1":
+				_, _ = w.Write([]byte(`{"Id":"1","PCIeDevices":[],"PCIeFunctions":[]}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		reader.httpClient = redfishTestHTTPClient(handler)
+		bmh.Spec.BMC.Address = "redfish+http://bmc.example/redfish/v1/Systems/1"
+
+		inventory, err := reader.GetGPUInventory(ctx, bmh)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(inventory.Status).To(Equal(gpuInventoryStatusUnsupported))
+		Expect(inventory.Devices).To(BeEmpty())
+	})
+
 	It("uses OpenBMC GPU Processor records and avoids duplicate PCIe entries", func() {
 		fallbackRequests := 0
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
