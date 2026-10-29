@@ -58,8 +58,9 @@ func (s *SubscriptionStorageProvider) GetSubscriptions(ctx context.Context) ([]n
 }
 
 // GetSubscription returns a single alarm subscription by id as a generic SubscriptionInfo.
-// The returned Filter is the effective filter (event_filter else filter) via the converter.
-// svcutils.ErrNotFound is preserved (wrapped with %w) so the notifier can detect deletion.
+// The returned Filter is the effective eventFilter via the converter (a NULL eventFilter
+// matches all events). svcutils.ErrNotFound is preserved (wrapped with %w) so the notifier
+// can detect deletion.
 func (s *SubscriptionStorageProvider) GetSubscription(ctx context.Context, id uuid.UUID) (*notifier.SubscriptionInfo, error) {
 	record, err := s.repository.GetAlarmSubscription(ctx, id)
 	if err != nil {

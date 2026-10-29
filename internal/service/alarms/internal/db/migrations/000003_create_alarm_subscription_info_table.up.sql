@@ -5,12 +5,9 @@ CREATE TABLE IF NOT EXISTS alarm_subscription_info (
     subscription_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- Unique identifier for each subscription
     -- consumerSubscriptionID does not explicitly set UUID in format, so it is stored as free-form text (not restricted to UUID values)
     consumer_subscription_id TEXT NULL, -- Optional ID for the consumer's subscription identifier
-    -- filter set nullable as false, but description says that if not set, all alarms are included
-    -- setting as NULL based on description and model definition in O-RAN.WG6.O2IMS-INTERFACE-R004-v07.00
-    filter VARCHAR(20) NULL, -- Can be ['NEW', 'CHANGE', 'CLEAR', 'ACKNOWLEDGE'], NULL means all
-    -- event_filter is the typed equivalent of filter. When non-NULL it takes precedence over filter;
-    -- when NULL the effective filter falls back to filter. Stored independently (dual-column) through PR 2.
-    event_filter VARCHAR(20) NULL, -- Can be ['NEW', 'CHANGE', 'CLEAR', 'ACKNOWLEDGE'], NULL means fall back to filter
+    -- event_filter carries the notification event type to exclude. When set, events of that type are not
+    -- delivered; when NULL, no event types are excluded and all events are eligible for delivery.
+    event_filter VARCHAR(20) NULL, -- Can be ['NEW', 'CHANGE', 'CLEAR', 'ACKNOWLEDGE'], NULL means match all
     callback TEXT NOT NULL, -- URL or endpoint for sending notifications
 
     -- Internal
@@ -19,7 +16,6 @@ CREATE TABLE IF NOT EXISTS alarm_subscription_info (
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, -- Record last update timestamp
 
     -- check does not fail with NULL
-    CONSTRAINT chk_filter CHECK (filter IN ('NEW', 'CHANGE', 'CLEAR', 'ACKNOWLEDGE')),
     CONSTRAINT chk_event_filter CHECK (event_filter IN ('NEW', 'CHANGE', 'CLEAR', 'ACKNOWLEDGE')),
     CONSTRAINT unique_callback UNIQUE (callback)
 );

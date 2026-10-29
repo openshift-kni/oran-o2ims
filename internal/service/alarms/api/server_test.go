@@ -9,7 +9,9 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 
@@ -21,6 +23,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	commonapi "github.com/openshift-kni/oran-o2ims/api/common"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/api"
 	alarmapi "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
@@ -526,9 +529,144 @@ var _ = Describe("AlarmsServer", func() {
 			Expect(rr.Code).To(Equal(http.StatusBadRequest))
 		})
 
+		It("rejects a body containing the removed legacy filter field with 400", func() {
+			rr := patch(`{"filter":"NEW"}`)
+			Expect(rr.Code).To(Equal(http.StatusBadRequest))
+		})
+
 		It("accepts a body with a known field", func() {
 			rr := patch(`{"eventFilter":"NEW"}`)
 			Expect(rr.Code).To(Equal(http.StatusOK))
+		})
+	})
+
+	Describe("CreateSubscription request validation", func() {
+		// The required eventFilter and additionalProperties:false on AlarmSubscriptionInfo are
+		// enforced by the shared OpenAPI request-validation middleware, not the handler, so they
+		// are exercised here against the generated spec. Direct handler tests do not prove
+		// request-schema rejection.
+		var handler http.Handler
+
+		BeforeEach(func() {
+			swagger, err := alarmapi.GetSwagger()
+			Expect(err).ToNot(HaveOccurred())
+			validation := middleware.OpenAPIValidation(swagger)
+			handler = validation(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusCreated)
+			}))
+		})
+
+		post := func(body string) *httptest.ResponseRecorder {
+			req := httptest.NewRequest(http.MethodPost,
+				"/O2ims_infrastructureMonitoring/v1/alarmSubscriptions",
+				bytes.NewBufferString(body))
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			return rr
+		}
+
+		It("rejects a body containing the removed legacy filter field with 400", func() {
+			rr := post(`{"callback":"https://example.com/cb","eventFilter":"NEW","filter":"NEW"}`)
+			Expect(rr.Code).To(Equal(http.StatusBadRequest))
+		})
+
+		It("rejects a body containing an unknown field with 400", func() {
+			rr := post(`{"callback":"https://example.com/cb","eventFilter":"NEW","bogus":"x"}`)
+			Expect(rr.Code).To(Equal(http.StatusBadRequest))
+		})
+
+		It("rejects a body that omits the required eventFilter with 400", func() {
+			rr := post(`{"callback":"https://example.com/cb"}`)
+			Expect(rr.Code).To(Equal(http.StatusBadRequest))
+		})
+
+		It("accepts a body with a concrete eventFilter value", func() {
+			rr := post(`{"callback":"https://example.com/cb","eventFilter":"NEW"}`)
+			Expect(rr.Code).To(Equal(http.StatusCreated))
+		})
+
+		It("accepts a body with an explicit null eventFilter", func() {
+			rr := post(`{"callback":"https://example.com/cb","eventFilter":null}`)
+			Expect(rr.Code).To(Equal(http.StatusCreated))
+		})
+	})
+
+	Describe("CreateSubscription response serialization", func() {
+		// Prove the end-to-end serialization contract: a CreateSubscription carrying an explicit
+		// null eventFilter is serialized by the generated response writer (via the strict handler
+		// and generated HTTP handler) with the eventFilter key present and null, not dropped.
+		// AlarmSubscriptionInfo.eventFilter has no omitempty tag, so it is always emitted.
+		It("emits eventFilter as an explicit null in the response body when created with null", func() {
+			swagger, err := alarmapi.GetSwagger()
+			Expect(err).ToNot(HaveOccurred())
+
+			// Stand up a reachable callback target plus the SSRF resolver stub so
+			// ValidateCallbackURL accepts it (mirrors the CreateSubscription unique_callback setup).
+			ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			defer ts.Close()
+			server.GlobalCloudID = uuid.New()
+			server.Config.SmoURL = ts.URL
+			savedResolver := svcapi.DefaultResolver
+			svcapi.DefaultResolver = &svcapi.TestResolver{Addrs: map[string][]string{
+				"127.0.0.1": {"203.0.113.1"},
+			}}
+			DeferCleanup(func() { svcapi.DefaultResolver = savedResolver })
+			server.SubscriptionEventHandler = &mockSubscriptionEventHandler{
+				provider: &mockClientProvider{client: ts.Client()},
+			}
+
+			callback := ts.URL + "/callback"
+			mockRepo.EXPECT().
+				CreateAlarmSubscription(gomock.Any(), gomock.Any()).
+				DoAndReturn(func(_ context.Context, sub models.AlarmSubscription) (*models.AlarmSubscription, error) {
+					// The request carried eventFilter:null, so the persisted model has no filter.
+					Expect(sub.EventFilter).To(BeNil())
+					sub.SubscriptionID = testUUID
+					sub.Callback = callback
+					return &sub, nil
+				})
+
+			// Assemble the production HTTP stack (minus auth): strict handler -> generated HTTP
+			// handler with OpenAPI request validation and the response filter.
+			strictHandler := alarmapi.NewStrictHandlerWithOptions(server, nil,
+				alarmapi.StrictHTTPServerOptions{
+					RequestErrorHandlerFunc:  middleware.GetOranReqErrFunc(),
+					ResponseErrorHandlerFunc: middleware.GetOranRespErrFunc(),
+				},
+			)
+			logger := slog.New(slog.DiscardHandler)
+			filterAdapter, err := middleware.NewFilterAdapterFromSwagger(logger, swagger)
+			Expect(err).ToNot(HaveOccurred())
+			baseRouter := http.NewServeMux()
+			alarmapi.HandlerWithOptions(strictHandler, alarmapi.StdHTTPServerOptions{
+				BaseRouter: baseRouter,
+				Middlewares: []alarmapi.MiddlewareFunc{
+					middleware.OpenAPIValidation(swagger),
+					middleware.ResponseFilter(filterAdapter),
+				},
+				ErrorHandlerFunc: middleware.GetOranReqErrFunc(),
+			})
+
+			// Derive the path from the monitoring base URL constant so this test tracks the
+			// active API version (v1 before the cutover commit, v2 after) rather than hardcoding it.
+			req := httptest.NewRequest(http.MethodPost,
+				constants.O2IMSMonitoringBaseURL+"/alarmSubscriptions",
+				bytes.NewBufferString(`{"callback":"`+callback+`","eventFilter":null}`))
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+			baseRouter.ServeHTTP(rr, req)
+
+			Expect(rr.Code).To(Equal(http.StatusCreated))
+
+			// Decode into RawMessage so the key presence and literal null are both asserted.
+			var decoded map[string]json.RawMessage
+			Expect(json.Unmarshal(rr.Body.Bytes(), &decoded)).To(Succeed())
+			raw, ok := decoded["eventFilter"]
+			Expect(ok).To(BeTrue(), "eventFilter key must be present in the response body")
+			Expect(string(raw)).To(Equal("null"))
 		})
 	})
 })

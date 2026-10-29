@@ -512,14 +512,14 @@ var _ = Describe("AlarmsRepository", func() {
 			It("returns all alarms subscription", func() {
 				id1, id2 := uuid.New(), uuid.New()
 				conID1, conID2 := uuid.NewString(), uuid.NewString()
-				f := api.AlarmSubscriptionInfoFilterNEW
+				ef := api.AlarmSubscriptionInfoEventFilterNEW
 				mock.ExpectQuery(fmt.Sprintf("SELECT (.+) FROM %s WHERE \\(1=1\\)", models.AlarmSubscription{}.TableName())).
 					WillReturnRows(
 						pgxmock.NewRows([]string{
-							"subscription_id", "consumer_subscription_id", "filter", "callback",
+							"subscription_id", "consumer_subscription_id", "event_filter", "callback",
 						}).
-							AddRow(id1, &conID1, &f, "http://test.com/callback").
-							AddRow(id2, &conID2, &f, "http://test.com/callback"),
+							AddRow(id1, &conID1, &ef, "http://test.com/callback").
+							AddRow(id2, &conID2, &ef, "http://test.com/callback"),
 					)
 
 				records, err := repo.GetAlarmSubscriptions(ctx)
@@ -551,21 +551,19 @@ var _ = Describe("AlarmsRepository", func() {
 
 	Describe("CreateAlarmSubscription", func() {
 		It("creates new subscription successfully", func() {
-			f := api.AlarmSubscriptionInfoFilterACKNOWLEDGE
 			id := uuid.NewString()
 			subscription := models.AlarmSubscription{
 				ConsumerSubscriptionID: &id,
 				Callback:               "http://test.com/callback",
-				Filter:                 &f,
 				EventCursor:            int64(10),
 			}
 
 			mock.ExpectQuery(fmt.Sprintf("INSERT INTO %s", models.AlarmSubscription{}.TableName())).
 				WithArgs(
-					subscription.Callback, subscription.ConsumerSubscriptionID, subscription.EventCursor, subscription.Filter,
+					subscription.Callback, subscription.ConsumerSubscriptionID, subscription.EventCursor,
 				).
-				WillReturnRows(pgxmock.NewRows([]string{"updated_at", "subscription_id", "consumer_subscription_id", "filter", "callback", "event_cursor", "created_at"}).
-					AddRow(time.Now(), uuid.New(), &id, &f, "http://test.com/callback", int64(10), time.Now()))
+				WillReturnRows(pgxmock.NewRows([]string{"updated_at", "subscription_id", "consumer_subscription_id", "callback", "event_cursor", "created_at"}).
+					AddRow(time.Now(), uuid.New(), &id, "http://test.com/callback", int64(10), time.Now()))
 
 			result, err := repo.CreateAlarmSubscription(ctx, subscription)
 			Expect(err).ToNot(HaveOccurred())
@@ -576,12 +574,10 @@ var _ = Describe("AlarmsRepository", func() {
 		It("includes event_filter in the insert when set", func() {
 			// When eventFilter has a value, event_filter and its enum arg appear in the
 			// generated INSERT (args are ordered by sorted struct field name: Callback,
-			// ConsumerSubscriptionID, EventCursor, EventFilter, Filter).
-			f := api.AlarmSubscriptionInfoFilterNEW
+			// ConsumerSubscriptionID, EventCursor, EventFilter).
 			ef := api.AlarmSubscriptionInfoEventFilterCHANGE
 			subscription := models.AlarmSubscription{
 				Callback:    "http://test.com/callback",
-				Filter:      &f,
 				EventFilter: &ef,
 				EventCursor: int64(0),
 			}
@@ -590,10 +586,10 @@ var _ = Describe("AlarmsRepository", func() {
 			// event_filter column would fail the match rather than slip through a table-name prefix.
 			mock.ExpectQuery(`(?s)INSERT INTO alarm_subscription_info.*event_filter`).
 				WithArgs(
-					subscription.Callback, subscription.EventCursor, subscription.EventFilter, subscription.Filter,
+					subscription.Callback, subscription.EventCursor, subscription.EventFilter,
 				).
-				WillReturnRows(pgxmock.NewRows([]string{"updated_at", "subscription_id", "filter", "event_filter", "callback", "event_cursor", "created_at"}).
-					AddRow(time.Now(), uuid.New(), &f, &ef, subscription.Callback, int64(0), time.Now()))
+				WillReturnRows(pgxmock.NewRows([]string{"updated_at", "subscription_id", "event_filter", "callback", "event_cursor", "created_at"}).
+					AddRow(time.Now(), uuid.New(), &ef, subscription.Callback, int64(0), time.Now()))
 
 			result, err := repo.CreateAlarmSubscription(ctx, subscription)
 			Expect(err).ToNot(HaveOccurred())

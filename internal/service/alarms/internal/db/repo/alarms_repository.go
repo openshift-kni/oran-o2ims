@@ -119,7 +119,7 @@ func (ar *AlarmsRepository) DeleteAlarmSubscription(ctx context.Context, id uuid
 
 // CreateAlarmSubscription inserts a new row of alarm_subscription
 func (ar *AlarmsRepository) CreateAlarmSubscription(ctx context.Context, record models.AlarmSubscription) (*models.AlarmSubscription, error) {
-	return svcutils.Create[models.AlarmSubscription](ctx, ar.Db, record, "ConsumerSubscriptionID", "Filter", "EventFilter", "Callback", "EventCursor")
+	return svcutils.Create[models.AlarmSubscription](ctx, ar.Db, record, "ConsumerSubscriptionID", "EventFilter", "Callback", "EventCursor")
 }
 
 // GetAlarmSubscription grabs a row of alarm_subscription using a primary key

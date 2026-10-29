@@ -129,20 +129,14 @@ func TestConvertSubscriptionModelToApi_EventFilterNullSerialization(t *testing.T
 
 func TestConvertAlertSubToNotificationSub_EffectiveFilter(t *testing.T) {
 	g := NewWithT(t)
-	filter := api.AlarmSubscriptionInfoFilterNEW
 	eventFilter := api.AlarmSubscriptionInfoEventFilterCHANGE
 
-	// (a) both set -> event_filter wins (precedence)
-	both := models.ConvertAlertSubToNotificationSub(&models.AlarmSubscription{Filter: &filter, EventFilter: &eventFilter})
-	g.Expect(both.Filter).ToNot(BeNil())
-	g.Expect(*both.Filter).To(Equal(string(eventFilter)))
+	// (a) event_filter set -> mapped onto the generic Filter field
+	set := models.ConvertAlertSubToNotificationSub(&models.AlarmSubscription{EventFilter: &eventFilter})
+	g.Expect(set.Filter).ToNot(BeNil())
+	g.Expect(*set.Filter).To(Equal(string(eventFilter)))
 
-	// (b) event_filter NULL + filter set -> fall back to filter
-	fallback := models.ConvertAlertSubToNotificationSub(&models.AlarmSubscription{Filter: &filter})
-	g.Expect(fallback.Filter).ToNot(BeNil())
-	g.Expect(*fallback.Filter).To(Equal(string(filter)))
-
-	// (c) both NULL -> nil (match-all)
+	// (b) event_filter NULL -> nil (match-all); the legacy filter fallback has been removed
 	none := models.ConvertAlertSubToNotificationSub(&models.AlarmSubscription{})
 	g.Expect(none.Filter).To(BeNil())
 }
