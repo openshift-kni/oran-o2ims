@@ -148,13 +148,19 @@ func SubscriptionFromModel(object *generated.Subscription) *commonmodels.Subscri
 
 // SubscriptionToInfo converts a Subscription to a generic SubscriptionInfo
 func SubscriptionToInfo(record *commonmodels.Subscription) *notifier.SubscriptionInfo {
-	return &notifier.SubscriptionInfo{
-		SubscriptionID:         *record.SubscriptionID,
-		ConsumerSubscriptionID: record.ConsumerSubscriptionID,
-		Callback:               record.Callback,
-		Filter:                 record.Filter,
-		EventCursor:            record.EventCursor,
+	info := &notifier.SubscriptionInfo{
+		SubscriptionID: *record.SubscriptionID,
+		Callback:       record.Callback,
+		Filter:         record.Filter,
+		EventCursor:    record.EventCursor,
 	}
+	// The notifier carries consumerSubscriptionId as a free-form string (M-10);
+	// this service keeps the UUID at the DB and public API, adapting only here.
+	if record.ConsumerSubscriptionID != nil {
+		s := record.ConsumerSubscriptionID.String()
+		info.ConsumerSubscriptionID = &s
+	}
+	return info
 }
 
 // getEventType determines the event type based on the object transition

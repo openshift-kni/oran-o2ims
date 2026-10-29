@@ -8,6 +8,9 @@ package collector
 
 import (
 	"fmt"
+	"log/slog"
+
+	"github.com/google/uuid"
 
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
@@ -37,7 +40,18 @@ func (t *NotificationTransformer) Transform(subscription *notifier.SubscriptionI
 
 	// Shallow copy to ensure each subscriber gets a copy of the payload with its own id
 	clone := payload
-	clone.ConsumerSubscriptionId = subscription.ConsumerSubscriptionID
+	// The notifier carries consumerSubscriptionId as a free-form string (M-10), but
+	// this service's public API uses a UUID. Parse back to a UUID; consumerSubscriptionId
+	// is optional, so on a parse failure deliver without it (set nil) rather than skipping
+	// the subscriber, which could cause the notification to be dropped entirely.
+	if parsed, err := uuid.Parse(*subscription.ConsumerSubscriptionID); err != nil {
+		slog.Warn("consumerSubscriptionId is not a valid UUID; delivering notification without it",
+			slog.String("subscription", subscription.SubscriptionID.String()),
+			slog.String("consumerSubscriptionId", *subscription.ConsumerSubscriptionID), slog.Any("error", err))
+		clone.ConsumerSubscriptionId = nil
+	} else {
+		clone.ConsumerSubscriptionId = &parsed
+	}
 	result := *notification
 	result.Payload = clone
 	return &result, nil

@@ -11,6 +11,9 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/google/uuid"
+	"github.com/oapi-codegen/nullable"
+
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	a "github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
@@ -54,6 +57,18 @@ func (s *SubscriptionStorageProvider) GetSubscriptions(ctx context.Context) ([]n
 	return subscriptions, nil
 }
 
+// GetSubscription returns a single alarm subscription by id as a generic SubscriptionInfo.
+// The returned Filter is the effective filter (event_filter else filter) via the converter.
+// svcutils.ErrNotFound is preserved (wrapped with %w) so the notifier can detect deletion.
+func (s *SubscriptionStorageProvider) GetSubscription(ctx context.Context, id uuid.UUID) (*notifier.SubscriptionInfo, error) {
+	record, err := s.repository.GetAlarmSubscription(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get subscription %s: %w", id, err)
+	}
+
+	return models.ConvertAlertSubToNotificationSub(record), nil
+}
+
 func (s *SubscriptionStorageProvider) Matches(subscription *notifier.SubscriptionInfo, notification *notifier.Notification) bool {
 	payload, ok := notification.Payload.(generated.AlarmEventNotification)
 	if !ok {
@@ -90,9 +105,11 @@ func (s *SubscriptionStorageProvider) Transform(subscription *notifier.Subscript
 		return nil, fmt.Errorf("notification payload is not of type AlarmEventNotification")
 	}
 
-	// Shallow copy to ensure each subscriber gets a copy of the payload with its own id
+	// Shallow copy to ensure each subscriber gets a copy of the payload with its own id.
+	// The nil guard above ensures ConsumerSubscriptionID is set; serialize it as a value
+	// (the base notification already carries an explicit null for subscribers without one).
 	clone := payload
-	clone.ConsumerSubscriptionId = subscription.ConsumerSubscriptionID
+	clone.ConsumerSubscriptionId = nullable.NewNullableWithValue(*subscription.ConsumerSubscriptionID)
 	result := *notification
 	result.Payload = clone
 	return &result, nil

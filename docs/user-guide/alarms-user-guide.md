@@ -168,27 +168,55 @@ curl -s -k \
 #### Create Subscription
 
 ```bash
-CONSUMER_UUID=$(uuidgen)
 curl -s -k \
   -H "Authorization: Bearer ${MY_TOKEN}" \
   -H "Content-Type: application/json" \
   -X POST \
-  -d "{
-    \"consumerSubscriptionId\": \"${CONSUMER_UUID}\",
-    \"filter\": \"NEW\",
-    \"callback\": \"https://your-webhook-endpoint.com/alarms\"
-  }" \
+  -d '{
+    "consumerSubscriptionId": "my-consumer-ref-1",
+    "eventFilter": "NEW",
+    "callback": "https://your-webhook-endpoint.com/alarms"
+  }' \
   "${BASE_URL}/alarmSubscriptions" | jq
 ```
 
-**Filter Options:**
+- `consumerSubscriptionId` is an **optional free-form string** (it is not restricted to
+  a UUID) that is echoed back in every notification delivered to this subscription.
+- `callback` is required and must point to a reachable endpoint under the SMO host.
 
-| Filter | Description |
+**Filtering (`filter` and `eventFilter`):**
+
+Both fields select a single notification event type that is **excluded** from delivery —
+the subscription receives every other event type. If neither field is set, **all** events
+are delivered. `eventFilter` is the typed equivalent of `filter`; when both are set
+`eventFilter` takes precedence.
+
+| Value | Effect |
 |---|---|
-| `NEW` | Notify when a new alarm is raised |
-| `CHANGE` | Notify when an existing alarm changes (e.g., severity change) |
-| `CLEAR` | Notify when an alarm is cleared |
-| `ACKNOWLEDGE` | Notify when an alarm is acknowledged |
+| `NEW` | Exclude new-alarm notifications; deliver CHANGE, CLEAR, ACKNOWLEDGE |
+| `CHANGE` | Exclude change notifications; deliver NEW, CLEAR, ACKNOWLEDGE |
+| `CLEAR` | Exclude clear notifications; deliver NEW, CHANGE, ACKNOWLEDGE |
+| `ACKNOWLEDGE` | Exclude acknowledge notifications; deliver NEW, CHANGE, CLEAR |
+| *(unset)* | Deliver all event types |
+
+#### Modify a Subscription (PATCH)
+
+Individual fields of an existing subscription can be modified with an RFC 7396 JSON Merge
+Patch. An **omitted** field is left unchanged, an explicit **null** clears the field, and a
+value replaces it. The `callback` field cannot be cleared (a null value returns `400`).
+Conditional updates (ETag / If-Match) are not supported.
+
+```bash
+# Set eventFilter to CLEAR and clear the previously set consumerSubscriptionId
+curl -s -k \
+  -H "Authorization: Bearer ${MY_TOKEN}" \
+  -H "Content-Type: application/merge-patch+json" \
+  -X PATCH \
+  -d '{"eventFilter": "CLEAR", "consumerSubscriptionId": null}' \
+  "${BASE_URL}/alarmSubscriptions/SUBSCRIPTION_ID" | jq
+```
+
+An empty body (`{}`) is a no-op that returns the current subscription unchanged.
 
 #### Manage Subscriptions
 
@@ -202,6 +230,21 @@ curl -s -k -H "Authorization: Bearer ${MY_TOKEN}" -X DELETE \
 ```
 
 **Webhook Requirements:** Your endpoint must respond to GET requests with 204 status. See [Development Guide](../../internal/service/alarms/DEVELOPING.md) for test server example.
+
+#### Notification Payload
+
+Each notification delivered to a subscription `callback` is an `AlarmEventNotification`.
+Note these fields:
+
+- `consumerSubscriptionId`: the value you supplied on the subscription (serialized as
+  `null` when you did not set one).
+- `objectClass`: the fully qualified class of the object that raised the alarm
+  (`oran.o2ims.cluster.NodeCluster` for cluster alarms, `oran.o2ims.resource.Resource`
+  for hardware alarms).
+- `objectRef`: a reference to the `AlarmEventRecord`. It is emitted as a **root-relative**
+  path (for example `/O2ims_infrastructureMonitoring/v1/alarms/<alarmEventRecordId>`).
+  Consumers that need an absolute URL must prepend the O-Cloud base URL; the absence of a
+  configurable public base URL is a known interoperability limitation.
 
 ## Troubleshooting
 
@@ -231,7 +274,7 @@ curl -s -k -H "Authorization: Bearer ${MY_TOKEN}" "${BASE_URL}/alarms" | jq '. |
 |------------------------------------------------------------------------------------------|-------------------------------------------------------|
 | `provisioning of Alarm Subscriptions is blocked until the SMO attributes are configured` | Configure SMO settings in Inventory CR                |
 | `invalid bearer token`                                                                   | Ensure Keycloak URL matches between client and server |
-| `string doesn't match the format "uuid"`                                                 | Use `uuidgen` for consumerSubscriptionId              |
+| `callback value must be unique`                                                          | Each subscription `callback` must be unique; reuse an existing subscription or choose a different URL |
 
 ## API Reference
 

@@ -21,6 +21,7 @@ import (
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	alarmsrepo "github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo"
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
 var _ = Describe("AlarmsRepository", func() {
@@ -227,7 +228,7 @@ var _ = Describe("AlarmsRepository", func() {
 		When("subscription exists", func() {
 			It("retrieves a specific alarm subscription", func() {
 				id := uuid.New()
-				conId := uuid.New()
+				conId := uuid.NewString()
 				callback := "http://example.com/callback"
 
 				mock.ExpectQuery(fmt.Sprintf("SELECT (.+) FROM %s WHERE", models.AlarmSubscription{}.TableName())).
@@ -266,11 +267,13 @@ var _ = Describe("AlarmsRepository", func() {
 		When("upserting a single record", func() {
 			It("successfully upserts alarm event records", func() {
 				id := uuid.New()
+				objectClass := "oran.o2ims.cluster.NodeCluster"
 				records := []models.AlarmEventRecord{
 					{
 						AlarmRaisedTime:   time.Now(),
 						PerceivedSeverity: api.WARNING,
 						ObjectID:          &id,
+						ObjectClass:       &objectClass,
 						Fingerprint:       "9a9e2d82a78cf2b9",
 						AlarmSource:       models.AlarmSourceCaaS,
 					},
@@ -278,12 +281,17 @@ var _ = Describe("AlarmsRepository", func() {
 				// Expect transaction begin
 				mock.ExpectBegin()
 
-				mock.ExpectExec(fmt.Sprintf("INSERT INTO %s", models.AlarmEventRecord{}.TableName())).
+				// object_class is included in the insert columns/args (R2 persistence)
+				// and in the ON CONFLICT DO UPDATE SET excluded list.
+				// Spot-check that object_class is present both in the INSERT column list and in the
+				// ON CONFLICT DO UPDATE SET clause (R2 persistence), so a dropped object_class column
+				// would fail the match rather than slip through a table-name-only prefix.
+				mock.ExpectExec(`(?s)INSERT INTO alarm_event_record.*object_class.*ON CONFLICT.*object_class`).
 					WithArgs(
 						records[0].AlarmRaisedTime, records[0].AlarmClearedTime,
 						records[0].AlarmAcknowledgedTime, records[0].AlarmAcknowledged,
 						records[0].PerceivedSeverity, records[0].Extensions,
-						records[0].ObjectID, records[0].ObjectTypeID,
+						records[0].ObjectID, records[0].ObjectTypeID, records[0].ObjectClass,
 						records[0].AlarmStatus, records[0].Fingerprint,
 						records[0].AlarmDefinitionID, records[0].ProbableCauseID, int64(0), records[0].AlarmSource,
 					).
@@ -327,18 +335,21 @@ var _ = Describe("AlarmsRepository", func() {
 				// Expect transaction begin
 				mock.ExpectBegin()
 
-				mock.ExpectExec(fmt.Sprintf("INSERT INTO %s", models.AlarmEventRecord{}.TableName())).
+				// Spot-check that object_class is present both in the INSERT column list and in the
+				// ON CONFLICT DO UPDATE SET clause (R2 persistence), so a dropped object_class column
+				// would fail the match rather than slip through a table-name-only prefix.
+				mock.ExpectExec(`(?s)INSERT INTO alarm_event_record.*object_class.*ON CONFLICT.*object_class`).
 					WithArgs(
 						records[0].AlarmRaisedTime, records[0].AlarmClearedTime,
 						records[0].AlarmAcknowledgedTime, records[0].AlarmAcknowledged,
 						records[0].PerceivedSeverity, records[0].Extensions,
-						records[0].ObjectID, records[0].ObjectTypeID,
+						records[0].ObjectID, records[0].ObjectTypeID, records[0].ObjectClass,
 						records[0].AlarmStatus, records[0].Fingerprint,
 						records[0].AlarmDefinitionID, records[0].ProbableCauseID, int64(0), records[0].AlarmSource,
 						records[1].AlarmRaisedTime, records[1].AlarmClearedTime,
 						records[1].AlarmAcknowledgedTime, records[1].AlarmAcknowledged,
 						records[1].PerceivedSeverity, records[1].Extensions,
-						records[1].ObjectID, records[1].ObjectTypeID,
+						records[1].ObjectID, records[1].ObjectTypeID, records[1].ObjectClass,
 						records[1].AlarmStatus, records[1].Fingerprint,
 						records[1].AlarmDefinitionID, records[1].ProbableCauseID, int64(0), records[1].AlarmSource,
 					).
@@ -500,7 +511,7 @@ var _ = Describe("AlarmsRepository", func() {
 		When("records exist", func() {
 			It("returns all alarms subscription", func() {
 				id1, id2 := uuid.New(), uuid.New()
-				conID1, conID2 := uuid.New(), uuid.New()
+				conID1, conID2 := uuid.NewString(), uuid.NewString()
 				f := api.AlarmSubscriptionInfoFilterNEW
 				mock.ExpectQuery(fmt.Sprintf("SELECT (.+) FROM %s WHERE \\(1=1\\)", models.AlarmSubscription{}.TableName())).
 					WillReturnRows(
@@ -541,7 +552,7 @@ var _ = Describe("AlarmsRepository", func() {
 	Describe("CreateAlarmSubscription", func() {
 		It("creates new subscription successfully", func() {
 			f := api.AlarmSubscriptionInfoFilterACKNOWLEDGE
-			id := uuid.New()
+			id := uuid.NewString()
 			subscription := models.AlarmSubscription{
 				ConsumerSubscriptionID: &id,
 				Callback:               "http://test.com/callback",
@@ -560,6 +571,130 @@ var _ = Describe("AlarmsRepository", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.ConsumerSubscriptionID).To(Equal(subscription.ConsumerSubscriptionID))
 			Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
+		})
+
+		It("includes event_filter in the insert when set", func() {
+			// When eventFilter has a value, event_filter and its enum arg appear in the
+			// generated INSERT (args are ordered by sorted struct field name: Callback,
+			// ConsumerSubscriptionID, EventCursor, EventFilter, Filter).
+			f := api.AlarmSubscriptionInfoFilterNEW
+			ef := api.AlarmSubscriptionInfoEventFilterCHANGE
+			subscription := models.AlarmSubscription{
+				Callback:    "http://test.com/callback",
+				Filter:      &f,
+				EventFilter: &ef,
+				EventCursor: int64(0),
+			}
+
+			// Spot-check that event_filter is present in the INSERT column list so a dropped
+			// event_filter column would fail the match rather than slip through a table-name prefix.
+			mock.ExpectQuery(`(?s)INSERT INTO alarm_subscription_info.*event_filter`).
+				WithArgs(
+					subscription.Callback, subscription.EventCursor, subscription.EventFilter, subscription.Filter,
+				).
+				WillReturnRows(pgxmock.NewRows([]string{"updated_at", "subscription_id", "filter", "event_filter", "callback", "event_cursor", "created_at"}).
+					AddRow(time.Now(), uuid.New(), &f, &ef, subscription.Callback, int64(0), time.Now()))
+
+			result, err := repo.CreateAlarmSubscription(ctx, subscription)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.EventFilter).ToNot(BeNil())
+			Expect(*result.EventFilter).To(Equal(ef))
+			Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
+		})
+
+		It("omits event_filter from the insert when nil", func() {
+			// An omitted/null eventFilter yields a nil model pointer, which GetColumnsAndValues
+			// skips, so event_filter is absent from the INSERT and the column defaults to SQL NULL.
+			subscription := models.AlarmSubscription{
+				Callback:    "http://test.com/callback2",
+				EventCursor: int64(0),
+			}
+
+			mock.ExpectQuery(fmt.Sprintf("INSERT INTO %s", models.AlarmSubscription{}.TableName())).
+				WithArgs(
+					subscription.Callback, subscription.EventCursor,
+				).
+				WillReturnRows(pgxmock.NewRows([]string{"updated_at", "subscription_id", "event_filter", "callback", "event_cursor", "created_at"}).
+					AddRow(time.Now(), uuid.New(), nil, subscription.Callback, int64(0), time.Now()))
+
+			result, err := repo.CreateAlarmSubscription(ctx, subscription)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.EventFilter).To(BeNil())
+			Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
+		})
+	})
+
+	Describe("PatchAlarmSubscription", func() {
+		subTable := models.AlarmSubscription{}.TableName()
+
+		When("clearing event_filter with a null value", func() {
+			It("emits the column with a NULL arg and returns the updated row", func() {
+				id := uuid.New()
+				// A nil value in the fields map emits SET event_filter = NULL.
+				// Spot-check that event_filter is the column being SET (not just any UPDATE
+				// on the table), so a wrong column name would fail the match.
+				mock.ExpectQuery(`(?s)UPDATE alarm_subscription_info SET.*event_filter`).
+					WithArgs(nil, id).
+					WillReturnRows(pgxmock.NewRows([]string{"subscription_id", "event_filter", "callback"}).
+						AddRow(id, nil, "http://x"))
+
+				result, err := repo.PatchAlarmSubscription(ctx, id, map[string]any{"EventFilter": nil})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(result.EventFilter).To(BeNil())
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
+			})
+		})
+
+		When("setting multiple columns", func() {
+			It("emits only the present columns in sorted field order", func() {
+				id := uuid.New()
+				consumer := "consumer-123"
+				ef := api.AlarmSubscriptionInfoEventFilterCHANGE
+				// Fields are keyed by model field name and emitted in sorted order:
+				// ConsumerSubscriptionID (consumer_subscription_id) then EventFilter (event_filter),
+				// followed by the WHERE arg.
+				// Spot-check both SET columns appear in sorted order (consumer_subscription_id
+				// then event_filter), so a dropped column would fail the match.
+				mock.ExpectQuery(`(?s)UPDATE alarm_subscription_info SET.*consumer_subscription_id.*event_filter`).
+					WithArgs("consumer-123", "CHANGE", id).
+					WillReturnRows(pgxmock.NewRows([]string{"subscription_id", "consumer_subscription_id", "event_filter", "callback"}).
+						AddRow(id, &consumer, &ef, "http://x"))
+
+				result, err := repo.PatchAlarmSubscription(ctx, id, map[string]any{
+					"ConsumerSubscriptionID": "consumer-123",
+					"EventFilter":            "CHANGE",
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(result.ConsumerSubscriptionID).ToNot(BeNil())
+				Expect(*result.ConsumerSubscriptionID).To(Equal("consumer-123"))
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
+			})
+		})
+
+		When("the subscription does not exist", func() {
+			It("returns ErrNotFound", func() {
+				id := uuid.New()
+				mock.ExpectQuery(fmt.Sprintf("UPDATE %s SET", subTable)).
+					WithArgs("http://new", id).
+					WillReturnRows(pgxmock.NewRows([]string{"subscription_id", "callback"}))
+
+				_, err := repo.PatchAlarmSubscription(ctx, id, map[string]any{"Callback": "http://new"})
+				Expect(err).To(MatchError(svcutils.ErrNotFound))
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
+			})
+		})
+
+		When("a non-patchable field is supplied", func() {
+			It("rejects the patch without touching the database", func() {
+				id := uuid.New()
+				// event_cursor is a valid model/db field but internal; the repository must
+				// reject it before building or executing any query, independently of the
+				// handler's own field filtering. No mock expectation is registered.
+				_, err := repo.PatchAlarmSubscription(ctx, id, map[string]any{"EventCursor": int64(5)})
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("not patchable"))
+				Expect(mock.ExpectationsWereMet()).ToNot(HaveOccurred())
+			})
 		})
 	})
 

@@ -16,10 +16,11 @@ import (
 
 // AlarmSubscription represents the alarm_subscription_info table in the database
 type AlarmSubscription struct {
-	SubscriptionID         uuid.UUID                              `db:"subscription_id"`
-	ConsumerSubscriptionID *uuid.UUID                             `db:"consumer_subscription_id"`
-	Filter                 *generated.AlarmSubscriptionInfoFilter `db:"filter"`
-	Callback               string                                 `db:"callback"`
+	SubscriptionID         uuid.UUID                                   `db:"subscription_id"`
+	ConsumerSubscriptionID *string                                     `db:"consumer_subscription_id"`
+	Filter                 *generated.AlarmSubscriptionInfoFilter      `db:"filter"`
+	EventFilter            *generated.AlarmSubscriptionInfoEventFilter `db:"event_filter"`
+	Callback               string                                      `db:"callback"`
 
 	EventCursor int64     `db:"event_cursor"`
 	CreatedAt   time.Time `db:"created_at"`

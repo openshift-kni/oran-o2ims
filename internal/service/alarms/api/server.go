@@ -125,7 +125,7 @@ func (a *AlarmsServer) GetSubscriptions(ctx context.Context, request api.GetSubs
 // CreateSubscription handles an API request to create an Alarm Subscription
 func (a *AlarmsServer) CreateSubscription(ctx context.Context, request api.CreateSubscriptionRequestObject) (api.CreateSubscriptionResponseObject, error) {
 	if request.Body.ConsumerSubscriptionId != nil {
-		ctx = logging.AppendCtx(ctx, slog.String("consumerSubscriptionId", request.Body.ConsumerSubscriptionId.String()))
+		ctx = logging.AppendCtx(ctx, slog.String("consumerSubscriptionId", *request.Body.ConsumerSubscriptionId))
 	}
 
 	// Block API if GlobalCloudID is not set
@@ -222,6 +222,105 @@ func (a *AlarmsServer) GetSubscription(ctx context.Context, request api.GetSubsc
 	}
 
 	return api.GetSubscription200JSONResponse(models.ConvertSubscriptionModelToApi(*record)), nil
+}
+
+// PatchSubscription handles an API request to apply an RFC 7396 merge-patch to an Alarm Subscription
+func (a *AlarmsServer) PatchSubscription(ctx context.Context, request api.PatchSubscriptionRequestObject) (api.PatchSubscriptionResponseObject, error) {
+	id := request.AlarmSubscriptionId
+	ctx = logging.AppendCtx(ctx, slog.String("alarmSubscriptionId", id.String()))
+	body := request.Body
+
+	// Build the set of columns to update from the three-state merge-patch body. A field is
+	// keyed by its model field name; a nil value clears the column (SET NULL). An omitted
+	// field is simply not added, so it is left unchanged.
+	fields := map[string]any{}
+
+	// callback: omitted=unchanged / null=400 (cannot clear) / value=validate then set
+	if body.Callback.IsSpecified() {
+		if body.Callback.IsNull() {
+			return api.PatchSubscription400ApplicationProblemPlusJSONResponse(common.ProblemDetails{
+				AdditionalAttributes: &map[string]string{"alarmSubscriptionId": id.String()},
+				Detail:               "callback cannot be set to null",
+				Status:               http.StatusBadRequest,
+			}), nil
+		}
+		callback, _ := body.Callback.Get()
+		if err := commonapi.ValidateCallbackURL(ctx, a.SubscriptionEventHandler.GetClientFactory(), callback, a.Config.SmoURL); err != nil {
+			slog.ErrorContext(ctx, "callback URL validation failed", slog.Any("error", err))
+			return api.PatchSubscription400ApplicationProblemPlusJSONResponse(common.ProblemDetails{
+				AdditionalAttributes: &map[string]string{"alarmSubscriptionId": id.String()},
+				Detail:               "callback URL validation failed",
+				Status:               http.StatusBadRequest,
+			}), nil
+		}
+		fields["Callback"] = callback
+	}
+
+	// eventFilter: omitted=unchanged / null=SET NULL / value=SET
+	if body.EventFilter.IsSpecified() {
+		if body.EventFilter.IsNull() {
+			fields["EventFilter"] = nil
+		} else {
+			v, _ := body.EventFilter.Get()
+			fields["EventFilter"] = string(v)
+		}
+	}
+
+	// consumerSubscriptionId: omitted=unchanged / null=SET NULL / value=SET
+	if body.ConsumerSubscriptionId.IsSpecified() {
+		if body.ConsumerSubscriptionId.IsNull() {
+			fields["ConsumerSubscriptionID"] = nil
+		} else {
+			v, _ := body.ConsumerSubscriptionId.Get()
+			fields["ConsumerSubscriptionID"] = v
+		}
+	}
+
+	// Empty body ({}) is a no-op: no UPDATE and no notifier event; return the current state.
+	if len(fields) == 0 {
+		record, err := a.AlarmsRepository.GetAlarmSubscription(ctx, id)
+		if errors.Is(err, svcutils.ErrNotFound) {
+			return api.PatchSubscription404ApplicationProblemPlusJSONResponse(common.ProblemDetails{
+				AdditionalAttributes: &map[string]string{"alarmSubscriptionId": id.String()},
+				Detail:               "requested Alarm Subscription not found",
+				Status:               http.StatusNotFound,
+			}), nil
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to get Alarm Subscription: %w", err)
+		}
+		return api.PatchSubscription200JSONResponse(models.ConvertSubscriptionModelToApi(*record)), nil
+	}
+
+	updated, err := a.AlarmsRepository.PatchAlarmSubscription(ctx, id, fields)
+	if errors.Is(err, svcutils.ErrNotFound) {
+		return api.PatchSubscription404ApplicationProblemPlusJSONResponse(common.ProblemDetails{
+			AdditionalAttributes: &map[string]string{"alarmSubscriptionId": id.String()},
+			Detail:               "requested Alarm Subscription not found",
+			Status:               http.StatusNotFound,
+		}), nil
+	}
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation && pgErr.ConstraintName == "unique_callback" {
+			return api.PatchSubscription400ApplicationProblemPlusJSONResponse(common.ProblemDetails{
+				AdditionalAttributes: &map[string]string{"alarmSubscriptionId": id.String()},
+				Detail:               "callback value must be unique",
+				Status:               http.StatusBadRequest,
+			}), nil
+		}
+		return nil, fmt.Errorf("failed to patch alarm subscription: %w", err)
+	}
+
+	// Signal the notifier to update the in-place worker. Only the id is sent; the notifier
+	// re-reads the latest persisted values so concurrent PATCHes converge on the DB state.
+	a.SubscriptionEventHandler.SubscriptionEvent(ctx, &notifier.SubscriptionEvent{
+		Updated:      true,
+		Subscription: &notifier.SubscriptionInfo{SubscriptionID: id},
+	})
+
+	slog.InfoContext(ctx, "Successfully patched Alarm Subscription")
+	return api.PatchSubscription200JSONResponse(models.ConvertSubscriptionModelToApi(*updated)), nil
 }
 
 // GetAlarms handles an API request to fetch Alarm Event Records

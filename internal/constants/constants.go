@@ -56,6 +56,16 @@ const (
 	AlarmsPath = "/alarms"
 )
 
+// Alarm objectClass fully-qualified names. These are derived from the alarm
+// source (see internal/service/alarms/internal/alertmanager). They are consts
+// (not vars) to prevent accidental mutation from other packages.
+const (
+	// ObjectClassCluster is the objectClass FQN for CaaS (cluster) alarms.
+	ObjectClassCluster = "oran.o2ims.cluster.NodeCluster"
+	// ObjectClassResource is the objectClass FQN for hardware (resource) alarms.
+	ObjectClassResource = "oran.o2ims.resource.Resource"
+)
+
 // Command line argument constants
 const (
 	HealthProbeFlag = "--health-probe-bind-address"

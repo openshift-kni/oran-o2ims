@@ -11,6 +11,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
+
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
@@ -53,6 +55,17 @@ func (p *SubscriptionStorageProvider) GetSubscriptions(ctx context.Context) ([]n
 	}
 
 	return subscriptions, nil
+}
+
+// GetSubscription returns a single subscription by id. svcutils.ErrNotFound is preserved
+// (wrapped with %w) so the notifier can detect a subscription that was deleted.
+func (p *SubscriptionStorageProvider) GetSubscription(ctx context.Context, id uuid.UUID) (*notifier.SubscriptionInfo, error) {
+	record, err := p.repository.GetSubscription(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get subscription %s: %w", id, err)
+	}
+
+	return models.SubscriptionToInfo(record), nil
 }
 
 // UpdateSubscription updates the subscription on behalf of the Notifier.  Currently only supports setting the event

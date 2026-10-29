@@ -100,6 +100,19 @@ func (w *SubscriptionWorker) GetNotifications() []*Notification {
 	return w.workQueue
 }
 
+// UpdateSubscription replaces the worker's mutable subscription attributes in place under
+// the work mutex, preserving the live cursor, work queue, in-flight work, and HTTP client.
+// Only the subscriber-facing attributes are updated; the event cursor and subscription id
+// are intentionally left untouched. The mutex guards the concurrent read of Callback by the
+// worker goroutine (processNextEvent / startup log).
+func (w *SubscriptionWorker) UpdateSubscription(latest *SubscriptionInfo) {
+	w.workMutex.Lock()
+	defer w.workMutex.Unlock()
+	w.subscription.Callback = latest.Callback
+	w.subscription.Filter = latest.Filter
+	w.subscription.ConsumerSubscriptionID = latest.ConsumerSubscriptionID
+}
+
 // Shutdown terminates the worker and releases any pending events
 func (w *SubscriptionWorker) Shutdown() {
 	w.cancel()
@@ -107,7 +120,12 @@ func (w *SubscriptionWorker) Shutdown() {
 
 // Run executes that main loop for the worker handling events as they arrive.
 func (w *SubscriptionWorker) Run() {
-	w.logger.Info("Subscription worker started", slog.String("callback", w.subscription.Callback))
+	// Read Callback under the work mutex: an in-place UpdateSubscription on the notifier
+	// goroutine may mutate it concurrently with this startup log.
+	w.workMutex.Lock()
+	startupCallback := w.subscription.Callback
+	w.workMutex.Unlock()
+	w.logger.Info("Subscription worker started", slog.String("callback", startupCallback))
 
 	for {
 		select {

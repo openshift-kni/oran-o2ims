@@ -9,8 +9,10 @@ package models
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/oapi-codegen/nullable"
 
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db/models"
@@ -44,29 +46,46 @@ func ConvertAlarmEventRecordModelToApi(aerModel AlarmEventRecord) api.AlarmEvent
 	if aerModel.ObjectID != nil {
 		record.ResourceID = *aerModel.ObjectID
 	}
+	if aerModel.ObjectClass != nil {
+		record.ObjectClass = aerModel.ObjectClass
+	}
 
 	return record
 }
 
+// timePtrToNullable converts an optional time to a Nullable that serializes as a value or
+// explicit null (never omitted), matching the M/0..1 notification time fields (C4).
+func timePtrToNullable(t *time.Time) nullable.Nullable[time.Time] {
+	if t == nil {
+		return nullable.NewNullNullable[time.Time]()
+	}
+	return nullable.NewNullableWithValue(*t)
+}
+
 // ConvertAlarmEventRecordModelToAlarmEventNotification converts an AlarmEventRecord to api AlarmEventNotification
 func ConvertAlarmEventRecordModelToAlarmEventNotification(aerModel AlarmEventRecord, globalCloudID uuid.UUID) api.AlarmEventNotification {
+	// objectRef is built root-relative: O2IMSMonitoringBaseURL is a path prefix (no host), so
+	// consumers that require an absolute URL must prepend the O-Cloud base URL. The absence of a
+	// configurable public base URL is a known interoperability limitation (C5(d)).
 	or := fmt.Sprintf("%s%s/%v", constants.O2IMSMonitoringBaseURL, constants.AlarmsPath, aerModel.AlarmEventRecordID.String())
 	notification := api.AlarmEventNotification{
-		AlarmAcknowledgeTime:  aerModel.AlarmAcknowledgedTime,
 		AlarmAcknowledged:     aerModel.AlarmAcknowledged,
+		AlarmAcknowledgeTime:  timePtrToNullable(aerModel.AlarmAcknowledgedTime),
+		AlarmChangedTime:      timePtrToNullable(aerModel.AlarmChangedTime),
+		AlarmClearedTime:      timePtrToNullable(aerModel.AlarmClearedTime),
 		AlarmEventRecordId:    aerModel.AlarmEventRecordID,
 		AlarmRaisedTime:       aerModel.AlarmRaisedTime,
 		Extensions:            aerModel.Extensions,
 		GlobalCloudID:         globalCloudID,
 		NotificationEventType: AlarmFilterToEventType(aerModel.NotificationEventType),
-		ObjectRef:             &or,
-		PerceivedSeverity:     aerModel.PerceivedSeverity,
+		ObjectRef:             nullable.NewNullableWithValue(or),
+		// consumerSubscriptionId is per-subscriber: the base notification serializes it as an
+		// explicit null and Transform overrides it for subscribers that provided one (C4).
+		ConsumerSubscriptionId: nullable.NewNullNullable[string](),
+		PerceivedSeverity:      aerModel.PerceivedSeverity,
 	}
 
 	// Handle all pointer fields together
-	if aerModel.AlarmChangedTime != nil {
-		notification.AlarmChangedTime = *aerModel.AlarmChangedTime
-	}
 	if aerModel.AlarmDefinitionID != nil {
 		notification.AlarmDefinitionID = *aerModel.AlarmDefinitionID
 	}
@@ -78,6 +97,9 @@ func ConvertAlarmEventRecordModelToAlarmEventNotification(aerModel AlarmEventRec
 	}
 	if aerModel.ObjectTypeID != nil {
 		notification.ResourceTypeID = *aerModel.ObjectTypeID
+	}
+	if aerModel.ObjectClass != nil {
+		notification.ObjectClass = *aerModel.ObjectClass
 	}
 
 	return notification
@@ -108,16 +130,32 @@ func ConvertSubscriptionModelToApi(subscriptionModel AlarmSubscription) api.Alar
 		apiModel.Filter = subscriptionModel.Filter
 	}
 
+	// eventFilter is M/0..1: always serialize the key, as a value or explicit null.
+	if subscriptionModel.EventFilter != nil {
+		apiModel.EventFilter = nullable.NewNullableWithValue(*subscriptionModel.EventFilter)
+	} else {
+		apiModel.EventFilter = nullable.NewNullNullable[api.AlarmSubscriptionInfoEventFilter]()
+	}
+
 	return apiModel
 }
 
 // ConvertSubscriptionAPIToModel converts an AlarmSubscription API model to a DB model
 func ConvertSubscriptionAPIToModel(subscriptionAPI *api.AlarmSubscriptionInfo) AlarmSubscription {
-	return AlarmSubscription{
+	model := AlarmSubscription{
 		Callback:               subscriptionAPI.Callback,
 		ConsumerSubscriptionID: subscriptionAPI.ConsumerSubscriptionId,
 		Filter:                 subscriptionAPI.Filter,
 	}
+
+	// Only persist event_filter when a concrete value is provided; an omitted or
+	// explicit-null eventFilter leaves the column NULL (never call Get() unguarded).
+	if subscriptionAPI.EventFilter.IsSpecified() && !subscriptionAPI.EventFilter.IsNull() {
+		v, _ := subscriptionAPI.EventFilter.Get()
+		model.EventFilter = &v
+	}
+
+	return model
 }
 
 // AlarmFilterToEventType map text to int e.g NEW -> 0
@@ -145,7 +183,13 @@ func ConvertAlertSubToNotificationSub(as *AlarmSubscription) *notifier.Subscript
 		EventCursor:            int(as.EventCursor),
 	}
 
-	if as.Filter != nil {
+	// Effective filter: event_filter takes precedence over filter; if neither is set
+	// the subscription matches all events (C3). The notifier SubscriptionInfo exposes a
+	// single Filter field, so the precedence is resolved here rather than in Matches().
+	switch {
+	case as.EventFilter != nil:
+		info.Filter = (*string)(as.EventFilter)
+	case as.Filter != nil:
 		info.Filter = (*string)(as.Filter)
 	}
 	return &info

@@ -11,8 +11,10 @@ import (
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	api "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
+	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
 	mockinfrastructure "github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure/generated"
 	"go.uber.org/mock/gomock"
 )
@@ -280,6 +282,109 @@ var _ = Describe("Alertmanager Functions", func() {
 			Expect(record.AlarmDefinitionID).ToNot(BeNil())
 			Expect(*record.AlarmDefinitionID).To(Equal(alarmDefUUID))
 			Expect(record.PerceivedSeverity).To(Equal(api.MAJOR)) // important maps to MAJOR
+		})
+
+		It("should derive the resource objectClass FQN for hardware alerts", func() {
+			now := time.Now().UTC()
+			resourceUUID := uuid.New()
+			fingerprint := commonFP
+
+			// ObjectID is non-nil for hardware alerts, so GetObjectTypeID is called.
+			// Return an error to keep the test focused on objectClass derivation.
+			mockInfraClient.EXPECT().
+				GetObjectTypeID(gomock.Any(), resourceUUID).
+				Return(uuid.Nil, errors.New("infrastructure error"))
+
+			firing := api.Firing
+			labels := map[string]string{
+				"alertname":     "HardwareAlert",
+				"severity":      "critical",
+				"type":          "hardware",
+				"component":     "ironic",
+				"instance_uuid": resourceUUID.String(),
+			}
+			alerts := []api.Alert{
+				{
+					Status:      &firing,
+					StartsAt:    &now,
+					Fingerprint: &fingerprint,
+					Labels:      &labels,
+				},
+			}
+
+			records := alertmanager.ConvertAmToAlarmEventRecordModels(ctx, &alerts, mockInfraClient, mockInfraClient)
+
+			Expect(records).To(HaveLen(1))
+			record := records[0]
+			Expect(record.AlarmSource).To(Equal(models.AlarmSourceHardware))
+			Expect(record.ObjectClass).ToNot(BeNil())
+			Expect(*record.ObjectClass).To(Equal(constants.ObjectClassResource))
+		})
+
+		It("should derive the cluster objectClass FQN for CaaS alerts", func() {
+			now := time.Now().UTC()
+			clusterUUID := uuid.New()
+			fingerprint := commonFP
+
+			mockInfraClient.EXPECT().
+				GetObjectTypeID(gomock.Any(), clusterUUID).
+				Return(uuid.Nil, errors.New("infrastructure error"))
+
+			firing := api.Firing
+			labels := map[string]string{
+				"alertname":       "TestAlert",
+				"severity":        "critical",
+				"managed_cluster": clusterUUID.String(),
+			}
+			alerts := []api.Alert{
+				{
+					Status:      &firing,
+					StartsAt:    &now,
+					Fingerprint: &fingerprint,
+					Labels:      &labels,
+				},
+			}
+
+			records := alertmanager.ConvertAmToAlarmEventRecordModels(ctx, &alerts, mockInfraClient, mockInfraClient)
+
+			Expect(records).To(HaveLen(1))
+			record := records[0]
+			Expect(record.AlarmSource).To(Equal(models.AlarmSourceCaaS))
+			Expect(record.ObjectClass).ToNot(BeNil())
+			Expect(*record.ObjectClass).To(Equal(constants.ObjectClassCluster))
+		})
+
+		It("should set the cluster objectClass FQN even when no usable identifier is present", func() {
+			// A cluster alert without managed_cluster or clusterID leaves ObjectID nil
+			// (no GetObjectTypeID call), but objectClass is still derived from the source.
+			//
+			// TODO: getClusterID emits a WARN ("Could not find managed_cluster or clusterID")
+			// on this path. Asserting that log line is deferred until a shared slog-capture
+			// test helper exists; swapping slog.Default() here would race with parallel specs.
+			now := time.Now().UTC()
+			fingerprint := commonFP
+
+			firing := api.Firing
+			labels := map[string]string{
+				"alertname": "TestAlert",
+				"severity":  "critical",
+			}
+			alerts := []api.Alert{
+				{
+					Status:      &firing,
+					StartsAt:    &now,
+					Fingerprint: &fingerprint,
+					Labels:      &labels,
+				},
+			}
+
+			records := alertmanager.ConvertAmToAlarmEventRecordModels(ctx, &alerts, mockInfraClient, mockInfraClient)
+
+			Expect(records).To(HaveLen(1))
+			record := records[0]
+			Expect(record.ObjectID).To(BeNil())
+			Expect(record.ObjectClass).ToNot(BeNil())
+			Expect(*record.ObjectClass).To(Equal(constants.ObjectClassCluster))
 		})
 
 		DescribeTable("severity mapping",

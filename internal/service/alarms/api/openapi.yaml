@@ -674,6 +674,71 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
+    patch:
+      operationId: PatchSubscription
+      summary: Modify individual fields of an Alarm Subscription
+      description: |
+        Applies an RFC 7396 JSON Merge Patch to an existing Alarm Subscription.
+        An omitted field is left unchanged, an explicit null clears the field
+        (except callback, which cannot be cleared), and a value replaces the field.
+        Conditional updates (ETag / If-Match) are not supported.
+      security:
+      - oauth2:
+        - role:o2ims-admin
+        - role:o2ims-subscriber
+      tags:
+      - subscriptions
+      parameters:
+      - in: path
+        name: alarmSubscriptionId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/AlarmSubscriptionUpdate'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlarmSubscriptionInfo'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
 
 components:
   securitySchemes:
@@ -750,6 +815,11 @@ components:
           example: 91d5d140-ef52-4167-b6dc-975ad1897f23
         perceivedSeverity:
           $ref: '#/components/schemas/PerceivedSeverity'
+        objectClass:
+          type: string
+          description: |
+            The fully qualified name of the class of the object (Resource or NodeCluster) which caused the alarm.
+          example: oran.o2ims.cluster.NodeCluster
         extensions:
           type: object
           additionalProperties: {}
@@ -820,7 +890,6 @@ components:
           example: 16d5fc54-cee0-4532-9826-2369f8240e1b
         consumerSubscriptionId:
           type: string
-          format: uuid
           description: Identifier for the consumer of events sent due to the Subscription.
           example: 16d5fc54-cee0-4532-9826-2369f8240e1b
         filter:
@@ -832,12 +901,51 @@ components:
             It can be filtered by criteria based on the type of notification of fields of the
             AlarmEventRecord.
           example: NEW
+        eventFilter:
+          type: string
+          enum: [ NEW, CHANGE, CLEAR, ACKNOWLEDGE ]
+          nullable: true
+          description: |
+            Typed criteria for events which will be filtered by the subscription notification service.
+            It carries the same exclusion semantics as filter (the notification event type to exclude).
+            When set it takes precedence over filter; when null or absent the service falls back to filter.
+            A null value explicitly clears a previously set eventFilter.
+          example: NEW
         callback:
           type: string
           format: uri
           description: The fully qualified URI to a consumer procedure which can process a Post of the AlarmEventNotification.
       required:
       - callback
+
+    AlarmSubscriptionUpdate:
+      type: object
+      additionalProperties: false
+      description: |
+        Schema for RFC 7396 JSON Merge Patch requests to an Alarm Subscription.
+        Every field is optional. An omitted field is left unchanged; an explicit
+        null clears the field (callback cannot be cleared); a value replaces it.
+      properties:
+        callback:
+          type: string
+          format: uri
+          nullable: true
+          description: |
+            The fully qualified URI to a consumer procedure which can process a Post
+            of the AlarmEventNotification. A null value is rejected (callback cannot be cleared).
+        eventFilter:
+          type: string
+          enum: [ NEW, CHANGE, CLEAR, ACKNOWLEDGE ]
+          nullable: true
+          description: |
+            Typed criteria for events which will be filtered by the subscription notification service.
+            A null value clears the eventFilter so the effective filter falls back to filter.
+        consumerSubscriptionId:
+          type: string
+          nullable: true
+          description: |
+            Identifier for the consumer of events sent due to the Subscription.
+            A null value clears the consumerSubscriptionId.
 
     ProbableCause:
       type: object
@@ -967,7 +1075,7 @@ components:
           example: da4698ba-c8a7-429d-ae16-484f15f282c5
         consumerSubscriptionId:
           type: string
-          format: uuid
+          nullable: true
           description: The value provided by the consumer in the subscription.
           example: 3ddc1128-a14d-46de-80da-6414b192ce9f
         notificationEventType:
@@ -982,8 +1090,18 @@ components:
           example: 0
         objectRef:
           type: string
-          description: The URL to the AlarmEventRecord object.
-          example: hostname.com/O2ims_infrastructureMonitoring/v1/alarms/bf3f8f2e-6f37-4882-96ad-c0b9cef6fc04
+          nullable: true
+          description: |
+            A reference to the AlarmEventRecord object. This is emitted as a root-relative
+            path (the trailing segment is the alarmEventRecordId). Consumers that require an
+            absolute URL must prepend the O-Cloud base URL; the absence of a configurable
+            public base URL is a known interoperability limitation.
+          example: /O2ims_infrastructureMonitoring/v1/alarms/bf3f8f2e-6f37-4882-96ad-c0b9cef6fc04
+        objectClass:
+          type: string
+          description: |
+            The fully qualified name of the class of the object (Resource or NodeCluster) which caused the alarm.
+          example: oran.o2ims.cluster.NodeCluster
         alarmEventRecordId:
           type: string
           format: uuid
@@ -1017,12 +1135,20 @@ components:
         alarmChangedTime:
           type: string
           format: date-time
+          nullable: true
           description: Date/Time stamp value when any value of the AlarmEventRecord has been modified.
           example: 2042-07-21T21:32:28Z
+        alarmClearedTime:
+          type: string
+          format: date-time
+          nullable: true
+          description: Date/Time stamp value when the alarm condition is cleared.
+          example: 2042-07-21T20:32:28Z
         alarmAcknowledgeTime:
           type: string
           format: date-time
-          description: Date/Time stamp value when any value of the AlarmEventRecord has been modified.
+          nullable: true
+          description: Date/Time stamp value when the alarm condition is acknowledged.
           example: 2042-07-21T22:32:28Z
         alarmAcknowledged:
           type: boolean
@@ -1038,7 +1164,10 @@ components:
             operator to extend the information provided about the O-Cloud Alarm.
       required:
       - globalCloudID
+      - consumerSubscriptionId
       - notificationEventType
+      - objectRef
+      - objectClass
       - alarmEventRecordId
       - resourceTypeID
       - resourceID
@@ -1046,6 +1175,8 @@ components:
       - probableCauseID
       - alarmRaisedTime
       - alarmChangedTime
+      - alarmClearedTime
+      - alarmAcknowledgeTime
       - alarmAcknowledged
       - perceivedSeverity
       - extensions

@@ -34,6 +34,7 @@ type AlarmEventRecord struct {
 	Extensions            map[string]interface{}                `db:"extensions" json:"extensions"`
 	ObjectID              *uuid.UUID                            `db:"object_id" json:"object_id,omitempty"`           // nullable since ACM may not provide the cluster ID. please manually track them and let ACM know about this.
 	ObjectTypeID          *uuid.UUID                            `db:"object_type_id" json:"object_type_id,omitempty"` // nullable since ACM may not provide the cluster ID. please manually track them and let ACM know about this.
+	ObjectClass           *string                               `db:"object_class" json:"object_class,omitempty"`     // Fully qualified name of the class of the object (Resource or NodeCluster) that caused the alarm, derived from the alarm source.
 	NotificationEventType generated.AlarmSubscriptionInfoFilter `db:"notification_event_type" json:"notification_event_type"`
 	AlarmStatus           string                                `db:"alarm_status" json:"alarm_status"`
 	Fingerprint           string                                `db:"fingerprint" json:"fingerprint"`
