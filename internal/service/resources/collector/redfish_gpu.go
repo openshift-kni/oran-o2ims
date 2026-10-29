@@ -641,6 +641,7 @@ func (l redfishLinkList) isEmpty() bool {
 type redfishCollection struct {
 	Members         []redfishObject `json:"Members"`
 	MembersNextLink string          `json:"Members@odata.nextLink"`
+	MembersCount    int             `json:"Members@odata.count"`
 }
 
 type redfishPartLocation struct {
@@ -740,6 +741,10 @@ func (s *redfishSession) discoverGPUInventory(ctx context.Context, directSystemP
 		return nil, fmt.Errorf("failed to read Redfish service root: %w", err)
 	}
 
+	// systemsComplete is true only when systems holds the service's entire system
+	// set. It stays false when a single system was targeted directly (the rest of
+	// the service was not enumerated) or when listing the collection failed.
+	systemsComplete := false
 	if directSystemPath != "" {
 		var system redfishObject
 		if err := s.get(ctx, directSystemPath, &system); err != nil {
@@ -751,6 +756,8 @@ func (s *redfishSession) discoverGPUInventory(ctx context.Context, directSystemP
 		systems, err = s.list(ctx, root.Systems.ODataID)
 		if err != nil {
 			partial = true
+		} else {
+			systemsComplete = true
 		}
 	}
 
@@ -776,9 +783,11 @@ func (s *redfishSession) discoverGPUInventory(ctx context.Context, directSystemP
 	// Prefer the chassis associated with the systems we are inventorying so a
 	// multi-system Redfish service does not attribute another host's GPUs to
 	// this one. Fall back to the service-wide chassis collection only when no
-	// system exposes a chassis association (common on single-system BMCs).
+	// system exposes a chassis association (common on single-system BMCs) and the
+	// service manages exactly one system, so that collection unambiguously
+	// belongs to this host.
 	chassisLinks := chassisLinksForSystems(systems)
-	if chassisLinks.isEmpty() {
+	if chassisLinks.isEmpty() && s.serviceHasSingleSystem(ctx, root, systems, systemsComplete) {
 		chassisLinks = redfishLinkList{collection: root.Chassis}
 	}
 	chassisDevices, chassisFound, chassisPartial := s.discoverChassisGPUs(ctx, chassisLinks)
@@ -800,6 +809,31 @@ func (s *redfishSession) discoverGPUInventory(ctx context.Context, directSystemP
 		return inventory.Devices[i].ID < inventory.Devices[j].ID
 	})
 	return inventory, nil
+}
+
+// serviceHasSingleSystem reports whether the Redfish service manages exactly one
+// system, which is the only case where the service-wide chassis collection can
+// be attributed to this host without risking another system's GPUs. When the
+// full system set is already known (the collection was listed successfully), its
+// length is authoritative. When a single system was targeted directly, the
+// Systems collection count is consulted; any uncertainty returns false so the
+// fallback is skipped.
+func (s *redfishSession) serviceHasSingleSystem(ctx context.Context, root redfishObject, systems []redfishObject, systemsComplete bool) bool {
+	if systemsComplete {
+		return len(systems) == 1
+	}
+	if root.Systems.ODataID == "" {
+		return false
+	}
+	var collection redfishCollection
+	if err := s.get(ctx, root.Systems.ODataID, &collection); err != nil {
+		return false
+	}
+	count := collection.MembersCount
+	if count == 0 {
+		count = len(collection.Members)
+	}
+	return count == 1
 }
 
 func (s *redfishSession) discoverProcessorGPUs(
