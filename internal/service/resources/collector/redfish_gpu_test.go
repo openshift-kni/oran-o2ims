@@ -703,6 +703,43 @@ var _ = Describe("GPU inventory API extension", func() {
 		Expect(reader.calls).To(Equal(0))
 	})
 
+	It("keeps the in-memory cache after reusing a persisted GPU inventory", func() {
+		bmh := newTestBMH("cache-survives-host", "pool", metal3v1alpha1.StateAvailable)
+		bmh.Spec.BMC.Address = "redfish+https://bmc.example"
+		reader := &countingGPUInventoryReader{inventory: &hwmgrcontroller.GPUInventory{
+			Status: gpuInventoryStatusComplete,
+		}}
+		resourceReader := &staticGPUInventoryResourceReader{resource: &models.Resource{
+			ResourceID: uuid.MustParse(string(bmh.UID)),
+			Extensions: map[string]interface{}{
+				gpusExtension: []interface{}{map[string]interface{}{
+					"id":    "GPU_0",
+					"model": "GH200 480GB",
+				}},
+				gpuInventoryStatusExtension: gpuInventoryStatusComplete,
+			},
+		}}
+		ds := &HardwareDataSource{
+			gpuInventoryReader:         reader,
+			gpuInventoryResourceReader: resourceReader,
+		}
+		ds.Init(uuid.New(), 1, make(chan *async.AsyncChangeEvent, 1))
+
+		for range 2 {
+			resource := &models.Resource{
+				ResourceID: uuid.MustParse(string(bmh.UID)),
+				Extensions: make(map[string]interface{}),
+			}
+			Expect(ds.prepareGPUInventory(context.Background(), bmh, resource)).To(BeFalse())
+			Expect(resource.Extensions[gpusExtension]).To(HaveLen(1))
+		}
+
+		// The first call reads persistence and caches the result; the second
+		// call must be served from the in-memory cache without a second read.
+		Expect(resourceReader.calls).To(Equal(1))
+		Expect(reader.calls).To(BeZero())
+	})
+
 	It("retries persisted partial inventory instead of treating it as complete", func() {
 		bmh := newTestBMH("persisted-partial-gpu-host", "pool", metal3v1alpha1.StateAvailable)
 		bmh.Spec.BMC.Address = "redfish+https://bmc.example"
