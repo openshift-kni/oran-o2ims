@@ -59,6 +59,12 @@ const (
 
 var errRedfishNotFound = errors.New("redfish resource not found")
 
+// errRedfishPartial signals that a collection was read only partially: some
+// members or pages could not be retrieved, but the returned objects are the
+// ones that were read successfully. Callers should mark the inventory partial
+// and keep the returned objects rather than discarding them.
+var errRedfishPartial = errors.New("redfish collection partially read")
+
 type redfishHTTPStatusError struct {
 	statusCode int
 }
@@ -975,6 +981,12 @@ func (s *redfishSession) listProcessorGPUs(ctx context.Context, link string) ([]
 	if err == nil {
 		return processors, nil
 	}
+	if errors.Is(err, errRedfishPartial) {
+		// The query was accepted; some members were just unreadable. Keep the
+		// processors we did read and propagate the partial signal rather than
+		// retrying the whole collection without query options.
+		return processors, err
+	}
 	var statusError *redfishHTTPStatusError
 	if !errors.As(err, &statusError) ||
 		(statusError.statusCode != http.StatusBadRequest && statusError.statusCode != http.StatusNotImplemented) {
@@ -1002,6 +1014,8 @@ func (s *redfishSession) listWithQuery(ctx context.Context, link string, query u
 
 	objects := make([]redfishObject, 0)
 	seenPages := make(map[string]struct{})
+	partial := false
+	firstPage := true
 	for nextPage := link; nextPage != ""; {
 		if _, seen := seenPages[nextPage]; seen {
 			return objects, errors.New("redfish collection repeated a pagination link")
@@ -1010,8 +1024,16 @@ func (s *redfishSession) listWithQuery(ctx context.Context, link string, query u
 
 		var collection redfishCollection
 		if err := s.get(ctx, nextPage, &collection); err != nil {
-			return objects, err
+			// The first page failing is a genuine collection error; callers rely on
+			// its status (e.g. to retry without query options). A later page failing
+			// means we already have earlier pages, so report partial and keep them.
+			if firstPage {
+				return objects, err
+			}
+			partial = true
+			break
 		}
+		firstPage = false
 		for _, member := range collection.Members {
 			if member.ODataID == "" {
 				continue
@@ -1022,13 +1044,23 @@ func (s *redfishSession) listWithQuery(ctx context.Context, link string, query u
 			}
 			var object redfishObject
 			if err := s.get(ctx, member.ODataID, &object); err != nil {
-				return objects, err
+				// One unavailable member must not hide the rest. Record that the
+				// result is partial and continue, unless the context is no longer
+				// usable, in which case further requests would fail anyway.
+				if ctx.Err() != nil {
+					return objects, err
+				}
+				partial = true
+				continue
 			}
 			objects = append(objects, object)
 		}
 		nextPage = collection.MembersNextLink
 	}
 
+	if partial {
+		return objects, errRedfishPartial
+	}
 	return objects, nil
 }
 
