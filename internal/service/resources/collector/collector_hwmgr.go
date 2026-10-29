@@ -59,7 +59,6 @@ type HardwareDataSource struct {
 	gpuInventoryResourceReader gpuInventoryResourceReader
 	gpuInventoryMu             sync.Mutex
 	gpuInventoryCache          map[string]gpuInventoryCacheEntry
-	gpuInventoryInFlight       map[gpuInventoryQueryKey]*gpuInventoryCall
 	gpuInventoryQueue          workqueue.TypedInterface[uuid.UUID]
 	gpuInventoryJobs           map[uuid.UUID]gpuInventoryWorkItem
 	gpuInventoryJobVersions    map[uuid.UUID]uint64
@@ -106,7 +105,6 @@ func NewHardwareDataSource(hubClient client.WithWatch, cloudID, globalCloudID uu
 		hubClient:               hubClient,
 		gpuInventoryReader:      newRedfishGPUInventoryClient(hubClient),
 		gpuInventoryCache:       make(map[string]gpuInventoryCacheEntry),
-		gpuInventoryInFlight:    make(map[gpuInventoryQueryKey]*gpuInventoryCall),
 		gpuInventoryQueue:       workqueue.NewTyped[uuid.UUID](),
 		gpuInventoryJobs:        make(map[uuid.UUID]gpuInventoryWorkItem),
 		gpuInventoryJobVersions: make(map[uuid.UUID]uint64),
@@ -506,7 +504,7 @@ func (d *HardwareDataSource) BuildResourcesForPool(ctx context.Context, poolName
 	}
 
 	var results []ResourceWithType
-	var gpuInventoryJobs []gpuInventoryWorkItem
+	var gpuInventoryBMHs []*metal3v1alpha1.BareMetalHost
 	var gpuInventoryResourceIDs []uuid.UUID
 	for i := range bmhList.Items {
 		bmh := &bmhList.Items[i]
@@ -547,12 +545,15 @@ func (d *HardwareDataSource) BuildResourcesForPool(ctx context.Context, poolName
 			ResourceType: *resourceType,
 		})
 		if queueGPUInventory {
-			gpuInventoryJobs = append(gpuInventoryJobs, gpuInventoryWorkItem{bmh: bmh.DeepCopy()})
+			// enqueueGPUInventory deep-copies the BMH; keep the slice pointer
+			// here rather than copying twice. bmhList is not mutated after this
+			// loop, so the pointer stays valid until enqueue below.
+			gpuInventoryBMHs = append(gpuInventoryBMHs, bmh)
 			gpuInventoryResourceIDs = append(gpuInventoryResourceIDs, resource.ResourceID)
 		}
 	}
-	for i := range gpuInventoryJobs {
-		d.enqueueGPUInventory(gpuInventoryJobs[i].bmh, gpuInventoryResourceIDs[i])
+	for i := range gpuInventoryBMHs {
+		d.enqueueGPUInventory(gpuInventoryBMHs[i], gpuInventoryResourceIDs[i])
 	}
 
 	return results, nil
