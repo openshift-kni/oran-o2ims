@@ -234,14 +234,22 @@ func (d *HardwareDataSource) enqueueGPUInventory(bmh *metal3v1alpha1.BareMetalHo
 
 func (d *HardwareDataSource) cancelGPUInventory(resourceID uuid.UUID) {
 	d.gpuInventoryMu.Lock()
+	d.cancelGPUInventoryJobLocked(resourceID)
+	// The cache is keyed by the BMH UID, which equals the resource ID string
+	// for every host that reaches this path; drop it so deleted hosts do not
+	// retain cached inventory indefinitely. Only the deletion path should evict
+	// the cache; the reuse paths in prepareGPUInventory cancel the job alone so
+	// the entry they just populated survives.
+	delete(d.gpuInventoryCache, resourceID.String())
+	d.gpuInventoryMu.Unlock()
+}
+
+// cancelGPUInventoryJobLocked drops any in-flight inventory job for the resource
+// without touching the cache. The caller must hold d.gpuInventoryMu.
+func (d *HardwareDataSource) cancelGPUInventoryJobLocked(resourceID uuid.UUID) {
 	d.ensureGPUInventoryQueueLocked()
 	delete(d.gpuInventoryJobs, resourceID)
 	delete(d.gpuInventoryJobVersions, resourceID)
-	// The cache is keyed by the BMH UID, which equals the resource ID string
-	// for every host that reaches this path; drop it so deleted hosts do not
-	// retain cached inventory indefinitely.
-	delete(d.gpuInventoryCache, resourceID.String())
-	d.gpuInventoryMu.Unlock()
 }
 
 func (d *HardwareDataSource) isCurrentGPUInventoryUpdate(update gpuInventoryUpdate) bool {
@@ -414,8 +422,8 @@ func (d *HardwareDataSource) prepareGPUInventory(
 	if entry, ok := d.gpuInventoryCache[resourceKey]; ok && entry.key == key {
 		if isReusableGPUInventory(entry.inventory) {
 			inventory := cloneGPUInventory(entry.inventory)
+			d.cancelGPUInventoryJobLocked(resource.ResourceID)
 			d.gpuInventoryMu.Unlock()
-			d.cancelGPUInventory(resource.ResourceID)
 			setGPUInventory(resource, inventory)
 			return false
 		}
@@ -430,8 +438,8 @@ func (d *HardwareDataSource) prepareGPUInventory(
 			d.gpuInventoryCache = make(map[string]gpuInventoryCacheEntry)
 		}
 		d.gpuInventoryCache[resourceKey] = gpuInventoryCacheEntry{key: key, inventory: cloneGPUInventory(inventory)}
+		d.cancelGPUInventoryJobLocked(resource.ResourceID)
 		d.gpuInventoryMu.Unlock()
-		d.cancelGPUInventory(resource.ResourceID)
 		setGPUInventory(resource, inventory)
 		return false
 	}
