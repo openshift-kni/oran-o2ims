@@ -361,12 +361,12 @@ Label values:
   generated wrappers reject non-UUID values with 400 before the
   middleware chain runs. Examples:
   - `/O2ims_infrastructureInventory/v2/resourcePools/{id}/resources/{id}`
-  - `/O2ims_infrastructureMonitoring/v1/alarms` (collection, no UUID)
+  - `/O2ims_infrastructureMonitoring/v2/alarms` (collection, no UUID)
 
 Example scrape output:
 
 ```text
-o2ims_auth_failures_total{service="alarms-server",type="authentication",method="GET",path="/O2ims_infrastructureMonitoring/v1/alarms"} 12
+o2ims_auth_failures_total{service="alarms-server",type="authentication",method="GET",path="/O2ims_infrastructureMonitoring/v2/alarms"} 12
 o2ims_auth_failures_total{service="cluster-server",type="authorization",method="POST",path="/O2ims_infrastructureCluster/v1/nodeClusters/{id}"} 3
 o2ims_auth_failures_total{service="resource-server",type="certificate_binding",method="GET",path="/O2ims_infrastructureInventory/v2/resourcePools/{id}"} 1
 o2ims_auth_failures_total{service="resource-server",type="authentication",method="GET",path="/O2ims_infrastructureInventory/v2/resourcePools"} 7
