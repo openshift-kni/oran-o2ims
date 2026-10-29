@@ -66,6 +66,8 @@ The typical workflow for deploying and managing clusters with the O-Cloud Manage
 ### Reference
 
 - [Glossary](./docs/user-guide/glossary.md)
+- [Example IBI live ISO server setup](./docs/user-guide/ibi-live-iso-server-example.md) —
+  optional, unsupported example using separate server and upload accounts
 
 ## Contributing
 
