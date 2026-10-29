@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package collector
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
@@ -598,6 +599,39 @@ type redfishLink struct {
 	ODataID string `json:"@odata.id"`
 }
 
+// redfishLinkList decodes a Redfish navigation property that may be either a
+// single collection reference ({"@odata.id": ...}) or an array of resource
+// links ([{"@odata.id": ...}, ...]). The DMTF ComputerSystem schema defines
+// PCIeDevices and PCIeFunctions as arrays of resource links, whereas chassis
+// and PCIe device collections use the single-reference form.
+type redfishLinkList struct {
+	// collection is set when the property is a single collection reference.
+	collection redfishLink
+	// links is set when the property is an array of resource links.
+	links []redfishLink
+}
+
+func (l *redfishLinkList) UnmarshalJSON(data []byte) error {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || string(trimmed) == "null" {
+		return nil
+	}
+	if trimmed[0] == '[' {
+		if err := json.Unmarshal(trimmed, &l.links); err != nil {
+			return fmt.Errorf("failed to decode Redfish link array: %w", err)
+		}
+		return nil
+	}
+	if err := json.Unmarshal(trimmed, &l.collection); err != nil {
+		return fmt.Errorf("failed to decode Redfish collection reference: %w", err)
+	}
+	return nil
+}
+
+func (l redfishLinkList) isEmpty() bool {
+	return l.collection.ODataID == "" && len(l.links) == 0
+}
+
 type redfishCollection struct {
 	Members         []redfishObject `json:"Members"`
 	MembersNextLink string          `json:"Members@odata.nextLink"`
@@ -612,31 +646,31 @@ type redfishLocation struct {
 }
 
 type redfishObject struct {
-	ODataID             string      `json:"@odata.id"`
-	ODataType           string      `json:"@odata.type"`
-	ID                  string      `json:"Id"`
-	Name                string      `json:"Name"`
-	Manufacturer        string      `json:"Manufacturer"`
-	Model               string      `json:"Model"`
-	SerialNumber        string      `json:"SerialNumber"`
-	PartNumber          string      `json:"PartNumber"`
-	SKU                 string      `json:"SKU"`
-	FirmwareVersion     string      `json:"FirmwareVersion"`
-	BiosVersion         string      `json:"BiosVersion"`
-	DeviceClass         string      `json:"DeviceClass"`
-	BusNumber           string      `json:"BusNumber"`
-	DeviceNumber        string      `json:"DeviceNumber"`
-	FunctionNumber      string      `json:"FunctionNumber"`
-	SegmentNumber       string      `json:"SegmentNumber"`
-	FunctionID          *int        `json:"FunctionId"`
-	ProcessorType       string      `json:"ProcessorType"`
-	Version             string      `json:"Version"`
-	Systems             redfishLink `json:"Systems"`
-	Processors          redfishLink `json:"Processors"`
-	GraphicsControllers redfishLink `json:"GraphicsControllers"`
-	PCIeDevices         redfishLink `json:"PCIeDevices"`
-	PCIeFunctions       redfishLink `json:"PCIeFunctions"`
-	Chassis             redfishLink `json:"Chassis"`
+	ODataID             string          `json:"@odata.id"`
+	ODataType           string          `json:"@odata.type"`
+	ID                  string          `json:"Id"`
+	Name                string          `json:"Name"`
+	Manufacturer        string          `json:"Manufacturer"`
+	Model               string          `json:"Model"`
+	SerialNumber        string          `json:"SerialNumber"`
+	PartNumber          string          `json:"PartNumber"`
+	SKU                 string          `json:"SKU"`
+	FirmwareVersion     string          `json:"FirmwareVersion"`
+	BiosVersion         string          `json:"BiosVersion"`
+	DeviceClass         string          `json:"DeviceClass"`
+	BusNumber           string          `json:"BusNumber"`
+	DeviceNumber        string          `json:"DeviceNumber"`
+	FunctionNumber      string          `json:"FunctionNumber"`
+	SegmentNumber       string          `json:"SegmentNumber"`
+	FunctionID          *int            `json:"FunctionId"`
+	ProcessorType       string          `json:"ProcessorType"`
+	Version             string          `json:"Version"`
+	Systems             redfishLink     `json:"Systems"`
+	Processors          redfishLink     `json:"Processors"`
+	GraphicsControllers redfishLink     `json:"GraphicsControllers"`
+	PCIeDevices         redfishLinkList `json:"PCIeDevices"`
+	PCIeFunctions       redfishLinkList `json:"PCIeFunctions"`
+	Chassis             redfishLink     `json:"Chassis"`
 	Links               struct {
 		PCIeDevice redfishLink `json:"PCIeDevice"`
 	} `json:"Links"`
@@ -802,12 +836,10 @@ func (s *redfishSession) discoverSystemGPUs(ctx context.Context, system redfishO
 		}
 	}
 
-	if system.PCIeFunctions.ODataID != "" {
+	if !system.PCIeFunctions.isEmpty() {
 		endpointFound = true
-		functions, err := s.list(ctx, system.PCIeFunctions.ODataID)
-		if err != nil {
-			partial = true
-		}
+		functions, funcPartial := s.resolveLinkList(ctx, system.PCIeFunctions)
+		partial = partial || funcPartial
 		for _, function := range functions {
 			if !isGPUDeviceClass(function.DeviceClass) {
 				continue
@@ -825,9 +857,9 @@ func (s *redfishSession) discoverSystemGPUs(ctx context.Context, system redfishO
 		}
 	}
 
-	if system.PCIeDevices.ODataID != "" {
+	if !system.PCIeDevices.isEmpty() {
 		endpointFound = true
-		pcieDevices, devicePartial := s.discoverPCIeDevices(ctx, system.PCIeDevices.ODataID)
+		pcieDevices, devicePartial := s.discoverPCIeDevices(ctx, system.PCIeDevices)
 		partial = partial || devicePartial
 		devices = append(devices, pcieDevices...)
 	}
@@ -843,32 +875,29 @@ func (s *redfishSession) discoverChassisGPUs(ctx context.Context, chassisPath st
 	devices := make([]hwmgrcontroller.GPUInfo, 0)
 	endpointFound := false
 	for _, item := range chassis {
-		if item.PCIeDevices.ODataID == "" {
+		if item.PCIeDevices.isEmpty() {
 			continue
 		}
 		endpointFound = true
-		pcieDevices, devicePartial := s.discoverPCIeDevices(ctx, item.PCIeDevices.ODataID)
+		pcieDevices, devicePartial := s.discoverPCIeDevices(ctx, item.PCIeDevices)
 		partial = partial || devicePartial
 		devices = append(devices, pcieDevices...)
 	}
 	return devices, endpointFound, partial
 }
 
-func (s *redfishSession) discoverPCIeDevices(ctx context.Context, collectionPath string) ([]hwmgrcontroller.GPUInfo, bool) {
-	pcieDevices, err := s.list(ctx, collectionPath)
-	partial := err != nil
+func (s *redfishSession) discoverPCIeDevices(ctx context.Context, list redfishLinkList) ([]hwmgrcontroller.GPUInfo, bool) {
+	pcieDevices, partial := s.resolveLinkList(ctx, list)
 	devices := make([]hwmgrcontroller.GPUInfo, 0)
 	for _, device := range pcieDevices {
-		if strings.EqualFold(device.Status.State, "Absent") || device.PCIeFunctions.ODataID == "" {
-			if device.PCIeFunctions.ODataID == "" && !strings.EqualFold(device.Status.State, "Absent") {
+		if strings.EqualFold(device.Status.State, "Absent") || device.PCIeFunctions.isEmpty() {
+			if device.PCIeFunctions.isEmpty() && !strings.EqualFold(device.Status.State, "Absent") {
 				partial = true
 			}
 			continue
 		}
-		functions, err := s.list(ctx, device.PCIeFunctions.ODataID)
-		if err != nil {
-			partial = true
-		}
+		functions, funcPartial := s.resolveLinkList(ctx, device.PCIeFunctions)
+		partial = partial || funcPartial
 		for _, function := range functions {
 			if isGPUDeviceClass(function.DeviceClass) {
 				devices = append(devices, gpuInfoFromPCIeDevice(device, function))
@@ -876,6 +905,34 @@ func (s *redfishSession) discoverPCIeDevices(ctx context.Context, collectionPath
 		}
 	}
 	return devices, partial
+}
+
+// resolveLinkList returns the Redfish objects referenced by a link list. A
+// single collection reference is listed; an array of resource links is fetched
+// element by element. Individual element failures mark the result partial but do
+// not stop the remaining elements.
+func (s *redfishSession) resolveLinkList(ctx context.Context, list redfishLinkList) ([]redfishObject, bool) {
+	if len(list.links) > 0 {
+		objects := make([]redfishObject, 0, len(list.links))
+		partial := false
+		for _, link := range list.links {
+			if link.ODataID == "" {
+				continue
+			}
+			var object redfishObject
+			if err := s.get(ctx, link.ODataID, &object); err != nil {
+				partial = true
+				continue
+			}
+			objects = append(objects, object)
+		}
+		return objects, partial
+	}
+	if list.collection.ODataID != "" {
+		objects, err := s.list(ctx, list.collection.ODataID)
+		return objects, err != nil
+	}
+	return nil, false
 }
 
 func (s *redfishSession) list(ctx context.Context, link string) ([]redfishObject, error) {
