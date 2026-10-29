@@ -202,7 +202,7 @@ func TestConvertAlarmEventRecordModelToAlarmEventNotification_NullSerialization(
 	g.Expect(notification.ObjectRef.IsNull()).To(BeFalse())
 
 	// objectRef is root-relative, trailing segment is the alarmEventRecordId (C5(d)).
-	g.Expect(notification.ObjectRef.MustGet()).To(Equal("/O2ims_infrastructureMonitoring/v1/alarms/" + recordID.String()))
+	g.Expect(notification.ObjectRef.MustGet()).To(Equal("/O2ims_infrastructureMonitoring/v2/alarms/" + recordID.String()))
 
 	// JSON marshaling keeps the keys present with explicit null.
 	data, err := json.Marshal(notification)

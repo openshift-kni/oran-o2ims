@@ -30,7 +30,7 @@ const (
 var (
 	O2IMSInventoryBaseURL           = O2IMSInventoryAPIPath + APIVersionV2
 	O2IMSClusterBaseURL             = O2IMSClusterAPIPath + APIVersionV1
-	O2IMSMonitoringBaseURL          = O2IMSMonitoringAPIPath + APIVersionV1
+	O2IMSMonitoringBaseURL          = O2IMSMonitoringAPIPath + APIVersionV2
 	O2IMSArtifactsBaseURL           = O2IMSArtifactsAPIPath + APIVersionV1
 	O2IMSProvisioningBaseURL        = O2IMSProvisioningAPIPath + APIVersionV1
 	HardwareManagerInventoryBaseURL = HardwareManagerInventoryAPIPath + APIVersionV1

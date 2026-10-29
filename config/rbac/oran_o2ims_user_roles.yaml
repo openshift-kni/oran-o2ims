@@ -32,21 +32,21 @@ rules:
   verbs:
   - get
 - nonResourceURLs:
-  - /O2ims_infrastructureMonitoring/v1/alarmSubscriptions
+  - /O2ims_infrastructureMonitoring/v2/alarmSubscriptions
   - /O2ims_infrastructureInventory/v2/subscriptions
   - /O2ims_infrastructureCluster/v1/subscriptions
   - /O2ims_infrastructureProvisioning/v1/provisioningRequests
   verbs:
   - get
 - nonResourceURLs:
-  - /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/*
+  - /O2ims_infrastructureMonitoring/v2/alarmSubscriptions/*
   - /O2ims_infrastructureInventory/v2/subscriptions/*
   - /O2ims_infrastructureCluster/v1/subscriptions/*
   - /O2ims_infrastructureProvisioning/v1/provisioningRequests/*
   verbs:
   - get
 - nonResourceURLs:
-  - /O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration
+  - /O2ims_infrastructureMonitoring/v2/alarmServiceConfiguration
   verbs:
   - get
 ---
@@ -58,11 +58,11 @@ metadata:
     role: maintainer-role
 rules:
 - nonResourceURLs:
-  - /O2ims_infrastructureMonitoring/v1/alarms/*
+  - /O2ims_infrastructureMonitoring/v2/alarms/*
   verbs:
   - patch
 - nonResourceURLs:
-  - /O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration
+  - /O2ims_infrastructureMonitoring/v2/alarmServiceConfiguration
   verbs:
   - get
   - patch
@@ -76,14 +76,14 @@ metadata:
     role: subscriber-role
 rules:
 - nonResourceURLs:
-  - /O2ims_infrastructureMonitoring/v1/alarmSubscriptions
+  - /O2ims_infrastructureMonitoring/v2/alarmSubscriptions
   - /O2ims_infrastructureInventory/v2/subscriptions
   - /O2ims_infrastructureCluster/v1/subscriptions
   verbs:
   - get
   - create
 - nonResourceURLs:
-  - /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/*
+  - /O2ims_infrastructureMonitoring/v2/alarmSubscriptions/*
   - /O2ims_infrastructureInventory/v2/subscriptions/*
   - /O2ims_infrastructureCluster/v1/subscriptions/*
   verbs:
@@ -93,7 +93,7 @@ rules:
 # Only the Monitoring alarmSubscriptions path supports PATCH; admin-role inherits this via the
 # subscriber-role aggregation label, while reader-role intentionally does not include patch.
 - nonResourceURLs:
-  - /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/*
+  - /O2ims_infrastructureMonitoring/v2/alarmSubscriptions/*
   verbs:
   - patch
 ---
