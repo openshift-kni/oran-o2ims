@@ -20,6 +20,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -49,7 +50,7 @@ const (
 	gpuInventoryStatusUnsupported = "unsupported"
 )
 
-var errRedfishNotFound = errors.New("Redfish resource not found")
+var errRedfishNotFound = errors.New("redfish resource not found")
 
 type redfishHTTPStatusError struct {
 	statusCode int
@@ -79,11 +80,6 @@ type gpuInventoryQueryKey struct {
 
 type gpuInventoryCacheEntry struct {
 	key       gpuInventoryQueryKey
-	inventory *hwmgrcontroller.GPUInventory
-}
-
-type gpuInventoryCall struct {
-	done      chan struct{}
 	inventory *hwmgrcontroller.GPUInventory
 }
 
@@ -122,9 +118,17 @@ type gpuInventoryUpdateValidator interface {
 }
 
 type redfishGPUInventoryClient struct {
-	hubClient  client.Reader
-	requests   chan struct{}
+	hubClient client.Reader
+	requests  chan struct{}
+	// httpClient, when set, overrides the lazily-built clients below. Tests use
+	// it to inject a client pointed at an httptest server.
 	httpClient *http.Client
+	// clientMu guards clientsByInsecure. The clients are built once and reused
+	// across inventory collections so TCP/TLS connections to each BMC are
+	// pooled rather than re-established per host. The map is keyed by the
+	// host's DisableCertificateVerification setting.
+	clientMu          sync.Mutex
+	clientsByInsecure map[bool]*http.Client
 }
 
 func (d *HardwareDataSource) setGPUInventoryResourceReader(reader gpuInventoryResourceReader) {
@@ -180,7 +184,7 @@ func (d *HardwareDataSource) processGPUInventoryJob(ctx context.Context, resourc
 		return
 	}
 
-	inventory := d.getGPUInventory(ctx, job.bmh)
+	inventory := d.getGPUInventory(ctx, job.bmh, false)
 	if inventory == nil || ctx.Err() != nil {
 		return
 	}
@@ -229,6 +233,10 @@ func (d *HardwareDataSource) cancelGPUInventory(resourceID uuid.UUID) {
 	d.ensureGPUInventoryQueueLocked()
 	delete(d.gpuInventoryJobs, resourceID)
 	delete(d.gpuInventoryJobVersions, resourceID)
+	// The cache is keyed by the BMH UID, which equals the resource ID string
+	// for every host that reaches this path; drop it so deleted hosts do not
+	// retain cached inventory indefinitely.
+	delete(d.gpuInventoryCache, resourceID.String())
 	d.gpuInventoryMu.Unlock()
 }
 
@@ -246,9 +254,15 @@ func (d *HardwareDataSource) completeGPUInventoryUpdate(update gpuInventoryUpdat
 	}
 }
 
+// getGPUInventory resolves the GPU inventory for a host from the in-memory
+// cache, the persisted resource (when includePersisted is set), or a live
+// Redfish query, in that order. Workers pass includePersisted=false because
+// prepareGPUInventory already consulted the persisted resource before queuing
+// the job, so re-reading it here would duplicate that database read.
 func (d *HardwareDataSource) getGPUInventory(
 	ctx context.Context,
 	bmh *metal3v1alpha1.BareMetalHost,
+	includePersisted bool,
 ) *hwmgrcontroller.GPUInventory {
 	if bmh == nil || (d.gpuInventoryReader == nil && d.gpuInventoryResourceReader == nil) {
 		return nil
@@ -263,12 +277,13 @@ func (d *HardwareDataSource) getGPUInventory(
 		credentialsName: bmh.Spec.BMC.CredentialsName,
 	}
 
+	// getGPUInventory is only invoked by the inventory workers, which the
+	// workqueue serializes per resourceID (the cache key is the BMH UID), so
+	// concurrent calls for the same key cannot occur and no in-flight
+	// deduplication is needed.
 	d.gpuInventoryMu.Lock()
 	if d.gpuInventoryCache == nil {
 		d.gpuInventoryCache = make(map[string]gpuInventoryCacheEntry)
-	}
-	if d.gpuInventoryInFlight == nil {
-		d.gpuInventoryInFlight = make(map[gpuInventoryQueryKey]*gpuInventoryCall)
 	}
 	if entry, ok := d.gpuInventoryCache[resourceKey]; ok && entry.key == key {
 		if isReusableGPUInventory(entry.inventory) {
@@ -278,30 +293,19 @@ func (d *HardwareDataSource) getGPUInventory(
 		}
 		delete(d.gpuInventoryCache, resourceKey)
 	}
-	if call, ok := d.gpuInventoryInFlight[key]; ok {
-		d.gpuInventoryMu.Unlock()
-		select {
-		case <-ctx.Done():
-			return &hwmgrcontroller.GPUInventory{Status: gpuInventoryStatusUnavailable}
-		case <-call.done:
-			return cloneGPUInventory(call.inventory)
-		}
-	}
-	call := &gpuInventoryCall{done: make(chan struct{})}
-	d.gpuInventoryInFlight[key] = call
 	d.gpuInventoryMu.Unlock()
 
-	inventory := d.getPersistedGPUInventory(ctx, bmh)
+	var inventory *hwmgrcontroller.GPUInventory
+	if includePersisted {
+		inventory = d.getPersistedGPUInventory(ctx, bmh)
+	}
 	var err error
-	if inventory == nil && d.gpuInventoryReader != nil && bmh.Spec.BMC.Address != "" {
+	queryable := d.gpuInventoryReader != nil && bmh.Spec.BMC.Address != ""
+	if inventory == nil && queryable {
 		inventory, err = d.gpuInventoryReader.GetGPUInventory(ctx, bmh)
 	}
-	if inventory == nil && err == nil && (d.gpuInventoryReader == nil || bmh.Spec.BMC.Address == "") {
-		d.gpuInventoryMu.Lock()
-		call.inventory = nil
-		delete(d.gpuInventoryInFlight, key)
-		close(call.done)
-		d.gpuInventoryMu.Unlock()
+	if inventory == nil && err == nil && !queryable {
+		// No persisted inventory and nothing to query.
 		return nil
 	}
 	if err != nil {
@@ -311,17 +315,14 @@ func (d *HardwareDataSource) getGPUInventory(
 		inventory = &hwmgrcontroller.GPUInventory{Status: gpuInventoryStatusUnavailable}
 	}
 
-	d.gpuInventoryMu.Lock()
 	if err == nil && isReusableGPUInventory(inventory) {
+		d.gpuInventoryMu.Lock()
 		d.gpuInventoryCache[resourceKey] = gpuInventoryCacheEntry{
 			key:       key,
 			inventory: cloneGPUInventory(inventory),
 		}
+		d.gpuInventoryMu.Unlock()
 	}
-	call.inventory = cloneGPUInventory(inventory)
-	delete(d.gpuInventoryInFlight, key)
-	close(call.done)
-	d.gpuInventoryMu.Unlock()
 
 	return inventory
 }
@@ -453,6 +454,49 @@ func newRedfishGPUInventoryClient(hubClient client.Reader) *redfishGPUInventoryC
 	}
 }
 
+// httpClientFor returns an HTTP client suitable for talking to a BMC with the
+// given certificate-verification setting. Clients are built once and cached so
+// their underlying transports pool connections across inventory collections.
+func (c *redfishGPUInventoryClient) httpClientFor(insecure bool) (*http.Client, error) {
+	if c.httpClient != nil {
+		return c.httpClient, nil
+	}
+
+	c.clientMu.Lock()
+	defer c.clientMu.Unlock()
+	if existing, ok := c.clientsByInsecure[insecure]; ok {
+		return existing, nil
+	}
+
+	defaultTransport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return nil, fmt.Errorf("default HTTP transport is not an *http.Transport")
+	}
+	transport := defaultTransport.Clone()
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+	if transport.TLSClientConfig != nil {
+		tlsConfig = transport.TLSClientConfig.Clone()
+		if tlsConfig.MinVersion == 0 {
+			tlsConfig.MinVersion = tls.VersionTLS12
+		}
+	}
+	tlsConfig.InsecureSkipVerify = insecure //nolint:gosec // honor explicit BareMetalHost configuration
+	transport.TLSClientConfig = tlsConfig
+	httpClient := &http.Client{
+		Timeout:   redfishRequestTimeout,
+		Transport: transport,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	if c.clientsByInsecure == nil {
+		c.clientsByInsecure = make(map[bool]*http.Client)
+	}
+	c.clientsByInsecure[insecure] = httpClient
+	return httpClient, nil
+}
+
 func (c *redfishGPUInventoryClient) GetGPUInventory(
 	ctx context.Context,
 	bmh *metal3v1alpha1.BareMetalHost,
@@ -492,30 +536,9 @@ func (c *redfishGPUInventoryClient) GetGPUInventory(
 		return nil, err
 	}
 
-	httpClient := c.httpClient
-	if httpClient == nil {
-		defaultTransport, ok := http.DefaultTransport.(*http.Transport)
-		if !ok {
-			return nil, fmt.Errorf("default HTTP transport is not an *http.Transport")
-		}
-		transport := defaultTransport.Clone()
-		defer transport.CloseIdleConnections()
-		tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
-		if transport.TLSClientConfig != nil {
-			tlsConfig = transport.TLSClientConfig.Clone()
-			if tlsConfig.MinVersion == 0 {
-				tlsConfig.MinVersion = tls.VersionTLS12
-			}
-		}
-		tlsConfig.InsecureSkipVerify = bmh.Spec.BMC.DisableCertificateVerification //nolint:gosec // honor explicit BareMetalHost configuration
-		transport.TLSClientConfig = tlsConfig
-		httpClient = &http.Client{
-			Timeout:   redfishRequestTimeout,
-			Transport: transport,
-			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
-		}
+	httpClient, err := c.httpClientFor(bmh.Spec.BMC.DisableCertificateVerification)
+	if err != nil {
+		return nil, err
 	}
 	session := redfishSession{
 		serviceRoot: serviceRoot,

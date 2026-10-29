@@ -81,6 +81,7 @@ type Collector struct {
 	AsyncChangeEvents           chan *async.AsyncChangeEvent
 	alarmDictCache              map[string]*uuid.UUID
 	gpuInventoryRetryMu         sync.Mutex
+	gpuInventoryRetryLimiter    workqueue.TypedRateLimiter[gpuInventoryRetryKey]
 	gpuInventoryRetryQueue      workqueue.TypedRateLimitingInterface[gpuInventoryRetryKey]
 	gpuInventoryRetryEvents     map[gpuInventoryRetryKey]*async.AsyncChangeEvent
 	gpuInventoryRetryWorkerOnce sync.Once
@@ -88,29 +89,36 @@ type Collector struct {
 
 // NewCollector creates a new collector instance
 func NewCollector(pool *pgxpool.Pool, repo *repo.ResourcesRepository, notificationHandler NotificationHandler, dataSources []DataSource) *Collector {
+	limiter, queue := newGPUInventoryRetryQueue()
 	return &Collector{
-		pool:                    pool,
-		repository:              repo,
-		notificationHandler:     notificationHandler,
-		dataSources:             dataSources,
-		AsyncChangeEvents:       make(chan *async.AsyncChangeEvent, asyncEventBufferSize),
-		gpuInventoryRetryQueue:  newGPUInventoryRetryQueue(),
-		gpuInventoryRetryEvents: make(map[gpuInventoryRetryKey]*async.AsyncChangeEvent),
+		pool:                     pool,
+		repository:               repo,
+		notificationHandler:      notificationHandler,
+		dataSources:              dataSources,
+		AsyncChangeEvents:        make(chan *async.AsyncChangeEvent, asyncEventBufferSize),
+		gpuInventoryRetryLimiter: limiter,
+		gpuInventoryRetryQueue:   queue,
+		gpuInventoryRetryEvents:  make(map[gpuInventoryRetryKey]*async.AsyncChangeEvent),
 	}
 }
 
-func newGPUInventoryRetryQueue() workqueue.TypedRateLimitingInterface[gpuInventoryRetryKey] {
-	return workqueue.NewTypedRateLimitingQueue(
-		workqueue.NewTypedItemExponentialFailureRateLimiter[gpuInventoryRetryKey](
-			gpuInventoryRetryInitialDelay,
-			gpuInventoryRetryMaxDelay,
-		),
+// newGPUInventoryRetryQueue builds the retry queue together with the rate
+// limiter it wraps, returning both so callers can ask the limiter for the exact
+// delay it assigns rather than recomputing the backoff schedule separately.
+func newGPUInventoryRetryQueue() (
+	workqueue.TypedRateLimiter[gpuInventoryRetryKey],
+	workqueue.TypedRateLimitingInterface[gpuInventoryRetryKey],
+) {
+	limiter := workqueue.NewTypedItemExponentialFailureRateLimiter[gpuInventoryRetryKey](
+		gpuInventoryRetryInitialDelay,
+		gpuInventoryRetryMaxDelay,
 	)
+	return limiter, workqueue.NewTypedRateLimitingQueue(limiter)
 }
 
 func (c *Collector) ensureGPUInventoryRetryQueueLocked() {
 	if c.gpuInventoryRetryQueue == nil {
-		c.gpuInventoryRetryQueue = newGPUInventoryRetryQueue()
+		c.gpuInventoryRetryLimiter, c.gpuInventoryRetryQueue = newGPUInventoryRetryQueue()
 	}
 	if c.gpuInventoryRetryEvents == nil {
 		c.gpuInventoryRetryEvents = make(map[gpuInventoryRetryKey]*async.AsyncChangeEvent)
@@ -210,10 +218,14 @@ func (c *Collector) scheduleGPUInventoryUpdateRetry(event *async.AsyncChangeEven
 		}
 	}
 	c.gpuInventoryRetryEvents[key] = &retryEvent
-	c.gpuInventoryRetryQueue.AddRateLimited(key)
+	// Ask the rate limiter for the delay directly and schedule with AddAfter so
+	// the logged delay is the exact value the limiter assigns (AddRateLimited
+	// would compute the same delay internally but not expose it).
+	delay := c.gpuInventoryRetryLimiter.When(key)
+	c.gpuInventoryRetryQueue.AddAfter(key, delay)
 	attempt := c.gpuInventoryRetryQueue.NumRequeues(key)
 	c.gpuInventoryRetryMu.Unlock()
-	return attempt, gpuInventoryRetryDelay(attempt - 1)
+	return attempt, delay
 }
 
 func (c *Collector) completeGPUInventoryRetry(update gpuInventoryUpdate) {
@@ -224,18 +236,6 @@ func (c *Collector) completeGPUInventoryRetry(update gpuInventoryUpdate) {
 		c.gpuInventoryRetryQueue.Forget(key)
 	}
 	delete(c.gpuInventoryRetryEvents, key)
-}
-
-func gpuInventoryRetryDelay(retryAttempt int) time.Duration {
-	delay := gpuInventoryRetryInitialDelay
-	for retryAttempt > 0 && delay < gpuInventoryRetryMaxDelay {
-		if delay > gpuInventoryRetryMaxDelay/2 {
-			return gpuInventoryRetryMaxDelay
-		}
-		delay *= 2
-		retryAttempt--
-	}
-	return delay
 }
 
 // init runs the onetime initialization steps for the collector

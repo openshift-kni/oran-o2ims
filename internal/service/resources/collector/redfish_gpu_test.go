@@ -427,6 +427,71 @@ var _ = Describe("Redfish GPU inventory", func() {
 		Expect(reader.calls).To(BeZero())
 		Expect(events).To(BeEmpty())
 	})
+
+	It("re-queries Redfish after a cancelled GPU inventory is cleared from the cache", func() {
+		bmh.Spec.BMC.Address = "redfish+https://bmc.example/redfish/v1/Systems/1"
+		countingReader := &countingGPUInventoryReader{
+			inventory: &hwmgrcontroller.GPUInventory{Status: gpuInventoryStatusComplete},
+		}
+		ds := &HardwareDataSource{cloudID: uuid.New(), gpuInventoryReader: countingReader}
+		resourceID := uuid.MustParse(string(bmh.UID))
+
+		Expect(ds.getGPUInventory(ctx, bmh, true).Status).To(Equal(gpuInventoryStatusComplete))
+		Expect(countingReader.calls).To(Equal(1))
+
+		// A second lookup is served from the cache without consulting Redfish.
+		Expect(ds.getGPUInventory(ctx, bmh, true).Status).To(Equal(gpuInventoryStatusComplete))
+		Expect(countingReader.calls).To(Equal(1))
+
+		// Cancelling the job (as on BMH deletion) evicts the cache entry, so the
+		// next lookup queries Redfish again.
+		ds.cancelGPUInventory(resourceID)
+		Expect(ds.getGPUInventory(ctx, bmh, true).Status).To(Equal(gpuInventoryStatusComplete))
+		Expect(countingReader.calls).To(Equal(2))
+	})
+
+	It("skips the persisted-inventory read when processing a queued job", func() {
+		bmh.Spec.BMC.Address = "redfish+https://bmc.example/redfish/v1/Systems/1"
+		reader := &countingGPUInventoryReader{
+			inventory: &hwmgrcontroller.GPUInventory{Status: gpuInventoryStatusComplete},
+		}
+		resourceReader := &staticGPUInventoryResourceReader{}
+		ds := &HardwareDataSource{
+			cloudID:                    uuid.New(),
+			gpuInventoryReader:         reader,
+			gpuInventoryResourceReader: resourceReader,
+		}
+		events := make(chan *async.AsyncChangeEvent, 1)
+		ds.Init(uuid.New(), 1, events)
+		resourceID := uuid.MustParse(string(bmh.UID))
+
+		ds.enqueueGPUInventory(bmh, resourceID)
+		ds.processGPUInventoryJob(ctx, resourceID)
+
+		update := (<-events).Object.(gpuInventoryUpdate)
+		Expect(update.Inventory.Status).To(Equal(gpuInventoryStatusComplete))
+		Expect(reader.calls).To(Equal(1))
+		// prepareGPUInventory already consulted persistence, so the worker must
+		// not read the resource again.
+		Expect(resourceReader.calls).To(BeZero())
+	})
+
+	It("reuses one HTTP client per certificate-verification setting", func() {
+		secure1, err := reader.httpClientFor(false)
+		Expect(err).ToNot(HaveOccurred())
+		secure2, err := reader.httpClientFor(false)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(secure2).To(BeIdenticalTo(secure1))
+
+		insecure, err := reader.httpClientFor(true)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(insecure).ToNot(BeIdenticalTo(secure1))
+
+		// An injected override client takes precedence over the cached clients.
+		override := redfishTestHTTPClient(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+		reader.httpClient = override
+		Expect(reader.httpClientFor(false)).To(BeIdenticalTo(override))
+	})
 })
 
 var _ = Describe("GPU inventory update events", func() {
@@ -469,17 +534,14 @@ var _ = Describe("GPU inventory update events", func() {
 			},
 		}
 		update := event.Object.(gpuInventoryUpdate)
-		Expect(gpuInventoryRetryDelay(0)).To(Equal(time.Second))
-		Expect(gpuInventoryRetryDelay(1)).To(Equal(2 * time.Second))
-		Expect(gpuInventoryRetryDelay(6)).To(Equal(time.Minute))
-		Expect(gpuInventoryRetryDelay(100)).To(Equal(time.Minute))
-
 		collector := &Collector{}
 		attempt, delay := collector.scheduleGPUInventoryUpdateRetry(event)
 		defer collector.gpuInventoryRetryQueue.ShutDown()
 
 		key := gpuInventoryRetryKey{ResourceID: update.ResourceID, Version: update.Version}
 		Expect(attempt).To(Equal(1))
+		// The delay is the exact value assigned by the rate limiter (first
+		// attempt = base delay of one second).
 		Expect(delay).To(Equal(time.Second))
 		Expect(collector.gpuInventoryRetryQueue.NumRequeues(key)).To(Equal(1))
 		Expect(collector.gpuInventoryRetryEvents).To(HaveKey(key))
@@ -487,6 +549,12 @@ var _ = Describe("GPU inventory update events", func() {
 		Expect(retryEvent).ToNot(BeIdenticalTo(event))
 		Expect(retryEvent.DataSourceID).To(Equal(event.DataSourceID))
 		Expect(retryEvent.Object).To(Equal(event.Object))
+
+		// A second failure for the same key escalates the delay per the rate
+		// limiter's exponential backoff.
+		attempt, delay = collector.scheduleGPUInventoryUpdateRetry(event)
+		Expect(attempt).To(Equal(2))
+		Expect(delay).To(Equal(2 * time.Second))
 	})
 
 	It("drops an older pending retry when a newer GPU result fails to persist", func() {
@@ -565,7 +633,7 @@ var _ = Describe("GPU inventory API extension", func() {
 	It("does not confuse a missing BMC URL with an empty GPU inventory", func() {
 		bmh := newTestBMH("no-bmc", "pool", metal3v1alpha1.StateAvailable)
 		ds := &HardwareDataSource{}
-		Expect(ds.getGPUInventory(context.Background(), bmh)).To(BeNil())
+		Expect(ds.getGPUInventory(context.Background(), bmh, true)).To(BeNil())
 	})
 
 	It("reuses a successful GPU inventory result for later resource rebuilds", func() {
@@ -577,8 +645,8 @@ var _ = Describe("GPU inventory API extension", func() {
 		}}
 		ds := &HardwareDataSource{gpuInventoryReader: reader}
 
-		Expect(ds.getGPUInventory(context.Background(), bmh).Devices).To(HaveLen(1))
-		Expect(ds.getGPUInventory(context.Background(), bmh).Devices).To(HaveLen(1))
+		Expect(ds.getGPUInventory(context.Background(), bmh, true).Devices).To(HaveLen(1))
+		Expect(ds.getGPUInventory(context.Background(), bmh, true).Devices).To(HaveLen(1))
 		Expect(reader.calls).To(Equal(1))
 	})
 
@@ -591,14 +659,14 @@ var _ = Describe("GPU inventory API extension", func() {
 		}}
 		ds := &HardwareDataSource{gpuInventoryReader: reader}
 
-		first := ds.getGPUInventory(context.Background(), bmh)
+		first := ds.getGPUInventory(context.Background(), bmh, true)
 		Expect(first.Status).To(Equal(gpuInventoryStatusPartial))
 
 		reader.inventory = &hwmgrcontroller.GPUInventory{
 			Status:  gpuInventoryStatusComplete,
 			Devices: []hwmgrcontroller.GPUInfo{{ID: "GPU_0", Model: "GH200 480GB"}},
 		}
-		second := ds.getGPUInventory(context.Background(), bmh)
+		second := ds.getGPUInventory(context.Background(), bmh, true)
 
 		Expect(second.Status).To(Equal(gpuInventoryStatusComplete))
 		Expect(second.Devices[0].Model).To(Equal("GH200 480GB"))
@@ -625,7 +693,7 @@ var _ = Describe("GPU inventory API extension", func() {
 			gpuInventoryResourceReader: resourceReader,
 		}
 
-		inventory := ds.getGPUInventory(context.Background(), bmh)
+		inventory := ds.getGPUInventory(context.Background(), bmh, true)
 
 		Expect(inventory).To(Equal(&hwmgrcontroller.GPUInventory{
 			Status:  gpuInventoryStatusComplete,
@@ -669,7 +737,9 @@ var _ = Describe("GPU inventory API extension", func() {
 		update := (<-events).Object.(gpuInventoryUpdate)
 		Expect(update.Inventory.Status).To(Equal(gpuInventoryStatusComplete))
 		Expect(update.Inventory.Devices[0].Model).To(Equal("GH200 480GB"))
-		Expect(resourceReader.calls).To(Equal(2))
+		// Only prepareGPUInventory reads the persisted resource; the worker does
+		// not read it again.
+		Expect(resourceReader.calls).To(Equal(1))
 		Expect(reader.calls).To(Equal(1))
 	})
 })
