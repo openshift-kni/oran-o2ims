@@ -62,6 +62,22 @@ func TestConvertAlarmEventRecordModelToAlarmEventNotification_ObjectClass(t *tes
 	g.Expect(notificationNil.ObjectClass).To(Equal(""))
 }
 
+// TestAlarmFilterToEventType verifies the mapping operates on the AlarmSubscriptionInfoEventFilter
+// enum (decoupled from the legacy AlarmSubscriptionInfoFilter type) and maps each value to its
+// corresponding notification event type.
+func TestAlarmFilterToEventType(t *testing.T) {
+	g := NewWithT(t)
+
+	g.Expect(models.AlarmFilterToEventType(api.AlarmSubscriptionInfoEventFilterNEW)).
+		To(Equal(api.AlarmEventNotificationNotificationEventTypeNEW))
+	g.Expect(models.AlarmFilterToEventType(api.AlarmSubscriptionInfoEventFilterCHANGE)).
+		To(Equal(api.AlarmEventNotificationNotificationEventTypeCHANGE))
+	g.Expect(models.AlarmFilterToEventType(api.AlarmSubscriptionInfoEventFilterCLEAR)).
+		To(Equal(api.AlarmEventNotificationNotificationEventTypeCLEAR))
+	g.Expect(models.AlarmFilterToEventType(api.AlarmSubscriptionInfoEventFilterACKNOWLEDGE)).
+		To(Equal(api.AlarmEventNotificationNotificationEventTypeACKNOWLEDGE))
+}
+
 func TestConvertSubscriptionAPIToModel_EventFilter(t *testing.T) {
 	g := NewWithT(t)
 	value := api.AlarmSubscriptionInfoEventFilterCHANGE
