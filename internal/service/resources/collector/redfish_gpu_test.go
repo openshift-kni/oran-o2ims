@@ -409,6 +409,34 @@ var _ = Describe("Redfish GPU inventory", func() {
 		Expect(queryOptionsMatched).To(BeTrue())
 	})
 
+	It("keeps reading healthy members after an earlier member fails", func() {
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/redfish/v1/":
+				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"}}`))
+			case "/redfish/v1/Systems/1":
+				_, _ = w.Write([]byte(`{"Processors":{"@odata.id":"/redfish/v1/Systems/1/Processors"}}`))
+			case "/redfish/v1/Systems/1/Processors":
+				// The first member is a bare link that is unavailable; the second is
+				// a healthy expanded GPU. The missing member must not hide it.
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Systems/1/Processors/GPU_MISSING"},{"@odata.type":"#Processor.v1_20_1.Processor","@odata.id":"/redfish/v1/Systems/1/Processors/GPU_1","Id":"GPU_1","ProcessorType":"GPU","Manufacturer":"NVIDIA","Model":"H100","SerialNumber":"GPU-SN-1","Status":{"State":"Enabled","Health":"OK"}}]}`))
+			case "/redfish/v1/Systems/1/Processors/GPU_MISSING":
+				http.NotFound(w, r)
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		reader.httpClient = redfishTestHTTPClient(handler)
+		bmh.Spec.BMC.Address = "redfish+http://bmc.example/redfish/v1/Systems/1"
+
+		inventory, err := reader.GetGPUInventory(ctx, bmh)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(inventory.Status).To(Equal(gpuInventoryStatusPartial))
+		Expect(inventory.Devices).To(HaveLen(1))
+		Expect(inventory.Devices[0].Model).To(Equal("H100"))
+	})
+
 	It("reports a successful empty inventory when no GPU-class functions are present", func() {
 		handler = newEmptyGPUInventoryHandler()
 		reader.httpClient = redfishTestHTTPClient(handler)
