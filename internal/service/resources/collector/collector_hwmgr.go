@@ -89,7 +89,12 @@ const (
 	storageExtension            = "storage"
 	gpusExtension               = "gpus"
 	gpuInventoryStatusExtension = "gpuInventoryStatus"
-	gpuInventoryStatusPending   = "pending"
+	// gpuInventoryFingerprintExtension stores a hash of the BMC identity
+	// (address + credentials name) that produced the persisted GPU inventory,
+	// so a later rebuild can detect when the BMH has been repointed at a
+	// different BMC and must re-query instead of reusing stale inventory.
+	gpuInventoryFingerprintExtension = "gpuInventoryFingerprint"
+	gpuInventoryStatusPending        = "pending"
 )
 
 // NewHardwareDataSource creates a hardware inventory data source that watches

@@ -685,7 +685,8 @@ var _ = Describe("GPU inventory API extension", func() {
 					"id":    "GPU_0",
 					"model": "GH200 480GB",
 				}},
-				gpuInventoryStatusExtension: gpuInventoryStatusComplete,
+				gpuInventoryStatusExtension:      gpuInventoryStatusComplete,
+				gpuInventoryFingerprintExtension: gpuInventoryFingerprint(bmh),
 			},
 		}}
 		ds := &HardwareDataSource{
@@ -703,6 +704,62 @@ var _ = Describe("GPU inventory API extension", func() {
 		Expect(reader.calls).To(Equal(0))
 	})
 
+	It("re-queries Redfish when the persisted GPU inventory was collected from a different BMC", func() {
+		bmh := newTestBMH("repointed-gpu-host", "pool", metal3v1alpha1.StateAvailable)
+		bmh.Spec.BMC.Address = "redfish+https://new-bmc.example"
+		staleBMH := bmh.DeepCopy()
+		staleBMH.Spec.BMC.Address = "redfish+https://old-bmc.example"
+		reader := &countingGPUInventoryReader{inventory: &hwmgrcontroller.GPUInventory{
+			Status:  gpuInventoryStatusComplete,
+			Devices: []hwmgrcontroller.GPUInfo{{ID: "GPU_0", Model: "GH200 480GB"}},
+		}}
+		resourceReader := &staticGPUInventoryResourceReader{resource: &models.Resource{
+			ResourceID: uuid.MustParse(string(bmh.UID)),
+			Extensions: map[string]interface{}{
+				gpusExtension:                    []interface{}{map[string]interface{}{"id": "STALE_GPU"}},
+				gpuInventoryStatusExtension:      gpuInventoryStatusComplete,
+				gpuInventoryFingerprintExtension: gpuInventoryFingerprint(staleBMH),
+			},
+		}}
+		ds := &HardwareDataSource{
+			gpuInventoryReader:         reader,
+			gpuInventoryResourceReader: resourceReader,
+		}
+
+		inventory := ds.getGPUInventory(context.Background(), bmh, true)
+
+		// The persisted record was collected from a different BMC, so it must be
+		// re-queried rather than reused.
+		Expect(reader.calls).To(Equal(1))
+		Expect(inventory.Devices).To(HaveLen(1))
+		Expect(inventory.Devices[0].ID).To(Equal("GPU_0"))
+	})
+
+	It("re-queries Redfish when the persisted GPU inventory has no BMC fingerprint", func() {
+		bmh := newTestBMH("legacy-gpu-host", "pool", metal3v1alpha1.StateAvailable)
+		bmh.Spec.BMC.Address = "redfish+https://bmc.example"
+		reader := &countingGPUInventoryReader{inventory: &hwmgrcontroller.GPUInventory{
+			Status:  gpuInventoryStatusComplete,
+			Devices: []hwmgrcontroller.GPUInfo{{ID: "GPU_0"}},
+		}}
+		resourceReader := &staticGPUInventoryResourceReader{resource: &models.Resource{
+			ResourceID: uuid.MustParse(string(bmh.UID)),
+			Extensions: map[string]interface{}{
+				gpusExtension:               []interface{}{map[string]interface{}{"id": "STALE_GPU"}},
+				gpuInventoryStatusExtension: gpuInventoryStatusComplete,
+			},
+		}}
+		ds := &HardwareDataSource{
+			gpuInventoryReader:         reader,
+			gpuInventoryResourceReader: resourceReader,
+		}
+
+		// A record written before the fingerprint existed is treated as a cache
+		// miss and re-queried.
+		Expect(ds.getGPUInventory(context.Background(), bmh, true).Devices[0].ID).To(Equal("GPU_0"))
+		Expect(reader.calls).To(Equal(1))
+	})
+
 	It("keeps the in-memory cache after reusing a persisted GPU inventory", func() {
 		bmh := newTestBMH("cache-survives-host", "pool", metal3v1alpha1.StateAvailable)
 		bmh.Spec.BMC.Address = "redfish+https://bmc.example"
@@ -716,7 +773,8 @@ var _ = Describe("GPU inventory API extension", func() {
 					"id":    "GPU_0",
 					"model": "GH200 480GB",
 				}},
-				gpuInventoryStatusExtension: gpuInventoryStatusComplete,
+				gpuInventoryStatusExtension:      gpuInventoryStatusComplete,
+				gpuInventoryFingerprintExtension: gpuInventoryFingerprint(bmh),
 			},
 		}}
 		ds := &HardwareDataSource{

@@ -8,7 +8,9 @@ package collector
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -93,9 +95,10 @@ type gpuInventoryWorkItem struct {
 }
 
 type gpuInventoryUpdate struct {
-	ResourceID uuid.UUID
-	Version    uint64
-	Inventory  *hwmgrcontroller.GPUInventory
+	ResourceID     uuid.UUID
+	Version        uint64
+	Inventory      *hwmgrcontroller.GPUInventory
+	BMCFingerprint string
 }
 
 type gpuInventoryRetryKey struct {
@@ -203,9 +206,10 @@ func (d *HardwareDataSource) processGPUInventoryJob(ctx context.Context, resourc
 	d.gpuInventoryMu.Unlock()
 
 	update := gpuInventoryUpdate{
-		ResourceID: resourceID,
-		Version:    job.version,
-		Inventory:  cloneGPUInventory(inventory),
+		ResourceID:     resourceID,
+		Version:        job.version,
+		Inventory:      cloneGPUInventory(inventory),
+		BMCFingerprint: gpuInventoryFingerprint(job.bmh),
 	}
 	select {
 	case <-ctx.Done():
@@ -364,6 +368,14 @@ func (d *HardwareDataSource) getPersistedGPUInventory(
 	if !ok || (status != gpuInventoryStatusComplete && status != gpuInventoryStatusUnsupported) {
 		return nil
 	}
+	// Reuse the persisted inventory only when it was collected from the BMC the
+	// BMH currently points at. A missing fingerprint (records written before
+	// this field existed) or a mismatch (the BMH was repointed) is treated as a
+	// cache miss so the inventory is queried again.
+	fingerprint, _ := resource.Extensions[gpuInventoryFingerprintExtension].(string)
+	if fingerprint == "" || fingerprint != gpuInventoryFingerprint(bmh) {
+		return nil
+	}
 	devicesValue, ok := resource.Extensions[gpusExtension]
 	if !ok {
 		return nil
@@ -424,7 +436,7 @@ func (d *HardwareDataSource) prepareGPUInventory(
 			inventory := cloneGPUInventory(entry.inventory)
 			d.cancelGPUInventoryJobLocked(resource.ResourceID)
 			d.gpuInventoryMu.Unlock()
-			setGPUInventory(resource, inventory)
+			setGPUInventory(resource, inventory, gpuInventoryFingerprint(bmh))
 			return false
 		}
 		delete(d.gpuInventoryCache, resourceKey)
@@ -440,7 +452,7 @@ func (d *HardwareDataSource) prepareGPUInventory(
 		d.gpuInventoryCache[resourceKey] = gpuInventoryCacheEntry{key: key, inventory: cloneGPUInventory(inventory)}
 		d.cancelGPUInventoryJobLocked(resource.ResourceID)
 		d.gpuInventoryMu.Unlock()
-		setGPUInventory(resource, inventory)
+		setGPUInventory(resource, inventory, gpuInventoryFingerprint(bmh))
 		return false
 	}
 	if d.gpuInventoryReader == nil || bmh.Spec.BMC.Address == "" {
@@ -451,12 +463,25 @@ func (d *HardwareDataSource) prepareGPUInventory(
 	return true
 }
 
-func setGPUInventory(resource *models.Resource, inventory *hwmgrcontroller.GPUInventory) {
+func setGPUInventory(resource *models.Resource, inventory *hwmgrcontroller.GPUInventory, fingerprint string) {
 	if resource.Extensions == nil {
 		resource.Extensions = make(map[string]interface{})
 	}
 	resource.Extensions[gpusExtension] = inventory.Devices
 	resource.Extensions[gpuInventoryStatusExtension] = inventory.Status
+	resource.Extensions[gpuInventoryFingerprintExtension] = fingerprint
+}
+
+// gpuInventoryFingerprint hashes the BMC identity (address and credentials
+// name) that a GPU inventory was collected from. It is persisted with the
+// inventory so a later rebuild can detect a repointed BMC and re-query rather
+// than reuse stale data.
+func gpuInventoryFingerprint(bmh *metal3v1alpha1.BareMetalHost) string {
+	if bmh == nil {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(bmh.Spec.BMC.Address + "\x00" + bmh.Spec.BMC.CredentialsName))
+	return hex.EncodeToString(sum[:])
 }
 
 func newRedfishGPUInventoryClient(hubClient client.Reader) *redfishGPUInventoryClient {
