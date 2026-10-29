@@ -555,7 +555,7 @@ func (c *Collector) handleAsyncGPUInventoryUpdate(
 		c.completeGPUInventoryRetry(update)
 		return nil
 	}
-	setGPUInventory(resource, update.Inventory)
+	setGPUInventory(resource, update.Inventory, update.BMCFingerprint)
 	if err := c.handleAsyncResourceEvent(ctx, *resource, false); err != nil {
 		return &gpuInventoryPersistenceError{err: err}
 	}
