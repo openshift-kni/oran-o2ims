@@ -543,6 +543,40 @@ var _ = Describe("Redfish GPU inventory", func() {
 		Expect(models).To(ConsistOf("H100", "L40S"))
 	})
 
+	It("deduplicates a GPU whose views differ in serial availability", func() {
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/redfish/v1/":
+				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"}}`))
+			case "/redfish/v1/Systems/1":
+				_, _ = w.Write([]byte(`{"GraphicsControllers":{"@odata.id":"/redfish/v1/Systems/1/GraphicsControllers"},"PCIeDevices":[{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU"}]}`))
+			// The GraphicsController view references the same PCIe device but omits
+			// the serial number; it is keyed only by the device ID.
+			case "/redfish/v1/Systems/1/GraphicsControllers":
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Systems/1/GraphicsControllers/0"}]}`))
+			case "/redfish/v1/Systems/1/GraphicsControllers/0":
+				_, _ = w.Write([]byte(`{"Id":"GC0","Model":"L40S","Links":{"PCIeDevice":{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU"}},"Status":{"State":"Enabled","Health":"OK"}}`))
+			// The PCIe device view carries the serial number for the same device,
+			// so a serial-only key would miss the match and double-count the GPU.
+			case "/redfish/v1/Systems/1/PCIeDevices/GPU":
+				_, _ = w.Write([]byte(`{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU","Id":"GPU","Model":"L40S","SerialNumber":"SN-A","PCIeFunctions":[{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU/PCIeFunctions/0"}],"Status":{"State":"Enabled","Health":"OK"}}`))
+			case "/redfish/v1/Systems/1/PCIeDevices/GPU/PCIeFunctions/0":
+				_, _ = w.Write([]byte(`{"DeviceClass":"ProcessingAccelerators"}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		reader.httpClient = redfishTestHTTPClient(handler)
+		bmh.Spec.BMC.Address = "redfish+http://bmc.example/redfish/v1/Systems/1"
+
+		inventory, err := reader.GetGPUInventory(ctx, bmh)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(inventory.Status).To(Equal(gpuInventoryStatusComplete))
+		Expect(inventory.Devices).To(HaveLen(1))
+		Expect(inventory.Devices[0].ID).To(Equal("/redfish/v1/Systems/1/PCIeDevices/GPU"))
+	})
+
 	It("uses filtered and expanded processor members when the BMC supports them", func() {
 		processorCollectionRequests := 0
 		queryOptionsMatched := false

@@ -1308,18 +1308,39 @@ func redfishObjectID(object redfishObject) string {
 	return object.ODataID
 }
 
+// addGPU appends a GPU unless the same physical device was already recorded. A
+// device may surface through several views that each populate a different subset
+// of identifiers: one view may report a serial number while another reports only
+// the device ID. Matching on either alias prevents the same GPU from being
+// counted twice. The first view to record a device wins, so callers order the
+// richer views (Processors) first.
 func addGPU(inventory *hwmgrcontroller.GPUInventory, seen map[string]struct{}, gpu hwmgrcontroller.GPUInfo) {
-	key := gpu.ID
+	var serialKey, idKey string
 	if gpu.SerialNumber != "" {
-		key = strings.ToLower(gpu.SerialNumber)
+		serialKey = "serial:" + strings.ToLower(gpu.SerialNumber)
 	}
-	if key == "" {
+	if gpu.ID != "" {
+		idKey = "id:" + gpu.ID
+	}
+	if serialKey == "" && idKey == "" {
 		return
 	}
-	if _, exists := seen[key]; exists {
-		return
+	if serialKey != "" {
+		if _, exists := seen[serialKey]; exists {
+			return
+		}
 	}
-	seen[key] = struct{}{}
+	if idKey != "" {
+		if _, exists := seen[idKey]; exists {
+			return
+		}
+	}
+	if serialKey != "" {
+		seen[serialKey] = struct{}{}
+	}
+	if idKey != "" {
+		seen[idKey] = struct{}{}
+	}
 	inventory.Devices = append(inventory.Devices, gpu)
 }
 
