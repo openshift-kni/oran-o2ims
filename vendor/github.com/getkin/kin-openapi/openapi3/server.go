@@ -53,9 +53,9 @@ type Server struct {
 	Extensions map[string]any `json:"-" yaml:"-"`
 	Origin     *Origin        `json:"-" yaml:"-"`
 
-	URL         string          `json:"url" yaml:"url"` // Required
-	Description string          `json:"description,omitempty" yaml:"description,omitempty"`
-	Variables   ServerVariables `json:"variables,omitempty" yaml:"variables,omitempty"`
+	URL         string          `json:"url,case:strict" yaml:"url"` // Required
+	Description string          `json:"description,omitempty,case:strict" yaml:"description,omitempty"`
+	Variables   ServerVariables `json:"variables,omitempty,case:strict" yaml:"variables,omitempty"`
 }
 
 // BasePath returns the base path extracted from the default values of variables, if any.
@@ -109,10 +109,10 @@ func (server Server) MarshalYAML() (any, error) {
 func (server *Server) UnmarshalJSON(data []byte) error {
 	type ServerBis Server
 	var x ServerBis
-	if err := json.Unmarshal(data, &x); err != nil {
+	if err := unmarshalJSON(data, &x); err != nil {
 		return unmarshalError(err)
 	}
-	_ = json.Unmarshal(data, &x.Extensions)
+	_ = unmarshalJSON(data, &x.Extensions)
 	delete(x.Extensions, "url")
 	delete(x.Extensions, "description")
 	delete(x.Extensions, "variables")
@@ -222,6 +222,9 @@ func serverURLTemplateVariables(serverURL string) []string {
 
 // Validate returns an error if Server does not comply with the OpenAPI spec.
 func (server *Server) Validate(ctx context.Context, opts ...ValidationOption) error {
+	if server == nil {
+		server = &Server{} // equivalent + fails soon after
+	}
 	ctx = WithValidationOptions(ctx, opts...)
 	me := newErrCollector(ctx)
 
@@ -280,9 +283,9 @@ type ServerVariable struct {
 	Extensions map[string]any `json:"-" yaml:"-"`
 	Origin     *Origin        `json:"-" yaml:"-"`
 
-	Enum        []string `json:"enum,omitempty" yaml:"enum,omitempty"`
-	Default     string   `json:"default,omitempty" yaml:"default,omitempty"`
-	Description string   `json:"description,omitempty" yaml:"description,omitempty"`
+	Enum        []string `json:"enum,omitempty,case:strict" yaml:"enum,omitempty"`
+	Default     string   `json:"default,omitempty,case:strict" yaml:"default,omitempty"`
+	Description string   `json:"description,omitempty,case:strict" yaml:"description,omitempty"`
 }
 
 // MarshalJSON returns the JSON encoding of ServerVariable.
@@ -314,10 +317,10 @@ func (serverVariable ServerVariable) MarshalYAML() (any, error) {
 func (serverVariable *ServerVariable) UnmarshalJSON(data []byte) error {
 	type ServerVariableBis ServerVariable
 	var x ServerVariableBis
-	if err := json.Unmarshal(data, &x); err != nil {
+	if err := unmarshalJSON(data, &x); err != nil {
 		return unmarshalError(err)
 	}
-	_ = json.Unmarshal(data, &x.Extensions)
+	_ = unmarshalJSON(data, &x.Extensions)
 	delete(x.Extensions, "enum")
 	delete(x.Extensions, "default")
 	delete(x.Extensions, "description")
@@ -330,6 +333,9 @@ func (serverVariable *ServerVariable) UnmarshalJSON(data []byte) error {
 
 // Validate returns an error if ServerVariable does not comply with the OpenAPI spec.
 func (serverVariable *ServerVariable) Validate(ctx context.Context, opts ...ValidationOption) error {
+	if serverVariable == nil {
+		serverVariable = &ServerVariable{} // equivalent + fails soon after
+	}
 	ctx = WithValidationOptions(ctx, opts...)
 
 	if serverVariable.Default == "" {
