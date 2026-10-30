@@ -2,7 +2,7 @@
 
 ```yaml
 title: o2ims-v13
-version: "3.1"
+version: "3.2"
 authors:
   - @rauherna
 reviewers:
@@ -312,35 +312,65 @@ concept. A meaningful probable cause is therefore domain classification we must
 own, not something derivable from the alert itself (echoing the alert name is not
 a cause).
 
-**Mechanism — embedded alert-name mapping table → `indeterminate` fallback:**
+**Mechanism — embedded alert-name mapping table → guaranteed `indeterminate` fallback:**
 
 1. Maintain a versioned, **embedded** `alertName → probableCause` table (YAML),
    bootstrapped from the published OCP monitoring / kube-prometheus / ACM alert
    catalogs. Key on `alertName` with an optional `(alertName, severity)`
    qualifier. Values map to the ITU-T X.733 / 3GPP TS 28.111 [42] probable-cause
-   enumeration and carry `standardReference` accordingly. The embedded default is
-   authoritative; an operator-supplied ConfigMap may *extend* it but is not a
-   dependency.
-2. At dictionary-generation time (resources + cluster collectors), build the
-   dictionary's `probableCauses` list from the distinct mapped causes, and record
-   each definition's probable-cause code in its `alarmAdditionalFields`.
-3. Unmapped alerts resolve to a defined **`indeterminate`** probable cause — never
-   the alert name (an echo looks meaningful while carrying no diagnostic value).
+   enumeration and carry `standardReference` accordingly. The table carries its
+   own **`mappingVersion`**. The embedded default is authoritative; an
+   operator-supplied ConfigMap may *extend* it (union by alert-name key; embedded
+   entries win on conflict) but is not a dependency.
+2. At dictionary-generation time (resources + cluster collectors), build each
+   dictionary's `probableCauses` list from the distinct mapped causes **plus the
+   reserved `indeterminate` cause, which is always included** so that every
+   `probableCauseId` a record can emit — the fallback included — resolves within
+   the same dictionary. Record each definition's probable-cause code in its
+   `alarmAdditionalFields`.
+3. **The fallback is total.** Any alarm that cannot be resolved to a mapped cause
+   is assigned the reserved `indeterminate` cause. This covers *every* miss — an
+   unmapped alert name, a missing/absent `ObjectTypeID`, and a dictionary
+   fetch/lookup failure — not just unmapped names. Echoing the alert name is never
+   used.
 4. The alarms server, which already resolves `alarmDefinitionId` from the fetched
    dictionary (`resourceserver.go` / `clusterserver.go` / `converter.go`), reads
    the associated probable-cause id in the same lookup and sets `probableCauseId`
-   on the record.
+   on the record. **`converter.go` must change:** today it performs the lookup
+   only when `ObjectTypeID` is present, logs failures, and still appends a record
+   with a nil `ProbableCauseID` (serialized by the API as a zero UUID). Under this
+   design it instead assigns the `indeterminate` id on any such miss, so a
+   persisted record's `probableCauseId` is **never nil/zero**.
 
-**`probableCauseId` type.** The record column is `probable_cause_id uuid`, but the
-spec PK is `probableCauseCode` (String). Generate a **deterministic UUIDv5** of
-`alarmDictionaryId + probableCauseCode` (same resolution approach as M-10) so the
-id is stable across collector runs; store the string code in the dictionary.
+**`probableCauseId` identity.** `ProbableCause` is keyed by `probableCauseCode`
+(String), but the record column is `probable_cause_id uuid`. Resolve the mismatch
+by deriving a **deterministic UUIDv5** and exposing the *same* value at both ends:
+
+- **Namespace:** a fixed, committed application namespace UUID constant,
+  `oranProbableCauseNamespace` (single documented value in code).
+- **Canonical input:** the UTF-8 string `"{alarmDictionaryId}:{probableCauseCode}"`
+  — `alarmDictionaryId` in canonical lowercase UUID form, a literal `:` separator,
+  and `probableCauseCode` verbatim.
+- **Exposure at both ends:** the `ProbableCause` entry in the dictionary response
+  carries this derived UUID alongside its `probableCauseCode`, and
+  `AlarmEventRecord.probableCauseId` holds the identical value — so a consumer can
+  resolve a record's cause back to a dictionary entry. (The earlier reference to
+  M-10 is dropped; M-10 governs a different field and does not define this
+  algorithm.)
+
+**Dictionary identity and history.** Because the `probableCauses` set is derived
+from the mapping table, a mapping change must not silently alter a dictionary that
+keeps the same identity. The table's `mappingVersion` is therefore folded into
+`AlarmDictionaryVersion` (and thus into the inputs for `alarmDictionaryId`), so
+any mapping change — embedded or ConfigMap-extended — yields a **new dictionary
+version**. Historical alarm records continue to reference the `probableCauseId` of
+the dictionary version under which they were raised, so previously emitted causes
+remain resolvable rather than dangling.
 
 **Coverage observability.** Alert names are renamed/added across OCP/ACM releases,
 so table entries silently rot to `indeterminate`. Log — and expose a count metric
-for — every alert that falls through to `indeterminate`, turning coverage gaps
-into an actionable signal, and pin the table to the dictionary version so changes
-are reviewable in git.
+for — every alarm that falls through to `indeterminate` (for any of the step-3
+reasons), turning coverage gaps into an actionable signal.
 
 **Deferred (optional tier).** An `expr`/metric-based classifier, keyed off the
 `Expr` already stored in `alarmAdditionalFields`, could fill the unmapped tail
@@ -348,9 +378,10 @@ with better-than-`indeterminate` causes. Deferred as an optional tier between th
 table and the fallback.
 
 **Compliance note.** The spec mandates the field be *present*, not *meaningful*.
-This design is compliant from day one (non-null `probableCauseId`, populated
-`probableCauses`), with meaningfulness bounded by — and growable through — table
-curation.
+Because the `indeterminate` cause is always in the dictionary, is assigned on
+every lookup miss, has a well-defined resolvable id, and is versioned with the
+dictionary, `probableCauseId` is **guaranteed non-null and resolvable** from day
+one; meaningfulness is bounded by — and growable through — table curation.
 
 #### Purge Alarms + Task Operations (M-11, M-12, M-13)
 
@@ -585,12 +616,12 @@ are handled in the OpenAPI spec and serialization layer, not the schema.
 | `internal/service/alarms/api/server.go` | New handlers: `PurgeAlarms`, `GetTaskOperations`, `GetTaskOperation`; async worker + advisory lock | [M-11](#52-gap-assessment), [M-12](#52-gap-assessment) |
 | `internal/service/alarms/serve.go` | Startup restart-recovery + terminal-state reaping of task operations | [M-11](#52-gap-assessment) |
 | `config/rbac/oran_o2ims_user_roles.yaml` | Add `create` on `/alarms/purge` to maintainer-role; task GETs already covered by reader wildcard (DD-004) | [M-11](#52-gap-assessment) |
-| `internal/service/{resources,cluster}/collector/collector_alarms.go` | Build dictionary `probableCauses` + associate codes to definitions via the mapping table | [M-14](#52-gap-assessment) |
+| `internal/service/{resources,cluster}/collector/collector_alarms.go` | Build dictionary `probableCauses` (always incl. `indeterminate`) + associate codes to definitions; fold mapping `mappingVersion` into `AlarmDictionaryVersion` | [M-14](#52-gap-assessment) |
 | `internal/service/{resources,cluster}/.../alarm_probable_cause_map.yaml` (new, embedded) | Versioned `alertName → probableCause` table bootstrapped from OCP/ACM catalogs + loader | [M-14](#52-gap-assessment) |
-| `internal/service/{resources,cluster}/db/models/` + migrations | Persist probable causes + definition association | [M-14](#52-gap-assessment) |
+| `internal/service/{resources,cluster}/db/models/` + migrations | Persist probable causes (code + derived UUIDv5) + definition association | [M-14](#52-gap-assessment) |
 | `internal/service/{resources,cluster}/api/openapi.yaml` | Expose `probableCauses` in the `alarmDictionaries` response | [I-3](#32-gap-assessment), [M-14](#52-gap-assessment) |
 | `internal/service/alarms/internal/infrastructure/{resourceserver,clusterserver}.go` | Carry probable-cause id through the existing dictionary lookup | [M-14](#52-gap-assessment) |
-| `internal/service/alarms/internal/alertmanager/converter.go` | Set `probableCauseId` on the AlarmEventRecord | [M-14](#52-gap-assessment) |
+| `internal/service/alarms/internal/alertmanager/converter.go` | Set `probableCauseId` on the AlarmEventRecord; assign `indeterminate` on any lookup miss (incl. missing `objectTypeId`) so it is never nil/zero | [M-14](#52-gap-assessment) |
 
 ---
 
@@ -756,6 +787,7 @@ resources under the current (v2) monitoring path:
 |     | filter vs eventFilter | Added semantic clarification: `filter` is ETSI attribute-based (deprecated), `eventFilter` is typed enum (new). |
 | 3.0 | Re-add purge/tasks (PR 4) | Purge Alarms + Task Operations re-scoped in (M-11, M-12, M-13). Eligibility per ORCH-USE-CASES 3.7.13 (inactive OR acknowledged-active). Full compliance via soft-purge suppression to prevent Alertmanager re-sync resurrection; tombstone alternative deferred. |
 | 3.1 | Add probableCauseId (M-14, I-3) | Populate `probableCauseId` via an embedded alert-name → probable-cause mapping table (X.733 / 3GPP TS 28.111 values) → `indeterminate` fallback; deterministic UUIDv5 ids; also builds the mandatory dictionary `probableCauses`. expr-classifier deferred. |
+| 3.2 | Address CodeRabbit (PR 5196) | Harden M-14: always include `indeterminate` per dictionary; total fallback on any lookup miss incl. missing `objectTypeId`; explicit UUIDv5 contract exposed at both ends; fold mapping version into `AlarmDictionaryVersion` so history stays resolvable. |
 
 ---
 
