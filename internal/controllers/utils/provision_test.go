@@ -1052,6 +1052,23 @@ nodes: []
 		Expect(got).To(MatchYAML(expected))
 	})
 
+	It("rejects a top-level nodes list instead of overwriting it", func() {
+		merged := mustYAMLMap(`
+nodes:
+- hostName: flat-1.example.com
+nodeGroups:
+- name: master
+  nodes:
+  - hostName: master-1.example.com
+`)
+		_, err := ExpandNodeGroupsToNodes(merged)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(`"nodes" is not supported; define hosts under nodeGroups[].nodes instead`))
+		// The merged data is left untouched.
+		Expect(merged).To(HaveKey("nodeGroups"))
+		Expect(merged["nodes"]).To(HaveLen(1))
+	})
+
 	It("rejects malformed nodeGroups", func() {
 		_, err := ExpandNodeGroupsToNodes(map[string]any{})
 		Expect(err).To(HaveOccurred())

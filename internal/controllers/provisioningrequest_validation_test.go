@@ -598,6 +598,30 @@ clusterName: no-groups
 		Expect(err.Error()).To(ContainSubstring("at least one node is required"))
 	})
 
+	It("rejects a top-level nodes list in the ProvisioningRequest input", func() {
+		defaults := `
+nodeGroups:
+- name: master
+  role: master`
+
+		// A template with additionalProperties: true would let this input through the schema.
+		params := `
+clusterName: mixed
+nodes:
+- hostName: flat-1.example.com
+nodeGroups:
+- name: master
+  nodes:
+  - hostName: master-1.example.com
+`
+
+		task = newTask(defaults, params)
+		_, err := task.getMergedClusterInstanceData(ctx, ciDefaultsCm, extractClusterInstanceInput(task))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(`"nodes" is not supported`))
+		Expect(task.clusterInput.hostToGroupName).To(BeNil())
+	})
+
 	It("rejects a ProvisioningRequest group not defined in the defaults", func() {
 		defaults := `
 nodeGroups:

@@ -411,11 +411,16 @@ func PrepareClusterInstanceForServerSideApply(ci *siteconfig.ClusterInstance) {
 // host overlay is merged on top (interfaces by name). Flattened interface
 // addresses (CIDR strings) are mapped into nmstate config. O-cloud-only sugar fields
 // (group name, interfaces[].addresses) are stripped. It also returns a map of
-// hostName -> nodeGroups[].name (spoke MCP name).
+// hostName -> nodeGroups[].name (spoke MCP name). A top-level nodes list in the
+// merged data is rejected rather than silently overwritten.
 func ExpandNodeGroupsToNodes(merged map[string]any) (map[string]string, error) {
 	raw, ok := merged[constants.ClusterInstanceNodeGroupsKey]
 	if !ok {
 		return nil, fmt.Errorf("%q is required for the nodeGroups format", constants.ClusterInstanceNodeGroupsKey)
+	}
+	if _, hasNodes := merged[constants.ClusterInstanceNodesKey]; hasNodes {
+		return nil, fmt.Errorf("%q is not supported; define hosts under %s[].%s instead",
+			constants.ClusterInstanceNodesKey, constants.ClusterInstanceNodeGroupsKey, constants.ClusterInstanceNodesKey)
 	}
 	groups, ok := raw.([]any)
 	if !ok {
