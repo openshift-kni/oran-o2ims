@@ -693,6 +693,19 @@ type redfishObject struct {
 	} `json:"Slot"`
 }
 
+// isRedfishDriverScheme reports whether a BMC address scheme (with any
+// +http/+https transport suffix already stripped) names a Metal3 Redfish driver.
+// These all speak the Redfish REST API at /redfish/v1 and default to HTTPS when
+// no explicit transport is given.
+func isRedfishDriverScheme(scheme string) bool {
+	switch strings.ToLower(scheme) {
+	case "redfish", "redfish-virtualmedia", "idrac-redfish", "idrac-virtualmedia":
+		return true
+	default:
+		return false
+	}
+}
+
 func parseRedfishBMCAddress(address string) (*url.URL, string, error) {
 	parsed, err := url.Parse(address)
 	if err != nil {
@@ -705,7 +718,10 @@ func parseRedfishBMCAddress(address string) (*url.URL, string, error) {
 	scheme := parsed.Scheme
 	if plus := strings.LastIndex(scheme, "+"); plus >= 0 {
 		scheme = scheme[plus+1:]
-	} else if scheme == "redfish" {
+	} else if isRedfishDriverScheme(scheme) {
+		// Metal3 documents the Redfish driver address forms (including the iDRAC
+		// and virtual-media variants) as defaulting to HTTPS when no explicit
+		// +http/+https transport is given.
 		scheme = "https"
 	}
 	if scheme != "http" && scheme != "https" {

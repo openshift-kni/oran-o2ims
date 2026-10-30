@@ -1243,4 +1243,31 @@ var _ = Describe("Redfish BMC address parsing", func() {
 		Expect(root.String()).To(Equal("https://bmc.example/redfish/v1/"))
 		Expect(systemPath).To(Equal("/redfish/v1/Systems/System.Embedded.1"))
 	})
+
+	DescribeTable("defaults implicit-HTTPS Redfish driver schemes to https",
+		func(address string) {
+			root, _, err := parseRedfishBMCAddress(address)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(root.String()).To(Equal("https://bmc.example/redfish/v1/"))
+		},
+		Entry("redfish", "redfish://bmc.example/redfish/v1"),
+		Entry("redfish-virtualmedia", "redfish-virtualmedia://bmc.example/redfish/v1"),
+		Entry("idrac-redfish", "idrac-redfish://bmc.example/redfish/v1"),
+		Entry("idrac-virtualmedia", "idrac-virtualmedia://bmc.example/redfish/v1"),
+	)
+
+	DescribeTable("honors an explicit transport suffix on Redfish driver schemes",
+		func(address, expectedScheme string) {
+			root, _, err := parseRedfishBMCAddress(address)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(root.Scheme).To(Equal(expectedScheme))
+		},
+		Entry("redfish-virtualmedia+http", "redfish-virtualmedia+http://bmc.example/redfish/v1", "http"),
+		Entry("idrac-redfish+https", "idrac-redfish+https://bmc.example/redfish/v1", "https"),
+	)
+
+	It("rejects a non-Redfish BMC address scheme", func() {
+		_, _, err := parseRedfishBMCAddress("ipmi://bmc.example")
+		Expect(err).To(HaveOccurred())
+	})
 })
