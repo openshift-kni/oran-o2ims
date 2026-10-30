@@ -527,100 +527,48 @@ func (t *clusterTemplateReconcilerTask) validateConfigmapReference(
 }
 
 // validateClusterInstanceDefaults validates clusterinstance-defaults data against the
-// ClusterInstance CRD and ensures its nodes/nodeGroups format matches the
-// ClusterInstanceParameters schema.
+// ClusterInstance CRD and ensures it uses the nodeGroups format.
 func (t *clusterTemplateReconcilerTask) validateClusterInstanceDefaults(
 	ctx context.Context, data map[string]any) error {
 
-	defaultsFormat, err := validateClusterInstanceDefaultsFormat(
-		t.object.Spec.TemplateParameterSchema.Raw, data)
-	if err != nil {
-		return typederrors.NewInputError("%s", err.Error())
+	// A top-level nodes list is rejected by the ClusterInstance CRD schema check below.
+	if _, hasNodeGroups := data[constants.ClusterInstanceNodeGroupsKey]; !hasNodeGroups {
+		return typederrors.NewInputError("%s must define %q",
+			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey, constants.ClusterInstanceNodeGroupsKey)
 	}
 
-	if err := ctlrutils.ValidateDefaultInterfaces(data, defaultsFormat); err != nil {
+	if err := ctlrutils.ValidateDefaultInterfaces(data); err != nil {
 		return typederrors.NewInputError("failed to validate the default ConfigMap: %w", err)
 	}
 
-	if defaultsFormat == constants.ClusterInstanceNodeGroupsKey {
-		// A nil map skips the membership check when hardware groups come from
-		// hwMgmtParameters instead of hwMgmtDefaults.nodeGroupData.
-		var hwMgmtNames map[string]struct{}
-		if len(t.object.Spec.TemplateDefaults.HwMgmtDefaults.NodeGroupData) > 0 {
-			// Collect the hardware node group names.
-			hwMgmtNames = map[string]struct{}{}
-			for _, ng := range t.object.Spec.TemplateDefaults.HwMgmtDefaults.NodeGroupData {
-				hwMgmtNames[ng.Name] = struct{}{}
-			}
+	// A nil map skips the membership check when hardware groups come from
+	// hwMgmtParameters instead of hwMgmtDefaults.nodeGroupData.
+	var hwMgmtNames map[string]struct{}
+	if len(t.object.Spec.TemplateDefaults.HwMgmtDefaults.NodeGroupData) > 0 {
+		// Collect the hardware node group names.
+		hwMgmtNames = map[string]struct{}{}
+		for _, ng := range t.object.Spec.TemplateDefaults.HwMgmtDefaults.NodeGroupData {
+			hwMgmtNames[ng.Name] = struct{}{}
 		}
-		if err := ctlrutils.ValidateNodeGroupsNames(data, hwMgmtNames); err != nil {
-			return typederrors.NewInputError("failed to validate the default ConfigMap: %w", err)
-		}
-		// Strip O-Cloud-only nodeGroups[].name before ClusterInstance CRD schema validation.
-		if err := ctlrutils.RemoveNodeGroupNames(data); err != nil {
-			return typederrors.NewInputError("failed to validate the default ConfigMap: %w", err)
-		}
+	}
+	if err := ctlrutils.ValidateNodeGroupsNames(data, hwMgmtNames); err != nil {
+		return typederrors.NewInputError("failed to validate the default ConfigMap: %w", err)
+	}
+	// Strip O-Cloud-only nodeGroups[].name before ClusterInstance CRD schema validation.
+	if err := ctlrutils.RemoveNodeGroupNames(data); err != nil {
+		return typederrors.NewInputError("failed to validate the default ConfigMap: %w", err)
 	}
 
 	// Strip O-Cloud-only interface labels before ClusterInstance CRD schema validation.
-	if err := ctlrutils.RemoveLabelFromInterfaces(data, defaultsFormat); err != nil {
+	if err := ctlrutils.RemoveLabelFromInterfaces(data, constants.ClusterInstanceNodeGroupsKey); err != nil {
 		return typederrors.NewInputError("failed to validate the default ConfigMap: %w", err)
 	}
 
-	if err := ctlrutils.ValidateConfigmapSchemaAgainstClusterInstanceCRD(
-		ctx, t.client, data, defaultsFormat); err != nil {
+	if err := ctlrutils.ValidateConfigmapSchemaAgainstClusterInstanceCRD(ctx, t.client, data); err != nil {
 		return typederrors.NewInputError("failed to validate the default ConfigMap: %w", err)
 	}
 
 	return nil
-}
-
-// validateClusterInstanceDefaultsFormat ensures clusterinstance-defaults uses
-// exactly one of nodes / nodeGroups and that clusterInstanceParameters in the
-// templateParameterSchema exposes a matching property.
-// Returns the defaults format key ("nodes" or "nodeGroups") or an error if
-// the format is invalid.
-func validateClusterInstanceDefaultsFormat(
-	schemaRaw []byte, data map[string]any) (string, error) {
-	_, hasNodes := data[constants.ClusterInstanceNodesKey]
-	_, hasNodeGroups := data[constants.ClusterInstanceNodeGroupsKey]
-
-	var defaultsFormat string
-	switch {
-	case hasNodes && hasNodeGroups:
-		return "", fmt.Errorf("%s must not define both %q and %q",
-			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			constants.ClusterInstanceNodesKey, constants.ClusterInstanceNodeGroupsKey)
-	case hasNodes:
-		defaultsFormat = constants.ClusterInstanceNodesKey
-	case hasNodeGroups:
-		defaultsFormat = constants.ClusterInstanceNodeGroupsKey
-	default:
-		return "", fmt.Errorf("%s must define either %q or %q",
-			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			constants.ClusterInstanceNodesKey, constants.ClusterInstanceNodeGroupsKey)
-	}
-
-	cipSchema, err := validation.ExtractSubSchema(
-		schemaRaw, constants.TemplateParamClusterInstance)
-	if err != nil {
-		return "", fmt.Errorf("failed to extract %q schema for defaults validation: %w",
-			constants.TemplateParamClusterInstance, err)
-	}
-	props, ok := cipSchema["properties"].(map[string]any)
-	if !ok {
-		return "", fmt.Errorf("%q schema must have a properties section",
-			constants.TemplateParamClusterInstance)
-	}
-
-	hasFormat := schemaPropertyExists(props, defaultsFormat)
-	if !hasFormat {
-		return "", fmt.Errorf(
-			"%s defines %q, but %s schema does not include a matching %q definition",
-			ctlrutils.ClusterInstanceTemplateDefaultsConfigmapKey,
-			defaultsFormat, constants.TemplateParamClusterInstance, defaultsFormat)
-	}
-	return defaultsFormat, nil
 }
 
 // validateName return true if the ClusterTemplate name is the
@@ -788,7 +736,7 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 }
 
 // validateClusterInstanceParametersSchema requires clusterInstanceParameters.properties to
-// expose exactly one of "nodes" or "nodeGroups".
+// expose "nodeGroups" and rejects a top-level "nodes" property.
 func validateClusterInstanceParametersSchema(cipSchema map[string]any) error {
 	props, ok := cipSchema["properties"].(map[string]any)
 	if !ok {
@@ -796,18 +744,15 @@ func validateClusterInstanceParametersSchema(cipSchema map[string]any) error {
 			constants.TemplateParamClusterInstance)
 	}
 
-	hasNodes := schemaPropertyExists(props, constants.ClusterInstanceNodesKey)
-	hasNodeGroups := schemaPropertyExists(props, constants.ClusterInstanceNodeGroupsKey)
-	if hasNodes && hasNodeGroups {
-		return fmt.Errorf("%q schema must not define both %q and %q; choose exactly one",
+	if schemaPropertyExists(props, constants.ClusterInstanceNodesKey) {
+		return fmt.Errorf("%q schema must not define %q; use %q instead",
 			constants.TemplateParamClusterInstance,
 			constants.ClusterInstanceNodesKey,
 			constants.ClusterInstanceNodeGroupsKey)
 	}
-	if !hasNodes && !hasNodeGroups {
-		return fmt.Errorf("%q schema must define either %q or %q",
+	if !schemaPropertyExists(props, constants.ClusterInstanceNodeGroupsKey) {
+		return fmt.Errorf("%q schema must define %q",
 			constants.TemplateParamClusterInstance,
-			constants.ClusterInstanceNodesKey,
 			constants.ClusterInstanceNodeGroupsKey)
 	}
 	return nil

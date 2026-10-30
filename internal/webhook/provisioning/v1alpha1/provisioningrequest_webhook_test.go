@@ -263,17 +263,6 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 							"baseDomain": {
 								"type": "string"
 							},
-							"nodes": {
-								"type": "array",
-								"items": {
-									"type": "object",
-									"properties": {
-										"hostName": {
-											"type": "string"
-										}
-									}
-								}
-							},
 							"nodeGroups": {
 								"type": "array",
 								"items": {
@@ -353,9 +342,14 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 					"clusterInstanceParameters": {
 						"clusterName": "test-cluster",
 						"baseDomain": "example.com",
-						"nodes": [
+						"nodeGroups": [
 							{
-								"hostName": "node1.example.com"
+								"name": "master",
+								"nodes": [
+									{
+										"hostName": "node1.example.com"
+									}
+								]
 							}
 						],
 						"extraAnnotations": {
@@ -396,9 +390,14 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				"clusterInstanceParameters": {
 					"clusterName": "test-cluster",
 					"baseDomain": "newdomain.com",
-					"nodes": [
+					"nodeGroups": [
 						{
-							"hostName": "node1.example.com"
+							"name": "master",
+							"nodes": [
+								{
+									"hostName": "node1.example.com"
+								}
+							]
 						}
 					],
 					"extraAnnotations": {
@@ -429,9 +428,14 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				"clusterInstanceParameters": {
 					"clusterName": "test-cluster",
 					"baseDomain": "example.com",
-					"nodes": [
+					"nodeGroups": [
 						{
-							"hostName": "node1.example.com"
+							"name": "master",
+							"nodes": [
+								{
+									"hostName": "node1.example.com"
+								}
+							]
 						}
 					],
 					"extraAnnotations": {
@@ -623,9 +627,14 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				"clusterInstanceParameters": {
 					"clusterName": "test-cluster",
 					"baseDomain": "example.com",
-					"nodes": [
+					"nodeGroups": [
 						{
-							"hostName": "node1.example.com"
+							"name": "master",
+							"nodes": [
+								{
+									"hostName": "node1.example.com"
+								}
+							]
 						}
 					],
 					"extraAnnotations": {
@@ -654,9 +663,14 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				"clusterInstanceParameters": {
 					"clusterName": "test-cluster",
 					"baseDomain": "example.com",
-					"nodes": [
+					"nodeGroups": [
 						{
-							"hostName": "node1.example.com"
+							"name": "master",
+							"nodes": [
+								{
+									"hostName": "node1.example.com"
+								}
+							]
 						}
 					],
 					"extraAnnotations": {
@@ -960,9 +974,14 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				"clusterInstanceParameters": {
 					"clusterName": "test-cluster",
 					"baseDomain": "newdomain.com",
-					"nodes": [
+					"nodeGroups": [
 						{
-							"hostName": "node1.example.com"
+							"name": "master",
+							"nodes": [
+								{
+									"hostName": "node1.example.com"
+								}
+							]
 						}
 					],
 					"extraAnnotations": {
@@ -1157,9 +1176,14 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				"clusterInstanceParameters": {
 					"clusterName": "new-cluster-name",
 					"baseDomain": "newdomain.com",
-					"nodes": [
+					"nodeGroups": [
 						{
-							"hostName": "newnode.example.com"
+							"name": "master",
+							"nodes": [
+								{
+									"hostName": "newnode.example.com"
+								}
+							]
 						}
 					]
 				},
@@ -1186,9 +1210,14 @@ var _ = Describe("ProvisioningRequestValidator", func() {
 				"clusterInstanceParameters": {
 					"clusterName": "new-cluster-name",
 					"baseDomain": "newdomain.com",
-					"nodes": [
+					"nodeGroups": [
 						{
-							"hostName": "newnode.example.com"
+							"name": "master",
+							"nodes": [
+								{
+									"hostName": "newnode.example.com"
+								}
+							]
 						}
 					]
 				},

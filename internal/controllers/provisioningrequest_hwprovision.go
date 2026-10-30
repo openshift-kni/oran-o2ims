@@ -215,7 +215,7 @@ func (t *provisioningRequestReconcilerTask) waitForHardwareData(
 
 // updateClusterInstance updates the given ClusterInstance object based on the provisioned nodeAllocationRequest.
 func (t *provisioningRequestReconcilerTask) updateClusterInstance(ctx context.Context,
-	clusterInstance *unstructured.Unstructured, nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) error {
+	clusterInstance *unstructured.Unstructured) error {
 
 	narNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
 	allocatedNodeList, err := listAllocatedNodesForNAR(ctx, t.client, t.object.Name, narNS)
@@ -237,7 +237,7 @@ func (t *provisioningRequestReconcilerTask) updateClusterInstance(ctx context.Co
 		return fmt.Errorf("failed to copy pull secret: %w", err)
 	}
 
-	configErr := t.applyNodeConfiguration(ctx, hwNodes, nodeAllocationRequest, clusterInstance)
+	configErr := t.applyNodeConfiguration(ctx, hwNodes, clusterInstance)
 	if configErr != nil {
 		if ctlrutils.IsClusterProvisionCompleted(t.object) {
 			// During scale-out, the new AllocatedNode may not exist yet when the
@@ -337,7 +337,7 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestProvisionS
 	provisioned, timedOutOrFailed, err := t.checkNodeAllocationRequestStatus(ctx, nodeAllocationRequestResponse, hwmgmtv1alpha1.Provisioned)
 	if provisioned && err == nil {
 		t.logger.InfoContext(ctx, fmt.Sprintf("NodeAllocationRequest (%s) is provisioned", nodeAllocationRequestID))
-		if err = t.updateClusterInstance(ctx, clusterInstance, nodeAllocationRequestResponse); err != nil {
+		if err = t.updateClusterInstance(ctx, clusterInstance); err != nil {
 			return provisioned, timedOutOrFailed, fmt.Errorf("failed to update the rendered cluster instance: %w", err)
 		}
 	}
@@ -457,16 +457,13 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestConfigStat
 func (t *provisioningRequestReconcilerTask) applyNodeConfiguration(
 	ctx context.Context,
 	hwNodes map[string][]ctlrutils.NodeInfo,
-	nar *hwmgmtv1alpha1.NodeAllocationRequest,
 	clusterInstance *unstructured.Unstructured,
 ) error {
 
 	// Create a map to track unmatched nodes
 	unmatchedNodes := make(map[int]string)
 
-	// ClusterInstance nodes format (legacy): one hardware group per installer role.
-	roleToNodeGroupName := getRoleToGroupNameMap(&nar.Spec)
-	// ClusterInstance nodeGroups format: hardware group by hostname.
+	// Hardware group by hostname, captured from the expanded nodeGroups input.
 	hostToGroupName := map[string]string{}
 	if t.clusterInput != nil {
 		hostToGroupName = t.clusterInput.hostToGroupName
@@ -503,14 +500,8 @@ func (t *provisioningRequestReconcilerTask) applyNodeConfiguration(
 			return fmt.Errorf("node at index %d is not a valid map", i)
 		}
 
-		role, _, _ := unstructured.NestedString(nodeMap, "role")
 		hostName, _, _ := unstructured.NestedString(nodeMap, "hostName")
-		var groupName string
-		if len(hostToGroupName) > 0 {
-			groupName = hostToGroupName[hostName]
-		} else {
-			groupName = roleToNodeGroupName[role]
-		}
+		groupName := hostToGroupName[hostName]
 
 		var nodeInfo ctlrutils.NodeInfo
 		matched := false
@@ -778,34 +769,13 @@ func isConfigTransactionObserved(observedID, expectedGeneration int64) bool {
 	return observedID == expectedGeneration
 }
 
-// buildNodeAllocationRequestSpec builds the NodeAllocationRequest from the pre-merged hwMgmt data and cluster instance
-func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec(
-	clusterInstance *unstructured.Unstructured) (*hwmgmtv1alpha1.NodeAllocationRequest, error) {
+// buildNodeAllocationRequestSpec builds the NodeAllocationRequest from the pre-merged hwMgmt data
+// and the hostName -> nodeGroups[].name mapping captured from the expanded ClusterInstance input
+func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec() (*hwmgmtv1alpha1.NodeAllocationRequest, error) {
 
 	hwMgmtData := t.clusterInput.hwMgmtData
 
-	// ClusterInstance nodes format (legacy): size each hardware group by installer role
-	// (one hardware group per role).
-	roleCounts := make(map[string]int)
-	nodes, found, err := unstructured.NestedSlice(clusterInstance.Object, "spec", "nodes")
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract nodes from cluster instance: %w", err)
-	}
-	if !found {
-		return nil, fmt.Errorf("spec.nodes not found in cluster instance")
-	}
-
-	for i, n := range nodes {
-		nodeMap, ok := n.(map[string]interface{})
-		if !ok {
-			return nil, fmt.Errorf("node at index %d is not a valid map", i)
-		}
-
-		role, _, _ := unstructured.NestedString(nodeMap, "role")
-		roleCounts[role]++
-	}
-
-	// ClusterInstance nodeGroups format: size each hardware group by hostname membership.
+	// Size each hardware group by hostname membership from the expanded nodeGroups input.
 	groupSizes := make(map[string]int)
 	for _, groupName := range t.clusterInput.hostToGroupName {
 		groupSizes[groupName]++
@@ -852,17 +822,9 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec(
 			Role:             role,
 		}
 
-		var size int
-		if len(t.clusterInput.hostToGroupName) > 0 {
-			// ClusterInstance nodeGroups format path
-			size = groupSizes[name]
-		} else {
-			// ClusterInstance nodes format path (legacy)
-			size = roleCounts[role]
-		}
 		nodeGroups = append(nodeGroups, hwmgmtv1alpha1.NodeGroup{
 			NodeGroupData: ngd,
-			Size:          size,
+			Size:          groupSizes[name],
 		})
 	}
 
@@ -921,15 +883,15 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequestSpec(
 	return nar, nil
 }
 
-func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(ctx context.Context,
-	clusterInstance *unstructured.Unstructured) (*hwmgmtv1alpha1.NodeAllocationRequest, error) {
+func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(
+	ctx context.Context) (*hwmgmtv1alpha1.NodeAllocationRequest, error) {
 
 	// Check if NAR can be fetched (ignore NotFound — it may not exist yet)
 	if _, err := t.getNAR(ctx); err != nil && !k8serrors.IsNotFound(err) {
 		return nil, fmt.Errorf("failed to get NodeAllocationRequest '%s': %w", t.object.Name, err)
 	}
 
-	nodeAllocationRequest, err := t.buildNodeAllocationRequestSpec(clusterInstance)
+	nodeAllocationRequest, err := t.buildNodeAllocationRequestSpec()
 	if err != nil {
 		return nil, err
 	}

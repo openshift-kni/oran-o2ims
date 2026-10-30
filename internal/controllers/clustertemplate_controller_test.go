@@ -945,34 +945,6 @@ var _ = Describe("validateClusterInstanceDefaults", func() {
 		tVersion      = "v1.0.0"
 	)
 
-	cipSchemaWithNodes := runtime.RawExtension{Raw: []byte(`{
-		"properties": {
-			"nodeClusterName": {"type": "string"},
-			"oCloudSiteId": {"type": "string"},
-			"clusterInstanceParameters": {
-				"type": "object",
-				"properties": {"nodes": {"type": "array"}}
-			},
-			"policyTemplateParameters": {"type": "object", "properties": {}}
-		},
-		"type": "object",
-		"required": ["nodeClusterName", "oCloudSiteId", "policyTemplateParameters", "clusterInstanceParameters"]
-	}`)}
-
-	cipSchemaWithNodeGroups := runtime.RawExtension{Raw: []byte(`{
-		"properties": {
-			"nodeClusterName": {"type": "string"},
-			"oCloudSiteId": {"type": "string"},
-			"clusterInstanceParameters": {
-				"type": "object",
-				"properties": {"nodeGroups": {"type": "array"}}
-			},
-			"policyTemplateParameters": {"type": "object", "properties": {}}
-		},
-		"type": "object",
-		"required": ["nodeClusterName", "oCloudSiteId", "policyTemplateParameters", "clusterInstanceParameters"]
-	}`)}
-
 	BeforeEach(func() {
 		ctx = context.Background()
 		clusterInstanceCRD, err := ctlrutils.BuildTestClusterInstanceCRD(ctlrutils.TestClusterInstanceSpecOk)
@@ -980,7 +952,7 @@ var _ = Describe("validateClusterInstanceDefaults", func() {
 		c = fakeclient.GetFakeClientFromObjects([]client.Object{clusterInstanceCRD}...)
 	})
 
-	newTask := func(schema runtime.RawExtension, hwMgmt []hwmgmtv1alpha1.NodeGroupData) *clusterTemplateReconcilerTask {
+	newTask := func(hwMgmt []hwmgmtv1alpha1.NodeGroupData) *clusterTemplateReconcilerTask {
 		return &clusterTemplateReconcilerTask{
 			client: c,
 			logger: slog.Default(),
@@ -998,7 +970,6 @@ var _ = Describe("validateClusterInstanceDefaults", func() {
 							NodeGroupData: hwMgmt,
 						},
 					},
-					TemplateParameterSchema: schema,
 				},
 			},
 		}
@@ -1018,63 +989,24 @@ var _ = Describe("validateClusterInstanceDefaults", func() {
 		return data
 	}
 
-	It("validates nodes defaults matching schema", func() {
+	It("rejects defaults without nodeGroups", func() {
 		data := loadDefaults(`
-baseDomain: example.sno.com
+baseDomain: example.com
+`)
+		t = newTask(nil)
+		err := t.validateClusterInstanceDefaults(ctx, data)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(`clusterinstance-defaults must define "nodeGroups"`))
+	})
+
+	It("rejects a top-level nodes list via the ClusterInstance CRD schema", func() {
+		data := loadDefaults(`
 nodes:
 - hostName: node1
   nodeNetwork:
     interfaces:
     - name: eno1
       label: boot-interface
-`)
-		t = newTask(cipSchemaWithNodes, nil)
-		Expect(t.validateClusterInstanceDefaults(ctx, data)).To(Succeed())
-	})
-
-	It("rejects nodes defaults with unknown fields against ClusterInstance CRD", func() {
-		data := loadDefaults(`
-baDomain: example.sno.com
-nodes: []
-`)
-		t = newTask(cipSchemaWithNodes, nil)
-		err := t.validateClusterInstanceDefaults(ctx, data)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("does not match the ClusterInstance schema"))
-		Expect(err.Error()).To(ContainSubstring("Additional property baDomain is not allowed"))
-	})
-
-	It("rejects missing interface label on nodes", func() {
-		data := loadDefaults(`
-nodes:
-- hostName: "node1"
-  nodeNetwork:
-    interfaces:
-    - name: "eno1"
-`)
-		t = newTask(cipSchemaWithNodes, nil)
-		err := t.validateClusterInstanceDefaults(ctx, data)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("'label' is missing for interface"))
-	})
-
-	It("rejects defaults that define both nodes and nodeGroups", func() {
-		data := loadDefaults(`
-nodes: []
-nodeGroups:
-- name: master
-  role: master
-`)
-		t = newTask(cipSchemaWithNodes, []hwmgmtv1alpha1.NodeGroupData{
-			{Name: "master", Role: "master", HwProfile: "profile"},
-		})
-		err := t.validateClusterInstanceDefaults(ctx, data)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("must not define both"))
-	})
-
-	It("rejects format mismatch between defaults nodeGroups and schema nodes", func() {
-		data := loadDefaults(`
 nodeGroups:
 - name: master
   role: master
@@ -1083,15 +1015,53 @@ nodeGroups:
     - name: eno1
       label: boot-interface
 `)
-		t = newTask(cipSchemaWithNodes, []hwmgmtv1alpha1.NodeGroupData{
+		t = newTask([]hwmgmtv1alpha1.NodeGroupData{
 			{Name: "master", Role: "master", HwProfile: "profile"},
 		})
 		err := t.validateClusterInstanceDefaults(ctx, data)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("does not include a matching"))
+		Expect(err.Error()).To(ContainSubstring("does not match the ClusterInstance schema"))
+		Expect(err.Error()).To(ContainSubstring("Additional property nodes is not allowed"))
 	})
 
-	It("validates nodeGroups defaults matching schema", func() {
+	It("rejects nodeGroups defaults with unknown fields against ClusterInstance CRD", func() {
+		data := loadDefaults(`
+baDomain: example.com
+nodeGroups:
+- name: master
+  role: master
+  nodeNetwork:
+    interfaces:
+    - name: eno1
+      label: boot-interface
+`)
+		t = newTask([]hwmgmtv1alpha1.NodeGroupData{
+			{Name: "master", Role: "master", HwProfile: "profile"},
+		})
+		err := t.validateClusterInstanceDefaults(ctx, data)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("does not match the ClusterInstance schema"))
+		Expect(err.Error()).To(ContainSubstring("Additional property baDomain is not allowed"))
+	})
+
+	It("rejects missing interface label on nodeGroups", func() {
+		data := loadDefaults(`
+nodeGroups:
+- name: master
+  role: master
+  nodeNetwork:
+    interfaces:
+    - name: "eno1"
+`)
+		t = newTask([]hwmgmtv1alpha1.NodeGroupData{
+			{Name: "master", Role: "master", HwProfile: "profile"},
+		})
+		err := t.validateClusterInstanceDefaults(ctx, data)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("'label' is missing for interface"))
+	})
+
+	It("validates nodeGroups defaults", func() {
 		data := loadDefaults(`
 baseDomain: example.com
 nodeGroups:
@@ -1102,7 +1072,7 @@ nodeGroups:
     - name: eno1
       label: boot-interface
 `)
-		t = newTask(cipSchemaWithNodeGroups, []hwmgmtv1alpha1.NodeGroupData{
+		t = newTask([]hwmgmtv1alpha1.NodeGroupData{
 			{Name: "master", Role: "master", HwProfile: "profile"},
 		})
 		Expect(t.validateClusterInstanceDefaults(ctx, data)).To(Succeed())
@@ -1120,7 +1090,7 @@ nodeGroups:
       label: boot-interface
 `)
 		// Hardware groups may be supplied later via hwMgmtParameters; skip membership check.
-		t = newTask(cipSchemaWithNodeGroups, nil)
+		t = newTask(nil)
 		Expect(t.validateClusterInstanceDefaults(ctx, data)).To(Succeed())
 	})
 
@@ -1135,7 +1105,7 @@ nodeGroups:
     - name: eno1
       label: boot-interface
 `)
-		t = newTask(cipSchemaWithNodeGroups, []hwmgmtv1alpha1.NodeGroupData{
+		t = newTask([]hwmgmtv1alpha1.NodeGroupData{
 			{Name: "master", Role: "master", HwProfile: "profile"},
 		})
 		err := t.validateClusterInstanceDefaults(ctx, data)
@@ -1155,7 +1125,7 @@ nodeGroups:
     - name: eno1
       label: boot-interface
 `)
-		t = newTask(cipSchemaWithNodeGroups, []hwmgmtv1alpha1.NodeGroupData{
+		t = newTask([]hwmgmtv1alpha1.NodeGroupData{
 			{Name: "master", Role: "master", HwProfile: "profile"},
 		})
 		err := t.validateClusterInstanceDefaults(ctx, data)
@@ -1173,7 +1143,7 @@ nodeGroups:
     - name: eno1
       label: ""
 `)
-		t = newTask(cipSchemaWithNodeGroups, []hwmgmtv1alpha1.NodeGroupData{
+		t = newTask([]hwmgmtv1alpha1.NodeGroupData{
 			{Name: "master", Role: "master", HwProfile: "profile"},
 		})
 		err := t.validateClusterInstanceDefaults(ctx, data)
@@ -1191,75 +1161,12 @@ nodeGroups:
     - name: eno1
       label: boot-interface
 `)
-		t = newTask(cipSchemaWithNodeGroups, []hwmgmtv1alpha1.NodeGroupData{
+		t = newTask([]hwmgmtv1alpha1.NodeGroupData{
 			{Name: "master", Role: "master", HwProfile: "profile"},
 		})
 		err := t.validateClusterInstanceDefaults(ctx, data)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("does not match any hardware node group"))
-	})
-})
-
-var _ = Describe("validateClusterInstanceDefaultsFormat", func() {
-	cipSchemaNodes := []byte(`{
-		"properties": {
-			"clusterInstanceParameters": {
-				"type": "object",
-				"properties": {"nodes": {"type": "array"}}
-			}
-		}
-	}`)
-	cipSchemaNodeGroups := []byte(`{
-		"properties": {
-			"clusterInstanceParameters": {
-				"type": "object",
-				"properties": {"nodeGroups": {"type": "array"}}
-			}
-		}
-	}`)
-
-	It("accepts nodes defaults matching schema", func() {
-		format, err := validateClusterInstanceDefaultsFormat(cipSchemaNodes, map[string]any{
-			"nodes": []any{},
-		})
-		Expect(err).ToNot(HaveOccurred())
-		Expect(format).To(Equal(constants.ClusterInstanceNodesKey))
-	})
-
-	It("accepts nodeGroups defaults matching schema", func() {
-		format, err := validateClusterInstanceDefaultsFormat(cipSchemaNodeGroups, map[string]any{
-			"nodeGroups": []any{},
-		})
-		Expect(err).ToNot(HaveOccurred())
-		Expect(format).To(Equal(constants.ClusterInstanceNodeGroupsKey))
-	})
-
-	It("rejects both nodes and nodeGroups in defaults", func() {
-		_, err := validateClusterInstanceDefaultsFormat(cipSchemaNodes, map[string]any{
-			"nodes":      []any{},
-			"nodeGroups": []any{},
-		})
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(Equal(
-			`clusterinstance-defaults must not define both "nodes" and "nodeGroups"`))
-	})
-
-	It("rejects neither nodes nor nodeGroups in defaults", func() {
-		_, err := validateClusterInstanceDefaultsFormat(cipSchemaNodes, map[string]any{
-			"baseDomain": "example.com",
-		})
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(Equal(
-			`clusterinstance-defaults must define either "nodes" or "nodeGroups"`))
-	})
-
-	It("rejects defaults format that does not match schema", func() {
-		_, err := validateClusterInstanceDefaultsFormat(cipSchemaNodes, map[string]any{
-			"nodeGroups": []any{},
-		})
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(Equal(
-			`clusterinstance-defaults defines "nodeGroups", but clusterInstanceParameters schema does not include a matching "nodeGroups" definition`))
 	})
 })
 
@@ -1796,14 +1703,15 @@ func Test_validateClusterInstanceParametersSchema(t *testing.T) {
 		errText   string
 	}{
 		{
-			name: "nodes only is ok",
+			name: "nodes only is rejected",
 			cipSchema: `{
 				"type": "object",
 				"properties": {
 					"nodes": {"type": "array"}
 				}
 			}`,
-			wantErr: false,
+			wantErr: true,
+			errText: `"clusterInstanceParameters" schema must not define "nodes"; use "nodeGroups" instead`,
 		},
 		{
 			name: "nodeGroups only is ok",
@@ -1816,13 +1724,13 @@ func Test_validateClusterInstanceParametersSchema(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "missing nodes and nodeGroups",
+			name: "missing nodeGroups",
 			cipSchema: `{
 				"type": "object",
 				"properties": {}
 			}`,
 			wantErr: true,
-			errText: `"clusterInstanceParameters" schema must define either "nodes" or "nodeGroups"`,
+			errText: `"clusterInstanceParameters" schema must define "nodeGroups"`,
 		},
 		{
 			name: "defines both nodes and nodeGroups",
@@ -1834,7 +1742,7 @@ func Test_validateClusterInstanceParametersSchema(t *testing.T) {
 				}
 			}`,
 			wantErr: true,
-			errText: `"clusterInstanceParameters" schema must not define both "nodes" and "nodeGroups"; choose exactly one`,
+			errText: `"clusterInstanceParameters" schema must not define "nodes"; use "nodeGroups" instead`,
 		},
 		{
 			name: "missing properties section",

@@ -25,9 +25,6 @@ var (
 		// Cluster-level non-immutable fields
 		{"extraAnnotations"},
 		{"extraLabels"},
-		// Node-level non-immutable fields (legacy flat nodes)
-		{constants.ClusterInstanceNodesKey, "*", "extraAnnotations"},
-		{constants.ClusterInstanceNodesKey, "*", "extraLabels"},
 		// Node-group-level and nested node non-immutable fields
 		{constants.ClusterInstanceNodeGroupsKey, "*", "extraAnnotations"},
 		{constants.ClusterInstanceNodeGroupsKey, "*", "extraLabels"},
@@ -176,10 +173,7 @@ func FindClusterInstanceImmutableFieldUpdates(
 		Existing node removed under a nodeGroup
 		  {"type": "delete", "path": ["nodeGroups", "1", "nodes", "0"], "from": {"hostName": "worker2"}, "to": null}
 
-		Field updated at the node-level (legacy flat nodes)
-		  {"type": "update", "path": ["nodes", "0", "nodeNetwork", "config", "dns-resolver", "config", "server", "0"], "from": "192.10.1.2", "to": "192.10.1.3"}
-
-		Field updated at the node-level (nodeGroups)
+		Field updated at the node-level
 		  {"type": "update", "path": ["nodeGroups", "0", "nodes", "0", "nodeNetwork", "config", "dns-resolver", "config", "server", "0"], "from": "192.10.1.2", "to": "192.10.1.3"}
 
 		Node swap (hostName changed in-place)

@@ -463,9 +463,8 @@ func hwMgmtDefaultsToMap(defaults provisioningv1alpha1.HwMgmtDefaults) map[strin
 // getMergedClusterInstanceData retrieves the ClusterInstance default data from the
 // referenced ConfigMap and merges the ProvisioningRequest clusterInstanceParameters
 // over it. extraLabels/extraAnnotations common to both are forced to the default
-// values. nodeGroups-format input is merged by group name and expanded into the flat
-// nodes[] shape the rest of the pipeline consumes; legacy flat nodes use an
-// index-based deep merge.
+// values. nodeGroups input is merged by group name and expanded into the flat
+// nodes[] shape the rest of the pipeline consumes.
 func (t *provisioningRequestReconcilerTask) getMergedClusterInstanceData(
 	ctx context.Context, templateDefaultsCm string, clusterInstanceInput map[string]any) (map[string]any, error) {
 
@@ -488,29 +487,21 @@ func (t *provisioningRequestReconcilerTask) getMergedClusterInstanceData(
 		return nil, typederrors.NewInputError("%s", err.Error())
 	}
 
-	format, err := resolveClusterInstanceFormat(clusterInstanceInput, clusterInstanceDefaults)
-	if err != nil {
-		return nil, typederrors.NewInputError("%s", err.Error())
-	}
-
-	var rules ctlrutils.SliceMergeRules
-	if format == constants.ClusterInstanceNodeGroupsKey {
-		rules = ctlrutils.SliceMergeRules{
-			constants.ClusterInstanceNodeGroupsKey: {
-				Key:   "name",
-				ByKey: ctlrutils.ByKeyMergeOptions{RejectUnmatchedSrc: true},
+	rules := ctlrutils.SliceMergeRules{
+		constants.ClusterInstanceNodeGroupsKey: {
+			Key:   "name",
+			ByKey: ctlrutils.ByKeyMergeOptions{RejectUnmatchedSrc: true},
+		},
+		// Kept for consistency with per-node expand: intended PR schema doesn't
+		// overlay nodeNetwork.interfaces at group-level; this path is unused for
+		// schema-compliant input.
+		constants.ClusterInstanceNodeGroupsKey + "[].nodeNetwork.interfaces": {
+			Key: "name",
+			ByKey: ctlrutils.ByKeyMergeOptions{
+				AllowDuplicateKeys: true,
+				RejectUnmatchedSrc: true,
 			},
-			// Kept for consistency with per-node expand: intended PR schema doesn't
-			// overlay nodeNetwork.interfaces at group-level; this path is unused for
-			// schema-compliant input.
-			constants.ClusterInstanceNodeGroupsKey + "[].nodeNetwork.interfaces": {
-				Key: "name",
-				ByKey: ctlrutils.ByKeyMergeOptions{
-					AllowDuplicateKeys: true,
-					RejectUnmatchedSrc: true,
-				},
-			},
-		}
+		},
 	}
 
 	mergedClusterDataMap, err := mergeClusterTemplateInputWithDefaults(
@@ -520,45 +511,21 @@ func (t *provisioningRequestReconcilerTask) getMergedClusterInstanceData(
 			"failed to merge data for %s: %s", constants.TemplateParamClusterInstance, err.Error())
 	}
 
-	if format == constants.ClusterInstanceNodeGroupsKey {
-		// Expand nodeGroups to flat nodes and capture hostName -> group name
-		// before expansion strips nodeGroups[].name.
-		hostToGroupName, err := ctlrutils.ExpandNodeGroupsToNodes(mergedClusterDataMap)
-		if err != nil {
-			return nil, typederrors.NewInputError(
-				"failed to expand %s nodeGroups: %s",
-				constants.TemplateParamClusterInstance, err.Error())
-		}
-		t.clusterInput.hostToGroupName = hostToGroupName
+	// Expand nodeGroups to flat nodes and capture hostName -> group name
+	// before expansion strips nodeGroups[].name.
+	hostToGroupName, err := ctlrutils.ExpandNodeGroupsToNodes(mergedClusterDataMap)
+	if err != nil {
+		return nil, typederrors.NewInputError(
+			"failed to expand %s nodeGroups: %s",
+			constants.TemplateParamClusterInstance, err.Error())
 	}
+	t.clusterInput.hostToGroupName = hostToGroupName
 
 	t.logger.InfoContext(ctx,
 		fmt.Sprintf("Merged the ClusterInstance default data with the %s for ProvisioningRequest", constants.TemplateParamClusterInstance),
 		slog.String("name", t.object.Name),
 	)
 	return mergedClusterDataMap, nil
-}
-
-// resolveClusterInstanceFormat returns the nodes-list format when both sides
-// exclusively use the same key (nodeGroups or nodes). Mixed or incomplete
-// combinations are rejected.
-func resolveClusterInstanceFormat(input, defaults map[string]any) (string, error) {
-	_, inputHasNodeGroups := input[constants.ClusterInstanceNodeGroupsKey]
-	_, defaultsHasNodeGroups := defaults[constants.ClusterInstanceNodeGroupsKey]
-	_, inputHasNodes := input[constants.ClusterInstanceNodesKey]
-	_, defaultsHasNodes := defaults[constants.ClusterInstanceNodesKey]
-
-	switch {
-	case inputHasNodeGroups && defaultsHasNodeGroups && !inputHasNodes && !defaultsHasNodes:
-		return constants.ClusterInstanceNodeGroupsKey, nil
-	case inputHasNodes && defaultsHasNodes && !inputHasNodeGroups && !defaultsHasNodeGroups:
-		return constants.ClusterInstanceNodesKey, nil
-	default:
-		//nolint:revive // string-format: capitalize CR name ProvisioningRequest
-		return "", fmt.Errorf(
-			"ProvisioningRequest %s and ClusterTemplate defaults must both use %q or both use %q",
-			constants.TemplateParamClusterInstance, constants.ClusterInstanceNodeGroupsKey, constants.ClusterInstanceNodesKey)
-	}
 }
 
 // mergeClusterTemplateInputWithDefaults merges the cluster template input with the default data.
@@ -638,26 +605,6 @@ func (t *provisioningRequestReconcilerTask) overrideClusterInstanceLabelsOrAnnot
 		}
 	}
 
-	// Process label/annotation overrides for the flat nodes format.
-	dstNodes, dstExists := dstProvisioningRequestInput["nodes"]
-	srcNodes, srcExists := srcConfigmap["nodes"]
-	if dstExists && srcExists {
-		// Determine the minimum length to merge
-		minLen := len(dstNodes.([]any))
-		if len(srcNodes.([]any)) < minLen {
-			minLen = len(srcNodes.([]any))
-		}
-
-		for i := 0; i < minLen; i++ {
-			if err := t.overrideClusterInstanceLabelsOrAnnotations(
-				dstNodes.([]any)[i].(map[string]any),
-				srcNodes.([]any)[i].(map[string]any),
-			); err != nil {
-				return fmt.Errorf("type mismatch for nodes: %w", err)
-			}
-		}
-	}
-
 	// Process label/annotation overrides for nodeGroups: match by name; group-level defaults win over PR group and node extra*.
 	dstGroups, dstGroupsExists := dstProvisioningRequestInput[constants.ClusterInstanceNodeGroupsKey].([]any)
 	srcGroups, srcGroupsExists := srcConfigmap[constants.ClusterInstanceNodeGroupsKey].([]any)
@@ -683,9 +630,7 @@ func (t *provisioningRequestReconcilerTask) overrideClusterInstanceLabelsOrAnnot
 				continue
 			}
 
-			// Group-level extra*: defaults win over the PR group-level values. The
-			// defaults group carries no per-host nodes, so the flat-nodes branch above
-			// is a no-op on this recursion.
+			// Group-level extra*: defaults win over the PR group-level values.
 			if err := t.overrideClusterInstanceLabelsOrAnnotations(dstGroup, srcGroup); err != nil {
 				return fmt.Errorf("node group %q: %w", name, err)
 			}

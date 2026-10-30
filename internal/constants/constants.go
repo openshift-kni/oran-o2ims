@@ -216,7 +216,8 @@ const (
 
 // ClusterInstance input field names used in ClusterInstanceParameters / ClusterInstance data.
 const (
-	// ClusterInstanceNodesKey is the legacy flat nodes list.
+	// ClusterInstanceNodesKey is the per-host list under each nodeGroups entry and the
+	// flat ClusterInstance spec.nodes list produced by expanding nodeGroups.
 	ClusterInstanceNodesKey = "nodes"
 	// ClusterInstanceNodeGroupsKey is the grouped node config list.
 	ClusterInstanceNodeGroupsKey = "nodeGroups"

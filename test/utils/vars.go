@@ -18,8 +18,7 @@ import (
 const (
 	GithubCommitsAPI      = "https://api.github.com/repos/%s/%s/commits/%s"
 	GithubUserContentLink = "https://raw.githubusercontent.com/%s/%s/%s/%s/%s"
-	// TestClusterInstanceSchema is the recommended nodeGroups clusterInstanceParameters
-	// subschema. Tests that exercise the deprecated flat-nodes path use inline schemas.
+	// TestClusterInstanceSchema is the nodeGroups clusterInstanceParameters subschema.
 	TestClusterInstanceSchema = `{
 		"description": "ClusterInstanceSpec defines the params that are allowed in the ProvisioningRequest spec.clusterInstanceInput",
 		"properties": {

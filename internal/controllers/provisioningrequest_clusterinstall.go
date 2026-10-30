@@ -1578,8 +1578,7 @@ func (t *provisioningRequestReconcilerTask) checkNodesAndMCPsReady(
 
 // checkMCPsReady verifies membership and convergence for worker MCPs only,
 // using the desired hostname-to-group mapping. Control-plane MCP convergence
-// is outside the scope of worker scale-out. Legacy flat nodes input has no
-// group mapping and keeps its node readiness check only.
+// is outside the scope of worker scale-out.
 func (t *provisioningRequestReconcilerTask) checkMCPsReady(
 	ctx context.Context, spokeClient client.Client, readyNodes map[string]*corev1.Node,
 	nodeRoles map[string]string,

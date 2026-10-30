@@ -1700,26 +1700,36 @@ var _ = Describe("ProvisioningRequestReconciler Unit Tests", func() {
 				},
 			}
 
-			// Create the reconciler task
+			// Create the reconciler task. The merged hwMgmt data is present, but the
+			// templateParameters lack oCloudSiteId, so the NodeAllocationRequest build
+			// fails with an internal error unless a test overrides the input.
 			narProvisioningTask = &provisioningRequestReconcilerTask{
-				logger:       reconciler.Logger,
-				client:       c,
-				object:       narProvisioningCR,
-				clusterInput: &clusterInput{},
-				ctDetails:    &clusterTemplateDetails{},
-				timeouts:     &timeouts{},
+				logger: reconciler.Logger,
+				client: c,
+				object: narProvisioningCR,
+				clusterInput: &clusterInput{
+					hwMgmtData: map[string]any{
+						"nodeGroupData": []any{
+							map[string]any{"name": "controller", "role": "master", "hwProfile": "profile-64G"},
+						},
+					},
+					hostToGroupName: map[string]string{"master-0": "controller"},
+				},
+				ctDetails: &clusterTemplateDetails{},
+				timeouts:  &timeouts{},
 			}
 		})
 
 		Context("when renderNodeAllocationRequest returns input error", func() {
-			It("should call checkClusterDeployConfigState and return appropriate result", func() {
-				// This will trigger NodeAllocationRequest build error due to missing template
+			It("should not requeue, proceed, or return an error", func() {
+				// Missing nodeGroupData in the merged hwMgmt data is an input error.
+				narProvisioningTask.clusterInput.hwMgmtData = map[string]any{}
+
 				result, proceed, err := narProvisioningTask.handleNodeAllocationRequestProvisioning(ctx, renderedClusterInstance)
 
-				// Input error from NodeAllocationRequest build should trigger checkClusterDeployConfigState
-				Expect(err).To(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 				Expect(proceed).To(BeFalse())
-				Expect(result).ToNot(BeNil()) // Should return a valid ctrl.Result
+				Expect(result).To(Equal(doNotRequeue()))
 			})
 		})
 
