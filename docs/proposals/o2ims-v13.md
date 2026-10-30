@@ -2,7 +2,7 @@
 
 ```yaml
 title: o2ims-v13
-version: "3.3"
+version: "3.4"
 authors:
   - @rauherna
 reviewers:
@@ -351,19 +351,27 @@ by deriving a **deterministic UUIDv5** and exposing the *same* value at both end
 - **Mapped causes:** `UUIDv5(oranProbableCauseNamespace,
   "{alarmDictionaryId}:{probableCauseCode}")` — `alarmDictionaryId` in canonical
   lowercase UUID form, a literal `:` separator, `probableCauseCode` verbatim.
-- **The `indeterminate` cause uses a dictionary-independent global id:**
-  `UUIDv5(oranProbableCauseNamespace, "indeterminate")`, with **no
-  `alarmDictionaryId` in the input**. This is what makes the total fallback
-  (step 3) computable in the paths that have *no* dictionary — a missing
-  `ObjectTypeID` or a dictionary fetch/lookup failure — and the same global
-  `indeterminate` `ProbableCause` (identical id) is the one included in every
-  dictionary.
+- **The `indeterminate` cause lives in a reserved global fallback dictionary.**
+  A reserved `AlarmDictionary` with a fixed, committed `alarmDictionaryId` constant
+  (`oranGlobalFallbackDictionaryId`) holds the `indeterminate` `ProbableCause`; its
+  id is `UUIDv5(oranProbableCauseNamespace,
+  "{oranGlobalFallbackDictionaryId}:indeterminate")`. Because both inputs are
+  constants, the fallback is computable **without any resource-type dictionary** —
+  which is what makes the total fallback (step 3) usable when `ObjectTypeID` is
+  missing or a lookup fails — and the same `indeterminate` entry is also included in
+  every per-resource-type dictionary.
+- **Records pin their revision.** `AlarmEventRecord` gains an **`alarmDictionaryId`**
+  (DB column `alarm_dictionary_id`, surfaced to consumers via the record's
+  `extensions`) set to the dictionary revision the record was raised under — the
+  reserved fallback id for fallback records. Since `probableCauseId` is a
+  non-invertible hash, this stored id is how a consumer *and* the prune reconciler
+  map a record to the exact `ProbableCause`: fetch the `alarmDictionaryId` revision,
+  then match `probableCauseId` within its `probableCauses`.
 - **Exposure at both ends:** each `ProbableCause` entry in the dictionary response
-  carries its derived UUID alongside its `probableCauseCode`, and
-  `AlarmEventRecord.probableCauseId` holds the identical value — so a consumer can
-  resolve a record's cause back to a dictionary entry. (The earlier reference to
-  M-10 is dropped; M-10 governs a different field and does not define this
-  algorithm.)
+  carries its derived UUID alongside its `probableCauseCode`, and the record carries
+  both `probableCauseId` and `alarmDictionaryId`, so the (dictionary, cause) pair is
+  always resolvable. (The earlier reference to M-10 is dropped; M-10 governs a
+  different field and does not define this algorithm.)
 
 **Dictionary identity, history, and persistence.** Because the `probableCauses`
 set is derived from the mapping table, a mapping change must not silently alter a
@@ -379,18 +387,31 @@ dictionary that keeps the same identity. Two coupled changes make this hold:
 - **Append-only revisions.** Today `UpsertAlarmDictionary` conflicts on
   `resource_type_id` (one row per resource type), which would overwrite the prior
   revision in place and strand any removed cause. This constraint is **dropped**:
-  the upsert keys on `alarm_dictionary_id` so successive revisions coexist, and a
-  record's `probableCauseId` keeps resolving against the revision it was raised
-  under. Superseded revisions are pruned by a reconciliation step once no live
-  (non-retention-purged) alarm record references them, so growth is bounded by the
-  alarm retention window.
+  the upsert keys on `alarm_dictionary_id` so successive revisions coexist. A record
+  resolves against the revision named by its stored `alarm_dictionary_id` (above),
+  and the prune reconciler uses that same column to drop a revision only once no
+  live (non-retention-purged) record references its `alarm_dictionary_id` — so
+  growth is bounded by the alarm retention window.
 
-**Backfill of pre-M-14 records.** Rows created before M-14 may hold a nil
-`probable_cause_id` (serialized as a zero UUID), which would violate the non-null
-guarantee. A one-time backfill — `UPDATE alarm_event_record SET probable_cause_id
-= <global indeterminate UUID> WHERE probable_cause_id IS NULL`, applied in the
-`000002` baseline per the pre-GA migration convention — sets these to the global
-`indeterminate` id. The non-null guarantee is scoped to "after backfill."
+**Backfill of pre-M-14 records.** Rows created before M-14 may hold nil
+`probable_cause_id` / `alarm_dictionary_id` (serialized as zero UUIDs), violating
+the non-null/resolvable guarantee, and pre-M-14 dictionaries lack the
+`indeterminate` entry. A dedicated migration handles this **in order**:
+
+1. Ensure the reserved global fallback `AlarmDictionary` (with its `indeterminate`
+   `ProbableCause`) exists.
+2. `UPDATE alarm_event_record SET probable_cause_id = <global indeterminate id>,
+   alarm_dictionary_id = <oranGlobalFallbackDictionaryId> WHERE probable_cause_id
+   IS NULL`.
+
+Because backfilled rows reference the reserved fallback dictionary created in step
+1, they never dangle. This uses a **new migration file, not an edit of the `000002`
+baseline**: the alarms migration runner records applied versions and skips an
+edited baseline on an already-migrated database, so an in-place edit would leave
+existing rows null. This is a deliberate, documented **deviation from the
+`AGENTS.md` "modify baselines in place / no new incremental migrations" convention**,
+justified because the backfill must run on databases that already applied `000002`.
+The non-null guarantee is scoped to "after this migration."
 
 **Coverage observability.** Alert names are renamed/added across OCP/ACM releases,
 so table entries silently rot to `indeterminate`. Log — and expose a count metric
@@ -645,10 +666,11 @@ are handled in the OpenAPI spec and serialization layer, not the schema.
 | `internal/service/{resources,cluster}/collector/collector_alarms.go` | Build dictionary `probableCauses` (always incl. `indeterminate`) + associate codes to definitions; fold mapping `mappingVersion` into `AlarmDictionaryVersion` | [M-14](#52-gap-assessment) |
 | `internal/service/{resources,cluster}/.../alarm_probable_cause_map.yaml` (new, embedded) | Versioned `alertName → probableCause` table bootstrapped from OCP/ACM catalogs + loader | [M-14](#52-gap-assessment) |
 | `internal/service/{resources,cluster}/db/models/` + migrations | Persist probable causes (code + derived UUIDv5) + definition association; drop `resource_type_id`-unique constraint for append-only dictionary revisions + prune reconciliation | [M-14](#52-gap-assessment) |
-| `internal/service/alarms/internal/db/migrations/000002_*` | One-time backfill: nil `probable_cause_id` → global `indeterminate` UUID | [M-14](#52-gap-assessment) |
+| `internal/service/alarms/internal/db/migrations/` (new file) | Seed reserved fallback dictionary (+ `indeterminate`), then backfill nil `probable_cause_id`/`alarm_dictionary_id`. New file (not a `000002` edit) so it reruns on migrated DBs | [M-14](#52-gap-assessment) |
 | `internal/service/{resources,cluster}/api/openapi.yaml` | Expose `probableCauses` in the `alarmDictionaries` response | [I-3](#32-gap-assessment), [M-14](#52-gap-assessment) |
 | `internal/service/alarms/internal/infrastructure/{resourceserver,clusterserver}.go` | Carry probable-cause id through the existing dictionary lookup | [M-14](#52-gap-assessment) |
-| `internal/service/alarms/internal/alertmanager/converter.go` | Set `probableCauseId` on the AlarmEventRecord; assign `indeterminate` on any lookup miss (incl. missing `objectTypeId`) so it is never nil/zero | [M-14](#52-gap-assessment) |
+| `internal/service/alarms/internal/alertmanager/converter.go` | Set `probableCauseId` + `alarmDictionaryId` on the record; on any lookup miss (incl. missing `objectTypeId`) assign the `indeterminate` id and the reserved fallback dictionary id so neither is nil/zero | [M-14](#52-gap-assessment) |
+| `internal/service/alarms/internal/db/models/alarm_event_record.go` + migration | Add `alarm_dictionary_id` column/field so records pin their dictionary revision (consumer + prune resolution) | [M-14](#52-gap-assessment) |
 
 ---
 
@@ -816,6 +838,7 @@ resources under the current (v2) monitoring path:
 | 3.1 | Add probableCauseId (M-14, I-3) | Populate `probableCauseId` via an embedded alert-name → probable-cause mapping table (X.733 / 3GPP TS 28.111 values) → `indeterminate` fallback; deterministic UUIDv5 ids; also builds the mandatory dictionary `probableCauses`. expr-classifier deferred. |
 | 3.2 | Address CodeRabbit (PR 5196) | Harden M-14: always include `indeterminate` per dictionary; total fallback on any lookup miss incl. missing `objectTypeId`; explicit UUIDv5 contract exposed at both ends; fold mapping version into `AlarmDictionaryVersion` so history stays resolvable. |
 | 3.3 | CodeRabbit re-review (PR 5196) | Resolve 2nd-order M-14 findings: global `indeterminate` id (fallback needs no dictionary); append-only dictionary revisions (deterministic id, drop `resource_type_id` constraint, prune) + ConfigMap content-hash version; backfill nil `probable_cause_id`. |
+| 3.4 | CodeRabbit 3rd review (PR 5196) | M-14 in the append-only model: records store `alarm_dictionary_id` (resolution + prune of the non-invertible id); reserved fallback dictionary holds `indeterminate`; backfill moved to a new migration that seeds it first. |
 
 ---
 
