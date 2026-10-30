@@ -679,8 +679,9 @@ type redfishObject struct {
 	PCIeFunctions       redfishLinkList `json:"PCIeFunctions"`
 	Chassis             redfishLink     `json:"Chassis"`
 	Links               struct {
-		PCIeDevice redfishLink     `json:"PCIeDevice"`
-		Chassis    redfishLinkList `json:"Chassis"`
+		PCIeDevice      redfishLink     `json:"PCIeDevice"`
+		Chassis         redfishLinkList `json:"Chassis"`
+		ComputerSystems redfishLinkList `json:"ComputerSystems"`
 	} `json:"Links"`
 	Status struct {
 		State  string `json:"State"`
@@ -790,7 +791,7 @@ func (s *redfishSession) discoverGPUInventory(ctx context.Context, directSystemP
 	if chassisLinks.isEmpty() && s.serviceHasSingleSystem(ctx, root, systems, systemsComplete, directSystemPath != "") {
 		chassisLinks = redfishLinkList{collection: root.Chassis}
 	}
-	chassisDevices, chassisFound, chassisPartial := s.discoverChassisGPUs(ctx, chassisLinks)
+	chassisDevices, chassisFound, chassisPartial := s.discoverChassisGPUs(ctx, chassisLinks, selectedSystemIDs(systems, directSystemPath))
 	endpointFound = endpointFound || chassisFound
 	partial = partial || chassisPartial
 	for _, device := range chassisDevices {
@@ -942,7 +943,7 @@ func chassisLinksForSystems(systems []redfishObject) redfishLinkList {
 	return list
 }
 
-func (s *redfishSession) discoverChassisGPUs(ctx context.Context, chassisLinks redfishLinkList) ([]hwmgrcontroller.GPUInfo, bool, bool) {
+func (s *redfishSession) discoverChassisGPUs(ctx context.Context, chassisLinks redfishLinkList, selectedSystems map[string]struct{}) ([]hwmgrcontroller.GPUInfo, bool, bool) {
 	if chassisLinks.isEmpty() {
 		return nil, false, false
 	}
@@ -953,12 +954,68 @@ func (s *redfishSession) discoverChassisGPUs(ctx context.Context, chassisLinks r
 		if item.PCIeDevices.isEmpty() {
 			continue
 		}
+		// A chassis can host several ComputerSystems. Its PCIe collection is the
+		// union of every hosted system's devices, so attribute it to this host
+		// only when the chassis is owned unambiguously by the selected systems.
+		if !chassisOwnedBySelectedSystems(item, selectedSystems) {
+			continue
+		}
 		endpointFound = true
 		pcieDevices, devicePartial := s.discoverPCIeDevices(ctx, item.PCIeDevices)
 		partial = partial || devicePartial
 		devices = append(devices, pcieDevices...)
 	}
 	return devices, endpointFound, partial
+}
+
+// selectedSystemIDs returns the set of @odata.ids for the systems being
+// inventoried, normalized so chassis back-references can be matched regardless
+// of a trailing slash. directSystemPath is included because a directly targeted
+// system is identified by its request path even when the response body omits
+// @odata.id.
+func selectedSystemIDs(systems []redfishObject, directSystemPath string) map[string]struct{} {
+	ids := make(map[string]struct{}, len(systems)+1)
+	if id := normalizeODataID(directSystemPath); id != "" {
+		ids[id] = struct{}{}
+	}
+	for _, system := range systems {
+		if id := normalizeODataID(system.ODataID); id != "" {
+			ids[id] = struct{}{}
+		}
+	}
+	return ids
+}
+
+// chassisOwnedBySelectedSystems reports whether a chassis's devices can be
+// attributed to the selected systems. A chassis that advertises no
+// ComputerSystems back-reference is treated as owned (it was reached from the
+// selected system's Links.Chassis, or via the single-system fallback). A chassis
+// that lists any ComputerSystem outside the selected set is ambiguous and is
+// skipped so another host's GPUs are not reported for this one.
+func chassisOwnedBySelectedSystems(chassis redfishObject, selectedSystems map[string]struct{}) bool {
+	links := chassis.Links.ComputerSystems
+	ids := make([]string, 0, len(links.links)+1)
+	if id := normalizeODataID(links.collection.ODataID); id != "" {
+		ids = append(ids, id)
+	}
+	for _, link := range links.links {
+		if id := normalizeODataID(link.ODataID); id != "" {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return true
+	}
+	for _, id := range ids {
+		if _, ok := selectedSystems[id]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func normalizeODataID(id string) string {
+	return strings.TrimRight(id, "/")
 }
 
 func (s *redfishSession) discoverPCIeDevices(ctx context.Context, list redfishLinkList) ([]hwmgrcontroller.GPUInfo, bool) {

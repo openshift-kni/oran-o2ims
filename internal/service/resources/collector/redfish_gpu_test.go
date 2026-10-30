@@ -325,6 +325,74 @@ var _ = Describe("Redfish GPU inventory", func() {
 		Expect(inventory.Devices[0].Model).To(Equal("H100"))
 	})
 
+	It("does not attribute a shared chassis's devices when it hosts another system", func() {
+		sharedChassisDevicesTraversed := false
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/redfish/v1/":
+				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"},"Chassis":{"@odata.id":"/redfish/v1/Chassis"}}`))
+			// System 1 links the shared chassis and lists only its own GPU A.
+			case "/redfish/v1/Systems/1":
+				_, _ = w.Write([]byte(`{"Id":"1","Links":{"Chassis":[{"@odata.id":"/redfish/v1/Chassis/1"}]},"PCIeDevices":[{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU-A"}]}`))
+			case "/redfish/v1/Systems/1/PCIeDevices/GPU-A":
+				_, _ = w.Write([]byte(`{"Id":"GPU-A","Manufacturer":"NVIDIA","Model":"A100","SerialNumber":"GPU-SN-A","PCIeFunctions":[{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU-A/PCIeFunctions/0"}],"Status":{"State":"Enabled","Health":"OK"}}`))
+			case "/redfish/v1/Systems/1/PCIeDevices/GPU-A/PCIeFunctions/0":
+				_, _ = w.Write([]byte(`{"DeviceClass":"ProcessingAccelerators"}`))
+			// The chassis hosts both system 1 and system 2, so its device list is
+			// the union of both hosts' GPUs and cannot be attributed to system 1.
+			case "/redfish/v1/Chassis/1":
+				_, _ = w.Write([]byte(`{"Id":"1","Links":{"ComputerSystems":[{"@odata.id":"/redfish/v1/Systems/1"},{"@odata.id":"/redfish/v1/Systems/2"}]},"PCIeDevices":[{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/GPU-A"},{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/GPU-B"}]}`))
+			case "/redfish/v1/Chassis/1/PCIeDevices/GPU-A", "/redfish/v1/Chassis/1/PCIeDevices/GPU-B":
+				sharedChassisDevicesTraversed = true
+				_, _ = w.Write([]byte(`{"Id":"GPU-B","Model":"L40S","SerialNumber":"GPU-SN-B","PCIeFunctions":[{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/GPU-B/PCIeFunctions/0"}],"Status":{"State":"Enabled","Health":"OK"}}`))
+			case "/redfish/v1/Chassis/1/PCIeDevices/GPU-B/PCIeFunctions/0":
+				sharedChassisDevicesTraversed = true
+				_, _ = w.Write([]byte(`{"DeviceClass":"ProcessingAccelerators"}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		reader.httpClient = redfishTestHTTPClient(handler)
+		bmh.Spec.BMC.Address = "redfish+http://bmc.example/redfish/v1/Systems/1"
+
+		inventory, err := reader.GetGPUInventory(ctx, bmh)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(sharedChassisDevicesTraversed).To(BeFalse())
+		Expect(inventory.Status).To(Equal(gpuInventoryStatusComplete))
+		Expect(inventory.Devices).To(HaveLen(1))
+		Expect(inventory.Devices[0].Model).To(Equal("A100"))
+	})
+
+	It("uses a shared chassis's devices when it hosts only the selected system", func() {
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/redfish/v1/":
+				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"},"Chassis":{"@odata.id":"/redfish/v1/Chassis"}}`))
+			case "/redfish/v1/Systems/1":
+				_, _ = w.Write([]byte(`{"Id":"1","Links":{"Chassis":[{"@odata.id":"/redfish/v1/Chassis/1"}]}}`))
+			// The chassis back-references only system 1, so its GPU belongs here.
+			case "/redfish/v1/Chassis/1":
+				_, _ = w.Write([]byte(`{"Id":"1","Links":{"ComputerSystems":[{"@odata.id":"/redfish/v1/Systems/1"}]},"PCIeDevices":[{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/GPU1"}]}`))
+			case "/redfish/v1/Chassis/1/PCIeDevices/GPU1":
+				_, _ = w.Write([]byte(`{"Id":"GPU1","Manufacturer":"NVIDIA","Model":"H100","SerialNumber":"GPU-SN-1","PCIeFunctions":[{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/GPU1/PCIeFunctions/0"}],"Status":{"State":"Enabled","Health":"OK"}}`))
+			case "/redfish/v1/Chassis/1/PCIeDevices/GPU1/PCIeFunctions/0":
+				_, _ = w.Write([]byte(`{"DeviceClass":"ProcessingAccelerators"}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		reader.httpClient = redfishTestHTTPClient(handler)
+		bmh.Spec.BMC.Address = "redfish+http://bmc.example/redfish/v1/Systems/1"
+
+		inventory, err := reader.GetGPUInventory(ctx, bmh)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(inventory.Status).To(Equal(gpuInventoryStatusComplete))
+		Expect(inventory.Devices).To(HaveLen(1))
+		Expect(inventory.Devices[0].Model).To(Equal("H100"))
+	})
+
 	It("does not fall back to the service-wide chassis when the Systems collection is paginated", func() {
 		serviceWideChassisTraversed := false
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
