@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -306,7 +307,7 @@ func (t *provisioningRequestReconcilerTask) validateAndMergeHwMgmtInput(
 	t.clusterInput.hwMgmtData = mergedData
 
 	// Validate merged nodeGroupData: presence, non-empty, name/role constraints
-	if err := validateMergedNodeGroups(mergedData); err != nil {
+	if err := validateMergedNodeGroups(mergedData, t.clusterInput.hostToGroupName); err != nil {
 		return err
 	}
 
@@ -338,7 +339,10 @@ func (t *provisioningRequestReconcilerTask) validateAndMergeHwMgmtInput(
 
 // validateMergedNodeGroups checks that the merged nodeGroupData entries have valid
 // name and role values. Selector fields (hwProfile, resourcePoolId, resourceSelector) are optional.
-func validateMergedNodeGroups(mergedData map[string]any) error {
+// It also checks that every ClusterInstance node group with hosts (hostToGroupName) has a
+// hardware node group of the same name, which the ClusterTemplate controller cannot verify
+// when the hardware groups come from hwMgmtParameters.
+func validateMergedNodeGroups(mergedData map[string]any, hostToGroupName map[string]string) error {
 	ngRaw, ok := mergedData[ctlrutils.HwMgmtNodeGroupDataKey]
 	if !ok {
 		return typederrors.NewInputError(
@@ -356,6 +360,7 @@ func validateMergedNodeGroups(mergedData map[string]any) error {
 	}
 
 	var masterGroup string
+	hwGroupNames := make(map[string]struct{}, len(ngSlice))
 	for _, ng := range ngSlice {
 		ngMap, ok := ng.(map[string]any)
 		if !ok {
@@ -372,6 +377,7 @@ func validateMergedNodeGroups(mergedData map[string]any) error {
 		if role != "master" && role != "worker" {
 			return typederrors.NewInputError("invalid role %q for nodeGroup %q: must be 'master' or 'worker'", role, name)
 		}
+		hwGroupNames[name] = struct{}{}
 		if role == "master" {
 			if masterGroup != "" {
 				return typederrors.NewInputError("duplicate role %q in %s for groups %q and %q", role, ctlrutils.HwMgmtNodeGroupDataKey, masterGroup, name)
@@ -382,6 +388,19 @@ func validateMergedNodeGroups(mergedData map[string]any) error {
 		// hwProfile, resourcePoolId, and resourceSelector are all optional.
 		// The hardware manager handles node selection based on whatever criteria are provided.
 		// Type validation for resourceSelector is handled by schema validation in validateAndMergeHwMgmtInput.
+	}
+
+	unmatched := map[string]struct{}{}
+	for _, groupName := range hostToGroupName {
+		if _, ok := hwGroupNames[groupName]; !ok {
+			unmatched[groupName] = struct{}{}
+		}
+	}
+	if len(unmatched) > 0 {
+		return typederrors.NewInputError(
+			"%s %q define hosts but do not match any hardware node group in %s: %q",
+			constants.ClusterInstanceNodeGroupsKey, slices.Sorted(maps.Keys(unmatched)),
+			ctlrutils.HwMgmtNodeGroupDataKey, slices.Sorted(maps.Keys(hwGroupNames)))
 	}
 
 	return nil

@@ -179,6 +179,7 @@ import (
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	typederrors "github.com/openshift-kni/oran-o2ims/internal/typed-errors"
 	"github.com/openshift-kni/oran-o2ims/test/fakeclient"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -5487,6 +5488,55 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 			},
 		}
 	}
+
+	It("should reject a ClusterInstance node group with hosts that has no hardware node group", func() {
+		c = fakeclient.GetFakeClientFromObjects(createHwProfiles()...)
+		task = buildTask(c, `{"nodeClusterName": "test"}`)
+		// "master" has hosts, but the only hardware node group is "controller".
+		task.clusterInput.hostToGroupName = map[string]string{
+			"master-1": "master",
+			"master-2": "master",
+		}
+
+		err := task.validateAndMergeHwMgmtInput(ctx, ct)
+		Expect(err).To(HaveOccurred())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring(
+			`nodeGroups ["master"] define hosts but do not match any hardware node group in nodeGroupData: ["controller"]`))
+	})
+
+	It("should accept node groups that match hardware groups supplied through hwMgmtParameters", func() {
+		c = fakeclient.GetFakeClientFromObjects(createHwProfiles()...)
+		task = buildTask(c, `{
+			"nodeClusterName": "test",
+			"hwMgmtParameters": {
+				"nodeGroupData": [
+					{"name": "worker", "role": "worker", "hwProfile": "profile-128G", "resourcePoolId": "pool-1"}
+				]
+			}
+		}`)
+		task.clusterInput.hostToGroupName = map[string]string{
+			"master-1": "controller",
+			"worker-1": "worker",
+		}
+
+		Expect(task.validateAndMergeHwMgmtInput(ctx, ct)).To(Succeed())
+	})
+
+	It("should allow hardware node groups that have no hosts", func() {
+		c = fakeclient.GetFakeClientFromObjects(createHwProfiles()...)
+		task = buildTask(c, `{
+			"nodeClusterName": "test",
+			"hwMgmtParameters": {
+				"nodeGroupData": [
+					{"name": "worker", "role": "worker", "hwProfile": "profile-128G", "resourcePoolId": "pool-1"}
+				]
+			}
+		}`)
+		task.clusterInput.hostToGroupName = map[string]string{"master-1": "controller"}
+
+		Expect(task.validateAndMergeHwMgmtInput(ctx, ct)).To(Succeed())
+	})
 
 	It("should use defaults only when no hwMgmtParameters in PR", func() {
 		c = fakeclient.GetFakeClientFromObjects(createHwProfiles()...)
