@@ -2,7 +2,7 @@
 
 ```yaml
 title: o2ims-v13
-version: "3.5"
+version: "3.6"
 authors:
   - @rauherna
 reviewers:
@@ -358,12 +358,23 @@ choice is what keeps the whole feature small:
   therefore remain **current-state**: the existing `resource_type_id` upsert is
   unchanged — no revisions, no pruning reconciler, no `mappingVersion` folded into
   `alarmDictionaryId`.
-- **Resolution path.** A consumer resolves a record's cause via
-  `objectTypeId → resource type → current AlarmDictionary → probableCauses`, matching
-  on the code-derived id. The reserved `indeterminate` entry is included in every
-  dictionary and its id is a documented global constant, so even a fallback record
-  with no `objectTypeId` carries a universally recognizable id. (The earlier
-  reference to M-10 is dropped; M-10 governs a different field.)
+- **Resolution contract.** The authoritative source of `ProbableCause` definitions
+  is an **append-only probable-cause catalog** — the embedded taxonomy
+  (code → code-derived id, `probableCauseDescription`, `standardReference`). Codes
+  are **never removed or repurposed**, so every `probableCauseId = UUIDv5(ns, code)`
+  ever emitted stays resolvable even after an `alertName → code` remapping; a
+  per-resource `AlarmDictionary.probableCauses` is a current-state *view* of the
+  catalog. This is what keeps historical causes resolvable when a mapping changes
+  (the resource dictionary's live set may drop a code, but the catalog never does).
+- **Fallback resolution (no `objectTypeId`).** `indeterminate` is a **documented
+  global built-in** cause with a fixed, published id
+  (`UUIDv5(oranProbableCauseNamespace, "indeterminate")`); consumers resolve it by
+  that definition, independent of any dictionary, and it is also present in every
+  `AlarmDictionary.probableCauses`. Normal records resolve via
+  `objectTypeId → resource type → AlarmDictionary → probableCauses` (or the catalog)
+  by matching the code-derived id. Alarm records are retention-bound, so any
+  divergence between a record's code and a dictionary's live view is short-lived.
+  (The earlier reference to M-10 is dropped; M-10 governs a different field.)
 
 **Migrations / backfill.** Per the `AGENTS.md` pre-GA convention (no production
 databases; modify baselines in place; no new incremental migrations), the
@@ -796,6 +807,7 @@ resources under the current (v2) monitoring path:
 | 3.3 | CodeRabbit re-review (PR 5196) | Resolve 2nd-order M-14 findings: global `indeterminate` id (fallback needs no dictionary); append-only dictionary revisions (deterministic id, drop `resource_type_id` constraint, prune) + ConfigMap content-hash version; backfill nil `probable_cause_id`. |
 | 3.4 | CodeRabbit 3rd review (PR 5196) | M-14 in the append-only model: records store `alarm_dictionary_id` (resolution + prune of the non-invertible id); reserved fallback dictionary holds `indeterminate`; backfill moved to a new migration that seeds it first. |
 | 3.5 | Pivot M-14 to code-only id (PR 5196) | Code-only `probableCauseId = UUIDv5(ns, code)`; `indeterminate` a reserved code in every dictionary. Retires the (impossible, resource-scoped) reserved fallback dictionary, the record dict-id column, revisions, pruning, and backfill. |
+| 3.6 | M-14 resolution contract (PR 5196) | Clarify resolution: append-only probable-cause catalog is the authoritative source (codes never removed/repurposed) so historical ids stay resolvable; `indeterminate` is a documented global built-in resolvable without a dictionary. No new machinery. |
 
 ---
 
