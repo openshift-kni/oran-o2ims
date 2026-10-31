@@ -16,8 +16,11 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -29,7 +32,7 @@ type FirmwareCatalogReconciler struct {
 	Logger *slog.Logger
 }
 
-//+kubebuilder:rbac:groups=clcm.openshift.io,resources=firmwarecatalogs,verbs=get;list;watch
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=firmwarecatalogs,verbs=create;get;list;watch
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=firmwarecatalogs/status,verbs=get;update;patch
 
 // Reconcile validates image entries and writes validation results to status.
@@ -74,17 +77,17 @@ func (r *FirmwareCatalogReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return result, nil
 	}
 
-	if err := r.validateAndSetStatus(ctx, catalog); err != nil {
+	if err := r.setStatus(ctx, catalog); err != nil {
 		return requeueWithShortInterval(), err
 	}
 
 	return result, nil
 }
 
-// validateAndSetStatus builds image statuses and writes results to status.
-// Field-level validation (component enum, URL pattern) is enforced by CRD markers
-// at admission time, so the controller only records each accepted entry as valid.
-func (r *FirmwareCatalogReconciler) validateAndSetStatus(ctx context.Context, catalog *hwmgmtv1alpha1.FirmwareCatalog) error {
+// setStatus builds image statuses and writes results to the FirmwareCatalog
+// status subresource. It records that each admitted entry passed CRD schema and
+// webhook validation.
+func (r *FirmwareCatalogReconciler) setStatus(ctx context.Context, catalog *hwmgmtv1alpha1.FirmwareCatalog) error {
 	imageStatuses := make([]hwmgmtv1alpha1.ImageValidationStatus, 0, len(catalog.Spec.Images))
 	for _, img := range catalog.Spec.Images {
 		imageStatuses = append(imageStatuses, hwmgmtv1alpha1.ImageValidationStatus{
@@ -123,7 +126,19 @@ func (r *FirmwareCatalogReconciler) validateAndSetStatus(ctx context.Context, ca
 // SetupWithManager sets up the controller with the Manager.
 func (r *FirmwareCatalogReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err := ctrl.NewControllerManagedBy(mgr).
-		For(&hwmgmtv1alpha1.FirmwareCatalog{}).
+		For(&hwmgmtv1alpha1.FirmwareCatalog{},
+			// Reconcile on create and spec changes only. Deletion is handled by
+			// the validating webhook (which blocks removal of referenced entries),
+			// so there is nothing for the reconciler to do on delete.
+			builder.WithPredicates(predicate.Funcs{
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					// Generation is only bumped on spec changes, not metadata or status.
+					return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration()
+				},
+				CreateFunc:  func(e event.CreateEvent) bool { return true },
+				GenericFunc: func(e event.GenericEvent) bool { return false },
+				DeleteFunc:  func(e event.DeleteEvent) bool { return false },
+			})).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to setup FirmwareCatalog controller: %w", err)
 	}
