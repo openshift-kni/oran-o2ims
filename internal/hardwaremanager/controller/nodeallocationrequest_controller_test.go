@@ -537,6 +537,184 @@ var _ = Describe("handleScaleOut", func() {
 	})
 })
 
+var _ = Describe("handleNewNodeAllocationRequestCreate", func() {
+	var (
+		reconciler *NodeAllocationRequestReconciler
+		fakeClient client.Client
+		ctx        context.Context
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		testLogger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
+		scheme := runtime.NewScheme()
+		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
+
+		fakeClient = fake.NewClientBuilder().WithScheme(scheme).
+			WithStatusSubresource(&hwmgmtv1alpha1.NodeAllocationRequest{}).Build()
+
+		reconciler = &NodeAllocationRequestReconciler{
+			Client:          fakeClient,
+			NoncachedClient: fakeClient,
+			Logger:          testLogger,
+			Namespace:       "oran-o2ims",
+		}
+	})
+
+	// Regression coverage for the Day-0 half of OCPBUGS-132825: Day-0 provisioning seeds
+	// Spec.ConfigTransactionId from the generation (>=1) and never emits a Configured
+	// condition. If the hardware manager acknowledged only ObservedGeneration on create,
+	// ObservedConfigTransactionId stayed 0 forever, so the ProvisioningRequest controller's
+	// hardware-config in-flight gate mistook the unobserved baseline for an in-flight Day-2
+	// configuration and blocked cluster installation indefinitely. The create handler must
+	// acknowledge the baseline config transaction so the gate can proceed.
+	It("acknowledges the baseline config transaction so Day-0 provisioning is not gated", func() {
+		nar := &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "test-nar",
+				Namespace:  "oran-o2ims",
+				Generation: 1,
+			},
+			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+				// Baseline transaction seeded from the generation; no NodeGroups so
+				// processNewNodeAllocationRequest completes without needing BMHs.
+				ConfigTransactionId: 1,
+			},
+		}
+		Expect(fakeClient.Create(ctx, nar)).To(Succeed())
+
+		_, err := reconciler.handleNewNodeAllocationRequestCreate(ctx, nar)
+		Expect(err).ToNot(HaveOccurred())
+
+		updatedNAR := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(nar), updatedNAR)).To(Succeed())
+
+		// Provisioned is driven to InProgress on create.
+		provCond := meta.FindStatusCondition(updatedNAR.Status.Conditions, string(hwmgmtv1alpha1.Provisioned))
+		Expect(provCond).ToNot(BeNil())
+		Expect(provCond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(provCond.Reason).To(Equal(string(hwmgmtv1alpha1.InProgress)))
+
+		// Both the generation and the baseline config transaction must be acknowledged.
+		Expect(updatedNAR.Status.ObservedGeneration).To(Equal(int64(1)))
+		Expect(updatedNAR.Status.ObservedConfigTransactionId).To(Equal(int64(1)))
+	})
+})
+
+var _ = Describe("handleNodeAllocationRequestNoop", func() {
+	var (
+		reconciler *NodeAllocationRequestReconciler
+		fakeClient client.Client
+		ctx        context.Context
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		testLogger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
+		scheme := runtime.NewScheme()
+		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
+
+		fakeClient = fake.NewClientBuilder().WithScheme(scheme).
+			WithStatusSubresource(&hwmgmtv1alpha1.NodeAllocationRequest{}).Build()
+
+		reconciler = &NodeAllocationRequestReconciler{
+			Client:          fakeClient,
+			NoncachedClient: fakeClient,
+			Logger:          testLogger,
+			Namespace:       "oran-o2ims",
+		}
+	})
+
+	// provisionedNAR builds a settled, provisioned NAR (the FSM Noop state).
+	provisionedNAR := func(specTxn, observedTxn int64, configured *metav1.ConditionStatus) *hwmgmtv1alpha1.NodeAllocationRequest {
+		nar := &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "test-nar",
+				Namespace:  "oran-o2ims",
+				Generation: 1,
+			},
+			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+				ConfigTransactionId: specTxn,
+			},
+		}
+		Expect(fakeClient.Create(ctx, nar)).To(Succeed())
+		nar.Status.ObservedGeneration = 1
+		nar.Status.ObservedConfigTransactionId = observedTxn
+		meta.SetStatusCondition(&nar.Status.Conditions, metav1.Condition{
+			Type:   string(hwmgmtv1alpha1.Provisioned),
+			Status: metav1.ConditionTrue,
+			Reason: string(hwmgmtv1alpha1.Completed),
+		})
+		if configured != nil {
+			meta.SetStatusCondition(&nar.Status.Conditions, metav1.Condition{
+				Type:   string(hwmgmtv1alpha1.Configured),
+				Status: *configured,
+				Reason: string(hwmgmtv1alpha1.ConfigApplied),
+			})
+		}
+		Expect(fakeClient.Status().Update(ctx, nar)).To(Succeed())
+		return nar
+	}
+
+	observed := func(nar *hwmgmtv1alpha1.NodeAllocationRequest) int64 {
+		updated := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(nar), updated)).To(Succeed())
+		return updated.Status.ObservedConfigTransactionId
+	}
+
+	// Regression coverage for the upgrade half of OCPBUGS-132825: a NAR created before the
+	// controller acknowledged the baseline ConfigTransactionId on create carries a nonzero
+	// Spec.ConfigTransactionId with ObservedConfigTransactionId == 0 and no Configured
+	// condition. Without acknowledging it on the Noop path, the hardware-config in-flight gate
+	// would block downstream phases forever after an operator upgrade.
+	It("acknowledges a legacy unobserved baseline transaction", func() {
+		nar := provisionedNAR(1, 0, nil)
+		_, err := reconciler.handleNodeAllocationRequestNoop(ctx, nar)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(observed(nar)).To(Equal(int64(1)))
+	})
+
+	It("leaves an already-acknowledged baseline unchanged", func() {
+		nar := provisionedNAR(1, 1, nil)
+		_, err := reconciler.handleNodeAllocationRequestNoop(ctx, nar)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(observed(nar)).To(Equal(int64(1)))
+	})
+
+	It("does not acknowledge when a Configured condition already exists", func() {
+		// A configured NAR is not a legacy baseline; acking here could mask a real
+		// in-flight Day-2 transaction, so the handler must leave the observed id alone.
+		configuredTrue := metav1.ConditionTrue
+		nar := provisionedNAR(2, 0, &configuredTrue)
+		_, err := reconciler.handleNodeAllocationRequestNoop(ctx, nar)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(observed(nar)).To(Equal(int64(0)))
+	})
+
+	It("is a no-op when no config transaction is set", func() {
+		nar := provisionedNAR(0, 0, nil)
+		_, err := reconciler.handleNodeAllocationRequestNoop(ctx, nar)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(observed(nar)).To(Equal(int64(0)))
+	})
+
+	It("requeues without acknowledging when a Day-2 races in after the check", func() {
+		// The live NAR already carries a newer Day-2 transaction (id 2), but the handler
+		// is invoked with the stale pre-Day-2 view (id 1) it validated. It must not
+		// acknowledge the unhandled transaction; it must requeue so the SpecChanged path
+		// processes it.
+		nar := provisionedNAR(2, 0, nil)
+		staleView := nar.DeepCopy()
+		staleView.Spec.ConfigTransactionId = 1
+
+		result, err := reconciler.handleNodeAllocationRequestNoop(ctx, staleView)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+		// The live observed id is left untouched; the unhandled transaction is not acked.
+		Expect(observed(nar)).To(Equal(int64(0)))
+	})
+})
+
 var _ = Describe("handleScaleInAnnotations", func() {
 	var (
 		ctx        context.Context

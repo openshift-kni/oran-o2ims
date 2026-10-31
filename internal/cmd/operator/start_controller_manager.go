@@ -406,8 +406,9 @@ func (c *ControllerManagerCommand) run(cmd *cobra.Command, argv []string) error 
 
 	// Start the Provisioning Request controller.
 	if err = (&controllers.ProvisioningRequestReconciler{
-		Client: mgr.GetClient(),
-		Logger: logger.With(slog.String("controller", "ProvisioningRequest")),
+		Client:          mgr.GetClient(),
+		NoncachedClient: mgr.GetAPIReader(),
+		Logger:          logger.With(slog.String("controller", "ProvisioningRequest")),
 	}).SetupWithManager(mgr); err != nil {
 		logger.ErrorContext(
 			ctx,

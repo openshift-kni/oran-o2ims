@@ -8,6 +8,7 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -58,37 +59,31 @@ func GetNodeAllocationRequest(ctx context.Context, client client.Reader, key cli
 	return nil
 }
 
-func UpdateNodeAllocationRequestObservedGeneration(
-	ctx context.Context,
-	c client.Client,
-	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) error {
+// ErrNodeAllocationRequestSpecChanged indicates that the NodeAllocationRequest spec
+// advanced (a new generation or ConfigTransactionId) between the time a reconcile
+// validated it and the time the observed status was about to be acknowledged. Callers
+// should requeue and let the normal reconcile flow handle the new spec rather than
+// acknowledging a transaction this reconcile never processed.
+var ErrNodeAllocationRequestSpecChanged = errors.New("NodeAllocationRequest spec changed before observed status could be acknowledged")
 
-	// nolint: wrapcheck
-	err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
-		newNodeAllocationRequest := &hwmgmtv1alpha1.NodeAllocationRequest{}
-		if err := c.Get(ctx, client.ObjectKeyFromObject(nodeAllocationRequest), newNodeAllocationRequest); err != nil {
-			return err
-		}
-		newNodeAllocationRequest.Status.ObservedGeneration = newNodeAllocationRequest.ObjectMeta.Generation
-		if err := c.Status().Update(ctx, newNodeAllocationRequest); err != nil {
-			return err
-		}
-		return nil
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to update NodeAllocationRequest condition: %w", err)
-	}
-
-	return nil
-}
-
-// UpdateNodeAllocationRequestObservedStatus acknowledges all spec changes by updating
-// both ObservedGeneration and ObservedConfigTransactionId in a single status update.
+// UpdateNodeAllocationRequestObservedStatus acknowledges the spec state that the
+// caller validated by updating both ObservedGeneration and ObservedConfigTransactionId
+// in a single status update.
+//
+// It only acknowledges expectedGeneration/expectedConfigTransactionId, and re-verifies
+// the freshly fetched object still matches both before writing. If the spec advanced in
+// the meantime (a Day-2 configuration arrived after the caller's check, or after a
+// Status().Update conflict forced a re-fetch), it returns ErrNodeAllocationRequestSpecChanged
+// without acknowledging anything. This prevents a race where the hardware manager would
+// mark a new, unhandled transaction as observed — which would let the ProvisioningRequest
+// controller's hardware-config in-flight gate proceed before the configuration is applied,
+// and could silently drop the Day-2 work entirely.
 func UpdateNodeAllocationRequestObservedStatus(
 	ctx context.Context,
 	c client.Client,
-	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) error {
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
+	expectedGeneration int64,
+	expectedConfigTransactionId int64) error {
 
 	// nolint: wrapcheck
 	err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
@@ -96,14 +91,25 @@ func UpdateNodeAllocationRequestObservedStatus(
 		if err := c.Get(ctx, client.ObjectKeyFromObject(nodeAllocationRequest), newNodeAllocationRequest); err != nil {
 			return err
 		}
-		newNodeAllocationRequest.Status.ObservedGeneration = newNodeAllocationRequest.ObjectMeta.Generation
-		newNodeAllocationRequest.Status.ObservedConfigTransactionId = newNodeAllocationRequest.Spec.ConfigTransactionId
+		// Do not acknowledge a transaction this reconcile has not handled. If the spec
+		// advanced since the caller validated it, bail out so the reconcile restarts and
+		// routes the new spec through the normal flow. This is not a conflict error, so
+		// RetryOnConflictOrRetriable does not retry it.
+		if newNodeAllocationRequest.ObjectMeta.Generation != expectedGeneration ||
+			newNodeAllocationRequest.Spec.ConfigTransactionId != expectedConfigTransactionId {
+			return ErrNodeAllocationRequestSpecChanged
+		}
+		newNodeAllocationRequest.Status.ObservedGeneration = expectedGeneration
+		newNodeAllocationRequest.Status.ObservedConfigTransactionId = expectedConfigTransactionId
 		if err := c.Status().Update(ctx, newNodeAllocationRequest); err != nil {
 			return err
 		}
 		return nil
 	})
 
+	if errors.Is(err, ErrNodeAllocationRequestSpecChanged) {
+		return ErrNodeAllocationRequestSpecChanged
+	}
 	if err != nil {
 		return fmt.Errorf("failed to update NodeAllocationRequest observed generation and transaction id: %w", err)
 	}
@@ -139,71 +145,32 @@ func UpdateNodeAllocationRequestStatusCondition(
 			conditionStatus,
 			message)
 
+		// Only acknowledge the spec state (ObservedConfigTransactionId / ObservedGeneration)
+		// when the freshly fetched object still matches the spec this reconcile validated.
+		// If the spec advanced between reconcile start and now — a Day-2 configuration arrived,
+		// or a Status().Update conflict forced a re-fetch onto a newer spec — acknowledging it
+		// here would mark a transaction/generation this reconcile never processed as observed.
+		// That would let the ProvisioningRequest controller's in-flight gate proceed before the
+		// new configuration is applied (OCPBUGS-132825). The condition itself is still written;
+		// skipping only the acks leaves ObservedGeneration/ObservedConfigTransactionId behind the
+		// spec, so the hardware manager FSM re-enters SpecChanged and processes the new spec.
+		specUnchanged := newNodeAllocationRequest.ObjectMeta.Generation == nodeAllocationRequest.ObjectMeta.Generation &&
+			newNodeAllocationRequest.Spec.ConfigTransactionId == nodeAllocationRequest.Spec.ConfigTransactionId
+		if !specUnchanged {
+			slog.DebugContext(ctx, "NodeAllocationRequest spec advanced during status update, not acknowledging observed status",
+				slog.String("nar", nodeAllocationRequest.Name),
+				slog.Int64("validatedGeneration", nodeAllocationRequest.ObjectMeta.Generation),
+				slog.Int64("currentGeneration", newNodeAllocationRequest.ObjectMeta.Generation),
+				slog.Int64("validatedConfigTransactionId", nodeAllocationRequest.Spec.ConfigTransactionId),
+				slog.Int64("currentConfigTransactionId", newNodeAllocationRequest.Spec.ConfigTransactionId))
+		}
+
 		// Update the observed config transaction id if the condition is Configured
-		if conditionType == hwmgmtv1alpha1.Configured {
+		if conditionType == hwmgmtv1alpha1.Configured && specUnchanged {
 			newNodeAllocationRequest.Status.ObservedConfigTransactionId = nodeAllocationRequest.Spec.ConfigTransactionId
 		}
 
-		// Apply start time logic to the fresh object to avoid race conditions.
-		// This ensures we work with the latest state from the API server.
-		now := metav1.NewTime(time.Now())
-		switch conditionType {
-		case hwmgmtv1alpha1.Provisioned:
-			if conditionStatus == metav1.ConditionFalse &&
-				conditionReason != hwmgmtv1alpha1.TimedOut &&
-				conditionReason != hwmgmtv1alpha1.Failed {
-
-				// Set start time when provisioning operation starts
-				if conditionReason == hwmgmtv1alpha1.InProgress &&
-					newNodeAllocationRequest.Status.HardwareOperationStartTime == nil {
-					// Set start time to track hardware operation timeout
-					// Only set once when first transitioning to InProgress
-					newNodeAllocationRequest.Status.HardwareOperationStartTime = &now
-				}
-			} else if conditionStatus == metav1.ConditionTrue ||
-				conditionReason == hwmgmtv1alpha1.Completed ||
-				conditionReason == hwmgmtv1alpha1.Failed ||
-				conditionReason == hwmgmtv1alpha1.TimedOut {
-				// Clear start time when provisioning operation completes, fails, or times out
-				newNodeAllocationRequest.Status.HardwareOperationStartTime = nil
-				// Acknowledge generation only on Failed/TimedOut states.
-				if conditionReason == hwmgmtv1alpha1.Failed ||
-					conditionReason == hwmgmtv1alpha1.TimedOut {
-					newNodeAllocationRequest.Status.ObservedGeneration = newNodeAllocationRequest.ObjectMeta.Generation
-				}
-			}
-
-		case hwmgmtv1alpha1.Configured:
-			if conditionStatus == metav1.ConditionFalse &&
-				conditionReason != hwmgmtv1alpha1.TimedOut &&
-				conditionReason != hwmgmtv1alpha1.Failed {
-
-				// Set/reset start time when configuration operation starts
-				// Only set when nil (first time) or when transitioning from terminal state
-				if conditionReason == hwmgmtv1alpha1.InProgress {
-					// Check if we're transitioning FROM a terminal state
-					existingCondition := meta.FindStatusCondition(newNodeAllocationRequest.Status.Conditions, string(hwmgmtv1alpha1.Configured))
-					isRetryAfterTerminal := existingCondition != nil &&
-						(existingCondition.Reason == string(hwmgmtv1alpha1.TimedOut) ||
-							existingCondition.Reason == string(hwmgmtv1alpha1.Failed))
-
-					// Set start time only if:
-					// 1. Start time is nil (first time entering config state), OR
-					// 2. Retrying after a terminal state (timeout/failure)
-					if newNodeAllocationRequest.Status.HardwareOperationStartTime == nil || isRetryAfterTerminal {
-						newNodeAllocationRequest.Status.HardwareOperationStartTime = &now
-					}
-				}
-			} else if conditionStatus == metav1.ConditionTrue ||
-				conditionReason == hwmgmtv1alpha1.ConfigApplied ||
-				conditionReason == hwmgmtv1alpha1.Failed ||
-				conditionReason == hwmgmtv1alpha1.TimedOut {
-				// Clear start time when configuration operation completes, fails, or times out
-				newNodeAllocationRequest.Status.HardwareOperationStartTime = nil
-				// Acknowledge generation on terminal states.
-				newNodeAllocationRequest.Status.ObservedGeneration = newNodeAllocationRequest.ObjectMeta.Generation
-			}
-		}
+		applyConditionSideEffects(newNodeAllocationRequest, conditionType, conditionReason, conditionStatus, specUnchanged)
 
 		if err := c.Status().Update(ctx, newNodeAllocationRequest); err != nil {
 			return err
@@ -216,6 +183,85 @@ func UpdateNodeAllocationRequestStatusCondition(
 	}
 
 	return nil
+}
+
+// applyConditionSideEffects maintains HardwareOperationStartTime and acknowledges
+// ObservedGeneration on terminal states, mutating the freshly fetched NAR in place.
+// Generation is acknowledged only when specUnchanged is true — see
+// UpdateNodeAllocationRequestStatusCondition for why a spec that advanced under this
+// reconcile must not be acknowledged.
+func applyConditionSideEffects(
+	nar *hwmgmtv1alpha1.NodeAllocationRequest,
+	conditionType hwmgmtv1alpha1.ConditionType,
+	conditionReason hwmgmtv1alpha1.ConditionReason,
+	conditionStatus metav1.ConditionStatus,
+	specUnchanged bool) {
+
+	// Apply start time logic to the fresh object to avoid race conditions.
+	// This ensures we work with the latest state from the API server.
+	now := metav1.NewTime(time.Now())
+	switch conditionType {
+	case hwmgmtv1alpha1.Provisioned:
+		if conditionStatus == metav1.ConditionFalse &&
+			conditionReason != hwmgmtv1alpha1.TimedOut &&
+			conditionReason != hwmgmtv1alpha1.Failed {
+
+			// Set start time when provisioning operation starts
+			if conditionReason == hwmgmtv1alpha1.InProgress &&
+				nar.Status.HardwareOperationStartTime == nil {
+				// Set start time to track hardware operation timeout
+				// Only set once when first transitioning to InProgress
+				nar.Status.HardwareOperationStartTime = &now
+			}
+		} else if conditionStatus == metav1.ConditionTrue ||
+			conditionReason == hwmgmtv1alpha1.Completed ||
+			conditionReason == hwmgmtv1alpha1.Failed ||
+			conditionReason == hwmgmtv1alpha1.TimedOut {
+			// Clear start time when provisioning operation completes, fails, or times out
+			nar.Status.HardwareOperationStartTime = nil
+			// Acknowledge generation only on Failed/TimedOut states, and only when the
+			// spec has not advanced since this reconcile validated it.
+			if specUnchanged &&
+				(conditionReason == hwmgmtv1alpha1.Failed ||
+					conditionReason == hwmgmtv1alpha1.TimedOut) {
+				nar.Status.ObservedGeneration = nar.ObjectMeta.Generation
+			}
+		}
+
+	case hwmgmtv1alpha1.Configured:
+		if conditionStatus == metav1.ConditionFalse &&
+			conditionReason != hwmgmtv1alpha1.TimedOut &&
+			conditionReason != hwmgmtv1alpha1.Failed {
+
+			// Set/reset start time when configuration operation starts
+			// Only set when nil (first time) or when transitioning from terminal state
+			if conditionReason == hwmgmtv1alpha1.InProgress {
+				// Check if we're transitioning FROM a terminal state
+				existingCondition := meta.FindStatusCondition(nar.Status.Conditions, string(hwmgmtv1alpha1.Configured))
+				isRetryAfterTerminal := existingCondition != nil &&
+					(existingCondition.Reason == string(hwmgmtv1alpha1.TimedOut) ||
+						existingCondition.Reason == string(hwmgmtv1alpha1.Failed))
+
+				// Set start time only if:
+				// 1. Start time is nil (first time entering config state), OR
+				// 2. Retrying after a terminal state (timeout/failure)
+				if nar.Status.HardwareOperationStartTime == nil || isRetryAfterTerminal {
+					nar.Status.HardwareOperationStartTime = &now
+				}
+			}
+		} else if conditionStatus == metav1.ConditionTrue ||
+			conditionReason == hwmgmtv1alpha1.ConfigApplied ||
+			conditionReason == hwmgmtv1alpha1.Failed ||
+			conditionReason == hwmgmtv1alpha1.TimedOut {
+			// Clear start time when configuration operation completes, fails, or times out
+			nar.Status.HardwareOperationStartTime = nil
+			// Acknowledge generation on terminal states, but only when the spec has not
+			// advanced since this reconcile validated it.
+			if specUnchanged {
+				nar.Status.ObservedGeneration = nar.ObjectMeta.Generation
+			}
+		}
+	}
 }
 
 func UpdateNodeAllocationRequestProperties(
