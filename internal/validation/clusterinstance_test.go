@@ -148,137 +148,82 @@ var _ = Describe("FindClusterInstanceImmutableFieldUpdates", func() {
 		}
 	})
 
-	It("should return no updates when specs are identical", func() {
-		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
-			oldClusterInstance.Object["spec"].(map[string]any),
-			newClusterInstance.Object["spec"].(map[string]any),
-			IgnoredClusterInstanceFields,
-			AllowedClusterInstanceFields)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(updatedFields).To(BeEmpty())
-		Expect(scalingNodes).To(BeEmpty())
+	// The rendered ClusterInstance spec has a flat spec.nodes list. Upgrade handling
+	// compares the existing and rendered specs, skipping hardware-assigned fields.
+	Context("with a rendered ClusterInstance spec", func() {
+		It("should return no updates when specs are identical", func() {
+			updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
+				oldClusterInstance.Object["spec"].(map[string]any),
+				newClusterInstance.Object["spec"].(map[string]any),
+				IgnoredClusterInstanceFields,
+				AllowedClusterInstanceFields)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedFields).To(BeEmpty())
+			Expect(scalingNodes).To(BeEmpty())
+		})
+
+		It("should detect changes in immutable cluster-level fields", func() {
+			// Change an immutable field at the cluster-level
+			spec := newClusterInstance.Object["spec"].(map[string]any)
+			spec["baseDomain"] = "newdomain.example.com"
+
+			updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
+				oldClusterInstance.Object["spec"].(map[string]any),
+				newClusterInstance.Object["spec"].(map[string]any),
+				IgnoredClusterInstanceFields,
+				AllowedClusterInstanceFields)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedFields).To(ContainElement("baseDomain"))
+			Expect(scalingNodes).To(BeEmpty())
+		})
+
+		It("should not flag changes in allowed cluster-level fields alongside immutable fields", func() {
+			// Add an allowed extra label
+			spec := newClusterInstance.Object["spec"].(map[string]any)
+			// Change allowed fields
+			labels := spec["extraLabels"].(map[string]any)["ManagedCluster"].(map[string]any)
+			labels["newLabelKey"] = "newLabelValue"
+			delete(spec, "extraAnnotations")
+			// Change immutable field
+			spec["clusterName"] = "newName"
+
+			updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
+				oldClusterInstance.Object["spec"].(map[string]any),
+				newClusterInstance.Object["spec"].(map[string]any),
+				IgnoredClusterInstanceFields,
+				AllowedClusterInstanceFields)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedFields).To(ContainElement("clusterName"))
+			Expect(len(updatedFields)).To(Equal(1))
+			Expect(scalingNodes).To(BeEmpty())
+		})
+
+		It("should not flag changes in ignored node-level fields alongside immutable fields", func() {
+			// Change ignored fields
+			spec := newClusterInstance.Object["spec"].(map[string]any)
+			node0 := spec["nodes"].([]any)[0].(map[string]any)
+			node0["bmcAddress"] = "placeholder"
+			node0["bmcCredentialsName"].(map[string]any)["name"] = "myCreds"
+			node0["bootMACAddress"] = "00:00:5E:00:53:AF"
+			node0NetworkInterfaces := node0["nodeNetwork"].(map[string]any)["interfaces"].([]any)
+			node0NetworkInterfaces[0].(map[string]any)["macAddress"] = "00:00:5E:00:53:AF"
+
+			updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
+				oldClusterInstance.Object["spec"].(map[string]any),
+				newClusterInstance.Object["spec"].(map[string]any),
+				IgnoredClusterInstanceFields,
+				AllowedClusterInstanceFields)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedFields).To(BeEmpty())
+			Expect(scalingNodes).To(BeEmpty())
+		})
 	})
 
-	It("should detect changes in immutable cluster-level fields", func() {
-		// Change an immutable field at the cluster-level
-		spec := newClusterInstance.Object["spec"].(map[string]any)
-		spec["baseDomain"] = "newdomain.example.com"
-
-		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
-			oldClusterInstance.Object["spec"].(map[string]any),
-			newClusterInstance.Object["spec"].(map[string]any),
-			IgnoredClusterInstanceFields,
-			AllowedClusterInstanceFields)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(updatedFields).To(ContainElement("baseDomain"))
-		Expect(scalingNodes).To(BeEmpty())
-	})
-
-	It("should not flag changes in allowed cluster-level fields alongside immutable fields", func() {
-		// Add an allowed extra label
-		spec := newClusterInstance.Object["spec"].(map[string]any)
-		// Change allowed fields
-		labels := spec["extraLabels"].(map[string]any)["ManagedCluster"].(map[string]any)
-		labels["newLabelKey"] = "newLabelValue"
-		delete(spec, "extraAnnotations")
-		// Change immutable field
-		spec["clusterName"] = "newName"
-
-		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
-			oldClusterInstance.Object["spec"].(map[string]any),
-			newClusterInstance.Object["spec"].(map[string]any),
-			IgnoredClusterInstanceFields,
-			AllowedClusterInstanceFields)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(updatedFields).To(ContainElement("clusterName"))
-		Expect(len(updatedFields)).To(Equal(1))
-		Expect(scalingNodes).To(BeEmpty())
-	})
-
-	It("should detect changes in disallowed node-level fields", func() {
-		// Change an immutable field in the node-level spec
-		spec := newClusterInstance.Object["spec"].(map[string]any)
-		node0 := spec["nodes"].([]any)[0].(map[string]any)
-		node0Network := node0["nodeNetwork"].(map[string]any)["config"].(map[string]any)["dns-resolver"].(map[string]any)
-		node0Network["config"].(map[string]any)["server"].([]any)[0] = "10.19.42.42"
-
-		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
-			oldClusterInstance.Object["spec"].(map[string]any),
-			newClusterInstance.Object["spec"].(map[string]any),
-			IgnoredClusterInstanceFields,
-			AllowedClusterInstanceFields)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(updatedFields).To(ContainElement(
-			"nodes.0.nodeNetwork.config.dns-resolver.config.server.0"))
-		Expect(scalingNodes).To(BeEmpty())
-	})
-
-	It("should not flag changes in allowed node-level fields alongside immutable fields", func() {
-		// Change an allowed field and an immutable field in the same node
-		spec := newClusterInstance.Object["spec"].(map[string]any)
-		// Change allowed field
-		nodes := spec["nodes"].([]any)
-		nodes[0].(map[string]any)["extraAnnotations"] = map[string]map[string]string{
-			"BareMetalHost": {
-				"newAnnotationKey": "newAnnotationValue",
-			},
-		}
-		// Change immutable field
-		node0 := spec["nodes"].([]any)[0].(map[string]any)
-		node0Network := node0["nodeNetwork"].(map[string]any)["config"].(map[string]any)["dns-resolver"].(map[string]any)
-		node0Network["config"].(map[string]any)["server"].([]any)[0] = "10.19.42.42"
-
-		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
-			oldClusterInstance.Object["spec"].(map[string]any),
-			newClusterInstance.Object["spec"].(map[string]any),
-			IgnoredClusterInstanceFields,
-			AllowedClusterInstanceFields)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(updatedFields).To(ContainElement(
-			"nodes.0.nodeNetwork.config.dns-resolver.config.server.0"))
-		Expect(len(updatedFields)).To(Equal(1))
-		Expect(scalingNodes).To(BeEmpty())
-	})
-
-	It("should not flag changes in ignored node-level fields alongside immutable fields", func() {
-		// Change ignored fields
-		spec := newClusterInstance.Object["spec"].(map[string]any)
-		node0 := spec["nodes"].([]any)[0].(map[string]any)
-		node0["bmcAddress"] = "placeholder"
-		node0["bmcCredentialsName"].(map[string]any)["name"] = "myCreds"
-		node0["bootMACAddress"] = "00:00:5E:00:53:AF"
-		node0NetworkInterfaces := node0["nodeNetwork"].(map[string]any)["interfaces"].([]any)
-		node0NetworkInterfaces[0].(map[string]any)["macAddress"] = "00:00:5E:00:53:AF"
-
-		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
-			oldClusterInstance.Object["spec"].(map[string]any),
-			newClusterInstance.Object["spec"].(map[string]any),
-			IgnoredClusterInstanceFields,
-			AllowedClusterInstanceFields)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(updatedFields).To(BeEmpty())
-		Expect(scalingNodes).To(BeEmpty())
-	})
-
-	It("should treat flat nodes membership changes as immutable (scaling requires nodeGroups)", func() {
-		spec := newClusterInstance.Object["spec"].(map[string]any)
-		nodes := spec["nodes"].([]any)
-		spec["nodes"] = append(nodes, map[string]any{"hostName": "worker2"})
-
-		updatedFields, scalingNodes, err := FindClusterInstanceImmutableFieldUpdates(
-			oldClusterInstance.Object["spec"].(map[string]any),
-			newClusterInstance.Object["spec"].(map[string]any),
-			IgnoredClusterInstanceFields,
-			AllowedClusterInstanceFields)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(updatedFields).To(ContainElement("nodes.1"))
-		Expect(scalingNodes).To(BeEmpty())
-	})
-
-	// nodeGroups format cases (cluster-level coverage is shared with the flat-nodes
-	// cases above; drop this Context when cleaning up legacy flat nodes).
-	Context("with nodeGroups format", func() {
-		// Convert legacy flat nodes into a single master nodeGroup.
+	// ProvisioningRequest clusterInstanceParameters express hosts under nodeGroups[].nodes.
+	// The webhook compares the old and new input to find immutable field updates and
+	// node scaling.
+	Context("with ProvisioningRequest clusterInstanceParameters", func() {
+		// Move the fixture's flat nodes under a single master nodeGroup.
 		toNodeGroupsSpec := func(spec map[string]any) {
 			nodes, ok := spec["nodes"]
 			if !ok {

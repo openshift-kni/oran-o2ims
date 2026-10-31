@@ -195,173 +195,6 @@ var _ = Describe("overrideClusterInstanceLabelsOrAnnotations", func() {
 		Expect(dstProvisioningRequestInput).To(Equal(expected))
 	})
 
-	It("should merge nodes and handle nested labels/annotations", func() {
-		dstProvisioningRequestInput = map[string]any{
-			"clusterName": "cluster-1",
-			"nodes": []any{
-				map[string]any{
-					"hostName": "node1",
-					"extraLabels": map[string]any{
-						"ManagedCluster": map[string]any{
-							"label1": "value1",
-						},
-					},
-					"extraAnnotations": map[string]any{
-						"ManagedCluster": map[string]any{
-							"annotation1": "value1",
-						},
-					},
-				},
-				map[string]any{
-					"hostName": "node2",
-					"extraLabels": map[string]any{
-						"ManagedCluster": map[string]any{
-							"label2": "value2",
-						},
-					},
-					"extraAnnotations": map[string]any{
-						"ManagedCluster": map[string]any{
-							"annotation2": "value2",
-						},
-					},
-				},
-			},
-		}
-
-		srcConfigmap = map[string]any{
-			"nodes": []any{
-				map[string]any{
-					"extraLabels": map[string]any{
-						"ManagedCluster": map[string]any{
-							"label1": "new_value1", // Existing label, should be overridden
-							"label2": "value2",     // New label, should be ignored
-						},
-					},
-					"extraAnnotations": map[string]any{
-						"ManagedCluster": map[string]any{
-							"annotation2": "value2", // New annotation, should be ignored
-						},
-					},
-				},
-				map[string]any{
-					"extraLabels": map[string]any{
-						"ManagedCluster": map[string]any{
-							"label1": "value1",     // New label, should be ignored
-							"label2": "new_value2", // Existing label, should be overridden
-						},
-					},
-				},
-			},
-		}
-
-		expected := map[string]any{
-			"clusterName": "cluster-1",
-			"nodes": []any{
-				map[string]any{
-					"hostName": "node1",
-					"extraLabels": map[string]any{
-						"ManagedCluster": map[string]any{
-							"label1": "new_value1", // Overridden
-						},
-					},
-					"extraAnnotations": map[string]any{
-						"ManagedCluster": map[string]any{
-							"annotation1": "value1", // no change
-						},
-					},
-				},
-				map[string]any{
-					"hostName": "node2",
-					"extraLabels": map[string]any{
-						"ManagedCluster": map[string]any{
-							"label2": "new_value2", // Overridden
-						},
-					},
-					"extraAnnotations": map[string]any{
-						"ManagedCluster": map[string]any{
-							"annotation2": "value2",
-						},
-					},
-				},
-			},
-		}
-
-		err := task.overrideClusterInstanceLabelsOrAnnotations(dstProvisioningRequestInput, srcConfigmap)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(dstProvisioningRequestInput).To(Equal(expected))
-	})
-
-	It("should not add the new node to dstProvisioningRequestInput", func() {
-		dstProvisioningRequestInput = map[string]any{
-			"clusterName": "cluster-1",
-			"nodes": []any{
-				map[string]any{
-					"hostName": "node1",
-					"extraLabels": map[string]any{
-						"ManagedCluster": map[string]any{
-							"label1": "value1",
-						},
-					},
-					"extraAnnotations": map[string]any{
-						"ManagedCluster": map[string]any{
-							"annotation1": "value1",
-						},
-					},
-				},
-			},
-		}
-
-		srcConfigmap = map[string]any{
-			"nodes": []any{
-				map[string]any{
-					"extraLabels": map[string]any{
-						"ManagedCluster": map[string]any{
-							"label1": "new_value1", // Existing label, should be overridden
-							"label2": "value2",     // New label, should be ignored
-						},
-					},
-					"extraAnnotations": map[string]any{
-						"ManagedCluster": map[string]any{
-							"annotation2": "value2", // New annotation, should be ignored
-						},
-					},
-				},
-				// New node, should be ignored
-				map[string]any{
-					"extraLabels": map[string]any{
-						"ManagedCluster": map[string]any{
-							"label1": "value1",
-							"label2": "value2",
-						},
-					},
-				},
-			},
-		}
-
-		expected := map[string]any{
-			"clusterName": "cluster-1",
-			"nodes": []any{
-				map[string]any{
-					"hostName": "node1",
-					"extraLabels": map[string]any{
-						"ManagedCluster": map[string]any{
-							"label1": "new_value1", // Overridden
-						},
-					},
-					"extraAnnotations": map[string]any{
-						"ManagedCluster": map[string]any{
-							"annotation1": "value1", // no change
-						},
-					},
-				},
-			},
-		}
-
-		err := task.overrideClusterInstanceLabelsOrAnnotations(dstProvisioningRequestInput, srcConfigmap)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(dstProvisioningRequestInput).To(Equal(expected))
-	})
-
 	It("should override only existing keys in nodeGroups format", func() {
 		dstProvisioningRequestInput = map[string]any{
 			"nodeGroups": []any{
@@ -551,53 +384,6 @@ var _ = Describe("overrideClusterInstanceLabelsOrAnnotations", func() {
 		err := task.overrideClusterInstanceLabelsOrAnnotations(dstProvisioningRequestInput, srcConfigmap)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(dstProvisioningRequestInput).To(Equal(expected))
-	})
-})
-
-var _ = Describe("resolveClusterInstanceFormat", func() {
-	It("returns nodeGroups when both sides exclusively use nodeGroups", func() {
-		format, err := resolveClusterInstanceFormat(
-			map[string]any{"nodeGroups": []any{}},
-			map[string]any{"nodeGroups": []any{}},
-		)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(format).To(Equal(constants.ClusterInstanceNodeGroupsKey))
-	})
-
-	It("returns nodes when both sides exclusively use nodes", func() {
-		format, err := resolveClusterInstanceFormat(
-			map[string]any{"nodes": []any{}},
-			map[string]any{"nodes": []any{}},
-		)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(format).To(Equal(constants.ClusterInstanceNodesKey))
-	})
-
-	It("rejects mixed or incomplete formats", func() {
-		_, err := resolveClusterInstanceFormat(
-			map[string]any{"nodeGroups": []any{}},
-			map[string]any{"nodes": []any{}},
-		)
-		Expect(err).To(HaveOccurred())
-
-		_, err = resolveClusterInstanceFormat(
-			map[string]any{"nodeGroups": []any{}, "nodes": []any{}},
-			map[string]any{"nodeGroups": []any{}},
-		)
-		Expect(err).To(HaveOccurred())
-
-		_, err = resolveClusterInstanceFormat(
-			map[string]any{"nodeGroups": []any{}},
-			map[string]any{"clusterName": "x"},
-		)
-		Expect(err).To(HaveOccurred())
-
-		// Both sides omit nodes/nodeGroups — reject (no defaults-only inheritance).
-		_, err = resolveClusterInstanceFormat(
-			map[string]any{"clusterName": "x"},
-			map[string]any{"clusterName": "y"},
-		)
-		Expect(err).To(HaveOccurred())
 	})
 })
 
@@ -796,107 +582,44 @@ nodes:
 		Expect(mergedYAML).To(MatchYAML(expectedYAML))
 	})
 
-	It("merges the legacy nodes format", func() {
+	It("rejects input that omits nodeGroups", func() {
 		defaults := `
-clusterImageSetNameRef: "4.15"
-pullSecretRef:
-  name: "pull-secret"
-nodes:
-- hostName: "node1"
-  role: master
-  bootMode: UEFI
-  nodeNetwork:
-    interfaces:
-    - name: eno1
-      label: boot-interface`
+nodeGroups:
+- name: master
+  role: master`
 
 		params := `
-clusterName: nodes-cluster
-nodes:
-- hostName: node1.example.com
-  nodeNetwork:
-    interfaces:
-    - name: eno1
-      macAddress: "aa:bb:cc:dd:ee:ff"
-`
-
-		expectedYAML := `
-clusterImageSetNameRef: "4.15"
-pullSecretRef:
-  name: "pull-secret"
-clusterName: "nodes-cluster"
-nodes:
-- hostName: "node1.example.com"
-  role: master
-  bootMode: UEFI
-  nodeNetwork:
-    interfaces:
-    - name: eno1
-      label: boot-interface
-      macAddress: "aa:bb:cc:dd:ee:ff"
+clusterName: no-groups
 `
 
 		task = newTask(defaults, params)
-		merged, err := task.getMergedClusterInstanceData(ctx, ciDefaultsCm, extractClusterInstanceInput(task))
-		Expect(err).ToNot(HaveOccurred())
+		_, err := task.getMergedClusterInstanceData(ctx, ciDefaultsCm, extractClusterInstanceInput(task))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("at least one node is required"))
+	})
+
+	It("rejects a top-level nodes list in the ProvisioningRequest input", func() {
+		defaults := `
+nodeGroups:
+- name: master
+  role: master`
+
+		// A template with additionalProperties: true would let this input through the schema.
+		params := `
+clusterName: mixed
+nodes:
+- hostName: flat-1.example.com
+nodeGroups:
+- name: master
+  nodes:
+  - hostName: master-1.example.com
+`
+
+		task = newTask(defaults, params)
+		_, err := task.getMergedClusterInstanceData(ctx, ciDefaultsCm, extractClusterInstanceInput(task))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(`"nodes" is not supported`))
 		Expect(task.clusterInput.hostToGroupName).To(BeNil())
-		mergedYAML, err := yaml.Marshal(merged)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(mergedYAML).To(MatchYAML(expectedYAML))
-	})
-
-	It("rejects mixed nodeGroups and nodes formats", func() {
-		defaultsWithNodeGroups := `
-nodeGroups:
-- name: master
-  role: master`
-
-		paramsWithNodes := `
-clusterName: mixed
-nodes:
-- hostName: node1.example.com
-`
-
-		task = newTask(defaultsWithNodeGroups, paramsWithNodes)
-		_, err := task.getMergedClusterInstanceData(ctx, ciDefaultsCm, extractClusterInstanceInput(task))
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("must both use"))
-
-		defaultsWithNodes := `
-nodes:
-- hostName: "node1"
-  role: master`
-
-		paramsWithNodeGroups := `
-clusterName: mixed
-nodeGroups:
-- name: master
-  nodes:
-  - hostName: m1
-`
-
-		task = newTask(defaultsWithNodes, paramsWithNodeGroups)
-		_, err = task.getMergedClusterInstanceData(ctx, ciDefaultsCm, extractClusterInstanceInput(task))
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("must both use"))
-	})
-
-	It("rejects when only one side uses nodeGroups", func() {
-		defaults := `
-clusterName: from-defaults`
-
-		params := `
-clusterName: only-pr
-nodeGroups:
-- name: master
-  nodes:
-  - hostName: m1
-`
-
-		task = newTask(defaults, params)
-		_, err := task.getMergedClusterInstanceData(ctx, ciDefaultsCm, extractClusterInstanceInput(task))
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("must both use"))
 	})
 
 	It("rejects a ProvisioningRequest group not defined in the defaults", func() {

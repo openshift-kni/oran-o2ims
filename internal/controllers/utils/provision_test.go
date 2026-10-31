@@ -299,39 +299,6 @@ var _ = Describe("ValidateNodeGroupsNames", func() {
 })
 
 var _ = Describe("ValidateDefaultInterfaces", func() {
-	It("returns error if nodes interfaces are missing labels", func() {
-		err := ValidateDefaultInterfaces(map[string]any{
-			"nodes": []any{
-				map[string]any{
-					"hostName": "node1",
-					"nodeNetwork": map[string]any{
-						"interfaces": []any{
-							map[string]any{"name": "eno1"},
-						},
-					},
-				},
-			},
-		}, constants.ClusterInstanceNodesKey)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(Equal("'label' is missing for interface: eno1"))
-	})
-
-	It("returns no error if nodes interfaces have labels", func() {
-		err := ValidateDefaultInterfaces(map[string]any{
-			"nodes": []any{
-				map[string]any{
-					"hostName": "node1",
-					"nodeNetwork": map[string]any{
-						"interfaces": []any{
-							map[string]any{"name": "eno1", "label": "boot-interface"},
-						},
-					},
-				},
-			},
-		}, constants.ClusterInstanceNodesKey)
-		Expect(err).ToNot(HaveOccurred())
-	})
-
 	It("returns error if nodeGroups interfaces are missing labels", func() {
 		err := ValidateDefaultInterfaces(map[string]any{
 			"nodeGroups": []any{
@@ -344,7 +311,7 @@ var _ = Describe("ValidateDefaultInterfaces", func() {
 					},
 				},
 			},
-		}, constants.ClusterInstanceNodeGroupsKey)
+		})
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(Equal("'label' is missing for interface: ens3f0"))
 	})
@@ -361,7 +328,7 @@ var _ = Describe("ValidateDefaultInterfaces", func() {
 					},
 				},
 			},
-		}, constants.ClusterInstanceNodeGroupsKey)
+		})
 		Expect(err).ToNot(HaveOccurred())
 	})
 })
@@ -379,7 +346,7 @@ var _ = Describe("ValidateConfigmapSchemaAgainstClusterInstanceCRD", func() {
 
 	It("returns an error when the ClusterInstance CRD does not exist", func() {
 		err := ValidateConfigmapSchemaAgainstClusterInstanceCRD(
-			ctx, fakeClient, nil, constants.ClusterInstanceNodesKey)
+			ctx, fakeClient, nil)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).
 			To(Equal(
@@ -395,7 +362,7 @@ var _ = Describe("ValidateConfigmapSchemaAgainstClusterInstanceCRD", func() {
 			Expect(fakeClient.Create(ctx, clusterInstanceCRD)).To(Succeed())
 
 			err = ValidateConfigmapSchemaAgainstClusterInstanceCRD(
-				ctx, fakeClient, nil, constants.ClusterInstanceNodesKey)
+				ctx, fakeClient, nil)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("failed to obtain the versions of the %s.%s CRD", ClusterInstanceCrdName, siteconfig.Group)))
 		})
@@ -406,12 +373,12 @@ var _ = Describe("ValidateConfigmapSchemaAgainstClusterInstanceCRD", func() {
 			Expect(fakeClient.Create(ctx, clusterInstanceCRD)).To(Succeed())
 
 			err = ValidateConfigmapSchemaAgainstClusterInstanceCRD(
-				ctx, fakeClient, nil, constants.ClusterInstanceNodesKey)
+				ctx, fakeClient, nil)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("no version served & stored in the %s.%s CRD ", ClusterInstanceCrdName, siteconfig.Group)))
 		})
 
-		It("returns error if the nodes-format ConfigMap schema does not match the ClusterInstance CRD schema", func() {
+		It("returns error if the cluster-level ConfigMap schema does not match the ClusterInstance CRD schema", func() {
 			clusterInstanceCRD, err := BuildTestClusterInstanceCRD(TestClusterInstanceSpecOk)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(fakeClient.Create(ctx, clusterInstanceCRD)).To(Succeed())
@@ -423,14 +390,14 @@ var _ = Describe("ValidateConfigmapSchemaAgainstClusterInstanceCRD", func() {
 				},
 			}
 			err = ValidateConfigmapSchemaAgainstClusterInstanceCRD(
-				ctx, fakeClient, data, constants.ClusterInstanceNodesKey)
+				ctx, fakeClient, data)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(
 				"ConfigMap does not match the ClusterInstance schema: " +
 					"invalid input: pullSecretRef: Additional property should-be-name is not allowed"))
 		})
 
-		It("returns no error if the nodes-format ConfigMap schema matches the ClusterInstance CRD schema", func() {
+		It("returns no error if the cluster-level ConfigMap schema matches the ClusterInstance CRD schema", func() {
 			clusterInstanceCRD, err := BuildTestClusterInstanceCRD(TestClusterInstanceSpecOk)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(fakeClient.Create(ctx, clusterInstanceCRD)).To(Succeed())
@@ -442,7 +409,7 @@ var _ = Describe("ValidateConfigmapSchemaAgainstClusterInstanceCRD", func() {
 				},
 			}
 			err = ValidateConfigmapSchemaAgainstClusterInstanceCRD(
-				ctx, fakeClient, data, constants.ClusterInstanceNodesKey)
+				ctx, fakeClient, data)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -465,7 +432,25 @@ var _ = Describe("ValidateConfigmapSchemaAgainstClusterInstanceCRD", func() {
 				},
 			}
 			Expect(ValidateConfigmapSchemaAgainstClusterInstanceCRD(
-				ctx, fakeClient, data, constants.ClusterInstanceNodeGroupsKey)).To(Succeed())
+				ctx, fakeClient, data)).To(Succeed())
+		})
+
+		It("returns error if the ConfigMap defines a top-level nodes list", func() {
+			clusterInstanceCRD, err := BuildTestClusterInstanceCRD(TestClusterInstanceSpecOk)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(fakeClient.Create(ctx, clusterInstanceCRD)).To(Succeed())
+
+			data := map[string]any{
+				"nodes": []any{
+					map[string]any{"role": "master"},
+				},
+			}
+			err = ValidateConfigmapSchemaAgainstClusterInstanceCRD(
+				ctx, fakeClient, data)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(
+				"ConfigMap does not match the ClusterInstance schema: " +
+					"invalid input: (root): Additional property nodes is not allowed"))
 		})
 
 		It("returns error if the nodeGroups-format ConfigMap schema does not match the ClusterInstance CRD schema", func() {
@@ -486,7 +471,7 @@ var _ = Describe("ValidateConfigmapSchemaAgainstClusterInstanceCRD", func() {
 				},
 			}
 			err = ValidateConfigmapSchemaAgainstClusterInstanceCRD(
-				ctx, fakeClient, data, constants.ClusterInstanceNodeGroupsKey)
+				ctx, fakeClient, data)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(
 				"ConfigMap does not match the ClusterInstance schema: " +
@@ -1065,6 +1050,23 @@ nodes: []
 		got, err := yaml.Marshal(merged)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(got).To(MatchYAML(expected))
+	})
+
+	It("rejects a top-level nodes list instead of overwriting it", func() {
+		merged := mustYAMLMap(`
+nodes:
+- hostName: flat-1.example.com
+nodeGroups:
+- name: master
+  nodes:
+  - hostName: master-1.example.com
+`)
+		_, err := ExpandNodeGroupsToNodes(merged)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(`"nodes" is not supported; define hosts under nodeGroups[].nodes instead`))
+		// The merged data is left untouched.
+		Expect(merged).To(HaveKey("nodeGroups"))
+		Expect(merged["nodes"]).To(HaveLen(1))
 	})
 
 	It("rejects malformed nodeGroups", func() {

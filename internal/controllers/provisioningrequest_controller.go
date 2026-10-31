@@ -57,9 +57,8 @@ type clusterInput struct {
 	clusterInstanceData map[string]any
 	policyTemplateData  map[string]any
 	hwMgmtData          map[string]any
-	// hostToGroupName maps ClusterInstance hostName to nodeGroups[].name
-	// Populated only for the ClusterInstance nodeGroups input format,
-	// before expansion strips group identity from spec.nodes[].
+	// hostToGroupName maps ClusterInstance hostName to nodeGroups[].name,
+	// captured before expansion strips group identity from spec.nodes[].
 	hostToGroupName map[string]string
 }
 
@@ -644,7 +643,7 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 	renderedClusterInstance *unstructured.Unstructured) (ctrl.Result, bool, error) {
 
 	// Build the NodeAllocationRequest
-	renderedNodeAllocationRequest, err := t.renderNodeAllocationRequest(ctx, renderedClusterInstance)
+	renderedNodeAllocationRequest, err := t.renderNodeAllocationRequest(ctx)
 	if err != nil {
 		if typederrors.IsInputError(err) {
 			return doNotRequeue(), false, nil
@@ -1104,9 +1103,9 @@ func (t *provisioningRequestReconcilerTask) handleClusterResources(ctx context.C
 	return err
 }
 
-func (t *provisioningRequestReconcilerTask) renderNodeAllocationRequest(ctx context.Context,
-	clusterInstance *unstructured.Unstructured) (*hwmgmtv1alpha1.NodeAllocationRequest, error) {
-	renderedNodeAllocationRequest, err := t.buildNodeAllocationRequest(ctx, clusterInstance)
+func (t *provisioningRequestReconcilerTask) renderNodeAllocationRequest(
+	ctx context.Context) (*hwmgmtv1alpha1.NodeAllocationRequest, error) {
+	renderedNodeAllocationRequest, err := t.buildNodeAllocationRequest(ctx)
 	if err != nil {
 		narRenderFailureMsg := "Failed to build the NodeAllocationRequest"
 		narRenderFailureMsgWithError := narRenderFailureMsg + ": " + err.Error()

@@ -1733,7 +1733,7 @@ var _ = Describe("checkNodesAndMCPsReady", func() {
 		Expect(ready).To(BeFalse())
 	})
 
-	It("keeps the existing join check for flat nodes input", func() {
+	It("skips the MCP check when no host-to-group mapping is available", func() {
 		task.clusterInput.hostToGroupName = nil
 		Expect(spoke.Delete(ctx, pool)).To(Succeed())
 		ready, err := task.checkNodesAndMCPsReady(ctx, ci)
