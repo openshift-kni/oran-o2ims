@@ -23,19 +23,13 @@ func TestConvertAlarmEventRecordModelToApi_ObjectClass(t *testing.T) {
 	g := NewWithT(t)
 	objectClass := "oran.o2ims.cluster.NodeCluster"
 
-	// Present objectClass is passed through
+	// objectClass is a mandatory, non-pointer string on both the model and the API record;
+	// it is passed through directly.
 	record := models.ConvertAlarmEventRecordModelToApi(models.AlarmEventRecord{
 		AlarmEventRecordID: uuid.New(),
-		ObjectClass:        &objectClass,
+		ObjectClass:        objectClass,
 	})
-	g.Expect(record.ObjectClass).ToNot(BeNil())
-	g.Expect(*record.ObjectClass).To(Equal(objectClass))
-
-	// Absent objectClass stays nil (optional field)
-	recordNil := models.ConvertAlarmEventRecordModelToApi(models.AlarmEventRecord{
-		AlarmEventRecordID: uuid.New(),
-	})
-	g.Expect(recordNil.ObjectClass).To(BeNil())
+	g.Expect(record.ObjectClass).To(Equal(objectClass))
 }
 
 func TestConvertAlarmEventRecordModelToAlarmEventNotification_ObjectClass(t *testing.T) {
@@ -43,23 +37,87 @@ func TestConvertAlarmEventRecordModelToAlarmEventNotification_ObjectClass(t *tes
 	globalCloudID := uuid.New()
 	objectClass := "oran.o2ims.resource.Resource"
 
-	// Present objectClass is dereferenced into the required notification field
+	// objectClass is mapped into the required notification field. objectId may be absent
+	// (zero value) while objectClass still identifies the source class, so cover that case.
 	notification := models.ConvertAlarmEventRecordModelToAlarmEventNotification(models.AlarmEventRecord{
 		AlarmEventRecordID: uuid.New(),
-		ObjectClass:        &objectClass,
+		ObjectClass:        objectClass,
 	}, globalCloudID)
 	g.Expect(notification.ObjectClass).To(Equal(objectClass))
+	g.Expect(notification.ObjectId).To(Equal(uuid.Nil))
+}
 
-	// Absent objectClass leaves the required field as the zero value. This is a legacy-row
-	// edge case that is unreachable with current code: the alertmanager converter always
-	// classifies an alert as hardware or cluster (isHardwareAlert is total) and sets
-	// objectClass accordingly, so object_class is never NULL for rows this code writes.
-	// An empty string is accepted here rather than a sentinel because, pre-GA, there are no
-	// legacy rows with a NULL object_class to migrate.
-	notificationNil := models.ConvertAlarmEventRecordModelToAlarmEventNotification(models.AlarmEventRecord{
+// TestConvertAlarmEventRecordModelToApi_V13JSONNames verifies the alarm record serializes the
+// v13 JSON keys and no longer emits the pre-v13 names.
+func TestConvertAlarmEventRecordModelToApi_V13JSONNames(t *testing.T) {
+	g := NewWithT(t)
+	defID, causeID, objID, objTypeID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+
+	record := models.ConvertAlarmEventRecordModelToApi(models.AlarmEventRecord{
 		AlarmEventRecordID: uuid.New(),
+		AlarmDefinitionID:  &defID,
+		ProbableCauseID:    &causeID,
+		ObjectID:           &objID,
+		ObjectTypeID:       &objTypeID,
+		ObjectClass:        "oran.o2ims.cluster.NodeCluster",
+	})
+
+	data, err := json.Marshal(record)
+	g.Expect(err).ToNot(HaveOccurred())
+	js := string(data)
+
+	for _, key := range []string{`"objectTypeId"`, `"objectId"`, `"alarmDefinitionId"`, `"probableCauseId"`, `"objectClass"`} {
+		g.Expect(js).To(ContainSubstring(key))
+	}
+	for _, key := range []string{`"resourceTypeID"`, `"resourceID"`, `"alarmDefinitionID"`, `"probableCauseID"`, `"alarmAcknowledgedTime"`} {
+		g.Expect(js).ToNot(ContainSubstring(key))
+	}
+}
+
+// TestConvertAlarmEventNotification_V13JSONNames verifies the delivered notification serializes
+// the v13 JSON keys (including globalCloudId) and no longer emits the pre-v13 names.
+func TestConvertAlarmEventNotification_V13JSONNames(t *testing.T) {
+	g := NewWithT(t)
+	globalCloudID := uuid.New()
+	defID, causeID, objID, objTypeID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+
+	notification := models.ConvertAlarmEventRecordModelToAlarmEventNotification(models.AlarmEventRecord{
+		AlarmEventRecordID: uuid.New(),
+		AlarmDefinitionID:  &defID,
+		ProbableCauseID:    &causeID,
+		ObjectID:           &objID,
+		ObjectTypeID:       &objTypeID,
+		ObjectClass:        "oran.o2ims.resource.Resource",
 	}, globalCloudID)
-	g.Expect(notificationNil.ObjectClass).To(Equal(""))
+
+	g.Expect(notification.GlobalCloudId).To(Equal(globalCloudID))
+
+	data, err := json.Marshal(notification)
+	g.Expect(err).ToNot(HaveOccurred())
+	js := string(data)
+
+	for _, key := range []string{`"globalCloudId"`, `"objectTypeId"`, `"objectId"`, `"alarmDefinitionId"`, `"probableCauseId"`, `"objectClass"`, `"alarmAcknowledgeTime"`} {
+		g.Expect(js).To(ContainSubstring(key))
+	}
+	for _, key := range []string{`"globalCloudID"`, `"resourceTypeID"`, `"resourceID"`, `"alarmDefinitionID"`, `"probableCauseID"`, `"alarmAcknowledgedTime"`} {
+		g.Expect(js).ToNot(ContainSubstring(key))
+	}
+}
+
+// TestAlarmFilterToEventType verifies the mapping operates on the AlarmSubscriptionInfoEventFilter
+// enum (decoupled from the legacy AlarmSubscriptionInfoFilter type) and maps each value to its
+// corresponding notification event type.
+func TestAlarmFilterToEventType(t *testing.T) {
+	g := NewWithT(t)
+
+	g.Expect(models.AlarmFilterToEventType(api.AlarmSubscriptionInfoEventFilterNEW)).
+		To(Equal(api.AlarmEventNotificationNotificationEventTypeNEW))
+	g.Expect(models.AlarmFilterToEventType(api.AlarmSubscriptionInfoEventFilterCHANGE)).
+		To(Equal(api.AlarmEventNotificationNotificationEventTypeCHANGE))
+	g.Expect(models.AlarmFilterToEventType(api.AlarmSubscriptionInfoEventFilterCLEAR)).
+		To(Equal(api.AlarmEventNotificationNotificationEventTypeCLEAR))
+	g.Expect(models.AlarmFilterToEventType(api.AlarmSubscriptionInfoEventFilterACKNOWLEDGE)).
+		To(Equal(api.AlarmEventNotificationNotificationEventTypeACKNOWLEDGE))
 }
 
 func TestConvertSubscriptionAPIToModel_EventFilter(t *testing.T) {
@@ -113,20 +171,14 @@ func TestConvertSubscriptionModelToApi_EventFilterNullSerialization(t *testing.T
 
 func TestConvertAlertSubToNotificationSub_EffectiveFilter(t *testing.T) {
 	g := NewWithT(t)
-	filter := api.AlarmSubscriptionInfoFilterNEW
 	eventFilter := api.AlarmSubscriptionInfoEventFilterCHANGE
 
-	// (a) both set -> event_filter wins (precedence)
-	both := models.ConvertAlertSubToNotificationSub(&models.AlarmSubscription{Filter: &filter, EventFilter: &eventFilter})
-	g.Expect(both.Filter).ToNot(BeNil())
-	g.Expect(*both.Filter).To(Equal(string(eventFilter)))
+	// (a) event_filter set -> mapped onto the generic Filter field
+	set := models.ConvertAlertSubToNotificationSub(&models.AlarmSubscription{EventFilter: &eventFilter})
+	g.Expect(set.Filter).ToNot(BeNil())
+	g.Expect(*set.Filter).To(Equal(string(eventFilter)))
 
-	// (b) event_filter NULL + filter set -> fall back to filter
-	fallback := models.ConvertAlertSubToNotificationSub(&models.AlarmSubscription{Filter: &filter})
-	g.Expect(fallback.Filter).ToNot(BeNil())
-	g.Expect(*fallback.Filter).To(Equal(string(filter)))
-
-	// (c) both NULL -> nil (match-all)
+	// (b) event_filter NULL -> nil (match-all); the legacy filter fallback has been removed
 	none := models.ConvertAlertSubToNotificationSub(&models.AlarmSubscription{})
 	g.Expect(none.Filter).To(BeNil())
 }
@@ -150,7 +202,7 @@ func TestConvertAlarmEventRecordModelToAlarmEventNotification_NullSerialization(
 	g.Expect(notification.ObjectRef.IsNull()).To(BeFalse())
 
 	// objectRef is root-relative, trailing segment is the alarmEventRecordId (C5(d)).
-	g.Expect(notification.ObjectRef.MustGet()).To(Equal("/O2ims_infrastructureMonitoring/v1/alarms/" + recordID.String()))
+	g.Expect(notification.ObjectRef.MustGet()).To(Equal("/O2ims_infrastructureMonitoring/v2/alarms/" + recordID.String()))
 
 	// JSON marshaling keeps the keys present with explicit null.
 	data, err := json.Marshal(notification)

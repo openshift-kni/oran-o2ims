@@ -67,35 +67,51 @@ var _ api.StrictServerInterface = (*AlarmsServer)(nil)
 
 // baseURL is the prefix for all of our supported API endpoints
 var baseURL = constants.O2IMSMonitoringBaseURL
-var currentVersion = "1.0.0"
+
+// CurrentVersion is the single source of truth for the supported Monitoring API version.
+// It is advertised by both discovery endpoints and emitted by the serve.go Version-header
+// middleware (which reads it by value). This file is in package api and aliases the generated
+// subpackage as api, so the discovery handlers below reference this constant unqualified;
+// api.CurrentVersion here would resolve to the generated subpackage and fail to compile.
+const CurrentVersion = "2.2.0"
 
 // GetAllVersions receives the API request to this endpoint, executes the request, and responds appropriately
 func (a *AlarmsServer) GetAllVersions(ctx context.Context, request api.GetAllVersionsRequestObject) (api.GetAllVersionsResponseObject, error) {
-	// We currently only support a single version
+	// We currently only support a single version. Go cannot take the address of a constant,
+	// so copy it into an addressable local before taking its pointer.
+	version := CurrentVersion
 	versions := []common.APIVersion{
 		{
-			Version: &currentVersion,
+			Version: &version,
 		},
 	}
 
+	// uriPrefix is advertised with a trailing slash per the spec; store it in an addressable
+	// local before taking its pointer (baseURL itself has no trailing slash).
+	uriPrefix := baseURL + "/"
 	return api.GetAllVersions200JSONResponse(common.APIVersions{
 		ApiVersions: &versions,
-		UriPrefix:   &baseURL,
+		UriPrefix:   &uriPrefix,
 	}), nil
 }
 
 // GetMinorVersions receives the API request to this endpoint, executes the request, and responds appropriately
 func (a *AlarmsServer) GetMinorVersions(ctx context.Context, request api.GetMinorVersionsRequestObject) (api.GetMinorVersionsResponseObject, error) {
-	// We currently only support a single version
+	// We currently only support a single version. Go cannot take the address of a constant,
+	// so copy it into an addressable local before taking its pointer.
+	version := CurrentVersion
 	versions := []common.APIVersion{
 		{
-			Version: &currentVersion,
+			Version: &version,
 		},
 	}
 
+	// uriPrefix is advertised with a trailing slash per the spec; store it in an addressable
+	// local before taking its pointer (baseURL itself has no trailing slash).
+	uriPrefix := baseURL + "/"
 	return api.GetMinorVersions200JSONResponse(common.APIVersions{
 		ApiVersions: &versions,
-		UriPrefix:   &baseURL,
+		UriPrefix:   &uriPrefix,
 	}), nil
 }
 
@@ -480,7 +496,7 @@ func (a *AlarmsServer) PatchAlarm(ctx context.Context, request api.PatchAlarmReq
 		return nil, fmt.Errorf("failed to patch Alarm Event Record: %w", err)
 	}
 
-	slog.DebugContext(ctx, "Alarm acknowledged/cleared", slog.Bool("alarmAcknowledged", updated.AlarmAcknowledged), slog.Any("alarmAcknowledgedTime", updated.AlarmAcknowledgedTime),
+	slog.DebugContext(ctx, "Alarm acknowledged/cleared", slog.Bool("alarmAcknowledged", updated.AlarmAcknowledged), slog.Any("alarmAcknowledgeTime", updated.AlarmAcknowledgedTime),
 		slog.Any("alarmClearedTime", updated.AlarmClearedTime), slog.Any("perceivedSeverity", updated.PerceivedSeverity), slog.Any("alarmChangedTime", updated.AlarmChangedTime))
 
 	return api.PatchAlarm200JSONResponse{AlarmAcknowledged: request.Body.AlarmAcknowledged, PerceivedSeverity: request.Body.PerceivedSeverity}, nil

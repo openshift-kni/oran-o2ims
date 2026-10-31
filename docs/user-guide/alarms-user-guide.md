@@ -61,7 +61,7 @@ export MY_TOKEN=$(oc create token -n oran-o2ims test-client --duration=24h \
 
 # Get API endpoint
 export API_URI=$(oc get route -n oran-o2ims -o jsonpath='{.items[?(@.spec.path=="/O2ims_infrastructureMonitoring")].spec.host}')
-export BASE_URL="https://${API_URI}/O2ims_infrastructureMonitoring/v1"
+export BASE_URL="https://${API_URI}/O2ims_infrastructureMonitoring/v2"
 ```
 
 > [!NOTE]
@@ -74,6 +74,23 @@ export BASE_URL="https://${API_URI}/O2ims_infrastructureMonitoring/v1"
 All examples assume you have set `MY_TOKEN` and `BASE_URL` as shown in the authentication section.
 
 **Note:** For complete endpoint documentation, parameter details, and response schemas, refer to the [OpenAPI specification](../../internal/service/alarms/api/openapi.yaml).
+
+### API Version & Discovery
+
+The Monitoring API is served under `/O2ims_infrastructureMonitoring/v2` at version `2.2.0`.
+Every response under the `v2` paths and the unversioned discovery endpoint carries a
+`Version: 2.2.0` HTTP response header.
+
+Both discovery endpoints advertise only `2.2.0`:
+
+```bash
+# Unversioned discovery (lists all supported major versions)
+curl -s -k -H "Authorization: Bearer ${MY_TOKEN}" \
+  "https://${API_URI}/O2ims_infrastructureMonitoring/api_versions" | jq
+
+# Versioned discovery (minor versions of v2)
+curl -s -k -H "Authorization: Bearer ${MY_TOKEN}" "${BASE_URL}/api_versions" | jq
+```
 
 ### Alarm Management
 
@@ -89,13 +106,14 @@ curl -s -k -H "Authorization: Bearer ${MY_TOKEN}" "${BASE_URL}/alarms" | jq
 [
   {
     "alarmEventRecordId": "e213f273-b6fa-48db-9aa2-a00df5de5747",
-    "alarmDefinitionID": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-    "probableCauseID": "00000000-0000-0000-0000-000000000000",
+    "alarmDefinitionId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "probableCauseId": "00000000-0000-0000-0000-000000000000",
     "alarmRaisedTime": "2025-09-10T19:45:16.78Z",
     "alarmChangedTime": "2025-09-25T16:25:12.977032Z",
     "alarmAcknowledged": false,
-    "resourceTypeID": "9144edb7-549b-5e86-9f6a-d4443f13ccfc",
-    "resourceID": "58d0aac5-ab60-4d49-8d44-9c6c50435bf0",
+    "objectTypeId": "9144edb7-549b-5e86-9f6a-d4443f13ccfc",
+    "objectId": "58d0aac5-ab60-4d49-8d44-9c6c50435bf0",
+    "objectClass": "oran.o2ims.cluster.NodeCluster",
     "perceivedSeverity": 3,
     "extensions": {
       "alertname": "UpdateAvailable",
@@ -112,7 +130,10 @@ curl -s -k -H "Authorization: Bearer ${MY_TOKEN}" "${BASE_URL}/alarms" | jq
 - `alarmRaisedTime`: When the alarm was first triggered (ISO 8601)
 - `alarmAcknowledged`: Whether alarm has been acknowledged by operator
 - `perceivedSeverity`: Severity level (0=Critical, 1=Major, 2=Minor, 3=Warning, 4=Indeterminate, 5=Cleared)
-- `resourceID`: ID of the affected resource (cluster, node, etc.)
+- `objectId`: ID of the affected resource (cluster, node, etc.)
+- `objectClass`: fully qualified class of the object that raised the alarm
+  (`oran.o2ims.cluster.NodeCluster` for cluster alarms, `oran.o2ims.resource.Resource`
+  for hardware alarms); always present and non-blank
 - `extensions`: Additional alert metadata from Prometheus/Alertmanager
 
 **Severity Mapping from Prometheus/Alertmanager:**
@@ -184,12 +205,15 @@ curl -s -k \
   a UUID) that is echoed back in every notification delivered to this subscription.
 - `callback` is required and must point to a reachable endpoint under the SMO host.
 
-**Filtering (`filter` and `eventFilter`):**
+**Event filtering (`eventFilter`):**
 
-Both fields select a single notification event type that is **excluded** from delivery —
-the subscription receives every other event type. If neither field is set, **all** events
-are delivered. `eventFilter` is the typed equivalent of `filter`; when both are set
-`eventFilter` takes precedence.
+`eventFilter` is **required** on create. It selects a single notification event type that is
+**excluded** from delivery — the subscription receives every other event type. Set it to an
+explicit `null` to exclude nothing, so **all** events are delivered. The response always
+echoes the key back (as a value or an explicit `null`).
+
+The legacy `filter` property has been removed in v2. A create or patch body that includes
+`filter` (or any other unknown field) is rejected with `400`.
 
 | Value | Effect |
 |---|---|
@@ -197,7 +221,7 @@ are delivered. `eventFilter` is the typed equivalent of `filter`; when both are 
 | `CHANGE` | Exclude change notifications; deliver NEW, CLEAR, ACKNOWLEDGE |
 | `CLEAR` | Exclude clear notifications; deliver NEW, CHANGE, ACKNOWLEDGE |
 | `ACKNOWLEDGE` | Exclude acknowledge notifications; deliver NEW, CHANGE, CLEAR |
-| *(unset)* | Deliver all event types |
+| `null` | Deliver all event types |
 
 #### Modify a Subscription (PATCH)
 
@@ -238,13 +262,18 @@ Note these fields:
 
 - `consumerSubscriptionId`: the value you supplied on the subscription (serialized as
   `null` when you did not set one).
+- `globalCloudId`: the global O-Cloud identifier assigned by the SMO.
 - `objectClass`: the fully qualified class of the object that raised the alarm
   (`oran.o2ims.cluster.NodeCluster` for cluster alarms, `oran.o2ims.resource.Resource`
   for hardware alarms).
 - `objectRef`: a reference to the `AlarmEventRecord`. It is emitted as a **root-relative**
-  path (for example `/O2ims_infrastructureMonitoring/v1/alarms/<alarmEventRecordId>`).
+  path (for example `/O2ims_infrastructureMonitoring/v2/alarms/<alarmEventRecordId>`).
   Consumers that need an absolute URL must prepend the O-Cloud base URL; the absence of a
   configurable public base URL is a known interoperability limitation.
+
+The alarm and notification payloads use the v13 JSON names: `objectTypeId`, `objectId`,
+`alarmDefinitionId`, `probableCauseId`, `alarmAcknowledgeTime`, and (notification only)
+`globalCloudId`.
 
 ## Troubleshooting
 
@@ -293,7 +322,7 @@ curl -s -k -H "Authorization: Bearer ${MY_TOKEN}" "${BASE_URL}/alarms" | jq '. |
 
 - **[OpenAPI Specification](../../internal/service/alarms/api/openapi.yaml)** - Complete API reference (endpoints, models, authentication)
 - **[Development Guide](../../internal/service/alarms/DEVELOPING.md)** - Server development and testing guidance
-- **[O-RAN O2IMS Spec](https://specifications.o-ran.org/download?id=674)** - Official specification this server implements
+- **[O-RAN O2IMS Spec](https://www.o-ran.org/specifications)** - Official specification this server implements (O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v13.00)
 
 ### Dependencies
 

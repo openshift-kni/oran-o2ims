@@ -24,30 +24,29 @@ import (
 // ConvertAlarmEventRecordModelToApi converts an AlarmEventRecord DB model to an API model
 func ConvertAlarmEventRecordModelToApi(aerModel AlarmEventRecord) api.AlarmEventRecord {
 	record := api.AlarmEventRecord{
-		AlarmAcknowledged:     aerModel.AlarmAcknowledged,
-		AlarmAcknowledgedTime: aerModel.AlarmAcknowledgedTime,
-		AlarmChangedTime:      aerModel.AlarmChangedTime,
-		AlarmClearedTime:      aerModel.AlarmClearedTime,
-		AlarmEventRecordId:    aerModel.AlarmEventRecordID,
-		AlarmRaisedTime:       aerModel.AlarmRaisedTime,
-		PerceivedSeverity:     aerModel.PerceivedSeverity,
-		Extensions:            aerModel.Extensions,
+		AlarmAcknowledged:    aerModel.AlarmAcknowledged,
+		AlarmAcknowledgeTime: aerModel.AlarmAcknowledgedTime,
+		AlarmChangedTime:     aerModel.AlarmChangedTime,
+		AlarmClearedTime:     aerModel.AlarmClearedTime,
+		AlarmEventRecordId:   aerModel.AlarmEventRecordID,
+		AlarmRaisedTime:      aerModel.AlarmRaisedTime,
+		PerceivedSeverity:    aerModel.PerceivedSeverity,
+		Extensions:           aerModel.Extensions,
+		// objectClass is a mandatory, non-blank field enforced at the DB boundary.
+		ObjectClass: aerModel.ObjectClass,
 	}
 
 	if aerModel.AlarmDefinitionID != nil {
-		record.AlarmDefinitionID = *aerModel.AlarmDefinitionID
+		record.AlarmDefinitionId = *aerModel.AlarmDefinitionID
 	}
 	if aerModel.ProbableCauseID != nil {
-		record.ProbableCauseID = *aerModel.ProbableCauseID
+		record.ProbableCauseId = *aerModel.ProbableCauseID
 	}
 	if aerModel.ObjectTypeID != nil {
-		record.ResourceTypeID = *aerModel.ObjectTypeID
+		record.ObjectTypeId = *aerModel.ObjectTypeID
 	}
 	if aerModel.ObjectID != nil {
-		record.ResourceID = *aerModel.ObjectID
-	}
-	if aerModel.ObjectClass != nil {
-		record.ObjectClass = aerModel.ObjectClass
+		record.ObjectId = *aerModel.ObjectID
 	}
 
 	return record
@@ -76,7 +75,7 @@ func ConvertAlarmEventRecordModelToAlarmEventNotification(aerModel AlarmEventRec
 		AlarmEventRecordId:    aerModel.AlarmEventRecordID,
 		AlarmRaisedTime:       aerModel.AlarmRaisedTime,
 		Extensions:            aerModel.Extensions,
-		GlobalCloudID:         globalCloudID,
+		GlobalCloudId:         globalCloudID,
 		NotificationEventType: AlarmFilterToEventType(aerModel.NotificationEventType),
 		ObjectRef:             nullable.NewNullableWithValue(or),
 		// consumerSubscriptionId is per-subscriber: the base notification serializes it as an
@@ -87,20 +86,19 @@ func ConvertAlarmEventRecordModelToAlarmEventNotification(aerModel AlarmEventRec
 
 	// Handle all pointer fields together
 	if aerModel.AlarmDefinitionID != nil {
-		notification.AlarmDefinitionID = *aerModel.AlarmDefinitionID
+		notification.AlarmDefinitionId = *aerModel.AlarmDefinitionID
 	}
 	if aerModel.ProbableCauseID != nil {
-		notification.ProbableCauseID = *aerModel.ProbableCauseID
+		notification.ProbableCauseId = *aerModel.ProbableCauseID
 	}
 	if aerModel.ObjectID != nil {
-		notification.ResourceID = *aerModel.ObjectID
+		notification.ObjectId = *aerModel.ObjectID
 	}
 	if aerModel.ObjectTypeID != nil {
-		notification.ResourceTypeID = *aerModel.ObjectTypeID
+		notification.ObjectTypeId = *aerModel.ObjectTypeID
 	}
-	if aerModel.ObjectClass != nil {
-		notification.ObjectClass = *aerModel.ObjectClass
-	}
+	// objectClass is a mandatory, non-blank field enforced at the DB boundary.
+	notification.ObjectClass = aerModel.ObjectClass
 
 	return notification
 }
@@ -126,10 +124,6 @@ func ConvertSubscriptionModelToApi(subscriptionModel AlarmSubscription) api.Alar
 		ConsumerSubscriptionId: subscriptionModel.ConsumerSubscriptionID,
 	}
 
-	if subscriptionModel.Filter != nil {
-		apiModel.Filter = subscriptionModel.Filter
-	}
-
 	// eventFilter is M/0..1: always serialize the key, as a value or explicit null.
 	if subscriptionModel.EventFilter != nil {
 		apiModel.EventFilter = nullable.NewNullableWithValue(*subscriptionModel.EventFilter)
@@ -145,7 +139,6 @@ func ConvertSubscriptionAPIToModel(subscriptionAPI *api.AlarmSubscriptionInfo) A
 	model := AlarmSubscription{
 		Callback:               subscriptionAPI.Callback,
 		ConsumerSubscriptionID: subscriptionAPI.ConsumerSubscriptionId,
-		Filter:                 subscriptionAPI.Filter,
 	}
 
 	// Only persist event_filter when a concrete value is provided; an omitted or
@@ -159,15 +152,15 @@ func ConvertSubscriptionAPIToModel(subscriptionAPI *api.AlarmSubscriptionInfo) A
 }
 
 // AlarmFilterToEventType map text to int e.g NEW -> 0
-func AlarmFilterToEventType(filter api.AlarmSubscriptionInfoFilter) api.AlarmEventNotificationNotificationEventType {
+func AlarmFilterToEventType(filter api.AlarmSubscriptionInfoEventFilter) api.AlarmEventNotificationNotificationEventType {
 	switch filter {
-	case api.AlarmSubscriptionInfoFilterNEW:
+	case api.AlarmSubscriptionInfoEventFilterNEW:
 		return api.AlarmEventNotificationNotificationEventTypeNEW
-	case api.AlarmSubscriptionInfoFilterCHANGE:
+	case api.AlarmSubscriptionInfoEventFilterCHANGE:
 		return api.AlarmEventNotificationNotificationEventTypeCHANGE
-	case api.AlarmSubscriptionInfoFilterCLEAR:
+	case api.AlarmSubscriptionInfoEventFilterCLEAR:
 		return api.AlarmEventNotificationNotificationEventTypeCLEAR
-	case api.AlarmSubscriptionInfoFilterACKNOWLEDGE:
+	case api.AlarmSubscriptionInfoEventFilterACKNOWLEDGE:
 		return api.AlarmEventNotificationNotificationEventTypeACKNOWLEDGE
 	default:
 		return api.AlarmEventNotificationNotificationEventTypeNEW
@@ -183,14 +176,11 @@ func ConvertAlertSubToNotificationSub(as *AlarmSubscription) *notifier.Subscript
 		EventCursor:            int(as.EventCursor),
 	}
 
-	// Effective filter: event_filter takes precedence over filter; if neither is set
-	// the subscription matches all events (C3). The notifier SubscriptionInfo exposes a
-	// single Filter field, so the precedence is resolved here rather than in Matches().
-	switch {
-	case as.EventFilter != nil:
+	// Effective filter: a set event_filter excludes its event type; a NULL event_filter
+	// matches all events (C3). The notifier SubscriptionInfo exposes a single generic Filter
+	// field, so the effective eventFilter is mapped onto it here.
+	if as.EventFilter != nil {
 		info.Filter = (*string)(as.EventFilter)
-	case as.Filter != nil:
-		info.Filter = (*string)(as.Filter)
 	}
 	return &info
 }

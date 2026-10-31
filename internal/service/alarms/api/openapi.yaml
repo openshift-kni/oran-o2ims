@@ -1,15 +1,22 @@
 openapi: 3.0.3
 info:
   title: O2IMS Infrastructure Monitoring Alarms API
-  version: 1.0.0
-  description: API for O2IMS Infrastructure Monitoring Alarms
+  version: 2.2.0
+  description: |
+    API for O2IMS Infrastructure Monitoring Alarms.
+
+    All responses served under the versioned /O2ims_infrastructureMonitoring/v2 paths and
+    the unversioned /O2ims_infrastructureMonitoring/api_versions discovery endpoint carry a
+    `Version: 2.2.0` HTTP response header (on both successful and handled-error responses).
+    The header is set by the server's path-scoped middleware; it is not part of any response
+    body schema.
   contact:
     name: Red Hat
     url: https://www.redhat.com
 
 externalDocs:
-  description: O-RAN apis from O-RAN.WG6.O2IMS-INTERFACE-R003-v06.00 (June 2024)
-  url: https://specifications.o-ran.org/download?id=674
+  description: O-RAN O2ims Interface Specification (O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v13.00), available from the O-RAN specifications catalog
+  url: https://www.o-ran.org/specifications
 
 servers:
 - url: http://localhost:8000
@@ -77,7 +84,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /O2ims_infrastructureMonitoring/v1/api_versions:
+  /O2ims_infrastructureMonitoring/v2/api_versions:
     get:
       operationId: getMinorVersions
       summary: Get minor API versions
@@ -122,7 +129,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /O2ims_infrastructureMonitoring/v1/alarms:
+  /O2ims_infrastructureMonitoring/v2/alarms:
     get:
       operationId: GetAlarms
       summary: Retrieve the list of alarms
@@ -171,7 +178,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /O2ims_infrastructureMonitoring/v1/alarms/{alarmEventRecordId}:
+  /O2ims_infrastructureMonitoring/v2/alarms/{alarmEventRecordId}:
     get:
       operationId: GetAlarm
       summary: Retrieve exactly one alarm
@@ -300,7 +307,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration:
+  /O2ims_infrastructureMonitoring/v2/alarmServiceConfiguration:
     get:
       operationId: GetServiceConfiguration
       summary: Retrieve the alarm service configuration
@@ -449,7 +456,7 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /O2ims_infrastructureMonitoring/v1/alarmSubscriptions:
+  /O2ims_infrastructureMonitoring/v2/alarmSubscriptions:
     get:
       operationId: GetSubscriptions
       summary: Retrieve the list of alarm subscriptions
@@ -568,7 +575,7 @@ paths:
                 '500':
                   description: Internal server error
 
-  /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId}:
+  /O2ims_infrastructureMonitoring/v2/alarmSubscriptions/{alarmSubscriptionId}:
     get:
       operationId: GetSubscription
       summary: Retrieve exactly one subscription
@@ -764,13 +771,13 @@ components:
             Identifier of an entry in the AlarmEventRecord.
             Locally unique within the scope of an O-Cloud instance.
           example: 752c4e22-057d-4162-997b-ca3e2fd4ff53
-        alarmDefinitionID:
+        alarmDefinitionId:
           type: string
           format: uuid
           description: |
             A reference to the Alarm Definition record in the Alarm Dictionary associated with the referenced Resource Type.
           example: 5369fe06-adeb-4966-b8ff-47a6f4d4cec5
-        probableCauseID:
+        probableCauseId:
           type: string
           format: uuid
           description: A reference to the ProbableCause of the Alarm.
@@ -793,7 +800,7 @@ components:
           description: |
             This field is populated with a Date/Time stamp value when the alarm condition is cleared.
           example: 2042-07-21T20:32:28Z
-        alarmAcknowledgedTime:
+        alarmAcknowledgeTime:
           type: string
           format: date-time
           description: This field is populated with a Date/Time stamp value when the alarm condition is acknowledged.
@@ -803,12 +810,12 @@ components:
           description: |
             When a system acknowledges an alarm, it is then set to TRUE.
           example: true
-        resourceTypeID:
+        objectTypeId:
           type: string
           format: uuid
           description: A reference to the type of resource which caused the alarm.
           example: 91d5d140-ef52-4167-b6dc-975ad1897f23
-        resourceID:
+        objectId:
           type: string
           format: uuid
           description: A reference to the resource which caused the alarm.
@@ -817,8 +824,10 @@ components:
           $ref: '#/components/schemas/PerceivedSeverity'
         objectClass:
           type: string
+          minLength: 1
           description: |
             The fully qualified name of the class of the object (Resource or NodeCluster) which caused the alarm.
+            This is a mandatory, non-blank value.
           example: oran.o2ims.cluster.NodeCluster
         extensions:
           type: object
@@ -828,14 +837,15 @@ components:
             operator to extend the information provided about the O-Cloud Alarm.
       required:
       - alarmEventRecordId
-      - alarmDefinitionID
-      - probableCauseID
+      - alarmDefinitionId
+      - probableCauseId
       - alarmRaisedTime
       - alarmAcknowledged
       - perceivedSeverity
       - extensions
-      - resourceTypeID
-      - resourceID
+      - objectTypeId
+      - objectId
+      - objectClass
 
     AlarmEventRecordModifications:
       type: object
@@ -881,6 +891,7 @@ components:
 
     AlarmSubscriptionInfo:
       type: object
+      additionalProperties: false
       properties:
         alarmSubscriptionId:
           type: string
@@ -892,24 +903,16 @@ components:
           type: string
           description: Identifier for the consumer of events sent due to the Subscription.
           example: 16d5fc54-cee0-4532-9826-2369f8240e1b
-        filter:
-          type: string
-          enum: [ NEW, CHANGE, CLEAR, ACKNOWLEDGE ]
-          description: |
-            Criteria for events which do not need to be reported or will be filtered by the subscription
-            notification service. Therefore, if a filter is not provided then all events are reported.
-            It can be filtered by criteria based on the type of notification of fields of the
-            AlarmEventRecord.
-          example: NEW
         eventFilter:
           type: string
           enum: [ NEW, CHANGE, CLEAR, ACKNOWLEDGE ]
           nullable: true
           description: |
             Typed criteria for events which will be filtered by the subscription notification service.
-            It carries the same exclusion semantics as filter (the notification event type to exclude).
-            When set it takes precedence over filter; when null or absent the service falls back to filter.
-            A null value explicitly clears a previously set eventFilter.
+            It carries exclusion semantics: an event whose notificationEventType equals eventFilter is
+            not delivered. A null eventFilter excludes no event types, so all events are eligible for
+            delivery. This key is required on create and is always present in responses, serialized as a
+            value or an explicit null.
           example: NEW
         callback:
           type: string
@@ -917,6 +920,7 @@ components:
           description: The fully qualified URI to a consumer procedure which can process a Post of the AlarmEventNotification.
       required:
       - callback
+      - eventFilter
 
     AlarmSubscriptionUpdate:
       type: object
@@ -939,7 +943,8 @@ components:
           nullable: true
           description: |
             Typed criteria for events which will be filtered by the subscription notification service.
-            A null value clears the eventFilter so the effective filter falls back to filter.
+            Omitting this field leaves the current value unchanged. A null value clears the eventFilter,
+            so no event types are excluded and all events are eligible for delivery. A value replaces it.
         consumerSubscriptionId:
           type: string
           nullable: true
@@ -1068,7 +1073,7 @@ components:
       type: object
       description: Alarm Event Notification sent to subscribers
       properties:
-        globalCloudID:
+        globalCloudId:
           type: string
           format: uuid
           description: The global cloud identifier assigned by the SMO.e
@@ -1096,7 +1101,7 @@ components:
             path (the trailing segment is the alarmEventRecordId). Consumers that require an
             absolute URL must prepend the O-Cloud base URL; the absence of a configurable
             public base URL is a known interoperability limitation.
-          example: /O2ims_infrastructureMonitoring/v1/alarms/bf3f8f2e-6f37-4882-96ad-c0b9cef6fc04
+          example: /O2ims_infrastructureMonitoring/v2/alarms/bf3f8f2e-6f37-4882-96ad-c0b9cef6fc04
         objectClass:
           type: string
           description: |
@@ -1107,22 +1112,22 @@ components:
           format: uuid
           description: The URL to the AlarmEventRecord object.
           example: 5f768e89-2ae1-477d-9978-173056154d5d
-        resourceTypeID:
+        objectTypeId:
           type: string
           format: uuid
           description: A reference to the type of resource which caused the alarm.
           example: 91d5d140-ef52-4167-b6dc-975ad1897f23
-        resourceID:
+        objectId:
           type: string
           format: uuid
           description: A reference to the resource instance which caused the alarm.
           example: 3bff173d-a9d5-4157-858f-f934f6fdec45
-        alarmDefinitionID:
+        alarmDefinitionId:
           type: string
           format: uuid
           description: A reference to the Alarm Definition record in the Alarm Dictionary associated with the referenced ResourceType.
           example: a3a505c7-84dc-4cff-baf8-36f33b3e70fc
-        probableCauseID:
+        probableCauseId:
           type: string
           format: uuid
           description: A reference to the ProbableCause of the Alarm.
@@ -1163,16 +1168,16 @@ components:
             These are unspecified (not standardized) properties (keys) which are tailored by the vendor or
             operator to extend the information provided about the O-Cloud Alarm.
       required:
-      - globalCloudID
+      - globalCloudId
       - consumerSubscriptionId
       - notificationEventType
       - objectRef
       - objectClass
       - alarmEventRecordId
-      - resourceTypeID
-      - resourceID
-      - alarmDefinitionID
-      - probableCauseID
+      - objectTypeId
+      - objectId
+      - alarmDefinitionId
+      - probableCauseId
       - alarmRaisedTime
       - alarmChangedTime
       - alarmClearedTime

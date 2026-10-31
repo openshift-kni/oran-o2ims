@@ -74,30 +74,6 @@ func (e AlarmSubscriptionInfoEventFilter) Valid() bool {
 	}
 }
 
-// Defines values for AlarmSubscriptionInfoFilter.
-const (
-	AlarmSubscriptionInfoFilterACKNOWLEDGE AlarmSubscriptionInfoFilter = "ACKNOWLEDGE"
-	AlarmSubscriptionInfoFilterCHANGE      AlarmSubscriptionInfoFilter = "CHANGE"
-	AlarmSubscriptionInfoFilterCLEAR       AlarmSubscriptionInfoFilter = "CLEAR"
-	AlarmSubscriptionInfoFilterNEW         AlarmSubscriptionInfoFilter = "NEW"
-)
-
-// Valid indicates whether the value is a known member of the AlarmSubscriptionInfoFilter enum.
-func (e AlarmSubscriptionInfoFilter) Valid() bool {
-	switch e {
-	case AlarmSubscriptionInfoFilterACKNOWLEDGE:
-		return true
-	case AlarmSubscriptionInfoFilterCHANGE:
-		return true
-	case AlarmSubscriptionInfoFilterCLEAR:
-		return true
-	case AlarmSubscriptionInfoFilterNEW:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for AlarmSubscriptionUpdateEventFilter.
 const (
 	AlarmSubscriptionUpdateEventFilterACKNOWLEDGE AlarmSubscriptionUpdateEventFilter = "ACKNOWLEDGE"
@@ -192,10 +168,10 @@ type AlarmEventNotification struct {
 	// Example: 2042-07-21T20:32:28Z
 	AlarmClearedTime nullable.Nullable[time.Time] `json:"alarmClearedTime"`
 
-	// AlarmDefinitionID A reference to the Alarm Definition record in the Alarm Dictionary associated with the referenced ResourceType.
+	// AlarmDefinitionId A reference to the Alarm Definition record in the Alarm Dictionary associated with the referenced ResourceType.
 	//
 	// Example: a3a505c7-84dc-4cff-baf8-36f33b3e70fc
-	AlarmDefinitionID openapi_types.UUID `json:"alarmDefinitionID"`
+	AlarmDefinitionId openapi_types.UUID `json:"alarmDefinitionId"`
 
 	// AlarmEventRecordId The URL to the AlarmEventRecord object.
 	//
@@ -216,10 +192,10 @@ type AlarmEventNotification struct {
 	// operator to extend the information provided about the O-Cloud Alarm.
 	Extensions map[string]interface{} `json:"extensions"`
 
-	// GlobalCloudID The global cloud identifier assigned by the SMO.e
+	// GlobalCloudId The global cloud identifier assigned by the SMO.e
 	//
 	// Example: da4698ba-c8a7-429d-ae16-484f15f282c5
-	GlobalCloudID openapi_types.UUID `json:"globalCloudID"`
+	GlobalCloudId openapi_types.UUID `json:"globalCloudId"`
 
 	// NotificationEventType Notification event type values
 	//
@@ -232,34 +208,34 @@ type AlarmEventNotification struct {
 	// Example: oran.o2ims.cluster.NodeCluster
 	ObjectClass string `json:"objectClass"`
 
+	// ObjectId A reference to the resource instance which caused the alarm.
+	//
+	// Example: 3bff173d-a9d5-4157-858f-f934f6fdec45
+	ObjectId openapi_types.UUID `json:"objectId"`
+
 	// ObjectRef A reference to the AlarmEventRecord object. This is emitted as a root-relative
 	// path (the trailing segment is the alarmEventRecordId). Consumers that require an
 	// absolute URL must prepend the O-Cloud base URL; the absence of a configurable
 	// public base URL is a known interoperability limitation.
 	//
 	//
-	// Example: /O2ims_infrastructureMonitoring/v1/alarms/bf3f8f2e-6f37-4882-96ad-c0b9cef6fc04
+	// Example: /O2ims_infrastructureMonitoring/v2/alarms/bf3f8f2e-6f37-4882-96ad-c0b9cef6fc04
 	ObjectRef nullable.Nullable[string] `json:"objectRef"`
+
+	// ObjectTypeId A reference to the type of resource which caused the alarm.
+	//
+	// Example: 91d5d140-ef52-4167-b6dc-975ad1897f23
+	ObjectTypeId openapi_types.UUID `json:"objectTypeId"`
 
 	// PerceivedSeverity This is an enumerated set of values which identify the perceived severity of the alarm.
 	//
 	// Example: 1
 	PerceivedSeverity PerceivedSeverity `json:"perceivedSeverity"`
 
-	// ProbableCauseID A reference to the ProbableCause of the Alarm.
+	// ProbableCauseId A reference to the ProbableCause of the Alarm.
 	//
 	// Example: b3cd1cc7-8e5c-42fe-aaf5-59fd94e33a8a
-	ProbableCauseID openapi_types.UUID `json:"probableCauseID"`
-
-	// ResourceID A reference to the resource instance which caused the alarm.
-	//
-	// Example: 3bff173d-a9d5-4157-858f-f934f6fdec45
-	ResourceID openapi_types.UUID `json:"resourceID"`
-
-	// ResourceTypeID A reference to the type of resource which caused the alarm.
-	//
-	// Example: 91d5d140-ef52-4167-b6dc-975ad1897f23
-	ResourceTypeID openapi_types.UUID `json:"resourceTypeID"`
+	ProbableCauseId openapi_types.UUID `json:"probableCauseId"`
 }
 
 // AlarmEventNotificationNotificationEventType Notification event type values
@@ -269,16 +245,16 @@ type AlarmEventNotificationNotificationEventType int
 
 // AlarmEventRecord defines model for AlarmEventRecord.
 type AlarmEventRecord struct {
+	// AlarmAcknowledgeTime This field is populated with a Date/Time stamp value when the alarm condition is acknowledged.
+	//
+	// Example: 2042-07-21T18:32:28Z
+	AlarmAcknowledgeTime *time.Time `json:"alarmAcknowledgeTime,omitempty"`
+
 	// AlarmAcknowledged When a system acknowledges an alarm, it is then set to TRUE.
 	//
 	//
 	// Example: true
 	AlarmAcknowledged bool `json:"alarmAcknowledged"`
-
-	// AlarmAcknowledgedTime This field is populated with a Date/Time stamp value when the alarm condition is acknowledged.
-	//
-	// Example: 2042-07-21T18:32:28Z
-	AlarmAcknowledgedTime *time.Time `json:"alarmAcknowledgedTime,omitempty"`
 
 	// AlarmChangedTime This field is populated with a Date/Time stamp value when any value
 	// of the AlarmEventRecord is modified.
@@ -293,11 +269,11 @@ type AlarmEventRecord struct {
 	// Example: 2042-07-21T20:32:28Z
 	AlarmClearedTime *time.Time `json:"alarmClearedTime,omitempty"`
 
-	// AlarmDefinitionID A reference to the Alarm Definition record in the Alarm Dictionary associated with the referenced Resource Type.
+	// AlarmDefinitionId A reference to the Alarm Definition record in the Alarm Dictionary associated with the referenced Resource Type.
 	//
 	//
 	// Example: 5369fe06-adeb-4966-b8ff-47a6f4d4cec5
-	AlarmDefinitionID openapi_types.UUID `json:"alarmDefinitionID"`
+	AlarmDefinitionId openapi_types.UUID `json:"alarmDefinitionId"`
 
 	// AlarmEventRecordId Identifier of an entry in the AlarmEventRecord.
 	// Locally unique within the scope of an O-Cloud instance.
@@ -316,30 +292,31 @@ type AlarmEventRecord struct {
 	Extensions map[string]interface{} `json:"extensions"`
 
 	// ObjectClass The fully qualified name of the class of the object (Resource or NodeCluster) which caused the alarm.
+	// This is a mandatory, non-blank value.
 	//
 	//
 	// Example: oran.o2ims.cluster.NodeCluster
-	ObjectClass *string `json:"objectClass,omitempty"`
+	ObjectClass string `json:"objectClass"`
+
+	// ObjectId A reference to the resource which caused the alarm.
+	//
+	// Example: 91d5d140-ef52-4167-b6dc-975ad1897f23
+	ObjectId openapi_types.UUID `json:"objectId"`
+
+	// ObjectTypeId A reference to the type of resource which caused the alarm.
+	//
+	// Example: 91d5d140-ef52-4167-b6dc-975ad1897f23
+	ObjectTypeId openapi_types.UUID `json:"objectTypeId"`
 
 	// PerceivedSeverity This is an enumerated set of values which identify the perceived severity of the alarm.
 	//
 	// Example: 1
 	PerceivedSeverity PerceivedSeverity `json:"perceivedSeverity"`
 
-	// ProbableCauseID A reference to the ProbableCause of the Alarm.
+	// ProbableCauseId A reference to the ProbableCause of the Alarm.
 	//
 	// Example: b45f64fe-6ed8-448d-8ff7-f5840090a075
-	ProbableCauseID openapi_types.UUID `json:"probableCauseID"`
-
-	// ResourceID A reference to the resource which caused the alarm.
-	//
-	// Example: 91d5d140-ef52-4167-b6dc-975ad1897f23
-	ResourceID openapi_types.UUID `json:"resourceID"`
-
-	// ResourceTypeID A reference to the type of resource which caused the alarm.
-	//
-	// Example: 91d5d140-ef52-4167-b6dc-975ad1897f23
-	ResourceTypeID openapi_types.UUID `json:"resourceTypeID"`
+	ProbableCauseId openapi_types.UUID `json:"probableCauseId"`
 }
 
 // AlarmEventRecordModifications defines model for AlarmEventRecordModifications.
@@ -397,39 +374,24 @@ type AlarmSubscriptionInfo struct {
 	ConsumerSubscriptionId *string `json:"consumerSubscriptionId,omitempty"`
 
 	// EventFilter Typed criteria for events which will be filtered by the subscription notification service.
-	// It carries the same exclusion semantics as filter (the notification event type to exclude).
-	// When set it takes precedence over filter; when null or absent the service falls back to filter.
-	// A null value explicitly clears a previously set eventFilter.
+	// It carries exclusion semantics: an event whose notificationEventType equals eventFilter is
+	// not delivered. A null eventFilter excludes no event types, so all events are eligible for
+	// delivery. This key is required on create and is always present in responses, serialized as a
+	// value or an explicit null.
 	//
 	//
 	// Example: NEW
-	EventFilter nullable.Nullable[AlarmSubscriptionInfoEventFilter] `json:"eventFilter,omitempty"`
-
-	// Filter Criteria for events which do not need to be reported or will be filtered by the subscription
-	// notification service. Therefore, if a filter is not provided then all events are reported.
-	// It can be filtered by criteria based on the type of notification of fields of the
-	// AlarmEventRecord.
-	//
-	//
-	// Example: NEW
-	Filter *AlarmSubscriptionInfoFilter `json:"filter,omitempty"`
+	EventFilter nullable.Nullable[AlarmSubscriptionInfoEventFilter] `json:"eventFilter"`
 }
 
 // AlarmSubscriptionInfoEventFilter Typed criteria for events which will be filtered by the subscription notification service.
-// It carries the same exclusion semantics as filter (the notification event type to exclude).
-// When set it takes precedence over filter; when null or absent the service falls back to filter.
-// A null value explicitly clears a previously set eventFilter.
+// It carries exclusion semantics: an event whose notificationEventType equals eventFilter is
+// not delivered. A null eventFilter excludes no event types, so all events are eligible for
+// delivery. This key is required on create and is always present in responses, serialized as a
+// value or an explicit null.
 //
 // Example: NEW
 type AlarmSubscriptionInfoEventFilter string
-
-// AlarmSubscriptionInfoFilter Criteria for events which do not need to be reported or will be filtered by the subscription
-// notification service. Therefore, if a filter is not provided then all events are reported.
-// It can be filtered by criteria based on the type of notification of fields of the
-// AlarmEventRecord.
-//
-// Example: NEW
-type AlarmSubscriptionInfoFilter string
 
 // AlarmSubscriptionUpdate Schema for RFC 7396 JSON Merge Patch requests to an Alarm Subscription.
 // Every field is optional. An omitted field is left unchanged; an explicit
@@ -444,12 +406,14 @@ type AlarmSubscriptionUpdate struct {
 	ConsumerSubscriptionId nullable.Nullable[string] `json:"consumerSubscriptionId,omitempty"`
 
 	// EventFilter Typed criteria for events which will be filtered by the subscription notification service.
-	// A null value clears the eventFilter so the effective filter falls back to filter.
+	// Omitting this field leaves the current value unchanged. A null value clears the eventFilter,
+	// so no event types are excluded and all events are eligible for delivery. A value replaces it.
 	EventFilter nullable.Nullable[AlarmSubscriptionUpdateEventFilter] `json:"eventFilter,omitempty"`
 }
 
 // AlarmSubscriptionUpdateEventFilter Typed criteria for events which will be filtered by the subscription notification service.
-// A null value clears the eventFilter so the effective filter falls back to filter.
+// Omitting this field leaves the current value unchanged. A null value clears the eventFilter,
+// so no event types are excluded and all events are eligible for delivery. A value replaces it.
 type AlarmSubscriptionUpdateEventFilter string
 
 // Alert defines model for Alert.
@@ -722,40 +686,40 @@ type ServerInterface interface {
 	// (GET /O2ims_infrastructureMonitoring/api_versions)
 	GetAllVersions(w http.ResponseWriter, r *http.Request)
 	// GetServiceConfiguration Retrieve the alarm service configuration
-	// (GET /O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration)
+	// (GET /O2ims_infrastructureMonitoring/v2/alarmServiceConfiguration)
 	GetServiceConfiguration(w http.ResponseWriter, r *http.Request)
 	// PatchAlarmServiceConfiguration Modify individual fields of the Alarm Service Configuration.
-	// (PATCH /O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration)
+	// (PATCH /O2ims_infrastructureMonitoring/v2/alarmServiceConfiguration)
 	PatchAlarmServiceConfiguration(w http.ResponseWriter, r *http.Request)
 	// UpdateAlarmServiceConfiguration Modify all fields of the Alarm Service Configuration.
-	// (PUT /O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration)
+	// (PUT /O2ims_infrastructureMonitoring/v2/alarmServiceConfiguration)
 	UpdateAlarmServiceConfiguration(w http.ResponseWriter, r *http.Request)
 	// GetSubscriptions Retrieve the list of alarm subscriptions
-	// (GET /O2ims_infrastructureMonitoring/v1/alarmSubscriptions)
+	// (GET /O2ims_infrastructureMonitoring/v2/alarmSubscriptions)
 	GetSubscriptions(w http.ResponseWriter, r *http.Request, params GetSubscriptionsParams)
 	// CreateSubscription Create a new alarm subscription
-	// (POST /O2ims_infrastructureMonitoring/v1/alarmSubscriptions)
+	// (POST /O2ims_infrastructureMonitoring/v2/alarmSubscriptions)
 	CreateSubscription(w http.ResponseWriter, r *http.Request)
 	// DeleteSubscription Delete exactly one subscription
-	// (DELETE /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId})
+	// (DELETE /O2ims_infrastructureMonitoring/v2/alarmSubscriptions/{alarmSubscriptionId})
 	DeleteSubscription(w http.ResponseWriter, r *http.Request, alarmSubscriptionId openapi_types.UUID)
 	// GetSubscription Retrieve exactly one subscription
-	// (GET /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId})
+	// (GET /O2ims_infrastructureMonitoring/v2/alarmSubscriptions/{alarmSubscriptionId})
 	GetSubscription(w http.ResponseWriter, r *http.Request, alarmSubscriptionId openapi_types.UUID)
 	// PatchSubscription Modify individual fields of an Alarm Subscription
-	// (PATCH /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId})
+	// (PATCH /O2ims_infrastructureMonitoring/v2/alarmSubscriptions/{alarmSubscriptionId})
 	PatchSubscription(w http.ResponseWriter, r *http.Request, alarmSubscriptionId openapi_types.UUID)
 	// GetAlarms Retrieve the list of alarms
-	// (GET /O2ims_infrastructureMonitoring/v1/alarms)
+	// (GET /O2ims_infrastructureMonitoring/v2/alarms)
 	GetAlarms(w http.ResponseWriter, r *http.Request, params GetAlarmsParams)
 	// GetAlarm Retrieve exactly one alarm
-	// (GET /O2ims_infrastructureMonitoring/v1/alarms/{alarmEventRecordId})
+	// (GET /O2ims_infrastructureMonitoring/v2/alarms/{alarmEventRecordId})
 	GetAlarm(w http.ResponseWriter, r *http.Request, alarmEventRecordId openapi_types.UUID)
 	// PatchAlarm Modify an individual alarm record
-	// (PATCH /O2ims_infrastructureMonitoring/v1/alarms/{alarmEventRecordId})
+	// (PATCH /O2ims_infrastructureMonitoring/v2/alarms/{alarmEventRecordId})
 	PatchAlarm(w http.ResponseWriter, r *http.Request, alarmEventRecordId openapi_types.UUID)
 	// GetMinorVersions Get minor API versions
-	// (GET /O2ims_infrastructureMonitoring/v1/api_versions)
+	// (GET /O2ims_infrastructureMonitoring/v2/api_versions)
 	GetMinorVersions(w http.ResponseWriter, r *http.Request)
 	// AmNotification Receive Alertmanager notifications
 	// (POST /internal/v1/caas-alerts/alertmanager)
@@ -1293,18 +1257,18 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/api_versions", wrapper.GetAllVersions)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration", wrapper.GetServiceConfiguration)
-	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration", wrapper.PatchAlarmServiceConfiguration)
-	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration", wrapper.UpdateAlarmServiceConfiguration)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v1/alarmSubscriptions", wrapper.GetSubscriptions)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v1/alarmSubscriptions", wrapper.CreateSubscription)
-	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId}", wrapper.DeleteSubscription)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId}", wrapper.GetSubscription)
-	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId}", wrapper.PatchSubscription)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v1/alarms", wrapper.GetAlarms)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v1/alarms/{alarmEventRecordId}", wrapper.GetAlarm)
-	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v1/alarms/{alarmEventRecordId}", wrapper.PatchAlarm)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v1/api_versions", wrapper.GetMinorVersions)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v2/alarmServiceConfiguration", wrapper.GetServiceConfiguration)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v2/alarmServiceConfiguration", wrapper.PatchAlarmServiceConfiguration)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v2/alarmServiceConfiguration", wrapper.UpdateAlarmServiceConfiguration)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v2/alarmSubscriptions", wrapper.GetSubscriptions)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v2/alarmSubscriptions", wrapper.CreateSubscription)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v2/alarmSubscriptions/{alarmSubscriptionId}", wrapper.DeleteSubscription)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v2/alarmSubscriptions/{alarmSubscriptionId}", wrapper.GetSubscription)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v2/alarmSubscriptions/{alarmSubscriptionId}", wrapper.PatchSubscription)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v2/alarms", wrapper.GetAlarms)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v2/alarms/{alarmEventRecordId}", wrapper.GetAlarm)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v2/alarms/{alarmEventRecordId}", wrapper.PatchAlarm)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureMonitoring/v2/api_versions", wrapper.GetMinorVersions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/internal/v1/caas-alerts/alertmanager", wrapper.AmNotification)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/internal/v1/hardware-alerts/{hwVendorName}", wrapper.HwNotification)
 
@@ -2564,40 +2528,40 @@ type StrictServerInterface interface {
 	// (GET /O2ims_infrastructureMonitoring/api_versions)
 	GetAllVersions(ctx context.Context, request GetAllVersionsRequestObject) (GetAllVersionsResponseObject, error)
 	// GetServiceConfiguration Retrieve the alarm service configuration
-	// (GET /O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration)
+	// (GET /O2ims_infrastructureMonitoring/v2/alarmServiceConfiguration)
 	GetServiceConfiguration(ctx context.Context, request GetServiceConfigurationRequestObject) (GetServiceConfigurationResponseObject, error)
 	// PatchAlarmServiceConfiguration Modify individual fields of the Alarm Service Configuration.
-	// (PATCH /O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration)
+	// (PATCH /O2ims_infrastructureMonitoring/v2/alarmServiceConfiguration)
 	PatchAlarmServiceConfiguration(ctx context.Context, request PatchAlarmServiceConfigurationRequestObject) (PatchAlarmServiceConfigurationResponseObject, error)
 	// UpdateAlarmServiceConfiguration Modify all fields of the Alarm Service Configuration.
-	// (PUT /O2ims_infrastructureMonitoring/v1/alarmServiceConfiguration)
+	// (PUT /O2ims_infrastructureMonitoring/v2/alarmServiceConfiguration)
 	UpdateAlarmServiceConfiguration(ctx context.Context, request UpdateAlarmServiceConfigurationRequestObject) (UpdateAlarmServiceConfigurationResponseObject, error)
 	// GetSubscriptions Retrieve the list of alarm subscriptions
-	// (GET /O2ims_infrastructureMonitoring/v1/alarmSubscriptions)
+	// (GET /O2ims_infrastructureMonitoring/v2/alarmSubscriptions)
 	GetSubscriptions(ctx context.Context, request GetSubscriptionsRequestObject) (GetSubscriptionsResponseObject, error)
 	// CreateSubscription Create a new alarm subscription
-	// (POST /O2ims_infrastructureMonitoring/v1/alarmSubscriptions)
+	// (POST /O2ims_infrastructureMonitoring/v2/alarmSubscriptions)
 	CreateSubscription(ctx context.Context, request CreateSubscriptionRequestObject) (CreateSubscriptionResponseObject, error)
 	// DeleteSubscription Delete exactly one subscription
-	// (DELETE /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId})
+	// (DELETE /O2ims_infrastructureMonitoring/v2/alarmSubscriptions/{alarmSubscriptionId})
 	DeleteSubscription(ctx context.Context, request DeleteSubscriptionRequestObject) (DeleteSubscriptionResponseObject, error)
 	// GetSubscription Retrieve exactly one subscription
-	// (GET /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId})
+	// (GET /O2ims_infrastructureMonitoring/v2/alarmSubscriptions/{alarmSubscriptionId})
 	GetSubscription(ctx context.Context, request GetSubscriptionRequestObject) (GetSubscriptionResponseObject, error)
 	// PatchSubscription Modify individual fields of an Alarm Subscription
-	// (PATCH /O2ims_infrastructureMonitoring/v1/alarmSubscriptions/{alarmSubscriptionId})
+	// (PATCH /O2ims_infrastructureMonitoring/v2/alarmSubscriptions/{alarmSubscriptionId})
 	PatchSubscription(ctx context.Context, request PatchSubscriptionRequestObject) (PatchSubscriptionResponseObject, error)
 	// GetAlarms Retrieve the list of alarms
-	// (GET /O2ims_infrastructureMonitoring/v1/alarms)
+	// (GET /O2ims_infrastructureMonitoring/v2/alarms)
 	GetAlarms(ctx context.Context, request GetAlarmsRequestObject) (GetAlarmsResponseObject, error)
 	// GetAlarm Retrieve exactly one alarm
-	// (GET /O2ims_infrastructureMonitoring/v1/alarms/{alarmEventRecordId})
+	// (GET /O2ims_infrastructureMonitoring/v2/alarms/{alarmEventRecordId})
 	GetAlarm(ctx context.Context, request GetAlarmRequestObject) (GetAlarmResponseObject, error)
 	// PatchAlarm Modify an individual alarm record
-	// (PATCH /O2ims_infrastructureMonitoring/v1/alarms/{alarmEventRecordId})
+	// (PATCH /O2ims_infrastructureMonitoring/v2/alarms/{alarmEventRecordId})
 	PatchAlarm(ctx context.Context, request PatchAlarmRequestObject) (PatchAlarmResponseObject, error)
 	// GetMinorVersions Get minor API versions
-	// (GET /O2ims_infrastructureMonitoring/v1/api_versions)
+	// (GET /O2ims_infrastructureMonitoring/v2/api_versions)
 	GetMinorVersions(ctx context.Context, request GetMinorVersionsRequestObject) (GetMinorVersionsResponseObject, error)
 	// AmNotification Receive Alertmanager notifications
 	// (POST /internal/v1/caas-alerts/alertmanager)
@@ -3076,111 +3040,114 @@ func (sh *strictHandler) HwNotification(w http.ResponseWriter, r *http.Request, 
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"/OnKk2J1c5UuQa+ipbzTdXd19/8BAAD//w==",
+	"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",
+	"v77/vwAAAP//",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -24,37 +24,60 @@ import (
 )
 
 // TestGetSubscriptions_EffectiveFilter verifies that GetSubscriptions resolves the
-// effective filter (event_filter precedence over filter) through the converter (C3).
+// effective filter from event_filter through the converter: a set event_filter is mapped
+// onto the generic Filter field and a NULL event_filter yields a nil Filter (match-all) (C3).
 func TestGetSubscriptions_EffectiveFilter(t *testing.T) {
 	g := NewWithT(t)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	filter := api.AlarmSubscriptionInfoFilterNEW
 	eventFilter := api.AlarmSubscriptionInfoEventFilterCHANGE
 
 	repo := mockrepo.NewMockAlarmRepositoryInterface(ctrl)
 	repo.EXPECT().GetAlarmSubscriptions(gomock.Any()).Return([]models.AlarmSubscription{
-		// event_filter set -> precedence
-		{SubscriptionID: uuid.New(), Callback: "http://a", Filter: &filter, EventFilter: &eventFilter},
-		// event_filter NULL + filter set -> fallback to filter
-		{SubscriptionID: uuid.New(), Callback: "http://b", Filter: &filter},
-		// both NULL -> match-all (nil)
-		{SubscriptionID: uuid.New(), Callback: "http://c"},
+		// event_filter set -> mapped onto the generic Filter
+		{SubscriptionID: uuid.New(), Callback: "http://a", EventFilter: &eventFilter},
+		// event_filter NULL -> match-all (nil)
+		{SubscriptionID: uuid.New(), Callback: "http://b"},
 	}, nil)
 
 	provider := notifier_provider.NewSubscriptionStorageProvider(repo)
 	subs, err := provider.GetSubscriptions(context.Background())
 	g.Expect(err).ToNot(HaveOccurred())
-	g.Expect(subs).To(HaveLen(3))
+	g.Expect(subs).To(HaveLen(2))
 
 	g.Expect(subs[0].Filter).ToNot(BeNil())
 	g.Expect(*subs[0].Filter).To(Equal(string(eventFilter)))
 
-	g.Expect(subs[1].Filter).ToNot(BeNil())
-	g.Expect(*subs[1].Filter).To(Equal(string(filter)))
+	g.Expect(subs[1].Filter).To(BeNil())
+}
 
-	g.Expect(subs[2].Filter).To(BeNil())
+// TestMatches verifies notifier matching after the legacy filter removal: a NULL eventFilter
+// (the effective state after a CREATE-with-null or a PATCH-to-null) matches all events, while a
+// set eventFilter excludes only the event whose notificationEventType equals the filter.
+func TestMatches(t *testing.T) {
+	g := NewWithT(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	provider := notifier_provider.NewSubscriptionStorageProvider(mockrepo.NewMockAlarmRepositoryInterface(ctrl))
+
+	newEvent := &notifier.Notification{Payload: api.AlarmEventNotification{
+		NotificationEventType: api.AlarmEventNotificationNotificationEventTypeNEW,
+	}}
+
+	// CREATE-with-null / PATCH-to-null => event_filter NULL => nil Filter => match-all delivery.
+	matchAll := &notifier.SubscriptionInfo{}
+	g.Expect(provider.Matches(matchAll, newEvent)).To(BeTrue())
+
+	// A set eventFilter excludes the event whose type equals the filter...
+	newFilter := string(api.AlarmSubscriptionInfoEventFilterNEW)
+	excluded := &notifier.SubscriptionInfo{Filter: &newFilter}
+	g.Expect(provider.Matches(excluded, newEvent)).To(BeFalse())
+
+	// ...but still delivers other event types.
+	ackFilter := string(api.AlarmSubscriptionInfoEventFilterACKNOWLEDGE)
+	other := &notifier.SubscriptionInfo{Filter: &ackFilter}
+	g.Expect(provider.Matches(other, newEvent)).To(BeTrue())
 }
 
 // TestGetSubscription verifies the by-id lookup returns the effective filter and

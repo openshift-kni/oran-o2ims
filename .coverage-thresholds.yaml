@@ -21,6 +21,7 @@ packages:
   internal/provisioning: 95
   internal/logging: 39
   internal/search: 38
+  internal/service/alarms: 5
   internal/service/alarms/api: 2
   internal/service/alarms/internal/alertmanager: 42
   internal/service/alarms/internal/db/models: 50
