@@ -669,4 +669,83 @@ var _ = Describe("AlarmsServer", func() {
 			Expect(string(raw)).To(Equal("null"))
 		})
 	})
+
+	Describe("AlarmServiceConfiguration request validation", func() {
+		var handler http.Handler
+
+		BeforeEach(func() {
+			swagger, err := alarmapi.GetSwagger()
+			Expect(err).ToNot(HaveOccurred())
+			validation := middleware.OpenAPIValidation(swagger)
+			handler = validation(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
+		})
+
+		put := func(body string) *httptest.ResponseRecorder {
+			req := httptest.NewRequest(http.MethodPut,
+				"/O2ims_infrastructureMonitoring/v2/alarmServiceConfiguration",
+				bytes.NewBufferString(body))
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			return rr
+		}
+
+		It("accepts PUT with retentionPeriod only (extensions omitted)", func() {
+			rr := put(`{"retentionPeriod":7}`)
+			Expect(rr.Code).To(Equal(http.StatusOK))
+		})
+
+		It("accepts PUT with retentionPeriod and empty extensions", func() {
+			rr := put(`{"retentionPeriod":7,"extensions":{}}`)
+			Expect(rr.Code).To(Equal(http.StatusOK))
+		})
+
+		It("accepts PUT with retentionPeriod and populated extensions", func() {
+			rr := put(`{"retentionPeriod":7,"extensions":{"key":"value"}}`)
+			Expect(rr.Code).To(Equal(http.StatusOK))
+		})
+
+		It("rejects PUT with explicit extensions:null", func() {
+			rr := put(`{"retentionPeriod":7,"extensions":null}`)
+			Expect(rr.Code).To(Equal(http.StatusBadRequest))
+		})
+	})
+
+	Describe("AlarmServiceConfiguration response serialization", func() {
+		It("serializes unset extensions as empty object in GET response", func() {
+			config := models.ServiceConfiguration{
+				RetentionPeriod: 1,
+				Extensions:      nil,
+			}
+			apiModel := models.ConvertServiceConfigurationToAPI(config)
+
+			data, err := json.Marshal(apiModel)
+			Expect(err).ToNot(HaveOccurred())
+
+			var decoded map[string]json.RawMessage
+			Expect(json.Unmarshal(data, &decoded)).To(Succeed())
+			raw, ok := decoded["extensions"]
+			Expect(ok).To(BeTrue(), "extensions key must be present even when unset")
+			Expect(string(raw)).To(Equal("{}"))
+		})
+
+		It("serializes populated extensions correctly", func() {
+			config := models.ServiceConfiguration{
+				RetentionPeriod: 1,
+				Extensions:      map[string]interface{}{"key": "value"},
+			}
+			apiModel := models.ConvertServiceConfigurationToAPI(config)
+
+			data, err := json.Marshal(apiModel)
+			Expect(err).ToNot(HaveOccurred())
+
+			var decoded map[string]json.RawMessage
+			Expect(json.Unmarshal(data, &decoded)).To(Succeed())
+			raw, ok := decoded["extensions"]
+			Expect(ok).To(BeTrue())
+			Expect(string(raw)).To(Equal(`{"key":"value"}`))
+		})
+	})
 })

@@ -547,7 +547,6 @@ func (a *AlarmsServer) PatchAlarmServiceConfiguration(ctx context.Context, reque
 		serviceConfigRecord.RetentionPeriod = *request.Body.RetentionPeriod
 	}
 
-	// Update extensions if provided in the request
 	if request.Body.Extensions != nil {
 		serviceConfigRecord.Extensions = *request.Body.Extensions
 	}
@@ -588,10 +587,12 @@ func (a *AlarmsServer) UpdateAlarmServiceConfiguration(ctx context.Context, requ
 		}), nil
 	}
 
-	// Update the Alarm Service Configuration
-	// Extensions is now a required field (not a pointer), always update it
 	serviceConfigRecord.RetentionPeriod = request.Body.RetentionPeriod
-	serviceConfigRecord.Extensions = request.Body.Extensions
+	if request.Body.Extensions != nil {
+		serviceConfigRecord.Extensions = *request.Body.Extensions
+	} else {
+		serviceConfigRecord.Extensions = nil
+	}
 
 	// TODO make it event-driven with PG listen/notify
 	// Update the Alarm Service Configuration

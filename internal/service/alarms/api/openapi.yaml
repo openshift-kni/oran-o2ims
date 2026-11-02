@@ -872,7 +872,6 @@ components:
           description: List of metadata key-value pairs used to associate meaningful metadata to the related alarm service
       required:
       - retentionPeriod
-      - extensions
 
     AlarmServiceConfigurationPatch:
       type: object
