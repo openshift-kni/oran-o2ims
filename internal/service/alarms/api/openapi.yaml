@@ -885,8 +885,12 @@ components:
           example: 30
         extensions:
           type: object
-          additionalProperties: {}
-          description: List of metadata key-value pairs used to associate meaningful metadata to the related alarm service
+          nullable: true
+          additionalProperties: true
+          description: |
+            RFC 7396 merge-patch semantics: an object value merges entries into the
+            stored extensions (null-valued keys remove entries); an explicit null
+            clears all extensions; omission leaves the stored value unchanged.
 
     AlarmSubscriptionInfo:
       type: object

@@ -711,6 +711,225 @@ var _ = Describe("AlarmsServer", func() {
 			rr := put(`{"retentionPeriod":7,"extensions":null}`)
 			Expect(rr.Code).To(Equal(http.StatusBadRequest))
 		})
+
+		patch := func(body string) *httptest.ResponseRecorder {
+			req := httptest.NewRequest(http.MethodPatch,
+				"/O2ims_infrastructureMonitoring/v2/alarmServiceConfiguration",
+				bytes.NewBufferString(body))
+			req.Header.Set("Content-Type", "application/merge-patch+json")
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			return rr
+		}
+
+		It("accepts PATCH with extensions:null (clears extensions per RFC 7396)", func() {
+			rr := patch(`{"extensions":null}`)
+			Expect(rr.Code).To(Equal(http.StatusOK))
+		})
+
+		It("accepts PATCH with extensions object (merge)", func() {
+			rr := patch(`{"extensions":{"key":"value"}}`)
+			Expect(rr.Code).To(Equal(http.StatusOK))
+		})
+
+		It("accepts PATCH with extensions omitted (preserves existing)", func() {
+			rr := patch(`{"retentionPeriod":5}`)
+			Expect(rr.Code).To(Equal(http.StatusOK))
+		})
+
+		It("accepts PATCH with null-valued extension entry (RFC 7396 delete)", func() {
+			rr := patch(`{"extensions":{"key2":null}}`)
+			Expect(rr.Code).To(Equal(http.StatusOK))
+		})
+	})
+
+	Describe("AlarmServiceConfiguration handler behavior", func() {
+		defaultConfig := func(ext map[string]interface{}) models.ServiceConfiguration {
+			return models.ServiceConfiguration{
+				ID:              testUUID,
+				RetentionPeriod: 1,
+				Extensions:      ext,
+			}
+		}
+
+		It("PUT with extensions omitted clears existing extensions", func() {
+			existing := defaultConfig(map[string]interface{}{"a": "1"})
+			mockRepo.EXPECT().GetServiceConfigurations(gomock.Any()).Return([]models.ServiceConfiguration{existing}, nil)
+			mockRepo.EXPECT().UpdateServiceConfiguration(gomock.Any(), testUUID, gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ uuid.UUID, rec *models.ServiceConfiguration) (*models.ServiceConfiguration, error) {
+					Expect(rec.Extensions).To(BeNil())
+					return rec, nil
+				})
+
+			resp, err := server.UpdateAlarmServiceConfiguration(ctx, alarmapi.UpdateAlarmServiceConfigurationRequestObject{
+				Body: &alarmapi.AlarmServiceConfiguration{RetentionPeriod: 5},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp).To(BeAssignableToTypeOf(alarmapi.UpdateAlarmServiceConfiguration200JSONResponse{}))
+		})
+
+		It("PUT with extensions:{} clears existing extensions", func() {
+			existing := defaultConfig(map[string]interface{}{"a": "1"})
+			mockRepo.EXPECT().GetServiceConfigurations(gomock.Any()).Return([]models.ServiceConfiguration{existing}, nil)
+			mockRepo.EXPECT().UpdateServiceConfiguration(gomock.Any(), testUUID, gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ uuid.UUID, rec *models.ServiceConfiguration) (*models.ServiceConfiguration, error) {
+					Expect(rec.Extensions).To(BeEmpty())
+					return rec, nil
+				})
+
+			ext := map[string]interface{}{}
+			resp, err := server.UpdateAlarmServiceConfiguration(ctx, alarmapi.UpdateAlarmServiceConfigurationRequestObject{
+				Body: &alarmapi.AlarmServiceConfiguration{RetentionPeriod: 5, Extensions: &ext},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp).To(BeAssignableToTypeOf(alarmapi.UpdateAlarmServiceConfiguration200JSONResponse{}))
+		})
+
+		It("PATCH with extensions omitted preserves existing extensions", func() {
+			existing := defaultConfig(map[string]interface{}{"a": "1"})
+			mockRepo.EXPECT().GetServiceConfigurations(gomock.Any()).Return([]models.ServiceConfiguration{existing}, nil)
+			mockRepo.EXPECT().UpdateServiceConfiguration(gomock.Any(), testUUID, gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ uuid.UUID, rec *models.ServiceConfiguration) (*models.ServiceConfiguration, error) {
+					Expect(rec.Extensions).To(HaveKeyWithValue("a", "1"))
+					return rec, nil
+				})
+
+			rp := 5
+			resp, err := server.PatchAlarmServiceConfiguration(ctx, alarmapi.PatchAlarmServiceConfigurationRequestObject{
+				Body: &alarmapi.AlarmServiceConfigurationPatch{RetentionPeriod: &rp},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp).To(BeAssignableToTypeOf(alarmapi.PatchAlarmServiceConfiguration200JSONResponse{}))
+		})
+
+		It("PATCH with extensions merges entries per RFC 7396", func() {
+			existing := defaultConfig(map[string]interface{}{"a": "1", "b": "2"})
+			mockRepo.EXPECT().GetServiceConfigurations(gomock.Any()).Return([]models.ServiceConfiguration{existing}, nil)
+			mockRepo.EXPECT().UpdateServiceConfiguration(gomock.Any(), testUUID, gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ uuid.UUID, rec *models.ServiceConfiguration) (*models.ServiceConfiguration, error) {
+					Expect(rec.Extensions).To(HaveKeyWithValue("a", "updated"))
+					Expect(rec.Extensions).ToNot(HaveKey("b"))
+					Expect(rec.Extensions).To(HaveKeyWithValue("c", "new"))
+					return rec, nil
+				})
+
+			patch := alarmapi.AlarmServiceConfigurationPatch{}
+			patch.Extensions.Set(map[string]interface{}{"a": "updated", "b": nil, "c": "new"})
+			resp, err := server.PatchAlarmServiceConfiguration(ctx, alarmapi.PatchAlarmServiceConfigurationRequestObject{
+				Body: &patch,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp).To(BeAssignableToTypeOf(alarmapi.PatchAlarmServiceConfiguration200JSONResponse{}))
+		})
+
+		It("PATCH with nested extensions merges recursively per RFC 7396", func() {
+			existing := defaultConfig(map[string]interface{}{
+				"nested": map[string]interface{}{"a": "1", "b": "2"},
+				"top":    "keep",
+			})
+			mockRepo.EXPECT().GetServiceConfigurations(gomock.Any()).Return([]models.ServiceConfiguration{existing}, nil)
+			mockRepo.EXPECT().UpdateServiceConfiguration(gomock.Any(), testUUID, gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ uuid.UUID, rec *models.ServiceConfiguration) (*models.ServiceConfiguration, error) {
+					nested := rec.Extensions["nested"].(map[string]interface{})
+					Expect(nested).To(HaveKeyWithValue("a", "1"))
+					Expect(nested).ToNot(HaveKey("b"))
+					Expect(nested).To(HaveKeyWithValue("c", "3"))
+					Expect(rec.Extensions).To(HaveKeyWithValue("top", "keep"))
+					return rec, nil
+				})
+
+			patch := alarmapi.AlarmServiceConfigurationPatch{}
+			patch.Extensions.Set(map[string]interface{}{
+				"nested": map[string]interface{}{"b": nil, "c": "3"},
+			})
+			resp, err := server.PatchAlarmServiceConfiguration(ctx, alarmapi.PatchAlarmServiceConfigurationRequestObject{
+				Body: &patch,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp).To(BeAssignableToTypeOf(alarmapi.PatchAlarmServiceConfiguration200JSONResponse{}))
+		})
+
+		It("PATCH with new nested object strips null keys per RFC 7396", func() {
+			existing := defaultConfig(map[string]interface{}{})
+			mockRepo.EXPECT().GetServiceConfigurations(gomock.Any()).Return([]models.ServiceConfiguration{existing}, nil)
+			mockRepo.EXPECT().UpdateServiceConfiguration(gomock.Any(), testUUID, gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ uuid.UUID, rec *models.ServiceConfiguration) (*models.ServiceConfiguration, error) {
+					vendor := rec.Extensions["vendor"].(map[string]interface{})
+					Expect(vendor).ToNot(HaveKey("remove"))
+					Expect(vendor).To(HaveKeyWithValue("keep", float64(1)))
+					return rec, nil
+				})
+
+			patch := alarmapi.AlarmServiceConfigurationPatch{}
+			patch.Extensions.Set(map[string]interface{}{
+				"vendor": map[string]interface{}{"remove": nil, "keep": float64(1)},
+			})
+			resp, err := server.PatchAlarmServiceConfiguration(ctx, alarmapi.PatchAlarmServiceConfigurationRequestObject{
+				Body: &patch,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp).To(BeAssignableToTypeOf(alarmapi.PatchAlarmServiceConfiguration200JSONResponse{}))
+		})
+
+		It("PATCH replaces scalar with nested object and strips null keys", func() {
+			existing := defaultConfig(map[string]interface{}{"key": "scalar"})
+			mockRepo.EXPECT().GetServiceConfigurations(gomock.Any()).Return([]models.ServiceConfiguration{existing}, nil)
+			mockRepo.EXPECT().UpdateServiceConfiguration(gomock.Any(), testUUID, gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ uuid.UUID, rec *models.ServiceConfiguration) (*models.ServiceConfiguration, error) {
+					nested := rec.Extensions["key"].(map[string]interface{})
+					Expect(nested).To(HaveKeyWithValue("a", "1"))
+					Expect(nested).ToNot(HaveKey("b"))
+					return rec, nil
+				})
+
+			patch := alarmapi.AlarmServiceConfigurationPatch{}
+			patch.Extensions.Set(map[string]interface{}{
+				"key": map[string]interface{}{"a": "1", "b": nil},
+			})
+			resp, err := server.PatchAlarmServiceConfiguration(ctx, alarmapi.PatchAlarmServiceConfigurationRequestObject{
+				Body: &patch,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp).To(BeAssignableToTypeOf(alarmapi.PatchAlarmServiceConfiguration200JSONResponse{}))
+		})
+
+		It("PATCH with extensions:null clears all extensions", func() {
+			existing := defaultConfig(map[string]interface{}{"a": "1"})
+			mockRepo.EXPECT().GetServiceConfigurations(gomock.Any()).Return([]models.ServiceConfiguration{existing}, nil)
+			mockRepo.EXPECT().UpdateServiceConfiguration(gomock.Any(), testUUID, gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ uuid.UUID, rec *models.ServiceConfiguration) (*models.ServiceConfiguration, error) {
+					Expect(rec.Extensions).To(BeNil())
+					return rec, nil
+				})
+
+			patch := alarmapi.AlarmServiceConfigurationPatch{}
+			patch.Extensions.SetNull()
+			resp, err := server.PatchAlarmServiceConfiguration(ctx, alarmapi.PatchAlarmServiceConfigurationRequestObject{
+				Body: &patch,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp).To(BeAssignableToTypeOf(alarmapi.PatchAlarmServiceConfiguration200JSONResponse{}))
+		})
+
+		It("GET response can be PUT back unchanged (round-trip)", func() {
+			existing := defaultConfig(nil)
+			mockRepo.EXPECT().GetServiceConfigurations(gomock.Any()).Return([]models.ServiceConfiguration{existing}, nil).Times(2)
+			mockRepo.EXPECT().UpdateServiceConfiguration(gomock.Any(), testUUID, gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ uuid.UUID, rec *models.ServiceConfiguration) (*models.ServiceConfiguration, error) {
+					return rec, nil
+				})
+
+			getResp, err := server.GetServiceConfiguration(ctx, alarmapi.GetServiceConfigurationRequestObject{})
+			Expect(err).ToNot(HaveOccurred())
+			getBody := getResp.(alarmapi.GetServiceConfiguration200JSONResponse)
+
+			putBody := alarmapi.AlarmServiceConfiguration(getBody)
+			putResp, err := server.UpdateAlarmServiceConfiguration(ctx, alarmapi.UpdateAlarmServiceConfigurationRequestObject{
+				Body: &putBody,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(putResp).To(BeAssignableToTypeOf(alarmapi.UpdateAlarmServiceConfiguration200JSONResponse{}))
+		})
 	})
 
 	Describe("AlarmServiceConfiguration response serialization", func() {

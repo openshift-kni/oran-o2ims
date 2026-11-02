@@ -547,8 +547,16 @@ func (a *AlarmsServer) PatchAlarmServiceConfiguration(ctx context.Context, reque
 		serviceConfigRecord.RetentionPeriod = *request.Body.RetentionPeriod
 	}
 
-	if request.Body.Extensions != nil {
-		serviceConfigRecord.Extensions = *request.Body.Extensions
+	if request.Body.Extensions.IsSpecified() {
+		if request.Body.Extensions.IsNull() {
+			serviceConfigRecord.Extensions = nil
+		} else {
+			patch, _ := request.Body.Extensions.Get()
+			if serviceConfigRecord.Extensions == nil {
+				serviceConfigRecord.Extensions = make(map[string]interface{})
+			}
+			mergePatchMap(serviceConfigRecord.Extensions, patch)
+		}
 	}
 
 	// Patch the Alarm Service Configuration
@@ -608,6 +616,26 @@ func (a *AlarmsServer) UpdateAlarmServiceConfiguration(ctx context.Context, requ
 	slog.DebugContext(ctx, "Alarm Service Configuration updated", slog.Int("retentionPeriod", updated.RetentionPeriod), slog.Any("extensions", updated.Extensions))
 	return api.UpdateAlarmServiceConfiguration200JSONResponse(models.ConvertServiceConfigurationToAPI(*updated)), nil
 
+}
+
+// mergePatchMap applies RFC 7396 merge-patch semantics recursively: null
+// removes a key, an object value merges into the existing nested object,
+// and any other value replaces the key.
+func mergePatchMap(target, patch map[string]interface{}) {
+	for k, v := range patch {
+		if v == nil {
+			delete(target, k)
+		} else if patchObj, ok := v.(map[string]interface{}); ok {
+			existing, ok := target[k].(map[string]interface{})
+			if !ok {
+				existing = make(map[string]interface{})
+				target[k] = existing
+			}
+			mergePatchMap(existing, patchObj)
+		} else {
+			target[k] = v
+		}
+	}
 }
 
 // AmNotification handles an API request coming from Alertmanager with CaaS alerts. This api is used internally.
