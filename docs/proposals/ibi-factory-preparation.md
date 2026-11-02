@@ -200,8 +200,8 @@ spec:
     key: ca-bundle.crt
   sshCredentialsSecretRef:
     name: factory-preparation-ssh
-  # Explicit factory-network policy; see the SSH trust discussion below.
-  sshHostKeyPolicy: TrustOnFirstUse
+  # Requires independently verified knownHosts data in the SSH Secret.
+  sshHostKeyPolicy: Strict
   parallelism: 5
   timeouts:
     preparation: 60m
@@ -479,15 +479,18 @@ For example, create the worker's authentication Secret from an existing key:
 ```bash
 oc -n oran-o2ims create secret generic factory-preparation-ssh \
   --from-literal=username=core \
-  --from-file=privateKey=/path/to/factory_id_ed25519
+  --from-file=privateKey=/path/to/factory_id_ed25519 \
+  --from-file=knownHosts=/path/to/verified_known_hosts
 ```
 
 The corresponding public key is the value supplied to `liveISO.sshKey` when
 generating the ISO. An ISO that does not authorize that key needs to be
 regenerated using the existing setting. The ISO generation Job does not need
-access to the new private-key Secret. Strict verification also requires the
-host-trust material described below; the example above only supplies login
-authentication.
+access to the new private-key Secret. The example uses strict host verification:
+`verified_known_hosts` must contain independently verified host keys for the
+actual live environments at the targets' SSH addresses. The login public key
+does not establish those host identities. See the
+[SSH trust requirements](#ssh-addressing-authentication-and-trust) below.
 
 The same login key pair can be used across regenerated ISOs. Changing an ISO URL
 or digest does not require changing the target list or Secret references.
@@ -546,6 +549,30 @@ artifact backend. A deployment without that protection needs a separately
 designed guarantee, such as a controlled server retaining and serving the
 verified bytes, before it can claim that the supplied digest covers the BMC's
 download. The ISO must remain available until all consumers have finished.
+
+### ISO download access
+
+The live ISO contains
+[installation registry credentials](https://github.com/openshift/installer/blob/f13cbf3931807e3dda28778b3c5024ba242bbcbc/pkg/asset/imagebased/image/ignition.go#L115)
+and must be treated as sensitive. HTTPS encrypts the transfer and verifies the
+server; it does not authorize clients to download the file. SSH authentication
+for publication and Redfish authentication for BMC operations do not authorize
+ISO downloads either.
+
+The initial design requires enforced network access restrictions on the ISO
+server, such as server-side firewall or network ACL rules allowing only the
+authorized factory workers and target BMCs to retrieve the artifacts. The
+factory administrator must configure and verify these controls, accounting for
+actual source addresses after NAT and any alternate serving paths. A shared
+allowed address must not also grant access to unauthorized clients. Knowing
+the ISO URL or its generation ID is not authorization.
+
+Validate that authorized workers and BMCs can fetch the ISO while unauthorized
+clients cannot. These controls must remain effective for the artifact's entire
+availability period. Authenticated HTTPS downloads could be considered
+separately where both workers and the supported BMCs can supply download
+credentials; this proposal uses network restrictions without adding download
+credentials to the request API.
 
 ### BMC HTTPS trust
 
@@ -659,17 +686,27 @@ Two proposed verification policies are:
   certificate trust mechanism. This is the proposed default. Certificate
   enrollment/bootstrap would need a separate design; it is not supplied merely
   by referencing a CA.
-- `TrustOnFirstUse`: an explicit option for a controlled factory network.
+- `TrustOnFirstUse`: a proposed explicit option for a controlled factory network.
   After initiating the target's boot, record the first observed host key and
   enforce it for the rest of that attempt, including worker restarts. Persist
   the pin in the target checkpoint. It does not independently authenticate the
   first connection, so it is a deployment trust decision, not equivalent to
   strict verification. A newly authorized attempt establishes a new trust scope.
+  Before enabling this option in a supported deployment, define and validate
+  enforced factory-network controls that restrict access to the worker-to-host
+  path and protect address assignment and resolution from untrusted devices.
+  A network described as private, or an ISO-download ACL alone, does not
+  establish that protection. The required controls remain an open design item.
 
-The example opts into the latter policy to illustrate repeated factory test
-runs without pinning fingerprints to individual ISO builds. The policy choices
-and default require review. Do not embed a shared SSH server private key in a
-reusable ISO to manufacture a stable identity for every server.
+The example uses `Strict`. Missing or changed host keys must fail verification,
+with no automatic fallback to TOFU. Obtain host keys through a trusted enrollment
+or out-of-band process; an unauthenticated `ssh-keyscan` alone does not establish
+identity. Keys must match the actual live boot, so a fresh host key requires
+trusted enrollment before the worker connects. Completing that bootstrap for
+unattended preparation remains an open design item. Reusing the login key pair
+across ISO builds does not remove the server-verification requirement. Do not
+embed a shared SSH server private key in a reusable ISO to manufacture a stable
+identity for every server.
 
 ## Failure handling, recovery, and deletion
 
@@ -770,6 +807,11 @@ Useful tests include:
   paths, and rejection of unsupported schemes.
 - Artifact-server enforcement against modification during a batch, and BMC
   HTTPS trust independently of the worker's two CA configurations.
+- ISO-download ACL enforcement: authorized workers and BMCs can fetch the
+  artifact, while unauthorized clients cannot, including through shared NAT or
+  alternate serving paths.
+- Strict SSH verification with trusted host keys, refusal of unknown or changed
+  keys, and trusted enrollment after live boots that generate new host keys.
 - Missing DHCP, routing or DNS failures in the live environment, and a reachable
   BMC with an unreachable booted host. Include DHCP address changes and blocked
   worker-to-host SSH connectivity when validating addressing assumptions.
