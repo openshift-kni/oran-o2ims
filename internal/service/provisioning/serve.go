@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	common "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/middleware"
@@ -134,6 +135,11 @@ func Serve(config *api.ProvisioningServerConfig) error {
 	handler := middleware.ChainHandlers(baseRouter,
 		middleware.ErrorJsonifier(),
 		middleware.TrailingSlashStripper(),
+		middleware.VersionHeader(
+			api.CurrentVersion,
+			constants.O2IMSProvisioningBaseURL,
+			constants.O2IMSProvisioningAPIPath+"/api_versions",
+		),
 	)
 
 	serverTLSConfig, err := ctlrutils.GetServerTLSConfig(ctx, config.TLS.CertFile, config.TLS.KeyFile)

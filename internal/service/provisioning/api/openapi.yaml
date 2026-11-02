@@ -17,7 +17,11 @@ openapi: 3.0.3
 info:
   title: O2IMS Infrastructure Provisioning API
   version: 1.2.0
-  description: API for O2IMS Infrastructure Provisioning
+  description: |
+    API for O2IMS Infrastructure Provisioning.
+
+    All responses carry a `Version: 1.2.0` HTTP response header, set by
+    the server's path-scoped middleware.
   license:
     name: Apache 2.0
     url: https://www.apache.org/licenses/LICENSE-2.0.html

@@ -15,7 +15,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime/debug"
-	"strings"
+
 	"syscall"
 	"time"
 
@@ -54,53 +54,16 @@ const (
 	database = "alarms"
 )
 
-// Public Monitoring paths that carry the Version response header.
-var (
-	// monitoringV2Path is the public Monitoring v2 base path.
-	monitoringV2Path = constants.O2IMSMonitoringAPIPath + constants.APIVersionV2
-	// monitoringDiscoveryPath is the unversioned discovery path.
-	monitoringDiscoveryPath = constants.O2IMSMonitoringAPIPath + "/api_versions"
-)
-
-// wrapAlarmHandler composes the alarms server middleware chain around the base router. The base
-// router also serves the internal /internal/v1/... ingestion routes and /metrics, so the Version
-// response-header middleware is added as the outermost wrapper and sets the header only for the
-// public Monitoring v2 paths and the unversioned discovery path (see versionHeader).
 func wrapAlarmHandler(inner http.Handler) http.Handler {
-	// ChainHandlers applies wrappers in order, so the last one is outermost: versionHeader runs
-	// before TrailingSlashStripper and therefore sees the un-normalized request path.
 	return middleware.ChainHandlers(inner,
 		middleware.ErrorJsonifier(),
 		middleware.TrailingSlashStripper(),
-		versionHeader(),
+		middleware.VersionHeader(
+			api.CurrentVersion,
+			constants.O2IMSMonitoringBaseURL,
+			constants.O2IMSMonitoringAPIPath+"/api_versions",
+		),
 	)
-}
-
-// versionHeader returns middleware that sets the Version response header on public Monitoring v2
-// responses and the unversioned discovery response, covering both successful and handled-error
-// responses (the header is buffered before the inner handler writes the response). It makes no
-// claim about responses produced by an unhandled panic.
-func versionHeader() middleware.Middleware {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if isMonitoringV2Path(r.URL.Path) {
-				w.Header().Set("Version", api.CurrentVersion)
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
-// isMonitoringV2Path reports whether path is a public Monitoring v2 path or the unversioned
-// discovery path. Because versionHeader is the outermost wrapper it runs before
-// TrailingSlashStripper, so the discovery path is matched in both its bare and trailing-slash
-// forms. The v2 prefix is matched on a path-segment boundary so a path such as
-// /O2ims_infrastructureMonitoring/v20 does not qualify.
-func isMonitoringV2Path(path string) bool {
-	if path == monitoringDiscoveryPath || path == monitoringDiscoveryPath+"/" {
-		return true
-	}
-	return path == monitoringV2Path || strings.HasPrefix(path, monitoringV2Path+"/")
 }
 
 // Serve start alarms server

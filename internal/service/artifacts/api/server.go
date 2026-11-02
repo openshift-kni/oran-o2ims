@@ -39,14 +39,14 @@ var _ api.StrictServerInterface = (*ArtifactsServer)(nil)
 
 // baseURL is the prefix for all of our supported API endpoints
 var baseURL = constants.O2IMSArtifactsBaseURL
-var currentVersion = "1.0.0"
+var CurrentVersion = "1.0.0"
 
 // GetAllVersions receives the API request to this endpoint, executes the request, and responds appropriately.
 func (a *ArtifactsServer) GetAllVersions(ctx context.Context, request api.GetAllVersionsRequestObject) (api.GetAllVersionsResponseObject, error) {
 	// We currently only support a single version
 	versions := []common.APIVersion{
 		{
-			Version: &currentVersion,
+			Version: &CurrentVersion,
 		},
 	}
 
@@ -61,7 +61,7 @@ func (a *ArtifactsServer) GetMinorVersions(ctx context.Context, request api.GetM
 	// We currently only support a single version
 	versions := []common.APIVersion{
 		{
-			Version: &currentVersion,
+			Version: &CurrentVersion,
 		},
 	}
 
