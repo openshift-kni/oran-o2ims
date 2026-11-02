@@ -2605,6 +2605,7 @@ baseDomain: example.com
 		err := task.validateClusterImageSetMatchesRelease(ctx)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("failed to parse ClusterImageSet version"))
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
 	})
 
 	It("should fail with an input error when release image has partial version (missing patch)", func() {
