@@ -1114,6 +1114,13 @@ func (t *clusterTemplateReconcilerTask) validateClusterImageSetMatchesRelease(ct
 	clusterImageSet := &hivev1.ClusterImageSet{}
 	err = t.client.Get(ctx, client.ObjectKey{Name: clusterImageSetName}, clusterImageSet)
 	if err != nil {
+		// A nonexistent ClusterImageSet is a user-fixable input error that must be
+		// reported on the Validated condition. Other Get failures (e.g. API-server
+		// unavailable) are operational and must keep requeuing.
+		if errors.IsNotFound(err) {
+			return typederrors.NewInputError(
+				"failed to get ClusterImageSet %s: %s", clusterImageSetName, err.Error())
+		}
 		return fmt.Errorf("failed to get ClusterImageSet %s: %w", clusterImageSetName, err)
 	}
 
@@ -1122,7 +1129,10 @@ func (t *clusterTemplateReconcilerTask) validateClusterImageSetMatchesRelease(ct
 	// Older ACM versions use tagged image references (e.g., ":4.20.4-x86_64").
 	imageVersion := extractVersionFromClusterImageSet(clusterImageSet)
 	if imageVersion == "" {
-		return fmt.Errorf("could not extract version from ClusterImageSet %s: no releaseTag label and release image %s has no parseable tag",
+		// An unextractable version is a user-fixable input error, so report it on
+		// the Validated condition rather than treating it as operational.
+		return typederrors.NewInputError(
+			"could not extract version from ClusterImageSet %s: no releaseTag label and release image %s has no parseable tag",
 			clusterImageSetName, clusterImageSet.Spec.ReleaseImage)
 	}
 
