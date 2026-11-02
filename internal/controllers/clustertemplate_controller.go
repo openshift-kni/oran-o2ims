@@ -252,7 +252,9 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 			if !typederrors.IsInputError(err) {
 				return false, fmt.Errorf("failed to validate ClusterImageSet matches release: %w", err)
 			}
-			validationErrs = append(validationErrs, err.Error())
+			validationErrs = append(validationErrs,
+				fmt.Sprintf("failed to validate ClusterImageSet specified in clusterInstanceDefaults %s: %s",
+					t.object.Spec.TemplateDefaults.ClusterInstanceDefaults, err.Error()))
 		}
 	}
 

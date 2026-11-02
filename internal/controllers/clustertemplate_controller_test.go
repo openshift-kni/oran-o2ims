@@ -729,6 +729,8 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		Expect(conditions[0].Type).To(Equal(string(provisioningv1alpha1.CTconditionTypes.Validated)))
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
 		Expect(conditions[0].Reason).To(Equal(string(provisioningv1alpha1.CTconditionReasons.Failed)))
+		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
+			"failed to validate ClusterImageSet specified in clusterInstanceDefaults %s", ciDefaultsCm)))
 		Expect(conditions[0].Message).To(ContainSubstring("not found"))
 		Expect(conditions[0].Message).To(ContainSubstring("4.15.0"))
 	})
@@ -771,6 +773,8 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		Expect(conditions[0].Type).To(Equal(string(provisioningv1alpha1.CTconditionTypes.Validated)))
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
 		Expect(conditions[0].Reason).To(Equal(string(provisioningv1alpha1.CTconditionReasons.Failed)))
+		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
+			"failed to validate ClusterImageSet specified in clusterInstanceDefaults %s", ciDefaultsCm)))
 		Expect(conditions[0].Message).To(ContainSubstring("could not extract version from ClusterImageSet"))
 	})
 
