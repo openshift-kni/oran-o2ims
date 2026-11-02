@@ -1118,8 +1118,7 @@ func (t *clusterTemplateReconcilerTask) validateClusterImageSetMatchesRelease(ct
 		// reported on the Validated condition. Other Get failures (e.g. API-server
 		// unavailable) are operational and must keep requeuing.
 		if errors.IsNotFound(err) {
-			return typederrors.NewInputError(
-				"failed to get ClusterImageSet %s: %s", clusterImageSetName, err.Error())
+			return typederrors.NewInputError("%s", err.Error())
 		}
 		return fmt.Errorf("failed to get ClusterImageSet %s: %w", clusterImageSetName, err)
 	}

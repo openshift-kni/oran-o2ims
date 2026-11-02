@@ -729,7 +729,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		Expect(conditions[0].Type).To(Equal(string(provisioningv1alpha1.CTconditionTypes.Validated)))
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
 		Expect(conditions[0].Reason).To(Equal(string(provisioningv1alpha1.CTconditionReasons.Failed)))
-		Expect(conditions[0].Message).To(ContainSubstring("failed to get ClusterImageSet"))
+		Expect(conditions[0].Message).To(ContainSubstring("not found"))
 		Expect(conditions[0].Message).To(ContainSubstring("4.15.0"))
 	})
 
@@ -2541,7 +2541,7 @@ baseDomain: example.com
 
 		err := task.validateClusterImageSetMatchesRelease(ctx)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("failed to get ClusterImageSet"))
+		Expect(err.Error()).To(ContainSubstring("not found"))
 		// A nonexistent ClusterImageSet is user-fixable and must be reported on
 		// the Validated condition rather than requeued as an operational error.
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
