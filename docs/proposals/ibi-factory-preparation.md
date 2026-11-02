@@ -188,11 +188,13 @@ spec:
     url: https://iso.example.com/ibi/seedgen/example-run/rhcos-ibi.iso
     # Illustrative digest; use the generated ISO's actual checksum.
     digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    # Used by workers to verify the ISO server's HTTPS certificate.
     caBundleRef:
       name: factory-iso-ca
       key: ca-bundle.crt
   bmcCredentialsSecretRef:
     name: factory-bmc-credentials
+  # Used by workers to verify the BMC's Redfish HTTPS certificate.
   bmcCABundleRef:
     name: factory-bmc-ca
     key: ca-bundle.crt
@@ -206,10 +208,10 @@ spec:
     shutdown: 5m
   targets:
     - name: server-01
-      bmcAddress: https://bmc-01.factory.example.com
+      bmcAddress: idrac-virtualmedia+https://bmc-01.factory.example.com/redfish/v1/Systems/System.Embedded.1
       sshHost: server-01.factory.example.com
     - name: server-02
-      bmcAddress: https://bmc-02.factory.example.com
+      bmcAddress: redfish-virtualmedia+https://bmc-02.factory.example.com/redfish/v1/Systems/1
       sshHost: server-02.factory.example.com
       # Optional override when this BMC uses different credentials.
       bmcCredentialsSecretRef:
@@ -222,11 +224,44 @@ verification additionally requires verified `knownHosts` data. References resolv
 in the preparation CR's namespace. Private credentials are never stored in the
 CR or its status.
 
+`iso.caBundleRef` and `bmcCABundleRef` identify keys in ConfigMaps. They configure
+the worker's HTTPS clients for the ISO server and BMC respectively; neither
+reference provisions trust into the BMC. If omitted, the corresponding worker
+client uses its system trust roots. Certificate verification remains enabled.
+The separate requirements for the BMC's ISO download are described under
+[BMC HTTPS trust](#bmc-https-trust).
+
 Target names are stable keys, unique within the request. Duplicate physical
-targets are rejected even if they use different names. A target may identify a
-specific Redfish System when its BMC exposes multiple systems; ambiguous
-discovery fails validation. Per-target SSH credential overrides can be supported
-using the same reference pattern if required.
+targets are rejected even if they use different names. Per-target SSH credential
+overrides can be supported using the same reference pattern if required.
+
+### BMC address format and System selection
+
+Use the existing BMH address syntax for Redfish virtual media, as documented in
+[Metal3's supported hardware guide](https://github.com/metal3-io/metal3-docs/blob/8bd05e4f4f5e96f7dab5228b3de9edd3394b0af0/docs/user-guide/src/bmo/supported_hardware.md#redfish-and-its-variants).
+The examples carry three pieces of information in one field:
+
+- `idrac-virtualmedia` or `redfish-virtualmedia` identifies the driver/boot-method
+  convention, including the iDRAC variant where appropriate.
+- `+https` specifies the transport to the BMC; omitting the suffix defaults to
+  HTTPS, following the existing BMH convention.
+- The path identifies the Redfish ComputerSystem resource, selecting the target
+  even when the BMC exposes multiple Systems.
+
+The worker parses this address into an HTTPS endpoint and System resource path,
+then discovers and validates the referenced System and its associated Managers,
+virtual media, and reset capabilities. The System path is required; there is no
+separate System selector or implicit selection of the first discovered System.
+An unknown or invalid resource fails validation before any power or media action.
+System-path validation does not replace physical UUID/serial verification.
+
+Reusing this input syntax does not invoke BMO or Ironic drivers. The preparation
+worker implements direct Redfish operations and any tested vendor-specific
+handling. Initial address support is limited to the two virtual-media forms
+above using HTTPS; other BMH schemes, including IPMI, PXE-based forms, and HTTP
+transport, fail validation. Syntax compatibility does not imply support for
+every BMO driver or every BMC accepting Redfish. The hardware support matrix
+defines the supported combinations.
 
 The spec is immutable. A request UID identifies one batch execution, and an
 explicitly recorded attempt identifies each target boot. Reapplying a completed
@@ -324,10 +359,10 @@ determine useful parallelism.
 4. **Wait for SSH.** Connect using the supplied address and authentication
    Secret under the selected host-verification policy. Record the current live
    boot ID and compare the host's physical identity with the Redfish System
-   identity, using supported UUID/serial normalization. An SSH address pointing
-   at a different server must not establish preparation success. Correlate the
-   observation with the newly initiated boot; ambiguous identity requires
-   investigation rather than accepting another server's service result.
+   identity under the [live-system identity contract](#live-system-identity-verification).
+   Correlate the observation with the newly initiated boot. Unreadable or
+   mismatched identity cannot establish preparation success and follows the
+   failure and cleanup rules below.
 5. **Monitor preparation.** Poll
    `install-rhcos-and-restore-seed.service` for evidence that it actually ran in
    this boot and reached terminal success or failure. An inactive service with
@@ -346,6 +381,34 @@ only once a connection succeeds. Separate bounded shutdown and cleanup budgets
 prevent an unresponsive BMC from being mistaken for successful completion.
 
 ## Validation and target ownership
+
+### Live-system identity verification
+
+For the initial x86 hardware support, the worker reads the live boot ID from
+`/proc/sys/kernel/random/boot_id` and system UUID from
+`/sys/class/dmi/id/product_uuid` over authenticated SSH, using `sudo` where
+needed. A supported serial fallback reads `/sys/class/dmi/id/product_serial`.
+The UUID and serial files are
+[Linux DMI identity attributes](https://github.com/torvalds/linux/blob/v6.12/drivers/firmware/dmi-id.c#L49).
+Match the product UUID with the selected Redfish ComputerSystem's `UUID`.
+Parse UUIDs into a canonical representation so case and presentation do not
+change identity; reject malformed or placeholder identifiers. A serial-based
+fallback when UUIDs are unavailable requires a tested mapping to the same
+system's Redfish serial field. It must not override a valid UUID mismatch.
+Trim surrounding whitespace, preserve meaningful characters, and reject missing
+or generic placeholder serials. Do not silently substitute a chassis
+serial or guess UUID byte-order transformations. Exact supported mappings and
+placeholder rules belong in the hardware compatibility design and tests.
+
+Transient read errors may be retried within the preparation deadline. A
+nonmatching identity, or an identity that still cannot be verified when that
+deadline expires, fails the attempt. Do not issue shutdown or other modifying
+SSH commands to an endpoint whose identity has not been verified. Clean up
+through the previously verified and reserved BMC/System: confirm power off and
+media removal before releasing the reservation and recording `Failed`. If
+cleanup cannot establish that safe state, report `RecoveryRequired` and retain
+the reservation. Preserve the identity failure as the reason; neither outcome
+accepts that endpoint's preparation result or automatically starts a new boot.
 
 ### BMH ownership exclusion
 
@@ -396,7 +459,7 @@ The existing workflow already supplies the main prerequisites:
 | `liveISO.sshKey` | Authorizes the factory worker's public SSH login key for the live environment |
 | `seedGenerationStatus.isoURL` | Supplies the previously published boot ISO |
 | `seedGenerationStatus.isoDigest` | Supplies the expected artifact checksum |
-| `seedGenerationStatus.isoServerCACertRef` | Supplies HTTPS trust material that can be copied or referenced for factory use |
+| `seedGenerationStatus.isoServerCACertRef` | Identifies HTTPS trust material for the factory operator to copy into the preparation namespace |
 | Job, SSH, and frozen-input handling | Provides patterns for implementation and testing; helpers should be shared where appropriate |
 
 **The SSH-based workflow requires no new executable behavior in the live ISO.**
@@ -433,23 +496,80 @@ fingerprint, could help detect configuration mistakes, but is not required for
 the basic workflow. Successful authentication still depends on using an ISO that
 authorizes the supplied key.
 
-The artifact handoff is explicit; preparation does not require the source
-ProvisioningRequest to remain present. If its CA ConfigMap is owned by that
-request, copy the bundle into an independently managed ConfigMap before deleting
-the source request. The published ISO must also remain available for the entire
-batch.
+### CA handoff and lifetime
+
+The artifact handoff is performed by the factory operator or its external
+automation. Preparation does not require the source ProvisioningRequest to
+remain present. When seed generation publishes a namespaced
+`isoServerCACertRef`, use this ordering:
+
+1. Read the ConfigMap using the source reference's `namespace`, `name`, and
+   `key` while the source ProvisioningRequest still exists.
+2. Copy the CA bundle into a separately named, independently managed ConfigMap
+   in the preparation namespace. Copy only the intended data, make the copy
+   immutable, and omit the source object's owner references. This creates a
+   new object; it does not transfer ownership of the source ConfigMap.
+3. Verify the copied data and set the preparation request's `iso.caBundleRef`
+   to its local `name` and `key`. The source ProvisioningRequest may then be
+   deleted without removing the copy.
+4. Keep the independent copy while preparation requests reference it. Each
+   request validates and freezes its CA data before creating execution Jobs;
+   its controller retains those request-owned snapshots through worker and
+   cleanup completion. The factory operator removes the independent copy only
+   after its consumers no longer need it.
+
+The copy-before-delete sequence is the factory operator's responsibility; no
+cross-request ownership or deletion finalizer is introduced. Missing or invalid
+trust material prevents preparation from starting. The source reference's
+namespace is not inferred from the preparation request, and preparation does
+not automatically retrieve or adopt the source ConfigMap.
+
+### Artifact integrity and immutability
 
 Validate the actual ISO bytes against the supplied digest, rather than trusting
-only a checksum sidecar. Publication must provide an immutable URL: the BMC
-fetches the ISO separately, and a worker's earlier hash check cannot guarantee
-the bytes of a later fetch if the server rewrites that URL. ISO generation
-already publishes separate paths per generation run.
+only a checksum sidecar. The BMC subsequently fetches the ISO independently, so
+that earlier hash check alone cannot guarantee the bytes the BMC boots.
 
-Direct Redfish mounting retains BMC-specific ISO-fetch requirements. The BMC
-must resolve the URL, reach the server, and satisfy its HTTPS trust requirements.
-A CA supplied to the worker does not install that CA into the BMC. This design
-does not rely on Ironic to cache or republish the ISO, so any factory proxy or
-network accommodation must be explicit.
+The artifact-serving environment must enforce a write-once publication contract:
+the advertised URL continues to serve the verified bytes for the entire batch,
+including retries and recovery. For example, use an immutable object version or
+a protected published snapshot that upload credentials cannot modify or replace.
+The factory administrator must configure and verify that protection for the
+chosen server before using it for preparation. A digest in a filename or a
+unique generation directory alone does not enforce immutability. Existing seed
+generation verifies publication-time content and uses separate run paths; it
+does not configure write-once storage on the external server.
+
+Controller-side HTTPS validation cannot prove an external server's storage
+policy. Enforcement is a deployment prerequisite, validated against the chosen
+artifact backend. A deployment without that protection needs a separately
+designed guarantee, such as a controlled server retaining and serving the
+verified bytes, before it can claim that the supplied digest covers the BMC's
+download. The ISO must remain available until all consumers have finished.
+
+### BMC HTTPS trust
+
+Direct Redfish mounting involves three distinct HTTPS trust paths:
+
+| Connection | Trust configuration |
+| --- | --- |
+| Worker to BMC Redfish API | `bmcCABundleRef`, or the worker's system trust roots |
+| Worker to ISO server for verification | `iso.caBundleRef`, or the worker's system trust roots |
+| BMC to ISO server for boot media | Trust already configured on the BMC under its supported firmware policy |
+
+The initial workflow requires the ISO server's certificate to be accepted by
+each target BMC under that policy. The factory administrator configures BMC
+trust beforehand; automated Redfish or vendor-specific trust-store changes are
+outside this proposal. Supplying either CA reference to a worker does not
+install a CA into the BMC.
+
+The BMC must independently resolve the ISO URL and reach the server. Supported
+BMC/firmware combinations must demonstrate HTTPS media retrieval during
+compatibility testing. Use any supported read-only checks during validation,
+but a successful worker download does not prove BMC reachability or trust.
+Surface media-fetch or certificate failures as target failures and apply the
+normal cleanup rules. This design does not rely on Ironic to cache or republish
+the ISO, so any factory proxy or network accommodation must be explicit.
 
 ## Live ISO networking and reporting trade-off
 
@@ -613,8 +733,8 @@ BMH conflict checking needs read-only permission across the namespaces being
 checked. Tie each grant to the actual client operations, including cached
 list/watch reads where applicable.
 
-Portable Redfish handling discovers Systems, Managers, virtual media, and reset
-capabilities. Require an explicit System selection for ambiguous BMCs. Vendor
+Portable Redfish handling validates the System path supplied in `bmcAddress`
+and discovers associated Managers, virtual media, and reset capabilities. Vendor
 and firmware support needs a tested matrix; a Dell-specific resource path or
 reset action is not a universal contract. Capability failures must be reported
 before starting preparation where they can be detected in advance.
@@ -643,12 +763,21 @@ Useful tests include:
 - Two requests racing to claim the same physical target.
 - Credential failures, unsupported virtual media, and ISO reachability,
   certificate, or digest failures.
+- Correct CA handoff across namespaces and source-request deletion, missing
+  CA data, and retention of frozen trust through cleanup.
+- Parsing supported BMH-style virtual-media addresses, including the default
+  HTTPS transport, explicit System paths on multi-System BMCs, invalid or missing
+  paths, and rejection of unsupported schemes.
+- Artifact-server enforcement against modification during a batch, and BMC
+  HTTPS trust independently of the worker's two CA configurations.
 - Missing DHCP, routing or DNS failures in the live environment, and a reachable
   BMC with an unreachable booted host. Include DHCP address changes and blocked
   worker-to-host SSH connectivity when validating addressing assumptions.
 - Completion monitoring for the current boot: success, service failure, service
   never started, stale logs, delayed SSH, connection loss, and an SSH address
   pointing at a different physical server.
+- Missing, unreadable, placeholder, or mismatched live-system identity, with
+  cleanup through the selected BMC and reservation retention when cleanup fails.
 - Worker and controller restart at each external side-effect boundary, without
   duplicate installation or loss of the SSH pin.
 - Shutdown/eject failure, cancellation during preparation, and bounded cleanup
