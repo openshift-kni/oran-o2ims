@@ -1131,10 +1131,16 @@ func (t *clusterTemplateReconcilerTask) validateClusterImageSetMatchesRelease(ct
 	imageVersion := extractVersionFromClusterImageSet(clusterImageSet)
 	if imageVersion == "" {
 		// An unextractable version is a user-fixable input error, so report it on
-		// the Validated condition rather than treating it as operational.
+		// the Validated condition rather than treating it as operational. Name the
+		// malformed releaseTag label when it is present so the user is not told the
+		// label is missing when it exists with an unparseable value.
+		labelDetail := "no releaseTag label"
+		if tag := clusterImageSet.Labels["releaseTag"]; tag != "" {
+			labelDetail = fmt.Sprintf("releaseTag label %q has no parseable version", tag)
+		}
 		return typederrors.NewInputError(
-			"could not extract version from ClusterImageSet %s: no releaseTag label and release image %s has no parseable tag",
-			clusterImageSetName, clusterImageSet.Spec.ReleaseImage)
+			"could not extract version from ClusterImageSet %s: %s and release image %s has no parseable tag",
+			clusterImageSetName, labelDetail, clusterImageSet.Spec.ReleaseImage)
 	}
 
 	// Compare with the ClusterTemplate release version

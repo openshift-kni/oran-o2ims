@@ -2596,6 +2596,24 @@ baseDomain: example.com
 		Expect(typederrors.IsInputError(err)).To(BeTrue())
 	})
 
+	It("should name the malformed releaseTag label when it has no parseable version", func() {
+		// The releaseTag label is present but unparseable, and the release image
+		// also has no parseable tag. The error must identify the bad label value
+		// rather than claim the label is missing.
+		clusterImageSet.Labels = map[string]string{"releaseTag": "not-a-version"}
+		clusterImageSet.Spec.ReleaseImage = "registry.example.com/openshift:latest" // No version pattern
+
+		Expect(c.Create(ctx, configMap)).To(Succeed())
+		Expect(c.Create(ctx, clusterImageSet)).To(Succeed())
+
+		err := task.validateClusterImageSetMatchesRelease(ctx)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("could not extract version from ClusterImageSet"))
+		Expect(err.Error()).To(ContainSubstring(`releaseTag label "not-a-version" has no parseable version`))
+		Expect(err.Error()).ToNot(ContainSubstring("no releaseTag label"))
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
+	})
+
 	It("should fail when extracted version is invalid semver", func() {
 		clusterImageSet.Spec.ReleaseImage = "registry.example.com/openshift:4.17.0-rc.invalid.identifier" // Invalid semver pre-release
 
