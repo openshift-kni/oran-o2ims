@@ -10,6 +10,10 @@ entries:
   - entries:
       - name: o-cloud-manager.v5.0.0
         skipRange: '>=4.22.0 <5.0.0'
+      # v5.0.1
+      - name: o-cloud-manager.v5.0.1
+        replaces: o-cloud-manager.v5.0.0
+        skipRange: '>=4.22.0 <5.0.1'
     name: stable
     package: o-cloud-manager
     schema: olm.channel
@@ -17,10 +21,17 @@ entries:
   - entries:
       - name: o-cloud-manager.v5.0.0
         skipRange: '>=4.22.0 <5.0.0'
+      # v5.0.1
+      - name: o-cloud-manager.v5.0.1
+        replaces: o-cloud-manager.v5.0.0
+        skipRange: '>=4.22.0 <5.0.1'
     name: "5.0"
     package: o-cloud-manager
     schema: olm.channel
   # v5.0.0 bundle
+  - image: registry.redhat.io/openshift5/o-cloud-manager-operator-bundle@sha256:4636c3708a1a488ada5eb4abfabc8f889efd881541e782654fd2e0a8181f9922
+    schema: olm.bundle
+  # v5.0.1 bundle
   # The url for this last entry is updated by telco5g-konflux/scripts/catalog/update-catalog-template.sh automatically
   - image: placeholder.will.be.updated.by.telco5g-konflux.scripts.catalog.update-catalog-template.sh
     schema: olm.bundle
