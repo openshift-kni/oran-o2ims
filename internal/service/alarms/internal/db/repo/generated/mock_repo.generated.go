@@ -237,6 +237,21 @@ func (mr *MockAlarmRepositoryInterfaceMockRecorder) PatchAlarmSubscription(ctx, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PatchAlarmSubscription", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).PatchAlarmSubscription), ctx, id, fields)
 }
 
+// PatchServiceConfigurationAtomic mocks base method.
+func (m *MockAlarmRepositoryInterface) PatchServiceConfigurationAtomic(ctx context.Context, patchFn func(*models.ServiceConfiguration) error) (*models.ServiceConfiguration, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PatchServiceConfigurationAtomic", ctx, patchFn)
+	ret0, _ := ret[0].(*models.ServiceConfiguration)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PatchServiceConfigurationAtomic indicates an expected call of PatchServiceConfigurationAtomic.
+func (mr *MockAlarmRepositoryInterfaceMockRecorder) PatchServiceConfigurationAtomic(ctx, patchFn any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PatchServiceConfigurationAtomic", reflect.TypeOf((*MockAlarmRepositoryInterface)(nil).PatchServiceConfigurationAtomic), ctx, patchFn)
+}
+
 // ResolveStaleAlarmEventCaaSRecord mocks base method.
 func (m *MockAlarmRepositoryInterface) ResolveStaleAlarmEventCaaSRecord(ctx context.Context, tx pgx.Tx, generationID int64) error {
 	m.ctrl.T.Helper()

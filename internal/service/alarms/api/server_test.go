@@ -787,11 +787,14 @@ var _ = Describe("AlarmsServer", func() {
 
 		It("PATCH with extensions omitted preserves existing extensions", func() {
 			existing := defaultConfig(map[string]interface{}{"a": "1"})
-			mockRepo.EXPECT().GetServiceConfigurations(gomock.Any()).Return([]models.ServiceConfiguration{existing}, nil)
-			mockRepo.EXPECT().UpdateServiceConfiguration(gomock.Any(), testUUID, gomock.Any()).DoAndReturn(
-				func(_ context.Context, _ uuid.UUID, rec *models.ServiceConfiguration) (*models.ServiceConfiguration, error) {
+			mockRepo.EXPECT().PatchServiceConfigurationAtomic(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, fn func(*models.ServiceConfiguration) error) (*models.ServiceConfiguration, error) {
+					rec := existing
+					if err := fn(&rec); err != nil {
+						return nil, err
+					}
 					Expect(rec.Extensions).To(HaveKeyWithValue("a", "1"))
-					return rec, nil
+					return &rec, nil
 				})
 
 			rp := 5
@@ -804,13 +807,16 @@ var _ = Describe("AlarmsServer", func() {
 
 		It("PATCH with extensions merges entries per RFC 7396", func() {
 			existing := defaultConfig(map[string]interface{}{"a": "1", "b": "2"})
-			mockRepo.EXPECT().GetServiceConfigurations(gomock.Any()).Return([]models.ServiceConfiguration{existing}, nil)
-			mockRepo.EXPECT().UpdateServiceConfiguration(gomock.Any(), testUUID, gomock.Any()).DoAndReturn(
-				func(_ context.Context, _ uuid.UUID, rec *models.ServiceConfiguration) (*models.ServiceConfiguration, error) {
+			mockRepo.EXPECT().PatchServiceConfigurationAtomic(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, fn func(*models.ServiceConfiguration) error) (*models.ServiceConfiguration, error) {
+					rec := existing
+					if err := fn(&rec); err != nil {
+						return nil, err
+					}
 					Expect(rec.Extensions).To(HaveKeyWithValue("a", "updated"))
 					Expect(rec.Extensions).ToNot(HaveKey("b"))
 					Expect(rec.Extensions).To(HaveKeyWithValue("c", "new"))
-					return rec, nil
+					return &rec, nil
 				})
 
 			patch := alarmapi.AlarmServiceConfigurationPatch{}
@@ -827,15 +833,18 @@ var _ = Describe("AlarmsServer", func() {
 				"nested": map[string]interface{}{"a": "1", "b": "2"},
 				"top":    "keep",
 			})
-			mockRepo.EXPECT().GetServiceConfigurations(gomock.Any()).Return([]models.ServiceConfiguration{existing}, nil)
-			mockRepo.EXPECT().UpdateServiceConfiguration(gomock.Any(), testUUID, gomock.Any()).DoAndReturn(
-				func(_ context.Context, _ uuid.UUID, rec *models.ServiceConfiguration) (*models.ServiceConfiguration, error) {
+			mockRepo.EXPECT().PatchServiceConfigurationAtomic(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, fn func(*models.ServiceConfiguration) error) (*models.ServiceConfiguration, error) {
+					rec := existing
+					if err := fn(&rec); err != nil {
+						return nil, err
+					}
 					nested := rec.Extensions["nested"].(map[string]interface{})
 					Expect(nested).To(HaveKeyWithValue("a", "1"))
 					Expect(nested).ToNot(HaveKey("b"))
 					Expect(nested).To(HaveKeyWithValue("c", "3"))
 					Expect(rec.Extensions).To(HaveKeyWithValue("top", "keep"))
-					return rec, nil
+					return &rec, nil
 				})
 
 			patch := alarmapi.AlarmServiceConfigurationPatch{}
@@ -851,13 +860,16 @@ var _ = Describe("AlarmsServer", func() {
 
 		It("PATCH with new nested object strips null keys per RFC 7396", func() {
 			existing := defaultConfig(map[string]interface{}{})
-			mockRepo.EXPECT().GetServiceConfigurations(gomock.Any()).Return([]models.ServiceConfiguration{existing}, nil)
-			mockRepo.EXPECT().UpdateServiceConfiguration(gomock.Any(), testUUID, gomock.Any()).DoAndReturn(
-				func(_ context.Context, _ uuid.UUID, rec *models.ServiceConfiguration) (*models.ServiceConfiguration, error) {
+			mockRepo.EXPECT().PatchServiceConfigurationAtomic(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, fn func(*models.ServiceConfiguration) error) (*models.ServiceConfiguration, error) {
+					rec := existing
+					if err := fn(&rec); err != nil {
+						return nil, err
+					}
 					vendor := rec.Extensions["vendor"].(map[string]interface{})
 					Expect(vendor).ToNot(HaveKey("remove"))
 					Expect(vendor).To(HaveKeyWithValue("keep", float64(1)))
-					return rec, nil
+					return &rec, nil
 				})
 
 			patch := alarmapi.AlarmServiceConfigurationPatch{}
@@ -873,13 +885,16 @@ var _ = Describe("AlarmsServer", func() {
 
 		It("PATCH replaces scalar with nested object and strips null keys", func() {
 			existing := defaultConfig(map[string]interface{}{"key": "scalar"})
-			mockRepo.EXPECT().GetServiceConfigurations(gomock.Any()).Return([]models.ServiceConfiguration{existing}, nil)
-			mockRepo.EXPECT().UpdateServiceConfiguration(gomock.Any(), testUUID, gomock.Any()).DoAndReturn(
-				func(_ context.Context, _ uuid.UUID, rec *models.ServiceConfiguration) (*models.ServiceConfiguration, error) {
+			mockRepo.EXPECT().PatchServiceConfigurationAtomic(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, fn func(*models.ServiceConfiguration) error) (*models.ServiceConfiguration, error) {
+					rec := existing
+					if err := fn(&rec); err != nil {
+						return nil, err
+					}
 					nested := rec.Extensions["key"].(map[string]interface{})
 					Expect(nested).To(HaveKeyWithValue("a", "1"))
 					Expect(nested).ToNot(HaveKey("b"))
-					return rec, nil
+					return &rec, nil
 				})
 
 			patch := alarmapi.AlarmServiceConfigurationPatch{}
@@ -895,11 +910,14 @@ var _ = Describe("AlarmsServer", func() {
 
 		It("PATCH with extensions:null clears all extensions", func() {
 			existing := defaultConfig(map[string]interface{}{"a": "1"})
-			mockRepo.EXPECT().GetServiceConfigurations(gomock.Any()).Return([]models.ServiceConfiguration{existing}, nil)
-			mockRepo.EXPECT().UpdateServiceConfiguration(gomock.Any(), testUUID, gomock.Any()).DoAndReturn(
-				func(_ context.Context, _ uuid.UUID, rec *models.ServiceConfiguration) (*models.ServiceConfiguration, error) {
+			mockRepo.EXPECT().PatchServiceConfigurationAtomic(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, fn func(*models.ServiceConfiguration) error) (*models.ServiceConfiguration, error) {
+					rec := existing
+					if err := fn(&rec); err != nil {
+						return nil, err
+					}
 					Expect(rec.Extensions).To(BeNil())
-					return rec, nil
+					return &rec, nil
 				})
 
 			patch := alarmapi.AlarmServiceConfigurationPatch{}

@@ -521,53 +521,37 @@ func (a *AlarmsServer) GetServiceConfiguration(ctx context.Context, _ api.GetSer
 
 // PatchAlarmServiceConfiguration handles an API request to patch the Alarm Service Configuration
 func (a *AlarmsServer) PatchAlarmServiceConfiguration(ctx context.Context, request api.PatchAlarmServiceConfigurationRequestObject) (api.PatchAlarmServiceConfigurationResponseObject, error) {
-	// Fetch the Alarm Service Configuration to be patched
-	records, err := a.AlarmsRepository.GetServiceConfigurations(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Alarm Service Configuration: %w", err)
-	}
-
-	// There must always be a single record
-	if len(records) != 1 {
-		return nil, fmt.Errorf("expected a single Alarm Service Configuration record, but got %d", len(records))
-	}
-
-	serviceConfigRecord := records[0]
-
-	// Patch the Alarm Service Configuration
+	// Validate retentionPeriod before entering the transaction.
 	if request.Body.RetentionPeriod != nil {
-		// Check if the retention period is valid
 		if *request.Body.RetentionPeriod < minRetentionPeriod {
 			return api.PatchAlarmServiceConfiguration400ApplicationProblemPlusJSONResponse(common.ProblemDetails{
 				Detail: fmt.Sprintf("retentionPeriod must be greater than or equal to %d", minRetentionPeriod),
 				Status: http.StatusBadRequest,
 			}), nil
 		}
-
-		serviceConfigRecord.RetentionPeriod = *request.Body.RetentionPeriod
 	}
 
-	if request.Body.Extensions.IsSpecified() {
-		if request.Body.Extensions.IsNull() {
-			serviceConfigRecord.Extensions = nil
-		} else {
-			patch, _ := request.Body.Extensions.Get()
-			if serviceConfigRecord.Extensions == nil {
-				serviceConfigRecord.Extensions = make(map[string]interface{})
-			}
-			mergePatchMap(serviceConfigRecord.Extensions, patch)
+	patched, err := a.AlarmsRepository.PatchServiceConfigurationAtomic(ctx, func(record *models.ServiceConfiguration) error {
+		if request.Body.RetentionPeriod != nil {
+			record.RetentionPeriod = *request.Body.RetentionPeriod
 		}
-	}
 
-	// Patch the Alarm Service Configuration
-	patched, err := a.AlarmsRepository.UpdateServiceConfiguration(ctx, serviceConfigRecord.ID, &serviceConfigRecord)
+		if request.Body.Extensions.IsSpecified() {
+			if request.Body.Extensions.IsNull() {
+				record.Extensions = nil
+			} else {
+				patch, _ := request.Body.Extensions.Get()
+				if record.Extensions == nil {
+					record.Extensions = make(map[string]interface{})
+				}
+				mergePatchMap(record.Extensions, patch)
+			}
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to patch Alarm Service Configuration: %w", err)
 	}
-
-	// The in-process events cleanup reads the retention period fresh on every run,
-	// so the updated value takes effect on the next cleanup without any additional
-	// coordination here.
 
 	slog.DebugContext(ctx, "Alarm Service Configuration patched", slog.Int("retentionPeriod", patched.RetentionPeriod), slog.Any("extensions", patched.Extensions))
 	return api.PatchAlarmServiceConfiguration200JSONResponse(models.ConvertServiceConfigurationToAPI(*patched)), nil
