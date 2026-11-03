@@ -14,11 +14,11 @@ type Encoding struct {
 	Extensions map[string]any `json:"-" yaml:"-"`
 	Origin     *Origin        `json:"-" yaml:"-"`
 
-	ContentType   string  `json:"contentType,omitempty" yaml:"contentType,omitempty"`
-	Headers       Headers `json:"headers,omitempty" yaml:"headers,omitempty"`
-	Style         string  `json:"style,omitempty" yaml:"style,omitempty"`
-	Explode       *bool   `json:"explode,omitempty" yaml:"explode,omitempty"`
-	AllowReserved bool    `json:"allowReserved,omitempty" yaml:"allowReserved,omitempty"`
+	ContentType   string  `json:"contentType,omitempty,case:strict" yaml:"contentType,omitempty"`
+	Headers       Headers `json:"headers,omitempty,case:strict" yaml:"headers,omitempty"`
+	Style         string  `json:"style,omitempty,case:strict" yaml:"style,omitempty"`
+	Explode       *bool   `json:"explode,omitempty,case:strict" yaml:"explode,omitempty"`
+	AllowReserved bool    `json:"allowReserved,omitempty,case:strict" yaml:"allowReserved,omitempty"`
 }
 
 func NewEncoding() *Encoding {
@@ -79,10 +79,10 @@ func (encoding Encoding) MarshalYAML() (any, error) {
 func (encoding *Encoding) UnmarshalJSON(data []byte) error {
 	type EncodingBis Encoding
 	var x EncodingBis
-	if err := json.Unmarshal(data, &x); err != nil {
+	if err := unmarshalJSON(data, &x); err != nil {
 		return unmarshalError(err)
 	}
-	_ = json.Unmarshal(data, &x.Extensions)
+	_ = unmarshalJSON(data, &x.Extensions)
 
 	delete(x.Extensions, "contentType")
 	delete(x.Extensions, "headers")
