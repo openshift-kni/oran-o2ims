@@ -34,7 +34,7 @@ require (
 	github.com/openshift/hive/apis v0.0.0-20260415205034-aa1db747a6ba
 	github.com/openshift/library-go v0.0.0-20261001144932-192662696fc7
 	github.com/pashagolub/pgxmock/v5 v5.2.0
-	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.94.1
+	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.94.2
 	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/client_model v0.6.3
 	github.com/r3labs/diff/v3 v3.0.2
