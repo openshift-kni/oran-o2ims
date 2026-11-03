@@ -67,35 +67,51 @@ var _ api.StrictServerInterface = (*AlarmsServer)(nil)
 
 // baseURL is the prefix for all of our supported API endpoints
 var baseURL = constants.O2IMSMonitoringBaseURL
-var currentVersion = "1.0.0"
+
+// CurrentVersion is the single source of truth for the supported Monitoring API version.
+// It is advertised by both discovery endpoints and emitted by the serve.go Version-header
+// middleware (which reads it by value). This file is in package api and aliases the generated
+// subpackage as api, so the discovery handlers below reference this constant unqualified;
+// api.CurrentVersion here would resolve to the generated subpackage and fail to compile.
+const CurrentVersion = "2.2.0"
 
 // GetAllVersions receives the API request to this endpoint, executes the request, and responds appropriately
 func (a *AlarmsServer) GetAllVersions(ctx context.Context, request api.GetAllVersionsRequestObject) (api.GetAllVersionsResponseObject, error) {
-	// We currently only support a single version
+	// We currently only support a single version. Go cannot take the address of a constant,
+	// so copy it into an addressable local before taking its pointer.
+	version := CurrentVersion
 	versions := []common.APIVersion{
 		{
-			Version: &currentVersion,
+			Version: &version,
 		},
 	}
 
+	// uriPrefix is advertised with a trailing slash per the spec; store it in an addressable
+	// local before taking its pointer (baseURL itself has no trailing slash).
+	uriPrefix := baseURL + "/"
 	return api.GetAllVersions200JSONResponse(common.APIVersions{
 		ApiVersions: &versions,
-		UriPrefix:   &baseURL,
+		UriPrefix:   &uriPrefix,
 	}), nil
 }
 
 // GetMinorVersions receives the API request to this endpoint, executes the request, and responds appropriately
 func (a *AlarmsServer) GetMinorVersions(ctx context.Context, request api.GetMinorVersionsRequestObject) (api.GetMinorVersionsResponseObject, error) {
-	// We currently only support a single version
+	// We currently only support a single version. Go cannot take the address of a constant,
+	// so copy it into an addressable local before taking its pointer.
+	version := CurrentVersion
 	versions := []common.APIVersion{
 		{
-			Version: &currentVersion,
+			Version: &version,
 		},
 	}
 
+	// uriPrefix is advertised with a trailing slash per the spec; store it in an addressable
+	// local before taking its pointer (baseURL itself has no trailing slash).
+	uriPrefix := baseURL + "/"
 	return api.GetMinorVersions200JSONResponse(common.APIVersions{
 		ApiVersions: &versions,
-		UriPrefix:   &baseURL,
+		UriPrefix:   &uriPrefix,
 	}), nil
 }
 
@@ -480,7 +496,7 @@ func (a *AlarmsServer) PatchAlarm(ctx context.Context, request api.PatchAlarmReq
 		return nil, fmt.Errorf("failed to patch Alarm Event Record: %w", err)
 	}
 
-	slog.DebugContext(ctx, "Alarm acknowledged/cleared", slog.Bool("alarmAcknowledged", updated.AlarmAcknowledged), slog.Any("alarmAcknowledgedTime", updated.AlarmAcknowledgedTime),
+	slog.DebugContext(ctx, "Alarm acknowledged/cleared", slog.Bool("alarmAcknowledged", updated.AlarmAcknowledged), slog.Any("alarmAcknowledgeTime", updated.AlarmAcknowledgedTime),
 		slog.Any("alarmClearedTime", updated.AlarmClearedTime), slog.Any("perceivedSeverity", updated.PerceivedSeverity), slog.Any("alarmChangedTime", updated.AlarmChangedTime))
 
 	return api.PatchAlarm200JSONResponse{AlarmAcknowledged: request.Body.AlarmAcknowledged, PerceivedSeverity: request.Body.PerceivedSeverity}, nil
@@ -505,46 +521,37 @@ func (a *AlarmsServer) GetServiceConfiguration(ctx context.Context, _ api.GetSer
 
 // PatchAlarmServiceConfiguration handles an API request to patch the Alarm Service Configuration
 func (a *AlarmsServer) PatchAlarmServiceConfiguration(ctx context.Context, request api.PatchAlarmServiceConfigurationRequestObject) (api.PatchAlarmServiceConfigurationResponseObject, error) {
-	// Fetch the Alarm Service Configuration to be patched
-	records, err := a.AlarmsRepository.GetServiceConfigurations(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Alarm Service Configuration: %w", err)
-	}
-
-	// There must always be a single record
-	if len(records) != 1 {
-		return nil, fmt.Errorf("expected a single Alarm Service Configuration record, but got %d", len(records))
-	}
-
-	serviceConfigRecord := records[0]
-
-	// Patch the Alarm Service Configuration
+	// Validate retentionPeriod before entering the transaction.
 	if request.Body.RetentionPeriod != nil {
-		// Check if the retention period is valid
 		if *request.Body.RetentionPeriod < minRetentionPeriod {
 			return api.PatchAlarmServiceConfiguration400ApplicationProblemPlusJSONResponse(common.ProblemDetails{
 				Detail: fmt.Sprintf("retentionPeriod must be greater than or equal to %d", minRetentionPeriod),
 				Status: http.StatusBadRequest,
 			}), nil
 		}
-
-		serviceConfigRecord.RetentionPeriod = *request.Body.RetentionPeriod
 	}
 
-	// Update extensions if provided in the request
-	if request.Body.Extensions != nil {
-		serviceConfigRecord.Extensions = *request.Body.Extensions
-	}
+	patched, err := a.AlarmsRepository.PatchServiceConfigurationAtomic(ctx, func(record *models.ServiceConfiguration) error {
+		if request.Body.RetentionPeriod != nil {
+			record.RetentionPeriod = *request.Body.RetentionPeriod
+		}
 
-	// Patch the Alarm Service Configuration
-	patched, err := a.AlarmsRepository.UpdateServiceConfiguration(ctx, serviceConfigRecord.ID, &serviceConfigRecord)
+		if request.Body.Extensions.IsSpecified() {
+			if request.Body.Extensions.IsNull() {
+				record.Extensions = nil
+			} else {
+				patch, _ := request.Body.Extensions.Get()
+				if record.Extensions == nil {
+					record.Extensions = make(map[string]interface{})
+				}
+				mergePatchMap(record.Extensions, patch)
+			}
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to patch Alarm Service Configuration: %w", err)
 	}
-
-	// The in-process events cleanup reads the retention period fresh on every run,
-	// so the updated value takes effect on the next cleanup without any additional
-	// coordination here.
 
 	slog.DebugContext(ctx, "Alarm Service Configuration patched", slog.Int("retentionPeriod", patched.RetentionPeriod), slog.Any("extensions", patched.Extensions))
 	return api.PatchAlarmServiceConfiguration200JSONResponse(models.ConvertServiceConfigurationToAPI(*patched)), nil
@@ -572,10 +579,12 @@ func (a *AlarmsServer) UpdateAlarmServiceConfiguration(ctx context.Context, requ
 		}), nil
 	}
 
-	// Update the Alarm Service Configuration
-	// Extensions is now a required field (not a pointer), always update it
 	serviceConfigRecord.RetentionPeriod = request.Body.RetentionPeriod
-	serviceConfigRecord.Extensions = request.Body.Extensions
+	if request.Body.Extensions != nil {
+		serviceConfigRecord.Extensions = *request.Body.Extensions
+	} else {
+		serviceConfigRecord.Extensions = nil
+	}
 
 	// TODO make it event-driven with PG listen/notify
 	// Update the Alarm Service Configuration
@@ -591,6 +600,26 @@ func (a *AlarmsServer) UpdateAlarmServiceConfiguration(ctx context.Context, requ
 	slog.DebugContext(ctx, "Alarm Service Configuration updated", slog.Int("retentionPeriod", updated.RetentionPeriod), slog.Any("extensions", updated.Extensions))
 	return api.UpdateAlarmServiceConfiguration200JSONResponse(models.ConvertServiceConfigurationToAPI(*updated)), nil
 
+}
+
+// mergePatchMap applies RFC 7396 merge-patch semantics recursively: null
+// removes a key, an object value merges into the existing nested object,
+// and any other value replaces the key.
+func mergePatchMap(target, patch map[string]interface{}) {
+	for k, v := range patch {
+		if v == nil {
+			delete(target, k)
+		} else if patchObj, ok := v.(map[string]interface{}); ok {
+			existing, ok := target[k].(map[string]interface{})
+			if !ok {
+				existing = make(map[string]interface{})
+				target[k] = existing
+			}
+			mergePatchMap(existing, patchObj)
+		} else {
+			target[k] = v
+		}
+	}
 }
 
 // AmNotification handles an API request coming from Alertmanager with CaaS alerts. This api is used internally.

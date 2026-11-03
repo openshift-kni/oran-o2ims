@@ -9,7 +9,9 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 
@@ -21,6 +23,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	commonapi "github.com/openshift-kni/oran-o2ims/api/common"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/api"
 	alarmapi "github.com/openshift-kni/oran-o2ims/internal/service/alarms/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/models"
@@ -513,7 +516,7 @@ var _ = Describe("AlarmsServer", func() {
 
 		patch := func(body string) *httptest.ResponseRecorder {
 			req := httptest.NewRequest(http.MethodPatch,
-				"/O2ims_infrastructureMonitoring/v1/alarmSubscriptions/"+uuid.New().String(),
+				"/O2ims_infrastructureMonitoring/v2/alarmSubscriptions/"+uuid.New().String(),
 				bytes.NewBufferString(body))
 			req.Header.Set("Content-Type", "application/merge-patch+json")
 			rr := httptest.NewRecorder()
@@ -526,9 +529,460 @@ var _ = Describe("AlarmsServer", func() {
 			Expect(rr.Code).To(Equal(http.StatusBadRequest))
 		})
 
+		It("rejects a body containing the removed legacy filter field with 400", func() {
+			rr := patch(`{"filter":"NEW"}`)
+			Expect(rr.Code).To(Equal(http.StatusBadRequest))
+		})
+
 		It("accepts a body with a known field", func() {
 			rr := patch(`{"eventFilter":"NEW"}`)
 			Expect(rr.Code).To(Equal(http.StatusOK))
+		})
+	})
+
+	Describe("CreateSubscription request validation", func() {
+		// The required eventFilter and additionalProperties:false on AlarmSubscriptionInfo are
+		// enforced by the shared OpenAPI request-validation middleware, not the handler, so they
+		// are exercised here against the generated spec. Direct handler tests do not prove
+		// request-schema rejection.
+		var handler http.Handler
+
+		BeforeEach(func() {
+			swagger, err := alarmapi.GetSwagger()
+			Expect(err).ToNot(HaveOccurred())
+			validation := middleware.OpenAPIValidation(swagger)
+			handler = validation(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusCreated)
+			}))
+		})
+
+		post := func(body string) *httptest.ResponseRecorder {
+			req := httptest.NewRequest(http.MethodPost,
+				"/O2ims_infrastructureMonitoring/v2/alarmSubscriptions",
+				bytes.NewBufferString(body))
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			return rr
+		}
+
+		It("rejects a body containing the removed legacy filter field with 400", func() {
+			rr := post(`{"callback":"https://example.com/cb","eventFilter":"NEW","filter":"NEW"}`)
+			Expect(rr.Code).To(Equal(http.StatusBadRequest))
+		})
+
+		It("rejects a body containing an unknown field with 400", func() {
+			rr := post(`{"callback":"https://example.com/cb","eventFilter":"NEW","bogus":"x"}`)
+			Expect(rr.Code).To(Equal(http.StatusBadRequest))
+		})
+
+		It("rejects a body that omits the required eventFilter with 400", func() {
+			rr := post(`{"callback":"https://example.com/cb"}`)
+			Expect(rr.Code).To(Equal(http.StatusBadRequest))
+		})
+
+		It("accepts a body with a concrete eventFilter value", func() {
+			rr := post(`{"callback":"https://example.com/cb","eventFilter":"NEW"}`)
+			Expect(rr.Code).To(Equal(http.StatusCreated))
+		})
+
+		It("accepts a body with an explicit null eventFilter", func() {
+			rr := post(`{"callback":"https://example.com/cb","eventFilter":null}`)
+			Expect(rr.Code).To(Equal(http.StatusCreated))
+		})
+	})
+
+	Describe("CreateSubscription response serialization", func() {
+		// Prove the end-to-end serialization contract: a CreateSubscription carrying an explicit
+		// null eventFilter is serialized by the generated response writer (via the strict handler
+		// and generated HTTP handler) with the eventFilter key present and null, not dropped.
+		// AlarmSubscriptionInfo.eventFilter has no omitempty tag, so it is always emitted.
+		It("emits eventFilter as an explicit null in the response body when created with null", func() {
+			swagger, err := alarmapi.GetSwagger()
+			Expect(err).ToNot(HaveOccurred())
+
+			// Stand up a reachable callback target plus the SSRF resolver stub so
+			// ValidateCallbackURL accepts it (mirrors the CreateSubscription unique_callback setup).
+			ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			defer ts.Close()
+			server.GlobalCloudID = uuid.New()
+			server.Config.SmoURL = ts.URL
+			savedResolver := svcapi.DefaultResolver
+			svcapi.DefaultResolver = &svcapi.TestResolver{Addrs: map[string][]string{
+				"127.0.0.1": {"203.0.113.1"},
+			}}
+			DeferCleanup(func() { svcapi.DefaultResolver = savedResolver })
+			server.SubscriptionEventHandler = &mockSubscriptionEventHandler{
+				provider: &mockClientProvider{client: ts.Client()},
+			}
+
+			callback := ts.URL + "/callback"
+			mockRepo.EXPECT().
+				CreateAlarmSubscription(gomock.Any(), gomock.Any()).
+				DoAndReturn(func(_ context.Context, sub models.AlarmSubscription) (*models.AlarmSubscription, error) {
+					// The request carried eventFilter:null, so the persisted model has no filter.
+					Expect(sub.EventFilter).To(BeNil())
+					sub.SubscriptionID = testUUID
+					sub.Callback = callback
+					return &sub, nil
+				})
+
+			// Assemble the production HTTP stack (minus auth): strict handler -> generated HTTP
+			// handler with OpenAPI request validation and the response filter.
+			strictHandler := alarmapi.NewStrictHandlerWithOptions(server, nil,
+				alarmapi.StrictHTTPServerOptions{
+					RequestErrorHandlerFunc:  middleware.GetOranReqErrFunc(),
+					ResponseErrorHandlerFunc: middleware.GetOranRespErrFunc(),
+				},
+			)
+			logger := slog.New(slog.DiscardHandler)
+			filterAdapter, err := middleware.NewFilterAdapterFromSwagger(logger, swagger)
+			Expect(err).ToNot(HaveOccurred())
+			baseRouter := http.NewServeMux()
+			alarmapi.HandlerWithOptions(strictHandler, alarmapi.StdHTTPServerOptions{
+				BaseRouter: baseRouter,
+				Middlewares: []alarmapi.MiddlewareFunc{
+					middleware.OpenAPIValidation(swagger),
+					middleware.ResponseFilter(filterAdapter),
+				},
+				ErrorHandlerFunc: middleware.GetOranReqErrFunc(),
+			})
+
+			// Derive the path from the monitoring base URL constant so this test tracks the
+			// active API version (v1 before the cutover commit, v2 after) rather than hardcoding it.
+			req := httptest.NewRequest(http.MethodPost,
+				constants.O2IMSMonitoringBaseURL+"/alarmSubscriptions",
+				bytes.NewBufferString(`{"callback":"`+callback+`","eventFilter":null}`))
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+			baseRouter.ServeHTTP(rr, req)
+
+			Expect(rr.Code).To(Equal(http.StatusCreated))
+
+			// Decode into RawMessage so the key presence and literal null are both asserted.
+			var decoded map[string]json.RawMessage
+			Expect(json.Unmarshal(rr.Body.Bytes(), &decoded)).To(Succeed())
+			raw, ok := decoded["eventFilter"]
+			Expect(ok).To(BeTrue(), "eventFilter key must be present in the response body")
+			Expect(string(raw)).To(Equal("null"))
+		})
+	})
+
+	Describe("AlarmServiceConfiguration request validation", func() {
+		var handler http.Handler
+
+		BeforeEach(func() {
+			swagger, err := alarmapi.GetSwagger()
+			Expect(err).ToNot(HaveOccurred())
+			validation := middleware.OpenAPIValidation(swagger)
+			handler = validation(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
+		})
+
+		put := func(body string) *httptest.ResponseRecorder {
+			req := httptest.NewRequest(http.MethodPut,
+				"/O2ims_infrastructureMonitoring/v2/alarmServiceConfiguration",
+				bytes.NewBufferString(body))
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			return rr
+		}
+
+		It("accepts PUT with retentionPeriod only (extensions omitted)", func() {
+			rr := put(`{"retentionPeriod":7}`)
+			Expect(rr.Code).To(Equal(http.StatusOK))
+		})
+
+		It("accepts PUT with retentionPeriod and empty extensions", func() {
+			rr := put(`{"retentionPeriod":7,"extensions":{}}`)
+			Expect(rr.Code).To(Equal(http.StatusOK))
+		})
+
+		It("accepts PUT with retentionPeriod and populated extensions", func() {
+			rr := put(`{"retentionPeriod":7,"extensions":{"key":"value"}}`)
+			Expect(rr.Code).To(Equal(http.StatusOK))
+		})
+
+		It("rejects PUT with explicit extensions:null", func() {
+			rr := put(`{"retentionPeriod":7,"extensions":null}`)
+			Expect(rr.Code).To(Equal(http.StatusBadRequest))
+		})
+
+		patch := func(body string) *httptest.ResponseRecorder {
+			req := httptest.NewRequest(http.MethodPatch,
+				"/O2ims_infrastructureMonitoring/v2/alarmServiceConfiguration",
+				bytes.NewBufferString(body))
+			req.Header.Set("Content-Type", "application/merge-patch+json")
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			return rr
+		}
+
+		It("accepts PATCH with extensions:null (clears extensions per RFC 7396)", func() {
+			rr := patch(`{"extensions":null}`)
+			Expect(rr.Code).To(Equal(http.StatusOK))
+		})
+
+		It("accepts PATCH with extensions object (merge)", func() {
+			rr := patch(`{"extensions":{"key":"value"}}`)
+			Expect(rr.Code).To(Equal(http.StatusOK))
+		})
+
+		It("accepts PATCH with extensions omitted (preserves existing)", func() {
+			rr := patch(`{"retentionPeriod":5}`)
+			Expect(rr.Code).To(Equal(http.StatusOK))
+		})
+
+		It("accepts PATCH with null-valued extension entry (RFC 7396 delete)", func() {
+			rr := patch(`{"extensions":{"key2":null}}`)
+			Expect(rr.Code).To(Equal(http.StatusOK))
+		})
+	})
+
+	Describe("AlarmServiceConfiguration handler behavior", func() {
+		defaultConfig := func(ext map[string]interface{}) models.ServiceConfiguration {
+			return models.ServiceConfiguration{
+				ID:              testUUID,
+				RetentionPeriod: 1,
+				Extensions:      ext,
+			}
+		}
+
+		It("PUT with extensions omitted clears existing extensions", func() {
+			existing := defaultConfig(map[string]interface{}{"a": "1"})
+			mockRepo.EXPECT().GetServiceConfigurations(gomock.Any()).Return([]models.ServiceConfiguration{existing}, nil)
+			mockRepo.EXPECT().UpdateServiceConfiguration(gomock.Any(), testUUID, gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ uuid.UUID, rec *models.ServiceConfiguration) (*models.ServiceConfiguration, error) {
+					Expect(rec.Extensions).To(BeNil())
+					return rec, nil
+				})
+
+			resp, err := server.UpdateAlarmServiceConfiguration(ctx, alarmapi.UpdateAlarmServiceConfigurationRequestObject{
+				Body: &alarmapi.AlarmServiceConfiguration{RetentionPeriod: 5},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp).To(BeAssignableToTypeOf(alarmapi.UpdateAlarmServiceConfiguration200JSONResponse{}))
+		})
+
+		It("PUT with extensions:{} clears existing extensions", func() {
+			existing := defaultConfig(map[string]interface{}{"a": "1"})
+			mockRepo.EXPECT().GetServiceConfigurations(gomock.Any()).Return([]models.ServiceConfiguration{existing}, nil)
+			mockRepo.EXPECT().UpdateServiceConfiguration(gomock.Any(), testUUID, gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ uuid.UUID, rec *models.ServiceConfiguration) (*models.ServiceConfiguration, error) {
+					Expect(rec.Extensions).To(BeEmpty())
+					return rec, nil
+				})
+
+			ext := map[string]interface{}{}
+			resp, err := server.UpdateAlarmServiceConfiguration(ctx, alarmapi.UpdateAlarmServiceConfigurationRequestObject{
+				Body: &alarmapi.AlarmServiceConfiguration{RetentionPeriod: 5, Extensions: &ext},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp).To(BeAssignableToTypeOf(alarmapi.UpdateAlarmServiceConfiguration200JSONResponse{}))
+		})
+
+		It("PATCH with extensions omitted preserves existing extensions", func() {
+			existing := defaultConfig(map[string]interface{}{"a": "1"})
+			mockRepo.EXPECT().PatchServiceConfigurationAtomic(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, fn func(*models.ServiceConfiguration) error) (*models.ServiceConfiguration, error) {
+					rec := existing
+					if err := fn(&rec); err != nil {
+						return nil, err
+					}
+					Expect(rec.Extensions).To(HaveKeyWithValue("a", "1"))
+					return &rec, nil
+				})
+
+			rp := 5
+			resp, err := server.PatchAlarmServiceConfiguration(ctx, alarmapi.PatchAlarmServiceConfigurationRequestObject{
+				Body: &alarmapi.AlarmServiceConfigurationPatch{RetentionPeriod: &rp},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp).To(BeAssignableToTypeOf(alarmapi.PatchAlarmServiceConfiguration200JSONResponse{}))
+		})
+
+		It("PATCH with extensions merges entries per RFC 7396", func() {
+			existing := defaultConfig(map[string]interface{}{"a": "1", "b": "2"})
+			mockRepo.EXPECT().PatchServiceConfigurationAtomic(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, fn func(*models.ServiceConfiguration) error) (*models.ServiceConfiguration, error) {
+					rec := existing
+					if err := fn(&rec); err != nil {
+						return nil, err
+					}
+					Expect(rec.Extensions).To(HaveKeyWithValue("a", "updated"))
+					Expect(rec.Extensions).ToNot(HaveKey("b"))
+					Expect(rec.Extensions).To(HaveKeyWithValue("c", "new"))
+					return &rec, nil
+				})
+
+			patch := alarmapi.AlarmServiceConfigurationPatch{}
+			patch.Extensions.Set(map[string]interface{}{"a": "updated", "b": nil, "c": "new"})
+			resp, err := server.PatchAlarmServiceConfiguration(ctx, alarmapi.PatchAlarmServiceConfigurationRequestObject{
+				Body: &patch,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp).To(BeAssignableToTypeOf(alarmapi.PatchAlarmServiceConfiguration200JSONResponse{}))
+		})
+
+		It("PATCH with nested extensions merges recursively per RFC 7396", func() {
+			existing := defaultConfig(map[string]interface{}{
+				"nested": map[string]interface{}{"a": "1", "b": "2"},
+				"top":    "keep",
+			})
+			mockRepo.EXPECT().PatchServiceConfigurationAtomic(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, fn func(*models.ServiceConfiguration) error) (*models.ServiceConfiguration, error) {
+					rec := existing
+					if err := fn(&rec); err != nil {
+						return nil, err
+					}
+					nested := rec.Extensions["nested"].(map[string]interface{})
+					Expect(nested).To(HaveKeyWithValue("a", "1"))
+					Expect(nested).ToNot(HaveKey("b"))
+					Expect(nested).To(HaveKeyWithValue("c", "3"))
+					Expect(rec.Extensions).To(HaveKeyWithValue("top", "keep"))
+					return &rec, nil
+				})
+
+			patch := alarmapi.AlarmServiceConfigurationPatch{}
+			patch.Extensions.Set(map[string]interface{}{
+				"nested": map[string]interface{}{"b": nil, "c": "3"},
+			})
+			resp, err := server.PatchAlarmServiceConfiguration(ctx, alarmapi.PatchAlarmServiceConfigurationRequestObject{
+				Body: &patch,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp).To(BeAssignableToTypeOf(alarmapi.PatchAlarmServiceConfiguration200JSONResponse{}))
+		})
+
+		It("PATCH with new nested object strips null keys per RFC 7396", func() {
+			existing := defaultConfig(map[string]interface{}{})
+			mockRepo.EXPECT().PatchServiceConfigurationAtomic(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, fn func(*models.ServiceConfiguration) error) (*models.ServiceConfiguration, error) {
+					rec := existing
+					if err := fn(&rec); err != nil {
+						return nil, err
+					}
+					vendor := rec.Extensions["vendor"].(map[string]interface{})
+					Expect(vendor).ToNot(HaveKey("remove"))
+					Expect(vendor).To(HaveKeyWithValue("keep", float64(1)))
+					return &rec, nil
+				})
+
+			patch := alarmapi.AlarmServiceConfigurationPatch{}
+			patch.Extensions.Set(map[string]interface{}{
+				"vendor": map[string]interface{}{"remove": nil, "keep": float64(1)},
+			})
+			resp, err := server.PatchAlarmServiceConfiguration(ctx, alarmapi.PatchAlarmServiceConfigurationRequestObject{
+				Body: &patch,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp).To(BeAssignableToTypeOf(alarmapi.PatchAlarmServiceConfiguration200JSONResponse{}))
+		})
+
+		It("PATCH replaces scalar with nested object and strips null keys", func() {
+			existing := defaultConfig(map[string]interface{}{"key": "scalar"})
+			mockRepo.EXPECT().PatchServiceConfigurationAtomic(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, fn func(*models.ServiceConfiguration) error) (*models.ServiceConfiguration, error) {
+					rec := existing
+					if err := fn(&rec); err != nil {
+						return nil, err
+					}
+					nested := rec.Extensions["key"].(map[string]interface{})
+					Expect(nested).To(HaveKeyWithValue("a", "1"))
+					Expect(nested).ToNot(HaveKey("b"))
+					return &rec, nil
+				})
+
+			patch := alarmapi.AlarmServiceConfigurationPatch{}
+			patch.Extensions.Set(map[string]interface{}{
+				"key": map[string]interface{}{"a": "1", "b": nil},
+			})
+			resp, err := server.PatchAlarmServiceConfiguration(ctx, alarmapi.PatchAlarmServiceConfigurationRequestObject{
+				Body: &patch,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp).To(BeAssignableToTypeOf(alarmapi.PatchAlarmServiceConfiguration200JSONResponse{}))
+		})
+
+		It("PATCH with extensions:null clears all extensions", func() {
+			existing := defaultConfig(map[string]interface{}{"a": "1"})
+			mockRepo.EXPECT().PatchServiceConfigurationAtomic(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, fn func(*models.ServiceConfiguration) error) (*models.ServiceConfiguration, error) {
+					rec := existing
+					if err := fn(&rec); err != nil {
+						return nil, err
+					}
+					Expect(rec.Extensions).To(BeNil())
+					return &rec, nil
+				})
+
+			patch := alarmapi.AlarmServiceConfigurationPatch{}
+			patch.Extensions.SetNull()
+			resp, err := server.PatchAlarmServiceConfiguration(ctx, alarmapi.PatchAlarmServiceConfigurationRequestObject{
+				Body: &patch,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resp).To(BeAssignableToTypeOf(alarmapi.PatchAlarmServiceConfiguration200JSONResponse{}))
+		})
+
+		It("GET response can be PUT back unchanged (round-trip)", func() {
+			existing := defaultConfig(nil)
+			mockRepo.EXPECT().GetServiceConfigurations(gomock.Any()).Return([]models.ServiceConfiguration{existing}, nil).Times(2)
+			mockRepo.EXPECT().UpdateServiceConfiguration(gomock.Any(), testUUID, gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ uuid.UUID, rec *models.ServiceConfiguration) (*models.ServiceConfiguration, error) {
+					return rec, nil
+				})
+
+			getResp, err := server.GetServiceConfiguration(ctx, alarmapi.GetServiceConfigurationRequestObject{})
+			Expect(err).ToNot(HaveOccurred())
+			getBody := getResp.(alarmapi.GetServiceConfiguration200JSONResponse)
+
+			putBody := alarmapi.AlarmServiceConfiguration(getBody)
+			putResp, err := server.UpdateAlarmServiceConfiguration(ctx, alarmapi.UpdateAlarmServiceConfigurationRequestObject{
+				Body: &putBody,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(putResp).To(BeAssignableToTypeOf(alarmapi.UpdateAlarmServiceConfiguration200JSONResponse{}))
+		})
+	})
+
+	Describe("AlarmServiceConfiguration response serialization", func() {
+		It("serializes unset extensions as empty object in GET response", func() {
+			config := models.ServiceConfiguration{
+				RetentionPeriod: 1,
+				Extensions:      nil,
+			}
+			apiModel := models.ConvertServiceConfigurationToAPI(config)
+
+			data, err := json.Marshal(apiModel)
+			Expect(err).ToNot(HaveOccurred())
+
+			var decoded map[string]json.RawMessage
+			Expect(json.Unmarshal(data, &decoded)).To(Succeed())
+			raw, ok := decoded["extensions"]
+			Expect(ok).To(BeTrue(), "extensions key must be present even when unset")
+			Expect(string(raw)).To(Equal("{}"))
+		})
+
+		It("serializes populated extensions correctly", func() {
+			config := models.ServiceConfiguration{
+				RetentionPeriod: 1,
+				Extensions:      map[string]interface{}{"key": "value"},
+			}
+			apiModel := models.ConvertServiceConfigurationToAPI(config)
+
+			data, err := json.Marshal(apiModel)
+			Expect(err).ToNot(HaveOccurred())
+
+			var decoded map[string]json.RawMessage
+			Expect(json.Unmarshal(data, &decoded)).To(Succeed())
+			raw, ok := decoded["extensions"]
+			Expect(ok).To(BeTrue())
+			Expect(string(raw)).To(Equal(`{"key":"value"}`))
 		})
 	})
 })

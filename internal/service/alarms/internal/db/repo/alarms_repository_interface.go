@@ -26,6 +26,7 @@ type AlarmRepositoryInterface interface {
 	CreateServiceConfiguration(ctx context.Context, defaultRetentionPeriod int) (*models.ServiceConfiguration, error)
 	GetServiceConfigurations(ctx context.Context) ([]models.ServiceConfiguration, error)
 	UpdateServiceConfiguration(ctx context.Context, id uuid.UUID, record *models.ServiceConfiguration) (*models.ServiceConfiguration, error)
+	PatchServiceConfigurationAtomic(ctx context.Context, patchFn func(*models.ServiceConfiguration) error) (*models.ServiceConfiguration, error)
 	GetAlarmSubscriptions(ctx context.Context) ([]models.AlarmSubscription, error)
 	DeleteAlarmSubscription(ctx context.Context, id uuid.UUID) (int64, error)
 	CreateAlarmSubscription(ctx context.Context, record models.AlarmSubscription) (*models.AlarmSubscription, error)

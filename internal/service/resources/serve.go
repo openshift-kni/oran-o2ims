@@ -35,6 +35,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/collector"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/repo"
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/listener"
+	svcresourceutils "github.com/openshift-kni/oran-o2ims/internal/service/resources/utils"
 )
 
 // Resource server config values
@@ -238,6 +239,11 @@ func Serve(config *api.ResourceServerConfig) error {
 	handler := middleware.ChainHandlers(baseRouter,
 		middleware.ErrorJsonifier(),
 		middleware.TrailingSlashStripper(),
+		middleware.VersionHeader(
+			svcresourceutils.CurrentInventoryVersion,
+			constants.O2IMSInventoryBaseURL,
+			constants.O2IMSInventoryAPIPath+"/api_versions",
+		),
 	)
 
 	serverTLSConfig, err := ctlrutils.GetServerTLSConfig(ctx, config.TLS.CertFile, config.TLS.KeyFile)

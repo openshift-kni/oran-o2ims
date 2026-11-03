@@ -137,6 +137,11 @@ func Serve(config *api.ArtifactsServerConfig) error {
 	handler := middleware.ChainHandlers(baseRouter,
 		middleware.ErrorJsonifier(),
 		middleware.TrailingSlashStripper(),
+		middleware.VersionHeader(
+			api.CurrentVersion,
+			constants.O2IMSArtifactsBaseURL,
+			constants.O2IMSArtifactsAPIPath+"/api_versions",
+		),
 	)
 
 	serverTLSConfig, err := ctlrutils.GetServerTLSConfig(ctx, config.TLS.CertFile, config.TLS.KeyFile)

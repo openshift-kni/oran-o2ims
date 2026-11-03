@@ -18,7 +18,10 @@ info:
   title: O2IMS Infrastructure Inventory API
   version: 2.0.0
   description: |
-    API for O2IMS Infrastructure Inventory
+    API for O2IMS Infrastructure Inventory.
+
+    All responses carry a `Version: 2.0.0` HTTP response header, set by
+    the server's path-scoped middleware.
   license:
     name: Apache 2.0
     url: https://www.apache.org/licenses/LICENSE-2.0.html

@@ -45,14 +45,14 @@ var _ api.StrictServerInterface = (*ProvisioningServer)(nil)
 
 // baseURL is the prefix for all of our supported API endpoints
 var baseURL = constants.O2IMSProvisioningBaseURL
-var currentVersion = "1.2.0"
+var CurrentVersion = "1.2.0"
 
 // GetAllVersions handles an API request to fetch all versions
 func (r *ProvisioningServer) GetAllVersions(ctx context.Context, request api.GetAllVersionsRequestObject) (api.GetAllVersionsResponseObject, error) {
 	// We currently only support a single version
 	versions := []common.APIVersion{
 		{
-			Version: &currentVersion,
+			Version: &CurrentVersion,
 		},
 	}
 	return api.GetAllVersions200JSONResponse(common.APIVersions{
@@ -66,7 +66,7 @@ func (r *ProvisioningServer) GetMinorVersions(ctx context.Context, request api.G
 	// We currently only support a single version
 	versions := []common.APIVersion{
 		{
-			Version: &currentVersion,
+			Version: &CurrentVersion,
 		},
 	}
 	return api.GetMinorVersions200JSONResponse(common.APIVersions{

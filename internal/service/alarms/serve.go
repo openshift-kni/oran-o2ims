@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime/debug"
+
 	"syscall"
 	"time"
 
@@ -52,6 +53,18 @@ const (
 	username = "alarms"
 	database = "alarms"
 )
+
+func wrapAlarmHandler(inner http.Handler) http.Handler {
+	return middleware.ChainHandlers(inner,
+		middleware.ErrorJsonifier(),
+		middleware.TrailingSlashStripper(),
+		middleware.VersionHeader(
+			api.CurrentVersion,
+			constants.O2IMSMonitoringBaseURL,
+			constants.O2IMSMonitoringAPIPath+"/api_versions",
+		),
+	)
+}
 
 // Serve start alarms server
 func Serve(config *api.AlarmsServerConfig) error {
@@ -246,11 +259,9 @@ func Serve(config *api.AlarmsServerConfig) error {
 	generated.HandlerWithOptions(alarmServerStrictHandler, opt)
 
 	// Server config
-	// Wrap base router with additional middlewares
-	handler := middleware.ChainHandlers(baseRouter,
-		middleware.ErrorJsonifier(),
-		middleware.TrailingSlashStripper(),
-	)
+	// Wrap base router with additional middlewares, including the outermost path-scoped
+	// Version response-header middleware.
+	handler := wrapAlarmHandler(baseRouter)
 
 	serverTLSConfig, err := ctlrutils.GetServerTLSConfig(ctx, config.TLS.CertFile, config.TLS.KeyFile)
 	if err != nil {

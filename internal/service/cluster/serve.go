@@ -26,11 +26,13 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/api/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/collector"
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/repo"
+	svcclusterutils "github.com/openshift-kni/oran-o2ims/internal/service/cluster/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/db"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
 	repo2 "github.com/openshift-kni/oran-o2ims/internal/service/common/repo"
@@ -195,6 +197,11 @@ func Serve(config *api.ClusterServerConfig) error {
 	handler := middleware.ChainHandlers(baseRouter,
 		middleware.ErrorJsonifier(),
 		middleware.TrailingSlashStripper(),
+		middleware.VersionHeader(
+			svcclusterutils.CurrentVersion,
+			constants.O2IMSClusterBaseURL,
+			constants.O2IMSClusterAPIPath+"/api_versions",
+		),
 	)
 
 	serverTLSConfig, err := ctlrutils.GetServerTLSConfig(ctx, config.TLS.CertFile, config.TLS.KeyFile)

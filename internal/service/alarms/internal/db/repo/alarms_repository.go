@@ -106,6 +106,47 @@ func (ar *AlarmsRepository) UpdateServiceConfiguration(ctx context.Context, id u
 	return svcutils.Update[models.ServiceConfiguration](ctx, ar.Db, id, *record, "RetentionPeriod", "Extensions")
 }
 
+// PatchServiceConfigurationAtomic reads the single service configuration row
+// under a SELECT FOR UPDATE lock, applies the caller's patch function to the
+// fetched record, and writes the result back — all within a single
+// transaction. This prevents concurrent PATCH requests from overwriting each
+// other's changes (lost-update problem).
+func (ar *AlarmsRepository) PatchServiceConfigurationAtomic(ctx context.Context, patchFn func(*models.ServiceConfiguration) error) (*models.ServiceConfiguration, error) {
+	var result *models.ServiceConfiguration
+	err := ar.WithTransaction(ctx, func(tx pgx.Tx) error {
+		var count int
+		if err := tx.QueryRow(ctx, "SELECT count(*) FROM alarm_service_configuration").Scan(&count); err != nil {
+			return fmt.Errorf("failed to count service configuration records: %w", err)
+		}
+		if count != 1 {
+			return fmt.Errorf("expected a single alarm service configuration record, but got %d", count)
+		}
+
+		row := tx.QueryRow(ctx,
+			"SELECT id, retention_period, extensions, created_at, updated_at FROM alarm_service_configuration FOR UPDATE")
+
+		var record models.ServiceConfiguration
+		if err := row.Scan(&record.ID, &record.RetentionPeriod, &record.Extensions, &record.CreatedAt, &record.UpdatedAt); err != nil {
+			return fmt.Errorf("failed to lock service configuration: %w", err)
+		}
+
+		if err := patchFn(&record); err != nil {
+			return err
+		}
+
+		updated, err := svcutils.Update[models.ServiceConfiguration](ctx, tx, record.ID, record, "RetentionPeriod", "Extensions")
+		if err != nil {
+			return fmt.Errorf("failed to update service configuration: %w", err)
+		}
+		result = updated
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // GetAlarmSubscriptions grabs all rows of alarm_subscription
 func (ar *AlarmsRepository) GetAlarmSubscriptions(ctx context.Context) ([]models.AlarmSubscription, error) {
 	return svcutils.FindAll[models.AlarmSubscription](ctx, ar.Db)
@@ -119,7 +160,7 @@ func (ar *AlarmsRepository) DeleteAlarmSubscription(ctx context.Context, id uuid
 
 // CreateAlarmSubscription inserts a new row of alarm_subscription
 func (ar *AlarmsRepository) CreateAlarmSubscription(ctx context.Context, record models.AlarmSubscription) (*models.AlarmSubscription, error) {
-	return svcutils.Create[models.AlarmSubscription](ctx, ar.Db, record, "ConsumerSubscriptionID", "Filter", "EventFilter", "Callback", "EventCursor")
+	return svcutils.Create[models.AlarmSubscription](ctx, ar.Db, record, "ConsumerSubscriptionID", "EventFilter", "Callback", "EventCursor")
 }
 
 // GetAlarmSubscription grabs a row of alarm_subscription using a primary key

@@ -79,16 +79,14 @@ func ConvertAmToAlarmEventRecordModels(ctx context.Context, alerts *[]api.Alert,
 			record.ObjectID = getResourceID(labels)
 			record.AlarmSource = models.AlarmSourceHardware
 			// objectClass is derived from the alarm source, independent of objectID/objectTypeID.
-			oc := constants.ObjectClassResource
-			record.ObjectClass = &oc
+			record.ObjectClass = constants.ObjectClassResource
 			infrastructureClient = resourceServer
 		} else {
 			// For CaaS alerts, object is the cluster ID from managed_cluster
 			record.ObjectID = getClusterID(labels)
 			record.AlarmSource = models.AlarmSourceCaaS
 			// objectClass is derived from the alarm source, independent of objectID/objectTypeID.
-			oc := constants.ObjectClassCluster
-			record.ObjectClass = &oc
+			record.ObjectClass = constants.ObjectClassCluster
 			infrastructureClient = clusterServer
 		}
 

@@ -110,3 +110,70 @@ var _ = Describe("Validation error logging", func() {
 		})
 	})
 })
+
+var _ = Describe("VersionHeader", func() {
+	const version = "2.2.0"
+	basePath := "/O2ims_infrastructureMonitoring/v2"
+	discoveryPath := "/O2ims_infrastructureMonitoring/api_versions"
+
+	var handler http.Handler
+
+	BeforeEach(func() {
+		inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+		handler = VersionHeader(version, basePath, discoveryPath)(inner)
+	})
+
+	request := func(path string) *httptest.ResponseRecorder {
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, path, nil))
+		return rr
+	}
+
+	It("sets the Version header on a v2 path", func() {
+		rr := request(basePath + "/alarms")
+		Expect(rr.Header().Get("Version")).To(Equal(version))
+	})
+
+	It("sets the Version header on the exact v2 base path", func() {
+		rr := request(basePath)
+		Expect(rr.Header().Get("Version")).To(Equal(version))
+	})
+
+	It("sets the Version header on the unversioned discovery path", func() {
+		rr := request(discoveryPath)
+		Expect(rr.Header().Get("Version")).To(Equal(version))
+	})
+
+	It("sets the Version header on the discovery path with trailing slash", func() {
+		rr := request(discoveryPath + "/")
+		Expect(rr.Header().Get("Version")).To(Equal(version))
+	})
+
+	It("does not set the header on a path prefix boundary mismatch", func() {
+		rr := request("/O2ims_infrastructureMonitoring/v20/alarms")
+		Expect(rr.Header().Get("Version")).To(BeEmpty())
+	})
+
+	It("does not set the header on internal ingestion paths", func() {
+		rr := request("/internal/v1/alerts")
+		Expect(rr.Header().Get("Version")).To(BeEmpty())
+	})
+
+	It("does not set the header on metrics path", func() {
+		rr := request("/metrics")
+		Expect(rr.Header().Get("Version")).To(BeEmpty())
+	})
+
+	It("sets the header before the inner handler writes the response", func() {
+		inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+		})
+		h := VersionHeader(version, basePath, discoveryPath)(inner)
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, basePath+"/alarms", nil))
+		Expect(rr.Code).To(Equal(http.StatusNotFound))
+		Expect(rr.Header().Get("Version")).To(Equal(version))
+	})
+})

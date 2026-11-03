@@ -108,6 +108,24 @@ func TrailingSlashStripper() Middleware {
 	}
 }
 
+// VersionHeader returns middleware that sets the Version response header on every
+// response whose path belongs to the given API. apiBasePath is the versioned
+// prefix (e.g. "/O2ims_infrastructureMonitoring/v2") and discoveryPath is the
+// unversioned api_versions path. The middleware runs before TrailingSlashStripper,
+// so the discovery path is matched with and without a trailing slash.
+func VersionHeader(version, apiBasePath, discoveryPath string) Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			p := r.URL.Path
+			if p == discoveryPath || p == discoveryPath+"/" ||
+				p == apiBasePath || strings.HasPrefix(p, apiBasePath+"/") {
+				w.Header().Set("Version", version)
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // ProblemDetails writes an error message using the appropriate header for an ORAN error response
 func ProblemDetails(w http.ResponseWriter, body string, code int) {
 	w.Header().Set("Content-Type", "application/problem+json; charset=utf-8")
