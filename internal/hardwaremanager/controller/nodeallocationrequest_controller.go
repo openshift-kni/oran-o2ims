@@ -285,11 +285,53 @@ func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 	case hwmgrutils.NodeAllocationRequestFSMSpecChanged:
 		return r.handleNodeAllocationRequestSpecChanged(ctx, nodeAllocationRequest)
 	case hwmgrutils.NodeAllocationRequestFSMNoop:
-		// Nothing to do
-		return result, nil
+		return r.handleNodeAllocationRequestNoop(ctx, nodeAllocationRequest)
 	}
 
 	return result, nil
+}
+
+// handleNodeAllocationRequestNoop handles the steady state where the hardware
+// manager has already caught up with the NAR spec. It exists to migrate NARs that
+// were created before the controller acknowledged the baseline ConfigTransactionId
+// on create (handleNewNodeAllocationRequestCreate): such a NAR has a settled
+// generation, has never been configured, and yet carries a nonzero
+// Spec.ConfigTransactionId with ObservedConfigTransactionId == 0. The
+// ProvisioningRequest controller's hardware-config in-flight gate treats that
+// unacknowledged baseline as an in-flight configuration and would block downstream
+// phases indefinitely after an operator upgrade.
+//
+// Acknowledging it here is safe and cannot mask real Day-2 work: a genuine Day-2
+// configuration bumps the generation (routing through SpecChanged, not here) and
+// writes a Configured condition, and every Configured condition write acknowledges
+// ObservedConfigTransactionId (see UpdateNodeAllocationRequestStatusCondition). So
+// ObservedConfigTransactionId == 0 with a nonzero Spec.ConfigTransactionId can only
+// be a never-configured legacy baseline.
+func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestNoop(
+	ctx context.Context,
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) (ctrl.Result, error) {
+
+	if nodeAllocationRequest.Spec.ConfigTransactionId != 0 &&
+		nodeAllocationRequest.Status.ObservedConfigTransactionId == 0 &&
+		meta.FindStatusCondition(nodeAllocationRequest.Status.Conditions,
+			string(hwmgmtv1alpha1.Configured)) == nil {
+		r.Logger.InfoContext(ctx, "Acknowledging legacy baseline config transaction",
+			slog.Int64("specConfigTransactionId", nodeAllocationRequest.Spec.ConfigTransactionId))
+		err := hwmgrutils.UpdateNodeAllocationRequestObservedStatus(ctx, r.Client, nodeAllocationRequest,
+			nodeAllocationRequest.ObjectMeta.Generation, nodeAllocationRequest.Spec.ConfigTransactionId)
+		if errors.Is(err, hwmgrutils.ErrNodeAllocationRequestSpecChanged) {
+			// A Day-2 configuration arrived between the no-op check and the ack; requeue so
+			// the SpecChanged path handles it instead of acknowledging an unprocessed spec.
+			r.Logger.InfoContext(ctx, "NodeAllocationRequest spec changed before baseline ack, requeuing")
+			return hwmgrutils.RequeueWithShortInterval(), nil
+		}
+		if err != nil {
+			return hwmgrutils.RequeueWithShortInterval(),
+				fmt.Errorf("failed to acknowledge legacy baseline config transaction: %w", err)
+		}
+	}
+
+	return ctrl.Result{}, nil
 }
 
 // handleScaleInAnnotations checks for the scale-in-nodes annotation and
@@ -597,9 +639,27 @@ func (r *NodeAllocationRequestReconciler) handleNewNodeAllocationRequestCreate(
 		return hwmgrutils.RequeueWithMediumInterval(),
 			fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, err)
 	}
-	// Ack this generation on create. Special case to acknowledge generation on Provisioned=InProgress state.
-	if err := hwmgrutils.UpdateNodeAllocationRequestObservedGeneration(ctx, r.Client, nodeAllocationRequest); err != nil {
-		return hwmgrutils.RequeueWithShortInterval(), fmt.Errorf("failed to update ObservedGeneration status: %w", err)
+	// Ack this generation and the baseline config transaction on create. Special case to
+	// acknowledge the observed status on the Provisioned=InProgress state.
+	//
+	// The baseline ConfigTransactionId is seeded equal to the generation when the NAR spec
+	// is built, and Day-0 provisioning never emits a Configured condition (that is a Day-2
+	// concern). Acknowledging ObservedConfigTransactionId here establishes the baseline so
+	// the ProvisioningRequest controller's hardware-config in-flight gate does not mistake an
+	// unobserved baseline transaction for an in-flight Day-2 configuration and block cluster
+	// installation indefinitely. A genuine Day-2 change advances ConfigTransactionId as a
+	// monotonic counter, re-entering the SpecChanged flow, so this does not mask real
+	// configuration work.
+	err := hwmgrutils.UpdateNodeAllocationRequestObservedStatus(ctx, r.Client, nodeAllocationRequest,
+		nodeAllocationRequest.ObjectMeta.Generation, nodeAllocationRequest.Spec.ConfigTransactionId)
+	if errors.Is(err, hwmgrutils.ErrNodeAllocationRequestSpecChanged) {
+		// The spec advanced during create; requeue so the next reconcile acknowledges the
+		// current baseline instead of a stale one.
+		r.Logger.InfoContext(ctx, "NodeAllocationRequest spec changed during create ack, requeuing")
+		return hwmgrutils.RequeueWithShortInterval(), nil
+	}
+	if err != nil {
+		return hwmgrutils.RequeueWithShortInterval(), fmt.Errorf("failed to update observed status: %w", err)
 	}
 
 	return hwmgrutils.DoNotRequeue(), nil
@@ -695,7 +755,16 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 				return ctrl.Result{}, fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, updateErr)
 			}
 		} else {
-			if err := hwmgrutils.UpdateNodeAllocationRequestObservedStatus(ctx, r.Client, nodeAllocationRequest); err != nil {
+			err := hwmgrutils.UpdateNodeAllocationRequestObservedStatus(ctx, r.Client, nodeAllocationRequest,
+				nodeAllocationRequest.ObjectMeta.Generation, nodeAllocationRequest.Spec.ConfigTransactionId)
+			if errors.Is(err, hwmgrutils.ErrNodeAllocationRequestSpecChanged) {
+				// A real spec change (e.g. an HW profile Day-2) arrived after the no-change
+				// check; requeue so it is re-evaluated and processed rather than acknowledged
+				// as a no-op.
+				r.Logger.InfoContext(ctx, "NodeAllocationRequest spec changed before spec-change ack, requeuing")
+				return hwmgrutils.RequeueWithShortInterval(), nil
+			}
+			if err != nil {
 				return hwmgrutils.RequeueWithShortInterval(),
 					fmt.Errorf("failed to acknowledge spec change: %w", err)
 			}

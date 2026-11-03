@@ -32,12 +32,28 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// getNAR retrieves the NodeAllocationRequest CR for this ProvisioningRequest.
-// The NAR name matches the ProvisioningRequest name (1:1 relationship).
+// getNAR retrieves the NodeAllocationRequest CR for this ProvisioningRequest
+// through the cached client. The NAR name matches the ProvisioningRequest name
+// (1:1 relationship).
 func (t *provisioningRequestReconcilerTask) getNAR(ctx context.Context) (*hwmgmtv1alpha1.NodeAllocationRequest, error) {
+	return t.getNARWithReader(ctx, t.client)
+}
+
+// noncachedReader returns a reader that bypasses the informer cache when one is
+// configured, falling back to the cached client otherwise (e.g. in unit tests
+// that construct the task without a noncached client).
+func (t *provisioningRequestReconcilerTask) noncachedReader() client.Reader {
+	if t.noncachedClient != nil {
+		return t.noncachedClient
+	}
+	return t.client
+}
+
+// getNARWithReader retrieves the NodeAllocationRequest CR using the supplied reader.
+func (t *provisioningRequestReconcilerTask) getNARWithReader(ctx context.Context, reader client.Reader) (*hwmgmtv1alpha1.NodeAllocationRequest, error) {
 	narNS := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
 	nar := &hwmgmtv1alpha1.NodeAllocationRequest{}
-	if err := t.client.Get(ctx, types.NamespacedName{Name: t.object.Name, Namespace: narNS}, nar); err != nil {
+	if err := reader.Get(ctx, types.NamespacedName{Name: t.object.Name, Namespace: narNS}, nar); err != nil {
 		return nil, fmt.Errorf("failed to get NodeAllocationRequest %s/%s: %w", narNS, t.object.Name, err)
 	}
 	return nar, nil
@@ -118,13 +134,19 @@ func (t *provisioningRequestReconcilerTask) createOrUpdateNodeAllocationRequest(
 	// NAR exists — compare spec and update if changed.
 	// Carry over fields not driven by the rendered NAR to avoid false-positive change detection.
 	nodeAllocationRequest.Spec.ClusterProvisioned = existingNAR.Spec.ClusterProvisioned
-	renderedConfigTransactionId := nodeAllocationRequest.Spec.ConfigTransactionId
 	nodeAllocationRequest.Spec.ConfigTransactionId = existingNAR.Spec.ConfigTransactionId
 
 	specChanged := !equality.Semantic.DeepEqual(existingNAR.Spec, nodeAllocationRequest.Spec)
 
 	if specChanged {
-		nodeAllocationRequest.Spec.ConfigTransactionId = renderedConfigTransactionId
+		// ConfigTransactionId is a monotonic counter, not the ProvisioningRequest
+		// generation. Seeding it from t.object.Generation here would make this update
+		// path a second, independent writer alongside the swap scale-in bump below,
+		// which can collide on a value or even move the id backwards. Always advancing
+		// from the existing value keeps it strictly increasing, so the transaction
+		// comparison in checkNodeAllocationRequestStatus is the single, reliable signal
+		// that the hardware manager has observed the latest spec.
+		nodeAllocationRequest.Spec.ConfigTransactionId = existingNAR.Spec.ConfigTransactionId + 1
 		patch := client.MergeFrom(existingNAR.DeepCopy())
 		existingNAR.Spec = nodeAllocationRequest.Spec
 		if err := t.client.Patch(ctx, existingNAR, patch); err != nil {
@@ -288,24 +310,46 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestStatus(
 	var timedOutOrFailed bool
 	var err error
 
-	// Guard against consuming stale Configured status during day-2 retries.
-	// After a PR spec change, the NAR may still carry a Configured condition
-	// from the previous attempt (Failed, TimedOut, or True from a prior success)
-	// until the hardware manager processes the new ConfigTransactionId. Skip the update
-	// and requeue until the hardware manager has observed the new transaction.
-	if condition == hwmgmtv1alpha1.Configured &&
-		nodeAllocationRequestResponse.Spec.ConfigTransactionId != 0 &&
-		nodeAllocationRequestResponse.Status.ObservedConfigTransactionId != nodeAllocationRequestResponse.Spec.ConfigTransactionId {
-		for _, c := range nodeAllocationRequestResponse.Status.Conditions {
-			if c.Type == string(condition) {
-				t.logger.InfoContext(ctx, "Skipping stale NAR status — hardware manager has not observed new transaction",
-					slog.String("condition", string(condition)),
-					slog.String("reason", c.Reason),
-					slog.Int64("specTransaction", nodeAllocationRequestResponse.Spec.ConfigTransactionId),
-					slog.Int64("observedTransaction", nodeAllocationRequestResponse.Status.ObservedConfigTransactionId))
-				return false, false, nil
-			}
+	// Single gate on the hardware manager catching up to the scheduled configuration.
+	// When a Day-2 configuration is scheduled but the hardware manager has not yet
+	// observed it, report the configuration as not-yet-complete (status=false) and
+	// requeue. This is the source of truth for "is a hardware configuration still in
+	// flight", covering two windows:
+	//
+	//   - The NAR still carries a Configured condition from a previous attempt (Failed,
+	//     TimedOut, or a prior True) that must not be consumed before the hardware manager
+	//     reprocesses the new transaction.
+	//   - No Configured condition exists yet — the window after a Day-2 firmware update is
+	//     scheduled but before the hardware manager attaches a condition. Returning
+	//     status=false here (so the derived `configured` is non-nil false, not nil) keeps
+	//     the downstream gate blocking, so the upgrade phase does not create the IBGU while
+	//     the firmware flash power-cycles the node and kills IBU Prep (OCPBUGS-132825).
+	//
+	// The in-flight signal is Spec.ConfigTransactionId vs Status.ObservedConfigTransactionId,
+	// both on the NAR's own status (not the ProvisioningRequest generation). ConfigTransactionId
+	// is a monotonic counter advanced on every spec change and on swap scale-in (see
+	// createOrUpdateNodeAllocationRequest), so a single transaction comparison reliably detects
+	// any unobserved spec. This depends on the hardware manager acknowledging the baseline
+	// ConfigTransactionId when it first creates the NAR (handleNewNodeAllocationRequestCreate ->
+	// UpdateNodeAllocationRequestObservedStatus) and on every terminal Configured write
+	// (UpdateNodeAllocationRequestStatusCondition). Without those acks the seeded baseline
+	// would read as perpetually unobserved and deadlock cluster installation.
+	transactionInFlight := nodeAllocationRequestResponse.Spec.ConfigTransactionId != 0 &&
+		nodeAllocationRequestResponse.Status.ObservedConfigTransactionId != nodeAllocationRequestResponse.Spec.ConfigTransactionId
+	if condition == hwmgmtv1alpha1.Configured && transactionInFlight {
+		t.logger.InfoContext(ctx, "Hardware manager has not observed the scheduled configuration",
+			slog.Int64("specTransaction", nodeAllocationRequestResponse.Spec.ConfigTransactionId),
+			slog.Int64("observedTransaction", nodeAllocationRequestResponse.Status.ObservedConfigTransactionId))
+		// Surface the in-flight transaction on the ProvisioningRequest as HardwareConfigured
+		// in-progress. The NAR's own Configured condition must not be propagated here: it may
+		// still carry a stale True/Failed/TimedOut from a previous transaction (which would
+		// wrongly surface as complete), or not exist yet. Reporting in-progress keeps the PR
+		// status observable while the hardware manager catches up, and the returned status=false
+		// still keeps downstream phases gated (OCPBUGS-132825).
+		if err := t.setHardwareConfigInProgress(ctx); err != nil {
+			return false, false, err
 		}
+		return false, false, nil
 	}
 
 	// Update the provisioning request Status with status from the NodeAllocationRequest object.
@@ -672,6 +716,25 @@ func (t *provisioningRequestReconcilerTask) processExistingHardwareCondition(
 	return status, reason, message, timedOutOrFailed
 }
 
+// setHardwareConfigInProgress marks the ProvisioningRequest's HardwareConfigured condition
+// as in-progress and persists the status. It is used by the spec-vs-observed gate in
+// checkNodeAllocationRequestStatus while a configuration transaction is in flight but not yet
+// observed by the hardware manager — a window where the NAR's own Configured condition cannot
+// be trusted (it may be a stale completion from a previous transaction, or not exist yet).
+func (t *provisioningRequestReconcilerTask) setHardwareConfigInProgress(ctx context.Context) error {
+	message := fmt.Sprintf("Hardware %s is in progress", ctlrutils.GetStatusMessage(hwmgmtv1alpha1.Configured))
+	ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
+		provisioningv1alpha1.PRconditionTypes.HardwareConfigured,
+		provisioningv1alpha1.CRconditionReasons.InProgress,
+		metav1.ConditionFalse,
+		message)
+	ctlrutils.SetProvisioningStateInProgress(t.object, message)
+	if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+		return fmt.Errorf("failed to update Hardware %s status: %w", ctlrutils.GetStatusMessage(hwmgmtv1alpha1.Configured), err)
+	}
+	return nil
+}
+
 // updateHardwareStatus updates the hardware status for the ProvisioningRequest.
 // Returns:
 //   - status (bool): true if the hardware condition is completed successfully (ConditionTrue)
@@ -704,28 +767,21 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 		}
 	}
 
-	// Check if we're waiting for a new configuration to start (only when condition doesn't exist)
-	waitingForConfigStart := condition == hwmgmtv1alpha1.Configured &&
-		hwCondition == nil &&
-		!isConfigTransactionObserved(nodeAllocationRequest.Status.ObservedConfigTransactionId, t.object.Generation)
-
 	if hwCondition == nil {
-		// Condition does not exist in NAR status
-		if waitingForConfigStart {
-			// We're waiting for a new configuration to start - return ConditionDoesNotExistsErr
-			// to indicate that configuration hasn't started yet for this transaction
+		// Condition does not exist in NAR status.
+		if condition == hwmgmtv1alpha1.Configured {
+			// Reaching here for the Configured condition means the hardware manager has
+			// already observed the scheduled ConfigTransactionId — the spec-vs-observed
+			// gate in checkNodeAllocationRequestStatus returns earlier otherwise — yet
+			// has emitted no Configured condition, i.e. no hardware configuration was
+			// initiated. Return a custom error so callers treat configuration as absent
+			// (configured==nil) and proceed.
 			return false, false, &ctlrutils.ConditionDoesNotExistsErr{ConditionName: string(condition)}
 		}
-		// Condition doesn't exist and we're not waiting for config start
+		// The Provisioned condition does not exist yet: provisioning is in progress.
 		status = metav1.ConditionFalse
 		reason = string(provisioningv1alpha1.CRconditionReasons.InProgress)
 		message = fmt.Sprintf("Hardware %s is in progress", ctlrutils.GetStatusMessage(condition))
-
-		if condition == hwmgmtv1alpha1.Configured {
-			// If there was no hardware configuration update initiated, return a custom error to
-			// indicate that the configured condition does not exist.
-			return false, false, &ctlrutils.ConditionDoesNotExistsErr{ConditionName: string(condition)}
-		}
 		ctlrutils.SetProvisioningStateInProgress(t.object, message)
 	} else {
 		// A hardware condition was found in NAR status - always process it
@@ -764,18 +820,6 @@ func (t *provisioningRequestReconcilerTask) updateHardwareStatus(
 	}
 
 	return status == metav1.ConditionTrue, timedOutOrFailed, err
-}
-
-// isConfigTransactionObserved checks if the observed config transaction ID matches the expected generation.
-// Returns true if the transaction has been observed (not zero and matches generation).
-// A value of 0 indicates the transaction has not been observed yet.
-func isConfigTransactionObserved(observedID, expectedGeneration int64) bool {
-	// Treat zero as unobserved
-	if observedID == 0 {
-		return false
-	}
-	// Check if the observed ID matches the expected generation
-	return observedID == expectedGeneration
 }
 
 // buildNodeAllocationRequestSpec builds the NodeAllocationRequest from the pre-merged hwMgmt data and cluster instance

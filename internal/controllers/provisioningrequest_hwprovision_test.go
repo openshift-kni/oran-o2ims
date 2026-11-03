@@ -724,10 +724,11 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 		err := task.createOrUpdateNodeAllocationRequest(ctx, ctNamespace, nodeAllocationRequest)
 		Expect(err).ToNot(HaveOccurred())
 
-		// Verify the NAR was updated with new ConfigTransactionId
+		// Verify the NAR was updated. ConfigTransactionId is a monotonic counter advanced
+		// from the existing value (2 -> 3), not seeded from the rendered value (4).
 		updatedNAR := &hwmgmtv1alpha1.NodeAllocationRequest{}
 		Expect(c.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: constants.DefaultNamespace}, updatedNAR)).To(Succeed())
-		Expect(updatedNAR.Spec.ConfigTransactionId).To(Equal(int64(4)))
+		Expect(updatedNAR.Spec.ConfigTransactionId).To(Equal(int64(3)))
 		Expect(updatedNAR.Spec.NodeGroup[0].Size).To(Equal(2))
 	})
 
@@ -1528,6 +1529,217 @@ var _ = Describe("waitForHardwareData", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(configured).To(BeNil())
 		Expect(timedOutOrFailed).To(BeFalse())
+	})
+
+	It("gates downstream phases when a Day-2 config is scheduled but not yet observed and no Configured condition exists (OCPBUGS-132825)", func() {
+		// Reproduces the exact decision the ProvisioningRequestController makes at
+		// handleNodeAllocationRequestProvisioning: the NAR is provisioned, but a Day-2
+		// firmware update has been scheduled (Spec.ConfigTransactionId bumped) and the
+		// hardware manager has not yet observed it or attached a Configured condition.
+		// The spec-vs-observed gate in checkNodeAllocationRequestStatus must report the
+		// configuration as in-progress (configured==false, not nil) so the gate keeps
+		// blocking and the upgrade phase does not create the IBGU while the firmware
+		// flash power-cycles the node.
+		scheduledButUnobservedMock := &hwmgmtv1alpha1.NodeAllocationRequest{
+			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+				ConfigTransactionId: 2,
+			},
+			Status: hwmgmtv1alpha1.NodeAllocationRequestStatus{
+				Conditions: []metav1.Condition{
+					{Type: "Provisioned", Status: metav1.ConditionTrue, Reason: "Completed", Message: "Hardware provisioned", LastTransitionTime: metav1.Now()},
+				},
+				ObservedConfigTransactionId: 1,
+			},
+		}
+
+		// waitForHardwareData derives `configured` from these two checks; call them
+		// directly to avoid the cluster-instance BMC update side effects that follow
+		// once provisioning is complete.
+		provisioned, timedOutOrFailed, err := task.checkNodeAllocationRequestStatus(ctx, scheduledButUnobservedMock, hwmgmtv1alpha1.Provisioned)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(provisioned).To(BeTrue())
+		Expect(timedOutOrFailed).To(BeFalse())
+
+		configured, timedOutOrFailed, err := task.checkNodeAllocationRequestConfigStatus(ctx, scheduledButUnobservedMock)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(configured).ToNot(BeNil())
+		Expect(*configured).To(BeFalse())
+		Expect(timedOutOrFailed).To(BeFalse())
+	})
+
+	It("gates downstream phases when a never-observed Day-2 config is scheduled (observed==0)", func() {
+		// A Day-2 config transaction scheduled on the NAR that the hardware manager has
+		// not acknowledged at all yet (ObservedConfigTransactionId==0) must block.
+		neverObservedMock := &hwmgmtv1alpha1.NodeAllocationRequest{
+			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+				ConfigTransactionId: 2,
+			},
+			Status: hwmgmtv1alpha1.NodeAllocationRequestStatus{
+				Conditions: []metav1.Condition{
+					{Type: "Provisioned", Status: metav1.ConditionTrue, Reason: "Completed", Message: "Hardware provisioned", LastTransitionTime: metav1.Now()},
+				},
+				ObservedConfigTransactionId: 0,
+			},
+		}
+
+		configured, timedOutOrFailed, err := task.checkNodeAllocationRequestConfigStatus(ctx, neverObservedMock)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(configured).ToNot(BeNil())
+		Expect(*configured).To(BeFalse())
+		Expect(timedOutOrFailed).To(BeFalse())
+	})
+
+	It("gates downstream phases when a swap-bumped transaction is scheduled but not yet observed", func() {
+		// Swap scale-in advances ConfigTransactionId as a monotonic counter (see
+		// createOrUpdateNodeAllocationRequest). The gate tracks the NAR's own
+		// spec-vs-observed transaction, so an in-flight swap whose new transaction the
+		// hardware manager has not yet observed is correctly reported as in-progress.
+		swapBumpedMock := &hwmgmtv1alpha1.NodeAllocationRequest{
+			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+				ConfigTransactionId: 3,
+			},
+			Status: hwmgmtv1alpha1.NodeAllocationRequestStatus{
+				Conditions: []metav1.Condition{
+					{Type: "Provisioned", Status: metav1.ConditionTrue, Reason: "Completed", Message: "Hardware provisioned", LastTransitionTime: metav1.Now()},
+				},
+				ObservedConfigTransactionId: 2,
+			},
+		}
+
+		configured, timedOutOrFailed, err := task.checkNodeAllocationRequestConfigStatus(ctx, swapBumpedMock)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(configured).ToNot(BeNil())
+		Expect(*configured).To(BeFalse())
+		Expect(timedOutOrFailed).To(BeFalse())
+	})
+
+	It("proceeds for a Day-0 baseline the hardware manager has acknowledged (observed==spec, no Configured condition)", func() {
+		// Day-0 provisioning seeds ConfigTransactionId from the generation and never emits
+		// a Configured condition. Once the hardware manager acknowledges the baseline
+		// (ObservedConfigTransactionId==Spec.ConfigTransactionId), checkNodeAllocationRequestConfigStatus
+		// must return nil (no configuration in flight) so cluster installation proceeds
+		// rather than deadlocking (OCPBUGS-132825 Day-0 deadlock).
+		baselineAckedMock := &hwmgmtv1alpha1.NodeAllocationRequest{
+			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+				ConfigTransactionId: 1,
+			},
+			Status: hwmgmtv1alpha1.NodeAllocationRequestStatus{
+				Conditions: []metav1.Condition{
+					{Type: "Provisioned", Status: metav1.ConditionTrue, Reason: "Completed", Message: "Hardware provisioned", LastTransitionTime: metav1.Now()},
+				},
+				ObservedConfigTransactionId: 1,
+			},
+		}
+
+		configured, timedOutOrFailed, err := task.checkNodeAllocationRequestConfigStatus(ctx, baselineAckedMock)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(configured).To(BeNil())
+		Expect(timedOutOrFailed).To(BeFalse())
+	})
+
+	It("surfaces HardwareConfigured as in-progress while a Day-2 config transaction is in flight", func() {
+		// Regression for OCPBUGS-132825 e2e gap: during a Day-2 hardware configuration the
+		// hardware manager sets the NAR Configured condition to InProgress but does not
+		// acknowledge the transaction (ObservedConfigTransactionId) until it reaches a terminal
+		// state, so the spec-vs-observed gate stays active for the whole in-flight window. The
+		// gate must still propagate an in-progress HardwareConfigured condition onto the
+		// ProvisioningRequest so the status is observable; previously it returned early and the
+		// PR never reached InProgress.
+		inFlightMock := &hwmgmtv1alpha1.NodeAllocationRequest{
+			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+				ConfigTransactionId: 3,
+			},
+			Status: hwmgmtv1alpha1.NodeAllocationRequestStatus{
+				Conditions: []metav1.Condition{
+					{Type: "Provisioned", Status: metav1.ConditionTrue, Reason: "Completed", Message: "Hardware provisioned", LastTransitionTime: metav1.Now()},
+					{Type: "Configured", Status: metav1.ConditionFalse, Reason: "InProgress", Message: "Applying configuration", LastTransitionTime: metav1.Now()},
+				},
+				ObservedConfigTransactionId: 2,
+			},
+		}
+
+		configured, timedOutOrFailed, err := task.checkNodeAllocationRequestConfigStatus(ctx, inFlightMock)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(configured).ToNot(BeNil())
+		Expect(*configured).To(BeFalse())
+		Expect(timedOutOrFailed).To(BeFalse())
+
+		var updatedCR provisioningv1alpha1.ProvisioningRequest
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(cr), &updatedCR)).To(Succeed())
+		condition := meta.FindStatusCondition(updatedCR.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.HardwareConfigured))
+		Expect(condition).ToNot(BeNil())
+		Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+		Expect(condition.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
+	})
+})
+
+var _ = Describe("getNodeAllocationRequestResponse read source", func() {
+	// Regression coverage for OCPBUGS-132825: the hardware-config in-flight gate reads
+	// the NAR right after createOrUpdateNodeAllocationRequest patches its spec. That read
+	// must bypass the informer cache (getNodeAllocationRequestResponseUncached), otherwise
+	// it can observe the pre-patch object and let downstream phases proceed while a
+	// configuration transaction is still in flight. These tests seed the cached and
+	// uncached readers with divergent NAR state to prove each accessor reads its own source.
+	var (
+		ctx          context.Context
+		crName       = "cluster-1"
+		narNS        = constants.DefaultNamespace
+		cr           *provisioningv1alpha1.ProvisioningRequest
+		cachedNAR    *hwmgmtv1alpha1.NodeAllocationRequest
+		uncachedNAR  *hwmgmtv1alpha1.NodeAllocationRequest
+		cachedClient client.Client
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		cr = &provisioningv1alpha1.ProvisioningRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: crName},
+		}
+		// Cached reader holds the stale, pre-patch NAR (transaction already observed).
+		cachedNAR = &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: crName, Namespace: narNS},
+			Spec:       hwmgmtv1alpha1.NodeAllocationRequestSpec{ConfigTransactionId: 2},
+			Status:     hwmgmtv1alpha1.NodeAllocationRequestStatus{ObservedConfigTransactionId: 2},
+		}
+		// Uncached reader holds the fresh, post-patch NAR (transaction still in flight).
+		uncachedNAR = &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: crName, Namespace: narNS},
+			Spec:       hwmgmtv1alpha1.NodeAllocationRequestSpec{ConfigTransactionId: 3},
+			Status:     hwmgmtv1alpha1.NodeAllocationRequestStatus{ObservedConfigTransactionId: 2},
+		}
+		cachedClient = fakeclient.GetFakeClientFromObjects([]client.Object{cachedNAR}...)
+	})
+
+	It("reads the uncached source for the in-flight gate and the cached source otherwise", func() {
+		task := &provisioningRequestReconcilerTask{
+			logger:          logger,
+			client:          cachedClient,
+			noncachedClient: fakeclient.GetFakeClientFromObjects([]client.Object{uncachedNAR}...),
+			object:          cr,
+		}
+
+		cached, exists, err := task.getNodeAllocationRequestResponse(ctx)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(exists).To(BeTrue())
+		Expect(cached.Spec.ConfigTransactionId).To(Equal(int64(2)))
+
+		uncached, exists, err := task.getNodeAllocationRequestResponseUncached(ctx)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(exists).To(BeTrue())
+		Expect(uncached.Spec.ConfigTransactionId).To(Equal(int64(3)))
+	})
+
+	It("falls back to the cached client when no uncached reader is configured", func() {
+		task := &provisioningRequestReconcilerTask{
+			logger: logger,
+			client: cachedClient,
+			object: cr,
+		}
+
+		uncached, exists, err := task.getNodeAllocationRequestResponseUncached(ctx)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(exists).To(BeTrue())
+		Expect(uncached.Spec.ConfigTransactionId).To(Equal(int64(2)))
 	})
 })
 
@@ -2824,7 +3036,7 @@ var _ = Describe("processExistingHardwareCondition", func() {
 		})
 	})
 
-	Context("waitingForConfigStart code path", func() {
+	Context("updateHardwareStatus with no Configured condition present", func() {
 		BeforeEach(func() {
 			// Create or get the ProvisioningRequest for this test
 			// Use local variable to avoid shadowing issues
@@ -2854,10 +3066,11 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			task.object = pr
 		})
 
-		It("should return ConditionDoesNotExistsErr when waiting for config start", func() {
-			// Create NAR response without Configured condition and ObservedConfigTransactionId not matching
-			// This simulates waiting for a new configuration transaction to start
-			observedID := int64(3) // Different from PR Generation (5)
+		It("should return ConditionDoesNotExistsErr when no Configured condition is present", func() {
+			// updateHardwareStatus is called directly (bypassing the spec-vs-observed gate
+			// in checkNodeAllocationRequestStatus). With no Configured condition present it
+			// reports the condition as absent so callers derive configured==nil.
+			observedID := int64(3)
 			mockResponse := &hwmgmtv1alpha1.NodeAllocationRequest{
 				Status: hwmgmtv1alpha1.NodeAllocationRequestStatus{
 					ObservedConfigTransactionId: observedID,
@@ -2962,8 +3175,8 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			// Refresh from client to get updated generation
 			Expect(c.Get(ctx, client.ObjectKeyFromObject(task.object), task.object)).To(Succeed())
 
-			// Step 3: Continue reconciliation - ObservedConfigTransactionId (5) no longer matches Generation (6)
-			// This should trigger waitingForConfigStart
+			// Step 3: Continue reconciliation - no Configured condition is present, so
+			// updateHardwareStatus reports the condition as absent (configured==nil).
 			configured, timedOutOrFailed, err := task.updateHardwareStatus(ctx, mockResponse1, hwmgmtv1alpha1.Configured)
 
 			Expect(err).To(HaveOccurred())
