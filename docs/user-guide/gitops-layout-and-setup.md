@@ -119,6 +119,8 @@ spec:
   - group: clcm.openshift.io
     kind: ClusterTemplate
   - group: clcm.openshift.io
+    kind: FirmwareCatalog
+  - group: clcm.openshift.io
     kind: HardwareProfile
   - group: ocloud.openshift.io
     kind: Location
@@ -127,3 +129,19 @@ spec:
   - group: ocloud.openshift.io
     kind: ResourcePool
 ```
+
+> **Note:** When HardwareProfiles use the `firmwareImages` field, the HP webhook
+> validates that referenced entries exist in the FirmwareCatalog at creation time.
+> If ArgoCD applies both resources simultaneously, the HP may be rejected because
+> the FirmwareCatalog hasn't been persisted yet. Configure a `retry` policy on the
+> ArgoCD Application to handle this transient ordering:
+>
+> ```yaml
+> syncPolicy:
+>   retry:
+>     limit: 5
+>     backoff:
+>       duration: "10s"
+>       factor: 2
+>       maxDuration: "3m"
+> ```

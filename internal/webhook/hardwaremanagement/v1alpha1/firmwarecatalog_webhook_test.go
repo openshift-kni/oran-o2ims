@@ -8,6 +8,7 @@ package v1alpha1
 
 import (
 	"context"
+	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -30,7 +31,7 @@ var _ = Describe("FirmwareCatalogValidator", func() {
 		ctx = context.TODO()
 		oldCatalog = &hwmgmtv1alpha1.FirmwareCatalog{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "firmware-catalog",
+				Name:      hwmgmtv1alpha1.FirmwareCatalogName,
 				Namespace: "oran-o2ims",
 			},
 			Spec: hwmgmtv1alpha1.FirmwareCatalogSpec{
@@ -61,6 +62,7 @@ var _ = Describe("FirmwareCatalogValidator", func() {
 			Build()
 		validator = &firmwareCatalogValidator{
 			Client: fakeClient,
+			Reader: fakeClient,
 		}
 	}
 
@@ -174,8 +176,50 @@ var _ = Describe("FirmwareCatalogValidator", func() {
 	})
 
 	Describe("ValidateDelete", func() {
-		It("should allow deletion", func() {
+		It("should allow deletion when no HardwareProfiles reference entries", func() {
 			setupValidator()
+			warnings, err := validator.ValidateDelete(ctx, oldCatalog)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(warnings).To(BeNil())
+		})
+
+		It("should reject deletion when a HardwareProfile references a BIOS entry via firmwareImages", func() {
+			hp := &hwmgmtv1alpha1.HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-profile", Namespace: "oran-o2ims"},
+				Spec:       hwmgmtv1alpha1.HardwareProfileSpec{FirmwareImages: []string{"dell-bios-2.3.5"}},
+			}
+			setupValidator(hp)
+			_, err := validator.ValidateDelete(ctx, oldCatalog)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("cannot delete FirmwareCatalog"))
+			Expect(err.Error()).To(ContainSubstring("dell-bios-2.3.5"))
+		})
+
+		It("should reject deletion when a HardwareProfile references a NIC entry via firmwareImages", func() {
+			catalog := oldCatalog.DeepCopy()
+			catalog.Spec.Images = append(catalog.Spec.Images, hwmgmtv1alpha1.FirmwareImage{
+				Name:      "broadcom-nic-25.2",
+				Component: "nic",
+				URL:       "https://example.com/nic.bin",
+				Version:   "25.2",
+			})
+			hp := &hwmgmtv1alpha1.HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-profile", Namespace: "oran-o2ims"},
+				Spec:       hwmgmtv1alpha1.HardwareProfileSpec{FirmwareImages: []string{"broadcom-nic-25.2"}},
+			}
+			setupValidator(hp)
+			_, err := validator.ValidateDelete(ctx, catalog)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("cannot delete FirmwareCatalog"))
+			Expect(err.Error()).To(ContainSubstring("broadcom-nic-25.2"))
+		})
+
+		It("should allow deletion when HardwareProfiles exist but have no firmware references", func() {
+			hp := &hwmgmtv1alpha1.HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-profile", Namespace: "oran-o2ims"},
+				Spec:       hwmgmtv1alpha1.HardwareProfileSpec{},
+			}
+			setupValidator(hp)
 			warnings, err := validator.ValidateDelete(ctx, oldCatalog)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(warnings).To(BeNil())
@@ -199,3 +243,49 @@ var _ = Describe("FirmwareCatalogValidator", func() {
 		})
 	})
 })
+
+func TestBuildReferencedEntryNames(t *testing.T) {
+	profiles := []hwmgmtv1alpha1.HardwareProfile{
+		{
+			Spec: hwmgmtv1alpha1.HardwareProfileSpec{
+				FirmwareImages: []string{"bios-entry-1", "bmc-entry-1", "nic-entry-1", "nic-entry-2"},
+			},
+		},
+		{
+			Spec: hwmgmtv1alpha1.HardwareProfileSpec{
+				FirmwareImages: []string{"bios-entry-2"},
+			},
+		},
+		{
+			// A profile using the deprecated inline fields creates no catalog
+			// dependency because those fields carry their own URL/version.
+			Spec: hwmgmtv1alpha1.HardwareProfileSpec{
+				BiosFirmware: hwmgmtv1alpha1.Firmware{Version: "9.9", URL: "https://example.com/inline.bin"},
+			},
+		},
+	}
+
+	referenced := buildReferencedEntryNames(profiles)
+
+	tests := []struct {
+		name      string
+		entryName string
+		want      bool
+	}{
+		{"referenced BIOS entry", "bios-entry-1", true},
+		{"referenced BMC entry", "bmc-entry-1", true},
+		{"referenced NIC entry", "nic-entry-1", true},
+		{"referenced second NIC", "nic-entry-2", true},
+		{"referenced by second profile", "bios-entry-2", true},
+		{"not referenced", "missing-entry", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, got := referenced[tt.entryName]
+			if got != tt.want {
+				t.Errorf("buildReferencedEntryNames()[%q] present = %v, want %v", tt.entryName, got, tt.want)
+			}
+		})
+	}
+}

@@ -81,9 +81,14 @@ spec:
                       type: string
                     url:
                       description: URL points to the firmware image file.
+                      maxLength: 2048
                       minLength: 1
                       pattern: ^(http|https)://.*$
                       type: string
+                      x-kubernetes-validations:
+                      - message: url must be a valid HTTP or HTTPS URL with a hostname
+                        rule: isURL(self) && url(self).getScheme() in ['http', 'https']
+                          && url(self).getHostname() != ''
                     vendor:
                       description: Vendor identifies the firmware vendor or manufacturer.
                       minLength: 1

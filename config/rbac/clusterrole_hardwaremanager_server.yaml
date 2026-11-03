@@ -40,6 +40,7 @@ rules:
   - clcm.openshift.io
   resources:
   - provisioningrequests
+  - firmwarecatalogs
   verbs:
   - get
   - list

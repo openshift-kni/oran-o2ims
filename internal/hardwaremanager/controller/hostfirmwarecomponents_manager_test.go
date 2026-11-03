@@ -150,105 +150,105 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 
 	Describe("validateFirmwareUpdateSpec", func() {
 		It("should return nil for empty firmware specs", func() {
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{}
-			err := validateFirmwareUpdateSpec(spec)
+			resolved := resolvedFirmware{}
+			err := validateFirmwareUpdateSpec(resolved)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should return error when BIOS version is set but URL is empty", func() {
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{
 					Version: "1.0.0",
 					URL:     "",
 				},
 			}
-			err := validateFirmwareUpdateSpec(spec)
+			err := validateFirmwareUpdateSpec(resolved)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing BIOS firmware URL"))
 		})
 
 		It("should return error when BIOS URL is invalid", func() {
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{
 					Version: "1.0.0",
 					URL:     "invalid-url",
 				},
 			}
-			err := validateFirmwareUpdateSpec(spec)
+			err := validateFirmwareUpdateSpec(resolved)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid BIOS firmware URL"))
 		})
 
 		It("should return error when BMC version is set but URL is empty", func() {
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BmcFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BmcFirmware: Firmware{
 					Version: "2.0.0",
 					URL:     "",
 				},
 			}
-			err := validateFirmwareUpdateSpec(spec)
+			err := validateFirmwareUpdateSpec(resolved)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing BMC firmware URL"))
 		})
 
 		It("should return error when BMC URL is invalid", func() {
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BmcFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BmcFirmware: Firmware{
 					Version: "2.0.0",
 					URL:     "invalid-url",
 				},
 			}
-			err := validateFirmwareUpdateSpec(spec)
+			err := validateFirmwareUpdateSpec(resolved)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid BMC firmware URL"))
 		})
 
 		It("should return nil for valid firmware specs", func() {
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{
 					Version: "1.0.0",
 					URL:     "https://example.com/bios.bin",
 				},
-				BmcFirmware: hwmgmtv1alpha1.Firmware{
+				BmcFirmware: Firmware{
 					Version: "2.0.0",
 					URL:     "https://example.com/bmc.bin",
 				},
 			}
-			err := validateFirmwareUpdateSpec(spec)
+			err := validateFirmwareUpdateSpec(resolved)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should return error when NIC version is set but URL is empty", func() {
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				NicFirmware: []hwmgmtv1alpha1.Nic{
+			resolved := resolvedFirmware{
+				NicFirmware: []Firmware{
 					{
 						Version: "3.0.0",
 						URL:     "",
 					},
 				},
 			}
-			err := validateFirmwareUpdateSpec(spec)
+			err := validateFirmwareUpdateSpec(resolved)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing NIC firmware URL for NIC at index 0"))
 		})
 
 		It("should return error when NIC URL is invalid", func() {
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				NicFirmware: []hwmgmtv1alpha1.Nic{
+			resolved := resolvedFirmware{
+				NicFirmware: []Firmware{
 					{
 						Version: "3.0.0",
 						URL:     "invalid-url",
 					},
 				},
 			}
-			err := validateFirmwareUpdateSpec(spec)
+			err := validateFirmwareUpdateSpec(resolved)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid NIC firmware URL for NIC at index 0"))
 		})
 
 		It("should return nil for valid NIC firmware specs", func() {
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				NicFirmware: []hwmgmtv1alpha1.Nic{
+			resolved := resolvedFirmware{
+				NicFirmware: []Firmware{
 					{
 						Version: "3.0.0",
 						URL:     "https://example.com/nic1.bin",
@@ -259,90 +259,90 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 					},
 				},
 			}
-			err := validateFirmwareUpdateSpec(spec)
+			err := validateFirmwareUpdateSpec(resolved)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should skip NIC validation when version is empty", func() {
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				NicFirmware: []hwmgmtv1alpha1.Nic{
+			resolved := resolvedFirmware{
+				NicFirmware: []Firmware{
 					{
 						Version: "", // Empty version should be skipped
 						URL:     "https://example.com/nic1.bin",
 					},
 				},
 			}
-			err := validateFirmwareUpdateSpec(spec)
+			err := validateFirmwareUpdateSpec(resolved)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should validate mixed firmware specs with BIOS, BMC, and NIC", func() {
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{
 					Version: "1.0.0",
 					URL:     "https://example.com/bios.bin",
 				},
-				BmcFirmware: hwmgmtv1alpha1.Firmware{
+				BmcFirmware: Firmware{
 					Version: "2.0.0",
 					URL:     "https://example.com/bmc.bin",
 				},
-				NicFirmware: []hwmgmtv1alpha1.Nic{
+				NicFirmware: []Firmware{
 					{
 						Version: "3.0.0",
 						URL:     "https://example.com/nic1.bin",
 					},
 				},
 			}
-			err := validateFirmwareUpdateSpec(spec)
+			err := validateFirmwareUpdateSpec(resolved)
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 
 	Describe("convertToFirmwareUpdates", func() {
 		It("should return empty slice when no firmware is specified", func() {
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{}
-			updates := convertToFirmwareUpdates(spec)
+			resolved := resolvedFirmware{}
+			updates := convertToFirmwareUpdates(resolved)
 			Expect(updates).To(BeEmpty())
 		})
 
 		It("should convert BIOS firmware to update", func() {
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{
 					Version: "1.0.0",
 					URL:     "https://example.com/bios.bin",
 				},
 			}
-			updates := convertToFirmwareUpdates(spec)
+			updates := convertToFirmwareUpdates(resolved)
 			Expect(updates).To(HaveLen(1))
 			Expect(updates[0].Component).To(Equal("bios"))
 			Expect(updates[0].URL).To(Equal("https://example.com/bios.bin"))
 		})
 
 		It("should convert BMC firmware to update", func() {
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BmcFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BmcFirmware: Firmware{
 					Version: "2.0.0",
 					URL:     "https://example.com/bmc.bin",
 				},
 			}
-			updates := convertToFirmwareUpdates(spec)
+			updates := convertToFirmwareUpdates(resolved)
 			Expect(updates).To(HaveLen(1))
 			Expect(updates[0].Component).To(Equal("bmc"))
 			Expect(updates[0].URL).To(Equal("https://example.com/bmc.bin"))
 		})
 
 		It("should convert both BIOS and BMC firmware to updates", func() {
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{
 					Version: "1.0.0",
 					URL:     "https://example.com/bios.bin",
 				},
-				BmcFirmware: hwmgmtv1alpha1.Firmware{
+				BmcFirmware: Firmware{
 					Version: "2.0.0",
 					URL:     "https://example.com/bmc.bin",
 				},
 			}
-			updates := convertToFirmwareUpdates(spec)
+			updates := convertToFirmwareUpdates(resolved)
 			Expect(updates).To(HaveLen(2))
 
 			var biosUpdate, bmcUpdate metal3v1alpha1.FirmwareUpdate
@@ -361,38 +361,38 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 		})
 
 		It("should not include firmware with empty URL", func() {
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{
 					Version: "1.0.0",
 					URL:     "",
 				},
-				BmcFirmware: hwmgmtv1alpha1.Firmware{
+				BmcFirmware: Firmware{
 					Version: "2.0.0",
 					URL:     "https://example.com/bmc.bin",
 				},
 			}
-			updates := convertToFirmwareUpdates(spec)
+			updates := convertToFirmwareUpdates(resolved)
 			Expect(updates).To(HaveLen(1))
 			Expect(updates[0].Component).To(Equal("bmc"))
 			Expect(updates[0].URL).To(Equal("https://example.com/bmc.bin"))
 		})
 
 		It("should skip NIC firmware conversion as it's handled by isVersionChangeDetected", func() {
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				NicFirmware: []hwmgmtv1alpha1.Nic{
+			resolved := resolvedFirmware{
+				NicFirmware: []Firmware{
 					{
 						Version: "3.0.0",
 						URL:     "https://example.com/nic1.bin",
 					},
 				},
 			}
-			updates := convertToFirmwareUpdates(spec)
+			updates := convertToFirmwareUpdates(resolved)
 			Expect(updates).To(HaveLen(0)) // NIC firmware is now handled by isVersionChangeDetected
 		})
 
 		It("should skip multiple NIC firmware conversion as it's handled by isVersionChangeDetected", func() {
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				NicFirmware: []hwmgmtv1alpha1.Nic{
+			resolved := resolvedFirmware{
+				NicFirmware: []Firmware{
 					{
 						Version: "3.0.0",
 						URL:     "https://example.com/nic1.bin",
@@ -403,28 +403,28 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 					},
 				},
 			}
-			updates := convertToFirmwareUpdates(spec)
+			updates := convertToFirmwareUpdates(resolved)
 			Expect(updates).To(HaveLen(0)) // NIC firmware is now handled by isVersionChangeDetected
 		})
 
 		It("should convert BIOS and BMC firmware to updates (NIC handled separately)", func() {
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{
 					Version: "1.0.0",
 					URL:     "https://example.com/bios.bin",
 				},
-				BmcFirmware: hwmgmtv1alpha1.Firmware{
+				BmcFirmware: Firmware{
 					Version: "2.0.0",
 					URL:     "https://example.com/bmc.bin",
 				},
-				NicFirmware: []hwmgmtv1alpha1.Nic{
+				NicFirmware: []Firmware{
 					{
 						Version: "3.0.0",
 						URL:     "https://example.com/nic1.bin",
 					},
 				},
 			}
-			updates := convertToFirmwareUpdates(spec)
+			updates := convertToFirmwareUpdates(resolved)
 			Expect(updates).To(HaveLen(2)) // Only BIOS and BMC, NIC is handled by isVersionChangeDetected
 
 			updateMap := make(map[string]string)
@@ -436,8 +436,8 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 		})
 
 		It("should not include NIC firmware (handled by isVersionChangeDetected)", func() {
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				NicFirmware: []hwmgmtv1alpha1.Nic{
+			resolved := resolvedFirmware{
+				NicFirmware: []Firmware{
 					{
 						Version: "3.0.0",
 						URL:     "",
@@ -448,7 +448,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 					},
 				},
 			}
-			updates := convertToFirmwareUpdates(spec)
+			updates := convertToFirmwareUpdates(resolved)
 			Expect(updates).To(HaveLen(0)) // NIC firmware is now handled by isVersionChangeDetected
 		})
 	})
@@ -575,14 +575,14 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			status := &metal3v1alpha1.HostFirmwareComponentsStatus{
 				Components: []metal3v1alpha1.FirmwareComponentStatus{},
 			}
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{
 					Version: "1.0.0",
 					URL:     "https://example.com/bios.bin",
 				},
 			}
 
-			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, spec)
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, resolved)
 			Expect(updates).To(BeEmpty())
 			Expect(updateRequired).To(BeFalse())
 		})
@@ -596,11 +596,11 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 					},
 				},
 			}
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{}, // Empty firmware spec
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{}, // Empty firmware spec
 			}
 
-			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, spec)
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, resolved)
 			Expect(updates).To(BeEmpty())
 			Expect(updateRequired).To(BeFalse())
 		})
@@ -614,14 +614,14 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 					},
 				},
 			}
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{
 					Version: "1.0.0",
 					URL:     "https://example.com/bios.bin",
 				},
 			}
 
-			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, spec)
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, resolved)
 			Expect(updates).To(HaveLen(1))
 			Expect(updates[0].Component).To(Equal("bios"))
 			Expect(updates[0].URL).To(Equal("https://example.com/bios.bin"))
@@ -637,14 +637,14 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 					},
 				},
 			}
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{
 					Version: "1.0.0",
 					URL:     "https://example.com/bios.bin",
 				},
 			}
 
-			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, spec)
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, resolved)
 			Expect(updates).To(BeEmpty())
 			Expect(updateRequired).To(BeFalse())
 		})
@@ -662,18 +662,18 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 					},
 				},
 			}
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{
 					Version: "1.0.0",
 					URL:     "https://example.com/bios.bin",
 				},
-				BmcFirmware: hwmgmtv1alpha1.Firmware{
+				BmcFirmware: Firmware{
 					Version: "2.0.0",
 					URL:     "https://example.com/bmc.bin",
 				},
 			}
 
-			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, spec)
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, resolved)
 			Expect(updates).To(HaveLen(2))
 			Expect(updateRequired).To(BeTrue())
 
@@ -704,8 +704,8 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 					},
 				},
 			}
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				NicFirmware: []hwmgmtv1alpha1.Nic{
+			resolved := resolvedFirmware{
+				NicFirmware: []Firmware{
 					{
 						Version: "3.0.0",
 						URL:     "https://example.com/nic1.bin",
@@ -713,7 +713,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 				},
 			}
 
-			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, spec)
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, resolved)
 			Expect(updates).To(HaveLen(1))
 			Expect(updates[0].Component).To(Equal("nic:pci-0000:01:00.0"))
 			Expect(updates[0].URL).To(Equal("https://example.com/nic1.bin"))
@@ -729,8 +729,8 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 					},
 				},
 			}
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				NicFirmware: []hwmgmtv1alpha1.Nic{
+			resolved := resolvedFirmware{
+				NicFirmware: []Firmware{
 					{
 						Version: "3.0.0",
 						URL:     "https://example.com/nic1.bin",
@@ -738,7 +738,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 				},
 			}
 
-			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, spec)
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, resolved)
 			Expect(updates).To(BeEmpty())
 			Expect(updateRequired).To(BeFalse())
 		})
@@ -752,8 +752,8 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 					},
 				},
 			}
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				NicFirmware: []hwmgmtv1alpha1.Nic{
+			resolved := resolvedFirmware{
+				NicFirmware: []Firmware{
 					{
 						Version: "", // Empty version should be skipped
 						URL:     "https://example.com/nic1.bin",
@@ -761,7 +761,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 				},
 			}
 
-			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, spec)
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, resolved)
 			Expect(updates).To(BeEmpty())
 			Expect(updateRequired).To(BeFalse())
 		})
@@ -787,16 +787,16 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 					},
 				},
 			}
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{
 					Version: "1.0.0",
 					URL:     "https://example.com/bios.bin",
 				},
-				BmcFirmware: hwmgmtv1alpha1.Firmware{
+				BmcFirmware: Firmware{
 					Version: "2.0.0",
 					URL:     "https://example.com/bmc.bin",
 				},
-				NicFirmware: []hwmgmtv1alpha1.Nic{
+				NicFirmware: []Firmware{
 					{
 						Version: "3.0.0",
 						URL:     "https://example.com/nic1.bin",
@@ -808,7 +808,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 				},
 			}
 
-			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, spec)
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, resolved)
 			Expect(updates).To(HaveLen(4))
 			Expect(updateRequired).To(BeTrue())
 
@@ -821,6 +821,87 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			Expect(updateMap["nic:pci-0000:01:00.0"]).To(Equal("https://example.com/nic1.bin"))
 			Expect(updateMap["nic:pci-0000:02:00.0"]).To(Equal("https://example.com/nic2.bin"))
 		})
+
+		It("should require an update when two NIC requirements share a version but only one component reached it", func() {
+			// Regression: the update-detection path must consume at most one
+			// nic: component per requirement, matching the per-version counting
+			// in validateNicFirmware. Otherwise two same-version requirements
+			// both match the single up-to-date component, the update path
+			// reports "converged" while validation reports "not converged", and
+			// the controller requeues forever without ever flashing the second
+			// NIC.
+			status := &metal3v1alpha1.HostFirmwareComponentsStatus{
+				Components: []metal3v1alpha1.FirmwareComponentStatus{
+					{
+						Component:      "nic:pci-0000:01:00.0",
+						CurrentVersion: "3.0.0",
+					},
+					{
+						Component:      "nic:pci-0000:02:00.0",
+						CurrentVersion: "2.9.0",
+					},
+				},
+			}
+			resolved := resolvedFirmware{
+				NicFirmware: []Firmware{
+					{Version: "3.0.0", URL: "https://example.com/nic.bin"},
+					{Version: "3.0.0", URL: "https://example.com/nic.bin"},
+				},
+			}
+
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, resolved)
+			Expect(updateRequired).To(BeTrue())
+			Expect(updates).To(HaveLen(1))
+			// The second requirement consumes the not-yet-updated component.
+			Expect(updates[0].Component).To(Equal("nic:pci-0000:02:00.0"))
+			Expect(updates[0].URL).To(Equal("https://example.com/nic.bin"))
+		})
+
+		It("should not require a BIOS update when versions differ only by a leading V or whitespace", func() {
+			// Regression: version comparison must be normalized on the
+			// update-detection path too, otherwise "V1.2.3" (or a trailing
+			// space) versus "1.2.3" keeps reporting updateRequired=true even
+			// though validation normalizes both and reports converged — a
+			// reboot loop.
+			status := &metal3v1alpha1.HostFirmwareComponentsStatus{
+				Components: []metal3v1alpha1.FirmwareComponentStatus{
+					{
+						Component:      "bios",
+						CurrentVersion: "1.2.3",
+					},
+				},
+			}
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{
+					Version: "V1.2.3 ",
+					URL:     "https://example.com/bios.bin",
+				},
+			}
+
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, resolved)
+			Expect(updates).To(BeEmpty())
+			Expect(updateRequired).To(BeFalse())
+		})
+
+		It("should not require a NIC update when versions differ only by a leading V or whitespace", func() {
+			status := &metal3v1alpha1.HostFirmwareComponentsStatus{
+				Components: []metal3v1alpha1.FirmwareComponentStatus{
+					{
+						Component:      "nic:pci-0000:01:00.0",
+						CurrentVersion: "3.0.0",
+					},
+				},
+			}
+			resolved := resolvedFirmware{
+				NicFirmware: []Firmware{
+					{Version: " v3.0.0", URL: "https://example.com/nic.bin"},
+				},
+			}
+
+			updates, updateRequired := isVersionChangeDetected(ctx, logger, status, resolved)
+			Expect(updates).To(BeEmpty())
+			Expect(updateRequired).To(BeFalse())
+		})
 	})
 
 	Describe("createHostFirmwareComponents", func() {
@@ -832,14 +913,14 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 
 		It("should create HFC with firmware updates", func() {
 			bmh := createBMH("test-bmh", "test-namespace")
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{
 					Version: "1.0.0",
 					URL:     "https://example.com/bios.bin",
 				},
 			}
 
-			hfc, err := createHostFirmwareComponents(ctx, fakeClient, bmh, spec)
+			hfc, err := createHostFirmwareComponents(ctx, fakeClient, bmh, resolved)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(hfc).ToNot(BeNil())
 			Expect(hfc.Name).To(Equal("test-bmh"))
@@ -857,9 +938,9 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 
 		It("should create HFC with empty updates when no firmware specified", func() {
 			bmh := createBMH("test-bmh", "test-namespace")
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{}
+			resolved := resolvedFirmware{}
 
-			hfc, err := createHostFirmwareComponents(ctx, fakeClient, bmh, spec)
+			hfc, err := createHostFirmwareComponents(ctx, fakeClient, bmh, resolved)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(hfc).ToNot(BeNil())
 			Expect(hfc.Spec.Updates).To(BeEmpty())
@@ -947,8 +1028,8 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 
 		It("should return error for invalid firmware spec", func() {
 			bmh := createBMH("test-bmh", "test-namespace")
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{
 					Version: "1.0.0",
 					URL:     "", // Invalid: version set but URL empty
 				},
@@ -956,14 +1037,14 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 
 			// validateOnly=true: returns error for invalid firmware spec
 			validateOnly := true
-			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
+			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, resolved, validateOnly)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing BIOS firmware URL"))
 			Expect(required).To(BeFalse())
 
 			// validateOnly=false: returns error for invalid firmware spec
 			validateOnly = false
-			required, err = IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
+			required, err = IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, resolved, validateOnly)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing BIOS firmware URL"))
 			Expect(required).To(BeFalse())
@@ -971,8 +1052,8 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 
 		It("should return true when HFC does not exist", func() {
 			bmh := createBMH("test-bmh", "test-namespace")
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{
 					Version: "1.0.0",
 					URL:     "https://example.com/bios.bin",
 				},
@@ -980,7 +1061,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 
 			// validateOnly=true: reports update required but does not create HFC
 			validateOnly := true
-			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
+			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, resolved, validateOnly)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(required).To(BeTrue())
 			hfc := &metal3v1alpha1.HostFirmwareComponents{}
@@ -990,7 +1071,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 
 			// validateOnly=false: creates HFC
 			validateOnly = false
-			required, err = IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
+			required, err = IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, resolved, validateOnly)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(required).To(BeTrue())
 			err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-bmh", Namespace: "test-namespace"}, hfc)
@@ -999,8 +1080,8 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 
 		It("should return false when no update is needed", func() {
 			bmh := createBMH("test-bmh", "test-namespace")
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{
 					Version: "1.0.0",
 					URL:     "https://example.com/bios.bin",
 				},
@@ -1018,21 +1099,21 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 
 			// validateOnly=true: reports no update required
 			validateOnly := true
-			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
+			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, resolved, validateOnly)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(required).To(BeFalse())
 
 			// validateOnly=false: reports no update required
 			validateOnly = false
-			required, err = IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
+			required, err = IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, resolved, validateOnly)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(required).To(BeFalse())
 		})
 
 		It("should return true and update HFC when version change is detected", func() {
 			bmh := createBMH("test-bmh", "test-namespace")
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{
 					Version: "2.0.0",
 					URL:     "https://example.com/new-bios.bin",
 				},
@@ -1050,7 +1131,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 
 			// validateOnly=true: reports update required but does not modify HFC
 			validateOnly := true
-			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
+			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, resolved, validateOnly)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(required).To(BeTrue())
 			unchangedHFC := &metal3v1alpha1.HostFirmwareComponents{}
@@ -1059,7 +1140,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 
 			// validateOnly=false: updates HFC with new firmware URL
 			validateOnly = false
-			required, err = IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
+			required, err = IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, resolved, validateOnly)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(required).To(BeTrue())
 			updatedHFC := &metal3v1alpha1.HostFirmwareComponents{}
@@ -1071,12 +1152,12 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 
 		It("should handle multiple firmware components correctly", func() {
 			bmh := createBMH("test-bmh", "test-namespace")
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{
 					Version: "2.0.0",
 					URL:     "https://example.com/new-bios.bin",
 				},
-				BmcFirmware: hwmgmtv1alpha1.Firmware{
+				BmcFirmware: Firmware{
 					Version: "3.0.0",
 					URL:     "https://example.com/new-bmc.bin",
 				},
@@ -1098,7 +1179,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 
 			// validateOnly=true: reports update required but does not modify HFC
 			validateOnly := true
-			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
+			required, err := IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, resolved, validateOnly)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(required).To(BeTrue())
 			unchangedHFC := &metal3v1alpha1.HostFirmwareComponents{}
@@ -1107,7 +1188,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 
 			// validateOnly=false: updates HFC with updates
 			validateOnly = false
-			required, err = IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, spec, validateOnly)
+			required, err = IsFirmwareUpdateRequired(ctx, fakeClient, logger, bmh, resolved, validateOnly)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(required).To(BeTrue())
 
@@ -1136,9 +1217,9 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 					{Component: "nic:0", CurrentVersion: "3.0"},
 				},
 			}
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{}
+			resolved := resolvedFirmware{}
 
-			err := validateHFCHasRequiredComponents(status, spec)
+			err := validateHFCHasRequiredComponents(status, resolved)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -1149,14 +1230,14 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 					{Component: "nic:0", CurrentVersion: "3.0"},
 				},
 			}
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{
 					Version: "1.1",
 					URL:     "https://example.com/bios.bin",
 				},
 			}
 
-			err := validateHFCHasRequiredComponents(status, spec)
+			err := validateHFCHasRequiredComponents(status, resolved)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("BIOS firmware update requested but BIOS component not found"))
 		})
@@ -1168,14 +1249,14 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 					{Component: "nic:0", CurrentVersion: "3.0"},
 				},
 			}
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BmcFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BmcFirmware: Firmware{
 					Version: "2.1",
 					URL:     "https://example.com/bmc.bin",
 				},
 			}
 
-			err := validateHFCHasRequiredComponents(status, spec)
+			err := validateHFCHasRequiredComponents(status, resolved)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("BMC firmware update requested but BMC component not found"))
 		})
@@ -1187,13 +1268,13 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 					{Component: "bmc", CurrentVersion: "2.0"},
 				},
 			}
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				NicFirmware: []hwmgmtv1alpha1.Nic{
+			resolved := resolvedFirmware{
+				NicFirmware: []Firmware{
 					{Version: "3.1", URL: "https://example.com/nic.bin"},
 				},
 			}
 
-			err := validateHFCHasRequiredComponents(status, spec)
+			err := validateHFCHasRequiredComponents(status, resolved)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("NIC firmware update requested but no NIC components found"))
 		})
@@ -1206,15 +1287,15 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 					{Component: "nic:0", CurrentVersion: "3.0"},
 				},
 			}
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				NicFirmware: []hwmgmtv1alpha1.Nic{
+			resolved := resolvedFirmware{
+				NicFirmware: []Firmware{
 					{Version: "3.1", URL: "https://example.com/nic1.bin"},
 					{Version: "3.2", URL: "https://example.com/nic2.bin"},
 					{Version: "3.3", URL: "https://example.com/nic3.bin"},
 				},
 			}
 
-			err := validateHFCHasRequiredComponents(status, spec)
+			err := validateHFCHasRequiredComponents(status, resolved)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("NIC firmware update requested for 3 NICs but only 1 NIC components found"))
 		})
@@ -1228,22 +1309,22 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 					{Component: "nic:1", CurrentVersion: "3.0"},
 				},
 			}
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{
 					Version: "1.1",
 					URL:     "https://example.com/bios.bin",
 				},
-				BmcFirmware: hwmgmtv1alpha1.Firmware{
+				BmcFirmware: Firmware{
 					Version: "2.1",
 					URL:     "https://example.com/bmc.bin",
 				},
-				NicFirmware: []hwmgmtv1alpha1.Nic{
+				NicFirmware: []Firmware{
 					{Version: "3.1", URL: "https://example.com/nic1.bin"},
 					{Version: "3.2", URL: "https://example.com/nic2.bin"},
 				},
 			}
 
-			err := validateHFCHasRequiredComponents(status, spec)
+			err := validateHFCHasRequiredComponents(status, resolved)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -1255,8 +1336,8 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 					{Component: "nic:0", CurrentVersion: "3.0"},
 				},
 			}
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				NicFirmware: []hwmgmtv1alpha1.Nic{
+			resolved := resolvedFirmware{
+				NicFirmware: []Firmware{
 					{Version: "3.1", URL: "https://example.com/nic.bin"},
 					{Version: "", URL: ""},         // Empty - should be skipped
 					{Version: "3.2", URL: ""},      // Only version - should be skipped
@@ -1264,7 +1345,7 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 				},
 			}
 
-			err := validateHFCHasRequiredComponents(status, spec)
+			err := validateHFCHasRequiredComponents(status, resolved)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -1272,21 +1353,21 @@ var _ = Describe("HostFirmwareComponents Manager", func() {
 			status := &metal3v1alpha1.HostFirmwareComponentsStatus{
 				Components: []metal3v1alpha1.FirmwareComponentStatus{},
 			}
-			spec := hwmgmtv1alpha1.HardwareProfileSpec{
-				BiosFirmware: hwmgmtv1alpha1.Firmware{
+			resolved := resolvedFirmware{
+				BiosFirmware: Firmware{
 					Version: "1.1",
 					URL:     "https://example.com/bios.bin",
 				},
-				BmcFirmware: hwmgmtv1alpha1.Firmware{
+				BmcFirmware: Firmware{
 					Version: "2.1",
 					URL:     "https://example.com/bmc.bin",
 				},
-				NicFirmware: []hwmgmtv1alpha1.Nic{
+				NicFirmware: []Firmware{
 					{Version: "3.1", URL: "https://example.com/nic.bin"},
 				},
 			}
 
-			err := validateHFCHasRequiredComponents(status, spec)
+			err := validateHFCHasRequiredComponents(status, resolved)
 			Expect(err).To(HaveOccurred())
 			// Should fail on first missing component (BIOS)
 			Expect(err.Error()).To(ContainSubstring("BIOS firmware update requested but BIOS component not found"))
