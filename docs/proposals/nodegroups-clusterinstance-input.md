@@ -15,7 +15,7 @@ reviewers:
 approvers:
   - TBD
 creation-date: 2026-08-05
-last-updated: 2026-08-06
+last-updated: 2026-10-29
 jira: CNF-18657
 ```
 
@@ -53,8 +53,9 @@ addressing are listed under each group. The controller expands this input into
 the existing flat ClusterInstance `spec.nodes[]` shape consumed by SiteConfig
 and the rest of the provisioning pipeline.
 
-Both `nodes` (legacy) and `nodeGroups` (new) are supported during migration.
-`nodes` will be deprecated and removed after a documented migration period.
+Both `nodes` (legacy) and `nodeGroups` (new) were supported during migration.
+The legacy `nodes` input path has since been removed (Phase 4, CNF-26442):
+only `nodeGroups` is accepted.
 
 ## Motivation
 
@@ -491,8 +492,12 @@ from rendered node roles, BMC/MAC injection, SiteConfig apply.
 | SNO migration + deprecation (Phase 3) | Migrate SNO samples/tests to `nodeGroups`; mark `nodes` deprecated; `nodeGroups` is the recommended format for all templates. |
 | Removal (Phase 4) | After the deprecation window: reject `nodes` and delete the legacy merge path. |
 
-Legacy `nodes` remains fully supported through Phase 3’s window. Removal is a
+Legacy `nodes` remained fully supported through Phase 3’s window. Removal was a
 separate phase.
+
+**Status:** Phase 4 is complete (CNF-26442). `nodes` is rejected in the
+ClusterTemplate `clusterInstanceParameters` schema, the defaults ConfigMap, and
+the ProvisioningRequest, and the legacy index-merge path has been removed.
 
 ### Validation
 
@@ -643,6 +648,8 @@ simplification lands in Phase 2.
   through the window.
 
 ### Phase 4 — Remove legacy `nodes` path (separate phase)
+
+Status: implemented (CNF-26442).
 
 - After the deprecation window: reject `nodes` in defaults and
   `clusterInstanceParameters`.

@@ -20,8 +20,7 @@ SPDX-License-Identifier: Apache-2.0
         - [Hardware data selectors](#hardware-data-selectors)
         - [Complete example](#complete-example)
     - [ClusterInstance defaults ConfigMap](#clusterinstance-defaults-configmap)
-      - [Deprecated format (`nodes`)](#deprecated-format-nodes)
-      - [Recommended format (`nodeGroups`)](#recommended-format-nodegroups)
+      - [Node groups (`nodeGroups`)](#node-groups-nodegroups)
     - [PolicyTemplate defaults ConfigMap](#policytemplate-defaults-configmap)
     - [Preparing templates for multiple worker MachineConfigPools](#preparing-templates-for-multiple-worker-machineconfigpools)
   - [Validation](#validation)
@@ -150,18 +149,16 @@ the ProvisioningRequest may send for cluster installation. It is **not** a full
 copy of the SiteConfig ClusterInstance CRD: templates expose only the fields the
 SMO is allowed to set.
 
-**Two formats.** Each template must expose **exactly one** node-layout format.
-Cluster-level fields (`clusterName`, VIPs, networks, and so on) stay
-ClusterInstance-shaped in both cases; the difference is how hosts are expressed:
+**Node layout.** Templates express hosts with the `nodeGroups` O-Cloud
+extension: hosts are grouped, and node-group-level configuration remains
+ClusterInstance-shaped. Cluster-level fields (`clusterName`, VIPs, networks,
+and so on) stay ClusterInstance-shaped. See the sample schema
+[`clusterInstanceParameters-nodeGroups.yaml`](../samples/schema/clusterInstanceParameters-nodeGroups.yaml).
 
-| Format | Status | Host layout | Sample schema |
-| --- | --- | --- | --- |
-| `nodeGroups` | Recommended | O-Cloud extension: hosts are grouped; node-group-level configuration remains ClusterInstance-shaped | [`clusterInstanceParameters-nodeGroups.yaml`](../samples/schema/clusterInstanceParameters-nodeGroups.yaml) |
-| `nodes` | Deprecated | Flat top-level ClusterInstance `nodes` subschema. Still accepted for existing templates; new templates must use `nodeGroups` | [`clusterInstanceParameters-legacy-nodes.yaml`](../samples/schema/clusterInstanceParameters-legacy-nodes.yaml) |
-
-The referenced `clusterInstanceDefaults` ConfigMap must use the **same** format.
-Mixing `nodes` and `nodeGroups` across the schema, defaults, and ProvisioningRequest
-is rejected.
+The schema must define `nodeGroups`, and the referenced `clusterInstanceDefaults`
+ConfigMap must use `nodeGroups` as well. A flat top-level ClusterInstance `nodes`
+list is not supported in the schema, the defaults, or the ProvisioningRequest,
+and is rejected.
 
 Full ClusterTemplate examples that embed these schemas:
 [SNO](../samples/git-setup/clustertemplates/version_4.Y.Z/sno-ran-du/sno-ran-du-v4-Y-Z-1.yaml),
@@ -170,9 +167,8 @@ Full ClusterTemplate examples that embed these schemas:
 
 ##### Providing `nodeGroups` in the ProvisioningRequest
 
-When the template schema uses `nodeGroups`, the ProvisioningRequest supplies
-site-specific cluster and host data under `clusterInstanceParameters`. Typical
-inputs:
+The ProvisioningRequest supplies site-specific cluster and host data under
+`clusterInstanceParameters`. Typical inputs:
 
 | Path | What to provide |
 | --- | --- |
@@ -194,7 +190,7 @@ when it expands `nodeGroups` to the flat ClusterInstance `nodes[]` list.
 The following examples are ProvisioningRequest `clusterInstanceParameters`
 excerpts. Group names and interface `name` values must already exist in the
 ClusterInstance defaults
-(see [Recommended format (`nodeGroups`)](#recommended-format-nodegroups)).
+(see [Node groups (`nodeGroups`)](#node-groups-nodegroups)).
 
 A multi-node cluster uses `master` and `worker` groups:
 
@@ -277,10 +273,9 @@ clusterInstanceParameters:
 A rendered ClusterInstance installs with `cpuArchitecture: x86_64` by default.
 To deploy on ARM hardware (for example an NVIDIA Grace-Hopper server), expose
 the cluster-level `cpuArchitecture` field in the template schema and set it to
-`aarch64`. The reference schemas
-([`clusterInstanceParameters-nodeGroups.yaml`](../samples/schema/clusterInstanceParameters-nodeGroups.yaml)
-and [`clusterInstanceParameters-legacy-nodes.yaml`](../samples/schema/clusterInstanceParameters-legacy-nodes.yaml))
-declare it with the allowed values `x86_64`, `aarch64`, and `multi`. The shipped
+`aarch64`. The reference schema
+([`clusterInstanceParameters-nodeGroups.yaml`](../samples/schema/clusterInstanceParameters-nodeGroups.yaml))
+declares it with the allowed values `x86_64`, `aarch64`, and `multi`. The shipped
 sample ClusterTemplates already include it.
 
 End-to-end steps for an aarch64 deployment:
@@ -519,36 +514,16 @@ extensions such as interface `label` values and `nodeGroups`. After the
 ProvisioningRequest is merged and expanded, the controller renders a
 ClusterInstance that complies with the SiteConfig schema.
 
-The defaults must define **exactly one** of `nodes` or `nodeGroups`, matching the
-`clusterInstanceParameters` schema in the ClusterTemplate (see
-[clusterInstanceParameters schema](#clusterinstanceparameters-schema)).
+The defaults must define `nodeGroups`, matching the `clusterInstanceParameters`
+schema in the ClusterTemplate (see
+[clusterInstanceParameters schema](#clusterinstanceparameters-schema)). A
+top-level `nodes` list is rejected.
 
 Each node’s boot interface in the `interfaces` list must include a `boot-interface` label.
 This allows the O-Cloud manager to resolve the boot NIC’s MAC address from the NIC-to-MAC
 mappings retrieved from the hardware manager.
 
-#### Deprecated format (`nodes`)
-
-Flat `nodes` list: one stub per expected host with defaults such as role, boot
-mode, interface skeleton, and nmstate config. The ProvisioningRequest supplies
-host-specific values (hostname, addresses, MAC) by index merge.
-
-This format is deprecated. Existing templates that still use it continue to
-work; new templates must use `nodeGroups`.
-
-```yaml
-# ConfigMap data.clusterinstance-defaults (deprecated nodes excerpt)
-nodes:
-  - role: master
-    bootMode: UEFI
-    nodeNetwork:
-      interfaces:
-        - name: ens3f0
-          label: boot-interface
-        - name: ens3f1
-```
-
-#### Recommended format (`nodeGroups`)
+#### Node groups (`nodeGroups`)
 
 One entry per hardware / MCP group, keyed by `name`. That `name` must match
 `hwMgmtDefaults.nodeGroupData[].name` (or the merged hardware group name when

@@ -59,15 +59,3 @@ func listAllocatedNodesForNAR(ctx context.Context, c client.Client, narName, nar
 	}
 	return nodes, nil
 }
-
-// getRoleToGroupNameMap creates a mapping of Role to Group Name from NodeAllocationRequest
-func getRoleToGroupNameMap(narSpec *hwmgmtv1alpha1.NodeAllocationRequestSpec) map[string]string {
-	roleToNodeGroupName := make(map[string]string)
-	for _, nodeGroup := range narSpec.NodeGroup {
-
-		if _, exists := roleToNodeGroupName[nodeGroup.NodeGroupData.Role]; !exists {
-			roleToNodeGroupName[nodeGroup.NodeGroupData.Role] = nodeGroup.NodeGroupData.Name
-		}
-	}
-	return roleToNodeGroupName
-}

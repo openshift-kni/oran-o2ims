@@ -133,15 +133,15 @@ func ClusterIsReadyForPolicyConfig(
 	return available && hubAccepted && joined, nil
 }
 
-// ValidateDefaultInterfaces verifies that each interface has a specified label field,
-// as labels are not part of the ClusterInstance structure by default.
-func ValidateDefaultInterfaces(data map[string]any, entriesKey string) error {
-	entries, ok := data[entriesKey].([]any)
+// ValidateDefaultInterfaces verifies that each nodeGroups interface has a specified
+// label field, as labels are not part of the ClusterInstance structure by default.
+func ValidateDefaultInterfaces(data map[string]any) error {
+	entries, ok := data[constants.ClusterInstanceNodeGroupsKey].([]any)
 	if ok {
 		for _, entry := range entries {
 			entryMap, ok := entry.(map[string]any)
 			if !ok {
-				return fmt.Errorf("unexpected: invalid %s data structure", entriesKey)
+				return fmt.Errorf("unexpected: invalid %s data structure", constants.ClusterInstanceNodeGroupsKey)
 			}
 			interfaces := getInterfaces(entryMap)
 			if interfaces == nil {
@@ -264,12 +264,12 @@ func RemoveNodeGroupNames(data map[string]any) error {
 }
 
 // ValidateConfigmapSchemaAgainstClusterInstanceCRD checks if the data of the ClusterInstance
-// default ConfigMap matches the ClusterInstance CRD schema. The entriesKey is "nodes" or "nodeGroups".
-// For nodeGroups, the CRD nodes property is renamed to nodeGroups before validation.
-// Caller must strip O-Cloud-only fields (interface labels, and nodeGroups[].name) from the
-// data before validation.
+// default ConfigMap matches the ClusterInstance CRD schema. The CRD nodes property is
+// renamed to nodeGroups before validation, so each nodeGroups entry is validated as a
+// ClusterInstance node. Caller must strip O-Cloud-only fields (interface labels and
+// nodeGroups[].name) from the data before validation.
 func ValidateConfigmapSchemaAgainstClusterInstanceCRD(
-	ctx context.Context, c client.Client, data map[string]any, entriesKey string) error {
+	ctx context.Context, c client.Client, data map[string]any) error {
 	// Get the ClusterInstance CRD.
 	clusterInstanceCrd := &unstructured.Unstructured{}
 	clusterInstanceCrd.SetGroupVersionKind(schema.GroupVersionKind{
@@ -318,18 +318,16 @@ func ValidateConfigmapSchemaAgainstClusterInstanceCRD(
 	// with k8s itself.
 	openAPIV3SchemaSpec := openAPIV3Schema["properties"].(map[string]any)["spec"].(map[string]any)
 
-	if entriesKey == constants.ClusterInstanceNodeGroupsKey {
-		props, ok := openAPIV3SchemaSpec["properties"].(map[string]any)
-		if !ok {
-			return fmt.Errorf("%s CRD spec schema is missing properties", ClusterInstanceCrdName)
-		}
-		nodesSchema, ok := props[constants.ClusterInstanceNodesKey]
-		if !ok {
-			return fmt.Errorf("%s CRD schema is missing %q property", ClusterInstanceCrdName, constants.ClusterInstanceNodesKey)
-		}
-		props[constants.ClusterInstanceNodeGroupsKey] = nodesSchema
-		delete(props, constants.ClusterInstanceNodesKey)
+	props, ok := openAPIV3SchemaSpec["properties"].(map[string]any)
+	if !ok {
+		return fmt.Errorf("%s CRD spec schema is missing properties", ClusterInstanceCrdName)
 	}
+	nodesSchema, ok := props[constants.ClusterInstanceNodesKey]
+	if !ok {
+		return fmt.Errorf("%s CRD schema is missing %q property", ClusterInstanceCrdName, constants.ClusterInstanceNodesKey)
+	}
+	props[constants.ClusterInstanceNodeGroupsKey] = nodesSchema
+	delete(props, constants.ClusterInstanceNodesKey)
 
 	// Prepare the data for schema validation.
 	// Remove the `required` property as the default ConfigMaps contains only a subset of the ClusterInstance spec.
@@ -413,11 +411,16 @@ func PrepareClusterInstanceForServerSideApply(ci *siteconfig.ClusterInstance) {
 // host overlay is merged on top (interfaces by name). Flattened interface
 // addresses (CIDR strings) are mapped into nmstate config. O-cloud-only sugar fields
 // (group name, interfaces[].addresses) are stripped. It also returns a map of
-// hostName -> nodeGroups[].name (spoke MCP name).
+// hostName -> nodeGroups[].name (spoke MCP name). A top-level nodes list in the
+// merged data is rejected rather than silently overwritten.
 func ExpandNodeGroupsToNodes(merged map[string]any) (map[string]string, error) {
 	raw, ok := merged[constants.ClusterInstanceNodeGroupsKey]
 	if !ok {
 		return nil, fmt.Errorf("%q is required for the nodeGroups format", constants.ClusterInstanceNodeGroupsKey)
+	}
+	if _, hasNodes := merged[constants.ClusterInstanceNodesKey]; hasNodes {
+		return nil, fmt.Errorf("%q is not supported; define hosts under %s[].%s instead",
+			constants.ClusterInstanceNodesKey, constants.ClusterInstanceNodeGroupsKey, constants.ClusterInstanceNodesKey)
 	}
 	groups, ok := raw.([]any)
 	if !ok {
@@ -603,7 +606,7 @@ func applyInterfaceAddresses(node map[string]any) error {
 // its host address and prefix length. The host address is preserved as written
 // (host bits are not masked), matching the nmstate config.interfaces[].ipvX.address
 // shape. The prefix length is returned as float64 to match yaml/json.Unmarshal into
-// map[string]any (same as the legacy nodes format). The prefix must be a base-10
+// map[string]any (same as numeric values in the nmstate config). The prefix must be a base-10
 // integer string (rejects values like "24.0" or "1e2"). IP address and prefix-range
 // validity are left to later nmstate/dry-run checks.
 func splitCIDR(cidr string) (ip string, prefix float64, err error) {

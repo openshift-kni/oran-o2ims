@@ -84,8 +84,6 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/test/fakeclient"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
-	"github.com/openshift/assisted-service/api/v1beta1"
-	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
 )
 
 const (
@@ -97,58 +95,19 @@ const (
 
 var _ = Describe("buildNodeAllocationRequest", func() {
 	var (
-		ctx             context.Context
-		c               client.Client
-		reconciler      *ProvisioningRequestReconciler
-		task            *provisioningRequestReconcilerTask
-		clusterInstance *siteconfig.ClusterInstance
-		cr              *provisioningv1alpha1.ProvisioningRequest
-		tName           = "clustertemplate-a"
-		tVersion        = "v1.0.0"
-		ctNamespace     = "clustertemplate-a-v4-16"
-		crName          = "cluster-1"
+		ctx         context.Context
+		c           client.Client
+		reconciler  *ProvisioningRequestReconciler
+		task        *provisioningRequestReconcilerTask
+		cr          *provisioningv1alpha1.ProvisioningRequest
+		tName       = "clustertemplate-a"
+		tVersion    = "v1.0.0"
+		ctNamespace = "clustertemplate-a-v4-16"
+		crName      = "cluster-1"
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
-
-		// Define the cluster instance.
-		clusterInstance = &siteconfig.ClusterInstance{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      crName,
-				Namespace: ctNamespace,
-			},
-			Spec: siteconfig.ClusterInstanceSpec{
-				Nodes: []siteconfig.NodeSpec{
-					{
-						Role: "master",
-						NodeNetwork: &v1beta1.NMStateConfigSpec{
-							Interfaces: []*v1beta1.Interface{
-								{Name: "eno12399"},
-								{Name: "eno1"},
-							},
-						},
-					},
-					{
-						Role: "master",
-						NodeNetwork: &v1beta1.NMStateConfigSpec{
-							Interfaces: []*v1beta1.Interface{
-								{Name: "eno12399"},
-								{Name: "eno1"},
-							},
-						},
-					},
-					{
-						Role: "worker",
-						NodeNetwork: &v1beta1.NMStateConfigSpec{
-							Interfaces: []*v1beta1.Interface{
-								{Name: "eno1"},
-							},
-						},
-					},
-				},
-			},
-		}
 
 		// Define the provisioning request.
 		cr = &provisioningv1alpha1.ProvisioningRequest{
@@ -195,24 +154,24 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		unstructuredCi, err := utils.ConvertToUnstructured(*clusterInstance)
-		Expect(err).ToNot(HaveOccurred())
-		nodeAllocationRequest, err := task.buildNodeAllocationRequest(ctx, unstructuredCi)
+		// Map each rendered host to its node group, as captured during nodeGroups expansion.
+		task.clusterInput.hostToGroupName = map[string]string{
+			"master-0": groupNameMaster,
+			"master-1": groupNameMaster,
+			"worker-0": groupNameWorker,
+		}
+
+		nodeAllocationRequest, err := task.buildNodeAllocationRequest(ctx)
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(nodeAllocationRequest).ToNot(BeNil())
 
-		roleCounts := make(map[string]int)
-		for _, node := range clusterInstance.Spec.Nodes {
-			// Count the nodes per group
-			roleCounts[node.Role]++
-		}
 		Expect(nodeAllocationRequest.Spec.NodeGroup).To(HaveLen(2))
 		expectedNodeGroups := map[string]struct {
 			size int
 		}{
-			groupNameMaster: {size: roleCounts["master"]},
-			groupNameWorker: {size: roleCounts["worker"]},
+			groupNameMaster: {size: 2},
+			groupNameWorker: {size: 1},
 		}
 
 		for _, group := range nodeAllocationRequest.Spec.NodeGroup {
@@ -228,10 +187,8 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			hwMgmtData: map[string]any{},
 		}
 
-		unstructuredCi, err := utils.ConvertToUnstructured(*clusterInstance)
-		Expect(err).ToNot(HaveOccurred())
 		// Test buildNodeAllocationRequestSpec directly since it validates nodeGroupData
-		nodeAllocationRequest, err := task.buildNodeAllocationRequestSpec(unstructuredCi)
+		nodeAllocationRequest, err := task.buildNodeAllocationRequestSpec()
 		Expect(err).To(HaveOccurred())
 		Expect(nodeAllocationRequest).To(BeNil())
 		Expect(err.Error()).To(ContainSubstring("nodeGroupData not found"))
@@ -243,9 +200,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			hwMgmtData: map[string]any{},
 		}
 
-		unstructuredCi, err := utils.ConvertToUnstructured(*clusterInstance)
-		Expect(err).ToNot(HaveOccurred())
-		nodeAllocationRequest, err := task.buildNodeAllocationRequest(ctx, unstructuredCi)
+		nodeAllocationRequest, err := task.buildNodeAllocationRequest(ctx)
 		Expect(err).To(HaveOccurred())
 		Expect(nodeAllocationRequest).To(BeNil())
 		Expect(err.Error()).To(ContainSubstring("nodeGroupData not found"))
@@ -890,23 +845,6 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 	})
 
 	It("builds NodeAllocationRequest correctly", func() {
-		clusterInstance := &unstructured.Unstructured{}
-		clusterInstance.Object = map[string]interface{}{
-			"spec": map[string]interface{}{
-				"nodes": []interface{}{
-					map[string]interface{}{
-						"role": "master",
-					},
-					map[string]interface{}{
-						"role": "master",
-					},
-					map[string]interface{}{
-						"role": "worker",
-					},
-				},
-			},
-		}
-
 		task.clusterInput = &clusterInput{
 			hwMgmtData: map[string]any{
 				"nodeGroupData": []any{
@@ -914,9 +852,14 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 					map[string]any{"name": "worker", "role": "worker", "hwProfile": "profile-2", "resourcePoolId": "pool-2"},
 				},
 			},
+			hostToGroupName: map[string]string{
+				"master-1": "master",
+				"master-2": "master",
+				"worker-1": "worker",
+			},
 		}
 
-		nar, err := task.buildNodeAllocationRequestSpec(clusterInstance)
+		nar, err := task.buildNodeAllocationRequestSpec()
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
 		Expect(nar.Spec.LocationSpec.Site).To(Equal("local-123"))
@@ -943,39 +886,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		Expect(workerGroup.NodeGroupData.Role).To(Equal("worker"))
 	})
 
-	It("builds NodeAllocationRequest with multiple worker pools for nodeGroups format", func() {
-		clusterInstance := &unstructured.Unstructured{}
-		clusterInstance.Object = map[string]interface{}{
-			"spec": map[string]interface{}{
-				"nodes": []interface{}{
-					map[string]interface{}{
-						"role":     "master",
-						"hostName": "master-1",
-					},
-					map[string]interface{}{
-						"role":     "master",
-						"hostName": "master-2",
-					},
-					map[string]interface{}{
-						"role":     "worker",
-						"hostName": "worker-1",
-					},
-					map[string]interface{}{
-						"role":     "worker",
-						"hostName": "worker-2",
-					},
-					map[string]interface{}{
-						"role":     "worker",
-						"hostName": "worker-3",
-					},
-					map[string]interface{}{
-						"role":     "worker",
-						"hostName": "worker-4",
-					},
-				},
-			},
-		}
-
+	It("builds NodeAllocationRequest with multiple worker pools", func() {
 		task.clusterInput = &clusterInput{
 			hwMgmtData: map[string]any{
 				"nodeGroupData": []any{
@@ -995,7 +906,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		nar, err := task.buildNodeAllocationRequestSpec(clusterInstance)
+		nar, err := task.buildNodeAllocationRequestSpec()
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
 		Expect(nar.Spec.LocationSpec.Site).To(Equal("local-123"))
@@ -1035,24 +946,6 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 	})
 
 	It("should set ConfigTransactionId to ProvisioningRequest generation", func() {
-		clusterInstance := &unstructured.Unstructured{
-			Object: map[string]interface{}{
-				"apiVersion": "siteconfig.openshift.io/v1alpha1",
-				"kind":       "ClusterInstance",
-				"metadata": map[string]interface{}{
-					"name":      "exampleCluster",
-					"namespace": "default",
-				},
-				"spec": map[string]interface{}{
-					"nodes": []interface{}{
-						map[string]interface{}{
-							"role": "master",
-						},
-					},
-				},
-			},
-		}
-
 		task.clusterInput = &clusterInput{
 			hwMgmtData: map[string]any{
 				"hardwareProvisioningTimeout": "60m",
@@ -1062,7 +955,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		nar, err := task.buildNodeAllocationRequestSpec(clusterInstance)
+		nar, err := task.buildNodeAllocationRequestSpec()
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
 		Expect(nar.Spec.ConfigTransactionId).To(Equal(int64(1))) // Should match PR generation
@@ -1071,24 +964,6 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 	})
 
 	It("should use default timeout when template timeout is empty", func() {
-		clusterInstance := &unstructured.Unstructured{
-			Object: map[string]interface{}{
-				"apiVersion": "siteconfig.openshift.io/v1alpha1",
-				"kind":       "ClusterInstance",
-				"metadata": map[string]interface{}{
-					"name":      "exampleCluster",
-					"namespace": "default",
-				},
-				"spec": map[string]interface{}{
-					"nodes": []interface{}{
-						map[string]interface{}{
-							"role": "master",
-						},
-					},
-				},
-			},
-		}
-
 		task.clusterInput = &clusterInput{
 			hwMgmtData: map[string]any{
 				"hardwareProvisioningTimeout": "", // Empty timeout
@@ -1098,7 +973,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		nar, err := task.buildNodeAllocationRequestSpec(clusterInstance)
+		nar, err := task.buildNodeAllocationRequestSpec()
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
 		Expect(nar.Spec.HardwareProvisioningTimeout).ToNot(BeNil())
@@ -1106,24 +981,6 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 	})
 
 	It("should return error for non-positive duration in templateParameters", func() {
-		clusterInstance := &unstructured.Unstructured{
-			Object: map[string]interface{}{
-				"apiVersion": "siteconfig.openshift.io/v1alpha1",
-				"kind":       "ClusterInstance",
-				"metadata": map[string]interface{}{
-					"name":      "exampleCluster",
-					"namespace": "default",
-				},
-				"spec": map[string]interface{}{
-					"nodes": []interface{}{
-						map[string]interface{}{
-							"role": "master",
-						},
-					},
-				},
-			},
-		}
-
 		task.clusterInput = &clusterInput{
 			hwMgmtData: map[string]any{
 				"hardwareProvisioningTimeout": "0s",
@@ -1133,31 +990,13 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		nar, err := task.buildNodeAllocationRequestSpec(clusterInstance)
+		nar, err := task.buildNodeAllocationRequestSpec()
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("must be > 0"))
 		Expect(nar).To(BeNil())
 	})
 
 	It("should return error for invalid duration string in templateParameters", func() {
-		clusterInstance := &unstructured.Unstructured{
-			Object: map[string]interface{}{
-				"apiVersion": "siteconfig.openshift.io/v1alpha1",
-				"kind":       "ClusterInstance",
-				"metadata": map[string]interface{}{
-					"name":      "exampleCluster",
-					"namespace": "default",
-				},
-				"spec": map[string]interface{}{
-					"nodes": []interface{}{
-						map[string]interface{}{
-							"role": "master",
-						},
-					},
-				},
-			},
-		}
-
 		task.clusterInput = &clusterInput{
 			hwMgmtData: map[string]any{
 				"hardwareProvisioningTimeout": "not-a-duration",
@@ -1167,45 +1006,13 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		nar, err := task.buildNodeAllocationRequestSpec(clusterInstance)
+		nar, err := task.buildNodeAllocationRequestSpec()
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("invalid hardwareProvisioningTimeout"))
 		Expect(nar).To(BeNil())
 	})
 
-	It("returns error when spec.nodes not found", func() {
-		clusterInstance := &unstructured.Unstructured{}
-		clusterInstance.Object = map[string]interface{}{
-			"spec": map[string]interface{}{
-				// no nodes field
-			},
-		}
-
-		task.clusterInput = &clusterInput{
-			hwMgmtData: map[string]any{},
-		}
-
-		nar, err := task.buildNodeAllocationRequestSpec(clusterInstance)
-		Expect(err).To(HaveOccurred())
-		Expect(nar).To(BeNil())
-		Expect(err.Error()).To(ContainSubstring("spec.nodes not found in cluster instance"))
-	})
-
 	It("uses overridden hwProfile from merged hwMgmtData", func() {
-		clusterInstance := &unstructured.Unstructured{}
-		clusterInstance.Object = map[string]interface{}{
-			"spec": map[string]interface{}{
-				"nodes": []interface{}{
-					map[string]interface{}{
-						"role": "master",
-					},
-					map[string]interface{}{
-						"role": "worker",
-					},
-				},
-			},
-		}
-
 		// The hwMgmtData is already merged with overrides before buildNodeAllocationRequestSpec is called
 		task.clusterInput = &clusterInput{
 			hwMgmtData: map[string]any{
@@ -1216,7 +1023,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		nar, err := task.buildNodeAllocationRequestSpec(clusterInstance)
+		nar, err := task.buildNodeAllocationRequestSpec()
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
 		Expect(nar.Spec.NodeGroup).To(HaveLen(2))
@@ -1241,17 +1048,6 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 	})
 
 	It("uses hwProfile from hwMgmtData defaults", func() {
-		clusterInstance := &unstructured.Unstructured{}
-		clusterInstance.Object = map[string]interface{}{
-			"spec": map[string]interface{}{
-				"nodes": []interface{}{
-					map[string]interface{}{
-						"role": "master",
-					},
-				},
-			},
-		}
-
 		task.clusterInput = &clusterInput{
 			hwMgmtData: map[string]any{
 				"nodeGroupData": []any{
@@ -1260,7 +1056,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		nar, err := task.buildNodeAllocationRequestSpec(clusterInstance)
+		nar, err := task.buildNodeAllocationRequestSpec()
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
 		Expect(nar.Spec.NodeGroup).To(HaveLen(1))
@@ -1268,17 +1064,6 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 	})
 
 	It("succeeds when nodeGroup has no hwProfile, resourcePoolId, or resourceSelector", func() {
-		clusterInstance := &unstructured.Unstructured{}
-		clusterInstance.Object = map[string]interface{}{
-			"spec": map[string]interface{}{
-				"nodes": []interface{}{
-					map[string]interface{}{
-						"role": "master",
-					},
-				},
-			},
-		}
-
 		task.clusterInput = &clusterInput{
 			hwMgmtData: map[string]any{
 				"nodeGroupData": []any{
@@ -1287,7 +1072,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		nar, err := task.buildNodeAllocationRequestSpec(clusterInstance)
+		nar, err := task.buildNodeAllocationRequestSpec()
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
 		Expect(nar.Spec.NodeGroup).To(HaveLen(1))
@@ -1540,7 +1325,6 @@ var _ = Describe("applyNodeConfiguration", func() {
 		cr          *provisioningv1alpha1.ProvisioningRequest
 		ci          *unstructured.Unstructured
 		hwNodes     map[string][]utils.NodeInfo
-		nar         *hwmgmtv1alpha1.NodeAllocationRequest
 		crName      = "cluster-1"
 		ctNamespace = "clustertemplate-a-v4-16"
 		tName       = "clustertemplate-a"
@@ -1701,26 +1485,6 @@ var _ = Describe("applyNodeConfiguration", func() {
 			},
 		}
 
-		// Set up node allocation request
-		nar = &hwmgmtv1alpha1.NodeAllocationRequest{
-			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
-				NodeGroup: []hwmgmtv1alpha1.NodeGroup{
-					{
-						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
-							Name: "master",
-							Role: "master",
-						},
-					},
-					{
-						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
-							Name: "worker",
-							Role: "worker",
-						},
-					},
-				},
-			},
-		}
-
 		c = fakeclient.GetFakeClientFromObjects([]client.Object{cr, ct}...)
 		reconciler = &ProvisioningRequestReconciler{
 			Client: c,
@@ -1742,6 +1506,11 @@ var _ = Describe("applyNodeConfiguration", func() {
 				namespace: ctNamespace,
 			},
 			clusterInput: &clusterInput{
+				hostToGroupName: map[string]string{
+					"master-01": "master",
+					"worker-01": "worker",
+					"worker-02": "worker",
+				},
 				clusterInstanceData: map[string]any{
 					"nodes": []any{
 						map[string]any{
@@ -1795,7 +1564,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 	})
 
 	It("successfully applies node configuration for fresh assignment", func() {
-		err := task.applyNodeConfiguration(ctx, hwNodes, nar, ci)
+		err := task.applyNodeConfiguration(ctx, hwNodes, ci)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Verify that the cluster instance has been updated
@@ -1833,23 +1602,18 @@ var _ = Describe("applyNodeConfiguration", func() {
 		Expect(workerNode2["bootMACAddress"]).To(Equal("aa:bb:cc:dd:ee:22"))
 	})
 
-	It("successfully applies node configuration for nodeGroups format with multiple worker MCPs", func() {
+	It("successfully applies node configuration with multiple worker MCPs", func() {
 		// Workers use custom MCPs.
 		hwNodes["worker-group-1"] = []utils.NodeInfo{hwNodes["worker"][0]}
 		hwNodes["worker-group-2"] = []utils.NodeInfo{hwNodes["worker"][1]}
 		delete(hwNodes, "worker")
-		nar.Spec.NodeGroup = []hwmgmtv1alpha1.NodeGroup{
-			{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "master", Role: "master"}},
-			{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker-group-1", Role: "worker"}},
-			{NodeGroupData: hwmgmtv1alpha1.NodeGroupData{Name: "worker-group-2", Role: "worker"}},
-		}
 		task.clusterInput.hostToGroupName = map[string]string{
 			"master-01": "master",
 			"worker-01": "worker-group-1",
 			"worker-02": "worker-group-2",
 		}
 
-		err := task.applyNodeConfiguration(ctx, hwNodes, nar, ci)
+		err := task.applyNodeConfiguration(ctx, hwNodes, ci)
 		Expect(err).ToNot(HaveOccurred())
 
 		nodes, found, err := unstructured.NestedSlice(ci.Object, "spec", "nodes")
@@ -1883,7 +1647,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 			},
 		}
 
-		err := task.applyNodeConfiguration(ctx, hwNodes, nar, ci)
+		err := task.applyNodeConfiguration(ctx, hwNodes, ci)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("spec.nodes not found in cluster instance"))
 	})
@@ -1898,7 +1662,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 			},
 		}
 
-		err := task.applyNodeConfiguration(ctx, hwNodes, nar, ci)
+		err := task.applyNodeConfiguration(ctx, hwNodes, ci)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("node at index 0 is not a valid map"))
 	})
@@ -1907,9 +1671,20 @@ var _ = Describe("applyNodeConfiguration", func() {
 		// Empty hardware nodes map
 		emptyHwNodes := map[string][]utils.NodeInfo{}
 
-		err := task.applyNodeConfiguration(ctx, emptyHwNodes, nar, ci)
+		err := task.applyNodeConfiguration(ctx, emptyHwNodes, ci)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("failed to find matches for the following nodes"))
+	})
+
+	It("does not fall back to role-based matching for hosts without a node group mapping", func() {
+		// worker-02 has no nodeGroups mapping; a free worker hardware node must not be
+		// assigned to it by role.
+		delete(task.clusterInput.hostToGroupName, "worker-02")
+
+		err := task.applyNodeConfiguration(ctx, hwNodes, ci)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to find matches for the following nodes"))
+		Expect(err.Error()).To(ContainSubstring("worker-02"))
 	})
 
 	It("handles nodes without HwMgrNodeId and HwMgrNodeNs", func() {
@@ -1969,7 +1744,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 			},
 		}
 
-		err := task.applyNodeConfiguration(ctx, hwNodesWithoutHostRef, nar, ci)
+		err := task.applyNodeConfiguration(ctx, hwNodesWithoutHostRef, ci)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Verify that nodes were still configured but without hostRef
@@ -1986,7 +1761,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 		Expect(found).To(BeFalse())
 	})
 
-	It("assigns distinct hardware nodes to multiple nodes of the same role", func() {
+	It("assigns distinct hardware nodes to multiple nodes of the same group", func() {
 		// Create multiple nodes of the same role to verify consumption
 		ci.Object = map[string]interface{}{
 			"spec": map[string]interface{}{
@@ -2038,8 +1813,9 @@ var _ = Describe("applyNodeConfiguration", func() {
 		})
 
 		Expect(hwNodes["master"]).To(HaveLen(2))
+		task.clusterInput.hostToGroupName["master-02"] = "master"
 
-		err := task.applyNodeConfiguration(ctx, hwNodes, nar, ci)
+		err := task.applyNodeConfiguration(ctx, hwNodes, ci)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Verify both nodes were configured with different BMC addresses
@@ -2066,7 +1842,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 			"node-worker-01": "worker-02",
 		}
 
-		err := task.applyNodeConfiguration(ctx, hwNodes, nar, ci)
+		err := task.applyNodeConfiguration(ctx, hwNodes, ci)
 		Expect(err).ToNot(HaveOccurred())
 
 		nodes, found, err := unstructured.NestedSlice(ci.Object, "spec", "nodes")
@@ -2113,7 +1889,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 			"node-worker-01": "worker-01",
 		}
 
-		err := task.applyNodeConfiguration(ctx, hwNodes, nar, ci)
+		err := task.applyNodeConfiguration(ctx, hwNodes, ci)
 		Expect(err).ToNot(HaveOccurred())
 
 		nodes, found, err := unstructured.NestedSlice(ci.Object, "spec", "nodes")
