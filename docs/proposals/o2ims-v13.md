@@ -398,7 +398,7 @@ Add new fields and endpoints while keeping the v1 API path:
 |------|--------|
 | API URL path | Bump from `/v1/` to `/v2/` |
 | `objectClass` | Make mandatory on AlarmEventRecord |
-| `eventFilter` | Make required in v2. Remove `filter` entirely. |
+| `eventFilter` | Optional on CREATE (spec cardinality M/0..1); always supported but client may omit. Remove `filter` entirely. |
 | `filter` removal | Drop `filter` field from schema, model, and DB. |
 | RBAC roles | Update monitoring endpoint paths in `oran_o2ims_user_roles.yaml` |
 | OAuth bindings | Update monitoring bindings in `oran_o2ims_oauth_role_bindings.yaml` |

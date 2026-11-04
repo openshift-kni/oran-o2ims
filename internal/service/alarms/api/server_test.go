@@ -541,7 +541,7 @@ var _ = Describe("AlarmsServer", func() {
 	})
 
 	Describe("CreateSubscription request validation", func() {
-		// The required eventFilter and additionalProperties:false on AlarmSubscriptionInfo are
+		// The additionalProperties:false on AlarmSubscriptionInfo is
 		// enforced by the shared OpenAPI request-validation middleware, not the handler, so they
 		// are exercised here against the generated spec. Direct handler tests do not prove
 		// request-schema rejection.
@@ -576,9 +576,9 @@ var _ = Describe("AlarmsServer", func() {
 			Expect(rr.Code).To(Equal(http.StatusBadRequest))
 		})
 
-		It("rejects a body that omits the required eventFilter with 400", func() {
+		It("accepts a body that omits eventFilter (spec cardinality 0..1)", func() {
 			rr := post(`{"callback":"https://example.com/cb"}`)
-			Expect(rr.Code).To(Equal(http.StatusBadRequest))
+			Expect(rr.Code).To(Equal(http.StatusCreated))
 		})
 
 		It("accepts a body with a concrete eventFilter value", func() {
@@ -594,19 +594,17 @@ var _ = Describe("AlarmsServer", func() {
 
 	Describe("CreateSubscription response serialization", func() {
 		// Prove the end-to-end serialization contract: a CreateSubscription carrying an explicit
-		// null eventFilter is serialized by the generated response writer (via the strict handler
-		// and generated HTTP handler) with the eventFilter key present and null, not dropped.
-		// AlarmSubscriptionInfo.eventFilter has no omitempty tag, so it is always emitted.
-		It("emits eventFilter as an explicit null in the response body when created with null", func() {
+		// null or omitted eventFilter results in a response where the eventFilter key is absent
+		// (omitempty on the unspecified Nullable zero value). A set filter appears normally.
+
+		createSubscriptionHTTP := func(extraFields string) *httptest.ResponseRecorder {
 			swagger, err := alarmapi.GetSwagger()
 			Expect(err).ToNot(HaveOccurred())
 
-			// Stand up a reachable callback target plus the SSRF resolver stub so
-			// ValidateCallbackURL accepts it (mirrors the CreateSubscription unique_callback setup).
 			ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusNoContent)
 			}))
-			defer ts.Close()
+			DeferCleanup(ts.Close)
 			server.GlobalCloudID = uuid.New()
 			server.Config.SmoURL = ts.URL
 			savedResolver := svcapi.DefaultResolver
@@ -622,15 +620,12 @@ var _ = Describe("AlarmsServer", func() {
 			mockRepo.EXPECT().
 				CreateAlarmSubscription(gomock.Any(), gomock.Any()).
 				DoAndReturn(func(_ context.Context, sub models.AlarmSubscription) (*models.AlarmSubscription, error) {
-					// The request carried eventFilter:null, so the persisted model has no filter.
 					Expect(sub.EventFilter).To(BeNil())
 					sub.SubscriptionID = testUUID
 					sub.Callback = callback
 					return &sub, nil
 				})
 
-			// Assemble the production HTTP stack (minus auth): strict handler -> generated HTTP
-			// handler with OpenAPI request validation and the response filter.
 			strictHandler := alarmapi.NewStrictHandlerWithOptions(server, nil,
 				alarmapi.StrictHTTPServerOptions{
 					RequestErrorHandlerFunc:  middleware.GetOranReqErrFunc(),
@@ -650,23 +645,39 @@ var _ = Describe("AlarmsServer", func() {
 				ErrorHandlerFunc: middleware.GetOranReqErrFunc(),
 			})
 
-			// Derive the path from the monitoring base URL constant so this test tracks the
-			// active API version (v1 before the cutover commit, v2 after) rather than hardcoding it.
+			body := `{"callback":"` + callback + `"`
+			if extraFields != "{}" {
+				body += "," + extraFields[1:]
+			} else {
+				body += "}"
+			}
 			req := httptest.NewRequest(http.MethodPost,
 				constants.O2IMSMonitoringBaseURL+"/alarmSubscriptions",
-				bytes.NewBufferString(`{"callback":"`+callback+`","eventFilter":null}`))
+				bytes.NewBufferString(body))
 			req.Header.Set("Content-Type", "application/json")
 			rr := httptest.NewRecorder()
 			baseRouter.ServeHTTP(rr, req)
+			return rr
+		}
 
+		It("omits eventFilter from the response body when created with null", func() {
+			rr := createSubscriptionHTTP(`{"eventFilter":null}`)
 			Expect(rr.Code).To(Equal(http.StatusCreated))
 
-			// Decode into RawMessage so the key presence and literal null are both asserted.
 			var decoded map[string]json.RawMessage
 			Expect(json.Unmarshal(rr.Body.Bytes(), &decoded)).To(Succeed())
-			raw, ok := decoded["eventFilter"]
-			Expect(ok).To(BeTrue(), "eventFilter key must be present in the response body")
-			Expect(string(raw)).To(Equal("null"))
+			_, ok := decoded["eventFilter"]
+			Expect(ok).To(BeFalse(), "eventFilter key must be absent when no filter is set")
+		})
+
+		It("omits eventFilter from the response body when created without eventFilter", func() {
+			rr := createSubscriptionHTTP(`{}`)
+			Expect(rr.Code).To(Equal(http.StatusCreated))
+
+			var decoded map[string]json.RawMessage
+			Expect(json.Unmarshal(rr.Body.Bytes(), &decoded)).To(Succeed())
+			_, ok := decoded["eventFilter"]
+			Expect(ok).To(BeFalse(), "eventFilter key must be absent when created without eventFilter")
 		})
 	})
 
