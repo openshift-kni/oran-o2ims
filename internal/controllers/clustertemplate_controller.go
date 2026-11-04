@@ -252,7 +252,9 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 			if !typederrors.IsInputError(err) {
 				return false, fmt.Errorf("failed to validate ClusterImageSet matches release: %w", err)
 			}
-			validationErrs = append(validationErrs, err.Error())
+			validationErrs = append(validationErrs,
+				fmt.Sprintf("failed to validate ClusterImageSet specified in clusterInstanceDefaults %s: %s",
+					t.object.Spec.TemplateDefaults.ClusterInstanceDefaults, err.Error()))
 		}
 	}
 
@@ -1114,6 +1116,12 @@ func (t *clusterTemplateReconcilerTask) validateClusterImageSetMatchesRelease(ct
 	clusterImageSet := &hivev1.ClusterImageSet{}
 	err = t.client.Get(ctx, client.ObjectKey{Name: clusterImageSetName}, clusterImageSet)
 	if err != nil {
+		// A nonexistent ClusterImageSet is a user-fixable input error that must be
+		// reported on the Validated condition. Other Get failures (e.g. API-server
+		// unavailable) are operational and must keep requeuing.
+		if errors.IsNotFound(err) {
+			return typederrors.NewInputError("%s", err.Error())
+		}
 		return fmt.Errorf("failed to get ClusterImageSet %s: %w", clusterImageSetName, err)
 	}
 
@@ -1122,8 +1130,17 @@ func (t *clusterTemplateReconcilerTask) validateClusterImageSetMatchesRelease(ct
 	// Older ACM versions use tagged image references (e.g., ":4.20.4-x86_64").
 	imageVersion := extractVersionFromClusterImageSet(clusterImageSet)
 	if imageVersion == "" {
-		return fmt.Errorf("could not extract version from ClusterImageSet %s: no releaseTag label and release image %s has no parseable tag",
-			clusterImageSetName, clusterImageSet.Spec.ReleaseImage)
+		// An unextractable version is a user-fixable input error, so report it on
+		// the Validated condition rather than treating it as operational. Name the
+		// malformed releaseTag label when it is present so the user is not told the
+		// label is missing when it exists with an unparseable value.
+		labelDetail := "no releaseTag label"
+		if tag := clusterImageSet.Labels["releaseTag"]; tag != "" {
+			labelDetail = fmt.Sprintf("releaseTag label %q has no parseable version", tag)
+		}
+		return typederrors.NewInputError(
+			"could not extract version from ClusterImageSet %s: %s and release image %s has no parseable tag",
+			clusterImageSetName, labelDetail, clusterImageSet.Spec.ReleaseImage)
 	}
 
 	// Compare with the ClusterTemplate release version

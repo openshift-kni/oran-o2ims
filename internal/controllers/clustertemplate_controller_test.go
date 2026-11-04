@@ -76,6 +76,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"testing"
@@ -98,6 +99,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -696,6 +698,84 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 			"the value of key %s from ConfigMap %s is not a valid duration string", ctlrutils.ClusterConfigurationTimeoutConfigKey, ptDefaultsCm)))
 		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
 			"the value of key %s from ConfigMap %s is not a valid duration string", ctlrutils.ClusterInstallationTimeoutConfigKey, ciDefaultsCm)))
+	})
+
+	It("should return false and report Validated=False when the referenced ClusterImageSet does not exist", func() {
+		for _, cm := range cms {
+			Expect(c.Create(ctx, cm)).To(Succeed())
+		}
+
+		// Create HardwareProfile CRs referenced by hwMgmtDefaults so the only
+		// validation failure is the missing ClusterImageSet.
+		for _, name := range []string{"profile-spr-single-processor-64G", "profile-spr-single-processor-128G"} {
+			hwProfile := &hwmgmtv1alpha1.HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      name,
+					Namespace: ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace),
+				},
+			}
+			Expect(c.Create(ctx, hwProfile)).To(Succeed())
+		}
+		// Intentionally do not create the ClusterImageSet "4.15.0".
+
+		valid, err := t.validateClusterTemplateCR(ctx)
+		// A missing ClusterImageSet is an input error, so validation reports it on
+		// the status condition instead of short-circuiting with an operational error.
+		Expect(err).ToNot(HaveOccurred())
+		Expect(valid).To(BeFalse())
+
+		conditions := t.object.Status.Conditions
+		Expect(conditions).To(HaveLen(1))
+		Expect(conditions[0].Type).To(Equal(string(provisioningv1alpha1.CTconditionTypes.Validated)))
+		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
+		Expect(conditions[0].Reason).To(Equal(string(provisioningv1alpha1.CTconditionReasons.Failed)))
+		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
+			"failed to validate ClusterImageSet specified in clusterInstanceDefaults %s", ciDefaultsCm)))
+		Expect(conditions[0].Message).To(ContainSubstring("not found"))
+		Expect(conditions[0].Message).To(ContainSubstring("4.15.0"))
+	})
+
+	It("should return false and report Validated=False when the ClusterImageSet version cannot be extracted", func() {
+		for _, cm := range cms {
+			Expect(c.Create(ctx, cm)).To(Succeed())
+		}
+
+		// Create HardwareProfile CRs referenced by hwMgmtDefaults so the only
+		// validation failure is the unextractable ClusterImageSet version.
+		for _, name := range []string{"profile-spr-single-processor-64G", "profile-spr-single-processor-128G"} {
+			hwProfile := &hwmgmtv1alpha1.HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      name,
+					Namespace: ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace),
+				},
+			}
+			Expect(c.Create(ctx, hwProfile)).To(Succeed())
+		}
+
+		// Create a ClusterImageSet with no releaseTag label and a release image
+		// that has no parseable version tag.
+		clusterImageSet := &hivev1.ClusterImageSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "4.15.0",
+			},
+			Spec: hivev1.ClusterImageSetSpec{
+				ReleaseImage: "registry.example.com/openshift:latest",
+			},
+		}
+		Expect(c.Create(ctx, clusterImageSet)).To(Succeed())
+
+		valid, err := t.validateClusterTemplateCR(ctx)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(valid).To(BeFalse())
+
+		conditions := t.object.Status.Conditions
+		Expect(conditions).To(HaveLen(1))
+		Expect(conditions[0].Type).To(Equal(string(provisioningv1alpha1.CTconditionTypes.Validated)))
+		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
+		Expect(conditions[0].Reason).To(Equal(string(provisioningv1alpha1.CTconditionReasons.Failed)))
+		Expect(conditions[0].Message).To(ContainSubstring(fmt.Sprintf(
+			"failed to validate ClusterImageSet specified in clusterInstanceDefaults %s", ciDefaultsCm)))
+		Expect(conditions[0].Message).To(ContainSubstring("could not extract version from ClusterImageSet"))
 	})
 
 	Context("skip clusterimageset validation annotation", func() {
@@ -2459,16 +2539,40 @@ baseDomain: example.com
 		Expect(err.Error()).To(ContainSubstring("is not a string"))
 	})
 
-	It("should fail when ClusterImageSet does not exist", func() {
+	It("should fail with an input error when ClusterImageSet does not exist", func() {
 		Expect(c.Create(ctx, configMap)).To(Succeed())
 		// Don't create the ClusterImageSet
 
 		err := task.validateClusterImageSetMatchesRelease(ctx)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("failed to get ClusterImageSet"))
+		Expect(err.Error()).To(ContainSubstring("not found"))
+		// A nonexistent ClusterImageSet is user-fixable and must be reported on
+		// the Validated condition rather than requeued as an operational error.
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
 	})
 
-	It("should fail when ClusterImageSet has no releaseImage in spec", func() {
+	It("should fail with an operational error when fetching the ClusterImageSet fails with a non-NotFound error", func() {
+		Expect(c.Create(ctx, configMap)).To(Succeed())
+
+		// Force a non-NotFound failure (e.g. API server unavailable) when fetching
+		// the ClusterImageSet. Such operational errors must stay retryable, not be
+		// reported as validation failures.
+		task.client = interceptor.NewClient(c.(client.WithWatch), interceptor.Funcs{
+			Get: func(ctx context.Context, cl client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+				if _, ok := obj.(*hivev1.ClusterImageSet); ok {
+					return errors.New("internal server error")
+				}
+				return cl.Get(ctx, key, obj, opts...)
+			},
+		})
+
+		err := task.validateClusterImageSetMatchesRelease(ctx)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to get ClusterImageSet"))
+		Expect(typederrors.IsInputError(err)).To(BeFalse())
+	})
+
+	It("should fail with an input error when ClusterImageSet has no releaseImage in spec", func() {
 		clusterImageSet.Spec.ReleaseImage = ""
 
 		Expect(c.Create(ctx, configMap)).To(Succeed())
@@ -2477,9 +2581,10 @@ baseDomain: example.com
 		err := task.validateClusterImageSetMatchesRelease(ctx)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("could not extract version from ClusterImageSet"))
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
 	})
 
-	It("should fail when ClusterImageSet releaseImage contains no extractable version", func() {
+	It("should fail with an input error when ClusterImageSet releaseImage contains no extractable version", func() {
 		clusterImageSet.Spec.ReleaseImage = "registry.example.com/openshift:latest" // No version pattern
 
 		Expect(c.Create(ctx, configMap)).To(Succeed())
@@ -2488,6 +2593,25 @@ baseDomain: example.com
 		err := task.validateClusterImageSetMatchesRelease(ctx)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("could not extract version from ClusterImageSet"))
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
+	})
+
+	It("should name the malformed releaseTag label when it has no parseable version", func() {
+		// The releaseTag label is present but unparseable, and the release image
+		// also has no parseable tag. The error must identify the bad label value
+		// rather than claim the label is missing.
+		clusterImageSet.Labels = map[string]string{"releaseTag": "not-a-version"}
+		clusterImageSet.Spec.ReleaseImage = "registry.example.com/openshift:latest" // No version pattern
+
+		Expect(c.Create(ctx, configMap)).To(Succeed())
+		Expect(c.Create(ctx, clusterImageSet)).To(Succeed())
+
+		err := task.validateClusterImageSetMatchesRelease(ctx)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("could not extract version from ClusterImageSet"))
+		Expect(err.Error()).To(ContainSubstring(`releaseTag label "not-a-version" has no parseable version`))
+		Expect(err.Error()).ToNot(ContainSubstring("no releaseTag label"))
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
 	})
 
 	It("should fail when extracted version is invalid semver", func() {
@@ -2499,9 +2623,10 @@ baseDomain: example.com
 		err := task.validateClusterImageSetMatchesRelease(ctx)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("failed to parse ClusterImageSet version"))
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
 	})
 
-	It("should fail when release image has partial version (missing patch)", func() {
+	It("should fail with an input error when release image has partial version (missing patch)", func() {
 		clusterImageSet.Spec.ReleaseImage = "registry.example.com/openshift:4.17" // Missing patch version
 
 		Expect(c.Create(ctx, configMap)).To(Succeed())
@@ -2510,6 +2635,7 @@ baseDomain: example.com
 		err := task.validateClusterImageSetMatchesRelease(ctx)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("could not extract version from ClusterImageSet"))
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
 	})
 
 	It("should fail when ClusterTemplate release version is invalid semver", func() {
