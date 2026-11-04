@@ -11,7 +11,7 @@ replace (
 require (
 	github.com/coreos/go-semver v0.3.1
 	github.com/distribution/reference v0.6.0
-	github.com/getkin/kin-openapi v0.151.0
+	github.com/getkin/kin-openapi v0.152.0
 	github.com/go-logr/logr v1.4.4
 	github.com/golang-migrate/migrate/v4 v4.20.1
 	github.com/google/uuid v1.6.0
