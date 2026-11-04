@@ -708,6 +708,24 @@ func (d *urlValuesDecoder) DecodeObject(param string, sm *openapi3.Serialization
 			}
 			return propsFromString(values[0], ",", ",")
 		}
+	case "spaceDelimited", "pipeDelimited":
+		// Only explode=false is defined for objects: name and value
+		// pairs are joined by the delimiter, as in "color=R|100|G|200".
+		if sm.Explode {
+			return nil, false, invalidSerializationMethodErr(sm)
+		}
+		delim := " "
+		if sm.Style == "pipeDelimited" {
+			delim = "|"
+		}
+		propsFn = func(params url.Values) (map[string]string, error) {
+			values := params[param]
+			if len(values) == 0 {
+				// HTTP request does not contain a value of the target query parameter.
+				return nil, nil
+			}
+			return propsFromString(values[0], delim, delim)
+		}
 	case "deepObject":
 		// Compile the parameter-name prefix matcher once: it depends only on
 		// param (constant for the whole loop), not on the loop variable. Doing
@@ -1229,13 +1247,13 @@ func parsePrimitiveCase(raw string, schema *openapi3.SchemaRef, typ string) (any
 	switch typ {
 	case "integer":
 		if schema.Value.Format == "int32" {
-			v, err := strconv.ParseInt(raw, 0, 32)
+			v, err := strconv.ParseInt(raw, 10, 32)
 			if err != nil {
 				return nil, &ParseError{Kind: KindInvalidFormat, Value: raw, Reason: "an invalid " + typ, Cause: err.(*strconv.NumError).Err}
 			}
 			return int32(v), nil
 		}
-		v, err := strconv.ParseInt(raw, 0, 64)
+		v, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil {
 			return nil, &ParseError{Kind: KindInvalidFormat, Value: raw, Reason: "an invalid " + typ, Cause: err.(*strconv.NumError).Err}
 		}
@@ -1435,6 +1453,19 @@ func YamlBodyDecoder(body io.Reader, header http.Header, schema *openapi3.Schema
 	return value, nil
 }
 
+// urlencodedObjectEncoded reports whether the encoding of an object property
+// of a urlencoded body keeps the object's properties apart from the rest of
+// the form: deepObject ("d[k]=v") or form without explode ("d=k,v").
+// The default, form with explode, would spread them over the whole form.
+func urlencodedObjectEncoded(encFn EncodingFn, propName string) bool {
+	if encFn == nil {
+		return false
+	}
+	sm := encFn(propName).SerializationMethod()
+	return sm.Style == openapi3.SerializationDeepObject ||
+		(sm.Style == openapi3.SerializationForm && !sm.Explode)
+}
+
 func UrlencodedBodyDecoder(body io.Reader, header http.Header, schema *openapi3.SchemaRef, encFn EncodingFn) (any, error) {
 	// Validate schema of request body.
 	// By the OpenAPI 3 specification request body's schema must have type "object".
@@ -1452,7 +1483,9 @@ func UrlencodedBodyDecoder(body io.Reader, header http.Header, schema *openapi3.
 		propType := propSchema.Value.Type
 		switch {
 		case propType.Is("object"):
-			return nil, fmt.Errorf("unsupported schema of request body's property %q", propName)
+			if !urlencodedObjectEncoded(encFn, propName) {
+				return nil, fmt.Errorf("unsupported schema of request body's property %q", propName)
+			}
 		case propType.Is("array"):
 			if propSchema.Value.Items == nil || propSchema.Value.Items.Value == nil {
 				return nil, fmt.Errorf("unsupported schema of request body's property %q: array items required", propName)
