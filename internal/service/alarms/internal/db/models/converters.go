@@ -123,11 +123,10 @@ func ConvertSubscriptionModelToApi(subscriptionModel AlarmSubscription) api.Alar
 		ConsumerSubscriptionId: subscriptionModel.ConsumerSubscriptionID,
 	}
 
-	// eventFilter is M/0..1: always serialize the key, as a value or explicit null.
+	// eventFilter is M/0..1: include the key only when a filter is set.
+	// An unset filter leaves EventFilter at its zero value; omitempty omits it.
 	if subscriptionModel.EventFilter != nil {
 		apiModel.EventFilter = nullable.NewNullableWithValue(*subscriptionModel.EventFilter)
-	} else {
-		apiModel.EventFilter = nullable.NewNullNullable[api.AlarmSubscriptionInfoEventFilter]()
 	}
 
 	return apiModel

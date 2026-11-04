@@ -207,10 +207,11 @@ curl -s -k \
 
 **Event filtering (`eventFilter`):**
 
-`eventFilter` is **required** on create. It selects a single notification event type that is
-**excluded** from delivery — the subscription receives every other event type. Set it to an
-explicit `null` to exclude nothing, so **all** events are delivered. The response always
-echoes the key back (as a value or an explicit `null`).
+`eventFilter` is **optional** on create (O-RAN spec cardinality M/0..1). It selects a single
+notification event type that is **excluded** from delivery — the subscription receives every
+other event type. Omitting the field or setting it to `null` both mean "no filter" — **all**
+events are delivered. Responses include the key only when a filter is set; an unset filter
+is represented by omitting the key.
 
 The legacy `filter` property has been removed in v2. A create or patch body that includes
 `filter` (or any other unknown field) is rejected with `400`.
@@ -221,7 +222,8 @@ The legacy `filter` property has been removed in v2. A create or patch body that
 | `CHANGE` | Exclude change notifications; deliver NEW, CLEAR, ACKNOWLEDGE |
 | `CLEAR` | Exclude clear notifications; deliver NEW, CHANGE, ACKNOWLEDGE |
 | `ACKNOWLEDGE` | Exclude acknowledge notifications; deliver NEW, CHANGE, CLEAR |
-| `null` | Deliver all event types |
+| `null` | Deliver all event types (same as omitting the field) |
+| *(omitted)* | Deliver all event types |
 
 #### Modify a Subscription (PATCH)
 

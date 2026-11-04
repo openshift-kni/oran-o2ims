@@ -913,9 +913,9 @@ components:
           description: |
             Typed criteria for events which will be filtered by the subscription notification service.
             It carries exclusion semantics: an event whose notificationEventType equals eventFilter is
-            not delivered. A null eventFilter excludes no event types, so all events are eligible for
-            delivery. This key is required on create and is always present in responses, serialized as a
-            value or an explicit null.
+            not delivered. An omitted or null eventFilter excludes no event types, so all events are
+            eligible for delivery (O-RAN spec cardinality M/0..1). Responses include this key only
+            when a filter is set; an unset filter is represented by omitting the key.
           example: NEW
         callback:
           type: string
@@ -923,7 +923,6 @@ components:
           description: The fully qualified URI to a consumer procedure which can process a Post of the AlarmEventNotification.
       required:
       - callback
-      - eventFilter
 
     AlarmSubscriptionUpdate:
       type: object

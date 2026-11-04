@@ -144,29 +144,30 @@ func TestConvertSubscriptionAPIToModel_EventFilter(t *testing.T) {
 	g.Expect(*withValue.EventFilter).To(Equal(value))
 }
 
-func TestConvertSubscriptionModelToApi_EventFilterNullSerialization(t *testing.T) {
+func TestConvertSubscriptionModelToApi_EventFilterSerialization(t *testing.T) {
 	g := NewWithT(t)
 	id := uuid.New()
 	value := api.AlarmSubscriptionInfoEventFilterCLEAR
 
-	// NULL event_filter -> key-present explicit null (M/0..1)
+	// NULL event_filter -> key absent (M/0..1: omit when unset)
 	nilModel := models.ConvertSubscriptionModelToApi(models.AlarmSubscription{SubscriptionID: id, Callback: "http://x"})
-	g.Expect(nilModel.EventFilter.IsSpecified()).To(BeTrue())
-	g.Expect(nilModel.EventFilter.IsNull()).To(BeTrue())
+	g.Expect(nilModel.EventFilter.IsSpecified()).To(BeFalse())
 
-	// Marshaling makes the M/0..1 contract explicit: eventFilter is emitted as an explicit
-	// null (key present), not omitted.
 	data, err := json.Marshal(nilModel)
 	g.Expect(err).ToNot(HaveOccurred())
-	g.Expect(string(data)).To(ContainSubstring(`"eventFilter":null`))
+	g.Expect(string(data)).ToNot(ContainSubstring(`"eventFilter"`))
 
-	// Non-NULL event_filter -> value
+	// Non-NULL event_filter -> value present
 	setModel := models.ConvertSubscriptionModelToApi(models.AlarmSubscription{SubscriptionID: id, Callback: "http://x", EventFilter: &value})
 	g.Expect(setModel.EventFilter.IsSpecified()).To(BeTrue())
 	g.Expect(setModel.EventFilter.IsNull()).To(BeFalse())
 	got, err := setModel.EventFilter.Get()
 	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(got).To(Equal(value))
+
+	data2, err := json.Marshal(setModel)
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(string(data2)).To(ContainSubstring(`"eventFilter":"CLEAR"`))
 }
 
 func TestConvertAlertSubToNotificationSub_EffectiveFilter(t *testing.T) {
