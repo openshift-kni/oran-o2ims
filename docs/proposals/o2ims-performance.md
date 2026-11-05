@@ -628,11 +628,11 @@ only exist as a non-standard extra, outside O2 conformance.
 
 | `collectionMethod` | Prom type | PromQL transform |
 |---|---|---|
-| CC (cumulative counter) | counter | `rate()` / `increase()` over step |
+| CC (cumulative counter) | counter | `rate()` / `increase()` over `counterWindow` (≥2 samples) |
 | GAUGE | gauge | raw / `avg_over_time` / `last_over_time` |
-| DER (discrete event) | counter | `increase()` over window |
+| DER (discrete event) | counter | `increase()` over `counterWindow` |
 | SI (status inspection) | gauge | instant sample |
-| (histogram/summary) | histogram | `histogram_quantile(q, rate(..._bucket[step]))` |
+| (histogram/summary) | histogram | `histogram_quantile(q, rate(..._bucket[counterWindow]))` |
 
 #### 5.8.3 Catalog entry schema
 
@@ -655,9 +655,10 @@ measurementUnit: percent
 measureObjectClass: KubernetesNode            # owning layer (ClusterResource)
 description: Average CPU utilization over the collection interval
 # --- the Prometheus bridge (our additions, not O-RAN fields) ---
-promql: '100 * (1 - avg by (cluster,instance)(rate(node_cpu_seconds_total{mode="idle", <scope>}[${step}])))'
+promql: '100 * (1 - avg by (cluster,instance)(rate(node_cpu_seconds_total{mode="idle", <scope>}[${counterWindow}])))'
 resourceIdentityLabels: [cluster, instance]   # instance = node FQDN = ClusterResource.Name (spike-confirmed)
 sourceMetrics: [node_cpu_seconds_total]
+counterWindow: 5m                             # rate()/increase() window; ≥2 samples, independent of the query step
 alsoAttachesTo:                               # overlap bucket only
   resourceType: PhysicalServer                # via ClusterResource.ResourceID (1:1)
   whenHosting: oneToOne                        # 1:N ⇒ use the separate aggregate definition
@@ -670,14 +671,23 @@ name, and resolve directly on the BMH-keyed `Resource` (arriving via
 recipes group by **`instance`, not `node`** — node-exporter carries no `node`
 label in ACM (spike-confirmed).
 
+The query **`step`** is the job's `collectionInterval`; **`counterWindow`** is a
+*separate* `rate()`/`increase()` window for counter-backed recipes, set long
+enough to span at least two forwarded samples (default
+`max(5m, 2× the effective collection interval)`). Keeping it independent of the
+step matters: at the interval floor the step alone could contain a single
+forwarded sample, and `rate()` over a single-sample window returns no series —
+so counter-backed definitions could otherwise yield no data at a valid interval.
+
 #### 5.8.4 Translation
 
 - **Forward (query):** `resourceScopeCriteria` → target ResourceType(s) → the
   resolver ([5.3](#53-resource-scope-resolution-and-layered-attribution)) yields
   the matching entities and their identity-label matchers (walking the
   `ClusterResource.ResourceID` hosting edge when the scope is the physical layer);
-  `measurementSelectionCriteria` → catalog entries → `promql` with `${step}` and
-  `<scope>` substituted → Thanos `query_range`.
+  `measurementSelectionCriteria` → catalog entries → `promql` with `${step}`
+  (= `collectionInterval`), `${counterWindow}`, and `<scope>` substituted →
+  Thanos `query_range`.
 - **Reverse (project):** each returned series → read its `resourceIdentityLabels`
   → resolve to the entity at the **scoped layer** (ClusterResource directly, or
   the physical `Resource` through the hosting edge) → emit a
@@ -701,7 +711,10 @@ the hand-written part is small and per-*pattern*:
    name-suffix convention gives `measurementUnit`; `/api/v1/labels` + series
    sampling give available identity labels; IDs are synthesized (stable hash of
    name+type). A raw gauge yields `promql: <name>{<scope>}`, a counter yields
-   `rate(<name>{<scope>}[step])` — zero per-metric authoring.
+   `rate(<name>{<scope>}[counterWindow])` — where `counterWindow` is independent
+   of the query step and long enough to span at least two forwarded samples
+   (default `max(5m, 2× the effective collection interval)`) — zero per-metric
+   authoring.
 3. **Hand-write only a compact mapping-policy file** (per-pattern, not
    per-metric): owning-layer rules that map a metric source/label-set to its
    ResourceType (`node-exporter {cluster,node}` → KubernetesNode; BMC/Redfish →
@@ -916,7 +929,7 @@ allowlist; ⚠️ requires a `observability-metrics-custom-allowlist` entry.
 | networkReceiveDrops | GAUGE | pkt/s | `instance:node_network_receive_drop_excluding_lo:rate1m` | ✅ |
 | networkTransmitDrops | GAUGE | pkt/s | `instance:node_network_transmit_drop_excluding_lo:rate1m` | ✅ |
 | majorPageFaults | GAUGE | faults/s | `instance:node_vmstat_pgmajfault:rate1m` | ✅ |
-| diskIoUtilization | CC | ratio | `rate(node_disk_io_time_seconds_total[${step}])` | ⚠️ |
+| diskIoUtilization | CC | ratio | `rate(node_disk_io_time_seconds_total[${counterWindow}])` | ⚠️ |
 
 **NodeCluster — per cluster** — aggregate scope
 
