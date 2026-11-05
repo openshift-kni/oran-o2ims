@@ -654,7 +654,7 @@ measurementName: cpuAverageUtilization
 collectionMethod: GAUGE                       # drives the transform
 measurementUnit: percent
 measureObjectClass: KubernetesNode            # owning layer (ClusterResource)
-description: Average CPU utilization over the collection interval
+description: Average CPU utilization over the trailing counterWindow
 # --- the Prometheus bridge (our additions, not O-RAN fields) ---
 promql: '100 * (1 - avg by (cluster,instance)(rate(node_cpu_seconds_total{mode="idle", <scope>}[${counterWindow}])))'
 resourceIdentityLabels: [cluster, instance]   # instance = node FQDN = ClusterResource.Name (spike-confirmed)
