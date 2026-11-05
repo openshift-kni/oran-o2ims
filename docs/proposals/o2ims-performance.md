@@ -16,6 +16,7 @@ change-history: "#appendix-c-document-version-history"
 
 **Epic**: TBD
 **Specs**:
+
 - O-RAN.WG6.TS.O2IMS-INTERFACE-R005-v13.00, clause 2.1.7 (service definitions)
   and clause 3.7 (`O2ims_InfrastructurePerformance` Service API, version 2.3.0)
 - O-RAN.WG6.O-CLOUD-IM.0-R004 (O-Cloud Information Model, ref [36]), clause
@@ -113,7 +114,7 @@ O-Cloud the O2IMS Performance **producer** the SMO talks to.
 Clause 3.7 defines a REST API (major version 2) with these resources
 (Figure 3.7.3-1):
 
-```
+```text
 {apiRoot}/O2ims_infrastructurePerformance/{apiMajorVersion}
   /measurementJobs
     /{measurementJobId}
@@ -239,7 +240,7 @@ A new `performance-server` microservice (one more subcommand of the existing
 multi-service binary), deployed on the hub by the inventory controller exactly
 like `alarms-server`:
 
-```
+```text
                 SMO / API consumer
                         │  O2 (HTTPS, OAuth)
                         ▼
@@ -567,7 +568,7 @@ O-Cloud Information Model. The relevant types and their mapping to Thanos:
 `PerformanceMeasurementReport` (IM 4.2.1.4.24), a nested aggregation the
 reporter builds from Thanos results:
 
-```
+```text
 PerformanceMeasurementReport
   globalCloudId, notificationTime,
   performanceSubscriptionId, consumerPerformanceSubscriptionId
@@ -726,7 +727,7 @@ the hand-written part is small and per-*pattern*:
 4. **Validate at startup** against the live allowlist; drop entries whose source
    metrics are absent (→ not advertised).
 
-```
+```text
 ACM allowlist ─┐
 Thanos /metadata,/labels,/series ─┤→ generator → draft dictionary (per ResourceType)
 hand-written mapping-policy file ─┘        ↓ validate vs live allowlist
@@ -771,7 +772,7 @@ cluster before committing to P1+.
 
 | Phase | PR theme | Scope |
 |-------|----------|-------|
-| **P-1** | Feasibility spike (gate) | Validate the three empirical risks against a live ACM Observability hub + managed cluster using `hack/perf-spike.sh`: (1) identity join — does a Prometheus node series resolve to a `ClusterResource`/`Resource` by string identity; (2) allowlist/Thanos coverage vs a golden set, and whether serving it needs ACM config changes; (3) any physical-hardware telemetry. Record results in `docs/spike/perf-spike-findings.md`. **Exit criteria gate P1+**: a green join key (or a defined correspondence table), adequate coverage, and a hardware verdict. If #1 needs a correspondence table or #2/#3 are thin, rescope (e.g. k8s-node layer only) before building. |
+| **P-1** | Feasibility spike (gate) | Validate three risks on a live ACM hub via `hack/perf-spike.sh` — identity join, coverage, hardware telemetry (`docs/spike/perf-spike-findings.md`). **Gates P1+**; rescope (e.g. k8s-node only) if the join or coverage is weak. |
 | **P0** | Proposal + contract | This document; hand-authored `openapi.yaml` for `/O2ims_infrastructurePerformance/v2` covering all clause-3.7 resources/types. No handlers yet. |
 | **P1** | Service scaffolding | New `internal/service/performance` tree (cmd, `serve.go`, generated handlers, Postgres `performance` DB + baseline migrations, serviceconfig stub). Inventory-controller deploy wiring, RBAC, SA, bundle. Health/`apiVersions` only. See [Appendix B](#appendix-b-files-to-create-and-modify). |
 | **P2** | Read path + mapping catalog | Measurement Mapping Catalog ([5.8](#58-schema-reconciliation-and-the-measurement-mapping-catalog)): dictionary generator (from ACM allowlist + Thanos metadata), mapping-policy file, Tier-0 golden-set KPIs. Thanos query client + PromQL translation; resource-scope resolver; preinstalled PM Jobs; `GET /measurementJobs`, `GET /measurementJobs/{id}` (filter/field selection/paging per ETSI SOL 013); `GET /performanceServiceConfiguration`. |
@@ -1002,6 +1003,7 @@ client + PromQL translation), `internal/pmdictionary` (allowlist catalog),
 `internal/resolver` (resource-scope), `internal/reporter` (subscription ticks).
 
 **Modify — central wiring:**
+
 - `main.go` — register `GetPerformanceRootCmd`.
 - `internal/constants/constants.go` — `O2IMSPerformanceAPIPath`,
   `O2IMSPerformanceBaseURL = O2IMSPerformanceAPIPath + APIVersionV2`, endpoint
@@ -1033,4 +1035,4 @@ client + PromQL translation), `internal/pmdictionary` (allowlist catalog),
 
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
-| 0.1 | 2026-11-05 | @browsell | Initial proposal: realize `O2ims_InfrastructurePerformance` over ACM Observability as virtual PM jobs translated from Thanos (single-source, in-cluster `observability-thanos-query`), with layered attribution (physical `Resource` / `ClusterResource` / cluster), the Measurement Mapping Catalog reconciling O-RAN ↔ Prometheus, NOTIFICATION-first subscriptions, a feasibility-spike gate (Phase -1, validated), spec coverage/omissions with designs for the material gaps, and the Tier-0 preinstalled golden set |
+| 0.1 | 2026-11-05 | @browsell | Initial proposal: `O2ims_InfrastructurePerformance` over ACM Observability — virtual PM jobs over Thanos, layered attribution, Measurement Mapping Catalog (O-RAN↔Prometheus), NOTIFICATION-first subscriptions, feasibility-spike gate, Tier-0 golden set |
