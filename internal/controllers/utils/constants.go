@@ -268,6 +268,8 @@ const (
 
 	ClusterTemplateArtifactsLabel = "clustertemplates.clcm.openshift.io/templateId"
 	HardwareManagerNodeIdLabel    = "clcm.openshift.io/hwMgrNodeId"
+	// NodeGroupAnnotation records the provisioning group for cluster inventory.
+	NodeGroupAnnotation = "clcm.openshift.io/node-group"
 )
 
 // AlarmDefinitionSeverityField severity field within additional fields of alarm definition

@@ -622,6 +622,111 @@ paths:
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
+  /O2ims_infrastructureCluster/v1/clusterResourceGroups:
+    get:
+      operationId: getClusterResourceGroups
+      summary: Get cluster resource groups
+      security:
+        - oauth2:
+            - role:o2ims-admin
+            - role:o2ims-reader
+      description: |
+        Returns the list of cluster resource groups.
+      parameters:
+        - $ref: "../../common/api/openapi.yaml#/components/parameters/allFields"
+        - $ref: "../../common/api/openapi.yaml#/components/parameters/excludeFields"
+        - $ref: "../../common/api/openapi.yaml#/components/parameters/fields"
+        - $ref: "../../common/api/openapi.yaml#/components/parameters/filter"
+      tags:
+        - resourceTypes
+      responses:
+        '200':
+          description: |
+            Successfully obtained the list of cluster resource groups.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ClusterResourceGroup"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
+  /O2ims_infrastructureCluster/v1/clusterResourceGroups/{clusterResourceGroupId}:
+    get:
+      operationId: getClusterResourceGroup
+      summary: Get a cluster resource group
+      security:
+        - oauth2:
+            - role:o2ims-admin
+            - role:o2ims-reader
+      description: |
+        Returns the details of a cluster resource group.
+      parameters:
+        - $ref: "#/components/parameters/clusterResourceGroupId"
+      tags:
+        - resourceTypes
+      responses:
+        '200':
+          description: |
+            Successfully obtained the details of the cluster resource group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClusterResourceGroup"
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '404':
+          description: The specified entity was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
+
   /O2ims_infrastructureCluster/v1/subscriptions:
     get:
       operationId: getSubscriptions
@@ -970,6 +1075,17 @@ components:
         format: uuid
       example: 38dcb63b-b1f0-4d2c-88bf-56446670ef01
 
+    clusterResourceGroupId:
+      name: clusterResourceGroupId
+      description: |
+        Unique identifier of a cluster resource group.
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      example: 38dcb63b-b1f0-4d2c-88bf-56446670ef01
+
     clusterResourceTypeId:
       name: clusterResourceTypeId
       description: |
@@ -1072,6 +1188,7 @@ components:
             The list of cluster resource identifiers that are used to construct this NodeCluster.
         clusterResourceGroups:
           type: array
+          uniqueItems: true
           items:
             type: string
             format: uuid
@@ -1114,6 +1231,44 @@ components:
       - clusterResourceTypeId
       - name
       - description
+
+    ClusterResourceGroup:
+      description: A named group of cluster resources belonging to a node cluster.
+      type: object
+      properties:
+        clusterResourceGroupId:
+          type: string
+          format: uuid
+          description: |
+            Unique identifier for the ClusterResourceGroup instance.
+        name:
+          type: string
+          description: |
+            Name of the ClusterResourceGroup.
+        description:
+          type: string
+          description: |
+            Human readable description of the ClusterResourceGroup.
+        extensions:
+          type: object
+          additionalProperties: {}
+          description: |
+            Additional properties that extend the information provided about the ClusterResourceGroup.
+        clusterResources:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          readOnly: true
+          description: |
+            Identifiers of the ClusterResources belonging to this ClusterResourceGroup.
+          items:
+            type: string
+            format: uuid
+      required:
+        - clusterResourceGroupId
+        - name
+        - description
+        - clusterResources
 
     ClusterResource:
       description: Information about a Cluster Resource

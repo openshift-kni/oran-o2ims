@@ -11,6 +11,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
+	"sort"
 	"sync/atomic"
 	"time"
 
@@ -298,6 +300,15 @@ func (c *Collector) linkClusterResources(ctx context.Context, nodeCluster *model
 
 // persistNodeCluster persists a NodeCluster to the database.  This may be an add or an update.
 func (c *Collector) persistNodeCluster(ctx context.Context, dataSource ClusterDataSource, cluster models.NodeCluster) error {
+	// Group references are maintained from Agent events, not ManagedCluster
+	// events. Preserve them when refreshing the rest of the cluster record.
+	previous, err := c.repository.GetNodeCluster(ctx, cluster.NodeClusterID)
+	if err != nil && !errors.Is(err, svcutils.ErrNotFound) {
+		return fmt.Errorf("get existing node cluster: %w", err)
+	}
+	if previous != nil {
+		cluster.ClusterResourceGroups = previous.ClusterResourceGroups
+	}
 	resourceType, err := dataSource.MakeNodeClusterType(&cluster)
 	if err != nil {
 		return fmt.Errorf("failed to make node cluster type from '%s': %w", cluster.Name, err)
@@ -399,6 +410,7 @@ func (c *Collector) handleClusterResourceSyncCompletion(ctx context.Context, ids
 	}
 
 	count := 0
+	clusters := make(map[uuid.UUID]struct{})
 	for _, record := range records {
 		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, record, record.ClusterResourceID, nil, func(object interface{}) any {
 			r, _ := object.(models.ClusterResource)
@@ -412,6 +424,16 @@ func (c *Collector) handleClusterResourceSyncCompletion(ctx context.Context, ids
 		if dataChangeEvent != nil {
 			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
 			count++
+		}
+		if record.NodeClusterID != nil {
+			clusters[*record.NodeClusterID] = struct{}{}
+		}
+	}
+	// A stale resource may have been the last member of its group, so sync the groups of every cluster that lost
+	// resources in this relist.
+	for id := range clusters {
+		if err := c.syncClusterResourceGroups(ctx, id); err != nil {
+			return fmt.Errorf("sync cluster resource groups: %w", err)
 		}
 	}
 
@@ -497,6 +519,15 @@ func (c *Collector) deleteRelatedClusterResources(ctx context.Context, nodeClust
 		}
 	}
 
+	groups, err := c.repository.GetNodeClusterResourceGroups(ctx, nodeCluster.NodeClusterID)
+	if err != nil {
+		return fmt.Errorf("get cluster resource groups for node cluster %s: %w", nodeCluster.NodeClusterID, err)
+	}
+	for _, group := range groups {
+		if err := c.deleteClusterResourceGroup(ctx, group); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -538,13 +569,24 @@ func (c *Collector) handleAsyncNodeClusterEvent(ctx context.Context, dataSource 
 	if err != nil {
 		return fmt.Errorf("failed to link cluster resources to node cluster '%s': %w", nodeCluster.NodeClusterID, err)
 	}
-	return err
+
+	// Resources were just linked to this cluster, so build the groups they belong to.
+	if err := c.syncClusterResourceGroups(ctx, nodeCluster.NodeClusterID); err != nil {
+		return fmt.Errorf("sync cluster resource groups: %w", err)
+	}
+	return nil
 }
 
 // handleAsyncClusterResourceEvent handles an async handleWatchEvent received for a ClusterResource object.
 func (c *Collector) handleAsyncClusterResourceEvent(ctx context.Context, dataSource ClusterDataSource, clusterResource models.ClusterResource, deleted bool) error {
 	ctx = logging.AppendCtx(ctx, slog.String("clusterResourceID", clusterResource.ClusterResourceID.String()))
 	ctx = logging.AppendCtx(ctx, slog.Bool("deleted", deleted))
+
+	previous, err := c.repository.GetClusterResource(ctx, clusterResource.ClusterResourceID)
+	if err != nil && !errors.Is(err, svcutils.ErrNotFound) {
+		return fmt.Errorf("get existing cluster resource: %w", err)
+	}
+
 	if deleted {
 		dataChangeEvent, err := svcutils.DeleteObjectWithChangeEvent(
 			ctx, c.pool, clusterResource, clusterResource.ClusterResourceID, nil, func(object interface{}) any {
@@ -558,6 +600,13 @@ func (c *Collector) handleAsyncClusterResourceEvent(ctx context.Context, dataSou
 
 		if dataChangeEvent != nil {
 			c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(dataChangeEvent))
+		}
+		// The deleted resource may have been the last member of its group, so sync the cluster it belonged to.  The
+		// cluster is taken from the stored record because the event object does not carry it.
+		if previous != nil && previous.NodeClusterID != nil {
+			if err := c.syncClusterResourceGroups(ctx, *previous.NodeClusterID); err != nil {
+				return fmt.Errorf("sync groups after resource deletion: %w", err)
+			}
 		}
 
 		return nil
@@ -579,7 +628,37 @@ func (c *Collector) handleAsyncClusterResourceEvent(ctx context.Context, dataSou
 		return fmt.Errorf("failed to update cluster resource '%s': %w", clusterResource.ResourceID, err)
 	}
 
+	// Groups only depend on the cluster and group a resource belongs to, so skip the sync, and its queries, when
+	// neither changed.
+	if !groupMembershipChanged(previous, clusterResource) {
+		return nil
+	}
+
+	// If the resource moved to a different cluster, remove it from the groups of the cluster it left.
+	if previous != nil && previous.NodeClusterID != nil && *previous.NodeClusterID != nodeCluster.NodeClusterID {
+		if err := c.syncClusterResourceGroups(ctx, *previous.NodeClusterID); err != nil {
+			return fmt.Errorf("sync previous node cluster groups: %w", err)
+		}
+	}
+
+	// The resource may have joined, left or switched group, so sync the groups of its cluster.
+	if err := c.syncClusterResourceGroups(ctx, nodeCluster.NodeClusterID); err != nil {
+		return fmt.Errorf("sync node cluster groups: %w", err)
+	}
 	return nil
+}
+
+// groupMembershipChanged determines whether storing the resource changes the membership of any cluster resource group,
+// by comparing it with the record that was stored before.  A resource that is new, not yet linked to a cluster, or
+// that changed cluster or group affects group membership; any other change, such as updated inventory details, does not.
+func groupMembershipChanged(previous *models.ClusterResource, current models.ClusterResource) bool {
+	if previous == nil || previous.NodeClusterID == nil || current.NodeClusterID == nil {
+		return true
+	}
+
+	return *previous.NodeClusterID != *current.NodeClusterID ||
+		previous.ClusterResourceGroupID != current.ClusterResourceGroupID ||
+		previous.ClusterResourceGroupName != current.ClusterResourceGroupName
 }
 
 // syncThanosAlarmDefinitions fetches Thanos rules and syncs alarm definitions to the database
@@ -832,4 +911,169 @@ func (c *Collector) handleAsyncAlarmDictionaryAndDefinitionsCreation(ctx context
 	}
 
 	slog.InfoContext(ctx, "Alarm dictionary and definitions created", slog.String("nodeClusterTypeID", nodeClusterType.NodeClusterTypeID.String()))
+}
+
+// makeClusterResourceGroups builds groups only for observed members. Sorting
+// UUIDs avoids spurious updates when Kubernetes returns resources in a new order.
+func makeClusterResourceGroups(clusterID uuid.UUID, clusterName string, resources []models.ClusterResource) map[uuid.UUID]models.ClusterResourceGroup {
+	groups := make(map[uuid.UUID]models.ClusterResourceGroup)
+	for _, resource := range resources {
+		if resource.ClusterResourceGroupID == uuid.Nil || resource.ClusterResourceGroupName == "" {
+			continue
+		}
+		id := resource.ClusterResourceGroupID
+		group, exists := groups[id]
+		if !exists {
+			// The first member seen defines the group; all members of a group carry the same group name.
+			group = models.ClusterResourceGroup{
+				ClusterResourceGroupID: id,
+				NodeClusterID:          clusterID,
+				Name:                   resource.ClusterResourceGroupName,
+				Description:            fmt.Sprintf("%s node group of cluster %s", resource.ClusterResourceGroupName, clusterName),
+				Extensions:             &map[string]any{"nodeClusterId": clusterID.String(), "nodeClusterName": clusterName},
+				DataSourceID:           resource.DataSourceID,
+				GenerationID:           resource.GenerationID,
+			}
+		}
+		group.ClusterResources = append(group.ClusterResources, resource.ClusterResourceID)
+		groups[id] = group
+	}
+	for id, group := range groups {
+		sort.Slice(group.ClusterResources, func(i, j int) bool { return group.ClusterResources[i].String() < group.ClusterResources[j].String() })
+		groups[id] = group
+	}
+	return groups
+}
+
+// persistClusterResourceGroup persists a group and reports its inventory change.
+func (c *Collector) persistClusterResourceGroup(ctx context.Context, group models.ClusterResourceGroup) error {
+	event, err := svcutils.PersistObjectWithChangeEvent(ctx, c.pool, group, group.ClusterResourceGroupID, &group.NodeClusterID, func(object any) any {
+		record := object.(models.ClusterResourceGroup)
+		return models.ClusterResourceGroupToModel(&record, commonapi.NewDefaultFieldOptions())
+	})
+	if err != nil {
+		return fmt.Errorf("persist cluster resource group %s: %w", group.ClusterResourceGroupID, err)
+	}
+	if event != nil {
+		c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(event))
+	}
+	return nil
+}
+
+// deleteClusterResourceGroup deletes a group and reports its inventory change.
+func (c *Collector) deleteClusterResourceGroup(ctx context.Context, group models.ClusterResourceGroup) error {
+	event, err := svcutils.DeleteObjectWithChangeEvent(ctx, c.pool, group, group.ClusterResourceGroupID, &group.NodeClusterID, func(object any) any {
+		record := object.(models.ClusterResourceGroup)
+		return models.ClusterResourceGroupToModel(&record, commonapi.NewDefaultFieldOptions())
+	})
+	if err != nil {
+		return fmt.Errorf("delete cluster resource group %s: %w", group.ClusterResourceGroupID, err)
+	}
+	if event != nil {
+		c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(event))
+	}
+	return nil
+}
+
+// updateNodeClusterGroupRefs makes the node cluster reference exactly the given groups.  The resource IDs are only
+// used to build the change event payload so that it matches what the API returns for the cluster.
+func (c *Collector) updateNodeClusterGroupRefs(ctx context.Context, cluster *models.NodeCluster, groupIDs, resourceIDs []uuid.UUID) error {
+	// A cluster that has never had groups keeps a nil reference list.  Writing an empty list would be seen as a
+	// change (absent -> empty) and would emit a spurious NodeCluster update event on every sync, so skip it.
+	if len(groupIDs) == 0 && cluster.ClusterResourceGroups == nil {
+		return nil
+	}
+
+	// Sorted so that the stored list (and therefore the change event) is stable.
+	sort.Slice(groupIDs, func(i, j int) bool { return groupIDs[i].String() < groupIDs[j].String() })
+
+	// Persisting an unchanged cluster still costs a transaction and logs a "no change detected" warning, so skip it.
+	if cluster.ClusterResourceGroups != nil && slices.Equal(*cluster.ClusterResourceGroups, groupIDs) {
+		return nil
+	}
+	cluster.ClusterResourceGroups = &groupIDs
+
+	event, err := svcutils.PersistObjectWithChangeEvent(ctx, c.pool, *cluster, cluster.NodeClusterID, nil, func(object any) any {
+		record := object.(models.NodeCluster)
+		return models.NodeClusterToModel(&record, resourceIDs, commonapi.NewDefaultFieldOptions())
+	})
+	if err != nil {
+		return fmt.Errorf("update node cluster resource group references: %w", err)
+	}
+	if event != nil {
+		c.notificationHandler.Notify(ctx, models.DataChangeEventToNotification(event))
+	}
+	return nil
+}
+
+// syncClusterResourceGroups brings the stored groups of a node cluster in line with its cluster resources.
+// Group membership is derived from the group recorded on each ClusterResource, so this recomputes the full set of
+// groups for the cluster and makes the database match it.  It is idempotent: it can be called after any change to a
+// cluster's resources (or to the cluster itself) and repairs any drift left by an earlier, interrupted call.
+//
+// It performs three steps:
+//  1. persist every group that currently has at least one member,
+//  2. delete every stored group that no longer has any member, and
+//  3. update NodeCluster.ClusterResourceGroups so that the cluster references exactly the groups that exist.
+func (c *Collector) syncClusterResourceGroups(ctx context.Context, clusterID uuid.UUID) error {
+	// The cluster may not exist yet (resources can arrive before the managed cluster) or may already be gone.  There
+	// is nothing to sync in that case; groups are synced again once the cluster is persisted and linked.
+	cluster, err := c.repository.GetNodeCluster(ctx, clusterID)
+	if errors.Is(err, svcutils.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("get node cluster for resource groups: %w", err)
+	}
+
+	// Membership source: all resources linked to this cluster.
+	resources, err := c.repository.GetNodeClusterResources(ctx, clusterID)
+	if err != nil {
+		return fmt.Errorf("get resources for node cluster: %w", err)
+	}
+
+	// Only used to keep the NodeCluster change event payload consistent with the API, which always returns the
+	// resource IDs of a cluster.  Sorted so the payload is stable regardless of query order.
+	resourceIDs := make([]uuid.UUID, 0, len(resources))
+	for _, resource := range resources {
+		resourceIDs = append(resourceIDs, resource.ClusterResourceID)
+	}
+	sort.Slice(resourceIDs, func(i, j int) bool { return resourceIDs[i].String() < resourceIDs[j].String() })
+
+	// Groups currently stored for this cluster; used to skip unchanged groups and to find the ones to remove.
+	existing, err := c.repository.GetNodeClusterResourceGroups(ctx, clusterID)
+	if err != nil {
+		return fmt.Errorf("get resource groups for node cluster: %w", err)
+	}
+	existingByID := make(map[uuid.UUID]models.ClusterResourceGroup, len(existing))
+	for _, group := range existing {
+		existingByID[group.ClusterResourceGroupID] = group
+	}
+
+	// Step 1: persist the desired groups that are new or changed.  This uses the same field comparison as the persist
+	// itself, ignoring the generation ID because it never changes for this data source.
+	desired := makeClusterResourceGroups(clusterID, cluster.Name, resources)
+	ids := make([]uuid.UUID, 0, len(desired))
+	for id, group := range desired {
+		ids = append(ids, id)
+		if stored, found := existingByID[id]; found && len(svcutils.CompareObjects(stored, group, "CreatedAt", "GenerationID")) == 0 {
+			continue
+		}
+		if err := c.persistClusterResourceGroup(ctx, group); err != nil {
+			return err
+		}
+	}
+
+	// Step 2: delete stored groups that have lost their last member.
+	for _, group := range existing {
+		if _, ok := desired[group.ClusterResourceGroupID]; ok {
+			continue
+		}
+		if err := c.deleteClusterResourceGroup(ctx, group); err != nil {
+			return err
+		}
+	}
+
+	// Step 3: update the group references held by the NodeCluster.
+	return c.updateNodeClusterGroupRefs(ctx, cluster, ids, resourceIDs)
 }
