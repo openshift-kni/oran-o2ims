@@ -49,6 +49,25 @@ func ClusterResourceToModel(record *ClusterResource, options *commonapi.FieldOpt
 	return result
 }
 
+// ClusterResourceGroupToModel converts a DB tuple to an API model.
+func ClusterResourceGroupToModel(record *ClusterResourceGroup, options *commonapi.FieldOptions) generated.ClusterResourceGroup {
+	result := generated.ClusterResourceGroup{
+		ClusterResourceGroupId: record.ClusterResourceGroupID,
+		ClusterResources:       &record.ClusterResources,
+		Name:                   record.Name,
+		Description:            record.Description,
+	}
+	if options != nil && options.IsIncluded(commonapi.ExtensionsAttribute) {
+		if record.Extensions == nil {
+			extensions := make(map[string]interface{})
+			result.Extensions = &extensions
+		} else {
+			result.Extensions = record.Extensions
+		}
+	}
+	return result
+}
+
 // ClusterResourceTypeToModel converts a DB tuple to an API model
 func ClusterResourceTypeToModel(record *ClusterResourceType, options *commonapi.FieldOptions) generated.ClusterResourceType {
 	result := generated.ClusterResourceType{
@@ -182,6 +201,8 @@ func getEventType(before, after map[string]interface{}) int {
 func getObjectReference(objectType string, objectID uuid.UUID) *string {
 	var value string
 	switch objectType {
+	case ClusterResourceGroup{}.TableName():
+		value = fmt.Sprintf("%s%s/%s", constants.O2IMSClusterBaseURL, constants.ClusterResourceGroupsPath, objectID.String())
 	case ClusterResourceType{}.TableName():
 		value = fmt.Sprintf("%s%s/%s", constants.O2IMSClusterBaseURL, constants.ClusterResourceTypesPath, objectID.String())
 	case ClusterResource{}.TableName():

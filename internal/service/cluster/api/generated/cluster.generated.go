@@ -103,6 +103,24 @@ type ClusterResource struct {
 	ResourceId openapi_types.UUID `json:"resourceId"`
 }
 
+// ClusterResourceGroup A named group of cluster resources belonging to a node cluster.
+type ClusterResourceGroup struct {
+	// ClusterResourceGroupId Unique identifier for the ClusterResourceGroup instance.
+	ClusterResourceGroupId openapi_types.UUID `json:"clusterResourceGroupId"`
+
+	// ClusterResources Identifiers of the ClusterResources belonging to this ClusterResourceGroup.
+	ClusterResources *[]openapi_types.UUID `json:"clusterResources,omitempty"`
+
+	// Description Human readable description of the ClusterResourceGroup.
+	Description string `json:"description"`
+
+	// Extensions Additional properties that extend the information provided about the ClusterResourceGroup.
+	Extensions *map[string]interface{} `json:"extensions,omitempty"`
+
+	// Name Name of the ClusterResourceGroup.
+	Name string `json:"name"`
+}
+
 // ClusterResourceType Information about a Cluster Resource Type
 type ClusterResourceType struct {
 	// ClusterResourceTypeId Unique identifier for the ClusterResourceType instance
@@ -191,6 +209,9 @@ type Subscription struct {
 	SubscriptionId *openapi_types.UUID `json:"subscriptionId,omitempty"`
 }
 
+// ClusterResourceGroupId defines model for clusterResourceGroupId.
+type ClusterResourceGroupId = openapi_types.UUID
+
 // ClusterResourceId defines model for clusterResourceId.
 type ClusterResourceId = openapi_types.UUID
 
@@ -208,6 +229,98 @@ type SubscriptionId = openapi_types.UUID
 
 // GetAlarmDictionariesParams defines parameters for GetAlarmDictionaries.
 type GetAlarmDictionariesParams struct {
+	// AllFields This URI query parameter requests that all complex attributes are included in the response.
+	//
+	// ```
+	// all_fields
+	// ```
+	AllFields *externalRef0.AllFields `form:"all_fields,omitempty" json:"all_fields,omitempty"`
+
+	// ExcludeFields Comma separated list of field references to exclude from the result.
+	//
+	// Each field reference is a field name, or a sequence of field names separated by slashes. For
+	// example, to exclude the `country` subfield of the `extensions` field:
+	//
+	// ```
+	// exclude_fields=extensions/country
+	// ```
+	//
+	// When this parameter isn't used no field will be excluded.
+	//
+	// Fields in this list will be excluded even if they are explicitly included using the
+	// `fields` parameter.
+	ExcludeFields *externalRef0.ExcludeFields `form:"exclude_fields,omitempty" json:"exclude_fields,omitempty"`
+
+	// Fields Comma separated list of field references to include in the result.
+	//
+	// Each field reference is a field name, or a sequence of field names separated by slashes. For
+	// example, to get the `name` field and the `country` subfield of the `extensions` field:
+	//
+	// ```
+	// fields=name,extensions/country
+	// ```
+	//
+	// When this parameter isn't used all the fields will be returned.
+	Fields *externalRef0.Fields `form:"fields,omitempty" json:"fields,omitempty"`
+
+	// Filter Search criteria.
+	//
+	// Contains one or more search criteria, separated by semicolons. Each search criteria is a
+	// tuple containing an operator, a field reference and one or more values. The operator can
+	// be any of the following strings:
+	//
+	// | Operator | Meaning                                                     |
+	// |----------|-------------------------------------------------------------|
+	// | `cont`   | Matches if the field contains the value                     |
+	// | `eq`     | Matches if the field is equal to the value                  |
+	// | `gt`     | Matches if the field is greater than the value              |
+	// | `gte`    | Matches if the field is greater than or equal to the value  |
+	// | `in`     | Matches if the field is one of the values                   |
+	// | `lt`     | Matches if the field is less than the value                 |
+	// | `lte`    | Matches if the field is less than or equal to the the value |
+	// | `ncont`  | Matches if the field does not contain the value             |
+	// | `neq`    | Matches if the field is not equal to the value              |
+	// | `nin`    | Matches if the field is not one of the values               |
+	//
+	// The field reference is the name of one of the fields of the object, or a sequence of
+	// name of fields separated by slashes. For example, to use the `country` sub-field inside
+	// the `extensions` field:
+	//
+	// ```
+	// filter=(eq,extensions/country,EQ)
+	// ```
+	//
+	// The values are the arguments of the operator. For example, the `eq` operator compares
+	// checks if the value of the field is equal to the value.
+	//
+	// The `in` and `nin` operators support multiple values. For example, to check if the `country`
+	// sub-field inside the `extensions` field is either `ES` or `US:
+	//
+	// ```
+	// filter=(in,extensions/country,ES,US)
+	// ```
+	//
+	// When values contain commas, slashes or spaces they need to be surrounded by single quotes.
+	// For example, to check if the `name` field is the string `my cluster`:
+	//
+	// ```
+	// filter=(eq,name,'my cluster')
+	// ```
+	//
+	// When multiple criteria separated by semicolons are used, all of them must match for the
+	// complete condition to match. For example, the following will check if the `name` is
+	// `my cluster` *and* the `country` extension is `ES`:
+	//
+	// ```
+	// filter=(eq,name,'my cluster');(eq,extensions/country,ES)
+	// ```
+	//
+	// When this parameter isn't used all the results will be returned.
+	Filter *externalRef0.Filter `form:"filter,omitempty" json:"filter,omitempty"`
+}
+
+// GetClusterResourceGroupsParams defines parameters for GetClusterResourceGroups.
+type GetClusterResourceGroupsParams struct {
 	// AllFields This URI query parameter requests that all complex attributes are included in the response.
 	//
 	// ```
@@ -775,6 +888,12 @@ type ServerInterface interface {
 	// GetMinorVersions Get minor API versions
 	// (GET /O2ims_infrastructureCluster/v1/api_versions)
 	GetMinorVersions(w http.ResponseWriter, r *http.Request)
+	// GetClusterResourceGroups Get cluster resource groups
+	// (GET /O2ims_infrastructureCluster/v1/clusterResourceGroups)
+	GetClusterResourceGroups(w http.ResponseWriter, r *http.Request, params GetClusterResourceGroupsParams)
+	// GetClusterResourceGroup Get a cluster resource group
+	// (GET /O2ims_infrastructureCluster/v1/clusterResourceGroups/{clusterResourceGroupId})
+	GetClusterResourceGroup(w http.ResponseWriter, r *http.Request, clusterResourceGroupId ClusterResourceGroupId)
 	// GetClusterResourceTypes Get cluster resource types
 	// (GET /O2ims_infrastructureCluster/v1/clusterResourceTypes)
 	GetClusterResourceTypes(w http.ResponseWriter, r *http.Request, params GetClusterResourceTypesParams)
@@ -942,6 +1061,104 @@ func (siw *ServerInterfaceWrapper) GetMinorVersions(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMinorVersions(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetClusterResourceGroups operation middleware
+func (siw *ServerInterfaceWrapper) GetClusterResourceGroups(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetClusterResourceGroupsParams
+
+	// ------------- Optional query parameter "all_fields" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "all_fields", r.URL.Query(), &params.AllFields, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "all_fields"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "all_fields", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "exclude_fields" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "exclude_fields", r.URL.Query(), &params.ExcludeFields, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "exclude_fields"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "exclude_fields", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "fields" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "fields", r.URL.Query(), &params.Fields, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "fields"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fields", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "filter" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "filter", r.URL.Query(), &params.Filter, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "filter"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "filter", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetClusterResourceGroups(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetClusterResourceGroup operation middleware
+func (siw *ServerInterfaceWrapper) GetClusterResourceGroup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "clusterResourceGroupId" -------------
+	var clusterResourceGroupId ClusterResourceGroupId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "clusterResourceGroupId", r.PathValue("clusterResourceGroupId"), &clusterResourceGroupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "clusterResourceGroupId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetClusterResourceGroup(w, r, clusterResourceGroupId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1638,6 +1855,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureCluster/v1/clusterResourceTypes/{clusterResourceTypeId}", wrapper.GetClusterResourceType)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureCluster/v1/clusterResources", wrapper.GetClusterResources)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureCluster/v1/clusterResources/{clusterResourceId}", wrapper.GetClusterResource)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureCluster/v1/clusterResourceGroups", wrapper.GetClusterResourceGroups)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureCluster/v1/clusterResourceGroups/{clusterResourceGroupId}", wrapper.GetClusterResourceGroup)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/O2ims_infrastructureCluster/v1/subscriptions", wrapper.GetSubscriptions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/O2ims_infrastructureCluster/v1/subscriptions", wrapper.CreateSubscription)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/O2ims_infrastructureCluster/v1/subscriptions/{subscriptionId}", wrapper.DeleteSubscription)
@@ -1961,6 +2180,176 @@ func (response GetMinorVersions403ApplicationProblemPlusJSONResponse) VisitGetMi
 type GetMinorVersions500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
 
 func (response GetMinorVersions500ApplicationProblemPlusJSONResponse) VisitGetMinorVersionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClusterResourceGroupsRequestObject struct {
+	Params GetClusterResourceGroupsParams
+}
+
+type GetClusterResourceGroupsResponseObject interface {
+	VisitGetClusterResourceGroupsResponse(w http.ResponseWriter) error
+}
+
+type GetClusterResourceGroups200JSONResponse []ClusterResourceGroup
+
+func (response GetClusterResourceGroups200JSONResponse) VisitGetClusterResourceGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClusterResourceGroups400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetClusterResourceGroups400ApplicationProblemPlusJSONResponse) VisitGetClusterResourceGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClusterResourceGroups401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetClusterResourceGroups401ApplicationProblemPlusJSONResponse) VisitGetClusterResourceGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClusterResourceGroups403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetClusterResourceGroups403ApplicationProblemPlusJSONResponse) VisitGetClusterResourceGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClusterResourceGroups500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetClusterResourceGroups500ApplicationProblemPlusJSONResponse) VisitGetClusterResourceGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClusterResourceGroupRequestObject struct {
+	ClusterResourceGroupId ClusterResourceGroupId `json:"clusterResourceGroupId"`
+}
+
+type GetClusterResourceGroupResponseObject interface {
+	VisitGetClusterResourceGroupResponse(w http.ResponseWriter) error
+}
+
+type GetClusterResourceGroup200JSONResponse ClusterResourceGroup
+
+func (response GetClusterResourceGroup200JSONResponse) VisitGetClusterResourceGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClusterResourceGroup400ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetClusterResourceGroup400ApplicationProblemPlusJSONResponse) VisitGetClusterResourceGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClusterResourceGroup401ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetClusterResourceGroup401ApplicationProblemPlusJSONResponse) VisitGetClusterResourceGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClusterResourceGroup403ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetClusterResourceGroup403ApplicationProblemPlusJSONResponse) VisitGetClusterResourceGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClusterResourceGroup404ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetClusterResourceGroup404ApplicationProblemPlusJSONResponse) VisitGetClusterResourceGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClusterResourceGroup500ApplicationProblemPlusJSONResponse externalRef0.ProblemDetails
+
+func (response GetClusterResourceGroup500ApplicationProblemPlusJSONResponse) VisitGetClusterResourceGroupResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -3078,6 +3467,12 @@ type StrictServerInterface interface {
 	// GetMinorVersions Get minor API versions
 	// (GET /O2ims_infrastructureCluster/v1/api_versions)
 	GetMinorVersions(ctx context.Context, request GetMinorVersionsRequestObject) (GetMinorVersionsResponseObject, error)
+	// GetClusterResourceGroups Get cluster resource groups
+	// (GET /O2ims_infrastructureCluster/v1/clusterResourceGroups)
+	GetClusterResourceGroups(ctx context.Context, request GetClusterResourceGroupsRequestObject) (GetClusterResourceGroupsResponseObject, error)
+	// GetClusterResourceGroup Get a cluster resource group
+	// (GET /O2ims_infrastructureCluster/v1/clusterResourceGroups/{clusterResourceGroupId})
+	GetClusterResourceGroup(ctx context.Context, request GetClusterResourceGroupRequestObject) (GetClusterResourceGroupResponseObject, error)
 	// GetClusterResourceTypes Get cluster resource types
 	// (GET /O2ims_infrastructureCluster/v1/clusterResourceTypes)
 	GetClusterResourceTypes(ctx context.Context, request GetClusterResourceTypesRequestObject) (GetClusterResourceTypesResponseObject, error)
@@ -3251,6 +3646,58 @@ func (sh *strictHandler) GetMinorVersions(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetMinorVersionsResponseObject); ok {
 		if err := validResponse.VisitGetMinorVersionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetClusterResourceGroups operation middleware
+func (sh *strictHandler) GetClusterResourceGroups(w http.ResponseWriter, r *http.Request, params GetClusterResourceGroupsParams) {
+	var request GetClusterResourceGroupsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetClusterResourceGroups(ctx, request.(GetClusterResourceGroupsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetClusterResourceGroups")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetClusterResourceGroupsResponseObject); ok {
+		if err := validResponse.VisitGetClusterResourceGroupsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetClusterResourceGroup operation middleware
+func (sh *strictHandler) GetClusterResourceGroup(w http.ResponseWriter, r *http.Request, clusterResourceGroupId ClusterResourceGroupId) {
+	var request GetClusterResourceGroupRequestObject
+
+	request.ClusterResourceGroupId = clusterResourceGroupId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetClusterResourceGroup(ctx, request.(GetClusterResourceGroupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetClusterResourceGroup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetClusterResourceGroupResponseObject); ok {
+		if err := validResponse.VisitGetClusterResourceGroupResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -3606,101 +4053,104 @@ func (sh *strictHandler) GetSubscription(w http.ResponseWriter, r *http.Request,
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"/w8AAP//",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

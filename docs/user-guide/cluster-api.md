@@ -20,6 +20,7 @@ All cluster API endpoints use the base path
 - [Node Clusters](#node-clusters)
 - [Node Cluster Types](#node-cluster-types)
 - [Cluster Resources](#cluster-resources)
+- [Cluster Resource Groups](#cluster-resource-groups)
 - [Cluster Resource Types](#cluster-resource-types)
 - [Subscriptions](#subscriptions)
 - [Alarm Dictionaries](#alarm-dictionaries)
@@ -126,6 +127,34 @@ curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
 ```bash
 curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
   "https://${API_URI}/O2ims_infrastructureCluster/v1/clusterResources/{clusterResourceId}" | jq
+```
+
+## Cluster Resource Groups
+
+A cluster resource group represents a named provisioning `nodeGroups` entry
+within one node cluster, so a cluster can have one master group and multiple
+worker groups. A group lists its members in `clusterResources` and exists only
+while it has at least one member. Its `extensions` carry `nodeClusterId` and
+`nodeClusterName`, and the node cluster lists its group UUIDs in
+`clusterResourceGroups`.
+
+> [!NOTE]
+> Groups are built from cluster resources, so clusters without cluster
+> resources, such as IBI-provisioned clusters, have no groups. See the note
+> under [Cluster Resources](#cluster-resources).
+
+### List Cluster Resource Groups
+
+```bash
+curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
+  "https://${API_URI}/O2ims_infrastructureCluster/v1/clusterResourceGroups" | jq
+```
+
+### Get a Specific Cluster Resource Group
+
+```bash
+curl -ks -H "Authorization: Bearer ${MY_TOKEN}" \
+  "https://${API_URI}/O2ims_infrastructureCluster/v1/clusterResourceGroups/{clusterResourceGroupId}" | jq
 ```
 
 ## Cluster Resource Types

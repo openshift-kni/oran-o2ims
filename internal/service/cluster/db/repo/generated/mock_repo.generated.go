@@ -206,6 +206,36 @@ func (mr *MockRepositoryInterfaceMockRecorder) GetClusterResource(arg0, arg1 any
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterResource", reflect.TypeOf((*MockRepositoryInterface)(nil).GetClusterResource), arg0, arg1)
 }
 
+// GetClusterResourceGroup mocks base method.
+func (m *MockRepositoryInterface) GetClusterResourceGroup(arg0 context.Context, arg1 uuid.UUID) (*models.ClusterResourceGroup, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetClusterResourceGroup", arg0, arg1)
+	ret0, _ := ret[0].(*models.ClusterResourceGroup)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetClusterResourceGroup indicates an expected call of GetClusterResourceGroup.
+func (mr *MockRepositoryInterfaceMockRecorder) GetClusterResourceGroup(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterResourceGroup", reflect.TypeOf((*MockRepositoryInterface)(nil).GetClusterResourceGroup), arg0, arg1)
+}
+
+// GetClusterResourceGroups mocks base method.
+func (m *MockRepositoryInterface) GetClusterResourceGroups(arg0 context.Context) ([]models.ClusterResourceGroup, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetClusterResourceGroups", arg0)
+	ret0, _ := ret[0].([]models.ClusterResourceGroup)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetClusterResourceGroups indicates an expected call of GetClusterResourceGroups.
+func (mr *MockRepositoryInterfaceMockRecorder) GetClusterResourceGroups(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterResourceGroups", reflect.TypeOf((*MockRepositoryInterface)(nil).GetClusterResourceGroups), arg0)
+}
+
 // GetClusterResourceType mocks base method.
 func (m *MockRepositoryInterface) GetClusterResourceType(arg0 context.Context, arg1 uuid.UUID) (*models.ClusterResourceType, error) {
 	m.ctrl.T.Helper()

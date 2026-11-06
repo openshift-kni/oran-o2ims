@@ -61,8 +61,10 @@ Test Suites:
 package controllers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -1994,6 +1996,105 @@ var _ = Describe("addPostProvisioningLabels", func() {
 		BeforeEach(func() {
 			// Create the NodeAllocationRequest.
 			Expect(c.Create(ctx, nodeAllocationRequest)).To(Succeed())
+		})
+
+		It("sets arbitrary annotations, including empty values", func() {
+			Expect(ProvReqTask.setAnnotationValue(ctx, managedCluster, "example.com/keep", "value")).To(Succeed())
+			Expect(ProvReqTask.setAnnotationValue(ctx, managedCluster, "example.com/empty", "")).To(Succeed())
+			Expect(ProvReqTask.setAnnotationValue(ctx, managedCluster, "example.com/keep", "value")).To(Succeed())
+			updated := &clusterv1.ManagedCluster{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: mclName}, updated)).To(Succeed())
+			Expect(updated.Annotations).To(HaveKeyWithValue("example.com/empty", ""))
+			Expect(updated.Annotations).To(HaveKeyWithValue("example.com/keep", "value"))
+		})
+
+		It("uses the matched AllocatedNode group even when its BMH is unavailable", func() {
+			hostname := "worker-1.example.com"
+			ProvReqTask.clusterInput = &clusterInput{hostToGroupName: map[string]string{hostname: "input-group"}}
+			ProvReqTask.object.Status.Extensions.AllocatedNodeHostMap = map[string]string{"allocated-1": hostname}
+			agent := &assistedservicev1beta1.Agent{
+				ObjectMeta: metav1.ObjectMeta{Name: AgentName, Namespace: mclName, Labels: map[string]string{
+					"agent-install.openshift.io/clusterdeployment-namespace": mclName,
+				}},
+				Spec: assistedservicev1beta1.AgentSpec{Hostname: hostname},
+			}
+			node := &hwmgmtv1alpha1.AllocatedNode{
+				ObjectMeta: metav1.ObjectMeta{Name: "allocated-1", Namespace: constants.DefaultNamespace},
+				Spec:       hwmgmtv1alpha1.AllocatedNodeSpec{NodeAllocationRequest: mclName, GroupName: "allocated-group"},
+			}
+			Expect(c.Create(ctx, agent)).To(Succeed())
+			Expect(c.Create(ctx, node)).To(Succeed())
+			Expect(ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)).To(Succeed())
+			Expect(c.Get(ctx, types.NamespacedName{Name: AgentName, Namespace: mclName}, agent)).To(Succeed())
+			Expect(agent.Annotations[utils.NodeGroupAnnotation]).To(Equal("allocated-group"))
+			Expect(agent.Labels).ToNot(HaveKey(utils.HardwareManagerNodeIdLabel))
+		})
+
+		It("records and updates the allocated node group on its Agent", func() {
+			hostname := "worker-1.example.com"
+			ProvReqTask.object.Status.Extensions.AllocatedNodeHostMap = map[string]string{"allocated-1": hostname}
+			agent := &assistedservicev1beta1.Agent{
+				ObjectMeta: metav1.ObjectMeta{Name: AgentName, Namespace: mclName, Labels: map[string]string{
+					"agent-install.openshift.io/clusterdeployment-namespace": mclName,
+				}},
+				Spec: assistedservicev1beta1.AgentSpec{Hostname: hostname},
+			}
+			node := &hwmgmtv1alpha1.AllocatedNode{
+				ObjectMeta: metav1.ObjectMeta{Name: "allocated-1", Namespace: constants.DefaultNamespace},
+				Spec:       hwmgmtv1alpha1.AllocatedNodeSpec{NodeAllocationRequest: mclName, GroupName: "worker-east"},
+			}
+			Expect(c.Create(ctx, agent)).To(Succeed())
+			Expect(c.Create(ctx, node)).To(Succeed())
+			Expect(ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)).To(Succeed())
+			Expect(c.Get(ctx, types.NamespacedName{Name: AgentName, Namespace: mclName}, agent)).To(Succeed())
+			Expect(agent.Annotations[utils.NodeGroupAnnotation]).To(Equal("worker-east"))
+			node.Spec.GroupName = "worker-west"
+			Expect(c.Update(ctx, node)).To(Succeed())
+			Expect(ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)).To(Succeed())
+			Expect(c.Get(ctx, types.NamespacedName{Name: AgentName, Namespace: mclName}, agent)).To(Succeed())
+			Expect(agent.Annotations[utils.NodeGroupAnnotation]).To(Equal("worker-west"))
+		})
+
+		It("preserves the group annotation and warns when no AllocatedNode matches", func() {
+			hostname := "worker-1.example.com"
+			ProvReqTask.clusterInput = &clusterInput{hostToGroupName: map[string]string{hostname: "input-group"}}
+			var logs bytes.Buffer
+			ProvReqTask.logger = slog.New(slog.NewTextHandler(&logs, nil))
+			agent := &assistedservicev1beta1.Agent{
+				ObjectMeta: metav1.ObjectMeta{Name: AgentName, Namespace: mclName,
+					Labels:      map[string]string{"agent-install.openshift.io/clusterdeployment-namespace": mclName},
+					Annotations: map[string]string{utils.NodeGroupAnnotation: "existing-group"}},
+				Spec: assistedservicev1beta1.AgentSpec{Hostname: hostname},
+			}
+			Expect(c.Create(ctx, agent)).To(Succeed())
+			Expect(ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)).To(Succeed())
+			Expect(c.Get(ctx, types.NamespacedName{Name: AgentName, Namespace: mclName}, agent)).To(Succeed())
+			Expect(agent.Annotations).To(HaveKeyWithValue(utils.NodeGroupAnnotation, "existing-group"))
+			Expect(logs.String()).To(ContainSubstring("The corresponding AllocatedNode not found for Agent"))
+		})
+
+		It("preserves the group annotation and warns when the matched AllocatedNode has no group", func() {
+			hostname := "worker-1.example.com"
+			ProvReqTask.clusterInput = &clusterInput{hostToGroupName: map[string]string{hostname: "input-group"}}
+			ProvReqTask.object.Status.Extensions.AllocatedNodeHostMap = map[string]string{"allocated-1": hostname}
+			var logs bytes.Buffer
+			ProvReqTask.logger = slog.New(slog.NewTextHandler(&logs, nil))
+			agent := &assistedservicev1beta1.Agent{
+				ObjectMeta: metav1.ObjectMeta{Name: AgentName, Namespace: mclName,
+					Labels:      map[string]string{"agent-install.openshift.io/clusterdeployment-namespace": mclName},
+					Annotations: map[string]string{utils.NodeGroupAnnotation: "existing-group"}},
+				Spec: assistedservicev1beta1.AgentSpec{Hostname: hostname},
+			}
+			node := &hwmgmtv1alpha1.AllocatedNode{
+				ObjectMeta: metav1.ObjectMeta{Name: "allocated-1", Namespace: constants.DefaultNamespace},
+				Spec:       hwmgmtv1alpha1.AllocatedNodeSpec{NodeAllocationRequest: mclName},
+			}
+			Expect(c.Create(ctx, agent)).To(Succeed())
+			Expect(c.Create(ctx, node)).To(Succeed())
+			Expect(ProvReqTask.addPostProvisioningLabels(ctx, managedCluster)).To(Succeed())
+			Expect(c.Get(ctx, types.NamespacedName{Name: AgentName, Namespace: mclName}, agent)).To(Succeed())
+			Expect(agent.Annotations).To(HaveKeyWithValue(utils.NodeGroupAnnotation, "existing-group"))
+			Expect(logs.String()).To(ContainSubstring("AllocatedNode has no group name"))
 		})
 
 		It("Updates Agent and ManagedCluster labels as expected", func() {
