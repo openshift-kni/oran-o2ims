@@ -41,7 +41,12 @@ import (
 )
 
 const (
-	redfishInventoryTimeout = 30 * time.Second
+	// redfishInventoryTimeout bounds a single host's full GPU discovery, which
+	// walks the PCIe device and function tree one resource at a time. GET
+	// responses are memoized per collection (see redfishSession.getCache), so a
+	// host's resources are each fetched once; this budget is headroom for hosts
+	// with large PCIe trees, not a crutch for re-reading the same resources.
+	redfishInventoryTimeout = 60 * time.Second
 	redfishRequestTimeout   = 5 * time.Second
 	redfishMaxResponseBytes = 4 << 20
 	// redfishWorkerCount is the number of hosts whose GPU inventory can be
@@ -332,7 +337,15 @@ func (d *HardwareDataSource) getGPUInventory(
 		return nil
 	}
 	if err != nil {
-		slog.WarnContext(ctx, "failed to collect GPU inventory", slog.Any("error", err))
+		// "unavailable" means the top-level Redfish read failed (auth, TLS, a
+		// mis-parsed BMC address, an HTTP error, or a timeout) — not that the
+		// host is powered off, since the BMC answers Redfish on standby power.
+		// Log the host and BMC address so the failure is attributable.
+		slog.WarnContext(ctx, "failed to collect GPU inventory",
+			slog.String("bmhName", bmh.Name),
+			slog.String("bmhNamespace", bmh.Namespace),
+			slog.String("bmcAddress", bmh.Spec.BMC.Address),
+			slog.Any("error", err))
 		inventory = &hwmgrcontroller.GPUInventory{Status: gpuInventoryStatusUnavailable}
 	} else if inventory == nil {
 		inventory = &hwmgrcontroller.GPUInventory{Status: gpuInventoryStatusUnavailable}
@@ -569,9 +582,15 @@ func (c *redfishGPUInventoryClient) GetGPUInventory(
 	}, &secret); err != nil {
 		return nil, fmt.Errorf("failed to read BMC credentials Secret: %w", err)
 	}
-	username, usernameOK := secret.Data["username"]
-	password, passwordOK := secret.Data["password"]
-	if !usernameOK || !passwordOK || len(username) == 0 || len(password) == 0 {
+	usernameBytes, usernameOK := secret.Data["username"]
+	passwordBytes, passwordOK := secret.Data["password"]
+	// Trim surrounding whitespace: BMC credential Secrets are frequently created
+	// with a trailing newline (e.g. `echo pass | base64`), which the BMC rejects
+	// with HTTP 401. Other Metal3 consumers of the same Secret tolerate this, so
+	// trim here too rather than failing GPU collection on a stray newline.
+	username := strings.TrimSpace(string(usernameBytes))
+	password := strings.TrimSpace(string(passwordBytes))
+	if !usernameOK || !passwordOK || username == "" || password == "" {
 		return nil, errors.New("bmc credentials secret must contain username and password")
 	}
 
@@ -586,9 +605,10 @@ func (c *redfishGPUInventoryClient) GetGPUInventory(
 	}
 	session := redfishSession{
 		serviceRoot: serviceRoot,
-		username:    string(username),
-		password:    string(password),
+		username:    username,
+		password:    password,
 		client:      httpClient,
+		getCache:    make(map[string][]byte),
 	}
 
 	return session.discoverGPUInventory(ctx, systemPath)
@@ -599,6 +619,14 @@ type redfishSession struct {
 	username    string
 	password    string
 	client      *http.Client
+	// getCache memoizes successful GET response bodies by resolved URL for the
+	// duration of one collection. A host exposes the same PCIe devices and
+	// functions through several views (system PCIeFunctions, system PCIeDevices,
+	// and the Chassis tree), so without this the collector would fetch each
+	// resource several times and a large PCIe tree can exhaust the inventory
+	// budget. Reads within a single collection are sequential, so no locking is
+	// needed.
+	getCache map[string][]byte
 }
 
 type redfishLink struct {
@@ -772,6 +800,7 @@ func (s *redfishSession) discoverGPUInventory(ctx context.Context, directSystemP
 		var err error
 		systems, err = s.list(ctx, root.Systems.ODataID)
 		if err != nil {
+			s.logPartialRead(ctx, root.Systems.ODataID, err)
 			partial = true
 		} else {
 			systemsComplete = true
@@ -861,6 +890,16 @@ func (s *redfishSession) serviceHasSingleSystem(ctx context.Context, root redfis
 	return len(collection.Members) == 1
 }
 
+// logPartialRead records the specific Redfish read that forced a partial GPU
+// inventory, so the cause is visible in logs instead of only the aggregate
+// "partial" status.
+func (s *redfishSession) logPartialRead(ctx context.Context, link string, err error) {
+	slog.WarnContext(ctx, "GPU inventory incomplete: Redfish read failed",
+		slog.String("link", link),
+		slog.String("serviceRoot", s.serviceRoot.String()),
+		slog.Any("error", err))
+}
+
 func (s *redfishSession) discoverProcessorGPUs(
 	ctx context.Context,
 	systems []redfishObject,
@@ -875,7 +914,8 @@ func (s *redfishSession) discoverProcessorGPUs(
 		}
 		endpointFound = true
 		processors, err := s.listProcessorGPUs(ctx, system.Processors.ODataID)
-		if err != nil {
+		if err != nil && !errors.Is(err, errRedfishNotFound) {
+			s.logPartialRead(ctx, system.Processors.ODataID, err)
 			partial = true
 		}
 		for _, processor := range processors {
@@ -896,7 +936,8 @@ func (s *redfishSession) discoverSystemGPUs(ctx context.Context, system redfishO
 	if system.GraphicsControllers.ODataID != "" {
 		endpointFound = true
 		graphics, err := s.list(ctx, system.GraphicsControllers.ODataID)
-		if err != nil {
+		if err != nil && !errors.Is(err, errRedfishNotFound) {
+			s.logPartialRead(ctx, system.GraphicsControllers.ODataID, err)
 			partial = true
 		}
 		for _, graphicsController := range graphics {
@@ -916,7 +957,10 @@ func (s *redfishSession) discoverSystemGPUs(ctx context.Context, system redfishO
 			if function.Links.PCIeDevice.ODataID != "" {
 				var device redfishObject
 				if err := s.get(ctx, function.Links.PCIeDevice.ODataID, &device); err != nil {
-					partial = true
+					if !errors.Is(err, errRedfishNotFound) {
+						s.logPartialRead(ctx, function.Links.PCIeDevice.ODataID, err)
+						partial = true
+					}
 				} else {
 					gpu = gpuInfoFromPCIeDevice(device, function)
 				}
@@ -1038,10 +1082,12 @@ func (s *redfishSession) discoverPCIeDevices(ctx context.Context, list redfishLi
 	pcieDevices, partial := s.resolveLinkList(ctx, list)
 	devices := make([]hwmgrcontroller.GPUInfo, 0)
 	for _, device := range pcieDevices {
+		// A device that is Absent, or present but exposes no PCIeFunctions link,
+		// contributes no GPU data. A missing functions link is not a partial read
+		// (an actual fetch error is flagged by resolveLinkList below); many BMCs
+		// list present devices with no functions subtree, so skip them without
+		// marking the inventory partial.
 		if strings.EqualFold(device.Status.State, "Absent") || device.PCIeFunctions.isEmpty() {
-			if device.PCIeFunctions.isEmpty() && !strings.EqualFold(device.Status.State, "Absent") {
-				partial = true
-			}
 			continue
 		}
 		functions, funcPartial := s.resolveLinkList(ctx, device.PCIeFunctions)
@@ -1069,7 +1115,13 @@ func (s *redfishSession) resolveLinkList(ctx context.Context, list redfishLinkLi
 			}
 			var object redfishObject
 			if err := s.get(ctx, link.ODataID, &object); err != nil {
-				partial = true
+				// A 404 means the referenced device is genuinely absent (the BMC
+				// advertised a link it no longer serves); skip it without marking
+				// the result partial. Other errors are transient read failures.
+				if !errors.Is(err, errRedfishNotFound) {
+					s.logPartialRead(ctx, link.ODataID, err)
+					partial = true
+				}
 				continue
 			}
 			objects = append(objects, object)
@@ -1078,7 +1130,14 @@ func (s *redfishSession) resolveLinkList(ctx context.Context, list redfishLinkLi
 	}
 	if list.collection.ODataID != "" {
 		objects, err := s.list(ctx, list.collection.ODataID)
-		return objects, err != nil
+		// An advertised collection that returns 404 is absent, not a partial
+		// read (some Dell iDRAC systems advertise a System PCIeDevices link that
+		// 404s while the real devices live under Chassis).
+		if err != nil && !errors.Is(err, errRedfishNotFound) {
+			s.logPartialRead(ctx, list.collection.ODataID, err)
+			return objects, true
+		}
+		return objects, false
 	}
 	return nil, false
 }
@@ -1145,6 +1204,7 @@ func (s *redfishSession) listWithQuery(ctx context.Context, link string, query u
 			if firstPage {
 				return objects, err
 			}
+			s.logPartialRead(ctx, nextPage, err)
 			partial = true
 			break
 		}
@@ -1165,6 +1225,7 @@ func (s *redfishSession) listWithQuery(ctx context.Context, link string, query u
 				if ctx.Err() != nil {
 					return objects, err
 				}
+				s.logPartialRead(ctx, member.ODataID, err)
 				partial = true
 				continue
 			}
@@ -1193,7 +1254,14 @@ func (s *redfishSession) get(ctx context.Context, link string, result any) error
 	if target.User != nil || !strings.EqualFold(target.Scheme, s.serviceRoot.Scheme) || !strings.EqualFold(target.Host, s.serviceRoot.Host) {
 		return fmt.Errorf("redfish link points outside the configured BMC origin")
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target.String(), nil)
+	cacheKey := target.String()
+	if cached, ok := s.getCache[cacheKey]; ok {
+		if err := json.Unmarshal(cached, result); err != nil {
+			return fmt.Errorf("failed to decode cached Redfish response: %w", err)
+		}
+		return nil
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, cacheKey, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create Redfish request: %w", err)
 	}
@@ -1219,6 +1287,9 @@ func (s *redfishSession) get(ctx context.Context, link string, result any) error
 	}
 	if err := json.Unmarshal(body, result); err != nil {
 		return fmt.Errorf("failed to decode Redfish response: %w", err)
+	}
+	if s.getCache != nil {
+		s.getCache[cacheKey] = body
 	}
 	return nil
 }

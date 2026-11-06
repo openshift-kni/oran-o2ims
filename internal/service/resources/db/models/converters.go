@@ -152,11 +152,50 @@ func ResourcePoolToModel(record *ResourcePool, options *commonapi.FieldOptions) 
 	return object
 }
 
+// GPUInventoryFingerprintExtension is the resource extension key under which the
+// collector stores a hash of the BMC identity that produced the persisted GPU
+// inventory. It is internal bookkeeping used only to validate the cached
+// inventory on rebuild, so it is persisted on the record but stripped from the
+// O2 IMS API representation.
+const GPUInventoryFingerprintExtension = "gpuInventoryFingerprint"
+
+// internalResourceExtensionKeys lists resource extension entries that are
+// persisted for internal use but must not be exposed through the O2 IMS API.
+var internalResourceExtensionKeys = []string{GPUInventoryFingerprintExtension}
+
+// apiResourceExtensions returns the extensions to expose through the API with
+// internal-only keys removed. The stored record is left untouched: a copy is
+// made only when an internal key is actually present, so the common case keeps
+// sharing the original map.
+func apiResourceExtensions(extensions map[string]interface{}) map[string]interface{} {
+	if extensions == nil {
+		return nil
+	}
+	hasInternal := false
+	for _, key := range internalResourceExtensionKeys {
+		if _, ok := extensions[key]; ok {
+			hasInternal = true
+			break
+		}
+	}
+	if !hasInternal {
+		return extensions
+	}
+	filtered := make(map[string]interface{}, len(extensions))
+	for key, value := range extensions {
+		filtered[key] = value
+	}
+	for _, key := range internalResourceExtensionKeys {
+		delete(filtered, key)
+	}
+	return filtered
+}
+
 // ResourceToModel converts a DB tuple to an API model
 func ResourceToModel(record *Resource, elements []Resource) generated.Resource {
 	object := generated.Resource{
 		Description:    record.Description,
-		Extensions:     record.Extensions,
+		Extensions:     apiResourceExtensions(record.Extensions),
 		ResourceId:     record.ResourceID,
 		ResourcePoolId: record.ResourcePoolID,
 		ResourceTypeId: record.ResourceTypeID,

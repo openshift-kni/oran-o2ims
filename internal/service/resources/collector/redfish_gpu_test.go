@@ -132,6 +132,83 @@ var _ = Describe("Redfish GPU inventory", func() {
 		Expect(inventory.Devices[0].PCIAddress).To(Equal("0000:01:00.0"))
 	})
 
+	It("trims trailing whitespace from BMC credentials before authenticating", func() {
+		// A Secret created with `echo pass | base64` stores a trailing newline;
+		// the BMC rejects it with 401. The collector must trim it, matching what
+		// the rest of the Metal3 stack tolerates for the same Secret.
+		scheme := runtime.NewScheme()
+		Expect(corev1.AddToScheme(scheme)).To(Succeed())
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "bmc-secret-nl", Namespace: testNamespace},
+			Data:       map[string][]byte{"username": []byte("reader\n"), "password": []byte("secret\n")},
+		}
+		hubClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(secret).Build()
+		nlReader := newRedfishGPUInventoryClient(hubClient)
+
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if u, p, ok := r.BasicAuth(); !ok || u != "reader" || p != "secret" {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/redfish/v1/":
+				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"}}`))
+			case "/redfish/v1/Systems/1":
+				_, _ = w.Write([]byte(`{"Id":"1"}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		nlReader.httpClient = redfishTestHTTPClient(handler)
+		bmh.Spec.BMC.CredentialsName = "bmc-secret-nl"
+		bmh.Spec.BMC.Address = "redfish+https://bmc.example/redfish/v1/Systems/1"
+
+		// Without trimming, Basic auth would send "secret\n" and the handler would
+		// 401, surfacing as a system-read error.
+		inventory, err := nlReader.GetGPUInventory(ctx, bmh)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(inventory).ToNot(BeNil())
+	})
+
+	It("treats an advertised-but-404 system PCIe collection as absent, not partial", func() {
+		// Some Dell iDRAC systems advertise a System PCIeDevices link that 404s
+		// while the real devices live under Chassis. The 404 must not poison the
+		// status to "partial" when chassis discovery succeeds.
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/redfish/v1/":
+				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"},"Chassis":{"@odata.id":"/redfish/v1/Chassis"}}`))
+			case "/redfish/v1/Systems/System.Embedded.1":
+				_, _ = w.Write([]byte(`{"Id":"System.Embedded.1","PCIeDevices":{"@odata.id":"/redfish/v1/Systems/System.Embedded.1/PCIeDevices"},"Links":{"Chassis":[{"@odata.id":"/redfish/v1/Chassis/System.Embedded.1"}]}}`))
+			case "/redfish/v1/Systems/System.Embedded.1/PCIeDevices":
+				// The quirk: advertised on the system but not actually served.
+				http.NotFound(w, r)
+			case "/redfish/v1/Chassis/System.Embedded.1":
+				_, _ = w.Write([]byte(`{"Id":"System.Embedded.1","PCIeDevices":{"@odata.id":"/redfish/v1/Chassis/System.Embedded.1/PCIeDevices"}}`))
+			case "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices":
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-181-0"}]}`))
+			case "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-181-0":
+				_, _ = w.Write([]byte(`{"Id":"0-181-0","Manufacturer":"Matrox Electronics Systems Ltd.","PCIeFunctions":{"@odata.id":"/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-181-0/PCIeFunctions"},"Status":{"State":"Enabled","Health":"OK"}}`))
+			case "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-181-0/PCIeFunctions":
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-181-0/PCIeFunctions/0"}]}`))
+			case "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-181-0/PCIeFunctions/0":
+				_, _ = w.Write([]byte(`{"DeviceClass":"DisplayController","BusNumber":"0xb5","DeviceNumber":"0x00","FunctionNumber":"0x0","SegmentNumber":"0x0"}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		reader.httpClient = redfishTestHTTPClient(handler)
+		bmh.Spec.BMC.Address = "idrac-virtualmedia+https://bmc.example/redfish/v1/Systems/System.Embedded.1"
+
+		inventory, err := reader.GetGPUInventory(ctx, bmh)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(inventory.Status).To(Equal(gpuInventoryStatusComplete))
+		Expect(inventory.Devices).To(HaveLen(1))
+		Expect(inventory.Devices[0].Manufacturer).To(Equal("Matrox Electronics Systems Ltd."))
+	})
+
 	It("discovers GPUs through the system-level PCIe functions collection", func() {
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
@@ -671,6 +748,81 @@ var _ = Describe("Redfish GPU inventory", func() {
 		Expect(inventory.Status).To(Equal(gpuInventoryStatusPartial))
 		Expect(inventory.Devices).To(HaveLen(1))
 		Expect(inventory.Devices[0].Model).To(Equal("H100"))
+	})
+
+	It("does not report partial when a present PCIe device exposes no functions", func() {
+		// Dells list present PCIe devices (e.g. the embedded video controller)
+		// with no PCIeFunctions subtree. That is not a partial read, so the
+		// overall status must stay complete when the real GPU is read.
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/redfish/v1/":
+				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"}}`))
+			case "/redfish/v1/Systems/1":
+				_, _ = w.Write([]byte(`{"Id":"1","PCIeDevices":{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices"}}`))
+			case "/redfish/v1/Systems/1/PCIeDevices":
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU1"},{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/NoFuncs"}]}`))
+			case "/redfish/v1/Systems/1/PCIeDevices/GPU1":
+				_, _ = w.Write([]byte(`{"Id":"GPU1","Manufacturer":"NVIDIA","Model":"H100","PCIeFunctions":{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU1/PCIeFunctions"},"Status":{"State":"Enabled","Health":"OK"}}`))
+			case "/redfish/v1/Systems/1/PCIeDevices/GPU1/PCIeFunctions":
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU1/PCIeFunctions/0"}]}`))
+			case "/redfish/v1/Systems/1/PCIeDevices/GPU1/PCIeFunctions/0":
+				_, _ = w.Write([]byte(`{"DeviceClass":"ProcessingAccelerators","BusNumber":"0x01","DeviceNumber":"0x00","FunctionNumber":"0x0","SegmentNumber":"0x0"}`))
+			case "/redfish/v1/Systems/1/PCIeDevices/NoFuncs":
+				// Present, but no PCIeFunctions link at all.
+				_, _ = w.Write([]byte(`{"Id":"NoFuncs","Status":{"State":"Enabled","Health":"OK"}}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		reader.httpClient = redfishTestHTTPClient(handler)
+		bmh.Spec.BMC.Address = "redfish+https://bmc.example/redfish/v1/Systems/1"
+
+		inventory, err := reader.GetGPUInventory(ctx, bmh)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(inventory.Status).To(Equal(gpuInventoryStatusComplete))
+		Expect(inventory.Devices).To(HaveLen(1))
+		Expect(inventory.Devices[0].Model).To(Equal("H100"))
+	})
+
+	It("fetches each Redfish resource once across overlapping PCIe views", func() {
+		// The same GPU is referenced by the system PCIeFunctions array, the system
+		// PCIeDevices array, and the Chassis PCIe tree. Without per-collection
+		// memoization each resource would be fetched multiple times, which is what
+		// exhausts the inventory budget on hosts with large PCIe trees.
+		counts := map[string]int{}
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			counts[r.URL.Path]++
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/redfish/v1/":
+				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"}}`))
+			case "/redfish/v1/Systems/1":
+				_, _ = w.Write([]byte(`{"Id":"1","PCIeFunctions":[{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/GPU1/PCIeFunctions/0"}],"PCIeDevices":[{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/GPU1"}],"Links":{"Chassis":[{"@odata.id":"/redfish/v1/Chassis/1"}]}}`))
+			case "/redfish/v1/Chassis/1":
+				_, _ = w.Write([]byte(`{"Id":"1","PCIeDevices":{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices"}}`))
+			case "/redfish/v1/Chassis/1/PCIeDevices":
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/GPU1"}]}`))
+			case "/redfish/v1/Chassis/1/PCIeDevices/GPU1":
+				_, _ = w.Write([]byte(`{"Id":"GPU1","Manufacturer":"NVIDIA","Model":"H100","PCIeFunctions":{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/GPU1/PCIeFunctions"},"Status":{"State":"Enabled","Health":"OK"}}`))
+			case "/redfish/v1/Chassis/1/PCIeDevices/GPU1/PCIeFunctions":
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/GPU1/PCIeFunctions/0"}]}`))
+			case "/redfish/v1/Chassis/1/PCIeDevices/GPU1/PCIeFunctions/0":
+				_, _ = w.Write([]byte(`{"DeviceClass":"ProcessingAccelerators","BusNumber":"0x01","DeviceNumber":"0x00","FunctionNumber":"0x0","SegmentNumber":"0x0"}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		reader.httpClient = redfishTestHTTPClient(handler)
+		bmh.Spec.BMC.Address = "redfish+https://bmc.example/redfish/v1/Systems/1"
+
+		inventory, err := reader.GetGPUInventory(ctx, bmh)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(inventory.Status).To(Equal(gpuInventoryStatusComplete))
+		Expect(inventory.Devices).To(HaveLen(1))
+		Expect(counts["/redfish/v1/Chassis/1/PCIeDevices/GPU1"]).To(Equal(1))
+		Expect(counts["/redfish/v1/Chassis/1/PCIeDevices/GPU1/PCIeFunctions/0"]).To(Equal(1))
 	})
 
 	It("reports a successful empty inventory when no GPU-class functions are present", func() {

@@ -92,8 +92,11 @@ const (
 	// gpuInventoryFingerprintExtension stores a hash of the BMC identity
 	// (address + credentials name) that produced the persisted GPU inventory,
 	// so a later rebuild can detect when the BMH has been repointed at a
-	// different BMC and must re-query instead of reusing stale inventory.
-	gpuInventoryFingerprintExtension = "gpuInventoryFingerprint"
+	// different BMC and must re-query instead of reusing stale inventory. It is
+	// internal bookkeeping and is stripped from the API representation in
+	// models.ResourceToModel; the canonical key lives in the models package so
+	// the two cannot drift.
+	gpuInventoryFingerprintExtension = models.GPUInventoryFingerprintExtension
 	gpuInventoryStatusPending        = "pending"
 )
 
