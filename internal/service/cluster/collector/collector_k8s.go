@@ -220,13 +220,18 @@ func (d *K8SDataSource) convertAgentToClusterResource(agent *v1beta1.Agent) (mod
 		// TODO: add more info for disks, nics, etc...
 	}
 
+	var nodeClusterName string
+	if agent.Spec.ClusterDeploymentName != nil {
+		nodeClusterName = agent.Spec.ClusterDeploymentName.Name
+	}
+
 	// NodeClusterID is filled in by the caller since it has to convert the cluster name to an id.
 	to := models.ClusterResource{
 		ClusterResourceID:     resourceID,
 		ClusterResourceTypeID: resourceTypeID,
 		Name:                  agent.Spec.Hostname,
 		Description:           agent.Spec.Hostname,
-		NodeClusterName:       agent.Spec.ClusterDeploymentName.Name,
+		NodeClusterName:       nodeClusterName,
 		Extensions:            &extensions,
 		ResourceID:            d.getInventoryResourceID(agent),
 		ExternalID:            name,

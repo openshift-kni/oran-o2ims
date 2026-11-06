@@ -231,6 +231,20 @@ var _ = Describe("K8S Collector", func() {
 			}))
 		})
 
+		It("converts an Agent that has no cluster reference without a cluster or group", func() {
+			agent.Spec.ClusterDeploymentName = nil
+
+			result, err := dataSource.convertAgentToClusterResource(agent)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.NodeClusterName).To(BeEmpty())
+			Expect(result.ClusterResourceGroupID).To(Equal(uuid.Nil))
+			Expect(result.ClusterResourceGroupName).To(BeEmpty())
+			// The rest of the resource is still converted.
+			Expect(result.Name).To(Equal("node-1.example.com"))
+			Expect(result.ClusterResourceID).To(Equal(
+				ctlrutils.MakeUUIDFromNames(ClusterResourceUUIDNamespace, dataSource.cloudID, "cluster-a/node-1")))
+		})
+
 		Describe("inventory identifiers", func() {
 			It("leaves the resource ID empty when the hardware manager node label is missing", func() {
 				delete(agent.Labels, ctlrutils.HardwareManagerNodeIdLabel)

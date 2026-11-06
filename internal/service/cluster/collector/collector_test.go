@@ -18,6 +18,84 @@ import (
 )
 
 var _ = Describe("Collector", func() {
+	Describe("groupMembershipChanged", func() {
+		var (
+			clusterID uuid.UUID
+			groupID   uuid.UUID
+			previous  *models.ClusterResource
+			current   models.ClusterResource
+		)
+
+		BeforeEach(func() {
+			clusterID = uuid.New()
+			groupID = uuid.New()
+			previous = &models.ClusterResource{
+				NodeClusterID:            &clusterID,
+				ClusterResourceGroupID:   groupID,
+				ClusterResourceGroupName: "worker",
+			}
+			current = models.ClusterResource{
+				NodeClusterID:            &clusterID,
+				ClusterResourceGroupID:   groupID,
+				ClusterResourceGroupName: "worker",
+			}
+		})
+
+		It("reports no change when the cluster and group are the same", func() {
+			Expect(groupMembershipChanged(previous, current)).To(BeFalse())
+		})
+
+		It("reports no change when only other details of the resource changed", func() {
+			previous.Description = "old"
+			previous.GenerationID = 1
+			current.Description = "new"
+			current.GenerationID = 2
+			Expect(groupMembershipChanged(previous, current)).To(BeFalse())
+		})
+
+		It("reports no change for a resource that is not in any group", func() {
+			previous.ClusterResourceGroupID, previous.ClusterResourceGroupName = uuid.Nil, ""
+			current.ClusterResourceGroupID, current.ClusterResourceGroupName = uuid.Nil, ""
+			Expect(groupMembershipChanged(previous, current)).To(BeFalse())
+		})
+
+		It("reports a change for a resource that was not stored before", func() {
+			Expect(groupMembershipChanged(nil, current)).To(BeTrue())
+		})
+
+		It("reports a change when the stored resource was not linked to a cluster", func() {
+			previous.NodeClusterID = nil
+			Expect(groupMembershipChanged(previous, current)).To(BeTrue())
+		})
+
+		It("reports a change when the resource is not linked to a cluster", func() {
+			current.NodeClusterID = nil
+			Expect(groupMembershipChanged(previous, current)).To(BeTrue())
+		})
+
+		It("reports a change when the resource moved to another cluster", func() {
+			otherCluster := uuid.New()
+			current.NodeClusterID = &otherCluster
+			Expect(groupMembershipChanged(previous, current)).To(BeTrue())
+		})
+
+		It("reports a change when the resource switched group", func() {
+			current.ClusterResourceGroupID = uuid.New()
+			current.ClusterResourceGroupName = "master"
+			Expect(groupMembershipChanged(previous, current)).To(BeTrue())
+		})
+
+		It("reports a change when the resource left its group", func() {
+			current.ClusterResourceGroupID, current.ClusterResourceGroupName = uuid.Nil, ""
+			Expect(groupMembershipChanged(previous, current)).To(BeTrue())
+		})
+
+		It("reports a change when the resource joined a group", func() {
+			previous.ClusterResourceGroupID, previous.ClusterResourceGroupName = uuid.Nil, ""
+			Expect(groupMembershipChanged(previous, current)).To(BeTrue())
+		})
+	})
+
 	Describe("makeClusterResourceGroups", func() {
 		var (
 			clusterID    uuid.UUID

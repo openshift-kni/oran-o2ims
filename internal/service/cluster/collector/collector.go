@@ -628,6 +628,12 @@ func (c *Collector) handleAsyncClusterResourceEvent(ctx context.Context, dataSou
 		return fmt.Errorf("failed to update cluster resource '%s': %w", clusterResource.ResourceID, err)
 	}
 
+	// Groups only depend on the cluster and group a resource belongs to, so skip the sync, and its queries, when
+	// neither changed.
+	if !groupMembershipChanged(previous, clusterResource) {
+		return nil
+	}
+
 	// If the resource moved to a different cluster, remove it from the groups of the cluster it left.
 	if previous != nil && previous.NodeClusterID != nil && *previous.NodeClusterID != nodeCluster.NodeClusterID {
 		if err := c.syncClusterResourceGroups(ctx, *previous.NodeClusterID); err != nil {
@@ -640,6 +646,19 @@ func (c *Collector) handleAsyncClusterResourceEvent(ctx context.Context, dataSou
 		return fmt.Errorf("sync node cluster groups: %w", err)
 	}
 	return nil
+}
+
+// groupMembershipChanged determines whether storing the resource changes the membership of any cluster resource group,
+// by comparing it with the record that was stored before.  A resource that is new, not yet linked to a cluster, or
+// that changed cluster or group affects group membership; any other change, such as updated inventory details, does not.
+func groupMembershipChanged(previous *models.ClusterResource, current models.ClusterResource) bool {
+	if previous == nil || previous.NodeClusterID == nil || current.NodeClusterID == nil {
+		return true
+	}
+
+	return *previous.NodeClusterID != *current.NodeClusterID ||
+		previous.ClusterResourceGroupID != current.ClusterResourceGroupID ||
+		previous.ClusterResourceGroupName != current.ClusterResourceGroupName
 }
 
 // syncThanosAlarmDefinitions fetches Thanos rules and syncs alarm definitions to the database
