@@ -34,6 +34,28 @@ type ResourceInfo struct {
 	Vendor           string                       `json:"vendor"`
 }
 
+// GPUInventory contains GPU devices discovered from the server BMC.
+type GPUInventory struct {
+	Devices []GPUInfo `json:"devices"`
+	Status  string    `json:"status"`
+}
+
+// GPUInfo describes a GPU device reported by Redfish.
+type GPUInfo struct {
+	DeviceClass     string `json:"deviceClass,omitempty"`
+	FirmwareVersion string `json:"firmwareVersion,omitempty"`
+	Health          string `json:"health,omitempty"`
+	ID              string `json:"id"`
+	Location        string `json:"location,omitempty"`
+	Manufacturer    string `json:"manufacturer,omitempty"`
+	Model           string `json:"model,omitempty"`
+	PCIAddress      string `json:"pciAddress,omitempty"`
+	PartNumber      string `json:"partNumber,omitempty"`
+	SerialNumber    string `json:"serialNumber,omitempty"`
+	SKU             string `json:"sku,omitempty"`
+	State           string `json:"state,omitempty"`
+}
+
 type ResourceInfoAdminState string
 
 const (
