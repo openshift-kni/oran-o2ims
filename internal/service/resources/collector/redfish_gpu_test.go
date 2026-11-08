@@ -576,13 +576,52 @@ var _ = Describe("Redfish GPU inventory", func() {
 			DeviceClass:     "GPU",
 			FirmwareVersion: "98.03.B1.00.01",
 			Health:          "OK",
-			ID:              "GPU_PCIE_A",
+			ID:              "/redfish/v1/Systems/1/Processors/GPU_PCIE_A",
 			Manufacturer:    "Nvidia",
 			Model:           "RTXPRO4500BlackwellDC",
 			PartNumber:      "2C3A-895-A1",
 			SerialNumber:    "1790326076967",
 			State:           "Enabled",
 		}))
+	})
+
+	It("does not collide GPUs from different systems that share a collection-local Id", func() {
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/redfish/v1/":
+				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"}}`))
+			case "/redfish/v1/Systems":
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Systems/1"},{"@odata.id":"/redfish/v1/Systems/2"}],"Members@odata.count":2}`))
+			case "/redfish/v1/Systems/1":
+				_, _ = w.Write([]byte(`{"Id":"1","Processors":{"@odata.id":"/redfish/v1/Systems/1/Processors"}}`))
+			case "/redfish/v1/Systems/2":
+				_, _ = w.Write([]byte(`{"Id":"2","Processors":{"@odata.id":"/redfish/v1/Systems/2/Processors"}}`))
+			// Each system exposes a distinct GPU that happens to share the local
+			// Id "GPU0" and reports no serial number. They must not collide.
+			case "/redfish/v1/Systems/1/Processors", "/redfish/v1/Systems/2/Processors":
+				if r.URL.Query().Has("$filter") || r.URL.Query().Has("$expand") {
+					http.Error(w, "query options are not supported", http.StatusNotImplemented)
+					return
+				}
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"` + r.URL.Path + `/GPU0"}]}`))
+			case "/redfish/v1/Systems/1/Processors/GPU0":
+				_, _ = w.Write([]byte(`{"@odata.id":"/redfish/v1/Systems/1/Processors/GPU0","Id":"GPU0","ProcessorType":"GPU","Model":"A100","Status":{"State":"Enabled","Health":"OK"}}`))
+			case "/redfish/v1/Systems/2/Processors/GPU0":
+				_, _ = w.Write([]byte(`{"@odata.id":"/redfish/v1/Systems/2/Processors/GPU0","Id":"GPU0","ProcessorType":"GPU","Model":"L40S","Status":{"State":"Enabled","Health":"OK"}}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		reader.httpClient = redfishTestHTTPClient(handler)
+		bmh.Spec.BMC.Address = "redfish+http://bmc.example/redfish/v1"
+
+		inventory, err := reader.GetGPUInventory(ctx, bmh)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(inventory.Status).To(Equal(gpuInventoryStatusComplete))
+		Expect(inventory.Devices).To(HaveLen(2))
+		models := []string{inventory.Devices[0].Model, inventory.Devices[1].Model}
+		Expect(models).To(ConsistOf("A100", "L40S"))
 	})
 
 	It("merges GPUs exposed through different views on the same system", func() {

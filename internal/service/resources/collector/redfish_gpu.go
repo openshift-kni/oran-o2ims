@@ -1388,11 +1388,16 @@ func redfishLocationLabel(object redfishObject) string {
 	return object.Slot.Location.PartLocation.ServiceLabel
 }
 
+// redfishObjectID returns a stable identity for a Redfish resource. The
+// canonical @odata.id is preferred because it is unique across the whole service
+// and encodes the owning ComputerSystem, so GPUs from different systems that
+// share a collection-local Id (e.g. "GPU0") do not collide in the per-service
+// deduplication map. The local Id is used only when no @odata.id is available.
 func redfishObjectID(object redfishObject) string {
-	if object.ID != "" {
-		return object.ID
+	if object.ODataID != "" {
+		return object.ODataID
 	}
-	return object.ODataID
+	return object.ID
 }
 
 // addGPU appends a GPU unless the same physical device was already recorded. A
