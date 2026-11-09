@@ -933,7 +933,7 @@ func (s *redfishSession) discoverProcessorGPUs(
 			continue
 		}
 		endpointFound = true
-		processors, err := s.listProcessorGPUs(ctx, system.Processors.ODataID)
+		processors, err := s.listProcessors(ctx, system.Processors.ODataID)
 		if err != nil && !errors.Is(err, errRedfishNotFound) {
 			s.logPartialRead(ctx, system.Processors.ODataID, err)
 			partial = true
@@ -1189,9 +1189,14 @@ func (s *redfishSession) list(ctx context.Context, link string) ([]redfishObject
 	return s.listWithQuery(ctx, link, nil)
 }
 
-func (s *redfishSession) listProcessorGPUs(ctx context.Context, link string) ([]redfishObject, error) {
+// listProcessors returns every member of a Processors collection, not only GPUs.
+// Non-GPU entries are needed so the caller can honor an explicit non-GPU
+// classification (e.g. an FPGA) and keep a broad PCIe ProcessingAccelerators
+// device from being counted as a GPU. A server-side ProcessorType filter would
+// hide those entries, so only $expand is requested to collapse the per-member
+// GETs into one response where supported.
+func (s *redfishSession) listProcessors(ctx context.Context, link string) ([]redfishObject, error) {
 	query := make(url.Values)
-	query.Set("$filter", "ProcessorType eq 'GPU'")
 	query.Set("$expand", ".")
 
 	processors, err := s.listWithQuery(ctx, link, query)
@@ -1215,7 +1220,7 @@ func (s *redfishSession) listProcessorGPUs(ctx context.Context, link string) ([]
 	}
 
 	// Query parameters are optional in Redfish. Retry with the plain collection
-	// traversal when the BMC does not support filtering or expansion.
+	// traversal when the BMC does not support expansion.
 	return s.list(ctx, link)
 }
 

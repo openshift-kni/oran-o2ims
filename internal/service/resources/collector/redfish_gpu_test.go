@@ -780,7 +780,7 @@ var _ = Describe("Redfish GPU inventory", func() {
 		Expect(inventory.Devices).To(HaveLen(1))
 	})
 
-	It("excludes an FPGA exposed through both Processor and PCIe views", func() {
+	It("excludes an FPGA across views when the BMC rejects processor query options", func() {
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			switch r.URL.Path {
@@ -790,7 +790,7 @@ var _ = Describe("Redfish GPU inventory", func() {
 				_, _ = w.Write([]byte(`{"Processors":{"@odata.id":"/redfish/v1/Systems/1/Processors"},"PCIeDevices":[{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/FPGA"},{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU"}]}`))
 			// The Processor view explicitly classifies the Alveo card as an FPGA.
 			case "/redfish/v1/Systems/1/Processors":
-				if r.URL.Query().Has("$filter") || r.URL.Query().Has("$expand") {
+				if r.URL.Query().Has("$expand") {
 					http.Error(w, "query options are not supported", http.StatusNotImplemented)
 					return
 				}
@@ -816,6 +816,50 @@ var _ = Describe("Redfish GPU inventory", func() {
 
 		inventory, err := reader.GetGPUInventory(ctx, bmh)
 		Expect(err).ToNot(HaveOccurred())
+		Expect(inventory.Status).To(Equal(gpuInventoryStatusComplete))
+		Expect(inventory.Devices).To(HaveLen(1))
+		Expect(inventory.Devices[0].Model).To(Equal("L40S"))
+	})
+
+	It("excludes an FPGA across views when the BMC honors processor query options", func() {
+		typeFilterSent := false
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/redfish/v1/":
+				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"}}`))
+			case "/redfish/v1/Systems/1":
+				_, _ = w.Write([]byte(`{"Processors":{"@odata.id":"/redfish/v1/Systems/1/Processors"},"PCIeDevices":[{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/FPGA"},{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU"}]}`))
+			// The BMC honors $expand and returns expanded members inline. Without a
+			// server-side type filter the FPGA Processor is visible, so its explicit
+			// non-GPU classification excludes the matching PCIe device.
+			case "/redfish/v1/Systems/1/Processors":
+				if r.URL.Query().Has("$filter") {
+					// A BMC honoring a ProcessorType eq 'GPU' filter would hide the
+					// FPGA, defeating the correlation; assert we do not send one.
+					typeFilterSent = true
+					_, _ = w.Write([]byte(`{"Members":[]}`))
+					return
+				}
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.type":"#Processor.v1_20_1.Processor","@odata.id":"/redfish/v1/Systems/1/Processors/FPGA0","Id":"FPGA0","ProcessorType":"FPGA","Model":"Alveo U250","SerialNumber":"FPGA-SN","Status":{"State":"Enabled","Health":"OK"}}]}`))
+			case "/redfish/v1/Systems/1/PCIeDevices/FPGA":
+				_, _ = w.Write([]byte(`{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/FPGA","Id":"FPGA","Model":"Alveo U250","SerialNumber":"FPGA-SN","PCIeFunctions":[{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/FPGA/PCIeFunctions/0"}],"Status":{"State":"Enabled","Health":"OK"}}`))
+			case "/redfish/v1/Systems/1/PCIeDevices/FPGA/PCIeFunctions/0":
+				_, _ = w.Write([]byte(`{"DeviceClass":"ProcessingAccelerators"}`))
+			case "/redfish/v1/Systems/1/PCIeDevices/GPU":
+				_, _ = w.Write([]byte(`{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU","Id":"GPU","Model":"L40S","SerialNumber":"GPU-SN","PCIeFunctions":[{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU/PCIeFunctions/0"}],"Status":{"State":"Enabled","Health":"OK"}}`))
+			case "/redfish/v1/Systems/1/PCIeDevices/GPU/PCIeFunctions/0":
+				_, _ = w.Write([]byte(`{"DeviceClass":"ProcessingAccelerators"}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		reader.httpClient = redfishTestHTTPClient(handler)
+		bmh.Spec.BMC.Address = "redfish+http://bmc.example/redfish/v1/Systems/1"
+
+		inventory, err := reader.GetGPUInventory(ctx, bmh)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(typeFilterSent).To(BeFalse())
 		Expect(inventory.Status).To(Equal(gpuInventoryStatusComplete))
 		Expect(inventory.Devices).To(HaveLen(1))
 		Expect(inventory.Devices[0].Model).To(Equal("L40S"))
@@ -915,13 +959,13 @@ var _ = Describe("Redfish GPU inventory", func() {
 		})}
 		session := &redfishSession{serviceRoot: root, client: client}
 
-		processors, err := session.listProcessorGPUs(interruptCtx, "/redfish/v1/Systems/1/Processors")
+		processors, err := session.listProcessors(interruptCtx, "/redfish/v1/Systems/1/Processors")
 		Expect(err).To(HaveOccurred())
 		Expect(processors).To(HaveLen(1))
 		Expect(processors[0].ID).To(Equal("GPU0"))
 	})
 
-	It("uses filtered and expanded processor members when the BMC supports them", func() {
+	It("uses expanded processor members without a type filter when the BMC supports them", func() {
 		processorCollectionRequests := 0
 		queryOptionsMatched := false
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -933,7 +977,9 @@ var _ = Describe("Redfish GPU inventory", func() {
 				_, _ = w.Write([]byte(`{"Processors":{"@odata.id":"/redfish/v1/Systems/1/Processors"}}`))
 			case "/redfish/v1/Systems/1/Processors":
 				processorCollectionRequests++
-				queryOptionsMatched = r.URL.Query().Get("$filter") == "ProcessorType eq 'GPU'" && r.URL.Query().Get("$expand") == "."
+				// Only $expand is requested; a server-side ProcessorType filter would
+				// hide non-GPU entries the classifier needs.
+				queryOptionsMatched = r.URL.Query().Get("$expand") == "." && !r.URL.Query().Has("$filter")
 				_, _ = w.Write([]byte(`{"Members":[{"@odata.type":"#Processor.v1_20_1.Processor","@odata.id":"/redfish/v1/Systems/1/Processors/GPU_0","Id":"GPU_0","Name":"Processor","ProcessorType":"GPU","Manufacturer":"NVIDIA","Model":"GH200 480GB","PartNumber":"2342-888-A1","SerialNumber":"1654523006485","Version":"A1","FirmwareVersion":"96.00.8D.00.03","Status":{"State":"Enabled","Health":"OK"}}]}`))
 			default:
 				http.NotFound(w, r)
@@ -970,8 +1016,8 @@ var _ = Describe("Redfish GPU inventory", func() {
 					_, _ = w.Write([]byte(`{"Members":[{"@odata.type":"#Processor.v1_20_1.Processor","@odata.id":"/redfish/v1/Systems/1/Processors/GPU_1","Id":"GPU_1","ProcessorType":"GPU","Manufacturer":"NVIDIA","Model":"H200"}]}`))
 					return
 				}
-				queryOptionsMatched = r.URL.Query().Get("$filter") == "ProcessorType eq 'GPU'" && r.URL.Query().Get("$expand") == "."
-				_, _ = w.Write([]byte(`{"Members":[{"@odata.type":"#Processor.v1_20_1.Processor","@odata.id":"/redfish/v1/Systems/1/Processors/GPU_0","Id":"GPU_0","ProcessorType":"GPU","Manufacturer":"NVIDIA","Model":"H100"}],"Members@odata.nextLink":"/redfish/v1/Systems/1/Processors?$filter=ProcessorType%20eq%20%27GPU%27&$expand=.&$skip=1"}`))
+				queryOptionsMatched = r.URL.Query().Get("$expand") == "." && !r.URL.Query().Has("$filter")
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.type":"#Processor.v1_20_1.Processor","@odata.id":"/redfish/v1/Systems/1/Processors/GPU_0","Id":"GPU_0","ProcessorType":"GPU","Manufacturer":"NVIDIA","Model":"H100"}],"Members@odata.nextLink":"/redfish/v1/Systems/1/Processors?$expand=.&$skip=1"}`))
 			default:
 				http.NotFound(w, r)
 			}
