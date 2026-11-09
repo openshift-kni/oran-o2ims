@@ -10,9 +10,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"time"
 
 	"github.com/google/uuid"
@@ -180,6 +182,11 @@ var _ = Describe("Redfish GPU inventory", func() {
 			switch r.URL.Path {
 			case "/redfish/v1/":
 				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"},"Chassis":{"@odata.id":"/redfish/v1/Chassis"}}`))
+			case "/redfish/v1/Systems":
+				// A real single-system iDRAC serves its Systems collection; the
+				// authoritative count lets the linked chassis (which omits reverse
+				// ComputerSystems links) be attributed to this host.
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Systems/System.Embedded.1"}],"Members@odata.count":1}`))
 			case "/redfish/v1/Systems/System.Embedded.1":
 				_, _ = w.Write([]byte(`{"Id":"System.Embedded.1","PCIeDevices":{"@odata.id":"/redfish/v1/Systems/System.Embedded.1/PCIeDevices"},"Links":{"Chassis":[{"@odata.id":"/redfish/v1/Chassis/System.Embedded.1"}]}}`))
 			case "/redfish/v1/Systems/System.Embedded.1/PCIeDevices":
@@ -297,7 +304,7 @@ var _ = Describe("Redfish GPU inventory", func() {
 			case "/redfish/v1/Systems/1":
 				_, _ = w.Write([]byte(`{"Id":"1","Links":{"Chassis":[{"@odata.id":"/redfish/v1/Chassis/1"}]}}`))
 			case "/redfish/v1/Chassis/1":
-				_, _ = w.Write([]byte(`{"Id":"1","PCIeDevices":[{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/NIC1"}]}`))
+				_, _ = w.Write([]byte(`{"Id":"1","Links":{"ComputerSystems":[{"@odata.id":"/redfish/v1/Systems/1"}]},"PCIeDevices":[{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/NIC1"}]}`))
 			case "/redfish/v1/Chassis/1/PCIeDevices/NIC1":
 				_, _ = w.Write([]byte(`{"Id":"NIC1","Model":"Ethernet Adapter","PCIeFunctions":[{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/NIC1/PCIeFunctions/0"}]}`))
 			case "/redfish/v1/Chassis/1/PCIeDevices/NIC1/PCIeFunctions/0":
@@ -436,7 +443,10 @@ var _ = Describe("Redfish GPU inventory", func() {
 		inventory, err := reader.GetGPUInventory(ctx, bmh)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(sharedChassisDevicesTraversed).To(BeFalse())
-		Expect(inventory.Status).To(Equal(gpuInventoryStatusComplete))
+		// The system's own PCIeDevices still yield GPU A, but the shared chassis
+		// could hold this host's GPUs we cannot safely attribute, so the result is
+		// partial rather than a potentially incomplete "complete".
+		Expect(inventory.Status).To(Equal(gpuInventoryStatusPartial))
 		Expect(inventory.Devices).To(HaveLen(1))
 		Expect(inventory.Devices[0].Model).To(Equal("A100"))
 	})
@@ -468,6 +478,40 @@ var _ = Describe("Redfish GPU inventory", func() {
 		Expect(inventory.Status).To(Equal(gpuInventoryStatusComplete))
 		Expect(inventory.Devices).To(HaveLen(1))
 		Expect(inventory.Devices[0].Model).To(Equal("H100"))
+	})
+
+	It("does not read the Systems collection when a linked chassis has reverse links", func() {
+		systemsCollectionRequested := false
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/redfish/v1/":
+				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"},"Chassis":{"@odata.id":"/redfish/v1/Chassis"}}`))
+			// Ownership is established by the chassis back-reference, so the
+			// single-system check (and its Systems-collection read) is unnecessary.
+			case "/redfish/v1/Systems":
+				systemsCollectionRequested = true
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Systems/1"}],"Members@odata.count":1}`))
+			case "/redfish/v1/Systems/1":
+				_, _ = w.Write([]byte(`{"Id":"1","Links":{"Chassis":[{"@odata.id":"/redfish/v1/Chassis/1"}]}}`))
+			case "/redfish/v1/Chassis/1":
+				_, _ = w.Write([]byte(`{"Id":"1","Links":{"ComputerSystems":[{"@odata.id":"/redfish/v1/Systems/1"}]},"PCIeDevices":[{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/GPU1"}]}`))
+			case "/redfish/v1/Chassis/1/PCIeDevices/GPU1":
+				_, _ = w.Write([]byte(`{"Id":"GPU1","Model":"H100","SerialNumber":"GPU-SN-1","PCIeFunctions":[{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/GPU1/PCIeFunctions/0"}],"Status":{"State":"Enabled","Health":"OK"}}`))
+			case "/redfish/v1/Chassis/1/PCIeDevices/GPU1/PCIeFunctions/0":
+				_, _ = w.Write([]byte(`{"DeviceClass":"ProcessingAccelerators"}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		reader.httpClient = redfishTestHTTPClient(handler)
+		bmh.Spec.BMC.Address = "redfish+http://bmc.example/redfish/v1/Systems/1"
+
+		inventory, err := reader.GetGPUInventory(ctx, bmh)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(systemsCollectionRequested).To(BeFalse())
+		Expect(inventory.Status).To(Equal(gpuInventoryStatusComplete))
+		Expect(inventory.Devices).To(HaveLen(1))
 	})
 
 	It("does not fall back to the service-wide chassis when the Systems collection is paginated", func() {
@@ -693,6 +737,190 @@ var _ = Describe("Redfish GPU inventory", func() {
 		Expect(inventory.Devices[0].ID).To(Equal("/redfish/v1/Systems/1/PCIeDevices/GPU"))
 	})
 
+	It("deduplicates across three views when the shared alias is learned mid-merge", func() {
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/redfish/v1/":
+				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"}}`))
+			case "/redfish/v1/Systems/1":
+				_, _ = w.Write([]byte(`{"Processors":{"@odata.id":"/redfish/v1/Systems/1/Processors"},"GraphicsControllers":{"@odata.id":"/redfish/v1/Systems/1/GraphicsControllers"},"PCIeDevices":[{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU_D"}]}`))
+			// View 1: Processor with ID GPU_P and serial S.
+			case "/redfish/v1/Systems/1/Processors":
+				if r.URL.Query().Has("$filter") || r.URL.Query().Has("$expand") {
+					http.Error(w, "query options are not supported", http.StatusNotImplemented)
+					return
+				}
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Systems/1/Processors/GPU_P"}]}`))
+			case "/redfish/v1/Systems/1/Processors/GPU_P":
+				_, _ = w.Write([]byte(`{"@odata.id":"/redfish/v1/Systems/1/Processors/GPU_P","Id":"GPU_P","ProcessorType":"GPU","Model":"H100","SerialNumber":"S","Status":{"State":"Enabled","Health":"OK"}}`))
+			// View 2: GraphicsController with serial S but a different ID (the PCIe
+			// device GPU_D). It matches View 1 by serial; the GPU_D alias must be
+			// recorded so View 3 is also deduplicated.
+			case "/redfish/v1/Systems/1/GraphicsControllers":
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Systems/1/GraphicsControllers/0"}]}`))
+			case "/redfish/v1/Systems/1/GraphicsControllers/0":
+				_, _ = w.Write([]byte(`{"Id":"GC0","Model":"H100","SerialNumber":"S","Links":{"PCIeDevice":{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU_D"}},"Status":{"State":"Enabled","Health":"OK"}}`))
+			// View 3: the PCIe device GPU_D with no serial. It shares only the ID
+			// alias learned from View 2.
+			case "/redfish/v1/Systems/1/PCIeDevices/GPU_D":
+				_, _ = w.Write([]byte(`{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU_D","Id":"GPU_D","Model":"H100","PCIeFunctions":[{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU_D/PCIeFunctions/0"}],"Status":{"State":"Enabled","Health":"OK"}}`))
+			case "/redfish/v1/Systems/1/PCIeDevices/GPU_D/PCIeFunctions/0":
+				_, _ = w.Write([]byte(`{"DeviceClass":"ProcessingAccelerators"}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		reader.httpClient = redfishTestHTTPClient(handler)
+		bmh.Spec.BMC.Address = "redfish+http://bmc.example/redfish/v1/Systems/1"
+
+		inventory, err := reader.GetGPUInventory(ctx, bmh)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(inventory.Status).To(Equal(gpuInventoryStatusComplete))
+		Expect(inventory.Devices).To(HaveLen(1))
+	})
+
+	It("excludes an FPGA exposed through both Processor and PCIe views", func() {
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/redfish/v1/":
+				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"}}`))
+			case "/redfish/v1/Systems/1":
+				_, _ = w.Write([]byte(`{"Processors":{"@odata.id":"/redfish/v1/Systems/1/Processors"},"PCIeDevices":[{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/FPGA"},{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU"}]}`))
+			// The Processor view explicitly classifies the Alveo card as an FPGA.
+			case "/redfish/v1/Systems/1/Processors":
+				if r.URL.Query().Has("$filter") || r.URL.Query().Has("$expand") {
+					http.Error(w, "query options are not supported", http.StatusNotImplemented)
+					return
+				}
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Systems/1/Processors/FPGA0"}]}`))
+			case "/redfish/v1/Systems/1/Processors/FPGA0":
+				_, _ = w.Write([]byte(`{"@odata.id":"/redfish/v1/Systems/1/Processors/FPGA0","Id":"FPGA0","ProcessorType":"FPGA","Model":"Alveo U250","SerialNumber":"FPGA-SN","Status":{"State":"Enabled","Health":"OK"}}`))
+			// The same FPGA reappears as a ProcessingAccelerators PCIe device and
+			// must not be re-added as a GPU; the real compute GPU is retained.
+			case "/redfish/v1/Systems/1/PCIeDevices/FPGA":
+				_, _ = w.Write([]byte(`{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/FPGA","Id":"FPGA","Model":"Alveo U250","SerialNumber":"FPGA-SN","PCIeFunctions":[{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/FPGA/PCIeFunctions/0"}],"Status":{"State":"Enabled","Health":"OK"}}`))
+			case "/redfish/v1/Systems/1/PCIeDevices/FPGA/PCIeFunctions/0":
+				_, _ = w.Write([]byte(`{"DeviceClass":"ProcessingAccelerators"}`))
+			case "/redfish/v1/Systems/1/PCIeDevices/GPU":
+				_, _ = w.Write([]byte(`{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU","Id":"GPU","Model":"L40S","SerialNumber":"GPU-SN","PCIeFunctions":[{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU/PCIeFunctions/0"}],"Status":{"State":"Enabled","Health":"OK"}}`))
+			case "/redfish/v1/Systems/1/PCIeDevices/GPU/PCIeFunctions/0":
+				_, _ = w.Write([]byte(`{"DeviceClass":"ProcessingAccelerators"}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		reader.httpClient = redfishTestHTTPClient(handler)
+		bmh.Spec.BMC.Address = "redfish+http://bmc.example/redfish/v1/Systems/1"
+
+		inventory, err := reader.GetGPUInventory(ctx, bmh)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(inventory.Status).To(Equal(gpuInventoryStatusComplete))
+		Expect(inventory.Devices).To(HaveLen(1))
+		Expect(inventory.Devices[0].Model).To(Equal("L40S"))
+	})
+
+	It("skips an absent parent device reached through the system PCIeFunctions", func() {
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/redfish/v1/":
+				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"}}`))
+			case "/redfish/v1/Systems/1":
+				_, _ = w.Write([]byte(`{"PCIeFunctions":[{"@odata.id":"/redfish/v1/Systems/1/PCIeFunctions/0"}]}`))
+			case "/redfish/v1/Systems/1/PCIeFunctions/0":
+				_, _ = w.Write([]byte(`{"DeviceClass":"ProcessingAccelerators","Links":{"PCIeDevice":{"@odata.id":"/redfish/v1/Systems/1/PCIeDevices/GPU-ABSENT"}}}`))
+			case "/redfish/v1/Systems/1/PCIeDevices/GPU-ABSENT":
+				_, _ = w.Write([]byte(`{"Id":"GPU-ABSENT","Model":"H100","SerialNumber":"GPU-SN","Status":{"State":"Absent"}}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		reader.httpClient = redfishTestHTTPClient(handler)
+		bmh.Spec.BMC.Address = "redfish+http://bmc.example/redfish/v1/Systems/1"
+
+		inventory, err := reader.GetGPUInventory(ctx, bmh)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(inventory.Status).To(Equal(gpuInventoryStatusComplete))
+		Expect(inventory.Devices).To(BeEmpty())
+	})
+
+	It("does not attribute a linked chassis without reverse links on a multi-system service", func() {
+		chassisDevicesTraversed := false
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/redfish/v1/":
+				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"},"Chassis":{"@odata.id":"/redfish/v1/Chassis"}}`))
+			case "/redfish/v1/Systems":
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Systems/1"},{"@odata.id":"/redfish/v1/Systems/2"}],"Members@odata.count":2}`))
+			case "/redfish/v1/Systems/1":
+				_, _ = w.Write([]byte(`{"Id":"1","Links":{"Chassis":[{"@odata.id":"/redfish/v1/Chassis/1"}]}}`))
+			// The chassis omits Links.ComputerSystems, so on a multi-system service
+			// its ownership cannot be established and its GPUs are not attributed.
+			case "/redfish/v1/Chassis/1":
+				_, _ = w.Write([]byte(`{"Id":"1","PCIeDevices":[{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/GPU1"}]}`))
+			case "/redfish/v1/Chassis/1/PCIeDevices/GPU1":
+				chassisDevicesTraversed = true
+				_, _ = w.Write([]byte(`{"Id":"GPU1","Model":"H100","SerialNumber":"GPU-SN-1","PCIeFunctions":[{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/GPU1/PCIeFunctions/0"}],"Status":{"State":"Enabled","Health":"OK"}}`))
+			case "/redfish/v1/Chassis/1/PCIeDevices/GPU1/PCIeFunctions/0":
+				chassisDevicesTraversed = true
+				_, _ = w.Write([]byte(`{"DeviceClass":"ProcessingAccelerators"}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		reader.httpClient = redfishTestHTTPClient(handler)
+		bmh.Spec.BMC.Address = "redfish+http://bmc.example/redfish/v1/Systems/1"
+
+		inventory, err := reader.GetGPUInventory(ctx, bmh)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(chassisDevicesTraversed).To(BeFalse())
+		Expect(inventory.Status).To(Equal(gpuInventoryStatusPartial))
+		Expect(inventory.Devices).To(BeEmpty())
+	})
+
+	It("preserves processors read before an interrupted traversal", func() {
+		root, parseErr := url.Parse("http://bmc.example/redfish/v1/")
+		Expect(parseErr).ToNot(HaveOccurred())
+		interruptCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		client := &http.Client{Transport: redfishTestRoundTripper(func(request *http.Request) (*http.Response, error) {
+			if err := request.Context().Err(); err != nil {
+				return nil, fmt.Errorf("request context cancelled: %w", err)
+			}
+			recorder := httptest.NewRecorder()
+			recorder.Header().Set("Content-Type", "application/json")
+			switch request.URL.Path {
+			case "/redfish/v1/Systems/1/Processors":
+				_, _ = recorder.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Systems/1/Processors/GPU0"},{"@odata.id":"/redfish/v1/Systems/1/Processors/GPU1"}]}`))
+			case "/redfish/v1/Systems/1/Processors/GPU0":
+				// The first member is read; cancelling here makes the next member
+				// fetch fail with a context error mid-traversal.
+				cancel()
+				_, _ = recorder.Write([]byte(`{"Id":"GPU0","ProcessorType":"GPU","Model":"H100"}`))
+			default:
+				recorder.Code = http.StatusNotFound
+			}
+			return &http.Response{
+				StatusCode: recorder.Code,
+				Header:     recorder.Header(),
+				Body:       io.NopCloser(bytes.NewReader(recorder.Body.Bytes())),
+				Request:    request,
+				Proto:      "HTTP/1.1",
+				ProtoMajor: 1,
+				ProtoMinor: 1,
+			}, nil
+		})}
+		session := &redfishSession{serviceRoot: root, client: client}
+
+		processors, err := session.listProcessorGPUs(interruptCtx, "/redfish/v1/Systems/1/Processors")
+		Expect(err).To(HaveOccurred())
+		Expect(processors).To(HaveLen(1))
+		Expect(processors[0].ID).To(Equal("GPU0"))
+	})
+
 	It("uses filtered and expanded processor members when the BMC supports them", func() {
 		processorCollectionRequests := 0
 		queryOptionsMatched := false
@@ -837,6 +1065,8 @@ var _ = Describe("Redfish GPU inventory", func() {
 			switch r.URL.Path {
 			case "/redfish/v1/":
 				_, _ = w.Write([]byte(`{"Systems":{"@odata.id":"/redfish/v1/Systems"}}`))
+			case "/redfish/v1/Systems":
+				_, _ = w.Write([]byte(`{"Members":[{"@odata.id":"/redfish/v1/Systems/1"}],"Members@odata.count":1}`))
 			case "/redfish/v1/Systems/1":
 				_, _ = w.Write([]byte(`{"Id":"1","PCIeFunctions":[{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/GPU1/PCIeFunctions/0"}],"PCIeDevices":[{"@odata.id":"/redfish/v1/Chassis/1/PCIeDevices/GPU1"}],"Links":{"Chassis":[{"@odata.id":"/redfish/v1/Chassis/1"}]}}`))
 			case "/redfish/v1/Chassis/1":
@@ -1083,6 +1313,28 @@ var _ = Describe("Redfish GPU inventory", func() {
 })
 
 var _ = Describe("GPU inventory update events", func() {
+	It("keeps the persistence version valid when a queued job is cancelled for cache reuse", func() {
+		ds := &HardwareDataSource{}
+		resourceID := uuid.New()
+		ds.gpuInventoryMu.Lock()
+		ds.ensureGPUInventoryQueueLocked()
+		ds.gpuInventoryJobVersions[resourceID] = 5
+		ds.gpuInventoryJobs[resourceID] = gpuInventoryWorkItem{version: 5}
+		ds.cancelGPUInventoryJobLocked(resourceID)
+		_, jobStillQueued := ds.gpuInventoryJobs[resourceID]
+		ds.gpuInventoryMu.Unlock()
+
+		update := gpuInventoryUpdate{ResourceID: resourceID, Version: 5}
+		// The queued job is dropped, but the version remains so a completed update
+		// awaiting persistence (or its retry) is still recognized as current.
+		Expect(jobStillQueued).To(BeFalse())
+		Expect(ds.isCurrentGPUInventoryUpdate(update)).To(BeTrue())
+
+		// A terminal cancel (resource deletion) does drop the version.
+		ds.cancelGPUInventory(resourceID)
+		Expect(ds.isCurrentGPUInventoryUpdate(update)).To(BeFalse())
+	})
+
 	It("ignores an update superseded by a newer BMH event", func() {
 		dataSourceID := uuid.New()
 		resourceID := uuid.New()

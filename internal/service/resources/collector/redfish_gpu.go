@@ -251,21 +251,27 @@ func (d *HardwareDataSource) enqueueGPUInventory(bmh *metal3v1alpha1.BareMetalHo
 func (d *HardwareDataSource) cancelGPUInventory(resourceID uuid.UUID) {
 	d.gpuInventoryMu.Lock()
 	d.cancelGPUInventoryJobLocked(resourceID)
-	// The cache is keyed by the BMH UID, which equals the resource ID string
-	// for every host that reaches this path; drop it so deleted hosts do not
-	// retain cached inventory indefinitely. Only the deletion path should evict
-	// the cache; the reuse paths in prepareGPUInventory cancel the job alone so
-	// the entry they just populated survives.
+	// This is a terminal cancel (the resource was deleted or excluded from
+	// inventory). Drop the job version so no pending persistence retry survives
+	// for a resource that no longer exists, and evict the cache so deleted hosts
+	// do not retain inventory indefinitely. The cache is keyed by the BMH UID,
+	// which equals the resource ID string for every host that reaches this path.
+	// Only the deletion path should do this; the reuse paths in
+	// prepareGPUInventory cancel the queued job alone so both the cache entry they
+	// just populated and any in-flight persistence retry survive.
+	delete(d.gpuInventoryJobVersions, resourceID)
 	delete(d.gpuInventoryCache, resourceID.String())
 	d.gpuInventoryMu.Unlock()
 }
 
-// cancelGPUInventoryJobLocked drops any in-flight inventory job for the resource
-// without touching the cache. The caller must hold d.gpuInventoryMu.
+// cancelGPUInventoryJobLocked drops any queued inventory job for the resource
+// without touching the cache or the job version. Keeping the version valid lets
+// an already-completed update awaiting persistence (or its scheduled retry) still
+// be recognized as current, so reusing cached inventory during a database outage
+// does not strand the update as stale. The caller must hold d.gpuInventoryMu.
 func (d *HardwareDataSource) cancelGPUInventoryJobLocked(resourceID uuid.UUID) {
 	d.ensureGPUInventoryQueueLocked()
 	delete(d.gpuInventoryJobs, resourceID)
-	delete(d.gpuInventoryJobVersions, resourceID)
 }
 
 func (d *HardwareDataSource) isCurrentGPUInventoryUpdate(update gpuInventoryUpdate) bool {
@@ -832,11 +838,25 @@ func (s *redfishSession) discoverGPUInventory(ctx context.Context, directSystemP
 	// system exposes a chassis association (common on single-system BMCs) and the
 	// service manages exactly one system, so that collection unambiguously
 	// belongs to this host.
+	//
+	// serviceHasSingleSystem can cost an extra request, so evaluate it lazily and
+	// at most once: it is only needed to decide the service-wide fallback or to
+	// attribute a linked chassis that omits its ComputerSystems back-reference. A
+	// chassis that lists a matching back-reference never consults it.
+	singleSystemEvaluated := false
+	singleSystemResult := false
+	singleSystem := func() bool {
+		if !singleSystemEvaluated {
+			singleSystemResult = s.serviceHasSingleSystem(ctx, root, systems, systemsComplete, directSystemPath != "")
+			singleSystemEvaluated = true
+		}
+		return singleSystemResult
+	}
 	chassisLinks := chassisLinksForSystems(systems)
-	if chassisLinks.isEmpty() && s.serviceHasSingleSystem(ctx, root, systems, systemsComplete, directSystemPath != "") {
+	if chassisLinks.isEmpty() && singleSystem() {
 		chassisLinks = redfishLinkList{collection: root.Chassis}
 	}
-	chassisDevices, chassisFound, chassisPartial := s.discoverChassisGPUs(ctx, chassisLinks, selectedSystemIDs(systems, directSystemPath))
+	chassisDevices, chassisFound, chassisPartial := s.discoverChassisGPUs(ctx, chassisLinks, selectedSystemIDs(systems, directSystemPath), singleSystem)
 	endpointFound = endpointFound || chassisFound
 	partial = partial || chassisPartial
 	for _, device := range chassisDevices {
@@ -920,6 +940,13 @@ func (s *redfishSession) discoverProcessorGPUs(
 		}
 		for _, processor := range processors {
 			if !strings.EqualFold(processor.ProcessorType, "GPU") {
+				// An explicit non-GPU Processor classification (e.g. an FPGA) wins
+				// over the broad PCIe ProcessingAccelerators class: block this
+				// device's identity so a later view cannot re-add it as a GPU.
+				if processor.ProcessorType != "" {
+					markNonGPU(seen, processor.SerialNumber,
+						redfishObjectID(processor), processor.Links.PCIeDevice.ODataID)
+				}
 				continue
 			}
 			addGPU(inventory, seen, gpuInfoFromProcessor(processor))
@@ -962,6 +989,12 @@ func (s *redfishSession) discoverSystemGPUs(ctx context.Context, system redfishO
 						partial = true
 					}
 				} else {
+					// Skip an absent parent device, consistently with the
+					// PCIeDevices traversal, so inventory does not depend on which
+					// navigation property exposes the same device.
+					if strings.EqualFold(device.Status.State, "Absent") {
+						continue
+					}
 					gpu = gpuInfoFromPCIeDevice(device, function)
 				}
 			}
@@ -1003,7 +1036,7 @@ func chassisLinksForSystems(systems []redfishObject) redfishLinkList {
 	return list
 }
 
-func (s *redfishSession) discoverChassisGPUs(ctx context.Context, chassisLinks redfishLinkList, selectedSystems map[string]struct{}) ([]hwmgrcontroller.GPUInfo, bool, bool) {
+func (s *redfishSession) discoverChassisGPUs(ctx context.Context, chassisLinks redfishLinkList, selectedSystems map[string]struct{}, singleSystem func() bool) ([]hwmgrcontroller.GPUInfo, bool, bool) {
 	if chassisLinks.isEmpty() {
 		return nil, false, false
 	}
@@ -1016,8 +1049,11 @@ func (s *redfishSession) discoverChassisGPUs(ctx context.Context, chassisLinks r
 		}
 		// A chassis can host several ComputerSystems. Its PCIe collection is the
 		// union of every hosted system's devices, so attribute it to this host
-		// only when the chassis is owned unambiguously by the selected systems.
-		if !chassisOwnedBySelectedSystems(item, selectedSystems) {
+		// only when ownership is positively established. When it cannot be, the
+		// chassis may hold this host's GPUs that we cannot safely attribute, so
+		// mark the inventory partial rather than silently reporting it complete.
+		if !chassisOwnedBySelectedSystems(item, selectedSystems, singleSystem) {
+			partial = true
 			continue
 		}
 		endpointFound = true
@@ -1047,12 +1083,19 @@ func selectedSystemIDs(systems []redfishObject, directSystemPath string) map[str
 }
 
 // chassisOwnedBySelectedSystems reports whether a chassis's devices can be
-// attributed to the selected systems. A chassis that advertises no
-// ComputerSystems back-reference is treated as owned (it was reached from the
-// selected system's Links.Chassis, or via the single-system fallback). A chassis
-// that lists any ComputerSystem outside the selected set is ambiguous and is
-// skipped so another host's GPUs are not reported for this one.
-func chassisOwnedBySelectedSystems(chassis redfishObject, selectedSystems map[string]struct{}) bool {
+// attributed to the selected systems. Ownership must be positively established:
+//
+//   - When the chassis lists ComputerSystems back-references, every one must be in
+//     the selected set; any other system makes the chassis shared and ambiguous.
+//   - When the chassis advertises no back-references, a missing reverse link does
+//     not by itself prove exclusivity, so it is owned only when the service
+//     manages a single system (singleSystem), where no other system can claim it.
+//
+// Any other case is treated as not owned so another host's GPUs are not reported
+// for this one. singleSystem is evaluated lazily and only consulted when the
+// chassis omits its back-references, so a correctly linked chassis costs no extra
+// request.
+func chassisOwnedBySelectedSystems(chassis redfishObject, selectedSystems map[string]struct{}, singleSystem func() bool) bool {
 	links := chassis.Links.ComputerSystems
 	ids := make([]string, 0, len(links.links)+1)
 	if id := normalizeODataID(links.collection.ODataID); id != "" {
@@ -1064,7 +1107,7 @@ func chassisOwnedBySelectedSystems(chassis redfishObject, selectedSystems map[st
 		}
 	}
 	if len(ids) == 0 {
-		return true
+		return singleSystem()
 	}
 	for _, id := range ids {
 		if _, ok := selectedSystems[id]; !ok {
@@ -1164,7 +1207,11 @@ func (s *redfishSession) listProcessorGPUs(ctx context.Context, link string) ([]
 	var statusError *redfishHTTPStatusError
 	if !errors.As(err, &statusError) ||
 		(statusError.statusCode != http.StatusBadRequest && statusError.statusCode != http.StatusNotImplemented) {
-		return nil, err
+		// A non-partial, non-query-rejection failure (e.g. the inventory context
+		// expiring mid-traversal) can still carry processors read before it
+		// occurred. Keep them so a later interruption cannot drop already-known
+		// GPUs; the error propagates so discovery is marked partial.
+		return processors, err
 	}
 
 	// Query parameters are optional in Redfish. Retry with the plain collection
@@ -1407,24 +1454,25 @@ func redfishObjectID(object redfishObject) string {
 // counted twice. The first view to record a device wins, so callers order the
 // richer views (Processors) first.
 func addGPU(inventory *hwmgrcontroller.GPUInventory, seen map[string]struct{}, gpu hwmgrcontroller.GPUInfo) {
-	var serialKey, idKey string
-	if gpu.SerialNumber != "" {
-		serialKey = "serial:" + strings.ToLower(gpu.SerialNumber)
-	}
-	if gpu.ID != "" {
-		idKey = "id:" + gpu.ID
-	}
+	serialKey := gpuSerialKey(gpu.SerialNumber)
+	idKey := gpuIDKey(gpu.ID)
 	if serialKey == "" && idKey == "" {
 		return
 	}
+	// Determine a match before registering, then register every alias this view
+	// supplies even on a match. A device seen first by serial and later by a new
+	// ID (or vice versa) must have both aliases recorded, so a third view that
+	// shares only the newly learned alias is still deduplicated rather than added
+	// as a duplicate.
+	matched := false
 	if serialKey != "" {
 		if _, exists := seen[serialKey]; exists {
-			return
+			matched = true
 		}
 	}
 	if idKey != "" {
 		if _, exists := seen[idKey]; exists {
-			return
+			matched = true
 		}
 	}
 	if serialKey != "" {
@@ -1433,7 +1481,41 @@ func addGPU(inventory *hwmgrcontroller.GPUInventory, seen map[string]struct{}, g
 	if idKey != "" {
 		seen[idKey] = struct{}{}
 	}
+	if matched {
+		return
+	}
 	inventory.Devices = append(inventory.Devices, gpu)
+}
+
+// markNonGPU records a device's identity aliases in seen without adding it to the
+// inventory, so a later view cannot (re)classify the same physical device as a
+// GPU. It is used for devices the Processor view explicitly classifies as
+// non-GPU: the broad PCIe DeviceClass ProcessingAccelerators also covers non-GPU
+// accelerators such as FPGAs, and that class alone must not override an explicit
+// Processor classification for the same device.
+func markNonGPU(seen map[string]struct{}, serial string, ids ...string) {
+	if key := gpuSerialKey(serial); key != "" {
+		seen[key] = struct{}{}
+	}
+	for _, id := range ids {
+		if key := gpuIDKey(id); key != "" {
+			seen[key] = struct{}{}
+		}
+	}
+}
+
+func gpuSerialKey(serial string) string {
+	if serial == "" {
+		return ""
+	}
+	return "serial:" + strings.ToLower(serial)
+}
+
+func gpuIDKey(id string) string {
+	if id == "" {
+		return ""
+	}
+	return "id:" + id
 }
 
 func redfishPCIAddress(function redfishObject) string {
