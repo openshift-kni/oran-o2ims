@@ -60,11 +60,12 @@ The successful path is:
 | 3 | IBI Operator | Record an attempt and create its preparation DataImage. |
 | 4 | BMO/Ironic | Attach the live ISO and preparation DataImage, then boot the server. |
 | 5 | Live ISO | Apply the per-host network configuration. |
-| 6 | Live ISO | Prepare the disk and pre-cache images. |
-| 7 | Live ISO and IBI callback server | Send an authenticated HTTPS callback and persist the preparation result. |
-| 8 | IBI Operator | Clean up preparation media and hand off to normal IBI installation. |
-| 9 | IBI Operator and BMO/Ironic | Attach the normal configuration DataImage and boot from disk. |
-| 10 | OCM | Observe cluster installation and fulfill the request. |
+| 6 | Live ISO | Verify the ISO's installation disk matches the declared target disk before any destructive preparation. |
+| 7 | Live ISO | Prepare the disk and pre-cache images. |
+| 8 | Live ISO and IBI callback server | Send an authenticated HTTPS callback and persist the preparation result. |
+| 9 | IBI Operator | Clean up preparation media and hand off to normal IBI installation. |
+| 10 | IBI Operator and BMO/Ironic | Attach the normal configuration DataImage and boot from disk. |
+| 11 | OCM | Observe cluster installation and fulfill the request. |
 
 The shared live ISO contains generic code and trust configuration. The
 preparation DataImage contains the target's network settings and the current
@@ -172,6 +173,44 @@ must continue to work without a preparation carrier. A callback-capable ISO is
 an identifiable prerequisite for automated preparation; existing ISOs do not gain
 the new executable behavior from a DataImage.
 
+### Target disk compatibility
+
+The live ISO contains a fixed `installationDisk`. Today's generator takes the
+explicit `liveISO.installationDisk` override or derives it from the seed
+ClusterInstance node's `rootDeviceHints.deviceName`. Neither the ISO URL nor its
+digest establishes that this disk choice is appropriate for an allocated target.
+A shared ISO therefore applies only to targets with a compatible disk selection
+and hardware layout; a seed-host-specific path must not silently become a fleet
+installation target.
+
+Agree a producer/consumer disk contract during API review:
+
+1. Record the effective installation disk from the frozen ISO build inputs in
+   artifact metadata bound to the verified ISO digest. Define how the consumer
+   obtains that metadata alongside the existing generation outputs.
+2. Obtain the intended target disk selector from the rendered configuration and
+   allocated hardware. Validate known artifact/template incompatibilities before
+   allocation where possible, and recheck the allocated target before boot.
+   Reject a known mismatch or an unsupported selector with a useful error.
+3. Include the expected target selector in the frozen preparation carrier. A
+   generic live-environment guard resolves both the ISO's embedded installation
+   path and that selector to the actual block-device identity. Missing,
+   ambiguous, or mismatched devices prevent the preparation service from starting
+   and produce a failure result before any destructive write.
+
+Hub-side comparison of declared configuration cannot replace the local guard.
+Linux device paths and aliases may only be resolvable in the live environment;
+the design does not assume a portable BMC check can validate them before boot.
+The guard must check the actual embedded installation value, not only a second
+copy of the expected selector. A guard failure or a skipped preparation service
+must never be reported as successful preparation.
+
+The carrier supplies a selector for verification, not an override of the ISO's
+baked-in installation disk. An incompatible target needs a compatible ISO or a
+new ISO generated with an appropriate `liveISO.installationDisk`. Confirm the
+supported selector forms, metadata interface, and guard ordering in the initial
+development experiment before considering this contract implemented.
+
 ### ISO identity and availability
 
 Consume the verified `isoURL` and `isoDigest` already published by seed
@@ -185,6 +224,37 @@ This is a unique location per request instance. It does not contain a seed-image
 digest and is not a content-addressed URL. Retain the original requirement to
 keep the published bytes unchanged and available while consumers use them.
 The URL layout alone does not enforce server-side immutability.
+
+The current uploader prevents overwriting an existing run directory/file and
+verifies the uploaded bytes over HTTPS, but publishes a file writable by its
+owner. These checks do not establish that later BMC fetches receive the same
+bytes. A digest check or a content-addressed filename alone cannot prove future
+immutability either.
+
+Each supported publication origin and path prefix needs a documented,
+deployment-qualified publication and retention policy. The initial contract is:
+
+- Publishing creates a new artifact version. The upload identity cannot modify,
+  replace, or delete published bytes or redirect the published URL to other
+  content. Writable staging separated from a protected published namespace, or
+  versioned write-once storage, are candidate mechanisms to evaluate; changing a
+  file mode while its owner can replace it is insufficient.
+- The version and URL remain available for every active consumer, including boot,
+  retries, and media cleanup. Retirement must account for active consumers and
+  prevent acceptance of new consumers after the retention guarantee ends.
+- Setup qualification exercises the actual upload identity and HTTPS serving
+  path to confirm those controls. Administrators approve the qualified
+  origin/path and policy through operator-owned configuration; runtime checks
+  require that approval in addition to the expected digest. An HTTP probe cannot
+  certify an arbitrary server's storage policy.
+
+Reject automated boot from an origin/path without that publication and retention
+contract. If the existing BMO/Ironic path can instead retain and serve the exact
+verified bytes for the entire consumer lifetime, it may provide an alternative,
+but the prototype must prove that binding and lifetime before relying on it.
+The current generic upload workflow is not assumed to satisfy either mechanism
+without changes or additional server-side controls. Selecting and qualifying the
+mechanism is part of the first development work package.
 
 The IBI Operator validates the approved ISO origin and expected ISO digest
 before boot. Prototype the actual BMO/Ironic fetch/rehosting behavior and the
@@ -244,6 +314,11 @@ conventions.
 - Reuse the same ISO on another target or distinct attempt with different
   network/callback data. Confirm the code and artifact are independent of the
   target and attempt.
+- Exercise an incompatible disk selector and prove the live guard prevents all
+  destructive preparation while reporting a failure.
+- Select and qualify the publication/retention mechanism. Exercise replacement
+  and deletion attempts with the upload identity and inspect the actual later
+  media-fetch path; an initial matching digest is not sufficient evidence.
 - Demonstrate removal of preparation media and the normal configuration
   DataImage/disk-boot handoff. Record unsupported combinations and the fallback
   decision if the preferred path fails.
@@ -262,6 +337,8 @@ mechanism QA must discover or prove for us.
   and existing ICIs that omit preparation.
 - Agree the creation-time rendering path, PR status mapping, callback endpoint
   configuration, and capability/version contract.
+- Agree the disk metadata/selector interface and the operator-owned origin/path
+  approval and retention contract.
 - Add validation and API regression tests; regenerate deepcopy, CRD, and bundle
   output in the owning repositories.
 
@@ -272,17 +349,19 @@ develop against the same API and distinguishes unsupported component versions.
 
 **Owner:** IBI Operator; coordinate asset consumption with OCM.
 
-- Build and serve one preparation carrier containing validated network data and
-  per-attempt callback parameters. Bind it to the ICI UID, BMH UID, and attempt;
-  name/namespace the DataImage according to the BMO host-matching contract.
+- Build and serve one preparation carrier containing validated network data,
+  the expected target disk selector, and per-attempt callback parameters. Bind it
+  to the ICI UID, BMH UID, and attempt; name/namespace the DataImage according to
+  the BMO host-matching contract.
 - Freeze the effective payload for an attempt and reuse those bytes on recovery.
   A changed network Secret must not silently change an already recorded attempt.
 - Keep token material in an owned Secret and treat the carrier as secret-bearing
   media with restricted access and short retention. Do not expose it through an
   unrestricted generic file-serving path.
-- Implement the mount/materialization, network setup, and completion reporter
-  units. Verify current-boot service completion and bound callback retries by
-  the agreed attempt budget. Keep credentials out of logs and command arguments.
+- Implement the mount/materialization, network setup, disk-compatibility guard,
+  and completion reporter units. Verify current-boot guard/service outcomes and
+  bound callback retries by the agreed attempt budget. Keep credentials out of
+  logs and command arguments.
 - Version the carrier layout and shared assets. Prefer a public, versioned
   package of embedded assets owned by the IBI project, consumed by OCM at build
   time. An OCM import of another repository's `internal/ignition` package is not
@@ -297,6 +376,9 @@ attempt credentials baked into the reusable ISO.
 
 - Add the preparation reconciler path before normal host configuration, with
   explicit BMH/media ownership checks and confirmed attachment before boot.
+- Require the approved publication/retention policy and validate the declared
+  disk compatibility before issuing a boot request. The live guard remains
+  responsible for confirming the actual device before destructive preparation.
 - Extend `cmd/server` with an authenticated callback handler and Kubernetes
   client. Validate active identity, payload bounds, and attempt state; persist a
   result without coupling the HTTP process to the controller's memory.
@@ -325,8 +407,11 @@ preparation and normal IBI installation, with focused lifecycle tests passing.
   run inputs so a resumed Job does not silently adopt different operator assets.
   Agree how generation outputs identify the compatible bootstrap/carrier version
   before a consumer boots the ISO.
-- Preserve the current upload/HTTPS verification, status outputs, and generation
-  layout. Document how to obtain or generate a compatible ISO.
+- Publish the effective installation-disk metadata from those frozen inputs,
+  bound to the verified ISO digest, using the agreed output interface.
+- Integrate the qualified publication/retention mechanism while preserving the
+  existing upload/HTTPS verification and status outputs. Document how to obtain
+  a compatible ISO and publish it through an approved origin/path.
 
 **Exit:** OCM can publish a reusable preparation-capable ISO; ordinary generation
 and its existing outputs remain compatible. This can develop in parallel with
@@ -362,6 +447,9 @@ without manual BMC actions. Omitted preparation retains the existing IBI path.
 - Cover invalid/replayed/stale callbacks, deadline/result races, interrupted
   carrier creation, attachment failure, bounded retries, interrupted cleanup,
   deletion, and restarts of each IBI process and OCM.
+- Cover missing, ambiguous, and incompatible target disks with assertions that
+  no destructive preparation starts. Verify rejection of unqualified publication
+  origins and the chosen mechanism's protection of the later media fetch.
 - Verify least-privilege RBAC for each process, regenerate effective manifests,
   and test the feature without granting OCM BMH mutation permissions for work
   owned by the IBI Operator.
@@ -399,13 +487,14 @@ not existing interfaces.
 | IBI Operator | `api/v1alpha1/imageclusterinstall_types.go`, `imageclusterinstall_webhook.go`, and their tests | Optional preparation API, immutable active inputs, durable status, validation, and generated CRD/deepcopy output. |
 | IBI Operator | `controllers/imageclusterinstall_controller.go`, `imageclusterinstall_monitor.go`, and related tests | Dispatch, host validation, preparation lifecycle, handoff, finalizers, and monitoring. |
 | IBI Operator | `internal/installer/`, `internal/imageserver/`, `cmd/server/main.go`, `cmd/manager/main.go` | Carrier construction/serving, callback route and API client, configuration, timeout handling, and process integration. |
-| IBI Operator | New shared bootstrap package, for example `pkg/preprovisioning/` | Versioned generic assets and carrier contract consumable outside the repository. |
+| IBI Operator | New shared bootstrap package, for example `pkg/preprovisioning/` | Versioned network/disk guards, callback assets, and carrier contract consumable outside the repository. |
 | IBI Operator | `config/manager/`, `config/rbac/`, `config/crd/`, `bundle/`, `hack/integration-test/` | Supported endpoint/configuration, effective permissions, generated artifacts, and development integration coverage. |
-| OCM | `api/provisioning/v1alpha1/clustertemplate_types.go`, `conditions.go`, `provisioningrequest_types.go` as needed | Typed preparation defaults and the agreed PR progress/durable timeout contract; regenerate API artifacts. |
+| OCM | `api/provisioning/v1alpha1/clustertemplate_types.go`, `conditions.go`, `provisioningrequest_types.go` as needed | Typed preparation defaults, PR progress/timeouts, and agreed artifact metadata; regenerate API artifacts. |
 | OCM | `internal/validation/`, `internal/controllers/clustertemplate_controller.go`, `provisioningrequest_validation.go` | Shared business validation, template/request call sites, `hwMgmtDefaultsToMap`, and existing `DeepMergeMaps` integration. |
 | OCM | `internal/controllers/provisioningrequest_controller.go`, `provisioningrequest_clusterinstall.go`, `provisioningrequest_hwprovision.go` | Correct creation/monitoring order, independent timeout budgets, status mapping, and deletion sequencing. |
 | OCM | `internal/controllers/provisioningrequest_setup.go` and a new preparation helper file | ICI status watch, ownership mapping, and focused preparation observation logic. |
-| OCM | `internal/validation/seedgeneration.go`, `internal/controllers/provisioningrequest_seedgeneration_iso_inputs.go`, related snapshot/Job code and tests | ISO capability opt-in, generic Ignition serialization, asset compatibility, and unchanged verified publication behavior. |
+| OCM | `internal/validation/seedgeneration.go`, `internal/controllers/provisioningrequest_seedgeneration_iso_inputs.go`, related snapshot/Job code and tests | ISO opt-in, Ignition serialization, asset compatibility, and frozen installation-disk metadata. |
+| OCM | `internal/controllers/provisioningrequest_seedgeneration_preflight.go`, `internal/controllers/scripts/seed-generation-iso.sh`, and output helpers | Effective disk derivation and the qualified publication/retention mechanism, preserving verification and existing outputs. |
 | OCM | `config/rbac/role.yaml`, CRD/bundle output, `test/utils/vars.go`, `must-gather/gather`, developer dependency documentation | Generated permissions/API output, external ICI test prerequisite, diagnostics, and collection coverage. |
 | OCM | `go.mod`, `go.sum`, `vendor/` | Pin the agreed ICI API and shared bootstrap dependencies. |
 | SiteConfig | IBI cluster/node templates and their supported input interface | Creation-time ICI preparation intent or the agreed explicit gate; exact upstream locations agreed with maintainers. |
@@ -427,8 +516,8 @@ the combined implementation before package 8 release qualification.
 These are initial engineering-effort ranges, including focused tests and code
 generation work. They are not elapsed delivery promises; review queues, lab
 availability, ACM release lead time, and QE's scale execution are additional.
-Re-estimate after package 1, especially if a BMO/Ironic change or a per-target ISO
-fallback is required.
+Re-estimate after package 1, especially if a BMO/Ironic change, a per-target ISO
+fallback, or a new publication mechanism is required.
 
 | Package | Effort | Main lab/review checkpoint |
 | --- | --- | --- |
@@ -467,6 +556,7 @@ QA should validate the supported feature through user-visible behavior:
 | --- | --- |
 | Unprepared SNO with preparation configured | One PR drives preparation and installation to a healthy, accessible cluster and `fulfilled`. |
 | Already prepared SNO with preparation omitted | Existing IBI installation succeeds without booting the preparation ISO. |
+| Incompatible target disk selection | Preparation is rejected with a useful error before any destructive write. |
 | Representative preparation failure/timeout | PR reports a useful terminal failure after its configured budget; normal installation does not proceed. |
 | Configured retry followed by success | PR remains progressing during retry/backoff and subsequently completes. |
 | Delete a PR during preparation | Cleanup completes and the request/dependent resources do not remain stranded behind finalizers. |
@@ -489,7 +579,9 @@ repeating every internal test on hardware.
    contract, including the proposed separate PR preparation condition.
 4. Agree ACM-owned callback endpoint configuration, trust, and carrier access.
 5. Agree the template-owned ISO capability opt-in and compatibility check.
-6. Schedule the ACM component delivery and identify the minimum supported build.
+6. Agree artifact disk metadata, supported target selectors, and the live guard.
+7. Qualify the publication/retention mechanism and origin/path approval policy.
+8. Schedule the ACM component delivery and identify the minimum supported build.
 
 SSH polling can reduce callback and ISO bootstrap work, but it does not deliver
 per-host static networking. With DHCP and an already SSH-enabled ISO it avoids
