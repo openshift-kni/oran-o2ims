@@ -146,14 +146,16 @@ place; this example adds access rather than replacing the host's SSH policy.
 
 ### Allow HTTPS downloads
 
-Allow HTTPS on port 10443 from the hub and authorized ISO consumers. Use a
+Allow HTTPS on port 10443 from the hub, administration hosts performing the
+certificate and upload verification below, and authorized ISO consumers. Use a
 separate source list for these clients; ISO consumers do not need SSH access.
 Using the firewalld zone selected above, replace the documentation ranges
-with your approved HTTPS source networks:
+with your approved HTTPS source networks. Include the administration network
+even when it differs from the hub and ISO consumer networks:
 
 ```bash
 HTTPS_FAMILY=ipv4
-HTTPS_SOURCES=(192.0.2.0/24 198.51.100.0/24)
+HTTPS_SOURCES=(192.0.2.0/24 198.51.100.0/24 203.0.113.0/24)
 
 for network in "${HTTPS_SOURCES[@]}"; do
     rule="rule family=\"$HTTPS_FAMILY\" source address=\"$network\" port port=\"10443\" protocol=\"tcp\" accept"
@@ -163,7 +165,8 @@ done
 ```
 
 If HTTPS clients use IPv6, repeat this example with `HTTPS_FAMILY=ipv6` and
-the approved IPv6 sources in `HTTPS_SOURCES`, for example `(2001:db8:2::/64)`.
+the approved IPv6 sources for the hub, administration hosts, and ISO consumers
+in `HTTPS_SOURCES`, for example `(2001:db8:2::/64)`.
 Check that broader existing rules do not expose HTTPS to unintended clients.
 The example does not publish an HTTP port.
 
