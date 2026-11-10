@@ -157,7 +157,7 @@ spec:
       - name: name
         value: run-script-oci-ta
       - name: bundle
-        value: quay.io/konflux-ci/tekton-catalog/task-run-script-oci-ta:0.1.3@sha256:5bb79b79f6b185d989f982ded379a52e99a9999664f140980527771815aa13c3
+        value: quay.io/konflux-ci/tekton-catalog/task-run-script-oci-ta:0.1.3@sha256:e14dc37c890666c795583843d9b2aa466bd71faef4d3cba12a426fe7502a9cfb
       - name: kind
         value: task
       resolver: bundles
