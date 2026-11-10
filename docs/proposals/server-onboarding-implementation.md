@@ -45,10 +45,13 @@ Each ExternalSecret references the `ClusterSecretStore` configured globally on t
 onboarding controller (via `--secret-store-name` flag or `SECRET_STORE_NAME` env
 var, defaulting to `onboarding-vault`). The External Secrets Operator (ESO), which
 is pre-configured on the hub as a prerequisite, syncs these into Kubernetes Secrets
-from the external vault. The controller waits for the relevant K8s Secrets to exist
-and contain data before transitioning to `Inspecting`. At minimum the shared
-default-credentials Secret must be present, since the BMH created in `Inspecting`
-references it via `spec.bmc.credentialsName`.
+from the external vault. The controller gates the transition to `Inspecting` on
+**ESO's sync status, not the Secret contents**: it watches each ExternalSecret's
+`.status` (the `Ready` / `SecretSynced` condition ESO sets) and never reads the
+synced Secret's `data`, so no BMC credential bytes ever enter the controller
+process. At minimum the shared default-credentials ExternalSecret must be synced,
+since the BMH created in `Inspecting` references the resulting Secret via
+`spec.bmc.credentialsName` — and **BMO, not the controller, reads it**.
 
 > **New external integration.** The codebase has no ESO integration today — no
 > ESO API types are vendored, registered in any scheme, or referenced by any
@@ -185,9 +188,14 @@ request a revert of the NIC to DHCP through the same API (see the cleanup table)
 Because the address is unchanged, no update to `spec.bmcAddress` is needed. It is
 deliberately placed before any credential or LDAP change so that the point of no
 return is still the credential change (local) or `DisablingLocalAccounts` (ldap).
-To ensure the leased address is not handed to another host between lease and
-pinning, a DHCP reservation for each BMC MAC is recommended. On success, transition
-to `UpdatingCredentials` (local) or `ConfiguringLdap` (ldap).
+To ensure the leased address is not handed to another host — not only in the window
+between lease and pinning, but for the **entire lifetime of the static assignment** —
+each BMC's address must be **durably reserved** (a per-MAC DHCP reservation) or
+**excluded from the DHCP pool in IPAM**. After pinning, the BMC stops renewing its
+lease, so a non-durable lease could expire and be reassigned to another client,
+colliding with the now-static BMC. The reservation/exclusion is released only when the
+static assignment is removed (host decommission). On success, transition to
+`UpdatingCredentials` (local) or `ConfiguringLdap` (ldap).
 
 An IPv6 `bmcAddress` uses the IPv6 equivalents (DHCPv6 disabled, `IPv6StaticAddresses`
 plus a static default gateway) and an IPv6 `bmcSubnet` CIDR; the controller only
@@ -203,10 +211,15 @@ the desired LDAP configuration and BMO applies it over Redfish:
    **illustrative** here): service addresses, bind credentials, base DN,
    username/group attributes, and remote role mappings from the OnboardingRequest's
    `ldapConfig`. BMO applies them to the BMC's Redfish Account Service.
-2. Watch the BareMetalHost conditions for BMO to report LDAP configured and
-   working (TLS established to the LDAP server). The LDAP integration API also
-   provides ESO credential synchronization, keeping the BMC admin Secret used by BMO in step
-   with the external vault.
+2. Watch the BareMetalHost conditions for BMO to report LDAP **configured and
+   verified** — not merely a TLS connection to the directory, but a successful
+   **authentication and authorization** of the BMH's LDAP credentials with the
+   required admin role. A TLS handshake alone does not prove the credentials or the
+   role mapping are valid; publishing (or later disabling local accounts) on that
+   basis could leave a live BMH unable to access its own BMC. The server does **not**
+   advance to `Publishing` until BMO confirms authenticated access. The LDAP
+   integration API also provides ESO credential synchronization, keeping the BMC
+   admin Secret used by BMO in step with the external vault.
 3. Disabling the local default account (`ldapConfig.disableLocalAccounts: true`) is
    **not** done here — it is deferred to the dedicated `DisablingLocalAccounts`
    state after `Publishing`. See the ordering note below.
@@ -232,7 +245,11 @@ Consequences:
   `disableLocalAccounts` is false (the default), there is no irreversible step —
   the local account is always a recovery path.
 - `DisablingLocalAccounts` runs against an already-published, fully-functional host, so it is
-  **best-effort**: a failure there never fails the server. Transient errors are
+  **best-effort**. Because the disable is irreversible, the controller **re-confirms
+  authenticated LDAP access** (via the BMH conditions, as in `ConfiguringLdap` step 2)
+  immediately before applying it; if that check does not pass it does **not** disable
+  the local account — it records the `LocalAccountsDisabled` condition as not-done and
+  completes with local auth intact. A failure there never fails the server. Transient errors are
   retried with backoff; if they persist past the retry limit, the controller
   records the failure in `status.stateMessage`, emits a `Warning` event, and
   still transitions to `Completed` (local auth remains available as a fallback).
@@ -332,7 +349,17 @@ retained when a published BMH exists) → `CreatingExternalSecrets` (delete per-
 ExternalSecret, only if no
 published BMH depends on it)
 
-**Cleanup tracking:** The OnboardingServer's `status.state` tracks which steps completed. `status.cleanupStatus` (`pending`, `completed`, `partial`) tracks whether cleanup finished cleanly. Best-effort — if a cleanup step fails, it is logged in `status.stateMessage` but does not block other cleanup.
+**Cleanup tracking:** Rollback selection keys off **`status.mutationProgress`**, not
+`status.state`. On a failure `status.state` collapses to `Failed` and no longer says
+which BMC mutation was in flight, so it cannot drive rollback. Instead the controller
+records each operation in `status.mutationProgress` as it goes — `Requested` before
+declaring the desired state on the BMH / companion CR, then `Applied` / `Failed` when
+BMO reports the outcome — and the finalizer rolls back exactly the operations that
+reached `Requested` or `Applied` (an op left at `Requested` is the partially-applied
+case that still needs reverting), marking each `RolledBack`. `status.cleanupStatus`
+(`pending`, `completed`, `partial`) is the separate **outcome** of that run: a
+best-effort step that fails is logged in `status.stateMessage` and recorded `partial`,
+but does not block other cleanup.
 
 **Cleanup mechanism (OnboardingServer finalizer):**
 
@@ -347,22 +374,37 @@ without the finalizer, an `oc delete onboardingserver` would drop the CR and
 orphan its per-server resources. On finalization the controller:
 
 1. Sets `status.cleanupStatus: pending`.
-2. Runs the per-server cleanup in the order above — the reversible BMC rollback
-   when the server is in `ConfiguringLdap` (disable LDAP, re-enable local auth; a
-   no-op for `UpdatingCredentials`, which is irreversible, and for pre-mutation
-   states); then reverts a pinned BMC NIC to DHCP when the server reached
-   `PinningBmcAddress` (best-effort; the address is unchanged so the BMH is
-   unaffected); then, **if a BMH exists but is still held** (inventory-hold marker
-   present — i.e. onboarding did not reach `Publishing`), deletes that held BMH,
-   since it has never appeared in O2 IMS inventory; then deletes the per-server
-   ExternalSecret and its ESO-synced Secret. These deletion steps are **skipped when
-   a published BMH exists** (marker removed, at/after `Publishing`): a published BMH
-   is live infrastructure the finalizer must never delete, and it references its
-   credential Secret (`spec.bmc.credentialsName`) for the life of the host, so the
-   finalizer **retains** the BMH and the per-server ExternalSecret/Secret. Those are
-   removed later, by the OnboardingRequest finalizer, which runs only after all BMHs
-   are gone (see
+2. **If the BMH is published, skip all BMC rollback and deletion** (marker removed,
+   at/after `Publishing`): a published BMH is live infrastructure the finalizer must
+   never mutate or delete. In particular it does **not** revert the BMC NIC to DHCP —
+   doing so would drop the static-address guarantee and could change the address the
+   live host answers on — and it **retains** the BMH and the per-server
+   ExternalSecret/Secret (referenced by `spec.bmc.credentialsName` for the life of
+   the host). Those shared/per-server credentials are removed later by the
+   OnboardingRequest finalizer, which runs only after all published BMHs are gone (see
    [Deletion semantics](server-onboarding-service.md#deletion-semantics)).
+
+   Otherwise (a **held** BMH, inventory-hold marker present — onboarding did not reach
+   `Publishing`), run the per-server cleanup in the order above, selecting what to roll
+   back from **`status.mutationProgress`** (not `status.state`, which may be `Failed`)
+   so a partially-applied op — recorded `Requested` but not `Applied` — is still
+   reverted:
+   - **Reversible BMC rollback** for any `ConfigureLdap` op at `Requested`/`Applied`
+     (request disable-LDAP / re-enable-local-auth via the Metal3 LDAP API; a no-op for
+     `ProvisionCredentials`, which is irreversible, and for pre-mutation states), and
+     the **NIC-to-DHCP revert** for a `PinNetwork` op at `Requested`/`Applied` (via the
+     Metal3 networking API, best-effort; the address is unchanged so the BMH is
+     unaffected). Each reverted op is marked `RolledBack` in `status.mutationProgress`.
+   - **Wait for BMO to report the requested rollback settled** before deleting the
+     held BMH. Because these operations are applied asynchronously by BMO, deleting
+     the BMH immediately could drop a rollback BMO has not yet performed. The
+     finalizer watches the BMH conditions for the rollback to complete, or, on a
+     bounded timeout, records `status.cleanupStatus: partial` (with the attempted
+     operation in `status.stateMessage`) and proceeds. Deleting the BMH's parent
+     Metal3 config state (if any) along with the BMH is acceptable only once the
+     rollback has settled or the timeout has elapsed.
+   - **Delete the held BMH** (it has never appeared in O2 IMS inventory), then delete
+     the per-server ExternalSecret and its ESO-synced Secret.
 3. Sets `status.cleanupStatus: completed` if every step succeeded, or `partial`
    if a best-effort step failed. `partial` is logged and recorded in
    `status.stateMessage` but **does not block** finalizer removal — cleanup never
@@ -376,19 +418,22 @@ the ExternalSecret is GC'd as a backstop only when the whole OnboardingRequest i
 torn down.
 
 **Composition with the OnboardingRequest finalizer:** the two finalizers divide
-responsibility by scope. The OnboardingRequest finalizer removes **shared**
-resources (the shared ExternalSecrets) and then lets
-owner-reference GC delete the OnboardingServer CRs; each OnboardingServer's
-finalizer runs during that cascade to clean its **per-server** resources. Because
-whole-request deletion is gated (webhook + finalizer) on no **published** BMHs
-remaining and no server being mid-BMC-mutation (see
-[Deletion semantics](server-onboarding-service.md#deletion-semantics)), the per-server BMC rollback is
-effectively a no-op at teardown time — every surviving server is either in a
-**pre-mutation state** (nothing to roll back) or **past `Publishing`**
-(`DisablingLocalAccounts`/`Completed`), and a server past `Publishing` has a published BMH,
-which the published-BMH gate blocks from deletion in the first place. The
-reversible rollback (`ConfiguringLdap`) only ever applies to a server still held
-before `Publishing`, which cannot coexist with a permitted teardown.
+responsibility by scope, and the **order matters**. The OnboardingRequest finalizer
+first **quiesces and drains** the children — stopping new mutations and waiting for
+any in-flight BMC operation to settle — then lets owner-reference GC delete the
+OnboardingServer CRs so each per-server finalizer runs its **per-server**
+rollback/cleanup **while the shared credential Secrets still exist**, and only
+**afterwards** removes the **shared** ExternalSecrets (see
+[Deletion semantics](server-onboarding-service.md#deletion-semantics)). After the
+drain, every surviving server is one of: **pre-mutation** (nothing to roll back);
+**past `Publishing`** (a published BMH — the finalizer never rolls back or deletes
+it, and the published-BMH gate blocks whole-request teardown until it is
+decommissioned); or **held in a terminal-failure state**. That last case is the one
+that still performs a real rollback — e.g. a `ConfiguringLdap` that failed before
+`Publishing`: disable LDAP / re-enable local auth on the held BMC. It is reversible
+precisely because local accounts are still enabled pre-`Publishing`, and it runs
+before the shared credentials are removed, so BMO still has the credentials it needs
+to apply it.
 
 **Terminal mismatch states (`VendorMismatch`, `HwMismatch`):** Both are reached
 from `Inventorying` — after inspection but before any Redfish mutation. The BMH
@@ -449,12 +494,14 @@ mismatch yields `VendorMismatch`; any other attribute mismatch yields `HwMismatc
 both delete the held BMH. See [Hardware attribute matching](server-onboarding-service.md#1-api-design-crds)
 for the catalog, units, and comparison rules.
 
-**BMC Redfish transport is BMO's concern.** TLS verification for self-signed BMC
-certs, per-request timeouts, retries, and account discovery (the default admin
+**BMC Redfish transport is BMO's concern.** TLS verification of the BMC's serving
+certificate, per-request timeouts, retries, and account discovery (the default admin
 account ID varies by vendor — Dell/HPE typically `1`, Lenovo varies) are all
 handled inside BMO's Redfish implementation, not the onboarding controller. The
-controller sets `spec.bmc.disableCertificateVerification` on the BMH (as BMO
-already expects) and otherwise leaves BMC transport entirely to BMO.
+controller only sets `spec.bmc.disableCertificateVerification` on the BMH — **`false`
+by default so BMO verifies the certificate**, and `true` only when the pool explicitly
+opts in via `spec.disableBmcCertificateVerification` for self-signed BMCs — and
+otherwise leaves BMC transport entirely to BMO.
 
 **Vendor Redfish coverage is partial.** Per the BMC-config APIs, DHCP toggle,
 `StaticNameServers`, and LDAP Account-Service fields are inconsistent across
@@ -551,14 +598,30 @@ boots the host over a provisioning network.
   - `spec.bmc.credentialsName`: reference to the **shared default-credentials**
     Secret (`<onboardingRequestName>-default-creds`). This is swapped to the
     per-server (local) or LDAP Secret later, after the BMC is mutated.
-  - `spec.bmc.disableCertificateVerification: true`
+  - `spec.bmc.disableCertificateVerification`: **`false` by default** — BMO verifies
+    the BMC's serving certificate. It is set to `true` **only** when the pool opts in
+    via `spec.disableBmcCertificateVerification` (self-signed BMCs with no trusted CA)
+    — an explicit, per-pool exception, since disabling verification lets an attacker on
+    the management path impersonate a BMC and intercept its credentials. Where the
+    BMCs' certificates can be trusted (a CA bundle configured for BMO), it stays
+    `false`. See [Security Considerations](server-onboarding-service.md#4-security-considerations).
   - `spec.inspectionMode: fast` — selects fast out-of-band (Redfish) inspection;
     BMO queries the BMC directly and produces the `HardwareData` used for matching,
     with no ramdisk boot and no provisioning network
-  - `spec.bootMACAddress`: **not set** — it is not needed for out-of-band
-    inspection and is populated later by the normal provisioning flow (the existing
-    `setBootMACAddressFromLabel()` path) when the BMH is allocated to a cluster via
-    a ProvisioningRequest
+  - `spec.bootMACAddress`: **not set at creation** — it is not needed for
+    out-of-band inspection. But the normal provisioning fallback
+    `setBootMACAddressFromLabel()` **errors when both** `spec.bootMACAddress` and the
+    boot-interface label are absent, so the controller must supply boot-interface
+    information **before publication** or an allocated host cannot be provisioned
+    without manual repair. Fast inspection enumerates the host NICs in `HardwareData`,
+    so at `Publishing` the controller records the boot interface on the BMH — setting
+    the boot-interface label `setBootMACAddressFromLabel()` reads (or
+    `spec.bootMACAddress` directly) from the inspected NICs. A server whose boot
+    interface cannot be determined **fails rather than publishing** a host that
+    provisioning could not later boot. (**Open question:** on a multi-NIC host, which
+    NIC is the provisioning/boot interface is not derivable from OOB inspection alone
+    and may need a pool-level boot-interface selector — see
+    [Open Questions](#12-open-questions--product-inputs).)
   - `spec.online`: **not set** (defaults to `false`) — fast inspection does not
     power the host on; the host stays powered off until the normal provisioning
     flow deploys it
@@ -638,8 +701,19 @@ func IncludeInInventory(bmh *metal3v1alpha1.BareMetalHost) bool {
 
 The `inspecting` state is already excluded (it is not in the included set), so the
 host is naturally hidden while inspection runs; the marker extends that exclusion
-through `available` until `Publishing` removes it. This is the only change to
-existing inventory code required by this design.
+through `available` until `Publishing` removes it.
+
+**The allocation selection path must honor the same marker.** `IncludeInInventory()`
+governs only whether a BMH is surfaced as an O2 IMS Resource — it does **not** gate
+allocation. A held BMH sits in `available`, so the hardware manager's selection path
+(`fetchBMHList` and `ResourceSelectionSecondaryFilter` in
+`internal/hardwaremanager/controller/`) could otherwise pick it for a cluster while
+onboarding is still mutating its BMC or firmware. The same
+`onboarding.openshift.io/inventory-hold` guard must therefore be added to that
+selection path so held hosts are excluded from allocation until `Publishing` removes
+the marker. These two guards — inventory visibility (`IncludeInInventory`) and
+allocation selection — are the only changes to existing inventory/allocation code
+required by this design.
 
 ### O2 IMS inventory population
 
@@ -939,11 +1013,16 @@ reads and writes OnboardingRequest / OnboardingServer CRs through `HubClient`.
   call, so the servicing CRs come with the BMH scheme already needed for
   inspection
 - `internal/constants/constants.go` — add onboarding constants (including the
-  `onboarding.openshift.io/inventory-hold` annotation key and the server
+  `onboarding.openshift.io/inventory-hold` and
+  `onboarding.openshift.io/hardening-complete` annotation keys and the server
   subcommand name)
 - `internal/hardwaremanager/controller/inventory.go` — `IncludeInInventory()`
   must exclude BMHs carrying the inventory-hold marker (see
   [Inventory-hold marker and `IncludeInInventory`](#inventory-hold-marker-and-includeininventory))
+- `internal/hardwaremanager/controller/` allocation selection (`fetchBMHList` /
+  `ResourceSelectionSecondaryFilter`) — must likewise exclude held BMHs so a
+  mid-onboarding host is never allocated before `Publishing` (same
+  [inventory-hold](#inventory-hold-marker-and-includeininventory) guard)
 - `config/crd/` — generated CRD manifests
 - `config/rbac/` — RBAC for the onboarding service account, plus the user-facing
   role updates required by DD-004:
@@ -987,7 +1066,7 @@ The following must be in place before the onboarding service can be used. All ar
 | **External Secrets Operator (ESO)** | Syncs vault secrets into K8s Secrets. Must be deployed on the hub cluster. | Platform admin / cluster setup |
 | **ClusterSecretStore CR** | Named `onboarding-vault` by default (configurable via `--secret-store-name` on the controller). Must be configured to connect to the external vault. All ExternalSecrets created by the onboarding controller reference this store. | Platform admin / security team |
 | **External vault** | Stores BMC credentials. Must contain: factory-default credentials (shared per vendor), per-server desired credentials (one vault entry per server, local mode), and LDAP bind/user credentials (LDAP mode). | Security team |
-| **BMC DHCP address** | Each BMC has a DHCP IP reachable from the hub at `bmcAddress` (per-MAC reservation recommended). The service later pins it to static, reusing the same IP; set `bmcSubnet`/`bmcGateway` so pinning does not need the lease. | Server / network team |
+| **BMC DHCP address** | Each BMC has a DHCP IP reachable from the hub at `bmcAddress`, backed by a **durable per-MAC reservation or IPAM exclusion** that holds for the lifetime of the static assignment (after pinning the BMC stops renewing, so a non-durable lease could be reassigned and collide). The service later pins it to static, reusing the same IP; set `bmcSubnet`/`bmcGateway` so pinning does not need the lease. | Server / network team |
 | **IP routing to BMC subnets** | **BMO/Ironic** must have outbound IP connectivity to the remote BMC management subnets for Redfish HTTPS — it performs all BMC traffic (inspection and net/creds/LDAP config). The **onboarding Pod needs no such route** (it talks only to the Kubernetes API). This requires routing from the Metal3/BMO pods to the BMC networks. | Network team |
 | **Metal3/Ironic + forthcoming BMC-config APIs** | BMO/Ironic must be deployed on the hub and support: fast out-of-band (Redfish) inspection; the BMC networking config API; the BMC credentials provisioning API; and, for LDAP pools, the LDAP integration API. The three BMC-config APIs are not yet available — each onboarding state is blocked until its API lands (local-cred onboarding needs fast inspection + BMC networking + BMC credentials; LDAP additionally needs LDAP integration). **No provisioning network, DHCP, TFTP, or PXE is required to onboard** — inspection is out-of-band. (A provisioning network is still needed later, by the normal provisioning flow, when a published host is actually deployed — but that is outside onboarding.) The onboarding controller needs **no direct BMC/Redfish client**. | Platform admin / Metal3 admin |
 | **LDAP server** (authMode=ldap only) | Directory server reachable from the BMC management networks. Must contain user accounts and groups for BMC admin access. BMCs must be able to reach the LDAP server for authentication after configuration. | Identity / directory team |
@@ -1244,7 +1323,7 @@ creates ExternalSecret CRs in the `pool-toronto-east-1` namespace:
           property: password
   ```
 
-ESO syncs these into K8s Secrets. The controller polls until at least the `toronto-east-pool1-default-creds` Secret exists and contains data (the BMH created next references it), then transitions to `Inspecting`.
+ESO syncs these into K8s Secrets. The controller watches the ExternalSecrets' `.status` until ESO reports at least the `toronto-east-pool1-default-creds` ExternalSecret synced (`Ready`) — it does not read the synced Secret's data; the BMH created next references the resulting Secret and BMO reads it — then transitions to `Inspecting`.
 
 #### 3b. CreatingExternalSecrets → Inspecting
 
@@ -1267,10 +1346,10 @@ spec:
   bmc:
     address: idrac-virtualmedia+https://10.10.10.101/redfish/v1/Systems/System.Embedded.1
     credentialsName: toronto-east-pool1-default-creds   # shared default creds (swapped later)
-    disableCertificateVerification: true
+    disableCertificateVerification: false   # BMO verifies the BMC cert; true only if the pool opts in (self-signed BMCs)
   inspectionMode: fast                # fast out-of-band (Redfish) inspection — no ramdisk boot
   # online defaults to false — fast inspection does not power the host on
-  # no bootMACAddress — not needed for out-of-band inspection; set later by provisioning
+  # no bootMACAddress yet — set (or the boot-interface label set) from inspected NICs at Publishing
 ```
 
 BMO registers the host against the BMC using the default credentials and runs a
@@ -1567,8 +1646,10 @@ is pinned from DHCP to static reusing the same IP). After that:
   ```
 
   The controller watches the BMH conditions for BMO to report LDAP configured and
-  working (TLS established to the LDAP server); the LDAP integration API's ESO
-  credential sync keeps the BMC admin Secret current with the vault.
+  **verified** — authenticated access with the required role, not just a TLS
+  connection to the directory (see the `ConfiguringLdap` state) — before advancing to
+  `Publishing`; the LDAP integration API's ESO credential sync keeps the BMC admin
+  Secret current with the vault.
 
 - No per-server desired credentials Secret is created. Once BMO reports LDAP working, the BMH's referenced credential Secret is the shared `toronto-east-pool1-ldap-creds` Secret, so BMO authenticates to the BMC via the LDAP user credentials.
 - All BMHs in the pool share the same LDAP user credentials — the LDAP server handles authentication, not per-BMC local accounts.
@@ -1638,6 +1719,7 @@ testing cannot be finalized until the numbers are supplied.
 |---|------|----------------|-----------------|
 | 1 | **Batch scale / timing target** | Max servers per OnboardingRequest and the time budget (e.g. "100 servers within N minutes"). | No throughput criterion; `MaxConcurrentReconciles` can't be validated against a target. The architecture scales via that knob; only the number is absent. |
 | 2 | **Per-Hub concurrent-batch count** | Max OnboardingRequests/pools a single Hub onboards concurrently. | No capacity-planning ceiling. The reconcile pool is global, not per-pool, so a supported maximum is needed to size it (and to decide whether per-pool fairness is ever needed). |
+| 3 | **Boot-interface selection** | How the provisioning/boot NIC is identified on a multi-NIC host (e.g. a pool-level selector by NIC name or MAC prefix) so the controller can set the boot-interface label / `spec.bootMACAddress` from inspection before `Publishing`. | On single-NIC hosts the controller can infer it; on multi-NIC hosts it cannot pick the boot interface from OOB inspection alone, so such servers would fail to publish without a selector. See [BMH creation](#6-hardware-inventory-and-bmh-creation). |
 
 Both feed directly into the [Concurrency and sizing](#7-controllers) guidance:
 once the targets are known, the `MaxConcurrentReconciles` default and any

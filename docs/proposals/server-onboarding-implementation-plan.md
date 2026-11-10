@@ -110,17 +110,29 @@ a required-vs-optional field validation smoke test (confirms
 **Deliverables.**
 
 - `internal/webhooks/onboardingrequest_webhook.go`: server-list validation,
-  spec immutability, append-only server list, and the **deletion guard** that
-  rejects deletion only when a *published* BMH exists (see
-  [Deletion semantics](server-onboarding-service.md#deletion-semantics)).
+  spec immutability, append-only server list, the **deletion guard** that
+  rejects deletion while a *published* BMH exists **or any server is
+  mid-BMC-mutation** (`PinningBmcAddress` / `UpdatingCredentials` /
+  `ConfiguringLdap`) — these webhook checks are advisory, and the request
+  **finalizer** is the authority that quiesces the child controllers and drains
+  in-flight mutations before removing shared state (see
+  [Deletion semantics](server-onboarding-service.md#deletion-semantics)) — and a
+  **v1 scope guard** that rejects requests setting `hardwareProfileName` or
+  `authMode: ldap` until the `ApplyingHardwareProfile` / `ConfiguringLdap` phases
+  land — otherwise such a request would reach `Completed` without applying the
+  requested baseline, and the published-BMH guard would then block retrying it.
   `LdapConfig` validation is added later with the LDAP mode.
 - `config/webhook/`: `service.yaml` (service-ca annotated), `manifests.yaml`
   (`ValidatingWebhookConfiguration` on create/update/delete, `failurePolicy: Fail`,
   `sideEffects: None`, cabundle injection), `kustomization.yaml`.
 
 **Tests.** envtest webhook cases: immutability rejection, append-only enforcement,
-deletion allowed with no published BMH / rejected with one, and the
-`hardwareProfileName`-references-existing-profile best-effort check.
+deletion allowed with no published BMH and no in-flight mutation / rejected when a
+published BMH exists / rejected while a server is mid-BMC-mutation, the v1 scope
+guard rejecting `hardwareProfileName` and `authMode: ldap`, and the
+`hardwareProfileName`-references-existing-profile best-effort check. (The
+finalizer's quiesce-and-drain behavior is covered by the Phase 4/6 controller
+tests, since it depends on the OnboardingServer state machine.)
 
 **Exit criteria.** Webhook validated in envtest; manifests wired into kustomize.
 
@@ -191,9 +203,13 @@ per-server `OnboardingServer` CRs, ExternalSecrets, and status counts.
 
 **Deliverables.**
 
-- `internal/controllers/onboardingrequest_controller.go`: ensure
-  `Location`/`OCloudSite`/`ResourcePool` (create when absent, with default
-  descriptions), create one `OnboardingServer` per `spec.servers` entry, create
+- `internal/controllers/onboardingrequest_controller.go`: ensure the inventory
+  hierarchy — require an **existing** `Location` (report `LocationNotFound` when
+  absent; never create one, since the request carries none of the address/coordinate
+  data a `Location` needs) and create `OCloudSite`/`ResourcePool` when absent (with
+  default descriptions), per
+  [Resource provisioning on reconciliation](server-onboarding-service.md#1-api-design-crds);
+  create one `OnboardingServer` per `spec.servers` entry, create
   per-server ExternalSecrets against the configured `ClusterSecretStore`, and
   maintain the status counts (`serversTotal/Pending/InProgress/Completed/Failed`)
   per the predicate in [§1](server-onboarding-service.md#1-api-design-crds).
@@ -221,7 +237,9 @@ re-onboarding.
   `CreatingExternalSecrets` → `Inspecting` → `Inventorying` → `PinningBmcAddress`
   → `UpdatingCredentials` → `Publishing` → `Completed`; terminal `VendorMismatch`,
   `AuthFailed`, `HwMismatch`, `Failed`. The `ApplyingHardwareProfile`,
-  `ConfiguringLdap`, and `DisablingLocalAccounts` states are added post-v1.
+  `ConfiguringLdap`, and `DisablingLocalAccounts` states are added post-v1, so v1
+  admission rejects `hardwareProfileName` and `authMode: ldap` until then (the
+  Phase 1 scope guard above).
 - Finalizer cleanup: delete a held BMH and per-server ExternalSecret/Secret on
   delete; **retain** a published BMH and its credentials; set
   `status.cleanupStatus`; retry-by-delete recreates the server as `Pending`.

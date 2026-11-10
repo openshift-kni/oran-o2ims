@@ -210,6 +210,15 @@ type OnboardingRequestSpec struct {
     BmcSubnet  string `json:"bmcSubnet,omitempty"`  // Management subnet in CIDR form, e.g. "10.10.10.0/24"
     BmcGateway string `json:"bmcGateway,omitempty"` // Management gateway, e.g. "10.10.10.1"
 
+    // DisableBmcCertificateVerification controls BMO's verification of each BMC's
+    // serving certificate (set as spec.bmc.disableCertificateVerification on every
+    // BMH in the pool). Defaults to false — BMO verifies the certificate. Set true
+    // ONLY as an explicit exception for a pool whose BMCs present self-signed
+    // certificates with no trusted CA available; disabling verification exposes the
+    // management path to BMC impersonation and credential interception. See
+    // "Security Considerations".
+    DisableBmcCertificateVerification bool `json:"disableBmcCertificateVerification,omitempty"`
+
     // No provisioning-network fields. Hardware validation uses fast out-of-band
     // (Redfish) inspection (spec.inspectionMode: fast), which queries the BMC
     // directly and never boots the host over a provisioning network, so no DHCP/
@@ -422,15 +431,17 @@ If `bmcVendor` does not match a known vendor, `bmcAddressTemplate` is required �
 
 The OnboardingRequestSpec is partially immutable after creation:
 
-- **Immutable fields**: All fields except `servers` — changing credentials, hardware attributes, vendor, resource pool, or the `hardwareProfileName` firmware/BIOS baseline while servers are being processed would cause inconsistent state (servers already onboarded were brought to the old baseline).
+- **Immutable fields**: All fields except `servers`, `bmcSubnet`, and `bmcGateway` — changing credentials, hardware attributes, vendor, resource pool, or the `hardwareProfileName` firmware/BIOS baseline while servers are being processed would cause inconsistent state (servers already onboarded were brought to the old baseline).
+- **Updatable BMC network settings (`bmcSubnet`, `bmcGateway`)**: these may be corrected after creation. They are consumed **only** at `PinningBmcAddress` (as the static subnet/gateway), so an update affects only servers **not yet pinned** — it never re-pins or disturbs a server already past `PinningBmcAddress`. This is the recovery path for the failure mode where a server lands in `Failed` at `PinningBmcAddress` because the BMC's DHCP lease omitted the gateway and no `bmcSubnet`/`bmcGateway` was supplied (see [Hardware attribute matching / pinning](#1-api-design-crds)): the operator sets or corrects `bmcSubnet`/`bmcGateway` on the existing OnboardingRequest and retries the failed server (delete its OnboardingServer; it is recreated as `Pending`) — **without** recreating the whole request, which the deletion guard would block once any server has published. The webhook re-validates the CIDR/gateway/family rules on update.
 - **Append-only `servers` list**: New server entries may be appended to the `servers` list. Existing entries cannot be modified or removed. This allows adding servers to an onboarding request incrementally without requiring a new CR.
 
 The webhook validates on update:
 
-1. All fields other than `servers` are unchanged.
+1. All fields other than `servers`, `bmcSubnet`, and `bmcGateway` are unchanged.
 2. The existing server entries (by index) are identical to the previous spec.
 3. Any new entries at the end of the list pass the same validation rules as at creation time.
 4. New `bmcAddress` values do not duplicate existing entries.
+5. Updated `bmcSubnet`/`bmcGateway` still satisfy the CIDR/gateway/family rules, and every server's `bmcAddress` still falls within `bmcSubnet`.
 
 **OnboardingServer CR naming:** The CR name must be a deterministic, unique,
 RFC-1123-valid label derived from the BMC address. A naive "replace `.` and `:`
@@ -642,12 +653,12 @@ inventory hierarchy exists. All three inventory CRs are created/looked up in the
 O-Cloud manager namespace (`oran-o2ims`):
 
 1. **Location CR** — must already exist in `oran-o2ims`. If not found, the OnboardingRequest is set to `Ready=False, Reason=LocationNotFound`.
-2. **OCloudSite CR** — created in `oran-o2ims` with `metadata.name` = `oCloudSiteName`, `spec.globalLocationName`, and the required `spec.description` (from `oCloudSiteDescription`, or a generated default) if not found.
+2. **OCloudSite CR** — created in `oran-o2ims` with `metadata.name` = `oCloudSiteName`, `spec.globalLocationName`, and the required `spec.description` (from `oCloudSiteDescription`, or a generated default) if not found. If it **already exists** but its `spec.globalLocationName` differs from the request's, the OnboardingRequest is set to `Ready=False, Reason=OCloudSiteConflict` and no ResourcePool is created — otherwise the pool and its hosts would be filed under a different Location than the request names.
 3. **ResourcePool CR** — created in `oran-o2ims` with `metadata.name` = `resourcePoolName`, `spec.oCloudSiteName`, and the required `spec.description` (from `resourcePoolDescription`, or a generated default) if not found.
 4. **Namespace** — created matching `resourcePoolName` if it does not exist, for BMH, Secret, and OnboardingServer resources. (Distinct from `oran-o2ims`.)
 5. **OnboardingServer CRs** — one created per entry in `spec.servers`, in the resource pool namespace, owned by the OnboardingRequest.
 
-If the ResourcePool already exists but references a different OCloudSite, the OnboardingRequest is set to `Ready=False, Reason=ResourcePoolConflict`.
+If the ResourcePool already exists but references a different OCloudSite, the OnboardingRequest is set to `Ready=False, Reason=ResourcePoolConflict`. (The analogous parent check one level up — an existing OCloudSite pointing at a different Location — yields `OCloudSiteConflict`, per step 2.)
 
 When new servers are appended to the spec, the controller creates OnboardingServer CRs for the new entries on the next reconciliation.
 
@@ -781,7 +792,35 @@ type OnboardingServerStatus struct {
     BmhName         string             `json:"bmhName,omitempty"`
     RetryCount      int                `json:"retryCount,omitempty"`
     LastAttemptAt   *metav1.Time       `json:"lastAttemptAt,omitempty"`
+
+    // MutationProgress records every BMC-mutation operation the controller has
+    // requested and how far it got — independent of State. When a mutation fails,
+    // State collapses to "Failed" and no longer says which operation was in flight;
+    // the finalizer reads MutationProgress (not State) to select the correct
+    // rollback, including for a partially applied operation. Each entry is written
+    // before the request (phase Requested) and updated when BMO reports the outcome
+    // (Applied / Failed), and again when cleanup reverts it (RolledBack).
+    MutationProgress []MutationOp `json:"mutationProgress,omitempty"`
+
+    // CleanupStatus is the outcome of the per-server finalizer's cleanup run, not a
+    // record of what was mutated (that is MutationProgress).
     CleanupStatus   string             `json:"cleanupStatus,omitempty"`   // pending, completed, partial
+}
+
+// MutationOp is one BMC-mutation operation and how far it progressed. The finalizer
+// uses it to decide what to roll back after a failure, since status.state is only
+// the (possibly terminal) state-machine state.
+type MutationOp struct {
+    // Operation is the BMC mutation performed via a Metal3 BMC-config API:
+    // "PinNetwork" (DHCP->static + DNS), "ProvisionCredentials" (local-mode
+    // per-server credentials), "ConfigureLdap", or "DisableLocalAccounts".
+    Operation string `json:"operation"`
+    // Phase is how far it got: "Requested" (desired state declared on the BMH /
+    // companion CR), "Applied" (BMO confirmed success), "Failed", or "RolledBack"
+    // (reverted during cleanup). A "Requested" (but not "Applied") op is the
+    // partially-applied case the rollback must still handle.
+    Phase string `json:"phase"`
+    UpdatedAt *metav1.Time `json:"updatedAt,omitempty"`
 }
 ```
 
@@ -844,21 +883,35 @@ a **validating webhook** on delete:
   state check is needed for it.)
 
 When both checks pass, deletion proceeds via a **finalizer** on the
-OnboardingRequest:
+OnboardingRequest. The webhook checks above are **advisory** — a server can enter a
+BMC mutation or `Publishing` in the TOCTOU window between admission and teardown — so
+the finalizer, not the webhook, is the authority that drains in-flight work before
+destroying any shared state:
 
-1. Re-check that no **published** `onboarded-*` BMHs remain in the resource pool
-   namespace — closing the TOCTOU gap between webhook admission and actual deletion
-   (e.g. a BMH published after admission). If any remain, the finalizer blocks and
-   requeues. (Held BMHs do not block; they are removed by the per-server
+1. **Quiesce the children.** Once the OnboardingRequest has a `DeletionTimestamp`,
+   the OnboardingServer controller treats that as a stop signal and starts **no new**
+   BMC mutation and **no** `Publishing` transition. (Per-server reconcilers still run
+   their own deletion/cleanup.)
+2. **Drain in-flight mutations.** Block and requeue while any OnboardingServer is
+   mid-BMC-mutation (`PinningBmcAddress` / `UpdatingCredentials` / `ConfiguringLdap`)
+   or mid-`Publishing` — wait for BMO to settle each to a stable state (success or
+   terminal failure). This closes the window the webhook's mid-mutation and
+   published-BMH checks cannot.
+3. **Re-check published BMHs.** If any **published** `onboarded-*` BMH remains in the
+   resource pool namespace (e.g. one that reached `Publishing` during the drain),
+   block and requeue — published hosts are live infrastructure and must be
+   decommissioned first. (Held BMHs do not block; they are removed by the per-server
    finalizers in step 4.)
-2. Delete the shared ExternalSecret CRs (default credentials, LDAP bind/user)
-   along with their ESO-synced K8s credential Secrets. Per-server ExternalSecrets
-   are **not** deleted here — they are removed by each OnboardingServer's own
-   finalizer during the garbage-collection cascade in step 4 (see
+4. **Let per-server cleanup run first.** Owner references cause Kubernetes to
+   garbage-collect the OnboardingServer CRs, triggering each one's finalizer, which
+   performs its per-server rollback/cleanup **while the shared credential Secrets
+   still exist** — BMO needs them to roll a held BMC back (see
    [Cleanup mechanism](server-onboarding-implementation.md#server-onboarding-state-machine--detailed-per-state-behavior)).
-3. Owner references then cause Kubernetes to garbage-collect all OnboardingServer
-   CRs — triggering each OnboardingServer's finalizer, which performs its
-   per-server cleanup before the CR is removed.
+5. **Delete shared credentials last.** Only after every child finalizer has completed
+   does the request finalizer delete the shared ExternalSecret CRs (default
+   credentials, LDAP bind/user) and their ESO-synced K8s Secrets. Per-server
+   ExternalSecrets were already removed by their own OnboardingServer finalizers in
+   step 4.
 
 **Inventory CRs are intentionally not deleted.** The `OCloudSite` and
 `ResourcePool` CRs the controller created (in the O-Cloud manager namespace) are
@@ -1171,14 +1224,28 @@ namespace. Because the BMH name is deterministically derived from the server's
 controller recomputes that name from `bmcAddress` and gets the BMH directly — no
 address annotation or list-and-filter is needed. It then checks that the BMH is
 **no longer carrying the inventory-hold marker**. If such a BMH is found, the
-server is already onboarded: the controller
-**short-circuits straight to `Completed`**, re-records `status.bmhName`, and
-performs no inspection or BMC mutation. The check is gated on the CR having no
-in-progress state precisely so it never fires on a server that is **already
-progressing** — in particular a server in `DisablingLocalAccounts`, which by design runs
-against an already-published BMH; such a server resumes its state machine (and
-completes hardening) rather than being short-circuited past it. Combined with
-the finalizer **retaining**
+server is already onboarded — but before short-circuiting the controller must also
+confirm that any **post-publication hardening was completed**, because a recreated
+CR has no memory of its predecessor's progress. A server deleted while in
+`DisablingLocalAccounts` (ldap + `disableLocalAccounts: true`) comes back with an
+empty state and would otherwise pass straight to `Completed`, silently skipping the
+local-account disable. To prevent that, hardening completion is recorded on the
+**retained BMH** itself (a `onboarding.openshift.io/hardening-complete` annotation
+set when `DisablingLocalAccounts` finishes, and set at `Publishing` when
+`disableLocalAccounts` is not requested, so the common case is already marked):
+
+- If the published BMH is marked hardening-complete (or hardening was never
+  requested), the controller **short-circuits straight to `Completed`**, re-records
+  `status.bmhName`, and performs no inspection or BMC mutation.
+- If hardening was requested but the BMH is **not** marked complete, the controller
+  adopts the BMH and **resumes at `DisablingLocalAccounts`** rather than
+  short-circuiting, so the pending hardening (and its `LocalAccountsDisabled`
+  condition) is finished before the server reaches `Completed`.
+
+The in-progress-state gate still prevents the check from firing on a server that is
+**the same CR** still progressing (e.g. mid-`DisablingLocalAccounts`); the BMH
+marker additionally covers the delete-and-recreate case the gate cannot see.
+Combined with the finalizer **retaining**
 the per-server credentials whenever a published BMH exists (see
 [Cleanup mechanism](server-onboarding-implementation.md#server-onboarding-state-machine--detailed-per-state-behavior)), deleting a `Completed`
 OnboardingServer is therefore a safe no-op: the CR is cleaned up without touching
@@ -1258,8 +1325,13 @@ Hub Cluster                               Remote Site
   attack surface entirely — there is no BMC credential material, and no BMC
   connection, in the onboarding pod.
 - `status.stateMessage` on OnboardingServer must never contain credential values
-- BMC Redfish transport (HTTPS, TLS verification for self-signed BMC certs) is
-  handled by Metal3/BMO, not the onboarding service
+- BMC Redfish transport (HTTPS, TLS) is handled by Metal3/BMO, not the onboarding
+  service. **BMC certificate verification is on by default** (`spec.bmc.disableCertificateVerification:
+  false` on every BMH); it is disabled only when a pool explicitly opts in via
+  `spec.disableBmcCertificateVerification` for self-signed BMCs with no trusted CA —
+  an explicit exception, because disabling it lets an attacker on the management path
+  impersonate a BMC and intercept credentials. Prefer provisioning a trusted CA bundle
+  for the BMCs over disabling verification
 - Management network assumed isolated (dedicated VLAN)
 - **Authorization**: OnboardingRequest is cluster-scoped. Access is controlled via
   ClusterRoleBindings — any user with `create` permission on OnboardingRequests can
@@ -1288,8 +1360,9 @@ Hub Cluster                               Remote Site
   tokens to onboarding clients.
 - Service account RBAC — the onboarding controllers run with a dedicated service
   account scoped to exactly the verbs below. Note the read verbs (`list`/`watch`)
-  the controllers need to _poll_ ESO-synced Secrets and to _re-check_ BMHs in the
-  deletion finalizer, which the earlier one-line summary omitted:
+  the controllers need to _watch_ `ExternalSecret` sync status (readiness is taken
+  from the `ExternalSecret` `.status`, not by reading Secret data) and to _re-check_
+  BMHs in the deletion finalizer, which the earlier one-line summary omitted:
 
   | API group | Resource | Verbs | Why |
   |---|---|---|---|
@@ -1302,7 +1375,7 @@ Hub Cluster                               Remote Site
   | `ocloud.openshift.io` | `resourcepools` | get, list, create | Create if not found |
   | (core) | `namespaces` | get, list, create | Resource pool namespace |
   | `external-secrets.io` | `externalsecrets` | get, list, watch, create, delete | Create shared/per-server ExternalSecrets; delete on finalizer/cleanup |
-  | (core) | `secrets` | get, list, watch, create, delete | Poll ESO-synced credential Secrets; delete per-server synced Secrets on cleanup |
+  | (core) | `secrets` | delete | Delete per-server ESO-synced credential Secrets on cleanup (by deterministic name). The controller does **not** read Secret data — ESO-sync readiness is observed via the `ExternalSecret` `.status`, and BMO (not the controller) reads the credential Secret — so it holds no `get`/`list`/`watch` on Secrets |
   | `metal3.io` | `baremetalhosts` | get, list, watch, create, update, patch, delete | Create the BMH with `inspectionMode: fast` and the inventory-hold marker (`Inspecting`); `update`/`patch` to request BMC network/credential/LDAP config and to clear the inventory-hold annotation (`Publishing`); watch status conditions for outcomes; delete a **held** BMH (constrained in code — see note) |
   | `metal3.io` | BMC networking / credentials / LDAP config resources (exact kinds TBD — may be BareMetalHost sub-resources or companion CRs) | get, list, watch, create, update, patch, delete | Declare and track the DHCP→static pin + DNS, credential provisioning, and LDAP config that BMO applies over Redfish. The precise resources/verbs depend on the final Metal3 API — see [Dependency on forthcoming Metal3 APIs](#dependency-on-forthcoming-metal3-apis) |
   | `metal3.io` | `hardwaredata` | get, list, watch | Read the `HardwareData` CR produced by fast out-of-band (Redfish) inspection for vendor/hardware matching (`Inventorying`) |
@@ -1337,7 +1410,7 @@ Hub Cluster                               Remote Site
 | Non-root user | Prevents privilege escalation within the container |
 | Read-only root filesystem | Minimal writable surface |
 | Drop all capabilities | No privileged operations needed |
-| NetworkPolicy | Restrict egress to the Kubernetes API only; no BMC-subnet egress (BMO performs all BMC traffic) and no ingress required |
+| NetworkPolicy | Restrict egress to the Kubernetes API only (no BMC-subnet egress — BMO performs all BMC traffic); allow **ingress from the Kubernetes API server to the validating-webhook port only** — the controller-manager serves the webhook with `failurePolicy: Fail`, so blocking it would stop OnboardingRequest create/delete — and no other ingress |
 
 ---
 
