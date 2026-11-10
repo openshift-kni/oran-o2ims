@@ -66,17 +66,20 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
@@ -615,8 +618,9 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 			},
 		}
 
-		err := task.createOrUpdateNodeAllocationRequest(ctx, ctNamespace, nodeAllocationRequest)
+		result, err := task.createOrUpdateNodeAllocationRequest(ctx, ctNamespace, nodeAllocationRequest)
 		Expect(err).ToNot(HaveOccurred())
+		Expect(result.ResourceVersion).ToNot(BeEmpty())
 
 		// Verify the NAR was created in the cluster
 		createdNAR := &hwmgmtv1alpha1.NodeAllocationRequest{}
@@ -676,8 +680,10 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 			},
 		}
 
-		err := task.createOrUpdateNodeAllocationRequest(ctx, ctNamespace, nodeAllocationRequest)
+		result, err := task.createOrUpdateNodeAllocationRequest(ctx, ctNamespace, nodeAllocationRequest)
 		Expect(err).ToNot(HaveOccurred())
+
+		Expect(result.Spec.ConfigTransactionId).To(Equal(int64(3)))
 
 		// Verify the NAR was updated. ConfigTransactionId is a monotonic counter advanced
 		// from the existing value (2 -> 3), not seeded from the rendered value (4).
@@ -733,8 +739,10 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 			},
 		}
 
-		err := task.createOrUpdateNodeAllocationRequest(ctx, ctNamespace, nodeAllocationRequest)
+		result, err := task.createOrUpdateNodeAllocationRequest(ctx, ctNamespace, nodeAllocationRequest)
 		Expect(err).ToNot(HaveOccurred())
+
+		Expect(result.Spec.NodeGroup[0].NodeGroupData.HwProfile).To(Equal("profile-spr-single-processor-128G"))
 
 		// Verify the NAR spec was updated in the cluster
 		updatedNAR := &hwmgmtv1alpha1.NodeAllocationRequest{}
@@ -793,8 +801,10 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 			},
 		}
 
-		err := task.createOrUpdateNodeAllocationRequest(ctx, ctNamespace, nodeAllocationRequest)
+		result, err := task.createOrUpdateNodeAllocationRequest(ctx, ctNamespace, nodeAllocationRequest)
 		Expect(err).ToNot(HaveOccurred())
+
+		Expect(result.Spec.ConfigTransactionId).To(Equal(int64(2)))
 
 		// Verify the NAR was NOT updated — ConfigTransactionId should remain at 2
 		updatedNAR := &hwmgmtv1alpha1.NodeAllocationRequest{}
@@ -802,6 +812,112 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 		Expect(updatedNAR.Spec.ConfigTransactionId).To(Equal(int64(2)))
 	})
 
+	It("uses the live NAR to advance the transaction and returns the patched state", func() {
+		live := &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: crName, Namespace: constants.DefaultNamespace},
+			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+				ClusterId: crName, ConfigTransactionId: 3,
+				LocationSpec: hwmgmtv1alpha1.LocationSpec{Site: "old"},
+			},
+			Status: hwmgmtv1alpha1.NodeAllocationRequestStatus{ObservedConfigTransactionId: 3},
+		}
+		Expect(c.Create(ctx, live)).To(Succeed())
+		stale := live.DeepCopy()
+		stale.Spec.ConfigTransactionId = 2
+		cached := fakeclient.GetFakeClientFromObjects(stale)
+		task.noncachedClient = c
+		task.client = interceptor.NewClient(c.(client.WithWatch), interceptor.Funcs{
+			Get: func(ctx context.Context, cl client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+				if _, ok := obj.(*hwmgmtv1alpha1.NodeAllocationRequest); ok {
+					return cached.Get(ctx, key, obj, opts...)
+				}
+				return cl.Get(ctx, key, obj, opts...)
+			},
+		})
+		rendered := live.DeepCopy()
+		rendered.Spec.LocationSpec.Site = "new"
+
+		result, err := task.createOrUpdateNodeAllocationRequest(ctx, ctNamespace, rendered)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(result.Spec.ConfigTransactionId).To(Equal(int64(4)))
+		Expect(result.Spec.LocationSpec.Site).To(Equal("new"))
+		Expect(result.Status.ObservedConfigTransactionId).To(Equal(int64(3)))
+		configured, timedOutOrFailed, err := task.checkNodeAllocationRequestConfigStatus(ctx, result)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(configured).ToNot(BeNil())
+		Expect(*configured).To(BeFalse())
+		Expect(timedOutOrFailed).To(BeFalse())
+		stored := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(live), stored)).To(Succeed())
+		Expect(stored.Spec.ConfigTransactionId).To(Equal(int64(4)))
+
+		// A second change must advance from the live value even while the cache is stale.
+		rendered.Spec.LocationSpec.Site = "newer"
+		result, err = task.createOrUpdateNodeAllocationRequest(ctx, ctNamespace, rendered)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(result.Spec.ConfigTransactionId).To(Equal(int64(5)))
+		Expect(result.Spec.LocationSpec.Site).To(Equal("newer"))
+	})
+
+	It("returns the updated transaction after a swap bump", func() {
+		live := &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: crName, Namespace: constants.DefaultNamespace},
+			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+				ConfigTransactionId: 3, NodeGroup: []hwmgmtv1alpha1.NodeGroup{{Size: 1}},
+			},
+			Status: hwmgmtv1alpha1.NodeAllocationRequestStatus{
+				ObservedConfigTransactionId: 3,
+				Conditions:                  []metav1.Condition{{Type: string(hwmgmtv1alpha1.Provisioned), Status: metav1.ConditionTrue}},
+			},
+		}
+		Expect(c.Create(ctx, live)).To(Succeed())
+		result, err := task.createOrUpdateNodeAllocationRequest(ctx, ctNamespace, live.DeepCopy())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(result.Spec.ConfigTransactionId).To(Equal(int64(4)))
+		Expect(result.Status.ObservedConfigTransactionId).To(Equal(int64(3)))
+	})
+
+	DescribeTable("rejects concurrent writes before advancing the transaction", func(swap bool) {
+		live := &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: crName, Namespace: constants.DefaultNamespace},
+			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+				ConfigTransactionId: 3, NodeGroup: []hwmgmtv1alpha1.NodeGroup{{Size: 1}},
+			},
+			Status: hwmgmtv1alpha1.NodeAllocationRequestStatus{
+				ObservedConfigTransactionId: 3,
+				Conditions:                  []metav1.Condition{{Type: string(hwmgmtv1alpha1.Provisioned), Status: metav1.ConditionTrue}},
+			},
+		}
+		Expect(c.Create(ctx, live)).To(Succeed())
+		rendered := live.DeepCopy()
+		if !swap {
+			rendered.Spec.LocationSpec.Site = "changed"
+		}
+		task.noncachedClient = c
+		task.client = interceptor.NewClient(c.(client.WithWatch), interceptor.Funcs{
+			Patch: func(ctx context.Context, cl client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+				concurrent := &hwmgmtv1alpha1.NodeAllocationRequest{}
+				if err := cl.Get(ctx, client.ObjectKeyFromObject(obj), concurrent); err != nil {
+					return fmt.Errorf("get concurrent NAR: %w", err)
+				}
+				concurrent.Spec.ConfigTransactionId = 4
+				if err := cl.Update(ctx, concurrent); err != nil {
+					return fmt.Errorf("update concurrent NAR: %w", err)
+				}
+				return cl.Patch(ctx, obj, patch, opts...)
+			},
+		})
+		result, err := task.createOrUpdateNodeAllocationRequest(ctx, ctNamespace, rendered)
+		Expect(k8serrors.IsConflict(err)).To(BeTrue(), "expected a resource version conflict, got %v", err)
+		Expect(result).To(BeNil())
+		stored := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(live), stored)).To(Succeed())
+		Expect(stored.Spec.ConfigTransactionId).To(Equal(int64(4)))
+		Expect(stored.Spec.LocationSpec.Site).To(BeEmpty())
+	},
+		Entry("for a hardware spec change", false),
+		Entry("for a swap bump", true),
+	)
 })
 
 var _ = Describe("buildNodeAllocationRequest", func() {
@@ -1455,76 +1571,6 @@ var _ = Describe("waitForHardwareData", func() {
 		Expect(condition).ToNot(BeNil())
 		Expect(condition.Status).To(Equal(metav1.ConditionFalse))
 		Expect(condition.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
-	})
-})
-
-var _ = Describe("getNodeAllocationRequestResponse read source", func() {
-	// Regression coverage for OCPBUGS-132825: the hardware-config in-flight gate reads
-	// the NAR right after createOrUpdateNodeAllocationRequest patches its spec. That read
-	// must bypass the informer cache (getNodeAllocationRequestResponseUncached), otherwise
-	// it can observe the pre-patch object and let downstream phases proceed while a
-	// configuration transaction is still in flight. These tests seed the cached and
-	// uncached readers with divergent NAR state to prove each accessor reads its own source.
-	var (
-		ctx          context.Context
-		crName       = "cluster-1"
-		narNS        = constants.DefaultNamespace
-		cr           *provisioningv1alpha1.ProvisioningRequest
-		cachedNAR    *hwmgmtv1alpha1.NodeAllocationRequest
-		uncachedNAR  *hwmgmtv1alpha1.NodeAllocationRequest
-		cachedClient client.Client
-	)
-
-	BeforeEach(func() {
-		ctx = context.Background()
-		cr = &provisioningv1alpha1.ProvisioningRequest{
-			ObjectMeta: metav1.ObjectMeta{Name: crName},
-		}
-		// Cached reader holds the stale, pre-patch NAR (transaction already observed).
-		cachedNAR = &hwmgmtv1alpha1.NodeAllocationRequest{
-			ObjectMeta: metav1.ObjectMeta{Name: crName, Namespace: narNS},
-			Spec:       hwmgmtv1alpha1.NodeAllocationRequestSpec{ConfigTransactionId: 2},
-			Status:     hwmgmtv1alpha1.NodeAllocationRequestStatus{ObservedConfigTransactionId: 2},
-		}
-		// Uncached reader holds the fresh, post-patch NAR (transaction still in flight).
-		uncachedNAR = &hwmgmtv1alpha1.NodeAllocationRequest{
-			ObjectMeta: metav1.ObjectMeta{Name: crName, Namespace: narNS},
-			Spec:       hwmgmtv1alpha1.NodeAllocationRequestSpec{ConfigTransactionId: 3},
-			Status:     hwmgmtv1alpha1.NodeAllocationRequestStatus{ObservedConfigTransactionId: 2},
-		}
-		cachedClient = fakeclient.GetFakeClientFromObjects([]client.Object{cachedNAR}...)
-	})
-
-	It("reads the uncached source for the in-flight gate and the cached source otherwise", func() {
-		task := &provisioningRequestReconcilerTask{
-			logger:          logger,
-			client:          cachedClient,
-			noncachedClient: fakeclient.GetFakeClientFromObjects([]client.Object{uncachedNAR}...),
-			object:          cr,
-		}
-
-		cached, exists, err := task.getNodeAllocationRequestResponse(ctx)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(exists).To(BeTrue())
-		Expect(cached.Spec.ConfigTransactionId).To(Equal(int64(2)))
-
-		uncached, exists, err := task.getNodeAllocationRequestResponseUncached(ctx)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(exists).To(BeTrue())
-		Expect(uncached.Spec.ConfigTransactionId).To(Equal(int64(3)))
-	})
-
-	It("falls back to the cached client when no uncached reader is configured", func() {
-		task := &provisioningRequestReconcilerTask{
-			logger: logger,
-			client: cachedClient,
-			object: cr,
-		}
-
-		uncached, exists, err := task.getNodeAllocationRequestResponseUncached(ctx)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(exists).To(BeTrue())
-		Expect(uncached.Spec.ConfigTransactionId).To(Equal(int64(2)))
 	})
 })
 

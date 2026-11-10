@@ -70,10 +70,10 @@ var ErrNodeAllocationRequestSpecChanged = errors.New("NodeAllocationRequest spec
 // caller validated by updating both ObservedGeneration and ObservedConfigTransactionId
 // in a single status update.
 //
-// It only acknowledges expectedGeneration/expectedConfigTransactionId, and re-verifies
-// the freshly fetched object still matches both before writing. If the spec advanced in
-// the meantime (a Day-2 configuration arrived after the caller's check, or after a
-// Status().Update conflict forced a re-fetch), it returns ErrNodeAllocationRequestSpecChanged
+// It only acknowledges the generation and transaction ID from the supplied NAR, and
+// re-verifies that the freshly fetched object still matches both before writing. If the
+// spec advanced in the meantime (a Day-2 configuration arrived after the caller's
+// check, or a Status().Update conflict forced a re-fetch), it returns ErrNodeAllocationRequestSpecChanged
 // without acknowledging anything. This prevents a race where the hardware manager would
 // mark a new, unhandled transaction as observed — which would let the ProvisioningRequest
 // controller's hardware-config in-flight gate proceed before the configuration is applied,
@@ -81,9 +81,10 @@ var ErrNodeAllocationRequestSpecChanged = errors.New("NodeAllocationRequest spec
 func UpdateNodeAllocationRequestObservedStatus(
 	ctx context.Context,
 	c client.Client,
-	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
-	expectedGeneration int64,
-	expectedConfigTransactionId int64) error {
+	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest) error {
+
+	expectedGeneration := nodeAllocationRequest.Generation
+	expectedConfigTransactionId := nodeAllocationRequest.Spec.ConfigTransactionId
 
 	// nolint: wrapcheck
 	err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {

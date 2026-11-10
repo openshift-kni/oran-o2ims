@@ -8,14 +8,18 @@ package utils
 
 import (
 	"context"
+	"errors"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 )
@@ -58,8 +62,7 @@ var _ = Describe("UpdateNodeAllocationRequestObservedStatus", func() {
 		current := &hwmgmtv1alpha1.NodeAllocationRequest{}
 		Expect(c.Get(ctx, client.ObjectKeyFromObject(nar), current)).To(Succeed())
 
-		err := UpdateNodeAllocationRequestObservedStatus(ctx, c, nar,
-			current.ObjectMeta.Generation, current.Spec.ConfigTransactionId)
+		err := UpdateNodeAllocationRequestObservedStatus(ctx, c, current)
 		Expect(err).ToNot(HaveOccurred())
 
 		updated := &hwmgmtv1alpha1.NodeAllocationRequest{}
@@ -72,8 +75,10 @@ var _ = Describe("UpdateNodeAllocationRequestObservedStatus", func() {
 		// Simulate a Day-2 arriving between the caller's validation and the ack: the caller
 		// validated transaction id 2, but the live spec is now 4. The helper must refuse to
 		// acknowledge the unhandled transaction.
-		err := UpdateNodeAllocationRequestObservedStatus(ctx, c, nar,
-			nar.ObjectMeta.Generation, 2)
+		processed := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(nar), processed)).To(Succeed())
+		processed.Spec.ConfigTransactionId = 2
+		err := UpdateNodeAllocationRequestObservedStatus(ctx, c, processed)
 		Expect(err).To(MatchError(ErrNodeAllocationRequestSpecChanged))
 
 		updated := &hwmgmtv1alpha1.NodeAllocationRequest{}
@@ -84,12 +89,39 @@ var _ = Describe("UpdateNodeAllocationRequestObservedStatus", func() {
 	})
 
 	It("does not acknowledge when the generation advanced after the check", func() {
-		err := UpdateNodeAllocationRequestObservedStatus(ctx, c, nar,
-			nar.ObjectMeta.Generation+1, nar.Spec.ConfigTransactionId)
+		processed := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(nar), processed)).To(Succeed())
+		processed.Generation--
+		err := UpdateNodeAllocationRequestObservedStatus(ctx, c, processed)
 		Expect(err).To(MatchError(ErrNodeAllocationRequestSpecChanged))
 
 		updated := &hwmgmtv1alpha1.NodeAllocationRequest{}
 		Expect(c.Get(ctx, client.ObjectKeyFromObject(nar), updated)).To(Succeed())
+		Expect(updated.Status.ObservedConfigTransactionId).To(Equal(int64(2)))
+		Expect(updated.Status.ObservedGeneration).To(Equal(int64(3)))
+	})
+
+	It("does not acknowledge a new transaction after a status update conflict", func() {
+		processed := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(nar), processed)).To(Succeed())
+		statusWrites := 0
+		wrapped := interceptor.NewClient(c.(client.WithWatch), interceptor.Funcs{
+			SubResourceUpdate: func(ctx context.Context, cl client.Client, _ string, obj client.Object, _ ...client.SubResourceUpdateOption) error {
+				statusWrites++
+				current := &hwmgmtv1alpha1.NodeAllocationRequest{}
+				Expect(cl.Get(ctx, client.ObjectKeyFromObject(obj), current)).To(Succeed())
+				current.Spec.ConfigTransactionId++
+				Expect(cl.Update(ctx, current)).To(Succeed())
+				return k8serrors.NewConflict(schema.GroupResource{Group: hwmgmtv1alpha1.GroupVersion.Group, Resource: "nodeallocationrequests"}, obj.GetName(), errors.New("concurrent update"))
+			},
+		})
+
+		err := UpdateNodeAllocationRequestObservedStatus(ctx, wrapped, processed)
+		Expect(err).To(MatchError(ErrNodeAllocationRequestSpecChanged))
+		Expect(statusWrites).To(Equal(1))
+		updated := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(nar), updated)).To(Succeed())
+		Expect(updated.Spec.ConfigTransactionId).To(Equal(int64(5)))
 		Expect(updated.Status.ObservedConfigTransactionId).To(Equal(int64(2)))
 		Expect(updated.Status.ObservedGeneration).To(Equal(int64(3)))
 	})

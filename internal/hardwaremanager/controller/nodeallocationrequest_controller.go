@@ -317,8 +317,7 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestNoop(
 			string(hwmgmtv1alpha1.Configured)) == nil {
 		r.Logger.InfoContext(ctx, "Acknowledging legacy baseline config transaction",
 			slog.Int64("specConfigTransactionId", nodeAllocationRequest.Spec.ConfigTransactionId))
-		err := hwmgrutils.UpdateNodeAllocationRequestObservedStatus(ctx, r.Client, nodeAllocationRequest,
-			nodeAllocationRequest.ObjectMeta.Generation, nodeAllocationRequest.Spec.ConfigTransactionId)
+		err := hwmgrutils.UpdateNodeAllocationRequestObservedStatus(ctx, r.Client, nodeAllocationRequest)
 		if errors.Is(err, hwmgrutils.ErrNodeAllocationRequestSpecChanged) {
 			// A Day-2 configuration arrived between the no-op check and the ack; requeue so
 			// the SpecChanged path handles it instead of acknowledging an unprocessed spec.
@@ -650,8 +649,7 @@ func (r *NodeAllocationRequestReconciler) handleNewNodeAllocationRequestCreate(
 	// installation indefinitely. A genuine Day-2 change advances ConfigTransactionId as a
 	// monotonic counter, re-entering the SpecChanged flow, so this does not mask real
 	// configuration work.
-	err := hwmgrutils.UpdateNodeAllocationRequestObservedStatus(ctx, r.Client, nodeAllocationRequest,
-		nodeAllocationRequest.ObjectMeta.Generation, nodeAllocationRequest.Spec.ConfigTransactionId)
+	err := hwmgrutils.UpdateNodeAllocationRequestObservedStatus(ctx, r.Client, nodeAllocationRequest)
 	if errors.Is(err, hwmgrutils.ErrNodeAllocationRequestSpecChanged) {
 		// The spec advanced during create; requeue so the next reconcile acknowledges the
 		// current baseline instead of a stale one.
@@ -755,8 +753,7 @@ func (r *NodeAllocationRequestReconciler) handleNodeAllocationRequestSpecChanged
 				return ctrl.Result{}, fmt.Errorf("failed to update status for NodeAllocationRequest %s: %w", nodeAllocationRequest.Name, updateErr)
 			}
 		} else {
-			err := hwmgrutils.UpdateNodeAllocationRequestObservedStatus(ctx, r.Client, nodeAllocationRequest,
-				nodeAllocationRequest.ObjectMeta.Generation, nodeAllocationRequest.Spec.ConfigTransactionId)
+			err := hwmgrutils.UpdateNodeAllocationRequestObservedStatus(ctx, r.Client, nodeAllocationRequest)
 			if errors.Is(err, hwmgrutils.ErrNodeAllocationRequestSpecChanged) {
 				// A real spec change (e.g. an HW profile Day-2) arrived after the no-change
 				// check; requeue so it is re-evaluated and processed rather than acknowledged
