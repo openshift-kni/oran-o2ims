@@ -370,6 +370,14 @@ Age — the summary row shown by `oc get onboardingrequest` in the
 - `servers` must not be empty
 - Each `bmcAddress` must be a valid IPv4 or IPv6 address
 - `bmcAddress` must be unique within the `servers` list
+- **All `bmcAddress` values must be the same address family** (all IPv4 or all
+  IPv6). A homogeneous pool shares one BMC management subnet, and `bmcSubnet` /
+  `bmcGateway` are single values; allowing mixed families would make the
+  `bmcSubnet`/`bmcGateway` recovery path (see [Spec mutability](#1-api-design-crds))
+  impossible — no single CIDR can contain both families, so the per-server-inside-
+  `bmcSubnet` check would reject every update and, once a server has published, the
+  deletion guard would block recreating the request. Dual-stack pools would be a
+  separate OnboardingRequest per family.
 - `bmcSubnet`, if set, must be a valid CIDR; `bmcGateway`, if set, must be a valid
   IP address; setting either requires the other, `bmcGateway` must fall inside
   `bmcSubnet`, and both must be of the same address family (IPv4/IPv6) as the
@@ -924,16 +932,24 @@ destroying any shared state:
    block and requeue — published hosts are live infrastructure and must be
    decommissioned first. (Held BMHs do not block; they are removed by the per-server
    finalizers in step 4.)
-4. **Let per-server cleanup run first.** Owner references cause Kubernetes to
-   garbage-collect the OnboardingServer CRs, triggering each one's finalizer, which
-   performs its per-server rollback/cleanup **while the shared credential Secrets
-   still exist** — BMO needs them to roll a held BMC back (see
+4. **Delete the children explicitly and wait for their finalizers.** The request
+   finalizer does **not** rely on owner-reference garbage collection to clean up the
+   children: under the default _background_ GC policy the owner can be removed before
+   the child finalizers complete, and the controller must not depend on the parent
+   finalizer to keep the children (and shared credentials) available. Instead it
+   **explicitly deletes each OnboardingServer** and **blocks/requeues until their
+   finalizers have run** — so each per-server rollback/cleanup completes **while the
+   shared credential Secrets still exist** (BMO needs them to roll a held BMC back; see
    [Cleanup mechanism](server-onboarding-implementation.md#server-onboarding-state-machine--detailed-per-state-behavior)).
-5. **Delete shared credentials last.** Only after every child finalizer has completed
+   This makes correctness independent of the foreground/background GC policy. (The
+   service account therefore needs `delete` on `onboardingservers` — see the RBAC
+   table.)
+5. **Delete shared credentials last.** Only after every child OnboardingServer is gone
    does the request finalizer delete the shared ExternalSecret CRs (default
    credentials, LDAP bind/user) and their ESO-synced K8s Secrets. Per-server
    ExternalSecrets were already removed by their own OnboardingServer finalizers in
-   step 4.
+   step 4. The request finalizer is removed last, so the OnboardingRequest object
+   outlives its children regardless of GC ordering.
 
 **Inventory CRs are intentionally not deleted.** The `OCloudSite` and
 `ResourcePool` CRs the controller created (in the O-Cloud manager namespace) are
@@ -1251,18 +1267,25 @@ confirm that any **post-publication hardening was completed**, because a recreat
 CR has no memory of its predecessor's progress. A server deleted while in
 `DisablingLocalAccounts` (ldap + `disableLocalAccounts: true`) comes back with an
 empty state and would otherwise pass straight to `Completed`, silently skipping the
-local-account disable. To prevent that, hardening completion is recorded on the
-**retained BMH** itself (a `onboarding.openshift.io/hardening-complete` annotation
-set when `DisablingLocalAccounts` finishes, and set at `Publishing` when
-`disableLocalAccounts` is not requested, so the common case is already marked):
+local-account disable. To prevent that, the hardening **outcome** — not merely that
+the state ran — is recorded on the **retained BMH** itself. The
+`onboarding.openshift.io/hardening-complete` annotation is set **only when the local
+account is actually disabled** (and set at `Publishing` when `disableLocalAccounts`
+is not requested, so the common case is already marked). Because
+`DisablingLocalAccounts` is best-effort and still reaches `Completed` after its
+retries are exhausted, a **failed** attempt must not mark the BMH complete; instead
+the controller records the failure outcome on the BMH (a
+`onboarding.openshift.io/hardening-failed` annotation carrying the reason) so a
+recreated server can restore the reported state:
 
 - If the published BMH is marked hardening-complete (or hardening was never
   requested), the controller **short-circuits straight to `Completed`**, re-records
   `status.bmhName`, and performs no inspection or BMC mutation.
-- If hardening was requested but the BMH is **not** marked complete, the controller
-  adopts the BMH and **resumes at `DisablingLocalAccounts`** rather than
-  short-circuiting, so the pending hardening (and its `LocalAccountsDisabled`
-  condition) is finished before the server reaches `Completed`.
+- If hardening was requested but the BMH is **not** marked complete — whether it was
+  never attempted or a prior attempt failed — the controller adopts the BMH and
+  **resumes at `DisablingLocalAccounts`** rather than short-circuiting, restoring the
+  `LocalAccountsDisabled=false` condition (with the recorded reason) so the failure
+  stays observable and the disable is retried before the server reaches `Completed`.
 
 The in-progress-state gate still prevents the check from firing on a server that is
 **the same CR** still progressing (e.g. mid-`DisablingLocalAccounts`); the BMH
@@ -1343,9 +1366,24 @@ Hub Cluster                               Remote Site
   ServerSpec. ESO handles the sync lifecycle.
 - **The onboarding controller never handles BMC credentials in memory.** It
   references vault/Secret names only; BMO reads the ESO-synced Secret and performs
-  all BMC authentication over Redfish. This removes the controller as a credential
-  attack surface entirely — there is no BMC credential material, and no BMC
+  all BMC authentication over Redfish. This removes the controller as a _direct_
+  credential attack surface — there is no BMC credential material, and no BMC
   connection, in the onboarding pod.
+- **Indirect credential exposure via BMH creation must be constrained.** Removing
+  Secret `get` is not sufficient on its own: an attacker who obtained the controller
+  service account could create a BareMetalHost that references an existing credential
+  Secret, point `spec.bmc.address` at an endpoint they control, and set
+  `disableCertificateVerification: true` — causing BMO to authenticate to the
+  attacker and disclose the credentials. Because BMH creation is therefore a trust
+  boundary, service-created BMHs are constrained by a validating webhook (and the
+  controller's own creation path): `spec.bmc.credentialsName` may reference only
+  onboarding-owned Secrets in the resource pool namespace; `spec.bmc.address` must be
+  the `bmcAddressTemplate` rendered for a declared server `bmcAddress` that falls
+  inside `bmcSubnet` (it cannot point at an arbitrary endpoint); and
+  `disableCertificateVerification` must follow the pool policy
+  (`spec.disableBmcCertificateVerification`) rather than being set freely. The
+  controller service account's `create` on `baremetalhosts` is the sensitive grant
+  this guard protects; it must stay tightly scoped.
 - `status.stateMessage` on OnboardingServer must never contain credential values
 - BMC Redfish transport (HTTPS, TLS) is handled by Metal3/BMO, not the onboarding
   service. **BMC certificate verification is on by default** (`spec.bmc.disableCertificateVerification:
@@ -1390,7 +1428,7 @@ Hub Cluster                               Remote Site
   |---|---|---|---|
   | `onboarding.openshift.io` | `onboardingrequests` | get, list, watch, update, patch | Reconcile; manage finalizer |
   | `onboarding.openshift.io` | `onboardingrequests/status` | get, update, patch | Update summary counts / conditions |
-  | `onboarding.openshift.io` | `onboardingservers` | get, list, watch, create, update, patch | Create one per server entry; drive reconcile |
+  | `onboarding.openshift.io` | `onboardingservers` | get, list, watch, create, update, patch, delete | Create one per server entry; drive reconcile; `delete` to explicitly tear children down and wait for their finalizers during request deletion (not relying on owner-reference GC) |
   | `onboarding.openshift.io` | `onboardingservers/status` | get, update, patch | Record state machine state |
   | `ocloud.openshift.io` | `locations` | get, list | Prerequisite lookup (must exist) |
   | `ocloud.openshift.io` | `ocloudsites` | get, list, create | Create if not found |

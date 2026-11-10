@@ -255,6 +255,13 @@ Consequences:
   still transitions to `Completed` (local auth remains available as a fallback).
   A `LocalAccountsDisabled` condition on the OnboardingServer records whether the
   hardening actually completed, so an incomplete hardening is still observable.
+  The outcome is also persisted on the **retained BMH**: the
+  `onboarding.openshift.io/hardening-complete` annotation is set **only on a
+  successful disable**; a failed attempt instead sets
+  `onboarding.openshift.io/hardening-failed` (with the reason). This is what lets a
+  recreated OnboardingServer tell "hardened" from "hardening failed" and resume/retry
+  rather than short-circuit to `Completed` (see
+  [Deleting a Completed server](server-onboarding-service.md#deleting-a-completed-server-idempotent-re-onboarding)).
 
 After LDAP is confirmed working, the controller **swaps** the already-created
 BMH's `spec.bmc.credentialsName` from the shared default-credentials Secret to the
@@ -1013,8 +1020,9 @@ reads and writes OnboardingRequest / OnboardingServer CRs through `HubClient`.
   call, so the servicing CRs come with the BMH scheme already needed for
   inspection
 - `internal/constants/constants.go` — add onboarding constants (including the
-  `onboarding.openshift.io/inventory-hold` and
-  `onboarding.openshift.io/hardening-complete` annotation keys and the server
+  `onboarding.openshift.io/inventory-hold`,
+  `onboarding.openshift.io/hardening-complete`, and
+  `onboarding.openshift.io/hardening-failed` annotation keys and the server
   subcommand name)
 - `internal/hardwaremanager/controller/inventory.go` — `IncludeInInventory()`
   must exclude BMHs carrying the inventory-hold marker (see
