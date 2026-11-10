@@ -439,15 +439,27 @@ orphan its per-server resources. On finalization the controller:
    wedges a delete.
 5. Removes the finalizer, allowing Kubernetes to delete the object.
 
-The per-server ExternalSecret carries an owner reference to the **OnboardingRequest**
-(not the OnboardingServer), so that deleting or retrying an individual
-OnboardingServer never garbage-collects credentials a live BMH still depends on.
-During request teardown it is **not** left to owner-reference GC: because the request
-finalizer deletes the children and waits for their finalizers *before* removing any
-shared/per-server ExternalSecret (next paragraph), the credentials BMO needs for
-rollback are still present while each child finalizer runs — this holds regardless of
-foreground vs. background GC, since the request finalizer, not the GC ordering,
-sequences it. The ExternalSecret is removed only after the child cleanup completes.
+The credential ExternalSecrets (per-server **and** shared) carry **no owner reference**
+that would trigger garbage collection on OnboardingServer or OnboardingRequest
+deletion, and their lifecycle is managed **explicitly by the controller**.
+Owner-reference GC cannot express the ordering this design needs: under *foreground*
+cascading deletion the collector deletes an owned dependent **concurrently** with the
+still-running child finalizers (the parent's own custom finalizer does not hold back
+GC of its other dependents), which would remove the credentials BMO needs for
+rollback mid-cleanup. Managing deletion explicitly avoids that race:
+
+- Deleting or retrying an **individual** OnboardingServer never removes a per-server
+  ExternalSecret that a **published** BMH still references — the per-server finalizer
+  deletes it only for a **held** (unpublished) BMH and retains it otherwise. (This is
+  enforced in finalizer logic, not via an owner reference, so GC cannot pre-empt it.)
+- On **whole-request teardown**, the request finalizer deletes the children and waits
+  for their finalizers first, and only then explicitly deletes the remaining
+  ExternalSecrets — per-server leftovers (for hosts being decommissioned) and the
+  shared ones — together with their ESO-synced Secrets. Since nothing is
+  owner-reference-GC'd, the ordering holds identically under foreground and background
+  deletion. (The finalizers are the lifecycle authority; a force-deleted request could
+  orphan these Secrets, which are then cleaned up out of band — an accepted trade-off
+  for correct ordering.)
 
 **Composition with the OnboardingRequest finalizer:** the two finalizers divide
 responsibility by scope, and the **order matters**. The OnboardingRequest finalizer
@@ -1738,7 +1750,13 @@ each state in [section 2](server-onboarding-service.md#2-server-onboarding-state
 3. **Integration**: Deploy onboarding Deployment, create OnboardingRequest CR with
    server list, verify OnboardingServer CRs progress through the state machine —
    BMH created and inspected, matched, credentials applied, marker removed — and
-   that the host appears in the O2 IMS inventory **only after** `Publishing`
+   that the host appears in the O2 IMS inventory **only after** `Publishing`. Include
+   a **foreground-cascading-deletion test with the garbage collector enabled** (real
+   cluster/kube-controller-manager, since envtest does not run GC): delete an
+   OnboardingRequest with a held, mid-rollback server using `foreground`
+   propagation and assert the credential ExternalSecrets / ESO-synced Secrets
+   survive until the child finalizers complete (i.e. they are not owner-reference-GC'd
+   out from under an in-flight rollback)
 4. **Manual**: Add servers to OnboardingRequest, observe full onboarding flow via `oc get onboardingservers -n <resourcePoolName>`; confirm a held BMH is not surfaced in the O2 IMS Resource inventory until the host is published (`Publishing`)
 
 ## 12. Open Questions / Product Inputs
