@@ -319,11 +319,19 @@ the marker is idempotent; once it is gone the controller transitions to
   empty or `Pending`, i.e. a freshly created or recreated OnboardingServer). For
   such a CR, if a **published** BMH for this server already exists (one whose
   inventory-hold marker has been removed), the controller short-circuits to
-  `Completed` without re-inspecting or mutating the BMC. A CR that is **already
-  progressing** through the state machine (any other `status.state`, including
-  `DisablingLocalAccounts`, which by design runs against an already-published BMH) is **not**
-  short-circuited — the controller resumes its state machine so post-`Publishing`
-  steps like `DisablingLocalAccounts` still run. A BMH that still carries the inventory-hold
+  `Completed` **only when the BMH is marked hardening-complete** (the
+  `onboarding.openshift.io/hardening-complete` annotation, set on a successful
+  local-account disable or at `Publishing` when `disableLocalAccounts` was not
+  requested). If hardening was requested but the BMH is **not** marked complete
+  (never attempted, or `hardening-failed`), the controller instead adopts the BMH
+  and **resumes at `DisablingLocalAccounts`** rather than short-circuiting, so the
+  pending hardening is retried and its `LocalAccountsDisabled` condition restored
+  (see [Deleting a Completed server](server-onboarding-service.md#deleting-a-completed-server-idempotent-re-onboarding)).
+  Either way it does not re-inspect or re-mutate an already-configured BMC. A CR
+  that is **already progressing** through the state machine (any other
+  `status.state`, including `DisablingLocalAccounts`, which by design runs against an
+  already-published BMH) is **not** short-circuited — the controller resumes its
+  state machine so post-`Publishing` steps like `DisablingLocalAccounts` still run. A BMH that still carries the inventory-hold
   marker is a mid-onboarding host (created in `Inspecting` but not yet published)
   and likewise does **not** short-circuit — the controller resumes the state
   machine from where it left off (see
@@ -381,7 +389,17 @@ without the finalizer, an `oc delete onboardingserver` would drop the CR and
 orphan its per-server resources. On finalization the controller:
 
 1. Sets `status.cleanupStatus: pending`.
-2. **If the BMH is published, skip all BMC rollback and deletion** (marker removed,
+2. **Waits for any still-in-flight BMC operation to settle (or safely cancels it)
+   before rolling anything back.** The child finalizer must do this **itself** — it
+   cannot assume the OnboardingRequest finalizer's drain ran, because under
+   *foreground* garbage collection Kubernetes can begin child finalization before the
+   parent finishes draining (and a lone `oc delete onboardingserver` has no parent
+   drain at all). Concretely: if `status.mutationProgress` shows an operation at
+   `Requested` with no terminal `Applied`/`Failed` outcome yet, the finalizer blocks
+   and requeues until BMO reports that operation settled (or cancels it) — issuing a
+   rollback against an operation BMO is still applying would race. Only then does it
+   proceed to rollback below.
+3. **If the BMH is published, skip all BMC rollback and deletion** (marker removed,
    at/after `Publishing`): a published BMH is live infrastructure the finalizer must
    never mutate or delete. In particular it does **not** revert the BMC NIC to DHCP —
    doing so would drop the static-address guarantee and could change the address the
@@ -393,13 +411,16 @@ orphan its per-server resources. On finalization the controller:
 
    Otherwise (a **held** BMH, inventory-hold marker present — onboarding did not reach
    `Publishing`), run the per-server cleanup in the order above, selecting what to roll
-   back from **`status.mutationProgress`** (not `status.state`, which may be `Failed`)
-   so a partially-applied op — recorded `Requested` but not `Applied` — is still
-   reverted:
-   - **Reversible BMC rollback** for any `ConfigureLdap` op at `Requested`/`Applied`
+   back from **`status.mutationProgress`** (not `status.state`, which may be `Failed`).
+   A reversible op is rolled back whenever it reached **`Requested`, `Applied`, or
+   `Failed`** — crucially including `Failed`, since a BMO operation can fail *after*
+   partially changing the BMC, and a `Requested`-but-not-`Applied` op may also have
+   taken effect. (Only ops still at `Requested` with a documented no-side-effect
+   guarantee may be skipped.):
+   - **Reversible BMC rollback** for any `ConfigureLdap` op at `Requested`/`Applied`/`Failed`
      (request disable-LDAP / re-enable-local-auth via the Metal3 LDAP API; a no-op for
      `ProvisionCredentials`, which is irreversible, and for pre-mutation states), and
-     the **NIC-to-DHCP revert** for a `PinNetwork` op at `Requested`/`Applied` (via the
+     the **NIC-to-DHCP revert** for a `PinNetwork` op at `Requested`/`Applied`/`Failed` (via the
      Metal3 networking API, best-effort; the address is unchanged so the BMH is
      unaffected). Each reverted op is marked `RolledBack` in `status.mutationProgress`.
    - **Wait for BMO to report the requested rollback settled** before deleting the
@@ -412,25 +433,31 @@ orphan its per-server resources. On finalization the controller:
      rollback has settled or the timeout has elapsed.
    - **Delete the held BMH** (it has never appeared in O2 IMS inventory), then delete
      the per-server ExternalSecret and its ESO-synced Secret.
-3. Sets `status.cleanupStatus: completed` if every step succeeded, or `partial`
+4. Sets `status.cleanupStatus: completed` if every step succeeded, or `partial`
    if a best-effort step failed. `partial` is logged and recorded in
    `status.stateMessage` but **does not block** finalizer removal — cleanup never
    wedges a delete.
-4. Removes the finalizer, allowing Kubernetes to delete the object.
+5. Removes the finalizer, allowing Kubernetes to delete the object.
 
 The per-server ExternalSecret carries an owner reference to the **OnboardingRequest**
 (not the OnboardingServer), so that deleting or retrying an individual
-OnboardingServer never garbage-collects credentials a live BMH still depends on;
-the ExternalSecret is GC'd as a backstop only when the whole OnboardingRequest is
-torn down.
+OnboardingServer never garbage-collects credentials a live BMH still depends on.
+During request teardown it is **not** left to owner-reference GC: because the request
+finalizer deletes the children and waits for their finalizers *before* removing any
+shared/per-server ExternalSecret (next paragraph), the credentials BMO needs for
+rollback are still present while each child finalizer runs — this holds regardless of
+foreground vs. background GC, since the request finalizer, not the GC ordering,
+sequences it. The ExternalSecret is removed only after the child cleanup completes.
 
 **Composition with the OnboardingRequest finalizer:** the two finalizers divide
 responsibility by scope, and the **order matters**. The OnboardingRequest finalizer
 first **quiesces and drains** the children — stopping new mutations and waiting for
-any in-flight BMC operation to settle — then lets owner-reference GC delete the
-OnboardingServer CRs so each per-server finalizer runs its **per-server**
-rollback/cleanup **while the shared credential Secrets still exist**, and only
-**afterwards** removes the **shared** ExternalSecrets (see
+any in-flight BMC operation to settle — then **explicitly deletes each OnboardingServer
+and waits for its finalizer to complete** (it does **not** rely on owner-reference GC,
+which under the default background policy could remove the owner first). Each
+per-server finalizer therefore runs its **per-server** rollback/cleanup **while the
+shared credential Secrets still exist**, and only **afterwards** does the request
+finalizer remove the **shared** ExternalSecrets and then its own finalizer (see
 [Deletion semantics](server-onboarding-service.md#deletion-semantics)). After the
 drain, every surviving server is one of: **pre-mutation** (nothing to roll back);
 **past `Publishing`** (a published BMH — the finalizer never rolls back or deletes
@@ -1702,7 +1729,12 @@ each state in [section 2](server-onboarding-service.md#2-server-onboarding-state
    append-only, deletion guard rejecting only when a **published** BMH exists);
    OnboardingServer finalizer cleanup (held BMH deleted, per-server
    ExternalSecret/Secret removed, published BMH and its credentials **retained**,
-   `status.cleanupStatus` set; retry-by-delete recreates the server as `Pending`)
+   `status.cleanupStatus` set; retry-by-delete recreates the server as `Pending`);
+   **security guardrails** — a BMH whose rendered `bmc.address` host is not the
+   declared `bmcAddress`, references a non-pool Secret, or flips cert verification
+   against pool policy is rejected; and a **compromised-service-account test** (the
+   controller SA cannot write the OnboardingRequest spec — append a server or widen
+   `bmcSubnet` — and cannot create an off-destination BMH)
 3. **Integration**: Deploy onboarding Deployment, create OnboardingRequest CR with
    server list, verify OnboardingServer CRs progress through the state machine —
    BMH created and inspected, matched, credentials applied, marker removed — and

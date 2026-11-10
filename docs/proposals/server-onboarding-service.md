@@ -847,8 +847,10 @@ type MutationOp struct {
     Operation string `json:"operation"`
     // Phase is how far it got: "Requested" (desired state declared on the BMH /
     // companion CR), "Applied" (BMO confirmed success), "Failed", or "RolledBack"
-    // (reverted during cleanup). A "Requested" (but not "Applied") op is the
-    // partially-applied case the rollback must still handle.
+    // (reverted during cleanup). Rollback must handle "Requested", "Applied", AND
+    // "Failed": a "Requested"-but-not-"Applied" op may already have taken effect, and
+    // a "Failed" op can fail only after partially changing the BMC. A reversible op
+    // in any of those phases is rolled back on cleanup.
     Phase string `json:"phase"`
     UpdatedAt *metav1.Time `json:"updatedAt,omitempty"`
 }
@@ -1377,13 +1379,25 @@ Hub Cluster                               Remote Site
   attacker and disclose the credentials. Because BMH creation is therefore a trust
   boundary, service-created BMHs are constrained by a validating webhook (and the
   controller's own creation path): `spec.bmc.credentialsName` may reference only
-  onboarding-owned Secrets in the resource pool namespace; `spec.bmc.address` must be
-  the `bmcAddressTemplate` rendered for a declared server `bmcAddress` that falls
-  inside `bmcSubnet` (it cannot point at an arbitrary endpoint); and
-  `disableCertificateVerification` must follow the pool policy
-  (`spec.disableBmcCertificateVerification`) rather than being set freely. The
-  controller service account's `create` on `baremetalhosts` is the sensitive grant
-  this guard protects; it must stay tightly scoped.
+  onboarding-owned Secrets in the resource pool namespace; the **host of the rendered
+  `spec.bmc.address` URL must equal the server's declared `bmcAddress`** (an exact
+  per-server match, not merely "inside `bmcSubnet`" — a subnet check alone is
+  insufficient, see below); and `disableCertificateVerification` must follow the pool
+  policy (`spec.disableBmcCertificateVerification`) rather than being set freely.
+- **The approved destinations must be protected independently of the controller
+  service account.** The checks above pin a BMH to a _declared_ `bmcAddress`, but the
+  declared set and `bmcSubnet` live in the OnboardingRequest spec — so if the same
+  compromised controller SA could **edit that spec** (append an attacker `bmcAddress`,
+  broaden `bmcSubnet`), it could pre-approve its own endpoint and then pass the BMH
+  webhook. To close this, **the controller service account has no write access to the
+  OnboardingRequest spec**: it is granted only `onboardingrequests/status` and
+  `onboardingrequests/finalizers` (not `update`/`patch` on the resource itself).
+  Appending servers or changing `bmcSubnet`/`bmcGateway` is a **user-driven** spec
+  change requiring separate RBAC a compromised controller does not hold. The
+  sensitive `create` on `baremetalhosts` is thus bounded by an approved-destination
+  set the controller cannot unilaterally expand. A **compromised-service-account
+  test** (controller SA attempts to add an endpoint / widen the subnet / create an
+  off-destination BMH, and is rejected) is part of the verification plan.
 - `status.stateMessage` on OnboardingServer must never contain credential values
 - BMC Redfish transport (HTTPS, TLS) is handled by Metal3/BMO, not the onboarding
   service. **BMC certificate verification is on by default** (`spec.bmc.disableCertificateVerification:
@@ -1426,8 +1440,9 @@ Hub Cluster                               Remote Site
 
   | API group | Resource | Verbs | Why |
   |---|---|---|---|
-  | `onboarding.openshift.io` | `onboardingrequests` | get, list, watch, update, patch | Reconcile; manage finalizer |
+  | `onboarding.openshift.io` | `onboardingrequests` | get, list, watch | Reconcile. **No `update`/`patch` on the resource** — the controller must not edit the request spec (declared servers, `bmcSubnet`/`bmcGateway`), so a compromised controller cannot pre-approve its own BMC destination (see [Security Considerations](#4-security-considerations)) |
   | `onboarding.openshift.io` | `onboardingrequests/status` | get, update, patch | Update summary counts / conditions |
+  | `onboarding.openshift.io` | `onboardingrequests/finalizers` | update | Manage the request finalizer without granting spec write |
   | `onboarding.openshift.io` | `onboardingservers` | get, list, watch, create, update, patch, delete | Create one per server entry; drive reconcile; `delete` to explicitly tear children down and wait for their finalizers during request deletion (not relying on owner-reference GC) |
   | `onboarding.openshift.io` | `onboardingservers/status` | get, update, patch | Record state machine state |
   | `ocloud.openshift.io` | `locations` | get, list | Prerequisite lookup (must exist) |
@@ -1435,7 +1450,7 @@ Hub Cluster                               Remote Site
   | `ocloud.openshift.io` | `resourcepools` | get, list, create | Create if not found |
   | (core) | `namespaces` | get, list, create | Resource pool namespace |
   | `external-secrets.io` | `externalsecrets` | get, list, watch, create, delete | Create shared/per-server ExternalSecrets; delete on finalizer/cleanup |
-  | (core) | `secrets` | delete | Delete per-server ESO-synced credential Secrets on cleanup (by name). The controller does **not** read Secret data — readiness comes from the `ExternalSecret` `.status`, and BMO reads the credential Secret — so it holds no `get`/`list`/`watch` on Secrets |
+  | (core) | `secrets` | delete | **Namespace-scoped** (`Role` + per-pool `RoleBinding`). Deletes per-server and shared ESO-synced Secrets (both in the pool namespace) by name. Controller never reads Secret data (readiness from `ExternalSecret` `.status`; BMO reads it) — so no `get`/`list`/`watch` |
   | `metal3.io` | `baremetalhosts` | get, list, watch, create, update, patch, delete | Create the BMH (`inspectionMode: fast`, hold marker) in `Inspecting`; `patch` to request BMC config and clear the hold annotation (`Publishing`); watch conditions; delete a **held** BMH (code-constrained) |
   | `metal3.io` | BMC networking / credentials / LDAP config resources (exact kinds TBD — may be BareMetalHost sub-resources or companion CRs) | get, list, watch, create, update, patch, delete | Declare and track the DHCP→static pin + DNS, credential provisioning, and LDAP config that BMO applies over Redfish. The precise resources/verbs depend on the final Metal3 API — see [Dependency on forthcoming Metal3 APIs](#dependency-on-forthcoming-metal3-apis) |
   | `metal3.io` | `hardwaredata` | get, list, watch | Read the `HardwareData` CR produced by fast out-of-band (Redfish) inspection for vendor/hardware matching (`Inventorying`) |
