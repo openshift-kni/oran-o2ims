@@ -946,12 +946,20 @@ destroying any shared state:
    This makes correctness independent of the foreground/background GC policy. (The
    service account therefore needs `delete` on `onboardingservers` — see the RBAC
    table.)
-5. **Delete shared credentials last.** Only after every child OnboardingServer is gone
-   does the request finalizer delete the shared ExternalSecret CRs (default
-   credentials, LDAP bind/user) and their ESO-synced K8s Secrets. Per-server
-   ExternalSecrets were already removed by their own OnboardingServer finalizers in
-   step 4. The request finalizer is removed last, so the OnboardingRequest object
-   outlives its children regardless of GC ordering.
+5. **Delete the shared credentials — and any remaining per-server credentials —
+   last.** Only after every child OnboardingServer is gone does the request finalizer
+   delete the shared ExternalSecret CRs (default credentials, LDAP bind/user) and
+   their ESO-synced K8s Secrets. It **also** deletes any per-server ExternalSecrets /
+   synced Secrets still present — in particular those for a **published host that was
+   decommissioned** before the request was torn down: that host's OnboardingServer
+   finalizer intentionally _retained_ its credentials while the BMH was live, and
+   because the credential ExternalSecrets carry **no owner reference**
+   ([they are managed explicitly](server-onboarding-implementation.md#server-onboarding-state-machine--detailed-per-state-behavior)),
+   nothing else would ever remove them. The request finalizer therefore sweeps every
+   onboarding-owned ExternalSecret/Secret in the pool namespace, not just the shared
+   ones, so no credential is left synced indefinitely. The request finalizer is
+   removed last, so the OnboardingRequest object outlives its children regardless of
+   GC ordering.
 
 **Inventory CRs are intentionally not deleted.** The `OCloudSite` and
 `ResourcePool` CRs the controller created (in the O-Cloud manager namespace) are

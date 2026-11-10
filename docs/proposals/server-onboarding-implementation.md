@@ -1754,9 +1754,10 @@ each state in [section 2](server-onboarding-service.md#2-server-onboarding-state
    a **foreground-cascading-deletion test with the garbage collector enabled** (real
    cluster/kube-controller-manager, since envtest does not run GC): delete an
    OnboardingRequest with a held, mid-rollback server using `foreground`
-   propagation and assert the credential ExternalSecrets / ESO-synced Secrets
-   survive until the child finalizers complete (i.e. they are not owner-reference-GC'd
-   out from under an in-flight rollback)
+   propagation and assert the per-server ExternalSecret and ESO-synced Secret
+   survive until that server's rollback settles or times out, and the shared
+   credential ExternalSecrets / ESO-synced Secrets survive until all child finalizers
+   complete (i.e. credentials are not owner-reference-GC'd during rollback)
 4. **Manual**: Add servers to OnboardingRequest, observe full onboarding flow via `oc get onboardingservers -n <resourcePoolName>`; confirm a held BMH is not surfaced in the O2 IMS Resource inventory until the host is published (`Publishing`)
 
 ## 12. Open Questions / Product Inputs
