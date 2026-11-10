@@ -431,8 +431,24 @@ If `bmcVendor` does not match a known vendor, `bmcAddressTemplate` is required �
 
 The OnboardingRequestSpec is partially immutable after creation:
 
-- **Immutable fields**: All fields except `servers`, `bmcSubnet`, and `bmcGateway` — changing credentials, hardware attributes, vendor, resource pool, or the `hardwareProfileName` firmware/BIOS baseline while servers are being processed would cause inconsistent state (servers already onboarded were brought to the old baseline).
-- **Updatable BMC network settings (`bmcSubnet`, `bmcGateway`)**: these may be corrected after creation. They are consumed **only** at `PinningBmcAddress` (as the static subnet/gateway), so an update affects only servers **not yet pinned** — it never re-pins or disturbs a server already past `PinningBmcAddress`. This is the recovery path for the failure mode where a server lands in `Failed` at `PinningBmcAddress` because the BMC's DHCP lease omitted the gateway and no `bmcSubnet`/`bmcGateway` was supplied (see [Hardware attribute matching / pinning](#1-api-design-crds)): the operator sets or corrects `bmcSubnet`/`bmcGateway` on the existing OnboardingRequest and retries the failed server (delete its OnboardingServer; it is recreated as `Pending`) — **without** recreating the whole request, which the deletion guard would block once any server has published. The webhook re-validates the CIDR/gateway/family rules on update.
+- **Immutable fields**: All fields except `servers`, `bmcSubnet`, and `bmcGateway`
+  — changing credentials, hardware attributes, vendor, resource pool, or the
+  `hardwareProfileName` firmware/BIOS baseline while servers are being processed
+  would cause inconsistent state (servers already onboarded were brought to the old
+  baseline).
+- **Updatable BMC network settings (`bmcSubnet`, `bmcGateway`)**: these may be
+  corrected after creation. They are consumed **only** at `PinningBmcAddress` (as the
+  static subnet/gateway), so an update affects only servers **not yet pinned** — it
+  never re-pins or disturbs a server already past `PinningBmcAddress`. This is the
+  recovery path for the failure mode where a server lands in `Failed` at
+  `PinningBmcAddress` because the BMC's DHCP lease omitted the gateway and no
+  `bmcSubnet`/`bmcGateway` was supplied (see
+  [Hardware attribute matching / pinning](#1-api-design-crds)): the operator sets or
+  corrects `bmcSubnet`/`bmcGateway` on the existing OnboardingRequest and retries the
+  failed server (delete its OnboardingServer; it is recreated as `Pending`) —
+  **without** recreating the whole request, which the deletion guard would block once
+  any server has published. The webhook re-validates the CIDR/gateway/family rules on
+  update.
 - **Append-only `servers` list**: New server entries may be appended to the `servers` list. Existing entries cannot be modified or removed. This allows adding servers to an onboarding request incrementally without requiring a new CR.
 
 The webhook validates on update:
@@ -653,7 +669,13 @@ inventory hierarchy exists. All three inventory CRs are created/looked up in the
 O-Cloud manager namespace (`oran-o2ims`):
 
 1. **Location CR** — must already exist in `oran-o2ims`. If not found, the OnboardingRequest is set to `Ready=False, Reason=LocationNotFound`.
-2. **OCloudSite CR** — created in `oran-o2ims` with `metadata.name` = `oCloudSiteName`, `spec.globalLocationName`, and the required `spec.description` (from `oCloudSiteDescription`, or a generated default) if not found. If it **already exists** but its `spec.globalLocationName` differs from the request's, the OnboardingRequest is set to `Ready=False, Reason=OCloudSiteConflict` and no ResourcePool is created — otherwise the pool and its hosts would be filed under a different Location than the request names.
+2. **OCloudSite CR** — created in `oran-o2ims` with `metadata.name` =
+   `oCloudSiteName`, `spec.globalLocationName`, and the required `spec.description`
+   (from `oCloudSiteDescription`, or a generated default) if not found. If it
+   **already exists** but its `spec.globalLocationName` differs from the request's,
+   the OnboardingRequest is set to `Ready=False, Reason=OCloudSiteConflict` and no
+   ResourcePool is created — otherwise the pool and its hosts would be filed under a
+   different Location than the request names.
 3. **ResourcePool CR** — created in `oran-o2ims` with `metadata.name` = `resourcePoolName`, `spec.oCloudSiteName`, and the required `spec.description` (from `resourcePoolDescription`, or a generated default) if not found.
 4. **Namespace** — created matching `resourcePoolName` if it does not exist, for BMH, Secret, and OnboardingServer resources. (Distinct from `oran-o2ims`.)
 5. **OnboardingServer CRs** — one created per entry in `spec.servers`, in the resource pool namespace, owned by the OnboardingRequest.
@@ -1292,7 +1314,7 @@ Hub Cluster                               Remote Site
 
 | # | Path | Protocol | Direction | Purpose |
 |---|------|----------|-----------|---------|
-| 1 | **Metal3/BMO → BMCs** | HTTPS (TCP 443) | Outbound from hub | BMO/Ironic reaches each BMC's Redfish API for **everything** the onboarding flow needs: fast out-of-band inspection (`HardwareData`), the DHCP→static BMC-NIC pin and DNS, credential provisioning, and LDAP config. Requires hub→BMC subnet routing from the Metal3/BMO pods. There is **no provisioning network, DHCP, TFTP, or PXE boot** on this path. |
+| 1 | **Metal3/BMO → BMCs** | HTTPS (TCP 443) | Outbound from hub | BMO/Ironic reaches each BMC's Redfish API for all BMC work: fast OOB inspection, the DHCP→static pin + DNS, credentials, and LDAP. Requires hub→BMC routing (from BMO pods). No provisioning net/DHCP/TFTP/PXE. |
 | 2 | **BMCs → LDAP server** | LDAPS (TCP 636) | From BMCs | (authMode=ldap only) After LDAP is configured on a BMC, the BMC authenticates users against the LDAP server. The LDAP server must be reachable from the BMC management subnet. This path does not involve the hub cluster. |
 | — | **Onboarding Pod → BMCs** | — | — | **None.** The onboarding controller never connects to a BMC; it drives BMC operations declaratively through Metal3 CRs and watches BareMetalHost status. |
 
@@ -1375,8 +1397,8 @@ Hub Cluster                               Remote Site
   | `ocloud.openshift.io` | `resourcepools` | get, list, create | Create if not found |
   | (core) | `namespaces` | get, list, create | Resource pool namespace |
   | `external-secrets.io` | `externalsecrets` | get, list, watch, create, delete | Create shared/per-server ExternalSecrets; delete on finalizer/cleanup |
-  | (core) | `secrets` | delete | Delete per-server ESO-synced credential Secrets on cleanup (by deterministic name). The controller does **not** read Secret data — ESO-sync readiness is observed via the `ExternalSecret` `.status`, and BMO (not the controller) reads the credential Secret — so it holds no `get`/`list`/`watch` on Secrets |
-  | `metal3.io` | `baremetalhosts` | get, list, watch, create, update, patch, delete | Create the BMH with `inspectionMode: fast` and the inventory-hold marker (`Inspecting`); `update`/`patch` to request BMC network/credential/LDAP config and to clear the inventory-hold annotation (`Publishing`); watch status conditions for outcomes; delete a **held** BMH (constrained in code — see note) |
+  | (core) | `secrets` | delete | Delete per-server ESO-synced credential Secrets on cleanup (by name). The controller does **not** read Secret data — readiness comes from the `ExternalSecret` `.status`, and BMO reads the credential Secret — so it holds no `get`/`list`/`watch` on Secrets |
+  | `metal3.io` | `baremetalhosts` | get, list, watch, create, update, patch, delete | Create the BMH (`inspectionMode: fast`, hold marker) in `Inspecting`; `patch` to request BMC config and clear the hold annotation (`Publishing`); watch conditions; delete a **held** BMH (code-constrained) |
   | `metal3.io` | BMC networking / credentials / LDAP config resources (exact kinds TBD — may be BareMetalHost sub-resources or companion CRs) | get, list, watch, create, update, patch, delete | Declare and track the DHCP→static pin + DNS, credential provisioning, and LDAP config that BMO applies over Redfish. The precise resources/verbs depend on the final Metal3 API — see [Dependency on forthcoming Metal3 APIs](#dependency-on-forthcoming-metal3-apis) |
   | `metal3.io` | `hardwaredata` | get, list, watch | Read the `HardwareData` CR produced by fast out-of-band (Redfish) inspection for vendor/hardware matching (`Inventorying`) |
   | `clcm.openshift.io` | `hardwareprofiles` | get, list | Read the referenced `HardwareProfile` for the firmware/BIOS baseline (`ApplyingHardwareProfile`); only when `hardwareProfileName` is set |
@@ -1410,7 +1432,7 @@ Hub Cluster                               Remote Site
 | Non-root user | Prevents privilege escalation within the container |
 | Read-only root filesystem | Minimal writable surface |
 | Drop all capabilities | No privileged operations needed |
-| NetworkPolicy | Restrict egress to the Kubernetes API only (no BMC-subnet egress — BMO performs all BMC traffic); allow **ingress from the Kubernetes API server to the validating-webhook port only** — the controller-manager serves the webhook with `failurePolicy: Fail`, so blocking it would stop OnboardingRequest create/delete — and no other ingress |
+| NetworkPolicy | Egress: Kubernetes API only (no BMC-subnet egress — BMO does all BMC traffic). Ingress: **API server → validating-webhook port only** (the webhook's `failurePolicy: Fail` would otherwise block OnboardingRequest create/delete); no other ingress |
 
 ---
 
