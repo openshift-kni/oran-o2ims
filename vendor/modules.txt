@@ -75,8 +75,9 @@ github.com/fsnotify/fsnotify/internal
 # github.com/fxamacker/cbor/v2 v2.9.4
 ## explicit; go 1.20
 github.com/fxamacker/cbor/v2
-# github.com/getkin/kin-openapi v0.152.0
+# github.com/getkin/kin-openapi v0.153.0
 ## explicit; go 1.25
+github.com/getkin/kin-openapi/internal/nodeindex
 github.com/getkin/kin-openapi/openapi3
 github.com/getkin/kin-openapi/openapi3filter
 github.com/getkin/kin-openapi/routers
@@ -335,12 +336,6 @@ github.com/oapi-codegen/oapi-codegen/v2/pkg/util
 ## explicit; go 1.24.0
 github.com/oapi-codegen/runtime
 github.com/oapi-codegen/runtime/types
-# github.com/oasdiff/yaml v0.1.1
-## explicit; go 1.25
-github.com/oasdiff/yaml
-# github.com/oasdiff/yaml3 v0.0.14
-## explicit; go 1.25
-github.com/oasdiff/yaml3
 # github.com/oklog/ulid/v2 v2.1.2
 ## explicit; go 1.15
 github.com/oklog/ulid/v2
@@ -651,6 +646,17 @@ go.yaml.in/yaml/v2
 # go.yaml.in/yaml/v3 v3.0.5
 ## explicit; go 1.16
 go.yaml.in/yaml/v3
+# go.yaml.in/yaml/v4 v4.0.0
+## explicit; go 1.18
+go.yaml.in/yaml/v4
+go.yaml.in/yaml/v4/internal/libyaml
+go.yaml.in/yaml/v4/internal/plugin
+go.yaml.in/yaml/v4/internal/plugin/mergekey
+go.yaml.in/yaml/v4/plugin/aliasdata
+go.yaml.in/yaml/v4/plugin/errorformat/v3
+go.yaml.in/yaml/v4/plugin/errorformat/v4
+go.yaml.in/yaml/v4/plugin/loaderlimits
+go.yaml.in/yaml/v4/plugin/mergekey
 # golang.org/x/crypto v0.58.0
 ## explicit; go 1.26.0
 golang.org/x/crypto/blowfish

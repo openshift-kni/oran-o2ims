@@ -160,7 +160,9 @@ func (pathItem *PathItem) UnmarshalJSON(data []byte) error {
 	if err := unmarshalJSON(data, &x); err != nil {
 		return unmarshalError(err)
 	}
-	_ = unmarshalJSON(data, &x.Extensions)
+	if err := unmarshalJSON(data, &x.Extensions); err != nil {
+		return unmarshalError(err)
+	}
 	delete(x.Extensions, "$ref")
 	delete(x.Extensions, "summary")
 	delete(x.Extensions, "description")
@@ -344,6 +346,11 @@ func (pathItem *PathItem) SetOperation(method string, operation *Operation) {
 // Validate returns an error if PathItem does not comply with the OpenAPI spec.
 func (pathItem *PathItem) Validate(ctx context.Context, opts ...ValidationOption) error {
 	ctx = WithValidationOptions(ctx, opts...)
+	return pathItem.validate(ctx, nil)
+}
+
+// validate passes visiting on to Callback.validate.
+func (pathItem *PathItem) validate(ctx context.Context, visiting map[*Callback]struct{}) error {
 	me := newErrCollector(ctx)
 
 	if !getValidationOptions(ctx).isOpenAPI32OrLater {
@@ -386,7 +393,7 @@ func (pathItem *PathItem) Validate(ctx context.Context, opts ...ValidationOption
 	for _, method := range componentNames(operations) {
 		operation := operations[method]
 		wrapOp := func(e error) error { return &OperationValidationError{Method: method, Cause: e} }
-		if err := me.emitWrapped(wrapOp, operation.Validate(ctx)); err != nil {
+		if err := me.emitWrapped(wrapOp, operation.validate(ctx, visiting)); err != nil {
 			return err
 		}
 	}

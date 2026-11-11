@@ -63,14 +63,19 @@ func DefaultRefNameResolver(doc *T, ref ComponentRef) string {
 			filePath = ""
 		}
 
-		// Remove the path extensions to make this JSON/YAML agnostic.
-		for ext := path.Ext(filePath); len(ext) > 0; ext = path.Ext(filePath) {
+		// Remove the path extension to make this JSON/YAML agnostic. Only
+		// the last one is stripped: earlier dots belong to the file name
+		// itself (e.g. "Lib.AccountId.yaml" must stay "Lib.AccountId"),
+		// otherwise two files like "Lib.AccountId.yaml" and
+		// "Lib.PageSize.yaml" would collapse to the same name.
+		if ext := path.Ext(filePath); len(ext) > 0 {
 			filePath = strings.TrimSuffix(filePath, ext)
 		}
 
 		// Trim the common prefix with the root doc path.
-		if doc.url != nil {
-			for commonDir := path.Dir(doc.url.Path); /*no common prefix*/ commonDir != "."; commonDir = path.Dir(commonDir) {
+		if doc.url != nil && filePath != "" {
+			// path.Dir of an absolute path ends at "/", never at ".".
+			for commonDir := path.Dir(doc.url.Path); /*no common prefix*/ commonDir != "." && commonDir != "/"; commonDir = path.Dir(commonDir) {
 				if p, found := cutDirectories(filePath, commonDir); found {
 					filePath = p
 					break
@@ -96,6 +101,11 @@ func DefaultRefNameResolver(doc *T, ref ComponentRef) string {
 
 	// Replace invalid characters in component fixed field names.
 	internalizedName = InvalidIdentifierCharRegExp.ReplaceAllString(internalizedName, "_")
+
+	// Nothing is left of a ref to the directory itself, such as "/" or "./".
+	if internalizedName == "" {
+		internalizedName = ref.CollectionName()
+	}
 
 	return internalizedName
 }
@@ -125,12 +135,16 @@ func cutDirectories(p, dirs string) (string, bool) {
 	return p, false
 }
 
+// isExternalRef reports whether ref has to be moved into the root document.
+// The add*ToSpec functions also leave alone any ref without a RefPath: the
+// loader did not follow it (its target was empty), so there is nothing to
+// move and the resolver could not name it.
 func isExternalRef(ref string, parentIsExternal bool) bool {
 	return ref != "" && (!strings.HasPrefix(ref, "#/components/") || parentIsExternal)
 }
 
 func (doc *T) addSchemaToSpec(s *SchemaRef, refNameResolver RefNameResolver, parentIsExternal bool) bool {
-	if s == nil || !isExternalRef(s.Ref, parentIsExternal) {
+	if s == nil || !isExternalRef(s.Ref, parentIsExternal) || s.RefPath() == nil {
 		return false
 	}
 
@@ -160,7 +174,7 @@ func (doc *T) addSchemaToSpec(s *SchemaRef, refNameResolver RefNameResolver, par
 }
 
 func (doc *T) addParameterToSpec(p *ParameterRef, refNameResolver RefNameResolver, parentIsExternal bool) bool {
-	if p == nil || !isExternalRef(p.Ref, parentIsExternal) {
+	if p == nil || !isExternalRef(p.Ref, parentIsExternal) || p.RefPath() == nil {
 		return false
 	}
 	name := refNameResolver(doc, p)
@@ -183,7 +197,7 @@ func (doc *T) addParameterToSpec(p *ParameterRef, refNameResolver RefNameResolve
 }
 
 func (doc *T) addHeaderToSpec(h *HeaderRef, refNameResolver RefNameResolver, parentIsExternal bool) bool {
-	if h == nil || !isExternalRef(h.Ref, parentIsExternal) {
+	if h == nil || !isExternalRef(h.Ref, parentIsExternal) || h.RefPath() == nil {
 		return false
 	}
 	name := refNameResolver(doc, h)
@@ -206,7 +220,7 @@ func (doc *T) addHeaderToSpec(h *HeaderRef, refNameResolver RefNameResolver, par
 }
 
 func (doc *T) addRequestBodyToSpec(r *RequestBodyRef, refNameResolver RefNameResolver, parentIsExternal bool) bool {
-	if r == nil || !isExternalRef(r.Ref, parentIsExternal) {
+	if r == nil || !isExternalRef(r.Ref, parentIsExternal) || r.RefPath() == nil {
 		return false
 	}
 	name := refNameResolver(doc, r)
@@ -229,7 +243,7 @@ func (doc *T) addRequestBodyToSpec(r *RequestBodyRef, refNameResolver RefNameRes
 }
 
 func (doc *T) addResponseToSpec(r *ResponseRef, refNameResolver RefNameResolver, parentIsExternal bool) bool {
-	if r == nil || !isExternalRef(r.Ref, parentIsExternal) {
+	if r == nil || !isExternalRef(r.Ref, parentIsExternal) || r.RefPath() == nil {
 		return false
 	}
 	name := refNameResolver(doc, r)
@@ -252,7 +266,7 @@ func (doc *T) addResponseToSpec(r *ResponseRef, refNameResolver RefNameResolver,
 }
 
 func (doc *T) addSecuritySchemeToSpec(ss *SecuritySchemeRef, refNameResolver RefNameResolver, parentIsExternal bool) {
-	if ss == nil || !isExternalRef(ss.Ref, parentIsExternal) {
+	if ss == nil || !isExternalRef(ss.Ref, parentIsExternal) || ss.RefPath() == nil {
 		return
 	}
 	name := refNameResolver(doc, ss)
@@ -275,7 +289,7 @@ func (doc *T) addSecuritySchemeToSpec(ss *SecuritySchemeRef, refNameResolver Ref
 }
 
 func (doc *T) addExampleToSpec(e *ExampleRef, refNameResolver RefNameResolver, parentIsExternal bool) {
-	if e == nil || !isExternalRef(e.Ref, parentIsExternal) {
+	if e == nil || !isExternalRef(e.Ref, parentIsExternal) || e.RefPath() == nil {
 		return
 	}
 	name := refNameResolver(doc, e)
@@ -298,7 +312,7 @@ func (doc *T) addExampleToSpec(e *ExampleRef, refNameResolver RefNameResolver, p
 }
 
 func (doc *T) addLinkToSpec(l *LinkRef, refNameResolver RefNameResolver, parentIsExternal bool) {
-	if l == nil || !isExternalRef(l.Ref, parentIsExternal) {
+	if l == nil || !isExternalRef(l.Ref, parentIsExternal) || l.RefPath() == nil {
 		return
 	}
 	name := refNameResolver(doc, l)
@@ -321,7 +335,7 @@ func (doc *T) addLinkToSpec(l *LinkRef, refNameResolver RefNameResolver, parentI
 }
 
 func (doc *T) addCallbackToSpec(c *CallbackRef, refNameResolver RefNameResolver, parentIsExternal bool) bool {
-	if c == nil || !isExternalRef(c.Ref, parentIsExternal) {
+	if c == nil || !isExternalRef(c.Ref, parentIsExternal) || c.RefPath() == nil {
 		return false
 	}
 	name := refNameResolver(doc, c)
@@ -337,17 +351,36 @@ func (doc *T) addCallbackToSpec(c *CallbackRef, refNameResolver RefNameResolver,
 	return true
 }
 
+// derefSchemaRef moves s into the root document when it points elsewhere,
+// then does the same for the refs within the schema it holds.
+func (doc *T) derefSchemaRef(s *SchemaRef, refNameResolver RefNameResolver, parentIsExternal bool) (isExternal bool) {
+	isExternal = doc.addSchemaToSpec(s, refNameResolver, parentIsExternal)
+	if s == nil {
+		return
+	}
+	if s.target == nil {
+		doc.derefSchema(s.Value, refNameResolver, isExternal || parentIsExternal)
+		return
+	}
+	// A $ref with siblings has a copy of its target as Value, with the siblings
+	// applied. Each schema in it is either the target's, which lives where the
+	// $ref points, or the siblings', which live next to the $ref, in the
+	// document of its parent. The siblings are what gets written out next to
+	// the $ref, even those Value left out, such as a conjunct that constrains
+	// nothing.
+	doc.derefSchema(s.target, refNameResolver, isExternal || parentIsExternal)
+	doc.derefSchema(s.sibling, refNameResolver, parentIsExternal)
+	return
+}
+
 func (doc *T) derefSchema(s *Schema, refNameResolver RefNameResolver, parentIsExternal bool) {
 	if s == nil || doc.isVisitedSchema(s) {
 		return
 	}
 
-	for _, list := range []SchemaRefs{s.AllOf, s.AnyOf, s.OneOf} {
+	for _, list := range []SchemaRefs{s.AllOf, s.AnyOf, s.OneOf, s.PrefixItems} {
 		for _, s2 := range list {
-			isExternal := doc.addSchemaToSpec(s2, refNameResolver, parentIsExternal)
-			if s2 != nil {
-				doc.derefSchema(s2.Value, refNameResolver, isExternal || parentIsExternal)
-			}
+			doc.derefSchemaRef(s2, refNameResolver, parentIsExternal)
 		}
 	}
 
@@ -364,24 +397,22 @@ func (doc *T) derefSchema(s *Schema, refNameResolver RefNameResolver, parentIsEx
 			if s2.RefPath() == nil {
 				continue
 			}
-			isExternal := doc.addSchemaToSpec(s2, refNameResolver, parentIsExternal)
-			doc.derefSchema(s2.Value, refNameResolver, isExternal || parentIsExternal)
+			doc.derefSchemaRef(s2, refNameResolver, parentIsExternal)
 			s.Discriminator.Mapping[k] = MappingRef(*s2)
 		}
 	}
 
-	for _, name := range componentNames(s.Properties) {
-		s2 := s.Properties[name]
-		isExternal := doc.addSchemaToSpec(s2, refNameResolver, parentIsExternal)
-		if s2 != nil {
-			doc.derefSchema(s2.Value, refNameResolver, isExternal || parentIsExternal)
+	for _, schemas := range []Schemas{s.Properties, s.PatternProperties, s.DependentSchemas, s.Defs} {
+		for _, name := range componentNames(schemas) {
+			doc.derefSchemaRef(schemas[name], refNameResolver, parentIsExternal)
 		}
 	}
-	for _, ref := range []*SchemaRef{s.Not, s.AdditionalProperties.Schema, s.Items} {
-		isExternal := doc.addSchemaToSpec(ref, refNameResolver, parentIsExternal)
-		if ref != nil {
-			doc.derefSchema(ref.Value, refNameResolver, isExternal || parentIsExternal)
-		}
+	for _, ref := range []*SchemaRef{
+		s.Not, s.AdditionalProperties.Schema, s.Items,
+		s.Contains, s.PropertyNames, s.If, s.Then, s.Else, s.ContentSchema,
+		s.UnevaluatedItems.Schema, s.UnevaluatedProperties.Schema,
+	} {
+		doc.derefSchemaRef(ref, refNameResolver, parentIsExternal)
 	}
 }
 
@@ -389,7 +420,7 @@ func (doc *T) derefHeaders(hs Headers, refNameResolver RefNameResolver, parentIs
 	for _, name := range componentNames(hs) {
 		h := hs[name]
 		isExternal := doc.addHeaderToSpec(h, refNameResolver, parentIsExternal)
-		if doc.isVisitedHeader(h.Value) {
+		if h == nil || h.Value == nil || doc.isVisitedHeader(h.Value) {
 			continue
 		}
 		doc.derefParameter(h.Value.Parameter, refNameResolver, parentIsExternal || isExternal)
@@ -406,13 +437,16 @@ func (doc *T) derefExamples(es Examples, refNameResolver RefNameResolver, parent
 func (doc *T) derefContent(c Content, refNameResolver RefNameResolver, parentIsExternal bool) {
 	for _, name := range componentNames(c) {
 		mediatype := c[name]
-		isExternal := doc.addSchemaToSpec(mediatype.Schema, refNameResolver, parentIsExternal)
-		if mediatype.Schema != nil {
-			doc.derefSchema(mediatype.Schema.Value, refNameResolver, isExternal || parentIsExternal)
+		if mediatype == nil {
+			continue
 		}
+		doc.derefSchemaRef(mediatype.Schema, refNameResolver, parentIsExternal)
 		doc.derefExamples(mediatype.Examples, refNameResolver, parentIsExternal)
 		for _, name := range componentNames(mediatype.Encoding) {
 			e := mediatype.Encoding[name]
+			if e == nil {
+				continue
+			}
 			doc.derefHeaders(e.Headers, refNameResolver, parentIsExternal)
 		}
 	}
@@ -426,6 +460,9 @@ func (doc *T) derefLinks(ls Links, refNameResolver RefNameResolver, parentIsExte
 }
 
 func (doc *T) derefResponse(r *ResponseRef, refNameResolver RefNameResolver, parentIsExternal bool) {
+	if r == nil {
+		return
+	}
 	isExternal := doc.addResponseToSpec(r, refNameResolver, parentIsExternal)
 	if v := r.Value; v != nil {
 		doc.derefHeaders(v.Headers, refNameResolver, isExternal || parentIsExternal)
@@ -446,11 +483,9 @@ func (doc *T) derefResponseBodies(es ResponseBodies, refNameResolver RefNameReso
 }
 
 func (doc *T) derefParameter(p Parameter, refNameResolver RefNameResolver, parentIsExternal bool) {
-	isExternal := doc.addSchemaToSpec(p.Schema, refNameResolver, parentIsExternal)
+	doc.derefExamples(p.Examples, refNameResolver, parentIsExternal)
 	doc.derefContent(p.Content, refNameResolver, parentIsExternal)
-	if p.Schema != nil {
-		doc.derefSchema(p.Schema.Value, refNameResolver, isExternal || parentIsExternal)
-	}
+	doc.derefSchemaRef(p.Schema, refNameResolver, parentIsExternal)
 }
 
 func (doc *T) derefRequestBody(r RequestBody, refNameResolver RefNameResolver, parentIsExternal bool) {
@@ -460,6 +495,9 @@ func (doc *T) derefRequestBody(r RequestBody, refNameResolver RefNameResolver, p
 func (doc *T) derefPaths(paths map[string]*PathItem, refNameResolver RefNameResolver, parentIsExternal bool) {
 	for _, name := range componentNames(paths) {
 		ops := paths[name]
+		if ops == nil {
+			continue
+		}
 		pathIsExternal := isExternalRef(ops.Ref, parentIsExternal)
 		// inline full operations
 		ops.Ref = ""
@@ -518,10 +556,9 @@ func (doc *T) InternalizeRefs(ctx context.Context, refNameResolver func(*T, Comp
 	if components := doc.Components; components != nil {
 		for _, name := range componentNames(components.Schemas) {
 			schema := components.Schemas[name]
-			isExternal := doc.addSchemaToSpec(schema, refNameResolver, false)
-			if schema != nil {
+			doc.derefSchemaRef(schema, refNameResolver, false)
+			if schema != nil && schema.Value != nil {
 				schema.Ref = "" // always dereference the top level
-				doc.derefSchema(schema.Value, refNameResolver, isExternal)
 			}
 		}
 		for _, name := range componentNames(components.Parameters) {
@@ -533,6 +570,11 @@ func (doc *T) InternalizeRefs(ctx context.Context, refNameResolver func(*T, Comp
 			}
 		}
 		doc.derefHeaders(components.Headers, refNameResolver, false)
+		for _, name := range componentNames(components.Headers) {
+			if h := components.Headers[name]; h != nil && h.Value != nil {
+				h.Ref = "" // always dereference the top level
+			}
+		}
 		for _, name := range componentNames(components.RequestBodies) {
 			req := components.RequestBodies[name]
 			isExternal := doc.addRequestBodyToSpec(req, refNameResolver, false)
@@ -542,12 +584,30 @@ func (doc *T) InternalizeRefs(ctx context.Context, refNameResolver func(*T, Comp
 			}
 		}
 		doc.derefResponseBodies(components.Responses, refNameResolver, false)
+		for _, name := range componentNames(components.Responses) {
+			if r := components.Responses[name]; r != nil && r.Value != nil {
+				r.Ref = "" // always dereference the top level
+			}
+		}
 		for _, name := range componentNames(components.SecuritySchemes) {
 			ss := components.SecuritySchemes[name]
 			doc.addSecuritySchemeToSpec(ss, refNameResolver, false)
+			if ss != nil && ss.Value != nil {
+				ss.Ref = "" // always dereference the top level
+			}
 		}
 		doc.derefExamples(components.Examples, refNameResolver, false)
+		for _, name := range componentNames(components.Examples) {
+			if e := components.Examples[name]; e != nil && e.Value != nil {
+				e.Ref = "" // always dereference the top level
+			}
+		}
 		doc.derefLinks(components.Links, refNameResolver, false)
+		for _, name := range componentNames(components.Links) {
+			if l := components.Links[name]; l != nil && l.Value != nil {
+				l.Ref = "" // always dereference the top level
+			}
+		}
 
 		for _, name := range componentNames(components.Callbacks) {
 			cb := components.Callbacks[name]
@@ -561,4 +621,5 @@ func (doc *T) InternalizeRefs(ctx context.Context, refNameResolver func(*T, Comp
 	}
 
 	doc.derefPaths(doc.Paths.Map(), refNameResolver, false)
+	doc.derefPaths(doc.Webhooks, refNameResolver, false)
 }
