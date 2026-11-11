@@ -39,7 +39,7 @@ require (
 	github.com/prometheus/client_model v0.6.3
 	github.com/r3labs/diff/v3 v3.0.2
 	github.com/spf13/cobra v1.10.2
-	github.com/spf13/pflag v1.0.10
+	github.com/spf13/pflag v1.1.0
 	github.com/stephenafamo/bob v0.50.0
 	github.com/stolostron/multicluster-observability-operator v0.0.0-20260728124419-1354ae451c1a
 	github.com/stolostron/siteconfig v0.0.0-20260730225110-604a6a3095fc
