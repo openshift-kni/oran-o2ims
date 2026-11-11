@@ -34,7 +34,7 @@ require (
 	github.com/openshift/hive/apis v0.0.0-20260415205034-aa1db747a6ba
 	github.com/openshift/library-go v0.0.0-20261001144932-192662696fc7
 	github.com/pashagolub/pgxmock/v5 v5.2.0
-	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.94.2
+	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.95.1
 	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/client_model v0.6.3
 	github.com/r3labs/diff/v3 v3.0.2
@@ -58,7 +58,7 @@ require (
 	k8s.io/client-go v0.37.2
 	k8s.io/klog/v2 v2.140.0
 	k8s.io/kubectl v0.37.2
-	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3
+	k8s.io/utils v0.0.0-20261023123148-ca04ba58ecab
 	open-cluster-management.io/api v1.4.0
 	open-cluster-management.io/governance-policy-propagator v0.20.1
 	open-cluster-management.io/managed-serviceaccount v0.12.0
