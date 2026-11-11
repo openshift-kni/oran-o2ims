@@ -101,7 +101,9 @@ func (ss *SecurityScheme) UnmarshalJSON(data []byte) error {
 	if err := unmarshalJSON(data, &x); err != nil {
 		return unmarshalError(err)
 	}
-	_ = unmarshalJSON(data, &x.Extensions)
+	if err := unmarshalJSON(data, &x.Extensions); err != nil {
+		return unmarshalError(err)
+	}
 	delete(x.Extensions, "type")
 	delete(x.Extensions, "description")
 	delete(x.Extensions, "name")
@@ -290,7 +292,9 @@ func (flows *OAuthFlows) UnmarshalJSON(data []byte) error {
 	if err := unmarshalJSON(data, &x); err != nil {
 		return unmarshalError(err)
 	}
-	_ = unmarshalJSON(data, &x.Extensions)
+	if err := unmarshalJSON(data, &x.Extensions); err != nil {
+		return unmarshalError(err)
+	}
 	delete(x.Extensions, "implicit")
 	delete(x.Extensions, "password")
 	delete(x.Extensions, "clientCredentials")
@@ -367,7 +371,13 @@ func (flow OAuthFlow) MarshalYAML() (any, error) {
 	if x := flow.RefreshURL; x != "" {
 		m["refreshUrl"] = x
 	}
-	m["scopes"] = flow.Scopes
+	// Required, so written even when missing: as null, not as the "{}" YAML
+	// would make of a nil map.
+	if x := flow.Scopes; x != nil {
+		m["scopes"] = x
+	} else {
+		m["scopes"] = nil
+	}
 	return m, nil
 }
 
@@ -378,7 +388,9 @@ func (flow *OAuthFlow) UnmarshalJSON(data []byte) error {
 	if err := unmarshalJSON(data, &x); err != nil {
 		return unmarshalError(err)
 	}
-	_ = unmarshalJSON(data, &x.Extensions)
+	if err := unmarshalJSON(data, &x.Extensions); err != nil {
+		return unmarshalError(err)
+	}
 
 	delete(x.Extensions, "authorizationUrl")
 	delete(x.Extensions, "tokenUrl")

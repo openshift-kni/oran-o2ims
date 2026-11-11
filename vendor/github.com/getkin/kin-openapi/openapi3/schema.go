@@ -402,24 +402,6 @@ func (types *Types) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// UnmarshalYAML accepts a single type as well as a sequence of types, mirroring
-// UnmarshalJSON. Swagger 2 and OpenAPI 3.0 documents always write `type` as a
-// scalar, so decoding such a document into openapi2.T or openapi3.T straight
-// from YAML would otherwise fail with "cannot unmarshal !!str into Types".
-func (types *Types) UnmarshalYAML(unmarshal func(any) error) error {
-	var single string
-	if err := unmarshal(&single); err == nil {
-		*types = Types{single}
-		return nil
-	}
-	var multiple []string
-	if err := unmarshal(&multiple); err != nil {
-		return err
-	}
-	*types = Types(multiple)
-	return nil
-}
-
 // BoolSchema represents a JSON Schema keyword that can be either a boolean or a schema object.
 // Used for additionalProperties, unevaluatedProperties, and unevaluatedItems.
 type BoolSchema struct {
@@ -729,7 +711,17 @@ func (schema Schema) MarshalYAML() (any, error) {
 		m["else"] = x
 	}
 	if x := schema.DependentRequired; len(x) != 0 {
-		m["dependentRequired"] = x
+		// A nil list of names is written null, as JSON writes it, rather
+		// than the "[]" YAML would make of it.
+		dr := make(map[string]any, len(x))
+		for name, names := range x {
+			if names == nil {
+				dr[name] = nil
+			} else {
+				dr[name] = names
+			}
+		}
+		m["dependentRequired"] = dr
 	}
 	if x := schema.Defs; len(x) != 0 {
 		m["$defs"] = x
@@ -792,7 +784,9 @@ func (schema *Schema) UnmarshalJSON(data []byte) error {
 	if err := unmarshalJSON(data, &x); err != nil {
 		return unmarshalError(err)
 	}
-	_ = unmarshalJSON(data, &x.Extensions)
+	if err := unmarshalJSON(data, &x.Extensions); err != nil {
+		return unmarshalError(err)
+	}
 
 	delete(x.Extensions, "oneOf")
 	delete(x.Extensions, "anyOf")
@@ -1284,7 +1278,8 @@ func (schema *Schema) WithMinLengthDecodedBase64(i int64) *Schema {
 
 func (schema *Schema) WithMaxLengthDecodedBase64(i int64) *Schema {
 	n := uint64(i)
-	schema.MinLength = (n*8 + 5) / 6
+	v := (n*8 + 5) / 6
+	schema.MaxLength = &v
 	return schema
 }
 
@@ -1396,6 +1391,19 @@ func (schema *Schema) permitsNull(settings *schemaValidationSettings) bool {
 
 // IsEmpty tells whether schema is equivalent to the empty schema `{}`.
 func (schema *Schema) IsEmpty() bool {
+	return schema.isEmpty(make(map[*Schema]struct{}))
+}
+
+// isEmpty is IsEmpty over a schema graph, which may be cyclic. A schema met
+// again on the way down is already being judged: it adds no constraint of its
+// own there, so it counts as empty and the others decide.
+func (schema *Schema) isEmpty(visiting map[*Schema]struct{}) bool {
+	if _, ok := visiting[schema]; ok {
+		return true
+	}
+	visiting[schema] = struct{}{}
+	defer delete(visiting, schema)
+
 	if schema.Type != nil || schema.Format != "" || len(schema.Enum) != 0 ||
 		schema.UniqueItems || schema.ExclusiveMin.IsSet() || schema.ExclusiveMax.IsSet() ||
 		schema.Nullable || schema.ReadOnly || schema.WriteOnly || schema.AllowEmptyValue ||
@@ -1407,54 +1415,54 @@ func (schema *Schema) IsEmpty() bool {
 		schema.Const != nil {
 		return false
 	}
-	if n := schema.Not; n != nil && n.Value != nil && !n.Value.IsEmpty() {
+	if n := schema.Not; n != nil && n.Value != nil && !n.Value.isEmpty(visiting) {
 		return false
 	}
-	if ap := schema.AdditionalProperties.Schema; ap != nil && ap.Value != nil && !ap.Value.IsEmpty() {
+	if ap := schema.AdditionalProperties.Schema; ap != nil && ap.Value != nil && !ap.Value.isEmpty(visiting) {
 		return false
 	}
 	if apa := schema.AdditionalProperties.Has; apa != nil && !*apa {
 		return false
 	}
-	if items := schema.Items; items != nil && items.Value != nil && !items.Value.IsEmpty() {
+	if items := schema.Items; items != nil && items.Value != nil && !items.Value.isEmpty(visiting) {
 		return false
 	}
 	for _, s := range schema.PrefixItems {
-		if ss := s.Value; ss != nil && !ss.IsEmpty() {
+		if ss := s.Value; ss != nil && !ss.isEmpty(visiting) {
 			return false
 		}
 	}
-	if c := schema.Contains; c != nil && c.Value != nil && !c.Value.IsEmpty() {
+	if c := schema.Contains; c != nil && c.Value != nil && !c.Value.isEmpty(visiting) {
 		return false
 	}
 	if schema.MinContains != nil || schema.MaxContains != nil {
 		return false
 	}
 	for _, s := range schema.Properties {
-		if ss := s.Value; ss != nil && !ss.IsEmpty() {
+		if ss := s.Value; ss != nil && !ss.isEmpty(visiting) {
 			return false
 		}
 	}
 	for _, s := range schema.PatternProperties {
-		if ss := s.Value; ss != nil && !ss.IsEmpty() {
+		if ss := s.Value; ss != nil && !ss.isEmpty(visiting) {
 			return false
 		}
 	}
 	for _, s := range schema.DependentSchemas {
-		if ss := s.Value; ss != nil && !ss.IsEmpty() {
+		if ss := s.Value; ss != nil && !ss.isEmpty(visiting) {
 			return false
 		}
 	}
-	if pn := schema.PropertyNames; pn != nil && pn.Value != nil && !pn.Value.IsEmpty() {
+	if pn := schema.PropertyNames; pn != nil && pn.Value != nil && !pn.Value.isEmpty(visiting) {
 		return false
 	}
-	if ui := schema.UnevaluatedItems.Schema; ui != nil && ui.Value != nil && !ui.Value.IsEmpty() {
+	if ui := schema.UnevaluatedItems.Schema; ui != nil && ui.Value != nil && !ui.Value.isEmpty(visiting) {
 		return false
 	}
 	if uih := schema.UnevaluatedItems.Has; uih != nil && !*uih {
 		return false
 	}
-	if up := schema.UnevaluatedProperties.Schema; up != nil && up.Value != nil && !up.Value.IsEmpty() {
+	if up := schema.UnevaluatedProperties.Schema; up != nil && up.Value != nil && !up.Value.isEmpty(visiting) {
 		return false
 	}
 	if uph := schema.UnevaluatedProperties.Has; uph != nil && !*uph {
@@ -1464,27 +1472,27 @@ func (schema *Schema) IsEmpty() bool {
 		return false
 	}
 	for _, s := range schema.OneOf {
-		if ss := s.Value; ss != nil && !ss.IsEmpty() {
+		if ss := s.Value; ss != nil && !ss.isEmpty(visiting) {
 			return false
 		}
 	}
 	for _, s := range schema.AnyOf {
-		if ss := s.Value; ss != nil && !ss.IsEmpty() {
+		if ss := s.Value; ss != nil && !ss.isEmpty(visiting) {
 			return false
 		}
 	}
 	for _, s := range schema.AllOf {
-		if ss := s.Value; ss != nil && !ss.IsEmpty() {
+		if ss := s.Value; ss != nil && !ss.isEmpty(visiting) {
 			return false
 		}
 	}
-	if f := schema.If; f != nil && f.Value != nil && !f.Value.IsEmpty() {
+	if f := schema.If; f != nil && f.Value != nil && !f.Value.isEmpty(visiting) {
 		return false
 	}
-	if t := schema.Then; t != nil && t.Value != nil && !t.Value.IsEmpty() {
+	if t := schema.Then; t != nil && t.Value != nil && !t.Value.isEmpty(visiting) {
 		return false
 	}
-	if e := schema.Else; e != nil && e.Value != nil && !e.Value.IsEmpty() {
+	if e := schema.Else; e != nil && e.Value != nil && !e.Value.isEmpty(visiting) {
 		return false
 	}
 	if len(schema.DependentRequired) != 0 {
@@ -1502,7 +1510,7 @@ func (schema *Schema) IsEmpty() bool {
 	if schema.ContentMediaType != "" || schema.ContentEncoding != "" {
 		return false
 	}
-	if cs := schema.ContentSchema; cs != nil && cs.Value != nil && !cs.Value.IsEmpty() {
+	if cs := schema.ContentSchema; cs != nil && cs.Value != nil && !cs.Value.isEmpty(visiting) {
 		return false
 	}
 	// Last, so a schema carrying both a boolean and other keywords is judged by
@@ -1570,6 +1578,12 @@ func (schema *Schema) validate(ctx context.Context, visited map[*Schema]struct{}
 			}
 			seen[name] = struct{}{}
 		}
+	}
+
+	// The value of `multipleOf` MUST be strictly greater than 0 (JSON Schema
+	// 2020-12 §6.2.1 for OAS 3.1, draft-04 for OAS 3.0).
+	if x := schema.MultipleOf; x != nil && *x <= 0 {
+		return visited, &SchemaMultipleOfNotPositiveError{MultipleOf: *x, Origin: schema.Origin}
 	}
 
 	// Reject fields that only exist in OAS 3.1 / JSON Schema 2020-12 when the
@@ -1768,6 +1782,20 @@ func (schema *Schema) validate(ctx context.Context, visited map[*Schema]struct{}
 		}
 	}
 
+	if d := schema.Discriminator; d != nil {
+		if err := d.Validate(ctx); err != nil {
+			return visited, err
+		}
+		for _, k := range componentNames(d.Mapping) {
+			if v := d.Mapping[k].Value; v != nil {
+				var err error
+				if visited, err = v.validate(ctx, visited); err != nil {
+					return visited, err
+				}
+			}
+		}
+	}
+
 	if ref := schema.Not; ref != nil {
 		v := ref.Value
 		if v == nil {
@@ -1855,15 +1883,6 @@ func (schema *Schema) validate(ctx context.Context, visited map[*Schema]struct{}
 					}
 				}
 			}
-			if !validationOpts.schemaPatternValidationDisabled && schema.Pattern != "" {
-				// Only successfully compiled patterns are cached.
-				// The cache does not record which compiler was used, so a custom one always compiles.
-				if _, ok := compiledPatterns.Load(schema.Pattern); !ok || validationOpts.regexCompilerFunc != nil {
-					if _, err := schema.compilePattern(nil, validationOpts.regexCompilerFunc); err != nil {
-						return visited, err
-					}
-				}
-			}
 		case TypeArray:
 			if schema.Items == nil && !validationOpts.jsonSchema2020ValidationEnabled && len(schema.PrefixItems) == 0 {
 				return visited, newSchemaItemsRequired(schema.Origin)
@@ -1875,6 +1894,18 @@ func (schema *Schema) validate(ctx context.Context, visited map[*Schema]struct{}
 			}
 		default:
 			return visited, newSchemaTypeError(schemaType, schema.Origin)
+		}
+	}
+
+	// `pattern` applies to every string value, also when `type` is omitted.
+	if !validationOpts.schemaPatternValidationDisabled && schema.Pattern != "" &&
+		(schema.Type.IsEmpty() || schema.Type.Includes(TypeString)) {
+		// Only successfully compiled patterns are cached.
+		// The cache does not record which compiler was used, so a custom one always compiles.
+		if _, ok := compiledPatterns.Load(schema.Pattern); !ok || validationOpts.regexCompilerFunc != nil {
+			if _, err := schema.compilePattern(nil, validationOpts.regexCompilerFunc); err != nil {
+				return visited, err
+			}
 		}
 	}
 
