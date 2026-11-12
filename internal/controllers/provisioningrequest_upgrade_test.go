@@ -101,6 +101,16 @@ var testUpgradeSchema = runtime.RawExtension{
 	}`),
 }
 
+// lastUpgradedVersionOf returns the last upgraded version recorded in the
+// ProvisioningRequest status, or an empty string if there is none.
+func lastUpgradedVersionOf(pr *provisioningv1alpha1.ProvisioningRequest) string {
+	clusterDetails := pr.Status.Extensions.ClusterDetails
+	if clusterDetails == nil || clusterDetails.ClusterUpgradeStatus == nil {
+		return ""
+	}
+	return clusterDetails.ClusterUpgradeStatus.LastUpgradedVersion
+}
+
 // toMap unmarshals JSON bytes to map[string]any for test comparisons.
 func toMap(jsonBytes []byte) map[string]any {
 	var m map[string]any
@@ -1538,11 +1548,13 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 		err = c.Get(ctx, types.NamespacedName{Name: "test-pr-upgrade-rbac", Namespace: clusterName}, mw)
 		Expect(k8serrors.IsNotFound(err)).To(BeTrue())
 	}
+	// Everything except LastUpgradedVersion, which outlives the upgrade, is cleared on completion.
 	assertUpgradeStatusCleared := func() {
-		ExpectWithOffset(1, task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus).To(BeNil())
+		cleared := &provisioningv1alpha1.ClusterUpgradeStatus{LastUpgradedVersion: "4.22.0"}
+		ExpectWithOffset(1, task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus).To(Equal(cleared))
 		persistedPR := &provisioningv1alpha1.ProvisioningRequest{}
 		ExpectWithOffset(1, c.Get(ctx, types.NamespacedName{Name: pr.Name}, persistedPR)).To(Succeed())
-		ExpectWithOffset(1, persistedPR.Status.Extensions.ClusterDetails.ClusterUpgradeStatus).To(BeNil())
+		ExpectWithOffset(1, persistedPR.Status.Extensions.ClusterDetails.ClusterUpgradeStatus).To(Equal(cleared))
 	}
 
 	assertUpgradeCondition := func(reason string, msgSubstring string) {
@@ -1645,6 +1657,41 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 			Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(
 				Equal(provisioningv1alpha1.StateFailed))
 		})
+
+		It("should set PreconditionChecksFailed when openshiftVersion label cannot be parsed", func() {
+			setupClientWithoutSpokeReady()
+			mc := &clusterv1.ManagedCluster{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: clusterName}, mc)).To(Succeed())
+			mc.Labels["openshiftVersion"] = "not-a-version"
+			Expect(c.Update(ctx, mc)).To(Succeed())
+
+			result, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName, &utils.UpgradeConfig{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed),
+				"failed to parse openshiftVersion label")
+		})
+
+		DescribeTable("should start from the later of the openshiftVersion label and the last upgraded version",
+			func(label, lastUpgraded, wantStartVersion string) {
+				setupClientWithoutSpokeReady()
+				mc := &clusterv1.ManagedCluster{}
+				Expect(c.Get(ctx, types.NamespacedName{Name: clusterName}, mc)).To(Succeed())
+				mc.Labels["openshiftVersion"] = label
+				Expect(c.Update(ctx, mc)).To(Succeed())
+				task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus =
+					&provisioningv1alpha1.ClusterUpgradeStatus{LastUpgradedVersion: lastUpgraded}
+
+				Expect(task.initUpgradeStatus(ctx, clusterName)).To(Succeed())
+				Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus.StartVersion).To(
+					Equal(wantStartVersion))
+			},
+			Entry("label lags behind the last upgraded version", "4.20.0", "4.21.0", "4.21.0"),
+			Entry("label has caught up with the last upgraded version", "4.22.0", "4.21.0", "4.22.0"),
+			Entry("no last upgraded version is recorded", "4.20.0", "", "4.20.0"),
+		)
 
 		It("should set PreconditionChecksFailed when managed-serviceaccount addon is missing", func() {
 			setupClientWithoutSpokeReady()
@@ -2798,6 +2845,56 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 	// --- Completed ---
 
 	Context("completed", func() {
+		DescribeTable("should persist completion before cleaning up spoke access", func(transient bool) {
+			cv := newBaseCV()
+			cv.Status.History = []configv1.UpdateHistory{{Version: "4.22.0", State: configv1.CompletedUpdate}}
+			buildSpoke(cv)
+			setupWithSpokeReady()
+			now := metav1.Now()
+			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{
+				StartedAt: &now,
+				WorkerPoolUpgrade: &provisioningv1alpha1.WorkerPoolUpgradeStatus{
+					Strategy: constants.WorkerPoolUpgradeStrategyOpenShiftDefault,
+				},
+			}
+			workDeleteAttempts := 0
+			task.client = interceptor.NewClient(c.(client.WithWatch), interceptor.Funcs{
+				Delete: func(ctx context.Context, underlying client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+					if _, ok := obj.(*workv1.ManifestWork); ok {
+						workDeleteAttempts++
+						persisted := &provisioningv1alpha1.ProvisioningRequest{}
+						Expect(c.Get(ctx, client.ObjectKeyFromObject(pr), persisted)).To(Succeed())
+						Expect(utils.IsClusterUpgradeCompleted(persisted)).To(BeTrue())
+						Expect(lastUpgradedVersionOf(persisted)).To(Equal("4.22.0"))
+						if transient && workDeleteAttempts == 1 {
+							return k8serrors.NewServiceUnavailable("temporary spoke cleanup failure")
+						}
+						if !transient {
+							return fmt.Errorf("permanent spoke cleanup failure")
+						}
+					}
+					return underlying.Delete(ctx, obj, opts...)
+				},
+			})
+
+			_, _, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName, &utils.UpgradeConfig{})
+			if transient {
+				Expect(err).ToNot(HaveOccurred())
+				Expect(workDeleteAttempts).To(Equal(2))
+				assertSpokeResourcesCleaned()
+			} else {
+				Expect(err).To(MatchError(ContainSubstring("permanent spoke cleanup failure")))
+				Expect(workDeleteAttempts).To(Equal(1))
+				Expect(c.Get(ctx, types.NamespacedName{Name: "test-pr-upgrade-rbac", Namespace: clusterName}, &workv1.ManifestWork{})).To(Succeed())
+			}
+			persisted := &provisioningv1alpha1.ProvisioningRequest{}
+			Expect(c.Get(ctx, client.ObjectKeyFromObject(pr), persisted)).To(Succeed())
+			Expect(utils.IsClusterUpgradeCompleted(persisted)).To(BeTrue())
+		},
+			Entry("retries a transient failure after partially deleting resources", true),
+			Entry("returns a permanent failure without retrying", false),
+		)
+
 		It("should set Completed, cleanup, proceed=true, and clear upgrade status", func() {
 			cv := newBaseCV()
 			cv.Status.History = []configv1.UpdateHistory{
@@ -2822,6 +2919,39 @@ var _ = Describe("handleClusterVersionUpgrade", func() {
 				"Upgrade to version 4.22.0 completed")
 			assertUpgradeStatusCleared()
 			assertSpokeResourcesCleaned()
+		})
+
+		It("should not record the upgraded version when the openshiftVersion label already reports it", func() {
+			cv := newBaseCV()
+			cv.Status.History = []configv1.UpdateHistory{
+				{Version: "4.22.0", State: configv1.CompletedUpdate},
+			}
+			buildSpoke(cv)
+			setupWithSpokeReady()
+			// The label reached the target while the worker pools were still rolling out, so no
+			// later label change would clear a record written now.
+			mc := &clusterv1.ManagedCluster{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: clusterName}, mc)).To(Succeed())
+			mc.Labels["openshiftVersion"] = "4.22.0"
+			Expect(c.Update(ctx, mc)).To(Succeed())
+			now := metav1.Now()
+			task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{
+				StartedAt: &now,
+				WorkerPoolUpgrade: &provisioningv1alpha1.WorkerPoolUpgradeStatus{
+					Strategy: constants.WorkerPoolUpgradeStrategyOpenShiftDefault,
+				},
+			}
+
+			_, proceed, err := task.handleClusterVersionUpgrade(ctx, ct, clusterName, &utils.UpgradeConfig{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(proceed).To(BeTrue())
+
+			assertUpgradeCondition(string(provisioningv1alpha1.CRconditionReasons.Completed),
+				"Upgrade to version 4.22.0 completed")
+			Expect(task.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus).To(BeNil())
+			persisted := &provisioningv1alpha1.ProvisioningRequest{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: pr.Name}, persisted)).To(Succeed())
+			Expect(persisted.Status.Extensions.ClusterDetails.ClusterUpgradeStatus).To(BeNil())
 		})
 
 		It("[EUS] should wait for MCPs and complete after they finish updating", func() {

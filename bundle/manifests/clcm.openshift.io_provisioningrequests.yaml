@@ -170,8 +170,9 @@ spec:
                         format: date-time
                         type: string
                       clusterUpgradeStatus:
-                        description: ClusterUpgradeStatus holds the state of a cluster
-                          upgrade in progress.
+                        description: |-
+                          ClusterUpgradeStatus holds the state of a cluster upgrade in progress and the
+                          version of the last completed upgrade.
                         properties:
                           accumulatedSuspendedDuration:
                             description: |-
@@ -190,6 +191,14 @@ spec:
                               IntermediateVersion is the intermediate version selected for
                               EUS-to-EUS upgrades, either from user configuration or
                               auto-selected from the Cincinnati update graph.
+                            type: string
+                          lastUpgradedVersion:
+                            description: |-
+                              LastUpgradedVersion is the target version of the last completed cluster upgrade.
+                              It is set when an upgrade completes if the ManagedCluster openshiftVersion label
+                              reports an earlier version, or if the versions cannot be compared. It is cleared
+                              once the label reports this version or a higher one, or when the ClusterTemplate
+                              release is no longer above the version the label reports.
                             type: string
                           startVersion:
                             description: StartVersion is the current cluster version
