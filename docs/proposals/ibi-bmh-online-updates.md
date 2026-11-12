@@ -25,6 +25,7 @@ last-updated: 2026-11-12
 - [Option 1: Suppress the BMH Manifest](#option-1-suppress-the-bmh-manifest)
 - [Option 2: Suppression With O-Cloud Manager Metadata Reconciliation](#option-2-suppression-with-o-cloud-manager-metadata-reconciliation)
 - [Option 3: Make SiteConfig Respect the IBI Power Lifecycle](#option-3-make-siteconfig-respect-the-ibi-power-lifecycle)
+- [Option 4: SiteConfig Initializes Online Once, Then Relinquishes It](#option-4-siteconfig-initializes-online-once-then-relinquishes-it)
 - [Other Approaches](#other-approaches)
 - [Comparison](#comparison)
 - [Validation Needed](#validation-needed)
@@ -57,6 +58,13 @@ and annotations. Extending O-Cloud Manager to reconcile that metadata itself
 has been discussed but has **not been implemented or tested**. A narrower
 SiteConfig change could preserve metadata updates while preventing the
 installation template from resetting the host's desired power state.
+
+The leading candidate for discussion is to have SiteConfig initialize
+`online` once for each host's installation lifecycle, then relinquish that
+field while continuing to reconcile the rest of the BMH. This could address
+both IBI and assisted installations without adding power-state inputs or a
+metadata reconciler to O-Cloud Manager. It requires a SiteConfig change and
+an ownership-handoff design; it is **not implemented or tested**.
 
 This document describes the alternatives for discussion. It does not select a
 final API, change controller behavior, or claim that the unimplemented
@@ -523,6 +531,125 @@ the reported power-off test.
 | O-Cloud Manager hardware manager | Retain the existing IBI cleanup and BMO reattachment. Do not add a competing continuous power-state override. |
 | Delivery and migration | Establish minimum SiteConfig/template support and how existing clusters adopt it, including any operator-generated suppression. |
 
+## Option 4: SiteConfig Initializes Online Once, Then Relinquishes It
+
+### Proposed Contract
+
+SiteConfig would set the initial desired power state when it first configures
+a BMH for a particular installation lifecycle, then stop managing that field.
+Later applies would still reconcile the BMH's supported metadata and other
+fields. This is the preferred candidate to investigate with the SiteConfig
+maintainers, subject to the implementation and compatibility questions below.
+
+| Point in the host lifecycle | SiteConfig responsibility for `spec.online` |
+| --- | --- |
+| Initial setup for IBI | Apply the [IBI template][ibi-bmh-template]'s `false` value so the IBI operator can prepare the DataImage before requesting boot. |
+| Initial setup for assisted installation | Apply the [assisted template][assisted-bmh-template]'s `true` value, preserving the current initial boot behavior. |
+| After SiteConfig's initial setup and field handoff | Exclude `online` from SiteConfig's ongoing managed intent; leave later desired-state changes to the installing controller, hardware manager, or an explicit power request. BMO enforces that state. |
+| New target, reallocation, or explicit reinstall | Establish a new installation lifecycle and initialize the field again according to that lifecycle's template. |
+
+Unlike Option 3's value-preservation variant, this option would not read the
+live value and continually resubmit it as SiteConfig's desired value. It would
+stop asserting the field. That avoids both resetting it to the template
+default and competing with an intentional desired-off state through a stale
+read followed by a forced apply.
+
+The current [SiteConfig apply routine][siteconfig-apply] copies the rendered
+object into a server-side apply payload and uses `ForceOwnership`. A targeted
+BMH preparation step could implement this policy before that apply, leaving
+the initial template values and the normal metadata rendering path intact.
+There is no existing initialization-only option in the inspected apply path;
+this is a proposed controller change, not an available configuration setting.
+
+### Initialization Must Belong to a Host Lifecycle
+
+"The BMH already exists" is not a sufficient test. O-Cloud Manager's hardware
+manager allocates BMHs from an existing inventory, so the first SiteConfig
+apply must still initialize their power state. SiteConfig needs to distinguish
+**its first setup of the host for this lifecycle** from an update to that
+already initialized host.
+
+The implementation would need to:
+
+- Persist or reliably derive that initialization has succeeded for the
+  particular ClusterInstance/host association and installation attempt.
+- Ensure a restart or a failure between applying the initial value and
+  recording initialization cannot cause that value to be replayed after
+  another controller has taken over. Dry-run validation must not advance
+  the persisted lifecycle state.
+- Treat label changes, new ClusterInstance generations, and software upgrades
+  as updates to the existing lifecycle. They must not initialize power again.
+- Handle genuine reinstall and host reuse explicitly. A hostname or resource
+  name alone cannot distinguish a new allocation from an old one.
+- Adopt already initialized clusters without writing the initial power value
+  again merely because they lack a newly introduced bookkeeping marker.
+
+The exact record or signal is an open design decision. It would not need to
+depend on the IBI-specific `image-based-install-managed` annotation if
+SiteConfig can track its own initialization and handoff reliably, which makes
+the approach applicable to assisted installation as well.
+
+### Server-Side Apply Ownership Handoff
+
+Simply deleting `spec.online` from later apply payloads is insufficient when
+SiteConfig is its sole field owner. Server-side apply may remove or reset a
+previously managed field when it is omitted. The handoff must leave the value
+intact and prevent SiteConfig from reclaiming it on subsequent reconciles.
+
+The [documented ownership-transfer mechanism][ssa-handoff] allows another
+field manager to share ownership of the same value before the outgoing
+manager omits the field. A manager used only for the initial handoff is one
+implementation possibility; the actual BMH protocol still needs to be
+designed and verified against a real API server. Manually editing
+`managedFields` is not part of this proposal.
+
+In particular, the design cannot assume another installer will always change
+the value first. IBI normally changes the initial `false` to `true`, but
+assisted installation can leave the initial `true` unchanged. Both cases must
+hand off safely, including when SiteConfig is still the sole owner. The
+handoff must also tolerate another controller changing `online` concurrently
+without restoring an earlier value.
+
+### Resulting Workflow and O-Cloud Manager Impact
+
+1. O-Cloud Manager applies the initial ClusterInstance normally. SiteConfig
+   initializes the host using the existing installer-specific template value
+   and safely relinquishes ongoing ownership of `online`.
+2. The installer and BMO perform the normal boot/install workflow. SiteConfig
+   no longer reasserts the initial power value on later BMH applies.
+3. After installation, O-Cloud Manager removes disable-auto-import. SiteConfig
+   processes the changed ClusterInstance and applies its metadata without
+   modifying `online`, even before PR fulfillment.
+4. Existing fulfillment cleanup and BMO reattachment proceed normally. Later
+   day 2 metadata changes follow the same SiteConfig path without causing a
+   template-driven power change.
+
+O-Cloud Manager could retain its normal ClusterInstance update behavior,
+without BMH suppression, a separate BMH metadata reconciler, or a new per-node
+power input. No O-Cloud Manager API change is inherent in this design. Its
+existing DataImage/network-data cleanup and BMO reattachment should remain;
+removing the fulfillment power-state safeguard would be a separate decision
+after validating the new ownership behavior.
+
+Adoption would require a compatible deployed SiteConfig release and regression
+coverage. An internal SiteConfig controller fix would not itself require an
+O-Cloud Manager Go API dependency update. Any operator-generated suppression
+already applied would still need a safe transition, and the other installation
+fields discussed under Option 3 still need checking.
+
+### Remaining Tradeoffs
+
+This option avoids duplicating metadata reconciliation in O-Cloud Manager and
+can cover both installers through one power-ownership contract. However,
+durable initialization, ownership transfer, and existing-cluster adoption are
+required work, not a proven one-line field removal.
+
+The SiteConfig maintainers must also agree on compatibility with custom BMH
+templates that intentionally control power beyond initial installation. They
+may require an explicit policy for that behavior rather than changing every
+template's contract unconditionally. This proposal targets `online` only;
+it does not define a general mechanism for ignoring arbitrary BMH fields.
+
 ## Other Approaches
 
 | Approach | Limitation |
@@ -540,6 +667,7 @@ the reported power-off test.
 | Suppression plus O-Cloud Manager metadata reconciliation | Retains the demonstrated mitigation | Would be implemented by O-Cloud Manager | Metadata ownership, removals, handoff, retries, and duplicated responsibility | Proposed extension; not implemented or tested |
 | SiteConfig internal power-state preservation | Expected if lifecycle and apply semantics are correct | Retained through SiteConfig | Agree on a per-host lifecycle signal and preservation behavior | Discussion only |
 | SiteConfig explicit per-node input | Expected if input is set and retained correctly | Retained through SiteConfig | Template/API support and O-Cloud Manager input management | Discussion only |
+| SiteConfig initializes, then relinquishes `online` (preferred candidate) | Expected after a safe initial handoff | Retained through SiteConfig | Durable host-lifecycle tracking, SSA handoff, and adoption | Proposed; not implemented or tested |
 
 ## Validation Needed
 
@@ -550,10 +678,13 @@ O-Cloud Manager e2e suite alone does not exercise all of those interactions.
 | Scenario | Required evidence |
 | --- | --- |
 | Initial IBI installation | DataImage preparation still precedes the intended boot; the cluster installs and reaches fulfillment. |
+| Initial assisted installation and an existing inventory BMH | SiteConfig applies the correct initial power value on its first setup even when the BMH already exists. |
+| Ownership release with both initial boolean values | The first omission preserves `online` when SiteConfig was its sole owner and when another controller already changed it. Verify SiteConfig relinquishes ownership and does not reclaim it later. |
+| Power changes after handoff | Another controller can change `online` in either direction; subsequent SiteConfig metadata applies leave it unchanged, including under concurrent updates. |
 | Automatic installation-to-import transition, with no user PR change | Observe disable-auto-import removal and the resulting ClusterInstance generation change; BMH `online` stays true, and reattachment occurs only after the desired power state is correct. |
 | ManagedCluster label/annotation update | Requested metadata appears, BMH desired power remains unchanged, and the running node stays Ready. |
 | BMH label/annotation update | Additions, replacements, and removals reach the live BMH with correct precedence and without changing its spec. |
-| Operator/controller restart or partial API failure | Metadata and any lifecycle input converge without losing removals or reverting power state. |
+| Operator/controller restart, dry-run, or partial API failure | Metadata and lifecycle state converge without losing removals, replaying initial power defaults, or recording a handoff that did not persist. |
 | BIOS/firmware update | Intended servicing and reboot work, runtime annotations remain correct, and the node returns Ready. |
 | Cluster-version and IBU updates | Any ClusterInstance reapply retains the correct power behavior; upgrade-specific handling remains functional. |
 | Assisted MNO scaling, if the fix also covers that path | Existing hosts stay protected, new targets install, and removed hosts prune and deallocate correctly. |
@@ -569,26 +700,34 @@ extension should be evaluated as additional controller functionality, with
 the associated ownership and recovery work, rather than assumed to be a
 small or already validated addition.
 
-The preferred direction for discussion is a narrower SiteConfig solution
-that retains normal BMH metadata rendering and respects the IBI power
-handoff. The decisions needed are:
+The preferred candidate is **Option 4: initialize `online` once, then
+relinquish it**. It addresses the ownership boundary directly, retains normal
+BMH metadata rendering, and could cover IBI and assisted installation without
+new O-Cloud Manager reconciliation or API inputs. This preference is for
+discussion; feasibility and the compatibility contract still need agreement
+and tests. Option 3's preservation and explicit-input variants remain
+alternatives if a general initialization-only contract is unsuitable.
 
-1. Can SiteConfig preserve the desired power state using an existing IBI
-   lifecycle signal, or is a new explicit input required?
-2. Which component owns that signal, and how is it reset for a new host or
-   installation attempt?
-3. Does protection begin early enough for the automatic installation-to-import
+The decisions needed are:
+
+1. Can SiteConfig safely initialize and relinquish `online` for both installers,
+   including when no other controller has changed the initial value?
+2. How is successful initialization identified durably for an existing BMH,
+   and how is a new allocation or reinstall distinguished from an update?
+3. Does the power-field handoff finish early enough for the automatic installation-to-import
    update, and how will an already-reset false value be distinguished from
    an intentional shutdown during adoption?
 4. How are intentional power changes represented without introducing another
    controller that continuously forces the host online?
-5. How will existing ClusterInstances receive the new behavior, and what
+5. What compatibility policy is needed for custom templates that intentionally
+   manage power beyond initial installation?
+6. How will existing ClusterInstances receive the new behavior, and what
    platform/template versions are required?
-6. If suppression is delivered as an interim mitigation, how will the BMH
+7. If suppression is delivered as an interim mitigation, how will the BMH
    metadata limitation be handled and the eventual transition tested?
 
 The outcome should determine the implementation scope in SiteConfig and
-O-Cloud Manager before either untested extension is treated as the final fix.
+O-Cloud Manager before an untested option is treated as the final fix.
 
 [ibi-bmh-template]: https://github.com/stolostron/siteconfig/blob/604a6a3095fc/internal/templates/image-based-installer/template.go#L136
 [ibi-start]: https://github.com/openshift/image-based-install-operator/blob/4bc5f2a691cab4b02638dfd6bd567cd0cf2f9408/controllers/imageclusterinstall_controller.go#L721
@@ -596,3 +735,6 @@ O-Cloud Manager before either untested extension is treated as the final fix.
 [siteconfig-context]: https://github.com/stolostron/siteconfig/blob/604a6a3095fc/internal/controller/clusterinstance/helper.go#L41
 [siteconfig-reconcile]: https://github.com/stolostron/siteconfig/blob/604a6a3095fc/internal/controller/clusterinstance_controller.go#L219
 [bmo-detachment]: https://github.com/metal3-io/baremetal-operator/blob/f10aa3a42ab52d1e524f8c2dddf3379c808c7d17/internal/controller/metal3.io/host_state_machine.go#L292
+[assisted-bmh-template]: https://github.com/stolostron/siteconfig/blob/604a6a3095fc/internal/templates/assisted-installer/template.go#L257
+[siteconfig-apply]: https://github.com/stolostron/siteconfig/blob/eadd0287e113d26400229d62ee0683098eb85b85/internal/controller/clusterinstance_controller.go#L653
+[ssa-handoff]: https://kubernetes.io/docs/reference/using-api/server-side-apply/#transferring-ownership-between-managers
