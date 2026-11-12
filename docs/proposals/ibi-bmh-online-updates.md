@@ -4,7 +4,7 @@ SPDX-FileCopyrightText: Red Hat
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# Discussion: IBI BMH Power State During Day 2 Updates
+# Discussion: IBI BMH Power State Across Installation and Day 2 Updates
 
 ```yaml
 title: ibi-bmh-online-updates
@@ -19,6 +19,7 @@ last-updated: 2026-11-12
 
 - [Summary](#summary)
 - [Current Installation Workflow](#current-installation-workflow)
+- [Automatic Update After Installation](#automatic-update-after-installation)
 - [How a Day 2 Update Powers Off the Node](#how-a-day-2-update-powers-off-the-node)
 - [Requirements for a Fix](#requirements-for-a-fix)
 - [Option 1: Suppress the BMH Manifest](#option-1-suppress-the-bmh-manifest)
@@ -37,6 +38,13 @@ causes O-Cloud Manager to update the ClusterInstance. SiteConfig then reapplies
 the IBI BareMetalHost (BMH) template, which contains `spec.online: false`.
 Once the BMH is under Bare Metal Operator (BMO) management, BMO acts on that
 desired state and powers off the node.
+
+The same template reset can also occur during normal provisioning, before
+fulfillment and without any user update. O-Cloud Manager changes the
+ClusterInstance after software installation to enable automatic import.
+The BMH can still be detached at this point, masking the incorrect `online: false`.
+This provides a concrete explanation for the hardware manager's need to
+restore `online: true` before removing detachment at fulfillment.
 
 [OCPBUGS-140666](https://redhat.atlassian.net/browse/OCPBUGS-140666) records this
 failure on an IBI-installed SNO, including the sequence from a label-only
@@ -62,20 +70,26 @@ versions installed on the target ACM release.
 
 O-Cloud Manager renders and applies a **ClusterInstance**, not the individual
 BMH manifest. The referenced SiteConfig node template renders the BMH.
+The sequence below shows the reset occurring while BMO management is still
+detached; asynchronous ordering is discussed in the next section.
 
 | Step | Component | Action and power-management effect |
 | --- | --- | --- |
-| 1 | O-Cloud Manager | Allocates hardware and applies a ClusterInstance referencing the IBI templates. |
+| 1 | O-Cloud Manager | Allocates hardware and applies a ClusterInstance referencing the IBI templates, with automatic ManagedCluster import disabled. |
 | 2 | SiteConfig | Renders the BMH with `online: false` and `externallyProvisioned: true`. |
 | 3 | IBI operator | Creates the configuration DataImage, then sets BMH `online: true` and requests a reboot when needed. BMO performs the power operation. |
 | 4 | IBI operator | Monitors installation. When installation completes, adds `baremetalhost.metal3.io/detached` to suspend BMO management. |
-| 5 | O-Cloud Manager | Completes provisioning and configuration, persists PR `fulfilled`, and sets NAR `spec.clusterProvisioned: true`. |
-| 6 | Hardware manager | Cleans up IBI installation artifacts, ensures BMH `online: true`, then removes the detached annotation so BMO resumes management. |
+| 5 | O-Cloud Manager | Observes completed installation, removes the live ManagedCluster's disable-auto-import annotation, and omits it from the next rendered ClusterInstance. |
+| 6 | SiteConfig | Processes the changed ClusterInstance and can render BMH `online: false` again. If management is still detached, the host remains running. |
+| 7 | O-Cloud Manager | Completes provisioning and configuration, persists PR `fulfilled`, and sets NAR `spec.clusterProvisioned: true`. |
+| 8 | Hardware manager | Cleans up IBI installation artifacts, restores BMH `online: true` if needed, then removes the detached annotation so BMO resumes management. |
 
 The BMH does **not** remain `online: false` until fulfillment: the IBI operator
 sets it to `true` earlier to boot the node. The hardware manager's fulfillment
 handling ensures that BMO resumes with the correct desired power state.
 `externallyProvisioned` remains `true` throughout this handoff.
+However, the initial `online: true` set by the IBI operator can be overwritten
+again during the automatic post-installation update described below.
 
 The initial `online: false` is deliberate.
 [ACM-18144](https://redhat.atlassian.net/browse/ACM-18144) introduced that default
@@ -97,6 +111,59 @@ Relevant code:
   [helpers.go](../../internal/hardwaremanager/controller/helpers.go) deletes the
   DataImage, cleans up the IBI-generated network-data Secret and references,
   ensures `online: true`, and removes detachment.
+
+## Automatic Update After Installation
+
+While `ClusterProvisioned` is not true, `buildClusterInstance()` injects the
+following annotation into the rendered ClusterInstance:
+
+```yaml
+spec:
+  extraAnnotations:
+    ManagedCluster:
+      import.open-cluster-management.io/disable-auto-import: "true"
+```
+
+Once software installation completes, the normal controller flow changes
+that input even though the user has not modified the ProvisioningRequest:
+
+1. `handleClusterInstallation()` observes the ClusterInstance's installation
+   status and records PR `ClusterProvisioned=True`.
+2. It calls `removeDisableAutoImportAnnotation()` to remove the annotation
+   directly from the live ManagedCluster, allowing ACM import to proceed.
+   This operation by itself does not change the ClusterInstance spec.
+3. On a subsequent reconcile, `buildClusterInstance()` sees
+   `ClusterProvisioned=True` and no longer injects the annotation into the
+   desired ClusterInstance. Applying that desired state removes the
+   previously managed spec entry and changes the ClusterInstance generation.
+4. SiteConfig renders and applies the templates for that changed generation,
+   including the IBI BMH's `online: false`.
+
+These functions are in
+[provisioningrequest_clusterinstall.go](../../internal/controllers/provisioningrequest_clusterinstall.go).
+The [SiteConfig reconciler][siteconfig-reconcile] skips template processing
+when the generation is already observed; an unchanged O-Cloud Manager apply
+alone does not imply that the BMH will be reapplied. Removing this annotation
+is a concrete spec change that causes another render.
+
+The IBI operator adds detachment **before** reporting installation complete.
+If SiteConfig's update arrives while management is still detached, the BMH can have desired
+`spec.online: false` while the physical server stays running. BMO's
+[detachment handling][bmo-detachment] suspends normal management, so it does
+not act on that false value. At fulfillment, the hardware manager must
+restore `online: true` **before** removing detachment; otherwise BMO could
+power off the server as management resumes.
+
+This places the automatic reset at the installation-to-import transition.
+ACM import and policy application are asynchronous, so it is not a strict
+barrier before every policy can start applying. The code establishes a
+normal-provisioning trigger; correlating audit records and logs would confirm
+the exact ordering in a particular historical lab run.
+
+Validation must also check the ordering of the SiteConfig apply and the
+hardware manager's fulfillment handling. A delayed template apply after
+reattachment would no longer be masked by detachment. Restoring `online: true`
+once at fulfillment cannot replace preventing later template-driven resets.
 
 ## How a Day 2 Update Powers Off the Node
 
@@ -130,6 +197,10 @@ becoming unavailable until the host is powered back on. This is a reconciliation
 ownership problem: an installation-time default overwrites a value deliberately
 changed later in the installation lifecycle.
 
+The distinction from the automatic provisioning update is the BMO attachment
+state: before fulfillment, detachment can mask the reset; after the hardware
+manager reattaches the BMH, the same reset can cause an actual power-off.
+
 The fulfillment handoff does not continuously repair `online`:
 `setNARClusterProvisioned()` returns without changing the NAR when its flag is
 already true. A label-only PR update therefore does not necessarily trigger
@@ -148,7 +219,9 @@ updates associated with upgrades, rather than only image-set changes.
 
 - Keep the initial IBI `online: false` and `externallyProvisioned: true`
   behavior and let the IBI operator control when installation boot begins.
-- Prevent unrelated day 2 updates from changing the host's desired power state.
+- Protect the automatic post-installation ClusterInstance update as well as
+  explicit day 2 updates. Protection must take effect before fulfillment.
+- Prevent unrelated updates from changing the host's desired power state.
 - Preserve supported BMH label and annotation updates, as documented in
   [Day-2 Cluster Configuration Changes](../user-guide/cluster-configuration.md#updates-to-the-clusterinstanceparameters-field-under-provisioningrequest-spectemplateparameters).
 - Preserve hardware-profile updates, including BMO-controlled BIOS and firmware
@@ -182,6 +255,12 @@ targets unsuppressed. It also uses the fulfilled node count to avoid treating
 pending scale-out nodes as installed after a restart. Node-level suppression
 avoids preventing a new worker's installation through blanket cluster-level
 BMH suppression.
+
+The prototype begins adding suppression when cluster installation is complete,
+rather than waiting for PR fulfillment. Its common apply-path placement can
+therefore cover the automatic disable-auto-import removal as well as explicit
+day 2 changes. That specific controller sequence still needs validation;
+the label-update test alone does not demonstrate it.
 
 **The suppression mitigation has been successfully tested for power-off
 prevention.** The local prototype also passed `make ci-job` and all 50 e2e
@@ -285,6 +364,10 @@ read and patch operations; a metadata-only extension does not inherently
 require new RBAC or an O-Cloud Manager CRD change. This still needs validation
 against the final implementation.
 
+The integration must also handle the automatic post-installation update,
+which does not require a new PR generation. It cannot depend only on a user
+changing the request or on the PR already being fulfilled.
+
 ## Option 3: Make SiteConfig Respect the IBI Power Lifecycle
 
 ### Proposed Behavior
@@ -299,6 +382,7 @@ The desired contract is:
 | --- | --- |
 | Initial installation, before the IBI operator prepares the DataImage | Render `online: false`, preserving the current installation sequence. |
 | IBI operator initiates installation boot | IBI operator sets `online: true`; BMO boots the host. |
+| Automatic disable-auto-import removal after installation completes | Preserve the desired power state during this ClusterInstance update, before PR fulfillment or BMO reattachment. |
 | Subsequent renders for that same host after the IBI power handoff | Preserve its current desired `spec.online` rather than restoring the installation default. For a normally running cluster this is `true`. |
 | New installation target or a new installation attempt | Establish the initial-installation behavior for that target; do not inherit another host's completed lifecycle. |
 
@@ -308,6 +392,14 @@ reboot or firmware operation while its desired state remains online.
 Likewise, forcing `online: true` on every day 2 render could undo an
 intentional desired shutdown. The ownership of such requests must be part
 of the agreed contract.
+
+Adoption also needs care: a live `online: false` might already be the result
+of the old template reset, rather than an intentional shutdown request.
+Preserving that value blindly does not repair an earlier reset. The fix must
+prevent the automatic reset at its source, and the rollout plan must define
+how existing affected states are handled without undoing deliberate power
+requests. The existing fulfillment restore-before-reattach ordering remains
+necessary while that behavior is being validated.
 
 There is no existing `ClusterInstance.spec.nodes[].online` override. The
 current [template context][siteconfig-context] exposes the ClusterInstance
@@ -340,8 +432,12 @@ The new workflow would be:
    and requests the initial boot through BMO.
 3. After the agreed IBI handoff signal exists, SiteConfig preserves that
    host's desired power state on subsequent BMH applies.
-4. IBI completion and O-Cloud Manager's fulfillment cleanup proceed as today.
-5. A later PR label update changes the ClusterInstance. SiteConfig applies
+4. IBI completes installation and detaches the BMH. O-Cloud Manager enables
+   import and updates the ClusterInstance to remove disable-auto-import.
+   SiteConfig processes that update while preserving `online: true`.
+5. Import, policy configuration, and O-Cloud Manager's fulfillment cleanup
+   proceed as today, including ensuring `online: true` before reattachment.
+6. A later PR label update changes the ClusterInstance. SiteConfig applies
    the new metadata while retaining the current desired `online` value, so
    an unrelated update does not request a power-off.
 
@@ -373,8 +469,11 @@ The new workflow would be:
 1. Initial ClusterInstance nodes have no post-installation override, so the
    template renders `online: false`.
 2. Installation and the existing IBI/BMO handoffs proceed normally.
-3. Before applying a post-installation update, O-Cloud Manager identifies the
+3. At the first post-installation ClusterInstance render, including the
+   automatic disable-auto-import removal, O-Cloud Manager identifies the
    existing installed nodes and supplies the agreed power-preservation input.
+   This must happen before that changed ClusterInstance is applied, without
+   waiting for PR fulfillment or a user-requested day 2 change.
    A simple running-node implementation would render `online: true`; the
    final design must also address intentional desired-off states.
 4. SiteConfig renders the BMH with that input and continues applying normal
@@ -420,7 +519,7 @@ the reported power-off test.
 | SiteConfig IBI BMH template | Replace the unconditional power-off value with the agreed lifecycle-aware behavior; keep initial installation offline and externally provisioned. |
 | SiteConfig rendering/apply code | Supply the existing desired power state or new input, with host identity checks and correct server-side apply behavior. |
 | SiteConfig API and webhook | Needed if adding a dedicated field; define its default, update permissions, and reinstall/reset semantics. |
-| O-Cloud Manager ClusterInstance apply | Variant A may need no new input. Variant B needs a per-node transformation around `applyClusterInstance()` in `provisioningrequest_clusterinstall.go`, covering normal updates and upgrade-associated applies. |
+| O-Cloud Manager ClusterInstance apply | Variant A may need no new input. Variant B needs a per-node transformation before `applyClusterInstance()`, covering automatic post-installation, day 2, and upgrade-associated applies. |
 | O-Cloud Manager hardware manager | Retain the existing IBI cleanup and BMO reattachment. Do not add a competing continuous power-state override. |
 | Delivery and migration | Establish minimum SiteConfig/template support and how existing clusters adopt it, including any operator-generated suppression. |
 
@@ -451,6 +550,7 @@ O-Cloud Manager e2e suite alone does not exercise all of those interactions.
 | Scenario | Required evidence |
 | --- | --- |
 | Initial IBI installation | DataImage preparation still precedes the intended boot; the cluster installs and reaches fulfillment. |
+| Automatic installation-to-import transition, with no user PR change | Observe disable-auto-import removal and the resulting ClusterInstance generation change; BMH `online` stays true, and reattachment occurs only after the desired power state is correct. |
 | ManagedCluster label/annotation update | Requested metadata appears, BMH desired power remains unchanged, and the running node stays Ready. |
 | BMH label/annotation update | Additions, replacements, and removals reach the live BMH with correct precedence and without changing its spec. |
 | Operator/controller restart or partial API failure | Metadata and any lifecycle input converge without losing removals or reverting power state. |
@@ -477,11 +577,14 @@ handoff. The decisions needed are:
    lifecycle signal, or is a new explicit input required?
 2. Which component owns that signal, and how is it reset for a new host or
    installation attempt?
-3. How are intentional power changes represented without introducing another
+3. Does protection begin early enough for the automatic installation-to-import
+   update, and how will an already-reset false value be distinguished from
+   an intentional shutdown during adoption?
+4. How are intentional power changes represented without introducing another
    controller that continuously forces the host online?
-4. How will existing ClusterInstances receive the new behavior, and what
+5. How will existing ClusterInstances receive the new behavior, and what
    platform/template versions are required?
-5. If suppression is delivered as an interim mitigation, how will the BMH
+6. If suppression is delivered as an interim mitigation, how will the BMH
    metadata limitation be handled and the eventual transition tested?
 
 The outcome should determine the implementation scope in SiteConfig and
@@ -491,3 +594,5 @@ O-Cloud Manager before either untested extension is treated as the final fix.
 [ibi-start]: https://github.com/openshift/image-based-install-operator/blob/4bc5f2a691cab4b02638dfd6bd567cd0cf2f9408/controllers/imageclusterinstall_controller.go#L721
 [ibi-complete]: https://github.com/openshift/image-based-install-operator/blob/4bc5f2a691cab4b02638dfd6bd567cd0cf2f9408/controllers/imageclusterinstall_monitor.go#L169
 [siteconfig-context]: https://github.com/stolostron/siteconfig/blob/604a6a3095fc/internal/controller/clusterinstance/helper.go#L41
+[siteconfig-reconcile]: https://github.com/stolostron/siteconfig/blob/604a6a3095fc/internal/controller/clusterinstance_controller.go#L219
+[bmo-detachment]: https://github.com/metal3-io/baremetal-operator/blob/f10aa3a42ab52d1e524f8c2dddf3379c808c7d17/internal/controller/metal3.io/host_state_machine.go#L292
