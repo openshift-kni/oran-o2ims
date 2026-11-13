@@ -92,8 +92,12 @@ controller does not reattach it.
    `upgradeDefaults.seedGeneration`. Configure `urlBase` and `uploadSecretRef`; the
    upload Secret must be in the ClusterTemplate namespace. Its HTTPS URL must be
    reachable from the hub build Job and from the target BMCs. See
-   [Configure a live ISO upload destination](./seed-generation-live-iso-upload.md)
+   [Configure an IBI live ISO upload destination](./seed-generation-live-iso-upload.md)
    for the Secret fields, SSH host-key pinning, HTTPS trust, and path layout.
+   An optional, unsupported [IBI live ISO server setup example](./ibi-live-iso-server-example.md)
+   demonstrates separate httpd and upload accounts, including
+   [upload-key authorization](./ibi-live-iso-server-example.md#create-and-authorize-the-upload-key)
+   and [upload Secret creation](./ibi-live-iso-server-example.md#create-the-upload-secret).
    If you set `liveISO.pullSecretRef`, it must reference a Secret in the
    ClusterTemplate namespace that allows pulling both the seed image and the
    OpenShift release image. If omitted, the controller combines the hub pull
