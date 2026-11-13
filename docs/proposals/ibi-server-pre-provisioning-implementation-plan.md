@@ -1,0 +1,604 @@
+<!--
+SPDX-FileCopyrightText: Red Hat
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
+# Implementation Plan: Automated IBI Server Pre-Provisioning
+
+## Purpose and baseline
+
+This document proposes the implementation and delivery plan for
+[CNF-26353](https://redhat.atlassian.net/browse/CNF-26353). It develops the
+[original server pre-provisioning proposal](./ibi-server-pre-provisioning.md)
+into work packages spanning O-Cloud Manager, the
+[IBI Operator](https://github.com/openshift/image-based-install-operator),
+and ACM delivery.
+
+The baseline includes Brent's proposed changes in
+[PR 5311](https://github.com/openshift-kni/oran-o2ims/pull/5311), reviewed at
+`fa16f086`. That PR is still under review. This plan incorporates its proposed
+per-host network extractor while accounting for the two outstanding corrections:
+the existing configuration ISO payload format and the actual ISO publication
+layout.
+
+The intended feature remains an optional preparation step within a
+ProvisioningRequest-driven SNO installation. The allocated server has a
+BareMetalHost (BMH), and the IBI Operator uses BMO/Ironic to manage its boot and
+media. Preparation is followed automatically by normal IBI cluster installation.
+The [independent factory-preparation proposal](https://github.com/openshift-kni/oran-o2ims/pull/5231)
+is a separate workflow choice.
+
+The working design uses authenticated HTTPS callbacks. SSH polling remains an
+alternative discussed below; it has not been selected as a replacement.
+
+## Component ownership
+
+| Component | Responsibility |
+| --- | --- |
+| O-Cloud Manager | Validate template/request inputs, allocate hardware, supply preparation configuration, generate a compatible reusable ISO, and report progress through the ProvisioningRequest. |
+| SiteConfig | Render the ImageClusterInstall (ICI) through the existing ClusterInstance/template path. Coordinate how preparation intent reaches the ICI; code/API changes depend on the agreed input path. |
+| IBI Operator, delivered through ACM | Own the preparation API, per-attempt state, extensions to the existing configuration ISO, network/callback bootstrap contract, callback receiver, BMH preparation lifecycle, recovery, and handoff to normal IBI installation. |
+| BMO/Ironic | Perform supported virtual-media and power operations requested through the BMH and DataImage resources. |
+| OpenShift installer | Build the live ISO using its existing image-based installation and Ignition override interfaces. Extend it only if the feasibility work establishes a missing capability. |
+
+The IBI Operator's controller manager and image server are separate processes
+(`cmd/manager` and `cmd/server`). A callback cannot wake the reconciler through
+an in-memory channel shared between them. The receiver will persist an
+authenticated attempt result through the Kubernetes API; the manager's ICI watch
+then drives reconciliation. Reconciliation also uses explicit deadline requeues
+so an absent callback cannot leave preparation waiting indefinitely.
+
+## Intended workflow
+
+The successful path is:
+
+| Step | Component | Action |
+| --- | --- | --- |
+| 1 | O-Cloud Manager | Validate the request and allocate hardware. |
+| 2 | SiteConfig and O-Cloud Manager | Create the ICI through the agreed rendering/input path, with preparation intent set before IBI reconciliation can proceed. |
+| 3 | IBI Operator | Record an attempt and generate the existing per-host configuration ISO earlier, adding the attempt's callback data. |
+| 4 | BMO/Ironic | Attach the live ISO and configuration DataImage, then boot the server. |
+| 5 | Live ISO | Extract and apply the per-host network configuration from the configuration ISO. |
+| 6 | Live ISO | Prepare the disk and pre-cache images. |
+| 7 | Live ISO and IBI callback server | Send an authenticated HTTPS callback and persist the preparation result. |
+| 8 | IBI Operator | Detach the live ISO, invalidate callback credentials, and complete the preparation handoff. |
+| 9 | IBI Operator and BMO/Ironic | Reuse the configuration DataImage for normal IBI installation and boot from disk. |
+| 10 | O-Cloud Manager | Observe cluster installation and fulfill the request. |
+
+The shared live ISO contains generic code and trust configuration. The existing
+per-host configuration ISO supplies the target's network settings and is extended
+with the current attempt's callback configuration. Its DataImage is attached
+before preparation and reused for the subsequent normal IBI installation.
+The workflow does not introduce a separate preparation or network ISO.
+
+## Contracts to settle before implementation
+
+### Media delivery and network bootstrap
+
+Brent's update proposes applying the existing per-host nmstate configuration
+before preparation pulls images or sends a callback. This can remove the DHCP
+dependency when usable static configuration is supplied, while retaining a
+shared live ISO. The per-host data is delivered on the existing IBI configuration
+ISO, generated and attached before the preparation boot.
+
+The first work package must prove that the supported BMC, BMO, and Ironic
+versions can expose the live ISO and configuration DataImage simultaneously.
+Having two slots in the BMC is insufficient evidence by itself: the driver must
+select compatible devices without replacing the boot ISO. Verify attachment
+completion and guest visibility before relying on the configuration ISO at boot.
+
+Reuse the existing configuration ISO generation and serving path. Its current
+format has volume label `cluster-config`, with the nmstate string in
+`cluster-configuration/manifest.json` under
+`raw_nm_state_config`. It is neither a standalone nmstate file nor config-drive
+`network_data.json`. The generic extractor reads that existing field; no second
+network-data format is required. Continue obtaining the configuration through
+the IBI Operator's existing BMH-referenced nmstate Secret input path, without
+relying on BMO to apply that Secret to a `live-iso` boot.
+
+The current configuration ISO does not contain callback parameters. Extend its
+generation path to add the per-attempt callback payload while preserving the
+existing installation payload and network layout. Agree and version the added
+files and their reader contract. The configuration ISO remains the single
+per-host DataImage for preparation and normal installation.
+
+Prove the attachment and power transitions needed to reuse that DataImage at
+handoff. Invalidate the completed attempt's callback token; retain the
+configuration ISO for normal installation. For a retry, generate a new version
+with fresh callback data, attached only after the previous attempt has stopped
+and its media has been detached. Freeze each attempt's payload and do not change
+bytes that an active consumer may still be reading.
+
+The generic network unit must run before
+`install-rhcos-and-restore-seed.service`. Its dependency ordering must prevent
+disk preparation from starting with missing or failed required network data.
+Check that the target live environment contains `nmstatectl` and the callback
+client's dependencies for each supported release. No network-dependent tool
+download can be needed to establish that network.
+
+Static configuration must include the addresses, routes, DNS, and interface
+identity needed on the preparation network. DHCP remains a possible explicit
+environment choice; a shared ISO without usable per-host static configuration
+still needs DHCP. Generating the configuration ISO earlier makes those values
+available, but the live ISO's extractor must apply them before preparation.
+
+Hub-side probes cannot establish that a not-yet-booted host can obtain an address
+or reach the callback endpoint. Validate what can be checked before boot and
+document the remaining network prerequisites. Prove the actual host path in the
+development experiment, then bound runtime failures with preparation timeouts
+and useful diagnostics.
+
+If simultaneous media cannot be demonstrated, stop and revisit the delivery
+design with ACM before implementing the full controller. The original fallback
+of a customized ISO per target/attempt changes reuse, generation, credential
+lifetime, and cleanup; it needs an explicit decision and revised estimates.
+
+### Input API and rendering
+
+Retain the original proposal's template-owned defaults and schema-controlled
+request overrides. The initial field mapping is:
+
+| O-Cloud Manager `hwMgmtDefaults.ibiPreProvisioning` | ICI `spec.preProvisioning` |
+| --- | --- |
+| `isoURL` | `isoURL` |
+| `isoDigest` | `isoDigest` |
+| `isoServerCACertRef` | `isoServerCACertRef` |
+| `preProvisioningTimeout` | `timeout` |
+| `maxRetries` | `maxRetries` |
+| `retryBackoff` | `retryBackoff` |
+
+Resolve name-only references in their documented source namespace and copy
+required CA data into the ICI namespace. Retain that trust material for the
+target installation's lifetime, independently of cleanup of the source seed
+generation request. Template validation checks defaults; request validation
+checks the permitted input and merged effective configuration before hardware
+allocation. Shared O-Cloud Manager rules belong in `internal/validation`.
+
+The callback origin and its trust configuration are environment/operator-owned
+settings, not arbitrary request destinations. Agree their supported ACM
+configuration surface. O-Cloud Manager must not rely on directly patching an
+ACM-managed Deployment to configure them. Ordinary Kubernetes RBAC does not
+restrict writes to a particular spec field; callback-origin policy needs
+admission/configuration validation as well as appropriate resource permissions.
+
+SiteConfig is involved because it already renders the ICI from the
+ClusterInstance and its referenced templates. The integration requirement is
+that preparation intent reaches the ICI before the IBI Operator can start normal
+installation. This does not establish a need for SiteConfig code or API changes.
+
+First confirm whether the existing template/input interfaces can supply the
+preparation configuration when creating the ICI. A template change alone cannot
+create a new field in the ClusterInstance API. If a supported creation-time path
+is unavailable, agree an explicit gate: SiteConfig creates a gated ICI,
+O-Cloud Manager populates preparation configuration, then releases the gate.
+Only propose SiteConfig code/API changes if the agreed path requires them.
+A normal ICI followed by an asynchronous patch can start the wrong workflow
+before that patch arrives.
+
+Define an explicit template-owned opt-in for producing callback-capable live
+ISOs. Agree its final schema during API review. Ordinary/manual ISO generation
+must continue to work without callback data. A callback-capable ISO is
+an identifiable prerequisite for automated preparation; existing ISOs do not gain
+the new executable behavior from a DataImage.
+
+### Target disk compatibility
+
+The live ISO contains a fixed `installationDisk`. Today's generator takes the
+explicit `liveISO.installationDisk` override or derives it from the seed
+ClusterInstance node's `rootDeviceHints.deviceName`. Choosing an ISO whose disk
+selection and hardware requirements suit the target is an existing prerequisite
+of manual preparation at a staging facility. Automation retains that same
+prerequisite; it does not introduce a new disk-selection mechanism.
+
+Document the required disk layout for each ISO/template and use hardware
+selection to allocate compatible targets. Validate known incompatibilities when
+the effective disk configuration is available to the operator. An ISO URL or
+digest alone does not establish disk compatibility, and hub-side checks cannot
+portably resolve Linux device paths on a server that has not booted.
+
+An incompatible target needs a compatible ISO or a new ISO generated with an
+appropriate `liveISO.installationDisk`. The configuration DataImage does not
+override that baked-in value.
+
+Digest-bound disk metadata and a live-environment device-identity guard would
+be additional safeguards beyond the existing manual workflow. They require
+separate scope and API agreement and are not prerequisites or included work
+packages in this plan. The checks above reject known incompatibilities; they do
+not claim to prove the actual target device before every destructive write.
+
+### ISO identity and availability
+
+Consume the verified `isoURL` and `isoDigest` already published by seed
+generation. Today's URL layout is:
+
+```text
+<liveISO.urlBase>/seedgen/<ProvisioningRequest.metadata.uid>/rhcos-ibi.iso
+```
+
+This is a unique location per request instance. It does not contain a seed-image
+digest and is not a content-addressed URL. Retain the original requirement to
+keep the published bytes unchanged and available while consumers use them.
+The URL layout alone does not enforce server-side immutability.
+
+The current uploader prevents overwriting an existing run directory/file and
+verifies the uploaded bytes over HTTPS, but publishes a file writable by its
+owner. These checks do not establish that later BMC fetches receive the same
+bytes. A digest check or a content-addressed filename alone cannot prove future
+immutability either.
+
+Each supported publication origin and path prefix needs a documented,
+deployment-qualified publication and retention policy. The initial contract is:
+
+- Publishing creates a new artifact version. The upload identity cannot modify,
+  replace, or delete published bytes or redirect the published URL to other
+  content. Writable staging separated from a protected published namespace, or
+  versioned write-once storage, are candidate mechanisms to evaluate; changing a
+  file mode while its owner can replace it is insufficient.
+- The version and URL remain available for every active consumer, including boot,
+  retries, and media cleanup. Retirement must account for active consumers and
+  prevent acceptance of new consumers after the retention guarantee ends.
+- Setup qualification exercises the actual upload identity and HTTPS serving
+  path to confirm those controls. Administrators approve the qualified
+  origin/path and policy through operator-owned configuration; runtime checks
+  require that approval in addition to the expected digest. An HTTP probe cannot
+  certify an arbitrary server's storage policy.
+
+Reject automated boot from an origin/path without that publication and retention
+contract. If the existing BMO/Ironic path can instead retain and serve the exact
+verified bytes for the entire consumer lifetime, it may provide an alternative,
+but the prototype must prove that binding and lifetime before relying on it.
+The current generic upload workflow is not assumed to satisfy either mechanism
+without changes or additional server-side controls. Selecting and qualifying the
+mechanism is part of the first development work package.
+
+The IBI Operator validates the approved ISO origin and expected ISO digest
+before boot. Prototype the actual BMO/Ironic fetch/rehosting behavior and the
+URL ultimately supplied to the BMC, including DNS and TLS behavior. Distinguish
+the operator's ISO-server trust, the BMC/Ironic media-fetch trust, and the live
+host's callback-server trust. A ConfigMap consumed by the operator does not
+configure the BMC's certificate store.
+
+### Preparation state and ProvisioningRequest sequencing
+
+Current O-Cloud Manager ordering completes hardware allocation before applying
+the ClusterInstance that produces the ICI. Waiting for ICI preparation at that
+earlier hardware gate would prevent creation of the object being awaited.
+
+The proposed refinement is to retain `HardwareProvisioned` for the allocation
+result, create the ClusterInstance/ICI, and track preparation separately before
+reporting cluster installation complete. A dedicated PR condition, provisionally
+`IBIPreProvisioningCompleted`, would expose the preparation result alongside
+normal installation status. Agree the final condition contract with ACM and
+O-Cloud Manager reviewers before code generation; it refines the original
+proposal's mapping onto `HardwareProvisioned`.
+
+The IBI Operator generates and attaches the configuration ISO before preparation
+but gates normal disk-boot installation until preparation has succeeded and its
+handoff cleanup is confirmed. In particular, its existing `validateHost` path
+must not set `externallyProvisioned` before verified preparation success.
+Preserve the existing behavior when preparation is omitted.
+
+Use the proposed `RequirementsMet` reasons for current ICI progress, with
+durable attempt/result and cleanup state. Retain a completed-preparation outcome
+after the condition advances to normal installation reasons. O-Cloud Manager
+must recover the outcome after a restart or coalesced watch updates, rather
+than depending on observing a temporary `PreProvisioningSucceeded` transition.
+
+Give preparation its own timeout and finite retry budget. Coordinate these with
+the overall PR timeout and start normal installation timing at the appropriate
+handoff. Persist start/deadline and retry-backoff state; progress-message updates
+must not reset the permitted duration. A retry remains `progressing`; only an
+exhausted budget produces terminal failure.
+
+## Development stages and reviewable work packages
+
+Stage numbers describe delivery order. Proposed filenames below describe the
+feature's responsibilities; final organization should follow each repository's
+conventions.
+
+### 1. Prove the boot, network, and reporting path
+
+**Owner:** joint O-Cloud Manager and IBI Operator development.
+
+- Use a controlled target and record the OCP, ACM, IBI Operator, BMO/Ironic,
+  BMC model/firmware, and installer versions.
+- Boot an existing IBI live ISO through the BMH path. Generate the existing
+  per-host configuration ISO earlier, record the actual media URLs, and verify
+  its DataImage stays attached alongside the live ISO.
+- Build a prototype ISO containing the generic network and callback units using
+  the existing installer Ignition override. Apply per-host static networking
+  with DHCP unavailable, then observe preparation and an authenticated callback.
+- Reuse the same ISO on another target or distinct attempt with different
+  network/callback data. Confirm the code and artifact are independent of the
+  target and attempt.
+- Use an ISO with a disk layout compatible with the target, as required by the
+  manual workflow, and identify which known mismatches can be validated from
+  the existing template and hardware data.
+- Select and qualify the publication/retention mechanism. Exercise replacement
+  and deletion attempts with the upload identity and inspect the actual later
+  media-fetch path; an initial matching digest is not sufficient evidence.
+- Demonstrate removal of the live ISO, callback credential invalidation, and
+  reuse of the configuration DataImage for normal disk-boot installation.
+  Record unsupported combinations and the fallback decision if reuse fails.
+
+**Exit:** reproducible development evidence for the chosen delivery path and a
+short agreed API/bootstrap contract. This is a development prerequisite, not a
+mechanism QA must discover or prove for us.
+
+### 2. Establish the IBI API and cross-component contracts
+
+**Owner:** IBI Operator, with O-Cloud Manager and SiteConfig review.
+
+- Add the optional ICI preparation configuration, validation/defaults, durable
+  attempt/result/deadline/cleanup state, and progress reasons.
+- Define immutability of active inputs and safe handling of updates, deletion,
+  and existing ICIs that omit preparation.
+- Agree the creation-time rendering path, PR status mapping, callback endpoint
+  configuration, and capability/version contract.
+- Agree the configuration ISO's callback extension and reuse at handoff, plus
+  the operator-owned origin/path approval and retention contract.
+- Add validation and API regression tests; regenerate deepcopy, CRD, and bundle
+  output in the owning repositories.
+
+**Exit:** reviewed producer/consumer contract that allows both repositories to
+develop against the same API and distinguishes unsupported component versions.
+
+### 3. Extend the configuration ISO and implement generic live ISO bootstrap
+
+**Owner:** IBI Operator; coordinate asset consumption with O-Cloud Manager.
+
+- Extend the existing configuration ISO generator and serving path with
+  per-attempt callback parameters. Preserve its installation payload and extract
+  networking from the existing manifest. Bind the attempt payload to the ICI
+  UID, BMH UID, and attempt; retain the BMO DataImage name/namespace contract.
+- Freeze the effective payload for an attempt and reuse those bytes on recovery.
+  A changed network Secret must not silently change an already recorded attempt.
+- Keep token material in an owned Secret and restrict access to the
+  configuration ISO. Invalidate the token at attempt completion, and retain the
+  installation payload until normal IBI installation no longer needs it.
+  Do not expose credential-bearing media through an unrestricted file server.
+- Implement the mount/materialization, network extractor, and completion
+  reporter units. Verify current-boot preparation service outcomes and bound
+  callback retries by the agreed attempt budget. Keep credentials out of logs
+  and command arguments.
+- Version the added callback layout and shared assets. Prefer a public,
+  versioned package of embedded assets owned by the IBI project, consumed by
+  O-Cloud Manager at build time. Go prevents importing another repository's
+  `internal/ignition` package; settle the public package or equivalent
+  distribution interface.
+
+**Exit:** tested configuration ISO extension, network extractor, and generic
+bootstrap, with no target or attempt credentials baked into the reusable live
+ISO.
+
+### 4. Implement the IBI preparation lifecycle and callback receiver
+
+**Owner:** IBI Operator, delivered as an ACM component.
+
+- Add the preparation reconciler path before normal host configuration, with
+  explicit BMH/media ownership checks and confirmed attachment before boot.
+- Require the approved publication/retention policy, document compatible ISO
+  selection, and reject known disk incompatibilities where existing inputs
+  provide enough information before issuing a boot request.
+- Extend `cmd/server` with an authenticated callback handler and Kubernetes
+  client. Validate active identity, payload bounds, and attempt state; persist a
+  result without coupling the HTTP process to the controller's memory.
+- Serialize result acceptance and timeout against one terminal outcome. Re-drive
+  cleanup idempotently after partial failure or restart.
+- On success, detach the live ISO, invalidate callback credentials, confirm the
+  required power transition, mark the host externally provisioned, and retain
+  durable preparation success. Reuse the configuration DataImage for normal
+  installation; confirm any necessary reattachment in the feasibility work.
+- On failure/timeout, remove the attempt's media, invalidate credentials, and
+  power down before a budgeted retry. Replace callback data only after the old
+  attempt has stopped. Deletion stops normal work and performs finalizer-owned
+  cleanup without initiating another installation.
+
+**Exit:** a manually created ICI can take a controlled unprepared BMH through
+preparation and normal IBI installation, with focused lifecycle tests passing.
+
+### 5. Integrate callback-capable ISO generation into O-Cloud Manager
+
+**Owner:** O-Cloud Manager, using the agreed IBI-owned bootstrap assets.
+
+- Add the template-owned ISO capability opt-in and extend its shared validation,
+  frozen input snapshot, installation configuration serialization, and tests.
+- Supply the generic Ignition override through the existing ISO build Job and
+  installer interface. Include required callback trust; carry per-target network
+  values in the existing configuration DataImage, not in the shared build
+  configuration.
+- Freeze the selected bootstrap version and serialized configuration with the
+  run inputs so a resumed Job does not silently adopt different operator assets.
+  Agree how generation outputs identify the compatible bootstrap and
+  configuration ISO extension version before a consumer boots the ISO.
+- Integrate the qualified publication/retention mechanism while preserving the
+  existing upload/HTTPS verification and status outputs. Document how to obtain
+  a compatible ISO and publish it through an approved origin/path.
+
+**Exit:** O-Cloud Manager can publish a reusable preparation-capable ISO; ordinary
+generation and its existing outputs remain compatible. This can develop in
+parallel with the IBI lifecycle after the asset contract is established.
+
+### 6. Integrate target preparation into O-Cloud Manager provisioning
+
+**Owner:** O-Cloud Manager, coordinating the rendering path with SiteConfig.
+
+- Extend typed hardware defaults, schema validation, request/default merging,
+  reference resolution, and supported-component checks before allocation.
+- Use the agreed template/input path to supply preparation intent when creating
+  the ICI, or implement an explicit creation gate before patching it. Confirm
+  whether SiteConfig code/API changes are needed; reuse existing interfaces
+  where possible. Keep allocation and preparation sequencing distinct.
+- Watch ICI status and enqueue its owning cluster-scoped ProvisioningRequest.
+  Reconcile durable outcomes after missed events/restarts and preserve correct
+  failure/retry/timeout handling.
+- Report observable progress: booting the preparation ISO, waiting for a result,
+  retry/backoff, preparation complete, and normal cluster installation. A missing
+  callback must not be described as proof that disk preparation failed.
+- Ensure PR deletion waits for IBI-owned cleanup as required before destructive
+  dependent-resource removal. Retain credentials/references until cleanup can
+  complete; never remove another controller's finalizers as normal recovery.
+
+**Exit:** one accepted PR drives the full workflow, with a supported ACM build,
+without manual BMC actions. Omitted preparation retains the existing IBI path.
+
+### 7. Complete recovery and integration testing
+
+**Owner:** development teams across both repositories.
+
+- Exercise callback-only and timeout-only ICI updates waking O-Cloud Manager,
+  including a missed intermediate condition and a controller restart after
+  preparation.
+- Cover invalid/replayed/stale callbacks, deadline/result races, interrupted
+  configuration ISO generation, attachment failure, bounded retries, interrupted
+  cleanup, deletion, and restarts of each IBI process and O-Cloud Manager.
+- Test any known disk incompatibility checks supported by the existing inputs.
+  Verify rejection of unqualified publication origins and the chosen mechanism's
+  protection of the later media fetch.
+- Verify least-privilege RBAC for each process, regenerate effective manifests,
+  and test the feature without granting O-Cloud Manager BMH mutation permissions
+  for work owned by the IBI Operator.
+- Add the external ICI API/watch prerequisites to local manager tests and check
+  the TLS-scan CI environment, its stub CRDs, scheme registration, and support
+  collection. A missing external CRD must not cause an unexpected manager
+  crash-loop in supported deployments.
+
+**Exit:** development regression coverage and required CI checks pass with no
+known lifecycle gap being deferred to a hardware acceptance test.
+
+### 8. Deliver through ACM and qualify the supported workflow
+
+**Owner:** ACM/IBI and O-Cloud Manager delivery teams, with QE and documentation.
+
+- Deliver the IBI controller, server, CRD, configuration, and bundle changes
+  through the supported ACM/MCE component release. Record its compatibility with
+  O-Cloud Manager and the ISO bootstrap version.
+- Publish the O-Cloud Manager templates, samples, user workflow, timeout/retry
+  semantics, networking/media prerequisites, diagnostics, and cleanup guidance.
+- Run the QA acceptance scenarios below, including the epic's parallel scale
+  requirement. Supply release enablement and reference configuration updates.
+
+**Exit:** supported versions, operator behavior, generated ISO requirements, and
+user instructions agree. Merging upstream code alone does not deliver the ACM
+component dependency.
+
+## Code locations expected to change
+
+Paths are relative to their repository. New file/package names are suggestions,
+not existing interfaces.
+
+| Repository | Existing locations | Planned change |
+| --- | --- | --- |
+| IBI Operator | `api/v1alpha1/imageclusterinstall_types.go`, `imageclusterinstall_webhook.go`, and their tests | Optional preparation API, immutable active inputs, durable status, validation, and generated CRD/deepcopy output. |
+| IBI Operator | `controllers/imageclusterinstall_controller.go`, `imageclusterinstall_monitor.go`, and related tests | Dispatch, host validation, preparation lifecycle, handoff, finalizers, and monitoring. |
+| IBI Operator | `internal/installer/`, `internal/imageserver/`, `cmd/server/main.go`, `cmd/manager/main.go` | Extend existing configuration ISO generation/serving with callback data, add the callback route and API client, configuration, timeout handling, and process integration. |
+| IBI Operator | New shared bootstrap package, for example `pkg/preprovisioning/` | Versioned network extractor, callback assets, and configuration ISO extension contract consumable outside the repository. |
+| IBI Operator | `config/manager/`, `config/rbac/`, `config/crd/`, `bundle/`, `hack/integration-test/` | Supported endpoint/configuration, effective permissions, generated artifacts, and development integration coverage. |
+| O-Cloud Manager | `api/provisioning/v1alpha1/clustertemplate_types.go`, `conditions.go`, `provisioningrequest_types.go` as needed | Typed preparation defaults and PR progress/timeouts; regenerate API artifacts. |
+| O-Cloud Manager | `internal/validation/`, `internal/controllers/clustertemplate_controller.go`, `provisioningrequest_validation.go` | Shared business validation, template/request call sites, `hwMgmtDefaultsToMap`, and existing `DeepMergeMaps` integration. |
+| O-Cloud Manager | `internal/controllers/provisioningrequest_controller.go`, `provisioningrequest_clusterinstall.go`, `provisioningrequest_hwprovision.go` | Correct creation/monitoring order, independent timeout budgets, status mapping, and deletion sequencing. |
+| O-Cloud Manager | `internal/controllers/provisioningrequest_setup.go` and a new preparation helper file | ICI status watch, ownership mapping, and focused preparation observation logic. |
+| O-Cloud Manager | `internal/validation/seedgeneration.go`, `internal/controllers/provisioningrequest_seedgeneration_iso_inputs.go`, related snapshot/Job code and tests | ISO opt-in, Ignition serialization, and bootstrap asset compatibility. |
+| O-Cloud Manager | `internal/controllers/provisioningrequest_seedgeneration_preflight.go`, `internal/controllers/scripts/seed-generation-iso.sh`, and output helpers | Integrate the qualified publication/retention mechanism, preserving effective disk derivation, verification, and existing outputs. |
+| O-Cloud Manager | `config/rbac/role.yaml`, CRD/bundle output, `test/utils/vars.go`, `must-gather/gather`, developer dependency documentation | Generated permissions/API output, external ICI test prerequisite, diagnostics, and collection coverage. |
+| O-Cloud Manager | `go.mod`, `go.sum`, `vendor/` | Pin the agreed ICI API and shared bootstrap dependencies. |
+| SiteConfig integration | IBI cluster/node templates referenced by the ClusterInstance and their supported input interface | Agree creation-time ICI preparation intent or an explicit gate. Identify template changes and propose upstream code/API changes only if required by the chosen input path. |
+
+New lifecycle helpers can live in a focused file such as
+`controllers/imageclusterinstall_preprovisioning.go` in the IBI repository.
+Check generated RBAC before adding grants: controller markers are unioned, and
+the IBI server and manager may share a service account. Tie each new grant to an
+actual operation, including cached `list`/`watch` reads and direct status writes.
+
+## Dependencies, estimates, and integration checkpoints
+
+Work packages 1 and 2 establish the design and API. Packages 3 and 4 implement
+the ACM-owned execution path; package 5 supplies compatible ISO generation.
+Package 6 can develop against that agreed API in parallel, but its full lab
+checkpoint needs the IBI implementation and a compatible ISO. Package 7 hardens
+the combined implementation before package 8 release qualification.
+
+These are initial engineering-effort ranges, including focused tests and code
+generation work. They are not elapsed delivery promises; review queues, lab
+availability, ACM release lead time, and QE's scale execution are additional.
+Re-estimate after package 1, especially if a BMO/Ironic change, a per-target ISO
+fallback, or a new publication mechanism is required.
+
+| Package | Effort | Main lab/review checkpoint |
+| --- | --- | --- |
+| 1. Feasibility | 3–5 person-days | Shared live ISO plus the existing per-host configuration ISO works through preparation and handoff, including static networking without DHCP. |
+| 2. API/contracts | 2–4 person-days | ACM, O-Cloud Manager, and SiteConfig agree inputs, status, gating, and bootstrap compatibility. |
+| 3. Configuration ISO/bootstrap | 3–6 person-days | Existing configuration ISO carries network/callback data; normal/manual ISO behavior is preserved. |
+| 4. IBI lifecycle | 5–8 person-days | Standalone ICI reaches preparation success and normal installation. |
+| 5. ISO generation | 2–4 person-days | O-Cloud Manager publishes an ISO that passes the preparation boot experiment. |
+| 6. O-Cloud Manager integration | 4–7 person-days | A PR installs an initially unprepared SNO and reaches `fulfilled`. |
+| 7. Hardening | 3–6 person-days | Development failure/recovery and cross-controller tests pass. |
+| 8. Delivery/docs | 2–4 person-days | Supported ACM and O-Cloud Manager artifacts, examples, and qualification handoff are ready. |
+
+The combined range is approximately 24–44 engineering person-days across the
+repositories, with some work parallelizable. A preliminary size allowance is
+roughly 1,500–3,000 production Go/shell lines and 2,000–4,000 test lines, excluding
+generated manifests/deepcopy output and documentation. Reuse and the final
+configuration ISO extension and asset interface can materially change those
+figures. Optional disk metadata and live device guards are outside these
+estimates.
+
+Useful incremental lab deployments are the feasibility prototype, the standalone
+ICI lifecycle, and the first integrated PR. API-only and documentation changes
+do not each require a full hardware installation.
+
+## Development validation and QA acceptance
+
+Development owns proving the delivery mechanism, source-level correctness, and
+recovery checkpoints. Unit/integration coverage should accompany the relevant
+work package, with script lint and systemd/ISO fixture checks where appropriate.
+For functional O-Cloud Manager changes, run `make ci-job` and the relevant
+`make test-e2e` coverage before submission; regenerate API/manifests/bundles when
+required. Documentation changes use `make markdownlint`. Use the IBI
+repository's test, generation, and integration targets for its changes.
+
+QA should validate the supported feature through user-visible behavior:
+
+| Scenario | Acceptance outcome |
+| --- | --- |
+| Unprepared SNO with preparation configured | One PR drives preparation and installation to a healthy, accessible cluster and `fulfilled`. |
+| Already prepared SNO with preparation omitted | Existing IBI installation succeeds without booting the preparation ISO. |
+| Representative preparation failure/timeout | PR reports a useful terminal failure after its configured budget; normal installation does not proceed. |
+| Configured retry followed by success | PR remains progressing during retry/backoff and subsequently completes. |
+| Delete a PR during preparation | Cleanup completes and the request/dependent resources do not remain stranded behind finalizers. |
+| Representative operator restart | The workflow resumes without a duplicate destructive preparation run or loss of the final result. |
+| Supported DHCP/static networking configurations | Documented prerequisites produce working preparation and installation on the supported environment. |
+| Up to 100 SNOs in parallel | Independent PR/ICI workflows progress correctly, results are associated with the right targets, and one target's failure does not corrupt others. |
+
+Capture progress transitions throughout the acceptance run. A one-time read
+after waiting cannot prove the order of short-lived handoff states. Check actual
+observed power state when a shutdown is part of the assertion, rather than only
+the desired `spec.online` value. QA can reference development coverage for the
+configuration ISO extension, callback authentication, and controller race cases
+instead of repeating every internal test on hardware.
+
+## Decisions remaining before implementation
+
+1. Confirm the media/network proof and supported BMC/BMO/Ironic combination.
+2. Agree the callback extension to the existing configuration ISO, its reuse at
+   handoff, and the public bootstrap asset interface.
+3. Agree the existing rendering/input path or explicit creation gate and the
+   durable ICI/PR status contract, including the proposed separate PR preparation
+   condition. Identify any necessary SiteConfig changes from that decision.
+4. Agree ACM-owned callback endpoint configuration, trust, and configuration ISO
+   access.
+5. Agree the template-owned ISO capability opt-in and compatibility check.
+6. Document compatible ISO/target disk requirements and the known incompatibility
+   checks possible with existing inputs.
+7. Qualify the publication/retention mechanism and origin/path approval policy.
+8. Schedule the ACM component delivery and identify the minimum supported build.
+
+SSH polling can reduce callback and ISO bootstrap work, but it does not deliver
+per-host static networking. With DHCP and an already SSH-enabled ISO it avoids
+callback data; without DHCP, the configuration ISO's network-data delivery is
+still needed. It also requires a known reachable host address, a private-key
+Secret, host-key verification, and current-boot/physical-target correlation.
+Selecting it would revise the bootstrap, API, networking assumptions, and
+estimates above, while retaining the original PR/ICI/BMH orchestration model if
+desired.
