@@ -81,6 +81,20 @@ CREATE TABLE IF NOT EXISTS cluster_resource_type
     FOREIGN KEY (data_source_id) REFERENCES data_source (data_source_id)      -- Manual cascade required for events
 );
 
+-- A group belongs to one node cluster and contains observed cluster resources.
+CREATE TABLE IF NOT EXISTS cluster_resource_group
+(
+    cluster_resource_group_id UUID PRIMARY KEY,
+    node_cluster_id UUID NOT NULL REFERENCES node_cluster (node_cluster_id),
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    extensions JSON NULL,
+    cluster_resources UUID[] NOT NULL,
+    data_source_id UUID NOT NULL REFERENCES data_source (data_source_id),
+    generation_id INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Table: cluster_resource
 CREATE TABLE IF NOT EXISTS cluster_resource
 (
@@ -89,6 +103,8 @@ CREATE TABLE IF NOT EXISTS cluster_resource
     name                     VARCHAR(255) NOT NULL,
     node_cluster_id   UUID         NULL,
     node_cluster_name VARCHAR(255) NOT NULL,
+    cluster_resource_group_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+    cluster_resource_group_name TEXT NOT NULL DEFAULT '',
     description              TEXT         NOT NULL,
     extensions               json         NULL,
     artifact_resource_ids    UUID[]       NULL,
