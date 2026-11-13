@@ -1,5 +1,24 @@
 FROM registry.redhat.io/openshift4/ose-cli-rhel9:latest
 
+# yq (kislyuk/yq) provides the YAML-aware Secret redaction used by the
+# gather script. It is a Python wrapper around jq, so jq and pip are
+# required at runtime. yq is version-pinned; note that jq, python3-pip,
+# and yq's transitive Python dependencies are not hash-pinned here.
+ARG YQ_VERSION=4.1.2
+
+# Root is required only to install the packages below. The runtime user
+# is restored afterwards so the image is not left running as root.
+USER 0
+RUN dnf install -y --setopt=install_weak_deps=0 jq python3-pip \
+    && pip3 install --no-cache-dir "yq==${YQ_VERSION}" \
+    && dnf clean all
+
 COPY must-gather/gather /usr/bin/gather
+
+# Restore an unprivileged runtime user so the must-gather image keeps the
+# base image's non-root security posture (compatible with restricted
+# SCCs). UID 1001 belongs to the root group (0), so the group-0 file
+# permissions used by OpenShift images remain readable/executable.
+USER 1001
 
 ENTRYPOINT ["/usr/bin/gather"]
