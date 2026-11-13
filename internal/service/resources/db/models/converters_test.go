@@ -15,6 +15,42 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/resources/db/models"
 )
 
+var _ = Describe("ResourceToModel", func() {
+	It("strips the internal GPU inventory fingerprint from the API extensions", func() {
+		record := models.Resource{
+			ResourceID: uuid.New(),
+			Extensions: map[string]interface{}{
+				"gpuInventoryStatus":                    "complete",
+				models.GPUInventoryFingerprintExtension: "900dcd96",
+				"model":                                 "QuantaEdge",
+			},
+		}
+
+		object := models.ResourceToModel(&record, nil)
+
+		Expect(object.Extensions).ToNot(BeNil())
+		Expect(object.Extensions).ToNot(HaveKey(models.GPUInventoryFingerprintExtension))
+		Expect(object.Extensions).To(HaveKeyWithValue("gpuInventoryStatus", "complete"))
+		Expect(object.Extensions).To(HaveKeyWithValue("model", "QuantaEdge"))
+
+		// The persisted record must keep the fingerprint so cache validation on
+		// rebuild still works; only the API representation is filtered.
+		Expect(record.Extensions).To(HaveKey(models.GPUInventoryFingerprintExtension))
+	})
+
+	It("shares the original extensions map when no internal keys are present", func() {
+		record := models.Resource{
+			ResourceID: uuid.New(),
+			Extensions: map[string]interface{}{"gpuInventoryStatus": "unsupported"},
+		}
+
+		object := models.ResourceToModel(&record, nil)
+
+		Expect(object.Extensions).To(HaveKeyWithValue("gpuInventoryStatus", "unsupported"))
+		Expect(object.Extensions).ToNot(HaveKey(models.GPUInventoryFingerprintExtension))
+	})
+})
+
 var _ = Describe("RedactDeploymentManagerCredentials", func() {
 	It("should remove profileData from extensions", func() {
 		extensions := map[string]interface{}{
