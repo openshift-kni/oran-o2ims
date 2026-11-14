@@ -34,17 +34,20 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // IsUpgradeRequested determines if a cluster upgrade is requested by comparing
-// the ClusterTemplate release version with the ManagedCluster's OpenShift
-// release version. The caller provides the resolved template so post-provisioning
+// the ClusterTemplate release version with the cluster's current OpenShift
+// version. The current version is the ManagedCluster's openshiftVersion label,
+// or the last upgraded version recorded in status while the label still lags
+// behind it. The caller provides the resolved template so post-provisioning
 // seed and upgrade dispatch can share the lookup.
 // Returns:
-//   - bool: true if an upgrade is requested (template version > managed cluster version), false otherwise
+//   - bool: true if an upgrade is requested (template version > current cluster version), false otherwise
 //   - ctrl.Result: requeue result with 30s delay if openshiftVersion label is not yet available, empty otherwise
 //   - error: any error encountered during processing (ManagedCluster fetch or version parsing)
 func (t *provisioningRequestReconcilerTask) IsUpgradeRequested(
@@ -77,20 +80,109 @@ func (t *provisioningRequestReconcilerTask) IsUpgradeRequested(
 		return false, ctrl.Result{}, fmt.Errorf("failed to parse ManagedCluster version %q: %w", openshiftVersion, err)
 	}
 
-	cmp := templateReleaseVersion.Compare(*managedClusterVersion)
+	// ACM updates the label asynchronously after an upgrade completes. While the label
+	// lags behind the recorded last upgraded version, use that version as the current
+	// one so the completed upgrade is not requested again. The record is only needed
+	// while it is ahead of the label and the template is ahead of the label. Otherwise
+	// drop it, so the label is the only source of truth again: the label has caught up,
+	// or the template was moved back to the version the label reports.
+	currentVersion := managedClusterVersion
+	if recorded := t.getLastUpgradedVersion(ctx); recorded != nil {
+		if recorded.Compare(*managedClusterVersion) > 0 && templateReleaseVersion.Compare(*managedClusterVersion) > 0 {
+			t.logger.InfoContext(ctx, "openshiftVersion label lags behind the last upgraded version",
+				slog.String("managedClusterVersion", managedClusterVersion.String()),
+				slog.String("lastUpgradedVersion", recorded.String()))
+			currentVersion = recorded
+		} else {
+			t.setLastUpgradedVersion("")
+			if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
+				return false, ctrl.Result{}, fmt.Errorf("failed to clear lastUpgradedVersion: %w", err)
+			}
+		}
+	}
+
+	cmp := templateReleaseVersion.Compare(*currentVersion)
 	switch cmp {
 	case 1:
-		t.logger.InfoContext(ctx, "Upgrade requested: template version is higher than ManagedCluster version",
-			slog.String("templateVersion", templateReleaseVersion.String()), slog.String("managedClusterVersion", managedClusterVersion.String()))
+		t.logger.InfoContext(ctx, "Upgrade requested: template version is higher than cluster version",
+			slog.String("templateVersion", templateReleaseVersion.String()), slog.String("clusterVersion", currentVersion.String()))
 		return true, ctrl.Result{}, nil
 	case -1:
-		t.logger.InfoContext(ctx, "Template version is lower than ManagedCluster version, no upgrade requested",
-			slog.String("templateVersion", templateReleaseVersion.String()), slog.String("managedClusterVersion", managedClusterVersion.String()))
+		t.logger.InfoContext(ctx, "Template version is lower than cluster version, no upgrade requested",
+			slog.String("templateVersion", templateReleaseVersion.String()), slog.String("clusterVersion", currentVersion.String()))
 	case 0:
-		t.logger.InfoContext(ctx, "Template version equals ManagedCluster version, no upgrade requested",
+		t.logger.InfoContext(ctx, "Template version equals cluster version, no upgrade requested",
 			slog.String("version", templateReleaseVersion.String()))
 	}
 	return false, ctrl.Result{}, nil
+}
+
+// getLastUpgradedVersion returns the target version of the last completed upgrade
+// recorded in status, or nil if there is none or it cannot be parsed.
+func (t *provisioningRequestReconcilerTask) getLastUpgradedVersion(ctx context.Context) *semver.Version {
+	clusterDetails := t.object.Status.Extensions.ClusterDetails
+	if clusterDetails == nil || clusterDetails.ClusterUpgradeStatus == nil ||
+		clusterDetails.ClusterUpgradeStatus.LastUpgradedVersion == "" {
+		return nil
+	}
+	recorded := clusterDetails.ClusterUpgradeStatus.LastUpgradedVersion
+	version, err := semver.NewVersion(recorded)
+	if err != nil {
+		t.logger.WarnContext(ctx, "Ignoring unparsable lastUpgradedVersion",
+			slog.String("lastUpgradedVersion", recorded), slog.Any("error", err))
+		return nil
+	}
+	return version
+}
+
+// setLastUpgradedVersion records the target version of the last completed upgrade in
+// ClusterUpgradeStatus, which is dropped when nothing else is left in it. An empty
+// version clears the record.
+func (t *provisioningRequestReconcilerTask) setLastUpgradedVersion(version string) {
+	clusterDetails := t.object.Status.Extensions.ClusterDetails
+	if clusterDetails.ClusterUpgradeStatus == nil {
+		if version == "" {
+			return
+		}
+		clusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{}
+	}
+	clusterDetails.ClusterUpgradeStatus.LastUpgradedVersion = version
+	if *clusterDetails.ClusterUpgradeStatus == (provisioningv1alpha1.ClusterUpgradeStatus{}) {
+		clusterDetails.ClusterUpgradeStatus = nil
+	}
+}
+
+// recordUpgradedVersion records the target version of a just completed upgrade, so that
+// IsUpgradeRequested does not request it again while the ManagedCluster openshiftVersion
+// label lags behind. If the label already reports that version or a higher one, there is
+// no lag to cover and no later label change would clear the record, so any record is
+// dropped instead. A label that is missing or cannot be parsed does not rule out lag,
+// so the version is recorded.
+func (t *provisioningRequestReconcilerTask) recordUpgradedVersion(
+	ctx context.Context, clusterName, version string,
+) error {
+	managedCluster := &clusterv1.ManagedCluster{}
+	if err := t.client.Get(ctx, types.NamespacedName{Name: clusterName}, managedCluster); client.IgnoreNotFound(err) != nil {
+		return fmt.Errorf("failed to get ManagedCluster: %w", err)
+	}
+
+	label := managedCluster.GetLabels()[ctlrutils.OpenshiftVersionLabelName]
+	labelVersion, labelErr := semver.NewVersion(label)
+	upgradedVersion, upgradedErr := semver.NewVersion(version)
+	if labelErr == nil && upgradedErr == nil && labelVersion.Compare(*upgradedVersion) >= 0 {
+		version = ""
+	} else if version != "" {
+		message := "Recording last upgraded version because ManagedCluster version cannot be compared"
+		if labelErr == nil && upgradedErr == nil {
+			message = "Recording last upgraded version while ManagedCluster version lags behind"
+		}
+		t.logger.InfoContext(ctx, message,
+			slog.String("clusterName", clusterName),
+			slog.String("managedClusterVersion", label),
+			slog.String("lastUpgradedVersion", version))
+	}
+	t.setLastUpgradedVersion(version)
+	return nil
 }
 
 // handleUpgrade dispatches to the appropriate upgrade handler based on the
@@ -293,6 +385,8 @@ func (t *provisioningRequestReconcilerTask) handleIBGUUpgrade(
 
 	ibgu := &ibgu.ImageBasedGroupUpgrade{}
 	err := t.client.Get(ctx, types.NamespacedName{Name: t.object.Name, Namespace: clusterName}, ibgu)
+	ibguExisted := err == nil
+
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return nextReconcile, proceed, fmt.Errorf("failed to get IBGU: %w", err)
@@ -323,43 +417,54 @@ func (t *provisioningRequestReconcilerTask) handleIBGUUpgrade(
 			return nextReconcile, proceed, fmt.Errorf("failed to create IBGU: %w", err)
 		}
 
-		t.logger.InfoContext(
-			ctx,
-			fmt.Sprintf(
-				"Upgrade initiated. Created IBGU %s in the namespace %s",
-				ibgu.GetName(),
-				ibgu.GetNamespace(),
-			),
-		)
+		createdVersion := ibgu.Spec.IBUSpec.SeedImageRef.Version
+		initiatedMessage := fmt.Sprintf("Upgrade to version %s initiated", createdVersion)
+		t.logger.InfoContext(ctx, "Upgrade initiated, created IBGU",
+			slog.String("ibgu", ibgu.GetName()),
+			slog.String("namespace", ibgu.GetNamespace()),
+			slog.String("upgradeVersion", createdVersion))
 
-		ctlrutils.SetProvisioningStateInProgress(t.object, "Cluster upgrade is initiated")
+		ctlrutils.SetProvisioningStateInProgress(t.object, initiatedMessage)
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
 			provisioningv1alpha1.CRconditionReasons.InProgress,
 			metav1.ConditionFalse,
-			"Upgrade is initiated",
+			initiatedMessage,
 		)
 		if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 			return nextReconcile, proceed, fmt.Errorf("failed to update ProvisioningRequest CR status: %w", err)
 		}
 	}
 
+	upgradeVersion := ibgu.Spec.IBUSpec.SeedImageRef.Version
 	if isIBGUProgressing(ibgu) {
-		t.logger.InfoContext(
-			ctx,
-			"Wait for upgrade to be completed",
-		)
+		t.logger.InfoContext(ctx, "Wait for upgrade to be completed",
+			slog.String("upgradeVersion", upgradeVersion))
 
-		ctlrutils.SetProvisioningStateInProgress(t.object, "Cluster upgrade is in progress")
+		ctlrutils.SetProvisioningStateInProgress(t.object,
+			fmt.Sprintf("Upgrading to version %s", upgradeVersion))
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
 			provisioningv1alpha1.CRconditionReasons.InProgress,
 			metav1.ConditionFalse,
-			"Upgrade is in progress",
+			fmt.Sprintf("Upgrade to version %s in progress", upgradeVersion),
 		)
 		nextReconcile = requeueWithMediumInterval()
+	} else if ibguExisted && upgradeVersion != clusterTemplate.Spec.Release {
+		// Remove a terminal IBGU for a previous release before creating one for
+		// the requested release on the next reconciliation.
+		if err := t.client.Delete(ctx, ibgu); client.IgnoreNotFound(err) != nil {
+			return nextReconcile, proceed, fmt.Errorf("failed to delete stale IBGU: %w", err)
+		}
+		t.logger.InfoContext(ctx, "Deleted stale IBGU left from an earlier upgrade request",
+			slog.String("ibgu", ibgu.GetName()),
+			slog.String("namespace", ibgu.GetNamespace()),
+			slog.String("ibguVersion", upgradeVersion),
+			slog.String("requestedVersion", clusterTemplate.Spec.Release))
+		return requeueWithShortInterval(), proceed, nil
 	} else if failed, message := isIBGUFailed(ibgu); failed {
-		ctlrutils.SetProvisioningStateFailed(t.object, "Cluster upgrade is failed")
+		ctlrutils.SetProvisioningStateFailed(t.object,
+			fmt.Sprintf("Upgrade to version %s failed", upgradeVersion))
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
 			provisioningv1alpha1.CRconditionReasons.Failed,
@@ -367,22 +472,37 @@ func (t *provisioningRequestReconcilerTask) handleIBGUUpgrade(
 			message,
 		)
 	} else {
+		if err := t.recordUpgradedVersion(ctx, clusterName, upgradeVersion); err != nil {
+			return nextReconcile, proceed, err
+		}
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
 			provisioningv1alpha1.CRconditionReasons.Completed,
 			metav1.ConditionTrue,
-			"Upgrade is completed",
+			fmt.Sprintf("Upgrade to version %s completed", upgradeVersion),
 		)
-		err := t.client.Delete(ctx, ibgu)
-		if err != nil {
-			return nextReconcile, proceed, fmt.Errorf("failed to cleanup IBGU: %w", err)
-		}
 		// Proceed to further processing only when IBGU is completed
 		proceed = true
 	}
 
 	if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
 		return nextReconcile, proceed, fmt.Errorf("failed to update ProvisioningRequest CR status: %w", err)
+	}
+
+	if proceed {
+		// Persist lastUpgradedVersion before deleting the IBGU when the label has not
+		// caught up, so a reconcile does not create another IBGU for the same upgrade.
+		uid := ibgu.UID
+		err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
+			return client.IgnoreNotFound(t.client.Delete(ctx, ibgu, client.Preconditions{UID: &uid}))
+		})
+		if err != nil {
+			return nextReconcile, false, fmt.Errorf("failed to cleanup IBGU: %w", err)
+		}
+		t.logger.InfoContext(ctx, "Upgrade completed, deleted IBGU",
+			slog.String("ibgu", ibgu.GetName()),
+			slog.String("namespace", ibgu.GetNamespace()),
+			slog.String("upgradeVersion", upgradeVersion))
 	}
 
 	return nextReconcile, proceed, nil
@@ -393,7 +513,7 @@ func isIBGUFailed(cr *ibgu.ImageBasedGroupUpgrade) (bool, string) {
 		if len(cluster.FailedActions) == 0 {
 			continue
 		}
-		message := "Upgrade Failed: "
+		message := fmt.Sprintf("Upgrade to version %s failed: ", cr.Spec.IBUSpec.SeedImageRef.Version)
 		for _, action := range cluster.FailedActions {
 			message += fmt.Sprintf("Action %s failed: %s\n", action.Action, action.Message)
 		}
@@ -931,8 +1051,8 @@ func (t *provisioningRequestReconcilerTask) handleClusterVersionUpgrade(
 }
 
 // handleCVUpgradeCompleted handles a completed ClusterVersion update. It first
-// reconciles any controller-managed worker-pool rollout, then cleans up spoke
-// access and marks the overall upgrade completed.
+// reconciles any controller-managed worker-pool rollout, then records completion
+// and cleans up spoke access.
 func (t *provisioningRequestReconcilerTask) handleCVUpgradeCompleted(
 	ctx context.Context, spokeClient client.Client, cv *configv1.ClusterVersion,
 	clusterTemplate *provisioningv1alpha1.ClusterTemplate,
@@ -957,15 +1077,19 @@ func (t *provisioningRequestReconcilerTask) handleCVUpgradeCompleted(
 	t.logger.InfoContext(ctx, "Cluster upgrade completed",
 		slog.String("clusterName", clusterName), slog.String("upgradeToVersion", action.UpgradeToVersion))
 
-	if err := spokeclient.CleanupSpokeAccess(ctx, t.client, clusterName, msaName, mwName); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to cleanup spoke access: %w", err)
+	if err := t.recordUpgradedVersion(ctx, clusterName, action.UpgradeToVersion); err != nil {
+		return ctrl.Result{}, err
 	}
-
 	if err := t.updateUpgradeStatus(ctx,
 		provisioningv1alpha1.CRconditionReasons.Completed,
 		fmt.Sprintf("Upgrade to version %s completed", action.UpgradeToVersion),
 	); err != nil {
 		return ctrl.Result{}, err
+	}
+	if err := ctlrutils.RetryOnConflictOrRetriable(retry.DefaultRetry, func() error {
+		return spokeclient.CleanupSpokeAccess(ctx, t.client, clusterName, msaName, mwName)
+	}); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to cleanup spoke access: %w", err)
 	}
 	return doNotRequeue(), nil
 }
@@ -1690,8 +1814,9 @@ func (t *provisioningRequestReconcilerTask) checkCVGraphPreconditions(
 
 // initUpgradeStatus ensures ClusterUpgradeStatus exists with StartedAt and
 // StartVersion populated. StartVersion is read from the ManagedCluster's
-// openshiftVersion label on first entry and persisted so EUS detection remains
-// stable after intermediate upgrades.
+// openshiftVersion label on first entry, or from the last upgraded version
+// recorded in status while the label lags behind it, and persisted so EUS
+// detection remains stable after intermediate upgrades.
 func (t *provisioningRequestReconcilerTask) initUpgradeStatus(
 	ctx context.Context, clusterName string,
 ) error {
@@ -1716,7 +1841,15 @@ func (t *provisioningRequestReconcilerTask) initUpgradeStatus(
 			return typederrors.NewInputError(
 				"openshiftVersion label not found on ManagedCluster %s", clusterName)
 		}
-		upgradeStatus.StartVersion = openshiftVersion
+		startVersion, err := semver.NewVersion(openshiftVersion)
+		if err != nil {
+			return typederrors.NewInputError(
+				"failed to parse openshiftVersion label %q on ManagedCluster %s: %s", openshiftVersion, clusterName, err.Error())
+		}
+		if recorded := t.getLastUpgradedVersion(ctx); recorded != nil && recorded.Compare(*startVersion) > 0 {
+			startVersion = recorded
+		}
+		upgradeStatus.StartVersion = startVersion.String()
 	}
 	return nil
 }
@@ -1739,7 +1872,7 @@ func (t *provisioningRequestReconcilerTask) updateUpgradeStatus(
 	switch reason {
 	case provisioningv1alpha1.CRconditionReasons.Completed:
 		conditionStatus = metav1.ConditionTrue
-		// Upgrade finished — clear the entire ClusterUpgradeStatus.
+		// Upgrade finished — clear the ClusterUpgradeStatus, keeping LastUpgradedVersion.
 		t.clearUpgradeStatus()
 	case provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
 		provisioningv1alpha1.CRconditionReasons.Failed,
@@ -1845,7 +1978,7 @@ func activeUpgradeDuration(
 }
 
 // cleanupStaleUpgradeState removes stale upgrade state. Cleans up spoke
-// resources if present and removes the UpgradeCompleted condition.
+// resources and the IBGU if present and removes the UpgradeCompleted condition.
 func (t *provisioningRequestReconcilerTask) cleanupStaleUpgradeState(
 	ctx context.Context, clusterName string,
 ) error {
@@ -1856,6 +1989,13 @@ func (t *provisioningRequestReconcilerTask) cleanupStaleUpgradeState(
 	mwName := t.object.Name + "-upgrade-rbac"
 	if err := spokeclient.CleanupSpokeAccess(ctx, t.client, clusterName, msaName, mwName); err != nil {
 		return fmt.Errorf("failed to cleanup spoke access: %w", err)
+	}
+
+	// A failed IBGU is retained for investigation. Remove it once the upgrade is no
+	// longer requested so that a later retry creates a new one.
+	staleIBGU := &ibgu.ImageBasedGroupUpgrade{ObjectMeta: metav1.ObjectMeta{Name: t.object.Name, Namespace: clusterName}}
+	if err := t.client.Delete(ctx, staleIBGU); client.IgnoreNotFound(err) != nil {
+		return fmt.Errorf("failed to delete IBGU: %w", err)
 	}
 
 	t.clearUpgradeStatus()
@@ -1881,10 +2021,20 @@ func (t *provisioningRequestReconcilerTask) resetUpgradeTimeoutAccounting() {
 	}
 }
 
-// clearUpgradeStatus clears the entire upgrade status. Called on completion
-// and stale cleanup when the upgrade is fully done or abandoned.
+// clearUpgradeStatus clears the upgrade status while preserving a non-empty
+// LastUpgradedVersion. Called on completion and stale cleanup when the upgrade
+// is fully done or abandoned.
 func (t *provisioningRequestReconcilerTask) clearUpgradeStatus() {
-	if t.object.Status.Extensions.ClusterDetails != nil {
-		t.object.Status.Extensions.ClusterDetails.ClusterUpgradeStatus = nil
+	clusterDetails := t.object.Status.Extensions.ClusterDetails
+	if clusterDetails == nil || clusterDetails.ClusterUpgradeStatus == nil {
+		return
+	}
+	lastUpgradedVersion := clusterDetails.ClusterUpgradeStatus.LastUpgradedVersion
+	if lastUpgradedVersion == "" {
+		clusterDetails.ClusterUpgradeStatus = nil
+		return
+	}
+	clusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{
+		LastUpgradedVersion: lastUpgradedVersion,
 	}
 }

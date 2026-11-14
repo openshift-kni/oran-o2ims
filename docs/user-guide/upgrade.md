@@ -15,6 +15,7 @@ SPDX-License-Identifier: Apache-2.0
     - [Overriding Upgrade Parameters per ProvisioningRequest](#overriding-upgrade-parameters-per-provisioningrequest)
     - [Monitoring Upgrade Progress](#monitoring-upgrade-progress)
     - [Retry After Failure](#retry-after-failure)
+    - [Retry After a Manual Rollback](#retry-after-a-manual-rollback)
   - [MNO ClusterVersion Upgrade](#mno-clusterversion-upgrade)
     - [MNO Prerequisites](#mno-prerequisites)
     - [Preparing the Upgrade ClusterTemplate](#preparing-the-upgrade-clustertemplate)
@@ -266,7 +267,7 @@ On successful completion, the ProvisioningRequest status returns to `fulfilled`:
 ```yaml
 status:
   conditions:
-    - message: Upgrade is completed
+    - message: Upgrade to version 4.Y.Z+1 completed
       reason: Completed
       status: "True"
       type: UpgradeCompleted
@@ -274,6 +275,16 @@ status:
     provisioningDetails: Provisioning request has completed successfully
     provisioningPhase: fulfilled
 ```
+
+After an upgrade completes, the ManagedCluster `openshiftVersion` label can take some time to report the
+new version. O-Cloud Manager compares that label with the ClusterTemplate release to decide whether an
+upgrade is needed.
+
+To prevent the completed upgrade from being requested again during that time, O-Cloud Manager records the
+version it just upgraded to in `status.extensions.clusterDetails.clusterUpgradeStatus.lastUpgradedVersion`,
+unless the label already reports that version, and treats it as the cluster's current version while the
+label lags behind. The field is cleared once the label reports that version or a higher one. You can still
+update the ProvisioningRequest to a higher version in the meantime. This applies to both upgrade methods.
 
 ### Retry After Failure
 
@@ -298,6 +309,63 @@ handle rollback and cleanup. To retry after the rollback or abort completes:
    oc patch provisioningrequests.clcm.openshift.io <name> --type merge \
      -p '{"spec":{"templateName":"sno-ran-du","templateVersion":"v4-Y-Z+1-1"}}'
    ```
+
+### Retry After a Manual Rollback
+
+O-Cloud Manager does not support rolling back an upgrade that has completed. If you roll the cluster back
+manually and want it to stay managed by O-Cloud Manager, first revert the ProvisioningRequest to the
+ClusterTemplate for the version you are rolling back to, and then roll back the cluster. See the patch
+example in [Retry After Failure](#retry-after-failure). To upgrade again later, update the
+ProvisioningRequest to the ClusterTemplate for the desired release.
+
+> [!WARNING]
+> Do not roll the cluster back without reverting the ProvisioningRequest first. O-Cloud Manager requests an
+> upgrade whenever the ManagedCluster `openshiftVersion` label is lower than the ClusterTemplate release.
+> Once the rollback completes and the label reports the rolled-back version, a new upgrade is triggered
+> automatically, and the ProvisioningRequest cannot be switched to another ClusterTemplate while that
+> upgrade is in progress.
+
+#### Rolled Back Without Reverting the ProvisioningRequest First
+
+In the normal case, the new upgrade is triggered automatically as described above. Check the version that
+O-Cloud Manager recorded on the ProvisioningRequest to see which case applies:
+
+```console
+oc get provisioningrequests.clcm.openshift.io <name> \
+  -o jsonpath='{.status.extensions.clusterDetails.clusterUpgradeStatus.lastUpgradedVersion}{"\n"}'
+```
+
+**The field is empty.** The label had already reported the upgraded version, so the rollback changes the
+label to the rolled-back version and the new upgrade is requested automatically. Wait for that upgrade to
+finish before changing the ClusterTemplate.
+
+**The field still shows the upgraded version.** This is unlikely. It means the label never reported the
+upgraded version before the rollback completed, which usually points to a problem with the label not being
+updated, for example in ACM. The label then still shows the rolled-back version, and O-Cloud Manager cannot
+tell this apart from a label that has not caught up yet. It treats the upgraded version as the cluster's
+current version and does not request the upgrade again. To retry the upgrade:
+
+1. Revert the ProvisioningRequest to the ClusterTemplate for the rolled-back version, which is the version
+   the label reports. See the patch example in [Retry After Failure](#retry-after-failure).
+2. Wait until the ProvisioningRequest returns to `fulfilled`. O-Cloud Manager clears `lastUpgradedVersion`
+   during that reconciliation. Run the command above again to confirm that it is empty.
+3. Check for an IBGU left over from the completed upgrade. It is normally deleted when the upgrade
+   completes, and because the ProvisioningRequest is `fulfilled`, any IBGU that is still present is a
+   leftover:
+
+   ```console
+   oc get ibgu -n <cluster-name>
+   ```
+
+   If one exists, delete it. Otherwise O-Cloud Manager takes it for the new attempt, reports the upgrade as
+   completed, and does not upgrade the cluster:
+
+   ```console
+   oc delete ibgu -n <cluster-name> <provisioning-request-name>
+   ```
+
+4. Update the ProvisioningRequest to the ClusterTemplate for the desired release to request the upgrade
+   again.
 
 ## MNO ClusterVersion Upgrade
 
@@ -702,6 +770,9 @@ oc get provisioningrequests.clcm.openshift.io
 | Pending, InProgress, AwaitingStageAuthorization, Unknown | progressing |
 | PreconditionChecksFailed, TimedOut | failed |
 | Completed | fulfilled |
+
+As with SNO upgrades, the ManagedCluster `openshiftVersion` label can lag behind a completed upgrade. See
+[Monitoring Upgrade Progress](#monitoring-upgrade-progress) for how the O-Cloud Manager handles this.
 
 ### MNO Retry After Failure
 

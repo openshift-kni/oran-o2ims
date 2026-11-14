@@ -30,7 +30,6 @@ import (
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	hwmgrutils "github.com/openshift-kni/oran-o2ims/internal/hardwaremanager/utils"
 	siteconfig "github.com/stolostron/siteconfig/api/v1alpha1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	policiesv1 "open-cluster-management.io/governance-policy-propagator/api/v1"
 )
@@ -147,28 +146,26 @@ func (r *ProvisioningRequestReconciler) SetupWithManager(mgr ctrl.Manager) error
 			&clusterv1.ManagedCluster{},
 			handler.EnqueueRequestsFromMapFunc(r.enqueueProvisioningRequestForManagedCluster),
 			builder.WithPredicates(predicate.Funcs{
-				UpdateFunc: func(e event.UpdateEvent) bool {
-					var availableInNew, availableInOld bool
-					availableCondition := meta.FindStatusCondition(
-						e.ObjectOld.(*clusterv1.ManagedCluster).Status.Conditions,
-						clusterv1.ManagedClusterConditionAvailable)
-					if availableCondition != nil && availableCondition.Status == metav1.ConditionTrue {
-						availableInOld = true
-					}
-					availableCondition = meta.FindStatusCondition(
-						e.ObjectNew.(*clusterv1.ManagedCluster).Status.Conditions,
-						clusterv1.ManagedClusterConditionAvailable)
-					if availableCondition != nil && availableCondition.Status == metav1.ConditionTrue {
-						availableInNew = true
-					}
-
-					return availableInOld != availableInNew
-				},
+				UpdateFunc:  managedClusterUpdatePredicate,
 				CreateFunc:  func(ce event.CreateEvent) bool { return false },
 				GenericFunc: func(ge event.GenericEvent) bool { return false },
 				DeleteFunc:  func(de event.DeleteEvent) bool { return false },
 			})).
 		Complete(r)
+}
+
+// managedClusterUpdatePredicate triggers on ManagedCluster availability changes and on
+// openshiftVersion label changes. The latter lets the controller observe when the hub
+// has caught up with a completed upgrade, so it can drop the recorded upgrade version.
+func managedClusterUpdatePredicate(e event.UpdateEvent) bool {
+	oldCluster := e.ObjectOld.(*clusterv1.ManagedCluster)
+	newCluster := e.ObjectNew.(*clusterv1.ManagedCluster)
+
+	availableInOld := meta.IsStatusConditionTrue(oldCluster.Status.Conditions, clusterv1.ManagedClusterConditionAvailable)
+	availableInNew := meta.IsStatusConditionTrue(newCluster.Status.Conditions, clusterv1.ManagedClusterConditionAvailable)
+
+	return availableInOld != availableInNew ||
+		oldCluster.Labels[ctlrutils.OpenshiftVersionLabelName] != newCluster.Labels[ctlrutils.OpenshiftVersionLabelName]
 }
 
 func provisioningRequestUpdatePredicate(e event.UpdateEvent) bool {
