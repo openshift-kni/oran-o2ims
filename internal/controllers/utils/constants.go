@@ -235,10 +235,21 @@ const (
 	UpgradeWorkerPoolUpgradeKey         = "workerPoolUpgrade"
 )
 
-// CRDs needed to be suppressed in ClusterInstance for upgrade
+// CRDs needed to be suppressed in ClusterInstance for upgrade.
+// These are the per-install-method install manifests that must not be
+// re-applied during an upgrade:
+//   - AgentClusterInstall    for assisted-installer (AI) clusters
+//   - ImageClusterInstall    for image-based-install (IBI) clusters
+//
+// Without suppressing the IBI install manifest, siteconfig re-renders the
+// ImageClusterInstall with the upgraded clusterImageSetNameRef. Its admission
+// webhook rejects any spec update once installation has started, which aborts
+// siteconfig's all-or-nothing manifest apply, so the re-rendered ManagedCluster
+// (and its updated extraLabels) is never applied. See OCPBUGS-140671.
 var (
 	CRDsToBeSuppressedForUpgrade = []string{
 		"AgentClusterInstall",
+		"ImageClusterInstall",
 	}
 )
 

@@ -874,6 +874,48 @@ func TestAssignNodeDetails(t *testing.T) {
 	}
 }
 
+var _ = Describe("addSuppressedInstallManifests", func() {
+	newRenderedCI := func(existing []any) *unstructured.Unstructured {
+		spec := map[string]any{}
+		if existing != nil {
+			spec["suppressedManifests"] = existing
+		}
+		return &unstructured.Unstructured{Object: map[string]any{"spec": spec}}
+	}
+
+	getSuppressed := func(ci *unstructured.Unstructured) []string {
+		raw, found, err := unstructured.NestedSlice(ci.Object, "spec", "suppressedManifests")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(found).To(BeTrue())
+		out := make([]string, 0, len(raw))
+		for _, item := range raw {
+			out = append(out, item.(string))
+		}
+		return out
+	}
+
+	It("suppresses both the AI and IBI install manifests when none are present", func() {
+		// Regression test for OCPBUGS-140671: the IBI install manifest
+		// (ImageClusterInstall) must be suppressed during upgrade, otherwise
+		// siteconfig's manifest apply is aborted and the ManagedCluster labels
+		// are never updated for IBI-installed clusters.
+		renderedCI := newRenderedCI(nil)
+
+		Expect(addSuppressedInstallManifests(renderedCI)).To(Succeed())
+
+		Expect(getSuppressed(renderedCI)).To(ConsistOf("AgentClusterInstall", "ImageClusterInstall"))
+	})
+
+	It("preserves existing suppressed manifests and does not duplicate", func() {
+		renderedCI := newRenderedCI([]any{"ImageClusterInstall", "SomeOtherManifest"})
+
+		Expect(addSuppressedInstallManifests(renderedCI)).To(Succeed())
+
+		Expect(getSuppressed(renderedCI)).To(ConsistOf(
+			"ImageClusterInstall", "SomeOtherManifest", "AgentClusterInstall"))
+	})
+})
+
 var _ = Describe("validateScaleWorkerOnly", func() {
 	makeCI := func(nodes []map[string]any) *unstructured.Unstructured {
 		ci := &unstructured.Unstructured{}
