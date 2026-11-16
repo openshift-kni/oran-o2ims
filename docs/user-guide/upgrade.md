@@ -277,11 +277,10 @@ status:
     provisioningPhase: fulfilled
 ```
 
-After an upgrade completes, the ManagedCluster `openshiftVersion` label does not change right away. ACM
-updates it asynchronously once the managed cluster has reported its new version to the hub, so the label
-keeps showing the previous version until then, and for longer if the cluster is temporarily disconnected
-from the hub. O-Cloud Manager compares that label with the ClusterTemplate release to decide whether an
-upgrade is needed.
+After an upgrade completes, the ManagedCluster `openshiftVersion` label might not change right away. ACM
+updates it asynchronously after the managed cluster reports its new version to the hub; this can take seconds
+to minutes. A longer delay can indicate a connectivity or reporting issue. O-Cloud Manager compares the label
+with the ClusterTemplate release to decide whether an upgrade is needed.
 
 To prevent the completed upgrade from being requested again during that time, O-Cloud Manager records the
 version it just upgraded to in `status.extensions.clusterDetails.clusterUpgradeStatus.lastUpgradedVersion`,

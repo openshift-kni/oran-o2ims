@@ -3223,6 +3223,124 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 				task.object = testPR
 			})
 
+			Context("when the template changes during an active IBGU", func() {
+				setTarget := func(version string) {
+					clusterTemplate.Spec.Release = version
+					clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw = fmt.Appendf(nil,
+						`{"imageBasedGroupUpgrade":{"ibuSpec":{"seedImageRef":{"image":"image","version":%q},"oadpContent":[{"name":"test","namespace":"test"}]},"plan":[{"actions":["Prep"]},{"actions":["Upgrade"]}]}}`, version)
+				}
+				var currentIBGU *ibgu.ImageBasedGroupUpgrade
+				BeforeEach(func() {
+					Expect(c.Create(ctx, &clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{
+						Name: clusterName, Labels: map[string]string{"openshiftVersion": "4.16.0"},
+					}})).To(Succeed())
+					utils.SetStatusCondition(&task.object.Status.Conditions, provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
+						provisioningv1alpha1.CRconditionReasons.InProgress, metav1.ConditionFalse, "Upgrade in progress")
+					Expect(c.Status().Update(ctx, task.object)).To(Succeed())
+					currentIBGU = &ibgu.ImageBasedGroupUpgrade{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+						Status: ibgu.ImageBasedGroupUpgradeStatus{Conditions: []metav1.Condition{{Type: "Progressing", Status: metav1.ConditionTrue}}}}
+					currentIBGU.Spec.IBUSpec.SeedImageRef.Version = "4.17.0"
+					Expect(c.Create(ctx, currentIBGU)).To(Succeed())
+				})
+
+				DescribeTable("should record the active upgrade before deciding on the changed target",
+					func(target, wantRecord string, wantNewIBGU bool) {
+						setTarget(target)
+						result, err := task.handleClusterUpgrades(ctx, clusterName, clusterTemplate)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(result.RequeueAfter).To(Equal(requeueWithMediumInterval().RequeueAfter))
+						Expect(c.Get(ctx, client.ObjectKeyFromObject(currentIBGU), currentIBGU)).To(Succeed())
+						currentIBGU.Status.Conditions[0].Status = metav1.ConditionFalse
+						Expect(c.Update(ctx, currentIBGU)).To(Succeed())
+
+						// A target change during an upgrade should be normally blocked by the webhook.
+						// Recording the completion does not requeue.
+						result, err = task.handleClusterUpgrades(ctx, clusterName, clusterTemplate)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(result).To(BeZero())
+						persisted := &provisioningv1alpha1.ProvisioningRequest{}
+						Expect(c.Get(ctx, client.ObjectKeyFromObject(task.object), persisted)).To(Succeed())
+						Expect(utils.IsClusterUpgradeCompleted(persisted)).To(BeTrue())
+						Expect(lastUpgradedVersionOf(persisted)).To(Equal("4.17.0"))
+						Expect(c.Get(ctx, client.ObjectKeyFromObject(currentIBGU), &ibgu.ImageBasedGroupUpgrade{})).To(MatchError(ContainSubstring("not found")))
+
+						_, err = task.handleClusterUpgrades(ctx, clusterName, clusterTemplate)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(c.Get(ctx, client.ObjectKeyFromObject(task.object), persisted)).To(Succeed())
+						Expect(lastUpgradedVersionOf(persisted)).To(Equal(wantRecord))
+						newIBGU := &ibgu.ImageBasedGroupUpgrade{}
+						err = c.Get(ctx, client.ObjectKeyFromObject(currentIBGU), newIBGU)
+						if wantNewIBGU {
+							Expect(err).ToNot(HaveOccurred())
+							Expect(newIBGU.Spec.IBUSpec.SeedImageRef.Version).To(Equal(target))
+						} else {
+							Expect(err).To(MatchError(ContainSubstring("not found")))
+							Expect(utils.IsClusterUpgradeCompleted(persisted)).To(BeTrue())
+						}
+					},
+					Entry("the template returns to the label version", "4.16.0", "", false),
+					Entry("the template is between the label and completed version", "4.16.5", "4.17.0", false),
+					Entry("the template requests a newer version", "4.18.0", "4.17.0", true),
+				)
+
+				DescribeTable("should record the old failure before handling the changed target", func(target string, wantRetry bool) {
+					setTarget(target)
+					currentIBGU.Status.Conditions[0].Status = metav1.ConditionFalse
+					currentIBGU.Status.Clusters = []ibgu.ClusterState{{Name: clusterName,
+						FailedActions: []ibgu.ActionMessage{{Action: "Prep", Message: "failed prep"}}}}
+					Expect(c.Update(ctx, currentIBGU)).To(Succeed())
+
+					// A target change during an upgrade should be normally blocked by the webhook.
+					// Recording the failure does not requeue.
+					result, err := task.handleClusterUpgrades(ctx, clusterName, clusterTemplate)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(result).To(BeZero())
+					persisted := &provisioningv1alpha1.ProvisioningRequest{}
+					Expect(c.Get(ctx, client.ObjectKeyFromObject(task.object), persisted)).To(Succeed())
+					condition := meta.FindStatusCondition(persisted.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
+					Expect(condition).ToNot(BeNil())
+					Expect(condition.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.Failed)))
+					Expect(condition.Message).To(ContainSubstring("failed prep"))
+					Expect(c.Get(ctx, client.ObjectKeyFromObject(currentIBGU), &ibgu.ImageBasedGroupUpgrade{})).To(Succeed())
+
+					_, err = task.handleClusterUpgrades(ctx, clusterName, clusterTemplate)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(c.Get(ctx, client.ObjectKeyFromObject(currentIBGU), &ibgu.ImageBasedGroupUpgrade{})).To(MatchError(ContainSubstring("not found")))
+					if wantRetry {
+						_, err = task.handleClusterUpgrades(ctx, clusterName, clusterTemplate)
+						Expect(err).ToNot(HaveOccurred())
+						retryIBGU := &ibgu.ImageBasedGroupUpgrade{}
+						Expect(c.Get(ctx, client.ObjectKeyFromObject(currentIBGU), retryIBGU)).To(Succeed())
+						Expect(retryIBGU.Spec.IBUSpec.SeedImageRef.Version).To(Equal(target))
+					} else {
+						Expect(c.Get(ctx, client.ObjectKeyFromObject(task.object), persisted)).To(Succeed())
+						Expect(meta.FindStatusCondition(persisted.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))).To(BeNil())
+					}
+				},
+					Entry("the template returns to the label version", "4.16.0", false),
+					Entry("the template requests a newer version", "4.18.0", true),
+				)
+
+				DescribeTable("should recreate a missing in-progress IBGU from the current template", func(label, target string) {
+					setTarget(target)
+					managedCluster := &clusterv1.ManagedCluster{}
+					Expect(c.Get(ctx, types.NamespacedName{Name: clusterName}, managedCluster)).To(Succeed())
+					managedCluster.Labels["openshiftVersion"] = label
+					Expect(c.Update(ctx, managedCluster)).To(Succeed())
+					Expect(c.Delete(ctx, currentIBGU)).To(Succeed())
+					result, err := task.handleClusterUpgrades(ctx, clusterName, clusterTemplate)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(result.RequeueAfter).To(Equal(requeueWithMediumInterval().RequeueAfter))
+					observed := &ibgu.ImageBasedGroupUpgrade{}
+					Expect(c.Get(ctx, client.ObjectKeyFromObject(currentIBGU), observed)).To(Succeed())
+					Expect(observed.Spec.IBUSpec.SeedImageRef.Version).To(Equal(target))
+				},
+					Entry("the template was reverted", "4.16.0", "4.16.0"),
+					Entry("the label already reports the target", "4.17.0", "4.17.0"),
+					Entry("an upgrade is still requested", "4.16.0", "4.17.0"),
+				)
+			})
+
 			It("should start a newer upgrade while the previous version label is stale", func() {
 				Expect(c.Create(ctx, &clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName, Labels: map[string]string{"openshiftVersion": "4.16.0"},
@@ -3275,7 +3393,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 					Expect(upgradeCond).ToNot(BeNil())
 					Expect(upgradeCond.Status).To(Equal(metav1.ConditionFalse))
 					Expect(upgradeCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
-					Expect(upgradeCond.Message).To(Equal("Upgrade to version 4.17.0 in progress"))
+					Expect(upgradeCond.Message).To(Equal("Upgrading to version 4.17.0"))
 					Expect(task.object.Status.ProvisioningStatus.ProvisioningDetails).To(
 						Equal("Upgrading to version 4.17.0"))
 				})
@@ -3313,7 +3431,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 					Expect(upgradeCond).ToNot(BeNil())
 					Expect(upgradeCond.Status).To(Equal(metav1.ConditionFalse))
 					Expect(upgradeCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
-					Expect(upgradeCond.Message).To(Equal("Upgrade to version 4.17.0 in progress"))
+					Expect(upgradeCond.Message).To(Equal("Upgrading to version 4.17.0"))
 					Expect(task.object.Status.ProvisioningStatus.ProvisioningDetails).To(
 						Equal("Upgrading to version 4.17.0"))
 				})
@@ -3335,6 +3453,10 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 										{
 											Action:  "Prep",
 											Message: "pre-cache failed",
+										},
+										{
+											Action:  "Upgrade",
+											Message: "timed out",
 										},
 									},
 								},
@@ -3362,10 +3484,20 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 					Expect(upgradeCond).ToNot(BeNil())
 					Expect(upgradeCond.Status).To(Equal(metav1.ConditionFalse))
 					Expect(upgradeCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.Failed)))
-					Expect(upgradeCond.Message).To(ContainSubstring("Upgrade to version 4.17.0 failed: Action Prep failed: pre-cache failed"))
+					Expect(upgradeCond.Message).To(Equal(
+						"Upgrade to version 4.17.0 failed: Action Prep failed: pre-cache failed; Action Upgrade failed: timed out"))
 					Expect(task.object.Status.ProvisioningStatus.ProvisioningPhase).To(Equal(provisioningv1alpha1.StateFailed))
-					Expect(task.object.Status.ProvisioningStatus.ProvisioningDetails).To(
-						Equal("Upgrade to version 4.17.0 failed"))
+					Expect(task.object.Status.ProvisioningStatus.ProvisioningDetails).To(Equal("Upgrade to version 4.17.0 failed"))
+
+					persisted := &provisioningv1alpha1.ProvisioningRequest{}
+					Expect(c.Get(ctx, client.ObjectKeyFromObject(task.object), persisted)).To(Succeed())
+					Expect(persisted.Status.ObservedGeneration).To(Equal(persisted.Generation))
+					persistedCondition := meta.FindStatusCondition(persisted.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
+					Expect(persistedCondition).ToNot(BeNil())
+					Expect(persistedCondition.Message).To(Equal(upgradeCond.Message))
+					Expect(persisted.Status.ProvisioningStatus.ProvisioningDetails).To(Equal("Upgrade to version 4.17.0 failed"))
+					task.object = persisted
+					Expect(task.shouldStopReconciliation()).To(BeFalse())
 				})
 			})
 
@@ -3768,7 +3900,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 						Expect(upgradeCond).ToNot(BeNil())
 						Expect(upgradeCond.Status).To(Equal(metav1.ConditionFalse))
 						Expect(upgradeCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
-						Expect(upgradeCond.Message).To(Equal("Upgrade to version 4.17.0 in progress"))
+						Expect(upgradeCond.Message).To(Equal("Upgrading to version 4.17.0"))
 					})
 				})
 
@@ -3817,7 +3949,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 
 						upgradeCond := meta.FindStatusCondition(task.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
 						Expect(upgradeCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
-						Expect(upgradeCond.Message).To(Equal("Upgrade to version 4.17.0 in progress"))
+						Expect(upgradeCond.Message).To(Equal("Upgrading to version 4.17.0"))
 					})
 				})
 
@@ -3857,7 +3989,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 
 						upgradeCond := meta.FindStatusCondition(task.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
 						Expect(upgradeCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
-						Expect(upgradeCond.Message).To(Equal("Upgrade to version 4.17.0 in progress"))
+						Expect(upgradeCond.Message).To(Equal("Upgrading to version 4.17.0"))
 					})
 				})
 
@@ -3892,7 +4024,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 
 						upgradeCond := meta.FindStatusCondition(task.object.Status.Conditions, string(provisioningv1alpha1.PRconditionTypes.UpgradeCompleted))
 						Expect(upgradeCond.Reason).To(Equal(string(provisioningv1alpha1.CRconditionReasons.InProgress)))
-						Expect(upgradeCond.Message).To(Equal("Upgrade to version 4.17.0 in progress"))
+						Expect(upgradeCond.Message).To(Equal("Upgrading to version 4.17.0"))
 					})
 				})
 			})

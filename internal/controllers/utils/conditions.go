@@ -187,6 +187,13 @@ func IsClusterUpgradeInitiated(cr *provisioningv1alpha1.ProvisioningRequest) boo
 	return condition != nil
 }
 
+// IsClusterUpgradeInProgress checks whether an initiated upgrade is neither
+// completed nor in a terminal failure. This includes pending and unknown states.
+func IsClusterUpgradeInProgress(cr *provisioningv1alpha1.ProvisioningRequest) bool {
+	return IsClusterUpgradeInitiated(cr) && !IsClusterUpgradeCompleted(cr) &&
+		!IsClusterUpgradeInTerminalFailure(cr)
+}
+
 // IsClusterZtpDone checks if the cluster ZTP is done
 func IsClusterZtpDone(cr *provisioningv1alpha1.ProvisioningRequest) bool {
 	if cr.Status.Extensions.ClusterDetails != nil {

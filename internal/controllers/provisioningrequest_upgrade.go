@@ -400,8 +400,6 @@ func (t *provisioningRequestReconcilerTask) handleIBGUUpgrade(
 
 	ibgu := &ibgu.ImageBasedGroupUpgrade{}
 	err := t.client.Get(ctx, types.NamespacedName{Name: t.object.Name, Namespace: clusterName}, ibgu)
-	ibguExisted := err == nil
-
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return nextReconcile, proceed, fmt.Errorf("failed to get IBGU: %w", err)
@@ -411,18 +409,8 @@ func (t *provisioningRequestReconcilerTask) handleIBGUUpgrade(
 		ibgu, err = t.prepareIBGU(ctx, clusterTemplate, clusterName)
 		if err != nil {
 			if typederrors.IsInputError(err) {
-				ctlrutils.LogError(ctx, t.logger, "Upgrade precondition check failed", err)
-				ctlrutils.SetProvisioningStateFailed(t.object, fmt.Sprintf("Upgrade precondition check failed: %s", err.Error()))
-				ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
-					provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
-					provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed,
-					metav1.ConditionFalse,
-					err.Error(),
-				)
-				if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
-					return nextReconcile, proceed, fmt.Errorf("failed to update ProvisioningRequest CR status: %w", updateErr)
-				}
-				return nextReconcile, proceed, nil
+				return nextReconcile, proceed, t.updateUpgradeStatus(ctx,
+					provisioningv1alpha1.CRconditionReasons.PreconditionChecksFailed, err.Error())
 			}
 			return nextReconcile, proceed, fmt.Errorf("failed to prepare IBGU for cluster: %w", err)
 		}
@@ -439,72 +427,54 @@ func (t *provisioningRequestReconcilerTask) handleIBGUUpgrade(
 			slog.String("namespace", ibgu.GetNamespace()),
 			slog.String("upgradeVersion", createdVersion))
 
-		ctlrutils.SetProvisioningStateInProgress(t.object, initiatedMessage)
-		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
-			provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
-			provisioningv1alpha1.CRconditionReasons.InProgress,
-			metav1.ConditionFalse,
-			initiatedMessage,
-		)
-		if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
-			return nextReconcile, proceed, fmt.Errorf("failed to update ProvisioningRequest CR status: %w", err)
+		if err := t.updateUpgradeStatus(ctx,
+			provisioningv1alpha1.CRconditionReasons.InProgress, initiatedMessage); err != nil {
+			return nextReconcile, proceed, err
+		}
+	} else {
+		// Remove a terminal IBGU for another release if the PR is no longer tracking
+		// the upgrade. Otherwise, continue monitoring it or record its result below.
+		upgradeVersion := ibgu.Spec.IBUSpec.SeedImageRef.Version
+		upgradeInProgress := ctlrutils.IsClusterUpgradeInProgress(t.object)
+		staleIBGU := !isIBGUProgressing(ibgu) &&
+			upgradeVersion != clusterTemplate.Spec.Release && !upgradeInProgress
+		if staleIBGU {
+			if err := t.client.Delete(ctx, ibgu); client.IgnoreNotFound(err) != nil {
+				return nextReconcile, proceed, fmt.Errorf("failed to delete stale IBGU: %w", err)
+			}
+			t.logger.InfoContext(ctx, "Deleted stale IBGU left from an earlier upgrade request",
+				slog.String("ibgu", ibgu.GetName()),
+				slog.String("namespace", ibgu.GetNamespace()),
+				slog.String("ibguVersion", upgradeVersion),
+				slog.String("requestedVersion", clusterTemplate.Spec.Release))
+			return requeueWithShortInterval(), proceed, nil
 		}
 	}
 
 	upgradeVersion := ibgu.Spec.IBUSpec.SeedImageRef.Version
 	if isIBGUProgressing(ibgu) {
-		t.logger.InfoContext(ctx, "Wait for upgrade to be completed",
-			slog.String("upgradeVersion", upgradeVersion))
-
-		ctlrutils.SetProvisioningStateInProgress(t.object,
-			fmt.Sprintf("Upgrading to version %s", upgradeVersion))
-		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
-			provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
-			provisioningv1alpha1.CRconditionReasons.InProgress,
-			metav1.ConditionFalse,
-			fmt.Sprintf("Upgrade to version %s in progress", upgradeVersion),
-		)
-		nextReconcile = requeueWithMediumInterval()
-	} else if ibguExisted && upgradeVersion != clusterTemplate.Spec.Release {
-		// Remove a terminal IBGU for a previous release before creating one for
-		// the requested release on the next reconciliation.
-		if err := t.client.Delete(ctx, ibgu); client.IgnoreNotFound(err) != nil {
-			return nextReconcile, proceed, fmt.Errorf("failed to delete stale IBGU: %w", err)
+		if err := t.updateUpgradeStatus(ctx, provisioningv1alpha1.CRconditionReasons.InProgress,
+			fmt.Sprintf("Upgrading to version %s", upgradeVersion)); err != nil {
+			return nextReconcile, proceed, err
 		}
-		t.logger.InfoContext(ctx, "Deleted stale IBGU left from an earlier upgrade request",
-			slog.String("ibgu", ibgu.GetName()),
-			slog.String("namespace", ibgu.GetNamespace()),
-			slog.String("ibguVersion", upgradeVersion),
-			slog.String("requestedVersion", clusterTemplate.Spec.Release))
-		return requeueWithShortInterval(), proceed, nil
+		nextReconcile = requeueWithMediumInterval()
 	} else if failed, message := isIBGUFailed(ibgu); failed {
-		ctlrutils.SetProvisioningStateFailed(t.object,
-			fmt.Sprintf("Upgrade to version %s failed", upgradeVersion))
-		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
-			provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
-			provisioningv1alpha1.CRconditionReasons.Failed,
-			metav1.ConditionFalse,
-			message,
-		)
+		// IBGU failedActions identifies failures but does not provide a structured reason
+		// to distinguish a timeout from other failures. Keep its detailed message in the
+		// condition, but not in ProvisioningDetails, so free-form text containing
+		// "timed out" does not trigger the provisioning timeout guard.
+		if err := t.updateUpgradeStatusWithDetails(ctx, provisioningv1alpha1.CRconditionReasons.Failed,
+			message, fmt.Sprintf("Upgrade to version %s failed", upgradeVersion)); err != nil {
+			return nextReconcile, proceed, err
+		}
 	} else {
 		if err := t.recordUpgradedVersion(ctx, clusterName, upgradeVersion); err != nil {
 			return nextReconcile, proceed, err
 		}
-		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
-			provisioningv1alpha1.PRconditionTypes.UpgradeCompleted,
-			provisioningv1alpha1.CRconditionReasons.Completed,
-			metav1.ConditionTrue,
-			fmt.Sprintf("Upgrade to version %s completed", upgradeVersion),
-		)
-		// Proceed to further processing only when IBGU is completed
-		proceed = true
-	}
-
-	if err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); err != nil {
-		return nextReconcile, proceed, fmt.Errorf("failed to update ProvisioningRequest CR status: %w", err)
-	}
-
-	if proceed {
+		if err := t.updateUpgradeStatus(ctx, provisioningv1alpha1.CRconditionReasons.Completed,
+			fmt.Sprintf("Upgrade to version %s completed", upgradeVersion)); err != nil {
+			return nextReconcile, proceed, err
+		}
 		// Persist lastUpgradedVersion before deleting the IBGU when the label has not
 		// caught up, so a reconcile does not create another IBGU for the same upgrade.
 		uid := ibgu.UID
@@ -518,6 +488,8 @@ func (t *provisioningRequestReconcilerTask) handleIBGUUpgrade(
 			slog.String("ibgu", ibgu.GetName()),
 			slog.String("namespace", ibgu.GetNamespace()),
 			slog.String("upgradeVersion", upgradeVersion))
+		// Proceed to further processing only when IBGU is completed
+		proceed = true
 	}
 
 	return nextReconcile, proceed, nil
@@ -528,11 +500,12 @@ func isIBGUFailed(cr *ibgu.ImageBasedGroupUpgrade) (bool, string) {
 		if len(cluster.FailedActions) == 0 {
 			continue
 		}
-		message := fmt.Sprintf("Upgrade to version %s failed: ", cr.Spec.IBUSpec.SeedImageRef.Version)
+		actions := make([]string, 0, len(cluster.FailedActions))
 		for _, action := range cluster.FailedActions {
-			message += fmt.Sprintf("Action %s failed: %s\n", action.Action, action.Message)
+			actions = append(actions, fmt.Sprintf("Action %s failed: %s", action.Action, action.Message))
 		}
-		return true, message
+		return true, fmt.Sprintf("Upgrade to version %s failed: %s",
+			cr.Spec.IBUSpec.SeedImageRef.Version, strings.Join(actions, "; "))
 	}
 	return false, ""
 }
@@ -1869,18 +1842,28 @@ func (t *provisioningRequestReconcilerTask) initUpgradeStatus(
 	return nil
 }
 
-// updateUpgradeStatus persists the UpgradeCompleted condition and provisioning
-// state based on the given reason:
+// updateUpgradeStatus uses the same message for the upgrade condition and
+// provisioning state.
+func (t *provisioningRequestReconcilerTask) updateUpgradeStatus(
+	ctx context.Context,
+	reason provisioningv1alpha1.ConditionReason,
+	message string,
+) error {
+	return t.updateUpgradeStatusWithDetails(ctx, reason, message, message)
+}
+
+// updateUpgradeStatusWithDetails persists the UpgradeCompleted condition and
+// provisioning state with separate messages, based on the given reason:
 //   - Terminal success (Completed): condition=True, clears upgrade status
 //   - Terminal failure (PreconditionChecksFailed, Failed, TimedOut):
 //     condition=False, provisioningState=Failed. TimedOut preserves timing and
 //     rollout diagnostics; other failures clear the active timer.
 //   - Non-terminal (Pending, InProgress, Unknown, AwaitingStageAuthorization):
 //     condition=False, provisioningState=InProgress
-func (t *provisioningRequestReconcilerTask) updateUpgradeStatus(
+func (t *provisioningRequestReconcilerTask) updateUpgradeStatusWithDetails(
 	ctx context.Context,
 	reason provisioningv1alpha1.ConditionReason,
-	message string,
+	message, provisioningDetails string,
 ) error {
 	conditionStatus := metav1.ConditionFalse
 
@@ -1895,7 +1878,7 @@ func (t *provisioningRequestReconcilerTask) updateUpgradeStatus(
 		t.logger.ErrorContext(ctx, "Upgrade failed",
 			slog.String("reason", string(reason)),
 			slog.String("message", message))
-		ctlrutils.SetProvisioningStateFailed(t.object, message)
+		ctlrutils.SetProvisioningStateFailed(t.object, provisioningDetails)
 		if reason != provisioningv1alpha1.CRconditionReasons.TimedOut {
 			// On other terminal failures, reset the timeout clock for retries while
 			// retaining StartVersion and the rest of the upgrade status; They are eventually
@@ -1907,7 +1890,7 @@ func (t *provisioningRequestReconcilerTask) updateUpgradeStatus(
 		t.logger.InfoContext(ctx, "Upgrade status update",
 			slog.String("reason", string(reason)),
 			slog.String("message", message))
-		ctlrutils.SetProvisioningStateInProgress(t.object, message)
+		ctlrutils.SetProvisioningStateInProgress(t.object, provisioningDetails)
 	}
 
 	ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
