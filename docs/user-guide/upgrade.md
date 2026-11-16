@@ -24,6 +24,7 @@ SPDX-License-Identifier: Apache-2.0
     - [How It Works](#how-it-works)
     - [MNO Monitoring Upgrade Progress](#mno-monitoring-upgrade-progress)
     - [MNO Retry After Failure](#mno-retry-after-failure)
+    - [MNO Leftover Spoke Access Resources](#mno-leftover-spoke-access-resources)
 
 ## Overview
 
@@ -276,8 +277,10 @@ status:
     provisioningPhase: fulfilled
 ```
 
-After an upgrade completes, the ManagedCluster `openshiftVersion` label can take some time to report the
-new version. O-Cloud Manager compares that label with the ClusterTemplate release to decide whether an
+After an upgrade completes, the ManagedCluster `openshiftVersion` label does not change right away. ACM
+updates it asynchronously once the managed cluster has reported its new version to the hub, so the label
+keeps showing the previous version until then, and for longer if the cluster is temporarily disconnected
+from the hub. O-Cloud Manager compares that label with the ClusterTemplate release to decide whether an
 upgrade is needed.
 
 To prevent the completed upgrade from being requested again during that time, O-Cloud Manager records the
@@ -649,8 +652,11 @@ The timeout can be configured via `upgradeDefaults` or overridden per Provisioni
 The MNO ClusterVersion upgrade follows these steps:
 
 1. **Create spoke client** — the controller creates a ManagedServiceAccount
-   and RBAC ManifestWork for scoped access to the managed cluster's
-   ClusterVersion and MachineConfigPool resources.
+   named `<provisioning-request-name>-upgrade` and an RBAC ManifestWork named
+   `<provisioning-request-name>-upgrade-rbac` in the managed cluster's
+   namespace on the hub, for scoped access to the managed cluster's
+   ClusterVersion and MachineConfigPool resources. If they already exist, for
+   example after a precondition failure, the controller reuses them.
 
 2. **Pre-upgrade checks** — for minor version upgrades, verifies the
    `Upgradeable` condition on the spoke ClusterVersion. Before the upgrade
@@ -696,6 +702,13 @@ The MNO ClusterVersion upgrade follows these steps:
    `AwaitingAuthorization`, `Pending`, `InProgress`, or `Completed` with start
    and completion timestamps. The ProvisioningRequest remains progressing until
    the last declared stage is authorized and updated.
+
+8. **Complete the upgrade** — after the target ClusterVersion upgrade and all
+   worker MachineConfigPool updates have finished, the controller sets the
+   `UpgradeCompleted` condition to `Completed` and deletes the
+   ManagedServiceAccount and RBAC ManifestWork. The ProvisioningRequest then
+   returns to `fulfilled`. If the deletion fails, see
+   [MNO Leftover Spoke Access Resources](#mno-leftover-spoke-access-resources).
 
 ### MNO Monitoring Upgrade Progress
 
@@ -806,3 +819,24 @@ investigate the spoke cluster to determine the root cause and resolve it.
   label through the ProvisioningRequest's `clusterInstanceParameters` to
   trigger reconciliation, and the ProvisioningRequest will detect the
   new version and transition to `fulfilled`.
+
+### MNO Leftover Spoke Access Resources
+
+The controller writes the `UpgradeCompleted` condition as `Completed` before it deletes the upgrade's
+ManagedServiceAccount and RBAC ManifestWork, and retries transient errors a few times. If the deletion is
+interrupted or keeps failing, the resources are left behind, and the controller does not retry the deletion on
+later reconciliations. A leftover is harmless for the next upgrade, so you do not need to delete it:
+
+- The next upgrade reuses it. The ManagedServiceAccount token rotates automatically while the account exists.
+- The next upgrade's completion deletes it.
+- Deleting the ProvisioningRequest also deletes it, together with the cluster namespace on the hub.
+
+Until it is deleted, the scoped permissions remain active on the spoke. If you do not want them to stay that
+long, you can check for leftovers and delete them manually, after confirming that no upgrade is in progress:
+
+```console
+oc get managedserviceaccount -n <cluster-name> <provisioning-request-name>-upgrade
+oc get manifestwork -n <cluster-name> <provisioning-request-name>-upgrade-rbac
+oc delete managedserviceaccount -n <cluster-name> <provisioning-request-name>-upgrade
+oc delete manifestwork -n <cluster-name> <provisioning-request-name>-upgrade-rbac
+```

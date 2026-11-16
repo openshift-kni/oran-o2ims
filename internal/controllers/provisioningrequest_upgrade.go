@@ -68,7 +68,7 @@ func (t *provisioningRequestReconcilerTask) IsUpgradeRequested(
 		return false, ctrl.Result{}, fmt.Errorf("failed to get ManagedCluster: %w", err)
 	}
 
-	openshiftVersion, ok := managedCluster.GetLabels()["openshiftVersion"]
+	openshiftVersion, ok := managedCluster.GetLabels()[ctlrutils.OpenshiftVersionLabelName]
 	if !ok {
 		t.logger.InfoContext(ctx, "openshiftVersion label not found in ManagedCluster, requeueing",
 			slog.String("managedCluster", managedClusterName))
@@ -140,14 +140,29 @@ func (t *provisioningRequestReconcilerTask) getLastUpgradedVersion(ctx context.C
 // version clears the record.
 func (t *provisioningRequestReconcilerTask) setLastUpgradedVersion(version string) {
 	clusterDetails := t.object.Status.Extensions.ClusterDetails
-	if clusterDetails.ClusterUpgradeStatus == nil {
-		if version == "" {
-			return
+
+	// Record a completed upgrade.
+	if version != "" {
+		if clusterDetails == nil {
+			clusterDetails = &provisioningv1alpha1.ClusterDetails{}
+			t.object.Status.Extensions.ClusterDetails = clusterDetails
 		}
-		clusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{}
+		if clusterDetails.ClusterUpgradeStatus == nil {
+			clusterDetails.ClusterUpgradeStatus = &provisioningv1alpha1.ClusterUpgradeStatus{}
+		}
+		clusterDetails.ClusterUpgradeStatus.LastUpgradedVersion = version
+		return
 	}
-	clusterDetails.ClusterUpgradeStatus.LastUpgradedVersion = version
-	if *clusterDetails.ClusterUpgradeStatus == (provisioningv1alpha1.ClusterUpgradeStatus{}) {
+
+	// Clear the recorded version.
+	if clusterDetails == nil || clusterDetails.ClusterUpgradeStatus == nil {
+		return
+	}
+	status := clusterDetails.ClusterUpgradeStatus
+	status.LastUpgradedVersion = ""
+
+	// Remove the status object only if no other information remains.
+	if *status == (provisioningv1alpha1.ClusterUpgradeStatus{}) {
 		clusterDetails.ClusterUpgradeStatus = nil
 	}
 }
@@ -1836,7 +1851,7 @@ func (t *provisioningRequestReconcilerTask) initUpgradeStatus(
 		if err := t.client.Get(ctx, types.NamespacedName{Name: clusterName}, managedCluster); err != nil {
 			return fmt.Errorf("failed to get ManagedCluster: %w", err)
 		}
-		openshiftVersion, ok := managedCluster.GetLabels()["openshiftVersion"]
+		openshiftVersion, ok := managedCluster.GetLabels()[ctlrutils.OpenshiftVersionLabelName]
 		if !ok {
 			return typederrors.NewInputError(
 				"openshiftVersion label not found on ManagedCluster %s", clusterName)

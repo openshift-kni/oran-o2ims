@@ -3524,6 +3524,15 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 					Expect(replacement.UID).To(Equal(types.UID("replacement")))
 				})
 
+				It("should record the upgraded version when the status has no ClusterDetails yet", func() {
+					task.object.Status.Extensions.ClusterDetails = nil
+
+					_, proceed, err := task.handleIBGUUpgrade(ctx, clusterTemplate, clusterName)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(proceed).To(BeTrue())
+					Expect(lastUpgradedVersionOf(task.object)).To(Equal("4.17.0"))
+				})
+
 				// The record only covers a label that lags behind. If the label already reports the
 				// target, no later label change would clear the record, so it must not be written.
 				DescribeTable("should record the upgraded version only while the openshiftVersion label lags behind it",
