@@ -37,12 +37,17 @@ import (
 // ProvisioningRequestReconciler reconciles a ProvisioningRequest object
 type ProvisioningRequestReconciler struct {
 	client.Client
-	Logger *slog.Logger
+	// NoncachedClient reads directly from the API server, bypassing the informer
+	// cache. It is used to read the current NodeAllocationRequest before assigning
+	// a hardware configuration transaction ID.
+	NoncachedClient client.Reader
+	Logger          *slog.Logger
 }
 
 type provisioningRequestReconcilerTask struct {
 	logger                           *slog.Logger
 	client                           client.Client
+	noncachedClient                  client.Reader
 	object                           *provisioningv1alpha1.ProvisioningRequest
 	clusterInput                     *clusterInput
 	ctDetails                        *clusterTemplateDetails
@@ -179,12 +184,13 @@ func (r *ProvisioningRequestReconciler) Reconcile(
 
 	// Create and run the task:
 	task := &provisioningRequestReconcilerTask{
-		logger:       r.Logger,
-		client:       r.Client,
-		object:       object,
-		clusterInput: &clusterInput{},
-		ctDetails:    &clusterTemplateDetails{},
-		timeouts:     &timeouts{},
+		logger:          r.Logger,
+		client:          r.Client,
+		noncachedClient: r.NoncachedClient,
+		object:          object,
+		clusterInput:    &clusterInput{},
+		ctDetails:       &clusterTemplateDetails{},
+		timeouts:        &timeouts{},
 	}
 	result, err = task.run(ctx)
 	return
@@ -653,7 +659,8 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 	}
 
 	// Create/Update the NodeAllocationRequest
-	if err := t.createOrUpdateNodeAllocationRequest(ctx, renderedClusterInstance.GetNamespace(), renderedNodeAllocationRequest); err != nil {
+	nodeAllocationRequestResponse, err := t.createOrUpdateNodeAllocationRequest(ctx, renderedClusterInstance.GetNamespace(), renderedNodeAllocationRequest)
+	if err != nil {
 		t.logger.WarnContext(ctx, "NodeAllocationRequest create/update error, will retry", slog.Any("error", err))
 		return requeueWithMediumInterval(), false, err
 	}
@@ -662,15 +669,6 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 	if nodeAllocationRequestID == "" {
 		t.logger.WarnContext(ctx, "Missing NodeAllocationRequest identifier, will retry")
 		return requeueWithShortInterval(), false, fmt.Errorf("missing nodeAllocationRequest identifier")
-	}
-
-	nodeAllocationRequestResponse, exists, err := t.getNodeAllocationRequestResponse(ctx)
-	if err != nil {
-		t.logger.WarnContext(ctx, "NodeAllocationRequest response error, will retry", slog.Any("error", err))
-		return requeueWithMediumInterval(), false, err
-	}
-	if !exists {
-		return requeueWithShortInterval(), false, nil
 	}
 
 	// Wait for the NodeAllocationRequest to be provisioned and update BMC details if necessary
@@ -690,6 +688,15 @@ func (t *provisioningRequestReconcilerTask) handleNodeAllocationRequestProvision
 			slog.String("nodeAllocationRequestID", nodeAllocationRequestID))
 		return requeueWithMediumInterval(), false, nil
 	}
+	// Block downstream phases while a hardware configuration transaction scheduled
+	// on the NodeAllocationRequest is still in flight — including the window after a
+	// Day-2 firmware update is scheduled but before a Configured condition exists.
+	// configured is the tri-state result from checkNodeAllocationRequestConfigStatus:
+	// nil means nothing is scheduled (safe to proceed), non-nil true means the
+	// configuration completed, and non-nil false means a transaction is in progress —
+	// which the spec-vs-observed gate also reports for that pre-condition window.
+	// Proceeding on non-nil false would let the upgrade phase create the IBGU while
+	// the firmware flash power-cycles the node and kills IBU Prep (OCPBUGS-132825).
 	if configured != nil && !*configured {
 		t.logger.InfoContext(ctx, "Waiting for NodeAllocationRequest to be configured",
 			slog.String("nodeAllocationRequestID", nodeAllocationRequestID))
@@ -1443,9 +1450,9 @@ func (t *provisioningRequestReconcilerTask) finalizeProvisioningIfComplete(
 	return nil
 }
 
-// getNodeAllocationRequestResponse retrieves the NodeAllocationRequest CR by PR name.
-// It returns the NodeAllocationRequest, a boolean indicating whether it exists,
-// and any error encountered.
+// getNodeAllocationRequestResponse retrieves the NodeAllocationRequest CR by PR name
+// through the cached client. It returns the NodeAllocationRequest, a boolean indicating
+// whether it exists, and any error encountered.
 func (t *provisioningRequestReconcilerTask) getNodeAllocationRequestResponse(ctx context.Context) (*hwmgmtv1alpha1.NodeAllocationRequest, bool, error) {
 	nar, err := t.getNAR(ctx)
 	if err != nil {

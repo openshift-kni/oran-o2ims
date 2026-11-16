@@ -8,13 +8,18 @@ package utils
 
 import (
 	"context"
+	"errors"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 )
@@ -54,13 +59,71 @@ var _ = Describe("UpdateNodeAllocationRequestObservedStatus", func() {
 	})
 
 	It("should update both ObservedGeneration and ObservedConfigTransactionId", func() {
-		err := UpdateNodeAllocationRequestObservedStatus(ctx, c, nar)
+		current := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(nar), current)).To(Succeed())
+
+		err := UpdateNodeAllocationRequestObservedStatus(ctx, c, current)
 		Expect(err).ToNot(HaveOccurred())
 
 		updated := &hwmgmtv1alpha1.NodeAllocationRequest{}
 		Expect(c.Get(ctx, client.ObjectKeyFromObject(nar), updated)).To(Succeed())
 		Expect(updated.Status.ObservedGeneration).To(Equal(updated.ObjectMeta.Generation))
 		Expect(updated.Status.ObservedConfigTransactionId).To(Equal(int64(4)))
+	})
+
+	It("does not acknowledge when the ConfigTransactionId advanced after the check", func() {
+		// Simulate a Day-2 arriving between the caller's validation and the ack: the caller
+		// validated transaction id 2, but the live spec is now 4. The helper must refuse to
+		// acknowledge the unhandled transaction.
+		processed := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(nar), processed)).To(Succeed())
+		processed.Spec.ConfigTransactionId = 2
+		err := UpdateNodeAllocationRequestObservedStatus(ctx, c, processed)
+		Expect(err).To(MatchError(ErrNodeAllocationRequestSpecChanged))
+
+		updated := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(nar), updated)).To(Succeed())
+		// Observed status is left untouched (the BeforeEach seed values).
+		Expect(updated.Status.ObservedConfigTransactionId).To(Equal(int64(2)))
+		Expect(updated.Status.ObservedGeneration).To(Equal(int64(3)))
+	})
+
+	It("does not acknowledge when the generation advanced after the check", func() {
+		processed := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(nar), processed)).To(Succeed())
+		processed.Generation--
+		err := UpdateNodeAllocationRequestObservedStatus(ctx, c, processed)
+		Expect(err).To(MatchError(ErrNodeAllocationRequestSpecChanged))
+
+		updated := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(nar), updated)).To(Succeed())
+		Expect(updated.Status.ObservedConfigTransactionId).To(Equal(int64(2)))
+		Expect(updated.Status.ObservedGeneration).To(Equal(int64(3)))
+	})
+
+	It("does not acknowledge a new transaction after a status update conflict", func() {
+		processed := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(nar), processed)).To(Succeed())
+		statusWrites := 0
+		wrapped := interceptor.NewClient(c.(client.WithWatch), interceptor.Funcs{
+			SubResourceUpdate: func(ctx context.Context, cl client.Client, _ string, obj client.Object, _ ...client.SubResourceUpdateOption) error {
+				statusWrites++
+				current := &hwmgmtv1alpha1.NodeAllocationRequest{}
+				Expect(cl.Get(ctx, client.ObjectKeyFromObject(obj), current)).To(Succeed())
+				current.Spec.ConfigTransactionId++
+				Expect(cl.Update(ctx, current)).To(Succeed())
+				return k8serrors.NewConflict(schema.GroupResource{Group: hwmgmtv1alpha1.GroupVersion.Group, Resource: "nodeallocationrequests"}, obj.GetName(), errors.New("concurrent update"))
+			},
+		})
+
+		err := UpdateNodeAllocationRequestObservedStatus(ctx, wrapped, processed)
+		Expect(err).To(MatchError(ErrNodeAllocationRequestSpecChanged))
+		Expect(statusWrites).To(Equal(1))
+		updated := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(nar), updated)).To(Succeed())
+		Expect(updated.Spec.ConfigTransactionId).To(Equal(int64(5)))
+		Expect(updated.Status.ObservedConfigTransactionId).To(Equal(int64(2)))
+		Expect(updated.Status.ObservedGeneration).To(Equal(int64(3)))
 	})
 })
 
@@ -132,4 +195,108 @@ var _ = Describe("UpdateNodeAllocationRequestStatusCondition", func() {
 		Entry("Provisioned TimedOut acks",
 			hwmgmtv1alpha1.Provisioned, hwmgmtv1alpha1.TimedOut, metav1.ConditionFalse, true),
 	)
+})
+
+var _ = Describe("UpdateNodeAllocationRequestStatusCondition spec-change guard", func() {
+	// Regression coverage for OCPBUGS-132825: when the live NAR spec advances between the
+	// time a reconcile validated it and the time this function writes status (a Day-2 config
+	// arriving, or a Status().Update conflict forcing a re-fetch onto a newer spec), the
+	// observed status (ObservedConfigTransactionId / ObservedGeneration) must not be
+	// acknowledged — doing so would mark a transaction/generation this reconcile never
+	// processed as observed and let the ProvisioningRequest controller's in-flight gate
+	// proceed prematurely. The condition itself is still written.
+	var (
+		ctx    context.Context
+		scheme *runtime.Scheme
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		scheme = runtime.NewScheme()
+		Expect(hwmgmtv1alpha1.AddToScheme(scheme)).To(Succeed())
+	})
+
+	buildClient := func(live *hwmgmtv1alpha1.NodeAllocationRequest) client.Client {
+		return fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithObjects(live).
+			WithStatusSubresource(live).
+			Build()
+	}
+
+	It("does not acknowledge observed status when the live ConfigTransactionId advanced", func() {
+		live := &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-nar", Namespace: "default", Generation: 5},
+			Spec:       hwmgmtv1alpha1.NodeAllocationRequestSpec{ConfigTransactionId: 5},
+			Status: hwmgmtv1alpha1.NodeAllocationRequestStatus{
+				ObservedGeneration:          3,
+				ObservedConfigTransactionId: 2,
+			},
+		}
+		c := buildClient(live)
+
+		// The reconcile validated the older transaction id 4; the live spec is now 5.
+		reconcileStart := live.DeepCopy()
+		reconcileStart.Spec.ConfigTransactionId = 4
+
+		err := UpdateNodeAllocationRequestStatusCondition(ctx, c, reconcileStart,
+			hwmgmtv1alpha1.Configured, hwmgmtv1alpha1.ConfigApplied, metav1.ConditionTrue, "test")
+		Expect(err).ToNot(HaveOccurred())
+
+		updated := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(live), updated)).To(Succeed())
+		// Acks skipped — observed status is left at the seeded values.
+		Expect(updated.Status.ObservedConfigTransactionId).To(Equal(int64(2)))
+		Expect(updated.Status.ObservedGeneration).To(Equal(int64(3)))
+		// The condition itself is still written.
+		cond := meta.FindStatusCondition(updated.Status.Conditions, string(hwmgmtv1alpha1.Configured))
+		Expect(cond).ToNot(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+	})
+
+	It("does not acknowledge observed status when the live generation advanced", func() {
+		live := &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-nar", Namespace: "default", Generation: 6},
+			Spec:       hwmgmtv1alpha1.NodeAllocationRequestSpec{ConfigTransactionId: 4},
+			Status: hwmgmtv1alpha1.NodeAllocationRequestStatus{
+				ObservedGeneration:          3,
+				ObservedConfigTransactionId: 2,
+			},
+		}
+		c := buildClient(live)
+
+		// The reconcile validated generation 5; the live generation is now 6.
+		reconcileStart := live.DeepCopy()
+		reconcileStart.ObjectMeta.Generation = 5
+
+		err := UpdateNodeAllocationRequestStatusCondition(ctx, c, reconcileStart,
+			hwmgmtv1alpha1.Configured, hwmgmtv1alpha1.ConfigApplied, metav1.ConditionTrue, "test")
+		Expect(err).ToNot(HaveOccurred())
+
+		updated := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(live), updated)).To(Succeed())
+		Expect(updated.Status.ObservedConfigTransactionId).To(Equal(int64(2)))
+		Expect(updated.Status.ObservedGeneration).To(Equal(int64(3)))
+	})
+
+	It("acknowledges observed status when the live spec still matches the validated spec", func() {
+		live := &hwmgmtv1alpha1.NodeAllocationRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-nar", Namespace: "default", Generation: 5},
+			Spec:       hwmgmtv1alpha1.NodeAllocationRequestSpec{ConfigTransactionId: 4},
+			Status: hwmgmtv1alpha1.NodeAllocationRequestStatus{
+				ObservedGeneration:          3,
+				ObservedConfigTransactionId: 2,
+			},
+		}
+		c := buildClient(live)
+
+		err := UpdateNodeAllocationRequestStatusCondition(ctx, c, live.DeepCopy(),
+			hwmgmtv1alpha1.Configured, hwmgmtv1alpha1.ConfigApplied, metav1.ConditionTrue, "test")
+		Expect(err).ToNot(HaveOccurred())
+
+		updated := &hwmgmtv1alpha1.NodeAllocationRequest{}
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(live), updated)).To(Succeed())
+		Expect(updated.Status.ObservedConfigTransactionId).To(Equal(int64(4)))
+		Expect(updated.Status.ObservedGeneration).To(Equal(int64(5)))
+	})
 })

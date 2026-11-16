@@ -345,6 +345,14 @@ defaultHugepagesSize: "1G"`,
 				Namespace: constants.DefaultNamespace,
 			},
 			Spec: hwmgmtv1alpha1.NodeAllocationRequestSpec{
+				// Match the spec createOrUpdateNodeAllocationRequest renders from the
+				// ProvisioningRequest so it detects no change and does not advance the
+				// monotonic ConfigTransactionId. Otherwise the hardware-config in-flight
+				// gate would see an unobserved transaction (no hardware manager runs in
+				// this suite to acknowledge it) and block before cluster installation.
+				ClusterId:                   "exampleCluster",
+				LocationSpec:                hwmgmtv1alpha1.LocationSpec{Site: "local-123"},
+				HardwareProvisioningTimeout: &metav1.Duration{Duration: 1 * time.Minute},
 				NodeGroup: []hwmgmtv1alpha1.NodeGroup{
 					{
 						NodeGroupData: hwmgmtv1alpha1.NodeGroupData{
