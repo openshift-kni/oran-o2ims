@@ -247,6 +247,8 @@ In this example:
   `autoRollbackOnFailure`, and remaining plan steps) are inherited from the
   ClusterTemplate's `upgradeDefaults`.
 
+The resulting image-based upgrade plan must include `Prep` followed by `Upgrade`.
+
 ### Monitoring Upgrade Progress
 
 Monitor the `UpgradeCompleted` condition on the ProvisioningRequest:

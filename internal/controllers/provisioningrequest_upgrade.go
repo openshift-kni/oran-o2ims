@@ -528,6 +528,13 @@ func (t *provisioningRequestReconcilerTask) prepareIBGU(
 	if !ok {
 		return nil, typederrors.NewInputError("key %q not found in merged upgrade data", ctlrutils.UpgradeDefaultsIBGUKey)
 	}
+	ibguData, ok := ibguRaw.(map[string]any)
+	if !ok {
+		return nil, typederrors.NewInputError("imageBasedGroupUpgrade must be an object")
+	}
+	if err := validation.ValidateIBGUPlan(ibguData); err != nil {
+		return nil, fmt.Errorf("invalid imageBasedGroupUpgrade plan: %w", err)
+	}
 	ibguBytes, err := json.Marshal(ibguRaw)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal %s data: %w", ctlrutils.UpgradeDefaultsIBGUKey, err)

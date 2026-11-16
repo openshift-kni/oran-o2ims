@@ -923,6 +923,38 @@ var _ = Describe("prepareIBGU", func() {
 		Expect(ibguCR.Spec.ClusterLabelSelectors[0].MatchLabels["name"]).To(Equal("prepare-cluster"))
 	})
 
+	It("should reject an effective IBGU plan without an Upgrade action", func() {
+		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"imageBasedGroupUpgrade":{"ibuSpec":{"seedImageRef":{"image":"image","version":"4.17.0"},"oadpContent":[{"name":"test","namespace":"test"}]},"plan":[{"actions":["Prep"]}]}}`)
+		_, err := task.prepareIBGU(ctx, clusterTemplate, "prepare-cluster")
+		Expect(err).To(HaveOccurred())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("plan must include Prep followed by Upgrade"))
+	})
+
+	It("should reject an effective IBGU plan without a Prep action", func() {
+		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"imageBasedGroupUpgrade":{"ibuSpec":{"seedImageRef":{"image":"image","version":"4.17.0"},"oadpContent":[{"name":"test","namespace":"test"}]},"plan":[{"actions":["Upgrade"]}]}}`)
+		_, err := task.prepareIBGU(ctx, clusterTemplate, "prepare-cluster")
+		Expect(err).To(HaveOccurred())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("plan must include Prep followed by Upgrade"))
+	})
+
+	It("should reject an effective IBGU plan with Upgrade before Prep", func() {
+		clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw = []byte(`{"imageBasedGroupUpgrade":{"ibuSpec":{"seedImageRef":{"image":"image","version":"4.17.0"},"oadpContent":[{"name":"test","namespace":"test"}]},"plan":[{"actions":["Upgrade"]},{"actions":["Prep"]}]}}`)
+		_, err := task.prepareIBGU(ctx, clusterTemplate, "prepare-cluster")
+		Expect(err).To(HaveOccurred())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("plan must include Prep followed by Upgrade"))
+	})
+
+	It("should reject an override that removes the Upgrade action from the effective plan", func() {
+		task.object.Spec.TemplateParameters.Raw = []byte(`{"upgradeParameters":{"imageBasedGroupUpgrade":{"plan":[{"actions":["Prep"]},{"actions":["AbortOnFailure"]}]}}}`)
+		_, err := task.prepareIBGU(ctx, clusterTemplate, "prepare-cluster")
+		Expect(err).To(HaveOccurred())
+		Expect(typederrors.IsInputError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("plan must include Prep followed by Upgrade"))
+	})
+
 	It("should return InputError when version mismatches", func() {
 		task.object.Spec.TemplateParameters = runtime.RawExtension{
 			Raw: []byte(`{"upgradeParameters":{"imageBasedGroupUpgrade":{"ibuSpec":{"seedImageRef":{"version":"4.18.0"}}}}}`),

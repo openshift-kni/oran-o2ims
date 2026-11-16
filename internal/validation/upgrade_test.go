@@ -15,6 +15,24 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+var _ = DescribeTable("ValidateIBGUPlan", func(plan map[string]any, valid bool) {
+	err := ValidateIBGUPlan(plan)
+	if valid {
+		Expect(err).ToNot(HaveOccurred())
+	} else {
+		Expect(err).To(MatchError(ContainSubstring("plan must include Prep followed by Upgrade")))
+	}
+},
+	Entry("prep only", map[string]any{"plan": []any{map[string]any{"actions": []any{"Prep"}}}}, false),
+	Entry("no plan", map[string]any{}, false),
+	Entry("upgrade only", map[string]any{"plan": []any{map[string]any{"actions": []any{"Upgrade"}}}}, false),
+	Entry("upgrade before prep", map[string]any{"plan": []any{map[string]any{"actions": []any{"Upgrade"}}, map[string]any{"actions": []any{"Prep"}}}}, false),
+	Entry("reversed actions in one step", map[string]any{"plan": []any{map[string]any{"actions": []any{"Upgrade", "Prep"}}}}, false),
+	Entry("separate steps", map[string]any{"plan": []any{map[string]any{"actions": []any{"Prep"}}, map[string]any{"actions": []any{"Upgrade"}}}}, true),
+	Entry("intervening abort on failure", map[string]any{"plan": []any{map[string]any{"actions": []any{"Prep"}}, map[string]any{"actions": []any{"AbortOnFailure"}}, map[string]any{"actions": []any{"Upgrade"}}}}, true),
+	Entry("multiple actions", map[string]any{"plan": []any{map[string]any{"actions": []any{"Prep", "Upgrade"}}}}, true),
+)
+
 var _ = Describe("ValidateCVUpgradeData", func() {
 	const release = "4.17.0"
 	const label = "upgradeDefaults"
