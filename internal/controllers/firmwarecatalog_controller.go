@@ -69,8 +69,7 @@ func (r *FirmwareCatalogReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	ctx = ctlrutils.AddObjectContext(ctx, catalog)
-	r.Logger.InfoContext(ctx, "Fetched FirmwareCatalog successfully",
-		slog.String("name", catalog.Name))
+	r.Logger.InfoContext(ctx, "Fetched FirmwareCatalog successfully")
 
 	if !catalog.DeletionTimestamp.IsZero() {
 		r.Logger.InfoContext(ctx, "FirmwareCatalog is being deleted, skipping validation")

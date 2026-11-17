@@ -70,8 +70,7 @@ func (r *LocationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 
 	// Add object-specific context
 	ctx = ctlrutils.AddObjectContext(ctx, location)
-	r.Logger.InfoContext(ctx, "Fetched Location successfully",
-		slog.String("name", location.Name))
+	r.Logger.InfoContext(ctx, "Fetched Location successfully")
 
 	// Skip validation if being deleted - let Kubernetes handle deletion directly
 	if !location.DeletionTimestamp.IsZero() {

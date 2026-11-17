@@ -94,9 +94,10 @@ func TestControllerLoggingIntegration(t *testing.T) {
 	// Validate that all expected context is present in logs
 	expectedContext := map[string]interface{}{
 		// From LogReconcileStart
-		LogAttrResource:  "ClusterTemplate",
-		LogAttrNamespace: "test-namespace",
-		LogAttrAction:    "reconcile_start",
+		LogAttrResource:     "ClusterTemplate",
+		LogAttrResourceName: "my-cluster-template",
+		LogAttrNamespace:    "test-namespace",
+		LogAttrAction:       "reconcile_start",
 
 		// From AddObjectContext
 		LogAttrResourceVersion: "12345",

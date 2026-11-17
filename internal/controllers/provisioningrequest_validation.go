@@ -9,7 +9,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"maps"
 	"slices"
 	"strings"
@@ -232,8 +231,7 @@ func (t *provisioningRequestReconcilerTask) validatePolicyTemplateInputMatchesSc
 			"failed to merge data for %s: %s", constants.TemplateParamPolicyConfig, err.Error())
 	}
 	t.logger.InfoContext(ctx,
-		fmt.Sprintf("Merged the PolicyTemplate default data with the %s for ProvisioningRequest", constants.TemplateParamPolicyConfig),
-		slog.String("name", t.object.Name))
+		fmt.Sprintf("Merged the PolicyTemplate default data with the %s for ProvisioningRequest", constants.TemplateParamPolicyConfig))
 
 	// Validate the merged PolicyTemplate input data matches the schema
 	err = validation.ValidateJSONSchema(
@@ -332,7 +330,6 @@ func (t *provisioningRequestReconcilerTask) validateAndMergeHwMgmtInput(
 
 	t.logger.InfoContext(ctx,
 		"Merged hwMgmt default data with hwMgmtParameters for ProvisioningRequest",
-		slog.String("name", t.object.Name),
 	)
 	return nil
 }
@@ -502,7 +499,7 @@ func (t *provisioningRequestReconcilerTask) getMergedClusterInstanceData(
 	// The clusterInstanceInput values are overridden with the values from the default
 	// configmap if the same labels/annotations exist in both.
 	if err := t.overrideClusterInstanceLabelsOrAnnotations(
-		clusterInstanceInput, clusterInstanceDefaults); err != nil {
+		ctx, clusterInstanceInput, clusterInstanceDefaults); err != nil {
 		return nil, typederrors.NewInputError("%s", err.Error())
 	}
 
@@ -542,7 +539,6 @@ func (t *provisioningRequestReconcilerTask) getMergedClusterInstanceData(
 
 	t.logger.InfoContext(ctx,
 		fmt.Sprintf("Merged the ClusterInstance default data with the %s for ProvisioningRequest", constants.TemplateParamClusterInstance),
-		slog.String("name", t.object.Name),
 	)
 	return mergedClusterDataMap, nil
 }
@@ -584,7 +580,7 @@ func mergeClusterTemplateInputWithDefaults(
 // or extraAnnotations. It overrides the values in the ProvisioningRequest with those from the default
 // configmap when the same labels/annotations exist in both. Labels/annotations that are not common
 // between the default configmap and ProvisioningRequest are ignored.
-func (t *provisioningRequestReconcilerTask) overrideClusterInstanceLabelsOrAnnotations(dstProvisioningRequestInput, srcConfigmap map[string]any) error {
+func (t *provisioningRequestReconcilerTask) overrideClusterInstanceLabelsOrAnnotations(ctx context.Context, dstProvisioningRequestInput, srcConfigmap map[string]any) error {
 	fields := []string{"extraLabels", "extraAnnotations"}
 
 	for _, field := range fields {
@@ -613,7 +609,7 @@ func (t *provisioningRequestReconcilerTask) overrideClusterInstanceLabelsOrAnnot
 					// Override ProvisioningRequestInput's values with defaults if the label/annotation key exists in both
 					for srcFieldKey, srcLabelValue := range srcFieldsMap {
 						if _, exists := dstFieldsMap[srcFieldKey]; exists {
-							t.logger.Info(fmt.Sprintf("%s.%s.%s found in both default configmap and clusterInstanceInput. "+
+							t.logger.InfoContext(ctx, fmt.Sprintf("%s.%s.%s found in both default configmap and clusterInstanceInput. "+
 								"Overriding it in ClusterInstanceInput with value %s from the default configmap.",
 								field, resourceType, srcFieldKey, srcLabelValue))
 							dstFieldsMap[srcFieldKey] = srcLabelValue
@@ -650,7 +646,7 @@ func (t *provisioningRequestReconcilerTask) overrideClusterInstanceLabelsOrAnnot
 			}
 
 			// Group-level extra*: defaults win over the PR group-level values.
-			if err := t.overrideClusterInstanceLabelsOrAnnotations(dstGroup, srcGroup); err != nil {
+			if err := t.overrideClusterInstanceLabelsOrAnnotations(ctx, dstGroup, srcGroup); err != nil {
 				return fmt.Errorf("node group %q: %w", name, err)
 			}
 
@@ -661,7 +657,7 @@ func (t *provisioningRequestReconcilerTask) overrideClusterInstanceLabelsOrAnnot
 					if !ok {
 						continue
 					}
-					if err := t.overrideClusterInstanceLabelsOrAnnotations(nodeMap, srcGroup); err != nil {
+					if err := t.overrideClusterInstanceLabelsOrAnnotations(ctx, nodeMap, srcGroup); err != nil {
 						return fmt.Errorf("node group %q node: %w", name, err)
 					}
 				}

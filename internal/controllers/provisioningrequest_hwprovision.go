@@ -351,7 +351,6 @@ func (t *provisioningRequestReconcilerTask) checkNodeAllocationRequestStatus(
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to update the NodeAllocationRequest status for ProvisioningRequest",
-			slog.String("name", t.object.Name),
 			slog.Any("error", err),
 		)
 	}

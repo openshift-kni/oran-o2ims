@@ -74,7 +74,6 @@ func (r *OCloudSiteReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// Add object-specific context
 	ctx = ctlrutils.AddObjectContext(ctx, site)
 	r.Logger.InfoContext(ctx, "Fetched OCloudSite successfully",
-		slog.String("name", site.Name),
 		slog.String("globalLocationName", site.Spec.GlobalLocationName))
 
 	// Skip validation if being deleted - let Kubernetes handle deletion directly

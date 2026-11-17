@@ -212,6 +212,11 @@ issues during code review.
 
 ## Logging Conventions
 
+- At the start of each reconciliation, call `ctlrutils.LogReconcileStart`
+  and pass its returned context to context-aware logs and downstream calls.
+  It adds the reconciled resource's type, name, and namespace, so do not add
+  that resource's name again to individual logs. Continue to identify related
+  resources separately when needed.
 - Use context-aware slog calls (`slog.InfoContext(ctx, ...)`,
   `slog.ErrorContext(ctx, ...)`, etc.) whenever a `ctx` variable is in
   scope. The `sloglint` linter enforces this. Use `logging.AppendCtx()`

@@ -66,27 +66,32 @@ func TestLogReconcileStart(t *testing.T) {
 	// Log a message to test that context attributes are included
 	logger.InfoContext(ctx, "Test message with context")
 
-	// Parse the log output (get the last line since LogReconcileStart also logs)
 	lines := bytes.Split(bytes.TrimSpace(buf.Bytes()), []byte("\n"))
-	lastLine := lines[len(lines)-1]
-
-	var logEntry map[string]interface{}
-	if err := json.Unmarshal(lastLine, &logEntry); err != nil {
-		t.Fatalf("Failed to parse log output: %v\nRaw output: %s", err, buf.String())
+	if len(lines) != 2 {
+		t.Fatalf("Expected two log entries, got %d: %s", len(lines), buf.String())
 	}
 
 	// Check that our context attributes are present
 	expectedAttrs := map[string]interface{}{
-		LogAttrResource:  "TestResource",
-		LogAttrNamespace: "test-namespace",
-		LogAttrAction:    "reconcile_start",
+		LogAttrResource:     "TestResource",
+		LogAttrResourceName: "test-resource",
+		LogAttrNamespace:    "test-namespace",
+		LogAttrAction:       "reconcile_start",
 	}
 
-	for key, expectedValue := range expectedAttrs {
-		if actualValue, exists := logEntry[key]; !exists {
-			t.Errorf("Expected attribute %s not found in log output", key)
-		} else if actualValue != expectedValue {
-			t.Errorf("Expected %s=%v, got %v", key, expectedValue, actualValue)
+	// The first entry verifies the attributes are set before the start log;
+	// the second verifies they remain in the returned context for later logs.
+	for i, line := range lines {
+		var logEntry map[string]interface{}
+		if err := json.Unmarshal(line, &logEntry); err != nil {
+			t.Fatalf("Failed to parse log entry %d: %v", i, err)
+		}
+		for key, expectedValue := range expectedAttrs {
+			if actualValue, exists := logEntry[key]; !exists {
+				t.Errorf("Expected attribute %s not found in log entry %d", key, i)
+			} else if actualValue != expectedValue {
+				t.Errorf("Expected %s=%v in log entry %d, got %v", key, expectedValue, i, actualValue)
+			}
 		}
 	}
 

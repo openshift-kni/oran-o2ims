@@ -126,7 +126,7 @@ var _ = Describe("overrideClusterInstanceLabelsOrAnnotations", func() {
 			"clusterName": "cluster-1",
 		}
 
-		err := task.overrideClusterInstanceLabelsOrAnnotations(dstProvisioningRequestInput, srcConfigmap)
+		err := task.overrideClusterInstanceLabelsOrAnnotations(context.Background(), dstProvisioningRequestInput, srcConfigmap)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(dstProvisioningRequestInput).To(Equal(expected))
 	})
@@ -158,7 +158,7 @@ var _ = Describe("overrideClusterInstanceLabelsOrAnnotations", func() {
 			"clusterName": "cluster-1",
 		}
 
-		err := task.overrideClusterInstanceLabelsOrAnnotations(dstProvisioningRequestInput, srcConfigmap)
+		err := task.overrideClusterInstanceLabelsOrAnnotations(context.Background(), dstProvisioningRequestInput, srcConfigmap)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(dstProvisioningRequestInput).To(Equal(expected))
 	})
@@ -190,7 +190,7 @@ var _ = Describe("overrideClusterInstanceLabelsOrAnnotations", func() {
 			"clusterName": "cluster-1",
 		}
 
-		err := task.overrideClusterInstanceLabelsOrAnnotations(dstProvisioningRequestInput, srcConfigmap)
+		err := task.overrideClusterInstanceLabelsOrAnnotations(context.Background(), dstProvisioningRequestInput, srcConfigmap)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(dstProvisioningRequestInput).To(Equal(expected))
 	})
@@ -256,7 +256,7 @@ var _ = Describe("overrideClusterInstanceLabelsOrAnnotations", func() {
 			},
 		}
 
-		err := task.overrideClusterInstanceLabelsOrAnnotations(dstProvisioningRequestInput, srcConfigmap)
+		err := task.overrideClusterInstanceLabelsOrAnnotations(context.Background(), dstProvisioningRequestInput, srcConfigmap)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(dstProvisioningRequestInput).To(Equal(expected))
 	})
@@ -318,7 +318,7 @@ var _ = Describe("overrideClusterInstanceLabelsOrAnnotations", func() {
 			},
 		}
 
-		err := task.overrideClusterInstanceLabelsOrAnnotations(dstProvisioningRequestInput, srcConfigmap)
+		err := task.overrideClusterInstanceLabelsOrAnnotations(context.Background(), dstProvisioningRequestInput, srcConfigmap)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(dstProvisioningRequestInput).To(Equal(expected))
 	})
@@ -381,7 +381,7 @@ var _ = Describe("overrideClusterInstanceLabelsOrAnnotations", func() {
 			},
 		}
 
-		err := task.overrideClusterInstanceLabelsOrAnnotations(dstProvisioningRequestInput, srcConfigmap)
+		err := task.overrideClusterInstanceLabelsOrAnnotations(context.Background(), dstProvisioningRequestInput, srcConfigmap)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(dstProvisioningRequestInput).To(Equal(expected))
 	})

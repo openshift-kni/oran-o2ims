@@ -74,7 +74,6 @@ func (r *ResourcePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// Add object-specific context
 	ctx = ctlrutils.AddObjectContext(ctx, pool)
 	r.Logger.InfoContext(ctx, "Fetched ResourcePool successfully",
-		slog.String("name", pool.Name),
 		slog.String("oCloudSiteName", pool.Spec.OCloudSiteName))
 
 	// Skip validation if being deleted - let Kubernetes handle deletion directly

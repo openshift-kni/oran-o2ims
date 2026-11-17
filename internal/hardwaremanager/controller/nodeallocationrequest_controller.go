@@ -93,9 +93,6 @@ func (r *NodeAllocationRequestReconciler) Reconcile(ctx context.Context, req ctr
 		}
 	}()
 
-	// Add logging context with the NodeAllocationRequest name
-	ctx = logging.AppendCtx(ctx, slog.String("nodeAllocationRequest", req.Name))
-
 	if !r.indexerEnabled {
 		if err := r.SetupIndexer(ctx); err != nil {
 			return hwmgrutils.DoNotRequeue(), fmt.Errorf("failed to setup indexer: %w", err)
@@ -195,7 +192,6 @@ func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 	// Check for hardware timeout at the top level
 	if timeoutExceeded, conditionType, err := r.checkHardwareTimeout(ctx, nodeAllocationRequest); err != nil {
 		r.Logger.ErrorContext(ctx, "Failed to check hardware timeout",
-			slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
 			slog.Any("error", err))
 		return hwmgrutils.RequeueWithMediumInterval(), fmt.Errorf("failed to check hardware timeout: %w", err)
 	} else if timeoutExceeded {
@@ -217,7 +213,6 @@ func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 		}
 
 		r.Logger.ErrorContext(ctx, "Timeout detected: "+timeoutMessage,
-			slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
 			slog.String("conditionType", string(conditionType)),
 			slog.Any("timeoutDuration", nodeAllocationRequest.Spec.HardwareProvisioningTimeout),
 			slog.String("startTime", startTimeStr))
@@ -228,7 +223,6 @@ func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 			metav1.ConditionFalse, timeoutMessage,
 		); updateErr != nil {
 			r.Logger.ErrorContext(ctx, "Failed to update status for timeout",
-				slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
 				slog.Any("error", updateErr))
 			return hwmgrutils.RequeueWithMediumInterval(),
 				fmt.Errorf("failed to update status for NodeAllocationRequest timeout %s: %w",
@@ -238,7 +232,6 @@ func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 		if conditionType == hwmgmtv1alpha1.Configured {
 			if err := clearConfigAnnotationForAllocatedNodes(ctx, r.Client, r.NoncachedClient, r.Logger, nodeAllocationRequest); err != nil {
 				r.Logger.ErrorContext(ctx, "Failed to clear config in progress annotations after configuration timeout",
-					slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
 					slog.Any("error", err))
 				return hwmgrutils.RequeueWithMediumInterval(),
 					fmt.Errorf("failed to clear config in progress annotations after configuration timeout %s: %w",
@@ -248,7 +241,6 @@ func (r *NodeAllocationRequestReconciler) HandleNodeAllocationRequest(
 			// Also clear BMH update annotations for configuration timeouts
 			if err := clearBMHUpdateAnnotationsForNAR(ctx, r.Client, r.Logger, nodeAllocationRequest); err != nil {
 				r.Logger.ErrorContext(ctx, "Failed to clear BMH update annotations after configuration timeout",
-					slog.String("nodeAllocationRequest", nodeAllocationRequest.Name),
 					slog.Any("error", err))
 				return hwmgrutils.RequeueWithMediumInterval(),
 					fmt.Errorf("failed to clear BMH update annotations after configuration timeout %s: %w",

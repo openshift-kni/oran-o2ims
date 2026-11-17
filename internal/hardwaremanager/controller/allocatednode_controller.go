@@ -61,9 +61,6 @@ func (r *AllocatedNodeReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 	}()
 
-	// Add logging context with the resource name
-	ctx = logging.AppendCtx(ctx, slog.String("reconcileRequest", req.Name))
-
 	allocatedNode, err := hwmgrutils.GetNode(ctx, r.Logger, r.NoncachedClient, req.Namespace, req.Name)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -129,8 +126,6 @@ func (r *AllocatedNodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // CleanupForDeletedNode
 func (r *AllocatedNodeReconciler) handleAllocatedNodeDeletion(ctx context.Context, allocatednode *hwmgmtv1alpha1.AllocatedNode) (bool, error) {
-	ctx = logging.AppendCtx(ctx, slog.String("node", allocatednode.Name))
-
 	r.Logger.InfoContext(ctx, "handleAllocatedNodeDeletion")
 	bmh, err := getBMHForNode(ctx, r.NoncachedClient, allocatednode)
 	if err != nil {
