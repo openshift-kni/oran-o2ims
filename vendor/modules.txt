@@ -332,9 +332,10 @@ github.com/oapi-codegen/nullable
 github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
 github.com/oapi-codegen/oapi-codegen/v2/pkg/codegen
 github.com/oapi-codegen/oapi-codegen/v2/pkg/util
-# github.com/oapi-codegen/runtime v1.8.0
-## explicit; go 1.24.0
+# github.com/oapi-codegen/runtime v1.9.0
+## explicit; go 1.26.0
 github.com/oapi-codegen/runtime
+github.com/oapi-codegen/runtime/internal/jsoncodec
 github.com/oapi-codegen/runtime/types
 # github.com/oklog/ulid/v2 v2.1.2
 ## explicit; go 1.15
